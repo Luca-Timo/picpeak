@@ -23,7 +23,7 @@ import { toast } from 'react-toastify';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 import { Button, Input, Card, SkeletonTable, ErrorBoundary } from '../../components/common';
-import { BulkArchiveModal } from '../../components/admin';
+import { BulkArchiveModal, BulkDeleteModal } from '../../components/admin';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { eventsService, type EventStatusFilter } from '../../services/events.service';
 import { adminService } from '../../services/admin.service';
@@ -47,6 +47,8 @@ export const EventsListPage: React.FC = () => {
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
   const [showBulkArchiveModal, setShowBulkArchiveModal] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeletePasswordError, setBulkDeletePasswordError] = useState<string | null>(null);
   const [copiedEventId, setCopiedEventId] = useState<number | null>(null);
 
   const copyShareLink = async (event: Event) => {
@@ -187,7 +189,7 @@ export const EventsListPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['admin-dashboard-stats'] });
       setSelectedEvents([]);
       setShowBulkArchiveModal(false);
-      
+
       if (data.results.failed.length === 0) {
         toast.success(t('events.bulkArchiveSuccess', { count: data.results.successful.length }));
       } else {
@@ -196,6 +198,36 @@ export const EventsListPage: React.FC = () => {
     },
     onError: () => {
       toast.error(t('toast.saveError'));
+    },
+  });
+
+  // Bulk delete mutation. The 401 INVALID_PASSWORD response surfaces inline
+  // on the modal's password field rather than as a toast, since it's a
+  // recoverable input error (the user can retry without losing context).
+  const bulkDeleteMutation = useMutation({
+    mutationFn: ({ eventIds, password }: { eventIds: number[]; password: string }) =>
+      eventsService.bulkDeleteEvents(eventIds, password),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-events'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-dashboard-stats'] });
+      setSelectedEvents([]);
+      setShowBulkDeleteModal(false);
+      setBulkDeletePasswordError(null);
+
+      if (data.results.failed.length === 0) {
+        toast.success(t('events.bulkDelete.successAll', { count: data.results.successful.length }));
+      } else {
+        toast.warning(t('events.bulkDelete.successPartial', { success: data.results.successful.length, failed: data.results.failed.length }));
+      }
+    },
+    onError: (error: unknown) => {
+      const e = error as { response?: { status?: number; data?: { code?: string; error?: string } } };
+      if (e?.response?.status === 401 && e.response.data?.code === 'INVALID_PASSWORD') {
+        setBulkDeletePasswordError(t('events.bulkDelete.incorrectPassword'));
+      } else {
+        toast.error(t('events.bulkDelete.errorGeneric'));
+        setShowBulkDeleteModal(false);
+      }
     },
   });
 
@@ -399,12 +431,23 @@ export const EventsListPage: React.FC = () => {
               <Button variant="outline" size="sm" onClick={() => setSelectedEvents([])}>
                 {t('events.clear')}
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => setShowBulkArchiveModal(true)}
               >
                 {t('events.archiveSelected')}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setBulkDeletePasswordError(null);
+                  setShowBulkDeleteModal(true);
+                }}
+                className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/30"
+              >
+                {t('events.deleteSelected', 'Delete Selected')}
               </Button>
             </div>
           </div>
@@ -434,6 +477,9 @@ export const EventsListPage: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   {t('events.date')}
                 </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+                  {t('events.photos', 'Photos')}
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
                   {t('events.status')}
                 </th>
@@ -448,7 +494,7 @@ export const EventsListPage: React.FC = () => {
             <tbody className="bg-white dark:bg-neutral-800 divide-y divide-neutral-200 dark:divide-neutral-700">
               {events.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-neutral-500 dark:text-neutral-400">
+                  <td colSpan={8} className="px-6 py-12 text-center text-neutral-500 dark:text-neutral-400">
                     {t('events.noEventsFound')}
                   </td>
                 </tr>
@@ -492,6 +538,9 @@ export const EventsListPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-sm text-neutral-700 dark:text-neutral-300">
                         {event.event_date ? format(parseISO(event.event_date), 'MMM d, yyyy') : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-right tabular-nums text-neutral-700 dark:text-neutral-300">
+                        {event.photo_count ?? 0}
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
@@ -712,6 +761,22 @@ export const EventsListPage: React.FC = () => {
         onConfirm={() => bulkArchiveMutation.mutate(selectedEvents)}
         selectedEvents={events.filter(e => selectedEvents.includes(e.id))}
         isLoading={bulkArchiveMutation.isPending}
+      />
+
+      {/* Bulk Delete Modal */}
+      <BulkDeleteModal
+        isOpen={showBulkDeleteModal}
+        onClose={() => {
+          setShowBulkDeleteModal(false);
+          setBulkDeletePasswordError(null);
+        }}
+        onConfirm={async (password) => {
+          await bulkDeleteMutation.mutateAsync({ eventIds: selectedEvents, password });
+        }}
+        selectedEvents={events.filter(e => selectedEvents.includes(e.id))}
+        isLoading={bulkDeleteMutation.isPending}
+        passwordError={bulkDeletePasswordError}
+        onPasswordErrorClear={() => setBulkDeletePasswordError(null)}
       />
       </div>
     </ErrorBoundary>

@@ -5,6 +5,54 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.40.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.39.1-beta.0...v3.40.0-beta.0) (2026-05-04)
+
+
+### Features
+
+* **branding:** per-family generic fallback via meta.json ([dcff451](https://github.com/the-luap/picpeak/commit/dcff4515721482e06c2ef1c1eb34f9e12754c07c))
+* **branding:** self-hosted webfonts with filesystem scanner ([d04bf28](https://github.com/the-luap/picpeak/commit/d04bf288084144bf53ef0ba988fa32ed703d7351))
+
+
+### Bug Fixes
+
+* **fonts:** drop immutable Cache-Control to allow font replacement rollout ([5703fcb](https://github.com/the-luap/picpeak/commit/5703fcb80680155e3b637dd5fc15c430de963c40))
+
+
+### Documentation
+
+* **fonts:** cache rollout, stale-list note, meta.json ([bd0e052](https://github.com/the-luap/picpeak/commit/bd0e052b1a1847718151a16117dacc6c42a2178e))
+
+## [3.39.1-beta.0](https://github.com/the-luap/picpeak/compare/v3.39.0-beta.0...v3.39.1-beta.0) (2026-05-04)
+
+
+### Documentation
+
+* **readme:** add Contributors section with @Luca-Timo and @Rekoo-PS ([c60ab74](https://github.com/the-luap/picpeak/commit/c60ab74ae2daabc4b11fea1f1b2df728294b03c8))
+* **readme:** add Contributors section with @Luca-Timo and @Rekoo-PS ([dbe0a30](https://github.com/the-luap/picpeak/commit/dbe0a3055bd2c71981cb7d9cf43c2b22b9e3276c))
+
+## [3.39.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.38.0-beta.0...v3.39.0-beta.0) (2026-05-04)
+
+
+### Features
+
+* **gallery:** decouple header style from layout, add banner option ([1f1a856](https://github.com/the-luap/picpeak/commit/1f1a856083b1966ed4b32a23a14442f1727cecef))
+
+## [3.38.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.37.0-beta.0...v3.38.0-beta.0) (2026-05-04)
+
+
+### Features
+
+* **events:** bulk delete with password confirmation ([#384](https://github.com/the-luap/picpeak/issues/384)) ([647aea2](https://github.com/the-luap/picpeak/commit/647aea21ae42fe0d089bf45568702617a25b98e4))
+
+## [3.37.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.36.0-beta.0...v3.37.0-beta.0) (2026-05-04)
+
+
+### Features
+
+* **events:** add Photos column to admin events list ([#384](https://github.com/the-luap/picpeak/issues/384)) ([d561db8](https://github.com/the-luap/picpeak/commit/d561db802b04db8fbb38819a22e840532e775ef0))
+* **events:** add Photos column to admin events list ([#384](https://github.com/the-luap/picpeak/issues/384)) ([ffb4318](https://github.com/the-luap/picpeak/commit/ffb4318a1f667e273cd59805673b125d2f17699b))
+
 ## [3.36.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.35.0-beta.0...v3.36.0-beta.0) (2026-05-04)
 
 
