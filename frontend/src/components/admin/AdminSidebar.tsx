@@ -12,6 +12,7 @@ import {
   FileText,
   HardDrive,
   Users,
+  UserCog,
   Tags
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -44,6 +45,9 @@ const navigation: NavItem[] = [
   { nameKey: 'navigation.backup', href: '/admin/backup', icon: HardDrive, permission: 'backup.view' },
   { nameKey: 'navigation.cmsPages', href: '/admin/cms', icon: FileText, permission: 'cms.view' },
   { nameKey: 'navigation.users', href: '/admin/users', icon: Users, permission: 'users.view' },
+  // Customer accounts (#354) — separate from admin users, gated on
+  // customers.view (granted to super_admin and admin by migration 087).
+  { nameKey: 'navigation.customers', href: '/admin/customers', icon: UserCog, permission: 'customers.view' },
 ];
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {

@@ -59,6 +59,7 @@ import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 import { Button, Input, Card, Loading } from '../../components/common';
 import { EventCategoryManager, AdminPhotoGrid, AdminPhotoViewer, PhotoFilters, PasswordResetModal, ThemeCustomizerEnhanced, ThemeDisplay, HeroPhotoSelector, FocalPointPicker, PhotoUploadModal, FeedbackSettings, FeedbackModerationPanel, EventRenameDialog, PhotoFilterPanel, PhotoExportMenu, AdminGuestsList } from '../../components/admin';
+import { CustomerAccountPicker } from '../../components/admin/CustomerAccountPicker';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { eventsService } from '../../services/events.service';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
@@ -284,6 +285,9 @@ export const EventDetailsPage: React.FC = () => {
     photo_cap: number;
     // Default photo sort
     default_photo_sort: string;
+    // Customer accounts assigned to this event (#354). Hydrated from
+    // event.customer_accounts on load; sent back as a flat id array.
+    customer_accounts: Array<{ id: number; email: string; displayName: string | null }>;
   };
 
   const [isEditing, setIsEditing] = useState(false);
@@ -321,6 +325,7 @@ export const EventDetailsPage: React.FC = () => {
     photo_cap: 0,
     // Default photo sort
     default_photo_sort: 'upload_date_desc',
+    customer_accounts: [],
   });
   const [feedbackSettings, setFeedbackSettings] = useState<FeedbackSettingsType>({
     feedback_enabled: false,
@@ -577,6 +582,17 @@ export const EventDetailsPage: React.FC = () => {
       photo_cap: event.photo_cap || 0,
       // Default photo sort
       default_photo_sort: event.default_photo_sort || 'upload_date_desc',
+      // Customer accounts (#354). The backend returns an array on the
+      // event detail response — translate snake_case → the picker's
+      // camelCase shape so editing the picker is local-state-only until
+      // the admin clicks Save.
+      customer_accounts: Array.isArray((event as any).customer_accounts)
+        ? (event as any).customer_accounts.map((c: any) => ({
+          id: c.id,
+          email: c.email,
+          displayName: c.display_name ?? c.displayName ?? null,
+        }))
+        : [],
     });
 
     setShowNewPassword(false);
@@ -752,7 +768,13 @@ export const EventDetailsPage: React.FC = () => {
     if (editForm.new_password) {
       updateData.password = editForm.new_password;
     }
-    
+
+    // Customer assignments (#354). Always send the array (even if empty)
+    // so the backend can clear assignments. The PUT route distinguishes
+    // "key omitted" (leave alone) from "[]" (clear all) — see
+    // adminEvents.js / setAssignmentsForEvent.
+    updateData.customer_account_ids = (editForm.customer_accounts || []).map((c) => c.id);
+
     // Remove any keys with undefined values
     Object.keys(updateData).forEach(key => {
       if (updateData[key] === undefined) {
@@ -1114,6 +1136,15 @@ export const EventDetailsPage: React.FC = () => {
                     />
                   </div>
                 )}
+
+                {/* Customer accounts (#354) — driven by the same picker
+                    component as CreateEventPage. The list reflects who
+                    can log in at /customer/login and view this gallery
+                    without the per-event password. */}
+                <CustomerAccountPicker
+                  value={editForm.customer_accounts}
+                  onChange={(next) => setEditForm((prev) => ({ ...prev, customer_accounts: next }))}
+                />
 
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
