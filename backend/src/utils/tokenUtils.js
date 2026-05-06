@@ -98,6 +98,49 @@ function sanitizeSlugForCookie(slug = '') {
   return String(slug).replace(/[^A-Za-z0-9_-]/g, '_');
 }
 
+/**
+ * Best-effort decode of a JWT payload WITHOUT verifying the signature.
+ * Used by the token-extraction helpers below to peek at the `type` claim
+ * so we can decide whether a given Authorization Bearer header is the
+ * RIGHT type of token for the caller. Signature verification still
+ * happens at the route layer via jwt.verify; this peek only filters
+ * out wrong-type tokens.
+ *
+ * Returns null on any parse error so the helpers fall through to cookies
+ * rather than mis-routing to the wrong token type.
+ */
+function peekTokenType(token) {
+  if (typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+    return typeof payload.type === 'string' ? payload.type : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pull a Bearer token from the Authorization header IFF it claims the
+ * expected `type`. Otherwise null.
+ *
+ * Why: when an admin and a customer are logged in the same browser, the
+ * admin's `admin_token` is read from sessionStorage by the events service
+ * and attached as `Authorization: Bearer <admin token>` on requests
+ * unrelated to the admin surface. Without a type-check here, the
+ * gallery-side `/auth/session?slug=…` would happily return that admin
+ * token, decode it as `type:'admin'`, and report the wrong identity —
+ * which is exactly what defeated the prefer-gallery precedence fix on
+ * the dual-cookie test.
+ */
+function getBearerTokenIfType(req, expectedType) {
+  const header = req.headers?.authorization;
+  if (!header || !header.startsWith('Bearer ')) return null;
+  const token = header.substring(7);
+  return peekTokenType(token) === expectedType ? token : null;
+}
+
 function setAdminAuthCookie(res, token) {
   if (!token) return;
   res.cookie(ADMIN_COOKIE_NAME, token, buildCookieOptionsWithExpiry(res));
@@ -145,10 +188,12 @@ function clearGalleryAuthCookies(res, slug) {
 }
 
 function getAdminTokenFromRequest(req) {
-  const header = req.headers?.authorization;
-  if (header && header.startsWith('Bearer ')) {
-    return header.substring(7);
-  }
+  // Honour Authorization: Bearer only if the JWT claims type:'admin'.
+  // Stops gallery/customer tokens that happen to be on the request from
+  // being mistaken for admin auth (mirrors getGalleryTokenFromRequest's
+  // protection in the other direction).
+  const bearer = getBearerTokenIfType(req, 'admin');
+  if (bearer) return bearer;
   return req.cookies?.[ADMIN_COOKIE_NAME] || null;
 }
 
@@ -172,10 +217,15 @@ function getCustomerTokenFromRequest(req) {
 }
 
 function getGalleryTokenFromRequest(req, slug) {
-  const header = req.headers?.authorization;
-  if (header && header.startsWith('Bearer ')) {
-    return header.substring(7);
-  }
+  // Honour Authorization: Bearer only if the JWT claims type:'gallery'.
+  // The previous unconditional Bearer pickup defeated the prefer-gallery
+  // precedence fix on /auth/session?slug=…: an admin token attached as
+  // Bearer (e.g. by the shared events.service.ts auto-auth path) was
+  // returned here, decoded as type:'admin' downstream, and mis-rendered
+  // the gallery as "logged in as admin" which kicked the customer back
+  // to the per-event password prompt.
+  const bearer = getBearerTokenIfType(req, 'gallery');
+  if (bearer) return bearer;
 
   if (!req.cookies) {
     return null;
