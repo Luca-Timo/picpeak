@@ -23,7 +23,6 @@ export interface CustomerEvent {
   eventType: string;
   eventDate: string | null;
   expiresAt: string | null;
-  coverPhotoId: number | null;
   isActive: boolean;
   assignedAt: string;
 }
