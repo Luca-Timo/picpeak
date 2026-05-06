@@ -1057,7 +1057,7 @@
       "showCompanyName": "Show company name in customer header",
       "showCompanyNameHint": "Hide if your logo already includes the company name.",
       "featuresTitle": "Customer features",
-      "featuresHint": "Globally enable or disable the Calendar, Quotes and Bills tabs on the customer surface. A customer only sees a tab if both the global toggle here AND the per-customer flag on their account are ON. The pages themselves are still placeholders right now.",
+      "featuresHint": "These are the master switches for the Calendar, Quotes and Bills tabs on the customer surface. ON shows the tab for every customer by default; you can hide it for individual customers from their detail page. OFF here hides the tab for everyone, regardless of per-customer overrides. The pages themselves are still placeholders right now.",
       "calendar": "Calendar",
       "quotes": "Quotes",
       "bills": "Bills",
@@ -2577,7 +2577,7 @@
       "countryCode": "País (ISO 2)",
       "notesHint": "Visível apenas para administradores. Nunca mostrado ao cliente.",
       "featuresSection": "Customer features",
-      "featuresHint": "Enable per-customer access to the new customer-surface tabs. Visibility is AND-combined with the global toggles in Settings → Customer Surface — both must be ON for the customer to see the entry.",
+      "featuresHint": "Per-customer overrides for the customer-surface tabs. The global toggles in Settings → Customer Surface are the master switch — when global is OFF nobody sees the tab, regardless of what you set here. Defaults are ON, so flip a switch OFF to hide a tab for this specific customer.",
       "passwordSection": "Account actions",
       "passwordHint": "Sends a 7-day single-use reset link to the customer's email. The customer's current password keeps working until they click the link and set a new one.",
       "passwordReset": {

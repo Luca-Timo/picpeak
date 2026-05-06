@@ -305,7 +305,7 @@ export const CustomerDetailPage: React.FC = () => {
         <p className="text-xs text-muted-theme mb-4">
           {t(
             'customers.detail.featuresHint',
-            'Enable per-customer access to the new customer-surface tabs. Visibility is AND-combined with the global toggles in Settings → Customer Surface — both must be ON for the customer to see the entry.'
+            'Per-customer overrides for the customer-surface tabs. The global toggles in Settings → Customer Surface are the master switch — when global is OFF nobody sees the tab, regardless of what you set here. Defaults are ON, so flip a switch OFF to hide a tab for this specific customer.'
           )}
         </p>
         <div className="space-y-3">
