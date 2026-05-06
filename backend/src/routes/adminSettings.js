@@ -273,7 +273,14 @@ router.put('/branding', adminAuth, requirePermission('settings.edit'), async (re
       logo_display_hero,
       logo_display_mode,
       hide_powered_by,
-      force_color_mode
+      force_color_mode,
+      // Login-page logo frame toggle. When true (default) both
+      // /admin/login and /customer/login render the tinted square
+      // behind the logo. When false, the logo sits directly on the
+      // page background — useful when the brand identity already
+      // includes a defined backdrop, or when the tint clashes with
+      // the customer's chosen theme.
+      login_logo_frame_enabled
     } = req.body;
 
     // Normalize force_color_mode: only 'dark' | 'light' | null are valid.
@@ -305,7 +312,8 @@ router.put('/branding', adminAuth, requirePermission('settings.edit'), async (re
       logo_display_hero,
       logo_display_mode,
       hide_powered_by,
-      force_color_mode: normalizedForceColorMode
+      force_color_mode: normalizedForceColorMode,
+      login_logo_frame_enabled
     };
 
     // Handle favicon deletion if empty string or null is provided

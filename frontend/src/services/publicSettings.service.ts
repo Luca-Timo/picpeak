@@ -25,6 +25,8 @@ export interface PublicSettings {
    * AdminDarkModeContext + ThemeContext both honor this.
    */
   branding_force_color_mode?: 'dark' | 'light' | null;
+  /** Tinted square frame behind the logo on /admin/login and /customer/login. */
+  branding_login_logo_frame_enabled?: boolean;
   theme_config: any;
   default_language: string;
   enable_analytics: boolean;

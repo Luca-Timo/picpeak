@@ -1355,7 +1355,9 @@
     "controlsStyleHeroWarning": "A barra lateral é recomendada para cabeçalhos Hero.",
     "betaThumbnailWarningTitle": "Baixa resolução de miniatura detectada",
     "betaThumbnailWarningText": "Suas miniaturas são atualmente {{width}}×{{height}}px. Temas beta exibem fotos em tamanhos maiores e requerem pelo menos {{recommended}}×{{recommended}}px para boa qualidade. Aumente as dimensões das miniaturas em Configurações > Miniaturas e regenere.",
-    "betaThumbnailWarningLink": "Ir para configurações de miniaturas"
+    "betaThumbnailWarningLink": "Ir para configurações de miniaturas",
+    "loginLogoFrame": "Show tinted frame behind login logo",
+    "loginLogoFrameHelp": "Applies to both the admin and customer login pages. Turn off if your logo already has its own backdrop."
   },
   "admin": {
     "title": "Painel Admin",

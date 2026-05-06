@@ -1790,7 +1790,9 @@
     "controlsStyleHeroWarning": "Für Hero-Kopfzeilen wird die Seitenleiste empfohlen, um zu verhindern, dass Steuerelemente über dem Hero-Bild erscheinen.",
     "betaThumbnailWarningTitle": "Niedrige Thumbnail-Auflösung erkannt",
     "betaThumbnailWarningText": "Ihre Thumbnails sind derzeit {{width}}×{{height}}px. Beta-Themes zeigen Fotos in größeren Formaten an und benötigen mindestens {{recommended}}×{{recommended}}px für gute Qualität. Erhöhen Sie die Thumbnail-Abmessungen unter Einstellungen > Thumbnails und regenerieren Sie diese.",
-    "betaThumbnailWarningLink": "Zu den Thumbnail-Einstellungen"
+    "betaThumbnailWarningLink": "Zu den Thumbnail-Einstellungen",
+    "loginLogoFrame": "Getöntes Logo-Feld auf den Login-Seiten anzeigen",
+    "loginLogoFrameHelp": "Gilt für Admin- und Kunden-Login. Deaktivieren, wenn dein Logo bereits einen eigenen Hintergrund hat."
   },
   "admin": {
     "title": "Admin-Panel",

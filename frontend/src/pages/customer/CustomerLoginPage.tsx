@@ -110,18 +110,28 @@ export const CustomerLoginPage: React.FC = () => {
       <div className="w-full max-w-md">
         {/* Logo / header — matches AdminLoginPage's tinted square frame
             so the brand presentation is identical across admin and
-            customer entry points. */}
+            customer entry points. The frame itself is admin-controllable
+            via Branding → "Show tinted frame behind login logo" — same
+            toggle drives both login pages. */}
         <div className="text-center mb-8">
-          <div
-            className="w-[200px] h-[150px] mx-auto mb-6 rounded-2xl flex items-center justify-center"
-            style={{ backgroundColor: '#eee6d2' }}
-          >
+          {settingsData?.branding_login_logo_frame_enabled !== false ? (
+            <div
+              className="w-[200px] h-[150px] mx-auto mb-6 rounded-2xl flex items-center justify-center"
+              style={{ backgroundColor: '#eee6d2' }}
+            >
+              <img
+                src={resolvedLogoUrl}
+                alt={companyName}
+                className="w-[180px] h-[130px] object-contain"
+              />
+            </div>
+          ) : (
             <img
               src={resolvedLogoUrl}
               alt={companyName}
-              className="w-[180px] h-[130px] object-contain"
+              className="h-24 w-auto object-contain mx-auto mb-6"
             />
-          </div>
+          )}
           <h1 className="text-3xl font-bold" style={{ color: 'var(--color-text, #171717)' }}>
             {t('customer.login.title', 'Customer login')}
           </h1>

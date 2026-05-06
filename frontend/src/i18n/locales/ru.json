@@ -1355,7 +1355,9 @@
     "controlsStyleHeroWarning": "Для заголовков-баннеров рекомендуется боковая панель, чтобы элементы управления не перекрывали изображение.",
     "betaThumbnailWarningTitle": "Обнаружено низкое разрешение миниатюр",
     "betaThumbnailWarningText": "Ваши миниатюры сейчас {{width}}×{{height}}px. Бета-темы отображают фото в большем размере и требуют минимум {{recommended}}×{{recommended}}px для хорошего качества. Увеличьте размеры миниатюр в Настройки > Миниатюры и пересоздайте их.",
-    "betaThumbnailWarningLink": "Перейти к настройкам миниатюр"
+    "betaThumbnailWarningLink": "Перейти к настройкам миниатюр",
+    "loginLogoFrame": "Show tinted frame behind login logo",
+    "loginLogoFrameHelp": "Applies to both the admin and customer login pages. Turn off if your logo already has its own backdrop."
   },
   "admin": {
     "title": "Панель администратора",

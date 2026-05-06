@@ -1361,7 +1361,9 @@
     "controlsStyleHeroWarning": "Sidebar is recommended for hero headers to prevent controls appearing above the hero image.",
     "betaThumbnailWarningTitle": "Low thumbnail resolution detected",
     "betaThumbnailWarningText": "Your thumbnails are currently {{width}}×{{height}}px. Beta themes display photos at larger sizes and require at least {{recommended}}×{{recommended}}px for good quality. Increase the thumbnail dimensions in Settings > Thumbnails and regenerate.",
-    "betaThumbnailWarningLink": "Go to Thumbnail Settings"
+    "betaThumbnailWarningLink": "Go to Thumbnail Settings",
+    "loginLogoFrame": "Show tinted frame behind login logo",
+    "loginLogoFrameHelp": "Applies to both the admin and customer login pages. Turn off if your logo already has its own backdrop."
   },
   "admin": {
     "title": "Admin Panel",
