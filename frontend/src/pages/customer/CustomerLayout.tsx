@@ -38,31 +38,43 @@ interface NavItem {
   fallback: string;
   icon: React.ComponentType<{ className?: string }>;
   /**
-   * Marks an entry as a stub (Calendar, Quotes, Bills) — surfaced via a
-   * small "Soon" pill. Clicking still works; the destination page renders
-   * a "Coming soon" placeholder.
+   * Optional gate — entry only renders when the matching feature is
+   * effective for this customer (i.e. global toggle ON and per-customer
+   * flag ON, AND-combined server-side in /api/customer/auth/session).
+   * Galleries + Profile are always visible; Calendar/Quotes/Bills are
+   * gated.
    */
-  comingSoon?: boolean;
+  feature?: 'calendar' | 'quotes' | 'bills';
 }
 
 const NAV: NavItem[] = [
   { to: '/customer/dashboard', labelKey: 'customer.nav.galleries', fallback: 'Galleries', icon: ImageIcon },
-  { to: '/customer/calendar', labelKey: 'customer.nav.calendar', fallback: 'Calendar', icon: Calendar, comingSoon: true },
-  { to: '/customer/quotes', labelKey: 'customer.nav.quotes', fallback: 'Quotes', icon: FileText, comingSoon: true },
-  { to: '/customer/bills', labelKey: 'customer.nav.bills', fallback: 'Bills', icon: Receipt, comingSoon: true },
+  { to: '/customer/calendar', labelKey: 'customer.nav.calendar', fallback: 'Calendar', icon: Calendar, feature: 'calendar' },
+  { to: '/customer/quotes', labelKey: 'customer.nav.quotes', fallback: 'Quotes', icon: FileText, feature: 'quotes' },
+  { to: '/customer/bills', labelKey: 'customer.nav.bills', fallback: 'Bills', icon: Receipt, feature: 'bills' },
   { to: '/customer/profile', labelKey: 'customer.nav.profile', fallback: 'Profile', icon: UserIcon },
 ];
 
 export const CustomerLayout: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
-  const { customer, isAuthenticated, isLoading, logout } = useCustomerAuth();
+  const { customer, features, branding, isAuthenticated, isLoading, logout } = useCustomerAuth();
   const { data: settingsData } = usePublicSettings();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const companyName = settingsData?.branding_company_name?.trim() || 'PicPeak';
   const logoUrl = settingsData?.branding_logo_url?.trim();
   const resolvedLogoUrl = logoUrl || '/picpeak-logo-transparent.png';
+
+  // Filter out feature-gated entries the customer can't see. Galleries +
+  // Profile have no feature property, so they're always present.
+  const visibleNav = NAV.filter((item) => !item.feature || features[item.feature] === true);
+
+  // Branding visibility — admin can hide either piece independently. If
+  // both are hidden the brand link still exists (you can click it to
+  // reach /customer/dashboard) but renders empty space at zero height.
+  const showLogo = branding.showLogo;
+  const showCompanyName = branding.showCompanyName;
 
   // Loading screen mirrors AdminLayout's so admin-as-customer dogfooding
   // sees a familiar transition. Background uses the theme variable so a
@@ -121,14 +133,18 @@ export const CustomerLayout: React.FC = () => {
               className="flex items-center gap-2 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded"
               onClick={() => setSidebarOpen(false)}
             >
-              <img
-                src={resolvedLogoUrl}
-                alt={companyName}
-                className="h-8 w-auto object-contain flex-shrink-0"
-              />
-              <span className="text-sm font-semibold text-theme truncate">
-                {companyName}
-              </span>
+              {showLogo && (
+                <img
+                  src={resolvedLogoUrl}
+                  alt={companyName}
+                  className="h-8 w-auto object-contain flex-shrink-0"
+                />
+              )}
+              {showCompanyName && (
+                <span className="text-sm font-semibold text-theme truncate">
+                  {companyName}
+                </span>
+              )}
             </Link>
             <button
               type="button"
@@ -142,7 +158,7 @@ export const CustomerLayout: React.FC = () => {
 
           {/* Navigation */}
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto min-h-0">
-            {NAV.map((item) => {
+            {visibleNav.map((item) => {
               const Icon = item.icon;
               // Active when the path matches or starts with the entry —
               // dashboard stays active only on exact match so the other
@@ -165,17 +181,6 @@ export const CustomerLayout: React.FC = () => {
                   <span className={`flex-1 truncate ${isActive ? '' : 'text-theme'}`}>
                     {t(item.labelKey, item.fallback)}
                   </span>
-                  {item.comingSoon && (
-                    <span
-                      className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold"
-                      style={{
-                        backgroundColor: 'color-mix(in srgb, var(--color-accent) 14%, transparent)',
-                        color: 'var(--color-accent)',
-                      }}
-                    >
-                      {t('customer.nav.soon', 'Soon')}
-                    </span>
-                  )}
                 </NavLink>
               );
             })}
