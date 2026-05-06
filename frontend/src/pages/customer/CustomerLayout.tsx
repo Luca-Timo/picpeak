@@ -181,6 +181,21 @@ export const CustomerLayout: React.FC = () => {
                   <span className={`flex-1 truncate ${isActive ? '' : 'text-theme'}`}>
                     {t(item.labelKey, item.fallback)}
                   </span>
+                  {/* Coming-soon pill for the gated entries. The pages
+                      themselves are still placeholders even when the
+                      admin has enabled access — the badge keeps that
+                      promise honest. */}
+                  {item.feature && (
+                    <span
+                      className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold"
+                      style={{
+                        backgroundColor: 'color-mix(in srgb, var(--color-accent) 14%, transparent)',
+                        color: 'var(--color-accent)',
+                      }}
+                    >
+                      {t('customer.nav.soon', 'Soon')}
+                    </span>
+                  )}
                 </NavLink>
               );
             })}

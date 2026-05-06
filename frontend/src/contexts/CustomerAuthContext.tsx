@@ -67,6 +67,38 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
   // handled inline on the login page itself, not here).
   const [error] = useState<string | null>(null);
 
+  /**
+   * Refetch the session from /api/customer/auth/session and update both
+   * React state and sessionStorage caches. Called on initial mount AND
+   * on window focus, so an admin who toggles a per-customer feature in
+   * one tab sees the change reflected in the customer tab the moment
+   * they switch back. Without this, the layout reads only from the
+   * mount-time sessionStorage cache and stays stale until a hard reload.
+   */
+  const refreshSession = React.useCallback(async () => {
+    try {
+      const response = await customerService.session();
+      if (response?.customer) {
+        setCustomerState(response.customer);
+        setFeatures(response.features);
+        setBranding(response.branding);
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(response.customer));
+        sessionStorage.setItem(FEATURES_KEY, JSON.stringify(response.features));
+        sessionStorage.setItem(BRANDING_KEY, JSON.stringify(response.branding));
+      } else {
+        setCustomerState(null);
+        sessionStorage.removeItem(STORAGE_KEY);
+        sessionStorage.removeItem(FEATURES_KEY);
+        sessionStorage.removeItem(BRANDING_KEY);
+      }
+    } catch {
+      setCustomerState(null);
+      sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(FEATURES_KEY);
+      sessionStorage.removeItem(BRANDING_KEY);
+    }
+  }, []);
+
   useEffect(() => {
     // Hydrate immediately from sessionStorage so the dashboard avoids
     // a flicker on hard refresh; the network call below confirms the
@@ -85,32 +117,24 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
     }
 
     let cancelled = false;
-    customerService.session().then((response) => {
-      if (cancelled) return;
-      if (response?.customer) {
-        setCustomerState(response.customer);
-        setFeatures(response.features);
-        setBranding(response.branding);
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(response.customer));
-        sessionStorage.setItem(FEATURES_KEY, JSON.stringify(response.features));
-        sessionStorage.setItem(BRANDING_KEY, JSON.stringify(response.branding));
-      } else {
-        setCustomerState(null);
-        sessionStorage.removeItem(STORAGE_KEY);
-        sessionStorage.removeItem(FEATURES_KEY);
-        sessionStorage.removeItem(BRANDING_KEY);
-      }
-      setIsLoading(false);
-    }).catch(() => {
-      if (cancelled) return;
-      setCustomerState(null);
-      sessionStorage.removeItem(STORAGE_KEY);
-      sessionStorage.removeItem(FEATURES_KEY);
-      sessionStorage.removeItem(BRANDING_KEY);
-      setIsLoading(false);
+    refreshSession().finally(() => {
+      if (!cancelled) setIsLoading(false);
     });
-    return () => { cancelled = true; };
-  }, []);
+
+    // Refetch on tab/window focus so admin-side changes (per-customer
+    // feature toggles, branding visibility, deactivation) reach the
+    // customer browser without requiring a manual page reload.
+    const onFocus = () => { void refreshSession(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') void refreshSession();
+    });
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [refreshSession]);
 
   const setCustomer = (c: CustomerProfile) => {
     setCustomerState(c);

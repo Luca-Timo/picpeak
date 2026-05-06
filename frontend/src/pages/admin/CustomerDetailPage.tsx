@@ -317,7 +317,17 @@ export const CustomerDetailPage: React.FC = () => {
             const enabled = !!form[key];
             return (
               <label key={key} className="flex items-center justify-between gap-3 cursor-pointer">
-                <span className="text-sm font-medium text-theme">{t(labelKey, fallback)}</span>
+                <span className="text-sm font-medium text-theme flex items-center gap-2">
+                  {t(labelKey, fallback)}
+                  {/* Soon badge — these tabs are still coming-soon stubs;
+                      this keeps the admin honest when looking at the
+                      toggles. */}
+                  <span
+                    className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                  >
+                    {t('customer.nav.soon', 'Soon')}
+                  </span>
+                </span>
                 <button
                   type="button"
                   role="switch"
