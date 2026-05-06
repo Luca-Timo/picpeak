@@ -2706,8 +2706,8 @@
       "save": "Save changes",
       "salutation": {
         "none": "— Not specified —",
-        "herr": "Herr",
-        "frau": "Frau",
+        "herr": "Mr.",
+        "frau": "Ms.",
         "mx": "Mx",
         "dr": "Dr."
       },
