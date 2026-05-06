@@ -95,7 +95,7 @@ export const CustomerResetPasswordPage: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center px-4 py-8"
+      className="customer-surface min-h-screen flex items-center justify-center px-4 py-8"
       style={{ backgroundColor: 'var(--color-background, #fafafa)' }}
     >
       <div className="w-full max-w-md">

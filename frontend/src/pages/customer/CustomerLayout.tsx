@@ -100,7 +100,11 @@ export const CustomerLayout: React.FC = () => {
 
   return (
     <div
-      className="h-screen flex overflow-hidden"
+      // The `customer-surface` marker is read by index.css to retheme
+      // <Input> components via CSS variables — admin uses tailwind's
+      // `dark:` modifier (toggled on <html>), but the customer surface
+      // uses theme tokens so we scope the override here.
+      className="customer-surface h-screen flex overflow-hidden"
       style={{ backgroundColor: 'var(--color-background, #fafafa)' }}
     >
       {/* Mobile backdrop */}
