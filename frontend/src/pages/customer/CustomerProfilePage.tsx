@@ -257,24 +257,42 @@ export const CustomerProfilePage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-theme mb-1">
+              <label className="block text-sm font-medium text-theme mb-1" htmlFor="profile-first-name">
                 {t('customer.profile.field.firstName', 'First name')}
               </label>
-              <Input value={form.firstName || ''} onChange={(e) => updateField('firstName', e.target.value)} />
+              <Input
+                id="profile-first-name"
+                name="given-name"
+                autoComplete="given-name"
+                value={form.firstName || ''}
+                onChange={(e) => updateField('firstName', e.target.value)}
+              />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-theme mb-1">
+              <label className="block text-sm font-medium text-theme mb-1" htmlFor="profile-last-name">
                 {t('customer.profile.field.lastName', 'Last name')}
               </label>
-              <Input value={form.lastName || ''} onChange={(e) => updateField('lastName', e.target.value)} />
+              <Input
+                id="profile-last-name"
+                name="family-name"
+                autoComplete="family-name"
+                value={form.lastName || ''}
+                onChange={(e) => updateField('lastName', e.target.value)}
+              />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-theme mb-1">
+              <label className="block text-sm font-medium text-theme mb-1" htmlFor="profile-display-name">
                 {t('customer.profile.field.displayName', 'Display name')}
               </label>
-              <Input value={form.displayName || ''} onChange={(e) => updateField('displayName', e.target.value)} />
+              <Input
+                id="profile-display-name"
+                name="nickname"
+                autoComplete="nickname"
+                value={form.displayName || ''}
+                onChange={(e) => updateField('displayName', e.target.value)}
+              />
               <p className="mt-1 text-xs text-muted-theme">
                 {t('customer.profile.field.displayNameHint', 'How we greet you in the dashboard.')}
               </p>
@@ -292,28 +310,44 @@ export const CustomerProfilePage: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-theme mb-1">
+              <label className="block text-sm font-medium text-theme mb-1" htmlFor="profile-phone">
                 {t('customer.profile.field.phone', 'Phone')}
               </label>
               <Input
+                id="profile-phone"
+                name="tel"
+                type="tel"
+                autoComplete="tel"
                 value={form.phone || ''}
                 onChange={(e) => updateField('phone', e.target.value)}
-                autoComplete="tel"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-theme mb-1">
+              <label className="block text-sm font-medium text-theme mb-1" htmlFor="profile-company">
                 {t('customer.profile.field.companyName', 'Company name')}
               </label>
-              <Input value={form.companyName || ''} onChange={(e) => updateField('companyName', e.target.value)} />
+              <Input
+                id="profile-company"
+                name="organization"
+                autoComplete="organization"
+                value={form.companyName || ''}
+                onChange={(e) => updateField('companyName', e.target.value)}
+              />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-theme mb-1">
+              <label className="block text-sm font-medium text-theme mb-1" htmlFor="profile-vat">
                 {t('customer.profile.field.vatId', 'VAT ID')}
               </label>
-              <Input value={form.vatId || ''} onChange={(e) => updateField('vatId', e.target.value)} />
+              {/* No standard autocomplete token for VAT — leave it off so
+                  browsers don't try to fill it from a random saved value. */}
+              <Input
+                id="profile-vat"
+                name="vat-id"
+                value={form.vatId || ''}
+                onChange={(e) => updateField('vatId', e.target.value)}
+              />
             </div>
           </div>
         </ProfileTile>
@@ -326,72 +360,99 @@ export const CustomerProfilePage: React.FC = () => {
             </h2>
           </div>
 
+          {/*
+            Address autofill: browsers (especially Safari) need three things
+            to reliably fill a billing address:
+              1. Each input has a `name` attribute that matches a standard
+                 form-autofill token (address-line1, postal-code, etc.).
+              2. The corresponding `autoComplete` attribute matches the
+                 same token.
+              3. All address fields share an autocomplete *section* — we
+                 prefix every token with `billing` so browser fills the
+                 user's billing address rather than their shipping one
+                 (Safari treats unprefixed and `shipping` as the default).
+            Without `name`+`id` matching, Safari heuristics give up and
+            fall back to nothing, which is what the maintainer hit.
+          */}
           <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
             <div className="sm:col-span-6">
-              <label className="block text-sm font-medium text-theme mb-1">
+              <label className="block text-sm font-medium text-theme mb-1" htmlFor="profile-address-line1">
                 {t('customer.profile.field.addressLine1', 'Address line 1')}
               </label>
               <Input
+                id="profile-address-line1"
+                name="address-line1"
+                autoComplete="billing address-line1"
                 value={form.addressLine1 || ''}
                 onChange={(e) => updateField('addressLine1', e.target.value)}
-                autoComplete="address-line1"
               />
             </div>
 
             <div className="sm:col-span-6">
-              <label className="block text-sm font-medium text-theme mb-1">
+              <label className="block text-sm font-medium text-theme mb-1" htmlFor="profile-address-line2">
                 {t('customer.profile.field.addressLine2', 'Address line 2')}
               </label>
               <Input
+                id="profile-address-line2"
+                name="address-line2"
+                autoComplete="billing address-line2"
                 value={form.addressLine2 || ''}
                 onChange={(e) => updateField('addressLine2', e.target.value)}
-                autoComplete="address-line2"
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-theme mb-1">
+              <label className="block text-sm font-medium text-theme mb-1" htmlFor="profile-postal-code">
                 {t('customer.profile.field.postalCode', 'Postal code')}
               </label>
               <Input
+                id="profile-postal-code"
+                name="postal-code"
+                autoComplete="billing postal-code"
+                inputMode="numeric"
                 value={form.postalCode || ''}
                 onChange={(e) => updateField('postalCode', e.target.value)}
-                autoComplete="postal-code"
               />
             </div>
 
             <div className="sm:col-span-3">
-              <label className="block text-sm font-medium text-theme mb-1">
+              <label className="block text-sm font-medium text-theme mb-1" htmlFor="profile-city">
                 {t('customer.profile.field.city', 'City')}
               </label>
               <Input
+                id="profile-city"
+                name="address-level2"
+                autoComplete="billing address-level2"
                 value={form.city || ''}
                 onChange={(e) => updateField('city', e.target.value)}
-                autoComplete="address-level2"
               />
             </div>
 
             <div className="sm:col-span-1">
-              <label className="block text-sm font-medium text-theme mb-1">
+              <label className="block text-sm font-medium text-theme mb-1" htmlFor="profile-country">
                 {t('customer.profile.field.countryCode', 'Country')}
               </label>
               <Input
-                value={form.countryCode || ''}
-                onChange={(e) => updateField('countryCode', e.target.value.toUpperCase().slice(0, 2))}
+                id="profile-country"
+                name="country"
+                autoComplete="billing country"
                 placeholder="DE"
                 maxLength={2}
-                autoComplete="country"
+                value={form.countryCode || ''}
+                onChange={(e) => updateField('countryCode', e.target.value.toUpperCase().slice(0, 2))}
               />
             </div>
 
             <div className="sm:col-span-3">
-              <label className="block text-sm font-medium text-theme mb-1">
+              <label className="block text-sm font-medium text-theme mb-1" htmlFor="profile-state">
                 {t('customer.profile.field.state', 'State / region')}
               </label>
               <Input
+                id="profile-state"
+                name="address-level1"
+                autoComplete="billing address-level1"
                 value={form.state || ''}
                 onChange={(e) => updateField('state', e.target.value)}
-                autoComplete="address-level1"
               />
             </div>
           </div>

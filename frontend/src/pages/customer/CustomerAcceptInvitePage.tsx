@@ -266,16 +266,28 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-theme mb-1">
+                    <label className="block text-sm font-medium text-theme mb-1" htmlFor="invite-first-name">
                       {t('customer.profile.field.firstName', 'First name')}
                     </label>
-                    <Input value={form.first_name} onChange={(e) => update('first_name', e.target.value)} autoComplete="given-name" />
+                    <Input
+                      id="invite-first-name"
+                      name="given-name"
+                      autoComplete="given-name"
+                      value={form.first_name}
+                      onChange={(e) => update('first_name', e.target.value)}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-theme mb-1">
+                    <label className="block text-sm font-medium text-theme mb-1" htmlFor="invite-last-name">
                       {t('customer.profile.field.lastName', 'Last name')}
                     </label>
-                    <Input value={form.last_name} onChange={(e) => update('last_name', e.target.value)} autoComplete="family-name" />
+                    <Input
+                      id="invite-last-name"
+                      name="family-name"
+                      autoComplete="family-name"
+                      value={form.last_name}
+                      onChange={(e) => update('last_name', e.target.value)}
+                    />
                   </div>
                 </div>
               </section>
@@ -290,22 +302,40 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-theme mb-1">
+                    <label className="block text-sm font-medium text-theme mb-1" htmlFor="invite-phone">
                       {t('customer.profile.field.phone', 'Phone')}
                     </label>
-                    <Input value={form.phone} onChange={(e) => update('phone', e.target.value)} autoComplete="tel" />
+                    <Input
+                      id="invite-phone"
+                      name="tel"
+                      type="tel"
+                      autoComplete="tel"
+                      value={form.phone}
+                      onChange={(e) => update('phone', e.target.value)}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-theme mb-1">
+                    <label className="block text-sm font-medium text-theme mb-1" htmlFor="invite-company">
                       {t('customer.profile.field.companyName', 'Company name')}
                     </label>
-                    <Input value={form.company_name} onChange={(e) => update('company_name', e.target.value)} autoComplete="organization" />
+                    <Input
+                      id="invite-company"
+                      name="organization"
+                      autoComplete="organization"
+                      value={form.company_name}
+                      onChange={(e) => update('company_name', e.target.value)}
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-theme mb-1">
+                    <label className="block text-sm font-medium text-theme mb-1" htmlFor="invite-vat">
                       {t('customer.profile.field.vatId', 'VAT ID')}
                     </label>
-                    <Input value={form.vat_id} onChange={(e) => update('vat_id', e.target.value)} />
+                    <Input
+                      id="invite-vat"
+                      name="vat-id"
+                      value={form.vat_id}
+                      onChange={(e) => update('vat_id', e.target.value)}
+                    />
                   </div>
                 </div>
               </section>
@@ -316,48 +346,83 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                   <MapPin className="w-4 h-4" />
                   {t('customer.acceptInvite.section.address', 'Billing address (optional)')}
                 </h2>
+                {/* Same `name`+`autoComplete` pairing the profile page
+                    uses — see CustomerProfilePage for the rationale. */}
                 <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
                   <div className="sm:col-span-6">
-                    <label className="block text-sm font-medium text-theme mb-1">
+                    <label className="block text-sm font-medium text-theme mb-1" htmlFor="invite-address-line1">
                       {t('customer.profile.field.addressLine1', 'Address line 1')}
                     </label>
-                    <Input value={form.address_line1} onChange={(e) => update('address_line1', e.target.value)} autoComplete="address-line1" />
+                    <Input
+                      id="invite-address-line1"
+                      name="address-line1"
+                      autoComplete="billing address-line1"
+                      value={form.address_line1}
+                      onChange={(e) => update('address_line1', e.target.value)}
+                    />
                   </div>
                   <div className="sm:col-span-6">
-                    <label className="block text-sm font-medium text-theme mb-1">
+                    <label className="block text-sm font-medium text-theme mb-1" htmlFor="invite-address-line2">
                       {t('customer.profile.field.addressLine2', 'Address line 2')}
                     </label>
-                    <Input value={form.address_line2} onChange={(e) => update('address_line2', e.target.value)} autoComplete="address-line2" />
+                    <Input
+                      id="invite-address-line2"
+                      name="address-line2"
+                      autoComplete="billing address-line2"
+                      value={form.address_line2}
+                      onChange={(e) => update('address_line2', e.target.value)}
+                    />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-theme mb-1">
+                    <label className="block text-sm font-medium text-theme mb-1" htmlFor="invite-postal-code">
                       {t('customer.profile.field.postalCode', 'Postal code')}
                     </label>
-                    <Input value={form.postal_code} onChange={(e) => update('postal_code', e.target.value)} autoComplete="postal-code" />
-                  </div>
-                  <div className="sm:col-span-3">
-                    <label className="block text-sm font-medium text-theme mb-1">
-                      {t('customer.profile.field.city', 'City')}
-                    </label>
-                    <Input value={form.city} onChange={(e) => update('city', e.target.value)} autoComplete="address-level2" />
-                  </div>
-                  <div className="sm:col-span-1">
-                    <label className="block text-sm font-medium text-theme mb-1">
-                      {t('customer.profile.field.countryCode', 'Country')}
-                    </label>
                     <Input
-                      value={form.country_code}
-                      onChange={(e) => update('country_code', e.target.value.toUpperCase().slice(0, 2))}
-                      placeholder="DE"
-                      maxLength={2}
-                      autoComplete="country"
+                      id="invite-postal-code"
+                      name="postal-code"
+                      autoComplete="billing postal-code"
+                      inputMode="numeric"
+                      value={form.postal_code}
+                      onChange={(e) => update('postal_code', e.target.value)}
                     />
                   </div>
                   <div className="sm:col-span-3">
-                    <label className="block text-sm font-medium text-theme mb-1">
+                    <label className="block text-sm font-medium text-theme mb-1" htmlFor="invite-city">
+                      {t('customer.profile.field.city', 'City')}
+                    </label>
+                    <Input
+                      id="invite-city"
+                      name="address-level2"
+                      autoComplete="billing address-level2"
+                      value={form.city}
+                      onChange={(e) => update('city', e.target.value)}
+                    />
+                  </div>
+                  <div className="sm:col-span-1">
+                    <label className="block text-sm font-medium text-theme mb-1" htmlFor="invite-country">
+                      {t('customer.profile.field.countryCode', 'Country')}
+                    </label>
+                    <Input
+                      id="invite-country"
+                      name="country"
+                      autoComplete="billing country"
+                      placeholder="DE"
+                      maxLength={2}
+                      value={form.country_code}
+                      onChange={(e) => update('country_code', e.target.value.toUpperCase().slice(0, 2))}
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-sm font-medium text-theme mb-1" htmlFor="invite-state">
                       {t('customer.profile.field.state', 'State / region')}
                     </label>
-                    <Input value={form.state} onChange={(e) => update('state', e.target.value)} autoComplete="address-level1" />
+                    <Input
+                      id="invite-state"
+                      name="address-level1"
+                      autoComplete="billing address-level1"
+                      value={form.state}
+                      onChange={(e) => update('state', e.target.value)}
+                    />
                   </div>
                 </div>
               </section>
