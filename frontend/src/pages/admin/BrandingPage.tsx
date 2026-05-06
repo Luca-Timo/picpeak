@@ -31,6 +31,7 @@ export const BrandingPage: React.FC = () => {
     logo_display_hero: true,
     logo_display_mode: 'logo_and_text',
     hide_powered_by: false,
+    show_gallery_menu_button: true,
   });
 
   const [currentTheme, setCurrentTheme] = useState<ThemeConfig>(theme);
@@ -536,6 +537,25 @@ export const BrandingPage: React.FC = () => {
                     </span>
                     <p className="text-xs text-neutral-600 dark:text-neutral-400">
                       {t('branding.showLogoInHeroHelp', 'Display the logo in hero sections (for non-grid layouts)')}
+                    </p>
+                  </div>
+                </label>
+
+                {/* Gallery menu icon visibility (#386). Per-event themes can
+                    still suppress the menu via controlsStyle: 'classic'. */}
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={brandingSettings.show_gallery_menu_button !== false}
+                    onChange={(e) => handleBrandingChange('show_gallery_menu_button', e.target.checked)}
+                    className="rounded border-neutral-300 dark:border-neutral-600 text-primary-600 focus:ring-primary-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                      {t('branding.showGalleryMenuButton', 'Show menu icon in gallery header')}
+                    </span>
+                    <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                      {t('branding.showGalleryMenuButtonHelp', 'Display the menu (sidebar toggle) icon in the gallery header. Per-event themes that use the inline filter bar will not show a menu icon regardless of this setting.')}
                     </p>
                   </div>
                 </label>

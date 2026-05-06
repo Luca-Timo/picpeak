@@ -19,6 +19,12 @@ export interface PublicSettings {
   branding_logo_display_header?: boolean;
   branding_logo_display_hero?: boolean;
   branding_hide_powered_by?: boolean;
+  /**
+   * Instance-wide toggle for the gallery menu icon button. Defaults true
+   * so existing installs render unchanged. Per-event ThemeConfig still
+   * controls per-event menu visibility via controlsStyle.
+   */
+  branding_show_gallery_menu_button?: boolean;
   theme_config: any;
   default_language: string;
   enable_analytics: boolean;
