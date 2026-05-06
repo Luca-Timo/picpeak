@@ -19,6 +19,8 @@ export interface BrandingSettings {
   logo_display_hero?: boolean;
   logo_display_mode?: 'logo_only' | 'text_only' | 'logo_and_text';
   hide_powered_by?: boolean;
+  /** Tinted square frame behind the logo on /admin/login and /customer/login. */
+  login_logo_frame_enabled?: boolean;
 }
 
 export interface ThemeSettings {
@@ -288,7 +290,12 @@ export const settingsService = {
       logo_display_header: this._parseBoolean(rawSettings.branding_logo_display_header, true),
       logo_display_hero: this._parseBoolean(rawSettings.branding_logo_display_hero, true),
       logo_display_mode: rawSettings.branding_logo_display_mode || 'logo_and_text',
-      hide_powered_by: this._parseBoolean(rawSettings.branding_hide_powered_by, false)
+      hide_powered_by: this._parseBoolean(rawSettings.branding_hide_powered_by, false),
+      // Login-page logo frame default true (matches the visual state
+      // shipped before the toggle existed). Without this entry,
+      // formatBrandingSettings would silently drop the field on every
+      // load and the saved-false value would round-trip back to true.
+      login_logo_frame_enabled: this._parseBoolean(rawSettings.branding_login_logo_frame_enabled, true),
     };
   },
 

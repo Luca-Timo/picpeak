@@ -5,6 +5,42 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Features
+
+* **customers:** recurring customer accounts ([#354](https://github.com/the-luap/picpeak/discussions/354)) — new "customer" user tier alongside admins and per-event guests. Photographers invite customers once; they log in at `/customer/login` and see every assigned gallery without re-entering per-event passwords. Includes:
+  - Customer profile (salutation, name, phone, company, VAT id, billing address, preferred language) — admin can pre-fill on invite, customer confirms or edits on accept.
+  - Self-service `/customer/profile` page with password change.
+  - Admin `/admin/customers` management (roster, invitations, detail/edit, deactivate, password-reset trigger).
+  - Customer dashboard at `/customer/dashboard` — inline list of assigned galleries with sort by name / newest / oldest, per-row Open + Download buttons. Click bypasses the per-event password.
+  - Admin-style sidebar layout for `/customer/*` (Galleries, Calendar, Quotes, Bills, Profile). Calendar/Quotes/Bills are placeholder stubs gated by toggles.
+  - Strictly separate auth: new `customer` token type, `customer_token` cookie, isolated `/api/customer/*` API surface.
+* **customers:** admin-triggered password reset flow (7-day single-use email link, current password keeps working until reset).
+* **customers:** admin Settings → Customer surface — branding visibility (hide logo / company name) and global feature toggles (Calendar / Quotes / Bills). Per-customer overrides on the detail page; global is the master switch, per-customer is opt-out only.
+* **customers:** event form `<CustomerAccountPicker>` lets admins assign customers to events as part of create/edit.
+* **branding:** new toggle "Show tinted frame behind login logo" — single setting drives both `/admin/login` and `/customer/login`. Default on (preserves existing visual state).
+
+### Bug Fixes
+
+* **auth:** `/auth/session?slug=…` prefers the gallery token over the admin token when present, so an admin dogfooding the customer flow no longer gets bounced to the per-event password prompt.
+* **auth:** `getGalleryTokenFromRequest` / `getAdminTokenFromRequest` only honor `Authorization: Bearer` when the JWT's `type` claim matches — admin Bearer headers leaking onto gallery requests no longer flip the reported identity.
+* **customers:** `/api/customer/events/:slug/access-token` writes the `gallery_token_<slug>` cookie alongside the JSON response, so the dashboard → gallery handoff survives `cleanupOldGalleryAuth` wiping sessionStorage on gallery mount.
+* **auth:** `revoked_tokens` insert uses `onConflict('token_id').ignore()` — double-logout is a no-op, not a 23505.
+* **audit:** `logActivity` coerces non-integer `actor_id` (legacy guest fingerprint) to null + stashes the original in `actor_name` so the writer doesn't drop entries.
+* **customers:** drop non-existent `events.cover_photo_id` from the dashboard query that was 500-ing assigned gallery lookups.
+* **customers:** `CustomerAuthContext` refetches `/auth/session` on window focus + visibilitychange, so admin-side per-customer toggle changes propagate to the customer tab without a manual reload.
+* **customers:** retheme `<Card>` and `<Input>` on the customer surface via `.customer-surface` scope — the global `.card`/`.input` classes hard-code white backgrounds; this picks up theme tokens so dark themes render correctly on profile / login / accept-invite / reset-password.
+* **migrations:** schema-tolerant template seeds — both 087 (customer invitation) and 089 (customer password reset) detect localized `subject_*` / `body_*_<locale>` columns and populate every locale variant present so installs with a multi-locale `email_templates` schema don't crash-loop on the NOT-NULL constraint.
+
+### Documentation
+
+* **changelog:** Unreleased section drafted ahead of the customer-accounts merge.
+
+### Notes
+
+* nl/pt/ru i18n keys for the new customer surface, profile, login, settings tab, branding toggle and i18n use English fallback values — flagged in the relevant PRs as needing native review before the next release tag.
+
 ## [3.40.1-beta.0](https://github.com/the-luap/picpeak/compare/v3.40.0-beta.0...v3.40.1-beta.0) (2026-05-04)
 
 
