@@ -1049,6 +1049,23 @@
       "deviceTypes": "Tipos de dispositivo por user agents",
       "privacy": "Privacidade",
       "privacyText": "Os endereços IP são hasheados para privacidade. Nenhum dado pessoal é armazenado. Os dados de análises são retidos por 90 dias."
+    },
+    "customerSurface": {
+      "title": "Customer surface",
+      "brandingTitle": "Customer surface branding",
+      "brandingHint": "Controls what shows in the header of the customer dashboard at /customer/dashboard. Leaves the public gallery and admin surfaces untouched.",
+      "showLogo": "Show logo in customer header",
+      "showLogoHint": "Uses the same branding logo configured in Branding settings.",
+      "showCompanyName": "Show company name in customer header",
+      "showCompanyNameHint": "Hide if your logo already includes the company name.",
+      "featuresTitle": "Customer features",
+      "featuresHint": "Globally enable or disable the Calendar, Quotes and Bills tabs on the customer surface. A customer only sees a tab if both the global toggle here AND the per-customer flag on their account are ON. The pages themselves are still placeholders right now.",
+      "calendar": "Calendar",
+      "quotes": "Quotes",
+      "bills": "Bills",
+      "save": "Save changes",
+      "saved": "Customer surface settings saved",
+      "error": "Could not save settings"
     }
   },
   "analytics": {
@@ -2560,7 +2577,17 @@
       "city": "Cidade",
       "state": "Estado / região",
       "countryCode": "País (ISO 2)",
-      "notesHint": "Visível apenas para administradores. Nunca mostrado ao cliente."
+      "notesHint": "Visível apenas para administradores. Nunca mostrado ao cliente.",
+      "featuresSection": "Customer features",
+      "featuresHint": "Enable per-customer access to the new customer-surface tabs. Visibility is AND-combined with the global toggles in Settings → Customer Surface — both must be ON for the customer to see the entry.",
+      "passwordSection": "Account actions",
+      "passwordHint": "Sends a 7-day single-use reset link to the customer's email. The customer's current password keeps working until they click the link and set a new one.",
+      "passwordReset": {
+        "button": "Send password reset email",
+        "success": "Password reset email sent",
+        "error": "Could not send password reset",
+        "inactive": "Reactivate the customer before sending a reset."
+      }
     }
   },
   "customer": {
@@ -2710,6 +2737,20 @@
         "savedToast": "Password updated",
         "error": "Could not change password"
       }
+    },
+    "resetPassword": {
+      "title": "Reset your password",
+      "invalidToken": "This reset link is invalid or has expired. Please ask your photographer to send a new one.",
+      "forEmail": "Setting a new password for ",
+      "password": "New password",
+      "confirm": "Confirm new password",
+      "submit": "Update password",
+      "hint": "At least 8 characters with one uppercase letter and one number.",
+      "tooShort": "Password must be at least 8 characters",
+      "mismatch": "Passwords do not match",
+      "successToast": "Password updated. Please log in.",
+      "invalidSubmission": "Could not update your password.",
+      "generalError": "Could not update your password. Please try again."
     }
   }
 }
