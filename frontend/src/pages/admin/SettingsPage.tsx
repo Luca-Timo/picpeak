@@ -14,6 +14,7 @@ import {
   Code,
   KeyRound,
   Webhook,
+  UserCog,
   type LucideIcon,
 } from 'lucide-react';
 import { Loading } from '../../components/common';
@@ -32,9 +33,10 @@ import {
   ThumbnailsTab,
   ApiTokensTab,
   WebhooksTab,
+  CustomerSurfaceTab,
 } from '../../features/settings';
 
-type TabType = 'general' | 'events' | 'status' | 'security' | 'imageSecurity' | 'thumbnails' | 'categories' | 'seo' | 'analytics' | 'moderation' | 'styling' | 'apiTokens' | 'webhooks';
+type TabType = 'general' | 'events' | 'status' | 'security' | 'imageSecurity' | 'thumbnails' | 'categories' | 'seo' | 'analytics' | 'moderation' | 'styling' | 'apiTokens' | 'webhooks' | 'customerSurface';
 
 interface NavItem {
   key: TabType;
@@ -116,6 +118,11 @@ export const SettingsPage: React.FC = () => {
         { key: 'categories', label: t('settings.categories.title'), icon: Tags },
         { key: 'thumbnails', label: t('settings.thumbnails.title', 'Thumbnails'), icon: ImageIcon },
         { key: 'styling', label: t('settings.styling.title', 'Custom CSS'), icon: Code },
+        // Customer-surface toggles (#354 follow-up). Lives under Display
+        // since branding visibility is the lead concern; the feature
+        // globals piggyback because the natural mental model is "what
+        // does my customer see?".
+        { key: 'customerSurface', label: t('settings.customerSurface.title', 'Customer surface'), icon: UserCog },
       ],
     },
     {
@@ -315,6 +322,7 @@ export const SettingsPage: React.FC = () => {
 
       {activeTab === 'apiTokens' && <ApiTokensTab />}
       {activeTab === 'webhooks' && <WebhooksTab />}
+      {activeTab === 'customerSurface' && <CustomerSurfaceTab />}
         </div>
       </div>
     </div>

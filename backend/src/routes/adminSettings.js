@@ -199,6 +199,59 @@ router.get('/password/complexity', adminAuth, requirePermission('settings.view')
 });
 
 // Update branding settings
+/**
+ * PUT /customer-surface (#354 follow-up)
+ *
+ * Five toggles that control the recurring-customer surface (#354):
+ *   customer_show_logo                 — hide/show the brand logo in the
+ *                                         customer sidebar
+ *   customer_show_company_name         — same, for the textual brand name
+ *   customer_feature_calendar_enabled  — global enable for the Calendar tab
+ *   customer_feature_quotes_enabled    — global enable for the Quotes tab
+ *   customer_feature_bills_enabled     — global enable for the Bills tab
+ *
+ * The feature toggles are AND-combined with each customer's per-row flag
+ * in customer_accounts (see customerAccountsService.getEffectiveFeaturesForCustomer).
+ * That gives the admin two levers — flip a feature on globally, then choose
+ * which customers actually see it.
+ */
+router.put('/customer-surface', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+  try {
+    const allowed = [
+      'customer_show_logo',
+      'customer_show_company_name',
+      'customer_feature_calendar_enabled',
+      'customer_feature_quotes_enabled',
+      'customer_feature_bills_enabled',
+    ];
+    const updates = [];
+    for (const key of allowed) {
+      if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+        const value = !!req.body[key]; // coerce — accept "true"/true/1
+        updates.push({ setting_key: key, setting_value: JSON.stringify(value), setting_type: 'customer_surface' });
+      }
+    }
+
+    for (const u of updates) {
+      const existing = await db('app_settings').where('setting_key', u.setting_key).first();
+      if (existing) {
+        await db('app_settings').where('setting_key', u.setting_key).update({
+          setting_value: u.setting_value,
+          setting_type: u.setting_type,
+          updated_at: new Date(),
+        });
+      } else {
+        await db('app_settings').insert({ ...u, created_at: new Date(), updated_at: new Date() });
+      }
+    }
+
+    res.json({ message: 'Customer surface settings updated', updated: updates.map((u) => u.setting_key) });
+  } catch (error) {
+    console.error('Customer surface settings save error:', error);
+    res.status(500).json({ error: 'Failed to save customer surface settings' });
+  }
+});
+
 router.put('/branding', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
     const {

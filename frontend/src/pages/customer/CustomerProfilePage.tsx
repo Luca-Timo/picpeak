@@ -28,7 +28,28 @@ import { toast } from 'react-toastify';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Lock, Save, User as UserIcon, MapPin, Phone, Mail } from 'lucide-react';
 
-import { Button, Card, Input, Loading } from '../../components/common';
+import { Button, Input, Loading } from '../../components/common';
+
+/**
+ * Inline tile wrapper used in place of <Card> on this page.
+ *
+ * The global .card class (used by <Card>) hard-codes bg-white + neutral
+ * borders, which fights the dark theme on the customer surface (the same
+ * fix the dashboard already shipped). Pinning to the theme tokens here
+ * keeps every section card consistent with the sidebar and the
+ * dashboard.
+ */
+const ProfileTile: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div
+    className="rounded-xl border p-6 sm:p-8"
+    style={{
+      backgroundColor: 'var(--color-surface)',
+      borderColor: 'var(--color-surface-border)',
+    }}
+  >
+    {children}
+  </div>
+);
 import {
   customerService,
   type CustomerProfileFull,
@@ -166,11 +187,11 @@ export const CustomerProfilePage: React.FC = () => {
   if (error || !profile) {
     return (
       <div className="container py-12">
-        <Card padding="lg">
+        <ProfileTile>
           <p className="text-sm text-red-600">
             {t('customer.profile.loadError', 'Could not load your profile.')}
           </p>
-        </Card>
+        </ProfileTile>
       </div>
     );
   }
@@ -190,7 +211,7 @@ export const CustomerProfilePage: React.FC = () => {
           customer can update everything in one save. The visual sections
           are inside the form purely for grouping. */}
       <form onSubmit={handleProfileSave} className="space-y-6">
-        <Card padding="lg">
+        <ProfileTile>
           <div className="flex items-center gap-2 mb-4">
             <UserIcon className="w-5 h-5 text-muted-theme" />
             <h2 className="text-lg font-semibold text-theme">
@@ -259,9 +280,9 @@ export const CustomerProfilePage: React.FC = () => {
               </p>
             </div>
           </div>
-        </Card>
+        </ProfileTile>
 
-        <Card padding="lg">
+        <ProfileTile>
           <div className="flex items-center gap-2 mb-4">
             <Phone className="w-5 h-5 text-muted-theme" />
             <h2 className="text-lg font-semibold text-theme">
@@ -295,9 +316,9 @@ export const CustomerProfilePage: React.FC = () => {
               <Input value={form.vatId || ''} onChange={(e) => updateField('vatId', e.target.value)} />
             </div>
           </div>
-        </Card>
+        </ProfileTile>
 
-        <Card padding="lg">
+        <ProfileTile>
           <div className="flex items-center gap-2 mb-4">
             <MapPin className="w-5 h-5 text-muted-theme" />
             <h2 className="text-lg font-semibold text-theme">
@@ -374,7 +395,7 @@ export const CustomerProfilePage: React.FC = () => {
               />
             </div>
           </div>
-        </Card>
+        </ProfileTile>
 
         {profileErr && (
           <p className="text-sm text-red-600">{profileErr}</p>
@@ -390,7 +411,7 @@ export const CustomerProfilePage: React.FC = () => {
       {/* Password change — separate form so it doesn't fight with the main
           save button and the user's password autofill never leaks into
           unrelated fields. */}
-      <Card padding="lg">
+      <ProfileTile>
         <div className="flex items-center gap-2 mb-4">
           <Lock className="w-5 h-5 text-muted-theme" />
           <h2 className="text-lg font-semibold text-theme">
@@ -446,7 +467,7 @@ export const CustomerProfilePage: React.FC = () => {
             </Button>
           </div>
         </form>
-      </Card>
+      </ProfileTile>
     </div>
   );
 };
