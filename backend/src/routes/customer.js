@@ -44,7 +44,6 @@ router.get('/events', customerAuth, async (req, res) => {
         eventType: e.event_type,
         eventDate: e.event_date,
         expiresAt: e.expires_at,
-        coverPhotoId: e.cover_photo_id,
         isActive: e.is_active,
         assignedAt: e.assigned_at,
       })),

@@ -456,7 +456,6 @@ async function listEventsForCustomer(customerId) {
       'events.event_type',
       'events.event_date',
       'events.expires_at',
-      'events.cover_photo_id',
       'events.is_active',
       'event_customer_assignments.assigned_at'
     )

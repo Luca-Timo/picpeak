@@ -43,6 +43,11 @@ async function revokeToken(token, reason, metadata = {}) {
     // undefined/string slip through and cause an INSERT type error.
     const userIdNumeric = Number.isInteger(payload.id) ? payload.id : null;
 
+    // onConflict.ignore: revoking an already-revoked token is a no-op,
+    // not an error. Hits the unique (token_id) index when the same JWT
+    // is logged out twice (e.g. duplicate /logout from two tabs, or a
+    // session-expiry path that races with an explicit logout). The
+    // previous insert was authoritative; nothing to do.
     await db('revoked_tokens').insert({
       token_id: buildTokenId(payload),
       user_id: userIdNumeric,
@@ -51,7 +56,7 @@ async function revokeToken(token, reason, metadata = {}) {
       expires_at: new Date(payload.exp * 1000).toISOString(),
       reason,
       metadata: JSON.stringify(metadata)
-    });
+    }).onConflict('token_id').ignore();
 
     logger.info('Token revoked', {
       userId: payload.id ?? payload.customerId ?? null,
