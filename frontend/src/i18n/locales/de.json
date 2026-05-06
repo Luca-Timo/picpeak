@@ -1516,6 +1516,23 @@
       "deviceTypes": "Gerätetypen aus User-Agents",
       "privacy": "Datenschutz",
       "privacyText": "IP-Adressen werden aus Datenschutzgründen gehasht. Es werden keine persönlichen Daten gespeichert. Analysedaten werden 90 Tage aufbewahrt."
+    },
+    "customerSurface": {
+      "title": "Kundenoberfläche",
+      "brandingTitle": "Branding der Kundenoberfläche",
+      "brandingHint": "Steuert die Anzeige im Header des Kunden-Dashboards (/customer/dashboard). Öffentliche Galerie und Admin-Oberflächen bleiben unverändert.",
+      "showLogo": "Logo im Kunden-Header anzeigen",
+      "showLogoHint": "Verwendet das in den Branding-Einstellungen konfigurierte Logo.",
+      "showCompanyName": "Firmennamen im Kunden-Header anzeigen",
+      "showCompanyNameHint": "Ausblenden, wenn dein Logo bereits den Firmennamen enthält.",
+      "featuresTitle": "Kundenfunktionen",
+      "featuresHint": "Schalte die Kalender-, Angebots- und Rechnungs-Tabs auf der Kundenoberfläche global an oder aus. Ein Kunde sieht einen Tab nur, wenn sowohl der globale Schalter hier als auch das Flag auf seinem Konto AN sind. Die Seiten selbst sind aktuell noch Platzhalter.",
+      "calendar": "Kalender",
+      "quotes": "Angebote",
+      "bills": "Rechnungen",
+      "save": "Änderungen speichern",
+      "saved": "Einstellungen für Kundenoberfläche gespeichert",
+      "error": "Einstellungen konnten nicht gespeichert werden"
     }
   },
   "branding": {
@@ -2564,7 +2581,17 @@
       "city": "Stadt",
       "state": "Bundesland / Region",
       "countryCode": "Land (ISO-2)",
-      "notesHint": "Nur für Administratoren sichtbar. Wird dem Kunden nie gezeigt."
+      "notesHint": "Nur für Administratoren sichtbar. Wird dem Kunden nie gezeigt.",
+      "featuresSection": "Kundenfunktionen",
+      "featuresHint": "Aktiviere den Zugriff pro Kunde auf die neuen Kunden-Tabs. Sichtbarkeit wird mit den globalen Schaltern in Einstellungen → Kundenoberfläche UND-verknüpft — beide müssen AN sein, damit der Kunde den Eintrag sieht.",
+      "passwordSection": "Kontoaktionen",
+      "passwordHint": "Sendet einen einmalig nutzbaren Reset-Link (7 Tage gültig) an die E-Mail-Adresse des Kunden. Das aktuelle Passwort bleibt gültig, bis der Kunde den Link öffnet und ein neues setzt.",
+      "passwordReset": {
+        "button": "Passwort-Reset-E-Mail senden",
+        "success": "Passwort-Reset-E-Mail gesendet",
+        "error": "Passwort-Reset konnte nicht gesendet werden",
+        "inactive": "Aktiviere den Kunden, bevor du einen Reset sendest."
+      }
     }
   },
   "customer": {
@@ -2714,6 +2741,20 @@
         "savedToast": "Passwort aktualisiert",
         "error": "Passwort konnte nicht geändert werden"
       }
+    },
+    "resetPassword": {
+      "title": "Passwort zurücksetzen",
+      "invalidToken": "Dieser Link ist ungültig oder abgelaufen. Bitte fordere bei deinem Fotografen einen neuen an.",
+      "forEmail": "Neues Passwort wird gesetzt für ",
+      "password": "Neues Passwort",
+      "confirm": "Neues Passwort bestätigen",
+      "submit": "Passwort aktualisieren",
+      "hint": "Mindestens 8 Zeichen, ein Großbuchstabe und eine Ziffer.",
+      "tooShort": "Passwort muss mindestens 8 Zeichen lang sein",
+      "mismatch": "Passwörter stimmen nicht überein",
+      "successToast": "Passwort aktualisiert. Bitte einloggen.",
+      "invalidSubmission": "Passwort konnte nicht aktualisiert werden.",
+      "generalError": "Passwort konnte nicht aktualisiert werden. Bitte erneut versuchen."
     }
   }
 }
