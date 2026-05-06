@@ -185,15 +185,24 @@ exports.up = async function(knex) {
 
     let templateId = existing?.id;
     if (!existing) {
+      // Build the master row by introspecting the columns that actually
+      // exist on this install. The schema has drifted across migrations
+      // (075 adds language-specific columns then 075 normalises into a
+      // separate translations table; some installs lack `created_at` /
+      // `updated_at` on the master row). Anything not present is skipped
+      // silently rather than causing the whole migration to abort and
+      // taking the backend down with it.
       const masterColumns = await knex('email_templates').columnInfo();
       const insertRow = {
         template_key: 'customer_invitation',
-        variables: JSON.stringify(['invite_link', 'expires_at']),
-        created_at: knex.fn.now(),
-        updated_at: knex.fn.now(),
       };
-      // Populate legacy columns when present so older email service code
-      // paths still find a sensible default body.
+      if (masterColumns.variables) {
+        insertRow.variables = JSON.stringify(['invite_link', 'expires_at']);
+      }
+      if (masterColumns.created_at) insertRow.created_at = knex.fn.now();
+      if (masterColumns.updated_at) insertRow.updated_at = knex.fn.now();
+      // Populate legacy single-language columns when present so older
+      // email service code paths still find a sensible default body.
       if (masterColumns.subject) insertRow.subject = 'You\'ve been invited to access your photo galleries';
       if (masterColumns.body_html) {
         insertRow.body_html = '<p>You\'ve been invited to create a customer account. <a href="{{invite_link}}">Set up your account</a> (expires {{expires_at}}).</p>';
@@ -201,16 +210,31 @@ exports.up = async function(knex) {
       if (masterColumns.body_text) {
         insertRow.body_text = 'Set up your customer account: {{invite_link}} (expires {{expires_at}}).';
       }
+      // Some installs have language-specific master columns from migration 075.
+      if (masterColumns.subject_en) insertRow.subject_en = insertRow.subject || 'You\'ve been invited to access your photo galleries';
+      if (masterColumns.body_html_en) insertRow.body_html_en = insertRow.body_html || '';
+      if (masterColumns.body_text_en) insertRow.body_text_en = insertRow.body_text || '';
+
       const [insertedId] = await knex('email_templates').insert(insertRow).returning('id');
       templateId = insertedId?.id || insertedId;
     }
 
     if (templateId && await knex.schema.hasTable('email_template_translations')) {
-      const en = {
-        template_id: templateId,
-        language: 'en',
-        subject: 'You\'ve been invited to access your photo galleries',
-        body_html: `
+      const transColumns = await knex('email_template_translations').columnInfo();
+      const buildTranslationRow = (language, subject, bodyHtml, bodyText) => {
+        const row = { template_id: templateId, language };
+        if (transColumns.subject) row.subject = subject;
+        if (transColumns.body_html) row.body_html = bodyHtml;
+        if (transColumns.body_text) row.body_text = bodyText;
+        if (transColumns.created_at) row.created_at = new Date();
+        if (transColumns.updated_at) row.updated_at = new Date();
+        return row;
+      };
+
+      const en = buildTranslationRow(
+        'en',
+        'You\'ve been invited to access your photo galleries',
+        `
 <h2>Welcome to your photo galleries</h2>
 <p>You've been invited to create a customer account so you can view all of your event galleries in one place — no more juggling separate links and passwords.</p>
 <div style="text-align: center; margin: 30px 0;">
@@ -219,7 +243,7 @@ exports.up = async function(knex) {
 <p>This invitation expires on {{expires_at}}. If the link doesn't work, copy and paste it into your browser:</p>
 <p style="word-break: break-all; font-size: 13px; color: #666;">{{invite_link}}</p>
 <p>If you weren't expecting this email, you can safely ignore it.</p>`,
-        body_text: `Welcome to your photo galleries
+        `Welcome to your photo galleries
 
 You've been invited to create a customer account so you can view all of your event galleries in one place — no more juggling separate links and passwords.
 
@@ -227,16 +251,13 @@ Set up your account: {{invite_link}}
 
 This invitation expires on {{expires_at}}.
 
-If you weren't expecting this email, you can safely ignore it.`,
-        created_at: new Date(),
-        updated_at: new Date(),
-      };
+If you weren't expecting this email, you can safely ignore it.`
+      );
 
-      const de = {
-        template_id: templateId,
-        language: 'de',
-        subject: 'Sie wurden eingeladen, auf Ihre Fotogalerien zuzugreifen',
-        body_html: `
+      const de = buildTranslationRow(
+        'de',
+        'Sie wurden eingeladen, auf Ihre Fotogalerien zuzugreifen',
+        `
 <h2>Willkommen bei Ihren Fotogalerien</h2>
 <p>Sie wurden eingeladen, ein Kundenkonto anzulegen, damit Sie alle Ihre Eventgalerien an einem Ort einsehen können — ohne mehrere Links und Passwörter verwalten zu müssen.</p>
 <div style="text-align: center; margin: 30px 0;">
@@ -245,7 +266,7 @@ If you weren't expecting this email, you can safely ignore it.`,
 <p>Diese Einladung läuft am {{expires_at}} ab. Falls der Link nicht funktioniert, kopieren Sie ihn in Ihren Browser:</p>
 <p style="word-break: break-all; font-size: 13px; color: #666;">{{invite_link}}</p>
 <p>Wenn Sie diese E-Mail nicht erwartet haben, können Sie sie ignorieren.</p>`,
-        body_text: `Willkommen bei Ihren Fotogalerien
+        `Willkommen bei Ihren Fotogalerien
 
 Sie wurden eingeladen, ein Kundenkonto anzulegen, damit Sie alle Ihre Eventgalerien an einem Ort einsehen können — ohne mehrere Links und Passwörter verwalten zu müssen.
 
@@ -253,10 +274,8 @@ Konto einrichten: {{invite_link}}
 
 Diese Einladung läuft am {{expires_at}} ab.
 
-Wenn Sie diese E-Mail nicht erwartet haben, können Sie sie ignorieren.`,
-        created_at: new Date(),
-        updated_at: new Date(),
-      };
+Wenn Sie diese E-Mail nicht erwartet haben, können Sie sie ignorieren.`
+      );
 
       for (const row of [en, de]) {
         const exists = await knex('email_template_translations')
