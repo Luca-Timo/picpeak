@@ -111,6 +111,11 @@ router.post('/login', [
     });
 
     setCustomerAuthCookie(res, token);
+    logger.info('[customerAuth/login] cookie set', {
+      customerId: customer.id,
+      tokenLen: token.length,
+      cookiesIn: Object.keys(req.cookies || {}),
+    });
 
     await logActivity('customer_login',
       { customerId: customer.id, email: customer.email, ipAddress },

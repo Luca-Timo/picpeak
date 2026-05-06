@@ -20,7 +20,12 @@ async function customerAuth(req, res, next) {
   try {
     const token = getCustomerTokenFromRequest(req);
     if (!token) {
-      return res.status(401).json({ error: 'No token provided' });
+      logger.info('[customerAuth] no token on request', {
+        url: req.originalUrl,
+        hasCookieHeader: !!req.headers?.cookie,
+        cookieKeys: Object.keys(req.cookies || {}),
+      });
+      return res.status(401).json({ error: 'No token provided', code: 'NO_TOKEN' });
     }
 
     let decoded;
@@ -31,25 +36,33 @@ async function customerAuth(req, res, next) {
       });
       decoded = verified.payload;
     } catch (err) {
+      logger.warn('[customerAuth] jwt verification failed', {
+        url: req.originalUrl,
+        errorName: err.name,
+        errorMessage: err.message,
+      });
       if (err.name === 'TokenExpiredError') {
         return res.status(401).json({ error: 'Token expired', code: 'TOKEN_EXPIRED' });
       }
-      return res.status(401).json({ error: 'Invalid token' });
+      return res.status(401).json({ error: 'Invalid token', code: 'JWT_INVALID' });
     }
 
     if (await isTokenRevoked(decoded)) {
-      logger.warn('Revoked customer token used', {
+      logger.warn('[customerAuth] token revoked', {
+        url: req.originalUrl,
         customerId: decoded.customerId,
         tokenType: decoded.type,
+        iat: decoded.iat,
       });
       return res.status(401).json({ error: 'Token has been revoked', code: 'TOKEN_REVOKED' });
     }
 
     if (decoded.type !== 'customer') {
-      logger.warn('Non-customer token used for customer endpoint', {
+      logger.warn('[customerAuth] wrong token type', {
+        url: req.originalUrl,
         tokenType: decoded.type,
       });
-      return res.status(403).json({ error: 'Insufficient permissions' });
+      return res.status(403).json({ error: 'Insufficient permissions', code: 'WRONG_TOKEN_TYPE' });
     }
 
     // IP drift gets logged but doesn't reject — same lenient policy as
@@ -71,7 +84,11 @@ async function customerAuth(req, res, next) {
     if (!customer) {
       // Either deleted, deactivated, or the id was forged. 401 across the
       // board so the frontend session-expiry handler kicks in.
-      return res.status(401).json({ error: 'Invalid token' });
+      logger.warn('[customerAuth] customer row not found / inactive', {
+        url: req.originalUrl,
+        customerId: decoded.customerId,
+      });
+      return res.status(401).json({ error: 'Invalid token', code: 'CUSTOMER_NOT_FOUND' });
     }
 
     if (customer.password_changed_at) {
@@ -79,7 +96,12 @@ async function customerAuth(req, res, next) {
         new Date(customer.password_changed_at).getTime() / 1000
       );
       if (decoded.iat < passwordChangedSeconds) {
-        logger.warn('Customer token used after password change', { customerId: decoded.customerId });
+        logger.warn('[customerAuth] token rejected: password_changed_at', {
+          url: req.originalUrl,
+          customerId: decoded.customerId,
+          iat: decoded.iat,
+          passwordChangedSeconds,
+        });
         return res.status(401).json({
           error: 'Token invalid due to password change',
           code: 'PASSWORD_CHANGED',
