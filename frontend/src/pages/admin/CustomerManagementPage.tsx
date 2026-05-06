@@ -38,6 +38,15 @@ const formatDate = (iso: string | null | undefined) => {
   try { return format(new Date(iso), 'PP'); } catch { return '—'; }
 };
 
+/**
+ * Invite modal with optional prefill (#354 follow-up).
+ *
+ * Email is the only required field. Everything else is collected behind
+ * a "Add contact details" toggle so a fast invite stays one-click. When
+ * filled, the values are stashed on the invitation row and re-rendered
+ * pre-populated on the customer's accept page (where the customer can
+ * still edit before submitting).
+ */
 const InviteModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
@@ -47,6 +56,27 @@ const InviteModal: React.FC<{
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showPrefill, setShowPrefill] = useState(false);
+  const [prefill, setPrefill] = useState({
+    salutation: '', first_name: '', last_name: '', display_name: '',
+    phone: '', company_name: '', vat_id: '',
+    address_line1: '', address_line2: '', postal_code: '', city: '', state: '', country_code: '',
+  });
+
+  const updatePrefill = (key: keyof typeof prefill, value: string) => {
+    setPrefill((p) => ({ ...p, [key]: value }));
+  };
+
+  const reset = () => {
+    setEmail('');
+    setError(null);
+    setShowPrefill(false);
+    setPrefill({
+      salutation: '', first_name: '', last_name: '', display_name: '',
+      phone: '', company_name: '', vat_id: '',
+      address_line1: '', address_line2: '', postal_code: '', city: '', state: '', country_code: '',
+    });
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,9 +87,20 @@ const InviteModal: React.FC<{
     }
     setSubmitting(true);
     try {
-      await customerAdminService.invite(email.trim());
+      // Strip empty values so the backend stores `null`/nothing for fields
+      // the admin didn't actually fill in. Saves a round trip through
+      // the backend's sanitiser and keeps the JSON payload small.
+      const cleaned: Record<string, string> = {};
+      for (const [k, v] of Object.entries(prefill)) {
+        const trimmed = v.trim();
+        if (trimmed) cleaned[k] = trimmed;
+      }
+      await customerAdminService.invite(
+        email.trim(),
+        Object.keys(cleaned).length > 0 ? cleaned : undefined,
+      );
       toast.success(t('customers.invite.success', 'Invitation sent'));
-      setEmail('');
+      reset();
       onInvited();
       onClose();
     } catch (e: any) {
@@ -74,8 +115,8 @@ const InviteModal: React.FC<{
 
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="w-full max-w-md rounded-xl shadow-lg" style={{ backgroundColor: 'var(--color-surface)' }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8 overflow-y-auto">
+      <div className="w-full max-w-2xl rounded-xl shadow-lg my-auto" style={{ backgroundColor: 'var(--color-surface)' }}>
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-theme">
@@ -83,7 +124,7 @@ const InviteModal: React.FC<{
             </h2>
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => { reset(); onClose(); }}
               className="p-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-700"
               aria-label={t('common.close', 'Close')}
             >
@@ -97,7 +138,7 @@ const InviteModal: React.FC<{
           <form onSubmit={submit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-theme mb-1">
-                {t('customers.invite.email', 'Email')}
+                {t('customers.invite.email', 'Email')} <span className="text-red-500">*</span>
               </label>
               <Input
                 type="email"
@@ -108,8 +149,134 @@ const InviteModal: React.FC<{
                 autoFocus
               />
             </div>
+
+            <div className="border-t pt-4" style={{ borderColor: 'var(--color-surface-border)' }}>
+              <button
+                type="button"
+                onClick={() => setShowPrefill((v) => !v)}
+                className="text-sm font-medium hover:underline"
+                style={{ color: 'var(--color-accent)' }}
+              >
+                {showPrefill
+                  ? t('customers.invite.hidePrefill', '− Hide contact details')
+                  : t('customers.invite.showPrefill', '+ Add contact details (optional)')}
+              </button>
+              <p className="mt-1 text-xs text-muted-theme">
+                {t('customers.invite.prefillHint',
+                  'Anything you fill in will be pre-populated on the customer\'s sign-up page — they can still edit it.')}
+              </p>
+            </div>
+
+            {showPrefill && (
+              <div className="space-y-4 pt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-theme mb-1">
+                      {t('customer.profile.field.salutation', 'Salutation')}
+                    </label>
+                    <select
+                      value={prefill.salutation}
+                      onChange={(e) => updatePrefill('salutation', e.target.value)}
+                      className="w-full rounded-lg border px-3 h-10 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                      style={{
+                        backgroundColor: 'var(--color-surface)',
+                        borderColor: 'var(--color-surface-border)',
+                        color: 'var(--color-text)',
+                      }}
+                    >
+                      <option value="">{t('customer.profile.salutation.none', '— Not specified —')}</option>
+                      <option value="Herr">Herr</option>
+                      <option value="Frau">Frau</option>
+                      <option value="Mx">Mx</option>
+                      <option value="Dr">Dr.</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme mb-1">
+                      {t('customer.profile.field.displayName', 'Display name')}
+                    </label>
+                    <Input value={prefill.display_name} onChange={(e) => updatePrefill('display_name', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme mb-1">
+                      {t('customer.profile.field.firstName', 'First name')}
+                    </label>
+                    <Input value={prefill.first_name} onChange={(e) => updatePrefill('first_name', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme mb-1">
+                      {t('customer.profile.field.lastName', 'Last name')}
+                    </label>
+                    <Input value={prefill.last_name} onChange={(e) => updatePrefill('last_name', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme mb-1">
+                      {t('customer.profile.field.phone', 'Phone')}
+                    </label>
+                    <Input value={prefill.phone} onChange={(e) => updatePrefill('phone', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme mb-1">
+                      {t('customer.profile.field.companyName', 'Company name')}
+                    </label>
+                    <Input value={prefill.company_name} onChange={(e) => updatePrefill('company_name', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-theme mb-1">
+                      {t('customer.profile.field.vatId', 'VAT ID')}
+                    </label>
+                    <Input value={prefill.vat_id} onChange={(e) => updatePrefill('vat_id', e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
+                  <div className="sm:col-span-6">
+                    <label className="block text-sm font-medium text-theme mb-1">
+                      {t('customer.profile.field.addressLine1', 'Address line 1')}
+                    </label>
+                    <Input value={prefill.address_line1} onChange={(e) => updatePrefill('address_line1', e.target.value)} />
+                  </div>
+                  <div className="sm:col-span-6">
+                    <label className="block text-sm font-medium text-theme mb-1">
+                      {t('customer.profile.field.addressLine2', 'Address line 2')}
+                    </label>
+                    <Input value={prefill.address_line2} onChange={(e) => updatePrefill('address_line2', e.target.value)} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-theme mb-1">
+                      {t('customer.profile.field.postalCode', 'Postal code')}
+                    </label>
+                    <Input value={prefill.postal_code} onChange={(e) => updatePrefill('postal_code', e.target.value)} />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-sm font-medium text-theme mb-1">
+                      {t('customer.profile.field.city', 'City')}
+                    </label>
+                    <Input value={prefill.city} onChange={(e) => updatePrefill('city', e.target.value)} />
+                  </div>
+                  <div className="sm:col-span-1">
+                    <label className="block text-sm font-medium text-theme mb-1">
+                      {t('customer.profile.field.countryCode', 'Country')}
+                    </label>
+                    <Input
+                      value={prefill.country_code}
+                      onChange={(e) => updatePrefill('country_code', e.target.value.toUpperCase().slice(0, 2))}
+                      placeholder="DE"
+                      maxLength={2}
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-sm font-medium text-theme mb-1">
+                      {t('customer.profile.field.state', 'State / region')}
+                    </label>
+                    <Input value={prefill.state} onChange={(e) => updatePrefill('state', e.target.value)} />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={onClose}>
+              <Button type="button" variant="outline" onClick={() => { reset(); onClose(); }}>
                 {t('common.cancel', 'Cancel')}
               </Button>
               <Button type="submit" variant="primary" isLoading={submitting} leftIcon={<UserPlus className="w-4 h-4" />}>
@@ -214,7 +381,18 @@ export const CustomerManagementPage: React.FC = () => {
     <div className="container py-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-theme">{t('customers.pageTitle', 'Customers')}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-theme">{t('customers.pageTitle', 'Customers')}</h1>
+            {/* Beta badge — Calendar/Quotes/Bills tabs in the customer
+                surface are placeholders, so flag the whole feature as
+                still evolving. Keeps expectations honest. */}
+            <span
+              className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+              title="Beta — feature is functional but still evolving"
+            >
+              {t('navigation.betaTag', 'Beta')}
+            </span>
+          </div>
           <p className="text-sm text-muted-theme mt-1">
             {t('customers.pageSubtitle', 'Recurring customer accounts that can log in at /customer/login.')}
           </p>
