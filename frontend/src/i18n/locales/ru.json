@@ -2606,7 +2606,11 @@
       "networkError": "Сервер недоступен. Попробуйте ещё раз.",
       "generalError": "Ошибка входа. Попробуйте ещё раз.",
       "acceptedToast": "Аккаунт готов — войдите.",
-      "adminHint": "Ищете админ-панель? Перейдите на /admin/login."
+      "adminHint": "Ищете админ-панель? Перейдите на /admin/login.",
+      "emailPlaceholder": "you@example.com",
+      "passwordPlaceholder": "Your password",
+      "needHelp": "Need help?",
+      "poweredBy": "Powered by PicPeak"
     },
     "acceptInvite": {
       "title": "Настройте ваш аккаунт",

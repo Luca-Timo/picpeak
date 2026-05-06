@@ -2617,7 +2617,11 @@
       "networkError": "Could not reach the server. Please try again.",
       "generalError": "Login failed. Please try again.",
       "acceptedToast": "Account ready — please log in.",
-      "adminHint": "Looking for the admin panel? Visit /admin/login."
+      "adminHint": "Looking for the admin panel? Visit /admin/login.",
+      "emailPlaceholder": "you@example.com",
+      "passwordPlaceholder": "Your password",
+      "needHelp": "Need help?",
+      "poweredBy": "Powered by PicPeak"
     },
     "acceptInvite": {
       "title": "Set up your account",
