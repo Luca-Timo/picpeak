@@ -1,0 +1,129 @@
+/**
+ * Admin → Customers API client (#354).
+ *
+ * Hits /api/admin/customers/* (admin auth). Distinct from customer.service.ts
+ * which is the customer's own /api/customer/* surface.
+ */
+import { api } from '../config/api';
+
+export interface CustomerAccountSummary {
+  id: number;
+  email: string;
+  displayName: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  salutation: string | null;
+  companyName: string | null;
+  isActive: boolean;
+  lastLogin: string | null;
+  createdAt: string;
+  eventCount?: number;
+}
+
+export interface CustomerAccountDetail extends CustomerAccountSummary {
+  phone: string | null;
+  billingEmail: string | null;
+  vatId: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  postalCode: string | null;
+  city: string | null;
+  state: string | null;
+  countryCode: string | null;
+  preferredLanguage: string;
+  notes: string | null;
+  events: Array<{
+    id: number;
+    slug: string;
+    eventName: string;
+    eventDate: string | null;
+    expiresAt: string | null;
+    isArchived: boolean;
+    assignedAt: string;
+  }>;
+}
+
+export interface CustomerInvitationSummary {
+  id: number;
+  email: string;
+  expiresAt: string;
+  createdAt: string;
+  invitedBy: string | null;
+}
+
+export const customerAdminService = {
+  async list(search?: string): Promise<CustomerAccountSummary[]> {
+    const response = await api.get<{ customers: CustomerAccountSummary[] }>(
+      '/admin/customers',
+      { params: search ? { search } : undefined }
+    );
+    return response.data.customers;
+  },
+
+  async search(term: string): Promise<CustomerAccountSummary[]> {
+    if (!term || !term.trim()) return [];
+    const response = await api.get<{ customers: CustomerAccountSummary[] }>(
+      '/admin/customers/search',
+      { params: { email: term } }
+    );
+    return response.data.customers;
+  },
+
+  async get(id: number): Promise<CustomerAccountDetail> {
+    const response = await api.get<{ customer: CustomerAccountDetail }>(`/admin/customers/${id}`);
+    return response.data.customer;
+  },
+
+  async update(id: number, payload: Partial<Omit<CustomerAccountDetail, 'id' | 'events' | 'eventCount'>>): Promise<CustomerAccountDetail> {
+    // Frontend sends camelCase, backend accepts snake_case — translate here
+    // so callers can stay in TS-land conventions.
+    const snake: Record<string, any> = {};
+    const map: Record<string, string> = {
+      email: 'email',
+      salutation: 'salutation',
+      firstName: 'first_name',
+      lastName: 'last_name',
+      displayName: 'display_name',
+      phone: 'phone',
+      companyName: 'company_name',
+      billingEmail: 'billing_email',
+      vatId: 'vat_id',
+      addressLine1: 'address_line1',
+      addressLine2: 'address_line2',
+      postalCode: 'postal_code',
+      city: 'city',
+      state: 'state',
+      countryCode: 'country_code',
+      preferredLanguage: 'preferred_language',
+      notes: 'notes',
+      isActive: 'is_active',
+    };
+    for (const [k, v] of Object.entries(payload)) {
+      if (k in map) snake[map[k]] = v;
+    }
+    const response = await api.put<{ customer: CustomerAccountDetail }>(`/admin/customers/${id}`, snake);
+    return response.data.customer;
+  },
+
+  async deactivate(id: number): Promise<void> {
+    await api.post(`/admin/customers/${id}/deactivate`);
+  },
+
+  async invite(email: string): Promise<{ id: number; email: string; expiresAt: string }> {
+    const response = await api.post<{ data: { invitation: { id: number; email: string; expiresAt: string } } }>(
+      '/admin/customers/invite',
+      { email }
+    );
+    // successResponse wraps in { success: true, data }
+    return (response.data as any).data?.invitation ?? (response.data as any).invitation;
+  },
+
+  async listInvitations(): Promise<CustomerInvitationSummary[]> {
+    const response = await api.get<{ invitations: CustomerInvitationSummary[] }>('/admin/customers/invitations');
+    return response.data.invitations;
+  },
+
+  async cancelInvitation(id: number): Promise<void> {
+    await api.delete(`/admin/customers/invitations/${id}`);
+  },
+};
