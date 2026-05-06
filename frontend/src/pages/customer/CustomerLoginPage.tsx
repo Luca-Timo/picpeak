@@ -97,26 +97,41 @@ export const CustomerLoginPage: React.FC = () => {
 
   return (
     <div
-      className="customer-surface min-h-screen flex items-center justify-center px-4 py-8"
+      // Visual structure mirrors AdminLoginPage so admin and customer
+      // landings feel like the same product: tinted logo frame above
+      // the title, "Need help?" support email below the form, "Powered
+      // by PicPeak" footer line. The .customer-surface marker class
+      // lets the global stylesheet retheme <Card>/<Input> for dark
+      // backgrounds (admin uses the dark: trigger; customer uses theme
+      // tokens).
+      className="customer-surface min-h-screen flex items-center justify-center p-4"
       style={{ backgroundColor: 'var(--color-background, #fafafa)' }}
     >
       <div className="w-full max-w-md">
+        {/* Logo / header — matches AdminLoginPage's tinted square frame
+            so the brand presentation is identical across admin and
+            customer entry points. */}
         <div className="text-center mb-8">
-          <img
-            src={resolvedLogoUrl}
-            alt={companyName}
-            className="h-16 w-auto object-contain mx-auto mb-4"
-          />
-          <h1 className="text-2xl font-bold text-theme">
+          <div
+            className="w-[200px] h-[150px] mx-auto mb-6 rounded-2xl flex items-center justify-center"
+            style={{ backgroundColor: '#eee6d2' }}
+          >
+            <img
+              src={resolvedLogoUrl}
+              alt={companyName}
+              className="w-[180px] h-[130px] object-contain"
+            />
+          </div>
+          <h1 className="text-3xl font-bold" style={{ color: 'var(--color-text, #171717)' }}>
             {t('customer.login.title', 'Customer login')}
           </h1>
-          <p className="mt-2 text-sm text-muted-theme">
+          <p className="mt-2" style={{ color: 'var(--color-text, #171717)', opacity: 0.7 }}>
             {t('customer.login.subtitle', 'Access all of your photo galleries in one place.')}
           </p>
         </div>
 
         <Card padding="lg">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-6">
             {errors.form && (
               <div
                 role="alert"
@@ -133,14 +148,17 @@ export const CustomerLoginPage: React.FC = () => {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-theme mb-1">
+              <label htmlFor="customer-email" className="block text-sm font-medium text-theme mb-1">
                 {t('customer.login.email', 'Email')}
               </label>
               <Input
+                id="customer-email"
+                name="email"
                 type="email"
                 value={formData.email}
                 onChange={handleInputChange('email')}
                 error={errors.email}
+                placeholder={t('customer.login.emailPlaceholder', 'you@example.com')}
                 leftIcon={<Mail className="w-5 h-5 text-neutral-400" />}
                 autoComplete="email"
                 autoFocus
@@ -148,34 +166,41 @@ export const CustomerLoginPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-theme mb-1">
+              <label htmlFor="customer-password" className="block text-sm font-medium text-theme mb-1">
                 {t('customer.login.password', 'Password')}
               </label>
               <div className="relative">
                 <Input
+                  id="customer-password"
+                  name="current-password"
                   type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={handleInputChange('password')}
                   error={errors.password}
+                  placeholder={t('customer.login.passwordPlaceholder', 'Your password')}
                   leftIcon={<Lock className="w-5 h-5 text-neutral-400" />}
                   autoComplete="current-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
-                  className="absolute right-3 top-2 p-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                  className="absolute right-3 top-3 text-neutral-400 hover:text-neutral-600 transition-colors"
+                  tabIndex={-1}
                   aria-label={showPassword
                     ? t('customer.login.hidePassword', 'Hide password')
                     : t('customer.login.showPassword', 'Show password')}
                 >
                   {showPassword
-                    ? <EyeOff className="w-4 h-4 text-neutral-500" />
-                    : <Eye className="w-4 h-4 text-neutral-500" />}
+                    ? <EyeOff className="w-5 h-5" />
+                    : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
-            <ReCaptcha onChange={setRecaptchaToken} />
+            <ReCaptcha
+              onChange={setRecaptchaToken}
+              onExpired={() => setRecaptchaToken(null)}
+            />
 
             <Button
               type="submit"
@@ -189,12 +214,27 @@ export const CustomerLoginPage: React.FC = () => {
           </form>
         </Card>
 
-        <p className="text-center mt-6 text-sm text-muted-theme">
-          {t(
-            'customer.login.adminHint',
-            'Looking for the admin panel? Visit /admin/login.'
-          )}
-        </p>
+        {/* Footer — mirrors AdminLoginPage. Support email links to
+            mailto: with the address from Branding settings; falls back
+            to a placeholder so the link is never broken. The
+            "admin hint" line that used to live here is gone — admins
+            who land here on purpose can navigate to /admin/login on
+            their own. */}
+        <div className="text-center mt-8">
+          <p className="text-sm" style={{ color: 'var(--color-text, #171717)', opacity: 0.7 }}>
+            {t('customer.login.needHelp', 'Need help?')}{' '}
+            <a
+              href={`mailto:${settingsData?.branding_support_email || 'support@example.com'}`}
+              className="hover:underline"
+              style={{ color: 'var(--color-primary, #5C8762)' }}
+            >
+              {settingsData?.branding_support_email || 'support@example.com'}
+            </a>
+          </p>
+          <p className="text-xs mt-2" style={{ color: 'var(--color-text, #171717)', opacity: 0.5 }}>
+            {t('customer.login.poweredBy', 'Powered by PicPeak')}
+          </p>
+        </div>
       </div>
     </div>
   );

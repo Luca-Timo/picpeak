@@ -2608,7 +2608,11 @@
       "networkError": "Não foi possível conectar ao servidor. Tente novamente.",
       "generalError": "Falha no login. Tente novamente.",
       "acceptedToast": "Conta pronta — faça login.",
-      "adminHint": "Procurando o painel de administração? Acesse /admin/login."
+      "adminHint": "Procurando o painel de administração? Acesse /admin/login.",
+      "emailPlaceholder": "you@example.com",
+      "passwordPlaceholder": "Your password",
+      "needHelp": "Need help?",
+      "poweredBy": "Powered by PicPeak"
     },
     "acceptInvite": {
       "title": "Configurar sua conta",

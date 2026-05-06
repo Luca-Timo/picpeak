@@ -2608,7 +2608,11 @@
       "networkError": "Kan de server niet bereiken. Probeer het opnieuw.",
       "generalError": "Inloggen mislukt. Probeer het opnieuw.",
       "acceptedToast": "Account klaar — log nu in.",
-      "adminHint": "Zoekt u het beheerderspaneel? Ga naar /admin/login."
+      "adminHint": "Zoekt u het beheerderspaneel? Ga naar /admin/login.",
+      "emailPlaceholder": "you@example.com",
+      "passwordPlaceholder": "Your password",
+      "needHelp": "Need help?",
+      "poweredBy": "Powered by PicPeak"
     },
     "acceptInvite": {
       "title": "Account instellen",

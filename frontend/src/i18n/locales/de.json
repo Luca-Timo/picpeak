@@ -2614,7 +2614,11 @@
       "networkError": "Server nicht erreichbar. Bitte erneut versuchen.",
       "generalError": "Anmeldung fehlgeschlagen. Bitte erneut versuchen.",
       "acceptedToast": "Konto bereit — bitte anmelden.",
-      "adminHint": "Sie suchen das Admin-Panel? Besuchen Sie /admin/login."
+      "adminHint": "Sie suchen das Admin-Panel? Besuchen Sie /admin/login.",
+      "emailPlaceholder": "du@beispiel.de",
+      "passwordPlaceholder": "Dein Passwort",
+      "needHelp": "Brauchst du Hilfe?",
+      "poweredBy": "Bereitgestellt von PicPeak"
     },
     "acceptInvite": {
       "title": "Konto einrichten",
