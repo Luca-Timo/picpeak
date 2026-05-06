@@ -1,77 +1,85 @@
 /**
- * Customer dashboard (#354) — list of every gallery the admin has
- * granted this customer access to. Mounted at /customer/dashboard.
+ * Customer dashboard (#354) — list of every gallery the admin has granted
+ * this customer access to. Mounted at /customer/dashboard.
  *
- * Card click → exchange the customer JWT for a per-event gallery JWT
- * via /api/customer/events/:slug/access-token, store it in the existing
- * gallery_token_{slug} cookie, then navigate to /gallery/:slug. The
- * gallery code path needs no changes — it sees a regular gallery token
- * exactly as if the per-event password had been entered.
+ * Now a layout-wrapped page (Outlet child of CustomerLayout) — no inner
+ * <CustomerLayout> wrapper.
+ *
+ * Design changes (#354 follow-up):
+ *   - inline list rows instead of card grid (the maintainer asked for a
+ *     denser, more spreadsheet-like view — works better when a customer
+ *     has many recurring weddings)
+ *   - sort dropdown: Name / Newest first / Oldest first
+ *   - per-row Open + Download buttons (download bypasses the gallery and
+ *     bundles a zip in one click)
+ *
+ * Card click → exchange the customer JWT for a per-event gallery JWT via
+ * /api/customer/events/:slug/access-token, the backend writes the
+ * gallery_token_<slug> cookie alongside the JSON response, then we navigate
+ * to /gallery/:slug. The gallery code path needs no changes — it sees a
+ * regular gallery token exactly as if the per-event password had been
+ * entered.
  */
-import React, { useEffect, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
-import { Calendar, Clock, Download, ImageIcon, AlertCircle } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Calendar, Clock, Download, ExternalLink, ImageIcon, AlertCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 import { format, parseISO } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
 
-import { Loading } from '../../components/common';
+import { Button, Loading } from '../../components/common';
 import { customerService, type CustomerEvent } from '../../services/customer.service';
 import { galleryService } from '../../services/gallery.service';
-import { useCustomerAuth } from '../../contexts/CustomerAuthContext';
 import { storeGalleryToken, setActiveGallerySlug } from '../../utils/galleryAuthStorage';
-import { CustomerLayout } from './CustomerLayout';
+
+type SortKey = 'newest' | 'oldest' | 'name';
+
+const SORT_OPTIONS: Array<{ value: SortKey; labelKey: string; fallback: string }> = [
+  { value: 'newest', labelKey: 'customer.dashboard.sortNewest', fallback: 'Newest first' },
+  { value: 'oldest', labelKey: 'customer.dashboard.sortOldest', fallback: 'Oldest first' },
+  { value: 'name', labelKey: 'customer.dashboard.sortName', fallback: 'By name' },
+];
+
+/**
+ * Default to newest-first because that's almost always what a returning
+ * customer wants ("which gallery did they upload yesterday?"). The other
+ * orderings are mostly useful for archival browsing.
+ */
+const DEFAULT_SORT: SortKey = 'newest';
 
 export const CustomerDashboardPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading: authLoading } = useCustomerAuth();
 
-  const [events, setEvents] = useState<CustomerEvent[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: events, isLoading, error } = useQuery({
+    queryKey: ['customer-events'],
+    queryFn: () => customerService.listEvents(),
+  });
+
   const [openingSlug, setOpeningSlug] = useState<string | null>(null);
   const [downloadingSlug, setDownloadingSlug] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortKey>(DEFAULT_SORT);
 
-  useEffect(() => {
-    if (authLoading || !isAuthenticated) return;
-    let cancelled = false;
-    customerService.listEvents()
-      .then((rows) => {
-        if (cancelled) return;
-        setEvents(rows);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setError(t('customer.dashboard.loadError', 'Could not load your galleries. Please try again.'));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [authLoading, isAuthenticated, t]);
+  const sortedEvents = useMemo(() => {
+    const list: CustomerEvent[] = (events || []).slice();
+    // Use eventDate (the wedding/shoot date) as the primary key for date
+    // sorts; fall back to assignedAt when the event has no date set so
+    // entries don't all collapse to the bottom. Name sort is a basic
+    // case-insensitive locale compare.
+    const dateOf = (e: CustomerEvent) => (e.eventDate || e.assignedAt || '');
+    if (sort === 'newest') {
+      list.sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
+    } else if (sort === 'oldest') {
+      list.sort((a, b) => dateOf(a).localeCompare(dateOf(b)));
+    } else {
+      list.sort((a, b) => a.eventName.localeCompare(b.eventName, undefined, { sensitivity: 'base' }));
+    }
+    return list;
+  }, [events, sort]);
 
-  // Routes outside the public surface: bounce to login. We wait for the
-  // session check to settle so the user isn't flashed to login during
-  // initial hydration.
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--color-background, #fafafa)' }}>
-        <Loading size="lg" />
-      </div>
-    );
-  }
-  if (!isAuthenticated) {
-    return <Navigate to="/customer/login" replace />;
-  }
-
-  /**
-   * Mint a gallery JWT, store it under the slug-specific cookie, and
-   * navigate to the gallery. Same code path that the gallery itself uses
-   * once a guest enters the per-event password.
-   */
   const openEvent = async (slug: string) => {
-    if (openingSlug) return; // double-click guard
+    if (openingSlug) return;
     setOpeningSlug(slug);
     try {
       const { token } = await customerService.getEventAccessToken(slug);
@@ -92,14 +100,6 @@ export const CustomerDashboardPage: React.FC = () => {
     }
   };
 
-  /**
-   * Quick-download all photos as a zip without going through the gallery
-   * page. Same exchange dance as openEvent (we need the gallery JWT in
-   * the cookie before /gallery/:slug/download-all will accept the
-   * request), then we hand off to the existing galleryService helper
-   * which triggers a browser download. The cookie sticks around so a
-   * follow-up "open gallery" click is a no-network-roundtrip nav.
-   */
   const quickDownload = async (slug: string, eventName: string) => {
     if (downloadingSlug) return;
     setDownloadingSlug(slug);
@@ -107,10 +107,6 @@ export const CustomerDashboardPage: React.FC = () => {
       const { token } = await customerService.getEventAccessToken(slug);
       storeGalleryToken(slug, token);
       setActiveGallerySlug(slug);
-      // Always use the blob fallback path: zipReady would require an
-      // extra precheck call to the gallery info endpoint, and the
-      // user wants this to be one click. The browser progress bar
-      // is a nice-to-have we can add later (#386 follow-up).
       await galleryService.downloadAllPhotos(slug, false);
       toast.success(t('customer.dashboard.downloadStarted', 'Download started for {{name}}', { name: eventName }));
     } catch (e: any) {
@@ -133,146 +129,175 @@ export const CustomerDashboardPage: React.FC = () => {
   };
 
   return (
-    <CustomerLayout>
-      <div className="container py-8">
-        <div className="mb-6">
+    <div className="container py-6 sm:py-8">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-6">
+        <div>
           <h1 className="text-2xl font-bold text-theme">
             {t('customer.dashboard.title', 'Your galleries')}
           </h1>
           <p className="mt-1 text-sm text-muted-theme">
-            {t('customer.dashboard.subtitle', 'Click a card to view the gallery.')}
+            {t('customer.dashboard.subtitle', 'Click a gallery to open it. The Download button bundles every photo as a zip.')}
           </p>
         </div>
 
-        {isLoading ? (
-          <div className="flex justify-center py-16"><Loading size="lg" /></div>
-        ) : error ? (
-          // Themed inline panel rather than <Card>: the global .card class
-          // hard-codes bg-white + neutral-200 border, which fights dark
-          // themes on the customer surface and produced near-illegible
-          // contrast for the error message.
-          <div
-            role="alert"
-            className="rounded-xl border p-6 flex items-start gap-3"
-            style={{
-              backgroundColor: 'var(--color-surface)',
-              borderColor: 'var(--color-surface-border)',
-            }}
-          >
-            <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-red-500" />
-            <p className="text-theme">{error}</p>
+        {/* Sort dropdown — only render when there's something to sort. */}
+        {(events?.length || 0) > 1 && (
+          <div className="flex items-center gap-2">
+            <label htmlFor="customer-events-sort" className="text-sm text-muted-theme whitespace-nowrap">
+              {t('customer.dashboard.sortLabel', 'Sort by')}
+            </label>
+            <select
+              id="customer-events-sort"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              className="rounded-lg border px-3 h-9 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                borderColor: 'var(--color-surface-border)',
+                color: 'var(--color-text)',
+              }}
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {t(opt.labelKey, opt.fallback)}
+                </option>
+              ))}
+            </select>
           </div>
-        ) : events.length === 0 ? (
-          <div
-            className="rounded-xl border p-6"
-            style={{
-              backgroundColor: 'var(--color-surface)',
-              borderColor: 'var(--color-surface-border)',
-            }}
-          >
-            <div className="text-center py-12">
-              <ImageIcon className="w-12 h-12 mx-auto mb-3 text-muted-theme" aria-hidden="true" />
-              <h2 className="text-lg font-semibold text-theme mb-2">
-                {t('customer.dashboard.emptyTitle', 'No galleries yet')}
-              </h2>
-              <p className="text-sm text-muted-theme">
-                {t(
-                  'customer.dashboard.emptyBody',
-                  'Once your photographer assigns you to a gallery, it will appear here.'
-                )}
-              </p>
-            </div>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-16"><Loading size="lg" /></div>
+      ) : error ? (
+        <div
+          role="alert"
+          className="rounded-xl border p-6 flex items-start gap-3"
+          style={{
+            backgroundColor: 'var(--color-surface)',
+            borderColor: 'var(--color-surface-border)',
+          }}
+        >
+          <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-red-500" />
+          <p className="text-theme">
+            {t('customer.dashboard.loadError', 'Could not load your galleries. Please try again.')}
+          </p>
+        </div>
+      ) : (sortedEvents.length === 0) ? (
+        <div
+          className="rounded-xl border p-6"
+          style={{
+            backgroundColor: 'var(--color-surface)',
+            borderColor: 'var(--color-surface-border)',
+          }}
+        >
+          <div className="text-center py-12">
+            <ImageIcon className="w-12 h-12 mx-auto mb-3 text-muted-theme" aria-hidden="true" />
+            <h2 className="text-lg font-semibold text-theme mb-2">
+              {t('customer.dashboard.emptyTitle', 'No galleries yet')}
+            </h2>
+            <p className="text-sm text-muted-theme">
+              {t(
+                'customer.dashboard.emptyBody',
+                'Once your photographer assigns you to a gallery, it will appear here.'
+              )}
+            </p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {events.map((ev) => {
+        </div>
+      ) : (
+        // Inline list — one row per gallery, no card grid. Hover affordance
+        // via the entire row acting as a button (Open) plus a separate
+        // Download icon button so click bubbling doesn't cross-trigger.
+        <div
+          className="rounded-xl border overflow-hidden"
+          style={{
+            backgroundColor: 'var(--color-surface)',
+            borderColor: 'var(--color-surface-border)',
+          }}
+        >
+          <ul className="divide-y" style={{ borderColor: 'var(--color-surface-border)' }}>
+            {sortedEvents.map((ev) => {
               const date = formatDate(ev.eventDate);
               const expires = formatDate(ev.expiresAt);
               const isExpired = ev.expiresAt ? new Date(ev.expiresAt) < new Date() : false;
               const isOpening = openingSlug === ev.slug;
               const isDownloading = downloadingSlug === ev.slug;
-              const cardDisabled = isExpired || openingSlug !== null || downloadingSlug !== null;
+              const rowDisabled = isExpired || openingSlug !== null || downloadingSlug !== null;
               return (
-                <div
+                <li
                   key={ev.id}
-                  className="rounded-xl border transition-shadow"
+                  className="px-4 py-3 sm:px-5 sm:py-4 flex items-center gap-3 sm:gap-4"
                   style={{
-                    backgroundColor: 'var(--color-surface, #ffffff)',
-                    borderColor: 'var(--color-surface-border, #e5e5e5)',
+                    borderColor: 'var(--color-surface-border)',
                     opacity: isExpired ? 0.6 : 1,
                   }}
                 >
-                  {/* Most of the card is one big click-to-open button.
-                      The download icon at the bottom-right gets its own
-                      button so the click doesn't bubble up. */}
-                  <button
-                    type="button"
-                    onClick={() => openEvent(ev.slug)}
-                    disabled={cardDisabled}
-                    className="w-full text-left p-5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed"
-                    aria-label={t('customer.dashboard.openAria', 'Open gallery {{name}}', { name: ev.eventName })}
-                  >
-                    <h3 className="text-base font-semibold text-theme mb-2 line-clamp-2">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm sm:text-base font-semibold text-theme truncate">
                       {ev.eventName}
                     </h3>
-                    <div className="space-y-1 text-sm text-muted-theme">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-sm text-muted-theme">
                       {date && (
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 flex-shrink-0" />
-                          <span>{date}</span>
-                        </div>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
+                          {date}
+                        </span>
                       )}
                       {expires && (
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 flex-shrink-0" />
-                          <span>
-                            {isExpired
-                              ? t('customer.dashboard.expiredOn', 'Expired {{date}}', { date: expires })
-                              : t('customer.dashboard.expiresOn', 'Expires {{date}}', { date: expires })}
-                          </span>
-                        </div>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                          {isExpired
+                            ? t('customer.dashboard.expiredOn', 'Expired {{date}}', { date: expires })
+                            : t('customer.dashboard.expiresOn', 'Expires {{date}}', { date: expires })}
+                        </span>
+                      )}
+                      {isOpening && (
+                        <span className="text-xs" style={{ color: 'var(--color-accent)' }}>
+                          {t('customer.dashboard.opening', 'Opening…')}
+                        </span>
                       )}
                     </div>
-                    {isOpening && (
-                      <div className="mt-3 text-xs" style={{ color: 'var(--color-accent)' }}>
-                        {t('customer.dashboard.opening', 'Opening…')}
-                      </div>
-                    )}
-                  </button>
+                  </div>
 
-                  {/*
-                    Quick-download button. Bypasses the gallery page so the
-                    customer can grab the zip in one click. Disabled on
-                    expired galleries and while another card-level action
-                    is in flight, to avoid two simultaneous downloads
-                    fighting over the same gallery_token cookie.
-                  */}
-                  {!isExpired && (
-                    <div className="px-5 pb-5 -mt-1 flex items-center justify-end">
-                      <button
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {!isExpired && (
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="sm"
                         onClick={() => quickDownload(ev.slug, ev.eventName)}
-                        disabled={cardDisabled}
+                        disabled={rowDisabled}
+                        leftIcon={<Download className="w-4 h-4" />}
                         aria-label={t('customer.dashboard.quickDownloadAria', 'Download all photos for {{name}}', { name: ev.eventName })}
-                        className="inline-flex items-center gap-2 px-3 h-9 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-                        style={{ backgroundColor: 'var(--color-accent)' }}
                       >
-                        <Download className="w-4 h-4" />
-                        <span>
+                        <span className="hidden sm:inline">
                           {isDownloading
                             ? t('customer.dashboard.preparingDownload', 'Preparing…')
                             : t('customer.dashboard.download', 'Download')}
                         </span>
-                      </button>
-                    </div>
-                  )}
-                </div>
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      onClick={() => openEvent(ev.slug)}
+                      disabled={rowDisabled}
+                      leftIcon={<ExternalLink className="w-4 h-4" />}
+                      aria-label={t('customer.dashboard.openAria', 'Open gallery {{name}}', { name: ev.eventName })}
+                    >
+                      <span className="hidden sm:inline">
+                        {t('customer.dashboard.open', 'Open')}
+                      </span>
+                    </Button>
+                  </div>
+                </li>
               );
             })}
-          </div>
-        )}
-      </div>
-    </CustomerLayout>
+          </ul>
+        </div>
+      )}
+    </div>
   );
 };
 
