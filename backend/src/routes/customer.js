@@ -19,6 +19,7 @@ const { formatBoolean } = require('../utils/dbCompat');
 const logger = require('../utils/logger');
 const { getClientIp } = require('../utils/requestIp');
 const { customerAuth } = require('../middleware/customerAuth');
+const { setGalleryAuthCookies } = require('../utils/tokenUtils');
 const customerAccountsService = require('../services/customerAccountsService');
 
 const router = express.Router();
@@ -124,6 +125,16 @@ router.get('/events/:slug/access-token', [
       expiresIn: GALLERY_TOKEN_TTL_SECONDS,
       issuer: 'picpeak-auth',
     });
+
+    // Mirror the cookie-write that /api/auth/gallery/verify performs on
+    // password success. Without this, the freshly-minted token only lives
+    // in the dashboard's sessionStorage; GalleryAuthProvider runs
+    // cleanupOldGalleryAuth() on mount and sweeps every gallery_token_*
+    // sessionStorage key, including the one we just stored. The cookie
+    // (which that cleanup helper does NOT touch when it's slug-scoped)
+    // is what keeps the customer authenticated after navigation, hard
+    // reloads, and tab restores.
+    setGalleryAuthCookies(res, token, event.slug);
 
     await db('access_logs').insert({
       event_id: event.id,
