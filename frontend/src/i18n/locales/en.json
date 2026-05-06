@@ -168,7 +168,8 @@
     "emailSettings": "Email Settings",
     "backup": "Backup & Restore",
     "cmsPages": "CMS Pages",
-    "users": "Users"
+    "users": "Users",
+    "customers": "Customers"
   },
   "archives": {
     "title": "Archives",
@@ -671,7 +672,15 @@
     "noEventsDescription": "Create your first event to get started.",
     "bulkArchive": "Archive",
     "confirmBulkArchive": "Are you sure you want to archive {{count}} event(s)?",
-    "confirmBulkArchiveDescription": "This action cannot be undone. Archived events will no longer be publicly accessible."
+    "confirmBulkArchiveDescription": "This action cannot be undone. Archived events will no longer be publicly accessible.",
+    "customerPicker": {
+      "label": "Customer accounts",
+      "help": "Customers added here can log in at /customer/login and view this gallery without entering the per-event password.",
+      "placeholder": "Search by email, name, or company",
+      "searching": "Searching…",
+      "noResults": "No matches. Invite this customer from /admin/customers first.",
+      "removeAria": "Remove {{name}}"
+    }
   },
   "settings": {
     "title": "System Settings",
@@ -2466,5 +2475,157 @@
     "filenameAZ": "Filename (A-Z)",
     "filenameZA": "Filename (Z-A)",
     "dateTaken": "Date Taken"
+  },
+  "customers": {
+    "pageTitle": "Customers",
+    "pageSubtitle": "Recurring customer accounts that can log in at /customer/login.",
+    "unnamed": "Unnamed",
+    "empty": "No customers yet. Click \"Invite customer\" to add one.",
+    "loadError": "Could not load customers",
+    "loadInvitationsError": "Could not load invitations",
+    "tabs": {
+      "customers": "Customers",
+      "invitations": "Invitations"
+    },
+    "search": {
+      "placeholder": "Search by email, name, or company"
+    },
+    "table": {
+      "name": "Name",
+      "email": "Email",
+      "company": "Company",
+      "eventCount": "Events",
+      "lastLogin": "Last login",
+      "status": "Status"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Deactivated"
+    },
+    "invite": {
+      "button": "Invite customer",
+      "title": "Invite a customer",
+      "description": "They will receive an email with a link to set up their account. Once they have accepted, you can assign them to events.",
+      "email": "Email",
+      "submit": "Send invitation",
+      "success": "Invitation sent",
+      "error": "Could not send invitation.",
+      "conflict": "A customer with this email already exists or has a pending invitation.",
+      "invalidEmail": "Please enter a valid email"
+    },
+    "invitations": {
+      "empty": "No pending invitations.",
+      "email": "Email",
+      "invitedBy": "Invited by",
+      "expiresAt": "Expires",
+      "createdAt": "Created",
+      "cancel": "Cancel"
+    },
+    "deactivate": {
+      "button": "Deactivate",
+      "title": "Deactivate customer?",
+      "body": "They will no longer be able to log in. You can re-invite them later.",
+      "success": "Customer deactivated",
+      "error": "Could not deactivate customer"
+    },
+    "cancelInvitation": {
+      "title": "Cancel invitation?",
+      "body": "The invitation link will stop working immediately.",
+      "success": "Invitation cancelled",
+      "error": "Could not cancel invitation"
+    },
+    "detail": {
+      "loadError": "Could not load customer",
+      "saved": "Customer saved",
+      "saveError": "Could not save changes.",
+      "emailConflict": "That email is already in use by another customer.",
+      "save": "Save changes",
+      "expires": "expires",
+      "accountSection": "Account",
+      "personalSection": "Personal information",
+      "billingSection": "Address & billing",
+      "notesSection": "Internal notes",
+      "eventsSection": "Assigned events",
+      "noEvents": "Not assigned to any events yet. Add this customer to an event from the event form.",
+      "email": "Email",
+      "preferredLanguage": "Preferred language",
+      "salutation": "Salutation",
+      "salutationNone": "—",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "displayName": "Display name",
+      "phone": "Phone",
+      "company": "Company",
+      "billingEmail": "Billing email",
+      "vatId": "VAT / tax ID",
+      "addressLine1": "Address line 1",
+      "addressLine2": "Address line 2",
+      "postalCode": "Postal code",
+      "city": "City",
+      "state": "State / region",
+      "countryCode": "Country (ISO 2)",
+      "notesHint": "Visible only to admins. Never shown to the customer."
+    }
+  },
+  "customer": {
+    "login": {
+      "title": "Customer login",
+      "subtitle": "Access all of your photo galleries in one place.",
+      "email": "Email",
+      "password": "Password",
+      "emailRequired": "Email is required",
+      "invalidEmail": "Please enter a valid email",
+      "passwordRequired": "Password is required",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
+      "signIn": "Sign in",
+      "loginSuccess": "Welcome back!",
+      "invalidCredentials": "Invalid email or password",
+      "tooManyAttempts": "Too many attempts — please try again later.",
+      "networkError": "Could not reach the server. Please try again.",
+      "generalError": "Login failed. Please try again.",
+      "acceptedToast": "Account ready — please log in.",
+      "adminHint": "Looking for the admin panel? Visit /admin/login."
+    },
+    "acceptInvite": {
+      "title": "Set up your account",
+      "invalidToken": "This invitation link is invalid or has expired. Please contact your photographer for a new invitation.",
+      "emailWillBe": "Your account email will be ",
+      "invitedBy": ", invited by ",
+      "name": "Your name",
+      "nameRequired": "Please enter your name",
+      "password": "Choose a password",
+      "confirm": "Confirm password",
+      "passwordTooShort": "Password must be at least 8 characters",
+      "passwordsMismatch": "Passwords do not match",
+      "passwordHint": "At least 8 characters.",
+      "submit": "Create account",
+      "successToast": "Account created — please log in.",
+      "alreadyExists": "An account with this email already exists. Please log in instead.",
+      "invalidSubmission": "Could not create your account.",
+      "generalError": "Could not create your account. Please try again."
+    },
+    "dashboard": {
+      "title": "Your galleries",
+      "subtitle": "Click a card to view the gallery.",
+      "loadError": "Could not load your galleries. Please try again.",
+      "emptyTitle": "No galleries yet",
+      "emptyBody": "Once your photographer assigns you to a gallery, it will appear here.",
+      "openAria": "Open gallery {{name}}",
+      "opening": "Opening…",
+      "expiresOn": "Expires {{date}}",
+      "expiredOn": "Expired {{date}}",
+      "eventExpired": "This gallery has expired.",
+      "eventForbidden": "You no longer have access to this gallery.",
+      "openError": "Could not open this gallery. Please try again.",
+      "download": "Download",
+      "preparingDownload": "Preparing…",
+      "quickDownloadAria": "Download all photos for {{name}}",
+      "downloadStarted": "Download started for {{name}}",
+      "downloadError": "Could not start the download. Please try again."
+    },
+    "layout": {
+      "greeting": "Hi, {{name}}"
+    }
   }
 }

@@ -162,7 +162,8 @@
     "emailSettings": "Configurações de E-mail",
     "backup": "Backup e Restauração",
     "cmsPages": "Páginas CMS",
-    "users": "Usuários"
+    "users": "Usuários",
+    "customers": "Clientes"
   },
   "archives": {
     "title": "Arquivos",
@@ -665,7 +666,15 @@
     "noEventsDescription": "Crie seu primeiro evento para começar.",
     "bulkArchive": "Arquivar",
     "confirmBulkArchive": "Tem certeza de que deseja arquivar {{count}} evento(s)?",
-    "confirmBulkArchiveDescription": "Esta ação não pode ser desfeita. Eventos arquivados não serão mais acessíveis publicamente."
+    "confirmBulkArchiveDescription": "Esta ação não pode ser desfeita. Eventos arquivados não serão mais acessíveis publicamente.",
+    "customerPicker": {
+      "label": "Contas de clientes",
+      "help": "Os clientes adicionados aqui podem fazer login em /customer/login e visualizar esta galeria sem inserir a senha do evento.",
+      "placeholder": "Pesquisar por e-mail, nome ou empresa",
+      "searching": "Pesquisando…",
+      "noResults": "Sem resultados. Convide este cliente primeiro em /admin/customers.",
+      "removeAria": "Remover {{name}}"
+    }
   },
   "settings": {
     "title": "Configurações do Sistema",
@@ -2455,5 +2464,157 @@
     "filenameAZ": "Nome do arquivo (A-Z)",
     "filenameZA": "Nome do arquivo (Z-A)",
     "dateTaken": "Data da captura"
+  },
+  "customers": {
+    "pageTitle": "Clientes",
+    "pageSubtitle": "Contas recorrentes de clientes que podem entrar em /customer/login.",
+    "unnamed": "Sem nome",
+    "empty": "Ainda não há clientes. Clique em \"Convidar cliente\" para adicionar um.",
+    "loadError": "Não foi possível carregar os clientes",
+    "loadInvitationsError": "Não foi possível carregar os convites",
+    "tabs": {
+      "customers": "Clientes",
+      "invitations": "Convites"
+    },
+    "search": {
+      "placeholder": "Pesquisar por e-mail, nome ou empresa"
+    },
+    "table": {
+      "name": "Nome",
+      "email": "E-mail",
+      "company": "Empresa",
+      "eventCount": "Eventos",
+      "lastLogin": "Último login",
+      "status": "Status"
+    },
+    "status": {
+      "active": "Ativo",
+      "inactive": "Desativado"
+    },
+    "invite": {
+      "button": "Convidar cliente",
+      "title": "Convidar um cliente",
+      "description": "Eles receberão um e-mail com um link para configurar a conta. Após aceitarem, você poderá atribuí-los a eventos.",
+      "email": "E-mail",
+      "submit": "Enviar convite",
+      "success": "Convite enviado",
+      "error": "Não foi possível enviar o convite.",
+      "conflict": "Já existe um cliente com este e-mail ou há um convite pendente.",
+      "invalidEmail": "Insira um e-mail válido"
+    },
+    "invitations": {
+      "empty": "Nenhum convite pendente.",
+      "email": "E-mail",
+      "invitedBy": "Convidado por",
+      "expiresAt": "Expira",
+      "createdAt": "Criado",
+      "cancel": "Cancelar"
+    },
+    "deactivate": {
+      "button": "Desativar",
+      "title": "Desativar cliente?",
+      "body": "Eles não poderão mais fazer login. Você pode convidá-los novamente depois.",
+      "success": "Cliente desativado",
+      "error": "Não foi possível desativar o cliente"
+    },
+    "cancelInvitation": {
+      "title": "Cancelar convite?",
+      "body": "O link do convite deixará de funcionar imediatamente.",
+      "success": "Convite cancelado",
+      "error": "Não foi possível cancelar o convite"
+    },
+    "detail": {
+      "loadError": "Não foi possível carregar o cliente",
+      "saved": "Cliente salvo",
+      "saveError": "Não foi possível salvar as alterações.",
+      "emailConflict": "Este e-mail já está em uso por outro cliente.",
+      "save": "Salvar alterações",
+      "expires": "expira",
+      "accountSection": "Conta",
+      "personalSection": "Informações pessoais",
+      "billingSection": "Endereço & faturamento",
+      "notesSection": "Notas internas",
+      "eventsSection": "Eventos atribuídos",
+      "noEvents": "Ainda não atribuído a nenhum evento. Adicione este cliente a um evento pelo formulário de evento.",
+      "email": "E-mail",
+      "preferredLanguage": "Idioma preferido",
+      "salutation": "Saudação",
+      "salutationNone": "—",
+      "firstName": "Nome",
+      "lastName": "Sobrenome",
+      "displayName": "Nome de exibição",
+      "phone": "Telefone",
+      "company": "Empresa",
+      "billingEmail": "E-mail de faturamento",
+      "vatId": "NIF / CNPJ",
+      "addressLine1": "Endereço linha 1",
+      "addressLine2": "Endereço linha 2",
+      "postalCode": "CEP",
+      "city": "Cidade",
+      "state": "Estado / região",
+      "countryCode": "País (ISO 2)",
+      "notesHint": "Visível apenas para administradores. Nunca mostrado ao cliente."
+    }
+  },
+  "customer": {
+    "login": {
+      "title": "Login de cliente",
+      "subtitle": "Acesse todas as suas galerias de fotos em um só lugar.",
+      "email": "E-mail",
+      "password": "Senha",
+      "emailRequired": "E-mail é obrigatório",
+      "invalidEmail": "Insira um e-mail válido",
+      "passwordRequired": "Senha é obrigatória",
+      "showPassword": "Mostrar senha",
+      "hidePassword": "Ocultar senha",
+      "signIn": "Entrar",
+      "loginSuccess": "Bem-vindo de volta!",
+      "invalidCredentials": "E-mail ou senha inválidos",
+      "tooManyAttempts": "Muitas tentativas — tente novamente mais tarde.",
+      "networkError": "Não foi possível conectar ao servidor. Tente novamente.",
+      "generalError": "Falha no login. Tente novamente.",
+      "acceptedToast": "Conta pronta — faça login.",
+      "adminHint": "Procurando o painel de administração? Acesse /admin/login."
+    },
+    "acceptInvite": {
+      "title": "Configurar sua conta",
+      "invalidToken": "Este link de convite é inválido ou expirou. Entre em contato com seu fotógrafo para um novo convite.",
+      "emailWillBe": "O e-mail da sua conta será ",
+      "invitedBy": ", convidado por ",
+      "name": "Seu nome",
+      "nameRequired": "Insira seu nome",
+      "password": "Escolha uma senha",
+      "confirm": "Confirmar senha",
+      "passwordTooShort": "A senha deve ter no mínimo 8 caracteres",
+      "passwordsMismatch": "As senhas não coincidem",
+      "passwordHint": "Mínimo de 8 caracteres.",
+      "submit": "Criar conta",
+      "successToast": "Conta criada — faça login.",
+      "alreadyExists": "Já existe uma conta com este e-mail. Faça login.",
+      "invalidSubmission": "Não foi possível criar sua conta.",
+      "generalError": "Não foi possível criar sua conta. Tente novamente."
+    },
+    "dashboard": {
+      "title": "Suas galerias",
+      "subtitle": "Clique em um cartão para ver a galeria.",
+      "loadError": "Não foi possível carregar suas galerias. Tente novamente.",
+      "emptyTitle": "Ainda não há galerias",
+      "emptyBody": "Assim que seu fotógrafo atribuir você a uma galeria, ela aparecerá aqui.",
+      "openAria": "Abrir galeria {{name}}",
+      "opening": "Abrindo…",
+      "expiresOn": "Expira em {{date}}",
+      "expiredOn": "Expirou em {{date}}",
+      "eventExpired": "Esta galeria expirou.",
+      "eventForbidden": "Você não tem mais acesso a esta galeria.",
+      "openError": "Não foi possível abrir esta galeria. Tente novamente.",
+      "download": "Baixar",
+      "preparingDownload": "Preparando…",
+      "quickDownloadAria": "Baixar todas as fotos de {{name}}",
+      "downloadStarted": "Download iniciado para {{name}}",
+      "downloadError": "Não foi possível iniciar o download. Tente novamente."
+    },
+    "layout": {
+      "greeting": "Olá, {{name}}"
+    }
   }
 }

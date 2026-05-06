@@ -162,7 +162,8 @@
     "emailSettings": "E-mailinstellingen",
     "backup": "Back-up & Herstel",
     "cmsPages": "CMS-pagina's",
-    "users": "Gebruikers"
+    "users": "Gebruikers",
+    "customers": "Klanten"
   },
   "archives": {
     "title": "Archieven",
@@ -665,6 +666,14 @@
       "failed": "Hernoemen mislukt",
       "filesRenamed": "{{count}} bestanden bijgewerkt",
       "confirm": "Evenement hernoemen"
+    },
+    "customerPicker": {
+      "label": "Klantaccounts",
+      "help": "Hier toegevoegde klanten kunnen inloggen op /customer/login en deze galerie bekijken zonder het evenementwachtwoord in te voeren.",
+      "placeholder": "Zoeken op e-mail, naam of bedrijf",
+      "searching": "Zoeken…",
+      "noResults": "Geen resultaten. Nodig deze klant eerst uit via /admin/customers.",
+      "removeAria": "{{name}} verwijderen"
     }
   },
   "settings": {
@@ -2455,5 +2464,157 @@
     "filenameAZ": "Bestandsnaam (A-Z)",
     "filenameZA": "Bestandsnaam (Z-A)",
     "dateTaken": "Opnamedatum"
+  },
+  "customers": {
+    "pageTitle": "Klanten",
+    "pageSubtitle": "Terugkerende klantaccounts die kunnen inloggen op /customer/login.",
+    "unnamed": "Naamloos",
+    "empty": "Nog geen klanten. Klik op \"Klant uitnodigen\" om er een toe te voegen.",
+    "loadError": "Klanten konden niet worden geladen",
+    "loadInvitationsError": "Uitnodigingen konden niet worden geladen",
+    "tabs": {
+      "customers": "Klanten",
+      "invitations": "Uitnodigingen"
+    },
+    "search": {
+      "placeholder": "Zoeken op e-mail, naam of bedrijf"
+    },
+    "table": {
+      "name": "Naam",
+      "email": "E-mail",
+      "company": "Bedrijf",
+      "eventCount": "Evenementen",
+      "lastLogin": "Laatste login",
+      "status": "Status"
+    },
+    "status": {
+      "active": "Actief",
+      "inactive": "Gedeactiveerd"
+    },
+    "invite": {
+      "button": "Klant uitnodigen",
+      "title": "Een klant uitnodigen",
+      "description": "Zij ontvangen een e-mail met een link om hun account in te stellen. Zodra zij hebben geaccepteerd, kunt u hen toewijzen aan evenementen.",
+      "email": "E-mail",
+      "submit": "Uitnodiging sturen",
+      "success": "Uitnodiging verzonden",
+      "error": "Uitnodiging kon niet worden verzonden.",
+      "conflict": "Er bestaat al een klant met dit e-mailadres of er is een openstaande uitnodiging.",
+      "invalidEmail": "Voer een geldig e-mailadres in"
+    },
+    "invitations": {
+      "empty": "Geen openstaande uitnodigingen.",
+      "email": "E-mail",
+      "invitedBy": "Uitgenodigd door",
+      "expiresAt": "Verloopt",
+      "createdAt": "Aangemaakt",
+      "cancel": "Annuleren"
+    },
+    "deactivate": {
+      "button": "Deactiveren",
+      "title": "Klant deactiveren?",
+      "body": "Zij kunnen niet meer inloggen. U kunt hen later opnieuw uitnodigen.",
+      "success": "Klant gedeactiveerd",
+      "error": "Klant kon niet worden gedeactiveerd"
+    },
+    "cancelInvitation": {
+      "title": "Uitnodiging annuleren?",
+      "body": "De uitnodigingslink stopt direct met werken.",
+      "success": "Uitnodiging geannuleerd",
+      "error": "Uitnodiging kon niet worden geannuleerd"
+    },
+    "detail": {
+      "loadError": "Klant kon niet worden geladen",
+      "saved": "Klant opgeslagen",
+      "saveError": "Wijzigingen konden niet worden opgeslagen.",
+      "emailConflict": "Dat e-mailadres is al in gebruik door een andere klant.",
+      "save": "Wijzigingen opslaan",
+      "expires": "verloopt",
+      "accountSection": "Account",
+      "personalSection": "Persoonlijke gegevens",
+      "billingSection": "Adres & facturering",
+      "notesSection": "Interne notities",
+      "eventsSection": "Toegewezen evenementen",
+      "noEvents": "Nog niet toegewezen aan evenementen. Voeg deze klant toe aan een evenement via het evenementformulier.",
+      "email": "E-mail",
+      "preferredLanguage": "Voorkeurstaal",
+      "salutation": "Aanhef",
+      "salutationNone": "—",
+      "firstName": "Voornaam",
+      "lastName": "Achternaam",
+      "displayName": "Weergavenaam",
+      "phone": "Telefoon",
+      "company": "Bedrijf",
+      "billingEmail": "Facturatie-e-mail",
+      "vatId": "BTW / fiscaal nummer",
+      "addressLine1": "Adresregel 1",
+      "addressLine2": "Adresregel 2",
+      "postalCode": "Postcode",
+      "city": "Stad",
+      "state": "Provincie / regio",
+      "countryCode": "Land (ISO 2)",
+      "notesHint": "Alleen zichtbaar voor beheerders. Wordt nooit aan de klant getoond."
+    }
+  },
+  "customer": {
+    "login": {
+      "title": "Klantlogin",
+      "subtitle": "Bekijk al uw fotogalerieën op één plek.",
+      "email": "E-mail",
+      "password": "Wachtwoord",
+      "emailRequired": "E-mail is verplicht",
+      "invalidEmail": "Voer een geldig e-mailadres in",
+      "passwordRequired": "Wachtwoord is verplicht",
+      "showPassword": "Wachtwoord tonen",
+      "hidePassword": "Wachtwoord verbergen",
+      "signIn": "Inloggen",
+      "loginSuccess": "Welkom terug!",
+      "invalidCredentials": "Ongeldig e-mailadres of wachtwoord",
+      "tooManyAttempts": "Te veel pogingen — probeer het later opnieuw.",
+      "networkError": "Kan de server niet bereiken. Probeer het opnieuw.",
+      "generalError": "Inloggen mislukt. Probeer het opnieuw.",
+      "acceptedToast": "Account klaar — log nu in.",
+      "adminHint": "Zoekt u het beheerderspaneel? Ga naar /admin/login."
+    },
+    "acceptInvite": {
+      "title": "Account instellen",
+      "invalidToken": "Deze uitnodigingslink is ongeldig of verlopen. Neem contact op met uw fotograaf voor een nieuwe uitnodiging.",
+      "emailWillBe": "Uw account-e-mail wordt ",
+      "invitedBy": ", uitgenodigd door ",
+      "name": "Uw naam",
+      "nameRequired": "Voer uw naam in",
+      "password": "Kies een wachtwoord",
+      "confirm": "Wachtwoord bevestigen",
+      "passwordTooShort": "Wachtwoord moet minimaal 8 tekens bevatten",
+      "passwordsMismatch": "Wachtwoorden komen niet overeen",
+      "passwordHint": "Minimaal 8 tekens.",
+      "submit": "Account aanmaken",
+      "successToast": "Account aangemaakt — log nu in.",
+      "alreadyExists": "Er bestaat al een account met dit e-mailadres. Log in plaats daarvan in.",
+      "invalidSubmission": "Account kon niet worden aangemaakt.",
+      "generalError": "Account kon niet worden aangemaakt. Probeer het opnieuw."
+    },
+    "dashboard": {
+      "title": "Uw galerieën",
+      "subtitle": "Klik op een kaart om de galerie te bekijken.",
+      "loadError": "Uw galerieën konden niet worden geladen. Probeer het opnieuw.",
+      "emptyTitle": "Nog geen galerieën",
+      "emptyBody": "Zodra uw fotograaf u aan een galerie toewijst, verschijnt deze hier.",
+      "openAria": "Galerie {{name}} openen",
+      "opening": "Openen…",
+      "expiresOn": "Verloopt op {{date}}",
+      "expiredOn": "Verlopen op {{date}}",
+      "eventExpired": "Deze galerie is verlopen.",
+      "eventForbidden": "U heeft geen toegang meer tot deze galerie.",
+      "openError": "Galerie kon niet worden geopend. Probeer het opnieuw.",
+      "download": "Downloaden",
+      "preparingDownload": "Voorbereiden…",
+      "quickDownloadAria": "Alle foto's voor {{name}} downloaden",
+      "downloadStarted": "Download gestart voor {{name}}",
+      "downloadError": "Download kon niet worden gestart. Probeer het opnieuw."
+    },
+    "layout": {
+      "greeting": "Hallo, {{name}}"
+    }
   }
 }
