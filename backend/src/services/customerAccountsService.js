@@ -434,6 +434,130 @@ async function deactivateCustomer(id, deactivatedByAdminId) {
 }
 
 /**
+ * Reactivate a previously-deactivated customer. Restores login (is_active
+ * back to true), but does NOT re-grant any historical assignments — those
+ * were never removed (deactivate keeps the junction rows for audit), so
+ * the customer immediately sees the same galleries they had before.
+ */
+async function reactivateCustomer(id, reactivatedByAdminId) {
+  const customer = await db('customer_accounts').where('id', id).first();
+  if (!customer) {
+    throw new NotFoundError('Customer', id);
+  }
+  if (customer.is_active) {
+    return; // already active, no-op
+  }
+
+  await db('customer_accounts').where('id', id).update({
+    is_active: formatBoolean(true),
+    // Don't touch password_changed_at — the customer's password (if set)
+    // remains valid. They log in with their existing credential.
+    updated_at: new Date(),
+  });
+
+  await logActivity('customer_reactivated',
+    { customerId: id, email: customer.email },
+    null,
+    { type: 'admin', id: reactivatedByAdminId, name: 'system' }
+  );
+
+  logger.info('Customer reactivated', { customerId: id, reactivatedByAdminId });
+}
+
+/**
+ * GDPR-style erasure: anonymize-in-place rather than hard delete.
+ *
+ * Why anonymize, not delete?
+ *   - `customer_invitations.accepted_customer_id` has no ON DELETE CASCADE
+ *     (Postgres default RESTRICT), so a hard delete would fail if the
+ *     customer accepted any invitations. Anonymize sidesteps the FK
+ *     constraint entirely.
+ *   - `event_customer_assignments` and `activity_logs` rows referencing
+ *     this customer are part of the gallery's access audit trail. Wiping
+ *     them would leave gaps that "who had access to this event" queries
+ *     can't recover from.
+ *
+ * What we do:
+ *   - Replace the email with a sentinel `deleted-<id>-<random>@deleted.invalid`
+ *     so unique-on-email holds and the address can never collide with a
+ *     real customer the admin invites later.
+ *   - NULL every PII column (name, phone, company, vat, full address, notes).
+ *   - Wipe `password_hash` so credentials can't be reused.
+ *   - Set `is_active=false` and bump `password_changed_at` so any
+ *     outstanding tokens die immediately.
+ *   - Delete pending invitations + reset tokens for this customer.
+ *
+ * What we keep:
+ *   - The customer_accounts row itself (anonymized).
+ *   - Their event_customer_assignments rows (with a now-anonymized FK).
+ *   - All activity_logs / access_logs (audit trail).
+ *
+ * Wrapped in a transaction so a partial failure doesn't leave half-erased
+ * state.
+ */
+async function eraseCustomer(id, erasedByAdminId) {
+  const customer = await db('customer_accounts').where('id', id).first();
+  if (!customer) {
+    throw new NotFoundError('Customer', id);
+  }
+
+  // Sentinel email — uses the .invalid TLD (RFC 6761) so it can't be
+  // a valid deliverable address, even by accident. Includes the id +
+  // a random suffix so a re-erase of a different account doesn't
+  // collide on the unique index.
+  const sentinelEmail = `deleted-${id}-${crypto.randomBytes(4).toString('hex')}@deleted.invalid`;
+
+  await db.transaction(async (trx) => {
+    await trx('customer_accounts').where('id', id).update({
+      email: sentinelEmail,
+      salutation: null,
+      first_name: null,
+      last_name: null,
+      display_name: null,
+      phone: null,
+      company_name: null,
+      billing_email: null,
+      vat_id: null,
+      address_line1: null,
+      address_line2: null,
+      postal_code: null,
+      city: null,
+      state: null,
+      country_code: null,
+      notes: null,
+      password_hash: null,
+      is_active: formatBoolean(false),
+      must_change_password: formatBoolean(false),
+      password_changed_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    // Drop pending invitations the customer hasn't accepted yet AND any
+    // that ARE pointed at this customer (accepted_customer_id) — keep the
+    // history columns (email + invited_by + accepted_at) on the
+    // already-accepted ones since those reference the now-sentinel email
+    // and serve as audit. We just clear the FK pointer.
+    await trx('customer_invitations').where('email', customer.email).whereNull('accepted_at').del();
+    await trx('customer_invitations').where('accepted_customer_id', id).update({
+      // Keep the row, drop the back-pointer so a future hard-delete (if
+      // ever added) doesn't FK-block.
+      accepted_customer_id: null,
+    });
+
+    // Active reset tokens for this customer should be invalidated.
+    await trx('customer_password_resets').where('customer_account_id', id).del();
+  });
+
+  await logActivity('customer_erased',
+    { customerId: id, originalEmail: customer.email },
+    null,
+    { type: 'admin', id: erasedByAdminId, name: 'system' }
+  );
+
+  logger.info('Customer erased (anonymized in place)', { customerId: id, erasedByAdminId });
+}
+
+/**
  * Autocomplete for the event-form picker. Returns up to `limit` rows
  * matching the email/name prefix. Active customers only — deactivated
  * accounts shouldn't show up as assignable options.
@@ -795,6 +919,8 @@ module.exports = {
   getCustomerById,
   updateCustomer,
   deactivateCustomer,
+  reactivateCustomer,
+  eraseCustomer,
   searchCustomers,
   setAssignmentsForEvent,
   getAssignmentsForEvent,

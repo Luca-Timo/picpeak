@@ -2601,6 +2601,20 @@
         "error": "Could not send password reset",
         "inactive": "Reactivate the customer before sending a reset."
       }
+    },
+    "reactivate": {
+      "button": "Reactivate",
+      "success": "Customer reactivated",
+      "error": "Could not reactivate customer"
+    },
+    "erase": {
+      "button": "Erase customer data",
+      "title": "Erase customer data?",
+      "body": "Removes the customer's name, email, phone, address, company and credentials. The account row stays so historical event-access records and audit logs still reference it. This is irreversible — you cannot restore the data afterwards.",
+      "confirm": "Erase permanently",
+      "confirmInFlight": "Erasing…",
+      "success": "Customer erased",
+      "error": "Could not erase customer"
     }
   },
   "customer": {
