@@ -359,7 +359,7 @@ export const GalleryPage: React.FC = () => {
               alt={settingsData?.branding_company_name || 'PicPeak'}
               className="h-12 sm:h-16 lg:h-20 w-auto object-contain mx-auto mb-3 sm:mb-4"
             />
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 px-2" style={{ color: 'var(--color-primary, #5C8762)' }}>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 px-2" style={{ color: 'var(--color-accent)' }}>
               {galleryInfo?.event_name}
             </h1>
           </div>
@@ -383,7 +383,11 @@ export const GalleryPage: React.FC = () => {
 
           <Card>
             <CardContent className="p-4 sm:p-6">
-              <h2 className="text-base sm:text-lg lg:text-xl font-semibold mb-4">{t('auth.enterPassword')}</h2>
+              {/* The global .card class hard-codes bg-white, so text inside
+                  must be dark explicitly — without this, dark themes set
+                  the inherited body color to white and the heading
+                  disappears against the still-white card. */}
+              <h2 className="text-base sm:text-lg lg:text-xl font-semibold mb-4 text-neutral-900">{t('auth.enterPassword')}</h2>
 
               <form onSubmit={handleLogin} className="space-y-4">
                 <Input
