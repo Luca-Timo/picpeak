@@ -273,6 +273,13 @@ router.put('/branding', adminAuth, requirePermission('settings.edit'), async (re
       logo_display_hero,
       logo_display_mode,
       hide_powered_by,
+      // Site-wide forced color mode from feat/darkmode-color-improvement
+      // (commit 5a162fc on beta). Accepts 'dark' | 'light' | null. Was
+      // dropped from this destructure during the user-accounts merge
+      // even though the normalization line below still referenced it,
+      // producing a ReferenceError 500 on every branding save. Restoring
+      // here so the orphan reference resolves.
+      force_color_mode,
       // Login-page logo frame toggle. When true (default) both
       // /admin/login and /customer/login render the tinted square
       // behind the logo. When false, the logo sits directly on the
@@ -281,6 +288,13 @@ router.put('/branding', adminAuth, requirePermission('settings.edit'), async (re
       // the customer's chosen theme.
       login_logo_frame_enabled
     } = req.body;
+
+    // Normalize force_color_mode: only 'dark' | 'light' | null are valid.
+    const normalizedForceColorMode = force_color_mode === 'dark'
+      ? 'dark'
+      : force_color_mode === 'light'
+        ? 'light'
+        : null;
 
     // Get current watermark settings hash for change detection
     const oldSettingsHash = await watermarkService.getSettingsHash();
@@ -304,6 +318,7 @@ router.put('/branding', adminAuth, requirePermission('settings.edit'), async (re
       logo_display_hero,
       logo_display_mode,
       hide_powered_by,
+      force_color_mode: normalizedForceColorMode,
       login_logo_frame_enabled
     };
 
