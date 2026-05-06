@@ -16,6 +16,42 @@ export interface CustomerProfile {
   preferredLanguage: string;
 }
 
+/**
+ * Full self-service profile shape — superset of CustomerProfile (which is
+ * the narrow auth-payload version). Used by the profile page and the
+ * accept-invite form.
+ */
+export interface CustomerProfileFull extends CustomerProfile {
+  salutation: string | null;
+  phone: string | null;
+  companyName: string | null;
+  vatId: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  postalCode: string | null;
+  city: string | null;
+  state: string | null;
+  countryCode: string | null;
+}
+
+/** Subset of profile fields the admin can pre-fill on an invitation
+ *  and that the customer can edit on accept. */
+export interface CustomerProfilePrefill {
+  salutation?: string;
+  first_name?: string;
+  last_name?: string;
+  display_name?: string;
+  phone?: string;
+  company_name?: string;
+  vat_id?: string;
+  address_line1?: string;
+  address_line2?: string;
+  postal_code?: string;
+  city?: string;
+  state?: string;
+  country_code?: string;
+}
+
 export interface CustomerEvent {
   id: number;
   slug: string;
@@ -31,6 +67,25 @@ export interface CustomerInvitationInfo {
   email: string;
   expiresAt: string;
   invitedBy: string | null;
+  /** Admin-supplied prefill — populates the accept-invite profile form. */
+  prefill: CustomerProfilePrefill | null;
+}
+
+export interface CustomerProfileUpdate {
+  salutation?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  displayName?: string | null;
+  phone?: string | null;
+  companyName?: string | null;
+  vatId?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  postalCode?: string | null;
+  city?: string | null;
+  state?: string | null;
+  countryCode?: string | null;
+  preferredLanguage?: string;
 }
 
 export interface CustomerAccessTokenResponse {
@@ -74,12 +129,32 @@ export const customerService = {
     return response.data.invitation;
   },
 
-  async acceptInvitation(token: string, name: string, password: string): Promise<{ email: string }> {
+  async acceptInvitation(
+    token: string,
+    name: string,
+    password: string,
+    profile?: CustomerProfilePrefill,
+  ): Promise<{ email: string }> {
     const response = await api.post<{ email: string }>(
       '/customer/auth/accept-invite',
-      { token, name, password }
+      { token, name, password, profile },
     );
     return response.data;
+  },
+
+  // ---- profile (self-service) ----
+  async getProfile(): Promise<CustomerProfileFull> {
+    const response = await api.get<{ profile: CustomerProfileFull }>('/customer/profile');
+    return response.data.profile;
+  },
+
+  async updateProfile(payload: CustomerProfileUpdate): Promise<CustomerProfileFull> {
+    const response = await api.put<{ profile: CustomerProfileFull }>('/customer/profile', payload);
+    return response.data.profile;
+  },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await api.post('/customer/profile/password', { currentPassword, newPassword });
   },
 
   // ---- dashboard ----

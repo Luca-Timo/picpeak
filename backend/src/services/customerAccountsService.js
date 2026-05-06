@@ -23,6 +23,65 @@ const { ConflictError, NotFoundError, ValidationError } = require('../utils/erro
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days, matches admin invites
 
 /**
+ * Whitelist of customer profile fields the admin is allowed to pre-fill on
+ * an invitation (and that the customer can then edit on accept). Centralised
+ * so both invite-create and accept paths agree on what survives the round
+ * trip.
+ */
+const PREFILLABLE_FIELDS = [
+  'salutation',
+  'first_name',
+  'last_name',
+  'display_name',
+  'phone',
+  'company_name',
+  'vat_id',
+  'address_line1',
+  'address_line2',
+  'postal_code',
+  'city',
+  'state',
+  'country_code',
+];
+
+/**
+ * Sanitise a free-form prefill payload coming from the admin UI. Trims
+ * whitespace, drops anything not in the whitelist, uppercases ISO country
+ * codes, and returns null if the result is effectively empty so we don't
+ * litter the DB with `{}` rows.
+ */
+function sanitisePrefill(input) {
+  if (!input || typeof input !== 'object') return null;
+  const out = {};
+  for (const field of PREFILLABLE_FIELDS) {
+    const raw = input[field];
+    if (raw === undefined || raw === null) continue;
+    const trimmed = String(raw).trim();
+    if (!trimmed) continue;
+    if (field === 'country_code') {
+      out[field] = trimmed.toUpperCase().slice(0, 2);
+    } else {
+      out[field] = trimmed;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/**
+ * Decode the prefill_data column. Postgres returns it pre-parsed; SQLite /
+ * older drivers may hand back a JSON string. Tolerate both, fail soft.
+ */
+function decodePrefill(raw) {
+  if (!raw) return null;
+  if (typeof raw === 'object') return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Create a new customer invitation.
  *
  * Idempotency: rejects if an active customer with this email already
@@ -33,7 +92,7 @@ const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days, matches admin invi
  *
  * @returns {Promise<{ id, email, token, expiresAt }>}
  */
-async function createInvitation({ email, invitedById }) {
+async function createInvitation({ email, invitedById, prefill }) {
   const normalisedEmail = String(email || '').trim().toLowerCase();
   if (!normalisedEmail) {
     throw new ValidationError('Email is required');
@@ -58,6 +117,7 @@ async function createInvitation({ email, invitedById }) {
   // 64-char hex = 32 bytes = 256 bits of entropy. Same as admin invites.
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
+  const sanitisedPrefill = sanitisePrefill(prefill);
 
   const [insertedId] = await db('customer_invitations').insert({
     email: normalisedEmail,
@@ -65,6 +125,10 @@ async function createInvitation({ email, invitedById }) {
     invited_by: invitedById,
     expires_at: expiresAt,
     created_at: new Date(),
+    // Stringify so SQLite (TEXT-typed json column) and Postgres (JSONB)
+    // both store the same shape. Skip the column entirely on null so
+    // databases predating migration 088 don't reject the insert.
+    ...(sanitisedPrefill ? { prefill_data: JSON.stringify(sanitisedPrefill) } : {}),
   }).returning('id');
   const id = insertedId?.id || insertedId;
 
@@ -99,7 +163,7 @@ async function createInvitation({ email, invitedById }) {
  * and marks the invitation accepted, so a partial failure can't leave a
  * dangling account or a re-usable token.
  */
-async function acceptInvitation({ token, name, password }) {
+async function acceptInvitation({ token, name, password, profile }) {
   const invitation = await db('customer_invitations')
     .where('token', token)
     .whereNull('accepted_at')
@@ -121,14 +185,39 @@ async function acceptInvitation({ token, name, password }) {
 
   const passwordHash = await bcrypt.hash(password, getBcryptRounds());
 
+  // Merge the admin's prefill with whatever the customer typed on the accept
+  // form. Customer-supplied values win on every key — the accept page shows
+  // the prefill values pre-populated but the customer is allowed to correct
+  // anything (e.g. an admin's typo in the company name).
+  const adminPrefill = decodePrefill(invitation.prefill_data) || {};
+  const customerProfile = sanitisePrefill(profile) || {};
+  const merged = { ...adminPrefill, ...customerProfile };
+  // The legacy single-name field still wins over a separately-typed
+  // display_name only if the merged record didn't carry one. Keeps backwards
+  // compatibility with clients that haven't been updated to send the
+  // structured profile.
+  if (name && !merged.display_name) {
+    merged.display_name = String(name).trim();
+  }
+
   const customerId = await db.transaction(async (trx) => {
     const [inserted] = await trx('customer_accounts').insert({
       email: invitation.email,
-      // The accept-invite form asks for a single "display name" field,
-      // mirrored to display_name. The salutation / first/last/billing
-      // fields stay null until the admin fills them in or we add a
-      // self-service profile page (out of scope for this PR).
-      display_name: name || null,
+      // Profile fields land directly on the customer row. Anything the user
+      // didn't set stays null.
+      salutation: merged.salutation || null,
+      first_name: merged.first_name || null,
+      last_name: merged.last_name || null,
+      display_name: merged.display_name || null,
+      phone: merged.phone || null,
+      company_name: merged.company_name || null,
+      vat_id: merged.vat_id || null,
+      address_line1: merged.address_line1 || null,
+      address_line2: merged.address_line2 || null,
+      postal_code: merged.postal_code || null,
+      city: merged.city || null,
+      state: merged.state || null,
+      country_code: merged.country_code || null,
       password_hash: passwordHash,
       is_active: formatBoolean(true),
       must_change_password: formatBoolean(false),
@@ -177,10 +266,15 @@ async function validateInvitationToken(token) {
     .select(
       'customer_invitations.email',
       'customer_invitations.expires_at',
+      'customer_invitations.prefill_data',
       'admin_users.username as invited_by_username'
     )
     .first();
-  return invitation || null;
+  if (!invitation) return null;
+  return {
+    ...invitation,
+    prefill: decodePrefill(invitation.prefill_data),
+  };
 }
 
 /**

@@ -117,11 +117,31 @@ router.post('/invite', [
   adminAuth,
   requirePermission('customers.create'),
   body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  // Optional prefill — admin can stash any subset of customer profile fields
+  // on the invitation. The customer sees them pre-populated on the accept
+  // form and can edit before submitting. Validators are deliberately lax:
+  // any field can be omitted, and only length is enforced (sanitisation
+  // happens server-side in the service).
+  body('prefill').optional().isObject(),
+  body('prefill.salutation').optional({ nullable: true }).isString().isLength({ max: 32 }),
+  body('prefill.first_name').optional({ nullable: true }).isString().isLength({ max: 80 }),
+  body('prefill.last_name').optional({ nullable: true }).isString().isLength({ max: 80 }),
+  body('prefill.display_name').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('prefill.phone').optional({ nullable: true }).isString().isLength({ max: 40 }),
+  body('prefill.company_name').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('prefill.vat_id').optional({ nullable: true }).isString().isLength({ max: 40 }),
+  body('prefill.address_line1').optional({ nullable: true }).isString().isLength({ max: 255 }),
+  body('prefill.address_line2').optional({ nullable: true }).isString().isLength({ max: 255 }),
+  body('prefill.postal_code').optional({ nullable: true }).isString().isLength({ max: 20 }),
+  body('prefill.city').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('prefill.state').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('prefill.country_code').optional({ nullable: true }).isString().isLength({ max: 2 }),
 ], handleAsync(async (req, res) => {
   validateRequest(req);
   const invitation = await customerAccountsService.createInvitation({
     email: req.body.email,
     invitedById: req.admin.id,
+    prefill: req.body.prefill,
   });
   // Don't echo the token in the response — only the email channel sees it.
   successResponse(res, {

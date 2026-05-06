@@ -43,6 +43,23 @@ export interface CustomerAccountDetail extends CustomerAccountSummary {
   }>;
 }
 
+/** Optional admin-side prefill on invite — see /admin/customers/invite. */
+export interface CustomerInvitePrefill {
+  salutation?: string;
+  first_name?: string;
+  last_name?: string;
+  display_name?: string;
+  phone?: string;
+  company_name?: string;
+  vat_id?: string;
+  address_line1?: string;
+  address_line2?: string;
+  postal_code?: string;
+  city?: string;
+  state?: string;
+  country_code?: string;
+}
+
 export interface CustomerInvitationSummary {
   id: number;
   email: string;
@@ -109,12 +126,21 @@ export const customerAdminService = {
     await api.post(`/admin/customers/${id}/deactivate`);
   },
 
-  async invite(email: string): Promise<{ id: number; email: string; expiresAt: string }> {
+  /**
+   * Invite a customer. `prefill` is an optional set of profile fields the
+   * admin can pre-populate on the invitation row — the customer sees them
+   * pre-filled (and editable) on the accept form. Saves the customer typing
+   * for the common case where the photographer already has the wedding
+   * couple's name + address from the booking form.
+   */
+  async invite(
+    email: string,
+    prefill?: CustomerInvitePrefill,
+  ): Promise<{ id: number; email: string; expiresAt: string }> {
     const response = await api.post<{ data: { invitation: { id: number; email: string; expiresAt: string } } }>(
       '/admin/customers/invite',
-      { email }
+      { email, prefill },
     );
-    // successResponse wraps in { success: true, data }
     return (response.data as any).data?.invitation ?? (response.data as any).invitation;
   },
 

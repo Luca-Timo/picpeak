@@ -183,6 +183,10 @@ router.get('/invite/:token', [
         email: invitation.email,
         expiresAt: invitation.expires_at,
         invitedBy: invitation.invited_by_username,
+        // Surface admin-supplied prefill so the accept page can populate
+        // its profile form. Customer can still edit any field — we just
+        // saved them some typing.
+        prefill: invitation.prefill || null,
       },
     });
   } catch (error) {
@@ -228,13 +232,30 @@ router.post('/accept-invite', [
   // specific message rather than a generic validator error.
   body('password').isString().isLength({ min: 8 })
     .withMessage('Password must be at least 8 characters'),
+  // Optional structured profile from the accept-invite form. Mirrors
+  // the admin prefill shape — anything the customer types here wins
+  // over the admin prefill stashed on the invitation row.
+  body('profile').optional().isObject(),
+  body('profile.salutation').optional({ nullable: true }).isString().isLength({ max: 32 }),
+  body('profile.first_name').optional({ nullable: true }).isString().isLength({ max: 80 }),
+  body('profile.last_name').optional({ nullable: true }).isString().isLength({ max: 80 }),
+  body('profile.display_name').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('profile.phone').optional({ nullable: true }).isString().isLength({ max: 40 }),
+  body('profile.company_name').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('profile.vat_id').optional({ nullable: true }).isString().isLength({ max: 40 }),
+  body('profile.address_line1').optional({ nullable: true }).isString().isLength({ max: 255 }),
+  body('profile.address_line2').optional({ nullable: true }).isString().isLength({ max: 255 }),
+  body('profile.postal_code').optional({ nullable: true }).isString().isLength({ max: 20 }),
+  body('profile.city').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('profile.state').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('profile.country_code').optional({ nullable: true }).isString().isLength({ max: 2 }),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
     }
-    const { token, name, password } = req.body;
+    const { token, name, password, profile } = req.body;
 
     const policyError = validateCustomerPassword(password);
     if (policyError) {
@@ -244,7 +265,7 @@ router.post('/accept-invite', [
       });
     }
 
-    const result = await customerAccountsService.acceptInvitation({ token, name, password });
+    const result = await customerAccountsService.acceptInvitation({ token, name, password, profile });
     res.json({ message: 'Invitation accepted', email: result.email });
   } catch (error) {
     if (error.code === 'CONFLICT' || error.statusCode === 409) {
