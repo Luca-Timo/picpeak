@@ -15,7 +15,7 @@ import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 import { format, parseISO } from 'date-fns';
 
-import { Card, Loading } from '../../components/common';
+import { Loading } from '../../components/common';
 import { customerService, type CustomerEvent } from '../../services/customer.service';
 import { galleryService } from '../../services/gallery.service';
 import { useCustomerAuth } from '../../contexts/CustomerAuthContext';
@@ -147,14 +147,29 @@ export const CustomerDashboardPage: React.FC = () => {
         {isLoading ? (
           <div className="flex justify-center py-16"><Loading size="lg" /></div>
         ) : error ? (
-          <Card padding="lg">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-red-600" />
-              <p className="text-theme">{error}</p>
-            </div>
-          </Card>
+          // Themed inline panel rather than <Card>: the global .card class
+          // hard-codes bg-white + neutral-200 border, which fights dark
+          // themes on the customer surface and produced near-illegible
+          // contrast for the error message.
+          <div
+            role="alert"
+            className="rounded-xl border p-6 flex items-start gap-3"
+            style={{
+              backgroundColor: 'var(--color-surface)',
+              borderColor: 'var(--color-surface-border)',
+            }}
+          >
+            <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-red-500" />
+            <p className="text-theme">{error}</p>
+          </div>
         ) : events.length === 0 ? (
-          <Card padding="lg">
+          <div
+            className="rounded-xl border p-6"
+            style={{
+              backgroundColor: 'var(--color-surface)',
+              borderColor: 'var(--color-surface-border)',
+            }}
+          >
             <div className="text-center py-12">
               <ImageIcon className="w-12 h-12 mx-auto mb-3 text-muted-theme" aria-hidden="true" />
               <h2 className="text-lg font-semibold text-theme mb-2">
@@ -167,7 +182,7 @@ export const CustomerDashboardPage: React.FC = () => {
                 )}
               </p>
             </div>
-          </Card>
+          </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {events.map((ev) => {

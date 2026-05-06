@@ -439,19 +439,16 @@ async function getAssignmentsForEvent(eventId) {
  * may want them to preview before publish). is_archived stays as the
  * single hard-exclude — those galleries are gone.
  *
- * is_archived comparison is written defensively with whereRaw so legacy
- * rows where the column was not set (NULL) still match: postgres'
- * `NULL = false` evaluates to NULL, which is excluded by a strict `=`
- * filter — and any pre-#029 events would silently disappear from the
- * dashboard. The COALESCE keeps them visible.
+ * is_archived has a NOT NULL DEFAULT false from migration 029, so a
+ * plain typed filter is safe — no need for a COALESCE-via-whereRaw
+ * dance (which itself caused a 500 on postgres because the parameter
+ * placeholders weren't accepting the boolean cleanly).
  */
 async function listEventsForCustomer(customerId) {
   return db('event_customer_assignments')
     .join('events', 'events.id', 'event_customer_assignments.event_id')
     .where('event_customer_assignments.customer_account_id', customerId)
-    .whereRaw('COALESCE(events.is_archived, ?) = ?', [
-      formatBoolean(false), formatBoolean(false),
-    ])
+    .where('events.is_archived', formatBoolean(false))
     .select(
       'events.id',
       'events.slug',
