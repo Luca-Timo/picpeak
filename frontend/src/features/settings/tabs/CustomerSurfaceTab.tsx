@@ -161,7 +161,7 @@ export const CustomerSurfaceTab: React.FC = () => {
         <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
           {t(
             'settings.customerSurface.featuresHint',
-            'Globally enable or disable the Calendar, Quotes and Bills tabs on the customer surface. A customer only sees a tab if both the global toggle here AND the per-customer flag on their account are ON. The pages themselves are still placeholders right now.'
+            'These are the master switches for the Calendar, Quotes and Bills tabs on the customer surface. ON shows the tab for every customer by default; you can hide it for individual customers from their detail page. OFF here hides the tab for everyone, regardless of per-customer overrides. The pages themselves are still placeholders right now.'
           )}
         </p>
 

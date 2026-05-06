@@ -1528,7 +1528,7 @@
       "showCompanyName": "Firmennamen im Kunden-Header anzeigen",
       "showCompanyNameHint": "Ausblenden, wenn dein Logo bereits den Firmennamen enthält.",
       "featuresTitle": "Kundenfunktionen",
-      "featuresHint": "Schalte die Kalender-, Angebots- und Rechnungs-Tabs auf der Kundenoberfläche global an oder aus. Ein Kunde sieht einen Tab nur, wenn sowohl der globale Schalter hier als auch das Flag auf seinem Konto AN sind. Die Seiten selbst sind aktuell noch Platzhalter.",
+      "featuresHint": "Dies sind die Master-Schalter für die Kalender-, Angebots- und Rechnungs-Tabs auf der Kundenoberfläche. AN zeigt den Tab standardmäßig für jeden Kunden; einzelne Kunden kannst du auf deren Detailseite ausblenden. AUS hier blendet den Tab für alle aus, unabhängig von Pro-Kunde-Überschreibungen. Die Seiten selbst sind aktuell noch Platzhalter.",
       "calendar": "Kalender",
       "quotes": "Angebote",
       "bills": "Rechnungen",
@@ -2585,7 +2585,7 @@
       "countryCode": "Land (ISO-2)",
       "notesHint": "Nur für Administratoren sichtbar. Wird dem Kunden nie gezeigt.",
       "featuresSection": "Kundenfunktionen",
-      "featuresHint": "Aktiviere den Zugriff pro Kunde auf die neuen Kunden-Tabs. Sichtbarkeit wird mit den globalen Schaltern in Einstellungen → Kundenoberfläche UND-verknüpft — beide müssen AN sein, damit der Kunde den Eintrag sieht.",
+      "featuresHint": "Pro-Kunde-Überschreibungen für die Kundenoberflächen-Tabs. Die globalen Schalter in Einstellungen → Kundenoberfläche sind der Master-Schalter — wenn global AUS, sieht niemand den Tab, unabhängig von der Einstellung hier. Standard ist AN, schalte einen Eintrag AUS, um diesen Tab für diesen Kunden auszublenden.",
       "passwordSection": "Kontoaktionen",
       "passwordHint": "Sendet einen einmalig nutzbaren Reset-Link (7 Tage gültig) an die E-Mail-Adresse des Kunden. Das aktuelle Passwort bleibt gültig, bis der Kunde den Link öffnet und ein neues setzt.",
       "passwordReset": {
