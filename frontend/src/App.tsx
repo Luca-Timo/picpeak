@@ -27,9 +27,17 @@ import {
   CMSPage,
   UserManagementPage,
   EventTypesPage,
-  WebhookDeliveriesPage
+  WebhookDeliveriesPage,
+  CustomerManagementPage,
+  CustomerDetailPage
 } from './pages/admin';
 import { AcceptInvitePage } from './pages/public/AcceptInvitePage';
+import {
+  CustomerLoginPage,
+  CustomerDashboardPage,
+  CustomerAcceptInvitePage,
+} from './pages/customer';
+import { CustomerAuthProvider } from './contexts/CustomerAuthContext';
 import { AdminLayout, AdminAuthWrapper } from './components/admin';
 import { PageErrorBoundary, OfflineIndicator, SkipLink, DynamicFavicon, RobotsMetaTags, CMSContentBlock } from './components/common';
 import { MaintenanceWrapper } from './components/MaintenanceWrapper';
@@ -137,12 +145,27 @@ function App() {
                       <Route path="backup" element={<BackupManagement />} />
                       <Route path="cms" element={<CMSPage />} />
                       <Route path="users" element={<UserManagementPage />} />
+                      <Route path="customers" element={<CustomerManagementPage />} />
+                      <Route path="customers/:id" element={<CustomerDetailPage />} />
                       <Route index element={<Navigate to="/admin/dashboard" replace />} />
                     </Route>
                   </Route>
 
                   {/* Public invitation acceptance page */}
                   <Route path="/invite/:token" element={<AcceptInvitePage />} />
+
+                  {/* Customer surface (#354). Strictly separate provider /
+                      cookie / API surface from /admin/*. */}
+                  <Route path="/customer/*" element={
+                    <CustomerAuthProvider>
+                      <Routes>
+                        <Route path="login" element={<CustomerLoginPage />} />
+                        <Route path="invite/:token" element={<CustomerAcceptInvitePage />} />
+                        <Route path="dashboard" element={<CustomerDashboardPage />} />
+                        <Route index element={<Navigate to="/customer/dashboard" replace />} />
+                      </Routes>
+                    </CustomerAuthProvider>
+                  } />
 
                   {/* Public legal pages */}
                   <Route path="/impressum" element={<LegalPage />} />
