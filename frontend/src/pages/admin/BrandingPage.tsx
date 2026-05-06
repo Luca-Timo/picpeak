@@ -31,6 +31,10 @@ export const BrandingPage: React.FC = () => {
     logo_display_hero: true,
     logo_display_mode: 'logo_and_text',
     hide_powered_by: false,
+    // Tinted square frame behind the logo on the admin and customer
+    // login pages. Default true matches the visual state shipped before
+    // this toggle existed.
+    login_logo_frame_enabled: true,
   });
 
   const [currentTheme, setCurrentTheme] = useState<ThemeConfig>(theme);
@@ -536,6 +540,27 @@ export const BrandingPage: React.FC = () => {
                     </span>
                     <p className="text-xs text-neutral-600 dark:text-neutral-400">
                       {t('branding.showLogoInHeroHelp', 'Display the logo in hero sections (for non-grid layouts)')}
+                    </p>
+                  </div>
+                </label>
+
+                {/* Login-page logo frame — single toggle covering both
+                    /admin/login and /customer/login. Off renders the
+                    logo on the page background directly (useful when
+                    the brand logo already has its own surround). */}
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={brandingSettings.login_logo_frame_enabled !== false}
+                    onChange={(e) => handleBrandingChange('login_logo_frame_enabled', e.target.checked)}
+                    className="rounded border-neutral-300 dark:border-neutral-600 text-primary-600 focus:ring-primary-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                      {t('branding.loginLogoFrame', 'Show tinted frame behind login logo')}
+                    </span>
+                    <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                      {t('branding.loginLogoFrameHelp', 'Applies to both the admin and customer login pages. Turn off if your logo already has its own backdrop.')}
                     </p>
                   </div>
                 </label>

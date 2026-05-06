@@ -122,18 +122,28 @@ export const AdminLoginPage: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--color-background, #fafafa)' }}>
       <div className="w-full max-w-md">
-        {/* Logo/Header */}
+        {/* Logo/Header — the tinted frame is admin-controllable via
+            Branding → "Show tinted frame behind login logo". Default
+            true preserves the visual state shipped before the toggle. */}
         <div className="text-center mb-8">
-          <div
-            className="w-[200px] h-[150px] mx-auto mb-6 rounded-2xl flex items-center justify-center"
-            style={{ backgroundColor: '#eee6d2' }}
-          >
+          {settingsData?.branding_login_logo_frame_enabled !== false ? (
+            <div
+              className="w-[200px] h-[150px] mx-auto mb-6 rounded-2xl flex items-center justify-center"
+              style={{ backgroundColor: '#eee6d2' }}
+            >
+              <img
+                src={resolvedLogoUrl}
+                alt={companyName}
+                className="w-[180px] h-[130px] object-contain"
+              />
+            </div>
+          ) : (
             <img
               src={resolvedLogoUrl}
               alt={companyName}
-              className="w-[180px] h-[130px] object-contain"
+              className="h-24 w-auto object-contain mx-auto mb-6"
             />
-          </div>
+          )}
           <h1 className="text-3xl font-bold" style={{ color: 'var(--color-text, #171717)' }}>{t('adminLogin.title')}</h1>
           <p className="mt-2" style={{ color: 'var(--color-text, #171717)', opacity: 0.7 }}>{t('adminLogin.subtitle')}</p>
         </div>

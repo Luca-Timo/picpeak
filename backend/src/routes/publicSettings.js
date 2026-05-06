@@ -65,6 +65,10 @@ router.get('/', async (req, res) => {
       branding_logo_display_hero: settingsObject.branding_logo_display_hero !== false,
       branding_logo_display_mode: settingsObject.branding_logo_display_mode || 'logo_and_text',
       branding_hide_powered_by: settingsObject.branding_hide_powered_by === true,
+      // Tinted square frame behind the logo on /admin/login and
+      // /customer/login. Default true preserves the current visual
+      // state for installs that haven't toggled it off.
+      branding_login_logo_frame_enabled: settingsObject.branding_login_logo_frame_enabled !== false,
       theme_config: settingsObject.theme_config || null,
       default_language: settingsObject.general_default_language || 'en',
       enable_analytics: settingsObject.general_enable_analytics !== false,

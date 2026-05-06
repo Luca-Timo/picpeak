@@ -19,6 +19,8 @@ export interface PublicSettings {
   branding_logo_display_header?: boolean;
   branding_logo_display_hero?: boolean;
   branding_hide_powered_by?: boolean;
+  /** Tinted square frame behind the logo on /admin/login and /customer/login. */
+  branding_login_logo_frame_enabled?: boolean;
   theme_config: any;
   default_language: string;
   enable_analytics: boolean;
