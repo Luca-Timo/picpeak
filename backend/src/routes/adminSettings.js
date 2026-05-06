@@ -222,6 +222,13 @@ router.put('/branding', adminAuth, requirePermission('settings.edit'), async (re
       hide_powered_by
     } = req.body;
 
+    // Normalize force_color_mode: only 'dark' | 'light' | null are valid.
+    const normalizedForceColorMode = force_color_mode === 'dark'
+      ? 'dark'
+      : force_color_mode === 'light'
+        ? 'light'
+        : null;
+
     // Get current watermark settings hash for change detection
     const oldSettingsHash = await watermarkService.getSettingsHash();
 
