@@ -153,16 +153,21 @@ function getAdminTokenFromRequest(req) {
 }
 
 /**
- * Customer-side equivalent. Note: we do NOT fall through to the admin
- * cookie. An admin and a customer are distinct identities with different
- * privileges; mixing them at the cookie layer would let an admin session
- * accidentally satisfy customerAuth and vice versa.
+ * Customer-side equivalent. Cookie-only — we deliberately do NOT honour
+ * the Authorization: Bearer header on /api/customer/* endpoints.
+ *
+ * Reason: admins occasionally hit the customer routes from the same
+ * browser (e.g. while dogfooding the dashboard). The shared axios
+ * client picks up the admin's token from `admin_token` and attaches it
+ * as `Authorization: Bearer <admin token>` for every request. If we
+ * accepted that header here, a logged-in admin's `'admin'` token would
+ * be returned and immediately rejected by the type check downstream as
+ * "wrong token type" — kicking the customer out on every reload.
+ *
+ * Customers don't have an API-token flow, so dropping the header
+ * fallback costs nothing and prevents the cross-contamination.
  */
 function getCustomerTokenFromRequest(req) {
-  const header = req.headers?.authorization;
-  if (header && header.startsWith('Bearer ')) {
-    return header.substring(7);
-  }
   return req.cookies?.[CUSTOMER_COOKIE_NAME] || null;
 }
 
