@@ -21,6 +21,11 @@ jest.mock('../services/emailProcessor', () => ({
 jest.mock('../utils/passwordValidation', () => ({
   getBcryptRounds: () => 4, // fast for tests
 }));
+// frontendUrl is resolved against app_settings; mock the helper directly
+// so the test doesn't need to also stub the settings query.
+jest.mock('../utils/frontendUrl', () => ({
+  getFrontendBaseUrl: jest.fn().mockResolvedValue('https://example.test'),
+}));
 jest.mock('../utils/dbCompat', () => ({
   formatBoolean: (v) => (v ? 1 : 0),
 }));
@@ -94,6 +99,11 @@ describe('createInvitation', () => {
     const call = queueEmail.mock.calls[0];
     expect(call[2]).toBe('customer_invitation');
     expect(call[3].invite_link).toMatch(/\/customer\/invite\//);
+    // Link must honour the configured frontend URL (Site Settings →
+    // general_site_url, surfaced via getFrontendBaseUrl). Mocked above
+    // to https://example.test — the dev-day bug was the link always
+    // emitting localhost regardless of config.
+    expect(call[3].invite_link.startsWith('https://example.test/')).toBe(true);
   });
 });
 

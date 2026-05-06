@@ -33,7 +33,12 @@ const {
   getCustomerTokenFromRequest,
 } = require('../utils/tokenUtils');
 const { getClientIp } = require('../utils/requestIp');
-const { validatePasswordInContext } = require('../utils/passwordValidation');
+// NOTE: customers intentionally do NOT go through validatePasswordInContext
+// (the admin-grade policy that can require special chars, dictionary checks,
+// breach lists, etc.). Customers are end-users picking a one-off password —
+// the friction of the admin policy turned them away. We enforce a simple,
+// human-readable rule below: minimum length, at least one uppercase letter,
+// at least one digit. No special-character or breach-list requirement.
 const customerAccountsService = require('../services/customerAccountsService');
 const { customerAuth } = require('../middleware/customerAuth');
 
@@ -181,9 +186,41 @@ router.get('/invite/:token', [
   }
 });
 
+/**
+ * Customer-specific password policy.
+ *
+ * Intentionally simpler than validatePasswordInContext (the admin-grade
+ * checker). Rules:
+ *   - At least 8 characters
+ *   - At least one uppercase letter (A–Z)
+ *   - At least one digit (0–9)
+ *
+ * No special-character requirement, no breach-list lookup, no dictionary
+ * check — those tripped up real customers picking real passwords (e.g.
+ * "PartyTime2026"). Capitals + a number is enough entropy for an
+ * account that only views galleries; it's not protecting financial data.
+ *
+ * Returns null on success, or a string error message on failure.
+ */
+function validateCustomerPassword(password) {
+  if (typeof password !== 'string' || password.length < 8) {
+    return 'Password must be at least 8 characters long.';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'Password must contain at least one uppercase letter.';
+  }
+  if (!/[0-9]/.test(password)) {
+    return 'Password must contain at least one number.';
+  }
+  return null;
+}
+
 router.post('/accept-invite', [
   body('token').isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i),
   body('name').optional({ nullable: true }).isString().trim().isLength({ max: 120 }),
+  // Length floor enforced again here for an early reject; the full
+  // policy (uppercase + digit) is checked below so we can surface a
+  // specific message rather than a generic validator error.
   body('password').isString().isLength({ min: 8 })
     .withMessage('Password must be at least 8 characters'),
 ], async (req, res) => {
@@ -194,12 +231,12 @@ router.post('/accept-invite', [
     }
     const { token, name, password } = req.body;
 
-    // Run the password through the same complexity policy admins are held
-    // to. The validator returns { ok, errors[] } so we surface specific
-    // failures rather than a generic "weak password".
-    const validation = await validatePasswordInContext(password, { username: name || '', email: '' });
-    if (!validation.ok) {
-      return res.status(400).json({ error: 'Password does not meet complexity requirements', details: validation.errors });
+    const policyError = validateCustomerPassword(password);
+    if (policyError) {
+      return res.status(400).json({
+        error: 'Password does not meet complexity requirements',
+        details: [policyError],
+      });
     }
 
     const result = await customerAccountsService.acceptInvitation({ token, name, password });

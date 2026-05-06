@@ -16,6 +16,7 @@ const { db, logActivity } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
 const { getBcryptRounds } = require('../utils/passwordValidation');
 const { queueEmail } = require('./emailProcessor');
+const { getFrontendBaseUrl } = require('../utils/frontendUrl');
 const logger = require('../utils/logger');
 const { ConflictError, NotFoundError, ValidationError } = require('../utils/errors');
 
@@ -68,10 +69,16 @@ async function createInvitation({ email, invitedById }) {
   const id = insertedId?.id || insertedId;
 
   // Queue invitation email. The customer-facing accept page lives at
-  // /customer/invite/:token (see CustomerAcceptInvitePage.tsx). We reuse
-  // the FRONTEND_URL env var that admin invites use, because the customer
-  // surface is served from the same frontend bundle.
-  const frontendUrl = process.env.FRONTEND_URL || process.env.ADMIN_URL || 'http://localhost:3005';
+  // /customer/invite/:token (see CustomerAcceptInvitePage.tsx).
+  //
+  // Resolve the frontend base URL through the shared helper so the link
+  // honours Site Settings → Site URL (general_site_url) rather than the
+  // local FRONTEND_URL env var. The helper still falls back to
+  // FRONTEND_URL → 'http://localhost:3000' if the setting isn't set, but
+  // a configured deployment will always use its real domain. (Admin
+  // invites in userManagementService use the env-only fallback — that's
+  // a separate bug to be fixed alongside this PR or after.)
+  const frontendUrl = (await getFrontendBaseUrl()) || 'http://localhost:3000';
   await queueEmail(null, normalisedEmail, 'customer_invitation', {
     invite_link: `${frontendUrl}/customer/invite/${token}`,
     expires_at: expiresAt.toISOString(),
