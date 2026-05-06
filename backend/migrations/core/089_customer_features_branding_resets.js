@@ -108,21 +108,47 @@ exports.up = async function(knex) {
   if (await knex.schema.hasTable('email_templates')) {
     const existing = await knex('email_templates').where('template_key', 'customer_password_reset').first();
     if (!existing) {
-      // Schema-tolerant insert: only set columns that exist in this
-      // install (older installs may lack created_at, language, etc.).
+      // Two email_templates schema variants exist in the wild:
+      //
+      //   (a) legacy single-locale: subject / body_html / body_text columns
+      //   (b) multi-locale: subject_en / subject_de / body_html_en /
+      //       body_text_en / ... — all NOT NULL on at least one install
+      //       (the maintainer's prod), where the previous version of this
+      //       migration silently produced a 23502 NOT NULL violation and
+      //       crash-looped the backend.
+      //
+      // Detect whichever variant is present and populate every matching
+      // column. For non-en locale columns we fall back to the English
+      // content so the install isn't left with NULL-violation rows;
+      // proper translations can be filled in later via the admin UI.
       const cols = await knex('email_templates').columnInfo();
-      const row = {};
-      if ('template_key' in cols) row.template_key = 'customer_password_reset';
-      if ('subject' in cols) row.subject = 'Reset your password';
-      if ('body_html' in cols) row.body_html = `<p>Hello,</p>
+      const SUBJECT = 'Reset your password';
+      const BODY_HTML = `<p>Hello,</p>
 <p>Your photographer has triggered a password reset for your customer account.</p>
 <p><a href="{{reset_link}}">Click here to set a new password</a>. This link expires on {{expires_at}}.</p>
 <p>If you didn't expect this, you can ignore the message — your current password will keep working until you click the link.</p>`;
-      if ('body_text' in cols) row.body_text = `Your photographer has triggered a password reset for your customer account.\n\nSet a new password: {{reset_link}}\n\nThis link expires on {{expires_at}}.\n\nIf you didn't expect this, you can ignore the message — your current password keeps working until you click the link.`;
+      const BODY_TEXT = `Your photographer has triggered a password reset for your customer account.\n\nSet a new password: {{reset_link}}\n\nThis link expires on {{expires_at}}.\n\nIf you didn't expect this, you can ignore the message — your current password keeps working until you click the link.`;
+
+      const row = {};
+      if ('template_key' in cols) row.template_key = 'customer_password_reset';
       if ('language' in cols) row.language = 'en';
       if ('is_active' in cols) row.is_active = true;
       if ('created_at' in cols) row.created_at = new Date();
       if ('updated_at' in cols) row.updated_at = new Date();
+
+      // Populate every subject/body column that exists, regardless of
+      // locale suffix. Fallback content == English; safe because email
+      // templates are user-editable post-install.
+      for (const colName of Object.keys(cols)) {
+        if (colName === 'subject' || /^subject_[a-z]{2,3}$/i.test(colName)) {
+          row[colName] = SUBJECT;
+        } else if (colName === 'body_html' || /^body_html_[a-z]{2,3}$/i.test(colName)) {
+          row[colName] = BODY_HTML;
+        } else if (colName === 'body_text' || /^body_text_[a-z]{2,3}$/i.test(colName)) {
+          row[colName] = BODY_TEXT;
+        }
+      }
+
       await knex('email_templates').insert(row);
     }
   }
