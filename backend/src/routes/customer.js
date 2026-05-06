@@ -12,15 +12,75 @@
  */
 
 const express = require('express');
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { param, validationResult } = require('express-validator');
+const { body, param, validationResult } = require('express-validator');
 const { db, logActivity } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
+const { getBcryptRounds } = require('../utils/passwordValidation');
 const logger = require('../utils/logger');
 const { getClientIp } = require('../utils/requestIp');
 const { customerAuth } = require('../middleware/customerAuth');
 const { setGalleryAuthCookies } = require('../utils/tokenUtils');
 const customerAccountsService = require('../services/customerAccountsService');
+
+/**
+ * Customer-side password policy mirrors the one in customerAuth.js — kept
+ * deliberately simple (8 chars, one uppercase, one digit) since a customer
+ * account only sees galleries, never financial or admin surfaces.
+ */
+function validateCustomerPassword(password) {
+  if (typeof password !== 'string' || password.length < 8) {
+    return 'Password must be at least 8 characters long.';
+  }
+  if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter.';
+  if (!/[0-9]/.test(password)) return 'Password must contain at least one number.';
+  return null;
+}
+
+/**
+ * Camel→snake mapping used by the self-service profile PUT. Same field set
+ * as the admin update endpoint minus is_active (admin-only) and
+ * preferred_language / notes (admin-only metadata, not customer-facing).
+ */
+const PROFILE_FIELD_MAP = {
+  salutation: 'salutation',
+  firstName: 'first_name',
+  lastName: 'last_name',
+  displayName: 'display_name',
+  phone: 'phone',
+  companyName: 'company_name',
+  vatId: 'vat_id',
+  addressLine1: 'address_line1',
+  addressLine2: 'address_line2',
+  postalCode: 'postal_code',
+  city: 'city',
+  state: 'state',
+  countryCode: 'country_code',
+  preferredLanguage: 'preferred_language',
+};
+
+function shapeProfile(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    email: row.email,
+    salutation: row.salutation,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    displayName: row.display_name,
+    phone: row.phone,
+    companyName: row.company_name,
+    vatId: row.vat_id,
+    addressLine1: row.address_line1,
+    addressLine2: row.address_line2,
+    postalCode: row.postal_code,
+    city: row.city,
+    state: row.state,
+    countryCode: row.country_code,
+    preferredLanguage: row.preferred_language || 'en',
+  };
+}
 
 const router = express.Router();
 
@@ -160,6 +220,157 @@ router.get('/events/:slug/access-token', [
   } catch (error) {
     logger.error('Customer access-token exchange error:', error);
     res.status(500).json({ error: 'Failed to issue access token' });
+  }
+});
+
+// ---- self-service profile ----------------------------------------------
+
+/**
+ * GET /profile
+ *
+ * Returns the full customer profile (everything the customer can edit on
+ * their own profile page). The /auth/session endpoint deliberately stays
+ * narrow — only the fields the layout needs — to keep the auth payload
+ * tight; this endpoint is the canonical "give me everything" read.
+ */
+router.get('/profile', customerAuth, async (req, res) => {
+  try {
+    const row = await db('customer_accounts').where('id', req.customer.id).first();
+    if (!row) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+    res.json({ profile: shapeProfile(row) });
+  } catch (error) {
+    logger.error('Customer profile read error:', error);
+    res.status(500).json({ error: 'Failed to load profile' });
+  }
+});
+
+/**
+ * PUT /profile
+ *
+ * Self-service edit. Accepts the same field set as the admin endpoint but
+ * deliberately excludes:
+ *   - email          (would invalidate the login credential silently)
+ *   - is_active      (admin-only)
+ *   - notes          (admin-only metadata)
+ *   - billing_email  (kept admin-managed for now; we'll surface it later
+ *                     when the quotes/bills flows actually need a separate
+ *                     billing contact)
+ *   - password_hash  (separate /profile/password endpoint)
+ */
+router.put('/profile', [
+  customerAuth,
+  body('salutation').optional({ nullable: true }).isString().isLength({ max: 32 }),
+  body('firstName').optional({ nullable: true }).isString().isLength({ max: 80 }),
+  body('lastName').optional({ nullable: true }).isString().isLength({ max: 80 }),
+  body('displayName').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('phone').optional({ nullable: true }).isString().isLength({ max: 40 }),
+  body('companyName').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('vatId').optional({ nullable: true }).isString().isLength({ max: 40 }),
+  body('addressLine1').optional({ nullable: true }).isString().isLength({ max: 255 }),
+  body('addressLine2').optional({ nullable: true }).isString().isLength({ max: 255 }),
+  body('postalCode').optional({ nullable: true }).isString().isLength({ max: 20 }),
+  body('city').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('state').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('countryCode').optional({ nullable: true }).isString().isLength({ max: 2 }),
+  body('preferredLanguage').optional().isString().isLength({ max: 8 }),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    // Normalise incoming values: trim strings, drop empty → null so the DB
+    // doesn't end up with `' '` rows that look populated but render blank.
+    const updates = {};
+    for (const [camel, snake] of Object.entries(PROFILE_FIELD_MAP)) {
+      if (!Object.prototype.hasOwnProperty.call(req.body, camel)) continue;
+      let value = req.body[camel];
+      if (typeof value === 'string') value = value.trim();
+      if (value === '') value = null;
+      if (snake === 'country_code' && value) {
+        value = String(value).toUpperCase().slice(0, 2);
+      }
+      updates[snake] = value;
+    }
+    updates.updated_at = new Date();
+
+    await db('customer_accounts').where('id', req.customer.id).update(updates);
+
+    const row = await db('customer_accounts').where('id', req.customer.id).first();
+
+    await logActivity('customer_self_profile_update',
+      { customerId: req.customer.id, fields: Object.keys(updates).filter((k) => k !== 'updated_at') },
+      null,
+      { type: 'customer', id: req.customer.id, name: req.customer.email }
+    );
+
+    res.json({ profile: shapeProfile(row) });
+  } catch (error) {
+    logger.error('Customer profile update error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+/**
+ * POST /profile/password
+ *
+ * Customer changes their own password. Requires the current password as
+ * proof of identity (so a stolen session cookie can't pivot to a permanent
+ * takeover without also having the old password). Bumps
+ * password_changed_at so any other active sessions for this customer get
+ * invalidated on next request via the customerAuth middleware check.
+ */
+router.post('/profile/password', [
+  customerAuth,
+  body('currentPassword').isString().isLength({ min: 1 }),
+  body('newPassword').isString().isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    const policyError = validateCustomerPassword(newPassword);
+    if (policyError) {
+      return res.status(400).json({
+        error: 'Password does not meet complexity requirements',
+        details: [policyError],
+      });
+    }
+
+    const row = await db('customer_accounts').where('id', req.customer.id).first();
+    if (!row || !row.password_hash) {
+      return res.status(400).json({ error: 'Password change unavailable' });
+    }
+    const ok = await bcrypt.compare(currentPassword, row.password_hash);
+    if (!ok) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, getBcryptRounds());
+    await db('customer_accounts').where('id', req.customer.id).update({
+      password_hash: newHash,
+      password_changed_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    await logActivity('customer_password_change',
+      { customerId: req.customer.id },
+      null,
+      { type: 'customer', id: req.customer.id, name: req.customer.email }
+    );
+
+    res.json({ message: 'Password updated' });
+  } catch (error) {
+    logger.error('Customer password change error:', error);
+    res.status(500).json({ error: 'Failed to change password' });
   }
 });
 
