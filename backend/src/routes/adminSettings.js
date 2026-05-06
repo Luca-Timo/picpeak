@@ -273,6 +273,8 @@ router.put('/branding', adminAuth, requirePermission('settings.edit'), async (re
       logo_display_hero,
       logo_display_mode,
       hide_powered_by,
+      // Site-wide forced color mode from feat/darkmode-color-improvement
+      // (commit 5a162fc on beta). Accepts 'dark' | 'light' | null.
       force_color_mode,
       // Login-page logo frame toggle. When true (default) both
       // /admin/login and /customer/login render the tinted square
