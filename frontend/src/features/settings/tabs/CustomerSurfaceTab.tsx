@@ -63,13 +63,22 @@ const Toggle: React.FC<{
   onChange: () => void;
   label: string;
   hint?: string;
+  /** Optional small pill rendered after the label (e.g. "Soon"). */
+  badge?: string;
   icon: React.ComponentType<{ className?: string }>;
-}> = ({ enabled, onChange, label, hint, icon: Icon }) => (
+}> = ({ enabled, onChange, label, hint, badge, icon: Icon }) => (
   <label className="flex items-start justify-between gap-4 py-3 cursor-pointer">
     <div className="flex items-start gap-3 min-w-0">
       <Icon className="w-5 h-5 mt-0.5 text-muted-theme flex-shrink-0" />
       <div className="min-w-0">
-        <div className="text-sm font-medium text-theme">{label}</div>
+        <div className="text-sm font-medium text-theme flex items-center gap-2">
+          <span>{label}</span>
+          {badge && (
+            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+              {badge}
+            </span>
+          )}
+        </div>
         {hint && <p className="text-xs text-muted-theme mt-0.5">{hint}</p>}
       </div>
     </div>
@@ -166,22 +175,28 @@ export const CustomerSurfaceTab: React.FC = () => {
         </p>
 
         <div className="divide-y" style={{ borderColor: 'var(--color-surface-border)' }}>
+          {/* "Soon" pill on each label — these tabs still render
+              placeholder pages; flipping them on shows the entry but
+              doesn't ship the feature. */}
           <Toggle
             enabled={form.customer_feature_calendar_enabled}
             onChange={() => toggle('customer_feature_calendar_enabled')}
-            label={t('settings.customerSurface.calendar', 'Calendar')}
+            label={`${t('settings.customerSurface.calendar', 'Calendar')}`}
+            badge={t('customer.nav.soon', 'Soon')}
             icon={Calendar}
           />
           <Toggle
             enabled={form.customer_feature_quotes_enabled}
             onChange={() => toggle('customer_feature_quotes_enabled')}
             label={t('settings.customerSurface.quotes', 'Quotes')}
+            badge={t('customer.nav.soon', 'Soon')}
             icon={FileText}
           />
           <Toggle
             enabled={form.customer_feature_bills_enabled}
             onChange={() => toggle('customer_feature_bills_enabled')}
             label={t('settings.customerSurface.bills', 'Bills')}
+            badge={t('customer.nav.soon', 'Soon')}
             icon={Receipt}
           />
         </div>
