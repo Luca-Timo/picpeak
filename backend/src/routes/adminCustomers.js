@@ -234,6 +234,52 @@ router.post('/:id/deactivate', [
 }));
 
 /**
+ * POST /:id/reactivate (#354 follow-up).
+ *
+ * Restore a previously-deactivated customer. Same permission as
+ * deactivate (`customers.delete`) since they're inverse operations and
+ * the admin who can disable should be the one who can re-enable.
+ */
+router.post('/:id/reactivate', [
+  adminAuth,
+  requirePermission('customers.delete'),
+  param('id').isInt({ min: 1 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  await customerAccountsService.reactivateCustomer(
+    parseInt(req.params.id, 10),
+    req.admin.id
+  );
+  successResponse(res, { message: 'Customer reactivated' });
+}));
+
+/**
+ * POST /:id/erase (#354 follow-up).
+ *
+ * Anonymize-in-place erasure (GDPR Art. 17 style): nulls every PII
+ * column, wipes credentials, drops pending invitations and reset tokens,
+ * keeps the row + audit references intact so historical "who had access"
+ * queries don't break. See customerAccountsService.eraseCustomer for
+ * the full rationale.
+ *
+ * Hard delete is NOT shipped — `customer_invitations.accepted_customer_id`
+ * has no ON DELETE CASCADE, so a real DELETE would FK-block on any
+ * customer who ever accepted an invitation.
+ */
+router.post('/:id/erase', [
+  adminAuth,
+  requirePermission('customers.delete'),
+  param('id').isInt({ min: 1 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  await customerAccountsService.eraseCustomer(
+    parseInt(req.params.id, 10),
+    req.admin.id
+  );
+  successResponse(res, { message: 'Customer erased' });
+}));
+
+/**
  * POST /:id/password-reset (#354 follow-up).
  *
  * Generate a 7-day password-reset token and email it to the customer.

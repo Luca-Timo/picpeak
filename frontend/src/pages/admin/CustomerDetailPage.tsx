@@ -52,6 +52,7 @@ export const CustomerDetailPage: React.FC = () => {
 
   const [form, setForm] = useState<Partial<Pick<CustomerAccountDetail, EditableFields>>>({});
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+  const [confirmErase, setConfirmErase] = useState(false);
 
   // Hydrate the form from the fetched record once. We deliberately do NOT
   // re-sync on every refetch so an admin's in-progress edits aren't blown
@@ -127,6 +128,33 @@ export const CustomerDetailPage: React.FC = () => {
       navigate('/admin/customers');
     },
     onError: () => toast.error(t('customers.deactivate.error', 'Could not deactivate customer')),
+  });
+
+  /** Re-enable login for a deactivated customer. */
+  const reactivateMutation = useMutation({
+    mutationFn: () => customerAdminService.reactivate(customerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-customer', customerId] });
+      queryClient.invalidateQueries({ queryKey: ['admin-customers'] });
+      toast.success(t('customers.reactivate.success', 'Customer reactivated'));
+    },
+    onError: () => toast.error(t('customers.reactivate.error', 'Could not reactivate customer')),
+  });
+
+  /**
+   * Anonymize-in-place erasure. Two-step UX: requires the customer to be
+   * deactivated first, then a separate confirm modal. Hard delete is
+   * deliberately NOT exposed — see service notes for why.
+   */
+  const eraseMutation = useMutation({
+    mutationFn: () => customerAdminService.erase(customerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-customer', customerId] });
+      queryClient.invalidateQueries({ queryKey: ['admin-customers'] });
+      toast.success(t('customers.erase.success', 'Customer erased'));
+      navigate('/admin/customers');
+    },
+    onError: () => toast.error(t('customers.erase.error', 'Could not erase customer')),
   });
 
   if (isLoading) {
@@ -423,16 +451,42 @@ export const CustomerDetailPage: React.FC = () => {
       </Card>
 
       {/* Actions */}
-      <div className="flex items-center justify-between">
-        {customer.isActive ? (
-          <Button
-            variant="outline"
-            leftIcon={<Trash2 className="w-4 h-4" />}
-            onClick={() => setConfirmDeactivate(true)}
-          >
-            {t('customers.deactivate.button', 'Deactivate')}
-          </Button>
-        ) : <span />}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          {customer.isActive ? (
+            <Button
+              variant="outline"
+              leftIcon={<Trash2 className="w-4 h-4" />}
+              onClick={() => setConfirmDeactivate(true)}
+            >
+              {t('customers.deactivate.button', 'Deactivate')}
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                leftIcon={<CheckCircle2 className="w-4 h-4" />}
+                isLoading={reactivateMutation.isPending}
+                onClick={() => reactivateMutation.mutate()}
+              >
+                {t('customers.reactivate.button', 'Reactivate')}
+              </Button>
+              {/* Erase is only offered when the customer is already
+                  inactive — forces a deliberate two-step (deactivate
+                  → erase) and removes the chance of misclicking through
+                  the deactivate button on a live account. */}
+              <Button
+                variant="outline"
+                leftIcon={<Trash2 className="w-4 h-4 text-red-600" />}
+                onClick={() => setConfirmErase(true)}
+              >
+                <span className="text-red-600">
+                  {t('customers.erase.button', 'Erase customer data')}
+                </span>
+              </Button>
+            </>
+          )}
+        </div>
         <Button
           variant="primary"
           leftIcon={<Save className="w-4 h-4" />}
@@ -455,7 +509,7 @@ export const CustomerDetailPage: React.FC = () => {
                   </h2>
                   <p className="mt-1 text-sm text-muted-theme">
                     {t('customers.deactivate.body',
-                      'They will no longer be able to log in. You can re-invite them later.')}
+                      'They will no longer be able to log in. You can re-activate or fully erase them later.')}
                   </p>
                 </div>
               </div>
@@ -470,6 +524,46 @@ export const CustomerDetailPage: React.FC = () => {
                 >
                   {t('common.confirm', 'Confirm')}
                 </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Erase confirm modal — second step after deactivate. Spelled out
+          "irreversible" copy + red Confirm button so the click feels
+          deliberate. The action anonymizes PII in place; assignments
+          and audit-log references are preserved. */}
+      {confirmErase && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-xl shadow-lg" style={{ backgroundColor: 'var(--color-surface)' }}>
+            <div className="p-6">
+              <div className="flex items-start gap-3 mb-4">
+                <AlertTriangle className="w-5 h-5 mt-0.5 text-red-600" />
+                <div>
+                  <h2 className="text-lg font-semibold text-theme">
+                    {t('customers.erase.title', 'Erase customer data?')}
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-theme">
+                    {t('customers.erase.body',
+                      'Removes the customer\'s name, email, phone, address, company and credentials. The account row stays so historical event-access records and audit logs still reference it. This is irreversible — you cannot restore the data afterwards.')}
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setConfirmErase(false)}>
+                  {t('common.cancel', 'Cancel')}
+                </Button>
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                  disabled={eraseMutation.isPending}
+                  onClick={() => { eraseMutation.mutate(); setConfirmErase(false); }}
+                >
+                  {eraseMutation.isPending
+                    ? t('customers.erase.confirmInFlight', 'Erasing…')
+                    : t('customers.erase.confirm', 'Erase permanently')}
+                </button>
               </div>
             </div>
           </div>

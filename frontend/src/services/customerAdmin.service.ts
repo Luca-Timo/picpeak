@@ -134,6 +134,20 @@ export const customerAdminService = {
     await api.post(`/admin/customers/${id}/deactivate`);
   },
 
+  /** Restore a deactivated customer (login re-enabled, assignments stay). */
+  async reactivate(id: number): Promise<void> {
+    await api.post(`/admin/customers/${id}/reactivate`);
+  },
+
+  /**
+   * Anonymize-in-place erasure (GDPR style). Customer row stays for
+   * audit FKs but every PII column is nulled and credentials are wiped.
+   * See backend service `eraseCustomer` for the full contract.
+   */
+  async erase(id: number): Promise<void> {
+    await api.post(`/admin/customers/${id}/erase`);
+  },
+
   /**
    * Trigger a password reset for an existing customer. The backend
    * generates a 7-day single-use token and emails the customer.
