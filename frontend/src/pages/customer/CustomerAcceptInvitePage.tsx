@@ -173,7 +173,7 @@ export const CustomerAcceptInvitePage: React.FC = () => {
                   autoComplete="new-password"
                 />
                 <p className="mt-1 text-xs text-muted-theme">
-                  {t('customer.acceptInvite.passwordHint', 'At least 8 characters.')}
+                  {t('customer.acceptInvite.passwordHint', 'At least 8 characters, with one uppercase letter and one number.')}
                 </p>
               </div>
 

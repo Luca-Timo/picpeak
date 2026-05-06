@@ -2587,7 +2587,7 @@
       "confirm": "Wachtwoord bevestigen",
       "passwordTooShort": "Wachtwoord moet minimaal 8 tekens bevatten",
       "passwordsMismatch": "Wachtwoorden komen niet overeen",
-      "passwordHint": "Minimaal 8 tekens.",
+      "passwordHint": "Minimaal 8 tekens, met één hoofdletter en één cijfer.",
       "submit": "Account aanmaken",
       "successToast": "Account aangemaakt — log nu in.",
       "alreadyExists": "Er bestaat al een account met dit e-mailadres. Log in plaats daarvan in.",

@@ -2598,7 +2598,7 @@
       "confirm": "Confirm password",
       "passwordTooShort": "Password must be at least 8 characters",
       "passwordsMismatch": "Passwords do not match",
-      "passwordHint": "At least 8 characters.",
+      "passwordHint": "At least 8 characters, with one uppercase letter and one number.",
       "submit": "Create account",
       "successToast": "Account created — please log in.",
       "alreadyExists": "An account with this email already exists. Please log in instead.",

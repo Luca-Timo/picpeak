@@ -2587,7 +2587,7 @@
       "confirm": "Confirmar senha",
       "passwordTooShort": "A senha deve ter no mínimo 8 caracteres",
       "passwordsMismatch": "As senhas não coincidem",
-      "passwordHint": "Mínimo de 8 caracteres.",
+      "passwordHint": "Mínimo de 8 caracteres, com uma letra maiúscula e um número.",
       "submit": "Criar conta",
       "successToast": "Conta criada — faça login.",
       "alreadyExists": "Já existe uma conta com este e-mail. Faça login.",
