@@ -119,7 +119,8 @@
     "select": "Select",
     "selected": "Selected",
     "chunk": "Chunk",
-    "optional": "optional"
+    "optional": "optional",
+    "confirm": "Confirm"
   },
   "upload": {
     "photoCategory": "Photo Category",
@@ -169,7 +170,8 @@
     "backup": "Backup & Restore",
     "cmsPages": "CMS Pages",
     "users": "Users",
-    "customers": "Customers"
+    "customers": "Customers",
+    "betaTag": "Beta"
   },
   "archives": {
     "title": "Archives",
@@ -2511,7 +2513,10 @@
       "success": "Invitation sent",
       "error": "Could not send invitation.",
       "conflict": "A customer with this email already exists or has a pending invitation.",
-      "invalidEmail": "Please enter a valid email"
+      "invalidEmail": "Please enter a valid email",
+      "showPrefill": "+ Add contact details (optional)",
+      "hidePrefill": "− Hide contact details",
+      "prefillHint": "Anything you fill in will be pre-populated on the customer's sign-up page — they can still edit it."
     },
     "invitations": {
       "empty": "No pending invitations.",
@@ -2603,11 +2608,19 @@
       "successToast": "Account created — please log in.",
       "alreadyExists": "An account with this email already exists. Please log in instead.",
       "invalidSubmission": "Could not create your account.",
-      "generalError": "Could not create your account. Please try again."
+      "generalError": "Could not create your account. Please try again.",
+      "subtitle": "Confirm or fill in your details. You can edit anything from the profile page later.",
+      "displayName": "Display name",
+      "section": {
+        "personal": "Personal",
+        "contact": "Contact & business (optional)",
+        "address": "Billing address (optional)",
+        "password": "Choose a password"
+      }
     },
     "dashboard": {
       "title": "Your galleries",
-      "subtitle": "Click a card to view the gallery.",
+      "subtitle": "Click a gallery to open it. The Download button bundles every photo as a zip.",
       "loadError": "Could not load your galleries. Please try again.",
       "emptyTitle": "No galleries yet",
       "emptyBody": "Once your photographer assigns you to a gallery, it will appear here.",
@@ -2622,10 +2635,90 @@
       "preparingDownload": "Preparing…",
       "quickDownloadAria": "Download all photos for {{name}}",
       "downloadStarted": "Download started for {{name}}",
-      "downloadError": "Could not start the download. Please try again."
+      "downloadError": "Could not start the download. Please try again.",
+      "sortLabel": "Sort by",
+      "sortNewest": "Newest first",
+      "sortOldest": "Oldest first",
+      "sortName": "By name",
+      "open": "Open"
     },
     "layout": {
       "greeting": "Hi, {{name}}"
+    },
+    "nav": {
+      "galleries": "Galleries",
+      "calendar": "Calendar",
+      "quotes": "Quotes",
+      "bills": "Bills",
+      "profile": "Profile",
+      "soon": "Soon"
+    },
+    "comingSoon": {
+      "tag": "Coming soon"
+    },
+    "calendar": {
+      "title": "Calendar",
+      "body": "Upcoming sessions, gallery delivery dates, and other shoot-related events will land here. We'll let you know when it's ready."
+    },
+    "quotes": {
+      "title": "Quotes",
+      "body": "Review and accept quotes for upcoming shoots in one place. We're still building this — for now, your photographer will keep sending quotes the usual way."
+    },
+    "bills": {
+      "title": "Bills",
+      "body": "Invoices and payment history for your sessions will be available here. We'll send you an email when this is live."
+    },
+    "profile": {
+      "title": "Customer profile",
+      "subtitle": "Keep your contact and billing details up to date — they're shown on quotes and invoices once those features go live.",
+      "savedToast": "Profile saved",
+      "saveError": "Could not save profile.",
+      "loadError": "Could not load your profile.",
+      "save": "Save changes",
+      "salutation": {
+        "none": "— Not specified —",
+        "herr": "Herr",
+        "frau": "Frau",
+        "mx": "Mx",
+        "dr": "Dr."
+      },
+      "section": {
+        "personal": "Personal information",
+        "contact": "Contact & business",
+        "address": "Billing address",
+        "password": "Change password"
+      },
+      "field": {
+        "email": "Email (login)",
+        "emailHint": "Contact your photographer if you need to change your login email.",
+        "salutation": "Salutation",
+        "firstName": "First name",
+        "lastName": "Last name",
+        "displayName": "Display name",
+        "displayNameHint": "How we greet you in the dashboard.",
+        "phone": "Phone",
+        "companyName": "Company name",
+        "vatId": "VAT ID",
+        "addressLine1": "Address line 1",
+        "addressLine2": "Address line 2",
+        "postalCode": "Postal code",
+        "city": "City",
+        "state": "State / region",
+        "countryCode": "Country"
+      },
+      "password": {
+        "current": "Current password",
+        "next": "New password",
+        "confirm": "Confirm new password",
+        "submit": "Update password",
+        "hint": "At least 8 characters with one uppercase letter and one number.",
+        "currentRequired": "Enter your current password",
+        "tooShort": "At least 8 characters",
+        "mismatch": "Passwords do not match",
+        "wrong": "Current password is incorrect",
+        "savedToast": "Password updated",
+        "error": "Could not change password"
+      }
     }
   }
 }

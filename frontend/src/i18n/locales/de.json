@@ -119,7 +119,8 @@
     "select": "Auswählen",
     "selected": "Ausgewählt",
     "chunk": "Teil",
-    "optional": "optional"
+    "optional": "optional",
+    "confirm": "Bestätigen"
   },
   "upload": {
     "photoCategory": "Fotokategorie",
@@ -169,7 +170,8 @@
     "backup": "Backup & Wiederherstellung",
     "cmsPages": "CMS-Seiten",
     "users": "Benutzer",
-    "customers": "Kunden"
+    "customers": "Kunden",
+    "betaTag": "Beta"
   },
   "eventTypes": {
     "title": "Veranstaltungsarten",
@@ -2506,7 +2508,10 @@
       "success": "Einladung gesendet",
       "error": "Einladung konnte nicht gesendet werden.",
       "conflict": "Ein Kunde mit dieser E-Mail existiert bereits oder hat eine offene Einladung.",
-      "invalidEmail": "Bitte geben Sie eine gültige E-Mail ein"
+      "invalidEmail": "Bitte geben Sie eine gültige E-Mail ein",
+      "showPrefill": "+ Kontaktdaten hinzufügen (optional)",
+      "hidePrefill": "− Kontaktdaten ausblenden",
+      "prefillHint": "Alles, was du ausfüllst, wird auf der Anmeldeseite des Kunden vorausgefüllt — er kann es weiterhin bearbeiten."
     },
     "invitations": {
       "empty": "Keine offenen Einladungen.",
@@ -2598,11 +2603,19 @@
       "successToast": "Konto erstellt — bitte anmelden.",
       "alreadyExists": "Es existiert bereits ein Konto mit dieser E-Mail. Bitte melden Sie sich stattdessen an.",
       "invalidSubmission": "Konto konnte nicht erstellt werden.",
-      "generalError": "Konto konnte nicht erstellt werden. Bitte erneut versuchen."
+      "generalError": "Konto konnte nicht erstellt werden. Bitte erneut versuchen.",
+      "subtitle": "Bestätige oder ergänze deine Daten. Du kannst alles später im Profil bearbeiten.",
+      "displayName": "Anzeigename",
+      "section": {
+        "personal": "Persönlich",
+        "contact": "Kontakt & Firma (optional)",
+        "address": "Rechnungsadresse (optional)",
+        "password": "Passwort wählen"
+      }
     },
     "dashboard": {
-      "title": "Ihre Galerien",
-      "subtitle": "Klicken Sie auf eine Karte, um die Galerie zu öffnen.",
+      "title": "Deine Galerien",
+      "subtitle": "Klicke auf eine Galerie, um sie zu öffnen. Der Download-Button bündelt alle Fotos als ZIP.",
       "loadError": "Galerien konnten nicht geladen werden. Bitte erneut versuchen.",
       "emptyTitle": "Noch keine Galerien",
       "emptyBody": "Sobald Ihr Fotograf Sie einer Galerie zuweist, erscheint sie hier.",
@@ -2617,10 +2630,90 @@
       "preparingDownload": "Wird vorbereitet…",
       "quickDownloadAria": "Alle Fotos für {{name}} herunterladen",
       "downloadStarted": "Download gestartet für {{name}}",
-      "downloadError": "Download konnte nicht gestartet werden. Bitte erneut versuchen."
+      "downloadError": "Download konnte nicht gestartet werden. Bitte erneut versuchen.",
+      "sortLabel": "Sortieren nach",
+      "sortNewest": "Neueste zuerst",
+      "sortOldest": "Älteste zuerst",
+      "sortName": "Nach Name",
+      "open": "Öffnen"
     },
     "layout": {
       "greeting": "Hallo, {{name}}"
+    },
+    "nav": {
+      "galleries": "Galerien",
+      "calendar": "Kalender",
+      "quotes": "Angebote",
+      "bills": "Rechnungen",
+      "profile": "Profil",
+      "soon": "Bald"
+    },
+    "comingSoon": {
+      "tag": "Demnächst"
+    },
+    "calendar": {
+      "title": "Kalender",
+      "body": "Bevorstehende Termine, Liefertermine für Galerien und weitere Shoot-Ereignisse landen hier. Wir geben Bescheid, sobald es soweit ist."
+    },
+    "quotes": {
+      "title": "Angebote",
+      "body": "Angebote für kommende Shoots an einem Ort prüfen und annehmen. Wir bauen das noch — bis dahin schickt dir dein Fotograf Angebote wie gewohnt."
+    },
+    "bills": {
+      "title": "Rechnungen",
+      "body": "Rechnungen und Zahlungshistorie zu deinen Shoots findest du hier. Wir senden eine E-Mail, sobald es live ist."
+    },
+    "profile": {
+      "title": "Kundenprofil",
+      "subtitle": "Halte Kontakt- und Rechnungsdaten aktuell — sie erscheinen auf Angeboten und Rechnungen, sobald diese Funktionen live sind.",
+      "savedToast": "Profil gespeichert",
+      "saveError": "Profil konnte nicht gespeichert werden.",
+      "loadError": "Profil konnte nicht geladen werden.",
+      "save": "Änderungen speichern",
+      "salutation": {
+        "none": "— Keine Angabe —",
+        "herr": "Herr",
+        "frau": "Frau",
+        "mx": "Mx",
+        "dr": "Dr."
+      },
+      "section": {
+        "personal": "Persönliche Angaben",
+        "contact": "Kontakt & Firma",
+        "address": "Rechnungsadresse",
+        "password": "Passwort ändern"
+      },
+      "field": {
+        "email": "E-Mail (Login)",
+        "emailHint": "Wende dich an deinen Fotografen, wenn du deine Login-E-Mail ändern möchtest.",
+        "salutation": "Anrede",
+        "firstName": "Vorname",
+        "lastName": "Nachname",
+        "displayName": "Anzeigename",
+        "displayNameHint": "So begrüßen wir dich im Dashboard.",
+        "phone": "Telefon",
+        "companyName": "Firmenname",
+        "vatId": "USt-IdNr.",
+        "addressLine1": "Adresszeile 1",
+        "addressLine2": "Adresszeile 2",
+        "postalCode": "Postleitzahl",
+        "city": "Stadt",
+        "state": "Bundesland / Region",
+        "countryCode": "Land"
+      },
+      "password": {
+        "current": "Aktuelles Passwort",
+        "next": "Neues Passwort",
+        "confirm": "Neues Passwort bestätigen",
+        "submit": "Passwort aktualisieren",
+        "hint": "Mindestens 8 Zeichen, ein Großbuchstabe und eine Ziffer.",
+        "currentRequired": "Aktuelles Passwort eingeben",
+        "tooShort": "Mindestens 8 Zeichen",
+        "mismatch": "Passwörter stimmen nicht überein",
+        "wrong": "Aktuelles Passwort ist falsch",
+        "savedToast": "Passwort aktualisiert",
+        "error": "Passwort konnte nicht geändert werden"
+      }
     }
   }
 }
