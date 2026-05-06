@@ -1,33 +1,86 @@
 /**
- * Branding-aware shell for the customer dashboard surface (#354).
+ * Customer surface shell (#354).
  *
- * Header is intentionally simple — no admin nav, no event-level chrome.
- * Just the company logo + the customer's name + a Logout button. Designed
- * to be visually consistent with the Branding palette so an admin who
- * matches Branding tokens to their CI gets the same look in the customer
- * portal as in the gallery itself.
+ * Visually patterned after the admin layout (sidebar + top header + scrollable
+ * main) — the maintainer asked for parity with /admin/* so admins dogfooding
+ * the customer flow get a familiar structure. Differences from AdminLayout:
+ *   - no AdminSidebar / RBAC permission gating; customers don't have roles
+ *   - branding header (logo + company name) sits inside the sidebar so the
+ *     customer surface looks like *their* photographer's site, not picpeak
+ *     chrome
+ *   - calendar / quotes / bills nav items are stubbed (coming-soon pages);
+ *     they're shown to the user behind a small "Coming soon" tag because
+ *     they're built but intentionally inert until the matching backends ship
+ *
+ * Renders as a layout route (Outlet pattern) so individual pages don't need
+ * to wrap their content in `<CustomerLayout>` — same approach AdminLayout uses.
  */
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link, NavLink, Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import {
+  Calendar,
+  FileText,
+  Image as ImageIcon,
+  LogOut,
+  Menu,
+  Receipt,
+  User as UserIcon,
+  X,
+} from 'lucide-react';
 
-import { Button } from '../../components/common';
 import { useCustomerAuth } from '../../contexts/CustomerAuthContext';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
 
-interface CustomerLayoutProps {
-  children: React.ReactNode;
+interface NavItem {
+  to: string;
+  labelKey: string;
+  fallback: string;
+  icon: React.ComponentType<{ className?: string }>;
+  /**
+   * Marks an entry as a stub (Calendar, Quotes, Bills) — surfaced via a
+   * small "Soon" pill. Clicking still works; the destination page renders
+   * a "Coming soon" placeholder.
+   */
+  comingSoon?: boolean;
 }
 
-export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
+const NAV: NavItem[] = [
+  { to: '/customer/dashboard', labelKey: 'customer.nav.galleries', fallback: 'Galleries', icon: ImageIcon },
+  { to: '/customer/calendar', labelKey: 'customer.nav.calendar', fallback: 'Calendar', icon: Calendar, comingSoon: true },
+  { to: '/customer/quotes', labelKey: 'customer.nav.quotes', fallback: 'Quotes', icon: FileText, comingSoon: true },
+  { to: '/customer/bills', labelKey: 'customer.nav.bills', fallback: 'Bills', icon: Receipt, comingSoon: true },
+  { to: '/customer/profile', labelKey: 'customer.nav.profile', fallback: 'Profile', icon: UserIcon },
+];
+
+export const CustomerLayout: React.FC = () => {
   const { t } = useTranslation();
-  const { customer, logout } = useCustomerAuth();
+  const location = useLocation();
+  const { customer, isAuthenticated, isLoading, logout } = useCustomerAuth();
   const { data: settingsData } = usePublicSettings();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const companyName = settingsData?.branding_company_name?.trim() || 'PicPeak';
   const logoUrl = settingsData?.branding_logo_url?.trim();
   const resolvedLogoUrl = logoUrl || '/picpeak-logo-transparent.png';
+
+  // Loading screen mirrors AdminLayout's so admin-as-customer dogfooding
+  // sees a familiar transition. Background uses the theme variable so a
+  // dark Branding palette doesn't flash white on first paint.
+  if (isLoading) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ backgroundColor: 'var(--color-background, #fafafa)' }}
+      >
+        <div className="w-12 h-12 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--color-accent)', borderTopColor: 'transparent' }} />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/customer/login" replace />;
+  }
 
   const greetingName = customer?.displayName
     || customer?.firstName
@@ -35,61 +88,156 @@ export const CustomerLayout: React.FC<CustomerLayoutProps> = ({ children }) => {
 
   return (
     <div
-      className="min-h-screen flex flex-col"
+      className="h-screen flex overflow-hidden"
       style={{ backgroundColor: 'var(--color-background, #fafafa)' }}
     >
-      <header
-        className="sticky top-0 z-40 border-b"
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 border-r transform transition-transform duration-200 ease-in-out lg:relative lg:translate-x-0 lg:h-screen ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
         style={{
           backgroundColor: 'var(--color-surface, #ffffff)',
           borderColor: 'var(--color-surface-border, #e5e5e5)',
         }}
       >
-        <div className="container py-3 flex items-center justify-between gap-3">
-          <Link
-            to="/customer/dashboard"
-            className="flex items-center gap-3 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded"
+        <div className="flex flex-col h-screen lg:h-full">
+          {/* Brand */}
+          <div
+            className="flex items-center justify-between h-16 px-4 border-b flex-shrink-0"
+            style={{ borderColor: 'var(--color-surface-border, #e5e5e5)' }}
           >
-            <img
-              src={resolvedLogoUrl}
-              alt={companyName}
-              className="h-8 w-auto object-contain"
-            />
-            <span className="hidden sm:inline text-base font-semibold text-theme truncate">
-              {companyName}
-            </span>
-          </Link>
-
-          <div className="flex items-center gap-3 min-w-0">
-            {greetingName && (
-              <span className="hidden sm:inline text-sm text-muted-theme truncate">
-                {t('customer.layout.greeting', 'Hi, {{name}}', { name: greetingName })}
-              </span>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              leftIcon={<LogOut className="w-4 h-4" />}
-              onClick={() => { void logout(); }}
+            <Link
+              to="/customer/dashboard"
+              className="flex items-center gap-2 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded"
+              onClick={() => setSidebarOpen(false)}
             >
-              <span className="hidden sm:inline">{t('common.logout', 'Logout')}</span>
-            </Button>
+              <img
+                src={resolvedLogoUrl}
+                alt={companyName}
+                className="h-8 w-auto object-contain flex-shrink-0"
+              />
+              <span className="text-sm font-semibold text-theme truncate">
+                {companyName}
+              </span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden text-muted-theme hover:text-theme"
+              aria-label={t('common.close', 'Close')}
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto min-h-0">
+            {NAV.map((item) => {
+              const Icon = item.icon;
+              // Active when the path matches or starts with the entry —
+              // dashboard stays active only on exact match so the other
+              // nav entries don't double-highlight on /customer/dashboard.
+              const isActive = item.to === '/customer/dashboard'
+                ? location.pathname === item.to
+                : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setSidebarOpen(false)}
+                  className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                  style={isActive ? {
+                    backgroundColor: 'color-mix(in srgb, var(--color-accent) 12%, transparent)',
+                    color: 'var(--color-accent)',
+                  } : undefined}
+                >
+                  <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? '' : 'text-muted-theme'}`} />
+                  <span className={`flex-1 truncate ${isActive ? '' : 'text-theme'}`}>
+                    {t(item.labelKey, item.fallback)}
+                  </span>
+                  {item.comingSoon && (
+                    <span
+                      className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold"
+                      style={{
+                        backgroundColor: 'color-mix(in srgb, var(--color-accent) 14%, transparent)',
+                        color: 'var(--color-accent)',
+                      }}
+                    >
+                      {t('customer.nav.soon', 'Soon')}
+                    </span>
+                  )}
+                </NavLink>
+              );
+            })}
+          </nav>
+
+          {/* Footer (logout + greeting on a single line, mirrors admin) */}
+          <div
+            className="border-t px-4 py-3 flex items-center justify-between gap-2"
+            style={{ borderColor: 'var(--color-surface-border, #e5e5e5)' }}
+          >
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-theme truncate">{greetingName}</div>
+              <div className="text-xs text-muted-theme truncate">{customer?.email}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => { void logout(); }}
+              className="p-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 text-muted-theme hover:text-theme focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              aria-label={t('common.logout', 'Logout')}
+              title={t('common.logout', 'Logout')}
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
           </div>
         </div>
-      </header>
+      </aside>
 
-      <main className="flex-1">{children}</main>
+      {/* Main column */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen">
+        <header
+          className="lg:hidden h-14 px-4 flex items-center justify-between border-b flex-shrink-0"
+          style={{
+            backgroundColor: 'var(--color-surface, #ffffff)',
+            borderColor: 'var(--color-surface-border, #e5e5e5)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 -ml-2 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 text-theme"
+            aria-label={t('common.menu', 'Menu')}
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+          <span className="text-sm font-semibold text-theme truncate">{companyName}</span>
+          <span className="w-9" aria-hidden="true" />
+        </header>
 
-      <footer
-        className="py-6 text-center text-xs"
-        style={{ color: 'var(--color-muted-text, #737373)' }}
-      >
-        <p>
-          {settingsData?.branding_footer_text
-            || `© ${new Date().getFullYear()} ${companyName}. All rights reserved.`}
-        </p>
-      </footer>
+        <main id="customer-main" className="flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
+
+        <footer
+          className="py-4 px-4 text-center text-xs"
+          style={{ color: 'var(--color-muted-text, #737373)' }}
+        >
+          <p>
+            {settingsData?.branding_footer_text
+              || `© ${new Date().getFullYear()} ${companyName}. All rights reserved.`}
+          </p>
+        </footer>
+      </div>
     </div>
   );
 };

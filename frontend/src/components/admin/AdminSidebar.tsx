@@ -31,6 +31,12 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   permission?: string;
+  /**
+   * If true, renders a small BETA pill next to the label. Used to flag
+   * features that are wired up end-to-end but still missing parts of the
+   * promised surface (calendar / quotes / bills coming soon — #354).
+   */
+  beta?: boolean;
 }
 
 const navigation: NavItem[] = [
@@ -47,7 +53,9 @@ const navigation: NavItem[] = [
   { nameKey: 'navigation.users', href: '/admin/users', icon: Users, permission: 'users.view' },
   // Customer accounts (#354) — separate from admin users, gated on
   // customers.view (granted to super_admin and admin by migration 087).
-  { nameKey: 'navigation.customers', href: '/admin/customers', icon: UserCog, permission: 'customers.view' },
+  // Beta-flagged because the calendar/quotes/bills tabs the customer
+  // surface ships are intentional placeholders right now.
+  { nameKey: 'navigation.customers', href: '/admin/customers', icon: UserCog, permission: 'customers.view', beta: true },
 ];
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
@@ -106,7 +114,15 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
                 <item.icon className={`w-5 h-5 mr-3 ${
                   isActive ? 'text-white' : 'text-neutral-400'
                 }`} />
-                {t(item.nameKey)}
+                <span className="flex-1 truncate">{t(item.nameKey)}</span>
+                {item.beta && (
+                  <span
+                    className="ml-2 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                    title="Beta — feature is functional but still evolving"
+                  >
+                    {t('navigation.betaTag', 'Beta')}
+                  </span>
+                )}
               </NavLink>
             );
           })}
