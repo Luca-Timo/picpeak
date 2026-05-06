@@ -393,7 +393,11 @@ router.post('/', adminAuth, requirePermission('events.create'), [
     'upload_date_desc', 'upload_date_asc',
     'capture_date_desc', 'capture_date_asc',
     'filename_asc', 'filename_desc'
-  ])
+  ]),
+  // Customer accounts assigned to this event (#354). Optional array of
+  // customer_accounts.id — many-to-many via event_customer_assignments.
+  body('customer_account_ids').optional().isArray(),
+  body('customer_account_ids.*').optional().isInt({ min: 1 })
 ], async (req, res) => {
   try {
     logger.debug('Create event request body', { body: req.body });
@@ -659,6 +663,27 @@ router.post('/', adminAuth, requirePermission('events.create'), [
     // Handle both PostgreSQL (returns array of objects) and SQLite (returns array of IDs)
     const eventId = insertResult[0]?.id || insertResult[0];
     
+    // Apply customer-account assignments (#354). If no array was sent we
+    // skip the call entirely so existing API consumers keep working — the
+    // helper interprets an undefined ids list differently from an empty
+    // array (latter clears, former is a no-op).
+    if (Array.isArray(req.body.customer_account_ids)) {
+      try {
+        const customerAccountsService = require('../services/customerAccountsService');
+        await customerAccountsService.setAssignmentsForEvent(
+          eventId,
+          req.body.customer_account_ids,
+          req.admin.id
+        );
+      } catch (e) {
+        // Log but don't fail event creation — admin can fix assignments
+        // from the event detail page if something goes wrong here.
+        logger.error('Failed to set customer assignments on event create', {
+          eventId, error: e.message,
+        });
+      }
+    }
+
     // Insert feedback settings if feedback is enabled
     if (feedback_enabled) {
       await db('event_feedback_settings').insert({
@@ -937,6 +962,18 @@ router.get('/:id', adminAuth, requirePermission('events.view'), async (req, res)
       .where('event_id', id)
       .countDistinct('ip_address as uniqueVisitors');
 
+    // Customer accounts assigned to this event (#354). Hydrates the
+    // CustomerAccountPicker on the EventDetailsPage admin form.
+    let customerAccounts = [];
+    try {
+      const customerAccountsService = require('../services/customerAccountsService');
+      customerAccounts = await customerAccountsService.getAssignmentsForEvent(parseInt(id, 10));
+    } catch (e) {
+      // Don't fail the whole detail call if the table is missing in dev
+      // (pre-migrate run) — just return an empty array.
+      logger.warn('Failed to load customer assignments for event', { eventId: id, error: e.message });
+    }
+
     res.json(mapEventForApi({
       ...event,
       photo_count: parseInt(photoCount) || 0,
@@ -944,7 +981,14 @@ router.get('/:id', adminAuth, requirePermission('events.view'), async (req, res)
       total_views: parseInt(totalViews) || 0,
       total_downloads: parseInt(totalDownloads) || 0,
       unique_visitors: parseInt(uniqueVisitors) || 0,
-      recent_photos: recentPhotos
+      recent_photos: recentPhotos,
+      customer_accounts: customerAccounts.map((c) => ({
+        id: c.id,
+        email: c.email,
+        display_name: c.display_name,
+        first_name: c.first_name,
+        last_name: c.last_name,
+      })),
     }));
   } catch (error) {
     console.error('Error fetching event:', error);
@@ -1100,7 +1144,11 @@ router.put('/:id', adminAuth, requirePermission('events.edit'), requireEventOwne
     'upload_date_desc', 'upload_date_asc',
     'capture_date_desc', 'capture_date_asc',
     'filename_asc', 'filename_desc'
-  ])
+  ]),
+  // Customer-account assignments (#354). Optional array; empty array
+  // explicitly clears all assignments, undefined leaves them untouched.
+  body('customer_account_ids').optional().isArray(),
+  body('customer_account_ids.*').optional().isInt({ min: 1 })
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -1111,6 +1159,12 @@ router.put('/:id', adminAuth, requirePermission('events.edit'), requireEventOwne
 
     const { id } = req.params;
     const updates = { ...req.body };
+    // Pull out customer_account_ids before the column-allowlist sanitization
+    // below — it isn't a column on `events`, it's a separate junction table.
+    const customerAccountIds = Array.isArray(updates.customer_account_ids)
+      ? updates.customer_account_ids
+      : null;
+    delete updates.customer_account_ids;
     const customerColumnsAvailable = await hasCustomerContactColumns();
 
     if (Object.prototype.hasOwnProperty.call(updates, 'host_name') || Object.prototype.hasOwnProperty.call(updates, 'host_email')) {
@@ -1285,6 +1339,24 @@ router.put('/:id', adminAuth, requirePermission('events.edit'), requireEventOwne
     await db('events')
       .where('id', id)
       .update(updates);
+
+    // Apply customer-account assignments diff if the request supplied an
+    // array. null (key omitted) → leave untouched so partial updates that
+    // don't touch the picker don't accidentally clear assignments.
+    if (customerAccountIds !== null) {
+      try {
+        const customerAccountsService = require('../services/customerAccountsService');
+        await customerAccountsService.setAssignmentsForEvent(
+          parseInt(id, 10),
+          customerAccountIds,
+          req.admin.id
+        );
+      } catch (e) {
+        logger.error('Failed to update customer assignments on event edit', {
+          eventId: id, error: e.message,
+        });
+      }
+    }
 
     // Log activity
     await logActivity('event_updated',

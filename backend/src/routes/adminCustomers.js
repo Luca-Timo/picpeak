@@ -1,0 +1,208 @@
+/**
+ * Admin → Customers Routes
+ *
+ * Endpoint mounted at /api/admin/customers (see app.js wiring).
+ * Mirrors adminUsers.js for the invitation lifecycle but operates on
+ * customer_accounts. Customer-side login routes live in customerAuth.js.
+ */
+
+const express = require('express');
+const { body, param, query } = require('express-validator');
+const { adminAuth } = require('../middleware/auth');
+const { requirePermission } = require('../middleware/permissions');
+const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
+const customerAccountsService = require('../services/customerAccountsService');
+
+const router = express.Router();
+
+/**
+ * Snake_case (DB) → camelCase (API). Kept narrow on purpose: only fields
+ * the frontend actually needs land in the response so the surface area
+ * doesn't accidentally grow when new columns get added later.
+ */
+function transformCustomer(c) {
+  return {
+    id: c.id,
+    email: c.email,
+    salutation: c.salutation,
+    firstName: c.first_name,
+    lastName: c.last_name,
+    displayName: c.display_name,
+    phone: c.phone,
+    companyName: c.company_name,
+    billingEmail: c.billing_email,
+    vatId: c.vat_id,
+    addressLine1: c.address_line1,
+    addressLine2: c.address_line2,
+    postalCode: c.postal_code,
+    city: c.city,
+    state: c.state,
+    countryCode: c.country_code,
+    preferredLanguage: c.preferred_language,
+    notes: c.notes,
+    isActive: c.is_active,
+    lastLogin: c.last_login,
+    createdAt: c.created_at,
+    updatedAt: c.updated_at,
+    eventCount: c.event_count != null ? Number(c.event_count) : undefined,
+    events: Array.isArray(c.events)
+      ? c.events.map((e) => ({
+        id: e.id,
+        slug: e.slug,
+        eventName: e.event_name,
+        eventDate: e.event_date,
+        expiresAt: e.expires_at,
+        isArchived: e.is_archived,
+        assignedAt: e.assigned_at,
+      }))
+      : undefined,
+  };
+}
+
+function transformInvitation(inv) {
+  return {
+    id: inv.id,
+    email: inv.email,
+    expiresAt: inv.expires_at,
+    createdAt: inv.created_at,
+    invitedBy: inv.invited_by,
+  };
+}
+
+// ---- list / search ------------------------------------------------------
+
+router.get('/', [
+  adminAuth,
+  requirePermission('customers.view'),
+  query('search').optional().isString(),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const customers = await customerAccountsService.listCustomers({
+    search: req.query.search,
+  });
+  res.json({ customers: customers.map(transformCustomer) });
+}));
+
+/**
+ * GET /search?email=…
+ *
+ * Autocomplete used by the event-form CustomerAccountPicker. Returns
+ * up to 10 matches against email/name/company prefixes. Permission is
+ * customers.view because exposing emails to anyone with users.view but
+ * not customers.view would leak the customer roster.
+ */
+router.get('/search', [
+  adminAuth,
+  requirePermission('customers.view'),
+  query('email').optional().isString(),
+  query('q').optional().isString(),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const term = req.query.email || req.query.q || '';
+  const results = await customerAccountsService.searchCustomers(term);
+  res.json({ customers: results.map(transformCustomer) });
+}));
+
+// ---- invitations --------------------------------------------------------
+
+router.get('/invitations', [
+  adminAuth,
+  requirePermission('customers.view'),
+], handleAsync(async (req, res) => {
+  const invitations = await customerAccountsService.getPendingInvitations();
+  res.json({ invitations: invitations.map(transformInvitation) });
+}));
+
+router.post('/invite', [
+  adminAuth,
+  requirePermission('customers.create'),
+  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const invitation = await customerAccountsService.createInvitation({
+    email: req.body.email,
+    invitedById: req.admin.id,
+  });
+  // Don't echo the token in the response — only the email channel sees it.
+  successResponse(res, {
+    invitation: {
+      id: invitation.id,
+      email: invitation.email,
+      expiresAt: invitation.expiresAt,
+    },
+  }, 201);
+}));
+
+router.delete('/invitations/:id', [
+  adminAuth,
+  requirePermission('customers.create'),
+  param('id').isInt({ min: 1 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  await customerAccountsService.cancelInvitation(
+    parseInt(req.params.id, 10),
+    req.admin.id
+  );
+  successResponse(res, { message: 'Invitation cancelled' });
+}));
+
+// ---- customer record ----------------------------------------------------
+
+router.get('/:id', [
+  adminAuth,
+  requirePermission('customers.view'),
+  param('id').isInt({ min: 1 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const customer = await customerAccountsService.getCustomerById(
+    parseInt(req.params.id, 10)
+  );
+  res.json({ customer: transformCustomer(customer) });
+}));
+
+router.put('/:id', [
+  adminAuth,
+  requirePermission('customers.create'),
+  param('id').isInt({ min: 1 }),
+  body('email').optional().isEmail().normalizeEmail(),
+  body('salutation').optional().isString().isLength({ max: 32 }),
+  body('first_name').optional().isString().isLength({ max: 80 }),
+  body('last_name').optional().isString().isLength({ max: 80 }),
+  body('display_name').optional().isString().isLength({ max: 120 }),
+  body('phone').optional().isString().isLength({ max: 40 }),
+  body('company_name').optional().isString().isLength({ max: 120 }),
+  body('billing_email').optional({ nullable: true }).isString(),
+  body('vat_id').optional({ nullable: true }).isString().isLength({ max: 40 }),
+  body('address_line1').optional({ nullable: true }).isString().isLength({ max: 255 }),
+  body('address_line2').optional({ nullable: true }).isString().isLength({ max: 255 }),
+  body('postal_code').optional({ nullable: true }).isString().isLength({ max: 20 }),
+  body('city').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('state').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('country_code').optional({ nullable: true }).isString().isLength({ max: 2 }),
+  body('preferred_language').optional().isString().isLength({ max: 8 }),
+  body('notes').optional({ nullable: true }).isString(),
+  body('is_active').optional().isBoolean(),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const customer = await customerAccountsService.updateCustomer(
+    parseInt(req.params.id, 10),
+    req.body,
+    req.admin.id
+  );
+  res.json({ customer: transformCustomer(customer) });
+}));
+
+router.post('/:id/deactivate', [
+  adminAuth,
+  requirePermission('customers.delete'),
+  param('id').isInt({ min: 1 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  await customerAccountsService.deactivateCustomer(
+    parseInt(req.params.id, 10),
+    req.admin.id
+  );
+  successResponse(res, { message: 'Customer deactivated' });
+}));
+
+module.exports = router;
