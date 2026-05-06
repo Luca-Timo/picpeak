@@ -41,6 +41,7 @@ import {
   CustomerCalendarPage,
   CustomerQuotesPage,
   CustomerBillsPage,
+  CustomerResetPasswordPage,
 } from './pages/customer';
 import { CustomerAuthProvider } from './contexts/CustomerAuthContext';
 import { AdminLayout, AdminAuthWrapper } from './components/admin';
@@ -168,6 +169,7 @@ function App() {
                             CustomerLayout (their own branded shells). */}
                         <Route path="login" element={<CustomerLoginPage />} />
                         <Route path="invite/:token" element={<CustomerAcceptInvitePage />} />
+                        <Route path="reset-password/:token" element={<CustomerResetPasswordPage />} />
 
                         {/* Authenticated surfaces share the sidebar layout
                             (Outlet pattern, mirrors AdminLayout). The
