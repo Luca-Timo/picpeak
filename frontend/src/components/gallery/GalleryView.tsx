@@ -736,13 +736,12 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event }) => {
         onDownloadAll={handleDownloadAll}
         isDownloading={downloadAllMutation.isPending}
         menuButton={
-          // Menu icon is shown when:
-          //   1. The event theme uses the sidebar controls style, AND
-          //   2. The instance-wide Branding toggle hasn't suppressed it.
-          // The button is icon-only — the redundant "Menu" text label was
-          // dropped (#386). The wrapper aligns the icon to the very left of
-          // the header so the logo lines up with the leftmost gallery image.
-          showSidebar && settingsData?.branding_show_gallery_menu_button !== false ? (
+          // Menu icon is shown when the event theme uses the sidebar
+          // controls style. The button is icon-only — the redundant
+          // "Menu" text label was dropped (#386). The wrapper aligns the
+          // icon to the very left of the header so the logo lines up
+          // with the leftmost gallery image.
+          showSidebar ? (
             <Button
               variant="ghost"
               size="sm"

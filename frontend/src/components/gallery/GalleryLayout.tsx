@@ -339,6 +339,23 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                     <span className="hidden sm:inline">{t('gallery.downloadAll')}</span>
                   </Button>
                 )}
+                {/* Accent Download CTA — also rendered in the minimal header
+                    so the action stays one click away regardless of header
+                    style. Intentionally NOT shown in the no-header variant
+                    where the gallery is fully chromeless by design. */}
+                {showHeaderDownload && onHeaderDownload && (
+                  <button
+                    type="button"
+                    onClick={onHeaderDownload}
+                    disabled={isDownloading}
+                    aria-label={t('gallery.download', 'Download')}
+                    className="gallery-btn gallery-btn-download inline-flex items-center gap-2 px-3 sm:px-4 h-9 rounded-lg text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                    style={{ backgroundColor: 'var(--color-accent)', color: '#ffffff' }}
+                  >
+                    <Download className="w-4 h-4" />
+                    <span className="hidden sm:inline">{t('gallery.download', 'Download')}</span>
+                  </button>
+                )}
                 {showLogout && onLogout && (
                   <Button
                     variant="outline"
@@ -417,6 +434,24 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                     <span className="hidden sm:inline">{t('gallery.downloadAll')}</span>
                     <span className="sm:hidden">{t('common.download')}</span>
                   </Button>
+                )}
+
+                {/* Accent Download CTA — also rendered above the hero so the
+                    primary download action is reachable without scrolling.
+                    Intentionally NOT shown in the no-header variant where
+                    the gallery is fully chromeless by design. */}
+                {showHeaderDownload && onHeaderDownload && (
+                  <button
+                    type="button"
+                    onClick={onHeaderDownload}
+                    disabled={isDownloading}
+                    aria-label={t('gallery.download', 'Download')}
+                    className="gallery-btn gallery-btn-download inline-flex items-center gap-2 px-3 sm:px-4 h-9 rounded-lg text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                    style={{ backgroundColor: 'var(--color-accent)', color: '#ffffff' }}
+                  >
+                    <Download className="w-4 h-4" />
+                    <span className="hidden sm:inline">{t('gallery.download', 'Download')}</span>
+                  </button>
                 )}
 
                 {/* Logout button */}

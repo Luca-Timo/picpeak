@@ -219,8 +219,7 @@ router.put('/branding', adminAuth, requirePermission('settings.edit'), async (re
       logo_display_header,
       logo_display_hero,
       logo_display_mode,
-      hide_powered_by,
-      show_gallery_menu_button
+      hide_powered_by
     } = req.body;
 
     // Get current watermark settings hash for change detection
@@ -244,10 +243,7 @@ router.put('/branding', adminAuth, requirePermission('settings.edit'), async (re
       logo_display_header,
       logo_display_hero,
       logo_display_mode,
-      hide_powered_by,
-      // Instance-wide toggle for the gallery sidebar/menu icon button. The
-      // per-event theme can still hide its menu via controlsStyle: 'classic'.
-      show_gallery_menu_button
+      hide_powered_by
     };
 
     // Handle favicon deletion if empty string or null is provided
