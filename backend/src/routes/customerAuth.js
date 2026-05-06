@@ -161,7 +161,21 @@ router.post('/logout', async (req, res) => {
 // ---- session echo ------------------------------------------------------
 
 router.get('/session', customerAuth, async (req, res) => {
-  res.json({ customer: req.customer });
+  // Resolve the effective feature set (global toggle AND per-customer flag)
+  // and the branding visibility globals so the customer frontend can render
+  // the correct sidebar without an extra round-trip on every navigation.
+  // Failure here is non-fatal — the customer should still be able to see
+  // their galleries even if the settings table is briefly unavailable.
+  let features = { calendar: false, quotes: false, bills: false };
+  let branding = { showLogo: true, showCompanyName: true };
+  try {
+    features = await customerAccountsService.getEffectiveFeaturesForCustomer(req.customer.id);
+    const globals = await customerAccountsService.getCustomerSurfaceGlobals();
+    branding = { showLogo: globals.showLogo, showCompanyName: globals.showCompanyName };
+  } catch (e) {
+    logger.warn('Customer session: failed to resolve features/branding, using defaults', { error: e?.message });
+  }
+  res.json({ customer: req.customer, features, branding });
 });
 
 // ---- invitation lifecycle (public) -------------------------------------
@@ -276,6 +290,65 @@ router.post('/accept-invite', [
     }
     logger.error('Customer invite accept error:', error);
     res.status(500).json({ error: 'Failed to accept invitation' });
+  }
+});
+
+// ---- password reset (public) -------------------------------------------
+
+/**
+ * GET /password-reset/:token (#354 follow-up).
+ *
+ * Validate a reset token without consuming it so the reset page can show
+ * "you're resetting the password for {{email}}" before the user submits.
+ */
+router.get('/password-reset/:token', [
+  param('token').isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(404).json({ error: 'Invalid reset link' });
+    const reset = await customerAccountsService.validatePasswordResetToken(req.params.token);
+    if (!reset) return res.status(404).json({ error: 'Invalid or expired reset link' });
+    res.json({ reset: { email: reset.email, expiresAt: reset.expires_at } });
+  } catch (error) {
+    logger.error('Customer reset lookup error:', error);
+    res.status(500).json({ error: 'Failed to validate reset link' });
+  }
+});
+
+/**
+ * POST /password-reset (#354 follow-up).
+ *
+ * Apply a reset: token + new password. Same simple password policy as
+ * the accept-invite path (8 chars, uppercase, digit). The service marks
+ * the reset row as used in the same transaction so a re-submitted token
+ * is rejected on the second click.
+ */
+router.post('/password-reset', [
+  body('token').isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i),
+  body('password').isString().isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    const policyError = validateCustomerPassword(req.body.password);
+    if (policyError) {
+      return res.status(400).json({
+        error: 'Password does not meet complexity requirements',
+        details: [policyError],
+      });
+    }
+    const result = await customerAccountsService.applyPasswordReset({
+      token: req.body.token,
+      password: req.body.password,
+    });
+    res.json({ message: 'Password updated', email: result.email });
+  } catch (error) {
+    if (error.code === 'VALIDATION' || error.statusCode === 400) {
+      return res.status(400).json({ error: error.message });
+    }
+    logger.error('Customer reset apply error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
   }
 });
 

@@ -41,6 +41,11 @@ function transformCustomer(c) {
     preferredLanguage: c.preferred_language,
     notes: c.notes,
     isActive: c.is_active,
+    // Per-customer feature flags (#354 follow-up). Coerce to bool so the
+    // frontend doesn't have to deal with SQLite's 0/1 values.
+    featureCalendar: c.feature_calendar === true || c.feature_calendar === 1,
+    featureQuotes:   c.feature_quotes   === true || c.feature_quotes   === 1,
+    featureBills:    c.feature_bills    === true || c.feature_bills    === 1,
     lastLogin: c.last_login,
     createdAt: c.created_at,
     updatedAt: c.updated_at,
@@ -202,6 +207,9 @@ router.put('/:id', [
   body('preferred_language').optional().isString().isLength({ max: 8 }),
   body('notes').optional({ nullable: true }).isString(),
   body('is_active').optional().isBoolean(),
+  body('feature_calendar').optional().isBoolean(),
+  body('feature_quotes').optional().isBoolean(),
+  body('feature_bills').optional().isBoolean(),
 ], handleAsync(async (req, res) => {
   validateRequest(req);
   const customer = await customerAccountsService.updateCustomer(
@@ -223,6 +231,27 @@ router.post('/:id/deactivate', [
     req.admin.id
   );
   successResponse(res, { message: 'Customer deactivated' });
+}));
+
+/**
+ * POST /:id/password-reset (#354 follow-up).
+ *
+ * Generate a 7-day password-reset token and email it to the customer.
+ * Reused permission `customers.create` because issuing a reset is the
+ * same authority level as issuing an invitation — both put a credential
+ * into the customer's mailbox.
+ */
+router.post('/:id/password-reset', [
+  adminAuth,
+  requirePermission('customers.create'),
+  param('id').isInt({ min: 1 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const result = await customerAccountsService.createPasswordReset({
+    customerId: parseInt(req.params.id, 10),
+    requestedByAdminId: req.admin.id,
+  });
+  successResponse(res, { email: result.email, expiresAt: result.expiresAt });
 }));
 
 module.exports = router;

@@ -358,7 +358,10 @@ async function updateCustomer(id, updates, updatedByAdminId) {
     'email', 'salutation', 'first_name', 'last_name', 'display_name',
     'phone', 'company_name', 'billing_email', 'vat_id',
     'address_line1', 'address_line2', 'postal_code', 'city', 'state',
-    'country_code', 'preferred_language', 'notes'
+    'country_code', 'preferred_language', 'notes',
+    // Per-customer feature flags (#354 follow-up). Booleans below are
+    // coerced via formatBoolean for SQLite compatibility.
+    'feature_calendar', 'feature_quotes', 'feature_bills',
   ];
   for (const f of fields) {
     if (updates[f] !== undefined) {
@@ -368,6 +371,8 @@ async function updateCustomer(id, updates, updatedByAdminId) {
         allowed[f] = String(updates[f] || '').trim().toLowerCase();
       } else if (f === 'country_code' && updates[f]) {
         allowed[f] = String(updates[f]).trim().toUpperCase().slice(0, 2);
+      } else if (f === 'feature_calendar' || f === 'feature_quotes' || f === 'feature_bills') {
+        allowed[f] = formatBoolean(updates[f]);
       } else {
         allowed[f] = updates[f];
       }
@@ -601,6 +606,187 @@ async function cancelInvitation(id, cancelledByAdminId) {
   logger.info('Customer invitation cancelled', { invitationId: id, cancelledByAdminId });
 }
 
+// =====================================================================
+// Customer-surface global toggles + password resets (#354 follow-up)
+// =====================================================================
+
+const PASSWORD_RESET_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/**
+ * Read the customer-surface global toggles (set in app_settings under
+ * setting_type='customer_surface'). Returns sane defaults when the keys
+ * aren't present so an install missing migration 089 doesn't crash —
+ * features default OFF, branding defaults ON to match the visual state
+ * before this migration shipped.
+ */
+async function getCustomerSurfaceGlobals() {
+  const rows = await db('app_settings').where('setting_type', 'customer_surface').select('setting_key', 'setting_value');
+  const map = {};
+  for (const r of rows) {
+    let v = r.setting_value;
+    if (typeof v === 'string') {
+      try { v = JSON.parse(v); } catch { /* leave as-is */ }
+    }
+    map[r.setting_key] = v;
+  }
+  return {
+    calendarEnabled: map.customer_feature_calendar_enabled === true,
+    quotesEnabled:   map.customer_feature_quotes_enabled   === true,
+    billsEnabled:    map.customer_feature_bills_enabled    === true,
+    showLogo:        map.customer_show_logo !== false, // default true
+    showCompanyName: map.customer_show_company_name !== false, // default true
+  };
+}
+
+/**
+ * Compute the effective feature-flag set for a single customer.
+ *
+ * AND-logic: a customer sees a feature iff the global toggle is on AND
+ * their per-customer flag is on. This gives the admin two independent
+ * levers — flip a feature on for the whole instance, then choose which
+ * customers actually see it.
+ *
+ * Pass either a numeric customerId (we'll fetch) or a row already loaded.
+ */
+async function getEffectiveFeaturesForCustomer(customerOrId) {
+  const customer = (typeof customerOrId === 'number')
+    ? await db('customer_accounts').where('id', customerOrId).first()
+    : customerOrId;
+  if (!customer) {
+    return { calendar: false, quotes: false, bills: false };
+  }
+  const globals = await getCustomerSurfaceGlobals();
+  return {
+    calendar: globals.calendarEnabled && customer.feature_calendar === true,
+    quotes:   globals.quotesEnabled   && customer.feature_quotes   === true,
+    bills:    globals.billsEnabled    && customer.feature_bills    === true,
+  };
+}
+
+/**
+ * Admin triggers a password reset for an existing customer.
+ *
+ * Behaviour:
+ *   - Generates a 64-char hex token (matches invitation tokens).
+ *   - Stores it in customer_password_resets with a 7-day expiry.
+ *   - Queues a customer_password_reset email with the link.
+ *   - Does NOT invalidate the existing password yet — we only flip
+ *     password_changed_at on the actual reset (so a typo'd reset doesn't
+ *     lock a customer out of an already-working session).
+ *
+ * Idempotency: if there's an unused, non-expired reset already in flight
+ * we delete it before creating the new one — admins re-clicking the
+ * "Send reset" button shouldn't fan out two valid links.
+ */
+async function createPasswordReset({ customerId, requestedByAdminId }) {
+  const customer = await db('customer_accounts').where('id', customerId).first();
+  if (!customer) {
+    throw new NotFoundError('Customer', customerId);
+  }
+  if (!customer.is_active) {
+    throw new ValidationError('Cannot reset password for an inactive customer');
+  }
+
+  // Clean up any previous unused reset for this customer.
+  await db('customer_password_resets')
+    .where('customer_account_id', customerId)
+    .whereNull('used_at')
+    .del();
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+
+  await db('customer_password_resets').insert({
+    token,
+    customer_account_id: customerId,
+    requested_by_admin_id: requestedByAdminId || null,
+    expires_at: expiresAt,
+    created_at: new Date(),
+  });
+
+  const frontendUrl = (await getFrontendBaseUrl()) || 'http://localhost:3000';
+  await queueEmail(null, customer.email, 'customer_password_reset', {
+    reset_link: `${frontendUrl}/customer/reset-password/${token}`,
+    expires_at: expiresAt.toISOString(),
+  });
+
+  await logActivity('customer_password_reset_requested',
+    { customerId, email: customer.email },
+    null,
+    { type: 'admin', id: requestedByAdminId, name: 'system' }
+  );
+
+  logger.info('Customer password reset requested', { customerId, requestedByAdminId });
+  return { customerId, email: customer.email, expiresAt };
+}
+
+/**
+ * Validate a password-reset token (lookup-only — does NOT consume it).
+ * Used by the customer's reset page to render "you're resetting the
+ * password for X" before they submit.
+ */
+async function validatePasswordResetToken(token) {
+  const row = await db('customer_password_resets')
+    .join('customer_accounts', 'customer_accounts.id', 'customer_password_resets.customer_account_id')
+    .where('customer_password_resets.token', token)
+    .whereNull('customer_password_resets.used_at')
+    .where('customer_password_resets.expires_at', '>', new Date())
+    .where('customer_accounts.is_active', formatBoolean(true))
+    .select(
+      'customer_password_resets.id',
+      'customer_password_resets.customer_account_id',
+      'customer_password_resets.expires_at',
+      'customer_accounts.email',
+    )
+    .first();
+  return row || null;
+}
+
+/**
+ * Apply a password reset: hash the new password, write it onto the
+ * customer row, mark the reset row used, and bump password_changed_at
+ * so any tokens issued before the reset (e.g. an attacker's session)
+ * stop working on next request.
+ *
+ * Wrapped in a transaction so we can't end up with a used token but no
+ * password update, or vice versa.
+ */
+async function applyPasswordReset({ token, password }) {
+  const row = await db('customer_password_resets')
+    .where('token', token)
+    .whereNull('used_at')
+    .where('expires_at', '>', new Date())
+    .first();
+  if (!row) {
+    throw new ValidationError('Invalid or expired reset link');
+  }
+
+  const customer = await db('customer_accounts').where('id', row.customer_account_id).first();
+  if (!customer || !customer.is_active) {
+    throw new ValidationError('Invalid or expired reset link');
+  }
+
+  const passwordHash = await bcrypt.hash(password, getBcryptRounds());
+  await db.transaction(async (trx) => {
+    await trx('customer_accounts').where('id', customer.id).update({
+      password_hash: passwordHash,
+      password_changed_at: new Date(),
+      must_change_password: formatBoolean(false),
+      updated_at: new Date(),
+    });
+    await trx('customer_password_resets').where('id', row.id).update({ used_at: new Date() });
+  });
+
+  await logActivity('customer_password_reset_applied',
+    { customerId: customer.id, email: customer.email },
+    null,
+    { type: 'system', id: null, name: 'system' }
+  );
+
+  logger.info('Customer password reset applied', { customerId: customer.id });
+  return { email: customer.email };
+}
+
 module.exports = {
   createInvitation,
   acceptInvitation,
@@ -616,4 +802,10 @@ module.exports = {
   customerHasAccessToEvent,
   getPendingInvitations,
   cancelInvitation,
+  // #354 follow-up
+  getCustomerSurfaceGlobals,
+  getEffectiveFeaturesForCustomer,
+  createPasswordReset,
+  validatePasswordResetToken,
+  applyPasswordReset,
 };

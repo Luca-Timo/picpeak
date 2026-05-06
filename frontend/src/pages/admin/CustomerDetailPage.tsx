@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import {
   ArrowLeft, Mail, MapPin, Phone, Building2, Save, Trash2, AlertTriangle,
-  CheckCircle2, X, FileText, Calendar,
+  CheckCircle2, X, FileText, Calendar, KeyRound, ToggleLeft,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -29,7 +29,8 @@ type EditableFields =
   | 'email' | 'salutation' | 'firstName' | 'lastName' | 'displayName'
   | 'phone' | 'companyName' | 'billingEmail' | 'vatId'
   | 'addressLine1' | 'addressLine2' | 'postalCode' | 'city' | 'state'
-  | 'countryCode' | 'preferredLanguage' | 'notes';
+  | 'countryCode' | 'preferredLanguage' | 'notes'
+  | 'featureCalendar' | 'featureQuotes' | 'featureBills';
 
 const formatDate = (iso: string | null | undefined) => {
   if (!iso) return '—';
@@ -75,9 +76,16 @@ export const CustomerDetailPage: React.FC = () => {
         countryCode: customer.countryCode,
         preferredLanguage: customer.preferredLanguage,
         notes: customer.notes,
-      });
+        featureCalendar: customer.featureCalendar ?? false,
+        featureQuotes:   customer.featureQuotes   ?? false,
+        featureBills:    customer.featureBills    ?? false,
+      } as any);
     }
   }, [customer, form]);
+
+  const toggleFeature = (key: 'featureCalendar' | 'featureQuotes' | 'featureBills') => {
+    setForm((prev) => ({ ...prev, [key]: !prev[key] }) as any);
+  };
 
   const setField = (key: EditableFields) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
@@ -95,6 +103,19 @@ export const CustomerDetailPage: React.FC = () => {
         : e?.response?.data?.error || t('customers.detail.saveError', 'Could not save changes.');
       toast.error(msg);
     },
+  });
+
+  /**
+   * Trigger a password-reset email. Reused permission `customers.create`
+   * server-side because issuing a reset is the same authority level as
+   * issuing an invitation (both put a credential in the customer's mailbox).
+   * Confirm dialog ahead of the click is surfaced via the same modal
+   * pattern as deactivate.
+   */
+  const passwordResetMutation = useMutation({
+    mutationFn: () => customerAdminService.sendPasswordReset(customerId),
+    onSuccess: () => toast.success(t('customers.detail.passwordReset.success', 'Password reset email sent')),
+    onError: () => toast.error(t('customers.detail.passwordReset.error', 'Could not send password reset')),
   });
 
   const deactivateMutation = useMutation({
@@ -273,6 +294,74 @@ export const CustomerDetailPage: React.FC = () => {
             />
           </div>
         </div>
+      </Card>
+
+      {/* Per-customer feature flags (#354 follow-up) */}
+      <Card padding="lg">
+        <h2 className="text-lg font-semibold text-theme mb-1 flex items-center gap-2">
+          <ToggleLeft className="w-5 h-5" />
+          {t('customers.detail.featuresSection', 'Customer features')}
+        </h2>
+        <p className="text-xs text-muted-theme mb-4">
+          {t(
+            'customers.detail.featuresHint',
+            'Enable per-customer access to the new customer-surface tabs. Visibility is AND-combined with the global toggles in Settings → Customer Surface — both must be ON for the customer to see the entry.'
+          )}
+        </p>
+        <div className="space-y-3">
+          {([
+            { key: 'featureCalendar', labelKey: 'customer.nav.calendar', fallback: 'Calendar' },
+            { key: 'featureQuotes',   labelKey: 'customer.nav.quotes',   fallback: 'Quotes' },
+            { key: 'featureBills',    labelKey: 'customer.nav.bills',    fallback: 'Bills' },
+          ] as const).map(({ key, labelKey, fallback }) => {
+            const enabled = !!form[key];
+            return (
+              <label key={key} className="flex items-center justify-between gap-3 cursor-pointer">
+                <span className="text-sm font-medium text-theme">{t(labelKey, fallback)}</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={enabled}
+                  onClick={() => toggleFeature(key)}
+                  className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                  style={{ backgroundColor: enabled ? 'var(--color-accent)' : 'var(--color-surface-border)' }}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`}
+                  />
+                </button>
+              </label>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Account actions: password reset (#354 follow-up) */}
+      <Card padding="lg">
+        <h2 className="text-lg font-semibold text-theme mb-1 flex items-center gap-2">
+          <KeyRound className="w-5 h-5" />
+          {t('customers.detail.passwordSection', 'Account actions')}
+        </h2>
+        <p className="text-xs text-muted-theme mb-4">
+          {t(
+            'customers.detail.passwordHint',
+            'Sends a 7-day single-use reset link to the customer\'s email. The customer\'s current password keeps working until they click the link and set a new one.'
+          )}
+        </p>
+        <Button
+          variant="outline"
+          leftIcon={<KeyRound className="w-4 h-4" />}
+          isLoading={passwordResetMutation.isPending}
+          disabled={!customer.isActive}
+          onClick={() => passwordResetMutation.mutate()}
+        >
+          {t('customers.detail.passwordReset.button', 'Send password reset email')}
+        </Button>
+        {!customer.isActive && (
+          <p className="text-xs text-muted-theme mt-2">
+            {t('customers.detail.passwordReset.inactive', 'Reactivate the customer before sending a reset.')}
+          </p>
+        )}
       </Card>
 
       {/* Notes (admin-only) */}

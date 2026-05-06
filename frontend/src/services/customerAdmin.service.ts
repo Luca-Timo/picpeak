@@ -18,6 +18,10 @@ export interface CustomerAccountSummary {
   lastLogin: string | null;
   createdAt: string;
   eventCount?: number;
+  /** Per-customer feature flags (#354 follow-up). */
+  featureCalendar?: boolean;
+  featureQuotes?: boolean;
+  featureBills?: boolean;
 }
 
 export interface CustomerAccountDetail extends CustomerAccountSummary {
@@ -114,6 +118,10 @@ export const customerAdminService = {
       preferredLanguage: 'preferred_language',
       notes: 'notes',
       isActive: 'is_active',
+      // Per-customer feature flags (#354 follow-up).
+      featureCalendar: 'feature_calendar',
+      featureQuotes:   'feature_quotes',
+      featureBills:    'feature_bills',
     };
     for (const [k, v] of Object.entries(payload)) {
       if (k in map) snake[map[k]] = v;
@@ -124,6 +132,17 @@ export const customerAdminService = {
 
   async deactivate(id: number): Promise<void> {
     await api.post(`/admin/customers/${id}/deactivate`);
+  },
+
+  /**
+   * Trigger a password reset for an existing customer. The backend
+   * generates a 7-day single-use token and emails the customer.
+   */
+  async sendPasswordReset(id: number): Promise<{ email: string; expiresAt: string }> {
+    const response = await api.post<{ data: { email: string; expiresAt: string } } | { email: string; expiresAt: string }>(
+      `/admin/customers/${id}/password-reset`,
+    );
+    return ((response.data as any).data ?? response.data) as { email: string; expiresAt: string };
   },
 
   /**

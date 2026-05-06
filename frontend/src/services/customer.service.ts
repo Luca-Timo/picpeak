@@ -112,13 +112,46 @@ export const customerService = {
     }
   },
 
-  async session(): Promise<{ customer: CustomerProfile } | null> {
+  async session(): Promise<{
+    customer: CustomerProfile;
+    features: { calendar: boolean; quotes: boolean; bills: boolean };
+    branding: { showLogo: boolean; showCompanyName: boolean };
+  } | null> {
     try {
-      const response = await api.get<{ customer: CustomerProfile }>('/customer/auth/session');
-      return response.data;
+      const response = await api.get<{
+        customer: CustomerProfile;
+        features?: { calendar: boolean; quotes: boolean; bills: boolean };
+        branding?: { showLogo: boolean; showCompanyName: boolean };
+      }>('/customer/auth/session');
+      return {
+        customer: response.data.customer,
+        features: response.data.features || { calendar: false, quotes: false, bills: false },
+        branding: response.data.branding || { showLogo: true, showCompanyName: true },
+      };
     } catch {
       return null;
     }
+  },
+
+  /**
+   * Look up a password-reset token without consuming it. Lets the reset
+   * page render "you're resetting the password for {{email}}" before
+   * the customer submits.
+   */
+  async getPasswordReset(token: string): Promise<{ email: string; expiresAt: string }> {
+    const response = await api.get<{ reset: { email: string; expiresAt: string } }>(
+      `/customer/auth/password-reset/${encodeURIComponent(token)}`,
+    );
+    return response.data.reset;
+  },
+
+  /** Apply a password reset (token + new password). */
+  async applyPasswordReset(token: string, password: string): Promise<{ email: string }> {
+    const response = await api.post<{ email: string }>(
+      '/customer/auth/password-reset',
+      { token, password },
+    );
+    return response.data;
   },
 
   // ---- invitations ----

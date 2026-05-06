@@ -7,14 +7,31 @@
  * a single browser can hold an admin session AND a customer session
  * without one clobbering the other (e.g. for the admin dogfooding the
  * customer dashboard).
+ *
+ * #354 follow-up: also surfaces the effective feature set and the
+ * branding visibility flags so CustomerLayout can render the sidebar
+ * without an extra round trip on every navigation.
  */
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { customerService, type CustomerProfile } from '../services/customer.service';
 
+export interface CustomerFeatureFlags {
+  calendar: boolean;
+  quotes: boolean;
+  bills: boolean;
+}
+
+export interface CustomerBrandingFlags {
+  showLogo: boolean;
+  showCompanyName: boolean;
+}
+
 interface CustomerAuthContextType {
   isAuthenticated: boolean;
   customer: CustomerProfile | null;
+  features: CustomerFeatureFlags;
+  branding: CustomerBrandingFlags;
   isLoading: boolean;
   error: string | null;
   /** Replaces the cached profile after a successful POST /login. */
@@ -33,11 +50,18 @@ export const useCustomerAuth = () => {
 };
 
 const STORAGE_KEY = 'customer_profile';
+const FEATURES_KEY = 'customer_features';
+const BRANDING_KEY = 'customer_branding';
+
+const DEFAULT_FEATURES: CustomerFeatureFlags = { calendar: false, quotes: false, bills: false };
+const DEFAULT_BRANDING: CustomerBrandingFlags = { showLogo: true, showCompanyName: true };
 
 interface ProviderProps { children: ReactNode; }
 
 export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
   const [customer, setCustomerState] = useState<CustomerProfile | null>(null);
+  const [features, setFeatures] = useState<CustomerFeatureFlags>(DEFAULT_FEATURES);
+  const [branding, setBranding] = useState<CustomerBrandingFlags>(DEFAULT_BRANDING);
   const [isLoading, setIsLoading] = useState(true);
   // Reserved for future surface-level errors (login form errors are
   // handled inline on the login page itself, not here).
@@ -50,8 +74,14 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
     try {
       const cached = sessionStorage.getItem(STORAGE_KEY);
       if (cached) setCustomerState(JSON.parse(cached));
+      const cachedFeatures = sessionStorage.getItem(FEATURES_KEY);
+      if (cachedFeatures) setFeatures(JSON.parse(cachedFeatures));
+      const cachedBranding = sessionStorage.getItem(BRANDING_KEY);
+      if (cachedBranding) setBranding(JSON.parse(cachedBranding));
     } catch {
       sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(FEATURES_KEY);
+      sessionStorage.removeItem(BRANDING_KEY);
     }
 
     let cancelled = false;
@@ -59,16 +89,24 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
       if (cancelled) return;
       if (response?.customer) {
         setCustomerState(response.customer);
+        setFeatures(response.features);
+        setBranding(response.branding);
         sessionStorage.setItem(STORAGE_KEY, JSON.stringify(response.customer));
+        sessionStorage.setItem(FEATURES_KEY, JSON.stringify(response.features));
+        sessionStorage.setItem(BRANDING_KEY, JSON.stringify(response.branding));
       } else {
         setCustomerState(null);
         sessionStorage.removeItem(STORAGE_KEY);
+        sessionStorage.removeItem(FEATURES_KEY);
+        sessionStorage.removeItem(BRANDING_KEY);
       }
       setIsLoading(false);
     }).catch(() => {
       if (cancelled) return;
       setCustomerState(null);
       sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(FEATURES_KEY);
+      sessionStorage.removeItem(BRANDING_KEY);
       setIsLoading(false);
     });
     return () => { cancelled = true; };
@@ -82,7 +120,11 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
   const logout = async () => {
     await customerService.logout();
     setCustomerState(null);
+    setFeatures(DEFAULT_FEATURES);
+    setBranding(DEFAULT_BRANDING);
     sessionStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(FEATURES_KEY);
+    sessionStorage.removeItem(BRANDING_KEY);
     // Hard navigate so any in-flight requests with the old cookie don't
     // race the cleared session — same approach AdminAuthContext uses.
     window.location.href = '/customer/login';
@@ -93,6 +135,8 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
       value={{
         isAuthenticated: !!customer,
         customer,
+        features,
+        branding,
         isLoading,
         error,
         setCustomer,

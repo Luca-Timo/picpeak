@@ -10,7 +10,7 @@ router.get('/', async (req, res) => {
     const settings = await withRetry(async () => {
       return await db('app_settings')
         .where(function() {
-          this.whereIn('setting_type', ['branding', 'theme', 'general', 'security', 'analytics', 'boolean'])
+          this.whereIn('setting_type', ['branding', 'theme', 'general', 'security', 'analytics', 'boolean', 'customer_surface'])
             .orWhere('setting_key', 'like', 'analytics_%')
             .orWhere('setting_key', 'like', 'event_require_%')
             .orWhereIn('setting_key', [
@@ -102,7 +102,18 @@ router.get('/', async (req, res) => {
       // SEO meta tag flags (safe to expose - these are intended for crawlers)
       seo_meta_noindex: settingsObject.seo_meta_noindex === true,
       seo_meta_nofollow: settingsObject.seo_meta_nofollow === true,
-      seo_meta_noai: settingsObject.seo_meta_noai === true
+      seo_meta_noai: settingsObject.seo_meta_noai === true,
+      // Customer-surface visibility toggles (#354 follow-up). The customer
+      // layout reads these to decide whether to render the brand logo /
+      // name. Defaults are true so installs without the migration applied
+      // keep their current visual state.
+      customer_show_logo: settingsObject.customer_show_logo !== false,
+      customer_show_company_name: settingsObject.customer_show_company_name !== false,
+      // The feature globals are deliberately NOT exposed here — they're
+      // resolved per-customer in /api/customer/auth/session so they
+      // already AND with the per-customer flag. Surfacing them publicly
+      // would tempt frontends to hide nav based on the global alone,
+      // which would mis-render for opted-in customers.
     };
 
     res.json(publicSettings);
