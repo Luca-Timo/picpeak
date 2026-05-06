@@ -132,7 +132,15 @@ async function acceptInvitation({ token, name, password }) {
       password_hash: passwordHash,
       is_active: formatBoolean(true),
       must_change_password: formatBoolean(false),
-      password_changed_at: new Date(),
+      // Leave password_changed_at NULL on initial accept. Setting it here
+      // creates a millisecond/second-rounding race with the JWT issued
+      // by the immediate /login call: stored timestamp X.500ms can floor
+      // to X+1 in postgres while the JWT's iat lands at X, causing the
+      // customerAuth middleware's `iat < password_changed_at` check to
+      // reject perfectly valid tokens on the very next page reload. We
+      // populate password_changed_at only when an actual password change
+      // happens later (deactivate / reset flows).
+      password_changed_at: null,
       created_by_admin_id: invitation.invited_by,
       created_at: new Date(),
       updated_at: new Date(),
@@ -425,12 +433,25 @@ async function getAssignmentsForEvent(eventId) {
  * since those galleries are no longer browsable. Expired events are
  * deliberately included so customers can see "your gallery has expired"
  * messaging in the dashboard rather than just disappearing silently.
+ *
+ * is_draft filter intentionally NOT applied: a customer assigned to a
+ * draft gallery should still see it on their dashboard (the photographer
+ * may want them to preview before publish). is_archived stays as the
+ * single hard-exclude — those galleries are gone.
+ *
+ * is_archived comparison is written defensively with whereRaw so legacy
+ * rows where the column was not set (NULL) still match: postgres'
+ * `NULL = false` evaluates to NULL, which is excluded by a strict `=`
+ * filter — and any pre-#029 events would silently disappear from the
+ * dashboard. The COALESCE keeps them visible.
  */
 async function listEventsForCustomer(customerId) {
   return db('event_customer_assignments')
     .join('events', 'events.id', 'event_customer_assignments.event_id')
     .where('event_customer_assignments.customer_account_id', customerId)
-    .where('events.is_archived', formatBoolean(false))
+    .whereRaw('COALESCE(events.is_archived, ?) = ?', [
+      formatBoolean(false), formatBoolean(false),
+    ])
     .select(
       'events.id',
       'events.slug',
