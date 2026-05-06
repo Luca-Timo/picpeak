@@ -25,6 +25,8 @@ export interface BrandingSettings {
    * `colorMode` override is ignored. `null` means no force (default behavior).
    */
   force_color_mode?: 'dark' | 'light' | null;
+  /** Tinted square frame behind the logo on /admin/login and /customer/login. */
+  login_logo_frame_enabled?: boolean;
 }
 
 export interface ThemeSettings {
@@ -299,7 +301,12 @@ export const settingsService = {
         ? 'dark'
         : rawSettings.branding_force_color_mode === 'light'
           ? 'light'
-          : null
+          : null,
+      // Login-page logo frame default true (matches the visual state
+      // shipped before the toggle existed). Without this entry,
+      // formatBrandingSettings would silently drop the field on every
+      // load and the saved-false value would round-trip back to true.
+      login_logo_frame_enabled: this._parseBoolean(rawSettings.branding_login_logo_frame_enabled, true),
     };
   },
 
