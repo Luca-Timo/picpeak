@@ -211,16 +211,22 @@ export const CustomerDetailPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-theme mb-1">{t('customers.detail.salutation', 'Salutation')}</label>
+            {/* Salutation values are stored verbatim in the DB ("Herr",
+                "Frau", "Mx", "Dr") — those are the canonical token values
+                across locales. Display labels are translated; the value
+                attribute stays in the German form so existing rows
+                remain valid regardless of which locale the admin is
+                viewing the dropdown in. */}
             <select
               value={form.salutation || ''}
               onChange={setField('salutation')}
               className="input"
             >
-              <option value="">{t('customers.detail.salutationNone', '—')}</option>
-              <option value="Herr">Herr</option>
-              <option value="Frau">Frau</option>
-              <option value="Mx">Mx</option>
-              <option value="Dr">Dr</option>
+              <option value="">{t('customer.profile.salutation.none', '— Not specified —')}</option>
+              <option value="Herr">{t('customer.profile.salutation.herr', 'Mr.')}</option>
+              <option value="Frau">{t('customer.profile.salutation.frau', 'Ms.')}</option>
+              <option value="Mx">{t('customer.profile.salutation.mx', 'Mx')}</option>
+              <option value="Dr">{t('customer.profile.salutation.dr', 'Dr.')}</option>
             </select>
           </div>
           <div>

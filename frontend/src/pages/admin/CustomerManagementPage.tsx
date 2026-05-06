@@ -185,10 +185,10 @@ const InviteModal: React.FC<{
                       }}
                     >
                       <option value="">{t('customer.profile.salutation.none', '— Not specified —')}</option>
-                      <option value="Herr">Herr</option>
-                      <option value="Frau">Frau</option>
-                      <option value="Mx">Mx</option>
-                      <option value="Dr">Dr.</option>
+                      <option value="Herr">{t('customer.profile.salutation.herr', 'Mr.')}</option>
+                      <option value="Frau">{t('customer.profile.salutation.frau', 'Ms.')}</option>
+                      <option value="Mx">{t('customer.profile.salutation.mx', 'Mx')}</option>
+                      <option value="Dr">{t('customer.profile.salutation.dr', 'Dr.')}</option>
                     </select>
                   </div>
                   <div>
