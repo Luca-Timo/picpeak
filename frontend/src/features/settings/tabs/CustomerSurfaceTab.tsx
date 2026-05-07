@@ -44,17 +44,35 @@ const DEFAULTS: CustomerSurfaceSettings = {
 };
 
 /**
- * The settings rows arrive as `{[key]: value | null}`. Keys not yet seeded
- * in the DB come back as undefined — coerce to defaults so a fresh install
- * shows the same UI as an existing one.
+ * Settings rows can arrive as either real booleans (Postgres JSONB column,
+ * already parsed) or as JSON-stringified booleans (`"true"` / `"false"`)
+ * depending on driver/version. Earlier the branding toggles used
+ * `!== false`, which was true for the string `"false"` and made the
+ * toggle stuck "on" on every reload regardless of the saved value.
+ *
+ * `parseBool` accepts boolean | "true" | "false" | string | null and
+ * coerces deterministically. `withDefaults` then preserves the existing
+ * defaults (branding ON, features OFF when the row is missing entirely).
  */
-function withDefaults(raw: Partial<CustomerSurfaceSettings> | null | undefined): CustomerSurfaceSettings {
+function parseBool(value: unknown): boolean | undefined {
+  if (value === true || value === false) return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return undefined;
+}
+
+function withDefaults(raw: Partial<Record<keyof CustomerSurfaceSettings, unknown>> | null | undefined): CustomerSurfaceSettings {
+  const showLogo = parseBool(raw?.customer_show_logo);
+  const showName = parseBool(raw?.customer_show_company_name);
   return {
-    customer_show_logo: raw?.customer_show_logo !== false,
-    customer_show_company_name: raw?.customer_show_company_name !== false,
-    customer_feature_calendar_enabled: raw?.customer_feature_calendar_enabled === true,
-    customer_feature_quotes_enabled: raw?.customer_feature_quotes_enabled === true,
-    customer_feature_bills_enabled: raw?.customer_feature_bills_enabled === true,
+    // Branding defaults: TRUE when the row is absent (preserves the
+    // visual state shipped before the toggle existed).
+    customer_show_logo: showLogo === undefined ? true : showLogo,
+    customer_show_company_name: showName === undefined ? true : showName,
+    // Feature defaults: FALSE when the row is absent.
+    customer_feature_calendar_enabled: parseBool(raw?.customer_feature_calendar_enabled) === true,
+    customer_feature_quotes_enabled: parseBool(raw?.customer_feature_quotes_enabled) === true,
+    customer_feature_bills_enabled: parseBool(raw?.customer_feature_bills_enabled) === true,
   };
 }
 
