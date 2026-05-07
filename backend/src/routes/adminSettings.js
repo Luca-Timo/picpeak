@@ -134,6 +134,101 @@ router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) 
   }
 });
 
+/**
+ * Customer-surface settings (#354 follow-up).
+ *
+ * Five toggles drive the recurring-customer surface:
+ *   customer_show_logo                 — show/hide brand logo in customer sidebar
+ *   customer_show_company_name         — show/hide textual brand name in customer sidebar
+ *   customer_feature_calendar_enabled  — global master for the Calendar tab
+ *   customer_feature_quotes_enabled    — global master for the Quotes tab
+ *   customer_feature_bills_enabled     — global master for the Bills tab
+ *
+ * These rows live under `setting_type='customer_surface'` in app_settings.
+ *
+ * IMPORTANT: both routes MUST be registered before the generic
+ * `router.get('/:type', ...)` below — Express matches routes in
+ * registration order, so a route registered after `:type` would never
+ * fire (the generic handler eats the request, queries
+ * `setting_type='customer-surface'` with the URL hyphen, finds nothing
+ * because rows are saved with the underscore form, and the admin form
+ * silently re-hydrates with empty defaults — making every saved toggle
+ * appear to "revert on reload").
+ */
+router.get('/customer-surface', adminAuth, requirePermission('settings.view'), async (req, res) => {
+  try {
+    const rows = await db('app_settings')
+      .where('setting_type', 'customer_surface')
+      .select('setting_key', 'setting_value');
+
+    const settings = {};
+    for (const r of rows) {
+      let value = r.setting_value;
+      if (value === null || value === undefined) {
+        settings[r.setting_key] = null;
+        continue;
+      }
+      // JSONB columns return parsed values; text columns return strings —
+      // tolerate both. Same shape as the generic GET /:type handler.
+      if (typeof value !== 'string') {
+        settings[r.setting_key] = value;
+      } else {
+        try { settings[r.setting_key] = JSON.parse(value); }
+        catch { settings[r.setting_key] = value; }
+      }
+    }
+
+    res.json(settings);
+  } catch (error) {
+    console.error('Customer surface settings fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch customer surface settings' });
+  }
+});
+
+router.put('/customer-surface', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+  try {
+    const allowed = [
+      'customer_show_logo',
+      'customer_show_company_name',
+      'customer_feature_calendar_enabled',
+      'customer_feature_quotes_enabled',
+      'customer_feature_bills_enabled',
+    ];
+    const updates = [];
+    for (const key of allowed) {
+      if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+        const value = !!req.body[key]; // coerce — accept "true"/true/1
+        updates.push({ setting_key: key, setting_value: JSON.stringify(value), setting_type: 'customer_surface' });
+      }
+    }
+
+    for (const u of updates) {
+      const existing = await db('app_settings').where('setting_key', u.setting_key).first();
+      if (existing) {
+        await db('app_settings').where('setting_key', u.setting_key).update({
+          setting_value: u.setting_value,
+          setting_type: u.setting_type,
+          updated_at: new Date(),
+        });
+      } else {
+        await db('app_settings').insert({ ...u, created_at: new Date(), updated_at: new Date() });
+      }
+    }
+
+    // Clear the server-side public-site cache so the next /api/public/settings
+    // request reflects the new customer_show_logo / customer_show_company_name
+    // values. Feature toggles are AND-combined per-customer in
+    // /api/customer/auth/session which reads the DB directly — no server
+    // cache to bust there.
+    clearPublicSiteCache();
+
+    res.json({ message: 'Customer surface settings updated', updated: updates.map((u) => u.setting_key) });
+  } catch (error) {
+    console.error('Customer surface settings save error:', error);
+    res.status(500).json({ error: 'Failed to save customer surface settings' });
+  }
+});
+
 // Get settings by type
 router.get('/:type', adminAuth, requirePermission('settings.view'), async (req, res) => {
   try {
@@ -199,106 +294,6 @@ router.get('/password/complexity', adminAuth, requirePermission('settings.view')
 });
 
 // Update branding settings
-/**
- * PUT /customer-surface (#354 follow-up)
- *
- * Five toggles that control the recurring-customer surface (#354):
- *   customer_show_logo                 — hide/show the brand logo in the
- *                                         customer sidebar
- *   customer_show_company_name         — same, for the textual brand name
- *   customer_feature_calendar_enabled  — global enable for the Calendar tab
- *   customer_feature_quotes_enabled    — global enable for the Quotes tab
- *   customer_feature_bills_enabled     — global enable for the Bills tab
- *
- * The feature toggles are AND-combined with each customer's per-row flag
- * in customer_accounts (see customerAccountsService.getEffectiveFeaturesForCustomer).
- * That gives the admin two levers — flip a feature on globally, then choose
- * which customers actually see it.
- */
-/**
- * GET /customer-surface (#354 follow-up).
- *
- * Dedicated handler so the URL slug (hyphen) maps to the DB
- * `setting_type` value (underscore). Without this, the request falls
- * through to the generic `GET /:type` handler which queries
- * `setting_type='customer-surface'` and finds no rows — the admin
- * settings form would then re-hydrate with empty defaults on every
- * refetch, silently reverting any toggle the admin had just saved.
- */
-router.get('/customer-surface', adminAuth, requirePermission('settings.view'), async (req, res) => {
-  try {
-    const rows = await db('app_settings')
-      .where('setting_type', 'customer_surface')
-      .select('setting_key', 'setting_value');
-
-    const settings = {};
-    for (const r of rows) {
-      let value = r.setting_value;
-      if (value === null || value === undefined) {
-        settings[r.setting_key] = null;
-        continue;
-      }
-      // JSONB columns return parsed values; text columns return strings —
-      // tolerate both. Same shape as the generic GET /:type handler.
-      if (typeof value !== 'string') {
-        settings[r.setting_key] = value;
-      } else {
-        try { settings[r.setting_key] = JSON.parse(value); }
-        catch { settings[r.setting_key] = value; }
-      }
-    }
-
-    res.json(settings);
-  } catch (error) {
-    console.error('Customer surface settings fetch error:', error);
-    res.status(500).json({ error: 'Failed to fetch customer surface settings' });
-  }
-});
-
-router.put('/customer-surface', adminAuth, requirePermission('settings.edit'), async (req, res) => {
-  try {
-    const allowed = [
-      'customer_show_logo',
-      'customer_show_company_name',
-      'customer_feature_calendar_enabled',
-      'customer_feature_quotes_enabled',
-      'customer_feature_bills_enabled',
-    ];
-    const updates = [];
-    for (const key of allowed) {
-      if (Object.prototype.hasOwnProperty.call(req.body, key)) {
-        const value = !!req.body[key]; // coerce — accept "true"/true/1
-        updates.push({ setting_key: key, setting_value: JSON.stringify(value), setting_type: 'customer_surface' });
-      }
-    }
-
-    for (const u of updates) {
-      const existing = await db('app_settings').where('setting_key', u.setting_key).first();
-      if (existing) {
-        await db('app_settings').where('setting_key', u.setting_key).update({
-          setting_value: u.setting_value,
-          setting_type: u.setting_type,
-          updated_at: new Date(),
-        });
-      } else {
-        await db('app_settings').insert({ ...u, created_at: new Date(), updated_at: new Date() });
-      }
-    }
-
-    // Clear the server-side public-site cache so the next /api/public/settings
-    // request reflects the new customer_show_logo / customer_show_company_name
-    // values. Mirrors the cache-clear other settings PUT handlers already do.
-    // Feature toggles are AND-combined per-customer in /api/customer/auth/session
-    // which reads the DB directly — no server cache to bust there.
-    clearPublicSiteCache();
-
-    res.json({ message: 'Customer surface settings updated', updated: updates.map((u) => u.setting_key) });
-  } catch (error) {
-    console.error('Customer surface settings save error:', error);
-    res.status(500).json({ error: 'Failed to save customer surface settings' });
-  }
-});
-
 router.put('/branding', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
     const {
