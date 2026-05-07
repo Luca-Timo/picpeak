@@ -95,12 +95,26 @@ export interface CustomerAccessTokenResponse {
 
 export const customerService = {
   // ---- auth ----
-  async login(email: string, password: string, recaptchaToken?: string | null): Promise<{ customer: CustomerProfile }> {
-    const response = await api.post<{ customer: CustomerProfile }>(
+  async login(email: string, password: string, recaptchaToken?: string | null): Promise<{
+    customer: CustomerProfile;
+    features: { calendar: boolean; quotes: boolean; bills: boolean };
+    branding: { showLogo: boolean; showCompanyName: boolean };
+  }> {
+    const response = await api.post<{
+      customer: CustomerProfile;
+      features?: { calendar: boolean; quotes: boolean; bills: boolean };
+      branding?: { showLogo: boolean; showCompanyName: boolean };
+    }>(
       '/customer/auth/login',
       { email, password, recaptchaToken }
     );
-    return response.data;
+    // Backwards-compat fallbacks for older backends that haven't been
+    // upgraded yet — defaults match CustomerAuthContext's DEFAULT_*.
+    return {
+      customer: response.data.customer,
+      features: response.data.features || { calendar: false, quotes: false, bills: false },
+      branding: response.data.branding || { showLogo: true, showCompanyName: true },
+    };
   },
 
   async logout(): Promise<void> {

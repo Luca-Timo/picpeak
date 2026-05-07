@@ -123,6 +123,23 @@ router.post('/login', [
       { type: 'customer', id: customer.id, name: customer.email }
     );
 
+    // Resolve effective features + branding right here so the login
+    // response carries the same shape as /session. Without this, the
+    // first-render dashboard after login would use the context's
+    // DEFAULT_FEATURES (all false) — features only "appear" on the next
+    // CustomerAuthProvider mount (e.g. after the user navigates to a
+    // gallery and back). Mirroring the /session resolution keeps the
+    // frontend on a single source of truth.
+    let features = { calendar: false, quotes: false, bills: false };
+    let branding = { showLogo: true, showCompanyName: true };
+    try {
+      features = await customerAccountsService.getEffectiveFeaturesForCustomer(customer);
+      const globals = await customerAccountsService.getCustomerSurfaceGlobals();
+      branding = { showLogo: globals.showLogo, showCompanyName: globals.showCompanyName };
+    } catch (e) {
+      logger.warn('Customer login: failed to resolve features/branding, using defaults', { error: e?.message });
+    }
+
     res.json({
       customer: {
         id: customer.id,
@@ -132,6 +149,8 @@ router.post('/login', [
         lastName: customer.last_name,
         preferredLanguage: customer.preferred_language || 'en',
       },
+      features,
+      branding,
     });
   } catch (error) {
     logger.error('Customer login error:', error);

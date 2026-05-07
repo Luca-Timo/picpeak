@@ -17,7 +17,7 @@ import { usePublicSettings } from '../../hooks/usePublicSettings';
 
 export const CustomerLoginPage: React.FC = () => {
   const { t } = useTranslation();
-  const { isAuthenticated, setCustomer } = useCustomerAuth();
+  const { isAuthenticated, setSession } = useCustomerAuth();
   const [searchParams] = useSearchParams();
 
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -70,7 +70,12 @@ export const CustomerLoginPage: React.FC = () => {
         formData.password,
         recaptchaToken
       );
-      setCustomer(response.customer);
+      // Apply the full session payload (customer + features + branding)
+      // so the dashboard's first paint shows the correct sidebar. Using
+      // setCustomer alone left features at DEFAULT_FEATURES (all false)
+      // until the next CustomerAuthProvider remount, which is why the
+      // Soon menus only appeared after navigating to a gallery and back.
+      setSession(response);
       toast.success(t('customer.login.loginSuccess', 'Welcome back!'));
       // Navigate via Navigate component on next render — setCustomer
       // flips isAuthenticated true so the redirect at the top fires.
