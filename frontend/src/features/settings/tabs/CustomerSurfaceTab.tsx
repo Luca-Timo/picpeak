@@ -19,7 +19,7 @@
  * from the central useSettingsState() to avoid threading five more booleans
  * through the already-busy useSettingsState shape.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
@@ -110,11 +110,28 @@ export const CustomerSurfaceTab: React.FC = () => {
   });
 
   const [form, setForm] = useState<CustomerSurfaceSettings>(DEFAULTS);
-  useEffect(() => { if (data) setForm(data); }, [data]);
+  // Hydrate the form from the server response ONCE on first arrival.
+  // React Query refetches on window-focus + reconnect by default, and
+  // syncing form on every refetch would clobber any in-flight toggle
+  // the admin had clicked but not yet saved — symptom: toggling a
+  // "Soon" feature would silently revert the logo / company-name
+  // toggles back to whatever the server last knew about. After the
+  // initial hydration we trust the local form state until the user
+  // explicitly clicks Save (the mutation onSuccess re-syncs).
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (data && !hydratedRef.current) {
+      setForm(data);
+      hydratedRef.current = true;
+    }
+  }, [data]);
 
   const saveMutation = useMutation({
     mutationFn: () => api.put('/admin/settings/customer-surface', form),
     onSuccess: () => {
+      // Allow the next refetch to re-sync form (cleared so the
+      // hydration useEffect fires once after the invalidation).
+      hydratedRef.current = false;
       qc.invalidateQueries({ queryKey: ['admin-settings-customer-surface'] });
       // Public settings cache also needs to clear so the customer
       // sidebar picks up branding changes on its next render.

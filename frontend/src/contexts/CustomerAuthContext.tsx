@@ -36,6 +36,14 @@ interface CustomerAuthContextType {
   error: string | null;
   /** Replaces the cached profile after a successful POST /login. */
   setCustomer: (c: CustomerProfile) => void;
+  /**
+   * Replaces customer + features + branding atomically. Used by the
+   * login page so the dashboard's first paint after login shows the
+   * correct sidebar (without this, features default to `false` and the
+   * Soon menus would only appear after the next CustomerAuthProvider
+   * re-mount, e.g. after navigating to a gallery and back).
+   */
+  setSession: (s: { customer: CustomerProfile; features: CustomerFeatureFlags; branding: CustomerBrandingFlags }) => void;
   logout: () => Promise<void>;
 }
 
@@ -153,6 +161,15 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(c));
   };
 
+  const setSession = (s: { customer: CustomerProfile; features: CustomerFeatureFlags; branding: CustomerBrandingFlags }) => {
+    setCustomerState(s.customer);
+    setFeatures(s.features);
+    setBranding(s.branding);
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(s.customer));
+    sessionStorage.setItem(FEATURES_KEY, JSON.stringify(s.features));
+    sessionStorage.setItem(BRANDING_KEY, JSON.stringify(s.branding));
+  };
+
   const logout = async () => {
     await customerService.logout();
     setCustomerState(null);
@@ -176,6 +193,7 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
         isLoading,
         error,
         setCustomer,
+        setSession,
         logout,
       }}
     >
