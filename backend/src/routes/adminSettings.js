@@ -215,6 +215,46 @@ router.get('/password/complexity', adminAuth, requirePermission('settings.view')
  * That gives the admin two levers — flip a feature on globally, then choose
  * which customers actually see it.
  */
+/**
+ * GET /customer-surface (#354 follow-up).
+ *
+ * Dedicated handler so the URL slug (hyphen) maps to the DB
+ * `setting_type` value (underscore). Without this, the request falls
+ * through to the generic `GET /:type` handler which queries
+ * `setting_type='customer-surface'` and finds no rows — the admin
+ * settings form would then re-hydrate with empty defaults on every
+ * refetch, silently reverting any toggle the admin had just saved.
+ */
+router.get('/customer-surface', adminAuth, requirePermission('settings.view'), async (req, res) => {
+  try {
+    const rows = await db('app_settings')
+      .where('setting_type', 'customer_surface')
+      .select('setting_key', 'setting_value');
+
+    const settings = {};
+    for (const r of rows) {
+      let value = r.setting_value;
+      if (value === null || value === undefined) {
+        settings[r.setting_key] = null;
+        continue;
+      }
+      // JSONB columns return parsed values; text columns return strings —
+      // tolerate both. Same shape as the generic GET /:type handler.
+      if (typeof value !== 'string') {
+        settings[r.setting_key] = value;
+      } else {
+        try { settings[r.setting_key] = JSON.parse(value); }
+        catch { settings[r.setting_key] = value; }
+      }
+    }
+
+    res.json(settings);
+  } catch (error) {
+    console.error('Customer surface settings fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch customer surface settings' });
+  }
+});
+
 router.put('/customer-surface', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
     const allowed = [
