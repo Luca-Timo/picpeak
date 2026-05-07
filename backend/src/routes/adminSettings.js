@@ -245,6 +245,13 @@ router.put('/customer-surface', adminAuth, requirePermission('settings.edit'), a
       }
     }
 
+    // Clear the server-side public-site cache so the next /api/public/settings
+    // request reflects the new customer_show_logo / customer_show_company_name
+    // values. Mirrors the cache-clear other settings PUT handlers already do.
+    // Feature toggles are AND-combined per-customer in /api/customer/auth/session
+    // which reads the DB directly — no server cache to bust there.
+    clearPublicSiteCache();
+
     res.json({ message: 'Customer surface settings updated', updated: updates.map((u) => u.setting_key) });
   } catch (error) {
     console.error('Customer surface settings save error:', error);

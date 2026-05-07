@@ -125,14 +125,26 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
     // feature toggles, branding visibility, deactivation) reach the
     // customer browser without requiring a manual page reload.
     const onFocus = () => { void refreshSession(); };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', () => {
+    const onVisibility = () => {
       if (document.visibilityState === 'visible') void refreshSession();
-    });
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    // Periodic background refresh — covers the case where the customer
+    // tab stays foregrounded for a long stretch (no focus/visibility
+    // events fire) but admin has flipped a global toggle in another
+    // browser. 60 seconds matches the usePublicSettings react-query
+    // staleTime so branding + feature flags stay roughly in sync.
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshSession();
+    }, 60_000);
 
     return () => {
       cancelled = true;
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.clearInterval(interval);
     };
   }, [refreshSession]);
 
