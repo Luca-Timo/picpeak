@@ -229,6 +229,88 @@ router.put('/customer-surface', adminAuth, requirePermission('settings.edit'), a
   }
 });
 
+/**
+ * Advanced features settings (#354 follow-up).
+ *
+ * Per-feature opt-in toggles. Currently the only key is
+ * `customer_portal_enabled` (master switch for the customer dashboard,
+ * profile, login, accept-invite, password reset, and admin "Customers"
+ * sidebar entry). Future advanced features (booking, quotes, bills,
+ * reminder emails) will land here as additional rows under the same
+ * setting_type='advanced_features'.
+ *
+ * Same route-ordering note as /customer-surface above — these MUST be
+ * registered before the generic /:type handler.
+ */
+router.get('/advanced-features', adminAuth, requirePermission('settings.view'), async (req, res) => {
+  try {
+    const rows = await db('app_settings')
+      .where('setting_type', 'advanced_features')
+      .select('setting_key', 'setting_value');
+
+    const settings = {};
+    for (const r of rows) {
+      let value = r.setting_value;
+      if (value === null || value === undefined) {
+        settings[r.setting_key] = null;
+        continue;
+      }
+      if (typeof value !== 'string') {
+        settings[r.setting_key] = value;
+      } else {
+        try { settings[r.setting_key] = JSON.parse(value); }
+        catch { settings[r.setting_key] = value; }
+      }
+    }
+
+    res.json(settings);
+  } catch (error) {
+    console.error('Advanced features settings fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch advanced features settings' });
+  }
+});
+
+router.put('/advanced-features', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+  try {
+    // Whitelist — only allow keys we know belong to this feature group.
+    // Adding a new advanced feature in the future means adding the key
+    // here and writing a corresponding row in a migration.
+    const allowed = [
+      'customer_portal_enabled',
+    ];
+    const updates = [];
+    for (const key of allowed) {
+      if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+        const value = !!req.body[key]; // coerce — accept "true"/true/1
+        updates.push({ setting_key: key, setting_value: JSON.stringify(value), setting_type: 'advanced_features' });
+      }
+    }
+
+    for (const u of updates) {
+      const existing = await db('app_settings').where('setting_key', u.setting_key).first();
+      if (existing) {
+        await db('app_settings').where('setting_key', u.setting_key).update({
+          setting_value: u.setting_value,
+          setting_type: u.setting_type,
+          updated_at: new Date(),
+        });
+      } else {
+        await db('app_settings').insert({ ...u, created_at: new Date(), updated_at: new Date() });
+      }
+    }
+
+    // Public-site cache clear so the public-settings consumers
+    // (CustomerLoginPage, AdminSidebar) pick up customer_portal_enabled
+    // on their next refetch without waiting for the 60-second poll.
+    clearPublicSiteCache();
+
+    res.json({ message: 'Advanced features settings updated', updated: updates.map((u) => u.setting_key) });
+  } catch (error) {
+    console.error('Advanced features settings save error:', error);
+    res.status(500).json({ error: 'Failed to save advanced features settings' });
+  }
+});
+
 // Get settings by type
 router.get('/:type', adminAuth, requirePermission('settings.view'), async (req, res) => {
   try {

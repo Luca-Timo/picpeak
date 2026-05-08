@@ -10,7 +10,7 @@ router.get('/', async (req, res) => {
     const settings = await withRetry(async () => {
       return await db('app_settings')
         .where(function() {
-          this.whereIn('setting_type', ['branding', 'theme', 'general', 'security', 'analytics', 'boolean', 'customer_surface'])
+          this.whereIn('setting_type', ['branding', 'theme', 'general', 'security', 'analytics', 'boolean', 'customer_surface', 'advanced_features'])
             .orWhere('setting_key', 'like', 'analytics_%')
             .orWhere('setting_key', 'like', 'event_require_%')
             .orWhereIn('setting_key', [
@@ -118,6 +118,13 @@ router.get('/', async (req, res) => {
       // already AND with the per-customer flag. Surfacing them publicly
       // would tempt frontends to hide nav based on the global alone,
       // which would mis-render for opted-in customers.
+      // Advanced features master toggle (#354 follow-up). When false the
+      // /customer/* routes redirect to /admin/login on the frontend and
+      // the AdminSidebar hides the "Customers" entry. Default false —
+      // this mirrors the migration default and keeps installs that
+      // haven't run migration 092 from accidentally exposing the
+      // surface.
+      customer_portal_enabled: settingsObject.customer_portal_enabled === true,
     };
 
     res.json(publicSettings);
