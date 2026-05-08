@@ -91,12 +91,6 @@ const GALLERY_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 router.get('/events', customerAuth, async (req, res) => {
   try {
     const events = await customerAccountsService.listEventsForCustomer(req.customer.id);
-    logger.info('[customer/events] list', {
-      customerId: req.customer.id,
-      count: events.length,
-      // log slugs so we can see what the join actually returned
-      slugs: events.map((e) => e.slug),
-    });
     res.json({
       events: events.map((e) => ({
         id: e.id,

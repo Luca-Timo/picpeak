@@ -20,7 +20,10 @@ async function customerAuth(req, res, next) {
   try {
     const token = getCustomerTokenFromRequest(req);
     if (!token) {
-      logger.info('[customerAuth] no token on request', {
+      // Quiet by default — unauthenticated /api/customer/* requests are
+      // normal (page polling, pre-login session probes). Bump to debug
+      // for noisy investigations only.
+      logger.debug('[customerAuth] no token on request', {
         url: req.originalUrl,
         hasCookieHeader: !!req.headers?.cookie,
         cookieKeys: Object.keys(req.cookies || {}),
