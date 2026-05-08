@@ -737,6 +737,35 @@ async function cancelInvitation(id, cancelledByAdminId) {
 const PASSWORD_RESET_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 /**
+/**
+ * Read the master "Customer portal" toggle (#354 follow-up). When false,
+ * every customer-side surface (login, dashboard, accept-invite, reset)
+ * returns 403/410 and the admin "Customers" sidebar entry is hidden.
+ * Defaults to false on installs missing the row (e.g. migration 092
+ * hasn't run yet).
+ *
+ * Kept as a small dedicated query rather than folded into
+ * getCustomerSurfaceGlobals() so the route-level gate doesn't pay for a
+ * second SELECT against the branding/feature columns it doesn't care
+ * about.
+ */
+async function isCustomerPortalEnabled() {
+  try {
+    const row = await db('app_settings').where('setting_key', 'customer_portal_enabled').first();
+    if (!row || row.setting_value === null || row.setting_value === undefined) return false;
+    let v = row.setting_value;
+    if (typeof v === 'string') {
+      try { v = JSON.parse(v); } catch { /* leave as-is */ }
+    }
+    return v === true || v === 'true';
+  } catch (e) {
+    // Defensive: if app_settings is briefly unavailable (early bootstrap,
+    // failover) treat as off rather than throwing a 500 from the gate.
+    return false;
+  }
+}
+
+/**
  * Read the customer-surface global toggles (set in app_settings under
  * setting_type='customer_surface'). Returns sane defaults when the keys
  * aren't present so an install missing migration 089 doesn't crash —
@@ -929,6 +958,7 @@ module.exports = {
   getPendingInvitations,
   cancelInvitation,
   // #354 follow-up
+  isCustomerPortalEnabled,
   getCustomerSurfaceGlobals,
   getEffectiveFeaturesForCustomer,
   createPasswordReset,

@@ -667,14 +667,22 @@ router.post('/', adminAuth, requirePermission('events.create'), [
     // skip the call entirely so existing API consumers keep working — the
     // helper interprets an undefined ids list differently from an empty
     // array (latter clears, former is a no-op).
+    //
+    // Also skip silently when the customer portal is disabled in
+    // Settings → Advanced features. The frontend hides the picker in
+    // that case, but a stale tab or third-party API client could still
+    // POST customer_account_ids; we ignore them rather than 403 the
+    // entire event-create operation.
     if (Array.isArray(req.body.customer_account_ids)) {
       try {
         const customerAccountsService = require('../services/customerAccountsService');
-        await customerAccountsService.setAssignmentsForEvent(
-          eventId,
-          req.body.customer_account_ids,
-          req.admin.id
-        );
+        if (await customerAccountsService.isCustomerPortalEnabled()) {
+          await customerAccountsService.setAssignmentsForEvent(
+            eventId,
+            req.body.customer_account_ids,
+            req.admin.id
+          );
+        }
       } catch (e) {
         // Log but don't fail event creation — admin can fix assignments
         // from the event detail page if something goes wrong here.
