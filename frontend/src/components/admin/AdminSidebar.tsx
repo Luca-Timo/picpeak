@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { settingsService } from '../../services/settings.service';
 import { VersionInfo } from './VersionInfo';
 import { usePermissions } from '../../contexts/PermissionsContext';
+import { usePublicSettings } from '../../hooks/usePublicSettings';
 
 interface AdminSidebarProps {
   isOpen: boolean;
@@ -37,6 +38,12 @@ interface NavItem {
    * promised surface (calendar / quotes / bills coming soon — #354).
    */
   beta?: boolean;
+  /**
+   * Hide this entry unless the named feature flag is enabled in
+   * Settings → Advanced features. Read from public-settings — the same
+   * source that drives the customer-portal route guards.
+   */
+  requiresFeature?: 'customer_portal_enabled';
 }
 
 const navigation: NavItem[] = [
@@ -54,19 +61,27 @@ const navigation: NavItem[] = [
   // Customer accounts (#354) — separate from admin users, gated on
   // customers.view (granted to super_admin and admin by migration 087).
   // Beta-flagged because the calendar/quotes/bills tabs the customer
-  // surface ships are intentional placeholders right now.
-  { nameKey: 'navigation.customers', href: '/admin/customers', icon: UserCog, permission: 'customers.view', beta: true },
+  // surface ships are intentional placeholders right now. Hidden
+  // entirely when the master Customer-portal toggle is OFF in
+  // Settings → Advanced features.
+  { nameKey: 'navigation.customers', href: '/admin/customers', icon: UserCog, permission: 'customers.view', beta: true, requiresFeature: 'customer_portal_enabled' },
 ];
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   const { t } = useTranslation();
   const { hasPermission } = usePermissions();
+  const { data: publicSettings } = usePublicSettings();
 
-  // Filter navigation items based on permissions
+  // Filter navigation items based on permissions AND advanced-feature
+  // flags. Permission gate runs first (so an admin without
+  // `customers.view` doesn't see the entry even if the feature is
+  // enabled), feature gate runs second (so a super-admin still doesn't
+  // see entries for features the instance has turned off).
   const filteredNavigation = navigation.filter(item => {
-    if (!item.permission) return true;
-    return hasPermission(item.permission);
+    if (item.permission && !hasPermission(item.permission)) return false;
+    if (item.requiresFeature && !publicSettings?.[item.requiresFeature]) return false;
+    return true;
   });
 
   return (

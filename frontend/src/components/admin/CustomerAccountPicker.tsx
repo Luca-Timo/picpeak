@@ -12,6 +12,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, X, UserPlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { customerAdminService, type CustomerAccountSummary } from '../../services/customerAdmin.service';
+import { usePublicSettings } from '../../hooks/usePublicSettings';
 
 export interface SelectedCustomer {
   id: number;
@@ -32,6 +33,14 @@ const labelFor = (c: { email: string; displayName?: string | null; companyName?:
 
 export const CustomerAccountPicker: React.FC<Props> = ({ value, onChange, disabled }) => {
   const { t } = useTranslation();
+  const { data: publicSettings } = usePublicSettings();
+
+  // Gate the entire picker on the master Customer-portal toggle. When
+  // off, the backend returns 410 on /admin/customers/search anyway, but
+  // hiding the UI here keeps the event form clean and removes the
+  // dangling "Customer accounts" label that would otherwise appear
+  // above an empty/error placeholder.
+  if (!publicSettings?.customer_portal_enabled) return null;
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<CustomerAccountSummary[]>([]);
   const [isOpen, setIsOpen] = useState(false);
