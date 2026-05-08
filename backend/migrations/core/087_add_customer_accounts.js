@@ -231,6 +231,12 @@ exports.up = async function(knex) {
         return row;
       };
 
+      // The button uses the wrapper's `.button` class instead of inline
+      // styles, which inherits the admin-configured `email_primary_color`
+      // (Settings → Branding → Email palette). Inline `background-color`
+      // would override it and lock the button to the legacy green
+      // regardless of branding — that's the bug shipped on the very
+      // first cut of this template.
       const en = buildTranslationRow(
         'en',
         'You\'ve been invited to access your photo galleries',
@@ -238,7 +244,7 @@ exports.up = async function(knex) {
 <h2>Welcome to your photo galleries</h2>
 <p>You've been invited to create a customer account so you can view all of your event galleries in one place — no more juggling separate links and passwords.</p>
 <div style="text-align: center; margin: 30px 0;">
-  <a href="{{invite_link}}" style="display: inline-block; padding: 14px 35px; background-color: #5C8762; color: white; text-decoration: none; border-radius: 5px; font-weight: 600; font-size: 16px;">Set up your account</a>
+  <a href="{{invite_link}}" class="button">Set up your account</a>
 </div>
 <p>This invitation expires on {{expires_at}}. If the link doesn't work, copy and paste it into your browser:</p>
 <p style="word-break: break-all; font-size: 13px; color: #666;">{{invite_link}}</p>
@@ -261,7 +267,7 @@ If you weren't expecting this email, you can safely ignore it.`
 <h2>Willkommen bei Ihren Fotogalerien</h2>
 <p>Sie wurden eingeladen, ein Kundenkonto anzulegen, damit Sie alle Ihre Eventgalerien an einem Ort einsehen können — ohne mehrere Links und Passwörter verwalten zu müssen.</p>
 <div style="text-align: center; margin: 30px 0;">
-  <a href="{{invite_link}}" style="display: inline-block; padding: 14px 35px; background-color: #5C8762; color: white; text-decoration: none; border-radius: 5px; font-weight: 600; font-size: 16px;">Konto einrichten</a>
+  <a href="{{invite_link}}" class="button">Konto einrichten</a>
 </div>
 <p>Diese Einladung läuft am {{expires_at}} ab. Falls der Link nicht funktioniert, kopieren Sie ihn in Ihren Browser:</p>
 <p style="word-break: break-all; font-size: 13px; color: #666;">{{invite_link}}</p>
