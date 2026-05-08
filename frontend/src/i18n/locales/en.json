@@ -1070,6 +1070,24 @@
       "save": "Save changes",
       "saved": "Customer surface settings saved",
       "error": "Could not save settings"
+    },
+    "groups": {
+      "advanced": "Advanced"
+    },
+    "advancedFeatures": {
+      "title": "Advanced features",
+      "intro": "Opt in to advanced functionality. Most users only need the gallery delivery features that come pre-enabled — flip these on only when your workflow actually needs them.",
+      "beta": "Beta",
+      "betaTooltip": "Beta — feature is functional but still evolving",
+      "save": "Save changes",
+      "saved": "Advanced features settings saved",
+      "error": "Could not save settings",
+      "customerPortal": {
+        "title": "Customer dashboard",
+        "description": "Persistent customer logins so recurring clients see all their galleries from a single dashboard. Adds /customer/* URLs, a profile page, password reset, and an admin Customers management page. Sub-features (Calendar, Quotes, Bills) appear once enabled.",
+        "subSettings": "Customer dashboard settings",
+        "subSettingsHint": "Branding visibility and per-feature toggles (Calendar, Quotes, Bills). Manage actual customer accounts from the \"Customers\" entry in the main sidebar."
+      }
     }
   },
   "analytics": {

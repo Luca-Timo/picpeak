@@ -1533,6 +1533,24 @@
       "save": "Änderungen speichern",
       "saved": "Einstellungen für Kundenoberfläche gespeichert",
       "error": "Einstellungen konnten nicht gespeichert werden"
+    },
+    "groups": {
+      "advanced": "Erweitert"
+    },
+    "advancedFeatures": {
+      "title": "Erweiterte Funktionen",
+      "intro": "Erweiterte Funktionen freischalten. Die meisten Nutzer brauchen nur die voraktivierten Galerie-Funktionen — schalte diese hier nur ein, wenn dein Arbeitsablauf sie tatsächlich erfordert.",
+      "beta": "Beta",
+      "betaTooltip": "Beta — Funktion ist nutzbar, wird aber noch weiterentwickelt",
+      "save": "Änderungen speichern",
+      "saved": "Einstellungen für erweiterte Funktionen gespeichert",
+      "error": "Einstellungen konnten nicht gespeichert werden",
+      "customerPortal": {
+        "title": "Kunden-Dashboard",
+        "description": "Persistente Kunden-Logins, damit wiederkehrende Kunden alle Galerien in einem Dashboard sehen. Bringt /customer/* URLs, eine Profilseite, Passwort-Reset und eine Kundenverwaltungs-Seite mit. Unterfunktionen (Kalender, Angebote, Rechnungen) erscheinen, sobald aktiviert.",
+        "subSettings": "Kunden-Dashboard-Einstellungen",
+        "subSettingsHint": "Branding-Sichtbarkeit und Funktions-Schalter (Kalender, Angebote, Rechnungen). Tatsächliche Kundenkonten verwaltest du über den Eintrag \"Kunden\" in der Hauptseitenleiste."
+      }
     }
   },
   "branding": {
