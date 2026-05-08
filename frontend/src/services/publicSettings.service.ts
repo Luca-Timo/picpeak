@@ -27,6 +27,13 @@ export interface PublicSettings {
   branding_force_color_mode?: 'dark' | 'light' | null;
   /** Tinted square frame behind the logo on /admin/login and /customer/login. */
   branding_login_logo_frame_enabled?: boolean;
+  /**
+   * Master toggle for the Customer portal advanced feature (#354
+   * follow-up). When false, /customer/* routes redirect away on the
+   * frontend and AdminSidebar hides the "Customers" entry. Defaults
+   * to false on installs that haven't run migration 092.
+   */
+  customer_portal_enabled?: boolean;
   theme_config: any;
   default_language: string;
   enable_analytics: boolean;

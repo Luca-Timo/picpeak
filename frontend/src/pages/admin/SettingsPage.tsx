@@ -14,7 +14,7 @@ import {
   Code,
   KeyRound,
   Webhook,
-  UserCog,
+  Beaker,
   type LucideIcon,
 } from 'lucide-react';
 import { Loading } from '../../components/common';
@@ -33,10 +33,10 @@ import {
   ThumbnailsTab,
   ApiTokensTab,
   WebhooksTab,
-  CustomerSurfaceTab,
+  AdvancedFeaturesTab,
 } from '../../features/settings';
 
-type TabType = 'general' | 'events' | 'status' | 'security' | 'imageSecurity' | 'thumbnails' | 'categories' | 'seo' | 'analytics' | 'moderation' | 'styling' | 'apiTokens' | 'webhooks' | 'customerSurface';
+type TabType = 'general' | 'events' | 'status' | 'security' | 'imageSecurity' | 'thumbnails' | 'categories' | 'seo' | 'analytics' | 'moderation' | 'styling' | 'apiTokens' | 'webhooks' | 'advancedFeatures';
 
 interface NavItem {
   key: TabType;
@@ -118,11 +118,6 @@ export const SettingsPage: React.FC = () => {
         { key: 'categories', label: t('settings.categories.title'), icon: Tags },
         { key: 'thumbnails', label: t('settings.thumbnails.title', 'Thumbnails'), icon: ImageIcon },
         { key: 'styling', label: t('settings.styling.title', 'Custom CSS'), icon: Code },
-        // Customer-surface toggles (#354 follow-up). Lives under Display
-        // since branding visibility is the lead concern; the feature
-        // globals piggyback because the natural mental model is "what
-        // does my customer see?".
-        { key: 'customerSurface', label: t('settings.customerSurface.title', 'Customer surface'), icon: UserCog },
       ],
     },
     {
@@ -139,6 +134,15 @@ export const SettingsPage: React.FC = () => {
       items: [
         { key: 'apiTokens', label: t('settings.apiTokens.title', 'API Tokens'), icon: KeyRound },
         { key: 'webhooks', label: t('settings.webhooks.title', 'Webhooks'), icon: Webhook },
+      ],
+    },
+    {
+      label: t('settings.groups.advanced', 'Advanced'),
+      items: [
+        // Master switches for opt-in advanced features (#354 follow-up).
+        // Currently only the customer portal lives here; future features
+        // (booking, quotes, bills, reminder emails) extend this row.
+        { key: 'advancedFeatures', label: t('settings.advancedFeatures.title', 'Advanced features'), icon: Beaker },
       ],
     },
     {
@@ -322,7 +326,7 @@ export const SettingsPage: React.FC = () => {
 
       {activeTab === 'apiTokens' && <ApiTokensTab />}
       {activeTab === 'webhooks' && <WebhooksTab />}
-      {activeTab === 'customerSurface' && <CustomerSurfaceTab />}
+      {activeTab === 'advancedFeatures' && <AdvancedFeaturesTab />}
         </div>
       </div>
     </div>

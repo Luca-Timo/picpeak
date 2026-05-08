@@ -18,3 +18,4 @@ export { ThumbnailsTab } from './tabs/ThumbnailsTab';
 export { ApiTokensTab } from './tabs/ApiTokensTab';
 export { WebhooksTab } from './tabs/WebhooksTab';
 export { CustomerSurfaceTab } from './tabs/CustomerSurfaceTab';
+export { AdvancedFeaturesTab } from './tabs/AdvancedFeaturesTab';
