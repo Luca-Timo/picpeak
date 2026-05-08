@@ -148,14 +148,24 @@ router.post('/invite', [
     invitedById: req.admin.id,
     prefill: req.body.prefill,
   });
-  // Don't echo the token in the response — only the email channel sees it.
-  successResponse(res, {
+  // Echo the token in the response ONLY in non-production. This lets
+  // local dev + Playwright e2e specs skip the email round-trip
+  // (queueing → SMTP → mailbox → parse) and accept the invitation
+  // straight away. In production the token stays email-channel-only:
+  // anyone with API access plus the response body would otherwise be
+  // able to take over a freshly-invited customer account before the
+  // legitimate user clicks the link.
+  const payload = {
     invitation: {
       id: invitation.id,
       email: invitation.email,
       expiresAt: invitation.expiresAt,
     },
-  }, 201);
+  };
+  if (process.env.NODE_ENV !== 'production') {
+    payload.invitation.token = invitation.token;
+  }
+  successResponse(res, payload, 201);
 }));
 
 router.delete('/invitations/:id', [
