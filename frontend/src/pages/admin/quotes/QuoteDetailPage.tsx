@@ -28,8 +28,21 @@ export const QuoteDetailPage: React.FC = () => {
   const q = data.quote;
 
   const handlePreview = async () => {
-    const url = await quotesService.pdfUrl(q.id);
-    window.open(url, '_blank');
+    // Open the placeholder window synchronously so the browser sees a
+    // user-gesture-initiated popup; redirect to the blob URL once the
+    // PDF buffer is fetched. Without this the popup blocker kills it.
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      toast.error(t('quotes.errors.popupBlocked', 'Allow pop-ups for this site to preview the PDF.'));
+      return;
+    }
+    try {
+      const url = await quotesService.pdfUrl(q.id);
+      previewWindow.location.href = url;
+    } catch (err: any) {
+      previewWindow.close();
+      toast.error(err?.response?.data?.error || err.message || 'Preview failed');
+    }
   };
 
   const handleSend = async () => {

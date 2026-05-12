@@ -278,10 +278,20 @@ export const QuoteEditorPage: React.FC = () => {
       toast.error(t('quotes.errors.customerRequired', 'Pick a customer first.'));
       return;
     }
+    // Open the placeholder window synchronously to preserve the user
+    // gesture, then redirect it to the blob URL once the PDF is ready.
+    // Without this the browser pop-up blocker eats the open() because
+    // it happens after an `await`.
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      toast.error(t('quotes.errors.popupBlocked', 'Allow pop-ups for this site to preview the PDF.'));
+      return;
+    }
     try {
       const url = await quotesService.previewPdfUrl(buildPayload(form));
-      window.open(url, '_blank');
+      previewWindow.location.href = url;
     } catch (err: any) {
+      previewWindow.close();
       toast.error(err?.response?.data?.error || err.message || 'Preview failed');
     }
   };
