@@ -35,7 +35,11 @@ export const BillEditorPage: React.FC = () => {
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState('');
   const [scheduledSendAt, setScheduledSendAt] = useState('');
-  const [qrFormat, setQrFormat] = useState<InvoiceQrFormat>('none');
+  // null = inherit profile default at render time. 'none' / 'swiss' /
+  // 'epc' = explicit per-invoice override. (Existing invoices that
+  // already have a value carry it through `setQrFormat` in the load
+  // effect; new invoices start as null so they pick up profile.)
+  const [qrFormat, setQrFormat] = useState<InvoiceQrFormat | null>(null);
   const [vatRate, setVatRate] = useState(0);
   const [shipping, setShipping] = useState(0);
   const [ccPdfEmail, setCcPdfEmail] = useState('');
@@ -57,7 +61,9 @@ export const BillEditorPage: React.FC = () => {
       setIssueDate(inv.issueDate);
       setDueDate(inv.dueDate);
       setScheduledSendAt(inv.scheduledSendAt ? inv.scheduledSendAt.slice(0, 16) : '');
-      setQrFormat((inv.qrFormat as InvoiceQrFormat) || 'none');
+      // Preserve null when the saved invoice has no explicit format —
+      // it inherits the profile default at render time.
+      setQrFormat((inv.qrFormat as InvoiceQrFormat | null) || null);
       setVatRate(Number(inv.vatRate || 0));
       setShipping(Number(inv.shippingAmountMinor || 0) / 100);
       setCcPdfEmail(inv.ccPdfEmail || '');
@@ -139,7 +145,10 @@ export const BillEditorPage: React.FC = () => {
     issueDate,
     dueDate: dueDate || undefined,
     scheduledSendAt: scheduledSendAt || undefined,
-    qrFormat,
+    // Omit when null so the server inherits the profile default;
+    // including null would persist as an explicit "no preference"
+    // which is the same outcome but pollutes the column.
+    qrFormat: qrFormat || undefined,
     vatRate,
     shippingAmountMinor: toMinor(shipping),
     ccPdfEmail: ccPdfEmail || undefined,
@@ -258,9 +267,16 @@ export const BillEditorPage: React.FC = () => {
             value={scheduledSendAt} onChange={(e) => setScheduledSendAt(e.target.value)} />
           <div>
             <label className="block text-sm font-medium mb-1">{t('bills.field.qrFormat', 'Payment QR format')}</label>
-            <select value={qrFormat} onChange={(e) => setQrFormat(e.target.value as InvoiceQrFormat)}
+            <select
+              value={qrFormat || ''}
+              onChange={(e) => setQrFormat((e.target.value || null) as any)}
               className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm">
-              <option value="none">{t('bills.qrFormat.none', 'None')}</option>
+              {/* Empty value = use the business-profile default. Server
+                  resolves the actual format at render time, so admins
+                  who curate it once in Settings → Business profile
+                  never have to think about it per-invoice. */}
+              <option value="">{t('bills.qrFormat.profileDefault', 'Use business profile default')}</option>
+              <option value="none">{t('bills.qrFormat.none', 'None (override)')}</option>
               <option value="swiss">{t('bills.qrFormat.swiss', 'Swiss QR-bill')}</option>
               <option value="epc">{t('bills.qrFormat.epc', 'EPC QR (SEPA)')}</option>
             </select>
