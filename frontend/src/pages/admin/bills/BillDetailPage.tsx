@@ -82,7 +82,12 @@ export const BillDetailPage: React.FC = () => {
     }
   };
 
-  const outstanding = (Number(inv.totalAmountMinor || 0) + Number(inv.lateFeeAmountMinor || 0) - Number(inv.paidAmountMinor || 0)) / 100;
+  // "Outstanding" mirrors the server's paid-threshold (principal only,
+  // late fee tracked separately) so the placeholder value in the
+  // mark-paid dialog matches the amount that flips the invoice to
+  // status='paid'. The late-fee row above still shows the surcharge
+  // separately so admins know what they could optionally collect.
+  const outstanding = (Number(inv.totalAmountMinor || 0) - Number(inv.paidAmountMinor || 0)) / 100;
 
   return (
     <div className="space-y-4">

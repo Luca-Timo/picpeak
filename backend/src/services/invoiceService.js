@@ -650,7 +650,14 @@ async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, not
     });
     const sumRow = await trx('invoice_payment_log').where({ invoice_id: id }).sum('amount_minor as total').first();
     const total = ensureInt(sumRow?.total || 0);
-    const isFull = total >= invoice.total_amount_minor + ensureInt(invoice.late_fee_amount_minor || 0);
+    // Consider the invoice paid when the recorded payments cover the
+    // invoice total. The late fee is NOT added to the threshold here
+    // — admins frequently waive it once the customer actually pays
+    // (and chasing the extra 25 CHF after a 1500 CHF invoice clears
+    // makes nobody happy). Admin can record a separate payment_log
+    // row if they did collect the fee; status flips to paid the
+    // moment the principal is covered.
+    const isFull = total >= invoice.total_amount_minor;
 
     const update = {
       paid_amount_minor: total,
