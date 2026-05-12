@@ -58,7 +58,10 @@ const QuotesPanel: React.FC<Props> = ({ customerAccountId }) => {
               customerAccountId search-param is present (cheap follow-up
               if you want it). For now the editor's customer picker
               starts empty. */}
-          <Link to={`/admin/clients/quotes/new`}>
+          {/* Pre-fill this customer on the editor via search-param
+              so the admin doesn't have to retype it. The editor picks
+              it up on mount. */}
+          <Link to={`/admin/clients/quotes/new?customerAccountId=${customerAccountId}`}>
             <Button size="sm"><Plus className="w-4 h-4 mr-1" />{t('quotes.new', 'New quote')}</Button>
           </Link>
         </div>
@@ -110,7 +113,8 @@ const InvoicesPanel: React.FC<Props> = ({ customerAccountId }) => {
           <Link to={`/admin/clients/bills?customerAccountId=${customerAccountId}`}>
             <Button variant="outline" size="sm">{t('common.showAll', 'Show all')}</Button>
           </Link>
-          <Link to={`/admin/clients/bills/new`}>
+          {/* Same prefill trick as quotes — see comment in QuotesPanel. */}
+          <Link to={`/admin/clients/bills/new?customerAccountId=${customerAccountId}`}>
             <Button size="sm"><Plus className="w-4 h-4 mr-1" />{t('bills.new', 'New invoice')}</Button>
           </Link>
         </div>

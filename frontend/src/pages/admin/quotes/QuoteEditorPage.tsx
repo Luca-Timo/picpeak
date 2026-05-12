@@ -13,7 +13,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Send } from 'lucide-react';
 import { Button, Card, Loading, Input } from '../../../components/common';
@@ -111,12 +111,42 @@ function buildPayload(f: FormState): QuoteCreatePayload {
 export const QuoteEditorPage: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useParams<{ id?: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isEdit = id && id !== 'new';
 
   const [form, setForm] = useState<FormState>(empty);
   const [busy, setBusy] = useState(false);
+
+  // Pre-fill the customer when the editor is opened from a customer
+  // detail page via `?customerAccountId=42`. Runs once on mount, only
+  // when creating a new quote, and skips if the user has already
+  // picked a customer.
+  const didPrefillCustomerRef = useRef(false);
+  useEffect(() => {
+    if (isEdit) return;
+    if (didPrefillCustomerRef.current) return;
+    const raw = searchParams.get('customerAccountId');
+    const cid = raw ? parseInt(raw, 10) : NaN;
+    if (!Number.isFinite(cid) || cid <= 0) return;
+    didPrefillCustomerRef.current = true;
+    (async () => {
+      try {
+        const c = await customerAdminService.get(cid);
+        setForm((prev) => prev.customerAccountId ? prev : ({
+          ...prev,
+          customerAccountId: c.id,
+          customerLabel: c.companyName || c.displayName || c.email,
+          // Inherit the customer's preferred language for the quote so
+          // the email + PDF land in the right locale automatically.
+          language: prev.language || c.preferredLanguage || 'de',
+        }));
+      } catch {
+        // Silent fail — admin can still pick the customer manually.
+      }
+    })();
+  }, [isEdit, searchParams]);
   const [customerSearch, setCustomerSearch] = useState('');
 
   // Load existing quote

@@ -25,6 +25,21 @@ function formatMoney(amount: number, currency: string, locale = 'de-CH') {
   }).format(amount);
 }
 
+/**
+ * Format a date string as DD.MM.YYYY (the customer-facing format used
+ * on the PDF too). Accepts ISO strings, Date objects, or already-short
+ * "YYYY-MM-DD" forms; returns the original if parsing fails.
+ */
+function formatShortDate(value: string | null | undefined): string {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}.${mm}.${yyyy}`;
+}
+
 export const QuoteResponsePage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { token } = useParams<{ token: string }>();
@@ -155,12 +170,12 @@ export const QuoteResponsePage: React.FC = () => {
           {q!.eventName && (
             <p className="text-neutral-600 dark:text-neutral-400 mb-2">
               <strong>{t('quoteResponse.event', 'Event')}:</strong> {q!.eventName}
-              {q!.eventDate && ` · ${q!.eventDate}`}
+              {q!.eventDate && ` · ${formatShortDate(q!.eventDate)}`}
             </p>
           )}
           <p className="text-neutral-600 dark:text-neutral-400 mb-4">
-            <strong>{t('quoteResponse.issueDate', 'Issued')}:</strong> {q!.issueDate}
-            {q!.validUntil && ` · ${t('quoteResponse.validUntil', 'valid until')} ${q!.validUntil}`}
+            <strong>{t('quoteResponse.issueDate', 'Issued')}:</strong> {formatShortDate(q!.issueDate)}
+            {q!.validUntil && ` · ${t('quoteResponse.validUntil', 'valid until')} ${formatShortDate(q!.validUntil)}`}
           </p>
 
           {q!.introText && (

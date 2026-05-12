@@ -3,15 +3,17 @@
  * quote conversion; this page is for one-off / ad-hoc invoicing.
  * Smaller surface than the quote editor on purpose.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Save as SaveIcon } from 'lucide-react';
 import { Button, Card, Loading, Input } from '../../../components/common';
 import { billsService, type InvoiceCreatePayload, type InvoiceQrFormat } from '../../../services/bills.service';
 import { LineItemsTable, type EditableLineItem } from '../../../components/admin/LineItemsTable';
 import { customerAdminService } from '../../../services/customerAdmin.service';
+import { userManagementService } from '../../../services/userManagement.service';
+import { useAdminAuth } from '../../../contexts/AdminAuthContext';
 import { toast } from 'react-toastify';
 
 function toMinor(amount: number) {
@@ -21,6 +23,7 @@ function toMinor(amount: number) {
 export const BillEditorPage: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useParams<{ id?: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const isEdit = id && id !== 'new';
@@ -68,6 +71,61 @@ export const BillEditorPage: React.FC = () => {
       })));
     }
   }, [existing]);
+
+  // Admin auth + list — used to pre-fill + offer a dropdown for the
+  // "CC PDF to" field (mirrors the QuoteEditorPage pattern + the
+  // admin_email picker on CreateEventPage). Falls back to an empty
+  // list silently if the current user lacks users.view permission so
+  // basic admins still get the auto-prefill from currentAdmin.
+  const { user: currentAdmin } = useAdminAuth();
+  const { data: adminUsers } = useQuery({
+    queryKey: ['admin-users-list'],
+    queryFn: async () => {
+      try { return await userManagementService.getUsers(); } catch { return []; }
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const activeAdmins = useMemo(
+    () => (adminUsers || []).filter((u: any) => u.isActive !== false && !!u.email),
+    [adminUsers]
+  );
+
+  // Pre-fill CC PDF email with the current admin's email on a brand-
+  // new invoice. Skip on edit and don't clobber existing values.
+  const didPrefillCcRef = useRef(false);
+  useEffect(() => {
+    if (isEdit) return;
+    if (didPrefillCcRef.current) return;
+    if (!currentAdmin?.email) return;
+    didPrefillCcRef.current = true;
+    setCcPdfEmail((cur) => cur || currentAdmin.email);
+  }, [currentAdmin?.email, isEdit]);
+
+  // Pre-fill the customer when the editor is opened from a customer
+  // detail page via `?customerAccountId=42`. Runs once on mount, only
+  // when creating a new invoice, and skips if the user has already
+  // picked a customer.
+  const didPrefillCustomerRef = useRef(false);
+  useEffect(() => {
+    if (isEdit) return;
+    if (didPrefillCustomerRef.current) return;
+    const raw = searchParams.get('customerAccountId');
+    const cid = raw ? parseInt(raw, 10) : NaN;
+    if (!Number.isFinite(cid) || cid <= 0) return;
+    didPrefillCustomerRef.current = true;
+    (async () => {
+      try {
+        const c = await customerAdminService.get(cid);
+        if (!customerId) {
+          setCustomerId(c.id);
+          setCustomerLabel(c.companyName || c.displayName || c.email);
+        }
+      } catch {
+        // Silent fail — admin can still pick the customer manually.
+      }
+    })();
+  }, [isEdit, searchParams, customerId]);
 
   const { data: customerOptions } = useQuery({
     queryKey: ['customer-search', customerSearch],
@@ -230,8 +288,36 @@ export const BillEditorPage: React.FC = () => {
       </Card>
 
       <Card>
-        <Input label={t('bills.field.ccPdfEmail', 'CC PDF to (extra recipient)') as string}
-          value={ccPdfEmail} onChange={(e) => setCcPdfEmail(e.target.value)} />
+        {/* CC PDF — admin email prefilled, with a picker when more than
+            one admin exists. Mirrors the quote editor + CreateEventPage
+            so the muscle memory carries over. */}
+        <div className="space-y-1">
+          <Input type="email"
+            label={t('bills.field.ccPdfEmail', 'CC PDF to (extra recipient)') as string}
+            placeholder={t('bills.field.ccPdfEmailPlaceholder', 'name@example.com') as string}
+            value={ccPdfEmail} onChange={(e) => setCcPdfEmail(e.target.value)} />
+          {activeAdmins.length > 1 && (
+            <div className="flex items-center gap-2">
+              <label htmlFor="bill-cc-pdf-picker" className="text-xs text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
+                {t('bills.field.ccPdfPickFromAdmins', 'Pick from admins:')}
+              </label>
+              <select
+                id="bill-cc-pdf-picker"
+                value={activeAdmins.some((a: any) => a.email === ccPdfEmail) ? ccPdfEmail : ''}
+                onChange={(e) => {
+                  const email = e.target.value;
+                  if (email) setCcPdfEmail(email);
+                }}
+                className="text-xs px-2 py-1 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 rounded focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+              >
+                <option value="">{t('bills.field.ccPdfCustom', 'Custom email')}</option>
+                {activeAdmins.map((a: any) => (
+                  <option key={a.id} value={a.email}>{a.email}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       </Card>
     </div>
   );

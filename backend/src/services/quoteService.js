@@ -606,7 +606,7 @@ async function sendQuote(id, adminId) {
     response_url: responseUrl,
     accept_url: `${responseUrl}?action=accept`,
     decline_url: `${responseUrl}?action=decline`,
-    valid_until: quote.valid_until || '',
+    valid_until: formatShortDate(quote.valid_until),
     event_name: quote.event_name || '',
     total_amount: formatMajor(quote.total_amount_minor, quote.currency, ctx.locale),
     cc: quote.cc_pdf_email || undefined,
@@ -629,6 +629,22 @@ function formatMajor(minor, currency, locale) {
   return new Intl.NumberFormat(locale === 'de' ? 'de-CH' : 'en-GB', {
     style: 'currency', currency: (currency || 'CHF').toUpperCase(),
   }).format(Number(minor || 0) / 100);
+}
+
+/**
+ * Format a date as DD.MM.YYYY for customer-facing email templates.
+ * Accepts the value the DB returns (could be a Date, ISO string, or
+ * already a YYYY-MM-DD string). Returns '' for nullish input so the
+ * `{{#if valid_until}}…{{/if}}` block in the template still hides
+ * cleanly when no expiry is set.
+ */
+function formatShortDate(value) {
+  if (!value) return '';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}.${mm}.${d.getFullYear()}`;
 }
 
 /**
