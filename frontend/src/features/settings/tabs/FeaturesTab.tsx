@@ -196,6 +196,10 @@ export const FeaturesTab: React.FC = () => {
 
         {/* Sales */}
         <Section title={t('settings.features.sections.sales', 'Sales')}>
+          {/* Quotes + Bills shipped in the CRM PR (#TBD). The old
+              placeholder lockedReason / disabled props are removed so
+              the toggles actually save. The sub-page surfaces under
+              /admin/clients/{quotes,bills} are gated independently. */}
           <FeatureCard
             icon={FileSignature}
             title={t('settings.features.quotes.title', 'Quotes')}
@@ -207,9 +211,7 @@ export const FeaturesTab: React.FC = () => {
             statusLabel={statusLabel('new')}
             sidebarLabel={t('settings.features.quotes.sidebar', 'Quotes')}
             enabled={staged.quotes}
-            onToggle={() => { /* locked */ }}
-            disabled
-            lockedReason={NOT_YET_AVAILABLE}
+            onToggle={(next) => setFlag('quotes', next)}
           />
 
           <FeatureCard
@@ -219,13 +221,11 @@ export const FeaturesTab: React.FC = () => {
               'settings.features.bills.description',
               'Generate a bill from any accepted quote. Mark paid manually — no payment processor integration.',
             )}
-            status="roadmap"
-            statusLabel={statusLabel('roadmap')}
+            status="new"
+            statusLabel={statusLabel('new')}
             sidebarLabel={t('settings.features.bills.sidebar', 'Bills')}
             enabled={staged.bills}
-            onToggle={() => { /* locked */ }}
-            disabled
-            lockedReason={NOT_YET_AVAILABLE}
+            onToggle={(next) => setFlag('bills', next)}
           />
         </Section>
 
