@@ -7,7 +7,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Eye, Send, Copy, ArrowRightCircle, Edit2 } from 'lucide-react';
+import { ArrowLeft, Eye, Send, Copy, ArrowRightCircle, Edit2, Receipt } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
 import { quotesService } from '../../../services/quotes.service';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
@@ -67,6 +67,20 @@ export const QuoteDetailPage: React.FC = () => {
     }
   };
 
+  const handleConvertToInvoice = async () => {
+    if (!window.confirm(t('quotes.confirmConvertToInvoice',
+      'Convert this quote into invoice(s) only? No gallery / event will be created.'))) return;
+    try {
+      const result = await quotesService.convertToInvoice(q.id);
+      toast.success(t('quotes.convertedToInvoiceToast',
+        '{{count}} invoice(s) created from this quote', { count: result.installmentsCreated }));
+      qc.invalidateQueries({ queryKey: ['quote', id] });
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Convert failed');
+    }
+  };
+
   const handleDuplicate = async () => {
     try {
       const result = await quotesService.duplicate(q.id);
@@ -102,7 +116,17 @@ export const QuoteDetailPage: React.FC = () => {
           <Button variant="outline" onClick={handleDuplicate}><Copy className="w-4 h-4 mr-1" />{t('common.duplicate', 'Duplicate')}</Button>
           {canSend && <Button onClick={handleSend}><Send className="w-4 h-4 mr-1" />{q.status === 'draft' ? t('quotes.send', 'Send') : t('quotes.resend', 'Resend')}</Button>}
           {q.status === 'accepted' && (
-            <Button onClick={handleConvert}><ArrowRightCircle className="w-4 h-4 mr-1" />{t('quotes.convert', 'Convert to event')}</Button>
+            <>
+              <Button onClick={handleConvert}>
+                <ArrowRightCircle className="w-4 h-4 mr-1" />{t('quotes.convert', 'Convert to event')}
+              </Button>
+              {/* Direct convert-to-invoice for engagements without a
+                  photo deliverable (consulting, hire, etc). Hidden
+                  once converted to either an event or to invoices. */}
+              <Button variant="outline" onClick={handleConvertToInvoice}>
+                <Receipt className="w-4 h-4 mr-1" />{t('quotes.convertToInvoice', 'Convert to invoice only')}
+              </Button>
+            </>
           )}
         </div>
       </div>

@@ -175,6 +175,12 @@ export const quotesService = {
     return data.data || data;
   },
 
+  /** Convert the quote directly into invoice(s) without creating an event. */
+  async convertToInvoice(id: number): Promise<{ installmentsCreated: number }> {
+    const { data } = await api.post(`/admin/quotes/${id}/convert-to-invoice`);
+    return data.data || data;
+  },
+
   /** Returns a blob URL the editor can `window.open()` straight into a tab. */
   async pdfUrl(id: number): Promise<string> {
     const res = await api.get(`/admin/quotes/${id}/pdf`, { responseType: 'blob' });
@@ -250,6 +256,16 @@ export interface PublicQuoteView {
     discountPercent: number;
     lineTotalMinor: number;
   }>;
+  /** Terms of Service block driven by the global `crm_quotes_tos_*`
+   *  settings. When `required` is true, the public page must show a
+   *  checkbox the customer ticks before Accept can fire. The text +
+   *  url are optional content the admin curates in CRM Settings. */
+  tos?: {
+    required: boolean;
+    text: string;
+    url: string;
+    acceptedAt: string | null;
+  };
   recipient: { displayName: string; email: string; companyName: string | null } | null;
   issuer: {
     companyName: string;
@@ -266,8 +282,15 @@ export const publicQuotesService = {
     const { data } = await api.get(`/public/quotes/${token}`);
     return data.data || data;
   },
-  async respond(token: string, action: 'accept' | 'decline'): Promise<{ status: QuoteStatus; lockedAt: string }> {
-    const { data } = await api.post(`/public/quotes/${token}/respond`, { action });
+  async respond(
+    token: string,
+    action: 'accept' | 'decline',
+    options: { tosAccepted?: boolean } = {},
+  ): Promise<{ status: QuoteStatus; lockedAt: string }> {
+    const { data } = await api.post(`/public/quotes/${token}/respond`, {
+      action,
+      tosAccepted: options.tosAccepted,
+    });
     return data.data || data;
   },
 };
