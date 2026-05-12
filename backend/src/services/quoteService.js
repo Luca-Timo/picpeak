@@ -469,6 +469,13 @@ async function buildRenderContext(quote, lineItems) {
       // Custom TTF used by pdfService when set; falls back to
       // Helvetica when null or the file is missing on disk.
       pdfFontTtfPath: profile.pdf_font_ttf_path,
+      // Visibility toggles (migration 106). Default true when the
+      // column is missing on older installs that haven't migrated
+      // yet — preserves the previously implicit "always show" state.
+      showLogo: profile.pdf_show_logo == null ? true
+        : (profile.pdf_show_logo === true || profile.pdf_show_logo === 1 || profile.pdf_show_logo === '1'),
+      showCompanyName: profile.pdf_show_company_name == null ? true
+        : (profile.pdf_show_company_name === true || profile.pdf_show_company_name === 1 || profile.pdf_show_company_name === '1'),
     } : {},
     recipient: (() => {
       // Pick the bold header line based on whether a real company is

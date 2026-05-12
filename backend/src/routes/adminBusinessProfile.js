@@ -50,6 +50,8 @@ function transformProfile(p) {
     footerLine: p.footer_line || '',
     logoPath: p.logo_path || '',
     pdfFontTtfPath: p.pdf_font_ttf_path || '',
+    pdfShowLogo: p.pdf_show_logo == null ? true : (p.pdf_show_logo === true || p.pdf_show_logo === 1 || p.pdf_show_logo === '1'),
+    pdfShowCompanyName: p.pdf_show_company_name == null ? true : (p.pdf_show_company_name === true || p.pdf_show_company_name === 1 || p.pdf_show_company_name === '1'),
     createdAt: p.created_at,
     updatedAt: p.updated_at,
   };
@@ -114,6 +116,12 @@ router.put(
     body('footerLine').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
     body('logoPath').optional({ values: 'falsy' }).isString().isLength({ max: 512 }),
     body('pdfFontTtfPath').optional({ values: 'falsy' }).isString().isLength({ max: 512 }),
+    // Visibility toggles use the explicit-undefined check pattern so
+    // `false` actually reaches the service layer. `optional({ values:
+    // 'falsy' })` would drop `false` and the toggle could never be
+    // disabled.
+    body('pdfShowLogo').optional().isBoolean(),
+    body('pdfShowCompanyName').optional().isBoolean(),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -140,6 +148,8 @@ router.put(
       footerLine: 'footer_line',
       logoPath: 'logo_path',
       pdfFontTtfPath: 'pdf_font_ttf_path',
+      pdfShowLogo: 'pdf_show_logo',
+      pdfShowCompanyName: 'pdf_show_company_name',
     };
     for (const [api, db] of Object.entries(map)) {
       if (Object.prototype.hasOwnProperty.call(req.body, api)) {

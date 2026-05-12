@@ -30,12 +30,40 @@ const { SwissQRBill, Table } = require('swissqrbill/pdf');
 const { t } = require('./pdf-i18n');
 
 // Page metrics in PDF points (1pt = 1/72in). A4 = 595.28 × 841.89.
+// 1mm = 2.834645669pt.
+const MM = 2.834645669;
 const PAGE = {
+  // A4 ISO 216.
+  width: 595.28,
+  height: 841.89,
   marginTop: 40,
   marginBottom: 40,
   marginLeft: 40,
   marginRight: 40,
   contentWidth: 595.28 - 80, // 515.28
+};
+
+// DIN 5008 Form B address window — the standard window position for
+// envelopes commonly used in DACH (B5 / C5-6 / DL with window). The
+// window's top-left corner sits 45mm from the top and 20mm from the
+// left of the A4 sheet, 85mm × 45mm in size. Picking Form B (the
+// "newer" form) over Form A means the document still fits envelopes
+// printed by every German/Swiss/Austrian/Liechtenstein vendor.
+//
+// We render INSIDE the window:
+//   - Return address line (small grey "Absender" reference)
+//     positioned in the upper ~5mm of the window
+//   - The actual recipient address starts ~17.7mm below the top of
+//     the window (DIN 5008 says address-line 1 starts on row 4 of
+//     the window, which is 5mm down + 12.7mm of line-rows)
+const ADDR_WINDOW = {
+  left:   20 * MM,        // 56.69pt
+  top:    45 * MM,        // 127.56pt
+  width:  85 * MM,        // 240.94pt
+  height: 45 * MM,        // 127.56pt
+  // Vertical offsets inside the window.
+  returnLineY: 47 * MM,   // 133.23pt — tiny "Absender" reference line
+  addressY:    52 * MM,   // 147.40pt — first line of recipient address
 };
 
 // Default to PDFKit's built-in Helvetica. These constants are STILL
@@ -130,25 +158,29 @@ function localeForIntl(locale) {
 }
 
 /**
- * Render the issuer block (top-right): big logo + address + a tidy
+ * Render the issuer block (top-right): logo + company name as
+ * a side-by-side banner, then the address block, then a tidy
  * label/value contact column. Matches the reference letterhead.
  *
  * Layout decisions:
- *   - Logo ~60pt tall, right-aligned (matches the reference).
- *   - Address: line1 → "postal city" → CountryName (no state line,
- *     country resolved to its full name in the doc locale).
- *   - Contact rows use two columns: "Phone:"/"Mobile:"/… labels at a
- *     fixed offset from the right edge, values flush right. Visually
- *     this reads as a small invisible table — much cleaner than the
- *     prior right-flushed single-column dump.
+ *   - Top banner: logo on the LEFT of the column with the company
+ *     name vertically centred to the RIGHT of it (mirrors the
+ *     "LUCA BRESCH MEDIA" branding screenshot). Either piece can be
+ *     suppressed via issuer.showLogo / issuer.showCompanyName.
+ *   - Address: line1 → "postal city" → CountryName, left-aligned
+ *     within the right-side column.
+ *   - Contact rows use two columns: "Phone:" labels at left,
+ *     values aligned underneath each other. Looks like a small
+ *     invisible table.
  */
 function drawIssuerBlock(doc, issuer, x, y, width, locale) {
   const startY = y;
+  const showLogo = issuer.showLogo !== false; // default true
+  const showName = issuer.showCompanyName !== false; // default true
 
-  // Logo — slightly bigger than before (60pt) to match the
-  // reference's prominent letterhead. Path resolved against
-  // storage/ root or absolute; missing file is silent.
-  if (issuer.logoPath) {
+  // ---- top banner: logo (left) + company name (right of it) -----
+  let logoFound = null;
+  if (showLogo && issuer.logoPath) {
     try {
       const path = require('path');
       const fs = require('fs');
@@ -157,44 +189,67 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
         path.join(process.cwd(), 'storage', issuer.logoPath.replace(/^\/+/, '')),
         path.join(process.cwd(), 'storage', 'branding', path.basename(issuer.logoPath)),
       ].filter(Boolean);
-      const found = candidates.find((p) => { try { return fs.existsSync(p); } catch { return false; } });
-      if (found) {
-        const logoH = 60;
-        const logoMaxW = Math.min(width, 200);
-        doc.image(found, x + width - logoMaxW, y, { fit: [logoMaxW, logoH], align: 'right' });
-        y += logoH + 12;
-      }
+      logoFound = candidates.find((p) => { try { return fs.existsSync(p); } catch { return false; } });
     } catch (_err) {
-      // Skip silently.
+      logoFound = null;
     }
   }
 
-  // Address block — right-aligned. New shape:
-  //   Street → "postal city" → CountryName
-  // Drops the state line (rarely useful in EU) and renders the
-  // full country name in the doc locale (de → "Liechtenstein").
+  const bannerH = 56;
+  if (logoFound && showName && issuer.companyName) {
+    // Logo + name side by side. Logo takes ~38% of column width,
+    // name takes the rest. Logo "fit" preserves aspect ratio.
+    const logoW = Math.min(width * 0.38, 90);
+    doc.image(logoFound, x, y, { fit: [logoW, bannerH] });
+    const nameX = x + logoW + 12;
+    const nameW = width - logoW - 12;
+    // Vertically centre the company name to roughly the middle of
+    // the logo height — pdfkit renders text top-down so we shift y
+    // by ~half the line height.
+    const nameY = y + (bannerH - 14) / 2;
+    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(13).fillColor('#000')
+      .text(issuer.companyName, nameX, nameY, { width: nameW, align: 'left', lineBreak: false });
+    y += bannerH + 8;
+  } else if (logoFound) {
+    // Logo only.
+    doc.image(logoFound, x, y, { fit: [width, bannerH] });
+    y += bannerH + 8;
+  } else if (showName && issuer.companyName) {
+    // Name only.
+    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(14).fillColor('#000')
+      .text(issuer.companyName, x, y, { width, align: 'left' });
+    y = doc.y + 8;
+  }
+
+  // ---- address block (left-aligned within the column) -----------
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#000');
+  const cityCountry = (() => {
+    // Match the screenshot: "FL-9494 Schaan / Liechtenstein" on one
+    // line. Fall back gracefully when fields are missing.
+    const cc = issuer.countryCode ? String(issuer.countryCode).toUpperCase() : '';
+    const pc = issuer.postalCode || '';
+    const city = issuer.city || '';
+    const left = [cc && pc ? `${cc}-${pc}` : (pc || cc), city].filter(Boolean).join(' ');
+    const country = countryName(issuer.countryCode, locale);
+    return [left, country].filter(Boolean).join(' / ');
+  })();
   const addressLines = [
     issuer.addressLine1,
     issuer.addressLine2,
-    [issuer.postalCode, issuer.city].filter(Boolean).join(' '),
-    countryName(issuer.countryCode, locale),
+    cityCountry,
   ].filter(Boolean);
   for (const line of addressLines) {
-    doc.text(line, x, y, { width, align: 'right' });
+    doc.text(line, x, y, { width, align: 'left' });
     y = doc.y;
   }
-  y += 10;
+  y += 8;
 
-  // Contact rows — two-column label/value layout. Labels sit at a
-  // fixed offset so the values line up flush right, exactly like a
-  // letterhead. Width budget: labelCol (~50pt) + gap (8pt) + value
-  // takes the rest of the column.
+  // ---- contact rows (label / value, two columns) ----------------
   const labelCol = 50;
-  const gap = 8;
+  const gap = 6;
   const valueCol = width - labelCol - gap;
-  const labelX = x + width - labelCol - gap - valueCol;
-  const valueX = x + width - valueCol;
+  const labelX = x;
+  const valueX = x + labelCol + gap;
 
   const contactRows = [
     issuer.phone   ? ['Phone:',  issuer.phone]   : null,
@@ -205,58 +260,71 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
   ].filter(Boolean);
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10);
   for (const [label, value] of contactRows) {
-    // We position both pieces on the same Y. PDFKit's text() advances
-    // doc.y after the second call, which is what we want for the
-    // next row.
     const rowY = y;
     doc.text(label, labelX, rowY, { width: labelCol, align: 'left',  lineBreak: false });
-    doc.text(value, valueX, rowY, { width: valueCol, align: 'left', lineBreak: false });
+    doc.text(value, valueX, rowY, { width: valueCol, align: 'left',  lineBreak: false });
     y = rowY + 13;
   }
   return Math.max(y, startY + 80);
 }
 
 /**
- * Render the recipient block (top-left). Header shape:
- *   - With company → bold company name, then "z. Hd. <name>" line
- *   - Without company → bold person name, NO attention line
- *     (avoids the "Noam Mayer / z. Hd. Noam Mayer" duplicate)
- * Address shape mirrors the issuer block: Street → postal+city →
- * CountryName.
+ * Render the recipient block INSIDE the DIN 5008 Form B address
+ * window. Two parts:
+ *
+ *   1. Return address line (small grey "Absender" reference) at the
+ *      top of the window — this is what's visible through window
+ *      envelopes above the actual address, by convention separated
+ *      with "*" or "·". Optional; suppressed when issuerLine is
+ *      blank.
+ *   2. Actual recipient block starting at ADDR_WINDOW.addressY:
+ *      - With company → bold company name, then "z. Hd. <name>"
+ *      - Without company → bold person name, NO attention line
+ *        (avoids the "Noam Mayer / z. Hd. Noam Mayer" duplicate)
+ *      - Address: Street → "POSTAL CITY" (no country prefix on
+ *        postal — the country line below carries that already)
+ *      - Country line in caps for window-envelope readability
+ *
+ * The block is positioned absolutely; the caller does not need to
+ * thread a `y` cursor through. Returns the y of the next free row
+ * AFTER the address window (useful when drawing the horizontal
+ * divider below).
  */
-function drawRecipientBlock(doc, recipient, x, y, width, locale) {
-  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8.5).fillColor('#666')
-    .text(`${recipient.issuerLine || ''}`, x, y, { width });
-  y = doc.y + 8;
+function drawRecipientBlock(doc, recipient, locale) {
+  const x = ADDR_WINDOW.left;
+  const w = ADDR_WINDOW.width;
 
-  // Build the header. The service may pass `companyName` either with
-  // the actual company (preferred) or as a fallback to the person's
-  // name when no company is on file. Tell them apart via the new
-  // `hasCompany` flag the caller sets — true when companyName is the
-  // real organisation, false when it's just the person name fallback.
+  // ---- tiny return address line at top of window ----------------
+  if (recipient.issuerLine) {
+    doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(7.5).fillColor('#555');
+    doc.text(recipient.issuerLine, x, ADDR_WINDOW.returnLineY, {
+      width: w, align: 'left', lineBreak: false,
+    });
+  }
+
+  // ---- recipient address ----------------------------------------
+  let y = ADDR_WINDOW.addressY;
+
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(11).fillColor('#000');
   if (recipient.companyName) {
-    doc.text(recipient.companyName, x, y, { width });
+    doc.text(recipient.companyName, x, y, { width: w });
     y = doc.y;
   }
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10);
-  // Only render "z. Hd. <name>" when a company is the bold header —
-  // otherwise the same name would appear twice (raised in the
-  // followup design review).
   const lines = [
     recipient.hasCompany ? recipient.attentionLine : null,
     recipient.addressLine1,
     recipient.addressLine2,
     [recipient.postalCode, recipient.city].filter(Boolean).join(' '),
-    // Country: prefer the explicit full name passed by the caller
-    // when set; else resolve from the ISO code.
     recipient.country || countryName(recipient.countryCodeIso, locale),
   ].filter(Boolean);
   for (const line of lines) {
-    doc.text(line, x, y, { width });
+    doc.text(line, x, y, { width: w });
     y = doc.y;
   }
-  return y;
+  // Return position just below the address window so the caller
+  // can position the date row / title underneath.
+  return Math.max(y, ADDR_WINDOW.top + ADDR_WINDOW.height);
 }
 
 function drawTitle(doc, title, x, y) {
@@ -306,7 +374,14 @@ function drawLineItems(doc, ctx) {
     ? [30, 40, 240, 50, 75, 80]
     : [30, 50, 280, 70, 85];
 
+  // Per-row padding (top + bottom + left + right in pt) opens up the
+  // table — the previous default produced tight, almost ledger-like
+  // rows. 6pt top/bottom gives each line item visible breathing room
+  // without forcing a multi-line description to wrap differently.
+  const ROW_PADDING = { top: 6, bottom: 6, left: 4, right: 4 };
+
   const dataRow = (li, idx) => ({
+    padding: ROW_PADDING,
     columns: showDiscount
       ? [
           { text: String(idx + 1),                                                  width: widths[0], align: 'left'  },
@@ -330,6 +405,7 @@ function drawLineItems(doc, ctx) {
     // use we route the bold row through it too.
     fontName: ctx.fonts?.bold || FONT_BOLD,
     fontSize: 9,
+    padding: ROW_PADDING,
     columns: showDiscount
       ? [
           { text: labels.pos,   width: widths[0], align: 'left'  },
@@ -419,7 +495,7 @@ function drawTotals(doc, ctx, x, y, width) {
  *          <IBAN>"
  */
 function drawPaymentBlock(doc, ctx, x, y, width) {
-  const { locale, paymentTerm, bank, intlLocale, doc: docMeta } = ctx;
+  const { locale, paymentTerm, bank, intlLocale, totals, currency, doc: docMeta } = ctx;
   const colWidth = (width - 20) / 2;
   const leftX = x;
   const rightX = x + colWidth + 20;
@@ -448,7 +524,23 @@ function drawPaymentBlock(doc, ctx, x, y, width) {
       }),
       leftX, y, { width: colWidth }
     );
-    y = doc.y + 4;
+    y = doc.y + 2;
+    // Show the post-discount amount so the customer doesn't have to do
+    // the math. Computed off the grand total (incl. VAT + shipping)
+    // since that's what the discount % is applied to per CH/DE convention.
+    const skontoTotalMinor = totals?.totalAmountMinor
+      ? Math.round(Number(totals.totalAmountMinor) * (1 - Number(paymentTerm.skontoPercent) / 100))
+      : null;
+    if (skontoTotalMinor != null) {
+      doc.fillColor('#444').text(
+        `${t(locale, 'skonto_amount_label')}: ${formatCurrencyLabel(currency)} ${formatMinor(skontoTotalMinor, currency, intlLocale)}`,
+        leftX, y, { width: colWidth }
+      );
+      doc.fillColor('#000');
+      y = doc.y + 4;
+    } else {
+      y += 2;
+    }
   }
   // Late fee note for second-reminder invoices.
   if (docMeta?.lateFeeMinor && Number(docMeta.lateFeeMinor) > 0) {
@@ -487,27 +579,35 @@ function drawPaymentBlock(doc, ctx, x, y, width) {
 }
 
 function drawFooter(doc, issuer, locale) {
-  // The previous version positioned the footer at
-  // `doc.page.height - marginBottom + 5` (i.e. INSIDE the bottom
-  // margin), which triggered PDFKit's auto-page-break the moment the
-  // text() call wrote past the margin — hence the mysterious empty
-  // second page on quotes and the third empty page on Swiss-QR
-  // invoices. Move the footer back up so it sits within the content
-  // area, just above the bottom margin. Also disable lineBreak on the
-  // text() so PDFKit's auto-paging stays quiet even when the footer
-  // line is unexpectedly long.
+  // Footer format (per design review):
+  //   "<Company>, <Street>, <CC>-<PostalCode> <City>, <CountryName>"
+  // e.g.
+  //   "Luca Bresch Media, Im Fetzer 45a, FL-9494 Schaan, Liechtenstein"
+  //
+  // The previous version printed `<PostalCode> <City>, <CC>` which
+  // dropped the country prefix from the postal block AND used the
+  // bare ISO code instead of the full country name.
+  //
+  // Footer sits within the content area (above the bottom margin) —
+  // writing past doc.page.height - marginBottom triggers PDFKit's
+  // auto-page-break (the original bug behind the mysterious empty
+  // trailing pages).
   const lineH = 12;
   const hasFooterLine = !!issuer.footerLine;
-  // Reserve room for one or two lines above the bottom margin edge.
   const reserved = hasFooterLine ? lineH * 2 + 4 : lineH;
   const footerY = doc.page.height - PAGE.marginBottom - reserved;
+
+  const cc = issuer.countryCode ? String(issuer.countryCode).toUpperCase() : '';
+  const pc = issuer.postalCode || '';
+  const postalLeft = cc && pc ? `${cc}-${pc}` : (pc || cc);
+  const postalSegment = [postalLeft, issuer.city].filter(Boolean).join(' ');
 
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8).fillColor('#888');
   const parts = [
     issuer.companyName,
     issuer.addressLine1,
-    [issuer.postalCode, issuer.city].filter(Boolean).join(' '),
-    issuer.countryCode,
+    postalSegment,
+    countryName(issuer.countryCode, locale),
   ].filter(Boolean);
   doc.text(parts.join(', '), PAGE.marginLeft, footerY, {
     width: PAGE.contentWidth, align: 'center', lineBreak: false,
@@ -639,29 +739,25 @@ function renderDocument(type, context) {
         }
       }
 
-      // ---- header row (issuer right, recipient left) ----------------
-      // Layout matches the reference Rechnung/Angebot PDFs:
-      //   - issuer block top-right (logo + company + address + contact)
-      //   - recipient block top-left (small grey issuer line + bold
-      //     company + attention + address + country)
-      //   - horizontal rule spanning the full content width
-      //   - "Datum:" row right-aligned just under the rule
-      //   - large bold title left-aligned below
-      const headerY = PAGE.marginTop;
-      const halfWidth = (PAGE.contentWidth - 20) / 2;
+      // ---- header layout (DIN 5008 Form B) -------------------------
+      //   - recipient block in the address window (top-left,
+      //     45mm from top, 20mm from left, 85×45mm)
+      //   - issuer block top-right (logo + company + address +
+      //     contact) sized to NOT overlap the address window
+      //
+      // The two blocks are positioned absolutely; we keep a `y`
+      // cursor for the body content that starts BELOW both blocks.
       const leftX = PAGE.marginLeft;
-      const rightX = PAGE.marginLeft + halfWidth + 20;
+      const issuerWidth = 220;
+      const issuerX = PAGE.width - PAGE.marginRight - issuerWidth;
+      const issuerY = PAGE.marginTop;
 
-      const issuerEndY = drawIssuerBlock(doc, ctx.issuer, rightX, headerY, halfWidth, ctx.locale);
-      const recipientEndY = drawRecipientBlock(doc, ctx.recipient, leftX, headerY + 60, halfWidth, ctx.locale);
-      let y = Math.max(issuerEndY, recipientEndY) + 16;
-
-      // Horizontal divider under the address blocks — matches the line
-      // running across the reference PDF between the recipient/sender
-      // band and the "Datum:" row.
-      doc.moveTo(leftX, y).lineTo(leftX + PAGE.contentWidth, y)
-        .strokeColor('#000').lineWidth(0.6).stroke();
-      y += 10;
+      const issuerEndY = drawIssuerBlock(doc, ctx.issuer, issuerX, issuerY, issuerWidth, ctx.locale);
+      const recipientEndY = drawRecipientBlock(doc, ctx.recipient, ctx.locale);
+      // Start the body content below both header blocks AND the
+      // address-window bottom edge — never let the date/title row
+      // cut through the window region.
+      let y = Math.max(issuerEndY, recipientEndY, ADDR_WINDOW.top + ADDR_WINDOW.height) + 14;
 
       // ---- date row (right-aligned, matches reference) --------------
       y = drawDate(doc, t(ctx.locale, 'date'), formatDate(ctx.doc.issueDate, ctx.intlLocale),
@@ -669,9 +765,7 @@ function renderDocument(type, context) {
 
       // ---- title ----------------------------------------------------
       const title = type === 'quote' ? t(ctx.locale, 'quote_title') : t(ctx.locale, 'invoice_title');
-      // Title sits further below the date row than before — gives
-      // the same visual weight as the reference Rechnung PDF.
-      y = drawTitle(doc, title, leftX, y + 18);
+      y = drawTitle(doc, title, leftX, y + 10);
 
       // Invoice → source quote cross-reference. We deliberately keep
       // invoice numbers on a strict monotonic sequence (R-YYYY-NNNN)
@@ -713,10 +807,20 @@ function renderDocument(type, context) {
       doc.y = y;
       doc.x = leftX;
       drawLineItems(doc, ctx);
-      // Breathing room between the table and the totals box (matches
-      // the reference letterhead's visual rhythm; previous gap was
-      // tight enough to look glued).
-      y = doc.y + 28;
+      // Breathing room after the table — matches the reference
+      // letterhead's visual rhythm.
+      y = doc.y + 24;
+
+      // ---- pin totals + payment to lower 1/3 ------------------------
+      // The maintainer wants the totals + payment block anchored to
+      // the lower third of the page regardless of how short the line
+      // items are — short invoices should not leave a wide gap of
+      // whitespace before the totals. We compute the anchor as
+      // 2/3 of page height, and use max(currentY, anchor) so long
+      // tables can still push everything down naturally (they'll
+      // overflow to a new page via PDFKit's auto-paging).
+      const LOWER_THIRD_Y = PAGE.height * 2 / 3; // ~561.26pt
+      y = Math.max(y, LOWER_THIRD_Y);
 
       // ---- totals box (right-aligned) -------------------------------
       y = drawTotals(doc, ctx, leftX, y, PAGE.contentWidth);

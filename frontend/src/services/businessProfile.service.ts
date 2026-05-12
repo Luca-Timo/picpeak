@@ -32,6 +32,12 @@ export interface BusinessProfile {
   /** Path (absolute or relative to storage/) to a TTF/OTF used by the
    *  PDF renderer. Falls back to Helvetica when blank or missing. */
   pdfFontTtfPath: string;
+  /** When false, the issuer logo image is suppressed on every PDF
+   *  (even if logoPath is set). Migration 106; defaults true. */
+  pdfShowLogo: boolean;
+  /** When false, the company name line is suppressed in the issuer
+   *  block on every PDF. Migration 106; defaults true. */
+  pdfShowCompanyName: boolean;
   createdAt: string;
   updatedAt: string;
 }
