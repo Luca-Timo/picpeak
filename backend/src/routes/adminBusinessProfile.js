@@ -146,7 +146,7 @@ router.put(
 
     const { profile, bankAccounts } = await businessProfileService.updateProfile(
       payload,
-      req.user.id
+      req.admin.id
     );
     return successResponse(res, {
       profile: transformProfile(profile),
@@ -187,7 +187,7 @@ router.post(
       currency: req.body.currency,
       is_default: req.body.isDefault,
       display_order: req.body.displayOrder,
-    }, req.user.id);
+    }, req.admin.id);
     return successResponse(res, { bankAccount: transformBank(bank) }, 201, 'Bank account created');
   })
 );
@@ -223,7 +223,7 @@ router.put(
         payload[db] = req.body[api];
       }
     }
-    const bank = await businessProfileService.updateBankAccount(id, payload, req.user.id);
+    const bank = await businessProfileService.updateBankAccount(id, payload, req.admin.id);
     return successResponse(res, { bankAccount: transformBank(bank) }, 200, 'Bank account updated');
   })
 );
@@ -235,7 +235,7 @@ router.delete(
   handleAsync(async (req, res) => {
     validateRequest(req);
     const id = parseInt(req.params.id, 10);
-    await businessProfileService.deleteBankAccount(id, req.user.id);
+    await businessProfileService.deleteBankAccount(id, req.admin.id);
     return successResponse(res, { deleted: true }, 200, 'Bank account deleted');
   })
 );

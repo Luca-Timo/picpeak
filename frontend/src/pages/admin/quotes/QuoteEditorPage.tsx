@@ -220,6 +220,16 @@ export const QuoteEditorPage: React.FC = () => {
       toast.error(t('quotes.errors.customerRequired', 'Pick a customer first.'));
       return;
     }
+    // If the user asked to preview, confirm/cancel BEFORE async work so
+    // the popup opens directly off the click (browsers block popups
+    // that happen after an `await`). We open a blank window now and
+    // point it at the blob URL once it's ready.
+    const previewWindow = then === 'preview' ? window.open('about:blank', '_blank') : null;
+    if (then === 'preview' && !previewWindow) {
+      toast.error(t('quotes.errors.popupBlocked', 'Allow pop-ups for this site to preview the PDF.'));
+      return;
+    }
+
     setBusy(true);
     try {
       const payload = buildPayload(form);
@@ -238,14 +248,26 @@ export const QuoteEditorPage: React.FC = () => {
         navigate(`/admin/clients/quotes/${saved.quote.id}`);
       } else if (then === 'preview') {
         const url = await quotesService.pdfUrl(saved.quote.id);
-        window.open(url, '_blank');
+        if (previewWindow) previewWindow.location.href = url;
         navigate(`/admin/clients/quotes/${saved.quote.id}`);
       } else {
         toast.success(t('quotes.savedToast', 'Quote saved as draft.'));
         navigate(`/admin/clients/quotes/${saved.quote.id}`);
       }
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || err.message || 'Save failed');
+      // Close the placeholder window if the save failed so it doesn't
+      // sit there showing "about:blank".
+      if (previewWindow) previewWindow.close();
+      const msg = err?.response?.data?.error || err.message || 'Save failed';
+      // Server returns a friendly code for the "customer feature off"
+      // case — surface a clearer message so admins know to flip the
+      // toggle on the customer detail page.
+      if (err?.response?.data?.code === 'CUSTOMER_FEATURE_DISABLED') {
+        toast.error(t('quotes.errors.customerFeatureDisabled',
+          'This customer has Quotes disabled. Enable "Quotes" on the customer detail page first.'));
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setBusy(false);
     }

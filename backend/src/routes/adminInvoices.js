@@ -225,7 +225,7 @@ router.post(
   [body('customerAccountId').isInt({ min: 1 }), ...INVOICE_BODY_VALIDATORS],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const id = await invoiceService.createInvoice(mapPayloadToService(req.body), req.user.id);
+    const id = await invoiceService.createInvoice(mapPayloadToService(req.body), req.admin.id);
     const data = await invoiceService.getInvoiceById(id);
     return successResponse(res, {
       invoice: transformInvoice(data.invoice),
@@ -320,7 +320,7 @@ router.post(
   [param('id').isInt({ min: 1 })],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    await invoiceService.sendInvoice(parseInt(req.params.id, 10), req.user.id);
+    await invoiceService.sendInvoice(parseInt(req.params.id, 10), req.admin.id);
     return successResponse(res, { sent: true });
   })
 );
@@ -344,7 +344,7 @@ router.post(
       paymentMethod: req.body.paymentMethod,
       reference: req.body.reference,
       notes: req.body.notes,
-    }, req.user.id);
+    }, req.admin.id);
     return successResponse(res, result);
   })
 );
@@ -361,7 +361,7 @@ router.post(
     const result = await invoiceService.sendReminder(
       parseInt(req.params.id, 10),
       req.body.level || null,
-      req.user.id
+      req.admin.id
     );
     return successResponse(res, result, 200, 'Reminder sent');
   })
@@ -373,7 +373,7 @@ router.post(
   [param('id').isInt({ min: 1 })],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    await invoiceService.cancelInvoice(parseInt(req.params.id, 10), req.user.id);
+    await invoiceService.cancelInvoice(parseInt(req.params.id, 10), req.admin.id);
     return successResponse(res, { cancelled: true });
   })
 );

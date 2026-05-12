@@ -268,7 +268,7 @@ router.post(
   QUOTE_BODY_VALIDATORS,
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const id = await quoteService.createQuote(mapPayloadToService(req.body), req.user.id);
+    const id = await quoteService.createQuote(mapPayloadToService(req.body), req.admin.id);
     const data = await quoteService.getQuoteById(id);
     return successResponse(res, {
       quote: transformQuote(data.quote),
@@ -284,7 +284,7 @@ router.put(
   handleAsync(async (req, res) => {
     validateRequest(req);
     const id = parseInt(req.params.id, 10);
-    await quoteService.updateQuote(id, mapPayloadToService(req.body), req.user.id);
+    await quoteService.updateQuote(id, mapPayloadToService(req.body), req.admin.id);
     const data = await quoteService.getQuoteById(id);
     return successResponse(res, {
       quote: transformQuote(data.quote),
@@ -304,7 +304,7 @@ router.post(
   handleAsync(async (req, res) => {
     validateRequest(req);
     const id = parseInt(req.params.id, 10);
-    const result = await quoteService.sendQuote(id, req.user.id);
+    const result = await quoteService.sendQuote(id, req.admin.id);
     return successResponse(res, { sent: true, token: result.token }, 200, 'Quote sent');
   })
 );
@@ -315,7 +315,7 @@ router.post(
   [param('id').isInt({ min: 1 })],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const newId = await quoteService.duplicateQuote(parseInt(req.params.id, 10), req.user.id);
+    const newId = await quoteService.duplicateQuote(parseInt(req.params.id, 10), req.admin.id);
     return successResponse(res, { id: newId }, 201, 'Quote duplicated');
   })
 );
@@ -327,7 +327,7 @@ router.post(
   handleAsync(async (req, res) => {
     validateRequest(req);
     const id = parseInt(req.params.id, 10);
-    const result = await quoteService.convertToEvent(id, req.user.id);
+    const result = await quoteService.convertToEvent(id, req.admin.id);
     return successResponse(res, result, 200, result.alreadyConverted ? 'Already converted' : 'Quote converted');
   })
 );
