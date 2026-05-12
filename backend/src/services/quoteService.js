@@ -29,6 +29,7 @@
 const crypto = require('crypto');
 const { db, withRetry, logActivity } = require('../database/db');
 const logger = require('../utils/logger');
+const { AppError } = require('../utils/errors');
 const { formatBoolean } = require('../utils/dbCompat');
 const settingsService = require('./settingsService');
 const businessProfileService = require('./businessProfileService');
@@ -135,22 +136,15 @@ function ensureCustomerFeatureEnabled(customer, feature) {
   // is checked at the route layer (feature flag); here we only enforce
   // the per-customer override.
   if (!customer) {
-    const err = new Error('Customer not found');
-    err.statusCode = 404;
-    throw err;
+    throw new AppError('Customer not found', 404);
   }
   if (customer.is_active === false || customer.is_active === 0) {
-    const err = new Error('Customer is deactivated');
-    err.statusCode = 409;
-    throw err;
+    throw new AppError('Customer is deactivated', 409);
   }
   const flagField = feature === 'quotes' ? 'feature_quotes' : 'feature_bills';
   const flagValue = customer[flagField];
   if (flagValue === false || flagValue === 0 || flagValue === '0') {
-    const err = new Error(`This customer has ${feature} disabled`);
-    err.statusCode = 409;
-    err.code = 'CUSTOMER_FEATURE_DISABLED';
-    throw err;
+    throw new AppError(`This customer has ${feature} disabled`, 409, 'CUSTOMER_FEATURE_DISABLED');
   }
 }
 
@@ -236,7 +230,22 @@ async function listQuotes({ filters = {}, sort = 'newest', page = 1, pageSize = 
 
 async function getQuoteById(id) {
   return await withRetry(async () => {
-    const quote = await db('quotes').where({ id }).first();
+    // LEFT JOIN customer_accounts so transformQuote (which reads
+    // q.customer_email / q.customer_display_name etc.) has populated
+    // fields. Without this the API returns nulls for the recipient
+    // block and the editor shows "undefined undefined" in its summary.
+    const quote = await db('quotes')
+      .leftJoin('customer_accounts', 'quotes.customer_account_id', 'customer_accounts.id')
+      .where('quotes.id', id)
+      .select(
+        'quotes.*',
+        'customer_accounts.email as customer_email',
+        'customer_accounts.display_name as customer_display_name',
+        'customer_accounts.first_name as customer_first_name',
+        'customer_accounts.last_name as customer_last_name',
+        'customer_accounts.company_name as customer_company_name',
+      )
+      .first();
     if (!quote) return null;
     const lineItems = await db('quote_line_items')
       .where({ quote_id: id })
@@ -335,10 +344,10 @@ async function createQuote(payload, adminId) {
 async function updateQuote(id, payload, adminId) {
   const existing = await db('quotes').where({ id }).first();
   if (!existing) {
-    const err = new Error('Quote not found'); err.statusCode = 404; throw err;
+    throw new AppError('Quote not found', 404);
   }
   if (existing.status === 'converted') {
-    const err = new Error('Cannot edit a converted quote'); err.statusCode = 409; throw err;
+    throw new AppError('Cannot edit a converted quote', 409);
   }
 
   const totals = computeTotals(
@@ -488,7 +497,7 @@ async function buildRenderContext(quote, lineItems) {
 
 async function renderQuotePdfBuffer(quoteId) {
   const data = await getQuoteById(quoteId);
-  if (!data) throw Object.assign(new Error('Quote not found'), { statusCode: 404 });
+  if (!data) throw new AppError('Quote not found', 404);
   const ctx = await buildRenderContext(data.quote, data.lineItems);
   return await pdfService.renderQuoteToBuffer(ctx);
 }
@@ -538,13 +547,11 @@ async function renderQuotePdfFromPayload(payload) {
  */
 async function sendQuote(id, adminId) {
   const data = await getQuoteById(id);
-  if (!data) throw Object.assign(new Error('Quote not found'), { statusCode: 404 });
+  if (!data) throw new AppError('Quote not found', 404);
   const { quote, lineItems } = data;
 
   if (!['draft', 'declined', 'expired'].includes(quote.status)) {
-    const err = new Error(`Cannot send a quote with status '${quote.status}'`);
-    err.statusCode = 409;
-    throw err;
+    throw new AppError(`Cannot send a quote with status '${quote.status}'`, 409);
   }
 
   const customer = await db('customer_accounts').where({ id: quote.customer_account_id }).first();
@@ -645,24 +652,22 @@ async function persistDocPdf(type, doc, buffer) {
  */
 async function recordResponse({ token, action, ip }) {
   if (!['accept', 'decline'].includes(action)) {
-    const err = new Error('Invalid action'); err.statusCode = 400; throw err;
+    throw new AppError('Invalid action', 400);
   }
   const tokenRow = await db('quote_action_tokens').where({ token }).first();
   if (!tokenRow) {
-    const err = new Error('Token not found'); err.statusCode = 404; throw err;
+    throw new AppError('Token not found', 404);
   }
   if (tokenRow.expires_at && new Date(tokenRow.expires_at).getTime() < Date.now()) {
-    const err = new Error('Token expired'); err.statusCode = 410; throw err;
+    throw new AppError('Token expired', 410);
   }
 
   const quote = await db('quotes').where({ id: tokenRow.quote_id }).first();
   if (!quote) {
-    const err = new Error('Quote not found'); err.statusCode = 404; throw err;
+    throw new AppError('Quote not found', 404);
   }
   if (!['sent', 'accepted', 'declined'].includes(quote.status)) {
-    const err = new Error(`Quote cannot be responded to in status '${quote.status}'`);
-    err.statusCode = 409;
-    throw err;
+    throw new AppError(`Quote cannot be responded to in status '${quote.status}'`, 409);
   }
 
   const now = new Date();
@@ -670,9 +675,7 @@ async function recordResponse({ token, action, ip }) {
   // If there's already a response, check if we're inside the toggle window.
   if (quote.responded_at && quote.response_locked_at) {
     if (now.getTime() > new Date(quote.response_locked_at).getTime()) {
-      const err = new Error('Response window has closed');
-      err.statusCode = 423;
-      err.code = 'RESPONSE_LOCKED';
+      const err = new AppError('Response window has closed', 423, 'RESPONSE_LOCKED');
       err.lockedAt = quote.response_locked_at;
       err.currentStatus = quote.status;
       throw err;
@@ -718,10 +721,9 @@ async function recordResponse({ token, action, ip }) {
  */
 async function convertToEvent(quoteId, adminId) {
   const { quote, lineItems } = (await getQuoteById(quoteId)) || {};
-  if (!quote) throw Object.assign(new Error('Quote not found'), { statusCode: 404 });
+  if (!quote) throw new AppError('Quote not found', 404);
   if (quote.status !== 'accepted') {
-    const err = new Error(`Cannot convert a quote with status '${quote.status}'`);
-    err.statusCode = 409; throw err;
+    throw new AppError(`Cannot convert a quote with status '${quote.status}'`, 409);
   }
   if (quote.converted_event_id) {
     return { eventId: quote.converted_event_id, alreadyConverted: true };
@@ -821,7 +823,7 @@ async function convertToEvent(quoteId, adminId) {
 
 async function duplicateQuote(id, adminId) {
   const { quote, lineItems } = (await getQuoteById(id)) || {};
-  if (!quote) throw Object.assign(new Error('Quote not found'), { statusCode: 404 });
+  if (!quote) throw new AppError('Quote not found', 404);
 
   return await createQuote({
     customerAccountId: quote.customer_account_id,
@@ -908,15 +910,11 @@ async function listPaymentTermTemplates() {
 
 async function createPaymentTermTemplate(payload) {
   if (!Array.isArray(payload.installments) || payload.installments.length === 0) {
-    const err = new Error('At least one installment is required');
-    err.statusCode = 400;
-    throw err;
+    throw new AppError('At least one installment is required', 400);
   }
   const sum = payload.installments.reduce((s, x) => s + ensureNumber(x.percent, 0), 0);
   if (Math.abs(sum - 100) > 0.01) {
-    const err = new Error('Installment percentages must sum to 100');
-    err.statusCode = 400;
-    throw err;
+    throw new AppError('Installment percentages must sum to 100', 400);
   }
   const row = {
     name: payload.name,
@@ -938,7 +936,7 @@ async function createPaymentTermTemplate(payload) {
 
 async function updatePaymentTermTemplate(id, payload) {
   const existing = await db('payment_term_templates').where({ id }).first();
-  if (!existing) throw Object.assign(new Error('Not found'), { statusCode: 404 });
+  if (!existing) throw new AppError('Not found', 404);
   if (existing.is_system && Object.prototype.hasOwnProperty.call(payload, 'installments')) {
     // Allow renaming + description tweaks on system rows but never let
     // an admin reshape the installment array — keeps the "factory
@@ -960,11 +958,9 @@ async function updatePaymentTermTemplate(id, payload) {
 
 async function deletePaymentTermTemplate(id) {
   const existing = await db('payment_term_templates').where({ id }).first();
-  if (!existing) throw Object.assign(new Error('Not found'), { statusCode: 404 });
+  if (!existing) throw new AppError('Not found', 404);
   if (existing.is_system) {
-    const err = new Error('Cannot delete a system payment-term template');
-    err.statusCode = 409;
-    throw err;
+    throw new AppError('Cannot delete a system payment-term template', 409);
   }
   // Soft-delete to keep snapshots referenced by sent quotes coherent.
   await db('payment_term_templates').where({ id })

@@ -22,6 +22,7 @@
 const crypto = require('crypto');
 const { db, withRetry, logActivity } = require('../database/db');
 const logger = require('../utils/logger');
+const { AppError } = require('../utils/errors');
 const { formatBoolean } = require('../utils/dbCompat');
 const settingsService = require('./settingsService');
 const businessProfileService = require('./businessProfileService');
@@ -69,13 +70,12 @@ async function nextInvoiceNumber() {
 }
 
 function ensureCustomerCanBill(customer) {
-  if (!customer) { const e = new Error('Customer not found'); e.statusCode = 404; throw e; }
+  if (!customer) { throw new AppError('Customer not found', 404); }
   if (customer.is_active === false || customer.is_active === 0) {
-    const e = new Error('Customer is deactivated'); e.statusCode = 409; throw e;
+    throw new AppError('Customer is deactivated', 409);
   }
   if (customer.feature_bills === false || customer.feature_bills === 0 || customer.feature_bills === '0') {
-    const e = new Error('This customer has bills disabled');
-    e.statusCode = 409; e.code = 'CUSTOMER_FEATURE_DISABLED'; throw e;
+    throw new AppError('This customer has bills disabled', 409, 'CUSTOMER_FEATURE_DISABLED');
   }
 }
 
@@ -212,7 +212,20 @@ async function listInvoices({ filters = {}, sort = 'newest', page = 1, pageSize 
 
 async function getInvoiceById(id) {
   return await withRetry(async () => {
-    const invoice = await db('invoices').where({ id }).first();
+    // LEFT JOIN customer_accounts so transformInvoice has populated
+    // customer_email / company etc. — mirrors getQuoteById.
+    const invoice = await db('invoices')
+      .leftJoin('customer_accounts', 'invoices.customer_account_id', 'customer_accounts.id')
+      .where('invoices.id', id)
+      .select(
+        'invoices.*',
+        'customer_accounts.email as customer_email',
+        'customer_accounts.display_name as customer_display_name',
+        'customer_accounts.first_name as customer_first_name',
+        'customer_accounts.last_name as customer_last_name',
+        'customer_accounts.company_name as customer_company_name',
+      )
+      .first();
     if (!invoice) return null;
     const lineItems = await db('invoice_line_items').where({ invoice_id: id }).orderBy('position', 'asc');
     const payments = await db('invoice_payment_log').where({ invoice_id: id }).orderBy('paid_at', 'asc');
@@ -474,7 +487,7 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
 
 async function renderInvoicePdfBuffer(invoiceId) {
   const data = await getInvoiceById(invoiceId);
-  if (!data) throw Object.assign(new Error('Invoice not found'), { statusCode: 404 });
+  if (!data) throw new AppError('Invoice not found', 404);
   const ctx = await buildInvoiceRenderContext(data.invoice, data.lineItems);
   return await pdfService.renderInvoiceToBuffer(ctx);
 }
@@ -519,12 +532,10 @@ async function renderInvoicePdfFromPayload(payload) {
  */
 async function sendInvoice(id, adminId) {
   const data = await getInvoiceById(id);
-  if (!data) throw Object.assign(new Error('Invoice not found'), { statusCode: 404 });
+  if (!data) throw new AppError('Invoice not found', 404);
   const { invoice, lineItems } = data;
   if (!['scheduled', 'sent', 'overdue'].includes(invoice.status)) {
-    const err = new Error(`Cannot send invoice with status '${invoice.status}'`);
-    err.statusCode = 409;
-    throw err;
+    throw new AppError(`Cannot send invoice with status '${invoice.status}'`, 409);
   }
   const customer = await db('customer_accounts').where({ id: invoice.customer_account_id }).first();
   ensureCustomerCanBill(customer);
@@ -574,13 +585,13 @@ async function sendInvoice(id, adminId) {
  */
 async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, notes }, adminId) {
   const invoice = await db('invoices').where({ id }).first();
-  if (!invoice) throw Object.assign(new Error('Invoice not found'), { statusCode: 404 });
+  if (!invoice) throw new AppError('Invoice not found', 404);
   if (invoice.status === 'cancelled') {
-    const e = new Error('Cannot mark a cancelled invoice as paid'); e.statusCode = 409; throw e;
+    throw new AppError('Cannot mark a cancelled invoice as paid', 409);
   }
   const amount = ensureInt(amountMinor);
   if (amount <= 0) {
-    const e = new Error('amount must be > 0'); e.statusCode = 400; throw e;
+    throw new AppError('amount must be > 0', 400);
   }
 
   return await db.transaction(async (trx) => {
@@ -620,9 +631,9 @@ async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, not
 
 async function cancelInvoice(id, adminId) {
   const invoice = await db('invoices').where({ id }).first();
-  if (!invoice) throw Object.assign(new Error('Invoice not found'), { statusCode: 404 });
+  if (!invoice) throw new AppError('Invoice not found', 404);
   if (invoice.status === 'paid') {
-    const e = new Error('Cannot cancel a paid invoice'); e.statusCode = 409; throw e;
+    throw new AppError('Cannot cancel a paid invoice', 409);
   }
   await db('invoices').where({ id }).update({
     status: 'cancelled', updated_at: new Date(),
@@ -638,14 +649,14 @@ async function cancelInvoice(id, adminId) {
  */
 async function sendReminder(id, levelOverride, adminId) {
   const data = await getInvoiceById(id);
-  if (!data) throw Object.assign(new Error('Invoice not found'), { statusCode: 404 });
+  if (!data) throw new AppError('Invoice not found', 404);
   const { invoice, lineItems } = data;
   if (invoice.status !== 'sent' && invoice.status !== 'overdue') {
-    const e = new Error(`Cannot remind on status '${invoice.status}'`); e.statusCode = 409; throw e;
+    throw new AppError(`Cannot remind on status '${invoice.status}'`, 409);
   }
   const newLevel = levelOverride || (invoice.reminder_level + 1);
   if (newLevel > 2) {
-    const e = new Error('Reminder level exhausted'); e.statusCode = 409; throw e;
+    throw new AppError('Reminder level exhausted', 409);
   }
   return await applyReminder(invoice, lineItems, newLevel, adminId);
 }

@@ -15,6 +15,7 @@
 
 const { db, withRetry } = require('../database/db');
 const logger = require('../utils/logger');
+const { AppError } = require('../utils/errors');
 const { formatBoolean } = require('../utils/dbCompat');
 
 const ALLOWED_PROFILE_FIELDS = [
@@ -178,9 +179,7 @@ async function updateProfile(payload, adminId) {
 async function createBankAccount(payload, adminId) {
   const data = sanitiseBankPayload(payload);
   if (!data.iban) {
-    const err = new Error('iban is required');
-    err.statusCode = 400;
-    throw err;
+    throw new AppError('iban is required', 400);
   }
   data.business_profile_id = 1;
   data.created_at = new Date();
@@ -213,9 +212,7 @@ async function updateBankAccount(id, payload, adminId) {
   return await db.transaction(async (trx) => {
     const existing = await trx('business_bank_accounts').where({ id }).first();
     if (!existing) {
-      const err = new Error('Bank account not found');
-      err.statusCode = 404;
-      throw err;
+      throw new AppError('Bank account not found', 404);
     }
     // Honour the per-currency single-default rule.
     if (data.is_default === true || data.is_default === 1 || data.is_default === formatBoolean(true)) {
@@ -237,9 +234,7 @@ async function deleteBankAccount(id, adminId) {
   return await withRetry(async () => {
     const existing = await db('business_bank_accounts').where({ id }).first();
     if (!existing) {
-      const err = new Error('Bank account not found');
-      err.statusCode = 404;
-      throw err;
+      throw new AppError('Bank account not found', 404);
     }
     await db('business_bank_accounts').where({ id }).del();
     logger.info('Business bank account deleted', { adminId, id });
