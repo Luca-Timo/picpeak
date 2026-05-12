@@ -26,6 +26,10 @@ const ALLOWED_PROFILE_FIELDS = [
   'city',
   'state',
   'country_code',
+  // Free-text country name (migration 107). Overrides the lookup
+  // when set; falls back to COUNTRY_NAMES[locale][country_code] in
+  // the PDF renderer when blank.
+  'country_name',
   'phone',
   'mobile',
   'email',
@@ -103,7 +107,7 @@ function sanitiseProfilePayload(payload) {
   // Trim free-text fields to avoid silent leading/trailing whitespace
   // when the admin pastes from a printed letterhead.
   for (const field of ['company_name', 'address_line1', 'address_line2',
-    'city', 'state', 'phone', 'mobile', 'email', 'website',
+    'city', 'state', 'country_name', 'phone', 'mobile', 'email', 'website',
     'vat_id', 'vat_label', 'footer_line', 'logo_path']) {
     if (typeof updates[field] === 'string') {
       updates[field] = updates[field].trim();

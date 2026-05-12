@@ -17,6 +17,12 @@ export interface BusinessProfile {
   city: string;
   state: string;
   countryCode: string;
+  /** Free-text country name (migration 107). When set, the PDF
+   *  renderer uses this verbatim; otherwise falls back to the
+   *  locale-aware lookup on countryCode. Useful when countryCode
+   *  carries the postal/vehicle abbreviation ("FL") rather than the
+   *  ISO code ("LI"). */
+  countryName: string;
   phone: string;
   mobile: string;
   email: string;

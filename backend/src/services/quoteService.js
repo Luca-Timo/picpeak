@@ -469,6 +469,10 @@ async function buildRenderContext(quote, lineItems) {
       // Custom TTF used by pdfService when set; falls back to
       // Helvetica when null or the file is missing on disk.
       pdfFontTtfPath: profile.pdf_font_ttf_path,
+      // Free-text country name override (migration 107). Used verbatim
+      // by the PDF renderer when set; otherwise falls back to the
+      // COUNTRY_NAMES lookup on the ISO country_code.
+      countryName: profile.country_name || null,
       // Visibility toggles (migration 106). Default true when the
       // column is missing on older installs that haven't migrated
       // yet — preserves the previously implicit "always show" state.
@@ -478,15 +482,25 @@ async function buildRenderContext(quote, lineItems) {
         : (profile.pdf_show_company_name === true || profile.pdf_show_company_name === 1 || profile.pdf_show_company_name === '1'),
     } : {},
     recipient: (() => {
-      // Pick the bold header line based on whether a real company is
-      // on file. The PDF renderer's recipient block uses `hasCompany`
-      // to decide whether to also render an "z. Hd. <name>" line —
-      // otherwise rendering it under the same name would duplicate.
-      const personFull = [customer?.first_name, customer?.last_name].filter(Boolean).join(' ');
-      const headerWithCompany = !!customer?.company_name;
-      const header = customer?.company_name
+      // Recipient first-line rule (maintainer spec):
+      //   1. If customer.company_name is set → bold company name on
+      //      line 1, then "z. Hd. <person>" on line 2.
+      //   2. Else → bold full person name on line 1, NO "z. Hd."
+      //      attention line (avoids the "Luca Bresch / z. Hd. Luca
+      //      Bresch" duplication).
+      //
+      // We trim each field defensively because empty strings ("")
+      // are truthy in JSON payloads after `||` short-circuiting
+      // unless we coerce empty → null first. Without the trim a
+      // customer row saved with company_name = "" (instead of NULL)
+      // would engage the company-header path with a blank line.
+      const trimmedCompany = (customer?.company_name || '').trim();
+      const personFull = [customer?.first_name, customer?.last_name]
+        .map((s) => (s || '').trim()).filter(Boolean).join(' ');
+      const headerWithCompany = !!trimmedCompany;
+      const header = trimmedCompany
         || personFull
-        || customer?.display_name
+        || (customer?.display_name || '').trim()
         || customer?.email
         || '';
       // Attention line only meaningful with a company; mention the
@@ -508,7 +522,11 @@ async function buildRenderContext(quote, lineItems) {
         // the doc locale. Pass the ISO code so the renderer can
         // resolve the right localised string ("Liechtenstein" vs
         // "Schweiz") for both quote and invoice surfaces.
-        country: null,
+        // Country name override (migration 107). When the customer
+        // record has a free-text country name, the PDF uses it
+        // verbatim; otherwise the renderer falls back to the locale-
+        // aware COUNTRY_NAMES lookup on countryCodeIso.
+        country: customer?.country_name || null,
         countryCodeIso: customer?.country_code,
       };
     })(),
