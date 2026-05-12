@@ -114,6 +114,14 @@ export const SettingsBusinessProfilePage: React.FC = () => {
           </div>
           <Input label={t('businessProfile.field.footerLine', 'PDF footer line') as string} value={profile.footerLine}
             onChange={(e) => setProfile({ ...profile, footerLine: e.target.value })} />
+          {/* Custom PDF font — TTF/OTF only. PDFKit doesn't read
+              woff2 (the bundled webfonts under assets/fonts), so the
+              admin needs to drop a real TTF/OTF under storage/fonts/
+              and reference it here. Blank = Helvetica. */}
+          <Input label={t('businessProfile.field.pdfFontTtfPath', 'PDF font (TTF/OTF, optional)') as string}
+            value={profile.pdfFontTtfPath || ''}
+            placeholder="fonts/MyBrand-Regular.ttf"
+            onChange={(e) => setProfile({ ...profile, pdfFontTtfPath: e.target.value })} />
         </div>
       </Card>
 
