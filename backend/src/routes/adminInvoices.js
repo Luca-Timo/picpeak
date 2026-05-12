@@ -113,22 +113,22 @@ function transformPaymentLog(p) {
 }
 
 const INVOICE_BODY_VALIDATORS = [
-  body('customerAccountId').optional().isInt({ min: 1 }),
-  body('language').optional().isString().isLength({ max: 8 }),
-  body('currency').optional().isString().isLength({ min: 3, max: 3 }),
-  body('issueDate').optional().isISO8601(),
-  body('dueDate').optional().isISO8601(),
-  body('scheduledSendAt').optional().isISO8601(),
-  body('installmentIndex').optional().isInt({ min: 0 }),
-  body('installmentTotal').optional().isInt({ min: 1 }),
-  body('installmentLabel').optional().isString().isLength({ max: 128 }),
-  body('installmentTrigger').optional().isString().isLength({ max: 32 }),
-  body('vatRate').optional().isFloat({ min: 0, max: 100 }),
-  body('shippingAmountMinor').optional().isInt({ min: 0 }),
-  body('ccPdfEmail').optional().isString().isLength({ max: 255 }),
-  body('businessBankAccountId').optional().isInt({ min: 1 }),
-  body('qrFormat').optional().isIn(['swiss', 'epc', 'none']),
-  body('lineItems').optional().isArray(),
+  body('customerAccountId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  body('language').optional({ values: 'falsy' }).isString().isLength({ max: 8 }),
+  body('currency').optional({ values: 'falsy' }).isString().isLength({ min: 3, max: 3 }),
+  body('issueDate').optional({ values: 'falsy' }).isISO8601(),
+  body('dueDate').optional({ values: 'falsy' }).isISO8601(),
+  body('scheduledSendAt').optional({ values: 'falsy' }).isISO8601(),
+  body('installmentIndex').optional({ values: 'falsy' }).isInt({ min: 0 }),
+  body('installmentTotal').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  body('installmentLabel').optional({ values: 'falsy' }).isString().isLength({ max: 128 }),
+  body('installmentTrigger').optional({ values: 'falsy' }).isString().isLength({ max: 32 }),
+  body('vatRate').optional({ values: 'falsy' }).isFloat({ min: 0, max: 100 }),
+  body('shippingAmountMinor').optional({ values: 'falsy' }).isInt({ min: 0 }),
+  body('ccPdfEmail').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
+  body('businessBankAccountId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  body('qrFormat').optional({ values: 'falsy' }).isIn(['swiss', 'epc', 'none']),
+  body('lineItems').optional({ values: 'falsy' }).isArray(),
 ];
 
 function mapPayloadToService(body) {
@@ -169,13 +169,13 @@ router.get(
   '/',
   requirePermission('bills.view'),
   [
-    query('status').optional().isString(),
-    query('customerAccountId').optional().isInt({ min: 1 }),
-    query('unpaidOnly').optional().isBoolean(),
-    query('q').optional().isString().isLength({ max: 255 }),
-    query('sort').optional().isIn(['newest', 'oldest', 'due_asc', 'due_desc', 'value_asc', 'value_desc', 'customer_asc']),
-    query('page').optional().isInt({ min: 1 }),
-    query('pageSize').optional().isInt({ min: 1, max: 100 }),
+    query('status').optional({ values: 'falsy' }).isString(),
+    query('customerAccountId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+    query('unpaidOnly').optional({ values: 'falsy' }).isBoolean(),
+    query('q').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
+    query('sort').optional({ values: 'falsy' }).isIn(['newest', 'oldest', 'due_asc', 'due_desc', 'value_asc', 'value_desc', 'customer_asc']),
+    query('page').optional({ values: 'falsy' }).isInt({ min: 1 }),
+    query('pageSize').optional({ values: 'falsy' }).isInt({ min: 1, max: 100 }),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -331,10 +331,10 @@ router.post(
   [
     param('id').isInt({ min: 1 }),
     body('amountMinor').isInt({ min: 1 }),
-    body('paidAt').optional().isISO8601(),
-    body('paymentMethod').optional().isString().isLength({ max: 64 }),
-    body('reference').optional().isString().isLength({ max: 128 }),
-    body('notes').optional().isString().isLength({ max: 5000 }),
+    body('paidAt').optional({ values: 'falsy' }).isISO8601(),
+    body('paymentMethod').optional({ values: 'falsy' }).isString().isLength({ max: 64 }),
+    body('reference').optional({ values: 'falsy' }).isString().isLength({ max: 128 }),
+    body('notes').optional({ values: 'falsy' }).isString().isLength({ max: 5000 }),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -354,7 +354,7 @@ router.post(
   requirePermission('bills.manage'),
   [
     param('id').isInt({ min: 1 }),
-    body('level').optional().isInt({ min: 1, max: 2 }),
+    body('level').optional({ values: 'falsy' }).isInt({ min: 1, max: 2 }),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
