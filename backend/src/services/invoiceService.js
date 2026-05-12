@@ -423,8 +423,16 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
     ? await db('business_bank_accounts').where({ id: invoice.business_bank_account_id }).first()
     : await businessProfileService.resolveBankAccountForCurrency(invoice.currency);
 
-  const qrFormat = invoice.qr_format
-    || (await getAppSetting('crm_invoices_qr_enabled')) === false ? 'none' : (profile?.default_qr_format || 'none');
+  // QR format resolution order (per-invoice override → profile
+  // default → none) gated by the global enable toggle. The earlier
+  // version had an operator-precedence bug that effectively dropped
+  // the profile default; this rewrites it as plain if/else for
+  // readability + correctness.
+  const qrGloballyEnabled = (await getAppSetting('crm_invoices_qr_enabled')) !== false;
+  let resolvedQrFormat = 'none';
+  if (qrGloballyEnabled) {
+    resolvedQrFormat = invoice.qr_format || profile?.default_qr_format || 'none';
+  }
 
   // Resolve the payment-term snapshot to thread Skonto + net-days into
   // the PDF's "Zahlungsbedingungen" block. Two sources, in order:
@@ -449,27 +457,45 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       };
     }
   }
-  if (!paymentTerm) {
-    // Fall back to global CRM settings for ad-hoc invoices (no source
-    // quote). Skonto only shows when the global toggle is on AND the
-    // default percent is > 0.
-    const skontoEnabled = (await getAppSetting('crm_invoices_skonto_percent_default')) != null
-      ? Number(await getAppSetting('crm_invoices_skonto_percent_default')) > 0
-      : false;
-    const skontoPercent = Number(await getAppSetting('crm_invoices_skonto_percent_default')) || null;
-    const skontoDays = parseInt(await getAppSetting('crm_invoices_skonto_business_days'), 10) || null;
+  // Globally-default Skonto values, always loaded. Used either to
+  // FILL a partial source-quote snapshot OR to seed the whole
+  // paymentTerm when there's no source quote. Both reads survive
+  // missing rows (returns null), unset values (NaN guarded), and
+  // string-encoded numbers from app_settings.
+  const defaultSkontoPercentRaw = await getAppSetting('crm_invoices_skonto_percent_default');
+  const defaultSkontoDaysRaw = await getAppSetting('crm_invoices_skonto_business_days');
+  const defaultSkontoPercent = Number.isFinite(Number(defaultSkontoPercentRaw)) && Number(defaultSkontoPercentRaw) > 0
+    ? Number(defaultSkontoPercentRaw) : null;
+  const defaultSkontoDays = Number.isFinite(Number(defaultSkontoDaysRaw)) && Number(defaultSkontoDaysRaw) > 0
+    ? parseInt(defaultSkontoDaysRaw, 10) : null;
+
+  if (paymentTerm) {
+    // The source quote's snapshot may carry only some of the Skonto
+    // fields (e.g. when the template predates Skonto support); fill
+    // missing parts from the global defaults so the PDF still shows
+    // the row whenever there's enough info to render it.
+    if (paymentTerm.skontoPercent == null && defaultSkontoPercent != null) {
+      paymentTerm.skontoPercent = defaultSkontoPercent;
+    }
+    if (paymentTerm.skontoWithinDays == null && defaultSkontoDays != null) {
+      paymentTerm.skontoWithinDays = defaultSkontoDays;
+    }
+  } else {
+    // Ad-hoc invoice (no source quote). Build the paymentTerm from
+    // the global defaults. Renders only when BOTH percent + days are
+    // set + > 0 (pdfService.drawPaymentBlock guards on that).
     paymentTerm = {
       description: null,
       netDays: 30,
-      skontoPercent: skontoEnabled ? skontoPercent : null,
-      skontoWithinDays: skontoEnabled ? skontoDays : null,
+      skontoPercent: defaultSkontoPercent,
+      skontoWithinDays: defaultSkontoDays,
     };
   }
 
   return {
     locale: invoice.language || profile?.default_locale || 'de',
     currency: invoice.currency,
-    qrFormat: invoice.qr_format || profile?.default_qr_format || 'none',
+    qrFormat: resolvedQrFormat,
     issuer: profile ? {
       companyName: profile.company_name,
       addressLine1: profile.address_line1,

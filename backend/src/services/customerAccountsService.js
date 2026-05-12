@@ -1011,10 +1011,16 @@ async function getEffectiveFeaturesForCustomer(customerOrId) {
     return { calendar: false, quotes: false, bills: false };
   }
   const globals = await getCustomerSurfaceGlobals();
+  // SQLite returns booleans as 0/1; Postgres returns true/false. The
+  // strict `=== true` check used to falsely return `false` on SQLite,
+  // hiding the sidebar entry even when admin had flipped the per-
+  // customer toggle on. Normalise both shapes here so the Quotes /
+  // Invoices tabs appear consistently.
+  const truthy = (v) => v === true || v === 1 || v === '1' || v === 't';
   return {
-    calendar: globals.calendarEnabled && customer.feature_calendar === true,
-    quotes:   globals.quotesEnabled   && customer.feature_quotes   === true,
-    bills:    globals.billsEnabled    && customer.feature_bills    === true,
+    calendar: globals.calendarEnabled && truthy(customer.feature_calendar),
+    quotes:   globals.quotesEnabled   && truthy(customer.feature_quotes),
+    bills:    globals.billsEnabled    && truthy(customer.feature_bills),
   };
 }
 
