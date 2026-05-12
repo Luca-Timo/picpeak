@@ -426,6 +426,46 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
   const qrFormat = invoice.qr_format
     || (await getAppSetting('crm_invoices_qr_enabled')) === false ? 'none' : (profile?.default_qr_format || 'none');
 
+  // Resolve the payment-term snapshot to thread Skonto + net-days into
+  // the PDF's "Zahlungsbedingungen" block. Two sources, in order:
+  //   1. The originating quote, if this invoice was created from one.
+  //   2. The global CRM defaults (settings tab) — `crm_invoices_*`.
+  // Both are wrapped in `paymentTerm` exactly as quoteService builds it
+  // so pdfService.drawPaymentBlock renders the same block on both
+  // document types.
+  let paymentTerm = null;
+  if (invoice.source_quote_id) {
+    const quote = await db('quotes').where({ id: invoice.source_quote_id }).first();
+    const snapshot = quote && quote.payment_term_snapshot
+      ? (typeof quote.payment_term_snapshot === 'string'
+          ? JSON.parse(quote.payment_term_snapshot) : quote.payment_term_snapshot)
+      : null;
+    if (snapshot) {
+      paymentTerm = {
+        description: snapshot.description,
+        netDays: snapshot.net_days,
+        skontoPercent: snapshot.skonto_percent,
+        skontoWithinDays: snapshot.skonto_within_days,
+      };
+    }
+  }
+  if (!paymentTerm) {
+    // Fall back to global CRM settings for ad-hoc invoices (no source
+    // quote). Skonto only shows when the global toggle is on AND the
+    // default percent is > 0.
+    const skontoEnabled = (await getAppSetting('crm_invoices_skonto_percent_default')) != null
+      ? Number(await getAppSetting('crm_invoices_skonto_percent_default')) > 0
+      : false;
+    const skontoPercent = Number(await getAppSetting('crm_invoices_skonto_percent_default')) || null;
+    const skontoDays = parseInt(await getAppSetting('crm_invoices_skonto_business_days'), 10) || null;
+    paymentTerm = {
+      description: null,
+      netDays: 30,
+      skontoPercent: skontoEnabled ? skontoPercent : null,
+      skontoWithinDays: skontoEnabled ? skontoDays : null,
+    };
+  }
+
   return {
     locale: invoice.language || profile?.default_locale || 'de',
     currency: invoice.currency,
@@ -442,6 +482,7 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       footerLine: profile.footer_line,
       vatId: profile.vat_id,
       logoPath: profile.logo_path,
+      pdfFontTtfPath: profile.pdf_font_ttf_path,
     } : {},
     recipient: {
       issuerLine: profile?.company_name
@@ -462,7 +503,7 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       accountHolder: bank.account_holder || profile?.company_name,
       iban: bank.iban, bic: bank.bic, currency: bank.currency,
     } : null,
-    paymentTerm: null,
+    paymentTerm,
     lineItems: lineItems.map((li) => ({
       quantity: li.quantity,
       description: li.description,
