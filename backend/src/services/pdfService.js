@@ -408,7 +408,21 @@ function drawPaymentBlock(doc, ctx, x, y, width) {
 }
 
 function drawFooter(doc, issuer, locale) {
-  const footerY = doc.page.height - PAGE.marginBottom + 5;
+  // The previous version positioned the footer at
+  // `doc.page.height - marginBottom + 5` (i.e. INSIDE the bottom
+  // margin), which triggered PDFKit's auto-page-break the moment the
+  // text() call wrote past the margin — hence the mysterious empty
+  // second page on quotes and the third empty page on Swiss-QR
+  // invoices. Move the footer back up so it sits within the content
+  // area, just above the bottom margin. Also disable lineBreak on the
+  // text() so PDFKit's auto-paging stays quiet even when the footer
+  // line is unexpectedly long.
+  const lineH = 12;
+  const hasFooterLine = !!issuer.footerLine;
+  // Reserve room for one or two lines above the bottom margin edge.
+  const reserved = hasFooterLine ? lineH * 2 + 4 : lineH;
+  const footerY = doc.page.height - PAGE.marginBottom - reserved;
+
   doc.font(FONT_BODY).fontSize(8).fillColor('#888');
   const parts = [
     issuer.companyName,
@@ -417,13 +431,16 @@ function drawFooter(doc, issuer, locale) {
     issuer.countryCode,
   ].filter(Boolean);
   doc.text(parts.join(', '), PAGE.marginLeft, footerY, {
-    width: PAGE.contentWidth, align: 'center',
+    width: PAGE.contentWidth, align: 'center', lineBreak: false,
   });
-  if (issuer.footerLine) {
-    doc.text(issuer.footerLine, PAGE.marginLeft, footerY + 12, {
-      width: PAGE.contentWidth, align: 'center',
+  if (hasFooterLine) {
+    doc.text(issuer.footerLine, PAGE.marginLeft, footerY + lineH, {
+      width: PAGE.contentWidth, align: 'center', lineBreak: false,
     });
   }
+  // Reset fill colour so any code that runs after the footer (e.g.
+  // the appendSwissQrBill page) doesn't inherit the grey.
+  doc.fillColor('#000');
 }
 
 /**
@@ -500,6 +517,13 @@ function renderDocument(type, context) {
       doc.on('error', reject);
 
       // ---- header row (issuer right, recipient left) ----------------
+      // Layout matches the reference Rechnung/Angebot PDFs:
+      //   - issuer block top-right (logo + company + address + contact)
+      //   - recipient block top-left (small grey issuer line + bold
+      //     company + attention + address + country)
+      //   - horizontal rule spanning the full content width
+      //   - "Datum:" row right-aligned just under the rule
+      //   - large bold title left-aligned below
       const headerY = PAGE.marginTop;
       const halfWidth = (PAGE.contentWidth - 20) / 2;
       const leftX = PAGE.marginLeft;
@@ -509,13 +533,20 @@ function renderDocument(type, context) {
       const recipientEndY = drawRecipientBlock(doc, ctx.recipient, leftX, headerY + 60, halfWidth);
       let y = Math.max(issuerEndY, recipientEndY) + 16;
 
-      // ---- date row -------------------------------------------------
+      // Horizontal divider under the address blocks — matches the line
+      // running across the reference PDF between the recipient/sender
+      // band and the "Datum:" row.
+      doc.moveTo(leftX, y).lineTo(leftX + PAGE.contentWidth, y)
+        .strokeColor('#000').lineWidth(0.6).stroke();
+      y += 10;
+
+      // ---- date row (right-aligned, matches reference) --------------
       y = drawDate(doc, t(ctx.locale, 'date'), formatDate(ctx.doc.issueDate, ctx.intlLocale),
                    leftX, y, PAGE.contentWidth);
 
       // ---- title ----------------------------------------------------
       const title = type === 'quote' ? t(ctx.locale, 'quote_title') : t(ctx.locale, 'invoice_title');
-      y = drawTitle(doc, title, leftX, y + 4);
+      y = drawTitle(doc, title, leftX, y + 12);
 
       // ---- salutation + lead-in ------------------------------------
       doc.font(FONT_BOLD).fontSize(10).fillColor('#000');
