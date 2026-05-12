@@ -195,42 +195,45 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
     }
   }
 
-  const bannerH = 56;
+  const bannerH = 42; // shrunk from 56
   if (logoFound && showName && issuer.companyName) {
     // Logo + name side by side. Logo takes ~38% of column width,
     // name takes the rest. Logo "fit" preserves aspect ratio.
-    const logoW = Math.min(width * 0.38, 90);
+    const logoW = Math.min(width * 0.42, 72);
     doc.image(logoFound, x, y, { fit: [logoW, bannerH] });
-    const nameX = x + logoW + 12;
-    const nameW = width - logoW - 12;
+    const nameX = x + logoW + 8;
+    const nameW = width - logoW - 8;
     // Vertically centre the company name to roughly the middle of
-    // the logo height — pdfkit renders text top-down so we shift y
-    // by ~half the line height.
-    const nameY = y + (bannerH - 14) / 2;
-    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(13).fillColor('#000')
+    // the logo height. Reduced font size matches the maintainer's
+    // tightened letterhead.
+    const nameY = y + (bannerH - 12) / 2;
+    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(11).fillColor('#000')
       .text(issuer.companyName, nameX, nameY, { width: nameW, align: 'left', lineBreak: false });
-    y += bannerH + 8;
+    y += bannerH + 6;
   } else if (logoFound) {
     // Logo only.
     doc.image(logoFound, x, y, { fit: [width, bannerH] });
-    y += bannerH + 8;
+    y += bannerH + 6;
   } else if (showName && issuer.companyName) {
     // Name only.
-    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(14).fillColor('#000')
+    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(12).fillColor('#000')
       .text(issuer.companyName, x, y, { width, align: 'left' });
-    y = doc.y + 8;
+    y = doc.y + 6;
   }
 
   // ---- address block (left-aligned within the column) -----------
-  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#000');
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8.5).fillColor('#000');
   const cityCountry = (() => {
     // Match the screenshot: "FL-9494 Schaan / Liechtenstein" on one
-    // line. Fall back gracefully when fields are missing.
+    // line. Fall back gracefully when fields are missing. The
+    // country name comes from the explicit `countryName` override
+    // when set (migration 107); otherwise we resolve it from the
+    // ISO country code via the locale-aware COUNTRY_NAMES map.
     const cc = issuer.countryCode ? String(issuer.countryCode).toUpperCase() : '';
     const pc = issuer.postalCode || '';
     const city = issuer.city || '';
     const left = [cc && pc ? `${cc}-${pc}` : (pc || cc), city].filter(Boolean).join(' ');
-    const country = countryName(issuer.countryCode, locale);
+    const country = issuer.countryName || countryName(issuer.countryCode, locale);
     return [left, country].filter(Boolean).join(' / ');
   })();
   const addressLines = [
@@ -242,11 +245,11 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
     doc.text(line, x, y, { width, align: 'left' });
     y = doc.y;
   }
-  y += 8;
+  y += 6;
 
   // ---- contact rows (label / value, two columns) ----------------
-  const labelCol = 50;
-  const gap = 6;
+  const labelCol = 38;
+  const gap = 4;
   const valueCol = width - labelCol - gap;
   const labelX = x;
   const valueX = x + labelCol + gap;
@@ -258,14 +261,14 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
     issuer.website ? ['Web:',    issuer.website] : null,
     issuer.vatId   ? ['VAT:',    issuer.vatId]   : null,
   ].filter(Boolean);
-  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10);
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8.5);
   for (const [label, value] of contactRows) {
     const rowY = y;
     doc.text(label, labelX, rowY, { width: labelCol, align: 'left',  lineBreak: false });
     doc.text(value, valueX, rowY, { width: valueCol, align: 'left',  lineBreak: false });
-    y = rowY + 13;
+    y = rowY + 11;
   }
-  return Math.max(y, startY + 80);
+  return Math.max(y, startY + 60);
 }
 
 /**
@@ -375,10 +378,11 @@ function drawLineItems(doc, ctx) {
     : [30, 50, 280, 70, 85];
 
   // Per-row padding (top + bottom + left + right in pt) opens up the
-  // table — the previous default produced tight, almost ledger-like
-  // rows. 6pt top/bottom gives each line item visible breathing room
-  // without forcing a multi-line description to wrap differently.
-  const ROW_PADDING = { top: 6, bottom: 6, left: 4, right: 4 };
+  // table for an airy, ~1.8x line-height feel. swissqrbill's Table
+  // helper renders text at ~12pt baseline-to-baseline with the
+  // default font; adding 12pt top + 12pt bottom padding makes each
+  // visual row ~36pt tall — roughly double the previous density.
+  const ROW_PADDING = { top: 12, bottom: 12, left: 4, right: 4 };
 
   const dataRow = (li, idx) => ({
     padding: ROW_PADDING,
@@ -607,7 +611,9 @@ function drawFooter(doc, issuer, locale) {
     issuer.companyName,
     issuer.addressLine1,
     postalSegment,
-    countryName(issuer.countryCode, locale),
+    // Prefer the explicit country_name override (migration 107)
+    // before falling back to the COUNTRY_NAMES lookup.
+    issuer.countryName || countryName(issuer.countryCode, locale),
   ].filter(Boolean);
   doc.text(parts.join(', '), PAGE.marginLeft, footerY, {
     width: PAGE.contentWidth, align: 'center', lineBreak: false,
@@ -748,16 +754,22 @@ function renderDocument(type, context) {
       // The two blocks are positioned absolutely; we keep a `y`
       // cursor for the body content that starts BELOW both blocks.
       const leftX = PAGE.marginLeft;
-      const issuerWidth = 220;
+      // Sender block: narrower (180pt vs 220pt), further right, and
+      // nudged down by 16pt so it doesn't crowd the very top of the
+      // page. Leaves more breathing room for the logo + name banner.
+      const issuerWidth = 180;
       const issuerX = PAGE.width - PAGE.marginRight - issuerWidth;
-      const issuerY = PAGE.marginTop;
+      const issuerY = PAGE.marginTop + 16;
 
       const issuerEndY = drawIssuerBlock(doc, ctx.issuer, issuerX, issuerY, issuerWidth, ctx.locale);
       const recipientEndY = drawRecipientBlock(doc, ctx.recipient, ctx.locale);
-      // Start the body content below both header blocks AND the
+      // Start the body content below the header blocks AND the
       // address-window bottom edge — never let the date/title row
-      // cut through the window region.
-      let y = Math.max(issuerEndY, recipientEndY, ADDR_WINDOW.top + ADDR_WINDOW.height) + 14;
+      // cut through the window region. The title position isn't
+      // dictated by DIN 5008 (the spec only fixes the address window
+      // position), so we pull it tight against the window's bottom
+      // edge to give the body more vertical room.
+      let y = Math.max(issuerEndY, recipientEndY, ADDR_WINDOW.top + ADDR_WINDOW.height) + 6;
 
       // ---- date row (right-aligned, matches reference) --------------
       y = drawDate(doc, t(ctx.locale, 'date'), formatDate(ctx.doc.issueDate, ctx.intlLocale),
@@ -765,7 +777,7 @@ function renderDocument(type, context) {
 
       // ---- title ----------------------------------------------------
       const title = type === 'quote' ? t(ctx.locale, 'quote_title') : t(ctx.locale, 'invoice_title');
-      y = drawTitle(doc, title, leftX, y + 10);
+      y = drawTitle(doc, title, leftX, y + 2);
 
       // Invoice → source quote cross-reference. We deliberately keep
       // invoice numbers on a strict monotonic sequence (R-YYYY-NNNN)

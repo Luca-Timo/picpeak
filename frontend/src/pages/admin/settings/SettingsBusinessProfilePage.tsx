@@ -71,9 +71,18 @@ export const SettingsBusinessProfilePage: React.FC = () => {
             onChange={(e) => setProfile({ ...profile, city: e.target.value })} />
           <Input label={t('businessProfile.field.state', 'State / Region') as string} value={profile.state}
             onChange={(e) => setProfile({ ...profile, state: e.target.value })} />
-          <Input label={t('businessProfile.field.countryCode', 'Country (ISO 3166)') as string} value={profile.countryCode}
+          <Input label={t('businessProfile.field.countryCode', 'Country abbreviation (FL, CH, DE …)') as string}
+            value={profile.countryCode}
             maxLength={2}
+            placeholder="FL"
             onChange={(e) => setProfile({ ...profile, countryCode: e.target.value.toUpperCase() })} />
+          {/* Free-text country name override (migration 107). When
+              left empty the renderer falls back to the COUNTRY_NAMES
+              lookup on the abbreviation. */}
+          <Input label={t('businessProfile.field.countryName', 'Country (full name)') as string}
+            value={profile.countryName || ''}
+            placeholder="Liechtenstein"
+            onChange={(e) => setProfile({ ...profile, countryName: e.target.value })} />
         </div>
       </Card>
 
@@ -122,20 +131,28 @@ export const SettingsBusinessProfilePage: React.FC = () => {
             value={profile.pdfFontTtfPath || ''}
             placeholder="fonts/MyBrand-Regular.ttf"
             onChange={(e) => setProfile({ ...profile, pdfFontTtfPath: e.target.value })} />
-          {/* PDF letterhead visibility toggles — let the admin suppress
-              the logo or the company-name line independently. Useful
-              when the logo itself already contains the brand name
-              (very common with wordmark logos). */}
-          <label className="flex items-center gap-2 text-sm pt-6">
-            <input type="checkbox" checked={profile.pdfShowLogo}
-              onChange={(e) => setProfile({ ...profile, pdfShowLogo: e.target.checked })} />
-            {t('businessProfile.field.pdfShowLogo', 'Show logo in PDF letterhead')}
-          </label>
-          <label className="flex items-center gap-2 text-sm pt-6">
-            <input type="checkbox" checked={profile.pdfShowCompanyName}
-              onChange={(e) => setProfile({ ...profile, pdfShowCompanyName: e.target.checked })} />
-            {t('businessProfile.field.pdfShowCompanyName', 'Show company name in PDF letterhead')}
-          </label>
+        </div>
+
+        {/* PDF letterhead visibility toggles — let the admin suppress
+            the logo or the company-name line independently. Useful
+            when the logo itself already contains the brand name
+            (very common with wordmark logos). Lifted out of the input
+            grid so the toggle switches don't fight the field sizing. */}
+        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700 space-y-3">
+          <PdfToggleRow
+            label={t('businessProfile.field.pdfShowLogo', 'Show logo in PDF letterhead') as string}
+            description={t('businessProfile.field.pdfShowLogoHelp',
+              'When off, the logo image is suppressed on every PDF even if a logo is uploaded.') as string}
+            enabled={profile.pdfShowLogo}
+            onChange={(v) => setProfile({ ...profile, pdfShowLogo: v })}
+          />
+          <PdfToggleRow
+            label={t('businessProfile.field.pdfShowCompanyName', 'Show company name in PDF letterhead') as string}
+            description={t('businessProfile.field.pdfShowCompanyNameHelp',
+              'When off, the company-name line is suppressed (useful if the logo is a wordmark already containing the name).') as string}
+            enabled={profile.pdfShowCompanyName}
+            onChange={(v) => setProfile({ ...profile, pdfShowCompanyName: v })}
+          />
         </div>
       </Card>
 
@@ -143,6 +160,41 @@ export const SettingsBusinessProfilePage: React.FC = () => {
     </div>
   );
 };
+
+/**
+ * Toggle row used for the PDF letterhead visibility options. Same
+ * accessible-switch markup as the customer feature toggles on
+ * CustomerDetailPage so the styling is consistent across the admin.
+ */
+interface PdfToggleRowProps {
+  label: string;
+  description?: string;
+  enabled: boolean;
+  onChange: (next: boolean) => void;
+}
+
+const PdfToggleRow: React.FC<PdfToggleRowProps> = ({ label, description, enabled, onChange }) => (
+  <label className="flex items-center justify-between gap-4 cursor-pointer">
+    <span className="text-sm">
+      <span className="font-medium text-neutral-900 dark:text-neutral-100">{label}</span>
+      {description && (
+        <span className="block text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">{description}</span>
+      )}
+    </span>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      onClick={() => onChange(!enabled)}
+      className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 shrink-0"
+      style={{ backgroundColor: enabled ? 'var(--color-accent)' : 'var(--color-surface-border)' }}
+    >
+      <span
+        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`}
+      />
+    </button>
+  </label>
+);
 
 interface BankAccountsSectionProps { accounts: BankAccount[] }
 
