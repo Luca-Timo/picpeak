@@ -1,0 +1,150 @@
+/**
+ * Customer CRM panels — quotes + invoices history shown on the customer
+ * detail page. Each panel:
+ *   - is gated by its global feature flag (`quotes` / `bills`); when the
+ *     flag is off the panel doesn't render at all (no empty space)
+ *   - shows the 10 most recent rows for that customer, with status
+ *     badge, total and a click-through to the full document
+ *   - exposes a "New …" button + a "Show all" link to the global list
+ *     pre-filtered by this customer
+ *
+ * Lives as a separate component so CustomerDetailPage doesn't need to
+ * know about CRM types; the panels handle their own data fetching.
+ */
+import React from 'react';
+import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { FileText, Plus, Receipt } from 'lucide-react';
+import { Card, Button, Loading } from '../common';
+import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
+import { quotesService } from '../../services/quotes.service';
+import { billsService } from '../../services/bills.service';
+import { formatMoney } from './LineItemsTable';
+
+interface Props {
+  customerAccountId: number;
+}
+
+export const CustomerCrmPanels: React.FC<Props> = ({ customerAccountId }) => {
+  const { flags } = useFeatureFlags();
+
+  return (
+    <>
+      {flags.quotes && <QuotesPanel customerAccountId={customerAccountId} />}
+      {flags.bills && <InvoicesPanel customerAccountId={customerAccountId} />}
+    </>
+  );
+};
+
+const QuotesPanel: React.FC<Props> = ({ customerAccountId }) => {
+  const { t } = useTranslation();
+  const { data, isLoading } = useQuery({
+    queryKey: ['customer-quotes', customerAccountId],
+    queryFn: () => quotesService.list({ customerAccountId, page: 1, pageSize: 10, sort: 'newest' }),
+  });
+
+  return (
+    <Card padding="lg">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-semibold text-theme flex items-center gap-2">
+          <FileText className="w-5 h-5" /> {t('customers.detail.quotesSection', 'Quotes')}
+        </h2>
+        <div className="flex gap-2">
+          <Link to={`/admin/clients/quotes?customerAccountId=${customerAccountId}`}>
+            <Button variant="outline" size="sm">{t('common.showAll', 'Show all')}</Button>
+          </Link>
+          {/* "New quote" pre-fills via state on QuoteEditorPage when a
+              customerAccountId search-param is present (cheap follow-up
+              if you want it). For now the editor's customer picker
+              starts empty. */}
+          <Link to={`/admin/clients/quotes/new`}>
+            <Button size="sm"><Plus className="w-4 h-4 mr-1" />{t('quotes.new', 'New quote')}</Button>
+          </Link>
+        </div>
+      </div>
+
+      {isLoading ? <Loading /> : !data || data.quotes.length === 0 ? (
+        <p className="text-sm text-muted-theme">
+          {t('customers.detail.noQuotes', 'No quotes for this customer yet.')}
+        </p>
+      ) : (
+        <ul className="divide-y" style={{ borderColor: 'var(--color-surface-border)' }}>
+          {data.quotes.map((q) => (
+            <li key={q.id} className="py-2 flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <Link to={`/admin/clients/quotes/${q.id}`} className="text-theme hover:underline font-mono text-sm">
+                  {q.quoteNumber}
+                </Link>
+                <span className="text-xs text-muted-theme ml-2">{q.eventName || q.issueDate}</span>
+              </div>
+              <span className="text-sm tabular-nums">{formatMoney(Number(q.totalAmountMinor) / 100, q.currency)}</span>
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                q.status === 'accepted' || q.status === 'converted' ? 'bg-green-100 text-green-800'
+                  : q.status === 'declined' ? 'bg-red-100 text-red-800'
+                  : q.status === 'sent' ? 'bg-blue-100 text-blue-800'
+                  : 'bg-neutral-100 text-neutral-700'
+              }`}>{t(`quotes.status.${q.status}`, q.status)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+};
+
+const InvoicesPanel: React.FC<Props> = ({ customerAccountId }) => {
+  const { t } = useTranslation();
+  const { data, isLoading } = useQuery({
+    queryKey: ['customer-invoices', customerAccountId],
+    queryFn: () => billsService.list({ customerAccountId, page: 1, pageSize: 10, sort: 'newest' }),
+  });
+
+  return (
+    <Card padding="lg">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-semibold text-theme flex items-center gap-2">
+          <Receipt className="w-5 h-5" /> {t('customers.detail.billsSection', 'Invoices')}
+        </h2>
+        <div className="flex gap-2">
+          <Link to={`/admin/clients/bills?customerAccountId=${customerAccountId}`}>
+            <Button variant="outline" size="sm">{t('common.showAll', 'Show all')}</Button>
+          </Link>
+          <Link to={`/admin/clients/bills/new`}>
+            <Button size="sm"><Plus className="w-4 h-4 mr-1" />{t('bills.new', 'New invoice')}</Button>
+          </Link>
+        </div>
+      </div>
+
+      {isLoading ? <Loading /> : !data || data.invoices.length === 0 ? (
+        <p className="text-sm text-muted-theme">
+          {t('customers.detail.noBills', 'No invoices for this customer yet.')}
+        </p>
+      ) : (
+        <ul className="divide-y" style={{ borderColor: 'var(--color-surface-border)' }}>
+          {data.invoices.map((inv) => (
+            <li key={inv.id} className="py-2 flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <Link to={`/admin/clients/bills/${inv.id}`} className="text-theme hover:underline font-mono text-sm">
+                  {inv.invoiceNumber}
+                </Link>
+                <span className="text-xs text-muted-theme ml-2">
+                  {inv.dueDate}
+                  {inv.installmentTotal > 1 ? ` · ${inv.installmentIndex + 1}/${inv.installmentTotal}` : ''}
+                </span>
+              </div>
+              <span className="text-sm tabular-nums">{formatMoney(Number(inv.totalAmountMinor) / 100, inv.currency)}</span>
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                inv.status === 'paid' ? 'bg-green-100 text-green-800'
+                  : inv.status === 'overdue' ? 'bg-red-100 text-red-800'
+                  : inv.status === 'sent' ? 'bg-blue-100 text-blue-800'
+                  : inv.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
+                  : 'bg-amber-100 text-amber-800'
+              }`}>{t(`bills.status.${inv.status}`, inv.status)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+};

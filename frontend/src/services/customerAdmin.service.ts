@@ -35,6 +35,14 @@ export interface CustomerAccountDetail extends CustomerAccountSummary {
   state: string | null;
   countryCode: string | null;
   preferredLanguage: string;
+  /**
+   * CRM billing cadence override (migration 102).
+   * - 'per_event' (default): respect each quote's installment plan
+   * - 'monthly' / 'quarterly': snap every scheduled invoice to
+   *   `billingCycleDay` of the next period.
+   */
+  billingCadence?: 'per_event' | 'monthly' | 'quarterly';
+  billingCycleDay?: number;
   notes: string | null;
   events: Array<{
     id: number;

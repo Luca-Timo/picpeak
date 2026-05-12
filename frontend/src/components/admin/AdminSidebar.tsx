@@ -77,7 +77,7 @@ const navigation: NavItem[] = [
     // there's nothing inside ClientsLayout to link to. Add future
     // sub-flags (calendar, quotes, bills, messaging) here as they
     // ship; the entry reappears the moment any of them is enabled.
-    featureFlagsAny: ['customerPortal'],
+    featureFlagsAny: ['customerPortal', 'quotes', 'bills'],
   },
 ];
 

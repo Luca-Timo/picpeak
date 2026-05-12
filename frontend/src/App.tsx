@@ -24,8 +24,16 @@ import {
   UserManagementPage,
   CustomerManagementPage,
   CustomerDetailPage,
-  WebhookDeliveriesPage
+  WebhookDeliveriesPage,
+  // CRM routes (#TBD) — feature-flagged at the route layer via RequireFeature.
+  QuotesListPage,
+  QuoteEditorPage,
+  QuoteDetailPage,
+  BillsListPage,
+  BillEditorPage,
+  BillDetailPage,
 } from './pages/admin';
+import { QuoteResponsePage } from './pages/public/QuoteResponsePage';
 import { AcceptInvitePage } from './pages/public/AcceptInvitePage';
 import {
   CustomerLoginPage,
@@ -172,12 +180,25 @@ function App() {
                             <Route path="accounts" element={<CustomerManagementPage />} />
                             <Route path="accounts/:id" element={<CustomerDetailPage />} />
                           </Route>
+                          {/* Quotes (CRM) — gated by `quotes`. */}
+                          <Route element={<RequireFeature flag="quotes" />}>
+                            <Route path="quotes" element={<QuotesListPage />} />
+                            <Route path="quotes/new" element={<QuoteEditorPage />} />
+                            <Route path="quotes/:id" element={<QuoteDetailPage />} />
+                            <Route path="quotes/:id/edit" element={<QuoteEditorPage />} />
+                          </Route>
+                          {/* Bills / invoices (CRM) — gated by `bills`. */}
+                          <Route element={<RequireFeature flag="bills" />}>
+                            <Route path="bills" element={<BillsListPage />} />
+                            <Route path="bills/new" element={<BillEditorPage />} />
+                            <Route path="bills/:id" element={<BillDetailPage />} />
+                            <Route path="bills/:id/edit" element={<BillEditorPage />} />
+                          </Route>
                           {/* Default: send /admin/clients (no sub-path) to
-                              the first available sub-feature. Today that's
-                              always accounts; when calendar/quotes ship they
-                              get their own routes here and the empty-state
-                              in ClientsLayout handles the rare "parent on,
-                              all children off" case. */}
+                              the first enabled sub-feature. accounts comes
+                              first because it predates the others. The empty
+                              state inside ClientsLayout handles "parent on,
+                              all children off". */}
                           <Route index element={<Navigate to="/admin/clients/accounts" replace />} />
                         </Route>
                       </Route>
@@ -208,6 +229,10 @@ function App() {
 
                   {/* Public invitation acceptance page */}
                   <Route path="/invite/:token" element={<AcceptInvitePage />} />
+
+                  {/* Public quote accept/decline page (CRM). Token-only,
+                      no auth required. */}
+                  <Route path="/quote/:token" element={<QuoteResponsePage />} />
 
                   {/* Customer surface (#354). Strictly separate provider /
                       cookie / API surface from /admin/*. The customerPortal
