@@ -5,7 +5,7 @@
  */
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Send, CheckCircle, BellRing, XCircle } from 'lucide-react';
 import { Button, Card, Loading, Input } from '../../../components/common';
@@ -147,6 +147,20 @@ export const BillDetailPage: React.FC = () => {
           <div><div className="text-neutral-500">{t('bills.field.outstanding', 'Outstanding')}</div>
             <div className={outstanding > 0 ? 'text-red-700 font-medium' : ''}>{formatMoney(outstanding, inv.currency)}</div></div>
           {inv.lateFeeAmountMinor > 0 && <div><div className="text-neutral-500">{t('bills.field.lateFee', 'Late fee')}</div><div className="text-amber-700">{formatMoney(Number(inv.lateFeeAmountMinor) / 100, inv.currency)}</div></div>}
+          {/* Cross-link back to the source quote — the invoice number
+              follows its own monotonic sequence (R-YYYY-NNNN) for
+              tax compliance, so this link is the only place admins
+              see the quote provenance. Customers see the same info
+              as a "Bezug: Angebot Q-..." line on the PDF. */}
+          {inv.sourceQuoteId && (
+            <div>
+              <div className="text-neutral-500">{t('bills.field.sourceQuote', 'From quote')}</div>
+              <Link to={`/admin/clients/quotes/${inv.sourceQuoteId}`}
+                className="text-primary-600 dark:text-primary-400 hover:underline font-mono text-sm">
+                #{inv.sourceQuoteId}
+              </Link>
+            </div>
+          )}
         </div>
       </Card>
 

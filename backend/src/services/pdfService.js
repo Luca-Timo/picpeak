@@ -673,6 +673,25 @@ function renderDocument(type, context) {
       // the same visual weight as the reference Rechnung PDF.
       y = drawTitle(doc, title, leftX, y + 18);
 
+      // Invoice → source quote cross-reference. We deliberately keep
+      // invoice numbers on a strict monotonic sequence (R-YYYY-NNNN)
+      // for tax-compliance reasons (CH/LI/DE/AT require
+      // "lückenlose Rechnungsnummern") — instead of mirroring the
+      // quote number on the invoice, we surface the link as a small
+      // "Bezug: Angebot Q-…" line under the title. Readers see the
+      // provenance without breaking the numbering scheme. Only
+      // rendered for invoices that came from a quote; no-op for
+      // standalone invoices.
+      if (type === 'invoice' && ctx.doc.sourceQuoteNumber) {
+        doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#666');
+        doc.text(
+          `${t(ctx.locale, 'reference_label')}: ${t(ctx.locale, 'quote_title')} ${ctx.doc.sourceQuoteNumber}`,
+          leftX, y, { width: PAGE.contentWidth }
+        );
+        y = doc.y + 6;
+        doc.fillColor('#000');
+      }
+
       // ---- salutation + lead-in ------------------------------------
       doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10).fillColor('#000');
       doc.text(t(ctx.locale, 'salutation'), leftX, y, { width: PAGE.contentWidth });

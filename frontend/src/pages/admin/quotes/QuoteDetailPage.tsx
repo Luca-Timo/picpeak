@@ -5,11 +5,12 @@
  */
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Send, Copy, ArrowRightCircle, Edit2, Receipt } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
 import { quotesService } from '../../../services/quotes.service';
+import { billsService } from '../../../services/bills.service';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
 import { toast } from 'react-toastify';
 
@@ -21,6 +22,15 @@ export const QuoteDetailPage: React.FC = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['quote', id],
     queryFn: () => quotesService.get(parseInt(id!, 10)),
+    enabled: !!id,
+  });
+
+  // Reciprocal lookup — pulls every invoice whose source_quote_id
+  // points at this quote so the admin can jump straight to the bills
+  // that came out of the conversion. Hidden when empty.
+  const { data: linkedInvoices } = useQuery({
+    queryKey: ['quote', id, 'linkedInvoices'],
+    queryFn: () => billsService.list({ sourceQuoteId: parseInt(id!, 10), pageSize: 50 }),
     enabled: !!id,
   });
 
@@ -178,6 +188,46 @@ export const QuoteDetailPage: React.FC = () => {
             <span className="tabular-nums w-28 text-right">{formatMoney(Number(q.totalAmountMinor || 0) / 100, q.currency)}</span></div>
         </div>
       </Card>
+
+      {linkedInvoices && linkedInvoices.invoices.length > 0 && (
+        <Card>
+          <h3 className="font-semibold mb-3">{t('quotes.section.linkedInvoices', 'Resulting invoices')}</h3>
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-neutral-200 dark:border-neutral-700">
+              <th className="text-left py-2">{t('bills.field.number', 'Invoice')}</th>
+              <th className="text-left py-2">{t('bills.field.status', 'Status')}</th>
+              <th className="text-left py-2">{t('bills.field.dueDate', 'Due')}</th>
+              <th className="text-right py-2">{t('bills.field.total', 'Total')}</th>
+            </tr></thead>
+            <tbody>
+              {linkedInvoices.invoices.map((inv) => (
+                <tr key={inv.id} className="border-b border-neutral-100 dark:border-neutral-800">
+                  <td className="py-2">
+                    <Link to={`/admin/clients/bills/${inv.id}`}
+                      className="text-primary-600 dark:text-primary-400 hover:underline font-mono">
+                      {inv.invoiceNumber}
+                    </Link>
+                    {inv.installmentTotal > 1 && (
+                      <span className="ml-2 text-xs text-neutral-500">
+                        {inv.installmentIndex + 1}/{inv.installmentTotal}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-neutral-100 text-neutral-700">
+                      {t(`bills.status.${inv.status}`, inv.status)}
+                    </span>
+                  </td>
+                  <td className="py-2">{inv.dueDate}</td>
+                  <td className="py-2 text-right tabular-nums">
+                    {formatMoney(Number(inv.totalAmountMinor || 0) / 100, inv.currency)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
 
       {q.internalNotes && (
         <Card>
