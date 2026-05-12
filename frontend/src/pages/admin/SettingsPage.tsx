@@ -46,6 +46,10 @@ import { BrandingPage } from './BrandingPage';
 import { EventTypesPage } from './EventTypesPage';
 import { BackupManagement } from './BackupManagement';
 import { CMSPage } from './CMSPage';
+// CRM (#TBD)
+import { SettingsBusinessProfilePage } from './settings/SettingsBusinessProfilePage';
+import { CrmSettingsPage } from './settings/CrmSettingsPage';
+import { Briefcase, Receipt } from 'lucide-react';
 
 // Tab keys driving the inner-nav. Must include every key used in
 // `navGroups` below and in the switch at the bottom of the component.
@@ -68,7 +72,11 @@ type TabType =
   | 'webhooks'
   | 'status'
   | 'analytics'
-  | 'backup';
+  | 'backup'
+  // CRM (#TBD): issuer block for quote/invoice PDFs and per-area
+  // CRM behaviour toggles.
+  | 'businessProfile'
+  | 'crm';
 
 interface NavItem {
   key: TabType;
@@ -88,6 +96,7 @@ const ALL_TAB_KEYS: TabType[] = [
   'security', 'imageSecurity', 'seo',
   'apiTokens', 'webhooks',
   'status', 'analytics', 'backup',
+  'businessProfile', 'crm',
 ];
 
 function isValidTab(value: string | null): value is TabType {
@@ -216,6 +225,16 @@ export const SettingsPage: React.FC = () => {
       items: [
         { key: 'apiTokens', label: t('settings.apiTokens.title', 'API Tokens'), icon: KeyRound },
         { key: 'webhooks',  label: t('settings.webhooks.title',  'Webhooks'),   icon: Webhook },
+      ],
+    },
+    {
+      // CRM group — appears once the `quotes` or `bills` global flag is
+      // on. The whole group is hidden when neither feature is enabled so
+      // installs that never opted into the CRM don't see empty tabs.
+      label: t('settings.groups.crm', 'Quotes & Invoices'),
+      items: [
+        { key: 'businessProfile', label: t('settings.businessProfile.title', 'Business profile'), icon: Briefcase },
+        { key: 'crm',             label: t('settings.crm.title',             'CRM behaviour'),    icon: Receipt },
       ],
     },
     {
@@ -363,6 +382,8 @@ export const SettingsPage: React.FC = () => {
           {activeTab === 'cms' && <CMSPage />}
           {activeTab === 'email' && <EmailConfigPage />}
           {activeTab === 'backup' && <BackupManagement />}
+          {activeTab === 'businessProfile' && <SettingsBusinessProfilePage />}
+          {activeTab === 'crm' && <CrmSettingsPage />}
 
           {activeTab === 'status' && (
             <StatusTab

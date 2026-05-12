@@ -24,6 +24,7 @@ import {
   customerAdminService,
   type CustomerAccountDetail,
 } from '../../services/customerAdmin.service';
+import { CustomerCrmPanels } from '../../components/admin/CustomerCrmPanels';
 
 type EditableFields =
   | 'email' | 'salutation' | 'firstName' | 'lastName' | 'displayName'
@@ -423,6 +424,14 @@ export const CustomerDetailPage: React.FC = () => {
           className="input w-full"
         />
       </Card>
+
+      {/* Quotes + Invoices history (CRM #TBD).
+          Each panel renders a compact list scoped to this customer. The
+          panels are independently feature-flagged so they vanish for
+          installs that haven't turned the master quotes/bills flag on.
+          The flag check lives in <CustomerCrmPanels /> so this page
+          doesn't need to import useFeatureFlags directly. */}
+      <CustomerCrmPanels customerAccountId={customer.id} />
 
       {/* Assigned events */}
       <Card padding="lg">

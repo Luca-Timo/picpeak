@@ -14,7 +14,7 @@
 import React from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Briefcase, UserCog } from 'lucide-react';
+import { Briefcase, UserCog, FileText, Receipt } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useFeatureFlags, type FeatureKey } from '../../contexts/FeatureFlagsContext';
 
@@ -46,12 +46,23 @@ export const ClientsLayout: React.FC = () => {
       icon: UserCog,
       featureFlag: 'customerPortal',
     },
-    // Add future sub-features here as they ship:
-    //   { key: 'calendar', to: '/admin/clients/calendar', ... featureFlag: 'calendar' }
-    //   { key: 'quotes',   to: '/admin/clients/quotes',   ... featureFlag: 'quotes'   }
-    //   { key: 'bills',    to: '/admin/clients/bills',    ... featureFlag: 'bills'    }
-    //   etc. The empty-state below disappears automatically once any of
-    //   these is enabled.
+    {
+      key: 'quotes',
+      to: '/admin/clients/quotes',
+      label: t('clients.subnav.quotes', 'Quotes'),
+      icon: FileText,
+      featureFlag: 'quotes',
+    },
+    {
+      key: 'bills',
+      to: '/admin/clients/bills',
+      label: t('clients.subnav.bills', 'Invoices'),
+      icon: Receipt,
+      featureFlag: 'bills',
+    },
+    // Future sub-features:
+    //   { key: 'calendar',  ... featureFlag: 'calendar' }
+    //   { key: 'messaging', ... featureFlag: 'messaging' }
   ];
 
   const enabledItems = navItems.filter((item) => flags[item.featureFlag]);
