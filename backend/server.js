@@ -611,6 +611,8 @@ app.use('/api/admin/quotes',   require('./src/routes/adminQuotes'));
 app.use('/api/admin/invoices', require('./src/routes/adminInvoices'));
 app.use('/api/public/quotes',  require('./src/routes/publicQuotes'));
 
+app.use('/api/customer/auth', require('./src/routes/customerAuth'));
+app.use('/api/customer', require('./src/routes/customer'));
 app.use('/api/admin/event-types', require('./src/routes/adminEventTypes'));
 app.use('/api/admin/api-tokens', require('./src/routes/adminApiTokens'));
 app.use('/api/admin/webhooks', require('./src/routes/adminWebhooks'));
