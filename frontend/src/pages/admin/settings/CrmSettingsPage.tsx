@@ -20,6 +20,10 @@ const SETTING_KEYS = [
   'crm_quotes_accept_window_minutes',
   'crm_quotes_default_valid_days',
   'crm_quotes_number_format',
+  // Terms of Service step on quote acceptance (migration 104).
+  'crm_quotes_tos_required',
+  'crm_quotes_tos_text',
+  'crm_quotes_tos_url',
   'crm_invoices_qr_enabled',
   'crm_invoices_reminders_enabled',
   'crm_invoices_reminder_first_days',
@@ -106,6 +110,37 @@ export const CrmSettingsPage: React.FC = () => {
             label={t('crmSettings.crm_quotes_number_format.label', 'Quote number format') as string}
             value={values.crm_quotes_number_format ?? ''}
             onChange={(e) => setVal('crm_quotes_number_format', e.target.value)} />
+        </div>
+
+        {/* Terms of Service step (migration 104). When required, the
+            public quote response page shows a checkbox the customer
+            must tick before Accept fires. The text snapshot is
+            recorded on the quote at acceptance time for audit. */}
+        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+          <h4 className="font-semibold mb-2 text-sm">
+            {t('crmSettings.section.quotesTos', 'Terms of Service / AGB step')}
+          </h4>
+          {checkbox('crm_quotes_tos_required', 'Require customers to tick "I accept the Terms of Service" before accepting')}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+            <Input
+              label={t('crmSettings.crm_quotes_tos_url.label', 'Terms of Service URL (optional)') as string}
+              placeholder="https://example.com/terms"
+              value={values.crm_quotes_tos_url ?? ''}
+              onChange={(e) => setVal('crm_quotes_tos_url', e.target.value)} />
+          </div>
+          <div className="mt-3">
+            <label className="block text-sm font-medium mb-1">
+              {t('crmSettings.crm_quotes_tos_text.label', 'Inline Terms text shown on the quote page')}
+            </label>
+            <textarea
+              rows={6}
+              className="w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+              value={values.crm_quotes_tos_text ?? ''}
+              onChange={(e) => setVal('crm_quotes_tos_text', e.target.value)}
+              placeholder={t('crmSettings.crm_quotes_tos_text.placeholder',
+                'Paste the contract terms here. Plain text. Leave empty to only show the checkbox + URL.') as string}
+            />
+          </div>
         </div>
       </Card>
 

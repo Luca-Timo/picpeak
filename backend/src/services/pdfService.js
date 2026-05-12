@@ -38,8 +38,17 @@ const PAGE = {
   contentWidth: 595.28 - 80, // 515.28
 };
 
+// Default to PDFKit's built-in Helvetica. These constants are STILL
+// used by the rest of the renderer as logical font names; when the
+// admin has uploaded a custom TTF (business_profile.pdf_font_ttf_path),
+// renderDocument registers it under these same names so every existing
+// `doc.font(doc._fonts ? doc._fonts.body : FONT_BODY)` / `doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD)` call automatically
+// picks it up. If only one weight is available we register it for both
+// — bold falls back gracefully to regular.
 const FONT_BODY = 'Helvetica';
 const FONT_BOLD = 'Helvetica-Bold';
+const CUSTOM_BODY = 'crm-body';
+const CUSTOM_BOLD = 'crm-bold';
 
 /**
  * Format a minor-unit BigInt-ish integer as a localised currency string.
@@ -122,12 +131,12 @@ function drawIssuerBlock(doc, issuer, x, y, width) {
     }
   }
 
-  doc.font(FONT_BOLD).fontSize(13);
+  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(13);
   if (issuer.companyName) {
     doc.text(issuer.companyName, x, y, { width, align: 'right' });
     y = doc.y + 4;
   }
-  doc.font(FONT_BODY).fontSize(9);
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(9);
   const addressLines = [
     issuer.addressLine1,
     issuer.addressLine2,
@@ -159,15 +168,15 @@ function drawIssuerBlock(doc, issuer, x, y, width) {
  * address. recipient comes pre-shaped by the calling service.
  */
 function drawRecipientBlock(doc, recipient, x, y, width) {
-  doc.font(FONT_BODY).fontSize(8.5).fillColor('#666')
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8.5).fillColor('#666')
     .text(`${recipient.issuerLine || ''}`, x, y, { width });
   y = doc.y + 8;
-  doc.font(FONT_BOLD).fontSize(11).fillColor('#000');
+  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(11).fillColor('#000');
   if (recipient.companyName) {
     doc.text(recipient.companyName, x, y, { width });
     y = doc.y;
   }
-  doc.font(FONT_BODY).fontSize(10);
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10);
   const lines = [
     recipient.attentionLine,
     recipient.addressLine1,
@@ -183,12 +192,12 @@ function drawRecipientBlock(doc, recipient, x, y, width) {
 }
 
 function drawTitle(doc, title, x, y) {
-  doc.font(FONT_BOLD).fontSize(20).fillColor('#000').text(title, x, y);
+  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(20).fillColor('#000').text(title, x, y);
   return doc.y + 8;
 }
 
 function drawDate(doc, label, value, x, y, width) {
-  doc.font(FONT_BODY).fontSize(10).fillColor('#000');
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#000');
   const right = x + width;
   const labelWidth = 80;
   doc.text(`${label}:`, right - labelWidth - 80, y, { width: 80, align: 'right' });
@@ -249,7 +258,9 @@ function drawLineItems(doc, ctx) {
   });
 
   const headerRow = {
-    fontName: FONT_BOLD,
+    // Table accepts any registered font name; if a custom font is in
+    // use we route the bold row through it too.
+    fontName: ctx.fonts?.bold || FONT_BOLD,
     fontSize: 9,
     columns: showDiscount
       ? [
@@ -305,18 +316,18 @@ function drawTotals(doc, ctx, x, y, width) {
   const rateX  = right - valueCol - 30;
   const valueX = right - valueCol;
 
-  doc.font(FONT_BOLD).fontSize(10);
+  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10);
   doc.text(t(locale, 'totals_net'), labelX, y, { width: labelCol });
-  doc.font(FONT_BODY);
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY);
   doc.text(formatMinor(totals.netAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
   y = doc.y + 4;
 
-  doc.font(FONT_BOLD).text(t(locale, 'totals_shipping'), labelX, y, { width: labelCol });
-  doc.font(FONT_BODY).text(formatMinor(totals.shippingAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
+  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).text(t(locale, 'totals_shipping'), labelX, y, { width: labelCol });
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).text(formatMinor(totals.shippingAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
   y = doc.y + 4;
 
-  doc.font(FONT_BOLD).text(t(locale, 'totals_vat'), labelX, y, { width: labelCol });
-  doc.font(FONT_BODY).text(`${stripTrailingZeros(totals.vatRate)}%`, rateX, y, { width: 40, align: 'right' });
+  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).text(t(locale, 'totals_vat'), labelX, y, { width: labelCol });
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).text(`${stripTrailingZeros(totals.vatRate)}%`, rateX, y, { width: 40, align: 'right' });
   doc.text(formatMinor(totals.vatAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
   y = doc.y + 10;
 
@@ -324,7 +335,7 @@ function drawTotals(doc, ctx, x, y, width) {
   doc.moveTo(labelX, y).lineTo(right, y).strokeColor('#000').lineWidth(0.8).stroke();
   y += 6;
 
-  doc.font(FONT_BOLD).fontSize(12);
+  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(12);
   doc.text(t(locale, 'totals_grand'), labelX, y, { width: labelCol });
   doc.text(formatCurrencyLabel(currency), rateX, y, { width: 40, align: 'right' });
   doc.text(formatMinor(totals.totalAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
@@ -346,10 +357,10 @@ function drawPaymentBlock(doc, ctx, x, y, width) {
   const rightX = x + colWidth + 20;
   const startY = y;
 
-  doc.font(FONT_BOLD).fontSize(10).fillColor('#000');
+  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10).fillColor('#000');
   doc.text(t(locale, 'payment_conditions') + ':', leftX, y, { width: colWidth });
   y = doc.y + 2;
-  doc.font(FONT_BODY).fontSize(10);
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10);
   if (paymentTerm?.description) {
     doc.text(paymentTerm.description, leftX, y, { width: colWidth });
     y = doc.y + 4;
@@ -386,10 +397,10 @@ function drawPaymentBlock(doc, ctx, x, y, width) {
   // Right column: IBAN.
   let ry = startY;
   if (bank) {
-    doc.font(FONT_BOLD).fontSize(10);
+    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10);
     doc.text(t(locale, 'iban_intro'), rightX, ry, { width: colWidth });
     ry = doc.y + 4;
-    doc.font(FONT_BODY).fontSize(10);
+    doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10);
     if (bank.accountHolder) {
       doc.text(bank.accountHolder, rightX, ry, { width: colWidth });
       ry = doc.y;
@@ -423,7 +434,7 @@ function drawFooter(doc, issuer, locale) {
   const reserved = hasFooterLine ? lineH * 2 + 4 : lineH;
   const footerY = doc.page.height - PAGE.marginBottom - reserved;
 
-  doc.font(FONT_BODY).fontSize(8).fillColor('#888');
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8).fillColor('#888');
   const parts = [
     issuer.companyName,
     issuer.addressLine1,
@@ -516,6 +527,50 @@ function renderDocument(type, context) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
+      // Optional custom font (business_profile.pdf_font_ttf_path).
+      // Loaded from STORAGE_PATH/<path> if relative, or absolute as-is.
+      // We rebind FONT_BODY/FONT_BOLD on the doc level by storing the
+      // resolved name on `ctx.fonts`; helpers below read from there.
+      // Falls back to Helvetica silently when the file is missing or
+      // PDFKit fails to register it (woff2 etc.).
+      // Helpers below read `doc._fonts` (one extra word per doc) so we
+      // don't have to thread the font names through every drawing
+      // function or fork the helpers per branding. Defaults to the
+      // built-in Helvetica family.
+      doc._fonts = { body: FONT_BODY, bold: FONT_BOLD };
+      ctx.fonts = doc._fonts;
+      if (ctx.issuer && ctx.issuer.pdfFontTtfPath) {
+        try {
+          const path = require('path');
+          const fs = require('fs');
+          const raw = ctx.issuer.pdfFontTtfPath;
+          const candidates = [
+            path.isAbsolute(raw) ? raw : null,
+            path.join(process.cwd(), 'storage', raw.replace(/^\/+/, '')),
+            path.join(process.cwd(), 'storage', 'fonts', path.basename(raw)),
+          ].filter(Boolean);
+          const found = candidates.find((p) => { try { return fs.existsSync(p); } catch { return false; } });
+          if (found && /\.(ttf|otf)$/i.test(found)) {
+            doc.registerFont(CUSTOM_BODY, found);
+            // PDFKit can't synthesise bold from a regular face, so
+            // bold falls back to the same registered face. Admins who
+            // want a proper bold should upload an OTF/TTF that bakes
+            // it in — same convention as other PDF generators.
+            doc.registerFont(CUSTOM_BOLD, found);
+            doc._fonts = { body: CUSTOM_BODY, bold: CUSTOM_BOLD };
+            ctx.fonts = doc._fonts;
+          } else {
+            const logger = require('../utils/logger');
+            logger.warn('Custom PDF font path not usable; falling back to Helvetica', {
+              raw, resolved: found || null,
+            });
+          }
+        } catch (err) {
+          const logger = require('../utils/logger');
+          logger.warn('Failed to register custom PDF font', { err: err.message });
+        }
+      }
+
       // ---- header row (issuer right, recipient left) ----------------
       // Layout matches the reference Rechnung/Angebot PDFs:
       //   - issuer block top-right (logo + company + address + contact)
@@ -549,10 +604,10 @@ function renderDocument(type, context) {
       y = drawTitle(doc, title, leftX, y + 12);
 
       // ---- salutation + lead-in ------------------------------------
-      doc.font(FONT_BOLD).fontSize(10).fillColor('#000');
+      doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10).fillColor('#000');
       doc.text(t(ctx.locale, 'salutation'), leftX, y, { width: PAGE.contentWidth });
       y = doc.y + 4;
-      doc.font(FONT_BODY);
+      doc.font(doc._fonts ? doc._fonts.body : FONT_BODY);
       const leadIn = type === 'quote'
         ? t(ctx.locale, 'lead_in_quote')
         : t(ctx.locale, 'lead_in_invoice');
@@ -576,7 +631,7 @@ function renderDocument(type, context) {
 
       // ---- outro text -----------------------------------------------
       if (ctx.doc.outroText) {
-        doc.font(FONT_BODY).fontSize(10).fillColor('#000');
+        doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#000');
         doc.text(ctx.doc.outroText, leftX, y, { width: PAGE.contentWidth });
         y = doc.y + 12;
       }

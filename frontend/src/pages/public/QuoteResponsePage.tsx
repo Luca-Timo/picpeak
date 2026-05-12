@@ -63,20 +63,30 @@ export const QuoteResponsePage: React.FC = () => {
   }, [data, i18n]);
 
   const q = data?.quote;
+  // Tick state for the optional Terms of Service step. Pre-ticked if
+  // the quote was already accepted (so re-displays don't lose state).
+  const [tosAccepted, setTosAccepted] = useState(false);
+  useEffect(() => {
+    if (q?.tos?.acceptedAt) setTosAccepted(true);
+  }, [q?.tos?.acceptedAt]);
+
   const handleRespond = React.useCallback(async (action: 'accept' | 'decline') => {
     setBusy(true);
     setError(null);
     try {
-      await publicQuotesService.respond(token!, action);
+      await publicQuotesService.respond(token!, action, { tosAccepted });
       await refetch();
     } catch (err: any) {
       if (err?.response?.data?.code === 'RESPONSE_LOCKED') {
         setError(t('quoteResponse.locked', 'Your response window has closed and the decision is now final.'));
+      } else if (err?.response?.data?.code === 'TOS_REQUIRED') {
+        setError(t('quoteResponse.tosRequiredError',
+          'Please tick "I accept the Terms of Service" before accepting the quote, or click Decline to refuse.'));
       } else {
         setError(err?.response?.data?.error || err.message || 'Something went wrong');
       }
     } finally { setBusy(false); }
-  }, [token, refetch, t]);
+  }, [token, refetch, t, tosAccepted]);
 
   // ONE-CLICK ACCEPT / DECLINE FROM EMAIL
   // The Accept / Decline links in the customer email carry the
@@ -86,6 +96,12 @@ export const QuoteResponsePage: React.FC = () => {
   // After firing we strip the query string so a refresh doesn't
   // re-submit and the page stays a normal read-only view of the
   // (now-locked) quote.
+  //
+  // EXCEPTION: when the global ToS toggle is on, auto-submit is
+  // DISABLED for the accept path. We still need the customer to tick
+  // the consent box, so the action carries through to the buttons in
+  // the page body. Decline auto-submits normally because it doesn't
+  // need consent.
   const autoSubmittedRef = useRef(false);
   useEffect(() => {
     if (autoSubmittedRef.current) return;
@@ -93,13 +109,14 @@ export const QuoteResponsePage: React.FC = () => {
     const action = searchParams.get('action');
     if (action !== 'accept' && action !== 'decline') return;
     if (!q.canRespond) return;
+    if (action === 'accept' && q.tos?.required && !tosAccepted) return; // wait for tick
     autoSubmittedRef.current = true;
     handleRespond(action as 'accept' | 'decline').finally(() => {
       const next = new URLSearchParams(searchParams);
       next.delete('action');
       setSearchParams(next, { replace: true });
     });
-  }, [q, token, searchParams, setSearchParams, handleRespond]);
+  }, [q, token, searchParams, setSearchParams, handleRespond, tosAccepted]);
 
   if (isLoading) return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-900">
@@ -243,9 +260,47 @@ export const QuoteResponsePage: React.FC = () => {
                     ? t('quoteResponse.changeWithin', 'You can change your response until {{at}}.', { at: q!.responseLockedAt ? new Date(q!.responseLockedAt).toLocaleTimeString() : '' })
                     : t('quoteResponse.intro', 'Please accept or decline this quote:')}
                 </p>
+
+                {/* Terms of Service step (admin-configurable in CRM
+                    Settings). When `tos.required` is true, Accept is
+                    disabled until the customer ticks the box. The
+                    text + optional link come from settings; both can
+                    be empty if only the checkbox + label is wanted. */}
+                {q!.tos && (q!.tos.text || q!.tos.required) && (
+                  <div className="text-left max-w-prose mx-auto mb-4 rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 p-4">
+                    {q!.tos.text && (
+                      <div className="text-xs text-neutral-700 dark:text-neutral-300 whitespace-pre-line mb-3 max-h-48 overflow-y-auto">
+                        {q!.tos.text}
+                      </div>
+                    )}
+                    <label className="flex items-start gap-2 text-sm text-neutral-700 dark:text-neutral-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={tosAccepted}
+                        onChange={(e) => setTosAccepted(e.target.checked)}
+                      />
+                      <span>
+                        {t('quoteResponse.tosCheckbox',
+                          'I have read and accept the Terms of Service.')}
+                        {q!.tos.url && (
+                          <>
+                            {' '}
+                            <a href={q!.tos.url} target="_blank" rel="noopener noreferrer"
+                              className="underline text-primary-600 dark:text-primary-400">
+                              {t('quoteResponse.tosLink', 'Read the full Terms')}
+                            </a>
+                          </>
+                        )}
+                      </span>
+                    </label>
+                  </div>
+                )}
+
                 <div className="flex justify-center gap-3 flex-wrap">
                   <button
-                    type="button" disabled={busy}
+                    type="button"
+                    disabled={busy || (q!.tos?.required && !tosAccepted)}
                     onClick={() => handleRespond('accept')}
                     className="px-6 py-3 rounded-md bg-green-600 hover:bg-green-700 text-white font-medium disabled:opacity-50"
                   >{t('quoteResponse.accept', 'Accept quote')}</button>
