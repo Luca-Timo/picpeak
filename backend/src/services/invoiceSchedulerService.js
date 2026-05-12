@@ -16,7 +16,7 @@
 
 const cron = require('node-cron');
 const invoiceService = require('./invoiceService');
-const { logger } = require('../utils/logger');
+const logger = require('../utils/logger');
 
 let task = null;
 
