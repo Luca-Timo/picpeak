@@ -122,6 +122,20 @@ export const SettingsBusinessProfilePage: React.FC = () => {
             value={profile.pdfFontTtfPath || ''}
             placeholder="fonts/MyBrand-Regular.ttf"
             onChange={(e) => setProfile({ ...profile, pdfFontTtfPath: e.target.value })} />
+          {/* PDF letterhead visibility toggles — let the admin suppress
+              the logo or the company-name line independently. Useful
+              when the logo itself already contains the brand name
+              (very common with wordmark logos). */}
+          <label className="flex items-center gap-2 text-sm pt-6">
+            <input type="checkbox" checked={profile.pdfShowLogo}
+              onChange={(e) => setProfile({ ...profile, pdfShowLogo: e.target.checked })} />
+            {t('businessProfile.field.pdfShowLogo', 'Show logo in PDF letterhead')}
+          </label>
+          <label className="flex items-center gap-2 text-sm pt-6">
+            <input type="checkbox" checked={profile.pdfShowCompanyName}
+              onChange={(e) => setProfile({ ...profile, pdfShowCompanyName: e.target.checked })} />
+            {t('businessProfile.field.pdfShowCompanyName', 'Show company name in PDF letterhead')}
+          </label>
         </div>
       </Card>
 

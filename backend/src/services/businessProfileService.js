@@ -43,6 +43,10 @@ const ALLOWED_PROFILE_FIELDS = [
   // woff2 and can't be loaded directly. Absolute path or relative to
   // storage/ root.
   'pdf_font_ttf_path',
+  // PDF letterhead visibility toggles (migration 106). Defaults true
+  // to keep existing PDFs visually identical after the migration runs.
+  'pdf_show_logo',
+  'pdf_show_company_name',
 ];
 
 const ALLOWED_BANK_FIELDS = [
@@ -103,6 +107,13 @@ function sanitiseProfilePayload(payload) {
     'vat_id', 'vat_label', 'footer_line', 'logo_path']) {
     if (typeof updates[field] === 'string') {
       updates[field] = updates[field].trim();
+    }
+  }
+  // Normalise the boolean PDF visibility toggles. Empty / undefined
+  // stays untouched (so partial updates don't reset existing values).
+  for (const field of ['pdf_show_logo', 'pdf_show_company_name']) {
+    if (updates[field] !== undefined) {
+      updates[field] = formatBoolean(Boolean(updates[field]));
     }
   }
 
