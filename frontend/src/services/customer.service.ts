@@ -244,4 +244,69 @@ export const customerService = {
     );
     return response.data;
   },
+
+  // ---- CRM (customer-side, read-only) ----
+  async listQuotes(): Promise<CustomerQuote[]> {
+    const response = await api.get<{ quotes: CustomerQuote[] }>('/customer/quotes');
+    return response.data.quotes;
+  },
+
+  async listInvoices(): Promise<CustomerInvoice[]> {
+    const response = await api.get<{ invoices: CustomerInvoice[] }>('/customer/invoices');
+    return response.data.invoices;
+  },
+
+  /** Returns a blob URL ready for window.open(). */
+  async invoicePdfUrl(id: number): Promise<string> {
+    const res = await api.get(`/customer/invoices/${id}/pdf`, { responseType: 'blob' });
+    return URL.createObjectURL(res.data);
+  },
 };
+
+export interface CustomerQuote {
+  id: number;
+  quoteNumber: string;
+  status: 'draft' | 'sent' | 'accepted' | 'declined' | 'expired' | 'converted';
+  currency: string;
+  issueDate: string;
+  validUntil: string | null;
+  eventName: string | null;
+  eventDate: string | null;
+  netAmountMinor: number;
+  vatRate: number | null;
+  vatAmountMinor: number;
+  shippingAmountMinor: number;
+  totalAmountMinor: number;
+  introText: string | null;
+  outroText: string | null;
+  sentAt: string | null;
+  respondedAt: string | null;
+  responseLockedAt: string | null;
+  acceptedAt: string | null;
+  declinedAt: string | null;
+  /** Token to open the public response page from the customer
+   *  dashboard. null when expired/used. */
+  responseToken: string | null;
+}
+
+export interface CustomerInvoice {
+  id: number;
+  invoiceNumber: string;
+  status: 'sent' | 'paid' | 'overdue';
+  currency: string;
+  issueDate: string;
+  dueDate: string;
+  installmentIndex: number;
+  installmentTotal: number;
+  installmentLabel: string | null;
+  netAmountMinor: number;
+  vatRate: number | null;
+  vatAmountMinor: number;
+  shippingAmountMinor: number;
+  totalAmountMinor: number;
+  paidAmountMinor: number;
+  paidAt: string | null;
+  lateFeeAmountMinor: number;
+  reminderLevel: number;
+  sentAt: string | null;
+}

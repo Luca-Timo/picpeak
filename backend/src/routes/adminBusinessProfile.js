@@ -49,6 +49,7 @@ function transformProfile(p) {
     defaultQrFormat: p.default_qr_format || 'none',
     footerLine: p.footer_line || '',
     logoPath: p.logo_path || '',
+    pdfFontTtfPath: p.pdf_font_ttf_path || '',
     createdAt: p.created_at,
     updatedAt: p.updated_at,
   };
@@ -112,6 +113,7 @@ router.put(
     body('defaultQrFormat').optional({ values: 'falsy' }).isIn(['swiss', 'epc', 'none']),
     body('footerLine').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
     body('logoPath').optional({ values: 'falsy' }).isString().isLength({ max: 512 }),
+    body('pdfFontTtfPath').optional({ values: 'falsy' }).isString().isLength({ max: 512 }),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -137,6 +139,7 @@ router.put(
       defaultQrFormat: 'default_qr_format',
       footerLine: 'footer_line',
       logoPath: 'logo_path',
+      pdfFontTtfPath: 'pdf_font_ttf_path',
     };
     for (const [api, db] of Object.entries(map)) {
       if (Object.prototype.hasOwnProperty.call(req.body, api)) {

@@ -425,6 +425,27 @@ async function buildRenderContext(quote, lineItems) {
     ? await db('payment_term_templates').where({ id: quote.payment_term_template_id }).first()
     : null;
 
+  // Resolve Skonto values for the PDF payment block:
+  //   - if the chosen template defines its own skonto_percent +
+  //     skonto_within_days, use those (per-template wins);
+  //   - otherwise fall back to the global CRM defaults
+  //     (crm_invoices_skonto_percent_default + _business_days);
+  //   - the whole row is suppressed when the global
+  //     `crm_quotes_skonto_enabled` toggle is off.
+  const skontoEnabled = (await getAppSetting('crm_quotes_skonto_enabled')) !== false;
+  let skontoPercent = paymentTerm?.skonto_percent;
+  let skontoWithinDays = paymentTerm?.skonto_within_days;
+  if (skontoEnabled && (skontoPercent == null || skontoWithinDays == null)) {
+    const defaultPct = Number(await getAppSetting('crm_invoices_skonto_percent_default'));
+    const defaultDays = parseInt(await getAppSetting('crm_invoices_skonto_business_days'), 10);
+    if (skontoPercent == null && Number.isFinite(defaultPct) && defaultPct > 0) skontoPercent = defaultPct;
+    if (skontoWithinDays == null && Number.isFinite(defaultDays) && defaultDays > 0) skontoWithinDays = defaultDays;
+  }
+  if (!skontoEnabled) {
+    skontoPercent = null;
+    skontoWithinDays = null;
+  }
+
   return {
     locale: quote.language || profile?.default_locale || 'de',
     currency: quote.currency,
@@ -445,33 +466,60 @@ async function buildRenderContext(quote, lineItems) {
       vatId: profile.vat_id,
       // PDF renderer resolves this relative to the storage/ root.
       logoPath: profile.logo_path,
+      // Custom TTF used by pdfService when set; falls back to
+      // Helvetica when null or the file is missing on disk.
+      pdfFontTtfPath: profile.pdf_font_ttf_path,
     } : {},
-    recipient: {
-      issuerLine: profile?.company_name
-        ? `${profile.company_name} * ${profile.address_line1 || ''} * ${profile.postal_code || ''} ${profile.city || ''}`
-        : '',
-      companyName: customer?.company_name || customer?.display_name || customer?.email,
-      attentionLine: customer?.salutation || customer?.first_name
-        ? `z. Hd. ${[customer.first_name, customer.last_name].filter(Boolean).join(' ')}`
-        : '',
-      addressLine1: customer?.address_line1,
-      addressLine2: customer?.address_line2,
-      postalCode: customer?.postal_code,
-      city: customer?.city,
-      country: customer?.country_code,
-      countryCodeIso: customer?.country_code,
-    },
+    recipient: (() => {
+      // Pick the bold header line based on whether a real company is
+      // on file. The PDF renderer's recipient block uses `hasCompany`
+      // to decide whether to also render an "z. Hd. <name>" line —
+      // otherwise rendering it under the same name would duplicate.
+      const personFull = [customer?.first_name, customer?.last_name].filter(Boolean).join(' ');
+      const headerWithCompany = !!customer?.company_name;
+      const header = customer?.company_name
+        || personFull
+        || customer?.display_name
+        || customer?.email
+        || '';
+      // Attention line only meaningful with a company; mention the
+      // salutation honorific when set (Herr/Frau/Dr.).
+      const attentionParts = [customer?.salutation, personFull].filter(Boolean);
+      const attentionLine = attentionParts.length > 0 ? `z. Hd. ${attentionParts.join(' ')}` : '';
+      return {
+        issuerLine: profile?.company_name
+          ? `${profile.company_name} * ${profile.address_line1 || ''} * ${profile.postal_code || ''} ${profile.city || ''}`
+          : '',
+        companyName: header,
+        hasCompany: headerWithCompany,
+        attentionLine,
+        addressLine1: customer?.address_line1,
+        addressLine2: customer?.address_line2,
+        postalCode: customer?.postal_code,
+        city: customer?.city,
+        // Country is rendered by pdfService via countryName() using
+        // the doc locale. Pass the ISO code so the renderer can
+        // resolve the right localised string ("Liechtenstein" vs
+        // "Schweiz") for both quote and invoice surfaces.
+        country: null,
+        countryCodeIso: customer?.country_code,
+      };
+    })(),
     bank: bank ? {
       accountHolder: bank.account_holder || profile?.company_name,
       iban: bank.iban,
       bic: bank.bic,
       currency: bank.currency,
     } : null,
-    paymentTerm: paymentTerm ? {
-      description: paymentTerm.description,
-      netDays: paymentTerm.net_days,
-      skontoPercent: paymentTerm.skonto_percent,
-      skontoWithinDays: paymentTerm.skonto_within_days,
+    // Resolved above so Skonto honours the global enable toggle + the
+    // default-rate fallback. If no template is selected at all we
+    // still pass the Skonto defaults through so the PDF can show a
+    // sensible "X% discount if paid within Y days" line.
+    paymentTerm: paymentTerm || skontoPercent || skontoWithinDays ? {
+      description: paymentTerm?.description,
+      netDays: paymentTerm?.net_days,
+      skontoPercent,
+      skontoWithinDays,
     } : null,
     lineItems: lineItems.map((li) => ({
       quantity: li.quantity,
@@ -669,7 +717,7 @@ async function persistDocPdf(type, doc, buffer) {
  * the same token may flip accept↔decline. After the window expires the
  * response is locked.
  */
-async function recordResponse({ token, action, ip }) {
+async function recordResponse({ token, action, ip, tosAccepted }) {
   if (!['accept', 'decline'].includes(action)) {
     throw new AppError('Invalid action', 400);
   }
@@ -689,6 +737,23 @@ async function recordResponse({ token, action, ip }) {
     throw new AppError(`Quote cannot be responded to in status '${quote.status}'`, 409);
   }
 
+  // Terms of Service handling on accept:
+  //   - Setting OFF: ignored.
+  //   - Setting ON + box ticked: normal acceptance; ToS snapshot
+  //     stored on the quote for audit.
+  //   - Setting ON + box NOT ticked: server returns TOS_REQUIRED;
+  //     the frontend keeps Accept disabled until ticked. To refuse
+  //     the engagement the customer clicks Decline explicitly, which
+  //     records `declined` like any other decline (no ToS needed for
+  //     decline since the customer is rejecting the terms anyway).
+  const tosRequired = await getAppSetting('crm_quotes_tos_required', false) === true;
+  const tosText = await getAppSetting('crm_quotes_tos_text', '');
+  if (action === 'accept' && tosRequired && !tosAccepted) {
+    throw new AppError('Terms of Service must be accepted before the quote can be accepted.',
+      400, 'TOS_REQUIRED');
+  }
+  const effectiveAction = action;
+
   const now = new Date();
   const windowMinutes = ensureInt(await getAppSetting('crm_quotes_accept_window_minutes')) || 15;
   // If there's already a response, check if we're inside the toggle window.
@@ -701,20 +766,29 @@ async function recordResponse({ token, action, ip }) {
     }
   }
 
-  const isAccept = action === 'accept';
+  const isAccept = effectiveAction === 'accept';
   const newStatus = isAccept ? 'accepted' : 'declined';
   const respondedAt = quote.responded_at || now;
   const responseLockedAt = new Date(new Date(respondedAt).getTime() + windowMinutes * 60 * 1000);
 
   await db.transaction(async (trx) => {
-    await trx('quotes').where({ id: quote.id }).update({
+    const updates = {
       status: newStatus,
       responded_at: respondedAt,
       response_locked_at: responseLockedAt,
       accepted_at: isAccept ? now : null,
       declined_at: !isAccept ? now : null,
       updated_at: now,
-    });
+    };
+    // Snapshot the ToS text the customer agreed to. Only set on the
+    // FIRST acceptance — subsequent toggles inside the 15-min window
+    // don't overwrite, so the audit trail captures the original
+    // agreement moment.
+    if (isAccept && tosAccepted && !quote.tos_accepted_at) {
+      updates.tos_accepted_at = now;
+      updates.tos_text_snapshot = tosText || null;
+    }
+    await trx('quotes').where({ id: quote.id }).update(updates);
     await trx('quote_action_tokens').where({ id: tokenRow.id }).update({
       used_at: now,
       used_action: newStatus,
@@ -738,6 +812,96 @@ async function recordResponse({ token, action, ip }) {
  * required by Commit 7. We `require` lazily to dodge the circular
  * dependency between quoteService and invoiceService.
  */
+/**
+ * Convert an accepted quote directly into an invoice — no event, no
+ * gallery, just the financial document. Used for engagements that
+ * don't produce a photo deliverable (consulting, equipment hire, etc).
+ *
+ * Creates ONE invoice per installment in the payment-term snapshot —
+ * same fan-out as convertToEvent, but without the events / event_
+ * payment_plans rows. The first installment is scheduled to send
+ * immediately; later ones use the same trigger-relative-to-event
+ * date logic the schedule pass uses, anchored on the quote's event_
+ * date if any, else the issue date.
+ *
+ * Leaves the quote `accepted` → `converted` state machine intact so
+ * the same status badge logic works for both paths.
+ */
+async function convertToInvoiceOnly(quoteId, adminId) {
+  const { quote, lineItems } = (await getQuoteById(quoteId)) || {};
+  if (!quote) throw new AppError('Quote not found', 404);
+  if (quote.status !== 'accepted') {
+    throw new AppError(`Cannot convert a quote with status '${quote.status}'`, 409);
+  }
+  if (quote.converted_event_id) {
+    // Already has a linked event — nothing to do here; tell the
+    // caller to use the event-detail page for new invoices.
+    throw new AppError('This quote was already converted to an event; create the invoice from the event instead.', 409, 'ALREADY_CONVERTED_TO_EVENT');
+  }
+
+  const customer = await db('customer_accounts').where({ id: quote.customer_account_id }).first();
+  ensureCustomerFeatureEnabled(customer, 'quotes');
+  // The customer must also have the bills feature enabled or the
+  // generated invoice can't be sent.
+  if (customer.feature_bills === false || customer.feature_bills === 0 || customer.feature_bills === '0') {
+    throw new AppError('This customer has Bills disabled — enable it on the customer detail page first.',
+      409, 'CUSTOMER_FEATURE_DISABLED');
+  }
+
+  const paymentTermSnapshot = quote.payment_term_snapshot
+    ? (typeof quote.payment_term_snapshot === 'string'
+        ? JSON.parse(quote.payment_term_snapshot)
+        : quote.payment_term_snapshot)
+    : null;
+
+  const invoiceService = require('./invoiceService');
+
+  return await db.transaction(async (trx) => {
+    const installments = Array.isArray(paymentTermSnapshot?.installments)
+      ? paymentTermSnapshot.installments
+      : [{ percent: 100, trigger: 'after_delivery', offset_days: 0, label: 'Total' }];
+
+    await invoiceService.scheduleInvoicesForEvent({
+      trx,
+      // eventId omitted → invoices have source_quote_id but no event_id.
+      eventId: null,
+      quoteId: quote.id,
+      customer,
+      currency: quote.currency,
+      language: quote.language,
+      lineItems,
+      totals: {
+        net: quote.net_amount_minor,
+        vatRate: quote.vat_rate,
+        vat: quote.vat_amount_minor,
+        shipping: quote.shipping_amount_minor,
+        total: quote.total_amount_minor,
+      },
+      installments,
+      eventDate: quote.event_date,
+      adminId,
+      ccPdfEmail: quote.cc_pdf_email,
+    });
+
+    // Mark quote `converted` without a converted_event_id so the
+    // existing transition rules still apply (can't be edited / sent
+    // again). The list view's status badge says "converted"; admin
+    // sees the linked invoices in the customer detail panel.
+    await trx('quotes').where({ id: quote.id }).update({
+      status: 'converted',
+      updated_at: new Date(),
+    });
+
+    try {
+      await logActivity('quote_converted_invoices_only', { quoteId: quote.id, installments: installments.length },
+        null, `admin:${adminId}`);
+    } catch (_) {}
+
+    logger.info('Quote converted to invoices only (no event)', { adminId, quoteId: quote.id, installments: installments.length });
+    return { installmentsCreated: installments.length };
+  });
+}
+
 async function convertToEvent(quoteId, adminId) {
   const { quote, lineItems } = (await getQuoteById(quoteId)) || {};
   if (!quote) throw new AppError('Quote not found', 404);
@@ -761,18 +925,51 @@ async function convertToEvent(quoteId, adminId) {
   const invoiceService = require('./invoiceService');
 
   return await db.transaction(async (trx) => {
+    // Stash a derived placeholder for fields the events table requires
+    // NOT NULL but the quote doesn't carry. Admin can fill in real
+    // values from the event edit page after conversion.
+    //   - host_email + admin_email: customer email, then the admin who
+    //     converted (so notifications go somewhere sane until edited)
+    //   - password_hash: random 32-byte hex; the event is a draft so
+    //     nothing reads it until admin sets a real password
+    //   - share_link: random 32-byte hex; uniqueness baked in
+    //   - expires_at: event_date + 1 year, common default for galleries
+    const adminRow = await trx('admin_users').where({ id: adminId }).first();
+    const oneYearAfterEvent = new Date(quote.event_date || quote.issue_date);
+    oneYearAfterEvent.setFullYear(oneYearAfterEvent.getFullYear() + 1);
+    const placeholder = crypto.randomBytes(32).toString('hex');
+    const shareLink = crypto.randomBytes(32).toString('hex');
+
     const eventRow = {
       slug: `quote-${quote.quote_number.toLowerCase()}-${crypto.randomBytes(3).toString('hex')}`,
       event_name: quote.event_name || `Event ${quote.quote_number}`,
       event_date: quote.event_date || quote.issue_date,
-      customer_name: [customer.first_name, customer.last_name].filter(Boolean).join(' ') || customer.display_name || customer.company_name,
-      customer_email: customer.email,
+      // events.host_name + host_email are the customer side; some
+      // installs renamed them to customer_name + customer_email via a
+      // later migration. Set both column names defensively so this
+      // works on either schema generation.
+      host_email: customer.email || `${quote.quote_number.toLowerCase()}@picpeak.local`,
+      host_name: [customer.first_name, customer.last_name].filter(Boolean).join(' ')
+        || customer.display_name || customer.company_name || quote.quote_number,
+      customer_name: [customer.first_name, customer.last_name].filter(Boolean).join(' ')
+        || customer.display_name || customer.company_name || quote.quote_number,
+      customer_email: customer.email || `${quote.quote_number.toLowerCase()}@picpeak.local`,
       customer_phone: customer.phone,
-      admin_email: null,
-      event_type: 'wedding', // sensible default; admin can change
+      // admin_email NOT NULL — fall back to the converting admin so
+      // notification emails go somewhere real until edited.
+      admin_email: adminRow?.email || customer.email || 'admin@picpeak.local',
+      event_type: 'wedding',
+      // events.password_hash is NOT NULL on the original schema. The
+      // event is a draft so this hash is never used until the admin
+      // sets a real password on the event detail page — random 32-byte
+      // hex is just a placeholder, not a real password.
+      password_hash: placeholder,
+      share_link: shareLink,
+      share_token: shareLink,
+      expires_at: oneYearAfterEvent,
       is_active: true,
       is_archived: false,
-      is_draft: true, // give admin a chance to review before activating
+      is_draft: true,
       created_by: adminId,
       quote_id: quote.id,
       created_at: new Date(),
@@ -997,6 +1194,7 @@ module.exports = {
   duplicateQuote,
   recordResponse,
   convertToEvent,
+  convertToInvoiceOnly,
 
   // Preview / PDF
   renderQuotePdfBuffer,

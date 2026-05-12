@@ -357,6 +357,21 @@ router.post(
   })
 );
 
+// Convert directly to invoice(s) — no event, no gallery. Used for
+// engagements like consulting / equipment hire where there's no photo
+// deliverable to ship.
+router.post(
+  '/:id/convert-to-invoice',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    const result = await quoteService.convertToInvoiceOnly(id, req.admin.id);
+    return successResponse(res, result, 200, 'Invoices created from quote');
+  })
+);
+
 // ---------------------------------------------------------------------
 // PDF — preview (unsaved payload) + download (persisted)
 // ---------------------------------------------------------------------

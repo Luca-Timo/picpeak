@@ -29,7 +29,7 @@ const respondLimiter = rateLimit({
   windowMs: 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false,
 });
 
-function publicQuoteView(quote, lineItems, customer, profile) {
+function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosText, tosUrl) {
   return {
     quoteNumber: quote.quote_number,
     status: quote.status,
@@ -69,6 +69,19 @@ function publicQuoteView(quote, lineItems, customer, profile) {
       email: customer.email,
       companyName: customer.company_name,
     } : null,
+    // Terms of Service surfaced to the customer when the global
+    // `crm_quotes_tos_required` flag is on. The text + URL are
+    // included unconditionally so admins can opt to display them
+    // without blocking acceptance; the frontend gates the checkbox.
+    // Snapshot is rendered when the quote has already been accepted
+    // so the customer sees exactly what they agreed to, not the
+    // current ToS text (which may have changed).
+    tos: {
+      required: tosRequired === true,
+      text: quote.tos_text_snapshot || tosText || '',
+      url: tosUrl || '',
+      acceptedAt: quote.tos_accepted_at || null,
+    },
     issuer: profile ? {
       companyName: profile.company_name,
       email: profile.email,
@@ -106,8 +119,17 @@ router.get(
     const customer = await db('customer_accounts').where({ id: data.quote.customer_account_id }).first();
     const businessProfileService = require('../services/businessProfileService');
     const { profile } = await businessProfileService.getProfile();
+    // Pull the three ToS keys via the shared helper so it works
+    // regardless of how setting_value is encoded (JSON-stringified vs
+    // raw). All three are optional.
+    const { getAppSetting } = require('../utils/appSettings');
+    const tosRequired = await getAppSetting('crm_quotes_tos_required', false);
+    const tosText = await getAppSetting('crm_quotes_tos_text', '');
+    const tosUrl = await getAppSetting('crm_quotes_tos_url', '');
 
-    return successResponse(res, { quote: publicQuoteView(data.quote, data.lineItems, customer, profile) });
+    return successResponse(res, {
+      quote: publicQuoteView(data.quote, data.lineItems, customer, profile, tosRequired, tosText, tosUrl),
+    });
   })
 );
 
@@ -117,6 +139,9 @@ router.post(
   [
     param('token').isString().isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i),
     body('action').isIn(['accept', 'decline']),
+    // ToS box: optional flag, only meaningful when the global
+    // `crm_quotes_tos_required` setting is on. Service enforces.
+    body('tosAccepted').optional().isBoolean(),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -126,6 +151,7 @@ router.post(
         token: req.params.token,
         action: req.body.action,
         ip,
+        tosAccepted: req.body.tosAccepted === true,
       });
       return successResponse(res, { status: result.status, lockedAt: result.lockedAt });
     } catch (err) {

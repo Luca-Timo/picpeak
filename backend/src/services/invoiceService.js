@@ -426,6 +426,46 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
   const qrFormat = invoice.qr_format
     || (await getAppSetting('crm_invoices_qr_enabled')) === false ? 'none' : (profile?.default_qr_format || 'none');
 
+  // Resolve the payment-term snapshot to thread Skonto + net-days into
+  // the PDF's "Zahlungsbedingungen" block. Two sources, in order:
+  //   1. The originating quote, if this invoice was created from one.
+  //   2. The global CRM defaults (settings tab) — `crm_invoices_*`.
+  // Both are wrapped in `paymentTerm` exactly as quoteService builds it
+  // so pdfService.drawPaymentBlock renders the same block on both
+  // document types.
+  let paymentTerm = null;
+  if (invoice.source_quote_id) {
+    const quote = await db('quotes').where({ id: invoice.source_quote_id }).first();
+    const snapshot = quote && quote.payment_term_snapshot
+      ? (typeof quote.payment_term_snapshot === 'string'
+          ? JSON.parse(quote.payment_term_snapshot) : quote.payment_term_snapshot)
+      : null;
+    if (snapshot) {
+      paymentTerm = {
+        description: snapshot.description,
+        netDays: snapshot.net_days,
+        skontoPercent: snapshot.skonto_percent,
+        skontoWithinDays: snapshot.skonto_within_days,
+      };
+    }
+  }
+  if (!paymentTerm) {
+    // Fall back to global CRM settings for ad-hoc invoices (no source
+    // quote). Skonto only shows when the global toggle is on AND the
+    // default percent is > 0.
+    const skontoEnabled = (await getAppSetting('crm_invoices_skonto_percent_default')) != null
+      ? Number(await getAppSetting('crm_invoices_skonto_percent_default')) > 0
+      : false;
+    const skontoPercent = Number(await getAppSetting('crm_invoices_skonto_percent_default')) || null;
+    const skontoDays = parseInt(await getAppSetting('crm_invoices_skonto_business_days'), 10) || null;
+    paymentTerm = {
+      description: null,
+      netDays: 30,
+      skontoPercent: skontoEnabled ? skontoPercent : null,
+      skontoWithinDays: skontoEnabled ? skontoDays : null,
+    };
+  }
+
   return {
     locale: invoice.language || profile?.default_locale || 'de',
     currency: invoice.currency,
@@ -442,27 +482,40 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       footerLine: profile.footer_line,
       vatId: profile.vat_id,
       logoPath: profile.logo_path,
+      pdfFontTtfPath: profile.pdf_font_ttf_path,
     } : {},
-    recipient: {
-      issuerLine: profile?.company_name
-        ? `${profile.company_name} * ${profile.address_line1 || ''} * ${profile.postal_code || ''} ${profile.city || ''}`
-        : '',
-      companyName: customer?.company_name || customer?.display_name || customer?.email,
-      attentionLine: customer?.first_name || customer?.last_name
-        ? `z. Hd. ${[customer.first_name, customer.last_name].filter(Boolean).join(' ')}`
-        : '',
-      addressLine1: customer?.address_line1,
-      addressLine2: customer?.address_line2,
-      postalCode: customer?.postal_code,
-      city: customer?.city,
-      country: customer?.country_code,
-      countryCodeIso: customer?.country_code,
-    },
+    recipient: (() => {
+      // Mirrors the quoteService recipient shape — see comments there
+      // for the hasCompany / attentionLine rationale.
+      const personFull = [customer?.first_name, customer?.last_name].filter(Boolean).join(' ');
+      const headerWithCompany = !!customer?.company_name;
+      const header = customer?.company_name
+        || personFull
+        || customer?.display_name
+        || customer?.email
+        || '';
+      const attentionParts = [customer?.salutation, personFull].filter(Boolean);
+      const attentionLine = attentionParts.length > 0 ? `z. Hd. ${attentionParts.join(' ')}` : '';
+      return {
+        issuerLine: profile?.company_name
+          ? `${profile.company_name} * ${profile.address_line1 || ''} * ${profile.postal_code || ''} ${profile.city || ''}`
+          : '',
+        companyName: header,
+        hasCompany: headerWithCompany,
+        attentionLine,
+        addressLine1: customer?.address_line1,
+        addressLine2: customer?.address_line2,
+        postalCode: customer?.postal_code,
+        city: customer?.city,
+        country: null,
+        countryCodeIso: customer?.country_code,
+      };
+    })(),
     bank: bank ? {
       accountHolder: bank.account_holder || profile?.company_name,
       iban: bank.iban, bic: bank.bic, currency: bank.currency,
     } : null,
-    paymentTerm: null,
+    paymentTerm,
     lineItems: lineItems.map((li) => ({
       quantity: li.quantity,
       description: li.description,
@@ -609,7 +662,14 @@ async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, not
     });
     const sumRow = await trx('invoice_payment_log').where({ invoice_id: id }).sum('amount_minor as total').first();
     const total = ensureInt(sumRow?.total || 0);
-    const isFull = total >= invoice.total_amount_minor + ensureInt(invoice.late_fee_amount_minor || 0);
+    // Consider the invoice paid when the recorded payments cover the
+    // invoice total. The late fee is NOT added to the threshold here
+    // — admins frequently waive it once the customer actually pays
+    // (and chasing the extra 25 CHF after a 1500 CHF invoice clears
+    // makes nobody happy). Admin can record a separate payment_log
+    // row if they did collect the fee; status flips to paid the
+    // moment the principal is covered.
+    const isFull = total >= invoice.total_amount_minor;
 
     const update = {
       paid_amount_minor: total,

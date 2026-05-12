@@ -29,6 +29,9 @@ export interface BusinessProfile {
   defaultQrFormat: QrFormat;
   footerLine: string;
   logoPath: string;
+  /** Path (absolute or relative to storage/) to a TTF/OTF used by the
+   *  PDF renderer. Falls back to Helvetica when blank or missing. */
+  pdfFontTtfPath: string;
   createdAt: string;
   updatedAt: string;
 }

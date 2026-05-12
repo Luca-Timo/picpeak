@@ -82,7 +82,12 @@ export const BillDetailPage: React.FC = () => {
     }
   };
 
-  const outstanding = (Number(inv.totalAmountMinor || 0) + Number(inv.lateFeeAmountMinor || 0) - Number(inv.paidAmountMinor || 0)) / 100;
+  // "Outstanding" mirrors the server's paid-threshold (principal only,
+  // late fee tracked separately) so the placeholder value in the
+  // mark-paid dialog matches the amount that flips the invoice to
+  // status='paid'. The late-fee row above still shows the surcharge
+  // separately so admins know what they could optionally collect.
+  const outstanding = (Number(inv.totalAmountMinor || 0) - Number(inv.paidAmountMinor || 0)) / 100;
 
   return (
     <div className="space-y-4">
@@ -107,7 +112,14 @@ export const BillDetailPage: React.FC = () => {
             <Button onClick={handleSend}><Send className="w-4 h-4 mr-1" />{inv.status === 'scheduled' ? t('bills.sendNow', 'Send now') : t('bills.resend', 'Resend')}</Button>
           )}
           {inv.status !== 'paid' && inv.status !== 'cancelled' && (
-            <Button variant="outline" onClick={() => setPayDialogOpen(true)}>
+            <Button variant="outline" onClick={() => {
+              // Pre-fill the reference with the invoice number — that's
+              // what the admin types 95% of the time, so save them the
+              // keystroke. Method left blank so the dropdown's "Select
+              // method…" placeholder still nudges them to pick.
+              setPayReference((cur) => cur || inv.invoiceNumber || '');
+              setPayDialogOpen(true);
+            }}>
               <CheckCircle className="w-4 h-4 mr-1" />{t('bills.markPaid', 'Mark paid')}
             </Button>
           )}
@@ -198,8 +210,28 @@ export const BillDetailPage: React.FC = () => {
             <div className="space-y-3">
               <Input type="number" step="0.01" label={t('bills.payment.amount', 'Amount') as string} value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)} placeholder={String(outstanding.toFixed(2))} />
-              <Input label={t('bills.payment.method', 'Payment method') as string} value={payMethod} onChange={(e) => setPayMethod(e.target.value)} />
-              <Input label={t('bills.payment.reference', 'Reference (optional)') as string} value={payReference} onChange={(e) => setPayReference(e.target.value)} />
+              {/* Payment method — common methods as a dropdown; we
+                  persist the value verbatim so admins can still record
+                  an out-of-band method by typing into the Notes field. */}
+              <div>
+                <label htmlFor="pay-method" className="block text-sm font-medium mb-1">
+                  {t('bills.payment.method', 'Payment method')}
+                </label>
+                <select
+                  id="pay-method"
+                  value={payMethod}
+                  onChange={(e) => setPayMethod(e.target.value)}
+                  className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+                >
+                  <option value="">{t('bills.payment.methodPlaceholder', 'Select method…')}</option>
+                  <option value="cash">{t('bills.payment.methods.cash', 'Cash')}</option>
+                  <option value="card">{t('bills.payment.methods.card', 'Card')}</option>
+                  <option value="paypal">{t('bills.payment.methods.paypal', 'PayPal')}</option>
+                  <option value="twint">{t('bills.payment.methods.twint', 'TWINT')}</option>
+                </select>
+              </div>
+              <Input label={t('bills.payment.reference', 'Reference') as string} value={payReference}
+                onChange={(e) => setPayReference(e.target.value)} />
               <div>
                 <label className="block text-sm font-medium mb-1">{t('bills.payment.notes', 'Notes')}</label>
                 <textarea rows={3} className="w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm"

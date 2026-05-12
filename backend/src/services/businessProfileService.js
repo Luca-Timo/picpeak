@@ -38,6 +38,11 @@ const ALLOWED_PROFILE_FIELDS = [
   'default_qr_format',
   'footer_line',
   'logo_path',
+  // Custom TTF/OTF for the PDF renderer (migration 103). PDFKit only
+  // understands TTF/OTF; the bundled webfonts under assets/fonts are
+  // woff2 and can't be loaded directly. Absolute path or relative to
+  // storage/ root.
+  'pdf_font_ttf_path',
 ];
 
 const ALLOWED_BANK_FIELDS = [
