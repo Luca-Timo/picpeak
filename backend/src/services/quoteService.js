@@ -442,6 +442,9 @@ async function buildRenderContext(quote, lineItems) {
       email: profile.email,
       website: profile.website,
       footerLine: profile.footer_line,
+      vatId: profile.vat_id,
+      // PDF renderer resolves this relative to the storage/ root.
+      logoPath: profile.logo_path,
     } : {},
     recipient: {
       issuerLine: profile?.company_name
