@@ -425,31 +425,17 @@ async function buildRenderContext(quote, lineItems) {
     ? await db('payment_term_templates').where({ id: quote.payment_term_template_id }).first()
     : null;
 
-  // Fall back to the global branding logo (Settings → Branding)
-  // when business_profile has no dedicated logo of its own. Admins
-  // typically upload ONE logo via the branding page and expect it
-  // to flow through to quotes + invoices too.
-  //
-  // Prefer the absolute filesystem path (`branding_logo_path`,
-  // written by multer at upload time) over the public URL
-  // (`branding_logo_url`) — the disk path bypasses all the
-  // storage-root / cwd path-guessing the renderer otherwise has to
-  // do. URL is the second-best fallback for older installs that
-  // only have the url key populated.
-  let resolvedLogoPath = (profile?.logo_path || '').trim() || null;
-  if (!resolvedLogoPath) {
-    try {
-      const brandingDiskPath = await getAppSetting('branding_logo_path');
-      if (brandingDiskPath && typeof brandingDiskPath === 'string' && brandingDiskPath.trim()) {
-        resolvedLogoPath = brandingDiskPath.trim();
-      } else {
-        const brandingLogoUrl = await getAppSetting('branding_logo_url');
-        if (brandingLogoUrl && typeof brandingLogoUrl === 'string' && brandingLogoUrl.trim()) {
-          resolvedLogoPath = brandingLogoUrl.trim();
-        }
-      }
-    } catch (_) { /* leave null */ }
-  }
+  // Resolve the PDF logo to a verified absolute disk path. The
+  // helper exhaustively tries:
+  //   1. business_profile.logo_path
+  //   2. app_settings.branding_logo_path  (absolute multer path)
+  //   3. app_settings.branding_logo_url   (URL path)
+  // …and for each, generates ~7 candidate disk locations before
+  // giving up. Returns null + logs a detailed warning when nothing
+  // resolves. Already-verified path means the renderer never has
+  // to second-guess.
+  const { resolveLogoFile } = require('../utils/resolveLogoFile');
+  const resolvedLogoPath = await resolveLogoFile(profile);
 
   // Resolve Skonto values for the PDF payment block:
   //   - if the chosen template defines its own skonto_percent +

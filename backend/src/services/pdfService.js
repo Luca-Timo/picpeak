@@ -237,87 +237,53 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
   const showName = issuer.showCompanyName !== false; // default true
 
   // ---- top banner: logo (left) + company name (right of it) -----
-  // Logo path resolution:
-  //   1. Absolute path → use as-is
-  //   2. Relative path → join with the canonical STORAGE_PATH (the
-  //      same root every other module uses; `process.cwd()` was
-  //      brittle under Docker where the working directory does NOT
-  //      always equal the storage root)
-  //   3. Bare filename → fall back to STORAGE_PATH/branding/<name>
-  //   4. URL-style path starting with /uploads → strip the leading
-  //      slash and resolve under STORAGE_PATH (matches the format
-  //      adminCMS.js stores in cms_pages.logo_url)
-  //
-  // PDFKit only natively decodes JPEG + PNG. SVG/WebP/GIF files
-  // upload fine via the CMS routes but cannot be embedded; we log
-  // and skip rather than throw so the rest of the PDF still
-  // renders.
-  let logoFound = null;
-  if (showLogo && issuer.logoPath) {
+  // Path resolution happens upstream in resolveLogoFile() — by the
+  // time we get here, `issuer.logoPath` is either:
+  //   - an absolute file path that has already been confirmed to
+  //     exist on disk + filtered for PNG/JPEG, or
+  //   - null when nothing resolved (logged upstream).
+  // We still wrap doc.image() in try/catch because PDFKit can reject
+  // valid-looking PNG/JPEG bytes (mislabelled extension, truncated
+  // download, etc.) — we'd rather render the rest of the PDF than
+  // crash on a broken logo.
+  const logoFound = showLogo && issuer.logoPath ? issuer.logoPath : null;
+  const drawLogoSafely = (file, opts) => {
     try {
-      const path = require('path');
-      const fs = require('fs');
-      const { getStoragePath } = require('../config/storage');
-      const storageRoot = getStoragePath();
-      const raw = String(issuer.logoPath).trim();
-      const stripped = raw.replace(/^\/+/, '');
-      const candidates = [
-        path.isAbsolute(raw) ? raw : null,
-        path.join(storageRoot, stripped),
-        path.join(storageRoot, 'branding', path.basename(raw)),
-        path.join(storageRoot, 'uploads', 'logos', path.basename(raw)),
-        // Last-ditch fallback for installs that still run with
-        // cwd-relative storage (older docker-compose configs).
-        path.join(process.cwd(), 'storage', stripped),
-      ].filter(Boolean);
-      logoFound = candidates.find((p) => {
-        try { return fs.existsSync(p) && fs.statSync(p).isFile(); }
-        catch { return false; }
-      });
-      if (!logoFound) {
-        const logger = require('../utils/logger');
-        logger.warn('PDF logo not found on disk', {
-          configured: issuer.logoPath, storageRoot, tried: candidates,
-        });
-      } else if (/\.(svg|webp|gif|tif|tiff)$/i.test(logoFound)) {
-        // PDFKit can't embed these formats — surface a clear
-        // warning so the admin knows to re-upload as PNG/JPEG.
-        const logger = require('../utils/logger');
-        logger.warn('PDF logo format not supported by PDFKit (use PNG or JPEG)', {
-          path: logoFound,
-        });
-        logoFound = null;
-      }
+      doc.image(file, opts.x, opts.y, { fit: [opts.w, opts.h] });
+      return true;
     } catch (err) {
       const logger = require('../utils/logger');
-      logger.warn('Failed to resolve PDF logo path', {
-        configured: issuer.logoPath, err: err.message,
+      logger.warn('PDFKit failed to embed logo image', {
+        path: file, err: err.message,
       });
-      logoFound = null;
+      return false;
     }
-  }
+  };
 
   const bannerH = 42; // shrunk from 56
+  // Try to draw the logo per the chosen layout. If PDFKit rejects
+  // the file (mislabelled extension, truncated bytes, etc.) we fall
+  // back to the "name only" branch so the letterhead never goes
+  // completely empty.
+  let logoDrawn = false;
   if (logoFound && showName && issuer.companyName) {
-    // Logo + name side by side. Logo takes ~38% of column width,
-    // name takes the rest. Logo "fit" preserves aspect ratio.
     const logoW = Math.min(width * 0.42, 72);
-    doc.image(logoFound, x, y, { fit: [logoW, bannerH] });
-    const nameX = x + logoW + 8;
-    const nameW = width - logoW - 8;
-    // Vertically centre the company name to roughly the middle of
-    // the logo height. Reduced font size matches the maintainer's
-    // tightened letterhead.
-    const nameY = y + (bannerH - 12) / 2;
-    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(11).fillColor('#000')
-      .text(issuer.companyName, nameX, nameY, { width: nameW, align: 'left', lineBreak: false });
-    y += bannerH + 6;
+    logoDrawn = drawLogoSafely(logoFound, { x, y, w: logoW, h: bannerH });
+    if (logoDrawn) {
+      const nameX = x + logoW + 8;
+      const nameW = width - logoW - 8;
+      const nameY = y + (bannerH - 12) / 2;
+      doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(11).fillColor('#000')
+        .text(issuer.companyName, nameX, nameY, { width: nameW, align: 'left', lineBreak: false });
+      y += bannerH + 6;
+    }
   } else if (logoFound) {
-    // Logo only.
-    doc.image(logoFound, x, y, { fit: [width, bannerH] });
-    y += bannerH + 6;
-  } else if (showName && issuer.companyName) {
-    // Name only.
+    logoDrawn = drawLogoSafely(logoFound, { x, y, w: width, h: bannerH });
+    if (logoDrawn) y += bannerH + 6;
+  }
+  if (!logoDrawn && showName && issuer.companyName) {
+    // Name-only branch — fires when the logo is missing, was skipped
+    // by the resolver, or PDFKit refused to embed it.
     doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(12).fillColor('#000')
       .text(issuer.companyName, x, y, { width, align: 'left' });
     y = doc.y + 6;
@@ -498,10 +464,23 @@ function drawLineItems(doc, ctx) {
   // items and the billing totals to read at the same weight so the
   // eye doesn't bounce between two scales.
   const ROW_FONT_SIZE = 10;
+  // Visual divider between items — thin grey rule under every data
+  // row. swissqrbill PDFRow supports `borderWidth` as a 4-tuple
+  // [top, right, bottom, left] and matching `borderColor`. We only
+  // want the bottom line on each data row, and a slightly darker
+  // bottom on the header row to anchor the column titles. The
+  // grand-total divider above the sum row is drawn separately in
+  // drawTotals; here we just delimit items from one another.
+  const ROW_BORDER_BOTTOM_WIDTH = [0, 0, 0.5, 0];
+  const ROW_BORDER_BOTTOM_COLOR = ['#000', '#000', '#cccccc', '#000'];
+  const HEADER_BORDER_BOTTOM_WIDTH = [0, 0, 1, 0];
+  const HEADER_BORDER_BOTTOM_COLOR = ['#000', '#000', '#000', '#000'];
 
   const dataRow = (li, idx) => ({
     padding: ROW_PADDING,
     fontSize: ROW_FONT_SIZE,
+    borderWidth: ROW_BORDER_BOTTOM_WIDTH,
+    borderColor: ROW_BORDER_BOTTOM_COLOR,
     columns: showDiscount
       ? [
           { text: String(idx + 1),                                                  width: widths[0], align: 'left'  },
@@ -526,6 +505,9 @@ function drawLineItems(doc, ctx) {
     fontName: ctx.fonts?.bold || FONT_BOLD,
     fontSize: ROW_FONT_SIZE,
     padding: ROW_PADDING,
+    borderWidth: HEADER_BORDER_BOTTOM_WIDTH,
+    borderColor: HEADER_BORDER_BOTTOM_COLOR,
+    header: true,
     columns: showDiscount
       ? [
           { text: labels.pos,   width: widths[0], align: 'left'  },
