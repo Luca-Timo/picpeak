@@ -20,6 +20,7 @@ const path = require('path');
 const { initializeDatabase, db } = require('./src/database/db');
 const { startFileWatcher } = require('./src/services/fileWatcher');
 const { startExpirationChecker } = require('./src/services/expirationChecker');
+const { startInvoiceScheduler } = require('./src/services/invoiceSchedulerService');
 const { initializeTransporter, startEmailQueueProcessor } = require('./src/services/emailProcessor');
 const { startBackupService } = require('./src/services/backupService');
 const { startScheduledBackups } = require('./src/services/databaseBackup');
@@ -592,6 +593,16 @@ app.use('/api/admin/customers', requireCustomerPortalEnabledAdmin, require('./sr
 // distinct token type, distinct cookie, distinct middleware.
 app.use('/api/customer/auth', requireCustomerPortalEnabled, require('./src/routes/customerAuth'));
 app.use('/api/customer', requireCustomerPortalEnabled, require('./src/routes/customer'));
+// --- CRM (#TBD) -------------------------------------------------------
+// Quotes + Invoices live under /api/admin/{quotes,invoices} and the
+// public accept/decline endpoint at /api/public/quotes. Business profile
+// (issuer block for PDFs) lives at /api/admin/business-profile, gated by
+// the existing settings.manage permission rather than a CRM-specific one.
+app.use('/api/admin/business-profile', require('./src/routes/adminBusinessProfile'));
+app.use('/api/admin/quotes',   require('./src/routes/adminQuotes'));
+app.use('/api/admin/invoices', require('./src/routes/adminInvoices'));
+app.use('/api/public/quotes',  require('./src/routes/publicQuotes'));
+
 app.use('/api/admin/event-types', require('./src/routes/adminEventTypes'));
 app.use('/api/admin/api-tokens', require('./src/routes/adminApiTokens'));
 app.use('/api/admin/webhooks', require('./src/routes/adminWebhooks'));
@@ -698,6 +709,10 @@ async function startServer() {
     
     // Start expiration checker
     startExpirationChecker();
+    // CRM invoice scheduler: hourly tick to flush scheduled-send invoices
+    // + run the overdue reminder ladder. No-op when the `bills` feature
+    // flag is OFF (the service short-circuits on empty result sets).
+    startInvoiceScheduler();
     
     // Initialize email transporter and start queue processor
     await initializeTransporter();
