@@ -481,6 +481,22 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
     ? await db('business_bank_accounts').where({ id: invoice.business_bank_account_id }).first()
     : await businessProfileService.resolveBankAccountForCurrency(invoice.currency);
 
+  // Fall back to the global branding logo (Settings → Branding,
+  // stored in app_settings.branding_logo_url) when the
+  // business_profile row has no dedicated logo of its own. This is
+  // by far the most common configuration: admins upload one logo
+  // via the existing branding page and expect it to flow through to
+  // invoices/quotes too.
+  let resolvedLogoPath = profile?.logo_path || null;
+  if (!resolvedLogoPath) {
+    try {
+      const brandingLogoRaw = await getAppSetting('branding_logo_url');
+      if (brandingLogoRaw && typeof brandingLogoRaw === 'string') {
+        resolvedLogoPath = brandingLogoRaw;
+      }
+    } catch (_) { /* leave null */ }
+  }
+
   // QR format resolution order (per-invoice override → profile
   // default → none) gated by the global enable toggle. The earlier
   // version had an operator-precedence bug that effectively dropped
@@ -571,7 +587,7 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       phone: profile.phone, mobile: profile.mobile, email: profile.email, website: profile.website,
       footerLine: profile.footer_line,
       vatId: profile.vat_id,
-      logoPath: profile.logo_path,
+      logoPath: resolvedLogoPath,
       pdfFontTtfPath: profile.pdf_font_ttf_path,
       // Free-text country name override (migration 107). When set the
       // PDF renderer uses this verbatim; falls back to the locale-aware

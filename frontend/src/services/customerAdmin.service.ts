@@ -34,6 +34,11 @@ export interface CustomerAccountDetail extends CustomerAccountSummary {
   city: string | null;
   state: string | null;
   countryCode: string | null;
+  /** Free-text country name (migration 107). PDF renderer uses this
+   *  verbatim when set; otherwise falls back to the locale-aware
+   *  lookup on countryCode. Useful when countryCode is the postal /
+   *  vehicle abbreviation ("FL") rather than the ISO code ("LI"). */
+  countryName: string | null;
   preferredLanguage: string;
   /**
    * CRM billing cadence override (migration 102).
@@ -123,6 +128,7 @@ export const customerAdminService = {
       city: 'city',
       state: 'state',
       countryCode: 'country_code',
+      countryName: 'country_name',
       preferredLanguage: 'preferred_language',
       notes: 'notes',
       isActive: 'is_active',

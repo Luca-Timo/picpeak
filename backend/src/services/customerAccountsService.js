@@ -42,6 +42,7 @@ const PREFILLABLE_FIELDS = [
   'city',
   'state',
   'country_code',
+  'country_name',
 ];
 
 /**
@@ -364,7 +365,7 @@ async function updateCustomer(id, updates, updatedByAdminId) {
     'email', 'salutation', 'first_name', 'last_name', 'display_name',
     'phone', 'company_name', 'billing_email', 'vat_id',
     'address_line1', 'address_line2', 'postal_code', 'city', 'state',
-    'country_code', 'preferred_language', 'notes',
+    'country_code', 'country_name', 'preferred_language', 'notes',
     // Per-customer feature flags (#354 follow-up). Booleans below are
     // coerced via formatBoolean for SQLite compatibility.
     'feature_calendar', 'feature_quotes', 'feature_bills',

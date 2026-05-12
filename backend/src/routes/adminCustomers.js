@@ -38,6 +38,7 @@ function transformCustomer(c) {
     city: c.city,
     state: c.state,
     countryCode: c.country_code,
+    countryName: c.country_name,
     preferredLanguage: c.preferred_language,
     // CRM billing cadence override (migration 102). Drives whether the
     // invoice scheduler honours the quote's installment plan or snaps
@@ -219,6 +220,7 @@ router.put('/:id', [
   body('city').optional({ nullable: true }).isString().isLength({ max: 120 }),
   body('state').optional({ nullable: true }).isString().isLength({ max: 120 }),
   body('country_code').optional({ nullable: true }).isString().isLength({ max: 2 }),
+  body('country_name').optional({ nullable: true }).isString().isLength({ max: 120 }),
   body('preferred_language').optional().isString().isLength({ max: 8 }),
   body('notes').optional({ nullable: true }).isString(),
   body('is_active').optional().isBoolean(),

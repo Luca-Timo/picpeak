@@ -123,6 +123,19 @@ export const SettingsBusinessProfilePage: React.FC = () => {
           </div>
           <Input label={t('businessProfile.field.footerLine', 'PDF footer line') as string} value={profile.footerLine}
             onChange={(e) => setProfile({ ...profile, footerLine: e.target.value })} />
+          {/* Logo path — points the PDF renderer at a file under
+              storage/. PDFKit only embeds PNG + JPEG; SVG/WebP/GIF
+              are detected and skipped with a server-side warning. */}
+          <div className="md:col-span-2">
+            <Input label={t('businessProfile.field.logoPath', 'Logo path (PNG or JPEG only)') as string}
+              value={profile.logoPath || ''}
+              placeholder="uploads/logos/my-logo.png"
+              onChange={(e) => setProfile({ ...profile, logoPath: e.target.value })} />
+            <p className="text-xs text-neutral-500 mt-1">
+              {t('businessProfile.field.logoPathHelp',
+                'Relative to the storage root (e.g. uploads/logos/foo.png) or an absolute path. SVG / WebP are not supported by the PDF engine — re-upload as PNG or JPEG.')}
+            </p>
+          </div>
           {/* Custom PDF font — TTF/OTF only. PDFKit doesn't read
               woff2 (the bundled webfonts under assets/fonts), so the
               admin needs to drop a real TTF/OTF under storage/fonts/

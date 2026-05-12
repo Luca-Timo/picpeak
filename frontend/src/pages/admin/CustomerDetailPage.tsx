@@ -31,7 +31,7 @@ type EditableFields =
   | 'email' | 'salutation' | 'firstName' | 'lastName' | 'displayName'
   | 'phone' | 'companyName' | 'billingEmail' | 'vatId'
   | 'addressLine1' | 'addressLine2' | 'postalCode' | 'city' | 'state'
-  | 'countryCode' | 'preferredLanguage' | 'notes'
+  | 'countryCode' | 'countryName' | 'preferredLanguage' | 'notes'
   | 'featureCalendar' | 'featureQuotes' | 'featureBills';
 
 const formatDate = (iso: string | null | undefined) => {
@@ -82,6 +82,7 @@ export const CustomerDetailPage: React.FC = () => {
         city: customer.city,
         state: customer.state,
         countryCode: customer.countryCode,
+        countryName: customer.countryName,
         preferredLanguage: customer.preferredLanguage,
         notes: customer.notes,
         featureCalendar: customer.featureCalendar ?? false,
@@ -407,12 +408,25 @@ export const CustomerDetailPage: React.FC = () => {
             <Input value={form.state || ''} onChange={setField('state')} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-theme mb-1">{t('customers.detail.countryCode', 'Country (ISO 2)')}</label>
+            <label className="block text-sm font-medium text-theme mb-1">{t('customers.detail.countryCode', 'Country abbreviation (FL, CH, DE …)')}</label>
             <Input
               value={form.countryCode || ''}
               onChange={setField('countryCode')}
               maxLength={2}
-              placeholder="e.g. CH"
+              placeholder="FL"
+            />
+          </div>
+          <div>
+            {/* Free-text country name override (migration 107). When
+                left empty the PDF renderer falls back to the locale-
+                aware lookup on the abbreviation; useful when the
+                abbreviation isn't an ISO code (e.g. "FL" for
+                Liechtenstein, which is "LI" in ISO). */}
+            <label className="block text-sm font-medium text-theme mb-1">{t('customers.detail.countryName', 'Country (full name)')}</label>
+            <Input
+              value={form.countryName || ''}
+              onChange={setField('countryName')}
+              placeholder="Liechtenstein"
             />
           </div>
         </div>

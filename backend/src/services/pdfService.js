@@ -140,10 +140,12 @@ function formatDate(value, locale) {
   if (!value) return '';
   const d = (value instanceof Date) ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return '';
-  // Match the user's reference layout: "02.12.25" / "30.01.26".
+  // Full DD.MM.YYYY (4-digit year) — matches the maintainer spec and
+  // the formatShortDate helper used in customer-facing email
+  // templates, so the date renders consistently across PDF + email.
   try {
     return new Intl.DateTimeFormat(locale || 'de-CH', {
-      day: '2-digit', month: '2-digit', year: '2-digit',
+      day: '2-digit', month: '2-digit', year: 'numeric',
     }).format(d);
   } catch (_) {
     return d.toISOString().slice(0, 10);
@@ -179,18 +181,62 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
   const showName = issuer.showCompanyName !== false; // default true
 
   // ---- top banner: logo (left) + company name (right of it) -----
+  // Logo path resolution:
+  //   1. Absolute path → use as-is
+  //   2. Relative path → join with the canonical STORAGE_PATH (the
+  //      same root every other module uses; `process.cwd()` was
+  //      brittle under Docker where the working directory does NOT
+  //      always equal the storage root)
+  //   3. Bare filename → fall back to STORAGE_PATH/branding/<name>
+  //   4. URL-style path starting with /uploads → strip the leading
+  //      slash and resolve under STORAGE_PATH (matches the format
+  //      adminCMS.js stores in cms_pages.logo_url)
+  //
+  // PDFKit only natively decodes JPEG + PNG. SVG/WebP/GIF files
+  // upload fine via the CMS routes but cannot be embedded; we log
+  // and skip rather than throw so the rest of the PDF still
+  // renders.
   let logoFound = null;
   if (showLogo && issuer.logoPath) {
     try {
       const path = require('path');
       const fs = require('fs');
+      const { getStoragePath } = require('../config/storage');
+      const storageRoot = getStoragePath();
+      const raw = String(issuer.logoPath).trim();
+      const stripped = raw.replace(/^\/+/, '');
       const candidates = [
-        path.isAbsolute(issuer.logoPath) ? issuer.logoPath : null,
-        path.join(process.cwd(), 'storage', issuer.logoPath.replace(/^\/+/, '')),
-        path.join(process.cwd(), 'storage', 'branding', path.basename(issuer.logoPath)),
+        path.isAbsolute(raw) ? raw : null,
+        path.join(storageRoot, stripped),
+        path.join(storageRoot, 'branding', path.basename(raw)),
+        path.join(storageRoot, 'uploads', 'logos', path.basename(raw)),
+        // Last-ditch fallback for installs that still run with
+        // cwd-relative storage (older docker-compose configs).
+        path.join(process.cwd(), 'storage', stripped),
       ].filter(Boolean);
-      logoFound = candidates.find((p) => { try { return fs.existsSync(p); } catch { return false; } });
-    } catch (_err) {
+      logoFound = candidates.find((p) => {
+        try { return fs.existsSync(p) && fs.statSync(p).isFile(); }
+        catch { return false; }
+      });
+      if (!logoFound) {
+        const logger = require('../utils/logger');
+        logger.warn('PDF logo not found on disk', {
+          configured: issuer.logoPath, storageRoot, tried: candidates,
+        });
+      } else if (/\.(svg|webp|gif|tif|tiff)$/i.test(logoFound)) {
+        // PDFKit can't embed these formats — surface a clear
+        // warning so the admin knows to re-upload as PNG/JPEG.
+        const logger = require('../utils/logger');
+        logger.warn('PDF logo format not supported by PDFKit (use PNG or JPEG)', {
+          path: logoFound,
+        });
+        logoFound = null;
+      }
+    } catch (err) {
+      const logger = require('../utils/logger');
+      logger.warn('Failed to resolve PDF logo path', {
+        configured: issuer.logoPath, err: err.message,
+      });
       logoFound = null;
     }
   }
@@ -314,11 +360,21 @@ function drawRecipientBlock(doc, recipient, locale) {
     y = doc.y;
   }
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10);
+  // Postal line mirrors the issuer block: "<CC>-<postal> <city>"
+  // (e.g. "FL-9494 Schaan"). The country code prefix is dropped
+  // when the customer has no countryCodeIso so the line still
+  // reads cleanly. The country name on the line below comes from
+  // the explicit `country` override (customer_accounts.country_name,
+  // migration 107) or falls back to the locale-aware lookup.
+  const cc = recipient.countryCodeIso ? String(recipient.countryCodeIso).toUpperCase() : '';
+  const pc = recipient.postalCode || '';
+  const postalLeft = cc && pc ? `${cc}-${pc}` : (pc || cc);
+  const postalSegment = [postalLeft, recipient.city].filter(Boolean).join(' ');
   const lines = [
     recipient.hasCompany ? recipient.attentionLine : null,
     recipient.addressLine1,
     recipient.addressLine2,
-    [recipient.postalCode, recipient.city].filter(Boolean).join(' '),
+    postalSegment,
     recipient.country || countryName(recipient.countryCodeIso, locale),
   ].filter(Boolean);
   for (const line of lines) {
@@ -377,15 +433,20 @@ function drawLineItems(doc, ctx) {
     ? [30, 40, 240, 50, 75, 80]
     : [30, 50, 280, 70, 85];
 
-  // Per-row padding (top + bottom + left + right in pt) opens up the
-  // table for an airy, ~1.8x line-height feel. swissqrbill's Table
-  // helper renders text at ~12pt baseline-to-baseline with the
-  // default font; adding 12pt top + 12pt bottom padding makes each
-  // visual row ~36pt tall — roughly double the previous density.
-  const ROW_PADDING = { top: 12, bottom: 12, left: 4, right: 4 };
+  // Per-row padding — sized so each item sits one paragraph-break
+  // apart from the next (think "normal Enter" in a word processor,
+  // not double-spacing). 6pt top + 6pt bottom adds ~12pt of vertical
+  // breathing room around the rendered text without doubling the
+  // row height.
+  const ROW_PADDING = { top: 6, bottom: 6, left: 4, right: 4 };
+  // Match the totals box font size; the maintainer wants the line
+  // items and the billing totals to read at the same weight so the
+  // eye doesn't bounce between two scales.
+  const ROW_FONT_SIZE = 10;
 
   const dataRow = (li, idx) => ({
     padding: ROW_PADDING,
+    fontSize: ROW_FONT_SIZE,
     columns: showDiscount
       ? [
           { text: String(idx + 1),                                                  width: widths[0], align: 'left'  },
@@ -408,7 +469,7 @@ function drawLineItems(doc, ctx) {
     // Table accepts any registered font name; if a custom font is in
     // use we route the bold row through it too.
     fontName: ctx.fonts?.bold || FONT_BOLD,
-    fontSize: 9,
+    fontSize: ROW_FONT_SIZE,
     padding: ROW_PADDING,
     columns: showDiscount
       ? [
@@ -457,12 +518,21 @@ function stripTrailingZeros(value) {
  */
 function drawTotals(doc, ctx, x, y, width) {
   const { locale, currency, intlLocale, totals } = ctx;
-  const labelCol = 130;
-  const valueCol = 80;
+  // Layout: labels anchored to the LEFT margin (matching the
+  // payment-conditions block beneath) so the totals box no longer
+  // sits as an indented ledger. Values + VAT-rate column right-
+  // aligned to the page edge — the eye still reads the amounts in a
+  // single tabular stack on the right, but the labels lock to the
+  // same vertical rule as the rest of the body content. This
+  // removes the visual "step" the maintainer flagged between the
+  // totals labels and "Please transfer the amount…" below.
   const right = x + width;
-  const labelX = right - labelCol - valueCol - 30;
-  const rateX  = right - valueCol - 30;
+  const valueCol = 80;
+  const rateCol = 40;
   const valueX = right - valueCol;
+  const rateX  = right - valueCol - rateCol;
+  const labelX = x;
+  const labelCol = rateX - labelX - 6; // leave a small gap before the rate column
 
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10);
   doc.text(t(locale, 'totals_net'), labelX, y, { width: labelCol });
@@ -475,17 +545,24 @@ function drawTotals(doc, ctx, x, y, width) {
   y = doc.y + 4;
 
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).text(t(locale, 'totals_vat'), labelX, y, { width: labelCol });
-  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).text(`${stripTrailingZeros(totals.vatRate)}%`, rateX, y, { width: 40, align: 'right' });
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).text(`${stripTrailingZeros(totals.vatRate)}%`, rateX, y, { width: rateCol, align: 'right' });
   doc.text(formatMinor(totals.vatAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
   y = doc.y + 10;
 
-  // Divider line above grand total.
+  // Divider line above grand total — spans the full content width
+  // so the line starts at the left margin under the labels (no
+  // "step" against the payment block heading below).
   doc.moveTo(labelX, y).lineTo(right, y).strokeColor('#000').lineWidth(0.8).stroke();
   y += 6;
 
-  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(12);
+  // Grand-total row uses the SAME font size as the rows above (and
+  // as the line-item table) — the maintainer wants the billing
+  // titles to read at one consistent scale instead of stair-
+  // stepping up to a bigger headline. The row stays bold for
+  // visual emphasis.
+  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10);
   doc.text(t(locale, 'totals_grand'), labelX, y, { width: labelCol });
-  doc.text(formatCurrencyLabel(currency), rateX, y, { width: 40, align: 'right' });
+  doc.text(formatCurrencyLabel(currency), rateX, y, { width: rateCol, align: 'right' });
   doc.text(formatMinor(totals.totalAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
   return doc.y + 10;
 }
