@@ -425,6 +425,21 @@ async function buildRenderContext(quote, lineItems) {
     ? await db('payment_term_templates').where({ id: quote.payment_term_template_id }).first()
     : null;
 
+  // Fall back to the global branding logo (Settings → Branding,
+  // stored in app_settings.branding_logo_url) when the
+  // business_profile row has no dedicated logo of its own. Most
+  // admins set one logo via the existing branding page and expect
+  // it to flow through to quote/invoice PDFs too.
+  let resolvedLogoPath = profile?.logo_path || null;
+  if (!resolvedLogoPath) {
+    try {
+      const brandingLogoRaw = await getAppSetting('branding_logo_url');
+      if (brandingLogoRaw && typeof brandingLogoRaw === 'string') {
+        resolvedLogoPath = brandingLogoRaw;
+      }
+    } catch (_) { /* leave null */ }
+  }
+
   // Resolve Skonto values for the PDF payment block:
   //   - if the chosen template defines its own skonto_percent +
   //     skonto_within_days, use those (per-template wins);
@@ -465,7 +480,10 @@ async function buildRenderContext(quote, lineItems) {
       footerLine: profile.footer_line,
       vatId: profile.vat_id,
       // PDF renderer resolves this relative to the storage/ root.
-      logoPath: profile.logo_path,
+      // `resolvedLogoPath` falls back to the global branding logo
+      // (app_settings.branding_logo_url) when the dedicated
+      // business_profile.logo_path is empty.
+      logoPath: resolvedLogoPath,
       // Custom TTF used by pdfService when set; falls back to
       // Helvetica when null or the file is missing on disk.
       pdfFontTtfPath: profile.pdf_font_ttf_path,
