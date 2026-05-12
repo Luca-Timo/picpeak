@@ -664,13 +664,34 @@ async function sendTemplateEmail(to, templateKey, variables) {
     // Process template with variables
     const { subject, htmlBody, textBody } = await processTemplate(template, variables, language);
 
+    // Optional plumbing — quote/invoice emails set these. Attachments
+    // are passed by callers as [{ filename, contentPath }] where the
+    // file is already written to disk; nodemailer streams it.
+    const ccList = Array.isArray(variables.cc)
+      ? variables.cc.filter(Boolean)
+      : (typeof variables.cc === 'string' && variables.cc.trim())
+        ? variables.cc.split(/[,;]+/).map((s) => s.trim()).filter(Boolean)
+        : undefined;
+    const attachments = Array.isArray(variables.attachments)
+      ? variables.attachments
+          .filter((a) => a && (a.contentPath || a.path || a.content))
+          .map((a) => ({
+            filename: a.filename,
+            path: a.contentPath || a.path,
+            content: a.content,
+            contentType: a.contentType,
+          }))
+      : undefined;
+
     // Send email
     const info = await transporter.sendMail({
       from: `${config.from_name} <${config.from_email}>`,
       to: to,
+      cc: ccList,
       subject: subject,
       html: htmlBody,
-      text: textBody || htmlToText(htmlBody)
+      text: textBody || htmlToText(htmlBody),
+      attachments,
     });
 
     logger.info(`Email sent successfully: ${info.messageId} (${language})`);
@@ -698,9 +719,17 @@ async function processEmailQueue() {
     
     let pendingEmails = [];
     try {
+      // Pick up emails that are pending AND either have no `scheduled_at`
+      // or whose scheduled_at is in the past. Used by CRM invoices to
+      // queue split-payment emails relative to the event date.
+      const now = new Date();
       pendingEmails = await db('email_queue')
         .where('status', 'pending')
         .where('retry_count', '<', 3)
+        .andWhere(function() {
+          this.whereNull('scheduled_at').orWhere('scheduled_at', '<=', now);
+        })
+        .orderBy('scheduled_at', 'asc')
         .orderBy('created_at', 'asc')
         .limit(10);
     } catch (dbError) {
@@ -765,22 +794,35 @@ async function processEmailQueue() {
   }
 }
 
-// Queue an email for sending
-async function queueEmail(eventId, recipientEmail, emailType, emailData) {
+// Queue an email for sending. Optionally takes a 5th `options` arg:
+//   options.scheduledAt — Date | ISO string; row only picks up once
+//                         this moment has passed (used by CRM split-
+//                         payment invoices). NULL = send immediately.
+// Attachments + cc travel inside `emailData` (keys: attachments, cc)
+// so callers don't need a new signature for every email shape.
+async function queueEmail(eventId, recipientEmail, emailType, emailData, options = {}) {
   try {
     // Add eventId to emailData for language detection
     emailData.eventId = eventId;
-    await db('email_queue').insert({
+    const row = {
       event_id: eventId,
       recipient_email: recipientEmail,
       email_type: emailType,
       email_data: JSON.stringify(emailData),
       status: 'pending',
       retry_count: 0,
-      created_at: new Date()
-    });
-    
-    logger.info(`Email queued: ${emailType} to ${recipientEmail}`);
+      created_at: new Date(),
+    };
+    if (options.scheduledAt) {
+      row.scheduled_at = options.scheduledAt instanceof Date
+        ? options.scheduledAt
+        : new Date(options.scheduledAt);
+    }
+    await db('email_queue').insert(row);
+
+    logger.info(`Email queued: ${emailType} to ${recipientEmail}${
+      options.scheduledAt ? ` (scheduled ${row.scheduled_at.toISOString()})` : ''
+    }`);
   } catch (error) {
     logger.error('Error queueing email:', error);
     throw error;
