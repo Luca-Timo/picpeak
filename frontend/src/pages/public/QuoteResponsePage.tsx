@@ -12,8 +12,8 @@
  *   - Localised based on the quote's stored language; falls back to
  *     browser language.
  */
-import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { publicQuotesService } from '../../services/quotes.service';
@@ -28,6 +28,7 @@ function formatMoney(amount: number, currency: string, locale = 'de-CH') {
 export const QuoteResponsePage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { token } = useParams<{ token: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -46,25 +47,8 @@ export const QuoteResponsePage: React.FC = () => {
     }
   }, [data, i18n]);
 
-  if (isLoading) return (
-    <div className="min-h-screen flex items-center justify-center"><Loading /></div>
-  );
-
-  if (isError || !data) {
-    return (
-      <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-6">
-        <div className="max-w-md text-center">
-          <h1 className="text-2xl font-bold mb-2">{t('quoteResponse.notFound', 'Quote not found')}</h1>
-          <p className="text-neutral-600">
-            {t('quoteResponse.notFoundBody', 'This link may have expired or been revoked. Please contact the photographer for a new quote.')}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const q = data.quote;
-  const handleRespond = async (action: 'accept' | 'decline') => {
+  const q = data?.quote;
+  const handleRespond = React.useCallback(async (action: 'accept' | 'decline') => {
     setBusy(true);
     setError(null);
     try {
@@ -77,59 +61,115 @@ export const QuoteResponsePage: React.FC = () => {
         setError(err?.response?.data?.error || err.message || 'Something went wrong');
       }
     } finally { setBusy(false); }
-  };
+  }, [token, refetch, t]);
 
-  const locked = !q.canRespond;
-  const responseStatus = q.respondedAt
-    ? (q.status === 'accepted' ? 'accepted' : q.status === 'declined' ? 'declined' : 'pending')
+  // ONE-CLICK ACCEPT / DECLINE FROM EMAIL
+  // The Accept / Decline links in the customer email carry the
+  // chosen action as a query string, e.g. /quote/<token>?action=accept.
+  // Auto-submit it as soon as the page loads — the customer's click
+  // in the email IS their response; no second click on the page.
+  // After firing we strip the query string so a refresh doesn't
+  // re-submit and the page stays a normal read-only view of the
+  // (now-locked) quote.
+  const autoSubmittedRef = useRef(false);
+  useEffect(() => {
+    if (autoSubmittedRef.current) return;
+    if (!q || !token) return;
+    const action = searchParams.get('action');
+    if (action !== 'accept' && action !== 'decline') return;
+    if (!q.canRespond) return;
+    autoSubmittedRef.current = true;
+    handleRespond(action as 'accept' | 'decline').finally(() => {
+      const next = new URLSearchParams(searchParams);
+      next.delete('action');
+      setSearchParams(next, { replace: true });
+    });
+  }, [q, token, searchParams, setSearchParams, handleRespond]);
+
+  if (isLoading) return (
+    <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-900">
+      <Loading />
+    </div>
+  );
+
+  if (isError || !data) {
+    return (
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center p-6">
+        <div className="max-w-md text-center">
+          <h1 className="text-2xl font-bold mb-2 text-neutral-900 dark:text-neutral-100">
+            {t('quoteResponse.notFound', 'Quote not found')}
+          </h1>
+          <p className="text-neutral-600 dark:text-neutral-400">
+            {t('quoteResponse.notFoundBody', 'This link may have expired or been revoked. Please contact the photographer for a new quote.')}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const locked = !q!.canRespond;
+  const responseStatus = q!.respondedAt
+    ? (q!.status === 'accepted' ? 'accepted' : q!.status === 'declined' ? 'declined' : 'pending')
     : 'pending';
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100">
       <div className="max-w-3xl mx-auto py-8 px-4">
-        {/* Issuer header */}
-        {q.issuer && (
+        {/* Issuer header — logo + company name. The logo URL is
+            built server-side under /uploads/, so it works even on
+            self-hosted Docker installs where the frontend can't reach
+            the backend storage directory directly. */}
+        {q!.issuer && (
           <div className="text-center mb-6">
-            <h2 className="text-xl font-bold">{q.issuer.companyName}</h2>
-            {q.issuer.website && <p className="text-sm text-neutral-500">{q.issuer.website}</p>}
+            {q!.issuer.logoUrl && (
+              <img
+                src={q!.issuer.logoUrl}
+                alt={q!.issuer.companyName || 'Logo'}
+                className="mx-auto mb-3 h-16 object-contain"
+              />
+            )}
+            <h2 className="text-xl font-bold">{q!.issuer.companyName}</h2>
+            {q!.issuer.website && (
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">{q!.issuer.website}</p>
+            )}
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 md:p-8">
-          <div className="flex items-baseline justify-between mb-4">
-            <h1 className="text-2xl font-bold">{t('quoteResponse.title', 'Quote')} {q.quoteNumber}</h1>
+        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 md:p-8">
+          <div className="flex items-baseline justify-between mb-4 gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold">{t('quoteResponse.title', 'Quote')} {q!.quoteNumber}</h1>
             <span className={`text-xs font-medium px-2 py-1 rounded ${
-              q.status === 'accepted' ? 'bg-green-100 text-green-800'
-                : q.status === 'declined' ? 'bg-red-100 text-red-800'
-                : 'bg-blue-100 text-blue-800'
-            }`}>{t(`quotes.status.${q.status}`, q.status)}</span>
+              q!.status === 'accepted' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
+                : q!.status === 'declined' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300'
+            }`}>{t(`quotes.status.${q!.status}`, q!.status)}</span>
           </div>
 
-          {q.recipient && (
-            <div className="mb-4 text-sm text-neutral-700">
-              <p className="font-medium">{q.recipient.companyName || q.recipient.displayName}</p>
-              <p>{q.recipient.email}</p>
+          {q!.recipient && (
+            <div className="mb-4 text-sm text-neutral-700 dark:text-neutral-300">
+              <p className="font-medium">{q!.recipient.companyName || q!.recipient.displayName}</p>
+              <p>{q!.recipient.email}</p>
             </div>
           )}
 
-          {q.eventName && (
-            <p className="text-neutral-600 mb-2">
-              <strong>{t('quoteResponse.event', 'Event')}:</strong> {q.eventName}
-              {q.eventDate && ` · ${q.eventDate}`}
+          {q!.eventName && (
+            <p className="text-neutral-600 dark:text-neutral-400 mb-2">
+              <strong>{t('quoteResponse.event', 'Event')}:</strong> {q!.eventName}
+              {q!.eventDate && ` · ${q!.eventDate}`}
             </p>
           )}
-          <p className="text-neutral-600 mb-4">
-            <strong>{t('quoteResponse.issueDate', 'Issued')}:</strong> {q.issueDate}
-            {q.validUntil && ` · ${t('quoteResponse.validUntil', 'valid until')} ${q.validUntil}`}
+          <p className="text-neutral-600 dark:text-neutral-400 mb-4">
+            <strong>{t('quoteResponse.issueDate', 'Issued')}:</strong> {q!.issueDate}
+            {q!.validUntil && ` · ${t('quoteResponse.validUntil', 'valid until')} ${q!.validUntil}`}
           </p>
 
-          {q.introText && (
-            <p className="whitespace-pre-line text-neutral-700 mb-4">{q.introText}</p>
+          {q!.introText && (
+            <p className="whitespace-pre-line text-neutral-700 dark:text-neutral-300 mb-4">{q!.introText}</p>
           )}
 
           <table className="w-full text-sm my-4">
             <thead>
-              <tr className="border-b border-neutral-200 text-neutral-600">
+              <tr className="border-b border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400">
                 <th className="text-left py-2 w-10">#</th>
                 <th className="text-left py-2">{t('quoteResponse.description', 'Description')}</th>
                 <th className="text-right py-2 w-16">{t('quoteResponse.qty', 'Qty')}</th>
@@ -138,52 +178,57 @@ export const QuoteResponsePage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {q.lineItems.map((li) => (
-                <tr key={li.position} className="border-b border-neutral-100">
+              {q!.lineItems.map((li) => (
+                <tr key={li.position} className="border-b border-neutral-100 dark:border-neutral-700/70">
                   <td className="py-2">{li.position}</td>
                   <td className="py-2 whitespace-pre-line">{li.description}</td>
                   <td className="py-2 text-right">{Number(li.quantity)}</td>
-                  <td className="py-2 text-right tabular-nums">{formatMoney(Number(li.unitPriceMinor) / 100, q.currency)}</td>
-                  <td className="py-2 text-right tabular-nums">{formatMoney(Number(li.lineTotalMinor) / 100, q.currency)}</td>
+                  <td className="py-2 text-right tabular-nums">{formatMoney(Number(li.unitPriceMinor) / 100, q!.currency)}</td>
+                  <td className="py-2 text-right tabular-nums">{formatMoney(Number(li.lineTotalMinor) / 100, q!.currency)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          <div className="flex flex-col items-end gap-1 text-sm border-t border-neutral-200 pt-3">
-            <div className="flex gap-6"><span className="text-neutral-600">{t('quoteResponse.subtotal', 'Subtotal')}:</span>
-              <span className="tabular-nums w-28 text-right">{formatMoney(Number(q.netAmountMinor) / 100, q.currency)}</span></div>
-            {q.vatAmountMinor > 0 && (
-              <div className="flex gap-6"><span className="text-neutral-600">{t('quoteResponse.vat', 'VAT')} ({Number(q.vatRate || 0).toFixed(1)}%):</span>
-                <span className="tabular-nums w-28 text-right">{formatMoney(Number(q.vatAmountMinor) / 100, q.currency)}</span></div>
+          <div className="flex flex-col items-end gap-1 text-sm border-t border-neutral-200 dark:border-neutral-700 pt-3">
+            <div className="flex gap-6"><span className="text-neutral-600 dark:text-neutral-400">{t('quoteResponse.subtotal', 'Subtotal')}:</span>
+              <span className="tabular-nums w-28 text-right">{formatMoney(Number(q!.netAmountMinor) / 100, q!.currency)}</span></div>
+            {q!.vatAmountMinor > 0 && (
+              <div className="flex gap-6"><span className="text-neutral-600 dark:text-neutral-400">{t('quoteResponse.vat', 'VAT')} ({Number(q!.vatRate || 0).toFixed(1)}%):</span>
+                <span className="tabular-nums w-28 text-right">{formatMoney(Number(q!.vatAmountMinor) / 100, q!.currency)}</span></div>
             )}
             <div className="flex gap-6 font-semibold text-base"><span>{t('quoteResponse.total', 'Total')}:</span>
-              <span className="tabular-nums w-28 text-right">{formatMoney(Number(q.totalAmountMinor) / 100, q.currency)}</span></div>
+              <span className="tabular-nums w-28 text-right">{formatMoney(Number(q!.totalAmountMinor) / 100, q!.currency)}</span></div>
           </div>
 
-          {q.outroText && (
-            <p className="whitespace-pre-line text-neutral-700 mt-4">{q.outroText}</p>
+          {q!.outroText && (
+            <p className="whitespace-pre-line text-neutral-700 dark:text-neutral-300 mt-4">{q!.outroText}</p>
           )}
 
           {/* Response area */}
-          <div className="mt-8 pt-6 border-t border-neutral-200 text-center">
-            {error && <p className="text-red-600 mb-4 text-sm">{error}</p>}
+          <div className="mt-8 pt-6 border-t border-neutral-200 dark:border-neutral-700 text-center">
+            {error && <p className="text-red-600 dark:text-red-400 mb-4 text-sm">{error}</p>}
+            {busy && (
+              <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+                {t('quoteResponse.submitting', 'Recording your response…')}
+              </p>
+            )}
             {locked ? (
-              <p className="text-sm text-neutral-600">
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">
                 {responseStatus === 'accepted'
-                  ? t('quoteResponse.acceptedLocked', 'You accepted this quote on {{date}}. The decision is final.', { date: q.respondedAt ? new Date(q.respondedAt).toLocaleString() : '' })
+                  ? t('quoteResponse.acceptedLocked', 'You accepted this quote on {{date}}. The decision is final.', { date: q!.respondedAt ? new Date(q!.respondedAt).toLocaleString() : '' })
                   : responseStatus === 'declined'
-                    ? t('quoteResponse.declinedLocked', 'You declined this quote on {{date}}. The decision is final.', { date: q.respondedAt ? new Date(q.respondedAt).toLocaleString() : '' })
+                    ? t('quoteResponse.declinedLocked', 'You declined this quote on {{date}}. The decision is final.', { date: q!.respondedAt ? new Date(q!.respondedAt).toLocaleString() : '' })
                     : t('quoteResponse.cannotRespond', 'This quote can no longer be responded to via this link.')}
               </p>
             ) : (
               <>
-                <p className="text-sm text-neutral-600 mb-4">
-                  {q.respondedAt
-                    ? t('quoteResponse.changeWithin', 'You can change your response until {{at}}.', { at: q.responseLockedAt ? new Date(q.responseLockedAt).toLocaleTimeString() : '' })
+                <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+                  {q!.respondedAt
+                    ? t('quoteResponse.changeWithin', 'You can change your response until {{at}}.', { at: q!.responseLockedAt ? new Date(q!.responseLockedAt).toLocaleTimeString() : '' })
                     : t('quoteResponse.intro', 'Please accept or decline this quote:')}
                 </p>
-                <div className="flex justify-center gap-3">
+                <div className="flex justify-center gap-3 flex-wrap">
                   <button
                     type="button" disabled={busy}
                     onClick={() => handleRespond('accept')}
@@ -192,7 +237,7 @@ export const QuoteResponsePage: React.FC = () => {
                   <button
                     type="button" disabled={busy}
                     onClick={() => handleRespond('decline')}
-                    className="px-6 py-3 rounded-md border border-neutral-300 hover:bg-neutral-50 text-neutral-700 font-medium disabled:opacity-50"
+                    className="px-6 py-3 rounded-md border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 font-medium disabled:opacity-50"
                   >{t('quoteResponse.decline', 'Decline')}</button>
                 </div>
               </>
@@ -200,8 +245,8 @@ export const QuoteResponsePage: React.FC = () => {
           </div>
         </div>
 
-        {q.issuer?.footerLine && (
-          <p className="text-center text-xs text-neutral-500 mt-4">{q.issuer.footerLine}</p>
+        {q!.issuer?.footerLine && (
+          <p className="text-center text-xs text-neutral-500 dark:text-neutral-400 mt-4">{q!.issuer.footerLine}</p>
         )}
       </div>
     </div>

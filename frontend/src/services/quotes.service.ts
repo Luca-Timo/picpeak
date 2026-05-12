@@ -251,7 +251,14 @@ export interface PublicQuoteView {
     lineTotalMinor: number;
   }>;
   recipient: { displayName: string; email: string; companyName: string | null } | null;
-  issuer: { companyName: string; email: string; website: string; footerLine: string } | null;
+  issuer: {
+    companyName: string;
+    email: string;
+    website: string;
+    footerLine: string;
+    /** Absolute or /uploads/-prefixed URL set by the public route. */
+    logoUrl?: string | null;
+  } | null;
 }
 
 export const publicQuotesService = {

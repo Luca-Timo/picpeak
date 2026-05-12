@@ -90,6 +90,38 @@ function localeForIntl(locale) {
  */
 function drawIssuerBlock(doc, issuer, x, y, width) {
   const startY = y;
+
+  // Logo (top-right above the issuer text) — relative path stored
+  // in business_profile.logo_path is resolved against the storage/
+  // root. Drawn only if the file exists; absence is silent so an
+  // unconfigured profile still renders cleanly.
+  if (issuer.logoPath) {
+    try {
+      const path = require('path');
+      const fs = require('fs');
+      const candidates = [
+        // Absolute path (admin pasted a full path).
+        path.isAbsolute(issuer.logoPath) ? issuer.logoPath : null,
+        // Under storage/ root (what the branding upload returns).
+        path.join(process.cwd(), 'storage', issuer.logoPath.replace(/^\/+/, '')),
+        // Already under public storage path.
+        path.join(process.cwd(), 'storage', 'branding', path.basename(issuer.logoPath)),
+      ].filter(Boolean);
+      const found = candidates.find((p) => { try { return fs.existsSync(p); } catch { return false; } });
+      if (found) {
+        const logoH = 50; // ~17.6mm tall — matches the reference letterhead
+        const logoMaxW = Math.min(width, 160);
+        // image() at (x, y) with fit:[w,h] preserves aspect ratio. We
+        // right-anchor by placing the box such that its right edge
+        // aligns with the issuer block's right edge.
+        doc.image(found, x + width - logoMaxW, y, { fit: [logoMaxW, logoH], align: 'right' });
+        y += logoH + 8;
+      }
+    } catch (_err) {
+      // Logo failures don't break the whole PDF — just skip.
+    }
+  }
+
   doc.font(FONT_BOLD).fontSize(13);
   if (issuer.companyName) {
     doc.text(issuer.companyName, x, y, { width, align: 'right' });
@@ -113,6 +145,7 @@ function drawIssuerBlock(doc, issuer, x, y, width) {
     issuer.mobile  ? `Mobile: ${issuer.mobile}`   : null,
     issuer.email   ? `Email: ${issuer.email}`     : null,
     issuer.website ? `Web: ${issuer.website}`     : null,
+    issuer.vatId   ? `VAT: ${issuer.vatId}`       : null,
   ].filter(Boolean);
   for (const line of contactLines) {
     doc.text(line, x, y, { width, align: 'right' });
@@ -248,7 +281,14 @@ function stripTrailingZeros(value) {
   if (value == null) return '';
   const num = Number(value);
   if (Number.isNaN(num)) return String(value);
-  return num.toString().replace(/\.?0+$/, '') || '0';
+  const s = num.toString();
+  // Only strip zeros AFTER the decimal point. Naively replacing
+  // `/\.?0+$/` also ate the trailing zero in whole numbers like
+  // "10" → "1", which made a quantity of 10 render as 1 on the
+  // PDF while the total (qty * unit) stayed correct: Anzahl=10,
+  // Einzelpreis 123, Summe 1230, but the column read "1".
+  if (!s.includes('.')) return s;
+  return s.replace(/0+$/, '').replace(/\.$/, '') || '0';
 }
 
 /**

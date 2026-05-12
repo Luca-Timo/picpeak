@@ -109,8 +109,29 @@ async function getRecipientLanguage(email, eventId = null) {
       logger.error('Error fetching event language:', error);
     }
   }
-  
-  // Second priority: Check app_settings for general default language
+
+  // Second priority: customer_accounts.preferred_language matched by
+  // recipient email. Honours the customer's own preference instead of
+  // the app-wide default — fixes the CRM bug where every quote /
+  // invoice / customer email shipped in the app default language
+  // (German on a German-locale install) even when the customer was
+  // explicitly set to English. Falls through silently on miss so admin
+  // recipients (no customer_accounts row) still see the app default.
+  if (email) {
+    try {
+      const customer = await db('customer_accounts')
+        .where('email', String(email).toLowerCase().trim())
+        .select('preferred_language')
+        .first();
+      if (customer && customer.preferred_language) {
+        return customer.preferred_language;
+      }
+    } catch (error) {
+      logger.debug('Skip customer_accounts language lookup', { error: error.message });
+    }
+  }
+
+  // Third priority: Check app_settings for general default language
   try {
     const langSetting = await db('app_settings')
       .where('setting_key', 'general_default_language')
@@ -122,7 +143,7 @@ async function getRecipientLanguage(email, eventId = null) {
     logger.error('Error fetching app settings language:', error);
   }
   
-  // Third priority: Check email configs for default language
+  // Fourth priority: Check email configs for default language
   try {
     const emailConfig = await db('email_configs').first();
     if (emailConfig && emailConfig.default_language) {
@@ -131,8 +152,8 @@ async function getRecipientLanguage(email, eventId = null) {
   } catch (error) {
     logger.error('Error fetching email config language:', error);
   }
-  
-  // Fourth priority: Check if the email domain suggests a language
+
+  // Fifth priority: Check if the email domain suggests a language
   if (email) {
     const domain = email.toLowerCase();
     const domainLanguageMap = [

@@ -440,6 +440,8 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       countryCode: profile.country_code,
       phone: profile.phone, mobile: profile.mobile, email: profile.email, website: profile.website,
       footerLine: profile.footer_line,
+      vatId: profile.vat_id,
+      logoPath: profile.logo_path,
     } : {},
     recipient: {
       issuerLine: profile?.company_name
