@@ -425,17 +425,28 @@ async function buildRenderContext(quote, lineItems) {
     ? await db('payment_term_templates').where({ id: quote.payment_term_template_id }).first()
     : null;
 
-  // Fall back to the global branding logo (Settings → Branding,
-  // stored in app_settings.branding_logo_url) when the
-  // business_profile row has no dedicated logo of its own. Most
-  // admins set one logo via the existing branding page and expect
-  // it to flow through to quote/invoice PDFs too.
-  let resolvedLogoPath = profile?.logo_path || null;
+  // Fall back to the global branding logo (Settings → Branding)
+  // when business_profile has no dedicated logo of its own. Admins
+  // typically upload ONE logo via the branding page and expect it
+  // to flow through to quotes + invoices too.
+  //
+  // Prefer the absolute filesystem path (`branding_logo_path`,
+  // written by multer at upload time) over the public URL
+  // (`branding_logo_url`) — the disk path bypasses all the
+  // storage-root / cwd path-guessing the renderer otherwise has to
+  // do. URL is the second-best fallback for older installs that
+  // only have the url key populated.
+  let resolvedLogoPath = (profile?.logo_path || '').trim() || null;
   if (!resolvedLogoPath) {
     try {
-      const brandingLogoRaw = await getAppSetting('branding_logo_url');
-      if (brandingLogoRaw && typeof brandingLogoRaw === 'string') {
-        resolvedLogoPath = brandingLogoRaw;
+      const brandingDiskPath = await getAppSetting('branding_logo_path');
+      if (brandingDiskPath && typeof brandingDiskPath === 'string' && brandingDiskPath.trim()) {
+        resolvedLogoPath = brandingDiskPath.trim();
+      } else {
+        const brandingLogoUrl = await getAppSetting('branding_logo_url');
+        if (brandingLogoUrl && typeof brandingLogoUrl === 'string' && brandingLogoUrl.trim()) {
+          resolvedLogoPath = brandingLogoUrl.trim();
+        }
       }
     } catch (_) { /* leave null */ }
   }
