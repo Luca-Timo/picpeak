@@ -368,4 +368,159 @@ router.post('/profile/password', [
   }
 });
 
+// ---- quotes (customer-facing read-only) ------------------------------
+// Lists quotes belonging to the logged-in customer. Scoped strictly to
+// the customer's own customer_account_id so a stale or stolen token can
+// never see another customer's quotes. Returns the same shape the admin
+// list does, minus fields that are admin-only (internal_notes, pdf_path,
+// created_by_admin_id). Disabled when the customer has `feature_quotes`
+// off OR the global `quotes` flag is off — the frontend's RequireFeature
+// already hides the sidebar entry, but we belt-and-braces it here so a
+// direct API hit gets a 403 instead of leaking rows.
+router.get('/quotes', customerAuth, async (req, res) => {
+  try {
+    const { db: dbi } = require('../database/db');
+    // Customer-feature gate. is_active is enforced by customerAuth.
+    const customer = await dbi('customer_accounts').where({ id: req.customer.id }).first();
+    if (!customer || customer.feature_quotes === false || customer.feature_quotes === 0) {
+      return res.status(403).json({ error: 'Quotes are disabled for this account', code: 'CUSTOMER_FEATURE_DISABLED' });
+    }
+    const rows = await dbi('quotes')
+      .where({ customer_account_id: req.customer.id })
+      .orderBy('issue_date', 'desc')
+      .orderBy('id', 'desc')
+      .select(
+        'id', 'quote_number', 'status', 'currency',
+        'issue_date', 'valid_until', 'event_name', 'event_date',
+        'net_amount_minor', 'vat_rate', 'vat_amount_minor',
+        'shipping_amount_minor', 'total_amount_minor',
+        'intro_text', 'outro_text',
+        'sent_at', 'responded_at', 'response_locked_at',
+        'accepted_at', 'declined_at',
+      );
+
+    // Look up the active accept/decline token for each non-locked
+    // quote so the customer dashboard can deep-link back into the
+    // public response page when the admin already sent it. We avoid
+    // re-issuing tokens here — the dashboard is for review, not
+    // re-sending.
+    const tokensByQuote = new Map();
+    if (rows.length > 0) {
+      const tokens = await dbi('quote_action_tokens')
+        .whereIn('quote_id', rows.map((r) => r.id))
+        .whereNull('used_at')
+        .where('expires_at', '>', new Date())
+        .select('quote_id', 'token');
+      for (const t of tokens) tokensByQuote.set(t.quote_id, t.token);
+    }
+
+    res.json({
+      quotes: rows.map((q) => ({
+        id: q.id,
+        quoteNumber: q.quote_number,
+        status: q.status,
+        currency: q.currency,
+        issueDate: q.issue_date,
+        validUntil: q.valid_until,
+        eventName: q.event_name,
+        eventDate: q.event_date,
+        netAmountMinor: q.net_amount_minor,
+        vatRate: q.vat_rate == null ? null : Number(q.vat_rate),
+        vatAmountMinor: q.vat_amount_minor,
+        shippingAmountMinor: q.shipping_amount_minor,
+        totalAmountMinor: q.total_amount_minor,
+        introText: q.intro_text,
+        outroText: q.outro_text,
+        sentAt: q.sent_at,
+        respondedAt: q.responded_at,
+        responseLockedAt: q.response_locked_at,
+        acceptedAt: q.accepted_at,
+        declinedAt: q.declined_at,
+        responseToken: tokensByQuote.get(q.id) || null,
+      })),
+    });
+  } catch (error) {
+    logger.error('Customer quotes list error:', error);
+    res.status(500).json({ error: 'Failed to load quotes' });
+  }
+});
+
+// ---- invoices (customer-facing read-only + PDF) ----------------------
+// Mirrors /quotes — list owned by the customer with the same feature
+// gate. Adds a PDF download endpoint so customers can grab the rendered
+// invoice from their dashboard.
+router.get('/invoices', customerAuth, async (req, res) => {
+  try {
+    const { db: dbi } = require('../database/db');
+    const customer = await dbi('customer_accounts').where({ id: req.customer.id }).first();
+    if (!customer || customer.feature_bills === false || customer.feature_bills === 0) {
+      return res.status(403).json({ error: 'Invoices are disabled for this account', code: 'CUSTOMER_FEATURE_DISABLED' });
+    }
+    const rows = await dbi('invoices')
+      .where({ customer_account_id: req.customer.id })
+      // Hide scheduled invoices that haven't been sent yet — the
+      // customer shouldn't see drafts the admin is still tweaking.
+      .whereNotIn('status', ['scheduled', 'cancelled'])
+      .orderBy('issue_date', 'desc')
+      .orderBy('id', 'desc')
+      .select(
+        'id', 'invoice_number', 'status', 'currency',
+        'issue_date', 'due_date',
+        'installment_index', 'installment_total', 'installment_label',
+        'net_amount_minor', 'vat_rate', 'vat_amount_minor',
+        'shipping_amount_minor', 'total_amount_minor',
+        'paid_amount_minor', 'paid_at',
+        'late_fee_amount_minor', 'reminder_level', 'sent_at',
+      );
+    res.json({
+      invoices: rows.map((i) => ({
+        id: i.id,
+        invoiceNumber: i.invoice_number,
+        status: i.status,
+        currency: i.currency,
+        issueDate: i.issue_date,
+        dueDate: i.due_date,
+        installmentIndex: i.installment_index,
+        installmentTotal: i.installment_total,
+        installmentLabel: i.installment_label,
+        netAmountMinor: i.net_amount_minor,
+        vatRate: i.vat_rate == null ? null : Number(i.vat_rate),
+        vatAmountMinor: i.vat_amount_minor,
+        shippingAmountMinor: i.shipping_amount_minor,
+        totalAmountMinor: i.total_amount_minor,
+        paidAmountMinor: i.paid_amount_minor,
+        paidAt: i.paid_at,
+        lateFeeAmountMinor: i.late_fee_amount_minor,
+        reminderLevel: i.reminder_level,
+        sentAt: i.sent_at,
+      })),
+    });
+  } catch (error) {
+    logger.error('Customer invoice list error:', error);
+    res.status(500).json({ error: 'Failed to load invoices' });
+  }
+});
+
+router.get('/invoices/:id/pdf', customerAuth, async (req, res) => {
+  try {
+    const { db: dbi } = require('../database/db');
+    const invoice = await dbi('invoices')
+      .where({ id: parseInt(req.params.id, 10), customer_account_id: req.customer.id })
+      .first();
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    if (['scheduled', 'cancelled'].includes(invoice.status)) {
+      // Don't expose scheduled drafts or cancelled docs.
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    const invoiceService = require('../services/invoiceService');
+    const buf = await invoiceService.renderInvoicePdfBuffer(invoice.id);
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="${invoice.invoice_number}.pdf"`);
+    res.send(buf);
+  } catch (error) {
+    logger.error('Customer invoice PDF error:', error);
+    res.status(500).json({ error: 'Failed to render invoice PDF' });
+  }
+});
+
 module.exports = router;
