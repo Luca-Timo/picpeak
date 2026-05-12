@@ -489,11 +489,11 @@ function drawLineItems(doc, ctx) {
     ? [30, 40, 240, 50, 75, 80]
     : [30, 50, 280, 70, 85];
 
-  // Per-row padding — sized for an airy, lots-of-breathing-room
-  // feel. 16pt top + 16pt bottom adds ~32pt of vertical space
-  // around the text inside each cell, so consecutive line items
-  // sit clearly apart on the page.
-  const ROW_PADDING = { top: 16, bottom: 16, left: 4, right: 4 };
+  // Per-row padding — pushed up again at the maintainer's request
+  // for an even more open, generously spaced look. 64pt top + 64pt
+  // bottom adds ~128pt of vertical space around the text inside
+  // each cell.
+  const ROW_PADDING = { top: 64, bottom: 64, left: 4, right: 4 };
   // Match the totals box font size; the maintainer wants the line
   // items and the billing totals to read at the same weight so the
   // eye doesn't bounce between two scales.

@@ -481,18 +481,30 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
     ? await db('business_bank_accounts').where({ id: invoice.business_bank_account_id }).first()
     : await businessProfileService.resolveBankAccountForCurrency(invoice.currency);
 
-  // Fall back to the global branding logo (Settings → Branding,
-  // stored in app_settings.branding_logo_url) when the
-  // business_profile row has no dedicated logo of its own. This is
-  // by far the most common configuration: admins upload one logo
-  // via the existing branding page and expect it to flow through to
-  // invoices/quotes too.
-  let resolvedLogoPath = profile?.logo_path || null;
+  // Fall back to the global branding logo (Settings → Branding)
+  // when business_profile has no dedicated logo of its own. Admins
+  // typically upload ONE logo via the branding page and expect it
+  // to flow through to quotes + invoices too.
+  //
+  // Branding upload stores two settings: `branding_logo_path` (the
+  // ABSOLUTE filesystem path written by multer — e.g.
+  // `/app/storage/uploads/logos/abc.png`) and `branding_logo_url`
+  // (the public URL path — `/uploads/logos/abc.png`). We prefer
+  // the disk path because it's already absolute and bypasses all
+  // the storage-root / cwd guessing the renderer otherwise has to
+  // do. URL is the second-best fallback for older installs that
+  // only have the url key populated.
+  let resolvedLogoPath = (profile?.logo_path || '').trim() || null;
   if (!resolvedLogoPath) {
     try {
-      const brandingLogoRaw = await getAppSetting('branding_logo_url');
-      if (brandingLogoRaw && typeof brandingLogoRaw === 'string') {
-        resolvedLogoPath = brandingLogoRaw;
+      const brandingDiskPath = await getAppSetting('branding_logo_path');
+      if (brandingDiskPath && typeof brandingDiskPath === 'string' && brandingDiskPath.trim()) {
+        resolvedLogoPath = brandingDiskPath.trim();
+      } else {
+        const brandingLogoUrl = await getAppSetting('branding_logo_url');
+        if (brandingLogoUrl && typeof brandingLogoUrl === 'string' && brandingLogoUrl.trim()) {
+          resolvedLogoPath = brandingLogoUrl.trim();
+        }
       }
     } catch (_) { /* leave null */ }
   }
