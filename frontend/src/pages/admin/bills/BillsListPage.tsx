@@ -58,13 +58,13 @@ export const BillsListPage: React.FC = () => {
             <input
               type="text"
               placeholder={t('bills.searchPlaceholder', 'Search by number or customer…') as string}
-              className="w-full pl-9 pr-3 py-2 rounded-md border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+              className="w-full pl-9 pr-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
           </div>
           <select
-            className="px-3 py-2 rounded-md border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+            className="px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
             value={sort}
             onChange={(e) => setSort(e.target.value as InvoiceSort)}
           >

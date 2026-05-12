@@ -11,7 +11,7 @@
  * and after save (GET /:id/pdf) for the "what does my customer see?"
  * check.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -24,6 +24,8 @@ import {
 } from '../../../services/quotes.service';
 import { LineItemsTable, type EditableLineItem } from '../../../components/admin/LineItemsTable';
 import { customerAdminService } from '../../../services/customerAdmin.service';
+import { userManagementService } from '../../../services/userManagement.service';
+import { useAdminAuth } from '../../../contexts/AdminAuthContext';
 import { toast } from 'react-toastify';
 
 interface FormState {
@@ -176,6 +178,37 @@ export const QuoteEditorPage: React.FC = () => {
     queryKey: ['line-item-presets'],
     queryFn: () => quotesService.listLineItemPresets(),
   });
+
+  // Admin user list — used to pre-fill + offer a dropdown for the
+  // "CC PDF to" field, mirroring CreateEventPage's admin_email picker.
+  // Falls back to an empty list silently if the current user lacks
+  // users.view permission so basic admins still get the auto-prefill
+  // from the currently signed-in admin.
+  const { user: currentAdmin } = useAdminAuth();
+  const { data: adminUsers } = useQuery({
+    queryKey: ['admin-users-list'],
+    queryFn: async () => {
+      try { return await userManagementService.getUsers(); } catch { return []; }
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const activeAdmins = useMemo(
+    () => (adminUsers || []).filter((u: any) => u.isActive !== false && !!u.email),
+    [adminUsers]
+  );
+
+  // Auto-prefill the CC PDF email with the current admin's email, only
+  // on a brand-new quote and only once. Don't clobber edits or existing
+  // values from a saved quote.
+  const didPrefillCcRef = useRef(false);
+  useEffect(() => {
+    if (isEdit) return;
+    if (didPrefillCcRef.current) return;
+    if (!currentAdmin?.email) return;
+    didPrefillCcRef.current = true;
+    setForm((prev) => (prev.ccPdfEmail ? prev : { ...prev, ccPdfEmail: currentAdmin.email }));
+  }, [currentAdmin?.email, isEdit]);
 
   const installmentPreview = useMemo<PaymentTermInstallment[]>(() => {
     const tpl = ptTemplates?.templates.find((x) => x.id === form.paymentTermTemplateId);
@@ -339,7 +372,7 @@ export const QuoteEditorPage: React.FC = () => {
           <div>
             <label className="block text-sm font-medium mb-1">{t('quotes.field.currency', 'Currency')}</label>
             <select value={form.currency} onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
-              className="w-full px-3 py-2 rounded-md border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm">
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm">
               <option>CHF</option><option>EUR</option><option>USD</option><option>GBP</option>
             </select>
           </div>
@@ -350,7 +383,7 @@ export const QuoteEditorPage: React.FC = () => {
       <Card>
         <h3 className="font-semibold mb-2">4. {t('quotes.section.payment', 'Payment conditions')}</h3>
         <select
-          className="w-full px-3 py-2 rounded-md border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+          className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
           value={form.paymentTermTemplateId || ''}
           onChange={(e) => setForm((f) => ({ ...f, paymentTermTemplateId: e.target.value ? Number(e.target.value) : null }))}
         >
@@ -374,19 +407,52 @@ export const QuoteEditorPage: React.FC = () => {
         <div className="space-y-3">
           <div>
             <label className="block text-sm font-medium mb-1">{t('quotes.field.introText', 'Intro text')}</label>
-            <textarea rows={3} className="w-full rounded-md border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm"
+            <textarea rows={3} className="w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
               value={form.introText} onChange={(e) => setForm((f) => ({ ...f, introText: e.target.value }))} />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">{t('quotes.field.outroText', 'Outro text')}</label>
-            <textarea rows={3} className="w-full rounded-md border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm"
+            <textarea rows={3} className="w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
               value={form.outroText} onChange={(e) => setForm((f) => ({ ...f, outroText: e.target.value }))} />
           </div>
-          <Input label={t('quotes.field.ccPdfEmail', 'CC PDF to (extra recipient)') as string} value={form.ccPdfEmail}
-            onChange={(e) => setForm((f) => ({ ...f, ccPdfEmail: e.target.value }))} />
+
+          {/* CC PDF — admin email prefilled, with a picker when more
+              than one admin exists. Mirrors the admin_email field on
+              CreateEventPage so the muscle memory carries over. */}
+          <div className="space-y-1">
+            <Input
+              type="email"
+              label={t('quotes.field.ccPdfEmail', 'CC PDF to (extra recipient)') as string}
+              placeholder={t('quotes.field.ccPdfEmailPlaceholder', 'name@example.com') as string}
+              value={form.ccPdfEmail}
+              onChange={(e) => setForm((f) => ({ ...f, ccPdfEmail: e.target.value }))}
+            />
+            {activeAdmins.length > 1 && (
+              <div className="flex items-center gap-2">
+                <label htmlFor="cc-pdf-picker" className="text-xs text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
+                  {t('quotes.field.ccPdfPickFromAdmins', 'Pick from admins:')}
+                </label>
+                <select
+                  id="cc-pdf-picker"
+                  value={activeAdmins.some((a: any) => a.email === form.ccPdfEmail) ? form.ccPdfEmail : ''}
+                  onChange={(e) => {
+                    const email = e.target.value;
+                    if (email) setForm((prev) => ({ ...prev, ccPdfEmail: email }));
+                  }}
+                  className="text-xs px-2 py-1 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 rounded focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
+                >
+                  <option value="">{t('quotes.field.ccPdfCustom', 'Custom email')}</option>
+                  {activeAdmins.map((a: any) => (
+                    <option key={a.id} value={a.email}>{a.email}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="block text-sm font-medium mb-1">{t('quotes.field.internalNotes', 'Internal notes (not on PDF)')}</label>
-            <textarea rows={3} className="w-full rounded-md border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm"
+            <textarea rows={3} className="w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
               value={form.internalNotes} onChange={(e) => setForm((f) => ({ ...f, internalNotes: e.target.value }))} />
           </div>
         </div>

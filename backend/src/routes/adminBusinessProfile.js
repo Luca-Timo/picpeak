@@ -3,7 +3,7 @@
  *
  * Endpoint mounted at /api/admin/business-profile (see server.js wiring).
  * Issuer block + bank-account roster that every quote/invoice PDF pulls
- * from. Gated by the existing `settings.manage` permission so any admin
+ * from. Gated by the existing `settings.edit` permission so any admin
  * who can edit Settings can edit this too — no separate CRM permission
  * required at this layer.
  *
@@ -88,7 +88,7 @@ router.get(
 // ---- PUT / ------------------------------------------------------------
 router.put(
   '/',
-  requirePermission('settings.manage'),
+  requirePermission('settings.edit'),
   [
     // All fields optional — partial update is fine. We only run shallow
     // shape validation on the types that absolutely must be sane;
@@ -167,7 +167,7 @@ router.get(
 
 router.post(
   '/bank-accounts',
-  requirePermission('settings.manage'),
+  requirePermission('settings.edit'),
   [
     body('iban').isString().isLength({ min: 5, max: 64 }).withMessage('IBAN is required'),
     body('label').optional().isString().isLength({ max: 128 }),
@@ -194,7 +194,7 @@ router.post(
 
 router.put(
   '/bank-accounts/:id',
-  requirePermission('settings.manage'),
+  requirePermission('settings.edit'),
   [
     param('id').isInt({ min: 1 }),
     body('iban').optional().isString().isLength({ min: 5, max: 64 }),
@@ -230,7 +230,7 @@ router.put(
 
 router.delete(
   '/bank-accounts/:id',
-  requirePermission('settings.manage'),
+  requirePermission('settings.edit'),
   [param('id').isInt({ min: 1 })],
   handleAsync(async (req, res) => {
     validateRequest(req);

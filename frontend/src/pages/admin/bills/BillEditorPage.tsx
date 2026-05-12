@@ -187,7 +187,7 @@ export const BillEditorPage: React.FC = () => {
           <div>
             <label className="block text-sm font-medium mb-1">{t('bills.field.qrFormat', 'Payment QR format')}</label>
             <select value={qrFormat} onChange={(e) => setQrFormat(e.target.value as InvoiceQrFormat)}
-              className="w-full px-3 py-2 rounded-md border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm">
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm">
               <option value="none">{t('bills.qrFormat.none', 'None')}</option>
               <option value="swiss">{t('bills.qrFormat.swiss', 'Swiss QR-bill')}</option>
               <option value="epc">{t('bills.qrFormat.epc', 'EPC QR (SEPA)')}</option>
@@ -208,7 +208,7 @@ export const BillEditorPage: React.FC = () => {
           <div>
             <label className="block text-sm font-medium mb-1">{t('bills.field.currency', 'Currency')}</label>
             <select value={currency} onChange={(e) => setCurrency(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm">
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm">
               <option>CHF</option><option>EUR</option><option>USD</option><option>GBP</option>
             </select>
           </div>

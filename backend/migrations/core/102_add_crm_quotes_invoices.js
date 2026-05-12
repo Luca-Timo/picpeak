@@ -133,6 +133,10 @@ const CRM_SUB_SETTINGS = [
   { setting_key: 'crm_invoices_late_fee_minor',           setting_value: 2500,  setting_type: 'crm' },
   { setting_key: 'crm_invoices_late_fee_label',           setting_value: 'Mahngebühr', setting_type: 'crm' },
   { setting_key: 'crm_invoices_skonto_business_days',     setting_value: 5,     setting_type: 'crm' },
+  // Default early-payment discount offered when a new payment-term
+  // template is created or when a quote/invoice doesn't override it.
+  // Expressed as a percentage (e.g. 2.0 = 2% off). 0 = no skonto by default.
+  { setting_key: 'crm_invoices_skonto_percent_default',   setting_value: 2,     setting_type: 'crm' },
   // Numbering
   { setting_key: 'crm_quotes_number_format',              setting_value: 'Q-{YEAR}-{SEQ:04d}',   setting_type: 'crm' },
   { setting_key: 'crm_invoices_number_format',            setting_value: 'R-{YEAR}-{SEQ:04d}',   setting_type: 'crm' },

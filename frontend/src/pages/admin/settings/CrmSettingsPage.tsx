@@ -28,6 +28,7 @@ const SETTING_KEYS = [
   'crm_invoices_late_fee_minor',
   'crm_invoices_late_fee_label',
   'crm_invoices_skonto_business_days',
+  'crm_invoices_skonto_percent_default',
   'crm_invoices_number_format',
 ];
 
@@ -130,6 +131,10 @@ export const CrmSettingsPage: React.FC = () => {
             label={t('crmSettings.crm_invoices_late_fee_label.label', 'Late fee label') as string}
             value={values.crm_invoices_late_fee_label ?? 'Mahngebühr'}
             onChange={(e) => setVal('crm_invoices_late_fee_label', e.target.value)} />
+          <Input type="number" min={0} step="0.01" max="100"
+            label={t('crmSettings.crm_invoices_skonto_percent_default.label', 'Skonto rate (default %)') as string}
+            value={values.crm_invoices_skonto_percent_default ?? 2}
+            onChange={(e) => setVal('crm_invoices_skonto_percent_default', Number(e.target.value))} />
           <Input type="number" min={0}
             label={t('crmSettings.crm_invoices_skonto_business_days.label', 'Skonto window (business days)') as string}
             value={values.crm_invoices_skonto_business_days ?? 5}
