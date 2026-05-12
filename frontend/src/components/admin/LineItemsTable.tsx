@@ -115,7 +115,7 @@ export const LineItemsTable: React.FC<Props> = ({
                 <td className="px-2 py-2">
                   <input
                     type="number" step="0.01" min="0"
-                    className="w-20 rounded border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm"
+                    className="w-20 rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm"
                     value={li.quantity}
                     onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
                   />
@@ -123,7 +123,7 @@ export const LineItemsTable: React.FC<Props> = ({
                 <td className="px-2 py-2">
                   <textarea
                     rows={2}
-                    className="w-full rounded border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm"
+                    className="w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm"
                     value={li.description}
                     onChange={(e) => setItem(idx, { description: e.target.value })}
                     placeholder={t('crm.lineItems.descriptionPlaceholder', 'Description (multi-line OK)') as string}
@@ -132,7 +132,7 @@ export const LineItemsTable: React.FC<Props> = ({
                 <td className="px-2 py-2">
                   <input
                     type="number" step="0.01" min="0"
-                    className="w-24 rounded border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm text-right"
+                    className="w-24 rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm text-right"
                     value={li.unitPrice}
                     onChange={(e) => setItem(idx, { unitPrice: Number(e.target.value) })}
                   />
@@ -141,7 +141,7 @@ export const LineItemsTable: React.FC<Props> = ({
                   <td className="px-2 py-2">
                     <input
                       type="number" step="0.1" min="0" max="100"
-                      className="w-20 rounded border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm text-right"
+                      className="w-20 rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm text-right"
                       value={li.discountPercent}
                       onChange={(e) => setItem(idx, { discountPercent: Number(e.target.value) })}
                     />
@@ -185,7 +185,7 @@ export const LineItemsTable: React.FC<Props> = ({
         </Button>
         {presets.length > 0 && (
           <select
-            className="text-sm rounded-md border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5"
+            className="text-sm rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5"
             onChange={(e) => {
               const id = parseInt(e.target.value, 10);
               const preset = presets.find((p) => p.id === id);

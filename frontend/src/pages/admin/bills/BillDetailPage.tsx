@@ -189,7 +189,7 @@ export const BillDetailPage: React.FC = () => {
               <Input label={t('bills.payment.reference', 'Reference (optional)') as string} value={payReference} onChange={(e) => setPayReference(e.target.value)} />
               <div>
                 <label className="block text-sm font-medium mb-1">{t('bills.payment.notes', 'Notes')}</label>
-                <textarea rows={3} className="w-full rounded-md border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm"
+                <textarea rows={3} className="w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm"
                   value={payNotes} onChange={(e) => setPayNotes(e.target.value)} />
               </div>
               <div className="flex justify-end gap-2 pt-2">

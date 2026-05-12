@@ -106,7 +106,7 @@ export const SettingsBusinessProfilePage: React.FC = () => {
           <div>
             <label className="block text-sm font-medium mb-1">{t('businessProfile.field.defaultQrFormat', 'Default invoice QR')}</label>
             <select value={profile.defaultQrFormat} onChange={(e) => setProfile({ ...profile, defaultQrFormat: e.target.value as QrFormat })}
-              className="w-full px-3 py-2 rounded-md border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm">
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm">
               <option value="none">{t('businessProfile.qrFormat.none', 'None')}</option>
               <option value="swiss">{t('businessProfile.qrFormat.swiss', 'Swiss QR-bill (CH / LI)')}</option>
               <option value="epc">{t('businessProfile.qrFormat.epc', 'EPC QR (SEPA / EUR)')}</option>
