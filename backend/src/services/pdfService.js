@@ -184,60 +184,61 @@ function drawLineItems(doc, ctx) {
 
   const showDiscount = type === 'quote' && lineItems.some((li) => Number(li.discountPercent) > 0);
 
-  // Column widths sum to PAGE.contentWidth = 515.28.
+  // Column widths sum to PAGE.contentWidth = 515.28. swissqrbill's
+  // PDFColumn carries `width` + `align` directly on each cell; there
+  // is NO top-level `columns: [...]` on the Table constructor. The
+  // previous attempt to pass column widths separately was a no-op,
+  // which is why numeric cells were left-aligned even though their
+  // headers were right-aligned (header `textOptions.align` happened
+  // to work on PDFKit's underlying text() call, but cell-level
+  // alignment needs the API-supported `align` property).
   const widths = showDiscount
     ? [30, 40, 240, 50, 75, 80]
     : [30, 50, 280, 70, 85];
 
-  const rows = lineItems.map((li, idx) => ({
-    height: undefined, // auto
+  const dataRow = (li, idx) => ({
     columns: showDiscount
       ? [
-          { text: String(idx + 1) },
-          { text: stripTrailingZeros(li.quantity) },
-          { text: li.description },
-          { text: `${stripTrailingZeros(li.discountPercent)}%`, textOptions: { align: 'right' } },
-          { text: formatMinor(li.unitPriceMinor, currency, intlLocale), textOptions: { align: 'right' } },
-          { text: formatMinor(li.lineTotalMinor, currency, intlLocale), textOptions: { align: 'right' } },
+          { text: String(idx + 1),                                                  width: widths[0], align: 'left'  },
+          { text: stripTrailingZeros(li.quantity),                                  width: widths[1], align: 'left'  },
+          { text: li.description,                                                   width: widths[2], align: 'left'  },
+          { text: `${stripTrailingZeros(li.discountPercent)}%`,                     width: widths[3], align: 'right' },
+          { text: formatMinor(li.unitPriceMinor, currency, intlLocale),             width: widths[4], align: 'right' },
+          { text: formatMinor(li.lineTotalMinor, currency, intlLocale),             width: widths[5], align: 'right' },
         ]
       : [
-          { text: String(idx + 1) },
-          { text: stripTrailingZeros(li.quantity) },
-          { text: li.description },
-          { text: formatMinor(li.unitPriceMinor, currency, intlLocale), textOptions: { align: 'right' } },
-          { text: formatMinor(li.lineTotalMinor, currency, intlLocale), textOptions: { align: 'right' } },
+          { text: String(idx + 1),                                                  width: widths[0], align: 'left'  },
+          { text: stripTrailingZeros(li.quantity),                                  width: widths[1], align: 'left'  },
+          { text: li.description,                                                   width: widths[2], align: 'left'  },
+          { text: formatMinor(li.unitPriceMinor, currency, intlLocale),             width: widths[3], align: 'right' },
+          { text: formatMinor(li.lineTotalMinor, currency, intlLocale),             width: widths[4], align: 'right' },
         ],
-  }));
+  });
 
   const headerRow = {
-    height: 16,
+    fontName: FONT_BOLD,
     fontSize: 9,
     columns: showDiscount
       ? [
-          { text: labels.pos },
-          { text: labels.qty },
-          { text: labels.desc },
-          { text: labels.disc, textOptions: { align: 'right' } },
-          { text: labels.unit, textOptions: { align: 'right' } },
-          { text: labels.total, textOptions: { align: 'right' } },
+          { text: labels.pos,   width: widths[0], align: 'left'  },
+          { text: labels.qty,   width: widths[1], align: 'left'  },
+          { text: labels.desc,  width: widths[2], align: 'left'  },
+          { text: labels.disc,  width: widths[3], align: 'right' },
+          { text: labels.unit,  width: widths[4], align: 'right' },
+          { text: labels.total, width: widths[5], align: 'right' },
         ]
       : [
-          { text: labels.pos },
-          { text: labels.qty },
-          { text: labels.desc },
-          { text: labels.unit, textOptions: { align: 'right' } },
-          { text: labels.total, textOptions: { align: 'right' } },
+          { text: labels.pos,   width: widths[0], align: 'left'  },
+          { text: labels.qty,   width: widths[1], align: 'left'  },
+          { text: labels.desc,  width: widths[2], align: 'left'  },
+          { text: labels.unit,  width: widths[3], align: 'right' },
+          { text: labels.total, width: widths[4], align: 'right' },
         ],
   };
-  headerRow.columns = headerRow.columns.map((c, i) => ({
-    ...c,
-    fontName: FONT_BOLD,
-  }));
 
   const table = new Table({
     width: PAGE.contentWidth,
-    rows: [headerRow, ...rows],
-    columns: widths.map((w) => ({ width: w })),
+    rows: [headerRow, ...lineItems.map(dataRow)],
   });
   table.attachTo(doc);
   return doc.y;

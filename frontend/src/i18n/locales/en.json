@@ -124,7 +124,11 @@
     "saveChanges": "Save changes",
     "resetChanges": "Reset Changes",
     "dismiss": "Dismiss",
-    "discard": "Discard"
+    "discard": "Discard",
+    "preview": "Preview",
+    "duplicate": "Duplicate",
+    "showAll": "Show all",
+    "confirm": "Confirm"
   },
   "upload": {
     "photoCategory": "Photo Category",
@@ -168,7 +172,8 @@
     "cmsPages": "CMS Pages",
     "users": "Users",
     "calendar": "Calendar",
-    "clients": "Clients"
+    "clients": "Clients",
+    "betaTag": "Beta"
   },
   "archives": {
     "title": "Archives",
@@ -2939,6 +2944,10 @@
         "error": "Could not send password reset",
         "inactive": "Reactivate the customer before sending a reset."
       },
+      "quotesSection": "Quotes",
+      "noQuotes": "No quotes for this customer yet.",
+      "billsSection": "Invoices",
+      "noBills": "No invoices for this customer yet.",
       "manageEvents": "Manage galleries"
     },
     "reactivate": {
@@ -2983,7 +2992,323 @@
       "body": "Enable Accounts (or another Clients sub-feature) under Settings → Features to get started."
     },
     "subnav": {
-      "accounts": "Accounts"
+      "accounts": "Accounts",
+      "quotes": "Quotes",
+      "bills": "Invoices"
     }
+  },
+  "quotes": {
+    "errors": {
+      "popupBlocked": "Allow pop-ups for this site to preview the PDF.",
+      "customerRequired": "Pick a customer first.",
+      "customerFeatureDisabled": "This customer has Quotes disabled. Enable Quotes on the customer detail page first."
+    },
+    "confirmSend": "Send this quote to the customer now?",
+    "sentToast": "Quote sent to customer.",
+    "confirmConvert": "Convert this accepted quote into an event + scheduled invoices?",
+    "convertedToast": "Quote converted to event #{{id}}",
+    "send": "Send",
+    "resend": "Resend",
+    "convert": "Convert to event",
+    "field": {
+      "issueDate": "Issued",
+      "validUntil": "Valid until",
+      "eventName": "Event",
+      "eventDate": "Event date",
+      "sentAt": "Sent at",
+      "acceptedAt": "Accepted at",
+      "declinedAt": "Declined at",
+      "responseWindow": "Response window",
+      "eventTimeStart": "Start time",
+      "eventTimeEnd": "End time",
+      "expectedDuration": "Expected duration (h)",
+      "vatRate": "VAT rate %",
+      "shipping": "Shipping amount",
+      "currency": "Currency",
+      "selectPaymentTerm": "— Select payment terms —",
+      "introText": "Intro text",
+      "outroText": "Outro text",
+      "ccPdfEmail": "CC PDF to (extra recipient)",
+      "ccPdfEmailPlaceholder": "name@example.com",
+      "ccPdfPickFromAdmins": "Pick from admins:",
+      "ccPdfCustom": "Custom email",
+      "internalNotes": "Internal notes (not on PDF)"
+    },
+    "responseWindowOpen": "Open until {{at}}",
+    "section": {
+      "lineItems": "Line items",
+      "internalNotes": "Internal notes",
+      "customer": "Customer",
+      "event": "Event details",
+      "payment": "Payment conditions",
+      "extras": "Intro / outro / extras"
+    },
+    "savedToast": "Quote saved as draft.",
+    "edit": "Edit quote",
+    "new": "New quote",
+    "preview": "Preview PDF",
+    "saveAndSend": "Save & send",
+    "customerSearch": "Search customer by email or company…",
+    "title": "Quotes",
+    "subtitle": "Send, track and convert quotes into events.",
+    "searchPlaceholder": "Search by number, customer, event…",
+    "sort": {
+      "newest": "Newest first",
+      "oldest": "Oldest first",
+      "customerAsc": "Customer A→Z",
+      "valueAsc": "Value low→high",
+      "valueDesc": "Value high→low"
+    },
+    "empty": "No quotes yet.",
+    "table": {
+      "customer": "Customer",
+      "event": "Event",
+      "issueDate": "Issued",
+      "total": "Total",
+      "status": "Status"
+    },
+    "pagination": "Page {{page}} of {{total}} · {{count}} quotes",
+    "status": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "accepted": "Accepted",
+      "declined": "Declined",
+      "expired": "Expired",
+      "converted": "Converted"
+    },
+    "trigger": {
+      "quote_accepted": "on acceptance",
+      "before_event": "before event",
+      "after_event": "after event",
+      "after_delivery": "after delivery",
+      "fixed_date": "on fixed date"
+    }
+  },
+  "crm": {
+    "lineItems": {
+      "quantity": "Qty",
+      "description": "Description",
+      "unitPrice": "Unit",
+      "total": "Total",
+      "subtotal": "Subtotal",
+      "vat": "VAT",
+      "position": "Pos.",
+      "discount": "Rabatt %",
+      "descriptionPlaceholder": "Description (multi-line OK)",
+      "saveAsPreset": "Save as preset",
+      "empty": "No line items yet — add one to get started.",
+      "addRow": "Add row",
+      "addFromPreset": "Add from preset…",
+      "shipping": "Shipping"
+    }
+  },
+  "bills": {
+    "title": "Invoices",
+    "subtitle": "Schedule, send, track payments and chase late invoices.",
+    "new": "New invoice",
+    "searchPlaceholder": "Search by number or customer…",
+    "sort": {
+      "newest": "Newest first",
+      "dueAsc": "Due soon first",
+      "dueDesc": "Due latest first",
+      "customerAsc": "Customer A→Z",
+      "valueAsc": "Value low→high",
+      "valueDesc": "Value high→low"
+    },
+    "filter": {
+      "unpaidOnly": "Unpaid only"
+    },
+    "empty": "No invoices yet.",
+    "table": {
+      "customer": "Customer",
+      "installment": "Installment",
+      "dueDate": "Due",
+      "total": "Total",
+      "status": "Status"
+    },
+    "errors": {
+      "popupBlocked": "Allow pop-ups for this site to preview the PDF.",
+      "customerRequired": "Pick a customer first."
+    },
+    "confirmSend": "Send invoice to customer now?",
+    "sentToast": "Invoice sent.",
+    "confirmReminder": "Send a reminder now?",
+    "reminderToast": "Reminder sent.",
+    "confirmCancel": "Cancel this invoice?",
+    "cancelledToast": "Invoice cancelled.",
+    "paymentRecordedToast": "Payment recorded.",
+    "sendNow": "Send now",
+    "resend": "Resend",
+    "markPaid": "Mark paid",
+    "sendReminder": "Send reminder",
+    "field": {
+      "issueDate": "Issued",
+      "dueDate": "Due",
+      "scheduledSendAt": "Scheduled send",
+      "installment": "Installment",
+      "total": "Total",
+      "paid": "Paid",
+      "outstanding": "Outstanding",
+      "lateFee": "Late fee",
+      "qrFormat": "Payment QR format",
+      "vatRate": "VAT rate %",
+      "shipping": "Shipping",
+      "currency": "Currency",
+      "ccPdfEmail": "CC PDF to (extra recipient)"
+    },
+    "section": {
+      "lineItems": "Line items",
+      "paymentLog": "Payment log",
+      "customer": "Customer",
+      "details": "Details"
+    },
+    "noPayments": "No payments recorded yet.",
+    "payment": {
+      "paidAt": "Date",
+      "amount": "Amount",
+      "method": "Method",
+      "reference": "Reference",
+      "notes": "Notes"
+    },
+    "recordPayment": "Record payment",
+    "savedToast": "Invoice saved.",
+    "edit": "Edit invoice",
+    "customerSearch": "Search by email or company…",
+    "qrFormat": {
+      "none": "None",
+      "swiss": "Swiss QR-bill",
+      "epc": "EPC QR (SEPA)"
+    },
+    "status": {
+      "scheduled": "Scheduled",
+      "sent": "Sent",
+      "paid": "Paid",
+      "overdue": "Overdue",
+      "cancelled": "Cancelled"
+    }
+  },
+  "businessProfile": {
+    "savedToast": "Business profile saved.",
+    "title": "Business profile",
+    "subtitle": "Issuer block shown on every quote and invoice PDF.",
+    "section": {
+      "company": "Company",
+      "contact": "Contact",
+      "defaults": "Defaults",
+      "banks": "Bank accounts"
+    },
+    "field": {
+      "companyName": "Company name",
+      "vatId": "VAT ID",
+      "addressLine1": "Address line 1",
+      "addressLine2": "Address line 2",
+      "postalCode": "Postal code",
+      "city": "City",
+      "state": "State / Region",
+      "countryCode": "Country (ISO 3166)",
+      "phone": "Phone",
+      "mobile": "Mobile",
+      "email": "Email",
+      "website": "Website",
+      "defaultCurrency": "Default currency",
+      "defaultLocale": "Default locale",
+      "vatLabel": "VAT label (e.g. MwSt., VAT)",
+      "vatRateDefault": "Default VAT rate %",
+      "defaultQrFormat": "Default invoice QR",
+      "footerLine": "PDF footer line"
+    },
+    "qrFormat": {
+      "none": "None",
+      "swiss": "Swiss QR-bill (CH / LI)",
+      "epc": "EPC QR (SEPA / EUR)"
+    },
+    "bankCreatedToast": "Bank account added.",
+    "bankDeletedToast": "Bank account removed.",
+    "addBank": "Add account",
+    "bank": {
+      "label": "Label",
+      "accountHolder": "Account holder",
+      "currency": "Currency",
+      "isDefault": "Default for this currency",
+      "makeDefault": "Make default",
+      "confirmDelete": "Remove this bank account?"
+    },
+    "noBanks": "No bank accounts configured yet."
+  },
+  "crmSettings": {
+    "savedToast": "CRM settings saved.",
+    "title": "CRM settings",
+    "subtitle": "Fine-tune quote and invoice behaviour.",
+    "section": {
+      "quotes": "Quotes",
+      "invoices": "Invoices"
+    },
+    "crm_quotes_accept_window_minutes": {
+      "label": "Accept window (minutes)"
+    },
+    "crm_quotes_default_valid_days": {
+      "label": "Default validity (days)"
+    },
+    "crm_quotes_number_format": {
+      "label": "Quote number format"
+    },
+    "crm_invoices_reminder_first_days": {
+      "label": "First reminder after (days past due)"
+    },
+    "crm_invoices_reminder_second_days": {
+      "label": "Second reminder after (days past due)"
+    },
+    "crm_invoices_late_fee_minor": {
+      "label": "Late fee (minor units / Rappen)"
+    },
+    "crm_invoices_late_fee_label": {
+      "label": "Late fee label"
+    },
+    "crm_invoices_skonto_percent_default": {
+      "label": "Skonto rate (default %)"
+    },
+    "crm_invoices_skonto_business_days": {
+      "label": "Skonto window (business days)"
+    },
+    "crm_invoices_number_format": {
+      "label": "Invoice number format"
+    },
+    "crm_quotes_pdf_attachment_enabled": {
+      "label": "Attach quote PDF to email"
+    },
+    "crm_quotes_skonto_enabled": {
+      "label": "Allow early-payment discount (Skonto) on quotes"
+    },
+    "crm_invoices_qr_enabled": {
+      "label": "Render payment QR on invoice PDFs"
+    },
+    "crm_invoices_reminders_enabled": {
+      "label": "Send automatic reminders for overdue invoices"
+    },
+    "crm_invoices_late_fee_enabled": {
+      "label": "Add a late fee on the second reminder"
+    }
+  },
+  "quoteResponse": {
+    "notFound": "Quote not found",
+    "notFoundBody": "This link may have expired or been revoked. Please contact the photographer for a new quote.",
+    "locked": "Your response window has closed and the decision is now final.",
+    "title": "Quote",
+    "event": "Event",
+    "issueDate": "Issued",
+    "validUntil": "valid until",
+    "description": "Description",
+    "qty": "Qty",
+    "unit": "Unit",
+    "total": "Total",
+    "subtotal": "Subtotal",
+    "vat": "VAT",
+    "acceptedLocked": "You accepted this quote on {{date}}. The decision is final.",
+    "declinedLocked": "You declined this quote on {{date}}. The decision is final.",
+    "cannotRespond": "This quote can no longer be responded to via this link.",
+    "changeWithin": "You can change your response until {{at}}.",
+    "intro": "Please accept or decline this quote:",
+    "accept": "Accept quote",
+    "decline": "Decline"
   }
 }
