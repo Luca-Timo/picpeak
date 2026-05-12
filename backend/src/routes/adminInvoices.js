@@ -1,0 +1,421 @@
+/**
+ * Admin → Invoices Routes
+ *
+ * Endpoint mounted at /api/admin/invoices. Surface:
+ *   GET    /                            list (filter + sort + paginate)
+ *   POST   /                            create (status=scheduled or sent)
+ *   GET    /:id                         detail incl. line items + payments
+ *   PUT    /:id                         update (only when not paid/cancelled)
+ *   POST   /:id/send                    render PDF + queue email now
+ *   POST   /:id/mark-paid               record a payment
+ *   POST   /:id/send-reminder           manually trigger reminder ladder
+ *   POST   /:id/cancel                  cancel a non-paid invoice
+ *   GET    /:id/pdf                     preview / download PDF
+ *   GET    /:id/payment-log             list payment log entries
+ *   POST   /preview                     render PDF from unsaved payload
+ *
+ * Permissions: `bills.view` for reads, `bills.manage` for writes.
+ * Global `bills` feature flag enforced at the route layer.
+ */
+
+const express = require('express');
+const { body, param, query } = require('express-validator');
+const { adminAuth } = require('../middleware/auth');
+const { requirePermission } = require('../middleware/permissions');
+const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
+const invoiceService = require('../services/invoiceService');
+const { db } = require('../database/db');
+
+const router = express.Router();
+
+async function requireBillsFlag(req, res, next) {
+  try {
+    const row = await db('feature_flags').where({ key: 'bills' }).first();
+    const enabled = row && (row.value === true || row.value === 1 || row.value === '1');
+    if (!enabled) return res.status(403).json({ error: 'Bills feature is disabled', code: 'BILLS_DISABLED' });
+    next();
+  } catch (err) { next(err); }
+}
+
+router.use(adminAuth);
+router.use(requireBillsFlag);
+
+function transformInvoice(i) {
+  if (!i) return null;
+  return {
+    id: i.id,
+    invoiceNumber: i.invoice_number,
+    customerAccountId: i.customer_account_id,
+    customer: {
+      email: i.customer_email,
+      displayName: i.customer_display_name,
+      firstName: i.customer_first_name,
+      lastName: i.customer_last_name,
+      companyName: i.customer_company_name,
+    },
+    sourceQuoteId: i.source_quote_id,
+    eventId: i.event_id,
+    language: i.language,
+    currency: i.currency,
+    issueDate: i.issue_date,
+    dueDate: i.due_date,
+    installmentIndex: i.installment_index,
+    installmentTotal: i.installment_total,
+    installmentLabel: i.installment_label,
+    installmentTrigger: i.installment_trigger,
+    status: i.status,
+    scheduledSendAt: i.scheduled_send_at,
+    sentAt: i.sent_at,
+    netAmountMinor: i.net_amount_minor,
+    vatRate: i.vat_rate == null ? null : Number(i.vat_rate),
+    vatAmountMinor: i.vat_amount_minor,
+    shippingAmountMinor: i.shipping_amount_minor,
+    totalAmountMinor: i.total_amount_minor,
+    paidAmountMinor: i.paid_amount_minor,
+    paidAt: i.paid_at,
+    paymentMethod: i.payment_method,
+    paymentReference: i.payment_reference,
+    reminderLevel: i.reminder_level,
+    lastReminderSentAt: i.last_reminder_sent_at,
+    lateFeeAmountMinor: i.late_fee_amount_minor,
+    ccPdfEmail: i.cc_pdf_email,
+    qrFormat: i.qr_format,
+    pdfPath: i.pdf_path,
+    businessBankAccountId: i.business_bank_account_id,
+    createdAt: i.created_at,
+    updatedAt: i.updated_at,
+  };
+}
+
+function transformLineItem(li) {
+  return {
+    id: li.id,
+    position: li.position,
+    quantity: Number(li.quantity),
+    description: li.description,
+    unitPriceMinor: li.unit_price_minor,
+    discountPercent: li.discount_percent == null ? 0 : Number(li.discount_percent),
+    lineTotalMinor: li.line_total_minor,
+  };
+}
+
+function transformPaymentLog(p) {
+  return {
+    id: p.id,
+    amountMinor: p.amount_minor,
+    paidAt: p.paid_at,
+    paymentMethod: p.payment_method,
+    reference: p.reference,
+    notes: p.notes,
+    recordedByAdminId: p.recorded_by_admin_id,
+    createdAt: p.created_at,
+  };
+}
+
+const INVOICE_BODY_VALIDATORS = [
+  body('customerAccountId').optional().isInt({ min: 1 }),
+  body('language').optional().isString().isLength({ max: 8 }),
+  body('currency').optional().isString().isLength({ min: 3, max: 3 }),
+  body('issueDate').optional().isISO8601(),
+  body('dueDate').optional().isISO8601(),
+  body('scheduledSendAt').optional().isISO8601(),
+  body('installmentIndex').optional().isInt({ min: 0 }),
+  body('installmentTotal').optional().isInt({ min: 1 }),
+  body('installmentLabel').optional().isString().isLength({ max: 128 }),
+  body('installmentTrigger').optional().isString().isLength({ max: 32 }),
+  body('vatRate').optional().isFloat({ min: 0, max: 100 }),
+  body('shippingAmountMinor').optional().isInt({ min: 0 }),
+  body('ccPdfEmail').optional().isString().isLength({ max: 255 }),
+  body('businessBankAccountId').optional().isInt({ min: 1 }),
+  body('qrFormat').optional().isIn(['swiss', 'epc', 'none']),
+  body('lineItems').optional().isArray(),
+];
+
+function mapPayloadToService(body) {
+  const out = {};
+  const map = {
+    customerAccountId: 'customerAccountId',
+    sourceQuoteId: 'sourceQuoteId',
+    eventId: 'eventId',
+    language: 'language', currency: 'currency',
+    issueDate: 'issueDate', dueDate: 'dueDate',
+    scheduledSendAt: 'scheduledSendAt',
+    installmentIndex: 'installmentIndex',
+    installmentTotal: 'installmentTotal',
+    installmentLabel: 'installmentLabel',
+    installmentTrigger: 'installmentTrigger',
+    vatRate: 'vatRate', shippingAmountMinor: 'shippingAmountMinor',
+    ccPdfEmail: 'ccPdfEmail', businessBankAccountId: 'businessBankAccountId',
+    qrFormat: 'qrFormat',
+  };
+  for (const [api, svc] of Object.entries(map)) {
+    if (Object.prototype.hasOwnProperty.call(body, api)) out[svc] = body[api];
+  }
+  if (Array.isArray(body.lineItems)) {
+    out.lineItems = body.lineItems.map((li, idx) => ({
+      position: li.position == null ? idx + 1 : li.position,
+      quantity: li.quantity,
+      description: li.description,
+      unit_price_minor: li.unitPriceMinor,
+      discount_percent: li.discountPercent,
+    }));
+  }
+  return out;
+}
+
+// ---- list + read -----------------------------------------------------
+
+router.get(
+  '/',
+  requirePermission('bills.view'),
+  [
+    query('status').optional().isString(),
+    query('customerAccountId').optional().isInt({ min: 1 }),
+    query('unpaidOnly').optional().isBoolean(),
+    query('q').optional().isString().isLength({ max: 255 }),
+    query('sort').optional().isIn(['newest', 'oldest', 'due_asc', 'due_desc', 'value_asc', 'value_desc', 'customer_asc']),
+    query('page').optional().isInt({ min: 1 }),
+    query('pageSize').optional().isInt({ min: 1, max: 100 }),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const statusFilter = req.query.status
+      ? String(req.query.status).split(',').map((s) => s.trim()).filter(Boolean)
+      : [];
+    const { rows, total, page, pageSize } = await invoiceService.listInvoices({
+      filters: {
+        status: statusFilter,
+        customerAccountId: req.query.customerAccountId ? parseInt(req.query.customerAccountId, 10) : null,
+        unpaidOnly: req.query.unpaidOnly === 'true' || req.query.unpaidOnly === true,
+        q: req.query.q,
+      },
+      sort: req.query.sort || 'newest',
+      page: req.query.page ? parseInt(req.query.page, 10) : 1,
+      pageSize: req.query.pageSize ? parseInt(req.query.pageSize, 10) : 25,
+    });
+    return successResponse(res, {
+      invoices: rows.map(transformInvoice),
+      pagination: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) || 1 },
+    });
+  })
+);
+
+router.get(
+  '/:id',
+  requirePermission('bills.view'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    const data = await invoiceService.getInvoiceById(id);
+    if (!data) return res.status(404).json({ error: 'Invoice not found' });
+    return successResponse(res, {
+      invoice: transformInvoice(data.invoice),
+      lineItems: data.lineItems.map(transformLineItem),
+      payments: data.payments.map(transformPaymentLog),
+    });
+  })
+);
+
+// ---- create + update -------------------------------------------------
+
+router.post(
+  '/',
+  requirePermission('bills.manage'),
+  [body('customerAccountId').isInt({ min: 1 }), ...INVOICE_BODY_VALIDATORS],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = await invoiceService.createInvoice(mapPayloadToService(req.body), req.user.id);
+    const data = await invoiceService.getInvoiceById(id);
+    return successResponse(res, {
+      invoice: transformInvoice(data.invoice),
+      lineItems: data.lineItems.map(transformLineItem),
+    }, 201, 'Invoice created');
+  })
+);
+
+// PUT — full re-save delegated through createInvoice's helper isn't
+// straightforward (we keep the existing row). Implementing as a small
+// inline shim that overrides scalars + replaces line items.
+router.put(
+  '/:id',
+  requirePermission('bills.manage'),
+  [param('id').isInt({ min: 1 }), ...INVOICE_BODY_VALIDATORS],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    const existing = await db('invoices').where({ id }).first();
+    if (!existing) return res.status(404).json({ error: 'Invoice not found' });
+    if (existing.status === 'paid' || existing.status === 'cancelled') {
+      return res.status(409).json({ error: `Cannot edit invoice with status '${existing.status}'` });
+    }
+    const payload = mapPayloadToService(req.body);
+
+    // Recompute totals if line items are present.
+    let updates = { updated_at: new Date() };
+    const map = {
+      language: 'language', currency: 'currency',
+      issueDate: 'issue_date', dueDate: 'due_date',
+      scheduledSendAt: 'scheduled_send_at',
+      installmentIndex: 'installment_index',
+      installmentTotal: 'installment_total',
+      installmentLabel: 'installment_label',
+      installmentTrigger: 'installment_trigger',
+      vatRate: 'vat_rate', shippingAmountMinor: 'shipping_amount_minor',
+      ccPdfEmail: 'cc_pdf_email', businessBankAccountId: 'business_bank_account_id',
+      qrFormat: 'qr_format',
+    };
+    for (const [api, col] of Object.entries(map)) {
+      if (Object.prototype.hasOwnProperty.call(payload, api)) updates[col] = payload[api];
+    }
+
+    if (Array.isArray(payload.lineItems)) {
+      // Recompute everything authoritatively.
+      let net = 0;
+      const items = payload.lineItems.map((li, idx) => {
+        const qty = Number(li.quantity || 1);
+        const unit = parseInt(li.unit_price_minor, 10) || 0;
+        const disc = Number(li.discount_percent || 0);
+        const lineTotal = Math.round(Math.round(qty * unit) * (1 - disc / 100));
+        net += lineTotal;
+        return {
+          invoice_id: id,
+          position: parseInt(li.position, 10) || (idx + 1),
+          quantity: qty, description: String(li.description || ''),
+          unit_price_minor: unit, discount_percent: disc, line_total_minor: lineTotal,
+          created_at: new Date(), updated_at: new Date(),
+        };
+      });
+      const vatRate = Number(payload.vatRate ?? existing.vat_rate ?? 0);
+      const vatAmount = Math.round(net * vatRate / 100);
+      const shipping = parseInt(payload.shippingAmountMinor ?? existing.shipping_amount_minor ?? 0, 10);
+      updates.net_amount_minor = net;
+      updates.vat_amount_minor = vatAmount;
+      updates.vat_rate = vatRate;
+      updates.shipping_amount_minor = shipping;
+      updates.total_amount_minor = net + vatAmount + shipping;
+
+      await db.transaction(async (trx) => {
+        await trx('invoice_line_items').where({ invoice_id: id }).del();
+        if (items.length > 0) await trx('invoice_line_items').insert(items);
+        await trx('invoices').where({ id }).update(updates);
+      });
+    } else {
+      await db('invoices').where({ id }).update(updates);
+    }
+
+    const data = await invoiceService.getInvoiceById(id);
+    return successResponse(res, {
+      invoice: transformInvoice(data.invoice),
+      lineItems: data.lineItems.map(transformLineItem),
+    }, 200, 'Invoice updated');
+  })
+);
+
+// ---- send / pay / remind / cancel ------------------------------------
+
+router.post(
+  '/:id/send',
+  requirePermission('bills.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    await invoiceService.sendInvoice(parseInt(req.params.id, 10), req.user.id);
+    return successResponse(res, { sent: true });
+  })
+);
+
+router.post(
+  '/:id/mark-paid',
+  requirePermission('bills.manage'),
+  [
+    param('id').isInt({ min: 1 }),
+    body('amountMinor').isInt({ min: 1 }),
+    body('paidAt').optional().isISO8601(),
+    body('paymentMethod').optional().isString().isLength({ max: 64 }),
+    body('reference').optional().isString().isLength({ max: 128 }),
+    body('notes').optional().isString().isLength({ max: 5000 }),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await invoiceService.markPaid(parseInt(req.params.id, 10), {
+      amountMinor: req.body.amountMinor,
+      paidAt: req.body.paidAt,
+      paymentMethod: req.body.paymentMethod,
+      reference: req.body.reference,
+      notes: req.body.notes,
+    }, req.user.id);
+    return successResponse(res, result);
+  })
+);
+
+router.post(
+  '/:id/send-reminder',
+  requirePermission('bills.manage'),
+  [
+    param('id').isInt({ min: 1 }),
+    body('level').optional().isInt({ min: 1, max: 2 }),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await invoiceService.sendReminder(
+      parseInt(req.params.id, 10),
+      req.body.level || null,
+      req.user.id
+    );
+    return successResponse(res, result, 200, 'Reminder sent');
+  })
+);
+
+router.post(
+  '/:id/cancel',
+  requirePermission('bills.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    await invoiceService.cancelInvoice(parseInt(req.params.id, 10), req.user.id);
+    return successResponse(res, { cancelled: true });
+  })
+);
+
+// ---- PDF -------------------------------------------------------------
+
+router.get(
+  '/:id/pdf',
+  requirePermission('bills.view'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const buf = await invoiceService.renderInvoicePdfBuffer(parseInt(req.params.id, 10));
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="invoice-${req.params.id}.pdf"`);
+    res.send(buf);
+  })
+);
+
+router.post(
+  '/preview',
+  requirePermission('bills.manage'),
+  INVOICE_BODY_VALIDATORS,
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const buf = await invoiceService.renderInvoicePdfFromPayload(mapPayloadToService(req.body));
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', 'inline; filename="invoice-preview.pdf"');
+    res.send(buf);
+  })
+);
+
+router.get(
+  '/:id/payment-log',
+  requirePermission('bills.view'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const data = await invoiceService.getInvoiceById(parseInt(req.params.id, 10));
+    if (!data) return res.status(404).json({ error: 'Invoice not found' });
+    return successResponse(res, { payments: data.payments.map(transformPaymentLog) });
+  })
+);
+
+module.exports = router;

@@ -368,6 +368,10 @@ async function updateCustomer(id, updates, updatedByAdminId) {
     // Per-customer feature flags (#354 follow-up). Booleans below are
     // coerced via formatBoolean for SQLite compatibility.
     'feature_calendar', 'feature_quotes', 'feature_bills',
+    // CRM billing cadence (migration 102). 'per_event' (default) keeps
+    // each invoice firing on its own schedule; monthly/quarterly snap
+    // every scheduled invoice to billing_cycle_day of the next period.
+    'billing_cadence', 'billing_cycle_day',
   ];
   for (const f of fields) {
     if (updates[f] !== undefined) {
@@ -379,6 +383,16 @@ async function updateCustomer(id, updates, updatedByAdminId) {
         allowed[f] = String(updates[f]).trim().toUpperCase().slice(0, 2);
       } else if (f === 'feature_calendar' || f === 'feature_quotes' || f === 'feature_bills') {
         allowed[f] = formatBoolean(updates[f]);
+      } else if (f === 'billing_cadence') {
+        // Whitelist enum. Anything else flips to 'per_event' so we
+        // never persist garbage that the scheduler can't interpret.
+        const v = String(updates[f] || '').toLowerCase();
+        allowed[f] = ['per_event', 'monthly', 'quarterly'].includes(v) ? v : 'per_event';
+      } else if (f === 'billing_cycle_day') {
+        // Clamp 1–28 — anything above 28 rolls back to month length at
+        // schedule time anyway, but 1–28 is a saner UI surface.
+        const v = parseInt(updates[f], 10);
+        allowed[f] = Number.isFinite(v) ? Math.max(1, Math.min(28, v)) : 1;
       } else {
         allowed[f] = updates[f];
       }

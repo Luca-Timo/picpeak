@@ -39,6 +39,11 @@ function transformCustomer(c) {
     state: c.state,
     countryCode: c.country_code,
     preferredLanguage: c.preferred_language,
+    // CRM billing cadence override (migration 102). Drives whether the
+    // invoice scheduler honours the quote's installment plan or snaps
+    // every bill to the customer's monthly/quarterly cycle day.
+    billingCadence: c.billing_cadence || 'per_event',
+    billingCycleDay: c.billing_cycle_day == null ? 1 : Number(c.billing_cycle_day),
     notes: c.notes,
     isActive: c.is_active,
     // Per-customer feature flags (#354 follow-up). Coerce to bool so the
@@ -220,6 +225,12 @@ router.put('/:id', [
   body('feature_calendar').optional().isBoolean(),
   body('feature_quotes').optional().isBoolean(),
   body('feature_bills').optional().isBoolean(),
+  // CRM billing cadence — see migration 102. `per_event` keeps the
+  // existing per-event payment plan; monthly/quarterly snap every
+  // generated invoice to billing_cycle_day of the next period.
+  body('billing_cadence').optional().isIn(['per_event', 'monthly', 'quarterly']),
+  body('billing_cycle_day').optional().isInt({ min: 1, max: 28 })
+    .withMessage('billing_cycle_day must be 1–28 (clamps to month length anyway)'),
 ], handleAsync(async (req, res) => {
   validateRequest(req);
   const customer = await customerAccountsService.updateCustomer(
