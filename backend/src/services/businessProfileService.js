@@ -14,7 +14,7 @@
  */
 
 const { db, withRetry } = require('../database/db');
-const { logger } = require('../utils/logger');
+const logger = require('../utils/logger');
 const { formatBoolean } = require('../utils/dbCompat');
 
 const ALLOWED_PROFILE_FIELDS = [

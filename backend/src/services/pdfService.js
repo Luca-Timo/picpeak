@@ -429,7 +429,7 @@ function appendSwissQrBill(doc, ctx) {
     // Don't kill PDF rendering if QR generation fails — log + carry on.
     // The invoice without QR is still legally valid; admin gets a flag
     // via the calling service.
-    const { logger } = require('../utils/logger');
+    const logger = require('../utils/logger');
     logger.warn('SwissQRBill render failed; emitting invoice without QR section', { err: err.message });
   }
 }

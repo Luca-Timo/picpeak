@@ -28,7 +28,7 @@
 
 const crypto = require('crypto');
 const { db, withRetry, logActivity } = require('../database/db');
-const { logger } = require('../utils/logger');
+const logger = require('../utils/logger');
 const { formatBoolean } = require('../utils/dbCompat');
 const settingsService = require('./settingsService');
 const businessProfileService = require('./businessProfileService');
