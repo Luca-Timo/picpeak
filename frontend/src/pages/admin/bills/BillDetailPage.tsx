@@ -34,8 +34,21 @@ export const BillDetailPage: React.FC = () => {
   const inv = data.invoice;
 
   const handlePreview = async () => {
-    const url = await billsService.pdfUrl(inv.id);
-    window.open(url, '_blank');
+    // Sync-open the placeholder window before any await so the popup
+    // blocker treats this as a user gesture, then redirect once the
+    // blob URL is ready.
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      toast.error(t('bills.errors.popupBlocked', 'Allow pop-ups for this site to preview the PDF.'));
+      return;
+    }
+    try {
+      const url = await billsService.pdfUrl(inv.id);
+      previewWindow.location.href = url;
+    } catch (err: any) {
+      previewWindow.close();
+      toast.error(err?.response?.data?.error || err.message || 'Preview failed');
+    }
   };
   const handleSend = async () => {
     if (!window.confirm(t('bills.confirmSend', 'Send invoice to customer now?'))) return;

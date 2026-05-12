@@ -96,6 +96,13 @@ export const BillEditorPage: React.FC = () => {
 
   const handleSave = async (then?: 'preview') => {
     if (!customerId) { toast.error(t('bills.errors.customerRequired', 'Pick a customer first.')); return; }
+    // Open the preview tab synchronously so popup blockers don't kill
+    // it (they reject any window.open that runs after an `await`).
+    const previewWindow = then === 'preview' ? window.open('about:blank', '_blank') : null;
+    if (then === 'preview' && !previewWindow) {
+      toast.error(t('bills.errors.popupBlocked', 'Allow pop-ups for this site to preview the PDF.'));
+      return;
+    }
     setBusy(true);
     try {
       const payload = buildPayload();
@@ -105,22 +112,29 @@ export const BillEditorPage: React.FC = () => {
       qc.invalidateQueries({ queryKey: ['invoices'] });
       if (then === 'preview') {
         const url = await billsService.pdfUrl(saved.invoice.id);
-        window.open(url, '_blank');
+        if (previewWindow) previewWindow.location.href = url;
       } else {
         toast.success(t('bills.savedToast', 'Invoice saved.'));
       }
       navigate(`/admin/clients/bills/${saved.invoice.id}`);
     } catch (err: any) {
+      if (previewWindow) previewWindow.close();
       toast.error(err?.response?.data?.error || err.message || 'Save failed');
     } finally { setBusy(false); }
   };
 
   const handlePreviewUnsaved = async () => {
     if (!customerId) { toast.error(t('bills.errors.customerRequired', 'Pick a customer first.')); return; }
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      toast.error(t('bills.errors.popupBlocked', 'Allow pop-ups for this site to preview the PDF.'));
+      return;
+    }
     try {
       const url = await billsService.previewPdfUrl(buildPayload());
-      window.open(url, '_blank');
+      previewWindow.location.href = url;
     } catch (err: any) {
+      previewWindow.close();
       toast.error(err?.response?.data?.error || 'Preview failed');
     }
   };
