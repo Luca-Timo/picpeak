@@ -172,6 +172,9 @@ async function listInvoices({ filters = {}, sort = 'newest', page = 1, pageSize 
     if (filters.customerAccountId) {
       query = query.where('invoices.customer_account_id', filters.customerAccountId);
     }
+    if (filters.sourceQuoteId) {
+      query = query.where('invoices.source_quote_id', filters.sourceQuoteId);
+    }
     if (filters.unpaidOnly) {
       query = query.whereIn('invoices.status', ['scheduled', 'sent', 'overdue']);
     }
@@ -396,18 +399,73 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
     const inserted = await trx('invoices').insert(row).returning('id');
     const invoiceId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
-    // Each invoice gets a single, pro-rata "Installment" line item.
-    await trx('invoice_line_items').insert({
-      invoice_id: invoiceId,
-      position: 1,
-      quantity: 1,
-      description: `${inst.label || `Installment ${i + 1}/${total}`} (${percent}%)`,
-      unit_price_minor: netSlice,
-      discount_percent: 0,
-      line_total_minor: netSlice,
-      created_at: new Date(),
-      updated_at: new Date(),
-    });
+    // Line items: copy from the quote so the customer sees what they
+    // actually agreed to, not a generic "Gesamtbetrag" placeholder.
+    // Two modes:
+    //   - Single-installment (100%): clone every quote line item
+    //     verbatim. The invoice totals already match the quote's.
+    //   - Multi-installment (split payment): clone the quote lines
+    //     but mark the invoice with the installment context. We pro-
+    //     rate by inserting one extra line at the bottom that adjusts
+    //     to the installment slice — keeps the per-line description
+    //     visible while the total still equals the pro-rata amount.
+    const sourceLines = Array.isArray(lineItems) ? lineItems : [];
+    if (sourceLines.length === 0) {
+      // Fallback for the (rare) case where the quote has no line
+      // items — fall back to the legacy "Installment N/M" line so
+      // we still produce a sensible invoice.
+      await trx('invoice_line_items').insert({
+        invoice_id: invoiceId,
+        position: 1,
+        quantity: 1,
+        description: inst.label || `Installment ${i + 1}/${total}`,
+        unit_price_minor: netSlice,
+        discount_percent: 0,
+        line_total_minor: netSlice,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+    } else {
+      // Clone each quote line as-is. Position numbering restarts at
+      // 1 for the new invoice.
+      const cloned = sourceLines.map((li, idx) => ({
+        invoice_id: invoiceId,
+        position: idx + 1,
+        quantity: li.quantity,
+        description: li.description,
+        unit_price_minor: li.unit_price_minor,
+        discount_percent: li.discount_percent || 0,
+        line_total_minor: li.line_total_minor,
+        created_at: new Date(),
+        updated_at: new Date(),
+      }));
+      await trx('invoice_line_items').insert(cloned);
+
+      // For split payments add an explicit "Installment X/Y (Z%)"
+      // adjustment line that reconciles the cloned line totals to
+      // the actual invoice net (which is the pro-rata slice). The
+      // line carries the difference as a negative if the slice is
+      // less than the quote total (typical), or positive on the
+      // final installment if rounding nudged the other way.
+      if (total > 1) {
+        const clonedSum = cloned.reduce((s, x) => s + ensureInt(x.line_total_minor), 0);
+        const adjustment = netSlice - clonedSum;
+        if (adjustment !== 0) {
+          const installmentLabel = inst.label || `Installment ${i + 1}/${total}`;
+          await trx('invoice_line_items').insert({
+            invoice_id: invoiceId,
+            position: cloned.length + 1,
+            quantity: 1,
+            description: `${installmentLabel} (${percent}% — ${i + 1}/${total})`,
+            unit_price_minor: adjustment,
+            discount_percent: 0,
+            line_total_minor: adjustment,
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+        }
+      }
+    }
 
     try {
       await logActivity('invoice_scheduled', { invoiceId, invoiceNumber, eventId, quoteId, scheduledSendAt },
@@ -442,11 +500,17 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
   // so pdfService.drawPaymentBlock renders the same block on both
   // document types.
   let paymentTerm = null;
+  // Load the source quote once — used for the payment-term snapshot
+  // AND for the "Bezug: Angebot Q-..." reference line on the invoice
+  // PDF. We deliberately keep invoice numbers on a strict monotonic
+  // sequence (tax compliance) and surface the link as a text
+  // reference rather than mirroring the number.
+  let sourceQuote = null;
   if (invoice.source_quote_id) {
-    const quote = await db('quotes').where({ id: invoice.source_quote_id }).first();
-    const snapshot = quote && quote.payment_term_snapshot
-      ? (typeof quote.payment_term_snapshot === 'string'
-          ? JSON.parse(quote.payment_term_snapshot) : quote.payment_term_snapshot)
+    sourceQuote = await db('quotes').where({ id: invoice.source_quote_id }).first();
+    const snapshot = sourceQuote && sourceQuote.payment_term_snapshot
+      ? (typeof sourceQuote.payment_term_snapshot === 'string'
+          ? JSON.parse(sourceQuote.payment_term_snapshot) : sourceQuote.payment_term_snapshot)
       : null;
     if (snapshot) {
       paymentTerm = {
@@ -562,6 +626,9 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       dueDate: invoice.due_date,
       totalAmountMinor: invoice.total_amount_minor,
       lateFeeMinor: invoice.late_fee_amount_minor,
+      // PDF renderer draws "Bezug: Angebot Q-..." under the title
+      // when set. Empty/null suppresses the line (standalone invoice).
+      sourceQuoteNumber: sourceQuote?.quote_number || null,
     },
   };
 }
@@ -643,7 +710,7 @@ async function sendInvoice(id, adminId) {
     customer_name: customer.display_name || customer.first_name || customer.email.split('@')[0],
     event_name: '',
     total_amount: formatMajor(invoice.total_amount_minor, invoice.currency, ctx.locale),
-    due_date: invoice.due_date,
+    due_date: formatShortDate(invoice.due_date),
     installment_label: invoice.installment_label || '',
     installment_index: invoice.installment_index + 1,
     installment_total: invoice.installment_total,
@@ -783,7 +850,15 @@ async function applyReminder(invoice, lineItems, level, adminId) {
 
   await db('invoices').where({ id: invoice.id }).update({ pdf_path: pdfPath, updated_at: new Date() });
 
-  const daysOverdue = Math.floor((Date.now() - new Date(invoice.due_date).getTime()) / 86400000);
+  // days_overdue floors at 1 — a reminder that fires with "0 days
+  // overdue" reads as broken to the customer ("Why am I getting this
+  // already?"). The scheduler only triggers the row once
+  // due_date <= now - reminder_first_days, so the natural minimum is
+  // the configured threshold; for the manual "Send reminder now"
+  // path the admin's intent is "this customer is late", so 1 is the
+  // sensible lower bound even if the calendar arithmetic disagrees.
+  const rawDaysOverdue = Math.floor((Date.now() - new Date(invoice.due_date).getTime()) / 86400000);
+  const daysOverdue = Math.max(1, rawDaysOverdue);
   const templateKey = level === 1 ? 'invoice_reminder_first' : 'invoice_reminder_second';
 
   await emailProcessor.queueEmail(invoice.event_id || null, customer.email, templateKey, {
@@ -792,8 +867,10 @@ async function applyReminder(invoice, lineItems, level, adminId) {
     total_amount: formatMajor(invoice.total_amount_minor, invoice.currency, ctx.locale),
     new_total_amount: formatMajor(newTotal, invoice.currency, ctx.locale),
     late_fee_amount: formatMajor(lateFeeMinor, invoice.currency, ctx.locale),
-    due_date: invoice.due_date,
-    days_overdue: Math.max(0, daysOverdue),
+    // Format dates as DD.MM.YYYY for the customer-facing email
+    // (matches the quote_sent + invoice_sent templates).
+    due_date: formatShortDate(invoice.due_date),
+    days_overdue: daysOverdue,
     cc: invoice.cc_pdf_email || undefined,
     attachments: [{
       filename: `${invoice.invoice_number}.pdf`,
@@ -877,6 +954,20 @@ function formatMajor(minor, currency, locale) {
   return new Intl.NumberFormat(locale === 'de' ? 'de-CH' : 'en-GB', {
     style: 'currency', currency: (currency || 'CHF').toUpperCase(),
   }).format(Number(minor || 0) / 100);
+}
+
+/**
+ * Format a date as DD.MM.YYYY for customer-facing email templates.
+ * Duplicate of the helper in quoteService — kept local to avoid the
+ * services growing a circular dep.
+ */
+function formatShortDate(value) {
+  if (!value) return '';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}.${mm}.${d.getFullYear()}`;
 }
 
 module.exports = {

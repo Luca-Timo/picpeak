@@ -171,6 +171,7 @@ router.get(
   [
     query('status').optional({ values: 'falsy' }).isString(),
     query('customerAccountId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+    query('sourceQuoteId').optional({ values: 'falsy' }).isInt({ min: 1 }),
     query('unpaidOnly').optional({ values: 'falsy' }).isBoolean(),
     query('q').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
     query('sort').optional({ values: 'falsy' }).isIn(['newest', 'oldest', 'due_asc', 'due_desc', 'value_asc', 'value_desc', 'customer_asc']),
@@ -186,6 +187,7 @@ router.get(
       filters: {
         status: statusFilter,
         customerAccountId: req.query.customerAccountId ? parseInt(req.query.customerAccountId, 10) : null,
+        sourceQuoteId: req.query.sourceQuoteId ? parseInt(req.query.sourceQuoteId, 10) : null,
         unpaidOnly: req.query.unpaidOnly === 'true' || req.query.unpaidOnly === true,
         q: req.query.q,
       },

@@ -925,44 +925,37 @@ async function convertToEvent(quoteId, adminId) {
   const invoiceService = require('./invoiceService');
 
   return await db.transaction(async (trx) => {
-    // Stash a derived placeholder for fields the events table requires
-    // NOT NULL but the quote doesn't carry. Admin can fill in real
-    // values from the event edit page after conversion.
-    //   - host_email + admin_email: customer email, then the admin who
-    //     converted (so notifications go somewhere sane until edited)
-    //   - password_hash: random 32-byte hex; the event is a draft so
-    //     nothing reads it until admin sets a real password
-    //   - share_link: random 32-byte hex; uniqueness baked in
-    //   - expires_at: event_date + 1 year, common default for galleries
+    // The events table schema has drifted across migrations:
+    // installs that ran the original 060 series have
+    // host_name/host_email; later ones renamed to customer_*; some
+    // have both. Rather than hard-code one set and fail on the
+    // other, introspect the columns at runtime and only insert
+    // fields the table actually has.
     const adminRow = await trx('admin_users').where({ id: adminId }).first();
     const oneYearAfterEvent = new Date(quote.event_date || quote.issue_date);
     oneYearAfterEvent.setFullYear(oneYearAfterEvent.getFullYear() + 1);
     const placeholder = crypto.randomBytes(32).toString('hex');
     const shareLink = crypto.randomBytes(32).toString('hex');
+    const fullName = [customer.first_name, customer.last_name].filter(Boolean).join(' ')
+      || customer.display_name || customer.company_name || quote.quote_number;
+    const customerEmail = customer.email || `${quote.quote_number.toLowerCase()}@picpeak.local`;
+    const adminEmail = adminRow?.email || customer.email || 'admin@picpeak.local';
 
-    const eventRow = {
+    // Each candidate column is paired with the value we'd write. We
+    // ask the DB which columns exist and only keep the matching pairs
+    // — bullet-proof against schema drift in either direction.
+    const eventCols = await trx('events').columnInfo();
+    const candidate = {
       slug: `quote-${quote.quote_number.toLowerCase()}-${crypto.randomBytes(3).toString('hex')}`,
       event_name: quote.event_name || `Event ${quote.quote_number}`,
       event_date: quote.event_date || quote.issue_date,
-      // events.host_name + host_email are the customer side; some
-      // installs renamed them to customer_name + customer_email via a
-      // later migration. Set both column names defensively so this
-      // works on either schema generation.
-      host_email: customer.email || `${quote.quote_number.toLowerCase()}@picpeak.local`,
-      host_name: [customer.first_name, customer.last_name].filter(Boolean).join(' ')
-        || customer.display_name || customer.company_name || quote.quote_number,
-      customer_name: [customer.first_name, customer.last_name].filter(Boolean).join(' ')
-        || customer.display_name || customer.company_name || quote.quote_number,
-      customer_email: customer.email || `${quote.quote_number.toLowerCase()}@picpeak.local`,
+      host_name: fullName,
+      host_email: customerEmail,
+      customer_name: fullName,
+      customer_email: customerEmail,
       customer_phone: customer.phone,
-      // admin_email NOT NULL — fall back to the converting admin so
-      // notification emails go somewhere real until edited.
-      admin_email: adminRow?.email || customer.email || 'admin@picpeak.local',
+      admin_email: adminEmail,
       event_type: 'wedding',
-      // events.password_hash is NOT NULL on the original schema. The
-      // event is a draft so this hash is never used until the admin
-      // sets a real password on the event detail page — random 32-byte
-      // hex is just a placeholder, not a real password.
       password_hash: placeholder,
       share_link: shareLink,
       share_token: shareLink,
@@ -975,6 +968,10 @@ async function convertToEvent(quoteId, adminId) {
       created_at: new Date(),
       updated_at: new Date(),
     };
+    const eventRow = {};
+    for (const [k, v] of Object.entries(candidate)) {
+      if (Object.prototype.hasOwnProperty.call(eventCols, k)) eventRow[k] = v;
+    }
     const inserted = await trx('events').insert(eventRow).returning('id');
     const eventId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 

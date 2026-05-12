@@ -104,6 +104,7 @@ export const billsService = {
   async list(params: {
     status?: InvoiceStatus[];
     customerAccountId?: number;
+    sourceQuoteId?: number;
     unpaidOnly?: boolean;
     q?: string;
     sort?: InvoiceSort;
