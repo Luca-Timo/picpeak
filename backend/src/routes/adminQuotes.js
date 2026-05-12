@@ -1,0 +1,507 @@
+/**
+ * Admin → Quotes Routes
+ *
+ * Endpoint mounted at /api/admin/quotes. Surface:
+ *   GET    /                            list (filter + sort + paginate)
+ *   POST   /                            create (status=draft)
+ *   GET    /:id                         detail
+ *   PUT    /:id                         update (line items + scalars)
+ *   POST   /:id/send                    render PDF + queue email
+ *   POST   /:id/duplicate               clone as new draft
+ *   POST   /:id/convert                 convert accepted quote → event
+ *   GET    /:id/pdf                     preview / download persisted PDF
+ *   POST   /preview                     render PDF from unsaved payload
+ *   GET    /presets/line-items
+ *   POST   /presets/line-items
+ *   PUT    /presets/line-items/:id
+ *   DELETE /presets/line-items/:id
+ *   GET    /presets/payment-terms
+ *   POST   /presets/payment-terms
+ *   PUT    /presets/payment-terms/:id
+ *   DELETE /presets/payment-terms/:id
+ *
+ * Permissions: `quotes.view` for reads, `quotes.manage` for writes.
+ * The global `quotes` feature flag is checked at the route layer so a
+ * disabled installation returns 403 cleanly without the route bodies
+ * ever running.
+ */
+
+const express = require('express');
+const { body, param, query } = require('express-validator');
+const { adminAuth } = require('../middleware/auth');
+const { requirePermission } = require('../middleware/permissions');
+const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
+const quoteService = require('../services/quoteService');
+const { db } = require('../database/db');
+
+const router = express.Router();
+
+// ----- feature flag gate (admin global) -------------------------------
+async function requireQuotesFlag(req, res, next) {
+  try {
+    const row = await db('feature_flags').where({ key: 'quotes' }).first();
+    const enabled = row && (row.value === true || row.value === 1 || row.value === '1');
+    if (!enabled) {
+      return res.status(403).json({ error: 'Quotes feature is disabled', code: 'QUOTES_DISABLED' });
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+router.use(adminAuth);
+router.use(requireQuotesFlag);
+
+// ---------------------------------------------------------------------
+// Transforms (snake_case DB → camelCase API)
+// ---------------------------------------------------------------------
+
+function transformQuote(q) {
+  if (!q) return null;
+  return {
+    id: q.id,
+    quoteNumber: q.quote_number,
+    customerAccountId: q.customer_account_id,
+    customer: {
+      email: q.customer_email,
+      displayName: q.customer_display_name,
+      firstName: q.customer_first_name,
+      lastName: q.customer_last_name,
+      companyName: q.customer_company_name,
+    },
+    status: q.status,
+    language: q.language,
+    currency: q.currency,
+    issueDate: q.issue_date,
+    validUntil: q.valid_until,
+    eventName: q.event_name,
+    eventDate: q.event_date,
+    eventTimeStart: q.event_time_start,
+    eventTimeEnd: q.event_time_end,
+    expectedDurationHours: q.expected_duration_hours == null ? null : Number(q.expected_duration_hours),
+    paymentTermTemplateId: q.payment_term_template_id,
+    netAmountMinor: q.net_amount_minor,
+    vatRate: q.vat_rate == null ? null : Number(q.vat_rate),
+    vatAmountMinor: q.vat_amount_minor,
+    shippingAmountMinor: q.shipping_amount_minor,
+    totalAmountMinor: q.total_amount_minor,
+    introText: q.intro_text,
+    outroText: q.outro_text,
+    internalNotes: q.internal_notes,
+    ccPdfEmail: q.cc_pdf_email,
+    sentAt: q.sent_at,
+    respondedAt: q.responded_at,
+    responseLockedAt: q.response_locked_at,
+    acceptedAt: q.accepted_at,
+    declinedAt: q.declined_at,
+    convertedEventId: q.converted_event_id,
+    pdfPath: q.pdf_path,
+    businessBankAccountId: q.business_bank_account_id,
+    createdAt: q.created_at,
+    updatedAt: q.updated_at,
+  };
+}
+
+function transformLineItem(li) {
+  return {
+    id: li.id,
+    position: li.position,
+    quantity: Number(li.quantity),
+    description: li.description,
+    unitPriceMinor: li.unit_price_minor,
+    discountPercent: li.discount_percent == null ? 0 : Number(li.discount_percent),
+    lineTotalMinor: li.line_total_minor,
+  };
+}
+
+function transformPaymentTermTemplate(t) {
+  if (!t) return null;
+  return {
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    netDays: t.net_days,
+    skontoPercent: t.skonto_percent == null ? null : Number(t.skonto_percent),
+    skontoWithinDays: t.skonto_within_days,
+    installments: typeof t.installments === 'string' ? JSON.parse(t.installments) : t.installments,
+    isSystem: t.is_system === 1 || t.is_system === true,
+    isActive: t.is_active === 1 || t.is_active === true,
+    displayOrder: t.display_order,
+  };
+}
+
+function transformLineItemPreset(p) {
+  if (!p) return null;
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    unitPriceMinor: p.unit_price_minor,
+    currency: p.currency,
+    quantityDefault: Number(p.quantity_default),
+    displayOrder: p.display_order,
+    isActive: p.is_active === 1 || p.is_active === true,
+  };
+}
+
+// ----- payload conversion helpers ------------------------------------
+
+function mapPayloadToService(body) {
+  const out = {};
+  const map = {
+    customerAccountId: 'customerAccountId',
+    language: 'language', currency: 'currency',
+    issueDate: 'issueDate', validUntil: 'validUntil',
+    eventName: 'eventName', eventDate: 'eventDate',
+    eventTimeStart: 'eventTimeStart', eventTimeEnd: 'eventTimeEnd',
+    expectedDurationHours: 'expectedDurationHours',
+    paymentTermTemplateId: 'paymentTermTemplateId',
+    vatRate: 'vatRate', shippingAmountMinor: 'shippingAmountMinor',
+    introText: 'introText', outroText: 'outroText',
+    internalNotes: 'internalNotes', ccPdfEmail: 'ccPdfEmail',
+    businessBankAccountId: 'businessBankAccountId',
+  };
+  for (const [api, svc] of Object.entries(map)) {
+    if (Object.prototype.hasOwnProperty.call(body, api)) out[svc] = body[api];
+  }
+  if (Array.isArray(body.lineItems)) {
+    out.lineItems = body.lineItems.map((li, idx) => ({
+      position: li.position == null ? idx + 1 : li.position,
+      quantity: li.quantity,
+      description: li.description,
+      unit_price_minor: li.unitPriceMinor,
+      discount_percent: li.discountPercent,
+    }));
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------
+// List + read
+// ---------------------------------------------------------------------
+
+router.get(
+  '/',
+  requirePermission('quotes.view'),
+  [
+    query('status').optional().isString(),
+    query('customerAccountId').optional().isInt({ min: 1 }),
+    query('q').optional().isString().isLength({ max: 255 }),
+    query('from').optional().isISO8601(),
+    query('to').optional().isISO8601(),
+    query('sort').optional().isIn(['newest', 'oldest', 'customer_asc', 'value_asc', 'value_desc']),
+    query('page').optional().isInt({ min: 1 }),
+    query('pageSize').optional().isInt({ min: 1, max: 100 }),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const statusFilter = req.query.status
+      ? String(req.query.status).split(',').map((s) => s.trim()).filter(Boolean)
+      : [];
+    const { rows, total, page, pageSize } = await quoteService.listQuotes({
+      filters: {
+        status: statusFilter,
+        customerAccountId: req.query.customerAccountId ? parseInt(req.query.customerAccountId, 10) : null,
+        from: req.query.from, to: req.query.to, q: req.query.q,
+      },
+      sort: req.query.sort || 'newest',
+      page: req.query.page ? parseInt(req.query.page, 10) : 1,
+      pageSize: req.query.pageSize ? parseInt(req.query.pageSize, 10) : 25,
+    });
+    return successResponse(res, {
+      quotes: rows.map(transformQuote),
+      pagination: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) || 1 },
+    });
+  })
+);
+
+router.get(
+  '/:id',
+  requirePermission('quotes.view'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    const data = await quoteService.getQuoteById(id);
+    if (!data) return res.status(404).json({ error: 'Quote not found' });
+    return successResponse(res, {
+      quote: transformQuote(data.quote),
+      lineItems: data.lineItems.map(transformLineItem),
+    });
+  })
+);
+
+// ---------------------------------------------------------------------
+// Create + update
+// ---------------------------------------------------------------------
+
+const QUOTE_BODY_VALIDATORS = [
+  body('customerAccountId').isInt({ min: 1 }).withMessage('Customer is required'),
+  body('language').optional().isString().isLength({ max: 8 }),
+  body('currency').optional().isString().isLength({ min: 3, max: 3 }),
+  body('issueDate').optional().isISO8601(),
+  body('validUntil').optional().isISO8601(),
+  body('eventName').optional().isString().isLength({ max: 255 }),
+  body('eventDate').optional().isISO8601(),
+  body('eventTimeStart').optional().isString().isLength({ max: 8 }),
+  body('eventTimeEnd').optional().isString().isLength({ max: 8 }),
+  body('expectedDurationHours').optional().isFloat({ min: 0, max: 99.99 }),
+  body('paymentTermTemplateId').optional().isInt({ min: 1 }),
+  body('vatRate').optional().isFloat({ min: 0, max: 100 }),
+  body('shippingAmountMinor').optional().isInt({ min: 0 }),
+  body('introText').optional().isString().isLength({ max: 5000 }),
+  body('outroText').optional().isString().isLength({ max: 5000 }),
+  body('internalNotes').optional().isString().isLength({ max: 5000 }),
+  body('ccPdfEmail').optional().isString().isLength({ max: 255 }),
+  body('businessBankAccountId').optional().isInt({ min: 1 }),
+  body('lineItems').optional().isArray(),
+  body('lineItems.*.description').optional().isString().isLength({ min: 1, max: 1000 }),
+  body('lineItems.*.quantity').optional().isFloat({ min: 0 }),
+  body('lineItems.*.unitPriceMinor').optional().isInt({ min: 0 }),
+  body('lineItems.*.discountPercent').optional().isFloat({ min: 0, max: 100 }),
+];
+
+router.post(
+  '/',
+  requirePermission('quotes.manage'),
+  QUOTE_BODY_VALIDATORS,
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = await quoteService.createQuote(mapPayloadToService(req.body), req.user.id);
+    const data = await quoteService.getQuoteById(id);
+    return successResponse(res, {
+      quote: transformQuote(data.quote),
+      lineItems: data.lineItems.map(transformLineItem),
+    }, 201, 'Quote created');
+  })
+);
+
+router.put(
+  '/:id',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 }), ...QUOTE_BODY_VALIDATORS.map((v) => v.optional)],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    await quoteService.updateQuote(id, mapPayloadToService(req.body), req.user.id);
+    const data = await quoteService.getQuoteById(id);
+    return successResponse(res, {
+      quote: transformQuote(data.quote),
+      lineItems: data.lineItems.map(transformLineItem),
+    }, 200, 'Quote updated');
+  })
+);
+
+// ---------------------------------------------------------------------
+// Send / duplicate / convert
+// ---------------------------------------------------------------------
+
+router.post(
+  '/:id/send',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    const result = await quoteService.sendQuote(id, req.user.id);
+    return successResponse(res, { sent: true, token: result.token }, 200, 'Quote sent');
+  })
+);
+
+router.post(
+  '/:id/duplicate',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const newId = await quoteService.duplicateQuote(parseInt(req.params.id, 10), req.user.id);
+    return successResponse(res, { id: newId }, 201, 'Quote duplicated');
+  })
+);
+
+router.post(
+  '/:id/convert',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    const result = await quoteService.convertToEvent(id, req.user.id);
+    return successResponse(res, result, 200, result.alreadyConverted ? 'Already converted' : 'Quote converted');
+  })
+);
+
+// ---------------------------------------------------------------------
+// PDF — preview (unsaved payload) + download (persisted)
+// ---------------------------------------------------------------------
+
+router.get(
+  '/:id/pdf',
+  requirePermission('quotes.view'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    const buf = await quoteService.renderQuotePdfBuffer(id);
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="quote-${id}.pdf"`);
+    res.send(buf);
+  })
+);
+
+router.post(
+  '/preview',
+  requirePermission('quotes.manage'),
+  QUOTE_BODY_VALIDATORS,
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const buf = await quoteService.renderQuotePdfFromPayload(mapPayloadToService(req.body));
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', 'inline; filename="quote-preview.pdf"');
+    res.send(buf);
+  })
+);
+
+// ---------------------------------------------------------------------
+// Presets — line items
+// ---------------------------------------------------------------------
+
+router.get(
+  '/presets/line-items',
+  requirePermission('quotes.view'),
+  handleAsync(async (req, res) => {
+    const rows = await quoteService.listLineItemPresets();
+    return successResponse(res, { presets: rows.map(transformLineItemPreset) });
+  })
+);
+
+router.post(
+  '/presets/line-items',
+  requirePermission('quotes.manage'),
+  [
+    body('name').isString().isLength({ min: 1, max: 128 }),
+    body('description').optional().isString().isLength({ max: 5000 }),
+    body('unitPriceMinor').optional().isInt({ min: 0 }),
+    body('currency').optional().isString().isLength({ min: 3, max: 3 }),
+    body('quantityDefault').optional().isFloat({ min: 0 }),
+    body('displayOrder').optional().isInt({ min: 0, max: 9999 }),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const row = await quoteService.createLineItemPreset({
+      name: req.body.name,
+      description: req.body.description,
+      unit_price_minor: req.body.unitPriceMinor,
+      currency: req.body.currency,
+      quantity_default: req.body.quantityDefault,
+      display_order: req.body.displayOrder,
+    });
+    return successResponse(res, { preset: transformLineItemPreset(row) }, 201);
+  })
+);
+
+router.put(
+  '/presets/line-items/:id',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    const row = await quoteService.updateLineItemPreset(id, {
+      name: req.body.name,
+      description: req.body.description,
+      unit_price_minor: req.body.unitPriceMinor,
+      currency: req.body.currency,
+      quantity_default: req.body.quantityDefault,
+      display_order: req.body.displayOrder,
+      is_active: req.body.isActive,
+    });
+    return successResponse(res, { preset: transformLineItemPreset(row) });
+  })
+);
+
+router.delete(
+  '/presets/line-items/:id',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    await quoteService.deleteLineItemPreset(parseInt(req.params.id, 10));
+    return successResponse(res, { deleted: true });
+  })
+);
+
+// ---------------------------------------------------------------------
+// Presets — payment terms
+// ---------------------------------------------------------------------
+
+router.get(
+  '/presets/payment-terms',
+  requirePermission('quotes.view'),
+  handleAsync(async (req, res) => {
+    const rows = await quoteService.listPaymentTermTemplates();
+    return successResponse(res, { templates: rows.map(transformPaymentTermTemplate) });
+  })
+);
+
+router.post(
+  '/presets/payment-terms',
+  requirePermission('quotes.manage'),
+  [
+    body('name').isString().isLength({ min: 1, max: 128 }),
+    body('installments').isArray({ min: 1 }),
+    body('netDays').optional().isInt({ min: 1, max: 365 }),
+    body('skontoPercent').optional().isFloat({ min: 0, max: 100 }),
+    body('skontoWithinDays').optional().isInt({ min: 0, max: 365 }),
+    body('description').optional().isString().isLength({ max: 5000 }),
+    body('displayOrder').optional().isInt({ min: 0, max: 9999 }),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const row = await quoteService.createPaymentTermTemplate({
+      name: req.body.name,
+      description: req.body.description,
+      net_days: req.body.netDays,
+      skonto_percent: req.body.skontoPercent,
+      skonto_within_days: req.body.skontoWithinDays,
+      installments: req.body.installments,
+      display_order: req.body.displayOrder,
+    });
+    return successResponse(res, { template: transformPaymentTermTemplate(row) }, 201);
+  })
+);
+
+router.put(
+  '/presets/payment-terms/:id',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    const row = await quoteService.updatePaymentTermTemplate(id, {
+      name: req.body.name,
+      description: req.body.description,
+      net_days: req.body.netDays,
+      skonto_percent: req.body.skontoPercent,
+      skonto_within_days: req.body.skontoWithinDays,
+      installments: req.body.installments,
+      display_order: req.body.displayOrder,
+      is_active: req.body.isActive,
+    });
+    return successResponse(res, { template: transformPaymentTermTemplate(row) });
+  })
+);
+
+router.delete(
+  '/presets/payment-terms/:id',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    await quoteService.deletePaymentTermTemplate(parseInt(req.params.id, 10));
+    return successResponse(res, { deleted: true });
+  })
+);
+
+module.exports = router;
