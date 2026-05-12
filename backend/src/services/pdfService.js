@@ -51,6 +51,42 @@ const CUSTOM_BODY = 'crm-body';
 const CUSTOM_BOLD = 'crm-bold';
 
 /**
+ * ISO 3166-1 alpha-2 → full country name, locale-aware. Falls back to
+ * the bare code when not in the map (no need to maintain every nation
+ * on earth — the user said de + en, with the issuer in LI/CH).
+ *
+ * Using `Intl.DisplayNames` would be neat but Node's built-in support
+ * for German names is patchy across versions, so a small explicit
+ * table is more reliable for the formats actually used.
+ */
+const COUNTRY_NAMES = {
+  de: {
+    LI: 'Liechtenstein', CH: 'Schweiz', AT: 'Österreich', DE: 'Deutschland',
+    FR: 'Frankreich',    IT: 'Italien', ES: 'Spanien',    PT: 'Portugal',
+    NL: 'Niederlande',   BE: 'Belgien', LU: 'Luxemburg',  GB: 'Vereinigtes Königreich',
+    US: 'USA',           DK: 'Dänemark', SE: 'Schweden',  NO: 'Norwegen',
+    FI: 'Finnland',      PL: 'Polen',   CZ: 'Tschechien', SK: 'Slowakei',
+    HU: 'Ungarn',        IE: 'Irland',
+  },
+  en: {
+    LI: 'Liechtenstein', CH: 'Switzerland', AT: 'Austria', DE: 'Germany',
+    FR: 'France',        IT: 'Italy',       ES: 'Spain',   PT: 'Portugal',
+    NL: 'Netherlands',   BE: 'Belgium',     LU: 'Luxembourg',
+    GB: 'United Kingdom',US: 'United States',
+    DK: 'Denmark',       SE: 'Sweden',      NO: 'Norway',
+    FI: 'Finland',       PL: 'Poland',      CZ: 'Czechia', SK: 'Slovakia',
+    HU: 'Hungary',       IE: 'Ireland',
+  },
+};
+
+function countryName(code, locale) {
+  if (!code) return '';
+  const upper = String(code).trim().toUpperCase().slice(0, 2);
+  const dict = COUNTRY_NAMES[locale] || COUNTRY_NAMES.en;
+  return dict[upper] || COUNTRY_NAMES.en[upper] || upper;
+}
+
+/**
  * Format a minor-unit BigInt-ish integer as a localised currency string.
  * Returns just the number portion ("750.00") not "CHF 750.00" — the
  * currency label is rendered separately in the totals box for layout
@@ -94,95 +130,127 @@ function localeForIntl(locale) {
 }
 
 /**
- * Render the issuer block (top-right): company name bold + multiline
- * address + phone/mobile/email/website. Matches reference layout.
+ * Render the issuer block (top-right): big logo + address + a tidy
+ * label/value contact column. Matches the reference letterhead.
+ *
+ * Layout decisions:
+ *   - Logo ~60pt tall, right-aligned (matches the reference).
+ *   - Address: line1 → "postal city" → CountryName (no state line,
+ *     country resolved to its full name in the doc locale).
+ *   - Contact rows use two columns: "Phone:"/"Mobile:"/… labels at a
+ *     fixed offset from the right edge, values flush right. Visually
+ *     this reads as a small invisible table — much cleaner than the
+ *     prior right-flushed single-column dump.
  */
-function drawIssuerBlock(doc, issuer, x, y, width) {
+function drawIssuerBlock(doc, issuer, x, y, width, locale) {
   const startY = y;
 
-  // Logo (top-right above the issuer text) — relative path stored
-  // in business_profile.logo_path is resolved against the storage/
-  // root. Drawn only if the file exists; absence is silent so an
-  // unconfigured profile still renders cleanly.
+  // Logo — slightly bigger than before (60pt) to match the
+  // reference's prominent letterhead. Path resolved against
+  // storage/ root or absolute; missing file is silent.
   if (issuer.logoPath) {
     try {
       const path = require('path');
       const fs = require('fs');
       const candidates = [
-        // Absolute path (admin pasted a full path).
         path.isAbsolute(issuer.logoPath) ? issuer.logoPath : null,
-        // Under storage/ root (what the branding upload returns).
         path.join(process.cwd(), 'storage', issuer.logoPath.replace(/^\/+/, '')),
-        // Already under public storage path.
         path.join(process.cwd(), 'storage', 'branding', path.basename(issuer.logoPath)),
       ].filter(Boolean);
       const found = candidates.find((p) => { try { return fs.existsSync(p); } catch { return false; } });
       if (found) {
-        const logoH = 50; // ~17.6mm tall — matches the reference letterhead
-        const logoMaxW = Math.min(width, 160);
-        // image() at (x, y) with fit:[w,h] preserves aspect ratio. We
-        // right-anchor by placing the box such that its right edge
-        // aligns with the issuer block's right edge.
+        const logoH = 60;
+        const logoMaxW = Math.min(width, 200);
         doc.image(found, x + width - logoMaxW, y, { fit: [logoMaxW, logoH], align: 'right' });
-        y += logoH + 8;
+        y += logoH + 12;
       }
     } catch (_err) {
-      // Logo failures don't break the whole PDF — just skip.
+      // Skip silently.
     }
   }
 
-  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(13);
-  if (issuer.companyName) {
-    doc.text(issuer.companyName, x, y, { width, align: 'right' });
-    y = doc.y + 4;
-  }
-  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(9);
+  // Address block — right-aligned. New shape:
+  //   Street → "postal city" → CountryName
+  // Drops the state line (rarely useful in EU) and renders the
+  // full country name in the doc locale (de → "Liechtenstein").
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#000');
   const addressLines = [
     issuer.addressLine1,
     issuer.addressLine2,
     [issuer.postalCode, issuer.city].filter(Boolean).join(' '),
-    issuer.state ? `${issuer.state}` : '',
-    issuer.countryCode ? issuer.countryCode : '',
+    countryName(issuer.countryCode, locale),
   ].filter(Boolean);
   for (const line of addressLines) {
     doc.text(line, x, y, { width, align: 'right' });
     y = doc.y;
   }
-  y += 6;
-  const contactLines = [
-    issuer.phone   ? `Phone: ${issuer.phone}`     : null,
-    issuer.mobile  ? `Mobile: ${issuer.mobile}`   : null,
-    issuer.email   ? `Email: ${issuer.email}`     : null,
-    issuer.website ? `Web: ${issuer.website}`     : null,
-    issuer.vatId   ? `VAT: ${issuer.vatId}`       : null,
+  y += 10;
+
+  // Contact rows — two-column label/value layout. Labels sit at a
+  // fixed offset so the values line up flush right, exactly like a
+  // letterhead. Width budget: labelCol (~50pt) + gap (8pt) + value
+  // takes the rest of the column.
+  const labelCol = 50;
+  const gap = 8;
+  const valueCol = width - labelCol - gap;
+  const labelX = x + width - labelCol - gap - valueCol;
+  const valueX = x + width - valueCol;
+
+  const contactRows = [
+    issuer.phone   ? ['Phone:',  issuer.phone]   : null,
+    issuer.mobile  ? ['Mobile:', issuer.mobile]  : null,
+    issuer.email   ? ['Email:',  issuer.email]   : null,
+    issuer.website ? ['Web:',    issuer.website] : null,
+    issuer.vatId   ? ['VAT:',    issuer.vatId]   : null,
   ].filter(Boolean);
-  for (const line of contactLines) {
-    doc.text(line, x, y, { width, align: 'right' });
-    y = doc.y;
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10);
+  for (const [label, value] of contactRows) {
+    // We position both pieces on the same Y. PDFKit's text() advances
+    // doc.y after the second call, which is what we want for the
+    // next row.
+    const rowY = y;
+    doc.text(label, labelX, rowY, { width: labelCol, align: 'left',  lineBreak: false });
+    doc.text(value, valueX, rowY, { width: valueCol, align: 'left', lineBreak: false });
+    y = rowY + 13;
   }
   return Math.max(y, startY + 80);
 }
 
 /**
- * Render the recipient block (top-left): company / name + multiline
- * address. recipient comes pre-shaped by the calling service.
+ * Render the recipient block (top-left). Header shape:
+ *   - With company → bold company name, then "z. Hd. <name>" line
+ *   - Without company → bold person name, NO attention line
+ *     (avoids the "Noam Mayer / z. Hd. Noam Mayer" duplicate)
+ * Address shape mirrors the issuer block: Street → postal+city →
+ * CountryName.
  */
-function drawRecipientBlock(doc, recipient, x, y, width) {
+function drawRecipientBlock(doc, recipient, x, y, width, locale) {
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8.5).fillColor('#666')
     .text(`${recipient.issuerLine || ''}`, x, y, { width });
   y = doc.y + 8;
+
+  // Build the header. The service may pass `companyName` either with
+  // the actual company (preferred) or as a fallback to the person's
+  // name when no company is on file. Tell them apart via the new
+  // `hasCompany` flag the caller sets — true when companyName is the
+  // real organisation, false when it's just the person name fallback.
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(11).fillColor('#000');
   if (recipient.companyName) {
     doc.text(recipient.companyName, x, y, { width });
     y = doc.y;
   }
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10);
+  // Only render "z. Hd. <name>" when a company is the bold header —
+  // otherwise the same name would appear twice (raised in the
+  // followup design review).
   const lines = [
-    recipient.attentionLine,
+    recipient.hasCompany ? recipient.attentionLine : null,
     recipient.addressLine1,
     recipient.addressLine2,
     [recipient.postalCode, recipient.city].filter(Boolean).join(' '),
-    recipient.country,
+    // Country: prefer the explicit full name passed by the caller
+    // when set; else resolve from the ISO code.
+    recipient.country || countryName(recipient.countryCodeIso, locale),
   ].filter(Boolean);
   for (const line of lines) {
     doc.text(line, x, y, { width });
@@ -584,8 +652,8 @@ function renderDocument(type, context) {
       const leftX = PAGE.marginLeft;
       const rightX = PAGE.marginLeft + halfWidth + 20;
 
-      const issuerEndY = drawIssuerBlock(doc, ctx.issuer, rightX, headerY, halfWidth);
-      const recipientEndY = drawRecipientBlock(doc, ctx.recipient, leftX, headerY + 60, halfWidth);
+      const issuerEndY = drawIssuerBlock(doc, ctx.issuer, rightX, headerY, halfWidth, ctx.locale);
+      const recipientEndY = drawRecipientBlock(doc, ctx.recipient, leftX, headerY + 60, halfWidth, ctx.locale);
       let y = Math.max(issuerEndY, recipientEndY) + 16;
 
       // Horizontal divider under the address blocks — matches the line
@@ -601,7 +669,9 @@ function renderDocument(type, context) {
 
       // ---- title ----------------------------------------------------
       const title = type === 'quote' ? t(ctx.locale, 'quote_title') : t(ctx.locale, 'invoice_title');
-      y = drawTitle(doc, title, leftX, y + 12);
+      // Title sits further below the date row than before — gives
+      // the same visual weight as the reference Rechnung PDF.
+      y = drawTitle(doc, title, leftX, y + 18);
 
       // ---- salutation + lead-in ------------------------------------
       doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10).fillColor('#000');
@@ -624,7 +694,10 @@ function renderDocument(type, context) {
       doc.y = y;
       doc.x = leftX;
       drawLineItems(doc, ctx);
-      y = doc.y + 16;
+      // Breathing room between the table and the totals box (matches
+      // the reference letterhead's visual rhythm; previous gap was
+      // tight enough to look glued).
+      y = doc.y + 28;
 
       // ---- totals box (right-aligned) -------------------------------
       y = drawTotals(doc, ctx, leftX, y, PAGE.contentWidth);

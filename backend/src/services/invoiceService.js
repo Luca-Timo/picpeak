@@ -484,21 +484,33 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       logoPath: profile.logo_path,
       pdfFontTtfPath: profile.pdf_font_ttf_path,
     } : {},
-    recipient: {
-      issuerLine: profile?.company_name
-        ? `${profile.company_name} * ${profile.address_line1 || ''} * ${profile.postal_code || ''} ${profile.city || ''}`
-        : '',
-      companyName: customer?.company_name || customer?.display_name || customer?.email,
-      attentionLine: customer?.first_name || customer?.last_name
-        ? `z. Hd. ${[customer.first_name, customer.last_name].filter(Boolean).join(' ')}`
-        : '',
-      addressLine1: customer?.address_line1,
-      addressLine2: customer?.address_line2,
-      postalCode: customer?.postal_code,
-      city: customer?.city,
-      country: customer?.country_code,
-      countryCodeIso: customer?.country_code,
-    },
+    recipient: (() => {
+      // Mirrors the quoteService recipient shape — see comments there
+      // for the hasCompany / attentionLine rationale.
+      const personFull = [customer?.first_name, customer?.last_name].filter(Boolean).join(' ');
+      const headerWithCompany = !!customer?.company_name;
+      const header = customer?.company_name
+        || personFull
+        || customer?.display_name
+        || customer?.email
+        || '';
+      const attentionParts = [customer?.salutation, personFull].filter(Boolean);
+      const attentionLine = attentionParts.length > 0 ? `z. Hd. ${attentionParts.join(' ')}` : '';
+      return {
+        issuerLine: profile?.company_name
+          ? `${profile.company_name} * ${profile.address_line1 || ''} * ${profile.postal_code || ''} ${profile.city || ''}`
+          : '',
+        companyName: header,
+        hasCompany: headerWithCompany,
+        attentionLine,
+        addressLine1: customer?.address_line1,
+        addressLine2: customer?.address_line2,
+        postalCode: customer?.postal_code,
+        city: customer?.city,
+        country: null,
+        countryCodeIso: customer?.country_code,
+      };
+    })(),
     bank: bank ? {
       accountHolder: bank.account_holder || profile?.company_name,
       iban: bank.iban, bic: bank.bic, currency: bank.currency,

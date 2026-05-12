@@ -470,21 +470,41 @@ async function buildRenderContext(quote, lineItems) {
       // Helvetica when null or the file is missing on disk.
       pdfFontTtfPath: profile.pdf_font_ttf_path,
     } : {},
-    recipient: {
-      issuerLine: profile?.company_name
-        ? `${profile.company_name} * ${profile.address_line1 || ''} * ${profile.postal_code || ''} ${profile.city || ''}`
-        : '',
-      companyName: customer?.company_name || customer?.display_name || customer?.email,
-      attentionLine: customer?.salutation || customer?.first_name
-        ? `z. Hd. ${[customer.first_name, customer.last_name].filter(Boolean).join(' ')}`
-        : '',
-      addressLine1: customer?.address_line1,
-      addressLine2: customer?.address_line2,
-      postalCode: customer?.postal_code,
-      city: customer?.city,
-      country: customer?.country_code,
-      countryCodeIso: customer?.country_code,
-    },
+    recipient: (() => {
+      // Pick the bold header line based on whether a real company is
+      // on file. The PDF renderer's recipient block uses `hasCompany`
+      // to decide whether to also render an "z. Hd. <name>" line —
+      // otherwise rendering it under the same name would duplicate.
+      const personFull = [customer?.first_name, customer?.last_name].filter(Boolean).join(' ');
+      const headerWithCompany = !!customer?.company_name;
+      const header = customer?.company_name
+        || personFull
+        || customer?.display_name
+        || customer?.email
+        || '';
+      // Attention line only meaningful with a company; mention the
+      // salutation honorific when set (Herr/Frau/Dr.).
+      const attentionParts = [customer?.salutation, personFull].filter(Boolean);
+      const attentionLine = attentionParts.length > 0 ? `z. Hd. ${attentionParts.join(' ')}` : '';
+      return {
+        issuerLine: profile?.company_name
+          ? `${profile.company_name} * ${profile.address_line1 || ''} * ${profile.postal_code || ''} ${profile.city || ''}`
+          : '',
+        companyName: header,
+        hasCompany: headerWithCompany,
+        attentionLine,
+        addressLine1: customer?.address_line1,
+        addressLine2: customer?.address_line2,
+        postalCode: customer?.postal_code,
+        city: customer?.city,
+        // Country is rendered by pdfService via countryName() using
+        // the doc locale. Pass the ISO code so the renderer can
+        // resolve the right localised string ("Liechtenstein" vs
+        // "Schweiz") for both quote and invoice surfaces.
+        country: null,
+        countryCodeIso: customer?.country_code,
+      };
+    })(),
     bank: bank ? {
       accountHolder: bank.account_holder || profile?.company_name,
       iban: bank.iban,
