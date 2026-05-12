@@ -140,10 +140,12 @@ function formatDate(value, locale) {
   if (!value) return '';
   const d = (value instanceof Date) ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return '';
-  // Match the user's reference layout: "02.12.25" / "30.01.26".
+  // Full DD.MM.YYYY (4-digit year) — matches the maintainer spec and
+  // the formatShortDate helper used in customer-facing email
+  // templates, so the date renders consistently across PDF + email.
   try {
     return new Intl.DateTimeFormat(locale || 'de-CH', {
-      day: '2-digit', month: '2-digit', year: '2-digit',
+      day: '2-digit', month: '2-digit', year: 'numeric',
     }).format(d);
   } catch (_) {
     return d.toISOString().slice(0, 10);
@@ -431,15 +433,20 @@ function drawLineItems(doc, ctx) {
     ? [30, 40, 240, 50, 75, 80]
     : [30, 50, 280, 70, 85];
 
-  // Per-row padding (top + bottom + left + right in pt) opens up the
-  // table for an airy, ~1.8x line-height feel. swissqrbill's Table
-  // helper renders text at ~12pt baseline-to-baseline with the
-  // default font; adding 12pt top + 12pt bottom padding makes each
-  // visual row ~36pt tall — roughly double the previous density.
-  const ROW_PADDING = { top: 12, bottom: 12, left: 4, right: 4 };
+  // Per-row padding — sized so each item sits one paragraph-break
+  // apart from the next (think "normal Enter" in a word processor,
+  // not double-spacing). 6pt top + 6pt bottom adds ~12pt of vertical
+  // breathing room around the rendered text without doubling the
+  // row height.
+  const ROW_PADDING = { top: 6, bottom: 6, left: 4, right: 4 };
+  // Match the totals box font size; the maintainer wants the line
+  // items and the billing totals to read at the same weight so the
+  // eye doesn't bounce between two scales.
+  const ROW_FONT_SIZE = 10;
 
   const dataRow = (li, idx) => ({
     padding: ROW_PADDING,
+    fontSize: ROW_FONT_SIZE,
     columns: showDiscount
       ? [
           { text: String(idx + 1),                                                  width: widths[0], align: 'left'  },
@@ -462,7 +469,7 @@ function drawLineItems(doc, ctx) {
     // Table accepts any registered font name; if a custom font is in
     // use we route the bold row through it too.
     fontName: ctx.fonts?.bold || FONT_BOLD,
-    fontSize: 9,
+    fontSize: ROW_FONT_SIZE,
     padding: ROW_PADDING,
     columns: showDiscount
       ? [
@@ -548,7 +555,12 @@ function drawTotals(doc, ctx, x, y, width) {
   doc.moveTo(labelX, y).lineTo(right, y).strokeColor('#000').lineWidth(0.8).stroke();
   y += 6;
 
-  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(12);
+  // Grand-total row uses the SAME font size as the rows above (and
+  // as the line-item table) — the maintainer wants the billing
+  // titles to read at one consistent scale instead of stair-
+  // stepping up to a bigger headline. The row stays bold for
+  // visual emphasis.
+  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10);
   doc.text(t(locale, 'totals_grand'), labelX, y, { width: labelCol });
   doc.text(formatCurrencyLabel(currency), rateX, y, { width: rateCol, align: 'right' });
   doc.text(formatMinor(totals.totalAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
