@@ -8,7 +8,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Star } from 'lucide-react';
+import { Plus, Trash2, Star, Pencil } from 'lucide-react';
 import {
   businessProfileService,
   type BusinessProfile,
@@ -123,21 +123,58 @@ export const SettingsBusinessProfilePage: React.FC = () => {
 };
 
 interface BankAccountsSectionProps { accounts: BankAccount[] }
+
+type BankDraft = {
+  label: string;
+  accountHolder: string;
+  iban: string;
+  bic: string;
+  currency: string;
+  isDefault: boolean;
+};
+
+const EMPTY_DRAFT: BankDraft = {
+  label: '', accountHolder: '', iban: '', bic: '', currency: 'CHF', isDefault: false,
+};
+
 const BankAccountsSection: React.FC<BankAccountsSectionProps> = ({ accounts }) => {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState({
-    label: '', accountHolder: '', iban: '', bic: '', currency: 'CHF', isDefault: false,
-  });
+  // null = no form open; 'new' = adding; numeric id = editing that row.
+  // Single piece of state means only one form is open at a time, which
+  // is what the maintainer asked for: Add OR Edit, never both.
+  const [openForm, setOpenForm] = useState<null | 'new' | number>(null);
+  const [draft, setDraft] = useState<BankDraft>(EMPTY_DRAFT);
+
+  const startEdit = (a: BankAccount) => {
+    setDraft({
+      label: a.label || '',
+      accountHolder: a.accountHolder || '',
+      iban: a.iban || '',
+      bic: a.bic || '',
+      currency: a.currency || 'CHF',
+      isDefault: !!a.isDefault,
+    });
+    setOpenForm(a.id);
+  };
+  const closeForm = () => { setOpenForm(null); setDraft(EMPTY_DRAFT); };
 
   const create = useMutation({
     mutationFn: () => businessProfileService.createBankAccount(draft),
     onSuccess: () => {
       toast.success(t('businessProfile.bankCreatedToast', 'Bank account added.'));
       qc.invalidateQueries({ queryKey: ['business-profile'] });
-      setAdding(false);
-      setDraft({ label: '', accountHolder: '', iban: '', bic: '', currency: 'CHF', isDefault: false });
+      closeForm();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed'),
+  });
+
+  const update = useMutation({
+    mutationFn: (id: number) => businessProfileService.updateBankAccount(id, draft),
+    onSuccess: () => {
+      toast.success(t('businessProfile.bankUpdatedToast', 'Bank account updated.'));
+      qc.invalidateQueries({ queryKey: ['business-profile'] });
+      closeForm();
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || 'Failed'),
   });
@@ -155,68 +192,89 @@ const BankAccountsSection: React.FC<BankAccountsSectionProps> = ({ accounts }) =
     },
   });
 
+  // Form body reused for both Add and Edit (single source of layout).
+  const renderForm = (mode: 'new' | 'edit', onSubmit: () => void, submitting: boolean) => (
+    <div className="mb-4 p-3 rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Input label={t('businessProfile.bank.label', 'Label') as string} value={draft.label}
+          onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
+        <Input label={t('businessProfile.bank.accountHolder', 'Account holder') as string} value={draft.accountHolder}
+          onChange={(e) => setDraft({ ...draft, accountHolder: e.target.value })} />
+        <Input label="IBAN" value={draft.iban}
+          onChange={(e) => setDraft({ ...draft, iban: e.target.value })} />
+        <Input label="BIC" value={draft.bic}
+          onChange={(e) => setDraft({ ...draft, bic: e.target.value })} />
+        <Input label={t('businessProfile.bank.currency', 'Currency') as string} value={draft.currency}
+          maxLength={3} onChange={(e) => setDraft({ ...draft, currency: e.target.value.toUpperCase() })} />
+        <label className="flex items-center gap-2 text-sm pt-6">
+          <input type="checkbox" checked={draft.isDefault}
+            onChange={(e) => setDraft({ ...draft, isDefault: e.target.checked })} />
+          {t('businessProfile.bank.isDefault', 'Default for this currency')}
+        </label>
+      </div>
+      <div className="flex justify-end gap-2 mt-3">
+        <Button variant="outline" size="sm" onClick={closeForm}>{t('common.cancel', 'Cancel')}</Button>
+        <Button size="sm" onClick={onSubmit} disabled={!draft.iban || submitting}>
+          {mode === 'new' ? t('common.add', 'Add') : t('common.save', 'Save')}
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
     <Card>
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold">{t('businessProfile.section.banks', 'Bank accounts')}</h3>
-        <Button size="sm" onClick={() => setAdding(!adding)}>
+        <Button size="sm" onClick={() => {
+          if (openForm === 'new') closeForm();
+          else { setDraft(EMPTY_DRAFT); setOpenForm('new'); }
+        }}>
           <Plus className="w-4 h-4 mr-1" />{t('businessProfile.addBank', 'Add account')}
         </Button>
       </div>
 
-      {adding && (
-        <div className="mb-4 p-3 rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Input label={t('businessProfile.bank.label', 'Label') as string} value={draft.label}
-              onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
-            <Input label={t('businessProfile.bank.accountHolder', 'Account holder') as string} value={draft.accountHolder}
-              onChange={(e) => setDraft({ ...draft, accountHolder: e.target.value })} />
-            <Input label="IBAN" value={draft.iban}
-              onChange={(e) => setDraft({ ...draft, iban: e.target.value })} />
-            <Input label="BIC" value={draft.bic}
-              onChange={(e) => setDraft({ ...draft, bic: e.target.value })} />
-            <Input label={t('businessProfile.bank.currency', 'Currency') as string} value={draft.currency}
-              maxLength={3} onChange={(e) => setDraft({ ...draft, currency: e.target.value.toUpperCase() })} />
-            <label className="flex items-center gap-2 text-sm pt-6">
-              <input type="checkbox" checked={draft.isDefault}
-                onChange={(e) => setDraft({ ...draft, isDefault: e.target.checked })} />
-              {t('businessProfile.bank.isDefault', 'Default for this currency')}
-            </label>
-          </div>
-          <div className="flex justify-end gap-2 mt-3">
-            <Button variant="outline" size="sm" onClick={() => setAdding(false)}>{t('common.cancel', 'Cancel')}</Button>
-            <Button size="sm" onClick={() => create.mutate()} disabled={!draft.iban || create.isPending}>
-              {t('common.save', 'Save')}
-            </Button>
-          </div>
-        </div>
-      )}
+      {openForm === 'new' && renderForm('new', () => create.mutate(), create.isPending)}
 
       {accounts.length === 0 ? (
         <p className="text-sm text-neutral-500">{t('businessProfile.noBanks', 'No bank accounts configured yet.')}</p>
       ) : (
         <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
           {accounts.map((b) => (
-            <li key={b.id} className="py-2 flex items-center justify-between">
-              <div>
-                <div className="font-medium text-sm">{b.label || b.iban}
-                  {b.isDefault && <Star className="inline w-4 h-4 ml-1 text-amber-500" />}
+            <React.Fragment key={b.id}>
+              <li className="py-2 flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-sm">{b.label || b.iban}
+                    {b.isDefault && <Star className="inline w-4 h-4 ml-1 text-amber-500" />}
+                  </div>
+                  <div className="text-xs text-neutral-500 font-mono">{b.iban.replace(/(.{4})/g, '$1 ').trim()}{b.currency ? ` · ${b.currency}` : ''}</div>
                 </div>
-                <div className="text-xs text-neutral-500 font-mono">{b.iban.replace(/(.{4})/g, '$1 ').trim()}{b.currency ? ` · ${b.currency}` : ''}</div>
-              </div>
-              <div className="flex gap-2">
-                {!b.isDefault && (
-                  <Button variant="outline" size="sm" onClick={() => setDefault.mutate(b.id)}>
-                    {t('businessProfile.bank.makeDefault', 'Make default')}
+                <div className="flex gap-2">
+                  {!b.isDefault && (
+                    <Button variant="outline" size="sm" onClick={() => setDefault.mutate(b.id)}>
+                      {t('businessProfile.bank.makeDefault', 'Make default')}
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => {
+                    if (openForm === b.id) closeForm();
+                    else startEdit(b);
+                  }}
+                    title={t('common.edit', 'Edit') as string}>
+                    <Pencil className="w-4 h-4" />
                   </Button>
-                )}
-                <Button variant="outline" size="sm" onClick={() => {
-                  if (window.confirm(t('businessProfile.bank.confirmDelete', 'Remove this bank account?'))) remove.mutate(b.id);
-                }}>
-                  <Trash2 className="w-4 h-4 text-red-600" />
-                </Button>
-              </div>
-            </li>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    if (window.confirm(t('businessProfile.bank.confirmDelete', 'Remove this bank account?'))) remove.mutate(b.id);
+                  }}
+                    title={t('common.delete', 'Delete') as string}>
+                    <Trash2 className="w-4 h-4 text-red-600" />
+                  </Button>
+                </div>
+              </li>
+              {openForm === b.id && (
+                <li className="py-2">
+                  {renderForm('edit', () => update.mutate(b.id), update.isPending)}
+                </li>
+              )}
+            </React.Fragment>
           ))}
         </ul>
       )}
