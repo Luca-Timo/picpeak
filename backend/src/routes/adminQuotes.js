@@ -280,7 +280,32 @@ router.post(
 router.put(
   '/:id',
   requirePermission('quotes.manage'),
-  [param('id').isInt({ min: 1 }), ...QUOTE_BODY_VALIDATORS.map((v) => v.optional)],
+  // PUT accepts partial updates. We declare the same fields as POST but
+  // every chain begins with `.optional()` so missing fields don't fail
+  // validation. Doing `.map(v => v.optional)` (without invoking it) was
+  // a bug that registered method references as middleware.
+  [
+    param('id').isInt({ min: 1 }),
+    body('customerAccountId').optional().isInt({ min: 1 }),
+    body('language').optional().isString().isLength({ max: 8 }),
+    body('currency').optional().isString().isLength({ min: 3, max: 3 }),
+    body('issueDate').optional().isISO8601(),
+    body('validUntil').optional().isISO8601(),
+    body('eventName').optional().isString().isLength({ max: 255 }),
+    body('eventDate').optional().isISO8601(),
+    body('eventTimeStart').optional().isString().isLength({ max: 8 }),
+    body('eventTimeEnd').optional().isString().isLength({ max: 8 }),
+    body('expectedDurationHours').optional().isFloat({ min: 0, max: 99.99 }),
+    body('paymentTermTemplateId').optional().isInt({ min: 1 }),
+    body('vatRate').optional().isFloat({ min: 0, max: 100 }),
+    body('shippingAmountMinor').optional().isInt({ min: 0 }),
+    body('introText').optional().isString().isLength({ max: 5000 }),
+    body('outroText').optional().isString().isLength({ max: 5000 }),
+    body('internalNotes').optional().isString().isLength({ max: 5000 }),
+    body('ccPdfEmail').optional().isString().isLength({ max: 255 }),
+    body('businessBankAccountId').optional().isInt({ min: 1 }),
+    body('lineItems').optional().isArray(),
+  ],
   handleAsync(async (req, res) => {
     validateRequest(req);
     const id = parseInt(req.params.id, 10);
