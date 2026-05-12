@@ -358,11 +358,21 @@ function drawRecipientBlock(doc, recipient, locale) {
     y = doc.y;
   }
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10);
+  // Postal line mirrors the issuer block: "<CC>-<postal> <city>"
+  // (e.g. "FL-9494 Schaan"). The country code prefix is dropped
+  // when the customer has no countryCodeIso so the line still
+  // reads cleanly. The country name on the line below comes from
+  // the explicit `country` override (customer_accounts.country_name,
+  // migration 107) or falls back to the locale-aware lookup.
+  const cc = recipient.countryCodeIso ? String(recipient.countryCodeIso).toUpperCase() : '';
+  const pc = recipient.postalCode || '';
+  const postalLeft = cc && pc ? `${cc}-${pc}` : (pc || cc);
+  const postalSegment = [postalLeft, recipient.city].filter(Boolean).join(' ');
   const lines = [
     recipient.hasCompany ? recipient.attentionLine : null,
     recipient.addressLine1,
     recipient.addressLine2,
-    [recipient.postalCode, recipient.city].filter(Boolean).join(' '),
+    postalSegment,
     recipient.country || countryName(recipient.countryCodeIso, locale),
   ].filter(Boolean);
   for (const line of lines) {
