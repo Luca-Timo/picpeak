@@ -74,6 +74,17 @@ function publicQuoteView(quote, lineItems, customer, profile) {
       email: profile.email,
       website: profile.website,
       footerLine: profile.footer_line,
+      // Expose the logo as a public URL — frontend renders it at the
+      // top of the response page so the customer sees the same
+      // letterhead as the PDF. The branding upload route writes
+      // under storage/uploads/, which is served by app.use('/uploads',
+      // …) in server.js. We accept either a bare filename or a path
+      // and normalise it onto /uploads/.
+      logoUrl: profile.logo_path
+        ? (profile.logo_path.startsWith('/') || /^https?:\/\//i.test(profile.logo_path)
+            ? profile.logo_path
+            : `/uploads/${profile.logo_path.replace(/^uploads\//, '')}`)
+        : null,
     } : null,
   };
 }
