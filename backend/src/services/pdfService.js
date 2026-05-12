@@ -107,6 +107,54 @@ const COUNTRY_NAMES = {
   },
 };
 
+/**
+ * Build the salutation line. When the customer record carries an
+ * honorific (Herr / Frau / Mr. / Ms. / Dr.) AND a last name, we use
+ * a personalised greeting; otherwise we fall back to the generic
+ * locale-specific opening from the i18n dictionary.
+ *
+ * Recognised honorifics are matched loosely (lowercased + trimmed,
+ * dot suffix stripped) so "Herr", "herr", "Mr.", "Mr" all hit. The
+ * gendered forms only fire when we can pick a gender from the
+ * honorific; ambiguous titles like "Dr." use the inclusive
+ * "Sehr geehrte/r Dr. <last>," (German) or "Dear Dr. <last>,"
+ * (English) variant.
+ */
+function personalSalutation(locale, salutation, lastName) {
+  const honorific = (salutation || '').trim();
+  const last = (lastName || '').trim();
+  if (!honorific || !last) return null;
+  const key = honorific.toLowerCase().replace(/\.+$/, '').trim();
+
+  // gender from the honorific: 'm' / 'f' / null (ambiguous)
+  let gender = null;
+  if (['herr', 'mr', 'mister', 'monsieur', 'señor', 'senhor', 'meneer', 'sig', 'г-н', 'господин'].includes(key)) gender = 'm';
+  if (['frau', 'mrs', 'ms', 'miss', 'madame', 'mademoiselle', 'señora', 'senhora', 'mevrouw', 'sig.ra', 'г-жа', 'госпожа'].includes(key)) gender = 'f';
+
+  switch ((locale || 'de').toLowerCase()) {
+  case 'de':
+    if (gender === 'm') return `Sehr geehrter ${honorific} ${last},`;
+    if (gender === 'f') return `Sehr geehrte ${honorific} ${last},`;
+    return `Sehr geehrte/r ${honorific} ${last},`;
+  case 'en':
+    return `Dear ${honorific} ${last},`;
+  case 'fr':
+    if (gender === 'm') return `Cher ${honorific} ${last},`;
+    if (gender === 'f') return `Chère ${honorific} ${last},`;
+    return `Cher/Chère ${honorific} ${last},`;
+  case 'nl':
+    return `Geachte ${honorific} ${last},`;
+  case 'pt':
+    if (gender === 'm') return `Prezado ${honorific} ${last},`;
+    if (gender === 'f') return `Prezada ${honorific} ${last},`;
+    return `Prezado(a) ${honorific} ${last},`;
+  case 'ru':
+    return `Уважаемый(ая) ${honorific} ${last}!`;
+  default:
+    return `Dear ${honorific} ${last},`;
+  }
+}
+
 function countryName(code, locale) {
   if (!code) return '';
   const upper = String(code).trim().toUpperCase().slice(0, 2);
@@ -136,19 +184,27 @@ function formatCurrencyLabel(currency) {
   return (currency || '').toUpperCase();
 }
 
-function formatDate(value, locale) {
+function formatDate(value, dateFormat) {
   if (!value) return '';
   const d = (value instanceof Date) ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return '';
-  // Full DD.MM.YYYY (4-digit year) — matches the maintainer spec and
-  // the formatShortDate helper used in customer-facing email
-  // templates, so the date renders consistently across PDF + email.
-  try {
-    return new Intl.DateTimeFormat(locale || 'de-CH', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-    }).format(d);
-  } catch (_) {
-    return d.toISOString().slice(0, 10);
+  // Respect the `general_date_format` app setting (read once in the
+  // service layer and passed through ctx.dateFormat). We build the
+  // string by hand instead of going through Intl.DateTimeFormat so
+  // a chosen "DD.MM.YYYY" actually renders with dots even when the
+  // customer's preferred_language maps to a locale that prints
+  // slashes (en-GB → 02/12/2025).
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = String(d.getFullYear());
+  const format = (dateFormat && dateFormat.format) || 'DD.MM.YYYY';
+  switch (format) {
+  case 'MM/DD/YYYY': return `${mm}/${dd}/${yyyy}`;
+  case 'DD/MM/YYYY': return `${dd}/${mm}/${yyyy}`;
+  case 'YYYY-MM-DD': return `${yyyy}-${mm}-${dd}`;
+  case 'DD.MM.YYYY':
+  default:
+    return `${dd}.${mm}.${yyyy}`;
   }
 }
 
@@ -433,12 +489,11 @@ function drawLineItems(doc, ctx) {
     ? [30, 40, 240, 50, 75, 80]
     : [30, 50, 280, 70, 85];
 
-  // Per-row padding — sized so each item sits one paragraph-break
-  // apart from the next (think "normal Enter" in a word processor,
-  // not double-spacing). 6pt top + 6pt bottom adds ~12pt of vertical
-  // breathing room around the rendered text without doubling the
-  // row height.
-  const ROW_PADDING = { top: 6, bottom: 6, left: 4, right: 4 };
+  // Per-row padding — sized for an airy, lots-of-breathing-room
+  // feel. 16pt top + 16pt bottom adds ~32pt of vertical space
+  // around the text inside each cell, so consecutive line items
+  // sit clearly apart on the page.
+  const ROW_PADDING = { top: 16, bottom: 16, left: 4, right: 4 };
   // Match the totals box font size; the maintainer wants the line
   // items and the billing totals to read at the same weight so the
   // eye doesn't bounce between two scales.
@@ -518,21 +573,21 @@ function stripTrailingZeros(value) {
  */
 function drawTotals(doc, ctx, x, y, width) {
   const { locale, currency, intlLocale, totals } = ctx;
-  // Layout: labels anchored to the LEFT margin (matching the
-  // payment-conditions block beneath) so the totals box no longer
-  // sits as an indented ledger. Values + VAT-rate column right-
-  // aligned to the page edge — the eye still reads the amounts in a
-  // single tabular stack on the right, but the labels lock to the
-  // same vertical rule as the rest of the body content. This
-  // removes the visual "step" the maintainer flagged between the
-  // totals labels and "Please transfer the amount…" below.
+  // Layout: align the totals labels with the RIGHT column of the
+  // payment block beneath (where "Please transfer the amount …",
+  // "<Account holder>", and "<IBAN>" appear). Both columns of the
+  // payment block split the page in half, so the right-column
+  // anchor sits at `x + width/2 + 10` (mirrors drawPaymentBlock's
+  // `rightX = x + colWidth + 20` with colWidth = (width-20)/2).
+  // Values + VAT-rate column stay right-aligned to the page edge
+  // so amounts still stack tabularly.
   const right = x + width;
   const valueCol = 80;
   const rateCol = 40;
   const valueX = right - valueCol;
   const rateX  = right - valueCol - rateCol;
-  const labelX = x;
-  const labelCol = rateX - labelX - 6; // leave a small gap before the rate column
+  const labelX = x + (width - 20) / 2 + 20;  // matches drawPaymentBlock.rightX
+  const labelCol = rateX - labelX - 6;       // small gap before rate column
 
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10);
   doc.text(t(locale, 'totals_net'), labelX, y, { width: labelCol });
@@ -549,9 +604,9 @@ function drawTotals(doc, ctx, x, y, width) {
   doc.text(formatMinor(totals.vatAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
   y = doc.y + 10;
 
-  // Divider line above grand total — spans the full content width
-  // so the line starts at the left margin under the labels (no
-  // "step" against the payment block heading below).
+  // Divider line above grand total — spans the right half of the
+  // page only, from the label anchor to the right edge, so it sits
+  // visually over the same column as "Please transfer …" below.
   doc.moveTo(labelX, y).lineTo(right, y).strokeColor('#000').lineWidth(0.8).stroke();
   y += 6;
 
@@ -849,7 +904,7 @@ function renderDocument(type, context) {
       let y = Math.max(issuerEndY, recipientEndY, ADDR_WINDOW.top + ADDR_WINDOW.height) + 6;
 
       // ---- date row (right-aligned, matches reference) --------------
-      y = drawDate(doc, t(ctx.locale, 'date'), formatDate(ctx.doc.issueDate, ctx.intlLocale),
+      y = drawDate(doc, t(ctx.locale, 'date'), formatDate(ctx.doc.issueDate, ctx.dateFormat),
                    leftX, y, PAGE.contentWidth);
 
       // ---- title ----------------------------------------------------
@@ -876,8 +931,14 @@ function renderDocument(type, context) {
       }
 
       // ---- salutation + lead-in ------------------------------------
+      // Personalised greeting when the customer record has an
+      // honorific + last name on file ("Sehr geehrter Herr Bresch,"),
+      // otherwise the generic locale-specific opening from the i18n
+      // dictionary ("Sehr geehrte Damen und Herren,").
+      const greeting = personalSalutation(ctx.locale, ctx.recipient?.salutation, ctx.recipient?.lastName)
+        || t(ctx.locale, 'salutation');
       doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10).fillColor('#000');
-      doc.text(t(ctx.locale, 'salutation'), leftX, y, { width: PAGE.contentWidth });
+      doc.text(greeting, leftX, y, { width: PAGE.contentWidth });
       y = doc.y + 4;
       doc.font(doc._fonts ? doc._fonts.body : FONT_BODY);
       const leadIn = type === 'quote'
@@ -958,6 +1019,11 @@ function normaliseContext(type, ctx) {
     totals: ctx.totals || {},
     doc: ctx.doc || {},
     qrFormat: ctx.qrFormat || 'none',
+    // Date-format config from the `general_date_format` app setting.
+    // Shape: `{ format: 'DD.MM.YYYY' | 'DD/MM/YYYY' | 'MM/DD/YYYY' |
+    // 'YYYY-MM-DD', locale?: string }`. The service layer hydrates
+    // this; defaults to DD.MM.YYYY when unset.
+    dateFormat: ctx.dateFormat || { format: 'DD.MM.YYYY' },
   };
 }
 

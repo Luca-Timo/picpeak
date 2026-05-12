@@ -461,10 +461,21 @@ async function buildRenderContext(quote, lineItems) {
     skontoWithinDays = null;
   }
 
+  // Global date format from Settings → General (general_date_format).
+  // Stored as JSON `{ format, locale }`; missing or malformed entries
+  // fall back to DD.MM.YYYY in the renderer.
+  let dateFormat = null;
+  try {
+    const raw = await getAppSetting('general_date_format');
+    if (raw && typeof raw === 'object' && raw.format) dateFormat = raw;
+    else if (typeof raw === 'string' && raw.trim()) dateFormat = { format: raw.trim() };
+  } catch (_) { /* fall back to default */ }
+
   return {
     locale: quote.language || profile?.default_locale || 'de',
     currency: quote.currency,
     qrFormat: 'none', // quotes never carry a Swiss QR-bill
+    dateFormat,
     issuer: profile ? {
       companyName: profile.company_name,
       addressLine1: profile.address_line1,
@@ -532,6 +543,12 @@ async function buildRenderContext(quote, lineItems) {
         companyName: header,
         hasCompany: headerWithCompany,
         attentionLine,
+        // Honorific + last name surfaced for the personalised
+        // salutation line ("Sehr geehrter Herr Bresch,"). Both must
+        // be present for personalisation to fire; otherwise the
+        // generic locale greeting is used.
+        salutation: customer?.salutation || null,
+        lastName: (customer?.last_name || '').trim() || null,
         addressLine1: customer?.address_line1,
         addressLine2: customer?.address_line2,
         postalCode: customer?.postal_code,
