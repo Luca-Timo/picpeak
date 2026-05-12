@@ -179,18 +179,62 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
   const showName = issuer.showCompanyName !== false; // default true
 
   // ---- top banner: logo (left) + company name (right of it) -----
+  // Logo path resolution:
+  //   1. Absolute path → use as-is
+  //   2. Relative path → join with the canonical STORAGE_PATH (the
+  //      same root every other module uses; `process.cwd()` was
+  //      brittle under Docker where the working directory does NOT
+  //      always equal the storage root)
+  //   3. Bare filename → fall back to STORAGE_PATH/branding/<name>
+  //   4. URL-style path starting with /uploads → strip the leading
+  //      slash and resolve under STORAGE_PATH (matches the format
+  //      adminCMS.js stores in cms_pages.logo_url)
+  //
+  // PDFKit only natively decodes JPEG + PNG. SVG/WebP/GIF files
+  // upload fine via the CMS routes but cannot be embedded; we log
+  // and skip rather than throw so the rest of the PDF still
+  // renders.
   let logoFound = null;
   if (showLogo && issuer.logoPath) {
     try {
       const path = require('path');
       const fs = require('fs');
+      const { getStoragePath } = require('../config/storage');
+      const storageRoot = getStoragePath();
+      const raw = String(issuer.logoPath).trim();
+      const stripped = raw.replace(/^\/+/, '');
       const candidates = [
-        path.isAbsolute(issuer.logoPath) ? issuer.logoPath : null,
-        path.join(process.cwd(), 'storage', issuer.logoPath.replace(/^\/+/, '')),
-        path.join(process.cwd(), 'storage', 'branding', path.basename(issuer.logoPath)),
+        path.isAbsolute(raw) ? raw : null,
+        path.join(storageRoot, stripped),
+        path.join(storageRoot, 'branding', path.basename(raw)),
+        path.join(storageRoot, 'uploads', 'logos', path.basename(raw)),
+        // Last-ditch fallback for installs that still run with
+        // cwd-relative storage (older docker-compose configs).
+        path.join(process.cwd(), 'storage', stripped),
       ].filter(Boolean);
-      logoFound = candidates.find((p) => { try { return fs.existsSync(p); } catch { return false; } });
-    } catch (_err) {
+      logoFound = candidates.find((p) => {
+        try { return fs.existsSync(p) && fs.statSync(p).isFile(); }
+        catch { return false; }
+      });
+      if (!logoFound) {
+        const logger = require('../utils/logger');
+        logger.warn('PDF logo not found on disk', {
+          configured: issuer.logoPath, storageRoot, tried: candidates,
+        });
+      } else if (/\.(svg|webp|gif|tif|tiff)$/i.test(logoFound)) {
+        // PDFKit can't embed these formats — surface a clear
+        // warning so the admin knows to re-upload as PNG/JPEG.
+        const logger = require('../utils/logger');
+        logger.warn('PDF logo format not supported by PDFKit (use PNG or JPEG)', {
+          path: logoFound,
+        });
+        logoFound = null;
+      }
+    } catch (err) {
+      const logger = require('../utils/logger');
+      logger.warn('Failed to resolve PDF logo path', {
+        configured: issuer.logoPath, err: err.message,
+      });
       logoFound = null;
     }
   }
@@ -457,12 +501,21 @@ function stripTrailingZeros(value) {
  */
 function drawTotals(doc, ctx, x, y, width) {
   const { locale, currency, intlLocale, totals } = ctx;
-  const labelCol = 130;
-  const valueCol = 80;
+  // Layout: labels anchored to the LEFT margin (matching the
+  // payment-conditions block beneath) so the totals box no longer
+  // sits as an indented ledger. Values + VAT-rate column right-
+  // aligned to the page edge — the eye still reads the amounts in a
+  // single tabular stack on the right, but the labels lock to the
+  // same vertical rule as the rest of the body content. This
+  // removes the visual "step" the maintainer flagged between the
+  // totals labels and "Please transfer the amount…" below.
   const right = x + width;
-  const labelX = right - labelCol - valueCol - 30;
-  const rateX  = right - valueCol - 30;
+  const valueCol = 80;
+  const rateCol = 40;
   const valueX = right - valueCol;
+  const rateX  = right - valueCol - rateCol;
+  const labelX = x;
+  const labelCol = rateX - labelX - 6; // leave a small gap before the rate column
 
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10);
   doc.text(t(locale, 'totals_net'), labelX, y, { width: labelCol });
@@ -475,17 +528,19 @@ function drawTotals(doc, ctx, x, y, width) {
   y = doc.y + 4;
 
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).text(t(locale, 'totals_vat'), labelX, y, { width: labelCol });
-  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).text(`${stripTrailingZeros(totals.vatRate)}%`, rateX, y, { width: 40, align: 'right' });
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).text(`${stripTrailingZeros(totals.vatRate)}%`, rateX, y, { width: rateCol, align: 'right' });
   doc.text(formatMinor(totals.vatAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
   y = doc.y + 10;
 
-  // Divider line above grand total.
+  // Divider line above grand total — spans the full content width
+  // so the line starts at the left margin under the labels (no
+  // "step" against the payment block heading below).
   doc.moveTo(labelX, y).lineTo(right, y).strokeColor('#000').lineWidth(0.8).stroke();
   y += 6;
 
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(12);
   doc.text(t(locale, 'totals_grand'), labelX, y, { width: labelCol });
-  doc.text(formatCurrencyLabel(currency), rateX, y, { width: 40, align: 'right' });
+  doc.text(formatCurrencyLabel(currency), rateX, y, { width: rateCol, align: 'right' });
   doc.text(formatMinor(totals.totalAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
   return doc.y + 10;
 }
