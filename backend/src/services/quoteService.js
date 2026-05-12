@@ -29,9 +29,9 @@
 const crypto = require('crypto');
 const { db, withRetry, logActivity } = require('../database/db');
 const logger = require('../utils/logger');
-const { getAppSetting } = require('../utils/appSettings');
 const { AppError } = require('../utils/errors');
 const { formatBoolean } = require('../utils/dbCompat');
+const settingsService = require('./settingsService');
 const businessProfileService = require('./businessProfileService');
 const pdfService = require('./pdfService');
 const emailProcessor = require('./emailProcessor');
@@ -108,7 +108,7 @@ function formatNumberInTemplate(format, year, seq) {
 }
 
 async function nextQuoteNumber() {
-  const format = (await getAppSetting('crm_quotes_number_format')) || 'Q-{YEAR}-{SEQ:04d}';
+  const format = (await settingsService.getSetting('crm_quotes_number_format')) || 'Q-{YEAR}-{SEQ:04d}';
   const year = new Date().getFullYear();
   // Find the highest existing seq for this year + base prefix. Loop on
   // unique-key collisions (concurrent admins) up to 5 times.
@@ -266,7 +266,7 @@ async function createQuote(payload, adminId) {
   const currency = (payload.currency || profile?.default_currency || 'CHF').toUpperCase();
   const language = payload.language || customer.preferred_language || profile?.default_locale || 'de';
 
-  const validDays = ensureInt(await getAppSetting('crm_quotes_default_valid_days')) || 30;
+  const validDays = ensureInt(await settingsService.getSetting('crm_quotes_default_valid_days')) || 30;
   const issueDate = payload.issueDate || new Date().toISOString().slice(0, 10);
   const validUntil = payload.validUntil || new Date(Date.now() + validDays * 24 * 60 * 60 * 1000)
     .toISOString().slice(0, 10);
@@ -594,7 +594,7 @@ async function sendQuote(id, adminId) {
 
   // Queue customer email (with PDF + cc) — honour the global
   // crm_quotes_pdf_attachment_enabled toggle.
-  const attachPdf = await getAppSetting('crm_quotes_pdf_attachment_enabled');
+  const attachPdf = await settingsService.getSetting('crm_quotes_pdf_attachment_enabled');
   const frontendUrl = await getFrontendBaseUrl() || 'http://localhost:3000';
   const responseUrl = `${frontendUrl}/quote/${token}`;
   await emailProcessor.queueEmail(null, customer.email, 'quote_sent', {
@@ -671,7 +671,7 @@ async function recordResponse({ token, action, ip }) {
   }
 
   const now = new Date();
-  const windowMinutes = ensureInt(await getAppSetting('crm_quotes_accept_window_minutes')) || 15;
+  const windowMinutes = ensureInt(await settingsService.getSetting('crm_quotes_accept_window_minutes')) || 15;
   // If there's already a response, check if we're inside the toggle window.
   if (quote.responded_at && quote.response_locked_at) {
     if (now.getTime() > new Date(quote.response_locked_at).getTime()) {

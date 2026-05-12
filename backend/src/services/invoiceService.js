@@ -22,9 +22,9 @@
 const crypto = require('crypto');
 const { db, withRetry, logActivity } = require('../database/db');
 const logger = require('../utils/logger');
-const { getAppSetting } = require('../utils/appSettings');
 const { AppError } = require('../utils/errors');
 const { formatBoolean } = require('../utils/dbCompat');
+const settingsService = require('./settingsService');
 const businessProfileService = require('./businessProfileService');
 const pdfService = require('./pdfService');
 const emailProcessor = require('./emailProcessor');
@@ -50,7 +50,7 @@ function formatNumberInTemplate(format, year, seq) {
 }
 
 async function nextInvoiceNumber() {
-  const format = (await getAppSetting('crm_invoices_number_format')) || 'R-{YEAR}-{SEQ:04d}';
+  const format = (await settingsService.getSetting('crm_invoices_number_format')) || 'R-{YEAR}-{SEQ:04d}';
   const year = new Date().getFullYear();
   for (let attempt = 1; attempt <= 5; attempt++) {
     const yearPrefix = formatNumberInTemplate(format, year, 0).slice(0, -4);
@@ -424,7 +424,7 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
     : await businessProfileService.resolveBankAccountForCurrency(invoice.currency);
 
   const qrFormat = invoice.qr_format
-    || (await getAppSetting('crm_invoices_qr_enabled')) === false ? 'none' : (profile?.default_qr_format || 'none');
+    || (await settingsService.getSetting('crm_invoices_qr_enabled')) === false ? 'none' : (profile?.default_qr_format || 'none');
 
   return {
     locale: invoice.language || profile?.default_locale || 'de',
@@ -665,9 +665,9 @@ async function applyReminder(invoice, lineItems, level, adminId) {
   const customer = await db('customer_accounts').where({ id: invoice.customer_account_id }).first();
   let lateFeeMinor = invoice.late_fee_amount_minor || 0;
   if (level === 2) {
-    const enabled = await getAppSetting('crm_invoices_late_fee_enabled');
+    const enabled = await settingsService.getSetting('crm_invoices_late_fee_enabled');
     if (enabled !== false) {
-      const fee = ensureInt(await getAppSetting('crm_invoices_late_fee_minor')) || 2500;
+      const fee = ensureInt(await settingsService.getSetting('crm_invoices_late_fee_minor')) || 2500;
       lateFeeMinor = fee;
     }
   }
@@ -745,10 +745,10 @@ async function runScheduledTasks() {
   }
 
   // 2. Overdue check (if reminders enabled).
-  const remindersEnabled = await getAppSetting('crm_invoices_reminders_enabled');
+  const remindersEnabled = await settingsService.getSetting('crm_invoices_reminders_enabled');
   if (remindersEnabled !== false) {
-    const firstDays  = ensureInt(await getAppSetting('crm_invoices_reminder_first_days')) || 14;
-    const secondDays = ensureInt(await getAppSetting('crm_invoices_reminder_second_days')) || 30;
+    const firstDays  = ensureInt(await settingsService.getSetting('crm_invoices_reminder_first_days')) || 14;
+    const secondDays = ensureInt(await settingsService.getSetting('crm_invoices_reminder_second_days')) || 30;
 
     const firstCutoff  = new Date(now.getTime() - firstDays  * 86400000);
     const secondCutoff = new Date(now.getTime() - secondDays * 86400000);
