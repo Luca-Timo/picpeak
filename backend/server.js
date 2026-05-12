@@ -596,9 +596,11 @@ app.use('/api/admin/users', require('./src/routes/adminUsers'));
 // customer out at once. PR-revert moved the gate back to per-record.
 app.use('/api/admin/customers', require('./src/routes/adminCustomers'));
 // Customer-side surface (#354). Strictly separate from /api/admin/* —
-// distinct token type, distinct cookie, distinct middleware.
-app.use('/api/customer/auth', requireCustomerPortalEnabled, require('./src/routes/customerAuth'));
-app.use('/api/customer', requireCustomerPortalEnabled, require('./src/routes/customer'));
+// distinct token type, distinct cookie, distinct middleware. No
+// route-level feature-flag gate; see the comment block above on why
+// the customerPortal flag is UI-only after the PR-revert.
+app.use('/api/customer/auth', require('./src/routes/customerAuth'));
+app.use('/api/customer', require('./src/routes/customer'));
 // --- CRM (#TBD) -------------------------------------------------------
 // Quotes + Invoices live under /api/admin/{quotes,invoices} and the
 // public accept/decline endpoint at /api/public/quotes. Business profile
