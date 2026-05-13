@@ -610,6 +610,7 @@ app.use('/api/admin/business-profile', require('./src/routes/adminBusinessProfil
 app.use('/api/admin/quotes',   require('./src/routes/adminQuotes'));
 app.use('/api/admin/invoices', require('./src/routes/adminInvoices'));
 app.use('/api/public/quotes',  require('./src/routes/publicQuotes'));
+app.use('/api/public/payment-check', require('./src/routes/publicPaymentCheck'));
 
 app.use('/api/customer/auth', require('./src/routes/customerAuth'));
 app.use('/api/customer', require('./src/routes/customer'));

@@ -34,6 +34,7 @@ import {
   BillDetailPage,
 } from './pages/admin';
 import { QuoteResponsePage } from './pages/public/QuoteResponsePage';
+import { PaymentCheckPage } from './pages/public/PaymentCheckPage';
 import { AcceptInvitePage } from './pages/public/AcceptInvitePage';
 import {
   CustomerLoginPage,
@@ -233,6 +234,12 @@ function App() {
                   {/* Public quote accept/decline page (CRM). Token-only,
                       no auth required. */}
                   <Route path="/quote/:token" element={<QuoteResponsePage />} />
+
+                  {/* Admin payment-check page (CRM) — token only,
+                      no auth. Reached from the "Paid in full /
+                      Partial / Not paid" buttons in the payment-
+                      check email. */}
+                  <Route path="/payment-check/:token" element={<PaymentCheckPage />} />
 
                   {/* Customer surface (#354). Strictly separate provider /
                       cookie / API surface from /admin/*. The customerPortal
