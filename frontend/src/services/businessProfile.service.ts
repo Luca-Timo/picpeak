@@ -54,6 +54,14 @@ export interface BusinessProfile {
   /** DIN 5008 folding marks on the page edge.
    *  'none' (default) | 'half' | 'third' | 'both'. Migration 108. */
   pdfFoldingMarks: 'none' | 'half' | 'third' | 'both';
+  /** When true, render the "X days from invoice date." line in the
+   *  payment-conditions block of QUOTE PDFs. Invoices always show
+   *  this row regardless. Migration 110; defaults FALSE. */
+  pdfQuoteShowNetDays: boolean;
+  /** When true, render the Skonto offer + "Amount with discount"
+   *  lines in the payment-conditions block of QUOTE PDFs. Invoices
+   *  always show these regardless. Migration 110; defaults FALSE. */
+  pdfQuoteShowSkonto: boolean;
   createdAt: string;
   updatedAt: string;
 }

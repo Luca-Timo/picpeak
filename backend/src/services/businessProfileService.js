@@ -57,6 +57,10 @@ const ALLOWED_PROFILE_FIELDS = [
   'pdf_folding_marks',
   'pdf_logo_height',
   'pdf_company_name_inline',
+  // Quote payment-block toggles (migration 110). Invoices always
+  // show the full payment block; these only affect quote PDFs.
+  'pdf_quote_show_net_days',
+  'pdf_quote_show_skonto',
 ];
 
 const ALLOWED_BANK_FIELDS = [
@@ -121,7 +125,10 @@ function sanitiseProfilePayload(payload) {
   }
   // Normalise the boolean PDF visibility toggles. Empty / undefined
   // stays untouched (so partial updates don't reset existing values).
-  for (const field of ['pdf_show_logo', 'pdf_show_company_name', 'pdf_company_name_inline']) {
+  for (const field of [
+    'pdf_show_logo', 'pdf_show_company_name', 'pdf_company_name_inline',
+    'pdf_quote_show_net_days', 'pdf_quote_show_skonto',
+  ]) {
     if (updates[field] !== undefined) {
       updates[field] = formatBoolean(Boolean(updates[field]));
     }
