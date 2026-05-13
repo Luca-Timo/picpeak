@@ -19,7 +19,12 @@ export type FeatureKey =
   // Customer-side portal surface (#354). Gates /customer/* routes
   // (login, dashboard, profile, accept-invite, reset-password) and
   // the Accounts sub-page under Clients in the admin UI.
-  | 'customerPortal';
+  | 'customerPortal'
+  // CRM developer tools — hidden by default. When enabled, surfaces
+  // a "Development" sub-tab under Clients with internal-use buttons
+  // (test the payment-check email flow, fire dev-only side effects,
+  // etc.). Strictly opt-in; toggled from Features.
+  | 'crmDevelopment';
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 

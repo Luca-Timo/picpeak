@@ -13,6 +13,7 @@ import {
   Users,
   UserCog,
   Briefcase,
+  Wrench,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card } from '../../../components/common';
@@ -261,6 +262,20 @@ export const FeaturesTab: React.FC = () => {
               'settings.features.userManagement.warning',
               'Existing user accounts stay valid; the admin UI for managing them will be hidden until you re-enable this.',
             )}
+          />
+
+          <FeatureCard
+            icon={Wrench}
+            title={t('settings.features.crmDevelopment.title', 'CRM developer tools')}
+            description={t(
+              'settings.features.crmDevelopment.description',
+              'Internal helpers for verifying CRM flows (e.g. fire the admin payment-check email instantly, bypass throttles). Surfaces as a "Development" sub-tab under Clients. Strictly opt-in — fires real side effects, use against test data only.',
+            )}
+            status="experimental"
+            statusLabel={statusLabel('experimental')}
+            sidebarLabel={t('settings.features.crmDevelopment.sidebar', 'Development')}
+            enabled={staged.crmDevelopment}
+            onToggle={(next) => setFlag('crmDevelopment', next)}
           />
         </Section>
       </Card>

@@ -41,6 +41,10 @@ const KNOWN_FLAGS = [
   // Customer-side portal surface (#354). Gates /customer/* routes
   // and the Accounts sub-page under Clients. See migration 095.
   'customerPortal',
+  // CRM developer tools sub-tab — internal helpers (test the
+  // payment-check email flow without waiting 30 days, etc.).
+  // Strictly opt-in.
+  'crmDevelopment',
 ];
 
 // Spec defaults for any flag missing from the DB (e.g. a row added by a
@@ -85,6 +89,7 @@ function applyDependencyRules(flags) {
   // ever drifts (e.g. partial migration run).
   out.clients = Boolean(
     out.customerPortal
+    || out.crmDevelopment
     // future siblings (out.calendar || out.quotes || out.bills || out.messaging) go here
   );
   return out;

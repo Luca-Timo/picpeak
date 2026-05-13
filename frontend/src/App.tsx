@@ -33,6 +33,7 @@ import {
   BillEditorPage,
   BillDetailPage,
 } from './pages/admin';
+import { CrmDevelopmentPage } from './pages/admin/clients/CrmDevelopmentPage';
 import { QuoteResponsePage } from './pages/public/QuoteResponsePage';
 import { PaymentCheckPage } from './pages/public/PaymentCheckPage';
 import { AcceptInvitePage } from './pages/public/AcceptInvitePage';
@@ -194,6 +195,11 @@ function App() {
                             <Route path="bills/new" element={<BillEditorPage />} />
                             <Route path="bills/:id" element={<BillDetailPage />} />
                             <Route path="bills/:id/edit" element={<BillEditorPage />} />
+                          </Route>
+
+                          {/* Developer tools — gated by `crmDevelopment`. */}
+                          <Route element={<RequireFeature flag="crmDevelopment" />}>
+                            <Route path="development" element={<CrmDevelopmentPage />} />
                           </Route>
                           {/* Default: send /admin/clients (no sub-path) to
                               the first enabled sub-feature. accounts comes

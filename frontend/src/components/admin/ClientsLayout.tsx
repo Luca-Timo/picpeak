@@ -14,7 +14,7 @@
 import React from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Briefcase, UserCog, FileText, Receipt } from 'lucide-react';
+import { Briefcase, UserCog, FileText, Receipt, Wrench } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useFeatureFlags, type FeatureKey } from '../../contexts/FeatureFlagsContext';
 
@@ -63,6 +63,13 @@ export const ClientsLayout: React.FC = () => {
     // Future sub-features:
     //   { key: 'calendar',  ... featureFlag: 'calendar' }
     //   { key: 'messaging', ... featureFlag: 'messaging' }
+    {
+      key: 'development',
+      to: '/admin/clients/development',
+      label: t('clients.subnav.development', 'Development'),
+      icon: Wrench,
+      featureFlag: 'crmDevelopment',
+    },
   ];
 
   const enabledItems = navItems.filter((item) => flags[item.featureFlag]);
