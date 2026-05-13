@@ -41,6 +41,10 @@ export interface InvoiceSummary {
   paidAmountMinor: number;
   reminderLevel: number;
   lateFeeAmountMinor: number;
+  /** True when the invoice was attached from a historical PDF
+   *  (migration 111). Hide line-item editing on these rows; the
+   *  uploaded PDF is the source of truth. */
+  isImported?: boolean;
 }
 
 export interface InvoiceDetail extends InvoiceSummary {
@@ -170,4 +174,69 @@ export const billsService = {
     const res = await api.post('/admin/invoices/preview', payload, { responseType: 'blob' });
     return URL.createObjectURL(res.data);
   },
+
+  /**
+   * Attach a historical invoice PDF (from a previous billing system)
+   * to a customer's account. The backend creates a minimal invoice
+   * row whose imported_pdf_path points at the uploaded file —
+   * customer + admin PDF endpoints stream the original document.
+   */
+  async importHistorical(payload: {
+    customerAccountId: number;
+    invoiceNumber: string;
+    issueDate: string;
+    dueDate?: string;
+    totalAmountMinor: number;
+    currency?: string;
+    status?: 'sent' | 'paid' | 'overdue';
+    paidAmountMinor?: number;
+    language?: string;
+    file: File;
+  }): Promise<InvoiceWithLineItems> {
+    const form = new FormData();
+    form.append('pdf', payload.file);
+    form.append('customerAccountId', String(payload.customerAccountId));
+    form.append('invoiceNumber', payload.invoiceNumber);
+    form.append('issueDate', payload.issueDate);
+    if (payload.dueDate) form.append('dueDate', payload.dueDate);
+    form.append('totalAmountMinor', String(payload.totalAmountMinor));
+    if (payload.currency) form.append('currency', payload.currency);
+    if (payload.status) form.append('status', payload.status);
+    if (payload.paidAmountMinor != null) form.append('paidAmountMinor', String(payload.paidAmountMinor));
+    if (payload.language) form.append('language', payload.language);
+    const { data } = await api.post('/admin/invoices/import', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data.data || data;
+  },
 };
+
+export interface CrmOverviewStats {
+  currency: string;
+  quotes: {
+    draft: number; sent: number; accepted: number;
+    declined: number; expired: number; converted: number;
+  };
+  invoices: {
+    scheduled: number; sent: number; paid: number;
+    overdue: number; cancelled: number;
+  };
+  revenue: {
+    monthMinor: number;
+    quarterMinor: number;
+    yearMinor: number;
+  };
+  outstanding: {
+    totalMinor: number;
+    invoiceCount: number;
+  };
+  generatedAt: string;
+}
+
+/** CRM headline metrics — quote / invoice counts, rolling revenue
+ *  windows (30 / 90 / 365 days), outstanding payment total. Drives
+ *  the /admin/clients/overview tab. */
+export async function fetchCrmOverview(): Promise<CrmOverviewStats> {
+  const { data } = await api.get('/admin/dashboard/crm-stats');
+  return data;
+}

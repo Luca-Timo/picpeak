@@ -20,13 +20,42 @@
 
 const express = require('express');
 const { body, param, query } = require('express-validator');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs').promises;
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
+const { getStoragePath } = require('../config/storage');
 const invoiceService = require('../services/invoiceService');
 const { db } = require('../database/db');
 
 const router = express.Router();
+
+// Multer config for "import historical invoice" PDF uploads. Stored
+// under storage/business-docs/invoice-imports/<year>/<filename> so
+// imported files don't collide with the renderer's own output under
+// storage/business-docs/invoice/<year>/. PDF-only, 10MB cap.
+const importedInvoiceStorage = multer.diskStorage({
+  destination: async (_req, _file, cb) => {
+    const year = new Date().getFullYear();
+    const dir = path.join(getStoragePath(), 'business-docs', 'invoice-imports', String(year));
+    await fs.mkdir(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.pdf';
+    cb(null, `imported-${Date.now()}${ext}`);
+  },
+});
+const importedInvoiceUpload = multer({
+  storage: importedInvoiceStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf') cb(null, true);
+    else cb(new Error('Only PDF files are allowed for imported invoices'));
+  },
+});
 
 async function requireBillsFlag(req, res, next) {
   try {
@@ -82,6 +111,10 @@ function transformInvoice(i) {
     qrFormat: i.qr_format,
     pdfPath: i.pdf_path,
     businessBankAccountId: i.business_bank_account_id,
+    // `isImported` surfaces the historical-PDF flag to the admin UI
+    // so the list / detail page can hide line-item editing on rows
+    // that originated from a different billing system (migration 111).
+    isImported: !!i.imported_pdf_path,
     createdAt: i.created_at,
     updatedAt: i.updated_at,
   };
@@ -236,6 +269,123 @@ router.post(
   })
 );
 
+// POST /import — attach a historical invoice PDF to a customer's
+// account. Inserts a minimal invoice row whose `imported_pdf_path`
+// points at the uploaded file. Every PDF endpoint (admin + customer)
+// short-circuits the renderer when this column is populated, so the
+// customer downloads the original document untouched.
+//
+// Use case: migrating from QuickBooks / Bexio / Xero — the admin
+// keeps the legal records intact but the customer still sees a
+// consolidated history in their portal.
+//
+// Form fields (multipart/form-data):
+//   pdf                file (required, application/pdf, max 10MB)
+//   customerAccountId  int (required)
+//   invoiceNumber      string (required — admin types the original)
+//   issueDate          ISO date (required)
+//   dueDate            ISO date (optional, defaults to issueDate)
+//   totalAmountMinor   int minor units (required)
+//   currency           3-letter ISO (optional, default profile/CHF)
+//   status             'sent' | 'paid' | 'overdue' (default 'sent')
+//   paidAmountMinor    int (optional, for status='paid')
+//   language           string (optional, default 'de')
+router.post(
+  '/import',
+  requirePermission('bills.manage'),
+  importedInvoiceUpload.single('pdf'),
+  [
+    body('customerAccountId').isInt({ min: 1 }),
+    body('invoiceNumber').isString().isLength({ min: 1, max: 64 }),
+    body('issueDate').isISO8601(),
+    body('dueDate').optional({ values: 'falsy' }).isISO8601(),
+    body('totalAmountMinor').isInt({ min: 0 }),
+    body('currency').optional({ values: 'falsy' }).isString().isLength({ min: 3, max: 3 }),
+    body('status').optional({ values: 'falsy' }).isIn(['sent', 'paid', 'overdue']),
+    body('paidAmountMinor').optional({ values: 'falsy' }).isInt({ min: 0 }),
+    body('language').optional({ values: 'falsy' }).isString().isLength({ max: 8 }),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    if (!req.file) return res.status(400).json({ error: 'PDF file is required' });
+
+    // Confirm the customer exists + has bills enabled (same gate as
+    // the regular createInvoice).
+    const customer = await db('customer_accounts').where({ id: req.body.customerAccountId }).first();
+    if (!customer) {
+      // Clean up the uploaded file so failed imports don't leave
+      // orphans on disk.
+      try { await fs.unlink(req.file.path); } catch (_) { /* ignore */ }
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    if (customer.feature_bills === false || customer.feature_bills === 0 || customer.feature_bills === '0') {
+      try { await fs.unlink(req.file.path); } catch (_) { /* ignore */ }
+      return res.status(409).json({
+        error: 'This customer has bills disabled',
+        code: 'CUSTOMER_FEATURE_DISABLED',
+      });
+    }
+
+    // Refuse duplicate invoice numbers — tax compliance requires
+    // uniqueness within the issuer's books.
+    const conflict = await db('invoices').where({ invoice_number: req.body.invoiceNumber }).first();
+    if (conflict) {
+      try { await fs.unlink(req.file.path); } catch (_) { /* ignore */ }
+      return res.status(409).json({
+        error: `Invoice number "${req.body.invoiceNumber}" already exists`,
+        code: 'INVOICE_NUMBER_TAKEN',
+      });
+    }
+
+    const totalMinor = parseInt(req.body.totalAmountMinor, 10);
+    const paidMinor  = parseInt(req.body.paidAmountMinor || '0', 10) || 0;
+    const status     = req.body.status || 'sent';
+    const issueDate  = req.body.issueDate;
+    const dueDate    = req.body.dueDate || issueDate;
+    const currency   = (req.body.currency || customer.preferred_currency || 'CHF').toUpperCase();
+    const language   = req.body.language || customer.preferred_language || 'de';
+
+    const row = {
+      invoice_number: req.body.invoiceNumber,
+      customer_account_id: customer.id,
+      source_quote_id: null,
+      event_id: null,
+      language,
+      currency,
+      issue_date: issueDate,
+      due_date: dueDate,
+      installment_index: 0,
+      installment_total: 1,
+      installment_label: null,
+      installment_trigger: null,
+      status,
+      scheduled_send_at: null,
+      sent_at: status !== 'scheduled' ? new Date() : null,
+      net_amount_minor: totalMinor,         // imported docs lack a breakdown
+      vat_rate: 0,                          // VAT info lives in the imported PDF
+      vat_amount_minor: 0,
+      shipping_amount_minor: 0,
+      total_amount_minor: totalMinor,
+      paid_amount_minor: paidMinor,
+      paid_at: status === 'paid' ? new Date() : null,
+      // Store the path RELATIVE to STORAGE_PATH so the value survives
+      // a host migration (Docker volume remount on a new host with a
+      // different absolute path).
+      imported_pdf_path: path.relative(getStoragePath(), req.file.path),
+      created_by_admin_id: req.admin.id,
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
+
+    const inserted = await db('invoices').insert(row).returning('id');
+    const invoiceId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
+
+    return successResponse(res, {
+      invoice: transformInvoice(await db('invoices').where({ id: invoiceId }).first()),
+    }, 201, 'Invoice imported');
+  })
+);
+
 // PUT — full re-save delegated through createInvoice's helper isn't
 // straightforward (we keep the existing row). Implementing as a small
 // inline shim that overrides scalars + replaces line items.
@@ -248,8 +398,17 @@ router.put(
     const id = parseInt(req.params.id, 10);
     const existing = await db('invoices').where({ id }).first();
     if (!existing) return res.status(404).json({ error: 'Invoice not found' });
-    if (existing.status === 'paid' || existing.status === 'cancelled') {
-      return res.status(409).json({ error: `Cannot edit invoice with status '${existing.status}'` });
+    // Once an invoice has been sent to the customer it becomes a
+    // legal record under CH/LI/DE/AT tax rules ("Rechnung ist
+    // ausgestellt"). Modifying it in place would break the audit
+    // trail — the correct workflow is to cancel the original +
+    // issue a new one. Only `scheduled` (not yet sent) invoices
+    // remain editable.
+    if (existing.status !== 'scheduled') {
+      return res.status(409).json({
+        error: `Cannot edit invoice with status '${existing.status}'. Sent invoices are locked — cancel and reissue if changes are needed.`,
+        code: 'INVOICE_LOCKED',
+      });
     }
     const payload = mapPayloadToService(req.body);
 

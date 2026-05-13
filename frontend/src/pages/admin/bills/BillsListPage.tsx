@@ -5,11 +5,13 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Plus, Search } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Plus, Search, Upload, X } from 'lucide-react';
 import { billsService, type InvoiceStatus, type InvoiceSort } from '../../../services/bills.service';
-import { Button, Card, Loading } from '../../../components/common';
+import { Button, Card, Input, Loading } from '../../../components/common';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
+import { customerAdminService } from '../../../services/customerAdmin.service';
+import { toast } from 'react-toastify';
 
 const STATUSES: InvoiceStatus[] = ['scheduled', 'sent', 'paid', 'overdue', 'cancelled'];
 
@@ -21,6 +23,7 @@ export const BillsListPage: React.FC = () => {
   const [unpaidOnly, setUnpaidOnly] = useState(false);
   const [sort, setSort] = useState<InvoiceSort>('newest');
   const [page, setPage] = useState(1);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['invoices', { search, statusFilter, unpaidOnly, sort, page }],
@@ -55,10 +58,20 @@ export const BillsListPage: React.FC = () => {
             {t('bills.subtitle', 'Schedule, send, track payments and chase late invoices.')}
           </p>
         </div>
-        <Link to="/admin/clients/bills/new">
-          <Button><Plus className="w-4 h-4 mr-1" />{t('bills.new', 'New invoice')}</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="w-4 h-4 mr-1" />
+            {t('bills.import', 'Import historical')}
+          </Button>
+          <Link to="/admin/clients/bills/new">
+            <Button><Plus className="w-4 h-4 mr-1" />{t('bills.new', 'New invoice')}</Button>
+          </Link>
+        </div>
       </div>
+
+      {importOpen && (
+        <ImportHistoricalInvoiceModal onClose={() => setImportOpen(false)} />
+      )}
 
       <Card padding="lg">
         <div className="flex flex-wrap items-center gap-3">
@@ -153,6 +166,197 @@ export const BillsListPage: React.FC = () => {
           )}
         </div>
       </Card>
+    </div>
+  );
+};
+
+/**
+ * Modal for attaching a historical invoice PDF to a customer's
+ * account. Stores the original document on disk; the customer sees
+ * the same bytes via their portal's "View PDF" button. Useful when
+ * migrating from a previous billing system — invoice number, date,
+ * and total are entered by hand exactly as they appeared in the
+ * source system (sequential numbering is the admin's responsibility
+ * for this path; the renderer's auto-numbering doesn't apply).
+ */
+interface ImportModalProps { onClose: () => void }
+const ImportHistoricalInvoiceModal: React.FC<ImportModalProps> = ({ onClose }) => {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerId, setCustomerId] = useState<number | null>(null);
+  const [customerLabel, setCustomerLabel] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
+  const [dueDate, setDueDate] = useState('');
+  const [totalMajor, setTotalMajor] = useState('');
+  const [currency, setCurrency] = useState('CHF');
+  const [status, setStatus] = useState<'sent' | 'paid' | 'overdue'>('paid');
+  const [paidMajor, setPaidMajor] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const { data: customerOptions } = useQuery({
+    queryKey: ['customer-search', customerSearch],
+    queryFn: () => customerAdminService.search(customerSearch),
+    enabled: customerSearch.length >= 2,
+  });
+
+  const canSubmit = customerId && invoiceNumber && issueDate && totalMajor && file && !submitting;
+
+  const onSubmit = async () => {
+    if (!canSubmit || !customerId || !file) return;
+    setSubmitting(true);
+    try {
+      await billsService.importHistorical({
+        customerAccountId: customerId,
+        invoiceNumber,
+        issueDate,
+        dueDate: dueDate || undefined,
+        totalAmountMinor: Math.round(Number(totalMajor) * 100),
+        currency: currency || undefined,
+        status,
+        paidAmountMinor: status === 'paid' && paidMajor
+          ? Math.round(Number(paidMajor) * 100)
+          : undefined,
+        file,
+      });
+      toast.success(t('bills.importedToast', 'Invoice imported.'));
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || t('bills.importError', 'Import failed'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      onClick={onClose}>
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200 dark:border-neutral-700">
+          <h2 className="text-lg font-semibold">
+            {t('bills.importTitle', 'Import historical invoice')}
+          </h2>
+          <button type="button" onClick={onClose} className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <p className="text-xs text-neutral-500">
+            {t('bills.importHelp',
+              'Attach a PDF from a previous billing system. The customer sees this original document in their portal — picpeak does not regenerate it.')}
+          </p>
+
+          {/* Customer picker */}
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              {t('bills.field.customer', 'Customer')}
+            </label>
+            {customerId ? (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-800">{customerLabel}</span>
+                <button type="button" onClick={() => { setCustomerId(null); setCustomerLabel(''); }}
+                  className="text-xs text-neutral-500 hover:underline">
+                  {t('common.change', 'Change')}
+                </button>
+              </div>
+            ) : (
+              <>
+                <Input placeholder={t('bills.customerSearch', 'Search by email or company…') as string}
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)} />
+                {customerSearch.length >= 2 && customerOptions && (
+                  <ul className="mt-1 max-h-40 overflow-y-auto border border-neutral-200 dark:border-neutral-700 rounded">
+                    {(customerOptions as any[]).map((c) => (
+                      <li key={c.id}>
+                        <button type="button"
+                          onClick={() => {
+                            setCustomerId(c.id);
+                            setCustomerLabel(c.companyName || c.displayName || c.email);
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                          {c.companyName || c.displayName || c.email}
+                          <span className="text-xs text-neutral-500 ml-2">{c.email}</span>
+                        </button>
+                      </li>
+                    ))}
+                    {(customerOptions as any[]).length === 0 && (
+                      <li className="px-3 py-2 text-xs text-neutral-500">{t('bills.noMatch', 'No matches')}</li>
+                    )}
+                  </ul>
+                )}
+              </>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Input label={t('bills.field.invoiceNumber', 'Invoice number') as string}
+              value={invoiceNumber}
+              placeholder="R-2024-0001"
+              onChange={(e) => setInvoiceNumber(e.target.value)} />
+            <Input label={t('bills.field.currency', 'Currency') as string}
+              value={currency}
+              maxLength={3}
+              onChange={(e) => setCurrency(e.target.value.toUpperCase())} />
+            <Input type="date" label={t('bills.field.issueDate', 'Issued') as string}
+              value={issueDate}
+              onChange={(e) => setIssueDate(e.target.value)} />
+            <Input type="date" label={t('bills.field.dueDate', 'Due') as string}
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)} />
+            <Input type="number" step="0.01" min="0"
+              label={t('bills.field.total', 'Total') as string}
+              value={totalMajor}
+              placeholder="543.00"
+              onChange={(e) => setTotalMajor(e.target.value)} />
+            <div>
+              <label className="block text-sm font-medium mb-1">{t('bills.field.status', 'Status')}</label>
+              <select value={status}
+                onChange={(e) => setStatus(e.target.value as any)}
+                className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm">
+                <option value="paid">{t('bills.status.paid', 'Paid')}</option>
+                <option value="sent">{t('bills.status.sent', 'Sent')}</option>
+                <option value="overdue">{t('bills.status.overdue', 'Overdue')}</option>
+              </select>
+            </div>
+            {status === 'paid' && (
+              <Input type="number" step="0.01" min="0"
+                label={t('bills.field.paidAmount', 'Paid amount (optional)') as string}
+                value={paidMajor}
+                placeholder={totalMajor || '0.00'}
+                onChange={(e) => setPaidMajor(e.target.value)} />
+            )}
+          </div>
+
+          {/* PDF picker */}
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              {t('bills.field.pdfFile', 'PDF file')}
+            </label>
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-primary-700"
+            />
+            {file && (
+              <p className="text-xs text-neutral-500 mt-1">{file.name} · {(file.size / 1024).toFixed(1)} KB</p>
+            )}
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-neutral-200 dark:border-neutral-700">
+          <Button variant="outline" onClick={onClose} disabled={submitting}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button onClick={onSubmit} disabled={!canSubmit}>
+            <Upload className="w-4 h-4 mr-1" />
+            {submitting ? t('bills.importing', 'Importing…') : t('bills.import', 'Import')}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };
