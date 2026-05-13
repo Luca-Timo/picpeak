@@ -289,17 +289,23 @@ async function loadRenderContext(locale) {
 }
 
 // Page layout for the tax-report table. Sized for A4 landscape (762pt
-// content width). Sums to ~755 leaving ~7pt slack for the right margin.
+// content width). Sums to ~759 leaving ~3pt slack for the right margin.
+//
+// "Status" column lives at the far right so the cancelled marker
+// doesn't crowd the invoice number. The invoice column itself stays
+// uncluttered with just "R-2026-0001" — easier to scan for an
+// auditor looking at the sequence.
 const TAX_TABLE_COLS = [
   { key: 'idx',      labelKey: 'tax_col_no',       width: 26,  align: 'right' },
-  { key: 'date',     labelKey: 'tax_col_date',     width: 62,  align: 'left'  },
-  { key: 'invoice',  labelKey: 'tax_col_invoice',  width: 95,  align: 'left'  },
-  { key: 'customer', labelKey: 'tax_col_customer', width: 175, align: 'left'  },
-  { key: 'event',    labelKey: 'tax_col_event',    width: 120, align: 'left'  },
+  { key: 'date',     labelKey: 'tax_col_date',     width: 60,  align: 'left'  },
+  { key: 'invoice',  labelKey: 'tax_col_invoice',  width: 100, align: 'left'  },
+  { key: 'customer', labelKey: 'tax_col_customer', width: 140, align: 'left'  },
+  { key: 'event',    labelKey: 'tax_col_event',    width: 105, align: 'left'  },
   { key: 'vatRate',  labelKey: 'tax_col_vat_rate', width: 42,  align: 'right' },
-  { key: 'net',      labelKey: 'tax_col_net',      width: 76,  align: 'right' },
-  { key: 'vat',      labelKey: 'tax_col_vat',      width: 70,  align: 'right' },
-  { key: 'total',    labelKey: 'tax_col_total',    width: 90,  align: 'right' },
+  { key: 'net',      labelKey: 'tax_col_net',      width: 74,  align: 'right' },
+  { key: 'vat',      labelKey: 'tax_col_vat',      width: 68,  align: 'right' },
+  { key: 'total',    labelKey: 'tax_col_total',    width: 86,  align: 'right' },
+  { key: 'status',   labelKey: 'tax_col_status',   width: 58,  align: 'left'  },
 ];
 
 function colX(leftMargin, index) {
@@ -335,20 +341,18 @@ function formatVatRate(rate, locale) {
 }
 
 function rowCellValues(row, idx, locale, dateFormat) {
-  const dateStr = formatDate(row.issueDate, dateFormat);
-  const invoiceLabel = row.isCancelled
-    ? `${row.invoiceNumber} (${t(locale, 'tax_status_cancelled')})`
-    : row.invoiceNumber;
+  const intlLocale = locale === 'de' ? 'de-CH' : 'en-GB';
   return {
     idx: String(idx),
-    date: dateStr,
-    invoice: invoiceLabel,
+    date: formatDate(row.issueDate, dateFormat),
+    invoice: row.invoiceNumber, // no inline "(Cancelled)" — keep the column tidy; status is its own column
     customer: row.customerLabel || '',
     event: row.eventName || '',
     vatRate: formatVatRate(row.vatRate, locale),
-    net: formatMinor(row.netMinor, row.currency, locale === 'de' ? 'de-CH' : 'en-GB'),
-    vat: formatMinor(row.vatMinor, row.currency, locale === 'de' ? 'de-CH' : 'en-GB'),
-    total: formatMinor(row.totalMinor, row.currency, locale === 'de' ? 'de-CH' : 'en-GB'),
+    net: formatMinor(row.netMinor, row.currency, intlLocale),
+    vat: formatMinor(row.vatMinor, row.currency, intlLocale),
+    total: formatMinor(row.totalMinor, row.currency, intlLocale),
+    status: row.isCancelled ? t(locale, 'tax_status_cancelled') : '',
   };
 }
 
@@ -426,6 +430,22 @@ async function renderTaxReportPdf({ from, to, currency, locale } = {}) {
         y += 24;
       }
 
+      // Belt-and-braces truncation. PDFKit's `lineBreak: false` is
+      // honoured most of the time, but when the cell value is wider
+      // than the column it still wraps occasionally — which then
+      // overlaps the row below. Cap each cell at a generous char
+      // budget so even worst-case glyph widths fit. The ellipsis on
+      // `doc.text` then catches anything that's still too wide.
+      const charBudgetFor = (col) => {
+        // ~5pt average per glyph at 8.5pt → ceil((width-4) / 5).
+        return Math.max(4, Math.floor((col.width - 4) / 5));
+      };
+      const clip = (s, budget) => {
+        if (s == null) return '';
+        const str = String(s);
+        return str.length > budget ? `${str.slice(0, budget - 1)}…` : str;
+      };
+
       for (let i = 0; i < report.rows.length; i += 1) {
         if (y + rowHeight > tableBottomLimit) {
           doc.addPage({ size: 'A4', layout: 'landscape' });
@@ -441,9 +461,10 @@ async function renderTaxReportPdf({ from, to, currency, locale } = {}) {
         }
         for (let c = 0; c < TAX_TABLE_COLS.length; c += 1) {
           const col = TAX_TABLE_COLS[c];
-          doc.text(cells[col.key] || '', colX(leftMargin, c) + 2, y, {
+          const value = clip(cells[col.key], charBudgetFor(col));
+          doc.text(value, colX(leftMargin, c) + 2, y, {
             width: col.width - 4, align: col.align,
-            ellipsis: true, lineBreak: false,
+            ellipsis: true, lineBreak: false, height: rowHeight - 2,
           });
         }
         // Light separator under each row.
@@ -502,6 +523,26 @@ async function renderTaxReportPdf({ from, to, currency, locale } = {}) {
             leftMargin, totalsTop,
             { width: page.contentWidth - totalsBoxWidth - 20, align: 'left' }
           );
+      }
+
+      // Page x of N footer (bottom-right). Done after all body
+      // rendering via PDFKit's bufferPages so we know the final count
+      // before stamping. Resets fill colour + font so the stamp looks
+      // identical on every page regardless of where rendering ended.
+      const range = doc.bufferedPageRange();
+      for (let pageIdx = 0; pageIdx < range.count; pageIdx += 1) {
+        doc.switchToPage(range.start + pageIdx);
+        const pageLabel = t(useLocale, 'page_of', {
+          current: pageIdx + 1, total: range.count,
+        });
+        // y just below the content area, far enough from the
+        // margin that PDFKit's "writing past the bottom margin"
+        // warning doesn't fire.
+        doc.font(fonts.body).fontSize(8).fillColor('#888')
+          .text(pageLabel,
+            page.width - page.marginRight - 160,
+            page.height - page.marginBottom + 6,
+            { width: 160, align: 'right', lineBreak: false });
       }
 
       doc.end();
