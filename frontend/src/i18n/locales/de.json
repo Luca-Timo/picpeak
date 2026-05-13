@@ -2764,11 +2764,46 @@
     },
     "quotes": {
       "title": "Angebote",
-      "body": "Angebote für kommende Shoots an einem Ort prüfen und annehmen. Wir bauen das noch — bis dahin schickt dir dein Fotograf Angebote wie gewohnt."
+      "subtitle": "Alle Angebote, die dir dein Fotograf gesendet hat. Klicke auf ein offenes Angebot, um es anzunehmen oder abzulehnen.",
+      "empty": "Noch keine Angebote.",
+      "disabled": "Diese Funktion ist für dein Konto aktuell deaktiviert. Bitte wende dich an deinen Fotografen, falls du hier Angebote erwartest.",
+      "loadError": "Angebote konnten nicht geladen werden.",
+      "noEventName": "—",
+      "openToRespond": "Öffnen zum Antworten",
+      "viewPdf": "PDF anzeigen",
+      "popupBlocked": "Erlaube Pop-ups für diese Seite, um das Angebots-PDF anzuzeigen."
     },
     "bills": {
       "title": "Rechnungen",
-      "body": "Rechnungen und Zahlungshistorie zu deinen Shoots findest du hier. Wir senden eine E-Mail, sobald es live ist."
+      "subtitle": "Alle Rechnungen, die dir dein Fotograf gesendet hat. Klicke auf „PDF anzeigen“, um sie herunterzuladen.",
+      "empty": "Noch keine Rechnungen.",
+      "disabled": "Diese Funktion ist für dein Konto aktuell deaktiviert. Bitte wende dich an deinen Fotografen, falls du hier Rechnungen erwartest.",
+      "loadError": "Rechnungen konnten nicht geladen werden.",
+      "viewPdf": "PDF anzeigen",
+      "popupBlocked": "Erlaube Pop-ups für diese Seite, um das Rechnungs-PDF anzuzeigen.",
+      "field": {
+        "issueDate": "Ausgestellt",
+        "dueDate": "Fällig",
+        "paidAt": "Bezahlt",
+        "outstanding": "Offen",
+        "lateFee": "Mahngebühr"
+      },
+      "filter": {
+        "outstanding": "Offen (gesendet + überfällig)"
+      }
+    },
+    "sort": {
+      "label": "Sortieren",
+      "newest": "Neueste zuerst",
+      "oldest": "Älteste zuerst",
+      "priceDesc": "Preis (hoch nach niedrig)",
+      "priceAsc": "Preis (niedrig nach hoch)"
+    },
+    "filter": {
+      "label": "Filter",
+      "all": "Alle",
+      "countAll": "{{count}} insgesamt",
+      "countFiltered": "{{visible}} von {{total}}"
     },
     "profile": {
       "title": "Kundenprofil",
@@ -2984,6 +3019,32 @@
     },
     "subnav": {
       "accounts": "Konten"
+    }
+  },
+  "quotes": {
+    "status": {
+      "draft": "Entwurf",
+      "sent": "Gesendet",
+      "accepted": "Angenommen",
+      "declined": "Abgelehnt",
+      "expired": "Abgelaufen",
+      "converted": "Umgewandelt"
+    }
+  },
+  "bills": {
+    "status": {
+      "scheduled": "Geplant",
+      "sent": "Gesendet",
+      "paid": "Bezahlt",
+      "overdue": "Überfällig",
+      "cancelled": "Storniert"
+    },
+    "field": {
+      "number": "Rechnung",
+      "status": "Status",
+      "dueDate": "Fällig",
+      "total": "Gesamt",
+      "sourceQuote": "Vom Angebot"
     }
   }
 }
