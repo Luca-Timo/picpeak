@@ -29,7 +29,7 @@ const respondLimiter = rateLimit({
   windowMs: 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false,
 });
 
-function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosText, tosUrl) {
+function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosText, tosUrl, brandingLogoUrl) {
   return {
     quoteNumber: quote.quote_number,
     status: quote.status,
@@ -87,17 +87,23 @@ function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosTe
       email: profile.email,
       website: profile.website,
       footerLine: profile.footer_line,
-      // Expose the logo as a public URL — frontend renders it at the
-      // top of the response page so the customer sees the same
-      // letterhead as the PDF. The branding upload route writes
-      // under storage/uploads/, which is served by app.use('/uploads',
-      // …) in server.js. We accept either a bare filename or a path
-      // and normalise it onto /uploads/.
-      logoUrl: profile.logo_path
-        ? (profile.logo_path.startsWith('/') || /^https?:\/\//i.test(profile.logo_path)
-            ? profile.logo_path
-            : `/uploads/${profile.logo_path.replace(/^uploads\//, '')}`)
-        : null,
+      // Expose the logo as a public URL — frontend renders it at
+      // the top of the response page so the customer sees the same
+      // letterhead as the PDF. Resolution order:
+      //   1. business_profile.logo_path (dedicated PDF/CRM logo)
+      //   2. app_settings.branding_logo_url (the global Settings →
+      //      Branding logo, passed in as `brandingLogoUrl`)
+      //
+      // Both paths are served by app.use('/uploads', …) in
+      // server.js; bare filenames are normalised onto /uploads/.
+      logoUrl: (() => {
+        const raw = (profile.logo_path && String(profile.logo_path).trim())
+          || (brandingLogoUrl && String(brandingLogoUrl).trim())
+          || null;
+        if (!raw) return null;
+        if (raw.startsWith('/') || /^https?:\/\//i.test(raw)) return raw;
+        return `/uploads/${raw.replace(/^uploads\//, '')}`;
+      })(),
     } : null,
   };
 }
@@ -126,9 +132,13 @@ router.get(
     const tosRequired = await getAppSetting('crm_quotes_tos_required', false);
     const tosText = await getAppSetting('crm_quotes_tos_text', '');
     const tosUrl = await getAppSetting('crm_quotes_tos_url', '');
+    // Fallback logo when business_profile has no dedicated CRM logo
+    // — admins typically upload one logo via Settings → Branding and
+    // expect it to flow through the customer-facing pages too.
+    const brandingLogoUrl = await getAppSetting('branding_logo_url', null);
 
     return successResponse(res, {
-      quote: publicQuoteView(data.quote, data.lineItems, customer, profile, tosRequired, tosText, tosUrl),
+      quote: publicQuoteView(data.quote, data.lineItems, customer, profile, tosRequired, tosText, tosUrl, brandingLogoUrl),
     });
   })
 );
