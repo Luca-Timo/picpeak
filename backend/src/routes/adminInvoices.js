@@ -112,6 +112,9 @@ function transformInvoice(i) {
     pdfPath: i.pdf_path,
     businessBankAccountId: i.business_bank_account_id,
     paymentTermTemplateId: i.payment_term_template_id || null,
+    /** Id of the invoice this one supersedes (migration 114). Set
+     *  when this row was created via Cancel & reissue. */
+    supersedesInvoiceId: i.supersedes_invoice_id || null,
     // `isImported` surfaces the historical-PDF flag to the admin UI
     // so the list / detail page can hide line-item editing on rows
     // that originated from a different billing system (migration 111).
@@ -553,6 +556,22 @@ router.post(
       req.admin.id
     );
     return successResponse(res, result, 200, 'Reminder sent');
+  })
+);
+
+// Cancel + reissue — atomically cancels the existing invoice and
+// creates a fresh scheduled duplicate with a new sequential number,
+// linked via supersedes_invoice_id (migration 114). The PDF
+// renderer stamps "Bezug: Ersetzt Rechnung R-XXXX vom DATE" on the
+// new invoice so the customer + auditors can trace the chain.
+router.post(
+  '/:id/reissue',
+  requirePermission('bills.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await invoiceService.reissueInvoice(parseInt(req.params.id, 10), req.admin.id);
+    return successResponse(res, result, 201, 'Invoice reissued');
   })
 );
 

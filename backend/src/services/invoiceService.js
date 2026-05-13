@@ -748,6 +748,18 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       // PDF renderer draws "Bezug: Angebot Q-..." under the title
       // when set. Empty/null suppresses the line (standalone invoice).
       sourceQuoteNumber: sourceQuote?.quote_number || null,
+      // When this invoice supersedes a previous one (migration 114 —
+      // cancel + reissue workflow), the renderer stamps a second
+      // reference line: "Bezug: Ersetzt Rechnung R-XXXX vom DATE".
+      supersedesInvoice: await (async () => {
+        if (!invoice.supersedes_invoice_id) return null;
+        const prior = await db('invoices')
+          .where({ id: invoice.supersedes_invoice_id })
+          .select('invoice_number', 'issue_date').first();
+        return prior
+          ? { number: prior.invoice_number, issueDate: prior.issue_date }
+          : null;
+      })(),
     },
   };
 }
@@ -921,6 +933,95 @@ async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, not
       invoice.event_id || null, `admin:${adminId}`); } catch (_) {}
 
     return { paidTotalMinor: total, status: isFull ? 'paid' : invoice.status };
+  });
+}
+
+/**
+ * Cancel + reissue an invoice — the legally-correct alternative to
+ * post-send editing. Atomic:
+ *   1. The original (if not already cancelled) flips to status
+ *      'cancelled'
+ *   2. A new `scheduled` invoice is created with a fresh sequential
+ *      number, copying line items + customer + totals + payment
+ *      terms + bank + QR + everything the renderer needs
+ *   3. The new row's `supersedes_invoice_id` points at the original
+ *      so the PDF renderer can stamp "Bezug: Ersetzt Rechnung X" and
+ *      auditors can trace the chain
+ *
+ * Refuses to act on `scheduled` rows — those are still editable
+ * via Edit; reissuing them creates a confusing duplicate. Allows
+ * `sent` / `overdue` / `paid` / `cancelled` (caller's
+ * responsibility to know whether reissuing a paid invoice makes
+ * sense — usually that's a credit-note scenario instead).
+ */
+async function reissueInvoice(id, adminId) {
+  const original = await db('invoices').where({ id }).first();
+  if (!original) throw new AppError('Invoice not found', 404);
+  if (original.status === 'scheduled') {
+    throw new AppError(
+      'This invoice has not been sent yet — use Edit instead of Cancel & reissue.',
+      409,
+      'USE_EDIT_INSTEAD',
+    );
+  }
+
+  return await db.transaction(async (trx) => {
+    // 1. Cancel the original (idempotent on already-cancelled rows).
+    if (original.status !== 'cancelled') {
+      await trx('invoices').where({ id }).update({
+        status: 'cancelled',
+        updated_at: new Date(),
+      });
+      try {
+        await logActivity('invoice_cancelled_for_reissue', { invoiceId: id },
+          original.event_id || null, `admin:${adminId}`);
+      } catch (_) {}
+    }
+
+    // 2. Snapshot the line items so the duplicate carries identical
+    //    rows. We re-insert via createInvoice rather than direct DB
+    //    copies so the totals get re-computed authoritatively (any
+    //    rounding drift is recalculated from line items, matching
+    //    the create flow).
+    const lineItems = await trx('invoice_line_items').where({ invoice_id: id }).orderBy('position', 'asc');
+    const liPayload = lineItems.map((li) => ({
+      position: li.position,
+      quantity: Number(li.quantity),
+      description: li.description,
+      unit_price_minor: Number(li.unit_price_minor),
+      discount_percent: Number(li.discount_percent || 0),
+    }));
+
+    const newId = await createInvoice({
+      customerAccountId: original.customer_account_id,
+      sourceQuoteId: original.source_quote_id || null,
+      eventId: original.event_id || null,
+      language: original.language,
+      currency: original.currency,
+      vatRate: original.vat_rate,
+      shippingAmountMinor: original.shipping_amount_minor,
+      ccPdfEmail: original.cc_pdf_email,
+      businessBankAccountId: original.business_bank_account_id,
+      qrFormat: original.qr_format,
+      paymentTermTemplateId: original.payment_term_template_id,
+      // No installment metadata — reissue defaults to a single
+      // standalone invoice. If the admin needs the same split they
+      // can run the original conversion again from the quote.
+      lineItems: liPayload,
+    }, adminId, trx);
+
+    // 3. Link the new row to the cancelled original.
+    await trx('invoices').where({ id: newId }).update({
+      supersedes_invoice_id: id,
+      updated_at: new Date(),
+    });
+
+    try {
+      await logActivity('invoice_reissued', { originalInvoiceId: id, newInvoiceId: newId },
+        original.event_id || null, `admin:${adminId}`);
+    } catch (_) {}
+
+    return { id: newId, supersedes: id };
   });
 }
 
@@ -1154,6 +1255,7 @@ module.exports = {
   markPaid,
   cancelInvoice,
   releaseForDelivery,
+  reissueInvoice,
   renderInvoicePdfBuffer,
   renderInvoicePdfFromPayload,
   runScheduledTasks,

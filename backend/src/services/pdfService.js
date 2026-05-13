@@ -1165,6 +1165,22 @@ function renderDocument(type, context) {
         y = doc.y + 6;
         doc.fillColor('#000');
       }
+      // Cancel + reissue trail (migration 114) — when this invoice
+      // supersedes an earlier one, surface "Bezug: Ersetzt Rechnung
+      // R-XXXX vom DATE" so the customer (and auditors) can trace
+      // the chain. Rendered in the same grey-666 small-print style
+      // as the quote-source reference above.
+      if (type === 'invoice' && ctx.doc.supersedesInvoice) {
+        const { number, issueDate } = ctx.doc.supersedesInvoice;
+        doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#666');
+        const datePart = issueDate ? ` ${t(ctx.locale, 'reference_dated', { date: formatDate(issueDate, ctx.dateFormat) })}` : '';
+        doc.text(
+          `${t(ctx.locale, 'reference_label')}: ${t(ctx.locale, 'reference_replaces')} ${t(ctx.locale, 'invoice_title')} ${number}${datePart}`,
+          leftX, y, { width: PAGE.contentWidth }
+        );
+        y = doc.y + 6;
+        doc.fillColor('#000');
+      }
 
       // ---- salutation + lead-in ------------------------------------
       // Personalised greeting when the customer record has an
