@@ -33,7 +33,10 @@ const { t } = require('./pdf-i18n');
 // 1mm = 2.834645669pt.
 const MM = 2.834645669;
 const PAGE = {
-  // A4 ISO 216.
+  // A4 ISO 216 — portrait. Quote/invoice rendering is hard-wired to this
+  // orientation (DIN 5008 address window only makes sense in portrait).
+  // Landscape callers (tax report, future wide-table exports) read their
+  // metrics from getPageMetrics('landscape') instead.
   width: 595.28,
   height: 841.89,
   marginTop: 40,
@@ -42,6 +45,28 @@ const PAGE = {
   marginRight: 40,
   contentWidth: 595.28 - 80, // 515.28
 };
+
+// A4 landscape — width and height swapped. Same 40pt margins on all
+// sides, so contentWidth grows from 515pt to 762pt — enough horizontal
+// room for the tax-report table's 9 columns without column squashing.
+const PAGE_LANDSCAPE = {
+  width: 841.89,
+  height: 595.28,
+  marginTop: 40,
+  marginBottom: 40,
+  marginLeft: 40,
+  marginRight: 40,
+  contentWidth: 841.89 - 80, // 761.89
+};
+
+/**
+ * Page metrics for the requested orientation. Default 'portrait' keeps
+ * every existing caller behaving identically. Used by createBaseDocument
+ * and by any renderer that needs to size its content against the page.
+ */
+function getPageMetrics(orientation) {
+  return orientation === 'landscape' ? PAGE_LANDSCAPE : PAGE;
+}
 
 // DIN 5008 Form B address window — the standard window position for
 // envelopes commonly used in DACH (B5 / C5-6 / DL with window). The
@@ -1045,6 +1070,72 @@ async function appendEpcQr(doc, ctx) {
 }
 
 /**
+ * Build a configured PDFDocument with our font conventions and return
+ * it alongside its page metrics. Used by both the quote/invoice
+ * renderer below (portrait, DIN 5008) and the tax-report renderer
+ * (landscape, wide table). Keeps font registration + page sizing in
+ * one place so future PDF features stay consistent.
+ *
+ *   options = {
+ *     orientation: 'portrait' | 'landscape' (default 'portrait'),
+ *     issuer: { pdfFontTtfPath? } — used for optional custom-font registration,
+ *     info:   { Title?, Author? } — PDF metadata (filename in Chrome viewer),
+ *   }
+ *
+ * Returns: { doc, page, fonts } where
+ *   doc   — pdfkit PDFDocument instance, ready to write to
+ *   page  — page metrics for the chosen orientation (see getPageMetrics)
+ *   fonts — { body, bold } logical font names; the caller passes these
+ *           to doc.font(...) calls and they resolve to either the
+ *           built-in Helvetica family or the admin's custom TTF.
+ *
+ * The function does NOT pipe the document to a stream — the caller
+ * decides whether to buffer (`doc.on('data', ...)`) or stream straight
+ * to an HTTP response. Mirrors the pattern the existing renderDocument
+ * already uses internally.
+ */
+function createBaseDocument(options = {}) {
+  const orientation = options.orientation === 'landscape' ? 'landscape' : 'portrait';
+  const page = getPageMetrics(orientation);
+  const doc = new PDFDocument({
+    size: 'A4',
+    layout: orientation,
+    bufferPages: true,
+    margins: {
+      top: page.marginTop, bottom: page.marginBottom,
+      left: page.marginLeft, right: page.marginRight,
+    },
+    info: options.info || {},
+  });
+
+  // Same font-registration block as renderDocument below — kept in
+  // sync intentionally so quote/invoice/tax-report PDFs all honour the
+  // admin's uploaded TTF (business_profile.pdf_font_ttf_path).
+  doc._fonts = { body: FONT_BODY, bold: FONT_BOLD };
+  const issuer = options.issuer || {};
+  if (issuer.pdfFontTtfPath) {
+    try {
+      const path = require('path');
+      const fs = require('fs');
+      const raw = issuer.pdfFontTtfPath;
+      const candidates = [
+        path.isAbsolute(raw) ? raw : null,
+        path.join(process.cwd(), 'storage', raw.replace(/^\/+/, '')),
+        path.join(process.cwd(), 'storage', 'fonts', path.basename(raw)),
+      ].filter(Boolean);
+      const found = candidates.find((p) => { try { return fs.existsSync(p); } catch { return false; } });
+      if (found && /\.(ttf|otf)$/i.test(found)) {
+        doc.registerFont(CUSTOM_BODY, found);
+        doc.registerFont(CUSTOM_BOLD, found);
+        doc._fonts = { body: CUSTOM_BODY, bold: CUSTOM_BOLD };
+      }
+    } catch { /* fall back silently to Helvetica */ }
+  }
+
+  return { doc, page, fonts: doc._fonts };
+}
+
+/**
  * The main renderer. `type` is 'quote' | 'invoice'. Returns Buffer.
  */
 function renderDocument(type, context) {
@@ -1415,6 +1506,12 @@ async function renderInvoiceToBuffer(context) {
 module.exports = {
   renderQuoteToBuffer,
   renderInvoiceToBuffer,
+  // Building blocks shared with other PDF features (tax report etc.) —
+  // they all run through createBaseDocument so the font + orientation
+  // story stays consistent.
+  createBaseDocument,
+  getPageMetrics,
+  drawIssuerBlock,
   // Exposed for unit tests + advanced callers.
   _internal: { formatMinor, formatDate, t },
 };
