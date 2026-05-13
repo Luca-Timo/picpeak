@@ -1263,6 +1263,19 @@ async function queuePaymentCheckEmail(invoiceId, { skipThrottle = false } = {}) 
   const buildUrl = (action) =>
     `${baseUrl.replace(/\/$/, '')}/payment-check/${token}?action=${action}`;
 
+  // Outstanding = gross total + late fee − already paid. The admin
+  // is being asked about what's STILL OWED, not the original gross
+  // figure — so surface outstanding + paid in the email context.
+  // Partial payments logged earlier (e.g. via a previous admin
+  // payment-check click) are reflected, so the admin doesn't get
+  // asked "did the customer pay CHF 234?" when they already paid
+  // CHF 134 of it.
+  const paidMinor = Number(invoice.paid_amount_minor || 0);
+  const lateFeeAlreadyMinor = Number(invoice.late_fee_amount_minor || 0);
+  const outstandingMinor = Math.max(0,
+    Number(invoice.total_amount_minor || 0) + lateFeeAlreadyMinor - paidMinor);
+  const hasPartial = paidMinor > 0;
+
   await emailProcessor.queueEmail(invoice.event_id || null, adminContact.email,
     'invoice_payment_check_admin', {
       invoice_number: invoice.invoice_number,
@@ -1273,6 +1286,9 @@ async function queuePaymentCheckEmail(invoiceId, { skipThrottle = false } = {}) 
       event_name: '',
       due_date: formatShortDate(invoice.due_date),
       total_amount: formatMajor(invoice.total_amount_minor, invoice.currency, locale),
+      paid_amount: formatMajor(paidMinor, invoice.currency, locale),
+      outstanding_amount: formatMajor(outstandingMinor, invoice.currency, locale),
+      has_partial_payment: hasPartial,
       paid_url:    buildUrl('paid_full'),
       partial_url: buildUrl('partial'),
       unpaid_url:  buildUrl('unpaid'),
