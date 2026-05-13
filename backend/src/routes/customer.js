@@ -387,6 +387,13 @@ router.get('/quotes', customerAuth, async (req, res) => {
     }
     const rows = await dbi('quotes')
       .where({ customer_account_id: req.customer.id })
+      // Hide drafts — they're admin scratch work; nothing has been
+      // sent to the customer yet. Mirrors the invoice list above
+      // which suppresses 'scheduled' + 'cancelled' for the same
+      // reason. Customers should only see quotes the admin has
+      // actually issued (sent / accepted / declined / expired /
+      // converted).
+      .whereNotIn('status', ['draft'])
       .orderBy('issue_date', 'desc')
       .orderBy('id', 'desc')
       .select(
