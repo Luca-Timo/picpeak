@@ -23,19 +23,29 @@ const { db } = require('../database/db');
 
 const router = express.Router();
 
-async function requireBillsFlag(req, res, next) {
+// The tax report has its own dedicated flag (taxReport) — independent
+// from `bills` so admins can leave it off until they actually need to
+// run the export. The frontend mirrors the dependency rule (bills off
+// → taxReport off) but we re-check both server-side for defence in
+// depth.
+async function requireTaxReportFlag(req, res, next) {
   try {
-    const row = await db('feature_flags').where({ key: 'bills' }).first();
-    const enabled = row && (row.value === true || row.value === 1 || row.value === '1');
-    if (!enabled) {
+    const rows = await db('feature_flags').whereIn('key', ['bills', 'taxReport']).select('key', 'value');
+    const isOn = (row) => row && (row.value === true || row.value === 1 || row.value === '1');
+    const bills      = isOn(rows.find((r) => r.key === 'bills'));
+    const taxReport  = isOn(rows.find((r) => r.key === 'taxReport'));
+    if (!bills) {
       return res.status(403).json({ error: 'Bills feature is disabled', code: 'BILLS_DISABLED' });
+    }
+    if (!taxReport) {
+      return res.status(403).json({ error: 'Tax report feature is disabled', code: 'TAX_REPORT_DISABLED' });
     }
     next();
   } catch (err) { next(err); }
 }
 
 router.use(adminAuth);
-router.use(requireBillsFlag);
+router.use(requireTaxReportFlag);
 
 // Shared validators for from/to/currency. ISO date (YYYY-MM-DD) and
 // ISO 4217 alpha-3 currency are enforced — anything else is rejected

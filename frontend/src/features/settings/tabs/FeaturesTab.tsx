@@ -14,6 +14,7 @@ import {
   UserCog,
   Briefcase,
   Wrench,
+  Calculator,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card } from '../../../components/common';
@@ -227,6 +228,25 @@ export const FeaturesTab: React.FC = () => {
             sidebarLabel={t('settings.features.bills.sidebar', 'Bills')}
             enabled={staged.bills}
             onToggle={(next) => setFlag('bills', next)}
+          />
+
+          <FeatureCard
+            icon={Calculator}
+            title={t('settings.features.taxReport.title', 'Tax report')}
+            description={t(
+              'settings.features.taxReport.description',
+              'Period-scoped revenue list with net + VAT breakdown grouped by VAT rate. Export as PDF (landscape, company letterhead) or CSV for your accountant. Cancelled invoices stay visible for a gap-free audit trail but are excluded from totals.',
+            )}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarLabel={t('settings.features.taxReport.sidebar', 'Tax')}
+            enabled={staged.taxReport}
+            onToggle={(next) => setFlag('taxReport', next)}
+            disabled={!staged.bills}
+            lockedReason={!staged.bills ? t(
+              'settings.features.taxReport.requiresBills',
+              'Enable Bills first — the tax report reads from your invoices.',
+            ) : undefined}
           />
         </Section>
 
