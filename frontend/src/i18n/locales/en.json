@@ -3216,6 +3216,7 @@
     },
     "status": {
       "scheduled": "Scheduled",
+      "pending_delivery": "Awaiting delivery",
       "sent": "Sent",
       "paid": "Paid",
       "overdue": "Overdue",

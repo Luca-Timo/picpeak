@@ -367,6 +367,16 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
       scheduledSendAt = snapToNextBillingCycle(scheduledSendAt, customer.billing_cadence, customer.billing_cycle_day);
     }
 
+    // `after_delivery` invoices wait for the admin to confirm photos
+    // have actually been delivered before they fire — we can't infer
+    // that automatically from a date. Mark them `pending_delivery`
+    // with no scheduled_send_at; the scheduler only picks rows in
+    // status `scheduled`, so they sit idle until the admin clicks
+    // "Release for delivery" on the invoice detail page.
+    const isDeliveryTrigger = inst.trigger === 'after_delivery';
+    const rowStatus = isDeliveryTrigger ? 'pending_delivery' : 'scheduled';
+    const rowScheduledSendAt = isDeliveryTrigger ? null : scheduledSendAt;
+
     const invoiceNumber = await nextInvoiceNumber();
     const dueDate = computeDueDate(scheduledSendAt, 30).toISOString().slice(0, 10);
 
@@ -383,8 +393,8 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
       installment_total: total,
       installment_label: inst.label || `Installment ${i + 1}/${total}`,
       installment_trigger: inst.trigger,
-      status: 'scheduled',
-      scheduled_send_at: scheduledSendAt,
+      status: rowStatus,
+      scheduled_send_at: rowScheduledSendAt,
       net_amount_minor: netSlice,
       vat_rate: ensureNumber(totals.vatRate, 0),
       vat_amount_minor: vatSlice,
@@ -865,6 +875,40 @@ async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, not
   });
 }
 
+/**
+ * Release a `pending_delivery` invoice for sending. Used when the
+ * photographer has actually delivered the photos and is ready to
+ * collect the final installment — flips the status to `scheduled`
+ * with `scheduled_send_at = now`, then immediately calls sendInvoice
+ * so the email goes out without waiting for the next scheduler tick.
+ *
+ * Refuses to act on rows that aren't pending — admins should use
+ * sendInvoice / sendReminder for the normal `scheduled`/`sent` flow.
+ */
+async function releaseForDelivery(id, adminId) {
+  const invoice = await db('invoices').where({ id }).first();
+  if (!invoice) throw new AppError('Invoice not found', 404);
+  if (invoice.status !== 'pending_delivery') {
+    throw new AppError(
+      `Invoice is not awaiting delivery (status: '${invoice.status}')`,
+      409,
+      'NOT_PENDING_DELIVERY',
+    );
+  }
+  const now = new Date();
+  await db('invoices').where({ id }).update({
+    status: 'scheduled',
+    scheduled_send_at: now,
+    updated_at: now,
+  });
+  try {
+    await logActivity('invoice_released_for_delivery', { invoiceId: id }, invoice.event_id || null, `admin:${adminId}`);
+  } catch (_) {}
+  // Fire immediately rather than waiting for the next scheduler
+  // tick — admin clicked the button because they want it out now.
+  return await sendInvoice(id, adminId);
+}
+
 async function cancelInvoice(id, adminId) {
   const invoice = await db('invoices').where({ id }).first();
   if (!invoice) throw new AppError('Invoice not found', 404);
@@ -1060,6 +1104,7 @@ module.exports = {
   sendReminder,
   markPaid,
   cancelInvoice,
+  releaseForDelivery,
   renderInvoicePdfBuffer,
   renderInvoicePdfFromPayload,
   runScheduledTasks,

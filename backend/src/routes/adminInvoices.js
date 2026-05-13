@@ -528,6 +528,19 @@ router.post(
   })
 );
 
+// Release a pending_delivery invoice — photographer has confirmed
+// delivery and wants the final installment to fire now.
+router.post(
+  '/:id/release-for-delivery',
+  requirePermission('bills.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await invoiceService.releaseForDelivery(parseInt(req.params.id, 10), req.admin.id);
+    return successResponse(res, result, 200, 'Delivery invoice released');
+  })
+);
+
 router.post(
   '/:id/cancel',
   requirePermission('bills.manage'),

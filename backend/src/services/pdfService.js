@@ -492,9 +492,16 @@ function drawLineItems(doc, ctx) {
   // header "Anzahl" (6 chars at 10pt + padding ≈ 50pt) doesn't wrap
   // across two lines. Width borrowed from the description column,
   // which has plenty of slack.
+  // Column order matches the public quote response webpage:
+  //   #  /  Description  /  Qty  /  [Discount]  /  Unit  /  Total
+  // The maintainer's call — description first reads more like a
+  // line-by-line list, which is how the web view presents it.
+  // Widths sum to PAGE.contentWidth (515.28); description takes the
+  // widest column, qty + numeric columns stay narrow but right-
+  // aligned.
   const widths = showDiscount
-    ? [30, 55, 225, 50, 75, 80]
-    : [30, 55, 275, 70, 85];
+    ? [30, 225, 55, 50, 75, 80]
+    : [30, 275, 55, 70, 85];
 
   // Per-row padding — tight rows. 3pt top + 3pt bottom keeps each
   // line item compact, with just enough vertical breathing room
@@ -526,16 +533,16 @@ function drawLineItems(doc, ctx) {
     columns: showDiscount
       ? [
           { text: String(idx + 1),                                                  width: widths[0], align: 'left'  },
-          { text: stripTrailingZeros(li.quantity),                                  width: widths[1], align: 'left'  },
-          { text: li.description,                                                   width: widths[2], align: 'left'  },
+          { text: li.description,                                                   width: widths[1], align: 'left'  },
+          { text: stripTrailingZeros(li.quantity),                                  width: widths[2], align: 'right' },
           { text: `${stripTrailingZeros(li.discountPercent)}%`,                     width: widths[3], align: 'right' },
           { text: formatMinor(li.unitPriceMinor, currency, intlLocale),             width: widths[4], align: 'right' },
           { text: formatMinor(li.lineTotalMinor, currency, intlLocale),             width: widths[5], align: 'right' },
         ]
       : [
           { text: String(idx + 1),                                                  width: widths[0], align: 'left'  },
-          { text: stripTrailingZeros(li.quantity),                                  width: widths[1], align: 'left'  },
-          { text: li.description,                                                   width: widths[2], align: 'left'  },
+          { text: li.description,                                                   width: widths[1], align: 'left'  },
+          { text: stripTrailingZeros(li.quantity),                                  width: widths[2], align: 'right' },
           { text: formatMinor(li.unitPriceMinor, currency, intlLocale),             width: widths[3], align: 'right' },
           { text: formatMinor(li.lineTotalMinor, currency, intlLocale),             width: widths[4], align: 'right' },
         ],
@@ -553,16 +560,16 @@ function drawLineItems(doc, ctx) {
     columns: showDiscount
       ? [
           { text: labels.pos,   width: widths[0], align: 'left'  },
-          { text: labels.qty,   width: widths[1], align: 'left'  },
-          { text: labels.desc,  width: widths[2], align: 'left'  },
+          { text: labels.desc,  width: widths[1], align: 'left'  },
+          { text: labels.qty,   width: widths[2], align: 'right' },
           { text: labels.disc,  width: widths[3], align: 'right' },
           { text: labels.unit,  width: widths[4], align: 'right' },
           { text: labels.total, width: widths[5], align: 'right' },
         ]
       : [
           { text: labels.pos,   width: widths[0], align: 'left'  },
-          { text: labels.qty,   width: widths[1], align: 'left'  },
-          { text: labels.desc,  width: widths[2], align: 'left'  },
+          { text: labels.desc,  width: widths[1], align: 'left'  },
+          { text: labels.qty,   width: widths[2], align: 'right' },
           { text: labels.unit,  width: widths[3], align: 'right' },
           { text: labels.total, width: widths[4], align: 'right' },
         ],

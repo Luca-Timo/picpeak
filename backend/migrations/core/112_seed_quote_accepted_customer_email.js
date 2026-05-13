@@ -32,13 +32,13 @@ const TEMPLATE = {
     body_html: `<h2>Thank you</h2>
 <p>Dear {{customer_name}},</p>
 <p>This confirms that quote <strong>{{quote_number}}</strong>{{#if event_name}} for "{{event_name}}"{{/if}} has been accepted. Total: <strong>{{total_amount}}</strong>.</p>
-{{#if accepted_on_behalf}}<p style="font-size: 13px; color: #666;">This acceptance was recorded on your behalf by your photographer. If anything is unclear, please reply directly to this email.</p>{{/if}}
+{{#if accepted_on_behalf}}<p style="font-size: 13px; color: #666;">This acceptance was recorded on your behalf by your photographer.</p>{{/if}}
 <p>We'll be in touch with next steps shortly.</p>`,
     body_text: `Dear {{customer_name}},
 
 This confirms that quote {{quote_number}}{{#if event_name}} for "{{event_name}}"{{/if}} has been accepted. Total: {{total_amount}}.
 {{#if accepted_on_behalf}}
-This acceptance was recorded on your behalf by your photographer. If anything is unclear, please reply directly to this email.
+This acceptance was recorded on your behalf by your photographer.
 {{/if}}
 We'll be in touch with next steps shortly.`,
   },
@@ -47,13 +47,13 @@ We'll be in touch with next steps shortly.`,
     body_html: `<h2>Vielen Dank</h2>
 <p>Sehr geehrte/r {{customer_name}},</p>
 <p>hiermit bestätigen wir, dass das Angebot <strong>{{quote_number}}</strong>{{#if event_name}} für „{{event_name}}"{{/if}} angenommen wurde. Gesamtbetrag: <strong>{{total_amount}}</strong>.</p>
-{{#if accepted_on_behalf}}<p style="font-size: 13px; color: #666;">Diese Bestätigung wurde stellvertretend durch Ihren Fotografen erfasst. Falls etwas unklar ist, antworten Sie bitte direkt auf diese E-Mail.</p>{{/if}}
+{{#if accepted_on_behalf}}<p style="font-size: 13px; color: #666;">Diese Bestätigung wurde stellvertretend durch Ihren Fotografen erfasst.</p>{{/if}}
 <p>Wir melden uns in Kürze mit den nächsten Schritten.</p>`,
     body_text: `Sehr geehrte/r {{customer_name}},
 
 hiermit bestätigen wir, dass das Angebot {{quote_number}}{{#if event_name}} für "{{event_name}}"{{/if}} angenommen wurde. Gesamtbetrag: {{total_amount}}.
 {{#if accepted_on_behalf}}
-Diese Bestätigung wurde stellvertretend durch Ihren Fotografen erfasst. Falls etwas unklar ist, antworten Sie bitte direkt auf diese E-Mail.
+Diese Bestätigung wurde stellvertretend durch Ihren Fotografen erfasst.
 {{/if}}
 Wir melden uns in Kürze mit den nächsten Schritten.`,
   },
