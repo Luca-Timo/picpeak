@@ -935,6 +935,50 @@ async function adminAcceptQuote(id, adminId) {
     await logActivity('quote_accepted_by_admin', { quoteId: id }, null, `admin:${adminId}`);
   } catch (_) {}
 
+  // ---- customer confirmation email -------------------------------
+  // Renders the quote PDF + queues a "quote accepted — on your
+  // behalf" email so the customer has a paper trail of what they
+  // just verbally agreed to on the phone. Failures here don't roll
+  // back the acceptance — the DB row is already updated and the
+  // admin can re-send via the resend flow if SMTP is down.
+  try {
+    const customer = await db('customer_accounts').where({ id: quote.customer_account_id }).first();
+    if (customer?.email) {
+      const fresh = await db('quotes').where({ id }).first();
+      const lineItems = await db('quote_line_items').where({ quote_id: id }).orderBy('position', 'asc');
+      const ctx = await buildRenderContext(fresh, lineItems);
+      const buffer = await pdfService.renderQuoteToBuffer(ctx);
+      // Persist PDF snapshot under the same convention sendQuote uses
+      // — keeps every issued PDF on disk for the audit trail.
+      const pdfPath = await persistDocPdf('quote', fresh, buffer);
+
+      const formatMoney = (minor, currency, locale) =>
+        new Intl.NumberFormat(locale === 'de' ? 'de-CH' : 'en-GB', {
+          style: 'currency', currency: (currency || 'CHF').toUpperCase(),
+        }).format(Number(minor || 0) / 100);
+
+      const lang = customer.preferred_language || ctx.locale || 'de';
+      await emailProcessor.queueEmail(null, customer.email, 'quote_accepted_customer', {
+        quote_number: fresh.quote_number,
+        customer_name: customer.display_name
+          || [customer.first_name, customer.last_name].filter(Boolean).join(' ')
+          || customer.email.split('@')[0],
+        event_name: fresh.event_name || '',
+        total_amount: formatMoney(fresh.total_amount_minor, fresh.currency, lang),
+        accepted_on_behalf: true,
+        attachments: [{
+          filename: `${fresh.quote_number}.pdf`,
+          contentPath: pdfPath,
+          contentType: 'application/pdf',
+        }],
+      });
+    }
+  } catch (err) {
+    // Email failure is not fatal — log + move on. The acceptance
+    // itself is recorded; the admin can use Resend later.
+    logger.warn('quote_accepted_customer email queue failed', { quoteId: id, err: err.message });
+  }
+
   return { status: 'accepted', lockedAt: responseLockedAt };
 }
 
