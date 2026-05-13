@@ -2769,11 +2769,46 @@
     },
     "quotes": {
       "title": "Quotes",
-      "body": "Review and accept quotes for upcoming shoots in one place. We're still building this — for now, your photographer will keep sending quotes the usual way."
+      "subtitle": "Every quote your photographer has sent you. Click an open quote to accept or decline.",
+      "empty": "No quotes yet.",
+      "disabled": "This feature is currently disabled for your account. Please contact your photographer if you expected to see quotes here.",
+      "loadError": "Could not load quotes.",
+      "noEventName": "—",
+      "openToRespond": "Open to respond",
+      "viewPdf": "View PDF",
+      "popupBlocked": "Allow pop-ups for this site to view the quote PDF."
     },
     "bills": {
-      "title": "Bills",
-      "body": "Invoices and payment history for your sessions will be available here. We'll send you an email when this is live."
+      "title": "Invoices",
+      "subtitle": "Every invoice your photographer has sent you. Click \"View PDF\" to download.",
+      "empty": "No invoices yet.",
+      "disabled": "This feature is currently disabled for your account. Please contact your photographer if you expected to see invoices here.",
+      "loadError": "Could not load invoices.",
+      "viewPdf": "View PDF",
+      "popupBlocked": "Allow pop-ups for this site to view the invoice PDF.",
+      "field": {
+        "issueDate": "Issued",
+        "dueDate": "Due",
+        "paidAt": "Paid",
+        "outstanding": "Outstanding",
+        "lateFee": "Late fee"
+      },
+      "filter": {
+        "outstanding": "Outstanding (sent + overdue)"
+      }
+    },
+    "sort": {
+      "label": "Sort",
+      "newest": "Newest first",
+      "oldest": "Oldest first",
+      "priceDesc": "Price (high to low)",
+      "priceAsc": "Price (low to high)"
+    },
+    "filter": {
+      "label": "Filter",
+      "all": "All",
+      "countAll": "{{count}} total",
+      "countFiltered": "{{visible}} of {{total}}"
     },
     "profile": {
       "title": "Customer profile",
