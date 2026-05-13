@@ -210,3 +210,33 @@ export const billsService = {
     return data.data || data;
   },
 };
+
+export interface CrmOverviewStats {
+  currency: string;
+  quotes: {
+    draft: number; sent: number; accepted: number;
+    declined: number; expired: number; converted: number;
+  };
+  invoices: {
+    scheduled: number; sent: number; paid: number;
+    overdue: number; cancelled: number;
+  };
+  revenue: {
+    monthMinor: number;
+    quarterMinor: number;
+    yearMinor: number;
+  };
+  outstanding: {
+    totalMinor: number;
+    invoiceCount: number;
+  };
+  generatedAt: string;
+}
+
+/** CRM headline metrics — quote / invoice counts, rolling revenue
+ *  windows (30 / 90 / 365 days), outstanding payment total. Drives
+ *  the /admin/clients/overview tab. */
+export async function fetchCrmOverview(): Promise<CrmOverviewStats> {
+  const { data } = await api.get('/admin/dashboard/crm-stats');
+  return data;
+}
