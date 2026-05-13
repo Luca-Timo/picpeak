@@ -1003,10 +1003,10 @@ function renderDocument(type, context) {
       // continuation page.
       const _origBottomMargin = doc.page.margins.bottom;
       const _itemsBottomReserve = PAGE.marginBottom
-        + 60                                  // FOOTER_RESERVE
-        + (ctx.paymentTerm ? 140 : 70)        // PAYMENT_BLOCK_HEIGHT
+        + 30                                  // FOOTER_RESERVE
+        + (ctx.paymentTerm ? 80 : 50)         // PAYMENT_BLOCK_HEIGHT
         + 12                                  // gap between totals + payment
-        + 110                                 // TOTALS_BLOCK_HEIGHT
+        + 90                                  // TOTALS_BLOCK_HEIGHT
         + 20;                                 // small breathing room
       doc.page.margins.bottom = _itemsBottomReserve;
       try {
@@ -1026,13 +1026,19 @@ function renderDocument(type, context) {
       // ---- pin totals + payment block to footer ---------------------
       // The totals box + payment block ALWAYS render at the same
       // distance from the page bottom regardless of how many line
-      // items rendered. Few items = white space between them and
-      // the totals; many items = if they overflow past the totals
-      // anchor, we add a new page and render the bottom block there
-      // (so the customer never sees the totals/payment crammed in).
-      const FOOTER_RESERVE = 60;                  // footer text + small gap
-      const PAYMENT_BLOCK_HEIGHT = ctx.paymentTerm ? 140 : 70;
-      const TOTALS_BLOCK_HEIGHT  = 110;
+      // items rendered. Reserves below are conservative-but-tight:
+      // they reflect the actual measured block heights, with just
+      // enough breathing room that a wrapped line or extra Skonto
+      // row doesn't crash into the footer.
+      //   FOOTER_RESERVE       = 30  (one footer line ~12pt + ~18pt gap)
+      //   PAYMENT_BLOCK_HEIGHT = 80 with paymentTerm, 50 without
+      //                          (header + 3-4 rows including the
+      //                           skonto + skonto_amount lines)
+      //   TOTALS_BLOCK_HEIGHT  = 90  (top divider + Net + Shipping +
+      //                          VAT + middle divider + Total)
+      const FOOTER_RESERVE = 30;
+      const PAYMENT_BLOCK_HEIGHT = ctx.paymentTerm ? 80 : 50;
+      const TOTALS_BLOCK_HEIGHT  = 90;
       const desiredPaymentY = PAGE.height - PAGE.marginBottom - FOOTER_RESERVE - PAYMENT_BLOCK_HEIGHT;
       const desiredTotalsY  = desiredPaymentY - 12 - TOTALS_BLOCK_HEIGHT;
 
