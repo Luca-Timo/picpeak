@@ -261,22 +261,76 @@ export const TaxReportPage: React.FC = () => {
           </p>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
-          {/* Table */}
+        <>
+          {/* Totals card — placed above the table so it stays visible
+              without horizontal scrolling, and the table gets the full
+              page width below. Per-VAT-rate buckets render in a
+              flex-wrap row; the grand totals sit on the right. */}
+          <Card padding="md">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mb-3">
+                  {t('taxReport.totalsByVatRate', 'Totals by VAT rate')}
+                </h2>
+                {report.totalsByVatRate.length === 0 ? (
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">—</p>
+                ) : (
+                  <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+                    {report.totalsByVatRate.map((b) => (
+                      <div key={b.vatRate} className="min-w-[140px]">
+                        <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
+                          {Number(b.vatRate).toFixed(1)}%
+                        </div>
+                        <div className="text-neutral-700 dark:text-neutral-300 tabular-nums">
+                          {t('taxReport.col.net', 'Net')}: {formatMinor(b.netMinor, report.currency, intlLocale)}
+                        </div>
+                        <div className="text-neutral-700 dark:text-neutral-300 tabular-nums">
+                          {t('taxReport.col.vat', 'VAT')}: {formatMinor(b.vatMinor, report.currency, intlLocale)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {report.cancelledCount > 0 && (
+                  <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
+                    {t('taxReport.cancelledFootnote', '{{count}} cancelled invoice(s) — amounts excluded from totals (shown for audit-trail continuity).', { count: report.cancelledCount })}
+                  </p>
+                )}
+              </div>
+              <div className="md:w-64 md:flex-shrink-0 md:border-l md:border-neutral-200 md:dark:border-neutral-700 md:pl-6 space-y-1.5 text-sm">
+                <div className="flex justify-between gap-3">
+                  <span className="text-neutral-700 dark:text-neutral-300">{t('taxReport.grandTotalNet', 'Total net')}</span>
+                  <span className="tabular-nums font-medium">{formatMinor(report.grandTotalNet, report.currency, intlLocale)}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-neutral-700 dark:text-neutral-300">{t('taxReport.grandTotalVat', 'Total VAT')}</span>
+                  <span className="tabular-nums font-medium">{formatMinor(report.grandTotalVat, report.currency, intlLocale)}</span>
+                </div>
+                <div className="flex justify-between gap-3 pt-1.5 border-t border-neutral-200 dark:border-neutral-700">
+                  <span className="font-semibold text-neutral-900 dark:text-neutral-100">{t('taxReport.grandTotalGross', 'Total gross')}</span>
+                  <span className="tabular-nums font-semibold text-neutral-900 dark:text-neutral-100">{formatMinor(report.grandTotal, report.currency, intlLocale)}</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Table — full width below the totals card. Horizontal
+              scroll within the card if the viewport really is too
+              narrow, but at desktop widths everything fits without it. */}
           <Card padding="none">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-neutral-50 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300">
                   <tr>
-                    <th className="px-3 py-2 text-right font-medium w-12">#</th>
-                    <th className="px-3 py-2 text-left font-medium">{t('taxReport.col.date', 'Date')}</th>
-                    <th className="px-3 py-2 text-left font-medium">{t('taxReport.col.invoice', 'Invoice')}</th>
-                    <th className="px-3 py-2 text-left font-medium">{t('taxReport.col.customer', 'Customer')}</th>
-                    <th className="px-3 py-2 text-left font-medium">{t('taxReport.col.event', 'Event')}</th>
-                    <th className="px-3 py-2 text-right font-medium">{t('taxReport.col.vatRate', 'VAT %')}</th>
-                    <th className="px-3 py-2 text-right font-medium">{t('taxReport.col.net', 'Net')}</th>
-                    <th className="px-3 py-2 text-right font-medium">{t('taxReport.col.vat', 'VAT')}</th>
-                    <th className="px-3 py-2 text-right font-medium">{t('taxReport.col.total', 'Gross')}</th>
+                    <th className="px-2 py-2 text-right font-medium w-10">#</th>
+                    <th className="px-2 py-2 text-left font-medium whitespace-nowrap">{t('taxReport.col.date', 'Date')}</th>
+                    <th className="px-2 py-2 text-left font-medium whitespace-nowrap">{t('taxReport.col.invoice', 'Invoice')}</th>
+                    <th className="px-2 py-2 text-left font-medium">{t('taxReport.col.customer', 'Customer')}</th>
+                    <th className="px-2 py-2 text-left font-medium">{t('taxReport.col.event', 'Event')}</th>
+                    <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.vatRate', 'VAT %')}</th>
+                    <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.net', 'Net')}</th>
+                    <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.vat', 'VAT')}</th>
+                    <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.total', 'Gross')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
@@ -287,9 +341,9 @@ export const TaxReportPage: React.FC = () => {
                         ? 'text-neutral-400 dark:text-neutral-500 italic'
                         : 'text-neutral-900 dark:text-neutral-100'}
                     >
-                      <td className="px-3 py-2 text-right tabular-nums">{i + 1}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{row.issueDate}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">
+                      <td className="px-2 py-1.5 text-right tabular-nums">{i + 1}</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap tabular-nums">{row.issueDate.slice(0, 10)}</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">
                         <span className="font-medium">{row.invoiceNumber}</span>
                         {row.isCancelled && (
                           <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 font-semibold not-italic">
@@ -302,16 +356,16 @@ export const TaxReportPage: React.FC = () => {
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 truncate max-w-[200px]" title={row.customerLabel}>{row.customerLabel}</td>
-                      <td className="px-3 py-2 truncate max-w-[160px]" title={row.eventName}>{row.eventName}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{Number(row.vatRate).toFixed(1)}%</td>
-                      <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
+                      <td className="px-2 py-1.5 truncate max-w-[180px]" title={row.customerLabel}>{row.customerLabel}</td>
+                      <td className="px-2 py-1.5 truncate max-w-[180px]" title={row.eventName}>{row.eventName}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">{Number(row.vatRate).toFixed(1)}%</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
                         {formatMinor(row.netMinor, row.currency, intlLocale)}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
+                      <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
                         {formatMinor(row.vatMinor, row.currency, intlLocale)}
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap font-medium">
+                      <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap font-medium">
                         {formatMinor(row.totalMinor, row.currency, intlLocale)}
                       </td>
                     </tr>
@@ -320,48 +374,7 @@ export const TaxReportPage: React.FC = () => {
               </table>
             </div>
           </Card>
-
-          {/* Totals card */}
-          <Card padding="md" className="h-fit lg:sticky lg:top-6">
-            <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mb-3">
-              {t('taxReport.totalsByVatRate', 'Totals by VAT rate')}
-            </h2>
-            <div className="space-y-2 text-sm">
-              {report.totalsByVatRate.map((b) => (
-                <div key={b.vatRate} className="grid grid-cols-[60px_1fr] gap-2">
-                  <span className="font-medium tabular-nums">{Number(b.vatRate).toFixed(1)}%</span>
-                  <div className="text-right tabular-nums">
-                    <div className="text-neutral-700 dark:text-neutral-300">
-                      {t('taxReport.col.net', 'Net')}: {formatMinor(b.netMinor, report.currency, intlLocale)}
-                    </div>
-                    <div className="text-neutral-700 dark:text-neutral-300">
-                      {t('taxReport.col.vat', 'VAT')}: {formatMinor(b.vatMinor, report.currency, intlLocale)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700 space-y-1.5 text-sm">
-              <div className="flex justify-between">
-                <span className="text-neutral-700 dark:text-neutral-300">{t('taxReport.grandTotalNet', 'Total net')}</span>
-                <span className="tabular-nums font-medium">{formatMinor(report.grandTotalNet, report.currency, intlLocale)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-700 dark:text-neutral-300">{t('taxReport.grandTotalVat', 'Total VAT')}</span>
-                <span className="tabular-nums font-medium">{formatMinor(report.grandTotalVat, report.currency, intlLocale)}</span>
-              </div>
-              <div className="flex justify-between pt-1.5 border-t border-neutral-200 dark:border-neutral-700">
-                <span className="font-semibold text-neutral-900 dark:text-neutral-100">{t('taxReport.grandTotalGross', 'Total gross')}</span>
-                <span className="tabular-nums font-semibold text-neutral-900 dark:text-neutral-100">{formatMinor(report.grandTotal, report.currency, intlLocale)}</span>
-              </div>
-            </div>
-            {report.cancelledCount > 0 && (
-              <p className="mt-4 pt-3 border-t border-neutral-200 dark:border-neutral-700 text-xs text-neutral-500 dark:text-neutral-400">
-                {t('taxReport.cancelledFootnote', '{{count}} cancelled invoice(s) — amounts excluded from totals (shown for audit-trail continuity).', { count: report.cancelledCount })}
-              </p>
-            )}
-          </Card>
-        </div>
+        </>
       )}
     </div>
   );
