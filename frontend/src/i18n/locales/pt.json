@@ -3016,7 +3016,47 @@
       "body": "Ative Contas (ou outra sub-funcionalidade de Clientes) em Configurações → Recursos para começar."
     },
     "subnav": {
-      "accounts": "Contas"
+      "accounts": "Contas",
+      "quotes": "Orçamentos",
+      "bills": "Faturas",
+      "taxReport": "Fiscal",
+      "development": "Desenvolvimento"
+    }
+  },
+  "taxReport": {
+    "title": "Relatório fiscal",
+    "intro": "Lista de receita por período com discriminação líquido + IVA agrupada por taxa de IVA. Faturas canceladas permanecem visíveis para continuidade do rastro de auditoria, mas são excluídas dos totais.",
+    "filters": {
+      "period": "Período",
+      "thisYear": "Este ano",
+      "lastYear": "Ano passado",
+      "thisQuarter": "Este trimestre",
+      "lastQuarter": "Trimestre passado",
+      "custom": "Intervalo personalizado",
+      "from": "De",
+      "to": "Até",
+      "currency": "Moeda"
+    },
+    "exportPdf": "Exportar PDF",
+    "exportCsv": "Exportar CSV",
+    "exportFailed": "Falha na exportação. Por favor, tente novamente.",
+    "errorTitle": "Não foi possível carregar o relatório fiscal",
+    "empty": "Sem faturas neste período.",
+    "statusCancelled": "Cancelada",
+    "totalsByVatRate": "Totais por taxa de IVA",
+    "grandTotalNet": "Total líquido",
+    "grandTotalVat": "Total IVA",
+    "grandTotalGross": "Total bruto",
+    "cancelledFootnote": "{{count}} fatura(s) cancelada(s) — valores excluídos dos totais (apresentados para continuidade do rastro de auditoria).",
+    "col": {
+      "date": "Data",
+      "invoice": "Fatura",
+      "customer": "Cliente",
+      "event": "Evento",
+      "vatRate": "IVA %",
+      "net": "Líquido",
+      "vat": "IVA",
+      "total": "Bruto"
     }
   }
 }
