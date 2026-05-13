@@ -1132,6 +1132,12 @@
         "description": "Generate a bill from any accepted quote. Mark paid manually — no payment processor integration.",
         "sidebar": "Bills"
       },
+      "taxReport": {
+        "title": "Tax report",
+        "description": "Period-scoped revenue list with net + VAT breakdown grouped by VAT rate. Export as PDF (landscape, company letterhead) or CSV for your accountant. Cancelled invoices stay visible for a gap-free audit trail but are excluded from totals.",
+        "sidebar": "Tax",
+        "requiresBills": "Enable Bills first — the tax report reads from your invoices."
+      },
       "analytics": {
         "title": "Analytics",
         "description": "Storage usage, gallery views, download counts, and per-event stats."
@@ -3029,7 +3035,45 @@
     "subnav": {
       "accounts": "Accounts",
       "quotes": "Quotes",
-      "bills": "Invoices"
+      "bills": "Invoices",
+      "taxReport": "Tax",
+      "development": "Development"
+    }
+  },
+  "taxReport": {
+    "title": "Tax report",
+    "intro": "Period-scoped revenue list with net + VAT breakdown grouped by VAT rate. Cancelled invoices stay visible for audit-trail continuity but are excluded from totals.",
+    "filters": {
+      "period": "Period",
+      "thisYear": "This year",
+      "lastYear": "Last year",
+      "thisQuarter": "This quarter",
+      "lastQuarter": "Last quarter",
+      "custom": "Custom range",
+      "from": "From",
+      "to": "To",
+      "currency": "Currency"
+    },
+    "exportPdf": "Export PDF",
+    "exportCsv": "Export CSV",
+    "exportFailed": "Export failed. Please try again.",
+    "errorTitle": "Could not load tax report",
+    "empty": "No invoices in this period.",
+    "statusCancelled": "Cancelled",
+    "totalsByVatRate": "Totals by VAT rate",
+    "grandTotalNet": "Total net",
+    "grandTotalVat": "Total VAT",
+    "grandTotalGross": "Total gross",
+    "cancelledFootnote": "{{count}} cancelled invoice(s) — amounts excluded from totals (shown for audit-trail continuity).",
+    "col": {
+      "date": "Date",
+      "invoice": "Invoice",
+      "customer": "Customer",
+      "event": "Event",
+      "vatRate": "VAT %",
+      "net": "Net",
+      "vat": "VAT",
+      "total": "Gross"
     }
   },
   "quotes": {

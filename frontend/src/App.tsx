@@ -34,6 +34,7 @@ import {
   BillDetailPage,
 } from './pages/admin';
 import { CrmDevelopmentPage } from './pages/admin/clients/CrmDevelopmentPage';
+import { TaxReportPage } from './pages/admin/clients/TaxReportPage';
 import { QuoteResponsePage } from './pages/public/QuoteResponsePage';
 import { PaymentCheckPage } from './pages/public/PaymentCheckPage';
 import { AcceptInvitePage } from './pages/public/AcceptInvitePage';
@@ -197,6 +198,10 @@ function App() {
                             <Route path="bills/:id/edit" element={<BillEditorPage />} />
                           </Route>
 
+                          {/* Tax / Steuer report — gated by `taxReport`. */}
+                          <Route element={<RequireFeature flag="taxReport" />}>
+                            <Route path="tax-report" element={<TaxReportPage />} />
+                          </Route>
                           {/* Developer tools — gated by `crmDevelopment`. */}
                           <Route element={<RequireFeature flag="crmDevelopment" />}>
                             <Route path="development" element={<CrmDevelopmentPage />} />
