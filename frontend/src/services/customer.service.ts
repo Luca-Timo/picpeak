@@ -261,6 +261,12 @@ export const customerService = {
     const res = await api.get(`/customer/invoices/${id}/pdf`, { responseType: 'blob' });
     return URL.createObjectURL(res.data);
   },
+
+  /** Returns a blob URL for the quote PDF (customer-side). */
+  async quotePdfUrl(id: number): Promise<string> {
+    const res = await api.get(`/customer/quotes/${id}/pdf`, { responseType: 'blob' });
+    return URL.createObjectURL(res.data);
+  },
 };
 
 export interface CustomerQuote {

@@ -198,23 +198,6 @@ export const CustomerLayout: React.FC = () => {
                     style={isActive ? undefined : { color: 'var(--color-text)' }}
                   />
                   {t(item.labelKey, item.fallback)}
-                  {/* Coming-soon pill for the gated entries. Pushed to
-                      the right of the label with ml-auto so it doesn't
-                      add the flex-1 stretching that was throwing off
-                      the active-pill visual. */}
-                  {item.feature && (
-                    <span
-                      className={`ml-auto text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold ${
-                        isActive ? 'bg-white/20 text-white' : ''
-                      }`}
-                      style={isActive ? undefined : {
-                        backgroundColor: 'color-mix(in srgb, var(--color-accent) 14%, transparent)',
-                        color: 'var(--color-accent)',
-                      }}
-                    >
-                      {t('customer.nav.soon', 'Soon')}
-                    </span>
-                  )}
                 </NavLink>
               );
             })}
