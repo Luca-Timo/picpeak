@@ -2983,7 +2983,47 @@
       "body": "Schakel Accounts (of een andere Klanten-subfunctie) in onder Instellingen → Functies om te beginnen."
     },
     "subnav": {
-      "accounts": "Accounts"
+      "accounts": "Accounts",
+      "quotes": "Offertes",
+      "bills": "Facturen",
+      "taxReport": "Belasting",
+      "development": "Ontwikkeling"
+    }
+  },
+  "taxReport": {
+    "title": "Belastingrapport",
+    "intro": "Periodegebonden omzetlijst met netto + btw-uitsplitsing gegroepeerd per btw-tarief. Geannuleerde facturen blijven zichtbaar voor de continuïteit van het audit-spoor, maar zijn uitgesloten van de totalen.",
+    "filters": {
+      "period": "Periode",
+      "thisYear": "Dit jaar",
+      "lastYear": "Vorig jaar",
+      "thisQuarter": "Dit kwartaal",
+      "lastQuarter": "Vorig kwartaal",
+      "custom": "Aangepast bereik",
+      "from": "Van",
+      "to": "Tot",
+      "currency": "Valuta"
+    },
+    "exportPdf": "PDF exporteren",
+    "exportCsv": "CSV exporteren",
+    "exportFailed": "Export mislukt. Probeer het opnieuw.",
+    "errorTitle": "Belastingrapport kon niet worden geladen",
+    "empty": "Geen facturen in deze periode.",
+    "statusCancelled": "Geannuleerd",
+    "totalsByVatRate": "Totalen per btw-tarief",
+    "grandTotalNet": "Totaal netto",
+    "grandTotalVat": "Totaal btw",
+    "grandTotalGross": "Totaal bruto",
+    "cancelledFootnote": "{{count}} geannuleerde factu(u)r(en) — bedragen uitgesloten van totalen (getoond voor continuïteit van het audit-spoor).",
+    "col": {
+      "date": "Datum",
+      "invoice": "Factuur",
+      "customer": "Klant",
+      "event": "Evenement",
+      "vatRate": "Btw %",
+      "net": "Netto",
+      "vat": "Btw",
+      "total": "Bruto"
     }
   }
 }

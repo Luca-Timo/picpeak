@@ -1488,6 +1488,12 @@
         "description": "Generieren Sie eine Rechnung aus jedem angenommenen Angebot. Manuell als bezahlt markieren — keine Integration mit Zahlungsanbietern.",
         "sidebar": "Rechnungen"
       },
+      "taxReport": {
+        "title": "Steuerliste",
+        "description": "Periodenbezogene Umsatzliste mit Netto- und MwSt-Aufschlüsselung, gruppiert nach MwSt-Satz. Exportieren Sie als PDF (Querformat, Firmenbriefkopf) oder CSV für Ihre Buchhaltung. Stornierte Rechnungen bleiben für die lückenlose Nummernfolge sichtbar, sind aber nicht in den Summen enthalten.",
+        "sidebar": "Steuer",
+        "requiresBills": "Bitte zuerst Rechnungen aktivieren — die Steuerliste liest aus Ihren Rechnungen."
+      },
       "analytics": {
         "title": "Statistiken",
         "description": "Speichernutzung, Galerie-Aufrufe, Download-Zahlen und Statistiken pro Veranstaltung."
@@ -3018,7 +3024,47 @@
       "body": "Aktiviere „Konten\" (oder eine andere Kunden-Unterfunktion) unter Einstellungen → Funktionen, um loszulegen."
     },
     "subnav": {
-      "accounts": "Konten"
+      "accounts": "Konten",
+      "quotes": "Angebote",
+      "bills": "Rechnungen",
+      "taxReport": "Steuer",
+      "development": "Entwicklung"
+    }
+  },
+  "taxReport": {
+    "title": "Steuerliste",
+    "intro": "Periodenbezogene Umsatzliste mit Netto- und MwSt-Aufschlüsselung, gruppiert nach MwSt-Satz. Stornierte Rechnungen bleiben für die lückenlose Nummernfolge sichtbar, sind aber nicht in den Summen enthalten.",
+    "filters": {
+      "period": "Zeitraum",
+      "thisYear": "Dieses Jahr",
+      "lastYear": "Letztes Jahr",
+      "thisQuarter": "Dieses Quartal",
+      "lastQuarter": "Letztes Quartal",
+      "custom": "Benutzerdefiniert",
+      "from": "Von",
+      "to": "Bis",
+      "currency": "Währung"
+    },
+    "exportPdf": "PDF exportieren",
+    "exportCsv": "CSV exportieren",
+    "exportFailed": "Export fehlgeschlagen. Bitte erneut versuchen.",
+    "errorTitle": "Steuerliste konnte nicht geladen werden",
+    "empty": "Keine Rechnungen in diesem Zeitraum.",
+    "statusCancelled": "Storniert",
+    "totalsByVatRate": "Summen nach MwSt-Satz",
+    "grandTotalNet": "Gesamt Netto",
+    "grandTotalVat": "Gesamt MwSt.",
+    "grandTotalGross": "Gesamt Brutto",
+    "cancelledFootnote": "{{count}} stornierte Rechnung(en) — Beträge nicht in den Summen enthalten (für lückenlose Nummernfolge dargestellt).",
+    "col": {
+      "date": "Datum",
+      "invoice": "Rechnung",
+      "customer": "Kunde",
+      "event": "Anlass",
+      "vatRate": "MwSt %",
+      "net": "Netto",
+      "vat": "MwSt.",
+      "total": "Brutto"
     }
   },
   "quotes": {
