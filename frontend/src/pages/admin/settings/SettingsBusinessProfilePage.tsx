@@ -145,8 +145,8 @@ export const SettingsBusinessProfilePage: React.FC = () => {
               className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm">
               <option value="none">{t('businessProfile.foldingMarks.none', 'None')}</option>
               <option value="half">{t('businessProfile.foldingMarks.half', 'Half (148.5mm) — for C5 envelopes')}</option>
-              <option value="third">{t('businessProfile.foldingMarks.third', 'Third (105mm) — for DL / DIN long envelopes')}</option>
-              <option value="both">{t('businessProfile.foldingMarks.both', 'Both marks')}</option>
+              <option value="third">{t('businessProfile.foldingMarks.third', 'Thirds (105 + 210mm) — for DL / DIN long envelopes')}</option>
+              <option value="both">{t('businessProfile.foldingMarks.both', 'All three marks')}</option>
             </select>
           </div>
           {/* Custom PDF font — TTF/OTF only. PDFKit doesn't read

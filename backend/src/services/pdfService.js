@@ -411,21 +411,31 @@ function drawRecipientBlock(doc, recipient, locale) {
  * Draw DIN 5008 folding marks on the LEFT page edge so the printed
  * letter can be folded cleanly to fit a window envelope.
  *
- *   'half'  → single 10mm mark at 148.5mm from top (C5 / half-fold)
- *   'third' → single 10mm mark at 105mm from top (DL / thirds-fold)
- *   'both'  → both marks
+ *   'half'  → single mark at 148.5mm from top (C5 / half-fold)
+ *   'third' → DIN 5008 thirds-fold: marks at 105mm AND 210mm so the
+ *             paper folds neatly into thirds for DL / C5-6 envelopes
+ *   'both'  → 1/2 mark + both thirds marks (three total)
  *   'none' (or anything else) → no marks
  *
- * Marks are drawn 1cm long, anchored against the left edge of the
- * paper (x = 0 → 28.35pt), 0.4pt hairline, mid-grey so they're
- * visible to the person folding but unobtrusive when scanned.
+ * Marks are drawn 7.5mm long, anchored against the left edge of the
+ * paper, 0.4pt hairline, mid-grey so they're visible to the person
+ * folding but unobtrusive when the page is scanned or photocopied.
  */
 function drawFoldingMarks(doc, mode) {
   if (!mode || mode === 'none') return;
-  const MARK_LEN_PT = 1 * 10 * MM; // 10mm = ~28.35pt
+  const MARK_LEN_PT = 7.5 * MM; // 7.5mm = ~21.26pt
   const ys = [];
-  if (mode === 'half' || mode === 'both')  ys.push(148.5 * MM); // 1/2 fold
-  if (mode === 'third' || mode === 'both') ys.push(105 * MM);    // 1/3 fold (DIN 5008)
+  if (mode === 'half' || mode === 'both') {
+    ys.push(148.5 * MM); // 1/2 fold (C5 envelope)
+  }
+  if (mode === 'third' || mode === 'both') {
+    // DIN 5008 thirds fold uses TWO marks at 105mm and 210mm. The
+    // 105mm line aligns with the top edge of the address window
+    // after the first fold; the 210mm line aligns with the next
+    // fold for the bottom third.
+    ys.push(105 * MM);
+    ys.push(210 * MM);
+  }
   doc.save();
   doc.strokeColor('#888').lineWidth(0.4);
   for (const y of ys) {
@@ -485,9 +495,10 @@ function drawLineItems(doc, ctx) {
   // `number | [top, right, bottom, left] | [vertical, horizontal]`
   // but NOT an object. The earlier object form was silently
   // ignored (so the padding bumps the maintainer asked for never
-  // landed visually). 24pt top + 24pt bottom gives generous space
-  // above and below the text inside every line-item cell.
-  const ROW_PADDING = [24, 4, 24, 4];
+  // landed visually). 8pt top + 8pt bottom is the sweet spot —
+  // enough breathing room for each item to read as its own row
+  // without doubling the visual height like the 24pt setting did.
+  const ROW_PADDING = [8, 4, 8, 4];
   // Match the totals box font size; the maintainer wants the line
   // items and the billing totals to read at the same weight so the
   // eye doesn't bounce between two scales.
