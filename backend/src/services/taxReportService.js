@@ -37,6 +37,11 @@
  */
 
 const { db, withRetry } = require('../database/db');
+const pdfService = require('./pdfService');
+const businessProfileService = require('./businessProfileService');
+const { getAppSetting } = require('../utils/appSettings');
+const { t } = require('./pdf-i18n');
+const { formatMinor, formatDate } = pdfService._internal;
 
 // Rows we WANT to surface in the tax report. `cancelled` is included
 // for audit visibility; the totals math filters it out separately.
@@ -237,8 +242,347 @@ async function getTaxReport({ from, to, currency } = {}) {
   });
 }
 
+// ---------------------------------------------------------------------
+// PDF + CSV renderers
+// ---------------------------------------------------------------------
+
+/**
+ * Pull the issuer block + date format that the renderers need. Mirrors
+ * the slice that invoiceService.buildInvoiceRenderContext builds for
+ * the regular invoice/quote PDFs so the letterhead looks identical.
+ */
+async function loadRenderContext(locale) {
+  const { profile } = await businessProfileService.getProfile();
+  let dateFormat = null;
+  try {
+    const raw = await getAppSetting('general_date_format');
+    if (raw && typeof raw === 'object' && raw.format) dateFormat = raw;
+    else if (typeof raw === 'string' && raw.trim()) dateFormat = { format: raw.trim() };
+  } catch (_) { /* fall back to renderer default */ }
+
+  const issuer = profile ? {
+    companyName: profile.company_name,
+    addressLine1: profile.address_line1,
+    addressLine2: profile.address_line2,
+    postalCode: profile.postal_code,
+    city: profile.city,
+    state: profile.state,
+    countryCode: profile.country_code,
+    countryName: profile.country_name || null,
+    phone: profile.phone, mobile: profile.mobile, email: profile.email, website: profile.website,
+    footerLine: profile.footer_line,
+    vatId: profile.vat_id,
+    logoPath: profile.logo_path,
+    pdfFontTtfPath: profile.pdf_font_ttf_path,
+    showLogo: profile.pdf_show_logo == null ? true
+      : (profile.pdf_show_logo === true || profile.pdf_show_logo === 1 || profile.pdf_show_logo === '1'),
+    showCompanyName: profile.pdf_show_company_name == null ? true
+      : (profile.pdf_show_company_name === true || profile.pdf_show_company_name === 1 || profile.pdf_show_company_name === '1'),
+    logoHeight: profile.pdf_logo_height == null ? 56 : Number(profile.pdf_logo_height),
+    companyNameInline: profile.pdf_company_name_inline === true || profile.pdf_company_name_inline === 1 || profile.pdf_company_name_inline === '1',
+    // Folding marks would clutter a tax-report (no envelope window in
+    // play); always suppress regardless of the profile setting.
+    foldingMarks: 'none',
+  } : {};
+
+  return { issuer, dateFormat, locale: locale || profile?.default_locale || 'de' };
+}
+
+// Page layout for the tax-report table. Sized for A4 landscape (762pt
+// content width). Sums to ~755 leaving ~7pt slack for the right margin.
+const TAX_TABLE_COLS = [
+  { key: 'idx',      labelKey: 'tax_col_no',       width: 26,  align: 'right' },
+  { key: 'date',     labelKey: 'tax_col_date',     width: 62,  align: 'left'  },
+  { key: 'invoice',  labelKey: 'tax_col_invoice',  width: 95,  align: 'left'  },
+  { key: 'customer', labelKey: 'tax_col_customer', width: 175, align: 'left'  },
+  { key: 'event',    labelKey: 'tax_col_event',    width: 120, align: 'left'  },
+  { key: 'vatRate',  labelKey: 'tax_col_vat_rate', width: 42,  align: 'right' },
+  { key: 'net',      labelKey: 'tax_col_net',      width: 76,  align: 'right' },
+  { key: 'vat',      labelKey: 'tax_col_vat',      width: 70,  align: 'right' },
+  { key: 'total',    labelKey: 'tax_col_total',    width: 90,  align: 'right' },
+];
+
+function colX(leftMargin, index) {
+  let x = leftMargin;
+  for (let i = 0; i < index; i += 1) x += TAX_TABLE_COLS[i].width;
+  return x;
+}
+
+function drawTaxTableHeader(doc, leftMargin, y, locale, fonts) {
+  doc.font(fonts.bold).fontSize(8.5).fillColor('#000');
+  for (let i = 0; i < TAX_TABLE_COLS.length; i += 1) {
+    const col = TAX_TABLE_COLS[i];
+    doc.text(t(locale, col.labelKey), colX(leftMargin, i) + 2, y, {
+      width: col.width - 4, align: col.align,
+    });
+  }
+  const headerBottom = y + 14;
+  doc.moveTo(leftMargin, headerBottom)
+    .lineTo(leftMargin + TAX_TABLE_COLS.reduce((s, c) => s + c.width, 0), headerBottom)
+    .lineWidth(0.6).strokeColor('#000').stroke();
+  return headerBottom + 4;
+}
+
+function formatVatRate(rate, locale) {
+  // 7.7 → "7.7 %" in en, "7,7 %" in de. Two decimals stripped for
+  // tidiness when zero (8.10 → "8.1 %").
+  const n = Number(rate || 0);
+  const intlLocale = locale === 'de' ? 'de-CH' : 'en-GB';
+  const formatted = new Intl.NumberFormat(intlLocale, {
+    minimumFractionDigits: 0, maximumFractionDigits: 2,
+  }).format(n);
+  return `${formatted} %`;
+}
+
+function rowCellValues(row, idx, locale, dateFormat) {
+  const dateStr = formatDate(row.issueDate, dateFormat);
+  const invoiceLabel = row.isCancelled
+    ? `${row.invoiceNumber} (${t(locale, 'tax_status_cancelled')})`
+    : row.invoiceNumber;
+  return {
+    idx: String(idx),
+    date: dateStr,
+    invoice: invoiceLabel,
+    customer: row.customerLabel || '',
+    event: row.eventName || '',
+    vatRate: formatVatRate(row.vatRate, locale),
+    net: formatMinor(row.netMinor, row.currency, locale === 'de' ? 'de-CH' : 'en-GB'),
+    vat: formatMinor(row.vatMinor, row.currency, locale === 'de' ? 'de-CH' : 'en-GB'),
+    total: formatMinor(row.totalMinor, row.currency, locale === 'de' ? 'de-CH' : 'en-GB'),
+  };
+}
+
+/**
+ * Render the tax report as a PDF buffer.
+ *
+ *   renderTaxReportPdf({ from, to, currency, locale })  → Promise<Buffer>
+ *
+ * Currency is required and used to scope the data (same contract as
+ * getTaxReport). Locale defaults to the business profile's default.
+ */
+async function renderTaxReportPdf({ from, to, currency, locale } = {}) {
+  const report = await getTaxReport({ from, to, currency });
+  const renderCtx = await loadRenderContext(locale);
+  const useLocale = renderCtx.locale;
+  const intlLocale = useLocale === 'de' ? 'de-CH' : 'en-GB';
+
+  const { doc, page, fonts } = pdfService.createBaseDocument({
+    orientation: 'landscape',
+    issuer: renderCtx.issuer,
+    info: {
+      Title: `${t(useLocale, 'tax_title')} ${report.period.from}–${report.period.to}`,
+      Author: renderCtx.issuer.companyName || 'picpeak',
+    },
+  });
+
+  return await new Promise((resolve, reject) => {
+    try {
+      const chunks = [];
+      doc.on('data', (c) => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const leftMargin = page.marginLeft;
+      // Issuer block: top-right, same width pattern as the existing
+      // invoice/quote letterhead (180pt) so the branding feels
+      // consistent across all admin-facing PDFs.
+      const issuerWidth = 180;
+      const issuerX = page.width - page.marginRight - issuerWidth;
+      const issuerY = page.marginTop + 4;
+      const issuerEndY = pdfService.drawIssuerBlock(
+        doc, renderCtx.issuer, issuerX, issuerY, issuerWidth, useLocale
+      );
+
+      // Title block on the left.
+      doc.font(fonts.bold).fontSize(18).fillColor('#000')
+        .text(t(useLocale, 'tax_title'), leftMargin, page.marginTop + 4, {
+          width: page.contentWidth - issuerWidth - 20, align: 'left',
+        });
+
+      doc.font(fonts.body).fontSize(10).fillColor('#333');
+      const periodLine = `${t(useLocale, 'tax_period')}: ${formatDate(report.period.from, renderCtx.dateFormat)} – ${formatDate(report.period.to, renderCtx.dateFormat)}`;
+      doc.text(periodLine, leftMargin, page.marginTop + 30, {
+        width: page.contentWidth - issuerWidth - 20, align: 'left',
+      });
+      doc.text(`${t(useLocale, 'tax_currency')}: ${report.currency}`,
+        leftMargin, page.marginTop + 46, {
+          width: page.contentWidth - issuerWidth - 20, align: 'left',
+        });
+
+      // Table starts below whichever block (issuer or title) ends lower.
+      let y = Math.max(issuerEndY, page.marginTop + 70) + 14;
+      y = drawTaxTableHeader(doc, leftMargin, y, useLocale, fonts);
+
+      doc.fontSize(8.5);
+      const rowHeight = 14;
+      const tableBottomLimit = page.height - page.marginBottom - 110; // leave room for totals
+      const tableWidth = TAX_TABLE_COLS.reduce((s, c) => s + c.width, 0);
+
+      if (report.rows.length === 0) {
+        doc.font(fonts.body).fontSize(10).fillColor('#555')
+          .text(t(useLocale, 'tax_no_invoices'), leftMargin, y + 6, {
+            width: tableWidth, align: 'center',
+          });
+        y += 24;
+      }
+
+      for (let i = 0; i < report.rows.length; i += 1) {
+        if (y + rowHeight > tableBottomLimit) {
+          doc.addPage({ size: 'A4', layout: 'landscape' });
+          y = page.marginTop;
+          y = drawTaxTableHeader(doc, leftMargin, y, useLocale, fonts);
+        }
+        const row = report.rows[i];
+        const cells = rowCellValues(row, i + 1, useLocale, renderCtx.dateFormat);
+        if (row.isCancelled) {
+          doc.font(fonts.body).fillColor('#888');
+        } else {
+          doc.font(fonts.body).fillColor('#000');
+        }
+        for (let c = 0; c < TAX_TABLE_COLS.length; c += 1) {
+          const col = TAX_TABLE_COLS[c];
+          doc.text(cells[col.key] || '', colX(leftMargin, c) + 2, y, {
+            width: col.width - 4, align: col.align,
+            ellipsis: true, lineBreak: false,
+          });
+        }
+        // Light separator under each row.
+        doc.moveTo(leftMargin, y + rowHeight - 2)
+          .lineTo(leftMargin + tableWidth, y + rowHeight - 2)
+          .lineWidth(0.3).strokeColor('#e0e0e0').stroke();
+        y += rowHeight;
+      }
+
+      // Totals block. Lives in the right half of the page so it
+      // doesn't fight with the cancelled footnote on the left.
+      const totalsTop = Math.min(y + 12, page.height - page.marginBottom - 100);
+      const totalsBoxWidth = 360;
+      const totalsX = page.width - page.marginRight - totalsBoxWidth;
+
+      doc.font(fonts.bold).fontSize(10).fillColor('#000')
+        .text(t(useLocale, 'tax_totals_by_rate'), totalsX, totalsTop, {
+          width: totalsBoxWidth, align: 'left',
+        });
+
+      let ty = totalsTop + 16;
+      doc.font(fonts.body).fontSize(9);
+      for (const bucket of report.totalsByVatRate) {
+        const labelLeft = `${formatVatRate(bucket.vatRate, useLocale)}`;
+        doc.text(labelLeft, totalsX, ty, { width: 80, align: 'left' });
+        doc.text(formatMinor(bucket.netMinor, report.currency, intlLocale),
+          totalsX + 80, ty, { width: 90, align: 'right' });
+        doc.text(formatMinor(bucket.vatMinor, report.currency, intlLocale),
+          totalsX + 175, ty, { width: 90, align: 'right' });
+        doc.text(formatMinor(bucket.totalMinor, report.currency, intlLocale),
+          totalsX + 270, ty, { width: 90, align: 'right' });
+        ty += 13;
+      }
+      // Divider above grand totals.
+      doc.moveTo(totalsX, ty + 2).lineTo(totalsX + totalsBoxWidth, ty + 2)
+        .lineWidth(0.6).strokeColor('#000').stroke();
+      ty += 6;
+      doc.font(fonts.bold);
+      doc.text(t(useLocale, 'tax_grand_total_net'), totalsX, ty, { width: 170, align: 'left' });
+      doc.text(formatMinor(report.grandTotalNet, report.currency, intlLocale),
+        totalsX + 175, ty, { width: 90, align: 'right' });
+      ty += 13;
+      doc.text(t(useLocale, 'tax_grand_total_vat'), totalsX, ty, { width: 170, align: 'left' });
+      doc.text(formatMinor(report.grandTotalVat, report.currency, intlLocale),
+        totalsX + 175, ty, { width: 90, align: 'right' });
+      ty += 13;
+      doc.text(t(useLocale, 'tax_grand_total_gross'), totalsX, ty, { width: 170, align: 'left' });
+      doc.text(formatMinor(report.grandTotal, report.currency, intlLocale),
+        totalsX + 270, ty, { width: 90, align: 'right' });
+
+      // Cancelled footnote (bottom-left). Only when there are any.
+      if (report.cancelledCount > 0) {
+        doc.font(fonts.body).fontSize(8).fillColor('#555')
+          .text(
+            t(useLocale, 'tax_cancelled_footnote', { count: report.cancelledCount }),
+            leftMargin, totalsTop,
+            { width: page.contentWidth - totalsBoxWidth - 20, align: 'left' }
+          );
+      }
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/**
+ * Render the tax report as a CSV string. Header row in the admin's
+ * locale; numbers use a dot decimal separator (universal for CSV
+ * import into Excel/Numbers/accounting software) so we don't have to
+ * thread locale-specific formatting into the export.
+ *
+ *   renderTaxReportCsv({ from, to, currency, locale })
+ *     → Promise<{ content, filename, contentType }>
+ */
+async function renderTaxReportCsv({ from, to, currency, locale } = {}) {
+  const report = await getTaxReport({ from, to, currency });
+  const useLocale = locale || 'en';
+
+  const headers = [
+    t(useLocale, 'tax_col_no'),
+    t(useLocale, 'tax_col_date'),
+    t(useLocale, 'tax_col_invoice'),
+    t(useLocale, 'tax_col_customer'),
+    t(useLocale, 'tax_col_event'),
+    t(useLocale, 'tax_col_vat_rate'),
+    `${t(useLocale, 'tax_col_net')} (${report.currency})`,
+    `${t(useLocale, 'tax_col_vat')} (${report.currency})`,
+    `${t(useLocale, 'tax_col_total')} (${report.currency})`,
+    t(useLocale, 'tax_status_cancelled'),
+  ];
+
+  const escape = (cell) => {
+    const s = cell === null || cell === undefined ? '' : String(cell);
+    // RFC 4180: wrap in quotes when the value contains comma, quote,
+    // or newline. We always wrap, simpler + bulletproof for Excel.
+    return `"${s.replace(/"/g, '""')}"`;
+  };
+
+  const minorToDotDecimal = (m) => ((Number(m) || 0) / 100).toFixed(2);
+
+  const lines = [headers.map(escape).join(',')];
+  report.rows.forEach((row, i) => {
+    lines.push([
+      i + 1,
+      row.issueDate,
+      row.invoiceNumber,
+      row.customerLabel,
+      row.eventName,
+      Number(row.vatRate).toFixed(2),
+      minorToDotDecimal(row.netMinor),
+      minorToDotDecimal(row.vatMinor),
+      minorToDotDecimal(row.totalMinor),
+      row.isCancelled ? '1' : '0',
+    ].map(escape).join(','));
+  });
+  // Trailing totals row: blank cells + grand totals at the end so
+  // the column alignment matches the data rows when opened in Excel.
+  lines.push('');
+  lines.push([
+    '', '', '',
+    t(useLocale, 'tax_grand_total_gross'),
+    '', '',
+    minorToDotDecimal(report.grandTotalNet),
+    minorToDotDecimal(report.grandTotalVat),
+    minorToDotDecimal(report.grandTotal),
+    '',
+  ].map(escape).join(','));
+
+  const content = lines.join('\r\n') + '\r\n';
+  const filename = `tax_report_${report.period.from}_to_${report.period.to}_${report.currency}.csv`;
+  return { content, filename, contentType: 'text/csv; charset=utf-8' };
+}
+
 module.exports = {
   getTaxReport,
+  renderTaxReportPdf,
+  renderTaxReportCsv,
   // Exposed for unit tests.
-  _internal: { grossUpLateFee, computeReportedAmounts, buildCustomerLabel },
+  _internal: { grossUpLateFee, computeReportedAmounts, buildCustomerLabel, formatVatRate },
 };
