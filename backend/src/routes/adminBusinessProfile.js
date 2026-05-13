@@ -88,6 +88,8 @@ function transformProfile(p) {
     pdfFoldingMarks: p.pdf_folding_marks || 'none',
     pdfLogoHeight: p.pdf_logo_height == null ? 56 : Number(p.pdf_logo_height),
     pdfCompanyNameInline: p.pdf_company_name_inline === true || p.pdf_company_name_inline === 1 || p.pdf_company_name_inline === '1',
+    pdfQuoteShowNetDays: p.pdf_quote_show_net_days === true || p.pdf_quote_show_net_days === 1 || p.pdf_quote_show_net_days === '1',
+    pdfQuoteShowSkonto:  p.pdf_quote_show_skonto  === true || p.pdf_quote_show_skonto  === 1 || p.pdf_quote_show_skonto  === '1',
     createdAt: p.created_at,
     updatedAt: p.updated_at,
   };
@@ -284,6 +286,8 @@ router.put(
     body('pdfCompanyNameInline').optional().isBoolean(),
     body('pdfFoldingMarks').optional({ values: 'falsy' }).isIn(['none', 'half', 'third', 'both']),
     body('pdfLogoHeight').optional({ values: 'falsy' }).isInt({ min: 24, max: 200 }),
+    body('pdfQuoteShowNetDays').optional().isBoolean(),
+    body('pdfQuoteShowSkonto').optional().isBoolean(),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -316,6 +320,8 @@ router.put(
       pdfCompanyNameInline: 'pdf_company_name_inline',
       pdfFoldingMarks: 'pdf_folding_marks',
       pdfLogoHeight: 'pdf_logo_height',
+      pdfQuoteShowNetDays: 'pdf_quote_show_net_days',
+      pdfQuoteShowSkonto: 'pdf_quote_show_skonto',
     };
     for (const [api, db] of Object.entries(map)) {
       if (Object.prototype.hasOwnProperty.call(req.body, api)) {

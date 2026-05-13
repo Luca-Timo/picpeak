@@ -510,6 +510,14 @@ async function buildRenderContext(quote, lineItems) {
       logoHeight: profile.pdf_logo_height == null ? 56 : Number(profile.pdf_logo_height),
       companyNameInline: profile.pdf_company_name_inline === true || profile.pdf_company_name_inline === 1 || profile.pdf_company_name_inline === '1',
       foldingMarks: profile.pdf_folding_marks || 'none',
+      // Quote payment-block toggles (migration 110). Read only on
+      // the quote path — invoices ignore these and always show the
+      // full payment block. Default FALSE when the column is missing
+      // (a quote is an offer, not a demand for payment; admins opt
+      // IN via the Business profile UI when they want the net-days
+      // / Skonto rows on quotes).
+      quoteShowNetDays: profile.pdf_quote_show_net_days === true || profile.pdf_quote_show_net_days === 1 || profile.pdf_quote_show_net_days === '1',
+      quoteShowSkonto:  profile.pdf_quote_show_skonto  === true || profile.pdf_quote_show_skonto  === 1 || profile.pdf_quote_show_skonto  === '1',
     } : {},
     recipient: (() => {
       // Recipient first-line rule (maintainer spec):

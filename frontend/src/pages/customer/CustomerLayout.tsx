@@ -178,7 +178,12 @@ export const CustomerLayout: React.FC = () => {
                   className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                     isActive
                       ? 'bg-accent-dark text-white'
-                      : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100'
+                      // Non-selected items use white text in dark mode
+                      // (matching the screenshot the maintainer flagged
+                      // — the previous neutral-300 was too dim against
+                      // the dark sidebar). Light mode keeps near-black
+                      // for contrast.
+                      : 'text-neutral-900 dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800'
                   }`}
                 >
                   {/* Mirrors AdminSidebar's active state exactly: solid
@@ -187,7 +192,7 @@ export const CustomerLayout: React.FC = () => {
                       what the admin chrome renders. */}
                   <Icon
                     className={`w-5 h-5 mr-3 ${
-                      isActive ? 'text-white' : 'text-neutral-400'
+                      isActive ? 'text-white' : 'text-neutral-900 dark:text-white'
                     }`}
                   />
                   {t(item.labelKey, item.fallback)}

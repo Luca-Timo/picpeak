@@ -657,68 +657,92 @@ function drawTotals(doc, ctx, x, y, width) {
  *          <IBAN>"
  */
 function drawPaymentBlock(doc, ctx, x, y, width) {
-  const { locale, paymentTerm, bank, intlLocale, totals, currency, doc: docMeta } = ctx;
+  const { type, locale, paymentTerm, bank, intlLocale, totals, currency, issuer, doc: docMeta } = ctx;
   const colWidth = (width - 20) / 2;
   const leftX = x;
   const rightX = x + colWidth + 20;
   const startY = y;
 
-  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10).fillColor('#000');
-  doc.text(t(locale, 'payment_conditions') + ':', leftX, y, { width: colWidth });
-  y = doc.y + 2;
-  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10);
-  if (paymentTerm?.description) {
-    doc.text(paymentTerm.description, leftX, y, { width: colWidth });
-    y = doc.y + 4;
-  }
-  if (paymentTerm?.netDays) {
-    doc.text(
-      `${paymentTerm.netDays} ${t(locale, 'net_days_suffix')}`,
-      leftX, y, { width: colWidth }
-    );
-    y = doc.y + 4;
-  }
-  if (paymentTerm?.skontoPercent && paymentTerm?.skontoWithinDays) {
-    doc.text(
-      t(locale, 'skonto_phrase', {
-        percent: stripTrailingZeros(paymentTerm.skontoPercent),
-        days: paymentTerm.skontoWithinDays,
-      }),
-      leftX, y, { width: colWidth }
-    );
+  // Quote vs invoice differs in two ways:
+  //   - Quotes never render the IBAN block (right column). A quote
+  //     is an offer, not a demand for payment, so wiring money
+  //     against an unsigned quote should not be encouraged.
+  //   - Quotes honor the per-issuer toggles for the net-days line
+  //     and the Skonto line. Both default true; setting either to
+  //     false suppresses that specific row.
+  // Invoices always show every available row + the IBAN.
+  const isQuote = type === 'quote';
+  const showNetDaysHere = isQuote ? (issuer?.quoteShowNetDays !== false) : true;
+  const showSkontoHere  = isQuote ? (issuer?.quoteShowSkonto  !== false) : true;
+  const showIbanHere    = !isQuote;
+
+  // If the quote has nothing to print in either column, bail out
+  // early — don't render a bare "Payment conditions:" header with
+  // no rows under it.
+  const hasNetDaysRow = showNetDaysHere && paymentTerm?.netDays;
+  const hasSkontoRow  = showSkontoHere && paymentTerm?.skontoPercent && paymentTerm?.skontoWithinDays;
+  const hasLateFeeRow = !isQuote && docMeta?.lateFeeMinor && Number(docMeta.lateFeeMinor) > 0;
+  const hasLeftContent = paymentTerm?.description || hasNetDaysRow || hasSkontoRow || hasLateFeeRow;
+  if (!hasLeftContent && !showIbanHere) return y;
+
+  if (hasLeftContent) {
+    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10).fillColor('#000');
+    doc.text(t(locale, 'payment_conditions') + ':', leftX, y, { width: colWidth });
     y = doc.y + 2;
-    // Show the post-discount amount so the customer doesn't have to do
-    // the math. Computed off the grand total (incl. VAT + shipping)
-    // since that's what the discount % is applied to per CH/DE convention.
-    const skontoTotalMinor = totals?.totalAmountMinor
-      ? Math.round(Number(totals.totalAmountMinor) * (1 - Number(paymentTerm.skontoPercent) / 100))
-      : null;
-    if (skontoTotalMinor != null) {
-      doc.fillColor('#444').text(
-        `${t(locale, 'skonto_amount_label')}: ${formatCurrencyLabel(currency)} ${formatMinor(skontoTotalMinor, currency, intlLocale)}`,
+    doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10);
+    if (paymentTerm?.description) {
+      doc.text(paymentTerm.description, leftX, y, { width: colWidth });
+      y = doc.y + 4;
+    }
+    if (hasNetDaysRow) {
+      doc.text(
+        `${paymentTerm.netDays} ${t(locale, 'net_days_suffix')}`,
+        leftX, y, { width: colWidth }
+      );
+      y = doc.y + 4;
+    }
+    if (hasSkontoRow) {
+      doc.text(
+        t(locale, 'skonto_phrase', {
+          percent: stripTrailingZeros(paymentTerm.skontoPercent),
+          days: paymentTerm.skontoWithinDays,
+        }),
+        leftX, y, { width: colWidth }
+      );
+      y = doc.y + 2;
+      // Show the post-discount amount so the customer doesn't have
+      // to do the math. Computed off the grand total (incl. VAT +
+      // shipping) per CH/DE convention.
+      const skontoTotalMinor = totals?.totalAmountMinor
+        ? Math.round(Number(totals.totalAmountMinor) * (1 - Number(paymentTerm.skontoPercent) / 100))
+        : null;
+      if (skontoTotalMinor != null) {
+        doc.fillColor('#444').text(
+          `${t(locale, 'skonto_amount_label')}: ${formatCurrencyLabel(currency)} ${formatMinor(skontoTotalMinor, currency, intlLocale)}`,
+          leftX, y, { width: colWidth }
+        );
+        doc.fillColor('#000');
+        y = doc.y + 4;
+      } else {
+        y += 2;
+      }
+    }
+    // Late fee note for second-reminder invoices (never on quotes).
+    if (hasLateFeeRow) {
+      doc.fillColor('#a00').text(
+        t(locale, 'late_fee_note', {
+          amount: `${formatCurrencyLabel(ctx.currency)} ${formatMinor(docMeta.lateFeeMinor, ctx.currency, intlLocale)}`,
+        }),
         leftX, y, { width: colWidth }
       );
       doc.fillColor('#000');
       y = doc.y + 4;
-    } else {
-      y += 2;
     }
   }
-  // Late fee note for second-reminder invoices.
-  if (docMeta?.lateFeeMinor && Number(docMeta.lateFeeMinor) > 0) {
-    doc.fillColor('#a00').text(
-      t(locale, 'late_fee_note', {
-        amount: `${formatCurrencyLabel(ctx.currency)} ${formatMinor(docMeta.lateFeeMinor, ctx.currency, intlLocale)}`,
-      }),
-      leftX, y, { width: colWidth }
-    );
-    doc.fillColor('#000');
-    y = doc.y + 4;
-  }
 
-  // Right column: IBAN.
+  // Right column: IBAN (invoices only).
   let ry = startY;
-  if (bank) {
+  if (showIbanHere && bank) {
     doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10);
     doc.text(t(locale, 'iban_intro'), rightX, ry, { width: colWidth });
     ry = doc.y + 4;

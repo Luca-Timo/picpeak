@@ -186,6 +186,24 @@ export const SettingsBusinessProfilePage: React.FC = () => {
             enabled={profile.pdfCompanyNameInline}
             onChange={(v) => setProfile({ ...profile, pdfCompanyNameInline: v })}
           />
+          {/* Quote payment-block toggles (migration 110). Both default
+              OFF — a quote is an offer, not a demand for payment, and
+              the IBAN block is always invoice-only. Admins opt in when
+              they want to set payment expectations on the quote. */}
+          <PdfToggleRow
+            label={t('businessProfile.field.pdfQuoteShowNetDays', 'Show net payment days on quote PDFs') as string}
+            description={t('businessProfile.field.pdfQuoteShowNetDaysHelp',
+              'When on, quote PDFs include the "X days from invoice date." line in the payment conditions block. Invoices always show this row regardless.') as string}
+            enabled={profile.pdfQuoteShowNetDays}
+            onChange={(v) => setProfile({ ...profile, pdfQuoteShowNetDays: v })}
+          />
+          <PdfToggleRow
+            label={t('businessProfile.field.pdfQuoteShowSkonto', 'Show Skonto / early-payment discount on quote PDFs') as string}
+            description={t('businessProfile.field.pdfQuoteShowSkontoHelp',
+              'When on, quote PDFs include the Skonto offer and the "Amount with discount" line. Invoices always show these regardless.') as string}
+            enabled={profile.pdfQuoteShowSkonto}
+            onChange={(v) => setProfile({ ...profile, pdfQuoteShowSkonto: v })}
+          />
         </div>
       </Card>
 
