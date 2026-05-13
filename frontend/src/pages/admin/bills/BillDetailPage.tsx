@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Eye, Send, CheckCircle, BellRing, XCircle, Truck } from 'lucide-react';
+import { ArrowLeft, Eye, Send, CheckCircle, BellRing, XCircle, Truck, Edit2 } from 'lucide-react';
 import { Button, Card, Loading, Input } from '../../../components/common';
 import { billsService } from '../../../services/bills.service';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
@@ -125,6 +125,16 @@ export const BillDetailPage: React.FC = () => {
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={handlePreview}><Eye className="w-4 h-4 mr-1" />{t('common.preview', 'Preview')}</Button>
+          {/* Edit is only available before the invoice has been sent
+              — the backend rejects PUTs on any non-scheduled status
+              with code INVOICE_LOCKED. Hide the button rather than
+              show it greyed out so it's clear the workflow has
+              shifted (cancel + reissue for sent invoices). */}
+          {inv.status === 'scheduled' && (
+            <Button variant="outline" onClick={() => navigate(`/admin/clients/bills/${inv.id}/edit`)}>
+              <Edit2 className="w-4 h-4 mr-1" />{t('common.edit', 'Edit')}
+            </Button>
+          )}
           {['scheduled', 'sent', 'overdue'].includes(inv.status) && (
             <Button onClick={handleSend}><Send className="w-4 h-4 mr-1" />{inv.status === 'scheduled' ? t('bills.sendNow', 'Send now') : t('bills.resend', 'Resend')}</Button>
           )}
