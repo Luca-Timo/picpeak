@@ -21,10 +21,22 @@ export interface PaymentCheckView {
   expiresAt: string;
 }
 
+export interface PaymentCheckIssuer {
+  companyName: string;
+  email?: string;
+  website?: string;
+  logoUrl: string | null;
+}
+export interface PaymentCheckResponse {
+  invoice: PaymentCheckView;
+  issuer: PaymentCheckIssuer | null;
+}
+
 export const paymentCheckService = {
-  async get(token: string): Promise<PaymentCheckView> {
+  async get(token: string): Promise<PaymentCheckResponse> {
     const { data } = await api.get(`/public/payment-check/${token}`);
-    return (data.data || data).invoice;
+    const body = data.data || data;
+    return { invoice: body.invoice, issuer: body.issuer || null };
   },
 
   async record(token: string, payload: {
