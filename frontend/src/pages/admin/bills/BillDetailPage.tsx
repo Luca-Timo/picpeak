@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Eye, Send, CheckCircle, BellRing, XCircle, Truck } from 'lucide-react';
+import { ArrowLeft, Eye, Send, CheckCircle, BellRing, XCircle, Truck, Edit2, RefreshCw } from 'lucide-react';
 import { Button, Card, Loading, Input } from '../../../components/common';
 import { billsService } from '../../../services/bills.service';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
@@ -65,6 +65,35 @@ export const BillDetailPage: React.FC = () => {
     try { await billsService.cancel(inv.id); toast.success(t('bills.cancelledToast', 'Invoice cancelled.')); qc.invalidateQueries({ queryKey: ['invoice', id] }); }
     catch (e: any) { toast.error(e?.response?.data?.error || 'Cancel failed'); }
   };
+  /**
+   * Cancel + reissue — the legally-correct alternative to editing
+   * a sent invoice. Atomically:
+   *   1. Cancels this invoice (status → cancelled)
+   *   2. Creates a new scheduled invoice with a fresh number,
+   *      same line items, linked via supersedesInvoiceId
+   *   3. Navigates to the new invoice's editor so the admin can
+   *      adjust whatever was wrong before sending
+   * For invoices that were never sent, use Edit instead — the
+   * backend rejects reissue with USE_EDIT_INSTEAD.
+   */
+  const handleReissue = async () => {
+    const msg = inv.status === 'cancelled'
+      ? t('bills.confirmReissueCancelled',
+        'Create a new scheduled invoice with the same line items, linked back to this cancelled one?')
+      : t('bills.confirmReissue',
+        'Cancel this invoice and create a new scheduled draft with the same line items? The PDF on the new invoice will reference this one as "Replaces R-XXXX".');
+    if (!window.confirm(msg)) return;
+    try {
+      const result = await billsService.reissue(inv.id);
+      toast.success(t('bills.reissuedToast', 'Invoice reissued — opening the new draft.'));
+      qc.invalidateQueries({ queryKey: ['invoice', id] });
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+      navigate(`/admin/clients/bills/${result.id}/edit`);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || 'Reissue failed');
+    }
+  };
+
   /**
    * Release a delivery invoice — fires immediately. Used for the
    * last installment in a split-payment plan (after_delivery
@@ -125,6 +154,16 @@ export const BillDetailPage: React.FC = () => {
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={handlePreview}><Eye className="w-4 h-4 mr-1" />{t('common.preview', 'Preview')}</Button>
+          {/* Edit is only available before the invoice has been sent
+              — the backend rejects PUTs on any non-scheduled status
+              with code INVOICE_LOCKED. Hide the button rather than
+              show it greyed out so it's clear the workflow has
+              shifted (cancel + reissue for sent invoices). */}
+          {inv.status === 'scheduled' && (
+            <Button variant="outline" onClick={() => navigate(`/admin/clients/bills/${inv.id}/edit`)}>
+              <Edit2 className="w-4 h-4 mr-1" />{t('common.edit', 'Edit')}
+            </Button>
+          )}
           {['scheduled', 'sent', 'overdue'].includes(inv.status) && (
             <Button onClick={handleSend}><Send className="w-4 h-4 mr-1" />{inv.status === 'scheduled' ? t('bills.sendNow', 'Send now') : t('bills.resend', 'Resend')}</Button>
           )}
@@ -154,6 +193,20 @@ export const BillDetailPage: React.FC = () => {
           {inv.status !== 'paid' && inv.status !== 'cancelled' && (
             <Button variant="outline" onClick={handleCancel}>
               <XCircle className="w-4 h-4 mr-1" />{t('common.cancel', 'Cancel')}
+            </Button>
+          )}
+          {/* Cancel & reissue — the legally-clean alternative to
+              post-send editing. Available for any invoice that's
+              already been issued (sent, overdue, paid) or already
+              cancelled (no-op cancel + create-new). Hidden for
+              scheduled (use Edit) and pending_delivery (Release
+              first if relevant). */}
+          {['sent', 'overdue', 'paid', 'cancelled'].includes(inv.status) && (
+            <Button variant="outline" onClick={handleReissue}>
+              <RefreshCw className="w-4 h-4 mr-1" />
+              {inv.status === 'cancelled'
+                ? t('bills.reissue', 'Reissue')
+                : t('bills.cancelAndReissue', 'Cancel & reissue')}
             </Button>
           )}
         </div>

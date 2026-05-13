@@ -279,6 +279,32 @@ async function createInvoice(payload, adminId, trx = db) {
 
   const bank = await businessProfileService.resolveBankAccountForCurrency(currency, payload.businessBankAccountId);
 
+  // Snapshot the selected payment-term template (net days / Skonto /
+  // installment plan) onto the invoice itself. Mirrors how the quote
+  // editor handles this — once snapshotted, edits to the template
+  // don't retroactively change rendered invoices. Migration 113.
+  let paymentTermTemplateId = null;
+  let paymentTermSnapshot = null;
+  if (payload.paymentTermTemplateId) {
+    const tpl = await trx('payment_term_templates')
+      .where({ id: payload.paymentTermTemplateId }).first();
+    if (tpl) {
+      paymentTermTemplateId = tpl.id;
+      // Match the snapshot shape the quote service emits so the
+      // PDF renderer's build* helpers can read both invoice and
+      // quote snapshots through one code path.
+      paymentTermSnapshot = JSON.stringify({
+        description: tpl.description || null,
+        net_days: tpl.net_days,
+        skonto_percent: tpl.skonto_percent,
+        skonto_within_days: tpl.skonto_within_days,
+        installments: typeof tpl.installments === 'string'
+          ? (() => { try { return JSON.parse(tpl.installments); } catch { return null; } })()
+          : tpl.installments || null,
+      });
+    }
+  }
+
   const row = {
     invoice_number: invoiceNumber,
     customer_account_id: payload.customerAccountId,
@@ -302,6 +328,8 @@ async function createInvoice(payload, adminId, trx = db) {
     cc_pdf_email: payload.ccPdfEmail || null,
     business_bank_account_id: bank?.id || null,
     qr_format: payload.qrFormat || null,
+    payment_term_template_id: paymentTermTemplateId,
+    payment_term_snapshot: paymentTermSnapshot,
     created_by_admin_id: adminId,
     created_at: new Date(),
     updated_at: new Date(),
@@ -515,25 +543,23 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
   }
 
   // Resolve the payment-term snapshot to thread Skonto + net-days into
-  // the PDF's "Zahlungsbedingungen" block. Two sources, in order:
-  //   1. The originating quote, if this invoice was created from one.
-  //   2. The global CRM defaults (settings tab) — `crm_invoices_*`.
-  // Both are wrapped in `paymentTerm` exactly as quoteService builds it
-  // so pdfService.drawPaymentBlock renders the same block on both
-  // document types.
+  // the PDF's "Zahlungsbedingungen" block. Three sources, in priority
+  // order:
+  //   1. The invoice's OWN snapshot (migration 113 — set when admin
+  //      picks a template directly in the New Invoice form).
+  //   2. The originating quote's snapshot, if this invoice was
+  //      created from one.
+  //   3. The global CRM defaults (settings tab) — `crm_invoices_*`.
+  // Both layers above are wrapped in `paymentTerm` exactly as
+  // quoteService builds it so pdfService.drawPaymentBlock renders
+  // the same block on both document types.
   let paymentTerm = null;
-  // Load the source quote once — used for the payment-term snapshot
-  // AND for the "Bezug: Angebot Q-..." reference line on the invoice
-  // PDF. We deliberately keep invoice numbers on a strict monotonic
-  // sequence (tax compliance) and surface the link as a text
-  // reference rather than mirroring the number.
-  let sourceQuote = null;
-  if (invoice.source_quote_id) {
-    sourceQuote = await db('quotes').where({ id: invoice.source_quote_id }).first();
-    const snapshot = sourceQuote && sourceQuote.payment_term_snapshot
-      ? (typeof sourceQuote.payment_term_snapshot === 'string'
-          ? JSON.parse(sourceQuote.payment_term_snapshot) : sourceQuote.payment_term_snapshot)
-      : null;
+
+  // Invoice-level snapshot wins when set.
+  if (invoice.payment_term_snapshot) {
+    const snapshot = typeof invoice.payment_term_snapshot === 'string'
+      ? (() => { try { return JSON.parse(invoice.payment_term_snapshot); } catch { return null; } })()
+      : invoice.payment_term_snapshot;
     if (snapshot) {
       paymentTerm = {
         description: snapshot.description,
@@ -541,6 +567,29 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
         skontoPercent: snapshot.skonto_percent,
         skontoWithinDays: snapshot.skonto_within_days,
       };
+    }
+  }
+
+  // Load the source quote once — used for the payment-term snapshot
+  // fallback AND for the "Bezug: Angebot Q-..." reference line on
+  // the invoice PDF. We deliberately keep invoice numbers on a
+  // strict monotonic sequence (tax compliance) and surface the link
+  // as a text reference rather than mirroring the number.
+  let sourceQuote = null;
+  if (invoice.source_quote_id) {
+    sourceQuote = await db('quotes').where({ id: invoice.source_quote_id }).first();
+    if (!paymentTerm && sourceQuote?.payment_term_snapshot) {
+      const snapshot = typeof sourceQuote.payment_term_snapshot === 'string'
+        ? (() => { try { return JSON.parse(sourceQuote.payment_term_snapshot); } catch { return null; } })()
+        : sourceQuote.payment_term_snapshot;
+      if (snapshot) {
+        paymentTerm = {
+          description: snapshot.description,
+          netDays: snapshot.net_days,
+          skontoPercent: snapshot.skonto_percent,
+          skontoWithinDays: snapshot.skonto_within_days,
+        };
+      }
     }
   }
   // Globally-default Skonto values, always loaded. Used either to
@@ -699,6 +748,18 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       // PDF renderer draws "Bezug: Angebot Q-..." under the title
       // when set. Empty/null suppresses the line (standalone invoice).
       sourceQuoteNumber: sourceQuote?.quote_number || null,
+      // When this invoice supersedes a previous one (migration 114 —
+      // cancel + reissue workflow), the renderer stamps a second
+      // reference line: "Bezug: Ersetzt Rechnung R-XXXX vom DATE".
+      supersedesInvoice: await (async () => {
+        if (!invoice.supersedes_invoice_id) return null;
+        const prior = await db('invoices')
+          .where({ id: invoice.supersedes_invoice_id })
+          .select('invoice_number', 'issue_date').first();
+        return prior
+          ? { number: prior.invoice_number, issueDate: prior.issue_date }
+          : null;
+      })(),
     },
   };
 }
@@ -876,6 +937,95 @@ async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, not
 }
 
 /**
+ * Cancel + reissue an invoice — the legally-correct alternative to
+ * post-send editing. Atomic:
+ *   1. The original (if not already cancelled) flips to status
+ *      'cancelled'
+ *   2. A new `scheduled` invoice is created with a fresh sequential
+ *      number, copying line items + customer + totals + payment
+ *      terms + bank + QR + everything the renderer needs
+ *   3. The new row's `supersedes_invoice_id` points at the original
+ *      so the PDF renderer can stamp "Bezug: Ersetzt Rechnung X" and
+ *      auditors can trace the chain
+ *
+ * Refuses to act on `scheduled` rows — those are still editable
+ * via Edit; reissuing them creates a confusing duplicate. Allows
+ * `sent` / `overdue` / `paid` / `cancelled` (caller's
+ * responsibility to know whether reissuing a paid invoice makes
+ * sense — usually that's a credit-note scenario instead).
+ */
+async function reissueInvoice(id, adminId) {
+  const original = await db('invoices').where({ id }).first();
+  if (!original) throw new AppError('Invoice not found', 404);
+  if (original.status === 'scheduled') {
+    throw new AppError(
+      'This invoice has not been sent yet — use Edit instead of Cancel & reissue.',
+      409,
+      'USE_EDIT_INSTEAD',
+    );
+  }
+
+  return await db.transaction(async (trx) => {
+    // 1. Cancel the original (idempotent on already-cancelled rows).
+    if (original.status !== 'cancelled') {
+      await trx('invoices').where({ id }).update({
+        status: 'cancelled',
+        updated_at: new Date(),
+      });
+      try {
+        await logActivity('invoice_cancelled_for_reissue', { invoiceId: id },
+          original.event_id || null, `admin:${adminId}`);
+      } catch (_) {}
+    }
+
+    // 2. Snapshot the line items so the duplicate carries identical
+    //    rows. We re-insert via createInvoice rather than direct DB
+    //    copies so the totals get re-computed authoritatively (any
+    //    rounding drift is recalculated from line items, matching
+    //    the create flow).
+    const lineItems = await trx('invoice_line_items').where({ invoice_id: id }).orderBy('position', 'asc');
+    const liPayload = lineItems.map((li) => ({
+      position: li.position,
+      quantity: Number(li.quantity),
+      description: li.description,
+      unit_price_minor: Number(li.unit_price_minor),
+      discount_percent: Number(li.discount_percent || 0),
+    }));
+
+    const newId = await createInvoice({
+      customerAccountId: original.customer_account_id,
+      sourceQuoteId: original.source_quote_id || null,
+      eventId: original.event_id || null,
+      language: original.language,
+      currency: original.currency,
+      vatRate: original.vat_rate,
+      shippingAmountMinor: original.shipping_amount_minor,
+      ccPdfEmail: original.cc_pdf_email,
+      businessBankAccountId: original.business_bank_account_id,
+      qrFormat: original.qr_format,
+      paymentTermTemplateId: original.payment_term_template_id,
+      // No installment metadata — reissue defaults to a single
+      // standalone invoice. If the admin needs the same split they
+      // can run the original conversion again from the quote.
+      lineItems: liPayload,
+    }, adminId, trx);
+
+    // 3. Link the new row to the cancelled original.
+    await trx('invoices').where({ id: newId }).update({
+      supersedes_invoice_id: id,
+      updated_at: new Date(),
+    });
+
+    try {
+      await logActivity('invoice_reissued', { originalInvoiceId: id, newInvoiceId: newId },
+        original.event_id || null, `admin:${adminId}`);
+    } catch (_) {}
+
+    return { id: newId, supersedes: id };
+  });
+}
+
+/**
  * Release a `pending_delivery` invoice for sending. Used when the
  * photographer has actually delivered the photos and is ready to
  * collect the final installment — flips the status to `scheduled`
@@ -1012,6 +1162,269 @@ async function applyReminder(invoice, lineItems, level, adminId) {
   return { level, lateFeeMinor };
 }
 
+// ---------------------------------------------------------------------
+// Payment-check workflow (admin-confirmed reminders)
+// ---------------------------------------------------------------------
+
+/**
+ * Resolve the admin email address that should receive the payment-
+ * check prompt. Priority:
+ *   1. created_by_admin_id's email (the admin who issued the invoice)
+ *   2. First admin user with bills.manage permission
+ *   3. business_profile.email as a last resort
+ * Returns null when nothing usable is found — caller logs + skips.
+ */
+async function resolveAdminEmailForInvoice(invoice) {
+  if (invoice.created_by_admin_id) {
+    const admin = await db('admin_users').where({ id: invoice.created_by_admin_id }).first();
+    if (admin?.email) return { email: admin.email, name: admin.username || admin.email };
+  }
+  // Fallback: business_profile.email.
+  const profile = await db('business_profile').where({ id: 1 }).first();
+  if (profile?.email) return { email: profile.email, name: profile.company_name || profile.email };
+  return null;
+}
+
+/**
+ * Generate a fresh payment-check token for an invoice and queue the
+ * admin email with three signed action buttons. Throttled to once
+ * per 24h per invoice via invoices.last_payment_check_at.
+ *
+ * Returns { token, sent: bool, reason? } so callers can log /
+ * surface the outcome.
+ */
+async function queuePaymentCheckEmail(invoiceId) {
+  const invoice = await db('invoices').where({ id: invoiceId }).first();
+  if (!invoice) return { sent: false, reason: 'not_found' };
+  if (!['sent', 'overdue'].includes(invoice.status)) {
+    return { sent: false, reason: `wrong_status_${invoice.status}` };
+  }
+  const now = new Date();
+  if (invoice.last_payment_check_at) {
+    const last = new Date(invoice.last_payment_check_at).getTime();
+    if (now.getTime() - last < 24 * 60 * 60 * 1000) {
+      return { sent: false, reason: 'throttled_24h' };
+    }
+  }
+
+  const adminContact = await resolveAdminEmailForInvoice(invoice);
+  if (!adminContact?.email) {
+    logger.warn('Payment-check email skipped — no admin email resolved', { invoiceId });
+    return { sent: false, reason: 'no_admin_email' };
+  }
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  await db('invoice_payment_check_tokens').insert({
+    invoice_id: invoiceId,
+    token,
+    expires_at: expiresAt,
+    created_at: now,
+  });
+  await db('invoices').where({ id: invoiceId }).update({
+    last_payment_check_at: now,
+    updated_at: now,
+  });
+
+  const customer = await db('customer_accounts').where({ id: invoice.customer_account_id }).first();
+  const profile = await db('business_profile').where({ id: 1 }).first();
+  const locale = invoice.language || profile?.default_locale || 'de';
+
+  // Determine whether the customer reminder will include a Mahngebühr
+  // if the admin selects "Not paid" / "Partial" — surfaced to the
+  // email so the admin sees the consequence before clicking.
+  const reminderLateFeeEnabled = (await getAppSetting('crm_invoices_late_fee_enabled')) !== false;
+  const reminderFeeMinor = ensureInt(await getAppSetting('crm_invoices_late_fee_minor')) || 2500;
+  const nextLevel = (invoice.reminder_level || 0) + 1;
+  const willChargeFee = reminderLateFeeEnabled && nextLevel >= 2;
+
+  const baseUrl = process.env.FRONTEND_URL
+    || (await getAppSetting('app_frontend_url'))
+    || 'https://app.example.com';
+  const buildUrl = (action) =>
+    `${baseUrl.replace(/\/$/, '')}/payment-check/${token}?action=${action}`;
+
+  await emailProcessor.queueEmail(invoice.event_id || null, adminContact.email,
+    'invoice_payment_check_admin', {
+      invoice_number: invoice.invoice_number,
+      customer_name: customer?.company_name
+        || customer?.display_name
+        || [customer?.first_name, customer?.last_name].filter(Boolean).join(' ')
+        || customer?.email || '',
+      event_name: '',
+      due_date: formatShortDate(invoice.due_date),
+      total_amount: formatMajor(invoice.total_amount_minor, invoice.currency, locale),
+      paid_url:    buildUrl('paid_full'),
+      partial_url: buildUrl('partial'),
+      unpaid_url:  buildUrl('unpaid'),
+      late_fee_due: willChargeFee,
+      late_fee_amount: formatMajor(reminderFeeMinor, invoice.currency, locale),
+    });
+
+  try {
+    await logActivity('invoice_payment_check_sent', { invoiceId, token: token.slice(0, 8) },
+      invoice.event_id || null, 'scheduler');
+  } catch (_) {}
+
+  return { token, sent: true };
+}
+
+/**
+ * Validate a payment-check token and return the invoice context
+ * the public page needs. Token must exist, not be expired, not
+ * already used.
+ */
+async function getPaymentCheckByToken(token) {
+  const row = await db('invoice_payment_check_tokens').where({ token }).first();
+  if (!row) throw new AppError('Token not found', 404);
+  if (row.used_at) {
+    const err = new AppError('This link has already been used', 410, 'TOKEN_ALREADY_USED');
+    err.usedAt = row.used_at;
+    err.usedAction = row.used_action;
+    throw err;
+  }
+  if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
+    throw new AppError('This link has expired', 410, 'TOKEN_EXPIRED');
+  }
+  const invoice = await db('invoices').where({ id: row.invoice_id }).first();
+  if (!invoice) throw new AppError('Invoice not found', 404);
+  const customer = await db('customer_accounts').where({ id: invoice.customer_account_id }).first();
+
+  const outstandingMinor = Math.max(0,
+    Number(invoice.total_amount_minor || 0) + Number(invoice.late_fee_amount_minor || 0)
+    - Number(invoice.paid_amount_minor || 0));
+
+  return {
+    invoiceNumber: invoice.invoice_number,
+    customer: {
+      label: customer?.company_name
+        || [customer?.first_name, customer?.last_name].filter(Boolean).join(' ')
+        || customer?.display_name || customer?.email || '',
+      email: customer?.email,
+    },
+    issueDate: invoice.issue_date,
+    dueDate: invoice.due_date,
+    totalMinor: invoice.total_amount_minor,
+    paidMinor: invoice.paid_amount_minor,
+    lateFeeMinor: invoice.late_fee_amount_minor,
+    outstandingMinor,
+    currency: invoice.currency,
+    status: invoice.status,
+    reminderLevel: invoice.reminder_level,
+    expiresAt: row.expires_at,
+  };
+}
+
+/**
+ * Record the admin's payment-check action and fire the downstream
+ * consequences:
+ *   - 'paid_full' → markPaid for the outstanding amount, no reminder.
+ *   - 'partial'   → markPaid for the amount supplied, then fire the
+ *                   next reminder for the remainder.
+ *   - 'unpaid'    → fire the next reminder (level 1 or 2) with the
+ *                   existing Mahngebühr logic in applyReminder.
+ *
+ * Atomic: token consumption + invoice status update happen in one
+ * transaction. The reminder email is queued AFTER the txn commits
+ * to avoid emailing a customer about a payment that never
+ * actually committed.
+ */
+async function recordPaymentCheckAction({ token, action, amountMinor, ip, adminId }) {
+  if (!['paid_full', 'partial', 'unpaid'].includes(action)) {
+    throw new AppError('Invalid action', 400);
+  }
+
+  const row = await db('invoice_payment_check_tokens').where({ token }).first();
+  if (!row) throw new AppError('Token not found', 404);
+  if (row.used_at) {
+    throw new AppError('This link has already been used', 410, 'TOKEN_ALREADY_USED');
+  }
+  if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
+    throw new AppError('This link has expired', 410, 'TOKEN_EXPIRED');
+  }
+  const invoice = await db('invoices').where({ id: row.invoice_id }).first();
+  if (!invoice) throw new AppError('Invoice not found', 404);
+
+  const outstandingMinor = Math.max(0,
+    Number(invoice.total_amount_minor || 0) + Number(invoice.late_fee_amount_minor || 0)
+    - Number(invoice.paid_amount_minor || 0));
+
+  if (action === 'partial') {
+    const amt = ensureInt(amountMinor);
+    if (amt <= 0) throw new AppError('partial amount must be > 0', 400);
+    if (amt > outstandingMinor) throw new AppError('partial amount exceeds outstanding', 400);
+  }
+
+  // Consume the token first — atomic with status update so a
+  // double-click can't fire the action twice.
+  const now = new Date();
+  const updated = await db('invoice_payment_check_tokens')
+    .where({ id: row.id })
+    .whereNull('used_at')
+    .update({
+      used_at: now,
+      used_action: action,
+      used_amount_minor: action === 'partial' ? ensureInt(amountMinor) : null,
+      used_ip: ip || null,
+    });
+  if (updated === 0) {
+    // Lost a race with another consumer.
+    throw new AppError('This link has already been used', 410, 'TOKEN_ALREADY_USED');
+  }
+
+  try {
+    await logActivity('invoice_payment_check_recorded',
+      { invoiceId: invoice.id, action, amountMinor: amountMinor || null },
+      invoice.event_id || null,
+      adminId ? `admin:${adminId}` : 'public:payment-check');
+  } catch (_) {}
+
+  // --- Apply the action -----------------------------------------
+  if (action === 'paid_full') {
+    await markPaid(invoice.id, {
+      amountMinor: outstandingMinor,
+      paymentMethod: invoice.payment_method || 'bank_transfer',
+      reference: invoice.payment_reference || null,
+      notes: 'Confirmed via admin payment-check link',
+    }, adminId || invoice.created_by_admin_id);
+    return { applied: 'paid_full' };
+  }
+
+  if (action === 'partial') {
+    const amt = ensureInt(amountMinor);
+    await markPaid(invoice.id, {
+      amountMinor: amt,
+      paymentMethod: invoice.payment_method || 'bank_transfer',
+      reference: invoice.payment_reference || null,
+      notes: 'Partial payment confirmed via admin payment-check link',
+    }, adminId || invoice.created_by_admin_id);
+    // Then fire the customer reminder for the remainder, unless
+    // markPaid flipped the invoice to paid (i.e. the partial
+    // amount equalled the outstanding).
+    const refreshed = await db('invoices').where({ id: invoice.id }).first();
+    if (refreshed.status !== 'paid') {
+      const nextLevel = (refreshed.reminder_level || 0) + 1;
+      if (nextLevel <= 2) {
+        const lineItems = await db('invoice_line_items')
+          .where({ invoice_id: invoice.id }).orderBy('position', 'asc');
+        await applyReminder(refreshed, lineItems, nextLevel, adminId);
+      }
+    }
+    return { applied: 'partial' };
+  }
+
+  // 'unpaid'
+  const nextLevel = (invoice.reminder_level || 0) + 1;
+  if (nextLevel > 2) {
+    // Already at max reminder — admin has to take this offline.
+    return { applied: 'unpaid', reminderSkipped: 'max_level_reached' };
+  }
+  const lineItems = await db('invoice_line_items')
+    .where({ invoice_id: invoice.id }).orderBy('position', 'asc');
+  await applyReminder(invoice, lineItems, nextLevel, adminId);
+  return { applied: 'unpaid', reminderLevel: nextLevel };
+}
+
 /**
  * Cron tick — find scheduled invoices ready to send + invoices past
  * due date that need a reminder. Called by invoiceSchedulerService.
@@ -1034,7 +1447,20 @@ async function runScheduledTasks() {
     }
   }
 
-  // 2. Overdue check (if reminders enabled).
+  // 2. Overdue payment-check prompts (if reminders enabled).
+  //
+  // NEW behavior (migration 115/116): instead of auto-firing the
+  // customer reminder when an invoice goes overdue, we email the
+  // ADMIN with three signed-token action buttons:
+  //   - Paid in full  → markPaid for the outstanding amount
+  //   - Partial       → admin enters amount; partial + reminder
+  //   - Not paid yet  → reminder fires (with Mahngebühr at level 2)
+  //
+  // The reminder thresholds still gate when the prompt fires:
+  //   - level 0 invoice past firstCutoff  → prompt for level-1 path
+  //   - level 1 invoice past secondCutoff → prompt for level-2 path
+  // Throttled to one email per 24h per invoice via
+  // invoices.last_payment_check_at.
   const remindersEnabled = await getAppSetting('crm_invoices_reminders_enabled');
   if (remindersEnabled !== false) {
     const firstDays  = ensureInt(await getAppSetting('crm_invoices_reminder_first_days')) || 14;
@@ -1043,7 +1469,7 @@ async function runScheduledTasks() {
     const firstCutoff  = new Date(now.getTime() - firstDays  * 86400000);
     const secondCutoff = new Date(now.getTime() - secondDays * 86400000);
 
-    // Level 1: overdue past firstCutoff, reminder_level = 0.
+    // Pre-reminder check (would-be-level-1).
     const firstBatch = await db('invoices')
       .whereIn('status', ['sent', 'overdue'])
       .where('reminder_level', 0)
@@ -1051,14 +1477,13 @@ async function runScheduledTasks() {
       .limit(20);
     for (const inv of firstBatch) {
       try {
-        const lineItems = await db('invoice_line_items').where({ invoice_id: inv.id }).orderBy('position', 'asc');
-        await applyReminder(inv, lineItems, 1, null);
+        await queuePaymentCheckEmail(inv.id);
       } catch (err) {
-        logger.error('First reminder failed', { invoiceId: inv.id, err: err.message });
+        logger.error('Payment-check email failed', { invoiceId: inv.id, err: err.message });
       }
     }
 
-    // Level 2: overdue past secondCutoff, reminder_level = 1.
+    // Pre-reminder check (would-be-level-2, including Mahngebühr).
     const secondBatch = await db('invoices')
       .whereIn('status', ['sent', 'overdue'])
       .where('reminder_level', 1)
@@ -1066,10 +1491,9 @@ async function runScheduledTasks() {
       .limit(20);
     for (const inv of secondBatch) {
       try {
-        const lineItems = await db('invoice_line_items').where({ invoice_id: inv.id }).orderBy('position', 'asc');
-        await applyReminder(inv, lineItems, 2, null);
+        await queuePaymentCheckEmail(inv.id);
       } catch (err) {
-        logger.error('Second reminder failed', { invoiceId: inv.id, err: err.message });
+        logger.error('Payment-check email (level 2) failed', { invoiceId: inv.id, err: err.message });
       }
     }
   }
@@ -1105,6 +1529,10 @@ module.exports = {
   markPaid,
   cancelInvoice,
   releaseForDelivery,
+  reissueInvoice,
+  queuePaymentCheckEmail,
+  getPaymentCheckByToken,
+  recordPaymentCheckAction,
   renderInvoicePdfBuffer,
   renderInvoicePdfFromPayload,
   runScheduledTasks,
