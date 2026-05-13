@@ -844,6 +844,13 @@ function renderDocument(type, context) {
       const ctx = normaliseContext(type, context);
       const doc = new PDFDocument({
         size: 'A4',
+        // bufferPages: true keeps every page open in memory after
+        // they're emitted so we can switch back and stamp the page
+        // numbers ("Page 1 of N" / "Seite 1 von N") once we know how
+        // many pages the document ended up with. Without buffering,
+        // PDFKit flushes each page as soon as the next one starts,
+        // so we couldn't know N until it was too late.
+        bufferPages: true,
         margins: {
           top: PAGE.marginTop, bottom: PAGE.marginBottom,
           left: PAGE.marginLeft, right: PAGE.marginRight,
@@ -985,7 +992,30 @@ function renderDocument(type, context) {
       y += 8;
       doc.y = y;
       doc.x = leftX;
-      drawLineItems(doc, ctx);
+
+      // Force the items table to auto-paginate BEFORE it can collide
+      // with the totals + payment block at the page bottom. We
+      // compute the same anchor as below, then temporarily inflate
+      // the page's bottom margin so swissqrbill's Table sees a
+      // shorter usable area and breaks to a new page when items
+      // would otherwise spill into the totals zone. The header row
+      // is already marked `header: true` so it auto-repeats on the
+      // continuation page.
+      const _origBottomMargin = doc.page.margins.bottom;
+      const _itemsBottomReserve = PAGE.marginBottom
+        + 60                                  // FOOTER_RESERVE
+        + (ctx.paymentTerm ? 140 : 70)        // PAYMENT_BLOCK_HEIGHT
+        + 12                                  // gap between totals + payment
+        + 110                                 // TOTALS_BLOCK_HEIGHT
+        + 20;                                 // small breathing room
+      doc.page.margins.bottom = _itemsBottomReserve;
+      try {
+        drawLineItems(doc, ctx);
+      } finally {
+        // Restore even if drawLineItems threw — keeps subsequent
+        // pages on the document's normal margin geometry.
+        doc.page.margins.bottom = _origBottomMargin;
+      }
       // y after the table — used only to detect whether the items
       // overflowed past the totals anchor below. We don't use it as
       // the totals position directly because the totals block is
@@ -1043,6 +1073,43 @@ function renderDocument(type, context) {
       // ---- swiss QR-bill on fresh page ------------------------------
       if (type === 'invoice') {
         appendSwissQrBill(doc, ctx);
+      }
+
+      // ---- page numbers ("Page 1 of N" / "Seite 1 von N") -----------
+      // Stamped after everything else so we know the final page
+      // count. bufferPages: true (on the PDFDocument options above)
+      // keeps every page open for back-editing — bufferedPageRange()
+      // returns {start, count}. We switchToPage() each one, draw the
+      // pagination label in the bottom-right corner, then end.
+      try {
+        const range = doc.bufferedPageRange();
+        const total = range.count;
+        // Stamp on EVERY page including single-page documents. The
+        // "Page 1 of 1" label is a tamper-evidence cue for the
+        // recipient — if they receive page 1 of 3 in isolation,
+        // they know pages are missing; conversely "1 of 1" lets a
+        // single-page invoice confirm it's complete. The cost (one
+        // grey line in the bottom corner) is negligible.
+        for (let i = 0; i < total; i++) {
+          doc.switchToPage(range.start + i);
+          doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8).fillColor('#888');
+          const label = t(ctx.locale, 'page_of', {
+            current: i + 1,
+            total,
+          });
+          // Bottom-right corner, just above the bottom margin so
+          // it doesn't trigger PDFKit's auto-paging.
+          const labelY = doc.page.height - PAGE.marginBottom - 12;
+          const labelW = 120;
+          const labelX = doc.page.width - PAGE.marginRight - labelW;
+          doc.text(label, labelX, labelY, {
+            width: labelW, align: 'right', lineBreak: false,
+          });
+          doc.fillColor('#000');
+        }
+      } catch (err) {
+        const logger = require('../utils/logger');
+        logger.warn('Failed to stamp page numbers on PDF', { err: err.message });
       }
 
       doc.end();
