@@ -22,6 +22,12 @@ function makeChain() {
     _insertResult: [{ id: 999 }],
     _selectResult: [],
     _allRows: [],
+    // knex chains are thenable — awaiting them runs the query and
+    // resolves with the row set. We mirror that so callers can
+    // `await trx('t').where(...).orderBy(...)` and get an array.
+    then: function (onResolve, onReject) {
+      return Promise.resolve(this._selectResult).then(onResolve, onReject);
+    },
     where: jest.fn(function () { return this; }),
     whereNot: jest.fn(function () { return this; }),
     whereNotIn: jest.fn(function () { return this; }),
@@ -57,13 +63,13 @@ function pickChainFor(name) {
   return tableChains[name];
 }
 
-const dbFn = jest.fn((name) => pickChainFor(name));
+const mockDbFn = jest.fn((name) => pickChainFor(name));
 // db.transaction(cb) runs the callback with a "trx" — for our
 // purposes the same chain factory works as trx.
-dbFn.transaction = jest.fn(async (cb) => cb(dbFn));
+mockDbFn.transaction = jest.fn(async (cb) => cb(mockDbFn));
 
 jest.mock('../../src/database/db', () => ({
-  db: dbFn,
+  db: mockDbFn,
   withRetry: jest.fn(async (fn) => fn()),
   logActivity: jest.fn(async () => {}),
 }));

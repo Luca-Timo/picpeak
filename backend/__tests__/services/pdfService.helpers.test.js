@@ -11,8 +11,15 @@ const pdfService = require('../../src/services/pdfService');
 const { formatMinor, formatDate, t } = pdfService._internal;
 
 describe('formatMinor', () => {
-  it('formats CHF cents with 2 decimals', () => {
-    expect(formatMinor(123456, 'CHF', 'de-CH')).toMatch(/123.456\.56|123’456\.56|123'456\.56/);
+  it('formats CHF cents with 2 decimals (123456 minor = 1234.56 major)', () => {
+    // de-CH uses ’ (U+2019) as the thousands separator.
+    expect(formatMinor(123456, 'CHF', 'de-CH')).toMatch(/1[’',\u2019]?234\.56/);
+  });
+
+  it('formats large amounts with thousands separators', () => {
+    // 12345600 minor units = 123,456.00 major; the separator
+    // varies by locale (de-CH = U+2019, en-GB = ',').
+    expect(formatMinor(12345600, 'CHF', 'de-CH')).toMatch(/123[’',\u2019]456\.00/);
   });
 
   it('returns 0,00 for zero or null', () => {
