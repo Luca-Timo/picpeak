@@ -345,6 +345,22 @@ router.post(
   })
 );
 
+// Admin "accept on behalf of customer" — flips the quote straight
+// to `accepted` without going through the public token + response
+// window. For phone-call workflows where the customer verbally
+// agrees and the admin wants to immediately convert.
+router.post(
+  '/:id/accept',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    const result = await quoteService.adminAcceptQuote(id, req.admin.id);
+    return successResponse(res, result, 200, 'Quote accepted');
+  })
+);
+
 router.post(
   '/:id/convert',
   requirePermission('quotes.manage'),

@@ -349,8 +349,18 @@ async function updateQuote(id, payload, adminId) {
   if (!existing) {
     throw new AppError('Quote not found', 404);
   }
-  if (existing.status === 'converted') {
-    throw new AppError('Cannot edit a converted quote', 409);
+  // Once a customer has responded (accept / decline) or the quote has
+  // been converted to an event/invoice, edits would invalidate the
+  // record the customer agreed to. Lock these states the same way
+  // sent invoices are locked. `draft` and `sent` remain editable;
+  // `sent` reverts to `draft` further down so the admin must resend.
+  // `expired` is left editable — quote can be revised and re-sent.
+  if (['accepted', 'declined', 'converted'].includes(existing.status)) {
+    throw new AppError(
+      `Cannot edit quote with status '${existing.status}'. Duplicate the quote and start fresh if changes are needed.`,
+      409,
+      'QUOTE_LOCKED',
+    );
   }
 
   const totals = computeTotals(
@@ -876,6 +886,59 @@ async function recordResponse({ token, action, ip, tosAccepted }) {
 }
 
 /**
+ * Admin "accept on behalf of customer" — records the quote as
+ * accepted directly, bypassing the public token + response window.
+ * Used when the admin is on the phone with the customer and they
+ * verbally accept; the admin wants the quote flipped to `accepted`
+ * immediately so they can convert it to an event/invoice.
+ *
+ * Unlike recordResponse:
+ *   - No token required
+ *   - No response-window lockout (admin can accept stale / expired
+ *     quotes too — useful for retroactive bookkeeping)
+ *   - Skips the ToS-required guard (admin is responsible for
+ *     confirming verbally; ToS_snapshot stays null)
+ *
+ * Refuses to act on quotes that are already terminal: `accepted`,
+ * `declined`, or `converted` rows would silently overwrite history.
+ * Admins use the cancel/duplicate flow for those cases.
+ */
+async function adminAcceptQuote(id, adminId) {
+  const quote = await db('quotes').where({ id }).first();
+  if (!quote) throw new AppError('Quote not found', 404);
+  if (quote.status === 'accepted') {
+    throw new AppError('Quote already accepted', 409, 'QUOTE_ALREADY_ACCEPTED');
+  }
+  if (quote.status === 'declined') {
+    throw new AppError('Quote was declined; duplicate it to start a fresh round.', 409, 'QUOTE_DECLINED');
+  }
+  if (quote.status === 'converted') {
+    throw new AppError('Quote already converted to an event/invoice', 409, 'QUOTE_CONVERTED');
+  }
+
+  const now = new Date();
+  const windowMinutes = ensureInt(await getAppSetting('crm_quotes_accept_window_minutes')) || 15;
+  const responseLockedAt = new Date(now.getTime() + windowMinutes * 60 * 1000);
+
+  await db('quotes').where({ id }).update({
+    status: 'accepted',
+    responded_at: now,
+    response_locked_at: responseLockedAt,
+    accepted_at: now,
+    // accept_on_behalf flag intentionally NOT stored as a separate
+    // column — the audit log entry below captures who accepted and
+    // when, which is the legally relevant breadcrumb.
+    updated_at: now,
+  });
+
+  try {
+    await logActivity('quote_accepted_by_admin', { quoteId: id }, null, `admin:${adminId}`);
+  } catch (_) {}
+
+  return { status: 'accepted', lockedAt: responseLockedAt };
+}
+
+/**
  * Convert an accepted quote to an event + scheduled invoices.
  * Wraps everything in a transaction so a half-finished conversion
  * doesn't litter the DB.
@@ -1262,6 +1325,7 @@ module.exports = {
   sendQuote,
   duplicateQuote,
   recordResponse,
+  adminAcceptQuote,
   convertToEvent,
   convertToInvoiceOnly,
 
