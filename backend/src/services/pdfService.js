@@ -491,14 +491,12 @@ function drawLineItems(doc, ctx) {
     ? [30, 40, 240, 50, 75, 80]
     : [30, 50, 280, 70, 85];
 
-  // Per-row padding — swissqrbill's PDFPadding type accepts
-  // `number | [top, right, bottom, left] | [vertical, horizontal]`
-  // but NOT an object. The earlier object form was silently
-  // ignored (so the padding bumps the maintainer asked for never
-  // landed visually). 8pt top + 8pt bottom is the sweet spot —
-  // enough breathing room for each item to read as its own row
-  // without doubling the visual height like the 24pt setting did.
-  const ROW_PADDING = [8, 4, 8, 4];
+  // Per-row padding — tight rows. 3pt top + 3pt bottom keeps each
+  // line item compact, with just enough vertical breathing room
+  // for the divider lines to read clearly. swissqrbill's PDFPadding
+  // type requires array form (number | [top, right, bottom, left]);
+  // the earlier object form was silently dropped.
+  const ROW_PADDING = [3, 4, 3, 4];
   // Match the totals box font size; the maintainer wants the line
   // items and the billing totals to read at the same weight so the
   // eye doesn't bounce between two scales.
@@ -982,30 +980,42 @@ function renderDocument(type, context) {
       }
 
       // ---- line items table ----------------------------------------
-      // Top padding before the table — separates the lead-in text
-      // from the header row so the items don't feel packed against
-      // the salutation block.
-      y += 24;
+      // Small top padding — tight against the lead-in text since the
+      // maintainer wants the items right under the greeting/intro.
+      y += 8;
       doc.y = y;
       doc.x = leftX;
       drawLineItems(doc, ctx);
-      // Bottom padding after the table — matches the top padding so
-      // the line items sit visually balanced between the lead-in
-      // above and the totals below.
-      y = doc.y + 32;
+      // y after the table — used only to detect whether the items
+      // overflowed past the totals anchor below. We don't use it as
+      // the totals position directly because the totals block is
+      // pinned to a fixed offset from the page bottom regardless of
+      // how many items rendered.
+      y = doc.y;
 
-      // ---- pin totals + payment ABOVE the footer ----------------
-      // Work backwards from the footer so the payment block (Skonto,
-      // IBAN, account holder) sits right against the footer with a
-      // small gap. Totals stack above the payment block. If the line
-      // items pushed past this anchor, we use the current Y instead
-      // and let PDFKit auto-paginate.
+      // ---- pin totals + payment block to footer ---------------------
+      // The totals box + payment block ALWAYS render at the same
+      // distance from the page bottom regardless of how many line
+      // items rendered. Few items = white space between them and
+      // the totals; many items = if they overflow past the totals
+      // anchor, we add a new page and render the bottom block there
+      // (so the customer never sees the totals/payment crammed in).
       const FOOTER_RESERVE = 60;                  // footer text + small gap
       const PAYMENT_BLOCK_HEIGHT = ctx.paymentTerm ? 140 : 70;
       const TOTALS_BLOCK_HEIGHT  = 110;
       const desiredPaymentY = PAGE.height - PAGE.marginBottom - FOOTER_RESERVE - PAYMENT_BLOCK_HEIGHT;
       const desiredTotalsY  = desiredPaymentY - 12 - TOTALS_BLOCK_HEIGHT;
-      y = Math.max(y, desiredTotalsY);
+
+      // If line items used more space than the totals anchor allows,
+      // advance to a new page before drawing totals — keeps the
+      // bottom block at a CONSTANT position from the footer on
+      // whatever page it lands on.
+      if (y > desiredTotalsY) {
+        doc.addPage();
+      }
+      // Always reset to the fixed anchor — independent of where the
+      // table ended on the page.
+      y = desiredTotalsY;
 
       // ---- totals box (right-aligned) -------------------------------
       y = drawTotals(doc, ctx, leftX, y, PAGE.contentWidth);
@@ -1018,10 +1028,10 @@ function renderDocument(type, context) {
       }
 
       // ---- payment conditions + IBAN block --------------------------
-      // Pin the payment block to sit RIGHT above the footer regardless
-      // of where totals ended (totals can end short of the desired
-      // anchor if e.g. only Net + Total render with no shipping/vat).
-      y = Math.max(y, desiredPaymentY);
+      // Pin the payment block to the fixed anchor too — the totals
+      // box can end short of it (e.g. when only Net + Total render
+      // with no shipping/VAT), so we snap back unconditionally.
+      y = desiredPaymentY;
       y = drawPaymentBlock(doc, ctx, leftX, y, PAGE.contentWidth);
 
       // ---- folding marks (left edge) --------------------------------
