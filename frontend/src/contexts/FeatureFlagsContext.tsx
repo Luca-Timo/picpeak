@@ -30,6 +30,9 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   customerPortal: false,
   // CRM developer tools sub-tab. Strictly opt-in.
   crmDevelopment: false,
+  // Tax / Steuer report sub-tab. Independent toggle; forced off when
+  // `bills` is off (no invoices → nothing to report).
+  taxReport: false,
 };
 
 export const FEATURE_FLAGS_QUERY_KEY = ['feature-flags'] as const;
@@ -61,6 +64,7 @@ function applyDependencyRules(flags: FeatureFlags): FeatureFlags {
   out.galleries = true;                            // foundation — always on
   if (out.quotes === false) out.bills = false;     // bills depend on quotes
   if (out.calendar === false) out.calendarBooking = false;  // booking depends on calendar
+  if (out.bills === false) out.taxReport = false;  // tax report depends on bills
   // Clients parent flag is DERIVED from its children. Admins don't
   // toggle it directly — enabling any CRM-area sub-feature
   // (Accounts today; future Calendar / Quotes / Bills / Messaging)
@@ -69,7 +73,10 @@ function applyDependencyRules(flags: FeatureFlags): FeatureFlags {
   out.clients = Boolean(
     out.customerPortal
     || out.crmDevelopment
-    // future siblings: || out.calendar || out.quotes || out.bills || out.messaging
+    || out.quotes
+    || out.bills
+    || out.taxReport
+    // future siblings: || out.calendar || out.messaging
   );
   return out;
 }

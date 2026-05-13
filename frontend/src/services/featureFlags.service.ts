@@ -24,7 +24,12 @@ export type FeatureKey =
   // a "Development" sub-tab under Clients with internal-use buttons
   // (test the payment-check email flow, fire dev-only side effects,
   // etc.). Strictly opt-in; toggled from Features.
-  | 'crmDevelopment';
+  | 'crmDevelopment'
+  // Tax / Steuer report — period-scoped revenue export under
+  // Clients. Independent of `bills` so admins who already use the
+  // billing surface don't get a new menu entry automatically; they
+  // opt in when they're ready to generate tax reports.
+  | 'taxReport';
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 

@@ -45,6 +45,11 @@ const KNOWN_FLAGS = [
   // payment-check email flow without waiting 30 days, etc.).
   // Strictly opt-in.
   'crmDevelopment',
+  // Tax / Steuer report sub-tab under Clients. Independent toggle so
+  // admins who use Bills but don't need the tax export (or aren't
+  // ready to enable it yet) can leave it off. Forced off when `bills`
+  // is off (no invoices → nothing to report).
+  'taxReport',
 ];
 
 // Spec defaults for any flag missing from the DB (e.g. a row added by a
@@ -60,6 +65,7 @@ const DEFAULT_FLAGS = {
   analytics: true,
   userManagement: true,
   clients: false,
+  taxReport: false,
 };
 
 async function readAllFlags() {
@@ -80,6 +86,10 @@ function applyDependencyRules(flags) {
   // Sub-features can't outlive their parents.
   if (out.quotes === false) out.bills = false;
   if (out.calendar === false) out.calendarBooking = false;
+  // Tax report only makes sense when bills are on — turning bills off
+  // implicitly turns the tax report off too. Admins enabling tax
+  // report must first enable bills.
+  if (out.bills === false) out.taxReport = false;
   // Clients parent flag is DERIVED from its children. Admins don't
   // toggle it directly in the Features tab — they enable a specific
   // sub-feature (Accounts today; Calendar/Quotes/Bills/Messaging
@@ -90,7 +100,10 @@ function applyDependencyRules(flags) {
   out.clients = Boolean(
     out.customerPortal
     || out.crmDevelopment
-    // future siblings (out.calendar || out.quotes || out.bills || out.messaging) go here
+    || out.quotes
+    || out.bills
+    || out.taxReport
+    // future siblings (out.calendar || out.messaging) go here
   );
   return out;
 }
