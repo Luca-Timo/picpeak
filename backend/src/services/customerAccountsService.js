@@ -985,10 +985,25 @@ async function getCustomerSurfaceGlobals() {
     }
     map[r.setting_key] = v;
   }
+  // Feature globals:
+  //   - quotes + bills default TRUE — the customer-facing pages are
+  //     fully built and the AND-logic with the per-customer flag is
+  //     the real gate. The earlier hardcoded `false` made it
+  //     impossible to surface the tabs without code changes.
+  //   - calendar defaults FALSE — the customer-side page is still a
+  //     coming-soon stub.
+  // Each is overridable via app_settings (setting_type='customer_surface').
+  const readBool = (key, fallback) => {
+    const v = map[key];
+    if (v === undefined) return fallback;
+    if (v === true || v === 1 || v === '1' || v === 't') return true;
+    if (v === false || v === 0 || v === '0' || v === 'f') return false;
+    return fallback;
+  };
   return {
-    calendarEnabled: false,
-    quotesEnabled: false,
-    billsEnabled: false,
+    calendarEnabled: readBool('customer_feature_calendar_enabled', false),
+    quotesEnabled:   readBool('customer_feature_quotes_enabled',   true),
+    billsEnabled:    readBool('customer_feature_bills_enabled',    true),
     showLogo:        map.customer_show_logo !== false, // default true
     showCompanyName: map.customer_show_company_name !== false, // default true
   };
