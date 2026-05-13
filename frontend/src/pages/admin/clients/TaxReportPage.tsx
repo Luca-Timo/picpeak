@@ -18,7 +18,13 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Calculator, Download, FileDown, AlertCircle } from 'lucide-react';
-import { Button, Card, Loading, Select, Input } from '../../../components/common';
+import { Button, Card, Loading, Input } from '../../../components/common';
+
+// Lightweight native select styled to match Input — the common barrel
+// doesn't export a Select component, and the form pieces here are
+// small enough that a plain styled <select> is the right call.
+const selectClassName =
+  'w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-primary-500';
 import { taxReportService, type TaxReportParams } from '../../../services/taxReport.service';
 import { toast } from 'react-toastify';
 
@@ -154,17 +160,18 @@ export const TaxReportPage: React.FC = () => {
             <label htmlFor="period-preset" className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               {t('taxReport.filters.period', 'Period')}
             </label>
-            <Select
+            <select
               id="period-preset"
               value={preset}
               onChange={(e) => onPresetChange(e.target.value as PeriodPreset)}
+              className={selectClassName}
             >
               <option value="thisYear">{t('taxReport.filters.thisYear', 'This year')}</option>
               <option value="lastYear">{t('taxReport.filters.lastYear', 'Last year')}</option>
               <option value="thisQuarter">{t('taxReport.filters.thisQuarter', 'This quarter')}</option>
               <option value="lastQuarter">{t('taxReport.filters.lastQuarter', 'Last quarter')}</option>
               <option value="custom">{t('taxReport.filters.custom', 'Custom range')}</option>
-            </Select>
+            </select>
           </div>
           <div>
             <label htmlFor="period-from" className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
@@ -192,16 +199,17 @@ export const TaxReportPage: React.FC = () => {
             <label htmlFor="currency" className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               {t('taxReport.filters.currency', 'Currency')}
             </label>
-            <Select
+            <select
               id="currency"
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
+              className={selectClassName}
             >
               <option value="CHF">CHF</option>
               <option value="EUR">EUR</option>
               <option value="USD">USD</option>
               <option value="GBP">GBP</option>
-            </Select>
+            </select>
           </div>
         </div>
 
