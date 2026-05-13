@@ -279,6 +279,32 @@ async function createInvoice(payload, adminId, trx = db) {
 
   const bank = await businessProfileService.resolveBankAccountForCurrency(currency, payload.businessBankAccountId);
 
+  // Snapshot the selected payment-term template (net days / Skonto /
+  // installment plan) onto the invoice itself. Mirrors how the quote
+  // editor handles this — once snapshotted, edits to the template
+  // don't retroactively change rendered invoices. Migration 113.
+  let paymentTermTemplateId = null;
+  let paymentTermSnapshot = null;
+  if (payload.paymentTermTemplateId) {
+    const tpl = await trx('payment_term_templates')
+      .where({ id: payload.paymentTermTemplateId }).first();
+    if (tpl) {
+      paymentTermTemplateId = tpl.id;
+      // Match the snapshot shape the quote service emits so the
+      // PDF renderer's build* helpers can read both invoice and
+      // quote snapshots through one code path.
+      paymentTermSnapshot = JSON.stringify({
+        description: tpl.description || null,
+        net_days: tpl.net_days,
+        skonto_percent: tpl.skonto_percent,
+        skonto_within_days: tpl.skonto_within_days,
+        installments: typeof tpl.installments === 'string'
+          ? (() => { try { return JSON.parse(tpl.installments); } catch { return null; } })()
+          : tpl.installments || null,
+      });
+    }
+  }
+
   const row = {
     invoice_number: invoiceNumber,
     customer_account_id: payload.customerAccountId,
@@ -302,6 +328,8 @@ async function createInvoice(payload, adminId, trx = db) {
     cc_pdf_email: payload.ccPdfEmail || null,
     business_bank_account_id: bank?.id || null,
     qr_format: payload.qrFormat || null,
+    payment_term_template_id: paymentTermTemplateId,
+    payment_term_snapshot: paymentTermSnapshot,
     created_by_admin_id: adminId,
     created_at: new Date(),
     updated_at: new Date(),
@@ -515,25 +543,23 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
   }
 
   // Resolve the payment-term snapshot to thread Skonto + net-days into
-  // the PDF's "Zahlungsbedingungen" block. Two sources, in order:
-  //   1. The originating quote, if this invoice was created from one.
-  //   2. The global CRM defaults (settings tab) — `crm_invoices_*`.
-  // Both are wrapped in `paymentTerm` exactly as quoteService builds it
-  // so pdfService.drawPaymentBlock renders the same block on both
-  // document types.
+  // the PDF's "Zahlungsbedingungen" block. Three sources, in priority
+  // order:
+  //   1. The invoice's OWN snapshot (migration 113 — set when admin
+  //      picks a template directly in the New Invoice form).
+  //   2. The originating quote's snapshot, if this invoice was
+  //      created from one.
+  //   3. The global CRM defaults (settings tab) — `crm_invoices_*`.
+  // Both layers above are wrapped in `paymentTerm` exactly as
+  // quoteService builds it so pdfService.drawPaymentBlock renders
+  // the same block on both document types.
   let paymentTerm = null;
-  // Load the source quote once — used for the payment-term snapshot
-  // AND for the "Bezug: Angebot Q-..." reference line on the invoice
-  // PDF. We deliberately keep invoice numbers on a strict monotonic
-  // sequence (tax compliance) and surface the link as a text
-  // reference rather than mirroring the number.
-  let sourceQuote = null;
-  if (invoice.source_quote_id) {
-    sourceQuote = await db('quotes').where({ id: invoice.source_quote_id }).first();
-    const snapshot = sourceQuote && sourceQuote.payment_term_snapshot
-      ? (typeof sourceQuote.payment_term_snapshot === 'string'
-          ? JSON.parse(sourceQuote.payment_term_snapshot) : sourceQuote.payment_term_snapshot)
-      : null;
+
+  // Invoice-level snapshot wins when set.
+  if (invoice.payment_term_snapshot) {
+    const snapshot = typeof invoice.payment_term_snapshot === 'string'
+      ? (() => { try { return JSON.parse(invoice.payment_term_snapshot); } catch { return null; } })()
+      : invoice.payment_term_snapshot;
     if (snapshot) {
       paymentTerm = {
         description: snapshot.description,
@@ -541,6 +567,29 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
         skontoPercent: snapshot.skonto_percent,
         skontoWithinDays: snapshot.skonto_within_days,
       };
+    }
+  }
+
+  // Load the source quote once — used for the payment-term snapshot
+  // fallback AND for the "Bezug: Angebot Q-..." reference line on
+  // the invoice PDF. We deliberately keep invoice numbers on a
+  // strict monotonic sequence (tax compliance) and surface the link
+  // as a text reference rather than mirroring the number.
+  let sourceQuote = null;
+  if (invoice.source_quote_id) {
+    sourceQuote = await db('quotes').where({ id: invoice.source_quote_id }).first();
+    if (!paymentTerm && sourceQuote?.payment_term_snapshot) {
+      const snapshot = typeof sourceQuote.payment_term_snapshot === 'string'
+        ? (() => { try { return JSON.parse(sourceQuote.payment_term_snapshot); } catch { return null; } })()
+        : sourceQuote.payment_term_snapshot;
+      if (snapshot) {
+        paymentTerm = {
+          description: snapshot.description,
+          netDays: snapshot.net_days,
+          skontoPercent: snapshot.skonto_percent,
+          skontoWithinDays: snapshot.skonto_within_days,
+        };
+      }
     }
   }
   // Globally-default Skonto values, always loaded. Used either to

@@ -111,6 +111,7 @@ function transformInvoice(i) {
     qrFormat: i.qr_format,
     pdfPath: i.pdf_path,
     businessBankAccountId: i.business_bank_account_id,
+    paymentTermTemplateId: i.payment_term_template_id || null,
     // `isImported` surfaces the historical-PDF flag to the admin UI
     // so the list / detail page can hide line-item editing on rows
     // that originated from a different billing system (migration 111).
@@ -161,6 +162,7 @@ const INVOICE_BODY_VALIDATORS = [
   body('ccPdfEmail').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
   body('businessBankAccountId').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('qrFormat').optional({ values: 'falsy' }).isIn(['swiss', 'epc', 'none']),
+  body('paymentTermTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('lineItems').optional({ values: 'falsy' }).isArray(),
 ];
 
@@ -180,6 +182,7 @@ function mapPayloadToService(body) {
     vatRate: 'vatRate', shippingAmountMinor: 'shippingAmountMinor',
     ccPdfEmail: 'ccPdfEmail', businessBankAccountId: 'businessBankAccountId',
     qrFormat: 'qrFormat',
+    paymentTermTemplateId: 'paymentTermTemplateId',
   };
   for (const [api, svc] of Object.entries(map)) {
     if (Object.prototype.hasOwnProperty.call(body, api)) out[svc] = body[api];
@@ -428,6 +431,31 @@ router.put(
     };
     for (const [api, col] of Object.entries(map)) {
       if (Object.prototype.hasOwnProperty.call(payload, api)) updates[col] = payload[api];
+    }
+    // Payment-term selection: re-snapshot the template when the admin
+    // changes it. Mirrors createInvoice — once the column is set the
+    // PDF renderer prefers it over the source-quote fallback.
+    if (Object.prototype.hasOwnProperty.call(payload, 'paymentTermTemplateId')) {
+      const id = parseInt(payload.paymentTermTemplateId, 10);
+      if (id) {
+        const tpl = await db('payment_term_templates').where({ id }).first();
+        if (tpl) {
+          updates.payment_term_template_id = tpl.id;
+          updates.payment_term_snapshot = JSON.stringify({
+            description: tpl.description || null,
+            net_days: tpl.net_days,
+            skonto_percent: tpl.skonto_percent,
+            skonto_within_days: tpl.skonto_within_days,
+            installments: typeof tpl.installments === 'string'
+              ? (() => { try { return JSON.parse(tpl.installments); } catch { return null; } })()
+              : tpl.installments || null,
+          });
+        }
+      } else {
+        // Explicit clear — admin picked "no template".
+        updates.payment_term_template_id = null;
+        updates.payment_term_snapshot = null;
+      }
     }
 
     if (Array.isArray(payload.lineItems)) {

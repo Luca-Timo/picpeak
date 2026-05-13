@@ -60,6 +60,11 @@ export interface InvoiceDetail extends InvoiceSummary {
   qrFormat: InvoiceQrFormat | null;
   pdfPath: string | null;
   businessBankAccountId: number | null;
+  /** Selected payment-term template id (migration 113). When set
+   *  the renderer uses this template's snapshot for the
+   *  Zahlungsbedingungen block; otherwise it falls back to the
+   *  source quote's snapshot or the global crm_invoices_* defaults. */
+  paymentTermTemplateId?: number | null;
 }
 
 export interface InvoicePayment {
@@ -96,6 +101,7 @@ export interface InvoiceCreatePayload {
   ccPdfEmail?: string;
   businessBankAccountId?: number;
   qrFormat?: InvoiceQrFormat;
+  paymentTermTemplateId?: number | null;
   lineItems: QuoteLineItem[];
 }
 

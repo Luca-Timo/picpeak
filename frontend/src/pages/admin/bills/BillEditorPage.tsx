@@ -10,6 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Save as SaveIcon } from 'lucide-react';
 import { Button, Card, Loading, Input } from '../../../components/common';
 import { billsService, type InvoiceCreatePayload, type InvoiceQrFormat } from '../../../services/bills.service';
+import { quotesService } from '../../../services/quotes.service';
 import { LineItemsTable, type EditableLineItem } from '../../../components/admin/LineItemsTable';
 import { customerAdminService } from '../../../services/customerAdmin.service';
 import { userManagementService } from '../../../services/userManagement.service';
@@ -44,7 +45,16 @@ export const BillEditorPage: React.FC = () => {
   const [shipping, setShipping] = useState(0);
   const [ccPdfEmail, setCcPdfEmail] = useState('');
   const [lineItems, setLineItems] = useState<EditableLineItem[]>([]);
+  const [paymentTermTemplateId, setPaymentTermTemplateId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Payment-term templates shared with the quote editor — same
+  // dropdown, same data source. Lets the admin pick net-days +
+  // Skonto + installment plan when creating an invoice directly.
+  const { data: ptTemplates } = useQuery({
+    queryKey: ['payment-term-templates'],
+    queryFn: () => quotesService.listPaymentTermTemplates(),
+  });
 
   const { data: existing, isLoading } = useQuery({
     queryKey: ['invoice', id],
@@ -67,6 +77,7 @@ export const BillEditorPage: React.FC = () => {
       setVatRate(Number(inv.vatRate || 0));
       setShipping(Number(inv.shippingAmountMinor || 0) / 100);
       setCcPdfEmail(inv.ccPdfEmail || '');
+      setPaymentTermTemplateId(inv.paymentTermTemplateId ?? null);
       setLineItems(existing.lineItems.map((li) => ({
         id: li.id,
         position: li.position,
@@ -152,6 +163,10 @@ export const BillEditorPage: React.FC = () => {
     vatRate,
     shippingAmountMinor: toMinor(shipping),
     ccPdfEmail: ccPdfEmail || undefined,
+    // Payment-term template id (migration 113). null = no template
+    // selected; backend falls back to source-quote snapshot or the
+    // global crm_invoices_* defaults.
+    paymentTermTemplateId: paymentTermTemplateId ?? undefined,
     lineItems: lineItems.map((li) => ({
       position: li.position,
       quantity: li.quantity,
@@ -301,6 +316,29 @@ export const BillEditorPage: React.FC = () => {
             </select>
           </div>
         </div>
+      </Card>
+
+      {/* Payment conditions — picks net-days + Skonto from the shared
+          payment-term templates (same dropdown the quote editor uses).
+          Optional: leave at "— Select —" to let the renderer fall back
+          to the source quote's snapshot, or to the global
+          crm_invoices_* defaults for ad-hoc invoices. */}
+      <Card>
+        <h3 className="font-semibold mb-2">{t('bills.section.payment', 'Payment conditions')}</h3>
+        <select
+          className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+          value={paymentTermTemplateId || ''}
+          onChange={(e) => setPaymentTermTemplateId(e.target.value ? Number(e.target.value) : null)}
+        >
+          <option value="">{t('bills.field.selectPaymentTerm', '— Select payment terms —')}</option>
+          {ptTemplates?.templates.map((tpl) => (
+            <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+          ))}
+        </select>
+        <p className="text-xs text-neutral-500 mt-2">
+          {t('bills.field.paymentTermHelp',
+            'Net days + Skonto for this invoice. Leave blank to inherit from the source quote or the global CRM defaults.')}
+        </p>
       </Card>
 
       <Card>
