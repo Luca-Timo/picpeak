@@ -487,9 +487,14 @@ function drawLineItems(doc, ctx) {
   // headers were right-aligned (header `textOptions.align` happened
   // to work on PDFKit's underlying text() call, but cell-level
   // alignment needs the API-supported `align` property).
+  // Column widths sum to PAGE.contentWidth = 515.28. The qty column
+  // gets a bit more room than the original 40pt so the German
+  // header "Anzahl" (6 chars at 10pt + padding ≈ 50pt) doesn't wrap
+  // across two lines. Width borrowed from the description column,
+  // which has plenty of slack.
   const widths = showDiscount
-    ? [30, 40, 240, 50, 75, 80]
-    : [30, 50, 280, 70, 85];
+    ? [30, 55, 225, 50, 75, 80]
+    : [30, 55, 275, 70, 85];
 
   // Per-row padding — tight rows. 3pt top + 3pt bottom keeps each
   // line item compact, with just enough vertical breathing room

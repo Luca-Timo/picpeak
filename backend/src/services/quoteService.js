@@ -266,7 +266,10 @@ async function createQuote(payload, adminId) {
   const currency = (payload.currency || profile?.default_currency || 'CHF').toUpperCase();
   const language = payload.language || customer.preferred_language || profile?.default_locale || 'de';
 
-  const validDays = ensureInt(await getAppSetting('crm_quotes_default_valid_days')) || 30;
+  // Default validity = 7 days. Admin can override via Settings →
+  // CRM → "Quote default validity (days)" (key
+  // `crm_quotes_default_valid_days`).
+  const validDays = ensureInt(await getAppSetting('crm_quotes_default_valid_days')) || 7;
   const issueDate = payload.issueDate || new Date().toISOString().slice(0, 10);
   const validUntil = payload.validUntil || new Date(Date.now() + validDays * 24 * 60 * 60 * 1000)
     .toISOString().slice(0, 10);
