@@ -738,6 +738,11 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       vatAmountMinor: invoice.vat_amount_minor,
       shippingAmountMinor: invoice.shipping_amount_minor,
       totalAmountMinor: invoice.total_amount_minor,
+      // Mahngebühr surfaced to the totals box (renders a row
+      // between VAT and the grand-total divider) and folded
+      // into the displayed Grand Total when > 0. Reminder
+      // invoices after level 2 carry a non-zero value.
+      lateFeeAmountMinor: invoice.late_fee_amount_minor || 0,
     },
     doc: {
       invoiceNumber: invoice.invoice_number,
@@ -745,6 +750,10 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       dueDate: invoice.due_date,
       totalAmountMinor: invoice.total_amount_minor,
       lateFeeMinor: invoice.late_fee_amount_minor,
+      // Reminder level — drives Skonto suppression on second
+      // reminders (no early-payment discount once the customer
+      // is in dunning).
+      reminderLevel: invoice.reminder_level || 0,
       // PDF renderer draws "Bezug: Angebot Q-..." under the title
       // when set. Empty/null suppresses the line (standalone invoice).
       sourceQuoteNumber: sourceQuote?.quote_number || null,
@@ -1136,11 +1145,21 @@ async function applyReminder(invoice, lineItems, level, adminId) {
   const daysOverdue = Math.max(1, rawDaysOverdue);
   const templateKey = level === 1 ? 'invoice_reminder_first' : 'invoice_reminder_second';
 
+  // Outstanding = gross total + late fee − already paid. Reminder
+  // templates use this for the "outstanding is X" line so partial
+  // payments are reflected in the reminder amount.
+  const outstandingMinor = Math.max(0,
+    Number(invoice.total_amount_minor || 0)
+    + Number(lateFeeMinor || 0)
+    - Number(invoice.paid_amount_minor || 0));
+
   await emailProcessor.queueEmail(invoice.event_id || null, customer.email, templateKey, {
     invoice_number: invoice.invoice_number,
     customer_name: customer.display_name || customer.first_name || customer.email.split('@')[0],
     total_amount: formatMajor(invoice.total_amount_minor, invoice.currency, ctx.locale),
     new_total_amount: formatMajor(newTotal, invoice.currency, ctx.locale),
+    outstanding_amount: formatMajor(outstandingMinor, invoice.currency, ctx.locale),
+    paid_amount: formatMajor(invoice.paid_amount_minor, invoice.currency, ctx.locale),
     late_fee_amount: formatMajor(lateFeeMinor, invoice.currency, ctx.locale),
     // Format dates as DD.MM.YYYY for the customer-facing email
     // (matches the quote_sent + invoice_sent templates).
@@ -1244,6 +1263,19 @@ async function queuePaymentCheckEmail(invoiceId, { skipThrottle = false } = {}) 
   const buildUrl = (action) =>
     `${baseUrl.replace(/\/$/, '')}/payment-check/${token}?action=${action}`;
 
+  // Outstanding = gross total + late fee − already paid. The admin
+  // is being asked about what's STILL OWED, not the original gross
+  // figure — so surface outstanding + paid in the email context.
+  // Partial payments logged earlier (e.g. via a previous admin
+  // payment-check click) are reflected, so the admin doesn't get
+  // asked "did the customer pay CHF 234?" when they already paid
+  // CHF 134 of it.
+  const paidMinor = Number(invoice.paid_amount_minor || 0);
+  const lateFeeAlreadyMinor = Number(invoice.late_fee_amount_minor || 0);
+  const outstandingMinor = Math.max(0,
+    Number(invoice.total_amount_minor || 0) + lateFeeAlreadyMinor - paidMinor);
+  const hasPartial = paidMinor > 0;
+
   await emailProcessor.queueEmail(invoice.event_id || null, adminContact.email,
     'invoice_payment_check_admin', {
       invoice_number: invoice.invoice_number,
@@ -1254,6 +1286,9 @@ async function queuePaymentCheckEmail(invoiceId, { skipThrottle = false } = {}) 
       event_name: '',
       due_date: formatShortDate(invoice.due_date),
       total_amount: formatMajor(invoice.total_amount_minor, invoice.currency, locale),
+      paid_amount: formatMajor(paidMinor, invoice.currency, locale),
+      outstanding_amount: formatMajor(outstandingMinor, invoice.currency, locale),
+      has_partial_payment: hasPartial,
       paid_url:    buildUrl('paid_full'),
       partial_url: buildUrl('partial'),
       unpaid_url:  buildUrl('unpaid'),

@@ -39,7 +39,30 @@ router.get(
     validateRequest(req);
     try {
       const view = await invoiceService.getPaymentCheckByToken(req.params.token);
-      return successResponse(res, { invoice: view });
+
+      // Branding block — same shape `publicQuotes.js` returns so the
+      // frontend can render a consistent header (logo + company
+      // name) and respect the admin's branding colour palette. Web
+      // pages use the global Settings → Branding logo, NOT the
+      // dedicated PDF logo (business_profile.logo_path is print-
+      // only).
+      const { db } = require('../database/db');
+      const { getAppSetting } = require('../utils/appSettings');
+      const profile = await db('business_profile').where({ id: 1 }).first();
+      const brandingLogoUrl = await getAppSetting('branding_logo_url', null);
+      const issuer = profile ? {
+        companyName: profile.company_name || '',
+        email: profile.email || '',
+        website: profile.website || '',
+        logoUrl: (() => {
+          const raw = (brandingLogoUrl && String(brandingLogoUrl).trim()) || null;
+          if (!raw) return null;
+          if (raw.startsWith('/') || /^https?:\/\//i.test(raw)) return raw;
+          return `/uploads/${raw.replace(/^uploads\//, '')}`;
+        })(),
+      } : null;
+
+      return successResponse(res, { invoice: view, issuer });
     } catch (err) {
       if (err.code === 'TOKEN_ALREADY_USED') {
         return res.status(410).json({

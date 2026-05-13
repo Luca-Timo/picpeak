@@ -640,7 +640,19 @@ function drawTotals(doc, ctx, x, y, width) {
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).text(t(locale, 'totals_vat'), labelX, y, { width: labelCol });
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).text(`${stripTrailingZeros(totals.vatRate)}%`, rateX, y, { width: rateCol, align: 'right' });
   doc.text(formatMinor(totals.vatAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
-  y = doc.y + 10;
+  y = doc.y + 4;
+
+  // Mahngebühr row — only rendered when a late fee has been added
+  // (second reminder onwards). Sits between VAT and the grand-total
+  // divider so the customer sees a clear "VAT + late fee → Total"
+  // arithmetic chain. The grand-total figure below folds it in.
+  const lateFeeMinor = Number(totals.lateFeeAmountMinor || 0);
+  if (lateFeeMinor > 0) {
+    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).text(t(locale, 'totals_late_fee'), labelX, y, { width: labelCol });
+    doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).text(formatMinor(lateFeeMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
+    y = doc.y + 4;
+  }
+  y += 6;
 
   // Divider line above grand total — spans the right half of the
   // page only, from the label anchor to the right edge, so it sits
@@ -652,11 +664,13 @@ function drawTotals(doc, ctx, x, y, width) {
   // as the line-item table) — the maintainer wants the billing
   // titles to read at one consistent scale instead of stair-
   // stepping up to a bigger headline. The row stays bold for
-  // visual emphasis.
+  // visual emphasis. Includes the Mahngebühr when present so the
+  // customer's "owed" figure is the single bottom-line number.
+  const grandTotalMinor = Number(totals.totalAmountMinor || 0) + lateFeeMinor;
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10);
   doc.text(t(locale, 'totals_grand'), labelX, y, { width: labelCol });
   doc.text(formatCurrencyLabel(currency), rateX, y, { width: rateCol, align: 'right' });
-  doc.text(formatMinor(totals.totalAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
+  doc.text(formatMinor(grandTotalMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
   return doc.y + 10;
 }
 
@@ -685,7 +699,14 @@ function drawPaymentBlock(doc, ctx, x, y, width) {
   // Invoices always show every available row + the IBAN.
   const isQuote = type === 'quote';
   const showNetDaysHere = isQuote ? (issuer?.quoteShowNetDays !== false) : true;
-  const showSkontoHere  = isQuote ? (issuer?.quoteShowSkonto  !== false) : true;
+  // Skonto is suppressed once the invoice is in dunning. A
+  // "Mahnrechnung" rewarding the customer with an early-payment
+  // discount makes no business sense — they're already late.
+  // Quotes still respect the per-issuer toggle.
+  const reminderLevel = Number(docMeta?.reminderLevel || 0);
+  const showSkontoHere = isQuote
+    ? (issuer?.quoteShowSkonto !== false)
+    : reminderLevel === 0;
   const showIbanHere    = !isQuote;
 
   // If the quote has nothing to print in either column, bail out
@@ -693,7 +714,10 @@ function drawPaymentBlock(doc, ctx, x, y, width) {
   // no rows under it.
   const hasNetDaysRow = showNetDaysHere && paymentTerm?.netDays;
   const hasSkontoRow  = showSkontoHere && paymentTerm?.skontoPercent && paymentTerm?.skontoWithinDays;
-  const hasLateFeeRow = !isQuote && docMeta?.lateFeeMinor && Number(docMeta.lateFeeMinor) > 0;
+  // Late-fee note in the payment block is redundant now that the
+  // Mahngebühr appears as its own row in the totals stack. Keep it
+  // suppressed to avoid duplicate "+CHF 25.00 late fee" text.
+  const hasLateFeeRow = false;
   const hasLeftContent = paymentTerm?.description || hasNetDaysRow || hasSkontoRow || hasLateFeeRow;
   if (!hasLeftContent && !showIbanHere) return y;
 
