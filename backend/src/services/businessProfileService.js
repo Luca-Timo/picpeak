@@ -51,6 +51,12 @@ const ALLOWED_PROFILE_FIELDS = [
   // to keep existing PDFs visually identical after the migration runs.
   'pdf_show_logo',
   'pdf_show_company_name',
+  // PDF layout customisation (migration 108): folding marks at the
+  // page edge, logo banner height in pt, and a toggle to render the
+  // company name as inline plain text rather than as a bold title.
+  'pdf_folding_marks',
+  'pdf_logo_height',
+  'pdf_company_name_inline',
 ];
 
 const ALLOWED_BANK_FIELDS = [
@@ -115,10 +121,24 @@ function sanitiseProfilePayload(payload) {
   }
   // Normalise the boolean PDF visibility toggles. Empty / undefined
   // stays untouched (so partial updates don't reset existing values).
-  for (const field of ['pdf_show_logo', 'pdf_show_company_name']) {
+  for (const field of ['pdf_show_logo', 'pdf_show_company_name', 'pdf_company_name_inline']) {
     if (updates[field] !== undefined) {
       updates[field] = formatBoolean(Boolean(updates[field]));
     }
+  }
+  // Folding-mark enum — whitelisted set. Garbage values fall back to
+  // 'none' so a typo can't shoot itself in the foot.
+  if (updates.pdf_folding_marks !== undefined) {
+    const v = String(updates.pdf_folding_marks || '').toLowerCase();
+    updates.pdf_folding_marks = ['none', 'half', 'third', 'both'].includes(v) ? v : 'none';
+  }
+  // Logo height — clamp to a sensible range (24-200pt). Out-of-range
+  // values get snapped instead of rejected so the form can be lax.
+  if (updates.pdf_logo_height !== undefined) {
+    const n = parseInt(updates.pdf_logo_height, 10);
+    updates.pdf_logo_height = Number.isFinite(n)
+      ? Math.max(24, Math.min(200, n))
+      : 56;
   }
 
   return updates;

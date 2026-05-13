@@ -506,6 +506,10 @@ async function buildRenderContext(quote, lineItems) {
         : (profile.pdf_show_logo === true || profile.pdf_show_logo === 1 || profile.pdf_show_logo === '1'),
       showCompanyName: profile.pdf_show_company_name == null ? true
         : (profile.pdf_show_company_name === true || profile.pdf_show_company_name === 1 || profile.pdf_show_company_name === '1'),
+      // Layout customisation (migration 108).
+      logoHeight: profile.pdf_logo_height == null ? 56 : Number(profile.pdf_logo_height),
+      companyNameInline: profile.pdf_company_name_inline === true || profile.pdf_company_name_inline === 1 || profile.pdf_company_name_inline === '1',
+      foldingMarks: profile.pdf_folding_marks || 'none',
     } : {},
     recipient: (() => {
       // Recipient first-line rule (maintainer spec):
