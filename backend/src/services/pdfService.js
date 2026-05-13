@@ -881,6 +881,11 @@ function appendSwissQrBill(doc, ctx) {
  * silently reject non-EUR payloads.
  */
 function buildEpcPayload({ name, iban, amount, currency, reference }) {
+  // Amount field: "<ISO 4217 3-letter><amount with 2 decimals>".
+  // Spec says EUR-only, but many wallets accept other 3-letter
+  // codes and either honour or ignore them. Emit whatever the
+  // invoice carries so the QR isn't a no-op for CHF/USD/etc.
+  const cur = String(currency || 'EUR').toUpperCase().slice(0, 3);
   const lines = [
     'BCD',
     '002',
@@ -889,7 +894,7 @@ function buildEpcPayload({ name, iban, amount, currency, reference }) {
     '',                                                 // BIC (optional in v002)
     String(name || '').slice(0, 70),
     String(iban || '').replace(/\s+/g, '').toUpperCase(),
-    currency === 'EUR' && amount > 0 ? `EUR${amount.toFixed(2)}` : '',
+    amount > 0 ? `${cur}${amount.toFixed(2)}` : '',
     '',                                                 // purpose
     '',                                                 // structured reference
     String(reference || '').slice(0, 140),              // unstructured reference
@@ -918,11 +923,18 @@ async function appendEpcQr(doc, ctx) {
     logger.warn('EPC QR skipped — no IBAN on the resolved bank account');
     return;
   }
-  if ((ctx.currency || '').toUpperCase() !== 'EUR') {
-    logger.warn('EPC QR skipped — EPC is EUR-only; current invoice currency is non-EUR', {
-      currency: ctx.currency,
+
+  // EPC069-12 spec is technically EUR-only, but most banking apps
+  // still parse the payload for non-EUR currencies and either honor
+  // it (when the bank supports the destination currency) or fall
+  // back to manual entry. Render the QR regardless and log a note
+  // when the currency isn't EUR so the admin sees it in the logs —
+  // emitting something is always more useful than emitting nothing.
+  const currencyUpper = (ctx.currency || 'EUR').toUpperCase();
+  if (currencyUpper !== 'EUR') {
+    logger.info('EPC QR rendered with non-EUR currency; banking apps may fall back to manual entry', {
+      currency: currencyUpper,
     });
-    return;
   }
 
   const totalMajor = Number(docMeta.totalAmountMinor || 0) / 100;
@@ -930,7 +942,7 @@ async function appendEpcQr(doc, ctx) {
     name: bank.accountHolder || issuer.companyName || '',
     iban: bank.iban,
     amount: totalMajor,
-    currency: 'EUR',
+    currency: currencyUpper,
     reference: docMeta.invoiceNumber || '',
   });
 
@@ -983,7 +995,7 @@ async function appendEpcQr(doc, ctx) {
     bank.iban.replace(/(.{4})/g, '$1 ').trim(),
     bank.bic ? `BIC: ${bank.bic}` : '',
     totalMajor > 0
-      ? `${t(ctx.locale, 'totals_grand')}: EUR ${formatMinor(docMeta.totalAmountMinor, 'EUR', ctx.intlLocale)}`
+      ? `${t(ctx.locale, 'totals_grand')}: ${currencyUpper} ${formatMinor(docMeta.totalAmountMinor, currencyUpper, ctx.intlLocale)}`
       : '',
     docMeta.invoiceNumber
       ? `${t(ctx.locale, 'reference_label')}: ${docMeta.invoiceNumber}`
