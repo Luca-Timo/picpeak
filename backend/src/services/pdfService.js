@@ -455,11 +455,10 @@ function drawLineItems(doc, ctx) {
     ? [30, 40, 240, 50, 75, 80]
     : [30, 50, 280, 70, 85];
 
-  // Per-row padding — pushed up again at the maintainer's request
-  // for an even more open, generously spaced look. 64pt top + 64pt
-  // bottom adds ~128pt of vertical space around the text inside
-  // each cell.
-  const ROW_PADDING = { top: 64, bottom: 64, left: 4, right: 4 };
+  // Per-row padding — generous breathing room above + below the
+  // text in each cell. 96pt top + 96pt bottom is intentionally
+  // large; the maintainer wants the line items to feel airy.
+  const ROW_PADDING = { top: 96, bottom: 96, left: 4, right: 4 };
   // Match the totals box font size; the maintainer wants the line
   // items and the billing totals to read at the same weight so the
   // eye doesn't bounce between two scales.
@@ -571,10 +570,11 @@ function drawTotals(doc, ctx, x, y, width) {
   const labelX = x + (width - 20) / 2 + 20;  // matches drawPaymentBlock.rightX
   const labelCol = rateX - labelX - 6;       // small gap before rate column
 
-  // Divider line ABOVE the totals block — same X-range and weight
-  // as the rule above the grand total below, so the totals stack
-  // sits cleanly framed top and bottom.
-  doc.moveTo(labelX, y).lineTo(right, y).strokeColor('#000').lineWidth(0.8).stroke();
+  // Divider line ABOVE the totals block — spans the FULL page
+  // content width (from the left margin to the right edge) so it
+  // visually closes off the line-items table above and the totals
+  // stack below as one continuous letterhead section.
+  doc.moveTo(x, y).lineTo(right, y).strokeColor('#000').lineWidth(0.8).stroke();
   y += 6;
 
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10);

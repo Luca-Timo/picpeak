@@ -36,12 +36,15 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { getStoragePath } = require('../config/storage');
 const { getAppSetting } = require('./appSettings');
 const logger = require('./logger');
 
 const SUPPORTED_EXT = /\.(png|jpe?g)$/i;
-const UNSUPPORTED_EXT = /\.(svg|webp|gif|tif|tiff)$/i;
+// Formats PDFKit can't embed directly but `sharp` can rasterise into
+// PNG for us. We transparently convert + cache.
+const CONVERTIBLE_EXT = /\.(svg|webp|gif|tif|tiff|avif|heif|heic)$/i;
 
 function generateCandidates(raw, storageRoot) {
   const value = String(raw || '').trim();
@@ -69,6 +72,56 @@ function pickExisting(candidates) {
     } catch (_) { /* ignore */ }
   }
   return null;
+}
+
+/**
+ * Rasterise a non-PNG/JPEG source into PNG so PDFKit can embed it.
+ * The output is cached under STORAGE_PATH/cache/logo-png/, keyed by
+ * the source path + mtime + size — re-uploading the SVG invalidates
+ * the cache automatically without us having to clean up old entries.
+ *
+ * Returns the absolute cached PNG path on success, or null when
+ * `sharp` fails (corrupt SVG, unsupported feature inside the SVG,
+ * etc.). The caller logs + falls back to the name-only branch.
+ */
+async function rasteriseToPng(sourcePath, storageRoot) {
+  let sharp;
+  try {
+    sharp = require('sharp');
+  } catch (err) {
+    logger.warn('PDF logo rasterisation skipped — sharp not installed', { err: err.message });
+    return null;
+  }
+  try {
+    const stat = fs.statSync(sourcePath);
+    const cacheDir = path.join(storageRoot, 'cache', 'logo-png');
+    fs.mkdirSync(cacheDir, { recursive: true });
+    // Content-addressed cache: sha1(src path + mtime ns + size).
+    // Including mtime means re-uploading the source invalidates the
+    // cache entry naturally.
+    const key = crypto.createHash('sha1')
+      .update(`${sourcePath}|${stat.mtimeMs}|${stat.size}`)
+      .digest('hex');
+    const cachedPath = path.join(cacheDir, `${key}.png`);
+    if (fs.existsSync(cachedPath)) {
+      return cachedPath;
+    }
+    // density: 384 gives a crisp render even when the SVG embeds at
+    // a small intrinsic size (PDFKit's `fit` will downscale, never
+    // upscale). 512px wide is more than enough for a letterhead
+    // logo.
+    await sharp(sourcePath, { density: 384 })
+      .resize({ width: 512, withoutEnlargement: false })
+      .png()
+      .toFile(cachedPath);
+    logger.info('PDF logo rasterised to PNG', { source: sourcePath, cached: cachedPath });
+    return cachedPath;
+  } catch (err) {
+    logger.warn('PDF logo rasterisation failed', {
+      source: sourcePath, err: err.message,
+    });
+    return null;
+  }
 }
 
 /**
@@ -101,20 +154,30 @@ async function resolveLogoFile(profile) {
     const candidates = generateCandidates(value, storageRoot);
     const found = pickExisting(candidates);
     if (!found) continue;
-    if (UNSUPPORTED_EXT.test(found)) {
-      logger.warn('PDF logo format not supported by PDFKit (use PNG or JPEG); skipping', {
+    if (SUPPORTED_EXT.test(found)) {
+      logger.info('Resolved PDF logo', { source, configured: value, resolved: found });
+      return found;
+    }
+    if (CONVERTIBLE_EXT.test(found)) {
+      // SVG / WebP / GIF / TIFF / AVIF — rasterise to PNG so PDFKit
+      // can embed it. Cached under STORAGE_PATH/cache/logo-png/ so
+      // repeated PDF renders don't re-encode the same source.
+      const rasterised = await rasteriseToPng(found, storageRoot);
+      if (rasterised) {
+        logger.info('Resolved PDF logo via rasterisation', {
+          source, configured: value, original: found, resolved: rasterised,
+        });
+        return rasterised;
+      }
+      logger.warn('PDF logo rasterisation produced no file; trying next source', {
         source, configured: value, found,
       });
       continue;
     }
-    if (!SUPPORTED_EXT.test(found)) {
-      // Unknown extension — try anyway, but log so we have a breadcrumb
-      // if PDFKit rejects it at render time.
-      logger.warn('PDF logo has unusual extension; attempting to render', {
-        source, configured: value, found,
-      });
-    }
-    logger.info('Resolved PDF logo', { source, configured: value, resolved: found });
+    // Unknown extension — try anyway, PDFKit may still accept it.
+    logger.warn('PDF logo has unusual extension; attempting to render as-is', {
+      source, configured: value, found,
+    });
     return found;
   }
 
