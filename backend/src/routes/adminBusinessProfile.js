@@ -89,6 +89,65 @@ router.get(
   })
 );
 
+// ---- GET /logo-diagnostic ---------------------------------------------
+// Diagnostic for "logo doesn't appear on PDF" tickets. Returns the
+// configured logo sources (business_profile.logo_path,
+// app_settings.branding_logo_path, app_settings.branding_logo_url),
+// the storage root the renderer would use, the candidate paths the
+// resolver would try, and which one (if any) currently resolves to
+// an existing file. Read-only — never modifies anything.
+router.get(
+  '/logo-diagnostic',
+  requirePermission('settings.view'),
+  handleAsync(async (req, res) => {
+    const fs = require('fs');
+    const path = require('path');
+    const { getStoragePath } = require('../config/storage');
+    const { getAppSetting } = require('../utils/appSettings');
+    const { resolveLogoFile } = require('../utils/resolveLogoFile');
+
+    const { profile } = await businessProfileService.getProfile();
+    const storageRoot = getStoragePath();
+    const brandingDiskPath = await getAppSetting('branding_logo_path');
+    const brandingLogoUrl  = await getAppSetting('branding_logo_url');
+    const resolved = await resolveLogoFile(profile);
+
+    const inspect = (label, raw) => {
+      const value = (raw || '').toString().trim();
+      if (!value) return { label, value: null, candidates: [] };
+      const stripped = value.replace(/^\/+/, '');
+      const baseName = path.basename(value);
+      const candidates = [
+        path.isAbsolute(value) ? value : null,
+        path.join(storageRoot, stripped),
+        path.join(storageRoot, 'uploads', 'logos', baseName),
+        path.join(storageRoot, 'branding', baseName),
+        path.join(process.cwd(), 'storage', stripped),
+        path.join(process.cwd(), 'storage', 'uploads', 'logos', baseName),
+        path.join(process.cwd(), 'storage', 'branding', baseName),
+      ].filter(Boolean);
+      return {
+        label, value,
+        candidates: [...new Set(candidates)].map((p) => ({
+          path: p,
+          exists: (() => { try { return fs.existsSync(p) && fs.statSync(p).isFile(); } catch { return false; } })(),
+        })),
+      };
+    };
+
+    return successResponse(res, {
+      storageRoot,
+      cwd: process.cwd(),
+      resolvedTo: resolved,
+      sources: [
+        inspect('business_profile.logo_path', profile?.logo_path),
+        inspect('app_settings.branding_logo_path', brandingDiskPath),
+        inspect('app_settings.branding_logo_url',  brandingLogoUrl),
+      ],
+    });
+  })
+);
+
 // ---- PUT / ------------------------------------------------------------
 router.put(
   '/',

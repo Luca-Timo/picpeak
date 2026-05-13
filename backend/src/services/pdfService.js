@@ -571,6 +571,12 @@ function drawTotals(doc, ctx, x, y, width) {
   const labelX = x + (width - 20) / 2 + 20;  // matches drawPaymentBlock.rightX
   const labelCol = rateX - labelX - 6;       // small gap before rate column
 
+  // Divider line ABOVE the totals block — same X-range and weight
+  // as the rule above the grand total below, so the totals stack
+  // sits cleanly framed top and bottom.
+  doc.moveTo(labelX, y).lineTo(right, y).strokeColor('#000').lineWidth(0.8).stroke();
+  y += 6;
+
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10);
   doc.text(t(locale, 'totals_net'), labelX, y, { width: labelCol });
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY);
@@ -936,12 +942,17 @@ function renderDocument(type, context) {
       }
 
       // ---- line items table ----------------------------------------
+      // Top padding before the table — separates the lead-in text
+      // from the header row so the items don't feel packed against
+      // the salutation block.
+      y += 24;
       doc.y = y;
       doc.x = leftX;
       drawLineItems(doc, ctx);
-      // Breathing room after the table — matches the reference
-      // letterhead's visual rhythm.
-      y = doc.y + 24;
+      // Bottom padding after the table — matches the top padding so
+      // the line items sit visually balanced between the lead-in
+      // above and the totals below.
+      y = doc.y + 32;
 
       // ---- pin totals + payment to lower 1/3 ------------------------
       // The maintainer wants the totals + payment block anchored to
