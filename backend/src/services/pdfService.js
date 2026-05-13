@@ -860,10 +860,152 @@ function appendSwissQrBill(doc, ctx) {
 }
 
 /**
+ * Build an EPC069-12 (SEPA Credit Transfer) QR payload.
+ *
+ * Format (each field on its own line, '\n' separator):
+ *   1. "BCD"                          service tag
+ *   2. "002"                          version
+ *   3. "1"                            character set (UTF-8)
+ *   4. "SCT"                          identification (SEPA Credit Transfer)
+ *   5. BIC                            optional in v002
+ *   6. Beneficiary name               max 70 chars, required
+ *   7. IBAN                           no spaces, required
+ *   8. Amount                         "EUR123.45", optional (customer
+ *                                     enters amount manually if absent)
+ *   9. Purpose                        ISO 11649 4-letter, optional
+ *  10. Structured reference           max 35 chars, optional
+ *  11. Unstructured reference         max 140 chars, optional
+ *  12. Beneficiary-to-originator info max 70 chars, optional
+ *
+ * Total payload <= 331 bytes. EPC QR is EUR-only; banking apps
+ * silently reject non-EUR payloads.
+ */
+function buildEpcPayload({ name, iban, amount, currency, reference }) {
+  const lines = [
+    'BCD',
+    '002',
+    '1',
+    'SCT',
+    '',                                                 // BIC (optional in v002)
+    String(name || '').slice(0, 70),
+    String(iban || '').replace(/\s+/g, '').toUpperCase(),
+    currency === 'EUR' && amount > 0 ? `EUR${amount.toFixed(2)}` : '',
+    '',                                                 // purpose
+    '',                                                 // structured reference
+    String(reference || '').slice(0, 140),              // unstructured reference
+    '',                                                 // info
+  ];
+  return lines.join('\n');
+}
+
+/**
+ * Append an EPC (SEPA) QR code to the document. Unlike Swiss QR-bill
+ * which is a full-page payment slip, EPC is just a QR code with a
+ * short caption — banking apps scan it to prefill a SEPA Credit
+ * Transfer. We add it on a fresh page so it never collides with the
+ * line items / totals above.
+ *
+ * Requires EUR currency. Non-EUR docs log a warning and skip — EPC
+ * QR codes in CHF/USD/etc. are silently rejected by every major
+ * banking app, so emitting one would be worse than emitting nothing.
+ */
+async function appendEpcQr(doc, ctx) {
+  if (ctx.qrFormat !== 'epc') return;
+  const logger = require('../utils/logger');
+  const { issuer, bank, doc: docMeta } = ctx;
+
+  if (!bank?.iban) {
+    logger.warn('EPC QR skipped — no IBAN on the resolved bank account');
+    return;
+  }
+  if ((ctx.currency || '').toUpperCase() !== 'EUR') {
+    logger.warn('EPC QR skipped — EPC is EUR-only; current invoice currency is non-EUR', {
+      currency: ctx.currency,
+    });
+    return;
+  }
+
+  const totalMajor = Number(docMeta.totalAmountMinor || 0) / 100;
+  const payload = buildEpcPayload({
+    name: bank.accountHolder || issuer.companyName || '',
+    iban: bank.iban,
+    amount: totalMajor,
+    currency: 'EUR',
+    reference: docMeta.invoiceNumber || '',
+  });
+
+  let pngBuffer;
+  try {
+    const QRCode = require('qrcode');
+    pngBuffer = await QRCode.toBuffer(payload, {
+      errorCorrectionLevel: 'M',
+      type: 'png',
+      margin: 2,
+      width: 320,
+    });
+  } catch (err) {
+    logger.warn('EPC QR generation failed', { err: err.message });
+    return;
+  }
+
+  // Fresh page so the QR doesn't fight the totals/payment layout on
+  // page 1. Centered, with a caption explaining what it is.
+  doc.addPage();
+  const captionTop = PAGE.marginTop + 20;
+  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(14).fillColor('#000');
+  doc.text(t(ctx.locale, 'epc_qr_title'), PAGE.marginLeft, captionTop, {
+    width: PAGE.contentWidth, align: 'center', lineBreak: false,
+  });
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#444');
+  doc.text(t(ctx.locale, 'epc_qr_subtitle'), PAGE.marginLeft, captionTop + 22, {
+    width: PAGE.contentWidth, align: 'center',
+  });
+
+  // QR centred on the page, sized at ~180pt (≈63mm) — comfortably
+  // scannable on every phone camera + small enough to leave room
+  // for the printed IBAN beneath.
+  const qrSize = 180;
+  const qrX = (PAGE.width - qrSize) / 2;
+  const qrY = captionTop + 60;
+  try {
+    doc.image(pngBuffer, qrX, qrY, { fit: [qrSize, qrSize] });
+  } catch (err) {
+    logger.warn('EPC QR embed failed', { err: err.message });
+    return;
+  }
+
+  // Human-readable summary under the QR so the customer can still
+  // initiate the transfer manually if their banking app can't scan.
+  const summaryY = qrY + qrSize + 24;
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#000');
+  const summaryLines = [
+    bank.accountHolder || issuer.companyName || '',
+    bank.iban.replace(/(.{4})/g, '$1 ').trim(),
+    bank.bic ? `BIC: ${bank.bic}` : '',
+    totalMajor > 0
+      ? `${t(ctx.locale, 'totals_grand')}: EUR ${formatMinor(docMeta.totalAmountMinor, 'EUR', ctx.intlLocale)}`
+      : '',
+    docMeta.invoiceNumber
+      ? `${t(ctx.locale, 'reference_label')}: ${docMeta.invoiceNumber}`
+      : '',
+  ].filter(Boolean);
+  let lineY = summaryY;
+  for (const line of summaryLines) {
+    doc.text(line, PAGE.marginLeft, lineY, { width: PAGE.contentWidth, align: 'center' });
+    lineY = doc.y + 2;
+  }
+}
+
+/**
  * The main renderer. `type` is 'quote' | 'invoice'. Returns Buffer.
  */
 function renderDocument(type, context) {
   return new Promise((resolve, reject) => {
+    // Wrap the body in an async IIFE so we can `await` the EPC QR
+    // PNG generation (which uses the qrcode library asynchronously).
+    // Errors from the IIFE bubble up via reject(); the doc 'end'
+    // event still resolves the outer Promise once writes flush.
+    (async () => {
     try {
       const ctx = normaliseContext(type, context);
       const doc = new PDFDocument({
@@ -1100,9 +1242,17 @@ function renderDocument(type, context) {
       // ---- footer ---------------------------------------------------
       drawFooter(doc, ctx.issuer, ctx.locale);
 
-      // ---- swiss QR-bill on fresh page ------------------------------
+      // ---- payment QR on fresh page (invoices only) -----------------
+      // Two paths, mutually exclusive:
+      //   - 'swiss' → SwissQRBill payment slip (CHF / EUR within CH/LI)
+      //   - 'epc'   → SEPA EPC069-12 QR code (EUR-only, every SEPA bank)
+      // Both append a fresh page; 'none' is a no-op.
       if (type === 'invoice') {
-        appendSwissQrBill(doc, ctx);
+        if (ctx.qrFormat === 'swiss') {
+          appendSwissQrBill(doc, ctx);
+        } else if (ctx.qrFormat === 'epc') {
+          await appendEpcQr(doc, ctx);
+        }
       }
 
       // ---- page numbers ("Page 1 of N" / "Seite 1 von N") -----------
@@ -1146,6 +1296,7 @@ function renderDocument(type, context) {
     } catch (err) {
       reject(err);
     }
+    })();
   });
 }
 
