@@ -178,41 +178,26 @@ export const CustomerLayout: React.FC = () => {
                   className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                     isActive
                       ? 'bg-accent-dark text-white'
-                      // Non-selected items use white text in dark mode
-                      // (matching the screenshot the maintainer flagged
-                      // — the previous neutral-300 was too dim against
-                      // the dark sidebar). Light mode keeps near-black
-                      // for contrast.
-                      : 'text-neutral-900 dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                      : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
                   }`}
+                  // Non-active items take their colour from the theme
+                  // variable the admin chose in the colour pickers
+                  // (`--color-text`). The Tailwind dark:text-white
+                  // approach didn't apply because the customer
+                  // portal toggles the palette via CSS variables, not
+                  // the `.dark` class — so the previous styling
+                  // resolved to the body's inherited muted colour.
+                  style={isActive ? undefined : { color: 'var(--color-text)' }}
                 >
                   {/* Mirrors AdminSidebar's active state exactly: solid
                       accent-dark pill, white icon and label, no extra
                       flex grow on the label so the pill width matches
                       what the admin chrome renders. */}
                   <Icon
-                    className={`w-5 h-5 mr-3 ${
-                      isActive ? 'text-white' : 'text-neutral-900 dark:text-white'
-                    }`}
+                    className="w-5 h-5 mr-3"
+                    style={isActive ? undefined : { color: 'var(--color-text)' }}
                   />
                   {t(item.labelKey, item.fallback)}
-                  {/* Coming-soon pill for the gated entries. Pushed to
-                      the right of the label with ml-auto so it doesn't
-                      add the flex-1 stretching that was throwing off
-                      the active-pill visual. */}
-                  {item.feature && (
-                    <span
-                      className={`ml-auto text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold ${
-                        isActive ? 'bg-white/20 text-white' : ''
-                      }`}
-                      style={isActive ? undefined : {
-                        backgroundColor: 'color-mix(in srgb, var(--color-accent) 14%, transparent)',
-                        color: 'var(--color-accent)',
-                      }}
-                    >
-                      {t('customer.nav.soon', 'Soon')}
-                    </span>
-                  )}
                 </NavLink>
               );
             })}

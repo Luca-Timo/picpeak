@@ -6,8 +6,12 @@
  *
  * Each row exposes a "View PDF" link that opens the rendered invoice
  * in a new tab via a popup-blocker-safe sync window.open.
+ *
+ * Adds client-side sort + status filter controls (newest, oldest,
+ * price ↑/↓; status: all / sent / paid / overdue / outstanding).
+ * "outstanding" rolls up everything still owing (sent + overdue).
  */
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Receipt, Download } from 'lucide-react';
@@ -25,12 +29,57 @@ function formatShortDate(value: string | null | undefined): string {
   return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
 }
 
+type SortKey = 'newest' | 'oldest' | 'price_desc' | 'price_asc';
+type StatusFilter = 'all' | 'sent' | 'paid' | 'overdue' | 'outstanding';
+
+const SORT_OPTIONS: { value: SortKey; key: string; fallback: string }[] = [
+  { value: 'newest',     key: 'customer.sort.newest',    fallback: 'Newest first' },
+  { value: 'oldest',     key: 'customer.sort.oldest',    fallback: 'Oldest first' },
+  { value: 'price_desc', key: 'customer.sort.priceDesc', fallback: 'Price (high to low)' },
+  { value: 'price_asc',  key: 'customer.sort.priceAsc',  fallback: 'Price (low to high)' },
+];
+const STATUS_OPTIONS: { value: StatusFilter; key: string; fallback: string }[] = [
+  { value: 'all',         key: 'customer.filter.all',           fallback: 'All' },
+  { value: 'sent',        key: 'bills.status.sent',             fallback: 'Open / sent' },
+  { value: 'paid',        key: 'bills.status.paid',             fallback: 'Paid' },
+  { value: 'overdue',     key: 'bills.status.overdue',          fallback: 'Overdue' },
+  { value: 'outstanding', key: 'customer.bills.filter.outstanding', fallback: 'Outstanding (sent + overdue)' },
+];
+
 export const CustomerBillsPage: React.FC = () => {
   const { t } = useTranslation();
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['customer-invoices'],
     queryFn: () => customerService.listInvoices(),
   });
+
+  const [sort, setSort] = useState<SortKey>('newest');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+
+  const visible = useMemo(() => {
+    const rows = data || [];
+    const filtered = rows.filter((inv) => {
+      if (statusFilter === 'all') return true;
+      if (statusFilter === 'outstanding') {
+        return inv.status === 'sent' || inv.status === 'overdue';
+      }
+      return inv.status === statusFilter;
+    });
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sort) {
+      case 'oldest':
+        return new Date(a.issueDate).getTime() - new Date(b.issueDate).getTime();
+      case 'price_desc':
+        return Number(b.totalAmountMinor || 0) - Number(a.totalAmountMinor || 0);
+      case 'price_asc':
+        return Number(a.totalAmountMinor || 0) - Number(b.totalAmountMinor || 0);
+      case 'newest':
+      default:
+        return new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime();
+      }
+    });
+    return sorted;
+  }, [data, sort, statusFilter]);
 
   if (isLoading) return <Loading />;
   if (isError) {
@@ -91,17 +140,87 @@ export const CustomerBillsPage: React.FC = () => {
           </p>
         </Card>
       ) : (
-        <Card padding="none">
-          <ul className="divide-y" style={{ borderColor: 'var(--color-surface-border)' }}>
-            {invoices.map((inv) => (
-              <InvoiceRow key={inv.id} inv={inv} onViewPdf={() => handleViewPdf(inv)} />
-            ))}
-          </ul>
-        </Card>
+        <>
+          <FilterSortBar
+            sort={sort} onSortChange={setSort}
+            statusFilter={statusFilter} onStatusChange={setStatusFilter}
+            statusOptions={STATUS_OPTIONS}
+            totalRowCount={invoices.length}
+            visibleRowCount={visible.length}
+          />
+          <Card padding="none">
+            <ul className="divide-y" style={{ borderColor: 'var(--color-surface-border)' }}>
+              {visible.map((inv) => (
+                <InvoiceRow key={inv.id} inv={inv} onViewPdf={() => handleViewPdf(inv)} />
+              ))}
+            </ul>
+          </Card>
+        </>
       )}
     </div>
   );
 };
+
+interface FilterSortBarProps<S extends string> {
+  sort: SortKey;
+  onSortChange: (v: SortKey) => void;
+  statusFilter: S;
+  onStatusChange: (v: S) => void;
+  statusOptions: { value: S; key: string; fallback: string }[];
+  totalRowCount: number;
+  visibleRowCount: number;
+}
+function FilterSortBar<S extends string>({
+  sort, onSortChange, statusFilter, onStatusChange, statusOptions,
+  totalRowCount, visibleRowCount,
+}: FilterSortBarProps<S>) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="text-xs text-muted-theme uppercase tracking-wider">
+          {t('customer.filter.label', 'Filter')}
+        </label>
+        <select
+          value={statusFilter}
+          onChange={(e) => onStatusChange(e.target.value as S)}
+          className="text-sm px-2 py-1 rounded border"
+          style={{
+            backgroundColor: 'var(--color-surface)',
+            borderColor: 'var(--color-surface-border)',
+            color: 'var(--color-text)',
+          }}
+        >
+          {statusOptions.map((o) => (
+            <option key={o.value} value={o.value}>{t(o.key, o.fallback)}</option>
+          ))}
+        </select>
+        <label className="text-xs text-muted-theme uppercase tracking-wider ml-2">
+          {t('customer.sort.label', 'Sort')}
+        </label>
+        <select
+          value={sort}
+          onChange={(e) => onSortChange(e.target.value as SortKey)}
+          className="text-sm px-2 py-1 rounded border"
+          style={{
+            backgroundColor: 'var(--color-surface)',
+            borderColor: 'var(--color-surface-border)',
+            color: 'var(--color-text)',
+          }}
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{t(o.key, o.fallback)}</option>
+          ))}
+        </select>
+      </div>
+      <div className="text-xs text-muted-theme">
+        {visibleRowCount === totalRowCount
+          ? t('customer.filter.countAll', '{{count}} total', { count: totalRowCount })
+          : t('customer.filter.countFiltered', '{{visible}} of {{total}}', { visible: visibleRowCount, total: totalRowCount })}
+      </div>
+    </div>
+  );
+}
 
 const InvoiceRow: React.FC<{ inv: CustomerInvoice; onViewPdf: () => void }> = ({ inv, onViewPdf }) => {
   const { t } = useTranslation();
@@ -112,8 +231,8 @@ const InvoiceRow: React.FC<{ inv: CustomerInvoice; onViewPdf: () => void }> = ({
 
   const statusClass =
     inv.status === 'paid' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
-    : inv.status === 'overdue' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
-    : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
+      : inv.status === 'overdue' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+        : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
 
   return (
     <li className="px-4 py-3">

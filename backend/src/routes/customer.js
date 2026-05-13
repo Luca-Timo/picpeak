@@ -501,6 +501,38 @@ router.get('/invoices', customerAuth, async (req, res) => {
   }
 });
 
+/**
+ * Customer-side quote PDF — mirrors the invoice PDF endpoint above.
+ * The customer can re-download any quote that's been sent to them
+ * (the public response page also uses this view). Draft quotes are
+ * hidden — they're not yet meant for the customer.
+ */
+router.get('/quotes/:id/pdf', customerAuth, async (req, res) => {
+  try {
+    // Feature-gate identically to /quotes (list endpoint).
+    if (req.customer.feature_quotes === false || req.customer.feature_quotes === 0 || req.customer.feature_quotes === '0') {
+      return res.status(403).json({ error: 'Quotes are disabled for this account' });
+    }
+    const { db: dbi } = require('../database/db');
+    const quote = await dbi('quotes')
+      .where({ id: parseInt(req.params.id, 10), customer_account_id: req.customer.id })
+      .first();
+    if (!quote) return res.status(404).json({ error: 'Quote not found' });
+    if (quote.status === 'draft') {
+      // Drafts aren't visible to the customer.
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+    const quoteService = require('../services/quoteService');
+    const buf = await quoteService.renderQuotePdfBuffer(quote.id);
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="${quote.quote_number}.pdf"`);
+    res.send(buf);
+  } catch (error) {
+    logger.error('Customer quote PDF error:', error);
+    res.status(500).json({ error: 'Failed to render quote PDF' });
+  }
+});
+
 router.get('/invoices/:id/pdf', customerAuth, async (req, res) => {
   try {
     const { db: dbi } = require('../database/db');
