@@ -487,9 +487,14 @@ function drawLineItems(doc, ctx) {
   // headers were right-aligned (header `textOptions.align` happened
   // to work on PDFKit's underlying text() call, but cell-level
   // alignment needs the API-supported `align` property).
+  // Column widths sum to PAGE.contentWidth = 515.28. The qty column
+  // gets a bit more room than the original 40pt so the German
+  // header "Anzahl" (6 chars at 10pt + padding ≈ 50pt) doesn't wrap
+  // across two lines. Width borrowed from the description column,
+  // which has plenty of slack.
   const widths = showDiscount
-    ? [30, 40, 240, 50, 75, 80]
-    : [30, 50, 280, 70, 85];
+    ? [30, 55, 225, 50, 75, 80]
+    : [30, 55, 275, 70, 85];
 
   // Per-row padding — tight rows. 3pt top + 3pt bottom keeps each
   // line item compact, with just enough vertical breathing room
@@ -1034,7 +1039,20 @@ function renderDocument(type, context) {
           left: PAGE.marginLeft, right: PAGE.marginRight,
         },
         info: {
-          Title: ctx.doc.invoiceNumber || ctx.doc.quoteNumber || (type === 'quote' ? 'Quote' : 'Invoice'),
+          // Chrome's built-in PDF viewer uses this Title metadata
+          // as the default save name when the PDF is served from a
+          // blob URL (where the original HTTP Content-Disposition
+          // header can't propagate). Format mirrors the filename
+          // we set on the HTTP response: "<number>_<customerLabel>"
+          // so saved files have a meaningful name in either path.
+          Title: (() => {
+            const docNumber = ctx.doc.invoiceNumber || ctx.doc.quoteNumber
+              || (type === 'quote' ? 'Quote' : 'Invoice');
+            // Prefer the recipient (customer) for the label —
+            // matches how admins typically file invoices.
+            const recipient = ctx.recipient?.companyName || '';
+            return recipient ? `${docNumber}_${recipient}` : String(docNumber);
+          })(),
           Author: ctx.issuer.companyName || 'picpeak',
         },
       });

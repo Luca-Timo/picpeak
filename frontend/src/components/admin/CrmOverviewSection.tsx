@@ -52,7 +52,24 @@ export const CrmOverviewSection: React.FC = () => {
 
   if (!anyCrm) return null;
   if (isLoading) return null;
-  if (isError || !data) return null;
+  if (isError || !data) {
+    // Surface a tiny inline notice when the section is enabled by
+    // flags but the API failed — silent renders make this hard to
+    // debug (the user reported "everything turned on but nothing
+    // shows" which traced back to a permission check on the
+    // backend). Keep it small so it doesn't disrupt the page.
+    return (
+      <section className="mt-8">
+        <h2 className="text-xl font-bold text-theme mb-2">
+          {t('crmOverview.title', 'CRM overview')}
+        </h2>
+        <p className="text-sm text-red-600">
+          {t('crmOverview.loadError',
+            'Could not load CRM stats. Check that you have bills.view or quotes.view permission and that the backend is on the latest build.')}
+        </p>
+      </section>
+    );
+  }
 
   const d: CrmOverviewStats = data;
   const cur = d.currency || 'CHF';

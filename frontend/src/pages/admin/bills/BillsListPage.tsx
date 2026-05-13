@@ -11,6 +11,7 @@ import { billsService, type InvoiceStatus, type InvoiceSort } from '../../../ser
 import { Button, Card, Input, Loading } from '../../../components/common';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
 import { customerAdminService } from '../../../services/customerAdmin.service';
+import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { toast } from 'react-toastify';
 
 const STATUSES: InvoiceStatus[] = ['scheduled', 'sent', 'paid', 'overdue', 'cancelled'];
@@ -301,12 +302,16 @@ const ImportHistoricalInvoiceModal: React.FC<ImportModalProps> = ({ onClose }) =
               value={currency}
               maxLength={3}
               onChange={(e) => setCurrency(e.target.value.toUpperCase())} />
-            <Input type="date" label={t('bills.field.issueDate', 'Issued') as string}
+            <LocalizedDateField
+              label={t('bills.field.issueDate', 'Issued') as string}
               value={issueDate}
-              onChange={(e) => setIssueDate(e.target.value)} />
-            <Input type="date" label={t('bills.field.dueDate', 'Due') as string}
+              onChange={setIssueDate}
+            />
+            <LocalizedDateField
+              label={t('bills.field.dueDate', 'Due') as string}
               value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)} />
+              onChange={setDueDate}
+            />
             <Input type="number" step="0.01" min="0"
               label={t('bills.field.total', 'Total') as string}
               value={totalMajor}
@@ -360,3 +365,113 @@ const ImportHistoricalInvoiceModal: React.FC<ImportModalProps> = ({ onClose }) =
     </div>
   );
 };
+
+/**
+ * Date field that displays + accepts values in the admin-configured
+ * format from Settings → General (`general_date_format`). Stores
+ * + emits ISO (YYYY-MM-DD) so the rest of the form / API surface
+ * keeps the canonical shape.
+ *
+ * Native `<input type="date">` always renders in the browser's
+ * locale (en-US users see MM/DD/YYYY), which mismatched what
+ * customers + the rest of the app see elsewhere. This component
+ * uses a plain text input + parses on blur, with the configured
+ * format shown as both placeholder and helper text. A small
+ * shadow native date input next to the field gives the click-to-
+ * open calendar without affecting the displayed format.
+ */
+interface LocalizedDateFieldProps {
+  label: string;
+  value: string;
+  onChange: (iso: string) => void;
+}
+const LocalizedDateField: React.FC<LocalizedDateFieldProps> = ({ label, value, onChange }) => {
+  const { dateFormat } = useLocalizedDate();
+  // Normalise the configured format down to the four shapes our
+  // parser understands. Defaults to DD.MM.YYYY (the maintainer's
+  // primary locale) when unknown.
+  const normalisedFormat = ((): 'DD.MM.YYYY' | 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD' => {
+    const f = String(dateFormat || 'dd.MM.yyyy').toLowerCase();
+    if (f.startsWith('mm/dd')) return 'MM/DD/YYYY';
+    if (f.startsWith('yyyy'))  return 'YYYY-MM-DD';
+    if (f.includes('/'))       return 'DD/MM/YYYY';
+    return 'DD.MM.YYYY';
+  })();
+  const placeholder = normalisedFormat.toLowerCase();
+
+  // ISO → display
+  const toDisplay = (iso: string): string => {
+    if (!iso) return '';
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!m) return iso;
+    const [, y, mo, d] = m;
+    switch (normalisedFormat) {
+    case 'MM/DD/YYYY': return `${mo}/${d}/${y}`;
+    case 'YYYY-MM-DD': return `${y}-${mo}-${d}`;
+    case 'DD/MM/YYYY': return `${d}/${mo}/${y}`;
+    case 'DD.MM.YYYY':
+    default:           return `${d}.${mo}.${y}`;
+    }
+  };
+
+  // display → ISO (accepts variant separators leniently)
+  const toIso = (raw: string): string => {
+    const s = raw.trim();
+    if (!s) return '';
+    // Already ISO?
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    // Split on . / -
+    const parts = s.split(/[./-]/);
+    if (parts.length !== 3) return '';
+    let [a, b, c] = parts;
+    let y: string, mo: string, d: string;
+    if (normalisedFormat === 'YYYY-MM-DD' || a.length === 4) {
+      [y, mo, d] = [a, b, c];
+    } else if (normalisedFormat === 'MM/DD/YYYY') {
+      [mo, d, y] = [a, b, c];
+    } else {
+      // DD.MM.YYYY or DD/MM/YYYY
+      [d, mo, y] = [a, b, c];
+    }
+    if (!/^\d{1,2}$/.test(d) || !/^\d{1,2}$/.test(mo) || !/^\d{4}$/.test(y)) return '';
+    return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  };
+
+  const [text, setText] = React.useState(toDisplay(value));
+  React.useEffect(() => { setText(toDisplay(value)); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [value]);
+
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-1">{label}</label>
+      <div className="flex gap-2">
+        <Input
+          value={text}
+          placeholder={placeholder}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={() => {
+            const iso = toIso(text);
+            if (iso) {
+              onChange(iso);
+              setText(toDisplay(iso));
+            } else if (!text.trim()) {
+              onChange('');
+            }
+          }}
+        />
+        {/* Tiny native date picker shortcut — gives the calendar
+            without polluting the visible text input. Hidden value
+            stays in ISO so it's always parseable. */}
+        <input
+          type="date"
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value)}
+          aria-label={label}
+          className="text-sm px-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800"
+          style={{ width: 36 }}
+        />
+      </div>
+      <p className="text-xs text-neutral-500 mt-1">{placeholder}</p>
+    </div>
+  );
+};
+

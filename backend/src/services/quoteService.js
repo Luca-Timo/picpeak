@@ -266,7 +266,10 @@ async function createQuote(payload, adminId) {
   const currency = (payload.currency || profile?.default_currency || 'CHF').toUpperCase();
   const language = payload.language || customer.preferred_language || profile?.default_locale || 'de';
 
-  const validDays = ensureInt(await getAppSetting('crm_quotes_default_valid_days')) || 30;
+  // Default validity = 7 days. Admin can override via Settings →
+  // CRM → "Quote default validity (days)" (key
+  // `crm_quotes_default_valid_days`).
+  const validDays = ensureInt(await getAppSetting('crm_quotes_default_valid_days')) || 7;
   const issueDate = payload.issueDate || new Date().toISOString().slice(0, 10);
   const validUntil = payload.validUntil || new Date(Date.now() + validDays * 24 * 60 * 60 * 1000)
     .toISOString().slice(0, 10);
@@ -346,8 +349,18 @@ async function updateQuote(id, payload, adminId) {
   if (!existing) {
     throw new AppError('Quote not found', 404);
   }
-  if (existing.status === 'converted') {
-    throw new AppError('Cannot edit a converted quote', 409);
+  // Once a customer has responded (accept / decline) or the quote has
+  // been converted to an event/invoice, edits would invalidate the
+  // record the customer agreed to. Lock these states the same way
+  // sent invoices are locked. `draft` and `sent` remain editable;
+  // `sent` reverts to `draft` further down so the admin must resend.
+  // `expired` is left editable — quote can be revised and re-sent.
+  if (['accepted', 'declined', 'converted'].includes(existing.status)) {
+    throw new AppError(
+      `Cannot edit quote with status '${existing.status}'. Duplicate the quote and start fresh if changes are needed.`,
+      409,
+      'QUOTE_LOCKED',
+    );
   }
 
   const totals = computeTotals(
@@ -873,6 +886,103 @@ async function recordResponse({ token, action, ip, tosAccepted }) {
 }
 
 /**
+ * Admin "accept on behalf of customer" — records the quote as
+ * accepted directly, bypassing the public token + response window.
+ * Used when the admin is on the phone with the customer and they
+ * verbally accept; the admin wants the quote flipped to `accepted`
+ * immediately so they can convert it to an event/invoice.
+ *
+ * Unlike recordResponse:
+ *   - No token required
+ *   - No response-window lockout (admin can accept stale / expired
+ *     quotes too — useful for retroactive bookkeeping)
+ *   - Skips the ToS-required guard (admin is responsible for
+ *     confirming verbally; ToS_snapshot stays null)
+ *
+ * Refuses to act on quotes that are already terminal: `accepted`,
+ * `declined`, or `converted` rows would silently overwrite history.
+ * Admins use the cancel/duplicate flow for those cases.
+ */
+async function adminAcceptQuote(id, adminId) {
+  const quote = await db('quotes').where({ id }).first();
+  if (!quote) throw new AppError('Quote not found', 404);
+  if (quote.status === 'accepted') {
+    throw new AppError('Quote already accepted', 409, 'QUOTE_ALREADY_ACCEPTED');
+  }
+  if (quote.status === 'declined') {
+    throw new AppError('Quote was declined; duplicate it to start a fresh round.', 409, 'QUOTE_DECLINED');
+  }
+  if (quote.status === 'converted') {
+    throw new AppError('Quote already converted to an event/invoice', 409, 'QUOTE_CONVERTED');
+  }
+
+  const now = new Date();
+  const windowMinutes = ensureInt(await getAppSetting('crm_quotes_accept_window_minutes')) || 15;
+  const responseLockedAt = new Date(now.getTime() + windowMinutes * 60 * 1000);
+
+  await db('quotes').where({ id }).update({
+    status: 'accepted',
+    responded_at: now,
+    response_locked_at: responseLockedAt,
+    accepted_at: now,
+    // accept_on_behalf flag intentionally NOT stored as a separate
+    // column — the audit log entry below captures who accepted and
+    // when, which is the legally relevant breadcrumb.
+    updated_at: now,
+  });
+
+  try {
+    await logActivity('quote_accepted_by_admin', { quoteId: id }, null, `admin:${adminId}`);
+  } catch (_) {}
+
+  // ---- customer confirmation email -------------------------------
+  // Renders the quote PDF + queues a "quote accepted — on your
+  // behalf" email so the customer has a paper trail of what they
+  // just verbally agreed to on the phone. Failures here don't roll
+  // back the acceptance — the DB row is already updated and the
+  // admin can re-send via the resend flow if SMTP is down.
+  try {
+    const customer = await db('customer_accounts').where({ id: quote.customer_account_id }).first();
+    if (customer?.email) {
+      const fresh = await db('quotes').where({ id }).first();
+      const lineItems = await db('quote_line_items').where({ quote_id: id }).orderBy('position', 'asc');
+      const ctx = await buildRenderContext(fresh, lineItems);
+      const buffer = await pdfService.renderQuoteToBuffer(ctx);
+      // Persist PDF snapshot under the same convention sendQuote uses
+      // — keeps every issued PDF on disk for the audit trail.
+      const pdfPath = await persistDocPdf('quote', fresh, buffer);
+
+      const formatMoney = (minor, currency, locale) =>
+        new Intl.NumberFormat(locale === 'de' ? 'de-CH' : 'en-GB', {
+          style: 'currency', currency: (currency || 'CHF').toUpperCase(),
+        }).format(Number(minor || 0) / 100);
+
+      const lang = customer.preferred_language || ctx.locale || 'de';
+      await emailProcessor.queueEmail(null, customer.email, 'quote_accepted_customer', {
+        quote_number: fresh.quote_number,
+        customer_name: customer.display_name
+          || [customer.first_name, customer.last_name].filter(Boolean).join(' ')
+          || customer.email.split('@')[0],
+        event_name: fresh.event_name || '',
+        total_amount: formatMoney(fresh.total_amount_minor, fresh.currency, lang),
+        accepted_on_behalf: true,
+        attachments: [{
+          filename: `${fresh.quote_number}.pdf`,
+          contentPath: pdfPath,
+          contentType: 'application/pdf',
+        }],
+      });
+    }
+  } catch (err) {
+    // Email failure is not fatal — log + move on. The acceptance
+    // itself is recorded; the admin can use Resend later.
+    logger.warn('quote_accepted_customer email queue failed', { quoteId: id, err: err.message });
+  }
+
+  return { status: 'accepted', lockedAt: responseLockedAt };
+}
+
+/**
  * Convert an accepted quote to an event + scheduled invoices.
  * Wraps everything in a transaction so a half-finished conversion
  * doesn't litter the DB.
@@ -1259,6 +1369,7 @@ module.exports = {
   sendQuote,
   duplicateQuote,
   recordResponse,
+  adminAcceptQuote,
   convertToEvent,
   convertToInvoiceOnly,
 

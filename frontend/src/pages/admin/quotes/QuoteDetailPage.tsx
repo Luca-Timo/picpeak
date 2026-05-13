@@ -7,7 +7,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Eye, Send, Copy, ArrowRightCircle, Edit2, Receipt } from 'lucide-react';
+import { ArrowLeft, Eye, Send, Copy, ArrowRightCircle, Edit2, Receipt, CheckCircle2 } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
 import { quotesService } from '../../../services/quotes.service';
 import { billsService } from '../../../services/bills.service';
@@ -91,6 +91,25 @@ export const QuoteDetailPage: React.FC = () => {
     }
   };
 
+  /**
+   * Admin accept-on-behalf. Used when the customer verbally agrees
+   * on the phone — admin flips the quote to accepted immediately so
+   * they can convert to an event/invoice without waiting for the
+   * customer to click the public response link.
+   */
+  const handleAcceptOnBehalf = async () => {
+    if (!window.confirm(t('quotes.confirmAcceptOnBehalf',
+      'Mark this quote as accepted on behalf of the customer? Use only when they have verbally agreed (e.g. on the phone).'))) return;
+    try {
+      await quotesService.acceptOnBehalf(q.id);
+      toast.success(t('quotes.acceptedOnBehalfToast', 'Quote marked as accepted.'));
+      qc.invalidateQueries({ queryKey: ['quote', id] });
+      qc.invalidateQueries({ queryKey: ['quotes'] });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Accept failed');
+    }
+  };
+
   const handleDuplicate = async () => {
     try {
       const result = await quotesService.duplicate(q.id);
@@ -125,6 +144,15 @@ export const QuoteDetailPage: React.FC = () => {
           </Button>
           <Button variant="outline" onClick={handleDuplicate}><Copy className="w-4 h-4 mr-1" />{t('common.duplicate', 'Duplicate')}</Button>
           {canSend && <Button onClick={handleSend}><Send className="w-4 h-4 mr-1" />{q.status === 'draft' ? t('quotes.send', 'Send') : t('quotes.resend', 'Resend')}</Button>}
+          {/* Accept-on-behalf — shown while the quote is in a state
+              that hasn't been responded to yet (draft / sent /
+              expired). Hidden once accepted / declined / converted. */}
+          {['draft', 'sent', 'expired'].includes(q.status) && (
+            <Button variant="outline" onClick={handleAcceptOnBehalf}>
+              <CheckCircle2 className="w-4 h-4 mr-1" />
+              {t('quotes.acceptOnBehalf', 'Accept on behalf')}
+            </Button>
+          )}
           {q.status === 'accepted' && (
             <>
               <Button onClick={handleConvert}>

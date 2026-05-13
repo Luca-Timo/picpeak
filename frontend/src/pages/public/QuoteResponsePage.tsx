@@ -17,7 +17,41 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { publicQuotesService } from '../../services/quotes.service';
+import { usePublicSettings } from '../../hooks/usePublicSettings';
 import { Loading } from '../../components/common';
+
+/**
+ * Toggle the `.dark` class on <html> based on the admin's branding
+ * settings (priority: `branding_force_color_mode` → OS preference).
+ * Necessary because the public quote response page lives outside
+ * the admin/customer layouts that already manage this; Tailwind's
+ * `dark:` modifiers depend on the class being present.
+ */
+function usePublicDarkMode() {
+  const { data: publicSettings } = usePublicSettings();
+  useEffect(() => {
+    const root = document.documentElement;
+    const forced = publicSettings?.branding_force_color_mode;
+    const apply = (isDark: boolean) => {
+      if (isDark) root.classList.add('dark');
+      else root.classList.remove('dark');
+    };
+    if (forced === 'dark') {
+      apply(true);
+      return;
+    }
+    if (forced === 'light') {
+      apply(false);
+      return;
+    }
+    // Auto: follow the OS preference and react when it flips.
+    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    apply(mql.matches);
+    const listener = (e: MediaQueryListEvent) => apply(e.matches);
+    mql.addEventListener('change', listener);
+    return () => mql.removeEventListener('change', listener);
+  }, [publicSettings?.branding_force_color_mode]);
+}
 
 function formatMoney(amount: number, currency: string, locale = 'de-CH') {
   return new Intl.NumberFormat(locale, {
@@ -46,6 +80,10 @@ export const QuoteResponsePage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Apply dark mode per the branding settings (forced dark/light)
+  // or fall back to the OS preference. Without this the public
+  // quote page renders in light mode regardless of admin settings.
+  usePublicDarkMode();
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['public-quote', token],

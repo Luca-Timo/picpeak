@@ -547,9 +547,23 @@ router.get(
   [param('id').isInt({ min: 1 })],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const buf = await invoiceService.renderInvoicePdfBuffer(parseInt(req.params.id, 10));
+    const id = parseInt(req.params.id, 10);
+    const buf = await invoiceService.renderInvoicePdfBuffer(id);
+    // Build a useful filename: `<invoiceNumber>_<customerName>.pdf`.
+    // The number + customer come from a small joined fetch; we
+    // already loaded everything inside renderInvoicePdfBuffer, but
+    // re-fetching here keeps the route a thin shim over the
+    // service rather than reaching inside its internals.
+    const { buildPdfFilename } = require('../utils/pdfFilename');
+    const inv = await db('invoices').where({ id }).first();
+    const customer = inv ? await db('customer_accounts').where({ id: inv.customer_account_id }).first() : null;
+    const filename = buildPdfFilename({
+      docNumber: inv?.invoice_number,
+      customer,
+      fallback: `invoice-${id}`,
+    });
     res.set('Content-Type', 'application/pdf');
-    res.set('Content-Disposition', `inline; filename="invoice-${req.params.id}.pdf"`);
+    res.set('Content-Disposition', `inline; filename="${filename}"`);
     res.send(buf);
   })
 );
@@ -560,9 +574,22 @@ router.post(
   INVOICE_BODY_VALIDATORS,
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const buf = await invoiceService.renderInvoicePdfFromPayload(mapPayloadToService(req.body));
+    const payload = mapPayloadToService(req.body);
+    const buf = await invoiceService.renderInvoicePdfFromPayload(payload);
+    // Preview is unsaved — there's no invoice_number yet. Look up
+    // the customer so the filename still reflects who the invoice
+    // is for; the number segment falls back to "invoice-preview".
+    const { buildPdfFilename } = require('../utils/pdfFilename');
+    const customer = payload.customerAccountId
+      ? await db('customer_accounts').where({ id: payload.customerAccountId }).first()
+      : null;
+    const filename = buildPdfFilename({
+      docNumber: null,
+      customer,
+      fallback: 'invoice-preview',
+    });
     res.set('Content-Type', 'application/pdf');
-    res.set('Content-Disposition', 'inline; filename="invoice-preview.pdf"');
+    res.set('Content-Disposition', `inline; filename="${filename}"`);
     res.send(buf);
   })
 );

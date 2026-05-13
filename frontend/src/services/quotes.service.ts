@@ -170,6 +170,14 @@ export const quotesService = {
     return data.data || data;
   },
 
+  /** Admin accept-on-behalf — flips the quote to `accepted` without
+   *  going through the customer's public response page. Used for
+   *  phone-call workflows where the customer verbally agrees. */
+  async acceptOnBehalf(id: number): Promise<{ status: string; lockedAt: string }> {
+    const { data } = await api.post(`/admin/quotes/${id}/accept`);
+    return data.data || data;
+  },
+
   async convert(id: number): Promise<{ eventId: number; alreadyConverted: boolean }> {
     const { data } = await api.post(`/admin/quotes/${id}/convert`);
     return data.data || data;
