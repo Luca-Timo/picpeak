@@ -178,7 +178,16 @@ export const CustomerLayout: React.FC = () => {
                   className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                     isActive
                       ? 'bg-accent-dark text-white'
-                      : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+                      // Hover uses the theme `--color-elevated` token
+                      // (light mode = #f5f5f5, dark mode = #1f1f1f) —
+                      // mirrors the admin sidebar's subtle grey hover.
+                      // Tailwind's bare `hover:bg-neutral-100 dark:
+                      // hover:bg-neutral-800` doesn't work here because
+                      // the customer portal toggles palette via CSS
+                      // variables, not the `.dark` class, so the
+                      // light-mode value was always winning and the
+                      // hover read as near-white.
+                      : 'hover:bg-[var(--color-elevated)]'
                   }`}
                   // Non-active items take their colour from the theme
                   // variable the admin chose in the colour pickers
