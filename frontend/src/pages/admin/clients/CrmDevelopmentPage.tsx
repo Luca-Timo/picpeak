@@ -2,34 +2,67 @@
  * CRM → Development sub-page.
  *
  * Houses internal-use dev tools for the CRM area. Hidden behind the
- * `crmDevelopment` feature flag (Settings → Features) so it stays
- * invisible on customer installs.
+ * `crmDevelopment` feature flag (Settings → Features).
  *
  * Current tools:
  *   - "Test admin payment-check email" — fires the full
- *     payment-check email flow on any sent/overdue invoice, bypassing
- *     the 24h throttle so the maintainer can verify the
- *     email → token page → action recorded chain in seconds.
- *
- * Future tools (sketched as TODOs in the code below) can dock here
- * — every entry stays gated by the same flag so the page is the one
- *  place to look for "weird internal buttons".
+ *     payment-check email flow on any sent/overdue invoice,
+ *     bypassing the 24h throttle.
+ *   - "Send any CRM email to me" — fires any of the seeded CRM
+ *     email templates to the currently-logged-in admin's mailbox
+ *     with mock data (real PDF attached when a matching record
+ *     exists). Lets the maintainer eyeball every template's
+ *     rendered output in seconds.
  */
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { Wrench, MailCheck, AlertTriangle } from 'lucide-react';
+import { Wrench, MailCheck, AlertTriangle, Mail } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
 import { billsService, type InvoiceStatus } from '../../../services/bills.service';
+import { devToolsService, type CrmEmailTemplateKey } from '../../../services/devTools.service';
 import { toast } from 'react-toastify';
+
+const TEMPLATE_LABELS: Record<CrmEmailTemplateKey, { title: string; description: string }> = {
+  quote_sent: {
+    title: 'Quote sent (to customer)',
+    description: 'Fires when a quote is sent — includes the PDF attachment + accept/decline links.',
+  },
+  quote_accepted_customer: {
+    title: 'Quote accepted — customer confirmation',
+    description: 'Sent to the customer after they (or the admin on their behalf) accept the quote. Includes PDF.',
+  },
+  quote_accepted_admin: {
+    title: 'Quote accepted — admin notification',
+    description: 'Notifies the admin that a quote was accepted by the customer.',
+  },
+  quote_declined_admin: {
+    title: 'Quote declined — admin notification',
+    description: 'Notifies the admin that a quote was declined by the customer.',
+  },
+  invoice_sent: {
+    title: 'Invoice sent (to customer)',
+    description: 'Fires when an invoice is sent — includes the PDF attachment.',
+  },
+  invoice_reminder_first: {
+    title: 'Invoice reminder — first',
+    description: 'First reminder to the customer. No late fee yet.',
+  },
+  invoice_reminder_second: {
+    title: 'Invoice reminder — second (with Mahngebühr)',
+    description: 'Second reminder with the late fee surcharge added.',
+  },
+  invoice_payment_check_admin: {
+    title: 'Payment-check (admin)',
+    description: 'Admin email with the three signed-token action buttons.',
+  },
+};
 
 export const CrmDevelopmentPage: React.FC = () => {
   const { t } = useTranslation();
 
-  // Only sent/overdue invoices can carry a payment-check token. We
-  // load the most recent 50 so the picker is fast — the test action
-  // is local-only and rarely fired against bulk lists.
-  const { data, isLoading } = useQuery({
+  // ---- Test payment-check email picker -------------------------
+  const { data: invoiceList, isLoading: invoiceListLoading } = useQuery({
     queryKey: ['invoices', 'dev-payment-check'],
     queryFn: () => billsService.list({
       status: ['sent', 'overdue'] as InvoiceStatus[],
@@ -37,22 +70,40 @@ export const CrmDevelopmentPage: React.FC = () => {
       pageSize: 50,
     }),
   });
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
+  const [paymentCheckBusy, setPaymentCheckBusy] = useState(false);
 
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const handleSend = async () => {
-    if (!selectedId) return;
-    setBusy(true);
+  const handleSendPaymentCheck = async () => {
+    if (!selectedInvoiceId) return;
+    setPaymentCheckBusy(true);
     try {
-      const res = await billsService.testPaymentCheck(selectedId);
+      await billsService.testPaymentCheck(selectedInvoiceId);
       toast.success(t('crmDev.paymentCheck.sentToast',
-        'Test email queued. Check the recipient\'s inbox. Token: {{token}}',
-        { token: (res as any).token?.slice(0, 8) + '…' || '' }));
+        'Test email queued. Check the recipient\'s inbox.'));
     } catch (e: any) {
       toast.error(e?.response?.data?.error || 'Failed to queue test email');
     } finally {
-      setBusy(false);
+      setPaymentCheckBusy(false);
+    }
+  };
+
+  // ---- Email-template self-tester -----------------------------
+  const { data: templates, isLoading: templatesLoading } = useQuery({
+    queryKey: ['dev', 'email-templates'],
+    queryFn: () => devToolsService.listEmailTemplates(),
+  });
+  const [sendingKey, setSendingKey] = useState<CrmEmailTemplateKey | null>(null);
+
+  const handleSendTemplate = async (key: CrmEmailTemplateKey) => {
+    setSendingKey(key);
+    try {
+      const result = await devToolsService.sendTestEmail(key);
+      toast.success(t('crmDev.templates.sentToast',
+        'Queued to {{to}}.', { to: result.to }));
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || 'Failed to queue test email');
+    } finally {
+      setSendingKey(null);
     }
   };
 
@@ -77,50 +128,100 @@ export const CrmDevelopmentPage: React.FC = () => {
         </p>
       </div>
 
-      <Card>
+      {/* Tool: payment-check email against a real invoice. */}
+      <Card className="mb-5">
         <h3 className="font-semibold mb-1 flex items-center gap-2">
           <MailCheck className="w-4 h-4" />
-          {t('crmDev.paymentCheck.title', 'Test payment-check email')}
+          {t('crmDev.paymentCheck.title', 'Test payment-check email (real invoice)')}
         </h3>
         <p className="text-sm text-muted-theme mb-4">
           {t('crmDev.paymentCheck.help',
-            'Fires the admin payment-check email for the selected invoice immediately, bypassing the 24h throttle. The email contains the three buttons (Paid in full / Partial / Not paid) that link to the token-gated public page — exactly what the scheduler would send when an invoice ages past the reminder threshold.')}
+            'Fires the admin payment-check email for a real sent/overdue invoice, bypassing the 24h throttle. The three buttons in the email are real signed tokens — clicking them will affect the invoice status.')}
         </p>
 
-        {isLoading ? <Loading /> : (
+        {invoiceListLoading ? <Loading /> : (
           <>
             <label className="block text-xs uppercase tracking-wider text-muted-theme mb-1">
               {t('crmDev.paymentCheck.selectInvoice', 'Sent or overdue invoice')}
             </label>
             <select
-              value={selectedId || ''}
-              onChange={(e) => setSelectedId(e.target.value ? Number(e.target.value) : null)}
+              value={selectedInvoiceId || ''}
+              onChange={(e) => setSelectedInvoiceId(e.target.value ? Number(e.target.value) : null)}
               className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm mb-3"
             >
               <option value="">{t('crmDev.paymentCheck.selectPlaceholder', '— Pick an invoice —')}</option>
-              {(data?.invoices || []).map((inv) => (
+              {(invoiceList?.invoices || []).map((inv) => (
                 <option key={inv.id} value={inv.id}>
                   {inv.invoiceNumber} · {inv.customer.companyName || inv.customer.displayName || inv.customer.email} · {inv.status}
                 </option>
               ))}
             </select>
-            {data && data.invoices.length === 0 && (
+            {invoiceList && invoiceList.invoices.length === 0 && (
               <p className="text-sm text-muted-theme mb-3">
                 {t('crmDev.paymentCheck.noneAvailable',
-                  'No sent or overdue invoices in the database — only those can carry a payment-check token.')}
+                  'No sent or overdue invoices in the database.')}
               </p>
             )}
             <div className="flex justify-end">
-              <Button onClick={handleSend} disabled={!selectedId || busy}>
+              <Button onClick={handleSendPaymentCheck} disabled={!selectedInvoiceId || paymentCheckBusy}>
                 <MailCheck className="w-4 h-4 mr-1" />
-                {busy ? t('crmDev.paymentCheck.sending', 'Queuing…') : t('crmDev.paymentCheck.send', 'Send test email')}
+                {paymentCheckBusy
+                  ? t('crmDev.paymentCheck.sending', 'Queuing…')
+                  : t('crmDev.paymentCheck.send', 'Send test email')}
               </Button>
             </div>
           </>
         )}
       </Card>
 
-      {/* Drop future dev tools here — each one as its own <Card>. */}
+      {/* Tool: send any CRM template to the logged-in admin. */}
+      <Card>
+        <h3 className="font-semibold mb-1 flex items-center gap-2">
+          <Mail className="w-4 h-4" />
+          {t('crmDev.templates.title', 'Send any CRM email to me (mock data)')}
+        </h3>
+        <p className="text-sm text-muted-theme mb-4">
+          {t('crmDev.templates.help',
+            'Queues the chosen template to your own admin email with placeholder values. When the install has a real quote / invoice on file, the appropriate PDF is attached so you can verify the full output.')}
+        </p>
+
+        {templatesLoading ? <Loading /> : (
+          <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
+            {(templates || []).map((tpl) => {
+              const meta = TEMPLATE_LABELS[tpl.key];
+              const busy = sendingKey === tpl.key;
+              return (
+                <li key={tpl.key} className="py-3 flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-neutral-500">{tpl.key}</span>
+                      {!tpl.present && (
+                        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                          {t('crmDev.templates.notSeeded', 'Not seeded')}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm font-medium mt-0.5">{meta?.title || tpl.key}</div>
+                    {meta && (
+                      <div className="text-xs text-muted-theme mt-0.5">{meta.description}</div>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSendTemplate(tpl.key)}
+                    disabled={!tpl.present || busy}
+                  >
+                    {busy
+                      ? t('crmDev.templates.sending', 'Queuing…')
+                      : t('crmDev.templates.send', 'Send to me')}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
     </div>
   );
 };

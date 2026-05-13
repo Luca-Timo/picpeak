@@ -609,6 +609,7 @@ app.use('/api/customer', require('./src/routes/customer'));
 app.use('/api/admin/business-profile', require('./src/routes/adminBusinessProfile'));
 app.use('/api/admin/quotes',   require('./src/routes/adminQuotes'));
 app.use('/api/admin/invoices', require('./src/routes/adminInvoices'));
+app.use('/api/admin/dev',      require('./src/routes/adminDev'));
 app.use('/api/public/quotes',  require('./src/routes/publicQuotes'));
 app.use('/api/public/payment-check', require('./src/routes/publicPaymentCheck'));
 
