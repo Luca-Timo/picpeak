@@ -9,10 +9,23 @@ import { AdminHeader } from './AdminHeader';
 import { MaintenanceBanner } from './MaintenanceBanner';
 import { MandatoryPasswordChangeModal } from './MandatoryPasswordChangeModal';
 
+const SIDEBAR_COLLAPSED_KEY = 'admin-sidebar-collapsed';
+
 export const AdminLayout: React.FC = () => {
   const { isAuthenticated, isLoading, mustChangePassword } = useAdminAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  
+  const [sidebarCollapsed, setSidebarCollapsedState] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+  });
+
+  const setSidebarCollapsed = (v: boolean) => {
+    setSidebarCollapsedState(v);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, v ? '1' : '0');
+    }
+  };
+
   // Handle session timeout
   useSessionTimeout();
 
@@ -40,6 +53,8 @@ export const AdminLayout: React.FC = () => {
       <AdminLayoutInner
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
+        sidebarCollapsed={sidebarCollapsed}
+        setSidebarCollapsed={setSidebarCollapsed}
         mustChangePassword={mustChangePassword}
       />
     </FeatureFlagsProvider>
@@ -49,10 +64,12 @@ export const AdminLayout: React.FC = () => {
 interface AdminLayoutInnerProps {
   sidebarOpen: boolean;
   setSidebarOpen: (v: boolean) => void;
+  sidebarCollapsed: boolean;
+  setSidebarCollapsed: (v: boolean) => void;
   mustChangePassword: boolean;
 }
 
-const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSidebarOpen, mustChangePassword }) => {
+const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, mustChangePassword }) => {
   return (
     <div className="h-screen bg-neutral-50 dark:bg-neutral-950 flex overflow-hidden">
       {/* Mandatory Password Change Modal */}
@@ -68,7 +85,12 @@ const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSid
 
       {/* Sidebar - disabled when password change required */}
       <div className={mustChangePassword ? 'pointer-events-none opacity-50' : ''}>
-        <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <AdminSidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
       </div>
 
       {/* Main content */}

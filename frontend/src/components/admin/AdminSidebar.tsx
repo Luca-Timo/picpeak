@@ -9,6 +9,8 @@ import {
   X,
   Users,
   Briefcase,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +22,10 @@ import { useFeatureFlags, type FeatureKey } from '../../contexts/FeatureFlagsCon
 interface AdminSidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Desktop-only: collapse to icon-rail when true. Persisted by parent. */
+  collapsed?: boolean;
+  /** Desktop-only: toggle for the collapse button rendered in the title bar. */
+  onToggleCollapse?: () => void;
 }
 
 interface NavItem {
@@ -81,7 +87,7 @@ const navigation: NavItem[] = [
   },
 ];
 
-export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) => {
+export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, collapsed = false, onToggleCollapse }) => {
   const location = useLocation();
   const { t } = useTranslation();
   const { hasPermission } = usePermissions();
@@ -101,38 +107,74 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
     return true;
   });
 
+  // Desktop width: full nav (w-64) vs icon rail (w-16). Mobile is always
+  // w-64 since the collapse affordance only applies on lg+ viewports.
+  const widthClasses = collapsed ? 'w-64 lg:w-16' : 'w-64';
+  const showLabels = !collapsed;
+
   return (
     <div
-      className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-700 transform transition-transform duration-200 ease-in-out lg:relative lg:translate-x-0 lg:h-screen ${
+      className={`fixed inset-y-0 left-0 z-50 ${widthClasses} bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-700 transform transition-all duration-200 ease-in-out lg:relative lg:translate-x-0 lg:h-screen ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       }`}
     >
       <div className="flex flex-col h-screen lg:h-full">
-        {/* Brand */}
-        <div className="flex items-center justify-between h-16 px-6 border-b border-neutral-200 dark:border-neutral-700 flex-shrink-0">
-          <div className="flex items-center">
-            <span className="text-xl font-bold text-neutral-900 dark:text-neutral-100">{t('admin.title')}</span>
+        {/* Brand row: collapse toggle (desktop) on the left, title to the right,
+            mobile close (X) on the far right. When collapsed on desktop, the
+            title hides and only the toggle remains, centered in the rail. */}
+        <div className={`flex items-center h-16 border-b border-neutral-200 dark:border-neutral-700 flex-shrink-0 ${
+          collapsed ? 'lg:justify-center lg:px-2 px-6 justify-between' : 'justify-between px-6'
+        }`}>
+          <div className="flex items-center gap-2">
+            {onToggleCollapse && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                className="hidden lg:inline-flex items-center justify-center w-9 h-9 rounded-md text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                aria-label={collapsed ? t('admin.expandSidebar', 'Expand sidebar') : t('admin.collapseSidebar', 'Collapse sidebar')}
+                title={collapsed ? t('admin.expandSidebar', 'Expand sidebar') : t('admin.collapseSidebar', 'Collapse sidebar')}
+              >
+                {collapsed
+                  ? <PanelLeftOpen className="w-5 h-5" />
+                  : <PanelLeftClose className="w-5 h-5" />}
+              </button>
+            )}
+            {showLabels && (
+              <span className="text-xl font-bold text-neutral-900 dark:text-neutral-100">{t('admin.title')}</span>
+            )}
+            {/* When collapsed on desktop the title is hidden; on mobile we
+                always show it because the rail-narrow style only applies at lg+ */}
+            {collapsed && (
+              <span className="text-xl font-bold text-neutral-900 dark:text-neutral-100 lg:hidden">{t('admin.title')}</span>
+            )}
           </div>
           <button
             onClick={onClose}
             className="lg:hidden text-neutral-400 hover:text-neutral-600"
+            aria-label="Close sidebar"
           >
             <X className="w-6 h-6" />
           </button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto min-h-0">
+        <nav className={`flex-1 py-4 space-y-1 overflow-y-auto overflow-x-hidden min-h-0 ${
+          collapsed ? 'px-4 lg:px-2' : 'px-4'
+        }`}>
           {filteredNavigation.map((item) => {
-            const isActive = location.pathname === item.href || 
+            const isActive = location.pathname === item.href ||
                            (item.href !== '/admin/dashboard' && location.pathname.startsWith(item.href));
-            
+            const label = t(item.nameKey);
+
             return (
               <NavLink
                 key={item.nameKey}
                 to={item.href}
                 onClick={() => onClose()}
-                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                title={collapsed ? label : undefined}
+                className={`flex items-center py-2 text-sm font-medium rounded-lg transition-colors ${
+                  collapsed ? 'px-3 lg:px-0 lg:justify-center' : 'px-3'
+                } ${
                   isActive
                     ? 'bg-accent-dark text-white'
                     : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100'
@@ -143,18 +185,22 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose }) =
                     .tile-selected pattern used in the customizer. The accent
                     -dark token defaults to the legacy primary green so users
                     who haven't set CI colours yet see no migration regression. */}
-                <item.icon className={`w-5 h-5 mr-3 ${
+                <item.icon className={`w-5 h-5 flex-shrink-0 ${
+                  collapsed ? 'mr-3 lg:mr-0' : 'mr-3'
+                } ${
                   isActive ? 'text-white' : 'text-neutral-400'
                 }`} />
-                {t(item.nameKey)}
+                <span className={collapsed ? 'lg:hidden' : ''}>{label}</span>
               </NavLink>
             );
           })}
         </nav>
 
-        {/* Bottom section - sticky to bottom (only for users with settings.view permission) */}
+        {/* Bottom section - sticky to bottom (only for users with settings.view permission).
+            Hidden on desktop when collapsed since these widgets don't fit in the icon rail;
+            mobile keeps them visible because mobile width is always w-64. */}
         {hasPermission('settings.view') && (
-          <div className="flex-shrink-0">
+          <div className={`flex-shrink-0 ${collapsed ? 'lg:hidden' : ''}`}>
             {/* Version Info */}
             <VersionInfo />
 
