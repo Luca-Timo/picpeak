@@ -4,7 +4,7 @@
 import { api } from '../config/api';
 import type { QuoteLineItem } from './quotes.service';
 
-export type InvoiceStatus = 'scheduled' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+export type InvoiceStatus = 'scheduled' | 'sent' | 'paid' | 'overdue' | 'cancelled' | 'pending_delivery';
 export type InvoiceSort =
   | 'newest' | 'oldest'
   | 'due_asc' | 'due_desc'
@@ -162,6 +162,14 @@ export const billsService = {
 
   async cancel(id: number): Promise<{ cancelled: true }> {
     const { data } = await api.post(`/admin/invoices/${id}/cancel`);
+    return data.data || data;
+  },
+
+  /** Release a pending_delivery invoice — photographer has delivered
+   *  the photos and is ready to collect the final installment. The
+   *  email fires immediately. */
+  async releaseForDelivery(id: number): Promise<{ sent: true }> {
+    const { data } = await api.post(`/admin/invoices/${id}/release-for-delivery`);
     return data.data || data;
   },
 

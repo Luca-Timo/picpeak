@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Eye, Send, CheckCircle, BellRing, XCircle } from 'lucide-react';
+import { ArrowLeft, Eye, Send, CheckCircle, BellRing, XCircle, Truck } from 'lucide-react';
 import { Button, Card, Loading, Input } from '../../../components/common';
 import { billsService } from '../../../services/bills.service';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
@@ -65,6 +65,23 @@ export const BillDetailPage: React.FC = () => {
     try { await billsService.cancel(inv.id); toast.success(t('bills.cancelledToast', 'Invoice cancelled.')); qc.invalidateQueries({ queryKey: ['invoice', id] }); }
     catch (e: any) { toast.error(e?.response?.data?.error || 'Cancel failed'); }
   };
+  /**
+   * Release a delivery invoice — fires immediately. Used for the
+   * last installment in a split-payment plan (after_delivery
+   * trigger). Photos have been delivered, admin clicks the button,
+   * customer gets the final invoice.
+   */
+  const handleRelease = async () => {
+    if (!window.confirm(t('bills.confirmRelease',
+      'Mark the photos as delivered and send this invoice to the customer now?'))) return;
+    try {
+      await billsService.releaseForDelivery(inv.id);
+      toast.success(t('bills.releasedToast', 'Delivery invoice sent.'));
+      qc.invalidateQueries({ queryKey: ['invoice', id] });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || 'Release failed');
+    }
+  };
   const submitPayment = async () => {
     try {
       await billsService.markPaid(inv.id, {
@@ -110,6 +127,12 @@ export const BillDetailPage: React.FC = () => {
           <Button variant="outline" onClick={handlePreview}><Eye className="w-4 h-4 mr-1" />{t('common.preview', 'Preview')}</Button>
           {['scheduled', 'sent', 'overdue'].includes(inv.status) && (
             <Button onClick={handleSend}><Send className="w-4 h-4 mr-1" />{inv.status === 'scheduled' ? t('bills.sendNow', 'Send now') : t('bills.resend', 'Resend')}</Button>
+          )}
+          {inv.status === 'pending_delivery' && (
+            <Button onClick={handleRelease}>
+              <Truck className="w-4 h-4 mr-1" />
+              {t('bills.releaseForDelivery', 'Mark delivered & send')}
+            </Button>
           )}
           {inv.status !== 'paid' && inv.status !== 'cancelled' && (
             <Button variant="outline" onClick={() => {
