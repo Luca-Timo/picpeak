@@ -28,6 +28,8 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   // logins are opt-in. Migration 095 flips this to TRUE on existing
   // installs (events>0).
   customerPortal: false,
+  // CRM developer tools sub-tab. Strictly opt-in.
+  crmDevelopment: false,
 };
 
 export const FEATURE_FLAGS_QUERY_KEY = ['feature-flags'] as const;
@@ -66,6 +68,7 @@ function applyDependencyRules(flags: FeatureFlags): FeatureFlags {
   // disabling all of them hides it again.
   out.clients = Boolean(
     out.customerPortal
+    || out.crmDevelopment
     // future siblings: || out.calendar || out.quotes || out.bills || out.messaging
   );
   return out;

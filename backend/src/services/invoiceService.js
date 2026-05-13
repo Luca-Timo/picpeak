@@ -1193,14 +1193,14 @@ async function resolveAdminEmailForInvoice(invoice) {
  * Returns { token, sent: bool, reason? } so callers can log /
  * surface the outcome.
  */
-async function queuePaymentCheckEmail(invoiceId) {
+async function queuePaymentCheckEmail(invoiceId, { skipThrottle = false } = {}) {
   const invoice = await db('invoices').where({ id: invoiceId }).first();
   if (!invoice) return { sent: false, reason: 'not_found' };
   if (!['sent', 'overdue'].includes(invoice.status)) {
     return { sent: false, reason: `wrong_status_${invoice.status}` };
   }
   const now = new Date();
-  if (invoice.last_payment_check_at) {
+  if (!skipThrottle && invoice.last_payment_check_at) {
     const last = new Date(invoice.last_payment_check_at).getTime();
     if (now.getTime() - last < 24 * 60 * 60 * 1000) {
       return { sent: false, reason: 'throttled_24h' };

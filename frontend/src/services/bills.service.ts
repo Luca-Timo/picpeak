@@ -182,6 +182,14 @@ export const billsService = {
     return data.data || data;
   },
 
+  /** Fire the admin payment-check email immediately, bypassing the
+   *  24h throttle. Useful for testing the flow without waiting for
+   *  the scheduled reminder window to elapse. */
+  async testPaymentCheck(id: number): Promise<{ token: string; sent: true }> {
+    const { data } = await api.post(`/admin/invoices/${id}/test-payment-check`);
+    return data.data || data;
+  },
+
   /** Cancel & reissue — atomically cancels this invoice and creates
    *  a fresh scheduled duplicate linked via `supersedesInvoiceId`.
    *  Returns the new invoice's id; caller typically navigates to

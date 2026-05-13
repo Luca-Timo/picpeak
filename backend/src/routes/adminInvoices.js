@@ -559,6 +559,32 @@ router.post(
   })
 );
 
+// Test the admin payment-check email manually — bypasses the 24h
+// throttle so the admin can verify the full flow (email → token
+// page → action recorded) without waiting for the invoice to age
+// past its reminder threshold. Only operates on sent/overdue
+// invoices (same gate as the scheduled path).
+router.post(
+  '/:id/test-payment-check',
+  requirePermission('bills.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await invoiceService.queuePaymentCheckEmail(
+      parseInt(req.params.id, 10),
+      { skipThrottle: true }
+    );
+    if (!result.sent) {
+      return res.status(409).json({
+        error: `Payment-check email not sent: ${result.reason}`,
+        code: 'PAYMENT_CHECK_NOT_SENT',
+        reason: result.reason,
+      });
+    }
+    return successResponse(res, result, 200, 'Test payment-check email queued');
+  })
+);
+
 // Cancel + reissue — atomically cancels the existing invoice and
 // creates a fresh scheduled duplicate with a new sequential number,
 // linked via supersedes_invoice_id (migration 114). The PDF
