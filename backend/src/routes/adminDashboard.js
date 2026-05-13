@@ -371,10 +371,13 @@ router.get('/crm-stats', adminAuth, async (req, res) => {
   try {
     // Either CRM permission is enough — both sub-features stand
     // alone (one studio may bill manually but quote via picpeak,
-    // another might invoice but not quote).
-    const perms = req.admin?.permissions || [];
-    const canSeeBills  = perms.includes('bills.view')  || perms.includes('*');
-    const canSeeQuotes = perms.includes('quotes.view') || perms.includes('*');
+    // another might invoice but not quote). Permissions aren't
+    // attached to req.admin synchronously; we have to ask the DB
+    // via userHasAnyPermission so our inline check matches the
+    // behaviour of the requirePermission middleware used elsewhere.
+    const { userHasAnyPermission } = require('../middleware/permissions');
+    const canSeeBills  = await userHasAnyPermission(req.admin.id, ['bills.view']);
+    const canSeeQuotes = await userHasAnyPermission(req.admin.id, ['quotes.view']);
     if (!canSeeBills && !canSeeQuotes) {
       return res.status(403).json({ error: 'Forbidden' });
     }
