@@ -87,19 +87,18 @@ function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosTe
       email: profile.email,
       website: profile.website,
       footerLine: profile.footer_line,
-      // Expose the logo as a public URL — frontend renders it at
-      // the top of the response page so the customer sees the same
-      // letterhead as the PDF. Resolution order:
-      //   1. business_profile.logo_path (dedicated PDF/CRM logo)
-      //   2. app_settings.branding_logo_url (the global Settings →
-      //      Branding logo, passed in as `brandingLogoUrl`)
+      // Logo source for the web quote page is ONLY the global
+      // Settings → Branding logo (`app_settings.branding_logo_url`).
       //
-      // Both paths are served by app.use('/uploads', …) in
-      // server.js; bare filenames are normalised onto /uploads/.
+      // `business_profile.logo_path` is intentionally NOT consulted
+      // here — it's a dedicated PDF lightmode logo (PDFs always
+      // print on white paper, so admins upload a dark variant
+      // there). On the web page the existing site branding already
+      // serves both light + dark modes correctly, so falling back
+      // to a PDF-only image would override that with a light
+      // version that doesn't read in dark mode.
       logoUrl: (() => {
-        const raw = (profile.logo_path && String(profile.logo_path).trim())
-          || (brandingLogoUrl && String(brandingLogoUrl).trim())
-          || null;
+        const raw = (brandingLogoUrl && String(brandingLogoUrl).trim()) || null;
         if (!raw) return null;
         if (raw.startsWith('/') || /^https?:\/\//i.test(raw)) return raw;
         return `/uploads/${raw.replace(/^uploads\//, '')}`;
