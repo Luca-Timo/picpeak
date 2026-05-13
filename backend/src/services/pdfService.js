@@ -1034,7 +1034,20 @@ function renderDocument(type, context) {
           left: PAGE.marginLeft, right: PAGE.marginRight,
         },
         info: {
-          Title: ctx.doc.invoiceNumber || ctx.doc.quoteNumber || (type === 'quote' ? 'Quote' : 'Invoice'),
+          // Chrome's built-in PDF viewer uses this Title metadata
+          // as the default save name when the PDF is served from a
+          // blob URL (where the original HTTP Content-Disposition
+          // header can't propagate). Format mirrors the filename
+          // we set on the HTTP response: "<number>_<customerLabel>"
+          // so saved files have a meaningful name in either path.
+          Title: (() => {
+            const docNumber = ctx.doc.invoiceNumber || ctx.doc.quoteNumber
+              || (type === 'quote' ? 'Quote' : 'Invoice');
+            // Prefer the recipient (customer) for the label —
+            // matches how admins typically file invoices.
+            const recipient = ctx.recipient?.companyName || '';
+            return recipient ? `${docNumber}_${recipient}` : String(docNumber);
+          })(),
           Author: ctx.issuer.companyName || 'picpeak',
         },
       });

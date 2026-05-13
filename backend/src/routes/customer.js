@@ -531,8 +531,15 @@ router.get('/quotes/:id/pdf', customerAuth, async (req, res) => {
     }
     const quoteService = require('../services/quoteService');
     const buf = await quoteService.renderQuotePdfBuffer(quote.id);
+    const { buildPdfFilename } = require('../utils/pdfFilename');
+    const customer = await dbi('customer_accounts').where({ id: req.customer.id }).first();
+    const filename = buildPdfFilename({
+      docNumber: quote.quote_number,
+      customer,
+      fallback: `quote-${quote.id}`,
+    });
     res.set('Content-Type', 'application/pdf');
-    res.set('Content-Disposition', `inline; filename="${quote.quote_number}.pdf"`);
+    res.set('Content-Disposition', `inline; filename="${filename}"`);
     res.send(buf);
   } catch (error) {
     logger.error('Customer quote PDF error:', error);
@@ -553,8 +560,15 @@ router.get('/invoices/:id/pdf', customerAuth, async (req, res) => {
     }
     const invoiceService = require('../services/invoiceService');
     const buf = await invoiceService.renderInvoicePdfBuffer(invoice.id);
+    const { buildPdfFilename } = require('../utils/pdfFilename');
+    const customer = await dbi('customer_accounts').where({ id: req.customer.id }).first();
+    const filename = buildPdfFilename({
+      docNumber: invoice.invoice_number,
+      customer,
+      fallback: `invoice-${invoice.id}`,
+    });
     res.set('Content-Type', 'application/pdf');
-    res.set('Content-Disposition', `inline; filename="${invoice.invoice_number}.pdf"`);
+    res.set('Content-Disposition', `inline; filename="${filename}"`);
     res.send(buf);
   } catch (error) {
     logger.error('Customer invoice PDF error:', error);

@@ -384,8 +384,16 @@ router.get(
     validateRequest(req);
     const id = parseInt(req.params.id, 10);
     const buf = await quoteService.renderQuotePdfBuffer(id);
+    const { buildPdfFilename } = require('../utils/pdfFilename');
+    const quote = await db('quotes').where({ id }).first();
+    const customer = quote ? await db('customer_accounts').where({ id: quote.customer_account_id }).first() : null;
+    const filename = buildPdfFilename({
+      docNumber: quote?.quote_number,
+      customer,
+      fallback: `quote-${id}`,
+    });
     res.set('Content-Type', 'application/pdf');
-    res.set('Content-Disposition', `inline; filename="quote-${id}.pdf"`);
+    res.set('Content-Disposition', `inline; filename="${filename}"`);
     res.send(buf);
   })
 );
@@ -396,9 +404,19 @@ router.post(
   QUOTE_BODY_VALIDATORS,
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const buf = await quoteService.renderQuotePdfFromPayload(mapPayloadToService(req.body));
+    const payload = mapPayloadToService(req.body);
+    const buf = await quoteService.renderQuotePdfFromPayload(payload);
+    const { buildPdfFilename } = require('../utils/pdfFilename');
+    const customer = payload.customerAccountId
+      ? await db('customer_accounts').where({ id: payload.customerAccountId }).first()
+      : null;
+    const filename = buildPdfFilename({
+      docNumber: null,
+      customer,
+      fallback: 'quote-preview',
+    });
     res.set('Content-Type', 'application/pdf');
-    res.set('Content-Disposition', 'inline; filename="quote-preview.pdf"');
+    res.set('Content-Disposition', `inline; filename="${filename}"`);
     res.send(buf);
   })
 );
