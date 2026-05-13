@@ -44,6 +44,16 @@ export interface BusinessProfile {
   /** When false, the company name line is suppressed in the issuer
    *  block on every PDF. Migration 106; defaults true. */
   pdfShowCompanyName: boolean;
+  /** When true, the company name renders as a plain address line
+   *  (same size + weight as the street) right above the address
+   *  instead of as a bold title under the logo. Migration 108. */
+  pdfCompanyNameInline: boolean;
+  /** Logo banner height in PDF points. 24-200. Defaults to 56.
+   *  Migration 108. */
+  pdfLogoHeight: number;
+  /** DIN 5008 folding marks on the page edge.
+   *  'none' (default) | 'half' | 'third' | 'both'. Migration 108. */
+  pdfFoldingMarks: 'none' | 'half' | 'third' | 'both';
   createdAt: string;
   updatedAt: string;
 }
@@ -97,6 +107,26 @@ export const businessProfileService = {
 
   async deleteBankAccount(id: number): Promise<{ deleted: true }> {
     const { data } = await api.delete(`/admin/business-profile/bank-accounts/${id}`);
+    return data.data || data;
+  },
+
+  /**
+   * Upload a dedicated PDF letterhead logo. Accepts PNG, JPEG, and
+   * SVG — the renderer rasterises SVG to PNG via sharp.
+   */
+  async uploadLogo(file: File): Promise<{ logoPath: string }> {
+    const form = new FormData();
+    form.append('logo', file);
+    const { data } = await api.post('/admin/business-profile/logo', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data.data || data;
+  },
+
+  /** Clear the dedicated PDF logo. The renderer then falls back to
+   *  the global branding logo (Settings → Branding). */
+  async clearLogo(): Promise<{ cleared: true }> {
+    const { data } = await api.delete('/admin/business-profile/logo');
     return data.data || data;
   },
 };

@@ -15,12 +15,44 @@
 
 const express = require('express');
 const { body, param } = require('express-validator');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs').promises;
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
+const { getStoragePath } = require('../config/storage');
 const businessProfileService = require('../services/businessProfileService');
+const { db } = require('../database/db');
 
 const router = express.Router();
+
+// Multer config for the dedicated PDF letterhead logo. Same target
+// directory as the global branding upload (storage/uploads/logos)
+// but accepts SVG in addition to PNG / JPEG — the PDF renderer
+// rasterises SVGs to PNG on the fly via resolveLogoFile() so the
+// admin can drop a vector logo here and have it work in print.
+const pdfLogoStorage = multer.diskStorage({
+  destination: async (_req, _file, cb) => {
+    const dir = path.join(getStoragePath(), 'uploads/logos');
+    await fs.mkdir(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.png';
+    cb(null, `pdf-logo-${Date.now()}${ext}`);
+  },
+});
+
+const pdfLogoUpload = multer({
+  storage: pdfLogoStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/png', 'image/jpeg', 'image/svg+xml'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only PNG, JPEG and SVG logos are allowed'));
+  },
+});
 
 /**
  * DB-shape → API shape. Keep narrow so adding new DB columns doesn't
@@ -53,6 +85,9 @@ function transformProfile(p) {
     pdfFontTtfPath: p.pdf_font_ttf_path || '',
     pdfShowLogo: p.pdf_show_logo == null ? true : (p.pdf_show_logo === true || p.pdf_show_logo === 1 || p.pdf_show_logo === '1'),
     pdfShowCompanyName: p.pdf_show_company_name == null ? true : (p.pdf_show_company_name === true || p.pdf_show_company_name === 1 || p.pdf_show_company_name === '1'),
+    pdfFoldingMarks: p.pdf_folding_marks || 'none',
+    pdfLogoHeight: p.pdf_logo_height == null ? 56 : Number(p.pdf_logo_height),
+    pdfCompanyNameInline: p.pdf_company_name_inline === true || p.pdf_company_name_inline === 1 || p.pdf_company_name_inline === '1',
     createdAt: p.created_at,
     updatedAt: p.updated_at,
   };
@@ -148,6 +183,69 @@ router.get(
   })
 );
 
+// ---- POST /logo, DELETE /logo -----------------------------------------
+// Dedicated PDF letterhead logo upload (separate from the global
+// Settings → Branding logo). PNG, JPEG, and SVG accepted; the PDF
+// renderer rasterises SVG to PNG via resolveLogoFile() so vector
+// uploads work in print. The relative path is stored in
+// business_profile.logo_path; the existing fallback to
+// branding_logo_path still applies when this is unset.
+router.post(
+  '/logo',
+  requirePermission('settings.edit'),
+  pdfLogoUpload.single('logo'),
+  handleAsync(async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No logo file uploaded' });
+    }
+
+    // Clean up the previous PDF logo on disk if it was uploaded via
+    // this same endpoint (matches the pdf-logo-* prefix). We leave
+    // anything else untouched — the admin may have set logo_path to
+    // a path managed by a different system.
+    try {
+      const previous = await db('business_profile').where({ id: 1 }).first();
+      const prev = previous?.logo_path;
+      if (prev && typeof prev === 'string' && /pdf-logo-\d+\./.test(prev)) {
+        const stripped = prev.replace(/^\/+/, '');
+        const prevDisk = path.isAbsolute(prev)
+          ? prev
+          : path.join(getStoragePath(), stripped);
+        try { await fs.unlink(prevDisk); } catch (_) { /* ignore */ }
+      }
+    } catch (_) { /* ignore */ }
+
+    const relative = `/uploads/logos/${req.file.filename}`;
+    await businessProfileService.updateProfile(
+      { logo_path: relative },
+      req.admin.id
+    );
+
+    return successResponse(res, { logoPath: relative }, 200, 'PDF logo uploaded');
+  })
+);
+
+router.delete(
+  '/logo',
+  requirePermission('settings.edit'),
+  handleAsync(async (req, res) => {
+    const existing = await db('business_profile').where({ id: 1 }).first();
+    const prev = existing?.logo_path;
+    if (prev && typeof prev === 'string' && /pdf-logo-\d+\./.test(prev)) {
+      const stripped = prev.replace(/^\/+/, '');
+      const prevDisk = path.isAbsolute(prev)
+        ? prev
+        : path.join(getStoragePath(), stripped);
+      try { await fs.unlink(prevDisk); } catch (_) { /* ignore */ }
+    }
+    await businessProfileService.updateProfile(
+      { logo_path: '' },
+      req.admin.id
+    );
+    return successResponse(res, { cleared: true }, 200, 'PDF logo cleared');
+  })
+);
+
 // ---- PUT / ------------------------------------------------------------
 router.put(
   '/',
@@ -183,6 +281,9 @@ router.put(
     // disabled.
     body('pdfShowLogo').optional().isBoolean(),
     body('pdfShowCompanyName').optional().isBoolean(),
+    body('pdfCompanyNameInline').optional().isBoolean(),
+    body('pdfFoldingMarks').optional({ values: 'falsy' }).isIn(['none', 'half', 'third', 'both']),
+    body('pdfLogoHeight').optional({ values: 'falsy' }).isInt({ min: 24, max: 200 }),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -212,6 +313,9 @@ router.put(
       pdfFontTtfPath: 'pdf_font_ttf_path',
       pdfShowLogo: 'pdf_show_logo',
       pdfShowCompanyName: 'pdf_show_company_name',
+      pdfCompanyNameInline: 'pdf_company_name_inline',
+      pdfFoldingMarks: 'pdf_folding_marks',
+      pdfLogoHeight: 'pdf_logo_height',
     };
     for (const [api, db] of Object.entries(map)) {
       if (Object.prototype.hasOwnProperty.call(req.body, api)) {

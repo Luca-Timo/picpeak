@@ -123,18 +123,31 @@ export const SettingsBusinessProfilePage: React.FC = () => {
           </div>
           <Input label={t('businessProfile.field.footerLine', 'PDF footer line') as string} value={profile.footerLine}
             onChange={(e) => setProfile({ ...profile, footerLine: e.target.value })} />
-          {/* Logo path — points the PDF renderer at a file under
-              storage/. PDFKit only embeds PNG + JPEG; SVG/WebP/GIF
-              are detected and skipped with a server-side warning. */}
+          {/* Dedicated PDF letterhead logo — separate from the global
+              Settings → Branding logo. SVG accepted (rasterised to PNG
+              on the fly). When unset the renderer falls back to the
+              branding logo. */}
           <div className="md:col-span-2">
-            <Input label={t('businessProfile.field.logoPath', 'Logo path (PNG or JPEG only)') as string}
-              value={profile.logoPath || ''}
-              placeholder="uploads/logos/my-logo.png"
-              onChange={(e) => setProfile({ ...profile, logoPath: e.target.value })} />
-            <p className="text-xs text-neutral-500 mt-1">
-              {t('businessProfile.field.logoPathHelp',
-                'Relative to the storage root (e.g. uploads/logos/foo.png) or an absolute path. SVG / WebP are not supported by the PDF engine — re-upload as PNG or JPEG.')}
-            </p>
+            <PdfLogoUploader profile={profile} setProfile={setProfile} />
+          </div>
+          {/* Logo banner height (pt) — admin-adjustable per migration 108. */}
+          <Input type="number" min={24} max={200}
+            label={t('businessProfile.field.pdfLogoHeight', 'PDF logo height (pt, 24-200)') as string}
+            value={profile.pdfLogoHeight ?? 56}
+            onChange={(e) => setProfile({ ...profile, pdfLogoHeight: Number(e.target.value) })} />
+          {/* Folding marks dropdown. */}
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              {t('businessProfile.field.pdfFoldingMarks', 'Folding marks on PDF page edge')}
+            </label>
+            <select value={profile.pdfFoldingMarks || 'none'}
+              onChange={(e) => setProfile({ ...profile, pdfFoldingMarks: e.target.value as any })}
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm">
+              <option value="none">{t('businessProfile.foldingMarks.none', 'None')}</option>
+              <option value="half">{t('businessProfile.foldingMarks.half', 'Half (148.5mm) — for C5 envelopes')}</option>
+              <option value="third">{t('businessProfile.foldingMarks.third', 'Third (105mm) — for DL / DIN long envelopes')}</option>
+              <option value="both">{t('businessProfile.foldingMarks.both', 'Both marks')}</option>
+            </select>
           </div>
           {/* Custom PDF font — TTF/OTF only. PDFKit doesn't read
               woff2 (the bundled webfonts under assets/fonts), so the
@@ -165,6 +178,13 @@ export const SettingsBusinessProfilePage: React.FC = () => {
               'When off, the company-name line is suppressed (useful if the logo is a wordmark already containing the name).') as string}
             enabled={profile.pdfShowCompanyName}
             onChange={(v) => setProfile({ ...profile, pdfShowCompanyName: v })}
+          />
+          <PdfToggleRow
+            label={t('businessProfile.field.pdfCompanyNameInline', 'Render company name inline with address') as string}
+            description={t('businessProfile.field.pdfCompanyNameInlineHelp',
+              'When on, the company name appears as a plain line directly above the street address (same size + weight). When off, it renders as a bold title under the logo.') as string}
+            enabled={profile.pdfCompanyNameInline}
+            onChange={(v) => setProfile({ ...profile, pdfCompanyNameInline: v })}
           />
         </div>
       </Card>
@@ -208,6 +228,84 @@ const PdfToggleRow: React.FC<PdfToggleRowProps> = ({ label, description, enabled
     </button>
   </label>
 );
+
+/**
+ * Dedicated PDF letterhead logo uploader. Accepts PNG / JPEG / SVG;
+ * the backend rasterises SVG to PNG via sharp so vector uploads work
+ * in print. Stores the relative path on business_profile.logo_path.
+ */
+interface PdfLogoUploaderProps {
+  profile: BusinessProfile;
+  setProfile: (next: BusinessProfile) => void;
+}
+const PdfLogoUploader: React.FC<PdfLogoUploaderProps> = ({ profile, setProfile }) => {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [uploading, setUploading] = useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { logoPath } = await businessProfileService.uploadLogo(file);
+      setProfile({ ...profile, logoPath });
+      qc.invalidateQueries({ queryKey: ['business-profile'] });
+      toast.success(t('businessProfile.logoUploadedToast', 'PDF logo uploaded.'));
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Upload failed');
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  const onClear = async () => {
+    if (!window.confirm(t('businessProfile.logoConfirmClear', 'Remove the PDF logo? The renderer will fall back to the Branding logo if one is set.'))) return;
+    setUploading(true);
+    try {
+      await businessProfileService.clearLogo();
+      setProfile({ ...profile, logoPath: '' });
+      qc.invalidateQueries({ queryKey: ['business-profile'] });
+      toast.success(t('businessProfile.logoClearedToast', 'PDF logo removed.'));
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Clear failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-1">
+        {t('businessProfile.field.pdfLogoUpload', 'PDF letterhead logo (PNG, JPEG, or SVG)')}
+      </label>
+      <div className="flex items-center gap-3 flex-wrap">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/svg+xml"
+          onChange={onPick}
+          disabled={uploading}
+          className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-primary-700 disabled:opacity-60"
+        />
+        {profile.logoPath && (
+          <>
+            <span className="text-xs text-neutral-500 font-mono break-all">{profile.logoPath}</span>
+            <Button variant="outline" size="sm" onClick={onClear} disabled={uploading}>
+              {t('common.remove', 'Remove')}
+            </Button>
+          </>
+        )}
+      </div>
+      <p className="text-xs text-neutral-500 mt-1">
+        {t('businessProfile.field.pdfLogoUploadHelp',
+          'Used on every quote and invoice PDF. SVG is accepted and rasterised to PNG automatically. When empty, the renderer falls back to the global Branding logo.')}
+      </p>
+    </div>
+  );
+};
 
 interface BankAccountsSectionProps { accounts: BankAccount[] }
 

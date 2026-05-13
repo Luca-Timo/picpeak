@@ -260,30 +260,22 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
     }
   };
 
-  const bannerH = 42; // shrunk from 56
-  // Try to draw the logo per the chosen layout. If PDFKit rejects
-  // the file (mislabelled extension, truncated bytes, etc.) we fall
-  // back to the "name only" branch so the letterhead never goes
-  // completely empty.
+  // Logo height is admin-configurable (migration 108). Falls back to
+  // 56pt — the prior hard-coded value — when unset.
+  const bannerH = Math.max(24, Math.min(200, Number(issuer.logoHeight) || 56));
+  const inlineName = issuer.companyNameInline === true;
+  // Logo and company name stack VERTICALLY (logo on top, name
+  // underneath). When `companyNameInline` is set, the bold-title
+  // name branch is skipped and the name is rendered as a regular
+  // address line right before the street address (handled below).
   let logoDrawn = false;
-  if (logoFound && showName && issuer.companyName) {
-    const logoW = Math.min(width * 0.42, 72);
-    logoDrawn = drawLogoSafely(logoFound, { x, y, w: logoW, h: bannerH });
-    if (logoDrawn) {
-      const nameX = x + logoW + 8;
-      const nameW = width - logoW - 8;
-      const nameY = y + (bannerH - 12) / 2;
-      doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(11).fillColor('#000')
-        .text(issuer.companyName, nameX, nameY, { width: nameW, align: 'left', lineBreak: false });
-      y += bannerH + 6;
-    }
-  } else if (logoFound) {
+  if (logoFound) {
     logoDrawn = drawLogoSafely(logoFound, { x, y, w: width, h: bannerH });
-    if (logoDrawn) y += bannerH + 6;
+    if (logoDrawn) y += bannerH + 4;
   }
-  if (!logoDrawn && showName && issuer.companyName) {
-    // Name-only branch — fires when the logo is missing, was skipped
-    // by the resolver, or PDFKit refused to embed it.
+  if (showName && issuer.companyName && !inlineName) {
+    // Bold-title branch — the standard letterhead look. Skipped when
+    // the admin opted into the inline-name variant.
     doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(12).fillColor('#000')
       .text(issuer.companyName, x, y, { width, align: 'left' });
     y = doc.y + 6;
@@ -304,7 +296,14 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
     const country = issuer.countryName || countryName(issuer.countryCode, locale);
     return [left, country].filter(Boolean).join(' / ');
   })();
+  // When the admin opted into the inline-name variant (migration 108)
+  // the company name renders as the first address line, in the same
+  // plain weight + size as the rest of the address. The bold-title
+  // branch above is skipped in that case.
+  const inlineCompanyLine = (showName && issuer.companyName && inlineName)
+    ? issuer.companyName : null;
   const addressLines = [
+    inlineCompanyLine,
     issuer.addressLine1,
     issuer.addressLine2,
     cityCountry,
@@ -408,6 +407,33 @@ function drawRecipientBlock(doc, recipient, locale) {
   return Math.max(y, ADDR_WINDOW.top + ADDR_WINDOW.height);
 }
 
+/**
+ * Draw DIN 5008 folding marks on the LEFT page edge so the printed
+ * letter can be folded cleanly to fit a window envelope.
+ *
+ *   'half'  → single 10mm mark at 148.5mm from top (C5 / half-fold)
+ *   'third' → single 10mm mark at 105mm from top (DL / thirds-fold)
+ *   'both'  → both marks
+ *   'none' (or anything else) → no marks
+ *
+ * Marks are drawn 1cm long, anchored against the left edge of the
+ * paper (x = 0 → 28.35pt), 0.4pt hairline, mid-grey so they're
+ * visible to the person folding but unobtrusive when scanned.
+ */
+function drawFoldingMarks(doc, mode) {
+  if (!mode || mode === 'none') return;
+  const MARK_LEN_PT = 1 * 10 * MM; // 10mm = ~28.35pt
+  const ys = [];
+  if (mode === 'half' || mode === 'both')  ys.push(148.5 * MM); // 1/2 fold
+  if (mode === 'third' || mode === 'both') ys.push(105 * MM);    // 1/3 fold (DIN 5008)
+  doc.save();
+  doc.strokeColor('#888').lineWidth(0.4);
+  for (const y of ys) {
+    doc.moveTo(0, y).lineTo(MARK_LEN_PT, y).stroke();
+  }
+  doc.restore();
+}
+
 function drawTitle(doc, title, x, y) {
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(20).fillColor('#000').text(title, x, y);
   return doc.y + 8;
@@ -455,10 +481,13 @@ function drawLineItems(doc, ctx) {
     ? [30, 40, 240, 50, 75, 80]
     : [30, 50, 280, 70, 85];
 
-  // Per-row padding — generous breathing room above + below the
-  // text in each cell. 96pt top + 96pt bottom is intentionally
-  // large; the maintainer wants the line items to feel airy.
-  const ROW_PADDING = { top: 96, bottom: 96, left: 4, right: 4 };
+  // Per-row padding — swissqrbill's PDFPadding type accepts
+  // `number | [top, right, bottom, left] | [vertical, horizontal]`
+  // but NOT an object. The earlier object form was silently
+  // ignored (so the padding bumps the maintainer asked for never
+  // landed visually). 24pt top + 24pt bottom gives generous space
+  // above and below the text inside every line-item cell.
+  const ROW_PADDING = [24, 4, 24, 4];
   // Match the totals box font size; the maintainer wants the line
   // items and the billing totals to read at the same weight so the
   // eye doesn't bounce between two scales.
@@ -954,16 +983,18 @@ function renderDocument(type, context) {
       // above and the totals below.
       y = doc.y + 32;
 
-      // ---- pin totals + payment to lower 1/3 ------------------------
-      // The maintainer wants the totals + payment block anchored to
-      // the lower third of the page regardless of how short the line
-      // items are — short invoices should not leave a wide gap of
-      // whitespace before the totals. We compute the anchor as
-      // 2/3 of page height, and use max(currentY, anchor) so long
-      // tables can still push everything down naturally (they'll
-      // overflow to a new page via PDFKit's auto-paging).
-      const LOWER_THIRD_Y = PAGE.height * 2 / 3; // ~561.26pt
-      y = Math.max(y, LOWER_THIRD_Y);
+      // ---- pin totals + payment ABOVE the footer ----------------
+      // Work backwards from the footer so the payment block (Skonto,
+      // IBAN, account holder) sits right against the footer with a
+      // small gap. Totals stack above the payment block. If the line
+      // items pushed past this anchor, we use the current Y instead
+      // and let PDFKit auto-paginate.
+      const FOOTER_RESERVE = 60;                  // footer text + small gap
+      const PAYMENT_BLOCK_HEIGHT = ctx.paymentTerm ? 140 : 70;
+      const TOTALS_BLOCK_HEIGHT  = 110;
+      const desiredPaymentY = PAGE.height - PAGE.marginBottom - FOOTER_RESERVE - PAYMENT_BLOCK_HEIGHT;
+      const desiredTotalsY  = desiredPaymentY - 12 - TOTALS_BLOCK_HEIGHT;
+      y = Math.max(y, desiredTotalsY);
 
       // ---- totals box (right-aligned) -------------------------------
       y = drawTotals(doc, ctx, leftX, y, PAGE.contentWidth);
@@ -976,7 +1007,14 @@ function renderDocument(type, context) {
       }
 
       // ---- payment conditions + IBAN block --------------------------
+      // Pin the payment block to sit RIGHT above the footer regardless
+      // of where totals ended (totals can end short of the desired
+      // anchor if e.g. only Net + Total render with no shipping/vat).
+      y = Math.max(y, desiredPaymentY);
       y = drawPaymentBlock(doc, ctx, leftX, y, PAGE.contentWidth);
+
+      // ---- folding marks (left edge) --------------------------------
+      drawFoldingMarks(doc, ctx.issuer?.foldingMarks);
 
       // ---- footer ---------------------------------------------------
       drawFooter(doc, ctx.issuer, ctx.locale);
