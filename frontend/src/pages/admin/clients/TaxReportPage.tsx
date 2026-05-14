@@ -133,108 +133,187 @@ export const TaxReportPage: React.FC = () => {
 
   const intlLocale = i18n.language === 'de' ? 'de-CH' : 'en-GB';
 
+  // Show the per-VAT-rate breakdown only when there are 2+ distinct
+  // rates in the period. With a single rate the breakdown is just a
+  // restatement of the grand totals — pure noise.
+  const showPerRateBreakdown = (report?.totalsByVatRate.length || 0) > 1;
+  const exportsDisabled = isLoading || isExporting !== null || !report || report.rows.length === 0;
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <Card padding="md">
-        <div className="flex items-start gap-3 mb-5">
-          <div className="w-10 h-10 rounded-lg bg-accent-soft text-on-accent-soft flex items-center justify-center">
-            <Calculator className="w-5 h-5" />
+      {/* Top row — filter card on the left (stacked rows, narrower
+          footprint), compact totals card on the right. Both cards sit
+          above the table so the table gets the full content width. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
+        {/* Filter card (left) */}
+        <Card padding="md">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-10 h-10 rounded-lg bg-accent-soft text-on-accent-soft flex items-center justify-center flex-shrink-0">
+              <Calculator className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+                {t('taxReport.title', 'Tax report')}
+              </h1>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-0.5">
+                {t(
+                  'taxReport.intro',
+                  'Period-scoped revenue list with net + VAT breakdown grouped by VAT rate. Cancelled invoices stay visible for audit-trail continuity but are excluded from totals.',
+                )}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-              {t('taxReport.title', 'Tax report')}
-            </h1>
-            <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-0.5 max-w-2xl">
-              {t(
-                'taxReport.intro',
-                'Period-scoped revenue list with net + VAT breakdown grouped by VAT rate. Cancelled invoices stay visible for audit-trail continuity but are excluded from totals.',
-              )}
-            </p>
-          </div>
-        </div>
 
-        {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div>
-            <label htmlFor="period-preset" className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-              {t('taxReport.filters.period', 'Period')}
-            </label>
-            <select
-              id="period-preset"
-              value={preset}
-              onChange={(e) => onPresetChange(e.target.value as PeriodPreset)}
-              className={selectClassName}
-            >
-              <option value="thisYear">{t('taxReport.filters.thisYear', 'This year')}</option>
-              <option value="lastYear">{t('taxReport.filters.lastYear', 'Last year')}</option>
-              <option value="thisQuarter">{t('taxReport.filters.thisQuarter', 'This quarter')}</option>
-              <option value="lastQuarter">{t('taxReport.filters.lastQuarter', 'Last quarter')}</option>
-              <option value="custom">{t('taxReport.filters.custom', 'Custom range')}</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="period-from" className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-              {t('taxReport.filters.from', 'From')}
-            </label>
-            <Input
-              id="period-from"
-              type="date"
-              value={from}
-              onChange={(e) => { setFrom(e.target.value); setPreset('custom'); }}
-            />
-          </div>
-          <div>
-            <label htmlFor="period-to" className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-              {t('taxReport.filters.to', 'To')}
-            </label>
-            <Input
-              id="period-to"
-              type="date"
-              value={to}
-              onChange={(e) => { setTo(e.target.value); setPreset('custom'); }}
-            />
-          </div>
-          <div>
-            <label htmlFor="currency" className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-              {t('taxReport.filters.currency', 'Currency')}
-            </label>
-            <select
-              id="currency"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className={selectClassName}
-            >
-              <option value="CHF">CHF</option>
-              <option value="EUR">EUR</option>
-              <option value="USD">USD</option>
-              <option value="GBP">GBP</option>
-            </select>
-          </div>
-        </div>
+          {/* Filters stacked vertically per the agreed layout:
+              Row 1: period preset (full width)
+              Row 2: from / to (side-by-side)
+              Row 3: currency (full width)
+              Row 4: export buttons (right-aligned) */}
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="period-preset" className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                {t('taxReport.filters.period', 'Period')}
+              </label>
+              <select
+                id="period-preset"
+                value={preset}
+                onChange={(e) => onPresetChange(e.target.value as PeriodPreset)}
+                className={selectClassName}
+              >
+                <option value="thisYear">{t('taxReport.filters.thisYear', 'This year')}</option>
+                <option value="lastYear">{t('taxReport.filters.lastYear', 'Last year')}</option>
+                <option value="thisQuarter">{t('taxReport.filters.thisQuarter', 'This quarter')}</option>
+                <option value="lastQuarter">{t('taxReport.filters.lastQuarter', 'Last quarter')}</option>
+                <option value="custom">{t('taxReport.filters.custom', 'Custom range')}</option>
+              </select>
+            </div>
 
-        {/* Export buttons */}
-        <div className="flex flex-wrap items-center justify-end gap-2 mt-5">
-          <Button
-            variant="outline"
-            onClick={() => handleExport('csv')}
-            disabled={isLoading || isExporting !== null || !report || report.rows.length === 0}
-            isLoading={isExporting === 'csv'}
-            leftIcon={<FileDown className="w-4 h-4" />}
-          >
-            {t('taxReport.exportCsv', 'Export CSV')}
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => handleExport('pdf')}
-            disabled={isLoading || isExporting !== null || !report || report.rows.length === 0}
-            isLoading={isExporting === 'pdf'}
-            leftIcon={<Download className="w-4 h-4" />}
-          >
-            {t('taxReport.exportPdf', 'Export PDF')}
-          </Button>
-        </div>
-      </Card>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="period-from" className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                  {t('taxReport.filters.from', 'From')}
+                </label>
+                <Input
+                  id="period-from"
+                  type="date"
+                  value={from}
+                  onChange={(e) => { setFrom(e.target.value); setPreset('custom'); }}
+                />
+              </div>
+              <div>
+                <label htmlFor="period-to" className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                  {t('taxReport.filters.to', 'To')}
+                </label>
+                <Input
+                  id="period-to"
+                  type="date"
+                  value={to}
+                  onChange={(e) => { setTo(e.target.value); setPreset('custom'); }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="currency" className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                {t('taxReport.filters.currency', 'Currency')}
+              </label>
+              <select
+                id="currency"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className={selectClassName}
+              >
+                <option value="CHF">CHF</option>
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+                <option value="GBP">GBP</option>
+              </select>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+              <Button
+                variant="outline"
+                onClick={() => handleExport('csv')}
+                disabled={exportsDisabled}
+                isLoading={isExporting === 'csv'}
+                leftIcon={<FileDown className="w-4 h-4" />}
+              >
+                {t('taxReport.exportCsv', 'Export CSV')}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => handleExport('pdf')}
+                disabled={exportsDisabled}
+                isLoading={isExporting === 'pdf'}
+                leftIcon={<Download className="w-4 h-4" />}
+              >
+                {t('taxReport.exportPdf', 'Export PDF')}
+              </Button>
+            </div>
+          </div>
+        </Card>
+
+        {/* Totals card (right) — compact summary. Headline is the
+            grand totals; the per-VAT-rate breakdown appears only when
+            there are 2+ rates in the period (otherwise it duplicates
+            the grand totals). Cancelled footnote at the bottom when
+            applicable. */}
+        {report && report.rows.length > 0 && (
+          <Card padding="md">
+            <div className="space-y-1.5 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-neutral-700 dark:text-neutral-300">{t('taxReport.grandTotalNet', 'Total net')}</span>
+                <span className="tabular-nums font-medium text-neutral-900 dark:text-neutral-100">
+                  {formatMinor(report.grandTotalNet, report.currency, intlLocale)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-neutral-700 dark:text-neutral-300">{t('taxReport.grandTotalVat', 'Total VAT')}</span>
+                <span className="tabular-nums font-medium text-neutral-900 dark:text-neutral-100">
+                  {formatMinor(report.grandTotalVat, report.currency, intlLocale)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-3 pt-1.5 border-t border-neutral-200 dark:border-neutral-700">
+                <span className="font-semibold text-neutral-900 dark:text-neutral-100">{t('taxReport.grandTotalGross', 'Total gross')}</span>
+                <span className="tabular-nums font-semibold text-neutral-900 dark:text-neutral-100">
+                  {formatMinor(report.grandTotal, report.currency, intlLocale)}
+                </span>
+              </div>
+            </div>
+
+            {showPerRateBreakdown && (
+              <div className="mt-4 pt-3 border-t border-neutral-200 dark:border-neutral-700">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
+                  {t('taxReport.totalsByVatRate', 'Totals by VAT rate')}
+                </h2>
+                <div className="space-y-2 text-sm">
+                  {report.totalsByVatRate.map((b) => (
+                    <div key={b.vatRate}>
+                      <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                        {Number(b.vatRate).toFixed(1)}%
+                      </div>
+                      <div className="flex justify-between gap-3 tabular-nums">
+                        <span className="text-neutral-700 dark:text-neutral-300">{t('taxReport.col.net', 'Net')}</span>
+                        <span>{formatMinor(b.netMinor, report.currency, intlLocale)}</span>
+                      </div>
+                      <div className="flex justify-between gap-3 tabular-nums">
+                        <span className="text-neutral-700 dark:text-neutral-300">{t('taxReport.col.vat', 'VAT')}</span>
+                        <span>{formatMinor(b.vatMinor, report.currency, intlLocale)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {report.cancelledCount > 0 && (
+              <p className="mt-3 pt-3 border-t border-neutral-200 dark:border-neutral-700 text-xs text-neutral-500 dark:text-neutral-400">
+                {t('taxReport.cancelledFootnote', '{{count}} cancelled invoice(s) — amounts excluded from totals (shown for audit-trail continuity).', { count: report.cancelledCount })}
+              </p>
+            )}
+          </Card>
+        )}
+      </div>
 
       {/* Results */}
       {isLoading ? (
@@ -262,61 +341,9 @@ export const TaxReportPage: React.FC = () => {
         </Card>
       ) : (
         <>
-          {/* Totals card — placed above the table so it stays visible
-              without horizontal scrolling, and the table gets the full
-              page width below. Per-VAT-rate buckets render in a
-              flex-wrap row; the grand totals sit on the right. */}
-          <Card padding="md">
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
-              <div className="flex-1 min-w-0">
-                <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mb-3">
-                  {t('taxReport.totalsByVatRate', 'Totals by VAT rate')}
-                </h2>
-                {report.totalsByVatRate.length === 0 ? (
-                  <p className="text-sm text-neutral-500 dark:text-neutral-400">—</p>
-                ) : (
-                  <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
-                    {report.totalsByVatRate.map((b) => (
-                      <div key={b.vatRate} className="min-w-[140px]">
-                        <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
-                          {Number(b.vatRate).toFixed(1)}%
-                        </div>
-                        <div className="text-neutral-700 dark:text-neutral-300 tabular-nums">
-                          {t('taxReport.col.net', 'Net')}: {formatMinor(b.netMinor, report.currency, intlLocale)}
-                        </div>
-                        <div className="text-neutral-700 dark:text-neutral-300 tabular-nums">
-                          {t('taxReport.col.vat', 'VAT')}: {formatMinor(b.vatMinor, report.currency, intlLocale)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {report.cancelledCount > 0 && (
-                  <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
-                    {t('taxReport.cancelledFootnote', '{{count}} cancelled invoice(s) — amounts excluded from totals (shown for audit-trail continuity).', { count: report.cancelledCount })}
-                  </p>
-                )}
-              </div>
-              <div className="md:w-64 md:flex-shrink-0 md:border-l md:border-neutral-200 md:dark:border-neutral-700 md:pl-6 space-y-1.5 text-sm">
-                <div className="flex justify-between gap-3">
-                  <span className="text-neutral-700 dark:text-neutral-300">{t('taxReport.grandTotalNet', 'Total net')}</span>
-                  <span className="tabular-nums font-medium">{formatMinor(report.grandTotalNet, report.currency, intlLocale)}</span>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <span className="text-neutral-700 dark:text-neutral-300">{t('taxReport.grandTotalVat', 'Total VAT')}</span>
-                  <span className="tabular-nums font-medium">{formatMinor(report.grandTotalVat, report.currency, intlLocale)}</span>
-                </div>
-                <div className="flex justify-between gap-3 pt-1.5 border-t border-neutral-200 dark:border-neutral-700">
-                  <span className="font-semibold text-neutral-900 dark:text-neutral-100">{t('taxReport.grandTotalGross', 'Total gross')}</span>
-                  <span className="tabular-nums font-semibold text-neutral-900 dark:text-neutral-100">{formatMinor(report.grandTotal, report.currency, intlLocale)}</span>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          {/* Table — full width below the totals card. Horizontal
-              scroll within the card if the viewport really is too
-              narrow, but at desktop widths everything fits without it. */}
+          {/* Table — full width below the filter + totals row above.
+              The totals card now lives in the top-right of the page
+              header so this section is purely the invoice list. */}
           <Card padding="none">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
