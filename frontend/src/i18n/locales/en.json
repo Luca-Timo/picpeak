@@ -2884,6 +2884,26 @@
     }
   },
   "customers": {
+    "create": {
+      "openLink": "+ Create new customer",
+      "title": "Create new customer",
+      "subtitle": "Fill in the details below. Choose \"Save as passive customer\" to create an admin-only record, or \"Save & send portal invitation\" to also email the customer a sign-up link.",
+      "saveAsPassive": "Save as passive customer",
+      "saveAndInvite": "Save & send portal invitation",
+      "savedPassiveToast": "Passive customer created.",
+      "savedActiveToast": "Customer created and portal invitation sent.",
+      "inviteFailedToast": "Customer saved (passive). Invitation email failed — retry from the customer detail page.",
+      "emailRequired": "A valid email is required."
+    },
+    "passive": {
+      "badge": "Passive — admin only",
+      "activeLabel": "Has portal access",
+      "sendInvite": "Send portal invitation",
+      "sendInviteToast": "Portal invitation sent.",
+      "alreadyActive": "Customer already has portal access — no invitation needed.",
+      "detailHint": "This customer has no portal access (admin-only record). Click below to email them a portal sign-up link. The customer's existing invoices, quotes, and gallery assignments are preserved when they claim the invitation.",
+      "deactivatedHint": "Reactivate the customer before sending the invitation."
+    },
     "pageTitle": "Customers",
     "pageSubtitle": "Recurring customer accounts that can log in at /customer/login.",
     "unnamed": "Unnamed",
@@ -2959,6 +2979,7 @@
       "noEvents": "Not assigned to any events yet. Add this customer to an event from the event form.",
       "email": "Email",
       "preferredLanguage": "Preferred language",
+      "preferredLanguageHint": "Drives portal UI and quote/invoice PDF locale. New customers default to the business-profile language ({{lang}}); override here per customer.",
       "salutation": "Salutation",
       "salutationNone": "—",
       "firstName": "First name",
@@ -3240,7 +3261,11 @@
       "shipping": "Shipping",
       "currency": "Currency",
       "ccPdfEmail": "CC PDF to (extra recipient)",
-      "sourceQuote": "From quote"
+      "sourceQuote": "From quote",
+      "businessBankAccount": "Payment account",
+      "bankAccountProfileDefault": "Use business profile default for {{currency}}",
+      "bankAccountDefaultBadge": "(default)",
+      "bankAccountHelp": "Overrides the profile default for this invoice only. Leave on default to inherit the currency-matched account from Settings → Business profile."
     },
     "section": {
       "lineItems": "Line items",

@@ -106,7 +106,10 @@ export interface InvoiceCreatePayload {
   vatRate?: number;
   shippingAmountMinor?: number;
   ccPdfEmail?: string;
-  businessBankAccountId?: number;
+  // null = explicitly clear the per-invoice override (back to the
+  // business-profile default for the currency). undefined = no
+  // change. number = pin this specific bank account.
+  businessBankAccountId?: number | null;
   qrFormat?: InvoiceQrFormat;
   paymentTermTemplateId?: number | null;
   lineItems: QuoteLineItem[];

@@ -15,6 +15,11 @@ export interface CustomerAccountSummary {
   salutation: string | null;
   companyName: string | null;
   isActive: boolean;
+  /** Passive = admin-only customer with no portal access (password_hash IS NULL).
+   *  The backend never returns the actual hash; this boolean is computed
+   *  server-side in transformCustomer. Drives the "Passive — admin only"
+   *  badge + the "Send portal invitation" button on the detail page. */
+  isPassive?: boolean;
   lastLogin: string | null;
   createdAt: string;
   eventCount?: number;
@@ -75,6 +80,10 @@ export interface CustomerInvitePrefill {
   city?: string;
   state?: string;
   country_code?: string;
+  country_name?: string;
+  /** ISO 639 / BCP-47 locale code. Defaults at insert time to the
+   *  business profile's default_locale when not supplied. */
+  preferred_language?: string;
 }
 
 export interface CustomerInvitationSummary {
@@ -218,5 +227,45 @@ export const customerAdminService = {
 
   async cancelInvitation(id: number): Promise<void> {
     await api.delete(`/admin/customers/invitations/${id}`);
+  },
+
+  /**
+   * Create a "passive" customer directly — admin-only record with no
+   * portal access, no invitation, no email. The customer is created
+   * with `password_hash = NULL`; the auth middleware rejects login
+   * for those, so the customer physically can't access the portal
+   * until the admin promotes them via `sendInvite()`.
+   *
+   * Used by the quote/invoice editor's "+ Create new customer" inline
+   * form: lets the admin spin up an identity in seconds for one-off
+   * projects (where issuing portal credentials would be overkill).
+   */
+  async createDirect(
+    email: string,
+    prefill?: CustomerInvitePrefill,
+  ): Promise<CustomerAccountDetail> {
+    const response = await api.post<{ data: { customer: CustomerAccountDetail } } | { customer: CustomerAccountDetail }>(
+      '/admin/customers',
+      { email, prefill },
+    );
+    return ((response.data as any).data ?? response.data).customer;
+  },
+
+  /**
+   * Promote a passive customer to active by firing the standard
+   * portal-invitation email. The customer clicks the link, lands on
+   * the accept page (pre-populated with their existing profile),
+   * sets a password, and is now active. The customer's id is
+   * preserved across promotion — all their existing invoices,
+   * quotes, and gallery assignments survive.
+   *
+   * Rejects with 409 CUSTOMER_ALREADY_ACTIVE if the customer
+   * already has a password set.
+   */
+  async sendInvite(id: number): Promise<{ id: number; email: string; expiresAt: string }> {
+    const response = await api.post<{ data: { invitation: { id: number; email: string; expiresAt: string } } }>(
+      `/admin/customers/${id}/send-invite`,
+    );
+    return (response.data as any).data?.invitation ?? (response.data as any).invitation;
   },
 };

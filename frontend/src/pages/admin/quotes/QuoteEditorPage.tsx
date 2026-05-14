@@ -23,6 +23,7 @@ import {
   type PaymentTermInstallment,
 } from '../../../services/quotes.service';
 import { LineItemsTable, type EditableLineItem } from '../../../components/admin/LineItemsTable';
+import { InlineCustomerCreate } from '../../../components/admin/InlineCustomerCreate';
 import { customerAdminService } from '../../../services/customerAdmin.service';
 import { userManagementService } from '../../../services/userManagement.service';
 import { useAdminAuth } from '../../../contexts/AdminAuthContext';
@@ -152,6 +153,9 @@ export const QuoteEditorPage: React.FC = () => {
     })();
   }, [isEdit, searchParams]);
   const [customerSearch, setCustomerSearch] = useState('');
+  // Toggle: when true, the customer card hides the search and shows
+  // the inline-create form (passive customer or "save & invite").
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
 
   // Load existing quote
   const { data: existing, isLoading } = useQuery({
@@ -374,6 +378,21 @@ export const QuoteEditorPage: React.FC = () => {
               {t('common.change', 'Change')}
             </Button>
           </div>
+        ) : creatingCustomer ? (
+          <InlineCustomerCreate
+            onCancel={() => setCreatingCustomer(false)}
+            onCreated={(c) => {
+              setForm((f) => ({
+                ...f,
+                customerAccountId: c.id,
+                customerLabel: c.companyName || c.displayName || c.email,
+                // Inherit the new customer's language so the quote
+                // gets rendered in their locale by default.
+                language: f.language || c.preferredLanguage || 'de',
+              }));
+              setCreatingCustomer(false);
+            }}
+          />
         ) : (
           <>
             <Input
@@ -399,6 +418,13 @@ export const QuoteEditorPage: React.FC = () => {
                 ))}
               </ul>
             )}
+            <button
+              type="button"
+              onClick={() => setCreatingCustomer(true)}
+              className="mt-3 inline-flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:underline"
+            >
+              {t('customers.create.openLink', '+ Create new customer')}
+            </button>
           </>
         )}
       </Card>

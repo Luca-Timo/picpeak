@@ -453,17 +453,28 @@ export const CustomerManagementPage: React.FC = () => {
                       <td className="px-3 py-3 text-muted-theme">{c.eventCount ?? 0}</td>
                       <td className="px-3 py-3 text-muted-theme">{formatDate(c.lastLogin)}</td>
                       <td className="px-3 py-3">
-                        {c.isActive ? (
-                          <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-accent)' }}>
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            {t('customers.status.active', 'Active')}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs text-red-600">
-                            <X className="w-3.5 h-3.5" />
-                            {t('customers.status.inactive', 'Deactivated')}
-                          </span>
-                        )}
+                        <div className="flex flex-col gap-1">
+                          {c.isActive ? (
+                            <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-accent)' }}>
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              {t('customers.status.active', 'Active')}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs text-red-600">
+                              <X className="w-3.5 h-3.5" />
+                              {t('customers.status.inactive', 'Deactivated')}
+                            </span>
+                          )}
+                          {/* Passive customers (no portal access). The
+                              status badge sits on its own line so a
+                              passive deactivated customer can still
+                              show both states clearly. */}
+                          {c.isPassive && (
+                            <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
+                              {t('customers.passive.badge', 'Passive — admin only')}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-3 text-right">
                         {c.isActive && (

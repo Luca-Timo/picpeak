@@ -2884,6 +2884,26 @@
     }
   },
   "customers": {
+    "create": {
+      "openLink": "+ Neuen Kunden erstellen",
+      "title": "Neuen Kunden erstellen",
+      "subtitle": "Geben Sie die Daten unten ein. Wählen Sie „Als passiven Kunden speichern“, um einen reinen Admin-Eintrag zu erstellen, oder „Speichern & Portal-Einladung senden“, um dem Kunden zusätzlich eine Einladungs-E-Mail zu schicken.",
+      "saveAsPassive": "Als passiven Kunden speichern",
+      "saveAndInvite": "Speichern & Portal-Einladung senden",
+      "savedPassiveToast": "Passiver Kunde erstellt.",
+      "savedActiveToast": "Kunde erstellt und Portal-Einladung gesendet.",
+      "inviteFailedToast": "Kunde gespeichert (passiv). Einladungs-E-Mail fehlgeschlagen — bitte aus dem Kundendetail erneut versuchen.",
+      "emailRequired": "Eine gültige E-Mail-Adresse ist erforderlich."
+    },
+    "passive": {
+      "badge": "Passiv — nur Admin",
+      "activeLabel": "Portalzugang aktiv",
+      "sendInvite": "Portal-Einladung senden",
+      "sendInviteToast": "Portal-Einladung gesendet.",
+      "alreadyActive": "Der Kunde hat bereits Portalzugang — keine Einladung nötig.",
+      "detailHint": "Dieser Kunde hat keinen Portalzugang (reiner Admin-Eintrag). Klicken Sie unten, um eine Portal-Einladung per E-Mail zu senden. Bestehende Rechnungen, Angebote und Galerie-Zuweisungen bleiben beim Annehmen der Einladung erhalten.",
+      "deactivatedHint": "Bitte den Kunden zuerst reaktivieren, bevor die Einladung gesendet wird."
+    },
     "pageTitle": "Kunden",
     "pageSubtitle": "Wiederkehrende Kundenkonten, die sich unter /customer/login anmelden können.",
     "unnamed": "Unbenannt",
@@ -2959,6 +2979,7 @@
       "noEvents": "Noch keinem Event zugewiesen. Fügen Sie diesen Kunden über das Event-Formular hinzu.",
       "email": "E-Mail",
       "preferredLanguage": "Bevorzugte Sprache",
+      "preferredLanguageHint": "Steuert die Portal-Sprache sowie die Sprache von Angebots- und Rechnungs-PDFs. Neue Kunden erben standardmässig die Sprache aus dem Geschäftsprofil ({{lang}}); hier kann pro Kunde überschrieben werden.",
       "salutation": "Anrede",
       "salutationNone": "—",
       "firstName": "Vorname",
@@ -3213,7 +3234,11 @@
       "shipping": "Versand",
       "currency": "Währung",
       "ccPdfEmail": "PDF-Kopie an (zusätzlicher Empfänger)",
-      "sourceQuote": "Aus Angebot"
+      "sourceQuote": "Aus Angebot",
+      "businessBankAccount": "Zahlungskonto",
+      "bankAccountProfileDefault": "Geschäftsprofil-Standard für {{currency}} verwenden",
+      "bankAccountDefaultBadge": "(Standard)",
+      "bankAccountHelp": "Überschreibt den Profil-Standard nur für diese Rechnung. Auf «Standard» belassen, um das passende Konto aus Einstellungen → Geschäftsprofil zu übernehmen."
     },
     "title": "Rechnungen",
     "subtitle": "Rechnungen planen, versenden, Zahlungen erfassen und überfällige Rechnungen mahnen.",
