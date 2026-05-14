@@ -147,6 +147,11 @@ router.post('/invite', [
   body('prefill.city').optional({ nullable: true }).isString().isLength({ max: 120 }),
   body('prefill.state').optional({ nullable: true }).isString().isLength({ max: 120 }),
   body('prefill.country_code').optional({ nullable: true }).isString().isLength({ max: 2 }),
+  // Per-customer preferred language. Drives portal UI + quote/invoice
+  // PDF locale. Defaults at insert time to the business profile's
+  // default_locale when the admin doesn't supply one (see
+  // customerAccountsService.acceptInvitation).
+  body('prefill.preferred_language').optional({ nullable: true }).isString().isLength({ min: 2, max: 8 }),
 ], handleAsync(async (req, res) => {
   validateRequest(req);
   const invitation = await customerAccountsService.createInvitation({

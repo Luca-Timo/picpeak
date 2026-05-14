@@ -25,6 +25,7 @@ import {
   customerAdminService,
   type CustomerAccountDetail,
 } from '../../services/customerAdmin.service';
+import { businessProfileService } from '../../services/businessProfile.service';
 import { CustomerCrmPanels } from '../../components/admin/CustomerCrmPanels';
 
 type EditableFields =
@@ -51,6 +52,20 @@ export const CustomerDetailPage: React.FC = () => {
     queryFn: () => customerAdminService.get(customerId),
     enabled: Number.isFinite(customerId) && customerId > 0,
   });
+
+  // Business-profile default locale powers the "Preferred language"
+  // dropdown's helper hint — admins see which language a brand-new
+  // customer would inherit and decide whether to override it.
+  const { data: profileSnapshot } = useQuery({
+    queryKey: ['business-profile-snapshot'],
+    queryFn: () => businessProfileService.get(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const profileDefaultLocale = profileSnapshot?.profile?.defaultLocale || 'en';
+  const LOCALE_LABELS: Record<string, string> = {
+    en: 'English', de: 'Deutsch', fr: 'Français',
+    nl: 'Nederlands', pt: 'Português', ru: 'Русский',
+  };
 
   const [form, setForm] = useState<Partial<Pick<CustomerAccountDetail, EditableFields>>>({});
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
@@ -225,16 +240,22 @@ export const CustomerDetailPage: React.FC = () => {
           <div>
             <label className="block text-sm font-medium text-theme mb-1">{t('customers.detail.preferredLanguage', 'Preferred language')}</label>
             <select
-              value={form.preferredLanguage || 'en'}
+              value={form.preferredLanguage || profileDefaultLocale}
               onChange={setField('preferredLanguage')}
               className="input"
             >
               <option value="en">English</option>
               <option value="de">Deutsch</option>
+              <option value="fr">Français</option>
               <option value="nl">Nederlands</option>
               <option value="pt">Português</option>
               <option value="ru">Русский</option>
             </select>
+            <p className="text-xs text-neutral-500 mt-1">
+              {t('customers.detail.preferredLanguageHint',
+                'Drives portal UI and quote/invoice PDF locale. New customers default to the business-profile language ({{lang}}); override here per customer.',
+                { lang: LOCALE_LABELS[profileDefaultLocale] || profileDefaultLocale.toUpperCase() })}
+            </p>
           </div>
         </div>
       </Card>

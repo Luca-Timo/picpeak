@@ -43,6 +43,11 @@ const PREFILLABLE_FIELDS = [
   'state',
   'country_code',
   'country_name',
+  // Locale used for portal UI AND for quote/invoice PDF rendering.
+  // Admin can pre-set this on the invitation so a German customer
+  // gets German documents from the very first invoice, without
+  // waiting for them to log in and pick their language.
+  'preferred_language',
 ];
 
 /**
@@ -201,6 +206,23 @@ async function acceptInvitation({ token, name, password, profile }) {
     merged.display_name = String(name).trim();
   }
 
+  // Default the customer's preferred_language to the business profile's
+  // default_locale. Migration 090 sets the schema default to 'en' which
+  // is a poor fit for a Swiss/DE business — by pulling from the
+  // configured profile we make sure German shops issue German quotes
+  // and invoices to their new customers automatically. Customer-typed
+  // value still wins (if the accept form ever exposes the picker), and
+  // the admin can always override later on the customer detail page.
+  // Lazy require to avoid a service-cycle with businessProfileService.
+  let defaultPreferredLanguage = 'en';
+  try {
+    // eslint-disable-next-line global-require
+    const businessProfileService = require('./businessProfileService');
+    const { profile: bp } = await businessProfileService.getProfile();
+    if (bp && bp.default_locale) defaultPreferredLanguage = bp.default_locale;
+  } catch (_) { /* keep 'en' fallback */ }
+  const preferredLanguage = merged.preferred_language || defaultPreferredLanguage;
+
   const customerId = await db.transaction(async (trx) => {
     const [inserted] = await trx('customer_accounts').insert({
       email: invitation.email,
@@ -219,6 +241,7 @@ async function acceptInvitation({ token, name, password, profile }) {
       city: merged.city || null,
       state: merged.state || null,
       country_code: merged.country_code || null,
+      preferred_language: preferredLanguage,
       password_hash: passwordHash,
       is_active: formatBoolean(true),
       // must_change_password is decorative today — accept-invite always
