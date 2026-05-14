@@ -633,13 +633,19 @@ export const BrandingPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Logo Position */}
+              {/* Logo Position
+                  - left / center / right: position inside the gallery header bar.
+                  - sidepanel: moves the logo out of the gallery header
+                    and into the admin sidebar's brand row (replaces the
+                    "PicPeak Admin" text; the favicon takes over when
+                    the sidebar is collapsed). The gallery falls back
+                    to 'left' for its own rendering. */}
               <div>
                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
                   {t('branding.logoPosition', 'Logo Position in Header')}
                 </label>
-                <div className="flex gap-2">
-                  {(['left', 'center', 'right'] as const).map((position) => (
+                <div className="flex flex-wrap gap-2">
+                  {(['left', 'center', 'right', 'sidepanel'] as const).map((position) => (
                     <button
                       key={position}
                       type="button"
@@ -654,6 +660,12 @@ export const BrandingPage: React.FC = () => {
                     </button>
                   ))}
                 </div>
+                {brandingSettings.logo_position === 'sidepanel' && (
+                  <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-2">
+                    {t('branding.positionSidepanelHelp',
+                      'The logo appears in the admin sidebar instead of the header. When the sidebar is collapsed, the favicon is shown.')}
+                  </p>
+                )}
               </div>
 
               {/* Display Mode */}
