@@ -363,6 +363,9 @@ async function listQuotes({ filters = {}, sort = 'newest', page = 1, pageSize = 
         'customer_accounts.first_name as customer_first_name',
         'customer_accounts.last_name as customer_last_name',
         'customer_accounts.company_name as customer_company_name',
+        // Surfaced so the route's transformQuote can compute the
+        // customer.isPassive flag. Hash itself never leaves the API.
+        'customer_accounts.password_hash as customer_password_hash',
       );
 
     if (Array.isArray(filters.status) && filters.status.length > 0) {
@@ -436,6 +439,8 @@ async function getQuoteById(id) {
         'customer_accounts.first_name as customer_first_name',
         'customer_accounts.last_name as customer_last_name',
         'customer_accounts.company_name as customer_company_name',
+        // For transformQuote.customer.isPassive — never leaves the API.
+        'customer_accounts.password_hash as customer_password_hash',
       )
       .first();
     if (!quote) return null;
@@ -878,12 +883,21 @@ async function renderQuotePdfFromPayload(payload) {
     shipping_amount_minor: totals.shippingAmountMinor,
     total_amount_minor: totals.totalAmountMinor,
   };
-  const ctx = await buildRenderContext(fakeQuote, totals.lineItems.map((li) => ({
+  // Carry position + parent_position + details_text through to the
+  // renderer so the preview matches the saved-quote PDF: sub-items
+  // render indented with parenthesised totals, parent shows its
+  // resolved total (sum of priced sub-items), and details_text rows
+  // appear under their parent. Without these fields the renderer
+  // treats every row as a top-level item and shows the parent at 0.
+  const ctx = await buildRenderContext(fakeQuote, totals.lineItems.map((li, idx) => ({
+    position: li.position == null ? idx + 1 : Number(li.position),
     quantity: li.quantity,
     description: li.description,
     unit_price_minor: li.unit_price_minor,
     discount_percent: li.discount_percent,
     line_total_minor: li.line_total_minor,
+    parent_position: li.parent_position == null || li.parent_position === '' ? null : Number(li.parent_position),
+    details_text: li.details_text || null,
   })));
   return await pdfService.renderQuoteToBuffer(ctx);
 }

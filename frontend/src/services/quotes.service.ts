@@ -41,6 +41,10 @@ export interface QuoteSummary {
     firstName: string | null;
     lastName: string | null;
     companyName: string | null;
+    /** Computed server-side from password_hash. true = admin-only
+     *  customer (no portal access). Drives the Passive badge in the
+     *  editor pill + the quotes list. */
+    isPassive?: boolean;
   };
   status: QuoteStatus;
   language: string;
