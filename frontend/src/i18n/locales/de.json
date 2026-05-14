@@ -124,7 +124,11 @@
     "saveChanges": "Änderungen speichern",
     "resetChanges": "Änderungen zurücksetzen",
     "dismiss": "Schließen",
-    "discard": "Verwerfen"
+    "discard": "Verwerfen",
+    "preview": "Vorschau",
+    "duplicate": "Duplizieren",
+    "showAll": "Alle anzeigen",
+    "confirm": "Bestätigen"
   },
   "upload": {
     "photoCategory": "Fotokategorie",
@@ -168,7 +172,8 @@
     "cmsPages": "CMS-Seiten",
     "users": "Benutzer",
     "calendar": "Kalender",
-    "clients": "Kunden"
+    "clients": "Kunden",
+    "betaTag": "Beta"
   },
   "eventTypes": {
     "title": "Veranstaltungsarten",
@@ -2980,7 +2985,11 @@
         "error": "Passwort-Reset konnte nicht gesendet werden",
         "inactive": "Aktiviere den Kunden, bevor du einen Reset sendest."
       },
-      "manageEvents": "Galerien verwalten"
+      "manageEvents": "Galerien verwalten",
+      "quotesSection": "Angebote",
+      "noQuotes": "Noch keine Angebote für diesen Kunden.",
+      "billsSection": "Rechnungen",
+      "noBills": "Noch keine Rechnungen für diesen Kunden."
     },
     "reactivate": {
       "button": "Reaktivieren",
@@ -3075,6 +3084,105 @@
       "declined": "Abgelehnt",
       "expired": "Abgelaufen",
       "converted": "Umgewandelt"
+    },
+    "errors": {
+      "popupBlocked": "Erlauben Sie Pop-ups für diese Seite, um die PDF-Vorschau anzuzeigen.",
+      "customerRequired": "Bitte zuerst einen Kunden auswählen.",
+      "customerFeatureDisabled": "Bei diesem Kunden sind Angebote deaktiviert. Aktivieren Sie Angebote zuerst in den Kundendetails."
+    },
+    "confirmSend": "Dieses Angebot jetzt an den Kunden senden?",
+    "sentToast": "Angebot an Kunden gesendet.",
+    "confirmConvert": "Dieses angenommene Angebot in einen Anlass + geplante Rechnungen umwandeln?",
+    "convertedToast": "Angebot in Anlass #{{id}} umgewandelt",
+    "send": "Senden",
+    "resend": "Erneut senden",
+    "convert": "In Anlass umwandeln",
+    "field": {
+      "issueDate": "Ausgestellt am",
+      "validUntil": "Gültig bis",
+      "eventName": "Anlass",
+      "eventDate": "Anlassdatum",
+      "sentAt": "Gesendet am",
+      "acceptedAt": "Angenommen am",
+      "declinedAt": "Abgelehnt am",
+      "responseWindow": "Antwortfrist",
+      "eventTimeStart": "Startzeit",
+      "eventTimeEnd": "Endzeit",
+      "expectedDuration": "Voraussichtliche Dauer (h)",
+      "vatRate": "MwSt-Satz %",
+      "shipping": "Versandkosten",
+      "currency": "Währung",
+      "selectPaymentTerm": "— Zahlungsbedingungen wählen —",
+      "introText": "Einleitungstext",
+      "outroText": "Schlusstext",
+      "ccPdfEmail": "PDF-Kopie an (zusätzlicher Empfänger)",
+      "ccPdfEmailPlaceholder": "name@example.com",
+      "ccPdfPickFromAdmins": "Aus Admins auswählen:",
+      "ccPdfCustom": "Eigene E-Mail-Adresse",
+      "internalNotes": "Interne Notizen (nicht auf der PDF)"
+    },
+    "responseWindowOpen": "Offen bis {{at}}",
+    "section": {
+      "lineItems": "Positionen",
+      "internalNotes": "Interne Notizen",
+      "customer": "Kunde",
+      "event": "Anlassdetails",
+      "payment": "Zahlungsbedingungen",
+      "extras": "Einleitung / Schluss / Extras"
+    },
+    "savedToast": "Angebot als Entwurf gespeichert.",
+    "edit": "Angebot bearbeiten",
+    "new": "Neues Angebot",
+    "preview": "PDF-Vorschau",
+    "saveAndSend": "Speichern & senden",
+    "customerSearch": "Kunde nach E-Mail oder Firma suchen…",
+    "title": "Angebote",
+    "subtitle": "Angebote versenden, verfolgen und in Anlässe umwandeln.",
+    "searchPlaceholder": "Nach Nummer, Kunde, Anlass suchen…",
+    "sort": {
+      "newest": "Neueste zuerst",
+      "oldest": "Älteste zuerst",
+      "customerAsc": "Kunde A→Z",
+      "valueAsc": "Betrag aufsteigend",
+      "valueDesc": "Betrag absteigend"
+    },
+    "empty": "Noch keine Angebote.",
+    "table": {
+      "customer": "Kunde",
+      "event": "Anlass",
+      "issueDate": "Ausgestellt",
+      "total": "Gesamt",
+      "status": "Status"
+    },
+    "pagination": "Seite {{page}} von {{total}} · {{count}} Angebote",
+    "trigger": {
+      "quote_accepted": "bei Annahme",
+      "before_event": "vor dem Anlass",
+      "after_event": "nach dem Anlass",
+      "after_delivery": "nach Lieferung",
+      "fixed_date": "an festem Datum"
+    }
+  },
+  "crm": {
+    "lineItems": {
+      "quantity": "Anzahl",
+      "description": "Beschreibung",
+      "unitPrice": "Einzelpreis",
+      "total": "Summe",
+      "subtotal": "Zwischensumme",
+      "vat": "MwSt.",
+      "position": "Pos.",
+      "discount": "Rabatt %",
+      "descriptionPlaceholder": "Beschreibung (mehrere Zeilen möglich)",
+      "saveAsPreset": "Als Vorlage speichern",
+      "empty": "Noch keine Positionen — fügen Sie eine hinzu, um zu starten.",
+      "addRow": "Position hinzufügen",
+      "addFromPreset": "Aus Vorlage hinzufügen…",
+      "shipping": "Versand",
+      "addSubItem": "Unterposition hinzufügen",
+      "detailsAdd": "+ Notiz / Details hinzufügen",
+      "detailsFilled": "Details",
+      "detailsPlaceholder": "Optionale Notizen — Kleingedrucktes, Paketinhalte, Bedingungen…"
     }
   },
   "bills": {
@@ -3091,7 +3199,203 @@
       "status": "Status",
       "dueDate": "Fällig",
       "total": "Gesamt",
-      "sourceQuote": "Vom Angebot"
+      "sourceQuote": "Vom Angebot",
+      "issueDate": "Ausgestellt am",
+      "scheduledSendAt": "Geplanter Versand (optional)",
+      "installment": "Rate",
+      "paid": "Bezahlt",
+      "outstanding": "Offen",
+      "lateFee": "Mahngebühr",
+      "qrFormat": "Zahlungs-QR-Format",
+      "vatRate": "MwSt-Satz %",
+      "shipping": "Versand",
+      "currency": "Währung",
+      "ccPdfEmail": "PDF-Kopie an (zusätzlicher Empfänger)"
+    },
+    "title": "Rechnungen",
+    "subtitle": "Rechnungen planen, versenden, Zahlungen erfassen und überfällige Rechnungen mahnen.",
+    "new": "Neue Rechnung",
+    "searchPlaceholder": "Nach Nummer oder Kunde suchen…",
+    "sort": {
+      "newest": "Neueste zuerst",
+      "dueAsc": "Fällig zuerst",
+      "dueDesc": "Fällig zuletzt",
+      "customerAsc": "Kunde A→Z",
+      "valueAsc": "Betrag aufsteigend",
+      "valueDesc": "Betrag absteigend"
+    },
+    "filter": {
+      "unpaidOnly": "Nur unbezahlt"
+    },
+    "empty": "Noch keine Rechnungen.",
+    "table": {
+      "customer": "Kunde",
+      "installment": "Rate",
+      "dueDate": "Fällig",
+      "total": "Gesamt",
+      "status": "Status"
+    },
+    "errors": {
+      "popupBlocked": "Erlauben Sie Pop-ups für diese Seite, um die PDF-Vorschau anzuzeigen.",
+      "customerRequired": "Bitte zuerst einen Kunden auswählen."
+    },
+    "confirmSend": "Diese Rechnung jetzt an den Kunden senden?",
+    "sentToast": "Rechnung an Kunden gesendet.",
+    "confirmReminder": "Zahlungserinnerung jetzt senden?",
+    "reminderToast": "Zahlungserinnerung gesendet.",
+    "confirmCancel": "Diese Rechnung wirklich stornieren? Sie wird ausgegraut und kann nicht mehr bearbeitet werden.",
+    "cancelledToast": "Rechnung storniert.",
+    "paymentRecordedToast": "Zahlung erfasst.",
+    "sendNow": "Jetzt senden",
+    "resend": "Erneut senden",
+    "markPaid": "Als bezahlt markieren",
+    "sendReminder": "Erinnerung senden",
+    "section": {
+      "lineItems": "Positionen",
+      "paymentLog": "Zahlungsverlauf",
+      "customer": "Kunde",
+      "details": "Details"
+    },
+    "noPayments": "Noch keine Zahlungen erfasst.",
+    "payment": {
+      "paidAt": "Bezahlt am",
+      "amount": "Betrag",
+      "method": "Methode",
+      "reference": "Referenz",
+      "notes": "Notizen"
+    },
+    "recordPayment": "Zahlung erfassen",
+    "savedToast": "Rechnung gespeichert.",
+    "edit": "Rechnung bearbeiten",
+    "customerSearch": "Kunde nach E-Mail oder Firma suchen…",
+    "qrFormat": {
+      "none": "Keiner (Override)",
+      "swiss": "Swiss QR-Bill",
+      "epc": "EPC QR (SEPA)"
     }
+  },
+  "businessProfile": {
+    "savedToast": "Geschäftsprofil gespeichert.",
+    "title": "Geschäftsprofil",
+    "subtitle": "Briefkopf, Kontaktdaten und Standardwerte für Angebote und Rechnungen.",
+    "section": {
+      "company": "Firma",
+      "contact": "Kontakt",
+      "defaults": "Standardwerte",
+      "banks": "Bankverbindungen"
+    },
+    "field": {
+      "companyName": "Firmenname",
+      "vatId": "USt-IdNr / MwSt-Nr",
+      "addressLine1": "Adresszeile 1",
+      "addressLine2": "Adresszeile 2",
+      "postalCode": "PLZ",
+      "city": "Ort",
+      "state": "Kanton / Bundesland",
+      "countryCode": "Land",
+      "phone": "Telefon",
+      "mobile": "Mobil",
+      "email": "E-Mail",
+      "website": "Webseite",
+      "defaultCurrency": "Standardwährung",
+      "defaultLocale": "Standardsprache",
+      "vatLabel": "MwSt-Bezeichnung",
+      "vatRateDefault": "Standard-MwSt-Satz %",
+      "defaultQrFormat": "Standard-QR-Format",
+      "footerLine": "Fusszeile"
+    },
+    "qrFormat": {
+      "none": "Kein QR",
+      "swiss": "Swiss QR-Bill",
+      "epc": "EPC QR (SEPA)"
+    },
+    "bankCreatedToast": "Bankverbindung hinzugefügt.",
+    "bankDeletedToast": "Bankverbindung gelöscht.",
+    "addBank": "Bankverbindung hinzufügen",
+    "bank": {
+      "label": "Bezeichnung",
+      "accountHolder": "Kontoinhaber",
+      "currency": "Währung",
+      "isDefault": "Standard",
+      "makeDefault": "Als Standard",
+      "confirmDelete": "Diese Bankverbindung wirklich löschen?"
+    },
+    "noBanks": "Noch keine Bankverbindungen hinterlegt."
+  },
+  "crmSettings": {
+    "savedToast": "CRM-Einstellungen gespeichert.",
+    "title": "CRM-Einstellungen",
+    "subtitle": "Standardwerte für Angebote und Rechnungen.",
+    "section": {
+      "quotes": "Angebote",
+      "invoices": "Rechnungen"
+    },
+    "crm_quotes_accept_window_minutes": {
+      "label": "Antwortfrist nach Versand (Minuten)"
+    },
+    "crm_quotes_default_valid_days": {
+      "label": "Standard-Gültigkeit Angebot (Tage)"
+    },
+    "crm_quotes_number_format": {
+      "label": "Format Angebotsnummer"
+    },
+    "crm_invoices_reminder_first_days": {
+      "label": "Erste Mahnung nach (Tagen)"
+    },
+    "crm_invoices_reminder_second_days": {
+      "label": "Zweite Mahnung nach (Tagen)"
+    },
+    "crm_invoices_late_fee_minor": {
+      "label": "Mahngebühr (Rappen / Cent)"
+    },
+    "crm_invoices_late_fee_label": {
+      "label": "Bezeichnung Mahngebühr"
+    },
+    "crm_invoices_skonto_percent_default": {
+      "label": "Standard-Skonto %"
+    },
+    "crm_invoices_skonto_business_days": {
+      "label": "Skonto-Frist (Werktage)"
+    },
+    "crm_invoices_number_format": {
+      "label": "Format Rechnungsnummer"
+    },
+    "crm_quotes_pdf_attachment_enabled": {
+      "label": "PDF an E-Mail anhängen (Angebote)"
+    },
+    "crm_quotes_skonto_enabled": {
+      "label": "Skonto auf Angeboten aktivieren"
+    },
+    "crm_invoices_qr_enabled": {
+      "label": "Zahlungs-QR auf Rechnungen aktivieren"
+    },
+    "crm_invoices_reminders_enabled": {
+      "label": "Automatische Mahnungen aktivieren"
+    },
+    "crm_invoices_late_fee_enabled": {
+      "label": "Mahngebühr aktivieren"
+    }
+  },
+  "quoteResponse": {
+    "notFound": "Angebot nicht gefunden",
+    "notFoundBody": "Dieser Angebotslink ist nicht mehr gültig.",
+    "locked": "Dieses Angebot kann nicht mehr beantwortet werden.",
+    "title": "Angebot",
+    "event": "Anlass",
+    "issueDate": "Ausgestellt am",
+    "validUntil": "Gültig bis",
+    "description": "Beschreibung",
+    "qty": "Anzahl",
+    "unit": "Einzelpreis",
+    "total": "Gesamt",
+    "subtotal": "Zwischensumme",
+    "vat": "MwSt.",
+    "acceptedLocked": "Dieses Angebot wurde bereits angenommen.",
+    "declinedLocked": "Dieses Angebot wurde abgelehnt.",
+    "cannotRespond": "Es ist nicht mehr möglich, auf dieses Angebot zu antworten.",
+    "changeWithin": "Sie können Ihre Antwort innerhalb von {{minutes}} Minuten ändern.",
+    "intro": "Vielen Dank für Ihre Anfrage. Bitte prüfen Sie das folgende Angebot und antworten Sie unten.",
+    "accept": "Angebot annehmen",
+    "decline": "Angebot ablehnen"
   }
 }
