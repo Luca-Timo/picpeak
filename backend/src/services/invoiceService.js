@@ -291,7 +291,19 @@ async function createInvoice(payload, adminId, trx = db) {
   const invoiceNumber = await nextInvoiceNumber();
   const issueDate = payload.issueDate || new Date().toISOString().slice(0, 10);
   const scheduledSendAt = payload.scheduledSendAt ? new Date(payload.scheduledSendAt) : null;
-  const dueDate = payload.dueDate || computeDueDate(scheduledSendAt || new Date(issueDate), 30)
+  // Resolve the selected payment-term template's net_days BEFORE
+  // computing the due date so Net 60 / 90 templates actually push
+  // the due date out. Falls back to 30 when no template is set
+  // (matches the historical default).
+  let resolvedNetDays = 30;
+  if (payload.paymentTermTemplateId) {
+    const probe = await trx('payment_term_templates')
+      .where({ id: payload.paymentTermTemplateId })
+      .select('net_days')
+      .first();
+    if (probe && probe.net_days != null) resolvedNetDays = ensureInt(probe.net_days) || 30;
+  }
+  const dueDate = payload.dueDate || computeDueDate(scheduledSendAt || new Date(issueDate), resolvedNetDays)
     .toISOString().slice(0, 10);
 
   // Re-compute totals from line items. Migration 119 — items with a
@@ -412,7 +424,12 @@ async function createInvoice(payload, adminId, trx = db) {
  */
 async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, currency, language,
                                           lineItems, totals, installments, eventDate, adminId,
-                                          ccPdfEmail }) {
+                                          ccPdfEmail, netDays }) {
+  // netDays drives the due-date offset on every scheduled invoice
+  // created here. Defaults to 30 when the caller doesn't pass one;
+  // callers in quoteService now pass the converting quote's
+  // payment-term net_days so Net 60 / 90 templates flow through.
+  const resolvedNetDays = ensureInt(netDays) || 30;
   const total = installments.length;
   const acceptanceTime = new Date();
 
@@ -460,7 +477,7 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
     const rowScheduledSendAt = isDeliveryTrigger ? null : scheduledSendAt;
 
     const invoiceNumber = await nextInvoiceNumber();
-    const dueDate = computeDueDate(scheduledSendAt, 30).toISOString().slice(0, 10);
+    const dueDate = computeDueDate(scheduledSendAt, resolvedNetDays).toISOString().slice(0, 10);
 
     const row = {
       invoice_number: invoiceNumber,

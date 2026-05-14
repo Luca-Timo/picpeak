@@ -1293,6 +1293,10 @@ async function convertToInvoiceOnly(quoteId, adminId) {
       eventDate: quote.event_date,
       adminId,
       ccPdfEmail: quote.cc_pdf_email,
+      // Net 14 / 30 / 60 / 90 carry through from the quote's
+      // selected payment-term template so each scheduled invoice's
+      // due_date reflects what the customer agreed to on the quote.
+      netDays: paymentTermSnapshot?.net_days,
     });
 
     // Mark quote `converted` without a converted_event_id so the
@@ -1429,6 +1433,9 @@ async function convertToEvent(quoteId, adminId) {
       eventDate: quote.event_date,
       adminId,
       ccPdfEmail: quote.cc_pdf_email,
+      // Net 14 / 30 / 60 / 90 carry through from the quote's
+      // payment-term template (same as convertToInvoiceOnly).
+      netDays: paymentTermSnapshot?.net_days,
     });
 
     await trx('quotes').where({ id: quote.id }).update({
