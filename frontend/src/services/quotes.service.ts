@@ -15,6 +15,20 @@ export interface QuoteLineItem {
   unitPriceMinor: number;
   discountPercent: number;
   lineTotalMinor?: number;
+  /**
+   * Hierarchy (migration 119). Sub-items reference their parent by
+   * position within the same payload. NULL = top-level item, summed
+   * into the document net. NON-NULL = sub-item, display-only
+   * itemisation under the parent. Max one level deep.
+   */
+  parentPosition?: number | null;
+  /** Persisted DB id of the parent, populated by the server on read. */
+  parentLineItemId?: number | null;
+  /**
+   * Optional free-form notes rendered below the description on the
+   * PDF and customer view. Smaller, italic. Max 2000 chars.
+   */
+  detailsText?: string | null;
 }
 
 export interface QuoteSummary {

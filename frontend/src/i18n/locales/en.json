@@ -3178,7 +3178,11 @@
       "empty": "No line items yet — add one to get started.",
       "addRow": "Add row",
       "addFromPreset": "Add from preset…",
-      "shipping": "Shipping"
+      "shipping": "Shipping",
+      "addSubItem": "Add sub-item",
+      "detailsAdd": "+ Add details / notes",
+      "detailsFilled": "Details",
+      "detailsPlaceholder": "Optional notes — fine print, package inclusions, conditions…"
     }
   },
   "bills": {
@@ -3233,7 +3237,8 @@
       "vatRate": "VAT rate %",
       "shipping": "Shipping",
       "currency": "Currency",
-      "ccPdfEmail": "CC PDF to (extra recipient)"
+      "ccPdfEmail": "CC PDF to (extra recipient)",
+      "sourceQuote": "From quote"
     },
     "section": {
       "lineItems": "Line items",

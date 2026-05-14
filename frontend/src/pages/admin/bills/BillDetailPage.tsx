@@ -233,7 +233,7 @@ export const BillDetailPage: React.FC = () => {
               <div className="text-neutral-500">{t('bills.field.sourceQuote', 'From quote')}</div>
               <Link to={`/admin/clients/quotes/${inv.sourceQuoteId}`}
                 className="text-primary-600 dark:text-primary-400 hover:underline font-mono text-sm">
-                #{inv.sourceQuoteId}
+                {inv.sourceQuoteNumber || `#${inv.sourceQuoteId}`}
               </Link>
             </div>
           )}
@@ -271,19 +271,23 @@ export const BillDetailPage: React.FC = () => {
         ) : (
           <table className="w-full text-sm">
             <thead><tr className="border-b border-neutral-200 dark:border-neutral-700">
-              <th className="text-left py-2">{t('bills.payment.paidAt', 'Date')}</th>
-              <th className="text-right py-2">{t('bills.payment.amount', 'Amount')}</th>
-              <th className="text-left py-2">{t('bills.payment.method', 'Method')}</th>
-              <th className="text-left py-2">{t('bills.payment.reference', 'Reference')}</th>
+              {/* Per-cell horizontal padding so the right-aligned
+                  Amount column and the left-aligned Method column
+                  have visible breathing room. Without padding the
+                  two collide visually on narrow rows. */}
+              <th className="text-left py-2 pr-4">{t('bills.payment.paidAt', 'Date')}</th>
+              <th className="text-right py-2 px-4">{t('bills.payment.amount', 'Amount')}</th>
+              <th className="text-left py-2 pl-4 pr-4">{t('bills.payment.method', 'Method')}</th>
+              <th className="text-left py-2 pr-4">{t('bills.payment.reference', 'Reference')}</th>
               <th className="text-left py-2">{t('bills.payment.notes', 'Notes')}</th>
             </tr></thead>
             <tbody>
               {data.payments.map((p) => (
                 <tr key={p.id} className="border-b border-neutral-100 dark:border-neutral-800">
-                  <td className="py-2">{new Date(p.paidAt).toLocaleDateString()}</td>
-                  <td className="py-2 text-right tabular-nums">{formatMoney(Number(p.amountMinor) / 100, inv.currency)}</td>
-                  <td className="py-2">{p.paymentMethod || '—'}</td>
-                  <td className="py-2 font-mono text-xs">{p.reference || '—'}</td>
+                  <td className="py-2 pr-4 whitespace-nowrap">{new Date(p.paidAt).toLocaleDateString()}</td>
+                  <td className="py-2 px-4 text-right tabular-nums whitespace-nowrap">{formatMoney(Number(p.amountMinor) / 100, inv.currency)}</td>
+                  <td className="py-2 pl-4 pr-4 whitespace-nowrap">{p.paymentMethod || '—'}</td>
+                  <td className="py-2 pr-4 font-mono text-xs">{p.reference || '—'}</td>
                   <td className="py-2">{p.notes || '—'}</td>
                 </tr>
               ))}

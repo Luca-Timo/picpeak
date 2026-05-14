@@ -28,6 +28,14 @@ const { formatBoolean } = require('../utils/dbCompat');
 const businessProfileService = require('./businessProfileService');
 const pdfService = require('./pdfService');
 const emailProcessor = require('./emailProcessor');
+// Migration 119 line-item hierarchy helpers, shared with quoteService.
+// We import lazily inside the functions that use them to avoid a
+// require-cycle warning (quoteService also imports invoiceService for
+// the quote→invoice conversion path).
+function getHierarchyHelpers() {
+  // eslint-disable-next-line global-require
+  return require('./quoteService')._internal;
+}
 
 // Reused tiny helpers identical to quoteService — duplicated rather
 // than imported to keep services decoupled.
@@ -219,6 +227,11 @@ async function getInvoiceById(id) {
     // customer_email / company etc. — mirrors getQuoteById.
     const invoice = await db('invoices')
       .leftJoin('customer_accounts', 'invoices.customer_account_id', 'customer_accounts.id')
+      // Join the source quote so the detail view can display its
+      // human-readable number ("LBM-Q-2026-0006") instead of just
+      // the numeric id ("#6"). LEFT join — most invoices come from
+      // a quote conversion but standalone invoices don't have one.
+      .leftJoin('quotes as src_quote', 'invoices.source_quote_id', 'src_quote.id')
       .where('invoices.id', id)
       .select(
         'invoices.*',
@@ -227,10 +240,20 @@ async function getInvoiceById(id) {
         'customer_accounts.first_name as customer_first_name',
         'customer_accounts.last_name as customer_last_name',
         'customer_accounts.company_name as customer_company_name',
+        'src_quote.quote_number as source_quote_number',
       )
       .first();
     if (!invoice) return null;
-    const lineItems = await db('invoice_line_items').where({ invoice_id: id }).orderBy('position', 'asc');
+    // Self-join so each row also carries `parent_position` (the position
+    // of its parent line item, when it's a sub-item). The editor needs
+    // position-based references to rebuild the hierarchy in the UI;
+    // parent_line_item_id is the DB-level relationship but isn't
+    // stable in the payload the editor sends back. Migration 119.
+    const lineItems = await db('invoice_line_items as li')
+      .leftJoin('invoice_line_items as parent', 'parent.id', 'li.parent_line_item_id')
+      .where('li.invoice_id', id)
+      .orderBy('li.position', 'asc')
+      .select('li.*', 'parent.position as parent_position');
     const payments = await db('invoice_payment_log').where({ invoice_id: id }).orderBy('paid_at', 'asc');
     return { invoice, lineItems, payments };
   });
@@ -254,7 +277,13 @@ async function createInvoice(payload, adminId, trx = db) {
   const dueDate = payload.dueDate || computeDueDate(scheduledSendAt || new Date(issueDate), 30)
     .toISOString().slice(0, 10);
 
-  // Re-compute totals from line items.
+  // Re-compute totals from line items. Migration 119 — items with a
+  // non-null `parent_position` are sub-items and their line totals do
+  // NOT roll into net (display-only itemisation). The
+  // validateLineItemHierarchy + insertLineItemsHierarchical helpers
+  // (shared with quoteService) enforce the 1-level-deep rule and do
+  // the two-phase insert. The DB-side line_total_minor is still
+  // computed for every row so the renderer can show sub-prices.
   const lineItems = Array.isArray(payload.lineItems) ? payload.lineItems : [];
   let netMinor = 0;
   const items = lineItems.map((li, idx) => {
@@ -262,7 +291,8 @@ async function createInvoice(payload, adminId, trx = db) {
     const unit = ensureInt(li.unit_price_minor);
     const discount = ensureNumber(li.discount_percent, 0);
     const lineTotal = Math.round(Math.round(qty * unit) * (1 - discount / 100));
-    netMinor += lineTotal;
+    const isSubItem = li.parent_position != null && li.parent_position !== '';
+    if (!isSubItem) netMinor += lineTotal;
     return {
       position: ensureInt(li.position) || (idx + 1),
       quantity: qty,
@@ -270,6 +300,8 @@ async function createInvoice(payload, adminId, trx = db) {
       unit_price_minor: unit,
       discount_percent: discount,
       line_total_minor: lineTotal,
+      parent_position: isSubItem ? ensureInt(li.parent_position) : null,
+      details_text: li.details_text || null,
     };
   });
   const vatRate = ensureNumber(payload.vatRate, 0);
@@ -338,12 +370,9 @@ async function createInvoice(payload, adminId, trx = db) {
   const invoiceId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
   if (items.length > 0) {
-    await trx('invoice_line_items').insert(items.map((li) => ({
-      ...li,
-      invoice_id: invoiceId,
-      created_at: new Date(),
-      updated_at: new Date(),
-    })));
+    const { validateLineItemHierarchy, insertLineItemsHierarchical } = getHierarchyHelpers();
+    validateLineItemHierarchy(items);
+    await insertLineItemsHierarchical(trx, 'invoice_line_items', 'invoice_id', invoiceId, items);
   }
 
   try { await logActivity('invoice_created', { invoiceId, invoiceNumber }, payload.eventId || null, `admin:${adminId}`); } catch (_) {}
@@ -464,20 +493,26 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
         updated_at: new Date(),
       });
     } else {
-      // Clone each quote line as-is. Position numbering restarts at
-      // 1 for the new invoice.
-      const cloned = sourceLines.map((li, idx) => ({
-        invoice_id: invoiceId,
-        position: idx + 1,
+      // Clone each quote line as-is, preserving its original `position`
+      // so the sub-item hierarchy carries over. Source lines already
+      // have `parent_position` populated by getQuoteById's self-join,
+      // so the same value reused on the new invoice points at the
+      // correct (also-cloned) parent. insertLineItemsHierarchical
+      // resolves position → new parent_line_item_id during the
+      // two-phase insert. Migration 119.
+      const cloned = sourceLines.map((li) => ({
+        position: ensureInt(li.position),
         quantity: li.quantity,
         description: li.description,
-        unit_price_minor: li.unit_price_minor,
-        discount_percent: li.discount_percent || 0,
-        line_total_minor: li.line_total_minor,
-        created_at: new Date(),
-        updated_at: new Date(),
+        unit_price_minor: ensureInt(li.unit_price_minor),
+        discount_percent: ensureNumber(li.discount_percent, 0),
+        line_total_minor: ensureInt(li.line_total_minor),
+        parent_position: li.parent_position == null ? null : ensureInt(li.parent_position),
+        details_text: li.details_text || null,
       }));
-      await trx('invoice_line_items').insert(cloned);
+      const { validateLineItemHierarchy, insertLineItemsHierarchical } = getHierarchyHelpers();
+      validateLineItemHierarchy(cloned);
+      await insertLineItemsHierarchical(trx, 'invoice_line_items', 'invoice_id', invoiceId, cloned);
 
       // For split payments add an explicit "Installment X/Y (Z%)"
       // adjustment line that reconciles the cloned line totals to
@@ -485,19 +520,28 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
       // line carries the difference as a negative if the slice is
       // less than the quote total (typical), or positive on the
       // final installment if rounding nudged the other way.
+      //
+      // The adjustment ONLY considers top-level cloned lines —
+      // sub-items don't contribute to net so they can't appear in
+      // the reconciliation sum.
       if (total > 1) {
-        const clonedSum = cloned.reduce((s, x) => s + ensureInt(x.line_total_minor), 0);
+        const clonedSum = cloned
+          .filter((x) => x.parent_position == null)
+          .reduce((s, x) => s + ensureInt(x.line_total_minor), 0);
         const adjustment = netSlice - clonedSum;
         if (adjustment !== 0) {
           const installmentLabel = inst.label || `Installment ${i + 1}/${total}`;
+          const maxPosition = cloned.reduce((m, x) => Math.max(m, x.position), 0);
           await trx('invoice_line_items').insert({
             invoice_id: invoiceId,
-            position: cloned.length + 1,
+            position: maxPosition + 1,
             quantity: 1,
             description: `${installmentLabel} (${percent}% — ${i + 1}/${total})`,
             unit_price_minor: adjustment,
             discount_percent: 0,
             line_total_minor: adjustment,
+            parent_line_item_id: null,
+            details_text: null,
             created_at: new Date(),
             updated_at: new Date(),
           });
@@ -731,6 +775,10 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       unitPriceMinor: li.unit_price_minor,
       discountPercent: li.discount_percent,
       lineTotalMinor: li.line_total_minor,
+      // Migration 119 — hierarchy + notes flow through to PDF.
+      parentLineItemId: li.parent_line_item_id || null,
+      parentPosition: li.parent_position == null ? null : Number(li.parent_position),
+      detailsText: li.details_text || null,
     })),
     totals: {
       netAmountMinor: invoice.net_amount_minor,
@@ -991,14 +1039,21 @@ async function reissueInvoice(id, adminId) {
     //    rows. We re-insert via createInvoice rather than direct DB
     //    copies so the totals get re-computed authoritatively (any
     //    rounding drift is recalculated from line items, matching
-    //    the create flow).
-    const lineItems = await trx('invoice_line_items').where({ invoice_id: id }).orderBy('position', 'asc');
+    //    the create flow). Self-join carries parent_position across
+    //    so the migration-119 sub-item hierarchy is preserved.
+    const lineItems = await trx('invoice_line_items as li')
+      .leftJoin('invoice_line_items as parent', 'parent.id', 'li.parent_line_item_id')
+      .where('li.invoice_id', id)
+      .orderBy('li.position', 'asc')
+      .select('li.*', 'parent.position as parent_position');
     const liPayload = lineItems.map((li) => ({
       position: li.position,
       quantity: Number(li.quantity),
       description: li.description,
       unit_price_minor: Number(li.unit_price_minor),
       discount_percent: Number(li.discount_percent || 0),
+      parent_position: li.parent_position == null ? null : Number(li.parent_position),
+      details_text: li.details_text || null,
     }));
 
     const newId = await createInvoice({

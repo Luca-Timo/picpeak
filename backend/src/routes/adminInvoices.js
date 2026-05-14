@@ -83,6 +83,7 @@ function transformInvoice(i) {
       companyName: i.customer_company_name,
     },
     sourceQuoteId: i.source_quote_id,
+    sourceQuoteNumber: i.source_quote_number || null,
     eventId: i.event_id,
     language: i.language,
     currency: i.currency,
@@ -133,6 +134,13 @@ function transformLineItem(li) {
     unitPriceMinor: li.unit_price_minor,
     discountPercent: li.discount_percent == null ? 0 : Number(li.discount_percent),
     lineTotalMinor: li.line_total_minor,
+    // Hierarchy (migration 119). parentPosition comes from the
+    // self-join in getInvoiceById; parentLineItemId is the raw FK.
+    // detailsText is the optional free-form notes block rendered
+    // below the description on the PDF and customer view.
+    parentLineItemId: li.parent_line_item_id || null,
+    parentPosition: li.parent_position == null ? null : Number(li.parent_position),
+    detailsText: li.details_text || null,
   };
 }
 
@@ -167,6 +175,15 @@ const INVOICE_BODY_VALIDATORS = [
   body('qrFormat').optional({ values: 'falsy' }).isIn(['swiss', 'epc', 'none']),
   body('paymentTermTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('lineItems').optional({ values: 'falsy' }).isArray(),
+  body('lineItems.*.description').optional({ values: 'falsy' }).isString().isLength({ min: 1, max: 1000 }),
+  body('lineItems.*.quantity').optional({ values: 'falsy' }).isFloat({ min: 0 }),
+  body('lineItems.*.unitPriceMinor').optional({ values: 'falsy' }).isInt({ min: 0 }),
+  body('lineItems.*.discountPercent').optional({ values: 'falsy' }).isFloat({ min: 0, max: 100 }),
+  // Migration 119: sub-item + details support. Cross-row constraints
+  // (parent must exist, max 1 level deep) are enforced by the service
+  // (validateLineItemHierarchy).
+  body('lineItems.*.parentPosition').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  body('lineItems.*.detailsText').optional({ values: 'falsy' }).isString().isLength({ max: 2000 }),
 ];
 
 function mapPayloadToService(body) {
@@ -197,6 +214,10 @@ function mapPayloadToService(body) {
       description: li.description,
       unit_price_minor: li.unitPriceMinor,
       discount_percent: li.discountPercent,
+      // Migration 119 sub-item + details support — same mapping as
+      // quotes so the editor's payload shape is identical for both.
+      parent_position: li.parentPosition == null || li.parentPosition === '' ? null : Number(li.parentPosition),
+      details_text: li.detailsText == null ? null : String(li.detailsText),
     }));
   }
   return out;
@@ -462,20 +483,26 @@ router.put(
     }
 
     if (Array.isArray(payload.lineItems)) {
-      // Recompute everything authoritatively.
+      // Recompute everything authoritatively. Only TOP-LEVEL line
+      // items (parent_position == null) contribute to net — sub-items
+      // are display-only itemisation under their parent. Migration 119.
       let net = 0;
       const items = payload.lineItems.map((li, idx) => {
         const qty = Number(li.quantity || 1);
         const unit = parseInt(li.unit_price_minor, 10) || 0;
         const disc = Number(li.discount_percent || 0);
         const lineTotal = Math.round(Math.round(qty * unit) * (1 - disc / 100));
-        net += lineTotal;
+        const isSubItem = li.parent_position != null && li.parent_position !== '';
+        if (!isSubItem) net += lineTotal;
         return {
-          invoice_id: id,
           position: parseInt(li.position, 10) || (idx + 1),
-          quantity: qty, description: String(li.description || ''),
-          unit_price_minor: unit, discount_percent: disc, line_total_minor: lineTotal,
-          created_at: new Date(), updated_at: new Date(),
+          quantity: qty,
+          description: String(li.description || ''),
+          unit_price_minor: unit,
+          discount_percent: disc,
+          line_total_minor: lineTotal,
+          parent_position: isSubItem ? parseInt(li.parent_position, 10) : null,
+          details_text: li.details_text || null,
         };
       });
       const vatRate = Number(payload.vatRate ?? existing.vat_rate ?? 0);
@@ -487,9 +514,14 @@ router.put(
       updates.shipping_amount_minor = shipping;
       updates.total_amount_minor = net + vatAmount + shipping;
 
+      const quoteService = require('../services/quoteService');
+      const { validateLineItemHierarchy, insertLineItemsHierarchical } = quoteService._internal;
       await db.transaction(async (trx) => {
         await trx('invoice_line_items').where({ invoice_id: id }).del();
-        if (items.length > 0) await trx('invoice_line_items').insert(items);
+        if (items.length > 0) {
+          validateLineItemHierarchy(items);
+          await insertLineItemsHierarchical(trx, 'invoice_line_items', 'invoice_id', id, items);
+        }
         await trx('invoices').where({ id }).update(updates);
       });
     } else {

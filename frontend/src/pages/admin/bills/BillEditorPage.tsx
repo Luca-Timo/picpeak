@@ -85,6 +85,8 @@ export const BillEditorPage: React.FC = () => {
         description: li.description,
         unitPrice: Number(li.unitPriceMinor || 0) / 100,
         discountPercent: Number(li.discountPercent || 0),
+        parentPosition: li.parentPosition ?? null,
+        detailsText: li.detailsText || '',
       })));
     }
   }, [existing]);
@@ -173,6 +175,9 @@ export const BillEditorPage: React.FC = () => {
       description: li.description,
       unitPriceMinor: toMinor(li.unitPrice),
       discountPercent: li.discountPercent,
+      // Migration 119 — sub-items + details survive save → reload.
+      parentPosition: li.parentPosition ?? null,
+      detailsText: li.detailsText || null,
     })),
   });
 

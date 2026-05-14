@@ -68,6 +68,18 @@ function ensureNumber(value, fallback = 0) {
  * Compute line totals + document totals authoritatively from the
  * supplied line items + VAT rate. Returns BigInt-safe integers (minor
  * units). Discount is applied before VAT.
+ *
+ * Hierarchy rule: items with `parent_position` (referring to another
+ * item's position in the same payload) are SUB-ITEMS. Their
+ * line_total_minor is still computed for display, but they do NOT
+ * roll into the document net total — only top-level items do. This
+ * is how "rented equipment package €500" with itemised sub-items
+ * (Profoto €150, Sony €200, …) gets exactly one €500 onto the
+ * invoice net, while still showing the breakdown.
+ *
+ * The empty-payload check upstream ensures `lineItems` is always an
+ * array; we treat anything truthy on `parent_position` (number or
+ * string that parses to int) as "I'm a sub-item".
  */
 function computeTotals(lineItems, vatRate, shippingAmountMinor = 0) {
   let netMinor = 0;
@@ -78,7 +90,8 @@ function computeTotals(lineItems, vatRate, shippingAmountMinor = 0) {
     const discount = Math.max(0, Math.min(100, ensureNumber(li.discount_percent, 0)));
     const rawLineMinor = Math.round(qty * unit);
     const discountedMinor = Math.round(rawLineMinor * (1 - discount / 100));
-    netMinor += discountedMinor;
+    const isSubItem = li.parent_position != null && li.parent_position !== '';
+    if (!isSubItem) netMinor += discountedMinor;
     out.push({
       ...li,
       line_total_minor: discountedMinor,
@@ -95,6 +108,109 @@ function computeTotals(lineItems, vatRate, shippingAmountMinor = 0) {
     totalAmountMinor: totalMinor,
     lineItems: out,
   };
+}
+
+/**
+ * Validate the hierarchy of a line-item payload BEFORE insert. Throws
+ * AppError on:
+ *   - duplicate positions
+ *   - sub-item's parent_position not found in the payload
+ *   - sub-item's parent is itself a sub-item (max 1 level deep)
+ *   - circular reference (item references itself)
+ *
+ * Used by both quote + invoice services so the rules stay identical
+ * across both flows (and so the quote→invoice cloner doesn't have to
+ * re-validate).
+ */
+function validateLineItemHierarchy(lineItems) {
+  if (!Array.isArray(lineItems) || lineItems.length === 0) return;
+  const positions = new Set();
+  const parentPositions = new Map(); // position → parent_position (or null)
+  for (const li of lineItems) {
+    const pos = ensureInt(li.position);
+    if (!pos) {
+      throw new AppError('Every line item must have a positive position', 400, 'LINE_ITEM_POSITION_REQUIRED');
+    }
+    if (positions.has(pos)) {
+      throw new AppError(`Duplicate line item position: ${pos}`, 400, 'LINE_ITEM_POSITION_DUPLICATE');
+    }
+    positions.add(pos);
+    const pp = li.parent_position == null || li.parent_position === '' ? null : ensureInt(li.parent_position);
+    parentPositions.set(pos, pp);
+  }
+  for (const [pos, pp] of parentPositions) {
+    if (pp == null) continue;
+    if (pp === pos) {
+      throw new AppError(`Line item ${pos} cannot be its own parent`, 400, 'LINE_ITEM_SELF_PARENT');
+    }
+    if (!parentPositions.has(pp)) {
+      throw new AppError(`Sub-item ${pos} references missing parent position ${pp}`, 400, 'LINE_ITEM_PARENT_NOT_FOUND');
+    }
+    if (parentPositions.get(pp) != null) {
+      throw new AppError(`Sub-item ${pos} cannot nest under another sub-item (max one level deep)`, 400, 'LINE_ITEM_NESTING_TOO_DEEP');
+    }
+  }
+}
+
+/**
+ * Two-phase insert into a *_line_items table to resolve the
+ * parent_position → parent_line_item_id remap. The payload uses
+ * position numbers to express parent/child relationships because the
+ * DB ids don't exist until rows are inserted; this helper handles
+ * the round-trip.
+ *
+ *   trx          — db or transaction handle
+ *   tableName    — 'quote_line_items' | 'invoice_line_items'
+ *   ownerColumn  — 'quote_id' | 'invoice_id'
+ *   ownerId      — the parent quote/invoice id
+ *   items        — array of line-item rows with `position` +
+ *                  optional `parent_position`. All other columns
+ *                  passed through verbatim (except parent_position
+ *                  which is stripped — it's a wire-only field, not a
+ *                  DB column).
+ *
+ * Caller must have already run `validateLineItemHierarchy` on the
+ * items, so this function trusts the hierarchy is sound.
+ */
+async function insertLineItemsHierarchical(trx, tableName, ownerColumn, ownerId, items) {
+  if (!Array.isArray(items) || items.length === 0) return;
+  // Phase 1: top-level items, captured into a position→id map for
+  // phase 2.
+  const topLevel = items.filter((li) => li.parent_position == null || li.parent_position === '');
+  const subItems = items.filter((li) => li.parent_position != null && li.parent_position !== '');
+  const stripWireOnly = ({ parent_position: _pp, parent_line_item_id: _pid, ...rest }) => rest;
+
+  const positionToId = new Map();
+  for (const li of topLevel) {
+    const row = {
+      ...stripWireOnly(li),
+      [ownerColumn]: ownerId,
+      parent_line_item_id: null,
+      details_text: li.details_text == null ? null : String(li.details_text),
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
+    const inserted = await trx(tableName).insert(row).returning('id');
+    const newId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
+    positionToId.set(ensureInt(li.position), newId);
+  }
+  for (const li of subItems) {
+    const parentId = positionToId.get(ensureInt(li.parent_position));
+    if (!parentId) {
+      // Defensive — validateLineItemHierarchy should have caught
+      // this. Rethrow as a 500 so we don't silently swallow.
+      throw new AppError(`Sub-item position ${li.position} references unknown parent ${li.parent_position}`, 500);
+    }
+    const row = {
+      ...stripWireOnly(li),
+      [ownerColumn]: ownerId,
+      parent_line_item_id: parentId,
+      details_text: li.details_text == null ? null : String(li.details_text),
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
+    await trx(tableName).insert(row);
+  }
 }
 
 function formatNumberInTemplate(format, year, seq) {
@@ -247,9 +363,15 @@ async function getQuoteById(id) {
       )
       .first();
     if (!quote) return null;
-    const lineItems = await db('quote_line_items')
-      .where({ quote_id: id })
-      .orderBy('position', 'asc');
+    // Self-join so the response carries parent_position alongside
+    // parent_line_item_id. The editor uses position (1-based, stable
+    // within the payload) to thread sub-items; the DB id is just for
+    // unrelated callers.
+    const lineItems = await db('quote_line_items as li')
+      .leftJoin('quote_line_items as parent', 'parent.id', 'li.parent_line_item_id')
+      .where('li.quote_id', id)
+      .orderBy('li.position', 'asc')
+      .select('li.*', 'parent.position as parent_position');
     return { quote, lineItems };
   });
 }
@@ -318,17 +440,21 @@ async function createQuote(payload, adminId) {
     const quoteId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
     if (totals.lineItems.length > 0) {
-      await trx('quote_line_items').insert(totals.lineItems.map((li, idx) => ({
-        quote_id: quoteId,
+      // Normalise rows for the hierarchical-insert helper. We preserve
+      // the wire-only `parent_position` field here so the helper can
+      // resolve it; the helper strips it before the actual DB insert.
+      const rows = totals.lineItems.map((li, idx) => ({
         position: ensureInt(li.position) || (idx + 1),
         quantity: ensureNumber(li.quantity, 1),
         description: String(li.description || ''),
         unit_price_minor: ensureInt(li.unit_price_minor),
         discount_percent: ensureNumber(li.discount_percent, 0),
         line_total_minor: li.line_total_minor,
-        created_at: new Date(),
-        updated_at: new Date(),
-      })));
+        details_text: li.details_text || null,
+        parent_position: li.parent_position || null,
+      }));
+      validateLineItemHierarchy(rows);
+      await insertLineItemsHierarchical(trx, 'quote_line_items', 'quote_id', quoteId, rows);
     }
 
     try {
@@ -402,19 +528,25 @@ async function updateQuote(id, payload, adminId) {
     }
     await trx('quotes').where({ id }).update(updates);
 
+    // Delete + reinsert keeps the editor flow simple: the frontend
+    // sends the canonical line-item set on every save, we drop the
+    // old rows and rebuild from scratch. CASCADE on parent_line_item_id
+    // means deleting parents sweeps their sub-items too, so there's
+    // no orphan risk here.
     await trx('quote_line_items').where({ quote_id: id }).del();
     if (totals.lineItems.length > 0) {
-      await trx('quote_line_items').insert(totals.lineItems.map((li, idx) => ({
-        quote_id: id,
+      const rows = totals.lineItems.map((li, idx) => ({
         position: ensureInt(li.position) || (idx + 1),
         quantity: ensureNumber(li.quantity, 1),
         description: String(li.description || ''),
         unit_price_minor: ensureInt(li.unit_price_minor),
         discount_percent: ensureNumber(li.discount_percent, 0),
         line_total_minor: li.line_total_minor,
-        created_at: new Date(),
-        updated_at: new Date(),
-      })));
+        details_text: li.details_text || null,
+        parent_position: li.parent_position || null,
+      }));
+      validateLineItemHierarchy(rows);
+      await insertLineItemsHierarchical(trx, 'quote_line_items', 'quote_id', id, rows);
     }
 
     try {
@@ -609,6 +741,12 @@ async function buildRenderContext(quote, lineItems) {
       unitPriceMinor: li.unit_price_minor,
       discountPercent: li.discount_percent,
       lineTotalMinor: li.line_total_minor,
+      // Migration 119 hierarchy + details — surfaced to the PDF
+      // renderer so drawLineItems can indent sub-items + render
+      // details_text below.
+      parentLineItemId: li.parent_line_item_id || null,
+      parentPosition: li.parent_position == null ? null : Number(li.parent_position),
+      detailsText: li.details_text || null,
     })),
     totals: {
       netAmountMinor: quote.net_amount_minor,
@@ -1388,5 +1526,15 @@ module.exports = {
   deletePaymentTermTemplate,
 
   // Internals exposed for tests + invoiceService re-use.
-  _internal: { computeTotals, ensureCustomerFeatureEnabled, nextQuoteNumber, persistDocPdf, buildRenderContext },
+  _internal: {
+    computeTotals,
+    ensureCustomerFeatureEnabled,
+    nextQuoteNumber,
+    persistDocPdf,
+    buildRenderContext,
+    // Migration 119: hierarchy helpers — shared with invoiceService
+    // (commit 3) so the quote → invoice cloner stays consistent.
+    validateLineItemHierarchy,
+    insertLineItemsHierarchical,
+  },
 };

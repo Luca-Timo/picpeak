@@ -112,6 +112,13 @@ function transformLineItem(li) {
     unitPriceMinor: li.unit_price_minor,
     discountPercent: li.discount_percent == null ? 0 : Number(li.discount_percent),
     lineTotalMinor: li.line_total_minor,
+    // Hierarchy (migration 119). `parentPosition` is what the editor
+    // uses to thread sub-items in unsaved drafts; on existing rows
+    // we hydrate it from the actual parent's position via a join in
+    // getQuoteById (see service). NULL = top-level item.
+    parentLineItemId: li.parent_line_item_id || null,
+    parentPosition: li.parent_position == null ? null : Number(li.parent_position),
+    detailsText: li.details_text || null,
   };
 }
 
@@ -172,6 +179,12 @@ function mapPayloadToService(body) {
       description: li.description,
       unit_price_minor: li.unitPriceMinor,
       discount_percent: li.discountPercent,
+      // Migration 119 — sub-item + details support. parentPosition
+      // refers to another item's position in the same payload; the
+      // service resolves it to parent_line_item_id after inserting
+      // the parents.
+      parent_position: li.parentPosition == null || li.parentPosition === '' ? null : Number(li.parentPosition),
+      details_text: li.detailsText == null ? null : String(li.detailsText),
     }));
   }
   return out;
@@ -260,6 +273,12 @@ const QUOTE_BODY_VALIDATORS = [
   body('lineItems.*.quantity').optional({ values: 'falsy' }).isFloat({ min: 0 }),
   body('lineItems.*.unitPriceMinor').optional({ values: 'falsy' }).isInt({ min: 0 }),
   body('lineItems.*.discountPercent').optional({ values: 'falsy' }).isFloat({ min: 0, max: 100 }),
+  // Migration 119: sub-item + details support. Cross-row constraints
+  // (parent must exist, max 1 level deep) are enforced by the service
+  // (validateLineItemHierarchy); these per-field validators just keep
+  // bad data from reaching it.
+  body('lineItems.*.parentPosition').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  body('lineItems.*.detailsText').optional({ values: 'falsy' }).isString().isLength({ max: 2000 }),
 ];
 
 router.post(

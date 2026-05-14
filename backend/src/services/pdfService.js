@@ -550,26 +550,92 @@ function drawLineItems(doc, ctx) {
   const HEADER_BORDER_BOTTOM_WIDTH = [0, 0, 1, 0];
   const HEADER_BORDER_BOTTOM_COLOR = ['#000', '#000', '#000', '#000'];
 
-  const dataRow = (li, idx) => ({
-    padding: ROW_PADDING,
-    fontSize: ROW_FONT_SIZE,
-    borderWidth: ROW_BORDER_BOTTOM_WIDTH,
-    borderColor: ROW_BORDER_BOTTOM_COLOR,
+  // Migration 119 — sub-items + details_text.
+  //
+  // Hierarchy rendering:
+  //   - Top-level items get a numeric position (1, 2, 3...) and their
+  //     line_total renders in full weight.
+  //   - Sub-items render with an empty position column, the
+  //     description indented with a small arrow prefix ("↳ "), and
+  //     their line_total wrapped in parentheses to mark it as
+  //     display-only (doesn't roll into net). Sub-items with
+  //     unit_price = 0 render the price columns empty.
+  //
+  // Details rendering:
+  //   - Each item that has a non-empty details_text gets an extra
+  //     row right below it: empty position cell + the details text
+  //     spanning the description column (smaller font, italic, grey).
+  //     swissqrbill's Table can't actually span columns, so the
+  //     details row fills the description cell width and leaves the
+  //     remaining columns empty — visually equivalent.
+  //
+  // We compute a displayIndex for top-level items so the position
+  // column stays 1..N regardless of how many sub-items sit between
+  // parents in the array.
+  let topLevelCount = 0;
+  const buildItemRow = (li) => {
+    const isSubItem = li.parentLineItemId != null || li.parentPosition != null;
+    const posLabel = isSubItem ? '' : String(++topLevelCount);
+    const descText = isSubItem ? `↳ ${li.description || ''}` : (li.description || '');
+    const subItemPriceless = isSubItem && (!li.unitPriceMinor || Number(li.unitPriceMinor) === 0);
+    const unitText = subItemPriceless ? '' : formatMinor(li.unitPriceMinor, currency, intlLocale);
+    const lineTotalText = subItemPriceless
+      ? ''
+      : isSubItem
+        ? `(${formatMinor(li.lineTotalMinor, currency, intlLocale)})`
+        : formatMinor(li.lineTotalMinor, currency, intlLocale);
+    const numericColor = isSubItem ? '#666' : '#000';
+
+    return {
+      padding: ROW_PADDING,
+      fontSize: ROW_FONT_SIZE,
+      borderWidth: ROW_BORDER_BOTTOM_WIDTH,
+      borderColor: ROW_BORDER_BOTTOM_COLOR,
+      columns: showDiscount
+        ? [
+            { text: posLabel,                                          width: widths[0], align: 'left'  },
+            { text: descText,                                          width: widths[1], align: 'left',  color: numericColor },
+            { text: stripTrailingZeros(li.quantity),                   width: widths[2], align: 'right', color: numericColor },
+            { text: subItemPriceless ? '' : `${stripTrailingZeros(li.discountPercent)}%`, width: widths[3], align: 'right', color: numericColor },
+            { text: unitText,                                          width: widths[4], align: 'right', color: numericColor },
+            { text: lineTotalText,                                     width: widths[5], align: 'right', color: numericColor },
+          ]
+        : [
+            { text: posLabel,                                          width: widths[0], align: 'left'  },
+            { text: descText,                                          width: widths[1], align: 'left',  color: numericColor },
+            { text: stripTrailingZeros(li.quantity),                   width: widths[2], align: 'right', color: numericColor },
+            { text: unitText,                                          width: widths[3], align: 'right', color: numericColor },
+            { text: lineTotalText,                                     width: widths[4], align: 'right', color: numericColor },
+          ],
+    };
+  };
+
+  /**
+   * Build a "details" row that follows an item with non-empty
+   * details_text. The details text fills the description cell at a
+   * smaller font + italic-ish (Helvetica-Oblique) + grey colour;
+   * other cells stay empty. No bottom border so the row visually
+   * belongs to the item above it.
+   */
+  const buildDetailsRow = (text) => ({
+    padding: [0, 4, 3, 4],
+    fontSize: 9,
+    borderWidth: [0, 0, 0, 0],
     columns: showDiscount
       ? [
-          { text: String(idx + 1),                                                  width: widths[0], align: 'left'  },
-          { text: li.description,                                                   width: widths[1], align: 'left'  },
-          { text: stripTrailingZeros(li.quantity),                                  width: widths[2], align: 'right' },
-          { text: `${stripTrailingZeros(li.discountPercent)}%`,                     width: widths[3], align: 'right' },
-          { text: formatMinor(li.unitPriceMinor, currency, intlLocale),             width: widths[4], align: 'right' },
-          { text: formatMinor(li.lineTotalMinor, currency, intlLocale),             width: widths[5], align: 'right' },
+          { text: '',   width: widths[0], align: 'left' },
+          { text,       width: widths[1], align: 'left', color: '#666', fontName: 'Helvetica-Oblique' },
+          { text: '',   width: widths[2], align: 'right' },
+          { text: '',   width: widths[3], align: 'right' },
+          { text: '',   width: widths[4], align: 'right' },
+          { text: '',   width: widths[5], align: 'right' },
         ]
       : [
-          { text: String(idx + 1),                                                  width: widths[0], align: 'left'  },
-          { text: li.description,                                                   width: widths[1], align: 'left'  },
-          { text: stripTrailingZeros(li.quantity),                                  width: widths[2], align: 'right' },
-          { text: formatMinor(li.unitPriceMinor, currency, intlLocale),             width: widths[3], align: 'right' },
-          { text: formatMinor(li.lineTotalMinor, currency, intlLocale),             width: widths[4], align: 'right' },
+          { text: '',   width: widths[0], align: 'left' },
+          { text,       width: widths[1], align: 'left', color: '#666', fontName: 'Helvetica-Oblique' },
+          { text: '',   width: widths[2], align: 'right' },
+          { text: '',   width: widths[3], align: 'right' },
+          { text: '',   width: widths[4], align: 'right' },
         ],
   });
 
@@ -600,9 +666,19 @@ function drawLineItems(doc, ctx) {
         ],
   };
 
+  // Expand each line item into [itemRow] + optional [detailsRow] so
+  // the details_text flows directly below its parent in the table.
+  const dataRows = [];
+  for (const li of lineItems) {
+    dataRows.push(buildItemRow(li));
+    if (li.detailsText && String(li.detailsText).trim().length > 0) {
+      dataRows.push(buildDetailsRow(String(li.detailsText).trim()));
+    }
+  }
+
   const table = new Table({
     width: PAGE.contentWidth,
-    rows: [headerRow, ...lineItems.map(dataRow)],
+    rows: [headerRow, ...dataRows],
   });
   table.attachTo(doc);
   return doc.y;
