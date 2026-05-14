@@ -8,7 +8,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Star, Pencil } from 'lucide-react';
+import { Plus, Trash2, Star, Pencil, Save } from 'lucide-react';
 import {
   businessProfileService,
   type BusinessProfile,
@@ -49,7 +49,12 @@ export const SettingsBusinessProfilePage: React.FC = () => {
             {t('businessProfile.subtitle', 'Issuer block shown on every quote and invoice PDF.')}
           </p>
         </div>
-        <Button onClick={() => saveProfile.mutate()} disabled={saveProfile.isPending}>
+        <Button
+          onClick={() => saveProfile.mutate()}
+          disabled={saveProfile.isPending}
+          isLoading={saveProfile.isPending}
+          leftIcon={<Save className="w-4 h-4" />}
+        >
           {t('common.save', 'Save')}
         </Button>
       </div>
@@ -417,7 +422,13 @@ const BankAccountsSection: React.FC<BankAccountsSectionProps> = ({ accounts }) =
       </div>
       <div className="flex justify-end gap-2 mt-3">
         <Button variant="outline" size="sm" onClick={closeForm}>{t('common.cancel', 'Cancel')}</Button>
-        <Button size="sm" onClick={onSubmit} disabled={!draft.iban || submitting}>
+        <Button
+          size="sm"
+          onClick={onSubmit}
+          disabled={!draft.iban || submitting}
+          isLoading={submitting}
+          leftIcon={mode === 'new' ? <Plus className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+        >
           {mode === 'new' ? t('common.add', 'Add') : t('common.save', 'Save')}
         </Button>
       </div>
