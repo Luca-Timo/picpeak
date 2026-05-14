@@ -35,15 +35,29 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick }) => {
   const companyName = brandingSettings?.branding_company_name?.trim() || 'PicPeak';
   const logoUrl = brandingSettings?.branding_logo_url?.trim();
   const logoDisplayMode = brandingSettings?.branding_logo_display_mode || 'logo_and_text';
-  // When Branding > Logo Position = "Sidebar", the logo has moved into
-  // the admin sidebar's brand row — suppress it here so it doesn't
-  // double up in the header. The company-name text still follows
-  // logo_display_mode so admins who picked 'logo_and_text' keep
-  // seeing the wordmark up top.
-  const logoInSidebar = brandingSettings?.branding_logo_position === 'sidepanel';
+  // Logo placement honours the same Branding > Logo Position setting
+  // the gallery does. 'sidepanel' moves the logo into the AdminSidebar
+  // brand row — suppress it here so it doesn't double up. left /
+  // center / right reposition the logo block within this header bar.
+  const logoPosition = brandingSettings?.branding_logo_position || 'left';
+  const logoInSidebar = logoPosition === 'sidepanel';
   const resolvedLogoUrl = logoUrl
     ? (logoUrl.startsWith('http') ? logoUrl : buildResourceUrl(logoUrl))
     : '/picpeak-kamera-transparent.png';
+
+  // Renders the logo + wordmark block per the current logo_display_mode.
+  // Re-used in left / center / right slots below so all three positions
+  // produce visually identical brand chrome.
+  const renderBrandBlock = () => (
+    <div className="flex items-center gap-2">
+      {!logoInSidebar && (logoDisplayMode === 'logo_only' || logoDisplayMode === 'logo_and_text') && (
+        <img src={resolvedLogoUrl} alt={companyName} className="h-8 w-auto object-contain" />
+      )}
+      {(logoDisplayMode === 'text_only' || logoDisplayMode === 'logo_and_text') && (
+        <span className="text-xl sm:text-2xl" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, color: '#145346' }}>{companyName}</span>
+      )}
+    </div>
+  );
 
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -87,8 +101,12 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick }) => {
   return (
     <header className="sticky top-0 z-30 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-700">
       <div className="px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Left side - Menu button, Logo, and Date */}
+        <div className="relative flex items-center justify-between h-16 gap-3">
+          {/* Left side - Menu button, optional left-positioned logo, Date.
+              Logo block appears here when logo_position = 'left' (the
+              default). For 'center' it's absolutely positioned across
+              the whole header; for 'right' it sits in the right-side
+              cluster just before the action widgets. */}
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={onMenuClick}
@@ -97,17 +115,17 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick }) => {
               <Menu className="w-6 h-6" />
             </button>
 
-            {/* Logo - sticky to the left on all sizes.
-                Logo image is suppressed here when logoInSidebar is on
-                (it's rendered in the AdminSidebar brand row instead). */}
-            <div className="flex items-center gap-2">
-              {!logoInSidebar && (logoDisplayMode === 'logo_only' || logoDisplayMode === 'logo_and_text') && (
-                <img src={resolvedLogoUrl} alt={companyName} className="h-8 w-auto object-contain" />
-              )}
-              {(logoDisplayMode === 'text_only' || logoDisplayMode === 'logo_and_text') && (
-                <span className="text-xl sm:text-2xl" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, color: '#145346' }}>{companyName}</span>
-              )}
-            </div>
+            {!logoInSidebar && logoPosition === 'left' && renderBrandBlock()}
+            {/* Narrow-viewport fallback for center / right positions.
+                On screens where the centered (lg+) or right-anchored
+                (md+) brand block is hidden, render it on the left so
+                the admin chrome doesn't go logo-less on phones. */}
+            {!logoInSidebar && logoPosition === 'center' && (
+              <div className="flex lg:hidden">{renderBrandBlock()}</div>
+            )}
+            {!logoInSidebar && logoPosition === 'right' && (
+              <div className="flex md:hidden">{renderBrandBlock()}</div>
+            )}
 
             {/* Date display - hidden on smaller screens */}
             <div className="hidden xl:block pl-3 border-l border-neutral-200 dark:border-neutral-700 ml-1">
@@ -117,8 +135,28 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick }) => {
             </div>
           </div>
 
-          {/* Right side actions */}
+          {/* Centered logo. Absolutely positioned so the existing
+              left/right clusters keep their natural sizing; hidden on
+              sub-lg widths to avoid colliding with the right-side
+              action cluster on narrow screens. pointer-events-none on
+              the wrapper passes hover/click through (the logo itself
+              has no interactive children today). */}
+          {!logoInSidebar && logoPosition === 'center' && (
+            <div className="hidden lg:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
+              {renderBrandBlock()}
+            </div>
+          )}
+
+          {/* Right side actions (preceded by the brand block when
+              logo_position = 'right'). The right-anchored logo sits
+              before the language / dark-mode / notifications / user
+              cluster so the widgets stay where admins expect them. */}
           <div className="flex items-center gap-3">
+            {!logoInSidebar && logoPosition === 'right' && (
+              <div className="hidden md:flex mr-1 pr-2 border-r border-neutral-200 dark:border-neutral-700">
+                {renderBrandBlock()}
+              </div>
+            )}
             {/* Language Selector */}
             <LanguageSelector />
 

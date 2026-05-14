@@ -645,7 +645,7 @@ export const BrandingPage: React.FC = () => {
                   {t('branding.logoPosition', 'Logo Position in Header')}
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {(['left', 'center', 'right', 'sidepanel'] as const).map((position) => (
+                  {(['sidepanel', 'left', 'center', 'right'] as const).map((position) => (
                     <button
                       key={position}
                       type="button"
