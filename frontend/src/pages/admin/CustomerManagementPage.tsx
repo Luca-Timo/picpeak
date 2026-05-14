@@ -20,8 +20,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import {
-  UserPlus, Mail, Trash2, Search, X, AlertTriangle, CheckCircle2, Clock,
+  UserPlus, UserCog, Mail, Trash2, Search, X, AlertTriangle, CheckCircle2, Clock,
 } from 'lucide-react';
+import { InlineCustomerCreate } from '../../components/admin/InlineCustomerCreate';
 import { format } from 'date-fns';
 
 import { Button, Card, Input, Loading } from '../../components/common';
@@ -296,6 +297,11 @@ export const CustomerManagementPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('customers');
   const [searchTerm, setSearchTerm] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
+  // Distinct from inviteOpen: this drives the "Create passive
+  // customer" modal which wraps the existing InlineCustomerCreate
+  // form. Two separate buttons → two separate modals so the choice
+  // between invite-by-email and admin-only-record is explicit.
+  const [createPassiveOpen, setCreatePassiveOpen] = useState(false);
   const [confirm, setConfirm] = useState<{ kind: 'deactivate'; id: number; name: string } | { kind: 'cancelInvite'; id: number; email: string } | null>(null);
 
   const { data: customers, isLoading: customersLoading, error: customersError } = useQuery({
@@ -397,9 +403,14 @@ export const CustomerManagementPage: React.FC = () => {
             {t('customers.pageSubtitle', 'Recurring customer accounts that can log in at /customer/login.')}
           </p>
         </div>
-        <Button variant="primary" leftIcon={<UserPlus className="w-4 h-4" />} onClick={() => setInviteOpen(true)}>
-          {t('customers.invite.button', 'Invite customer')}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" leftIcon={<UserCog className="w-4 h-4" />} onClick={() => setCreatePassiveOpen(true)}>
+            {t('customers.create.openButton', 'Create passive customer')}
+          </Button>
+          <Button variant="primary" leftIcon={<UserPlus className="w-4 h-4" />} onClick={() => setInviteOpen(true)}>
+            {t('customers.invite.button', 'Invite customer')}
+          </Button>
+        </div>
       </div>
 
       <Card padding="lg">
@@ -556,6 +567,37 @@ export const CustomerManagementPage: React.FC = () => {
         onClose={() => setInviteOpen(false)}
         onInvited={() => queryClient.invalidateQueries({ queryKey: ['admin-customer-invitations'] })}
       />
+
+      {/* Create-passive-customer modal. Reuses InlineCustomerCreate
+          so the form contract is identical to the inline-editor
+          context — the component already provides the same two save
+          buttons (passive vs. save & invite). Closing the modal on
+          success and invalidating the customer list re-fetches the
+          table so the new row shows up immediately with its Passive
+          badge. */}
+      {createPassiveOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={() => setCreatePassiveOpen(false)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-xl shadow-lg max-h-[90vh] overflow-y-auto"
+            style={{ backgroundColor: 'var(--color-surface)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <InlineCustomerCreate
+                onCancel={() => setCreatePassiveOpen(false)}
+                onCreated={() => {
+                  setCreatePassiveOpen(false);
+                  queryClient.invalidateQueries({ queryKey: ['admin-customers'] });
+                  queryClient.invalidateQueries({ queryKey: ['admin-customer-invitations'] });
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">

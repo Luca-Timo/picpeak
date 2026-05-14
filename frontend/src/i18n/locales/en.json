@@ -2885,6 +2885,7 @@
   },
   "customers": {
     "create": {
+      "openButton": "Create passive customer",
       "openLink": "+ Create new customer",
       "title": "Create new customer",
       "subtitle": "Fill in the details below. Choose \"Save as passive customer\" to create an admin-only record, or \"Save & send portal invitation\" to also email the customer a sign-up link.",
