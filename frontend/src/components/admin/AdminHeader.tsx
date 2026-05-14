@@ -127,8 +127,18 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick }) => {
               <div className="flex md:hidden">{renderBrandBlock()}</div>
             )}
 
-            {/* Date display - hidden on smaller screens */}
-            <div className="hidden xl:block pl-3 border-l border-neutral-200 dark:border-neutral-700 ml-1">
+            {/* Date display - hidden on smaller screens.
+                The vertical divider + left padding only render when
+                the logo sits on the left of the date (logo_position
+                = 'left'). For 'center' / 'right' / 'sidepanel' the
+                left cluster has only the mobile menu (which is
+                hidden on xl+), so a divider would be floating on
+                its own with nothing to separate. */}
+            <div className={`hidden xl:block ml-1 ${
+              logoPosition === 'left' && !logoInSidebar
+                ? 'pl-3 border-l border-neutral-200 dark:border-neutral-700'
+                : ''
+            }`}>
               <p className="text-base text-neutral-700 dark:text-neutral-300">
                 {format(new Date(), 'PPPP')}
               </p>
