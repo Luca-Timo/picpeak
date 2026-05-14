@@ -47,6 +47,12 @@ function transformCustomer(c) {
     billingCycleDay: c.billing_cycle_day == null ? 1 : Number(c.billing_cycle_day),
     notes: c.notes,
     isActive: c.is_active,
+    // Passive customers (admin-only, no portal access) are identified
+    // by a null password_hash. We never expose the hash itself —
+    // this boolean is the only thing the frontend ever sees, and it
+    // drives the "Passive — admin only" badge + the "Send portal
+    // invitation" button on the detail page.
+    isPassive: c.password_hash == null,
     // Per-customer feature flags (#354 follow-up). Coerce to bool so the
     // frontend doesn't have to deal with SQLite's 0/1 values.
     featureCalendar: c.feature_calendar === true || c.feature_calendar === 1,
@@ -190,6 +196,112 @@ router.delete('/invitations/:id', [
     req.admin.id
   );
   successResponse(res, { message: 'Invitation cancelled' });
+}));
+
+// ---- create passive customer (no invitation, admin-only) ----------------
+//
+// Counterpart to POST /invite: instead of creating an invitation row +
+// email, this endpoint inserts the customer directly with
+// password_hash=null (passive). The admin uses this when they have all
+// the customer's info on hand and just need an identity to attach a
+// quote / invoice / gallery to — no portal access required.
+//
+// Same per-field validators as /invite's prefill block, plus `email`
+// required at the top level. Permission: customers.create.
+router.post('/', [
+  adminAuth,
+  requirePermission('customers.create'),
+  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('prefill').optional().isObject(),
+  body('prefill.salutation').optional({ nullable: true }).isString().isLength({ max: 32 }),
+  body('prefill.first_name').optional({ nullable: true }).isString().isLength({ max: 80 }),
+  body('prefill.last_name').optional({ nullable: true }).isString().isLength({ max: 80 }),
+  body('prefill.display_name').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('prefill.phone').optional({ nullable: true }).isString().isLength({ max: 40 }),
+  body('prefill.company_name').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('prefill.vat_id').optional({ nullable: true }).isString().isLength({ max: 40 }),
+  body('prefill.address_line1').optional({ nullable: true }).isString().isLength({ max: 255 }),
+  body('prefill.address_line2').optional({ nullable: true }).isString().isLength({ max: 255 }),
+  body('prefill.postal_code').optional({ nullable: true }).isString().isLength({ max: 20 }),
+  body('prefill.city').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('prefill.state').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('prefill.country_code').optional({ nullable: true }).isString().isLength({ max: 2 }),
+  body('prefill.country_name').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('prefill.preferred_language').optional({ nullable: true }).isString().isLength({ min: 2, max: 8 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const { id } = await customerAccountsService.createDirect({
+    email: req.body.email,
+    prefill: req.body.prefill,
+    createdByAdminId: req.admin.id,
+  });
+  const customer = await customerAccountsService.getCustomerById(id);
+  successResponse(res, { customer: transformCustomer(customer) }, 201);
+}));
+
+// ---- promote a passive customer to active (send portal invitation) ------
+//
+// Fires the standard customer-invitation email flow at a customer who
+// currently has no password_hash. The customer clicks the link, lands
+// on the accept page (pre-populated with their existing profile),
+// chooses a password, and is now active. The customer's id stays the
+// same — all their invoices/quotes/gallery assignments survive.
+//
+// 409 with code CUSTOMER_ALREADY_ACTIVE when the customer already has
+// a password set, so the button on the detail page can render an
+// appropriate error toast.
+router.post('/:id/send-invite', [
+  adminAuth,
+  requirePermission('customers.create'),
+  param('id').isInt({ min: 1 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const customerId = parseInt(req.params.id, 10);
+  const customer = await customerAccountsService.getCustomerById(customerId);
+  if (customer.password_hash) {
+    return res.status(409).json({
+      error: 'Customer already has portal access — no invitation needed.',
+      code: 'CUSTOMER_ALREADY_ACTIVE',
+    });
+  }
+  // Derive the invitation prefill from the customer's existing
+  // profile so the accept page is pre-populated with what the admin
+  // already entered for them (saves the customer typing it again).
+  // Only the whitelisted fields go through.
+  const prefill = {
+    salutation:     customer.salutation,
+    first_name:     customer.first_name,
+    last_name:      customer.last_name,
+    display_name:   customer.display_name,
+    phone:          customer.phone,
+    company_name:   customer.company_name,
+    vat_id:         customer.vat_id,
+    address_line1:  customer.address_line1,
+    address_line2:  customer.address_line2,
+    postal_code:    customer.postal_code,
+    city:           customer.city,
+    state:          customer.state,
+    country_code:   customer.country_code,
+    country_name:   customer.country_name,
+    preferred_language: customer.preferred_language,
+  };
+  const invitation = await customerAccountsService.createInvitation({
+    email: customer.email,
+    invitedById: req.admin.id,
+    prefill,
+  });
+  const payload = {
+    invitation: {
+      id: invitation.id,
+      email: invitation.email,
+      expiresAt: invitation.expiresAt,
+    },
+  };
+  // Echo the token in dev so e2e tests can skip the email-channel round-trip.
+  if (process.env.NODE_ENV !== 'production') {
+    payload.invitation.token = invitation.token;
+  }
+  successResponse(res, payload, 201);
 }));
 
 // ---- customer record ----------------------------------------------------
