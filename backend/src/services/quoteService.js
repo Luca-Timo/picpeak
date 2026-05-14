@@ -69,34 +69,77 @@ function ensureNumber(value, fallback = 0) {
  * supplied line items + VAT rate. Returns BigInt-safe integers (minor
  * units). Discount is applied before VAT.
  *
- * Hierarchy rule: items with `parent_position` (referring to another
- * item's position in the same payload) are SUB-ITEMS. Their
- * line_total_minor is still computed for display, but they do NOT
- * roll into the document net total — only top-level items do. This
- * is how "rented equipment package €500" with itemised sub-items
- * (Profoto €150, Sony €200, …) gets exactly one €500 onto the
- * invoice net, while still showing the breakdown.
+ * Hierarchy rules (migration 119):
+ *   - Items with `parent_position` are SUB-ITEMS of the referenced
+ *     top-level item.
+ *   - Each sub-item's `line_total_minor` is computed (qty × unit ×
+ *     (1 − discount)) so the renderer can show its individual price
+ *     in parentheses for transparency.
+ *   - **Parent total auto-resolves from sub-items when any are
+ *     priced.** If at least one sub-item under a given parent has
+ *     `unit_price_minor > 0`, the parent's effective line_total is
+ *     the SUM of those sub-items' line_totals — the parent's own
+ *     stored unit_price is ignored. Mental model: when you list
+ *     itemised equipment with individual prices, the parent line
+ *     becomes a header that auto-totals what's under it.
+ *   - If all sub-items are priceless (transparency-only bullets), the
+ *     parent's own qty × unit × discount math stands as today.
+ *   - Sub-items NEVER contribute to the document net directly —
+ *     only the parent's effective line_total does. So sub-items
+ *     don't double-count, and the parent's "sum-of-sub-items" total
+ *     is what lands in net + VAT.
  *
  * The empty-payload check upstream ensures `lineItems` is always an
  * array; we treat anything truthy on `parent_position` (number or
  * string that parses to int) as "I'm a sub-item".
  */
 function computeTotals(lineItems, vatRate, shippingAmountMinor = 0) {
-  let netMinor = 0;
-  const out = [];
-  for (const li of lineItems) {
+  // Phase 1: compute raw line_total_minor for every row from its own
+  // qty × unit × discount. Sub-item lines are computed here too so
+  // the renderer can display their individual amounts.
+  const computed = lineItems.map((li) => {
     const qty = ensureNumber(li.quantity, 1);
     const unit = ensureInt(li.unit_price_minor);
     const discount = Math.max(0, Math.min(100, ensureNumber(li.discount_percent, 0)));
     const rawLineMinor = Math.round(qty * unit);
     const discountedMinor = Math.round(rawLineMinor * (1 - discount / 100));
-    const isSubItem = li.parent_position != null && li.parent_position !== '';
-    if (!isSubItem) netMinor += discountedMinor;
-    out.push({
-      ...li,
-      line_total_minor: discountedMinor,
-    });
+    const parentPosition = li.parent_position == null || li.parent_position === ''
+      ? null : ensureInt(li.parent_position);
+    return { ...li, line_total_minor: discountedMinor, parent_position: parentPosition };
+  });
+
+  // Phase 2: resolve parents. For each top-level item, sum its priced
+  // sub-items; if the sum > 0, override the parent's line_total_minor.
+  // Index by position for O(n) lookup.
+  const childrenByParent = new Map();
+  for (const li of computed) {
+    if (li.parent_position == null) continue;
+    if (!childrenByParent.has(li.parent_position)) childrenByParent.set(li.parent_position, []);
+    childrenByParent.get(li.parent_position).push(li);
   }
+  for (const li of computed) {
+    if (li.parent_position != null) continue; // skip sub-items
+    const children = childrenByParent.get(ensureInt(li.position)) || [];
+    const pricedChildrenSum = children.reduce(
+      (s, c) => s + (ensureInt(c.unit_price_minor) > 0 ? ensureInt(c.line_total_minor) : 0),
+      0,
+    );
+    if (pricedChildrenSum > 0) {
+      // Override the parent's effective line total with the sum of
+      // its priced sub-items. The parent's own stored unit_price is
+      // intentionally ignored here (the editor disables the parent
+      // input when sub-items become priced — but the backend is the
+      // source of truth either way).
+      li.line_total_minor = pricedChildrenSum;
+    }
+  }
+
+  // Phase 3: net = sum of top-level line totals (resolved).
+  let netMinor = 0;
+  for (const li of computed) {
+    if (li.parent_position == null) netMinor += ensureInt(li.line_total_minor);
+  }
+
   const vatPercent = ensureNumber(vatRate, 0);
   const vatMinor = Math.round(netMinor * vatPercent / 100);
   const shipping = ensureInt(shippingAmountMinor);
@@ -106,8 +149,41 @@ function computeTotals(lineItems, vatRate, shippingAmountMinor = 0) {
     vatAmountMinor: vatMinor,
     shippingAmountMinor: shipping,
     totalAmountMinor: totalMinor,
-    lineItems: out,
+    lineItems: computed,
   };
+}
+
+/**
+ * Resolve parent line_total_minor from priced sub-items, in place.
+ * Mirrors the phase-2 step of computeTotals so non-quote callers
+ * (invoiceService.createInvoice, the PUT-invoice route) can apply
+ * the same hierarchy math without going through full totals.
+ *
+ * Each item must already have line_total_minor pre-computed (the
+ * raw qty × unit × discount product). After this call, top-level
+ * items whose sub-items include at least one priced row will have
+ * their line_total_minor overwritten with the sum of priced
+ * sub-items' line_totals.
+ */
+function resolveParentTotalsFromSubItems(items) {
+  if (!Array.isArray(items) || items.length === 0) return;
+  const childrenByParent = new Map();
+  for (const li of items) {
+    const pp = li.parent_position == null || li.parent_position === '' ? null : ensureInt(li.parent_position);
+    if (pp == null) continue;
+    if (!childrenByParent.has(pp)) childrenByParent.set(pp, []);
+    childrenByParent.get(pp).push(li);
+  }
+  for (const li of items) {
+    const pp = li.parent_position == null || li.parent_position === '' ? null : ensureInt(li.parent_position);
+    if (pp != null) continue;
+    const children = childrenByParent.get(ensureInt(li.position)) || [];
+    const pricedSum = children.reduce(
+      (s, c) => s + (ensureInt(c.unit_price_minor) > 0 ? ensureInt(c.line_total_minor) : 0),
+      0,
+    );
+    if (pricedSum > 0) li.line_total_minor = pricedSum;
+  }
 }
 
 /**
@@ -1536,5 +1612,6 @@ module.exports = {
     // (commit 3) so the quote → invoice cloner stays consistent.
     validateLineItemHierarchy,
     insertLineItemsHierarchical,
+    resolveParentTotalsFromSubItems,
   },
 };

@@ -279,20 +279,19 @@ async function createInvoice(payload, adminId, trx = db) {
 
   // Re-compute totals from line items. Migration 119 — items with a
   // non-null `parent_position` are sub-items and their line totals do
-  // NOT roll into net (display-only itemisation). The
-  // validateLineItemHierarchy + insertLineItemsHierarchical helpers
-  // (shared with quoteService) enforce the 1-level-deep rule and do
-  // the two-phase insert. The DB-side line_total_minor is still
-  // computed for every row so the renderer can show sub-prices.
+  // NOT roll into net directly. Parent totals AUTO-RESOLVE from
+  // priced sub-items: if any sub-item under a parent has unit_price > 0,
+  // the parent's effective line_total_minor becomes the sum of those
+  // sub-items, and the parent's own stored unit_price is ignored.
+  // Mental model matches the editor — pricing on sub-items implies
+  // "parent is a header, total derives from what's under it".
   const lineItems = Array.isArray(payload.lineItems) ? payload.lineItems : [];
-  let netMinor = 0;
   const items = lineItems.map((li, idx) => {
     const qty = ensureNumber(li.quantity, 1);
     const unit = ensureInt(li.unit_price_minor);
     const discount = ensureNumber(li.discount_percent, 0);
     const lineTotal = Math.round(Math.round(qty * unit) * (1 - discount / 100));
     const isSubItem = li.parent_position != null && li.parent_position !== '';
-    if (!isSubItem) netMinor += lineTotal;
     return {
       position: ensureInt(li.position) || (idx + 1),
       quantity: qty,
@@ -304,6 +303,15 @@ async function createInvoice(payload, adminId, trx = db) {
       details_text: li.details_text || null,
     };
   });
+  // Apply the migration-119 hierarchy resolver: rewrites parent
+  // line_total_minor to sum-of-priced-sub-items where applicable.
+  // Net is then summed across top-level (resolved) items.
+  const { resolveParentTotalsFromSubItems } = getHierarchyHelpers();
+  resolveParentTotalsFromSubItems(items);
+  let netMinor = 0;
+  for (const li of items) {
+    if (li.parent_position == null) netMinor += ensureInt(li.line_total_minor);
+  }
   const vatRate = ensureNumber(payload.vatRate, 0);
   const vatMinor = Math.round(netMinor * vatRate / 100);
   const shippingMinor = ensureInt(payload.shippingAmountMinor);

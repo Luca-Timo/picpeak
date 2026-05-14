@@ -207,9 +207,35 @@ export const LineItemsTable: React.FC<Props> = ({
     }
   };
 
-  const lineTotal = (li: EditableLineItem) =>
+  const rawLineTotal = (li: EditableLineItem) =>
     Math.round(li.quantity * li.unitPrice * (1 - li.discountPercent / 100) * 100) / 100;
-  // Subtotal: top-level items ONLY. Sub-items are display-only itemisation.
+
+  /**
+   * A parent has "priced sub-items" when at least one of its
+   * children has unitPrice > 0. In that mode the parent's own
+   * unit_price / qty / discount inputs are disabled and its line
+   * total auto-resolves to the sum of those priced sub-items.
+   * Matches the backend resolveParentTotalsFromSubItems() rule
+   * (migration 119) so the editor mirrors what gets persisted.
+   */
+  const hasPricedChildren = (parentPos: number) =>
+    items.some((c) => c.parentPosition === parentPos && c.unitPrice > 0);
+  const pricedChildrenSum = (parentPos: number) =>
+    items
+      .filter((c) => c.parentPosition === parentPos && c.unitPrice > 0)
+      .reduce((s, c) => s + rawLineTotal(c), 0);
+
+  /** Resolved line total: parent auto-sums when sub-items are priced. */
+  const lineTotal = (li: EditableLineItem) => {
+    if (!isSub(li) && hasPricedChildren(li.position)) {
+      return pricedChildrenSum(li.position);
+    }
+    return rawLineTotal(li);
+  };
+
+  // Subtotal: top-level items ONLY (their resolved totals). Sub-items
+  // never roll directly into net — they only feed their parent's
+  // auto-resolved line total.
   const subtotal = items.filter((li) => !isSub(li)).reduce((s, li) => s + lineTotal(li), 0);
   const vatAmount = Math.round(subtotal * vatRate) / 100;
   const total = subtotal + vatAmount + (Number(shippingAmount) || 0);
@@ -254,6 +280,15 @@ export const LineItemsTable: React.FC<Props> = ({
             {items.map((li, idx) => {
               const sub = isSub(li);
               const open = detailsOpen.has(li.position);
+              // Parent is "auto-totaled" when at least one of its
+              // sub-items has a price. In that mode the qty / unit
+              // price / discount inputs are disabled — the parent's
+              // total is the sum of priced sub-items, computed by
+              // the backend on save.
+              const parentAutoTotaled = !sub && hasPricedChildren(li.position);
+              const disabledInputClass = parentAutoTotaled
+                ? 'bg-neutral-100 dark:bg-neutral-700 text-neutral-400 cursor-not-allowed'
+                : 'bg-white dark:bg-neutral-800';
               return (
                 <React.Fragment key={li.position}>
                   <tr className={`border-t border-neutral-200 dark:border-neutral-700 ${
@@ -268,9 +303,11 @@ export const LineItemsTable: React.FC<Props> = ({
                     <td className="px-2 py-2 align-top">
                       <input
                         type="number" step="0.01" min="0"
-                        className="w-20 rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm"
+                        className={`w-20 rounded border border-neutral-300 dark:border-neutral-600 px-2 py-1 text-sm ${disabledInputClass}`}
                         value={li.quantity}
                         onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
+                        disabled={parentAutoTotaled}
+                        title={parentAutoTotaled ? t('crm.lineItems.autoTotaledHint', 'Total auto-computed from sub-items below') as string : undefined}
                       />
                     </td>
                     <td className={`px-2 py-2 align-top ${sub ? 'pl-6' : ''}`}>
@@ -309,18 +346,22 @@ export const LineItemsTable: React.FC<Props> = ({
                     <td className="px-2 py-2 align-top">
                       <input
                         type="number" step="0.01" min="0"
-                        className="w-24 rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm text-right"
+                        className={`w-24 rounded border border-neutral-300 dark:border-neutral-600 px-2 py-1 text-sm text-right ${disabledInputClass}`}
                         value={li.unitPrice}
                         onChange={(e) => setItem(idx, { unitPrice: Number(e.target.value) })}
+                        disabled={parentAutoTotaled}
+                        title={parentAutoTotaled ? t('crm.lineItems.autoTotaledHint', 'Total auto-computed from sub-items below') as string : undefined}
                       />
                     </td>
                     {showDiscount && (
                       <td className="px-2 py-2 align-top">
                         <input
                           type="number" step="0.1" min="0" max="100"
-                          className="w-20 rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-sm text-right"
+                          className={`w-20 rounded border border-neutral-300 dark:border-neutral-600 px-2 py-1 text-sm text-right ${disabledInputClass}`}
                           value={li.discountPercent}
                           onChange={(e) => setItem(idx, { discountPercent: Number(e.target.value) })}
+                          disabled={parentAutoTotaled}
+                          title={parentAutoTotaled ? t('crm.lineItems.autoTotaledHint', 'Total auto-computed from sub-items below') as string : undefined}
                         />
                       </td>
                     )}
@@ -334,6 +375,11 @@ export const LineItemsTable: React.FC<Props> = ({
                           ? `(${formatMoney(lineTotal(li), currency)})`
                           : ''
                         : formatMoney(lineTotal(li), currency)}
+                      {parentAutoTotaled && (
+                        <div className="text-[10px] font-normal text-neutral-500 dark:text-neutral-400 italic mt-0.5">
+                          {t('crm.lineItems.autoTotaledNote', '= Σ Unterpositionen') as string}
+                        </div>
+                      )}
                     </td>
                     <td className="px-2 py-2 align-top">
                       <div className="flex items-center gap-1 justify-end flex-wrap">
