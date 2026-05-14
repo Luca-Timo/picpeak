@@ -6,6 +6,7 @@ import { ThemeCustomizerEnhanced, GalleryPreview } from '../../components/admin'
 import { useTheme, type ThemeConfig, GALLERY_THEME_PRESETS } from '../../contexts/ThemeContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { settingsService, type BrandingSettings } from '../../services/settings.service';
+import { businessProfileService } from '../../services/businessProfile.service';
 import { useTranslation } from 'react-i18next';
 import { buildResourceUrl } from '../../utils/url';
 import { useFeatureEnabled, useFeatureFlags } from '../../contexts/FeatureFlagsContext';
@@ -52,6 +53,11 @@ export const BrandingPage: React.FC = () => {
   const [currentTheme, setCurrentTheme] = useState<ThemeConfig>(theme);
   const [currentThemeName, setCurrentThemeName] = useState('default');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  // PDF body font selection (migration 121). Lives on this page so the
+  // top-level Save button can persist it together with branding +
+  // theme — no card-local save button. Null = "no preference,
+  // fall back to Helvetica" — same encoding the column uses.
+  const [pdfFontFamily, setPdfFontFamily] = useState<string | null>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch current settings
@@ -64,6 +70,17 @@ export const BrandingPage: React.FC = () => {
   const { data: themeSettings } = useQuery({
     queryKey: ['admin-settings', 'theme'],
     queryFn: () => settingsService.getSettingsByType('theme'),
+  });
+
+  // Fetch business profile snapshot — needed to hydrate the PDF
+  // typography card with the saved pdfFontFamily value. The PDF
+  // typography card is rendered only when a PDF-producing feature is
+  // enabled, but the query is cheap and the page already issues other
+  // settings queries on mount, so we always fetch.
+  const { data: businessProfileSnapshot } = useQuery({
+    queryKey: ['business-profile-snapshot'],
+    queryFn: () => businessProfileService.get(),
+    staleTime: 5 * 60 * 1000,
   });
 
   // Update branding mutation
@@ -106,6 +123,13 @@ export const BrandingPage: React.FC = () => {
       setBrandingSettings(prev => ({ ...prev, ...formatted }));
     }
   }, [settings]);
+
+  // Hydrate the PDF font selection once the business profile arrives.
+  useEffect(() => {
+    if (businessProfileSnapshot?.profile) {
+      setPdfFontFamily(businessProfileSnapshot.profile.pdfFontFamily || null);
+    }
+  }, [businessProfileSnapshot?.profile?.pdfFontFamily]);
 
   // Initialize theme from database
   useEffect(() => {
@@ -258,16 +282,27 @@ export const BrandingPage: React.FC = () => {
         ...brandingSettings,
         logo_url: currentTheme.logoUrl || brandingSettings.logo_url || ''
       };
-      
+
       // Save branding settings to database
       await brandingMutation.mutateAsync(updatedBrandingSettings);
-      
+
       // Save theme settings to database
       await themeMutation.mutateAsync(currentTheme);
-      
+
+      // Persist PDF font family if it changed. Skipped when the value
+      // matches the snapshot to avoid touching business_profile on
+      // every Branding save (the row carries unrelated settings).
+      const savedPdfFontFamily = businessProfileSnapshot?.profile?.pdfFontFamily || null;
+      if (savedPdfFontFamily !== pdfFontFamily) {
+        await businessProfileService.update({
+          pdfFontFamily: pdfFontFamily ? pdfFontFamily : null,
+        });
+        queryClient.invalidateQueries({ queryKey: ['business-profile-snapshot'] });
+      }
+
       // Apply theme globally
       setTheme(currentTheme);
-      
+
       // Update local state to reflect saved values
       setBrandingSettings(updatedBrandingSettings);
     } catch (error) {
@@ -931,8 +966,8 @@ export const BrandingPage: React.FC = () => {
             </label>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left side - Theme Customizer */}
-            <div>
+            {/* Left side - Theme Customizer (+ PDF typography below) */}
+            <div className="space-y-6">
               <ThemeCustomizerEnhanced
                 value={currentTheme}
                 onChange={handleThemeChange}
@@ -943,8 +978,19 @@ export const BrandingPage: React.FC = () => {
                 forceColorMode={brandingSettings.force_color_mode ?? null}
                 onForceColorModeChange={handleForceColorModeChange}
               />
+              {/* PDF typography — sits directly beneath the web
+                  typography customizer so the two visually pair.
+                  Hidden when no PDF-producing feature is on: the
+                  setting has no surface to apply to. Persisted via
+                  the top-level Save button (handleSave). */}
+              {(flags.quotes || flags.bills || flags.taxReport) && (
+                <PdfTypographyCard
+                  value={pdfFontFamily}
+                  onChange={setPdfFontFamily}
+                />
+              )}
             </div>
-            
+
             {/* Right side - Gallery Preview */}
             <div className="lg:sticky lg:top-4 lg:h-fit">
               <Card className="p-4">
@@ -959,15 +1005,6 @@ export const BrandingPage: React.FC = () => {
               </Card>
             </div>
           </div>
-
-          {/* PDF typography — sits directly after the web typography
-              section. Hidden when no PDF-producing feature is on:
-              the setting has no surface to apply to. */}
-          {(flags.quotes || flags.bills || flags.taxReport) && (
-            <div className="mt-6">
-              <PdfTypographyCard />
-            </div>
-          )}
         </div>
 
         {/* Event-Specific Themes Info */}
