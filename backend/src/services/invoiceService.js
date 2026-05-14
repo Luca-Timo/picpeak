@@ -202,7 +202,15 @@ async function listInvoices({ filters = {}, sort = 'newest', page = 1, pageSize 
     const total = ensureInt(countRow?.total || 0);
 
     switch (sort) {
-      case 'oldest':       query = query.orderBy('invoices.issue_date', 'asc').orderBy('invoices.id', 'asc'); break;
+      // "Newest" / "Oldest" means newest/oldest by CREATION time, not
+      // by issue_date. Issue_date is admin-controlled (used for tax
+      // accruals, retro-dating, future-dating) so it can drift from
+      // actual chronology — sorting by it makes a just-created invoice
+      // disappear into the middle of the list whenever its issue_date
+      // is set to something other than today. created_at always
+      // reflects when the row landed in the DB. id is the tiebreaker
+      // for rows that share a created_at second.
+      case 'oldest':       query = query.orderBy('invoices.created_at', 'asc').orderBy('invoices.id', 'asc'); break;
       case 'due_asc':      query = query.orderBy('invoices.due_date', 'asc'); break;
       case 'due_desc':     query = query.orderBy('invoices.due_date', 'desc'); break;
       case 'value_asc':    query = query.orderBy('invoices.total_amount_minor', 'asc'); break;
@@ -214,7 +222,7 @@ async function listInvoices({ filters = {}, sort = 'newest', page = 1, pageSize 
         break;
       case 'newest':
       default:
-        query = query.orderBy('invoices.issue_date', 'desc').orderBy('invoices.id', 'desc');
+        query = query.orderBy('invoices.created_at', 'desc').orderBy('invoices.id', 'desc');
         break;
     }
 
