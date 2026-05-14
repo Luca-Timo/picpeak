@@ -120,6 +120,24 @@ describe('renderTaxReportPdf', () => {
     expect(buf.slice(0, 4).toString('ascii')).toBe('%PDF');
   });
 
+  it('renders without throwing when a row has long text that must wrap', async () => {
+    // Customer + event labels long enough to force multi-line wrap
+    // in their narrow columns. The dynamic row-height logic should
+    // grow the row to fit rather than overlapping the next one.
+    invoiceRowsForRun = [
+      SAMPLE_ROW({
+        customer_company_name: 'Sehr lange Firmenbezeichnung mit Adresszusatz GmbH & Co. KG',
+        event_name: 'Hochzeit Müller & Schmidt — ganztägige Reportage inkl. Empfang und Trauung',
+      }),
+      SAMPLE_ROW({ id: 2, invoice_number: 'R-2026-0002' }),
+    ];
+    const buf = await taxReportService.renderTaxReportPdf({
+      from: '2026-01-01', to: '2026-03-31', currency: 'CHF', locale: 'de',
+    });
+    expect(buf.length).toBeGreaterThan(500);
+    expect(buf.slice(0, 4).toString('ascii')).toBe('%PDF');
+  });
+
   it('honours the locale parameter (en) without throwing', async () => {
     invoiceRowsForRun = [SAMPLE_ROW()];
     const buf = await taxReportService.renderTaxReportPdf({

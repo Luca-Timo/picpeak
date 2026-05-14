@@ -418,7 +418,6 @@ async function renderTaxReportPdf({ from, to, currency, locale } = {}) {
       y = drawTaxTableHeader(doc, leftMargin, y, useLocale, fonts);
 
       doc.fontSize(8.5);
-      const rowHeight = 14;
       const tableBottomLimit = page.height - page.marginBottom - 110; // leave room for totals
       const tableWidth = TAX_TABLE_COLS.reduce((s, c) => s + c.width, 0);
 
@@ -430,48 +429,75 @@ async function renderTaxReportPdf({ from, to, currency, locale } = {}) {
         y += 24;
       }
 
-      // Belt-and-braces truncation. PDFKit's `lineBreak: false` is
-      // honoured most of the time, but when the cell value is wider
-      // than the column it still wraps occasionally — which then
-      // overlaps the row below. Cap each cell at a generous char
-      // budget so even worst-case glyph widths fit. The ellipsis on
-      // `doc.text` then catches anything that's still too wide.
-      const charBudgetFor = (col) => {
-        // ~5pt average per glyph at 8.5pt → ceil((width-4) / 5).
-        return Math.max(4, Math.floor((col.width - 4) / 5));
-      };
-      const clip = (s, budget) => {
-        if (s == null) return '';
-        const str = String(s);
-        return str.length > budget ? `${str.slice(0, budget - 1)}…` : str;
+      // Row height is now DYNAMIC — computed per row as the max
+      // rendered height across every cell at its column width. This
+      // means a cell that wraps to two lines (long customer label,
+      // multi-line event name, "Storniert" tag in a narrow status
+      // column) makes the whole row taller instead of overlapping
+      // the row below. The minimum keeps tight rows readable.
+      const ROW_MIN_HEIGHT = 14;
+      const ROW_VERTICAL_PADDING = 4; // space between text and the separator line
+      const safeStr = (v) => (v == null ? '' : String(v));
+
+      // Measure how tall a value would render in the given column.
+      // Numeric / aligned cells use `lineBreak: false` so they never
+      // wrap (they're either ints or money strings whose width we
+      // budget for) — only text cells (customer, event, invoice,
+      // status) opt into natural wrapping.
+      const isWrappable = (col) => ['invoice', 'customer', 'event', 'status'].includes(col.key);
+      const measureCellHeight = (value, col) => {
+        const s = safeStr(value);
+        if (!s) return 0;
+        const opts = isWrappable(col)
+          ? { width: col.width - 4, align: col.align }
+          : { width: col.width - 4, align: col.align, lineBreak: false };
+        // `doc.heightOfString` reads the current font + fontSize, so
+        // we set the body font + 8.5pt before each row's measurement
+        // pass and the values stay consistent with the actual draw.
+        return doc.heightOfString(s, opts);
       };
 
       for (let i = 0; i < report.rows.length; i += 1) {
-        if (y + rowHeight > tableBottomLimit) {
+        const row = report.rows[i];
+        const cells = rowCellValues(row, i + 1, useLocale, renderCtx.dateFormat);
+
+        // Set the font BEFORE measuring so heightOfString reads the
+        // exact rendering state we'll use for doc.text below.
+        doc.font(fonts.body).fontSize(8.5);
+
+        let textHeight = ROW_MIN_HEIGHT - ROW_VERTICAL_PADDING;
+        for (const col of TAX_TABLE_COLS) {
+          const h = measureCellHeight(cells[col.key], col);
+          if (h > textHeight) textHeight = h;
+        }
+        const rowH = Math.ceil(textHeight) + ROW_VERTICAL_PADDING;
+
+        // Page break check uses the actual row height we're about to
+        // draw, not the old hard-coded constant — long rows can't
+        // sneak past the bottom margin.
+        if (y + rowH > tableBottomLimit) {
           doc.addPage({ size: 'A4', layout: 'landscape' });
           y = page.marginTop;
           y = drawTaxTableHeader(doc, leftMargin, y, useLocale, fonts);
+          doc.font(fonts.body).fontSize(8.5);
         }
-        const row = report.rows[i];
-        const cells = rowCellValues(row, i + 1, useLocale, renderCtx.dateFormat);
-        if (row.isCancelled) {
-          doc.font(fonts.body).fillColor('#888');
-        } else {
-          doc.font(fonts.body).fillColor('#000');
-        }
+
+        doc.fillColor(row.isCancelled ? '#888' : '#000');
+
         for (let c = 0; c < TAX_TABLE_COLS.length; c += 1) {
           const col = TAX_TABLE_COLS[c];
-          const value = clip(cells[col.key], charBudgetFor(col));
-          doc.text(value, colX(leftMargin, c) + 2, y, {
-            width: col.width - 4, align: col.align,
-            ellipsis: true, lineBreak: false, height: rowHeight - 2,
-          });
+          const opts = isWrappable(col)
+            ? { width: col.width - 4, align: col.align }
+            : { width: col.width - 4, align: col.align, lineBreak: false };
+          doc.text(safeStr(cells[col.key]), colX(leftMargin, c) + 2, y, opts);
         }
-        // Light separator under each row.
-        doc.moveTo(leftMargin, y + rowHeight - 2)
-          .lineTo(leftMargin + tableWidth, y + rowHeight - 2)
+
+        // Light separator under each row, drawn at the dynamic
+        // bottom edge — not at a fixed offset.
+        doc.moveTo(leftMargin, y + rowH - 1)
+          .lineTo(leftMargin + tableWidth, y + rowH - 1)
           .lineWidth(0.3).strokeColor('#e0e0e0').stroke();
-        y += rowHeight;
+        y += rowH;
       }
 
       // Totals block. Lives in the right half of the page so it
