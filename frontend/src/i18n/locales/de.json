@@ -2885,6 +2885,7 @@
   },
   "customers": {
     "create": {
+      "openButton": "Passiven Kunden erstellen",
       "openLink": "+ Neuen Kunden erstellen",
       "title": "Neuen Kunden erstellen",
       "subtitle": "Geben Sie die Daten unten ein. Wählen Sie „Als passiven Kunden speichern“, um einen reinen Admin-Eintrag zu erstellen, oder „Speichern & Portal-Einladung senden“, um dem Kunden zusätzlich eine Einladungs-E-Mail zu schicken.",

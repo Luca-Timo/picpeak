@@ -235,7 +235,7 @@ export const QuoteResponsePage: React.FC = () => {
                     }`}>
                       <td className="py-2">{isSub ? '' : topCount}</td>
                       <td className={`py-2 whitespace-pre-line ${isSub ? 'pl-6' : ''}`}>
-                        {isSub ? '↳ ' : ''}{li.description}
+                        {isSub ? '• ' : ''}{li.description}
                       </td>
                       <td className="py-2 text-right">{Number(li.quantity)}</td>
                       <td className="py-2 text-right tabular-nums">

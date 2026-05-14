@@ -32,6 +32,9 @@ import { toast } from 'react-toastify';
 interface FormState {
   customerAccountId: number | null;
   customerLabel: string;
+  /** Mirrors the customer.isPassive flag from the API. Drives the
+   *  "Passive — admin only" badge next to the customer label. */
+  customerIsPassive: boolean;
   language: string;
   currency: string;
   issueDate: string;
@@ -55,6 +58,7 @@ interface FormState {
 const empty: FormState = {
   customerAccountId: null,
   customerLabel: '',
+  customerIsPassive: false,
   language: 'de',
   currency: 'CHF',
   issueDate: new Date().toISOString().slice(0, 10),
@@ -143,6 +147,7 @@ export const QuoteEditorPage: React.FC = () => {
           ...prev,
           customerAccountId: c.id,
           customerLabel: c.companyName || c.displayName || c.email,
+          customerIsPassive: Boolean(c.isPassive),
           // Inherit the customer's preferred language for the quote so
           // the email + PDF land in the right locale automatically.
           language: prev.language || c.preferredLanguage || 'de',
@@ -170,6 +175,7 @@ export const QuoteEditorPage: React.FC = () => {
       setForm({
         customerAccountId: q.customerAccountId,
         customerLabel: q.customer.companyName || q.customer.displayName || q.customer.email || '',
+        customerIsPassive: Boolean(q.customer.isPassive),
         language: q.language,
         currency: q.currency,
         issueDate: q.issueDate,
@@ -373,8 +379,15 @@ export const QuoteEditorPage: React.FC = () => {
         <h3 className="font-semibold mb-2">1. {t('quotes.section.customer', 'Customer')}</h3>
         {form.customerAccountId ? (
           <div className="flex items-center justify-between bg-neutral-50 dark:bg-neutral-800 rounded-md px-3 py-2">
-            <span className="text-sm">{form.customerLabel}</span>
-            <Button variant="outline" size="sm" onClick={() => setForm((f) => ({ ...f, customerAccountId: null, customerLabel: '' }))}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm">{form.customerLabel}</span>
+              {form.customerIsPassive && (
+                <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300">
+                  {t('customers.passive.badge', 'Passive — admin only')}
+                </span>
+              )}
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setForm((f) => ({ ...f, customerAccountId: null, customerLabel: '', customerIsPassive: false }))}>
               {t('common.change', 'Change')}
             </Button>
           </div>
@@ -386,6 +399,7 @@ export const QuoteEditorPage: React.FC = () => {
                 ...f,
                 customerAccountId: c.id,
                 customerLabel: c.companyName || c.displayName || c.email,
+                customerIsPassive: Boolean(c.isPassive),
                 // Inherit the new customer's language so the quote
                 // gets rendered in their locale by default.
                 language: f.language || c.preferredLanguage || 'de',
@@ -409,10 +423,16 @@ export const QuoteEditorPage: React.FC = () => {
                         ...f,
                         customerAccountId: c.id,
                         customerLabel: c.companyName || c.displayName || c.email,
+                        customerIsPassive: Boolean(c.isPassive),
                       }))}
                     >
                       <span className="font-medium">{c.companyName || c.displayName || c.email}</span>
                       <span className="text-neutral-500 ml-2">{c.email}</span>
+                      {c.isPassive && (
+                        <span className="ml-2 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300">
+                          {t('customers.passive.badge', 'Passive — admin only')}
+                        </span>
+                      )}
                     </button>
                   </li>
                 ))}

@@ -33,6 +33,11 @@ export const BillEditorPage: React.FC = () => {
 
   const [customerId, setCustomerId] = useState<number | null>(null);
   const [customerLabel, setCustomerLabel] = useState('');
+  // Tracks whether the selected customer is a passive (admin-only)
+  // account so the editor can render the "Passive — admin only"
+  // badge next to the label. Driven by the same isPassive boolean
+  // the backend exposes on transformInvoice.customer + transformQuote.customer.
+  const [customerIsPassive, setCustomerIsPassive] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   // Toggle: when true, the customer card hides the search and shows
   // the inline-create form (passive customer or "save & invite").
@@ -88,6 +93,7 @@ export const BillEditorPage: React.FC = () => {
       const inv = existing.invoice;
       setCustomerId(inv.customerAccountId);
       setCustomerLabel(inv.customer.companyName || inv.customer.displayName || inv.customer.email || '');
+      setCustomerIsPassive(Boolean(inv.customer.isPassive));
       setCurrency(inv.currency);
       setIssueDate(inv.issueDate);
       setDueDate(inv.dueDate);
@@ -161,6 +167,7 @@ export const BillEditorPage: React.FC = () => {
         if (!customerId) {
           setCustomerId(c.id);
           setCustomerLabel(c.companyName || c.displayName || c.email);
+          setCustomerIsPassive(Boolean(c.isPassive));
         }
       } catch {
         // Silent fail — admin can still pick the customer manually.
@@ -283,8 +290,15 @@ export const BillEditorPage: React.FC = () => {
         <h3 className="font-semibold mb-2">{t('bills.section.customer', 'Customer')}</h3>
         {customerId ? (
           <div className="flex items-center justify-between bg-neutral-50 dark:bg-neutral-800 rounded-md px-3 py-2">
-            <span className="text-sm">{customerLabel}</span>
-            <Button variant="outline" size="sm" onClick={() => { setCustomerId(null); setCustomerLabel(''); }}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm">{customerLabel}</span>
+              {customerIsPassive && (
+                <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300">
+                  {t('customers.passive.badge', 'Passive — admin only')}
+                </span>
+              )}
+            </div>
+            <Button variant="outline" size="sm" onClick={() => { setCustomerId(null); setCustomerLabel(''); setCustomerIsPassive(false); }}>
               {t('common.change', 'Change')}
             </Button>
           </div>
@@ -294,6 +308,7 @@ export const BillEditorPage: React.FC = () => {
             onCreated={(c) => {
               setCustomerId(c.id);
               setCustomerLabel(c.companyName || c.displayName || c.email);
+              setCustomerIsPassive(Boolean(c.isPassive));
               setCreatingCustomer(false);
             }}
           />
@@ -306,9 +321,18 @@ export const BillEditorPage: React.FC = () => {
                 {customerOptions.map((c) => (
                   <li key={c.id}>
                     <button type="button" className="w-full text-left px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-sm"
-                      onClick={() => { setCustomerId(c.id); setCustomerLabel(c.companyName || c.displayName || c.email); }}>
+                      onClick={() => {
+                        setCustomerId(c.id);
+                        setCustomerLabel(c.companyName || c.displayName || c.email);
+                        setCustomerIsPassive(Boolean(c.isPassive));
+                      }}>
                       <span className="font-medium">{c.companyName || c.displayName || c.email}</span>
                       <span className="text-neutral-500 ml-2">{c.email}</span>
+                      {c.isPassive && (
+                        <span className="ml-2 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300">
+                          {t('customers.passive.badge', 'Passive — admin only')}
+                        </span>
+                      )}
                     </button>
                   </li>
                 ))}
