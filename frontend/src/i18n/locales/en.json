@@ -3240,7 +3240,11 @@
       "shipping": "Shipping",
       "currency": "Currency",
       "ccPdfEmail": "CC PDF to (extra recipient)",
-      "sourceQuote": "From quote"
+      "sourceQuote": "From quote",
+      "businessBankAccount": "Payment account",
+      "bankAccountProfileDefault": "Use business profile default for {{currency}}",
+      "bankAccountDefaultBadge": "(default)",
+      "bankAccountHelp": "Overrides the profile default for this invoice only. Leave on default to inherit the currency-matched account from Settings → Business profile."
     },
     "section": {
       "lineItems": "Line items",

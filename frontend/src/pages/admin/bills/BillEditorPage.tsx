@@ -11,6 +11,7 @@ import { ArrowLeft, Eye, Save as SaveIcon } from 'lucide-react';
 import { Button, Card, Loading, Input } from '../../../components/common';
 import { billsService, type InvoiceCreatePayload, type InvoiceQrFormat } from '../../../services/bills.service';
 import { quotesService } from '../../../services/quotes.service';
+import { businessProfileService } from '../../../services/businessProfile.service';
 import { LineItemsTable, type EditableLineItem } from '../../../components/admin/LineItemsTable';
 import { customerAdminService } from '../../../services/customerAdmin.service';
 import { userManagementService } from '../../../services/userManagement.service';
@@ -46,7 +47,23 @@ export const BillEditorPage: React.FC = () => {
   const [ccPdfEmail, setCcPdfEmail] = useState('');
   const [lineItems, setLineItems] = useState<EditableLineItem[]>([]);
   const [paymentTermTemplateId, setPaymentTermTemplateId] = useState<number | null>(null);
+  // null = use the business-profile default for the chosen currency.
+  // A number = explicit per-invoice override pointing at a specific
+  // business_bank_accounts row. The backend's
+  // resolveBankAccountForCurrency() already prefers this over the
+  // currency-default when set, so we just need to surface a picker.
+  const [businessBankAccountId, setBusinessBankAccountId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Load every configured bank account so the override dropdown can
+  // offer them all. We filter by currency in the dropdown itself
+  // (with an "any currency" fallback in case the admin wants to be
+  // explicit about a cross-currency bank).
+  const { data: bankAccountsData } = useQuery({
+    queryKey: ['business-bank-accounts'],
+    queryFn: () => businessProfileService.listBankAccounts(),
+  });
+  const bankAccounts = bankAccountsData?.bankAccounts || [];
 
   // Payment-term templates shared with the quote editor — same
   // dropdown, same data source. Lets the admin pick net-days +
@@ -78,6 +95,7 @@ export const BillEditorPage: React.FC = () => {
       setShipping(Number(inv.shippingAmountMinor || 0) / 100);
       setCcPdfEmail(inv.ccPdfEmail || '');
       setPaymentTermTemplateId(inv.paymentTermTemplateId ?? null);
+      setBusinessBankAccountId(inv.businessBankAccountId ?? null);
       setLineItems(existing.lineItems.map((li) => ({
         id: li.id,
         position: li.position,
@@ -169,6 +187,15 @@ export const BillEditorPage: React.FC = () => {
     // selected; backend falls back to source-quote snapshot or the
     // global crm_invoices_* defaults.
     paymentTermTemplateId: paymentTermTemplateId ?? undefined,
+    // Per-invoice bank-account override. Sending `null` explicitly
+    // (instead of stripping the key with `?? undefined`) ensures the
+    // PUT handler can detect "clear this override" — JSON serialises
+    // undefined out of the body, so an omitted key would otherwise
+    // leave the previously-pinned bank in place. A number pins the
+    // chosen account; the renderer reads it from
+    // invoices.business_bank_account_id at PDF time, no further
+    // lookup needed.
+    businessBankAccountId: businessBankAccountId,
     lineItems: lineItems.map((li) => ({
       position: li.position,
       quantity: li.quantity,
@@ -300,6 +327,42 @@ export const BillEditorPage: React.FC = () => {
               <option value="swiss">{t('bills.qrFormat.swiss', 'Swiss QR-bill')}</option>
               <option value="epc">{t('bills.qrFormat.epc', 'EPC QR (SEPA)')}</option>
             </select>
+          </div>
+          {/* Per-invoice bank-account override (migration 102 column
+              business_bank_account_id). Empty value = let the server
+              pick the default account for the invoice currency at
+              save time. Showing every configured bank lets the admin
+              pin one for this invoice without changing the global
+              defaults in Settings → Business profile. */}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium mb-1">
+              {t('bills.field.businessBankAccount', 'Payment account')}
+            </label>
+            <select
+              value={businessBankAccountId == null ? '' : String(businessBankAccountId)}
+              onChange={(e) => setBusinessBankAccountId(e.target.value ? Number(e.target.value) : null)}
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm">
+              <option value="">
+                {t('bills.field.bankAccountProfileDefault',
+                  'Use business profile default for {{currency}}', { currency })}
+              </option>
+              {bankAccounts.map((b) => {
+                const labelParts = [
+                  b.label || b.accountHolder || b.iban,
+                  b.currency,
+                  b.isDefault ? t('bills.field.bankAccountDefaultBadge', '(default)') : null,
+                ].filter(Boolean);
+                return (
+                  <option key={b.id} value={b.id}>
+                    {labelParts.join(' · ')} — {b.iban}
+                  </option>
+                );
+              })}
+            </select>
+            <p className="text-xs text-neutral-500 mt-1">
+              {t('bills.field.bankAccountHelp',
+                'Overrides the profile default for this invoice only. Leave on default to inherit the currency-matched account from Settings → Business profile.')}
+            </p>
           </div>
         </div>
       </Card>

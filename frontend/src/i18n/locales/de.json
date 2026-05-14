@@ -3213,7 +3213,11 @@
       "shipping": "Versand",
       "currency": "Währung",
       "ccPdfEmail": "PDF-Kopie an (zusätzlicher Empfänger)",
-      "sourceQuote": "Aus Angebot"
+      "sourceQuote": "Aus Angebot",
+      "businessBankAccount": "Zahlungskonto",
+      "bankAccountProfileDefault": "Geschäftsprofil-Standard für {{currency}} verwenden",
+      "bankAccountDefaultBadge": "(Standard)",
+      "bankAccountHelp": "Überschreibt den Profil-Standard nur für diese Rechnung. Auf «Standard» belassen, um das passende Konto aus Einstellungen → Geschäftsprofil zu übernehmen."
     },
     "title": "Rechnungen",
     "subtitle": "Rechnungen planen, versenden, Zahlungen erfassen und überfällige Rechnungen mahnen.",
