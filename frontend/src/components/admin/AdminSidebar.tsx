@@ -18,6 +18,8 @@ import { settingsService } from '../../services/settings.service';
 import { VersionInfo } from './VersionInfo';
 import { usePermissions } from '../../contexts/PermissionsContext';
 import { useFeatureFlags, type FeatureKey } from '../../contexts/FeatureFlagsContext';
+import { usePublicSettings } from '../../hooks/usePublicSettings';
+import { buildResourceUrl } from '../../utils/url';
 
 interface AdminSidebarProps {
   isOpen: boolean;
@@ -92,6 +94,27 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
   const { t } = useTranslation();
   const { hasPermission } = usePermissions();
   const { flags } = useFeatureFlags();
+  // Branding lookup for the "logo_position = sidepanel" mode — when
+  // chosen, the logo replaces the "PicPeak Admin" text in the brand
+  // row, and the favicon takes over in the collapsed icon rail.
+  const { data: publicSettings } = usePublicSettings();
+  const logoInSidebar = publicSettings?.branding_logo_position === 'sidepanel';
+  const rawLogoUrl = publicSettings?.branding_logo_url?.trim();
+  const rawFaviconUrl = publicSettings?.branding_favicon_url?.trim();
+  const resolvedLogoUrl = rawLogoUrl
+    ? (rawLogoUrl.startsWith('http') ? rawLogoUrl : buildResourceUrl(rawLogoUrl))
+    : null;
+  const resolvedFaviconUrl = rawFaviconUrl
+    ? (rawFaviconUrl.startsWith('http') ? rawFaviconUrl : buildResourceUrl(rawFaviconUrl))
+    : null;
+  // In collapsed rail, prefer the favicon (it's already a square,
+  // tight crop). Fall back to the logo when no favicon is set, then
+  // to nothing — better an empty rail than a stretched logo.
+  const sidebarBrandImageUrl = collapsed
+    ? (resolvedFaviconUrl || resolvedLogoUrl)
+    : (resolvedLogoUrl || resolvedFaviconUrl);
+  const showLogoBrand = logoInSidebar && !!sidebarBrandImageUrl;
+  const brandAlt = publicSettings?.branding_company_name?.trim() || t('admin.title');
 
   const filteredNavigation = navigation.filter((item) => {
     if (item.permission && !hasPermission(item.permission as string)) return false;
@@ -119,33 +142,51 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
       }`}
     >
       <div className="flex flex-col h-screen lg:h-full">
-        {/* Brand row: collapse toggle (desktop) on the left, title to the right,
-            mobile close (X) on the far right. When collapsed on desktop, the
-            title hides and only the toggle remains, centered in the rail. */}
+        {/* Brand row: title on the left, mobile close (X) on the
+            right. The desktop collapse toggle used to live here but
+            was moved down next to the version / storage widgets so
+            it sits in admins' muscle-memory zone for chrome controls.
+            When collapsed on desktop the title hides and the row
+            becomes an empty spacer (no rail-width fight). */}
         <div className={`flex items-center h-16 border-b border-neutral-200 dark:border-neutral-700 flex-shrink-0 ${
           collapsed ? 'lg:justify-center lg:px-2 px-6 justify-between' : 'justify-between px-6'
         }`}>
-          <div className="flex items-center gap-2">
-            {onToggleCollapse && (
-              <button
-                type="button"
-                onClick={onToggleCollapse}
-                className="hidden lg:inline-flex items-center justify-center w-9 h-9 rounded-md text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-                aria-label={collapsed ? t('admin.expandSidebar', 'Expand sidebar') : t('admin.collapseSidebar', 'Collapse sidebar')}
-                title={collapsed ? t('admin.expandSidebar', 'Expand sidebar') : t('admin.collapseSidebar', 'Collapse sidebar')}
-              >
-                {collapsed
-                  ? <PanelLeftOpen className="w-5 h-5" />
-                  : <PanelLeftClose className="w-5 h-5" />}
-              </button>
-            )}
-            {showLabels && (
-              <span className="text-xl font-bold text-neutral-900 dark:text-neutral-100">{t('admin.title')}</span>
-            )}
-            {/* When collapsed on desktop the title is hidden; on mobile we
-                always show it because the rail-narrow style only applies at lg+ */}
-            {collapsed && (
-              <span className="text-xl font-bold text-neutral-900 dark:text-neutral-100 lg:hidden">{t('admin.title')}</span>
+          <div className="flex items-center gap-2 min-w-0">
+            {showLogoBrand ? (
+              <>
+                {/* Logo brand variant — fed by Branding > Logo
+                    Position = "Sidebar". On the collapsed rail, only
+                    the favicon (or logo as fallback) is shown — sized
+                    to fit the 64px-wide rail. Expanded shows the full
+                    logo at the same h-8 the admin header uses for
+                    visual continuity. */}
+                <img
+                  src={sidebarBrandImageUrl!}
+                  alt={brandAlt}
+                  className={collapsed ? 'h-8 w-8 object-contain lg:h-9 lg:w-9' : 'h-8 w-auto object-contain max-w-full'}
+                />
+                {/* On mobile the rail-narrow style only applies at
+                    lg+, so when collapsed=true the mobile view still
+                    has the regular w-64 width — show the company name
+                    next to the logo so the brand row doesn't feel
+                    empty there. */}
+                {collapsed && (
+                  <span className="text-xl font-bold text-neutral-900 dark:text-neutral-100 lg:hidden truncate">
+                    {brandAlt}
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                {showLabels && (
+                  <span className="text-xl font-bold text-neutral-900 dark:text-neutral-100">{t('admin.title')}</span>
+                )}
+                {/* When collapsed on desktop the title is hidden; on mobile we
+                    always show it because the rail-narrow style only applies at lg+ */}
+                {collapsed && (
+                  <span className="text-xl font-bold text-neutral-900 dark:text-neutral-100 lg:hidden">{t('admin.title')}</span>
+                )}
+              </>
             )}
           </div>
           <button
@@ -195,6 +236,30 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
             );
           })}
         </nav>
+
+        {/* Desktop collapse / expand toggle.
+            Lives directly above the version + storage widgets — sits
+            in admins' muscle-memory zone for chrome controls and
+            stays visible even when the sidebar is collapsed so the
+            rail can always be re-expanded. Hidden on mobile (the X
+            in the brand row already closes the sheet there). */}
+        {onToggleCollapse && (
+          <div className={`hidden lg:flex flex-shrink-0 border-t border-neutral-200 dark:border-neutral-700 py-2 ${
+            collapsed ? 'justify-center px-2' : 'justify-end px-4'
+          }`}>
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="inline-flex items-center justify-center w-9 h-9 rounded-md text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              aria-label={collapsed ? t('admin.expandSidebar', 'Expand sidebar') : t('admin.collapseSidebar', 'Collapse sidebar')}
+              title={collapsed ? t('admin.expandSidebar', 'Expand sidebar') : t('admin.collapseSidebar', 'Collapse sidebar')}
+            >
+              {collapsed
+                ? <PanelLeftOpen className="w-5 h-5" />
+                : <PanelLeftClose className="w-5 h-5" />}
+            </button>
+          </div>
+        )}
 
         {/* Bottom section - sticky to bottom (only for users with settings.view permission).
             Hidden on desktop when collapsed since these widgets don't fit in the icon rail;
