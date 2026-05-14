@@ -726,6 +726,11 @@ async function buildRenderContext(quote, lineItems) {
       // Custom TTF used by pdfService when set; falls back to
       // Helvetica when null or the file is missing on disk.
       pdfFontTtfPath: profile.pdf_font_ttf_path,
+      // Bundled-fonts dropdown (migration 121). When set,
+      // pdfService loads <family>/400.ttf + <family>/700.ttf from
+      // backend/assets/fonts/. Priority: pdfFontTtfPath wins if both
+      // are present.
+      pdfFontFamily: profile.pdf_font_family || null,
       // Free-text country name override (migration 107). Used verbatim
       // by the PDF renderer when set; otherwise falls back to the
       // COUNTRY_NAMES lookup on the ISO country_code.

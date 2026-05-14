@@ -741,6 +741,11 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       vatId: profile.vat_id,
       logoPath: resolvedLogoPath,
       pdfFontTtfPath: profile.pdf_font_ttf_path,
+      // Bundled-fonts dropdown (migration 121). When set, pdfService
+      // loads <family>/400.ttf + <family>/700.ttf from
+      // backend/assets/fonts/. Priority: pdfFontTtfPath wins if both
+      // are present.
+      pdfFontFamily: profile.pdf_font_family || null,
       // Free-text country name override (migration 107). When set the
       // PDF renderer uses this verbatim; falls back to the locale-aware
       // COUNTRY_NAMES lookup when blank.

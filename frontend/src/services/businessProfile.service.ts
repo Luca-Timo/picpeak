@@ -36,8 +36,16 @@ export interface BusinessProfile {
   footerLine: string;
   logoPath: string;
   /** Path (absolute or relative to storage/) to a TTF/OTF used by the
-   *  PDF renderer. Falls back to Helvetica when blank or missing. */
+   *  PDF renderer. Falls back to Helvetica when blank or missing.
+   *  The UI for setting this was retired in favour of `pdfFontFamily`
+   *  (migration 121) but the field stays read-only on the type so
+   *  legacy values keep flowing through. */
   pdfFontTtfPath: string;
+  /** Bundled-fonts dropdown choice (migration 121). Stores the
+   *  on-disk directory name under backend/assets/fonts/ (e.g.
+   *  "Inter", "Playfair-Display"). null = no preference, Helvetica
+   *  fallback. */
+  pdfFontFamily: string | null;
   /** When false, the issuer logo image is suppressed on every PDF
    *  (even if logoPath is set). Migration 106; defaults true. */
   pdfShowLogo: boolean;

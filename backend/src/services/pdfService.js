@@ -1227,15 +1227,43 @@ function createBaseDocument(options = {}) {
     info: options.info || {},
   });
 
-  // Same font-registration block as renderDocument below — kept in
-  // sync intentionally so quote/invoice/tax-report PDFs all honour the
-  // admin's uploaded TTF (business_profile.pdf_font_ttf_path).
+  // Font registration. Resolution priority:
+  //   1. issuer.pdfFontTtfPath  → legacy free-text upload (migration 103).
+  //      The UI for setting it was retired in favour of the dropdown,
+  //      but any existing value still wins so deployments that already
+  //      pointed at a custom brand font keep rendering with it.
+  //   2. issuer.pdfFontFamily   → bundled-fonts dropdown (migration 121).
+  //      Maps to backend/assets/fonts/<family>/400.ttf for body and
+  //      <family>/700.ttf for bold. Falls back to 600/400 if 700 is
+  //      missing (some families don't ship every weight).
+  //   3. Helvetica              → PDFKit's built-in default.
+  //
+  // Same block is mirrored below in renderDocument so quote / invoice
+  // / tax-report PDFs all resolve fonts identically.
   doc._fonts = { body: FONT_BODY, bold: FONT_BOLD };
   const issuer = options.issuer || {};
+  const fontRegistered = registerCustomFonts(doc, issuer);
+  if (fontRegistered) doc._fonts = fontRegistered;
+
+  return { doc, page, fonts: doc._fonts };
+}
+
+/**
+ * Try to register a custom font pair on the given doc per the
+ * priority order documented on createBaseDocument. Returns the new
+ * `{ body, bold }` logical-font-names object when a custom font is
+ * applied, or `null` when we fell through to Helvetica.
+ *
+ * Exported via _internal for unit tests.
+ */
+function registerCustomFonts(doc, issuer) {
+  if (!issuer || typeof issuer !== 'object') return null;
+  const path = require('path');
+  const fs = require('fs');
+
+  // Priority 1: legacy free-text path.
   if (issuer.pdfFontTtfPath) {
     try {
-      const path = require('path');
-      const fs = require('fs');
       const raw = issuer.pdfFontTtfPath;
       const candidates = [
         path.isAbsolute(raw) ? raw : null,
@@ -1246,12 +1274,42 @@ function createBaseDocument(options = {}) {
       if (found && /\.(ttf|otf)$/i.test(found)) {
         doc.registerFont(CUSTOM_BODY, found);
         doc.registerFont(CUSTOM_BOLD, found);
-        doc._fonts = { body: CUSTOM_BODY, bold: CUSTOM_BOLD };
+        return { body: CUSTOM_BODY, bold: CUSTOM_BOLD };
       }
-    } catch { /* fall back silently to Helvetica */ }
+    } catch { /* fall through to family / Helvetica */ }
   }
 
-  return { doc, page, fonts: doc._fonts };
+  // Priority 2: bundled-fonts dropdown.
+  if (issuer.pdfFontFamily) {
+    try {
+      // Sanitise the family name aggressively — comes from user input
+      // (a saved dropdown value), so prevent path traversal even
+      // though directory names should always be plain ASCII like
+      // "Inter" or "Playfair-Display".
+      const family = String(issuer.pdfFontFamily).replace(/[^A-Za-z0-9_-]/g, '');
+      if (family) {
+        const fontsRoot = path.resolve(__dirname, '../../assets/fonts', family);
+        const bodyCandidates = ['400.ttf', '500.ttf', '600.ttf', '700.ttf'];
+        const boldCandidates = ['700.ttf', '600.ttf', '500.ttf', '400.ttf'];
+        const findFirst = (names) => {
+          for (const n of names) {
+            const full = path.join(fontsRoot, n);
+            try { if (fs.existsSync(full)) return full; } catch { /* ignore */ }
+          }
+          return null;
+        };
+        const bodyFile = findFirst(bodyCandidates);
+        const boldFile = findFirst(boldCandidates);
+        if (bodyFile && boldFile) {
+          doc.registerFont(CUSTOM_BODY, bodyFile);
+          doc.registerFont(CUSTOM_BOLD, boldFile);
+          return { body: CUSTOM_BODY, bold: CUSTOM_BOLD };
+        }
+      }
+    } catch { /* fall through to Helvetica */ }
+  }
+
+  return null;
 }
 
 /**
@@ -1303,48 +1361,18 @@ function renderDocument(type, context) {
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Optional custom font (business_profile.pdf_font_ttf_path).
-      // Loaded from STORAGE_PATH/<path> if relative, or absolute as-is.
-      // We rebind FONT_BODY/FONT_BOLD on the doc level by storing the
-      // resolved name on `ctx.fonts`; helpers below read from there.
-      // Falls back to Helvetica silently when the file is missing or
-      // PDFKit fails to register it (woff2 etc.).
-      // Helpers below read `doc._fonts` (one extra word per doc) so we
-      // don't have to thread the font names through every drawing
-      // function or fork the helpers per branding. Defaults to the
-      // built-in Helvetica family.
+      // Font registration. Same resolution priority as
+      // createBaseDocument: pdfFontTtfPath (legacy override) →
+      // pdfFontFamily (bundled dropdown) → Helvetica. Helpers below
+      // read `doc._fonts` (one extra word per doc) so we don't have
+      // to thread the font names through every drawing function or
+      // fork the helpers per branding.
       doc._fonts = { body: FONT_BODY, bold: FONT_BOLD };
       ctx.fonts = doc._fonts;
-      if (ctx.issuer && ctx.issuer.pdfFontTtfPath) {
-        try {
-          const path = require('path');
-          const fs = require('fs');
-          const raw = ctx.issuer.pdfFontTtfPath;
-          const candidates = [
-            path.isAbsolute(raw) ? raw : null,
-            path.join(process.cwd(), 'storage', raw.replace(/^\/+/, '')),
-            path.join(process.cwd(), 'storage', 'fonts', path.basename(raw)),
-          ].filter(Boolean);
-          const found = candidates.find((p) => { try { return fs.existsSync(p); } catch { return false; } });
-          if (found && /\.(ttf|otf)$/i.test(found)) {
-            doc.registerFont(CUSTOM_BODY, found);
-            // PDFKit can't synthesise bold from a regular face, so
-            // bold falls back to the same registered face. Admins who
-            // want a proper bold should upload an OTF/TTF that bakes
-            // it in — same convention as other PDF generators.
-            doc.registerFont(CUSTOM_BOLD, found);
-            doc._fonts = { body: CUSTOM_BODY, bold: CUSTOM_BOLD };
-            ctx.fonts = doc._fonts;
-          } else {
-            const logger = require('../utils/logger');
-            logger.warn('Custom PDF font path not usable; falling back to Helvetica', {
-              raw, resolved: found || null,
-            });
-          }
-        } catch (err) {
-          const logger = require('../utils/logger');
-          logger.warn('Failed to register custom PDF font', { err: err.message });
-        }
+      const registered = registerCustomFonts(doc, ctx.issuer);
+      if (registered) {
+        doc._fonts = registered;
+        ctx.fonts = registered;
       }
 
       // ---- header layout (DIN 5008 Form B) -------------------------
@@ -1632,5 +1660,5 @@ module.exports = {
   getPageMetrics,
   drawIssuerBlock,
   // Exposed for unit tests + advanced callers.
-  _internal: { formatMinor, formatDate, t },
+  _internal: { formatMinor, formatDate, t, registerCustomFonts },
 };

@@ -145,6 +145,11 @@ function transformProfile(p) {
     footerLine: p.footer_line || '',
     logoPath: p.logo_path || '',
     pdfFontTtfPath: p.pdf_font_ttf_path || '',
+    // Bundled-fonts dropdown (migration 121). NULL = no preference,
+    // Helvetica fallback. Surfaces the on-disk directory name (e.g.
+    // "Inter", "Playfair-Display"); pdfService maps it to the
+    // bundled TTFs at render time.
+    pdfFontFamily: p.pdf_font_family || null,
     pdfShowLogo: p.pdf_show_logo == null ? true : (p.pdf_show_logo === true || p.pdf_show_logo === 1 || p.pdf_show_logo === '1'),
     pdfShowCompanyName: p.pdf_show_company_name == null ? true : (p.pdf_show_company_name === true || p.pdf_show_company_name === 1 || p.pdf_show_company_name === '1'),
     pdfFoldingMarks: p.pdf_folding_marks || 'none',
@@ -338,7 +343,11 @@ router.put(
     body('defaultQrFormat').optional({ values: 'falsy' }).isIn(['swiss', 'epc', 'none']),
     body('footerLine').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
     body('logoPath').optional({ values: 'falsy' }).isString().isLength({ max: 512 }),
-    body('pdfFontTtfPath').optional({ values: 'falsy' }).isString().isLength({ max: 512 }),
+    // Bundled-fonts dropdown (migration 121). Free-text upload field
+    // (pdfFontTtfPath, migration 103) was retired from the UI in
+    // favour of this dropdown; the column stays in the DB so any
+    // legacy value continues to be honoured by pdfService.
+    body('pdfFontFamily').optional({ nullable: true, values: 'falsy' }).isString().isLength({ max: 128 }),
     // Visibility toggles use the explicit-undefined check pattern so
     // `false` actually reaches the service layer. `optional({ values:
     // 'falsy' })` would drop `false` and the toggle could never be
@@ -376,7 +385,7 @@ router.put(
       defaultQrFormat: 'default_qr_format',
       footerLine: 'footer_line',
       logoPath: 'logo_path',
-      pdfFontTtfPath: 'pdf_font_ttf_path',
+      pdfFontFamily: 'pdf_font_family',
       pdfShowLogo: 'pdf_show_logo',
       pdfShowCompanyName: 'pdf_show_company_name',
       pdfCompanyNameInline: 'pdf_company_name_inline',

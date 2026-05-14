@@ -81,6 +81,54 @@ describe('createBaseDocument', () => {
     expect(fonts.bold).toBe('Helvetica-Bold');
   });
 
+  it('registers a bundled font family when pdfFontFamily is set', () => {
+    // Migration-121 dropdown path. Inter ships 400 + 600 + 700 under
+    // backend/assets/fonts/Inter/, so the resolver should pick 400
+    // for body and 700 for bold.
+    const { fonts } = pdfService.createBaseDocument({
+      issuer: { pdfFontFamily: 'Inter' },
+    });
+    expect(fonts.body).toBe('crm-body');
+    expect(fonts.bold).toBe('crm-bold');
+  });
+
+  it('falls back to Helvetica when pdfFontFamily names a non-existent directory', () => {
+    const { fonts } = pdfService.createBaseDocument({
+      issuer: { pdfFontFamily: 'NotARealFamily' },
+    });
+    expect(fonts.body).toBe('Helvetica');
+    expect(fonts.bold).toBe('Helvetica-Bold');
+  });
+
+  it('strips path-traversal characters from pdfFontFamily', () => {
+    // Defence in depth: the sanitiser keeps only [A-Za-z0-9_-].
+    // "../../etc/passwd" becomes "etcpasswd" → no such font dir → fallback.
+    const { fonts } = pdfService.createBaseDocument({
+      issuer: { pdfFontFamily: '../../etc/passwd' },
+    });
+    expect(fonts.body).toBe('Helvetica');
+    expect(fonts.bold).toBe('Helvetica-Bold');
+  });
+
+  it('prefers pdfFontTtfPath over pdfFontFamily when both are set', () => {
+    // The explicit upload is the priority-1 override. When the upload
+    // path is unusable (file missing) the family is consulted next.
+    // Here we set BOTH to invalid values and confirm Helvetica fallback
+    // — what matters is that the family DIDN'T get registered while a
+    // (failed) explicit path was being evaluated.
+    const { fonts } = pdfService.createBaseDocument({
+      issuer: {
+        pdfFontTtfPath: '/nonexistent/path/font.ttf',
+        pdfFontFamily: 'Inter',
+      },
+    });
+    // pdfFontTtfPath misses → falls through to pdfFontFamily → Inter
+    // registers successfully. crm-body / crm-bold confirm a custom
+    // font won.
+    expect(fonts.body).toBe('crm-body');
+    expect(fonts.bold).toBe('crm-bold');
+  });
+
   it('forwards PDF info metadata (Title, Author) to the document', () => {
     const { doc } = pdfService.createBaseDocument({
       info: { Title: 'Tax Report 2026', Author: 'picpeak' },

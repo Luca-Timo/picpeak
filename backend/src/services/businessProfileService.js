@@ -42,11 +42,17 @@ const ALLOWED_PROFILE_FIELDS = [
   'default_qr_format',
   'footer_line',
   'logo_path',
-  // Custom TTF/OTF for the PDF renderer (migration 103). PDFKit only
-  // understands TTF/OTF; the bundled webfonts under assets/fonts are
-  // woff2 and can't be loaded directly. Absolute path or relative to
-  // storage/ root.
-  'pdf_font_ttf_path',
+  // Bundled-fonts dropdown (migration 121). Stores the on-disk
+  // directory name under backend/assets/fonts/ (e.g. "Inter",
+  // "Playfair-Display"). pdfService loads <family>/400.ttf as body
+  // and <family>/700.ttf as bold at render time.
+  //
+  // Note: the legacy `pdf_font_ttf_path` column (migration 103) is
+  // intentionally NOT in this whitelist anymore — the UI for setting
+  // it was retired in favour of the dropdown. Existing values keep
+  // working at render time (pdfService still reads the column with
+  // priority), but new writes go exclusively through pdf_font_family.
+  'pdf_font_family',
   // PDF letterhead visibility toggles (migration 106). Defaults true
   // to keep existing PDFs visually identical after the migration runs.
   'pdf_show_logo',
