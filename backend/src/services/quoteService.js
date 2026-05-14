@@ -363,6 +363,9 @@ async function listQuotes({ filters = {}, sort = 'newest', page = 1, pageSize = 
         'customer_accounts.first_name as customer_first_name',
         'customer_accounts.last_name as customer_last_name',
         'customer_accounts.company_name as customer_company_name',
+        // Surfaced so the route's transformQuote can compute the
+        // customer.isPassive flag. Hash itself never leaves the API.
+        'customer_accounts.password_hash as customer_password_hash',
       );
 
     if (Array.isArray(filters.status) && filters.status.length > 0) {
@@ -436,6 +439,8 @@ async function getQuoteById(id) {
         'customer_accounts.first_name as customer_first_name',
         'customer_accounts.last_name as customer_last_name',
         'customer_accounts.company_name as customer_company_name',
+        // For transformQuote.customer.isPassive — never leaves the API.
+        'customer_accounts.password_hash as customer_password_hash',
       )
       .first();
     if (!quote) return null;

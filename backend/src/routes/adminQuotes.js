@@ -69,6 +69,9 @@ function transformQuote(q) {
       firstName: q.customer_first_name,
       lastName: q.customer_last_name,
       companyName: q.customer_company_name,
+      // Passive customers (admin-only, no portal access) flagged
+      // by null password_hash. Hash itself is dropped here.
+      isPassive: q.customer_password_hash == null,
     },
     status: q.status,
     language: q.language,

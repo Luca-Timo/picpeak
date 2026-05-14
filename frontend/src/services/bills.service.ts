@@ -23,6 +23,10 @@ export interface InvoiceSummary {
     firstName: string | null;
     lastName: string | null;
     companyName: string | null;
+    /** Computed server-side from password_hash. true = admin-only
+     *  customer (no portal access). Drives the Passive badge that
+     *  appears next to the customer label across editor + lists. */
+    isPassive?: boolean;
   };
   sourceQuoteId: number | null;
   /** Human-readable quote number of the source quote (joined-in on read).

@@ -81,6 +81,10 @@ function transformInvoice(i) {
       firstName: i.customer_first_name,
       lastName: i.customer_last_name,
       companyName: i.customer_company_name,
+      // Passive customers (admin-only, no portal access) are
+      // identified by a null password_hash. We expose just the
+      // boolean — the hash itself is dropped here.
+      isPassive: i.customer_password_hash == null,
     },
     sourceQuoteId: i.source_quote_id,
     sourceQuoteNumber: i.source_quote_number || null,

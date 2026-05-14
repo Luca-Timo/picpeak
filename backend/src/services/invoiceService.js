@@ -171,6 +171,10 @@ async function listInvoices({ filters = {}, sort = 'newest', page = 1, pageSize 
         'customer_accounts.display_name as customer_display_name',
         'customer_accounts.first_name as customer_first_name',
         'customer_accounts.last_name as customer_last_name',
+        // Same isPassive-source as getInvoiceById — surfaced so list
+        // rows can render the Passive badge inline without an N+1
+        // round-trip.
+        'customer_accounts.password_hash as customer_password_hash',
         'customer_accounts.company_name as customer_company_name',
       );
 
@@ -240,6 +244,11 @@ async function getInvoiceById(id) {
         'customer_accounts.first_name as customer_first_name',
         'customer_accounts.last_name as customer_last_name',
         'customer_accounts.company_name as customer_company_name',
+        // Surfaced so the route's transformInvoice can compute the
+        // customer.isPassive flag (passwordHash == null). The hash
+        // itself never leaves the API — transformInvoice drops it
+        // and only exposes the boolean.
+        'customer_accounts.password_hash as customer_password_hash',
         'src_quote.quote_number as source_quote_number',
       )
       .first();
