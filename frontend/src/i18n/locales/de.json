@@ -2884,6 +2884,24 @@
     }
   },
   "customers": {
+    "create": {
+      "openLink": "+ Neuen Kunden erstellen",
+      "title": "Neuen Kunden erstellen",
+      "subtitle": "Geben Sie die Daten unten ein. Wählen Sie „Als passiven Kunden speichern“, um einen reinen Admin-Eintrag zu erstellen, oder „Speichern & Portal-Einladung senden“, um dem Kunden zusätzlich eine Einladungs-E-Mail zu schicken.",
+      "saveAsPassive": "Als passiven Kunden speichern",
+      "saveAndInvite": "Speichern & Portal-Einladung senden",
+      "savedPassiveToast": "Passiver Kunde erstellt.",
+      "savedActiveToast": "Kunde erstellt und Portal-Einladung gesendet.",
+      "inviteFailedToast": "Kunde gespeichert (passiv). Einladungs-E-Mail fehlgeschlagen — bitte aus dem Kundendetail erneut versuchen.",
+      "emailRequired": "Eine gültige E-Mail-Adresse ist erforderlich."
+    },
+    "passive": {
+      "badge": "Passiv — nur Admin",
+      "activeLabel": "Portalzugang aktiv",
+      "sendInvite": "Portal-Einladung senden",
+      "sendInviteToast": "Portal-Einladung gesendet.",
+      "alreadyActive": "Der Kunde hat bereits Portalzugang — keine Einladung nötig."
+    },
     "pageTitle": "Kunden",
     "pageSubtitle": "Wiederkehrende Kundenkonten, die sich unter /customer/login anmelden können.",
     "unnamed": "Unbenannt",

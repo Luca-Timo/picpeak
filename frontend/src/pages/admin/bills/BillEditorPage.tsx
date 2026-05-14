@@ -12,6 +12,7 @@ import { Button, Card, Loading, Input } from '../../../components/common';
 import { billsService, type InvoiceCreatePayload, type InvoiceQrFormat } from '../../../services/bills.service';
 import { quotesService } from '../../../services/quotes.service';
 import { businessProfileService } from '../../../services/businessProfile.service';
+import { InlineCustomerCreate } from '../../../components/admin/InlineCustomerCreate';
 import { LineItemsTable, type EditableLineItem } from '../../../components/admin/LineItemsTable';
 import { customerAdminService } from '../../../services/customerAdmin.service';
 import { userManagementService } from '../../../services/userManagement.service';
@@ -33,6 +34,9 @@ export const BillEditorPage: React.FC = () => {
   const [customerId, setCustomerId] = useState<number | null>(null);
   const [customerLabel, setCustomerLabel] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
+  // Toggle: when true, the customer card hides the search and shows
+  // the inline-create form (passive customer or "save & invite").
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [currency, setCurrency] = useState('CHF');
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState('');
@@ -284,6 +288,15 @@ export const BillEditorPage: React.FC = () => {
               {t('common.change', 'Change')}
             </Button>
           </div>
+        ) : creatingCustomer ? (
+          <InlineCustomerCreate
+            onCancel={() => setCreatingCustomer(false)}
+            onCreated={(c) => {
+              setCustomerId(c.id);
+              setCustomerLabel(c.companyName || c.displayName || c.email);
+              setCreatingCustomer(false);
+            }}
+          />
         ) : (
           <>
             <Input placeholder={t('bills.customerSearch', 'Search by email or company…') as string}
@@ -301,6 +314,13 @@ export const BillEditorPage: React.FC = () => {
                 ))}
               </ul>
             )}
+            <button
+              type="button"
+              onClick={() => setCreatingCustomer(true)}
+              className="mt-3 inline-flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:underline"
+            >
+              {t('customers.create.openLink', '+ Create new customer')}
+            </button>
           </>
         )}
       </Card>
