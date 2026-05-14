@@ -589,8 +589,12 @@ function drawLineItems(doc, ctx) {
     return {
       padding: ROW_PADDING,
       fontSize: ROW_FONT_SIZE,
-      borderWidth: ROW_BORDER_BOTTOM_WIDTH,
-      borderColor: ROW_BORDER_BOTTOM_COLOR,
+      // Border is set by the caller (buildGroupRows) so the LAST row
+      // of each "group" (parent + sub-items + their details_text
+      // rows) carries the divider, and the rows above it leave the
+      // bottom edge empty. Without this, every row gets its own line
+      // and parent + sub-items look like separate items.
+      borderWidth: [0, 0, 0, 0],
       columns: showDiscount
         ? [
             { text: posLabel,                                          width: widths[0], align: 'left'  },
@@ -666,14 +670,47 @@ function drawLineItems(doc, ctx) {
         ],
   };
 
-  // Expand each line item into [itemRow] + optional [detailsRow] so
-  // the details_text flows directly below its parent in the table.
+  // Group rows so a parent + its sub-items + every involved details_text
+  // share ONE bottom divider drawn after the entire group. Without
+  // this grouping, each row (parent, sub-item, details) gets its own
+  // divider and the visual cohesion is lost — sub-items look like
+  // independent line items, and a details block looks orphaned below
+  // its parent's divider.
+  //
+  // Algorithm:
+  //   - Iterate items in their array order (already grouped by the
+  //     editor: parent → its sub-items → next parent).
+  //   - Collect each parent's row + its details row + every sub-item's
+  //     row + sub-items' details rows into a single "group" array.
+  //   - Apply the bottom border ONLY to the last row of each group.
   const dataRows = [];
+  const groups = [];
+  let currentGroup = null;
   for (const li of lineItems) {
-    dataRows.push(buildItemRow(li));
-    if (li.detailsText && String(li.detailsText).trim().length > 0) {
-      dataRows.push(buildDetailsRow(String(li.detailsText).trim()));
+    const isSubItem = li.parentLineItemId != null || li.parentPosition != null;
+    if (!isSubItem) {
+      // Start a new group at every top-level item.
+      currentGroup = [];
+      groups.push(currentGroup);
+    } else if (!currentGroup) {
+      // Defensive: if the array starts with an orphaned sub-item
+      // (shouldn't happen — validateLineItemHierarchy rejects this)
+      // give it its own group rather than crashing.
+      currentGroup = [];
+      groups.push(currentGroup);
     }
+    currentGroup.push(buildItemRow(li));
+    if (li.detailsText && String(li.detailsText).trim().length > 0) {
+      currentGroup.push(buildDetailsRow(String(li.detailsText).trim()));
+    }
+  }
+  // Apply the bottom border to the last row of each group.
+  for (const group of groups) {
+    if (group.length === 0) continue;
+    const last = group[group.length - 1];
+    last.borderWidth = ROW_BORDER_BOTTOM_WIDTH;
+    last.borderColor = ROW_BORDER_BOTTOM_COLOR;
+    for (const row of group) dataRows.push(row);
   }
 
   const table = new Table({

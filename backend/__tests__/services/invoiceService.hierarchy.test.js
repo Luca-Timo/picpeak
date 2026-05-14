@@ -61,9 +61,17 @@ describe('quote → invoice cloner shape', () => {
     // Recreate the inner math from scheduleInvoicesForEvent: sum
     // only line_total_minor where parent_position is null. Sub-items
     // would otherwise double-count and skew the adjustment.
+    //
+    // Note: the cloner stores raw line_total_minor on each row from
+    // the source quote. By the time this sum runs, the parent's
+    // line_total_minor has already been resolved upstream (via
+    // computeTotals on the quote at save time) — so iterating
+    // top-level only sums the resolved parent totals + standalone
+    // top-level items. Sub-items never contribute here regardless of
+    // whether their parent's total was auto-resolved or not.
     const cloned = modelCloner([
-      // Top-level parent €500
-      { position: 1, unit_price_minor: 50000, line_total_minor: 50000, parent_position: null },
+      // Parent — resolved line_total assumed to be €450 (sum of priced sub-items below)
+      { position: 1, unit_price_minor: 0, line_total_minor: 45000, parent_position: null },
       // Sub-items €150 + €200 + €100 — shown for transparency, must
       // NOT enter the reconciliation sum.
       { position: 2, unit_price_minor: 15000, line_total_minor: 15000, parent_position: 1 },
@@ -75,8 +83,8 @@ describe('quote → invoice cloner shape', () => {
     const clonedSum = cloned
       .filter((x) => x.parent_position == null)
       .reduce((s, x) => s + x.line_total_minor, 0);
-    // Top-level only: 50000 + 10000 = 60000. NOT 95000.
-    expect(clonedSum).toBe(60000);
+    // Top-level only: 45000 (resolved parent) + 10000 = 55000. NOT 100000.
+    expect(clonedSum).toBe(55000);
   });
 });
 

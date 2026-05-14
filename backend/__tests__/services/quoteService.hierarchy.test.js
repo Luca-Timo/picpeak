@@ -11,22 +11,52 @@ const {
   insertLineItemsHierarchical,
 } = quoteService._internal;
 
-describe('computeTotals — hierarchy rule', () => {
-  it('sums only top-level items into net (sub-items are display-only)', () => {
+describe('computeTotals — hierarchy + parent auto-resolve rule', () => {
+  it('parent total auto-resolves to sum of priced sub-items (parent unit_price ignored)', () => {
     const items = [
-      // Top-level parent: €500
+      // Parent with its own price €500 — should be IGNORED because
+      // sub-items have prices. Parent's effective line_total becomes
+      // sum of priced sub-items.
       { position: 1, quantity: 1, unit_price_minor: 50000, discount_percent: 0 },
-      // Sub-items under position 1 — itemised but not summed
+      // Priced sub-items €150 + €200 = €350
       { position: 2, quantity: 1, unit_price_minor: 15000, discount_percent: 0, parent_position: 1 },
       { position: 3, quantity: 1, unit_price_minor: 20000, discount_percent: 0, parent_position: 1 },
       // Another top-level item: €100
       { position: 4, quantity: 2, unit_price_minor: 5000, discount_percent: 0 },
     ];
     const out = computeTotals(items, 0, 0);
-    // Net = 50000 (parent 1) + 10000 (top-level row 4 = 2×5000) = 60000.
-    // Sub-items at positions 2 and 3 are EXCLUDED from net.
-    expect(out.netAmountMinor).toBe(60000);
-    expect(out.totalAmountMinor).toBe(60000);
+    // Net = 35000 (parent 1, auto-resolved) + 10000 (row 4) = 45000.
+    // Parent's own €500 is silently overridden.
+    expect(out.netAmountMinor).toBe(45000);
+    // Parent's stored line_total_minor reflects the resolved sum.
+    expect(out.lineItems[0].line_total_minor).toBe(35000);
+  });
+
+  it('priceless sub-items leave the parent\'s own line_total intact', () => {
+    const items = [
+      // Parent €500 with three priceless transparency-bullets — the
+      // €500 stands.
+      { position: 1, quantity: 1, unit_price_minor: 50000, discount_percent: 0 },
+      { position: 2, quantity: 1, unit_price_minor: 0, discount_percent: 0, parent_position: 1 },
+      { position: 3, quantity: 1, unit_price_minor: 0, discount_percent: 0, parent_position: 1 },
+    ];
+    const out = computeTotals(items, 0, 0);
+    expect(out.netAmountMinor).toBe(50000);
+    expect(out.lineItems[0].line_total_minor).toBe(50000);
+  });
+
+  it('mixed priced + priceless sub-items: only priced contribute, parent\'s own price still overridden', () => {
+    const items = [
+      // Parent €500 → overridden because at least one sub-item is priced.
+      { position: 1, quantity: 1, unit_price_minor: 50000, discount_percent: 0 },
+      { position: 2, quantity: 1, unit_price_minor: 15000, discount_percent: 0, parent_position: 1 },
+      // Priceless bullet — doesn't add anything
+      { position: 3, quantity: 1, unit_price_minor: 0, discount_percent: 0, parent_position: 1 },
+    ];
+    const out = computeTotals(items, 0, 0);
+    // Parent resolves to €150 (only priced sub-item).
+    expect(out.netAmountMinor).toBe(15000);
+    expect(out.lineItems[0].line_total_minor).toBe(15000);
   });
 
   it('still computes line_total_minor on sub-items so the renderer can show it', () => {
@@ -37,15 +67,16 @@ describe('computeTotals — hierarchy rule', () => {
     expect(out.lineItems[1].line_total_minor).toBe(27000); // 2 × 150.00 × 0.9 = 270.00
   });
 
-  it('applies VAT only to top-level subtotal', () => {
+  it('applies VAT to the resolved parent total', () => {
     const out = computeTotals([
+      // Parent €1000 overridden by priced €800 sub-item
       { position: 1, quantity: 1, unit_price_minor: 100000, discount_percent: 0 },
       { position: 2, quantity: 1, unit_price_minor: 80000, discount_percent: 0, parent_position: 1 },
     ], 7.7);
-    // Net = 100000, VAT = 7700, no contribution from the €800 sub-item.
-    expect(out.netAmountMinor).toBe(100000);
-    expect(out.vatAmountMinor).toBe(7700);
-    expect(out.totalAmountMinor).toBe(107700);
+    // Resolved net = 80000, VAT 7.7% = 6160.
+    expect(out.netAmountMinor).toBe(80000);
+    expect(out.vatAmountMinor).toBe(6160);
+    expect(out.totalAmountMinor).toBe(86160);
   });
 
   it('treats empty-string parent_position as top-level (frontend may send "")', () => {

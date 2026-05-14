@@ -483,17 +483,16 @@ router.put(
     }
 
     if (Array.isArray(payload.lineItems)) {
-      // Recompute everything authoritatively. Only TOP-LEVEL line
-      // items (parent_position == null) contribute to net — sub-items
-      // are display-only itemisation under their parent. Migration 119.
-      let net = 0;
+      // Recompute everything authoritatively. Migration 119 — sub-
+      // items don't roll into net directly; parent totals auto-
+      // resolve from priced sub-items via resolveParentTotalsFromSubItems
+      // (shared helper in quoteService._internal).
       const items = payload.lineItems.map((li, idx) => {
         const qty = Number(li.quantity || 1);
         const unit = parseInt(li.unit_price_minor, 10) || 0;
         const disc = Number(li.discount_percent || 0);
         const lineTotal = Math.round(Math.round(qty * unit) * (1 - disc / 100));
         const isSubItem = li.parent_position != null && li.parent_position !== '';
-        if (!isSubItem) net += lineTotal;
         return {
           position: parseInt(li.position, 10) || (idx + 1),
           quantity: qty,
@@ -505,6 +504,12 @@ router.put(
           details_text: li.details_text || null,
         };
       });
+      const { resolveParentTotalsFromSubItems } = require('../services/quoteService')._internal;
+      resolveParentTotalsFromSubItems(items);
+      let net = 0;
+      for (const it of items) {
+        if (it.parent_position == null) net += parseInt(it.line_total_minor, 10) || 0;
+      }
       const vatRate = Number(payload.vatRate ?? existing.vat_rate ?? 0);
       const vatAmount = Math.round(net * vatRate / 100);
       const shipping = parseInt(payload.shippingAmountMinor ?? existing.shipping_amount_minor ?? 0, 10);

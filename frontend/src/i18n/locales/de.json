@@ -3182,7 +3182,9 @@
       "addSubItem": "Unterposition hinzufügen",
       "detailsAdd": "+ Notiz / Details hinzufügen",
       "detailsFilled": "Details",
-      "detailsPlaceholder": "Optionale Notizen — Kleingedrucktes, Paketinhalte, Bedingungen…"
+      "detailsPlaceholder": "Optionale Notizen — Kleingedrucktes, Paketinhalte, Bedingungen…",
+      "autoTotaledHint": "Summe automatisch aus den Unterpositionen berechnet",
+      "autoTotaledNote": "= Σ Unterpositionen"
     }
   },
   "bills": {

@@ -3182,7 +3182,9 @@
       "addSubItem": "Add sub-item",
       "detailsAdd": "+ Add details / notes",
       "detailsFilled": "Details",
-      "detailsPlaceholder": "Optional notes — fine print, package inclusions, conditions…"
+      "detailsPlaceholder": "Optional notes — fine print, package inclusions, conditions…",
+      "autoTotaledHint": "Total auto-computed from sub-items below",
+      "autoTotaledNote": "= sum of sub-items"
     }
   },
   "bills": {
