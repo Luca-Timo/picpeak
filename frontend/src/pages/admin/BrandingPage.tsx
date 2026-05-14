@@ -978,8 +978,15 @@ export const BrandingPage: React.FC = () => {
             </label>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left side - Theme Customizer (+ PDF typography below) */}
-            <div className="space-y-6">
+            {/* Left side - Theme Customizer.
+                The PDF typography card is injected via the
+                customizer's `slotBeforeCustomCss` so it sits
+                immediately after the web Typography & Style section
+                and before the (often bulky) Custom CSS editor —
+                keeps all typography choices visually grouped.
+                Hidden when no PDF-producing feature is on; persisted
+                via the top-level Save button (handleSave). */}
+            <div>
               <ThemeCustomizerEnhanced
                 value={currentTheme}
                 onChange={handleThemeChange}
@@ -989,18 +996,12 @@ export const BrandingPage: React.FC = () => {
                 hideActions={true}
                 forceColorMode={brandingSettings.force_color_mode ?? null}
                 onForceColorModeChange={handleForceColorModeChange}
+                slotBeforeCustomCss={
+                  (flags.quotes || flags.bills || flags.taxReport)
+                    ? <PdfTypographyCard value={pdfFontFamily} onChange={setPdfFontFamily} />
+                    : null
+                }
               />
-              {/* PDF typography — sits directly beneath the web
-                  typography customizer so the two visually pair.
-                  Hidden when no PDF-producing feature is on: the
-                  setting has no surface to apply to. Persisted via
-                  the top-level Save button (handleSave). */}
-              {(flags.quotes || flags.bills || flags.taxReport) && (
-                <PdfTypographyCard
-                  value={pdfFontFamily}
-                  onChange={setPdfFontFamily}
-                />
-              )}
             </div>
 
             {/* Right side - Gallery Preview */}

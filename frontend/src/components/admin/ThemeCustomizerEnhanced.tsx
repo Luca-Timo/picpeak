@@ -66,6 +66,12 @@ interface ThemeCustomizerEnhancedProps {
   // only the colour tokens swap, layout/header/typography stay put so an
   // admin who's already arranged the structure can pull just the palette.
   onSyncFromBranding?: () => void;
+  // Optional render slot inserted between the Typography & Style /
+  // CSS Templates section and the Event-specific Custom CSS card.
+  // Used by BrandingPage to slot in unrelated cards (PDF typography)
+  // so they live with the other typography choices rather than after
+  // the always-bulky Custom CSS editor.
+  slotBeforeCustomCss?: React.ReactNode;
 }
 
 /**
@@ -174,7 +180,8 @@ export const ThemeCustomizerEnhanced: React.FC<ThemeCustomizerEnhancedProps> = (
   onCssTemplateChange,
   forceColorMode,
   onForceColorModeChange,
-  onSyncFromBranding
+  onSyncFromBranding,
+  slotBeforeCustomCss
 }) => {
   const { t } = useTranslation();
   const [localTheme, setLocalTheme] = useState<ThemeConfig>(value);
@@ -1363,6 +1370,11 @@ export const ThemeCustomizerEnhanced: React.FC<ThemeCustomizerEnhancedProps> = (
           </div>
         </Card>
       )}
+
+      {/* Caller-provided slot — used by BrandingPage to keep the
+          PDF typography card adjacent to the web typography section
+          instead of trailing the (often-collapsed) Custom CSS block. */}
+      {slotBeforeCustomCss}
 
       {/* Event-specific Custom CSS */}
       <Card className="p-6">
