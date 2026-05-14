@@ -869,15 +869,30 @@ async function renderInvoicePdfBuffer(invoiceId) {
 async function renderInvoicePdfFromPayload(payload) {
   const customer = await db('customer_accounts').where({ id: payload.customerAccountId }).first();
   const lineItems = Array.isArray(payload.lineItems) ? payload.lineItems : [];
-  let netMinor = 0;
+  // Migration 119 — preview must match the saved-invoice math:
+  //   - Compute every row's raw line_total_minor (qty × unit × discount).
+  //   - Then resolveParentTotalsFromSubItems rewrites each parent's
+  //     line_total to the sum of its priced sub-items (parent's own
+  //     unit_price is ignored when any sub-item has a price).
+  //   - Net sums TOP-LEVEL items only (parent_position == null).
+  // Without these two steps, the preview shows the parent at 0 and
+  // double-counts sub-items into net, neither of which matches the
+  // values the renderer would produce for the persisted invoice.
   const items = lineItems.map((li, idx) => {
     const qty = ensureNumber(li.quantity, 1);
     const unit = ensureInt(li.unit_price_minor);
     const discount = ensureNumber(li.discount_percent, 0);
     const lineTotal = Math.round(Math.round(qty * unit) * (1 - discount / 100));
-    netMinor += lineTotal;
     return { ...li, position: li.position || idx + 1, line_total_minor: lineTotal };
   });
+  const { resolveParentTotalsFromSubItems } = getHierarchyHelpers();
+  resolveParentTotalsFromSubItems(items);
+  let netMinor = 0;
+  for (const it of items) {
+    if (it.parent_position == null || it.parent_position === '') {
+      netMinor += ensureInt(it.line_total_minor);
+    }
+  }
   const vatRate = ensureNumber(payload.vatRate, 0);
   const vatMinor = Math.round(netMinor * vatRate / 100);
   const shippingMinor = ensureInt(payload.shippingAmountMinor);
