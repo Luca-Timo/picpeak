@@ -192,12 +192,27 @@ export const InlineCustomerCreate: React.FC<Props> = ({ onCreated, onCancel }) =
           value={form.companyName}
           onChange={setField('companyName')}
         />
-        <Input
-          label={t('customers.detail.salutation', 'Salutation') as string}
-          value={form.salutation}
-          onChange={setField('salutation')}
-          placeholder="Herr / Frau / Mr / Mrs"
-        />
+        <div>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            {t('customers.detail.salutation', 'Salutation')}
+          </label>
+          {/* Salutation values are stored verbatim ("Herr", "Frau",
+              "Mx", "Dr") — canonical tokens across locales. Display
+              labels are translated; the option's value stays in the
+              German form so the same key works regardless of which
+              locale the admin is editing in. Matches CustomerDetailPage. */}
+          <select
+            value={form.salutation}
+            onChange={setField('salutation')}
+            className="w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100"
+          >
+            <option value="">{t('customer.profile.salutation.none', '— Not specified —')}</option>
+            <option value="Herr">{t('customer.profile.salutation.herr', 'Mr.')}</option>
+            <option value="Frau">{t('customer.profile.salutation.frau', 'Ms.')}</option>
+            <option value="Mx">{t('customer.profile.salutation.mx', 'Mx')}</option>
+            <option value="Dr">{t('customer.profile.salutation.dr', 'Dr.')}</option>
+          </select>
+        </div>
         <Input
           label={t('customers.detail.phone', 'Phone') as string}
           value={form.phone}
