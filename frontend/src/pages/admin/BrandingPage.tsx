@@ -8,12 +8,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { settingsService, type BrandingSettings } from '../../services/settings.service';
 import { useTranslation } from 'react-i18next';
 import { buildResourceUrl } from '../../utils/url';
-import { useFeatureEnabled } from '../../contexts/FeatureFlagsContext';
+import { useFeatureEnabled, useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { CustomerDashboardBrandingCard } from '../../components/admin/CustomerDashboardBrandingCard';
+import { PdfTypographyCard } from '../../components/admin/PdfTypographyCard';
 
 export const BrandingPage: React.FC = () => {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
+  // Used to gate the PDF typography card — when no PDF-producing
+  // feature is enabled the setting has no surface to apply to.
+  const { flags } = useFeatureFlags();
   const [brandingSettings, setBrandingSettings] = useState<BrandingSettings>({
     company_name: '',
     company_tagline: '',
@@ -947,14 +951,23 @@ export const BrandingPage: React.FC = () => {
                 <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
                   {t('branding.livePreview')}
                 </h3>
-                <GalleryPreview 
+                <GalleryPreview
                   theme={currentTheme}
                   branding={brandingSettings}
-                  className="shadow-lg" 
+                  className="shadow-lg"
                 />
               </Card>
             </div>
           </div>
+
+          {/* PDF typography — sits directly after the web typography
+              section. Hidden when no PDF-producing feature is on:
+              the setting has no surface to apply to. */}
+          {(flags.quotes || flags.bills || flags.taxReport) && (
+            <div className="mt-6">
+              <PdfTypographyCard />
+            </div>
+          )}
         </div>
 
         {/* Event-Specific Themes Info */}

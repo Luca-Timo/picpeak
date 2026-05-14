@@ -274,6 +274,7 @@ async function loadRenderContext(locale) {
     vatId: profile.vat_id,
     logoPath: profile.logo_path,
     pdfFontTtfPath: profile.pdf_font_ttf_path,
+    pdfFontFamily: profile.pdf_font_family || null,
     showLogo: profile.pdf_show_logo == null ? true
       : (profile.pdf_show_logo === true || profile.pdf_show_logo === 1 || profile.pdf_show_logo === '1'),
     showCompanyName: profile.pdf_show_company_name == null ? true

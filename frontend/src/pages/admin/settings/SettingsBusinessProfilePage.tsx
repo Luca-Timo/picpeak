@@ -154,14 +154,13 @@ export const SettingsBusinessProfilePage: React.FC = () => {
               <option value="both">{t('businessProfile.foldingMarks.both', 'All three marks')}</option>
             </select>
           </div>
-          {/* Custom PDF font — TTF/OTF only. PDFKit doesn't read
-              woff2 (the bundled webfonts under assets/fonts), so the
-              admin needs to drop a real TTF/OTF under storage/fonts/
-              and reference it here. Blank = Helvetica. */}
-          <Input label={t('businessProfile.field.pdfFontTtfPath', 'PDF font (TTF/OTF, optional)') as string}
-            value={profile.pdfFontTtfPath || ''}
-            placeholder="fonts/MyBrand-Regular.ttf"
-            onChange={(e) => setProfile({ ...profile, pdfFontTtfPath: e.target.value })} />
+          {/* PDF font selection lives on Settings → Branding now
+              (migration 121, "PDF typography" card). The legacy
+              free-text TTF path input was retired in favour of the
+              bundled-fonts dropdown there. The column
+              `pdf_font_ttf_path` stays on the row as a power-user
+              override that the PDF renderer still honours when
+              populated directly in the DB. */}
         </div>
 
         {/* PDF letterhead visibility toggles — let the admin suppress
