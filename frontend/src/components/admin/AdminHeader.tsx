@@ -35,6 +35,12 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick }) => {
   const companyName = brandingSettings?.branding_company_name?.trim() || 'PicPeak';
   const logoUrl = brandingSettings?.branding_logo_url?.trim();
   const logoDisplayMode = brandingSettings?.branding_logo_display_mode || 'logo_and_text';
+  // When Branding > Logo Position = "Sidebar", the logo has moved into
+  // the admin sidebar's brand row — suppress it here so it doesn't
+  // double up in the header. The company-name text still follows
+  // logo_display_mode so admins who picked 'logo_and_text' keep
+  // seeing the wordmark up top.
+  const logoInSidebar = brandingSettings?.branding_logo_position === 'sidepanel';
   const resolvedLogoUrl = logoUrl
     ? (logoUrl.startsWith('http') ? logoUrl : buildResourceUrl(logoUrl))
     : '/picpeak-kamera-transparent.png';
@@ -91,9 +97,11 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick }) => {
               <Menu className="w-6 h-6" />
             </button>
 
-            {/* Logo - sticky to the left on all sizes */}
+            {/* Logo - sticky to the left on all sizes.
+                Logo image is suppressed here when logoInSidebar is on
+                (it's rendered in the AdminSidebar brand row instead). */}
             <div className="flex items-center gap-2">
-              {(logoDisplayMode === 'logo_only' || logoDisplayMode === 'logo_and_text') && (
+              {!logoInSidebar && (logoDisplayMode === 'logo_only' || logoDisplayMode === 'logo_and_text') && (
                 <img src={resolvedLogoUrl} alt={companyName} className="h-8 w-auto object-contain" />
               )}
               {(logoDisplayMode === 'text_only' || logoDisplayMode === 'logo_and_text') && (
