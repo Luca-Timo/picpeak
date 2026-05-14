@@ -556,7 +556,7 @@ function drawLineItems(doc, ctx) {
   //   - Top-level items get a numeric position (1, 2, 3...) and their
   //     line_total renders in full weight.
   //   - Sub-items render with an empty position column, the
-  //     description indented with a small arrow prefix ("↳ "), and
+  //     description indented with a bullet prefix ("• "), and
   //     their line_total wrapped in parentheses to mark it as
   //     display-only (doesn't roll into net). Sub-items with
   //     unit_price = 0 render the price columns empty.
@@ -576,7 +576,13 @@ function drawLineItems(doc, ctx) {
   const buildItemRow = (li) => {
     const isSubItem = li.parentLineItemId != null || li.parentPosition != null;
     const posLabel = isSubItem ? '' : String(++topLevelCount);
-    const descText = isSubItem ? `↳ ${li.description || ''}` : (li.description || '');
+    // Bullet (U+2022) is part of the WinAnsi character set that
+    // PDFKit's built-in Helvetica supports, unlike the earlier "↳"
+    // (U+21B3) which rendered as the font's .notdef glyph ("!3").
+    // Custom TTFs registered via business_profile.pdf_font_ttf_path
+    // typically include the arrow too, but the bullet is the safe
+    // common-denominator that always renders.
+    const descText = isSubItem ? `\u2022 ${li.description || ''}` : (li.description || '');
     const subItemPriceless = isSubItem && (!li.unitPriceMinor || Number(li.unitPriceMinor) === 0);
     const unitText = subItemPriceless ? '' : formatMinor(li.unitPriceMinor, currency, intlLocale);
     const lineTotalText = subItemPriceless
