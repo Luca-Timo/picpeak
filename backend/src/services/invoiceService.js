@@ -769,6 +769,10 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       unitPriceMinor: li.unit_price_minor,
       discountPercent: li.discount_percent,
       lineTotalMinor: li.line_total_minor,
+      // Migration 119 — hierarchy + notes flow through to PDF.
+      parentLineItemId: li.parent_line_item_id || null,
+      parentPosition: li.parent_position == null ? null : Number(li.parent_position),
+      detailsText: li.details_text || null,
     })),
     totals: {
       netAmountMinor: invoice.net_amount_minor,

@@ -215,15 +215,55 @@ export const QuoteResponsePage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {q!.lineItems.map((li) => (
-                <tr key={li.position} className="border-b border-neutral-100 dark:border-neutral-700/70">
-                  <td className="py-2">{li.position}</td>
-                  <td className="py-2 whitespace-pre-line">{li.description}</td>
-                  <td className="py-2 text-right">{Number(li.quantity)}</td>
-                  <td className="py-2 text-right tabular-nums">{formatMoney(Number(li.unitPriceMinor) / 100, q!.currency)}</td>
-                  <td className="py-2 text-right tabular-nums">{formatMoney(Number(li.lineTotalMinor) / 100, q!.currency)}</td>
-                </tr>
-              ))}
+              {(() => {
+                // Migration 119 — sub-items + details_text. Top-level
+                // items get a numeric position; sub-items show empty
+                // position + indented description + parenthesised
+                // (display-only) line total. A non-empty detailsText
+                // renders as a small italic grey line directly below
+                // its parent. Sub-items with unit_price = 0 leave the
+                // price columns empty (transparency list only).
+                let topCount = 0;
+                const rows: React.ReactNode[] = [];
+                for (const li of q!.lineItems) {
+                  const isSub = li.parentLineItemId != null || li.parentPosition != null;
+                  if (!isSub) topCount += 1;
+                  const priceless = isSub && (!li.unitPriceMinor || Number(li.unitPriceMinor) === 0);
+                  rows.push(
+                    <tr key={`row-${li.position}`} className={`border-b border-neutral-100 dark:border-neutral-700/70 ${
+                      isSub ? 'text-neutral-600 dark:text-neutral-400' : ''
+                    }`}>
+                      <td className="py-2">{isSub ? '' : topCount}</td>
+                      <td className={`py-2 whitespace-pre-line ${isSub ? 'pl-6' : ''}`}>
+                        {isSub ? '↳ ' : ''}{li.description}
+                      </td>
+                      <td className="py-2 text-right">{Number(li.quantity)}</td>
+                      <td className="py-2 text-right tabular-nums">
+                        {priceless ? '' : formatMoney(Number(li.unitPriceMinor) / 100, q!.currency)}
+                      </td>
+                      <td className={`py-2 text-right tabular-nums ${isSub ? 'italic' : ''}`}>
+                        {priceless
+                          ? ''
+                          : isSub
+                            ? `(${formatMoney(Number(li.lineTotalMinor) / 100, q!.currency)})`
+                            : formatMoney(Number(li.lineTotalMinor) / 100, q!.currency)}
+                      </td>
+                    </tr>
+                  );
+                  if (li.detailsText && String(li.detailsText).trim().length > 0) {
+                    rows.push(
+                      <tr key={`details-${li.position}`} className="border-b border-neutral-100 dark:border-neutral-700/70">
+                        <td className="py-1"></td>
+                        <td className={`py-1 text-xs italic text-neutral-500 dark:text-neutral-400 whitespace-pre-line ${isSub ? 'pl-10' : 'pl-4'}`}
+                          colSpan={4}>
+                          {li.detailsText}
+                        </td>
+                      </tr>
+                    );
+                  }
+                }
+                return rows;
+              })()}
             </tbody>
           </table>
 

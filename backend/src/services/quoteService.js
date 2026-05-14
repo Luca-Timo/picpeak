@@ -741,6 +741,12 @@ async function buildRenderContext(quote, lineItems) {
       unitPriceMinor: li.unit_price_minor,
       discountPercent: li.discount_percent,
       lineTotalMinor: li.line_total_minor,
+      // Migration 119 hierarchy + details — surfaced to the PDF
+      // renderer so drawLineItems can indent sub-items + render
+      // details_text below.
+      parentLineItemId: li.parent_line_item_id || null,
+      parentPosition: li.parent_position == null ? null : Number(li.parent_position),
+      detailsText: li.details_text || null,
     })),
     totals: {
       netAmountMinor: quote.net_amount_minor,

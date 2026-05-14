@@ -104,6 +104,10 @@ function buildPayload(f: FormState): QuoteCreatePayload {
       description: li.description,
       unitPriceMinor: toMinor(li.unitPrice),
       discountPercent: li.discountPercent,
+      // Migration 119 — sub-items + details. Pass through to backend
+      // so the hierarchy survives save → reload.
+      parentPosition: li.parentPosition ?? null,
+      detailsText: li.detailsText || null,
     })),
   };
 }
@@ -186,6 +190,8 @@ export const QuoteEditorPage: React.FC = () => {
           description: li.description,
           unitPrice: Number(li.unitPriceMinor || 0) / 100,
           discountPercent: Number(li.discountPercent || 0),
+          parentPosition: li.parentPosition ?? null,
+          detailsText: li.detailsText || '',
         })),
       });
     }
