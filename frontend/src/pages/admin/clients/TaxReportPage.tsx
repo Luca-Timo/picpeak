@@ -345,8 +345,15 @@ export const TaxReportPage: React.FC = () => {
               The totals card now lives in the top-right of the page
               header so this section is purely the invoice list. */}
           <Card padding="none">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            {/* Two nested wrappers: the OUTER clips the header row's
+                solid fill so the top corners stay rounded (matches
+                the Card's own rounded-xl). The INNER provides
+                horizontal scroll when the table is wider than the
+                viewport. Combining `overflow-hidden` + `overflow-x-auto`
+                on a single element would cancel the auto-scroll. */}
+            <div className="rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
                 <thead className="bg-neutral-50 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300">
                   <tr>
                     <th className="px-2 py-2 text-right font-medium w-10">#</th>
@@ -399,6 +406,7 @@ export const TaxReportPage: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           </Card>
         </>
