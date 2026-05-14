@@ -24,6 +24,41 @@ const { handleAsync, validateRequest, successResponse } = require('../utils/rout
 const { getStoragePath } = require('../config/storage');
 const businessProfileService = require('../services/businessProfileService');
 const { db } = require('../database/db');
+const { validateIban } = require('../utils/iban');
+
+/**
+ * express-validator custom rule that runs the ISO 13616 IBAN check
+ * AND normalises the value on the request body so the service-layer
+ * insert/update stores the canonical spaceless uppercase form. Lets
+ * admins paste IBANs with spaces ("CH93 0076 ...") without the
+ * uniqueness/render code having to re-normalise downstream.
+ *
+ * Used by both POST and PUT /bank-accounts. Pass `required: true` on
+ * POST (IBAN is mandatory there) and `required: false` on PUT (admin
+ * may be patching other fields without touching the IBAN).
+ */
+function ibanValidator({ required }) {
+  return (value, { req }) => {
+    if (value == null || value === '') {
+      if (required) throw new Error('IBAN is required');
+      return true;
+    }
+    const result = validateIban(value);
+    if (!result.valid) {
+      const reasonText = {
+        EMPTY:    'IBAN is required',
+        FORMAT:   'IBAN format is invalid (expected country code + check digits + account)',
+        LENGTH:   'IBAN has the wrong length for this country',
+        CHECKSUM: 'IBAN checksum is invalid — please check for typos',
+      }[result.reason] || 'IBAN is invalid';
+      throw new Error(reasonText);
+    }
+    // Persist the normalised value so the DB never sees a
+    // user-typed space.
+    req.body.iban = result.normalized;
+    return true;
+  };
+}
 
 const router = express.Router();
 
@@ -354,7 +389,8 @@ router.post(
   '/bank-accounts',
   requirePermission('settings.edit'),
   [
-    body('iban').isString().isLength({ min: 5, max: 64 }).withMessage('IBAN is required'),
+    body('iban').isString().isLength({ min: 5, max: 64 }).withMessage('IBAN is required')
+      .bail().custom(ibanValidator({ required: true })),
     body('label').optional({ values: 'falsy' }).isString().isLength({ max: 128 }),
     body('accountHolder').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
     body('bic').optional({ values: 'falsy' }).isString().isLength({ max: 16 }),
@@ -382,7 +418,8 @@ router.put(
   requirePermission('settings.edit'),
   [
     param('id').isInt({ min: 1 }),
-    body('iban').optional({ values: 'falsy' }).isString().isLength({ min: 5, max: 64 }),
+    body('iban').optional({ values: 'falsy' }).isString().isLength({ min: 5, max: 64 })
+      .bail().custom(ibanValidator({ required: false })),
     body('label').optional({ values: 'falsy' }).isString().isLength({ max: 128 }),
     body('accountHolder').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
     body('bic').optional({ values: 'falsy' }).isString().isLength({ max: 16 }),
