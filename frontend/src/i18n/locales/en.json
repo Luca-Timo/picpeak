@@ -3237,7 +3237,8 @@
       "vatRate": "VAT rate %",
       "shipping": "Shipping",
       "currency": "Currency",
-      "ccPdfEmail": "CC PDF to (extra recipient)"
+      "ccPdfEmail": "CC PDF to (extra recipient)",
+      "sourceQuote": "From quote"
     },
     "section": {
       "lineItems": "Line items",

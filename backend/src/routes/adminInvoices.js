@@ -83,6 +83,7 @@ function transformInvoice(i) {
       companyName: i.customer_company_name,
     },
     sourceQuoteId: i.source_quote_id,
+    sourceQuoteNumber: i.source_quote_number || null,
     eventId: i.event_id,
     language: i.language,
     currency: i.currency,

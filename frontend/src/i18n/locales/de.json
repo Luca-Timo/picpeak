@@ -3210,7 +3210,8 @@
       "vatRate": "MwSt-Satz %",
       "shipping": "Versand",
       "currency": "Währung",
-      "ccPdfEmail": "PDF-Kopie an (zusätzlicher Empfänger)"
+      "ccPdfEmail": "PDF-Kopie an (zusätzlicher Empfänger)",
+      "sourceQuote": "Aus Angebot"
     },
     "title": "Rechnungen",
     "subtitle": "Rechnungen planen, versenden, Zahlungen erfassen und überfällige Rechnungen mahnen.",

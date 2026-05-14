@@ -227,6 +227,11 @@ async function getInvoiceById(id) {
     // customer_email / company etc. — mirrors getQuoteById.
     const invoice = await db('invoices')
       .leftJoin('customer_accounts', 'invoices.customer_account_id', 'customer_accounts.id')
+      // Join the source quote so the detail view can display its
+      // human-readable number ("LBM-Q-2026-0006") instead of just
+      // the numeric id ("#6"). LEFT join — most invoices come from
+      // a quote conversion but standalone invoices don't have one.
+      .leftJoin('quotes as src_quote', 'invoices.source_quote_id', 'src_quote.id')
       .where('invoices.id', id)
       .select(
         'invoices.*',
@@ -235,6 +240,7 @@ async function getInvoiceById(id) {
         'customer_accounts.first_name as customer_first_name',
         'customer_accounts.last_name as customer_last_name',
         'customer_accounts.company_name as customer_company_name',
+        'src_quote.quote_number as source_quote_number',
       )
       .first();
     if (!invoice) return null;
