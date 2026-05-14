@@ -2900,7 +2900,9 @@
       "activeLabel": "Has portal access",
       "sendInvite": "Send portal invitation",
       "sendInviteToast": "Portal invitation sent.",
-      "alreadyActive": "Customer already has portal access — no invitation needed."
+      "alreadyActive": "Customer already has portal access — no invitation needed.",
+      "detailHint": "This customer has no portal access (admin-only record). Click below to email them a portal sign-up link. The customer's existing invoices, quotes, and gallery assignments are preserved when they claim the invitation.",
+      "deactivatedHint": "Reactivate the customer before sending the invitation."
     },
     "pageTitle": "Customers",
     "pageSubtitle": "Recurring customer accounts that can log in at /customer/login.",

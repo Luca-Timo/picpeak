@@ -142,6 +142,26 @@ export const CustomerDetailPage: React.FC = () => {
     onError: () => toast.error(t('customers.detail.passwordReset.error', 'Could not send password reset')),
   });
 
+  // Promote a passive customer to active by firing the standard
+  // portal-invitation email. On success we invalidate the customer
+  // query so the badge + the "Has portal access" copy update once
+  // the customer actually claims the invite (next reload).
+  const sendInviteMutation = useMutation({
+    mutationFn: () => customerAdminService.sendInvite(customerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-customer', customerId] });
+      toast.success(t('customers.passive.sendInviteToast', 'Portal invitation sent.'));
+    },
+    onError: (err: any) => {
+      if (err?.response?.data?.code === 'CUSTOMER_ALREADY_ACTIVE') {
+        toast.error(t('customers.passive.alreadyActive',
+          'Customer already has portal access — no invitation needed.'));
+      } else {
+        toast.error(err?.response?.data?.error || err?.message || t('common.error', 'Something went wrong.'));
+      }
+    },
+  });
+
   const deactivateMutation = useMutation({
     mutationFn: () => customerAdminService.deactivate(customerId),
     onSuccess: () => {
@@ -212,7 +232,7 @@ export const CustomerDetailPage: React.FC = () => {
             <p className="text-sm text-muted-theme truncate">{customer.email}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col items-end gap-1">
           {customer.isActive ? (
             <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-accent)' }}>
               <CheckCircle2 className="w-3.5 h-3.5" />
@@ -222,6 +242,21 @@ export const CustomerDetailPage: React.FC = () => {
             <span className="inline-flex items-center gap-1 text-xs text-red-600">
               <X className="w-3.5 h-3.5" />
               {t('customers.status.inactive', 'Deactivated')}
+            </span>
+          )}
+          {customer.isPassive ? (
+            <span
+              className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
+              title={t(
+                'customers.passive.detailHint',
+                'This customer has no portal access (admin-only record). Click "Send portal invitation" below to email them a sign-up link.',
+              ) as string}
+            >
+              {t('customers.passive.badge', 'Passive — admin only')}
+            </span>
+          ) : (
+            <span className="text-[11px] text-muted-theme">
+              {t('customers.passive.activeLabel', 'Has portal access')}
             </span>
           )}
         </div>
@@ -515,33 +550,63 @@ export const CustomerDetailPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Account actions: password reset (#354 follow-up). Last
-          section before the structural Actions row (save / deactivate)
-          so destructive options cluster together at the bottom. */}
+      {/* Account actions: password reset OR portal invitation
+          (#354 follow-up + passive-customer flow). Passive customers
+          don't have a password to reset — the equivalent action is
+          firing the standard portal-invitation email. We show ONE
+          card with the right action based on the customer's state. */}
       <Card padding="lg">
         <h2 className="text-lg font-semibold text-theme mb-1 flex items-center gap-2">
           <KeyRound className="w-5 h-5" />
           {t('customers.detail.passwordSection', 'Account actions')}
         </h2>
-        <p className="text-xs text-muted-theme mb-4">
-          {t(
-            'customers.detail.passwordHint',
-            'Sends a 7-day single-use reset link to the customer\'s email. The customer\'s current password keeps working until they click the link and set a new one.'
-          )}
-        </p>
-        <Button
-          variant="outline"
-          leftIcon={<KeyRound className="w-4 h-4" />}
-          isLoading={passwordResetMutation.isPending}
-          disabled={!customer.isActive}
-          onClick={() => passwordResetMutation.mutate()}
-        >
-          {t('customers.detail.passwordReset.button', 'Send password reset email')}
-        </Button>
-        {!customer.isActive && (
-          <p className="text-xs text-muted-theme mt-2">
-            {t('customers.detail.passwordReset.inactive', 'Reactivate the customer before sending a reset.')}
-          </p>
+        {customer.isPassive ? (
+          <>
+            <p className="text-xs text-muted-theme mb-4">
+              {t(
+                'customers.passive.detailHint',
+                'This customer has no portal access (admin-only record). Click below to email them a portal sign-up link. The customer\'s existing invoices, quotes, and gallery assignments are preserved when they claim the invitation.',
+              )}
+            </p>
+            <Button
+              variant="primary"
+              leftIcon={<KeyRound className="w-4 h-4" />}
+              isLoading={sendInviteMutation.isPending}
+              disabled={!customer.isActive || sendInviteMutation.isPending}
+              onClick={() => sendInviteMutation.mutate()}
+            >
+              {t('customers.passive.sendInvite', 'Send portal invitation')}
+            </Button>
+            {!customer.isActive && (
+              <p className="text-xs text-muted-theme mt-2">
+                {t('customers.passive.deactivatedHint',
+                  'Reactivate the customer before sending the invitation.')}
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-muted-theme mb-4">
+              {t(
+                'customers.detail.passwordHint',
+                'Sends a 7-day single-use reset link to the customer\'s email. The customer\'s current password keeps working until they click the link and set a new one.'
+              )}
+            </p>
+            <Button
+              variant="outline"
+              leftIcon={<KeyRound className="w-4 h-4" />}
+              isLoading={passwordResetMutation.isPending}
+              disabled={!customer.isActive}
+              onClick={() => passwordResetMutation.mutate()}
+            >
+              {t('customers.detail.passwordReset.button', 'Send password reset email')}
+            </Button>
+            {!customer.isActive && (
+              <p className="text-xs text-muted-theme mt-2">
+                {t('customers.detail.passwordReset.inactive', 'Reactivate the customer before sending a reset.')}
+              </p>
+            )}
+          </>
         )}
       </Card>
 
