@@ -396,8 +396,13 @@ async function listQuotes({ filters = {}, sort = 'newest', page = 1, pageSize = 
     const total = ensureInt(totalRow?.total || 0);
 
     switch (sort) {
+      // "Newest" / "Oldest" sort by CREATION time, not issue_date —
+      // the latter is admin-controlled (retro-dated quotes, future-
+      // dated quotes for accruals) and drifts from actual chronology.
+      // Sorting by created_at always puts a just-saved quote at the
+      // top of the "Newest first" list.
       case 'oldest':
-        query = query.orderBy('quotes.issue_date', 'asc').orderBy('quotes.id', 'asc');
+        query = query.orderBy('quotes.created_at', 'asc').orderBy('quotes.id', 'asc');
         break;
       case 'customer_asc':
         query = query
@@ -412,7 +417,7 @@ async function listQuotes({ filters = {}, sort = 'newest', page = 1, pageSize = 
         break;
       case 'newest':
       default:
-        query = query.orderBy('quotes.issue_date', 'desc').orderBy('quotes.id', 'desc');
+        query = query.orderBy('quotes.created_at', 'desc').orderBy('quotes.id', 'desc');
         break;
     }
 
@@ -1288,6 +1293,10 @@ async function convertToInvoiceOnly(quoteId, adminId) {
       eventDate: quote.event_date,
       adminId,
       ccPdfEmail: quote.cc_pdf_email,
+      // Net 14 / 30 / 60 / 90 carry through from the quote's
+      // selected payment-term template so each scheduled invoice's
+      // due_date reflects what the customer agreed to on the quote.
+      netDays: paymentTermSnapshot?.net_days,
     });
 
     // Mark quote `converted` without a converted_event_id so the
@@ -1424,6 +1433,9 @@ async function convertToEvent(quoteId, adminId) {
       eventDate: quote.event_date,
       adminId,
       ccPdfEmail: quote.cc_pdf_email,
+      // Net 14 / 30 / 60 / 90 carry through from the quote's
+      // payment-term template (same as convertToInvoiceOnly).
+      netDays: paymentTermSnapshot?.net_days,
     });
 
     await trx('quotes').where({ id: quote.id }).update({
