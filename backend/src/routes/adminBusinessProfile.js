@@ -25,6 +25,33 @@ const { getStoragePath } = require('../config/storage');
 const businessProfileService = require('../services/businessProfileService');
 const { db } = require('../database/db');
 const { validateIban } = require('../utils/iban');
+const { validationResult } = require('express-validator');
+const { ValidationError } = require('../utils/errors');
+
+/**
+ * Same shape as utils/routeHelpers.validateRequest BUT surfaces the
+ * FIRST field-level error message as the top-level `error` string —
+ * so a user typing a bad IBAN sees "IBAN checksum is invalid — please
+ * check for typos" in the toast, not the generic "Validation failed".
+ *
+ * Scoped to this route file because business-profile is the only
+ * surface where field-specific copy is worth the extra wiring;
+ * other routes keep the shared helper's behaviour.
+ */
+function validateRequestWithFieldMessage(req) {
+  const errors = validationResult(req);
+  if (errors.isEmpty()) return;
+  const details = errors.array().map((err) => ({
+    field: err.path || err.param,
+    message: err.msg,
+  }));
+  // Use the first field-level message as the top-level message so
+  // generic toast UIs that only read `error` still get the precise
+  // reason. Falls back to "Validation failed" only when no message
+  // was supplied (shouldn't happen with our validators).
+  const primary = details[0]?.message || 'Validation failed';
+  throw new ValidationError(primary, details);
+}
 
 /**
  * express-validator custom rule that runs the ISO 13616 IBAN check
@@ -399,7 +426,7 @@ router.post(
     body('displayOrder').optional({ values: 'falsy' }).isInt({ min: 0, max: 9999 }),
   ],
   handleAsync(async (req, res) => {
-    validateRequest(req);
+    validateRequestWithFieldMessage(req);
     const bank = await businessProfileService.createBankAccount({
       iban: req.body.iban,
       label: req.body.label,
@@ -428,7 +455,7 @@ router.put(
     body('displayOrder').optional({ values: 'falsy' }).isInt({ min: 0, max: 9999 }),
   ],
   handleAsync(async (req, res) => {
-    validateRequest(req);
+    validateRequestWithFieldMessage(req);
     const id = parseInt(req.params.id, 10);
     const payload = {};
     const map = {
