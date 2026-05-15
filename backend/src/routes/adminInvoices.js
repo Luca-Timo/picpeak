@@ -661,8 +661,12 @@ router.post(
   [param('id').isInt({ min: 1 })],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    await invoiceService.cancelInvoice(parseInt(req.params.id, 10), req.admin.id);
-    return successResponse(res, { cancelled: true });
+    // Service returns { cancelled, stornoId } — pass through so the
+    // frontend can show "Storno S-XXXX wurde erzeugt" feedback
+    // when the invoice was already issued (vs. silent soft-cancel
+    // on drafts).
+    const result = await invoiceService.cancelInvoice(parseInt(req.params.id, 10), req.admin.id);
+    return successResponse(res, result);
   })
 );
 
