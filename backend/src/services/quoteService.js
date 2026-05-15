@@ -1296,6 +1296,12 @@ async function convertToInvoiceOnly(quoteId, adminId) {
       },
       installments,
       eventDate: quote.event_date,
+      // Inline event snapshot — copied so the converted invoice
+      // keeps the quote's event label / times for accounting + UI
+      // even when there's no `events` row to fall back to (migration 123).
+      eventName: quote.event_name,
+      eventTimeStart: quote.event_time_start,
+      eventTimeEnd: quote.event_time_end,
       adminId,
       ccPdfEmail: quote.cc_pdf_email,
       // Net 14 / 30 / 60 / 90 carry through from the quote's
@@ -1436,6 +1442,11 @@ async function convertToEvent(quoteId, adminId) {
       },
       installments,
       eventDate: quote.event_date,
+      // Inline event snapshot — same rationale as convertToInvoiceOnly
+      // above (migration 123).
+      eventName: quote.event_name,
+      eventTimeStart: quote.event_time_start,
+      eventTimeEnd: quote.event_time_end,
       adminId,
       ccPdfEmail: quote.cc_pdf_email,
       // Net 14 / 30 / 60 / 90 carry through from the quote's

@@ -128,6 +128,7 @@ export const BillsListPage: React.FC = () => {
                     <tr>
                       <th className="px-3 py-2 text-left">#</th>
                       <th className="px-3 py-2 text-left">{t('bills.table.customer', 'Customer')}</th>
+                      <th className="px-3 py-2 text-left">{t('bills.table.event', 'Event')}</th>
                       <th className="px-3 py-2 text-left">{t('bills.table.installment', 'Installment')}</th>
                       <th className="px-3 py-2 text-left">{t('bills.table.dueDate', 'Due')}</th>
                       <th className="px-3 py-2 text-right">{t('bills.table.total', 'Total')}</th>
@@ -155,6 +156,7 @@ export const BillsListPage: React.FC = () => {
                           )}
                         </td>
                         <td className="px-3 py-2">{inv.customer.companyName || inv.customer.displayName || inv.customer.email}</td>
+                        <td className="px-3 py-2 truncate max-w-xs">{inv.eventName || '—'}</td>
                         <td className="px-3 py-2 text-xs text-muted-theme">
                           {inv.installmentTotal > 1 ? `${inv.installmentIndex + 1}/${inv.installmentTotal} · ${inv.installmentLabel || ''}` : '—'}
                         </td>

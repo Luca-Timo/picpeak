@@ -62,6 +62,14 @@ export const BillEditorPage: React.FC = () => {
   // resolveBankAccountForCurrency() already prefers this over the
   // currency-default when set, so we just need to surface a picker.
   const [businessBankAccountId, setBusinessBankAccountId] = useState<number | null>(null);
+  // Inline event snapshot (migration 123). Mirrors the quote editor's
+  // event section — admin can type a free-text label without needing
+  // an actual events row, and it carries through to the customer
+  // portal + tax report + email templates.
+  const [eventName, setEventName] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [eventTimeStart, setEventTimeStart] = useState('');
+  const [eventTimeEnd, setEventTimeEnd] = useState('');
   const [busy, setBusy] = useState(false);
 
   // Load every configured bank account so the override dropdown can
@@ -106,6 +114,10 @@ export const BillEditorPage: React.FC = () => {
       setCcPdfEmail(inv.ccPdfEmail || '');
       setPaymentTermTemplateId(inv.paymentTermTemplateId ?? null);
       setBusinessBankAccountId(inv.businessBankAccountId ?? null);
+      setEventName(inv.eventName || '');
+      setEventDate(inv.eventDate || '');
+      setEventTimeStart(inv.eventTimeStart || '');
+      setEventTimeEnd(inv.eventTimeEnd || '');
       setLineItems(existing.lineItems.map((li) => ({
         id: li.id,
         position: li.position,
@@ -207,6 +219,14 @@ export const BillEditorPage: React.FC = () => {
     // invoices.business_bank_account_id at PDF time, no further
     // lookup needed.
     businessBankAccountId: businessBankAccountId,
+    // Inline event snapshot (migration 123). Empty string → undefined
+    // so the backend can distinguish "not provided" from a deliberate
+    // clear (which the route's `optional({ values: 'falsy' })` already
+    // treats identically — falsy values bypass validation entirely).
+    eventName: eventName || undefined,
+    eventDate: eventDate || undefined,
+    eventTimeStart: eventTimeStart || undefined,
+    eventTimeEnd: eventTimeEnd || undefined,
     lineItems: lineItems.map((li) => ({
       position: li.position,
       quantity: li.quantity,
@@ -347,6 +367,26 @@ export const BillEditorPage: React.FC = () => {
             </button>
           </>
         )}
+      </Card>
+
+      {/* Event snapshot section (migration 123). Mirrors the quote
+          editor's Event section — free-text label that doesn't require
+          a linked events row. The values flow into the invoice email
+          template's {{event_name}} placeholder, the customer portal
+          row heading, the admin list "Event" column, and the tax
+          report event column. */}
+      <Card>
+        <h3 className="font-semibold mb-2">{t('bills.section.event', 'Event details')}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <Input label={t('bills.field.eventName', 'Event') as string}
+            value={eventName} onChange={(e) => setEventName(e.target.value)} />
+          <Input type="date" label={t('bills.field.eventDate', 'Event date') as string}
+            value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+          <Input type="time" label={t('bills.field.eventTimeStart', 'Start time') as string}
+            value={eventTimeStart} onChange={(e) => setEventTimeStart(e.target.value)} />
+          <Input type="time" label={t('bills.field.eventTimeEnd', 'End time') as string}
+            value={eventTimeEnd} onChange={(e) => setEventTimeEnd(e.target.value)} />
+        </div>
       </Card>
 
       <Card>

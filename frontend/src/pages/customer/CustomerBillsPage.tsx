@@ -269,6 +269,16 @@ const InvoiceRow: React.FC<{ inv: CustomerInvoice; onViewPdf: () => void }> = ({
               </span>
             )}
           </div>
+          {/* Event label (migration 123 snapshot). Mirrors the customer
+              quotes view so an invoice for the same event is visually
+              grouped at a glance. Omit when no event is set rather than
+              rendering a stray em-dash. */}
+          {inv.eventName && (
+            <div className="text-sm text-muted-theme mt-1 truncate">
+              {inv.eventName}
+              {inv.eventDate ? ` · ${formatShortDate(inv.eventDate)}` : ''}
+            </div>
+          )}
           <div className="text-sm text-muted-theme mt-1">
             {t('customer.bills.field.issueDate', 'Issued')}: {formatShortDate(inv.issueDate)}
             {!isStorno && inv.dueDate && (
@@ -285,12 +295,14 @@ const InvoiceRow: React.FC<{ inv: CustomerInvoice; onViewPdf: () => void }> = ({
               bookkeeper can find both documents). */}
           {isStorno && inv.cancelsInvoiceId && (
             <div className="text-xs text-purple-700 dark:text-purple-300 mt-1">
-              {t('customer.bills.cancelsLabel', 'Cancels invoice')} #{inv.cancelsInvoiceId}
+              {t('customer.bills.cancelsLabel', 'Cancels invoice')}{' '}
+              {inv.cancelsInvoiceNumber || `#${inv.cancelsInvoiceId}`}
             </div>
           )}
           {!isStorno && isCancelled && inv.cancellationStornoId && (
             <div className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-              {t('customer.bills.cancelledByLabel', 'Cancelled by cancellation invoice')} #{inv.cancellationStornoId}
+              {t('customer.bills.cancelledByLabel', 'Cancelled by cancellation invoice')}{' '}
+              {inv.cancellationStornoNumber || `#${inv.cancellationStornoId}`}
             </div>
           )}
         </div>

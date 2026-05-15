@@ -128,7 +128,16 @@ function transformInvoice(i) {
     kind: i.kind || 'invoice',
     replacesInvoiceId: i.replaces_invoice_id || null,
     cancelsInvoiceId: i.cancels_invoice_id || null,
+    cancelsInvoiceNumber: i.cancels_invoice_number || null,
     cancellationStornoId: i.cancellation_storno_id || null,
+    cancellationStornoNumber: i.cancellation_storno_number || null,
+    // Inline event snapshot (migration 123). The editor binds to
+    // these, the list page shows event_name as a column, and email
+    // / tax-report rendering reads them in preference to the FK.
+    eventName: i.event_name || null,
+    eventDate: i.event_date || null,
+    eventTimeStart: i.event_time_start || null,
+    eventTimeEnd: i.event_time_end || null,
     // `isImported` surfaces the historical-PDF flag to the admin UI
     // so the list / detail page can hide line-item editing on rows
     // that originated from a different billing system (migration 111).
@@ -187,6 +196,12 @@ const INVOICE_BODY_VALIDATORS = [
   body('businessBankAccountId').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('qrFormat').optional({ values: 'falsy' }).isIn(['swiss', 'epc', 'none']),
   body('paymentTermTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  // Inline event snapshot (migration 123). Mirrors quotes — kept
+  // optional because standalone invoices may not have an event yet.
+  body('eventName').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
+  body('eventDate').optional({ values: 'falsy' }).isISO8601(),
+  body('eventTimeStart').optional({ values: 'falsy' }).isString().isLength({ max: 8 }),
+  body('eventTimeEnd').optional({ values: 'falsy' }).isString().isLength({ max: 8 }),
   body('lineItems').optional({ values: 'falsy' }).isArray(),
   body('lineItems.*.description').optional({ values: 'falsy' }).isString().isLength({ min: 1, max: 1000 }),
   body('lineItems.*.quantity').optional({ values: 'falsy' }).isFloat({ min: 0 }),
@@ -215,6 +230,10 @@ function mapPayloadToService(body) {
     vatRate: 'vatRate', shippingAmountMinor: 'shippingAmountMinor',
     ccPdfEmail: 'ccPdfEmail', businessBankAccountId: 'businessBankAccountId',
     qrFormat: 'qrFormat',
+    eventName: 'eventName',
+    eventDate: 'eventDate',
+    eventTimeStart: 'eventTimeStart',
+    eventTimeEnd: 'eventTimeEnd',
     paymentTermTemplateId: 'paymentTermTemplateId',
   };
   for (const [api, svc] of Object.entries(map)) {
@@ -465,6 +484,13 @@ router.put(
       vatRate: 'vat_rate', shippingAmountMinor: 'shipping_amount_minor',
       ccPdfEmail: 'cc_pdf_email', businessBankAccountId: 'business_bank_account_id',
       qrFormat: 'qr_format',
+      // Inline event snapshot (migration 123) — editable as long as
+      // the invoice is still in 'scheduled' status (this route already
+      // gates on that above).
+      eventName: 'event_name',
+      eventDate: 'event_date',
+      eventTimeStart: 'event_time_start',
+      eventTimeEnd: 'event_time_end',
     };
     for (const [api, col] of Object.entries(map)) {
       if (Object.prototype.hasOwnProperty.call(payload, api)) updates[col] = payload[api];

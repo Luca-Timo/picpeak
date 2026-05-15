@@ -324,6 +324,17 @@ export interface CustomerInvoice {
   sentAt: string | null;
   /** On a Storno row (kind='storno') → id of the invoice it reverses. */
   cancelsInvoiceId: number | null;
+  /** Human invoice_number of the row referenced by `cancelsInvoiceId`,
+   *  joined server-side so the customer view can show the actual
+   *  invoice number instead of the bare row id. */
+  cancelsInvoiceNumber: string | null;
   /** On a cancelled invoice → id of the Storno that cancelled it. */
   cancellationStornoId: number | null;
+  /** Human invoice_number of the Storno referenced by
+   *  `cancellationStornoId`. */
+  cancellationStornoNumber: string | null;
+  /** Inline event snapshot (migration 123) — rendered next to the
+   *  invoice number on the customer portal bills list. */
+  eventName: string | null;
+  eventDate: string | null;
 }

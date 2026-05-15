@@ -175,7 +175,11 @@ async function getTaxReport({ from, to, currency } = {}) {
         'customer_accounts.first_name    as customer_first_name',
         'customer_accounts.last_name     as customer_last_name',
         'customer_accounts.company_name  as customer_company_name',
-        'events.event_name               as event_name',
+        // Prefer the invoice's inline snapshot (migration 123) so
+        // renames on the events table don't retroactively change
+        // historical tax reports; fall back to events.event_name for
+        // legacy rows where the snapshot is still null.
+        db.raw('COALESCE(invoices.event_name, events.event_name) AS event_name'),
       );
 
     // Find replacement invoice numbers for any cancelled rows so the

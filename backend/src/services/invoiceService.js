@@ -244,6 +244,12 @@ async function getInvoiceById(id) {
       // the numeric id ("#6"). LEFT join — most invoices come from
       // a quote conversion but standalone invoices don't have one.
       .leftJoin('quotes as src_quote', 'invoices.source_quote_id', 'src_quote.id')
+      // Self-joins for Storno lineage so the detail view can render
+      // "Cancelled by Stornorechnung S-XXXX" / "This Stornorechnung
+      // cancels invoice R-XXXX" using the human invoice_number rather
+      // than the bare DB row id. Same pattern as source_quote_number.
+      .leftJoin('invoices as cancels_inv', 'invoices.cancels_invoice_id', 'cancels_inv.id')
+      .leftJoin('invoices as cancellation_storno', 'invoices.cancellation_storno_id', 'cancellation_storno.id')
       .where('invoices.id', id)
       .select(
         'invoices.*',
@@ -258,6 +264,8 @@ async function getInvoiceById(id) {
         // and only exposes the boolean.
         'customer_accounts.password_hash as customer_password_hash',
         'src_quote.quote_number as source_quote_number',
+        'cancels_inv.invoice_number as cancels_invoice_number',
+        'cancellation_storno.invoice_number as cancellation_storno_number',
       )
       .first();
     if (!invoice) return null;
@@ -379,6 +387,15 @@ async function createInvoice(payload, adminId, trx = db) {
     customer_account_id: payload.customerAccountId,
     source_quote_id: payload.sourceQuoteId || null,
     event_id: payload.eventId || null,
+    // Inline event snapshot (migration 123). Mirrors quotes — the
+    // snapshot survives an event rename so an archived invoice keeps
+    // its original event label for accounting / audit. Optional;
+    // standalone invoices created without an event will have these
+    // as null and the renderer simply omits the for-clause.
+    event_name: payload.eventName || null,
+    event_date: payload.eventDate || null,
+    event_time_start: payload.eventTimeStart || null,
+    event_time_end: payload.eventTimeEnd || null,
     language,
     currency,
     issue_date: issueDate,
@@ -424,7 +441,8 @@ async function createInvoice(payload, adminId, trx = db) {
  */
 async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, currency, language,
                                           lineItems, totals, installments, eventDate, adminId,
-                                          ccPdfEmail, netDays }) {
+                                          ccPdfEmail, netDays,
+                                          eventName, eventTimeStart, eventTimeEnd }) {
   // netDays drives the due-date offset on every scheduled invoice
   // created here. Defaults to 30 when the caller doesn't pass one;
   // callers in quoteService now pass the converting quote's
@@ -484,6 +502,14 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
       customer_account_id: customer.id,
       source_quote_id: quoteId,
       event_id: eventId,
+      // Inline event snapshot carried over from the source quote
+      // (migration 123). Mirrors how event_date is already carried —
+      // a converted invoice should keep the event reference even if
+      // the linked event is later renamed or deleted.
+      event_name: eventName || null,
+      event_date: eventDate || null,
+      event_time_start: eventTimeStart || null,
+      event_time_end: eventTimeEnd || null,
       language,
       currency,
       issue_date: scheduledSendAt.toISOString().slice(0, 10),
@@ -1007,7 +1033,7 @@ async function sendInvoice(id, adminId) {
   await emailProcessor.queueEmail(invoice.event_id || null, customer.email, 'invoice_sent', {
     invoice_number: invoice.invoice_number,
     customer_name: customer.display_name || customer.first_name || customer.email.split('@')[0],
-    event_name: '',
+    event_name: invoice.event_name || '',
     total_amount: formatMajor(invoice.total_amount_minor, invoice.currency, ctx.locale),
     due_date: formatShortDate(invoice.due_date),
     installment_label: invoice.installment_label || '',
@@ -1138,6 +1164,13 @@ async function createStorno(originalId, adminId, trx = db) {
     invoice_number: stornoNumber,
     customer_account_id: original.customer_account_id,
     event_id: original.event_id,
+    // Inline event snapshot — copy so the Storno carries the same
+    // event label as the invoice it reverses (migration 123). The
+    // bookkeeper expects to see both documents under the same event.
+    event_name: original.event_name || null,
+    event_date: original.event_date || null,
+    event_time_start: original.event_time_start || null,
+    event_time_end: original.event_time_end || null,
     source_quote_id: null,
     currency: original.currency,
     language: original.language,
@@ -1680,7 +1713,7 @@ async function queuePaymentCheckEmail(invoiceId, { skipThrottle = false } = {}) 
         || customer?.display_name
         || [customer?.first_name, customer?.last_name].filter(Boolean).join(' ')
         || customer?.email || '',
-      event_name: '',
+      event_name: invoice.event_name || '',
       due_date: formatShortDate(invoice.due_date),
       total_amount: formatMajor(invoice.total_amount_minor, invoice.currency, locale),
       paid_amount: formatMajor(paidMinor, invoice.currency, locale),

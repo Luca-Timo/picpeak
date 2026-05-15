@@ -34,6 +34,10 @@ const mockDbFn = jest.fn(() => {
   if (callCount === 1) return makeChain(invoiceRowsForRun);
   return makeChain(replacementsRowsForRun);
 });
+// `.raw()` is used in the .select() column list for the event_name
+// COALESCE (migration 123). The chain's select() ignores its
+// arguments so the raw() return value just needs to exist.
+mockDbFn.raw = jest.fn((sql) => sql);
 
 jest.mock('../../src/database/db', () => ({
   db: mockDbFn,

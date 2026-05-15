@@ -46,6 +46,18 @@ export interface InvoiceSummary {
    *  "From quote LBM-Q-2026-0006" rather than "From quote #6". */
   sourceQuoteNumber?: string | null;
   eventId: number | null;
+  /** Inline event snapshot (migration 123). Free-text label for the
+   *  event the invoice relates to. Persists independently of the
+   *  events FK so renames don't retroactively change historical
+   *  documents. Shown next to the invoice number on the customer
+   *  portal and as the "Event" column on the admin list. */
+  eventName: string | null;
+  /** Event date snapshot. */
+  eventDate: string | null;
+  /** Event start time, "HH:MM". */
+  eventTimeStart: string | null;
+  /** Event end time, "HH:MM". */
+  eventTimeEnd: string | null;
   language: string;
   currency: string;
   issueDate: string;
@@ -92,10 +104,17 @@ export interface InvoiceDetail extends InvoiceSummary {
    *  invoice this Storno reverses. Drives the "Storno zu Rechnung
    *  R-XXXX" reference rendering in the admin detail view. */
   cancelsInvoiceId?: number | null;
+  /** Human invoice_number of the row referenced by `cancelsInvoiceId`
+   *  (joined server-side). Used so the lineage banner can display
+   *  "R-2026-0007" instead of the bare row id "#7". */
+  cancelsInvoiceNumber?: string | null;
   /** On a CANCELLED original: points at the Storno that cancelled
    *  it. Drives the "Cancelled by Storno S-XXXX" banner shown on
    *  the cancelled invoice's detail view. */
   cancellationStornoId?: number | null;
+  /** Human invoice_number of the row referenced by
+   *  `cancellationStornoId` (joined server-side). */
+  cancellationStornoNumber?: string | null;
 }
 
 export interface InvoicePayment {
@@ -136,6 +155,12 @@ export interface InvoiceCreatePayload {
   businessBankAccountId?: number | null;
   qrFormat?: InvoiceQrFormat;
   paymentTermTemplateId?: number | null;
+  // Inline event snapshot (migration 123). All optional — standalone
+  // invoices may have none of these.
+  eventName?: string;
+  eventDate?: string;
+  eventTimeStart?: string;
+  eventTimeEnd?: string;
   lineItems: QuoteLineItem[];
 }
 

@@ -3256,7 +3256,11 @@
       "businessBankAccount": "Zahlungskonto",
       "bankAccountProfileDefault": "Geschäftsprofil-Standard für {{currency}} verwenden",
       "bankAccountDefaultBadge": "(Standard)",
-      "bankAccountHelp": "Überschreibt den Profil-Standard nur für diese Rechnung. Auf «Standard» belassen, um das passende Konto aus Einstellungen → Geschäftsprofil zu übernehmen."
+      "bankAccountHelp": "Überschreibt den Profil-Standard nur für diese Rechnung. Auf «Standard» belassen, um das passende Konto aus Einstellungen → Geschäftsprofil zu übernehmen.",
+      "eventName": "Anlass",
+      "eventDate": "Anlassdatum",
+      "eventTimeStart": "Startzeit",
+      "eventTimeEnd": "Endzeit"
     },
     "title": "Rechnungen",
     "subtitle": "Rechnungen planen, versenden, Zahlungen erfassen und überfällige Rechnungen mahnen.",
@@ -3276,6 +3280,7 @@
     "empty": "Noch keine Rechnungen.",
     "table": {
       "customer": "Kunde",
+      "event": "Anlass",
       "installment": "Rate",
       "dueDate": "Fällig",
       "total": "Gesamt",
@@ -3314,6 +3319,7 @@
       "lineItems": "Positionen",
       "paymentLog": "Zahlungsverlauf",
       "customer": "Kunde",
+      "event": "Anlassdetails",
       "details": "Details"
     },
     "noPayments": "Noch keine Zahlungen erfasst.",
