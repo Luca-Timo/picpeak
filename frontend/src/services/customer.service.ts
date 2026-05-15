@@ -333,4 +333,8 @@ export interface CustomerInvoice {
   /** Human invoice_number of the Storno referenced by
    *  `cancellationStornoId`. */
   cancellationStornoNumber: string | null;
+  /** Inline event snapshot (migration 123) — rendered next to the
+   *  invoice number on the customer portal bills list. */
+  eventName: string | null;
+  eventDate: string | null;
 }

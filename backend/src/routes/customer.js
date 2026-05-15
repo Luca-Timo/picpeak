@@ -488,6 +488,10 @@ router.get('/invoices', customerAuth, async (req, res) => {
       .select(
         'invoices.id', 'invoices.kind', 'invoices.invoice_number', 'invoices.status', 'invoices.currency',
         'invoices.issue_date', 'invoices.due_date',
+        // Inline event snapshot (migration 123) — the customer portal
+        // shows event_name next to the invoice number, mirroring the
+        // quotes list.
+        'invoices.event_name', 'invoices.event_date',
         'invoices.installment_index', 'invoices.installment_total', 'invoices.installment_label',
         'invoices.net_amount_minor', 'invoices.vat_rate', 'invoices.vat_amount_minor',
         'invoices.shipping_amount_minor', 'invoices.total_amount_minor',
@@ -527,6 +531,8 @@ router.get('/invoices', customerAuth, async (req, res) => {
         cancelsInvoiceNumber: i.cancels_invoice_number || null,
         cancellationStornoId: i.cancellation_storno_id || null,
         cancellationStornoNumber: i.cancellation_storno_number || null,
+        eventName: i.event_name || null,
+        eventDate: i.event_date || null,
       })),
     });
   } catch (error) {

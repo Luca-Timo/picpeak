@@ -3245,6 +3245,7 @@
     "empty": "No invoices yet.",
     "table": {
       "customer": "Customer",
+      "event": "Event",
       "installment": "Installment",
       "dueDate": "Due",
       "total": "Total",
@@ -3297,12 +3298,17 @@
       "businessBankAccount": "Payment account",
       "bankAccountProfileDefault": "Use business profile default for {{currency}}",
       "bankAccountDefaultBadge": "(default)",
-      "bankAccountHelp": "Overrides the profile default for this invoice only. Leave on default to inherit the currency-matched account from Settings → Business profile."
+      "bankAccountHelp": "Overrides the profile default for this invoice only. Leave on default to inherit the currency-matched account from Settings → Business profile.",
+      "eventName": "Event",
+      "eventDate": "Event date",
+      "eventTimeStart": "Start time",
+      "eventTimeEnd": "End time"
     },
     "section": {
       "lineItems": "Line items",
       "paymentLog": "Payment log",
       "customer": "Customer",
+      "event": "Event details",
       "details": "Details"
     },
     "noPayments": "No payments recorded yet.",

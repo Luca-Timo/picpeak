@@ -269,6 +269,16 @@ const InvoiceRow: React.FC<{ inv: CustomerInvoice; onViewPdf: () => void }> = ({
               </span>
             )}
           </div>
+          {/* Event label (migration 123 snapshot). Mirrors the customer
+              quotes view so an invoice for the same event is visually
+              grouped at a glance. Omit when no event is set rather than
+              rendering a stray em-dash. */}
+          {inv.eventName && (
+            <div className="text-sm text-muted-theme mt-1 truncate">
+              {inv.eventName}
+              {inv.eventDate ? ` · ${formatShortDate(inv.eventDate)}` : ''}
+            </div>
+          )}
           <div className="text-sm text-muted-theme mt-1">
             {t('customer.bills.field.issueDate', 'Issued')}: {formatShortDate(inv.issueDate)}
             {!isStorno && inv.dueDate && (

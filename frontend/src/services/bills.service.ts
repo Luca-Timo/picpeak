@@ -46,6 +46,18 @@ export interface InvoiceSummary {
    *  "From quote LBM-Q-2026-0006" rather than "From quote #6". */
   sourceQuoteNumber?: string | null;
   eventId: number | null;
+  /** Inline event snapshot (migration 123). Free-text label for the
+   *  event the invoice relates to. Persists independently of the
+   *  events FK so renames don't retroactively change historical
+   *  documents. Shown next to the invoice number on the customer
+   *  portal and as the "Event" column on the admin list. */
+  eventName: string | null;
+  /** Event date snapshot. */
+  eventDate: string | null;
+  /** Event start time, "HH:MM". */
+  eventTimeStart: string | null;
+  /** Event end time, "HH:MM". */
+  eventTimeEnd: string | null;
   language: string;
   currency: string;
   issueDate: string;
@@ -143,6 +155,12 @@ export interface InvoiceCreatePayload {
   businessBankAccountId?: number | null;
   qrFormat?: InvoiceQrFormat;
   paymentTermTemplateId?: number | null;
+  // Inline event snapshot (migration 123). All optional — standalone
+  // invoices may have none of these.
+  eventName?: string;
+  eventDate?: string;
+  eventTimeStart?: string;
+  eventTimeEnd?: string;
   lineItems: QuoteLineItem[];
 }
 
