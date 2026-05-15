@@ -2773,7 +2773,7 @@
       "galleries": "Galleries",
       "calendar": "Calendar",
       "quotes": "Quotes",
-      "bills": "Bills",
+      "bills": "Invoices",
       "profile": "Profile",
       "soon": "Soon"
     },
@@ -3271,7 +3271,8 @@
     "reissue": "Reissue",
     "cancelAndReissue": "Cancel & reissue",
     "kind": {
-      "storno": "Stornorechnung"
+      "storno": "Stornorechnung",
+      "reissue": "Reissue"
     },
     "stornoCancelsLabel": "This Stornorechnung cancels invoice",
     "cancelledByStornoLabel": "This invoice was cancelled by Stornorechnung",

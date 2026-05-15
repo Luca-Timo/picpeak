@@ -51,7 +51,7 @@ const NAV: NavItem[] = [
   { to: '/customer/dashboard', labelKey: 'customer.nav.galleries', fallback: 'Galleries', icon: ImageIcon },
   { to: '/customer/calendar', labelKey: 'customer.nav.calendar', fallback: 'Calendar', icon: Calendar, feature: 'calendar' },
   { to: '/customer/quotes', labelKey: 'customer.nav.quotes', fallback: 'Quotes', icon: FileText, feature: 'quotes' },
-  { to: '/customer/bills', labelKey: 'customer.nav.bills', fallback: 'Bills', icon: Receipt, feature: 'bills' },
+  { to: '/customer/bills', labelKey: 'customer.nav.bills', fallback: 'Invoices', icon: Receipt, feature: 'bills' },
   { to: '/customer/profile', labelKey: 'customer.nav.profile', fallback: 'Profile', icon: UserIcon },
 ];
 
