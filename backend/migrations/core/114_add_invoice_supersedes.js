@@ -33,17 +33,20 @@
 exports.up = async function(knex) {
   if (!(await knex.schema.hasTable('invoices'))) return;
 
-  await knex.schema.alterTable('invoices', (table) => {
-    // Discriminator. 'invoice' is the default so existing rows
-    // continue to render exactly as they did before this migration —
-    // the renderer only branches on Storno.
-    table.string('kind', 16).notNullable().defaultTo('invoice');
-  }).catch(() => {});
-  // The `.catch(() => {})` swallows the "column already exists" error
-  // that knex throws when the alterTable runs on a DB that already
-  // applied a prior version of this migration. Each individual column
-  // is guarded by hasColumn below — the alterTable is split per
-  // column so partial migrations recover cleanly.
+  // Discriminator. 'invoice' is the default so existing rows
+  // continue to render exactly as they did before this migration —
+  // the renderer only branches on Storno. Guarded by hasColumn (not
+  // .catch on the alterTable) because in Postgres a swallowed
+  // "duplicate column" error still leaves the surrounding
+  // transaction in `aborted` state — every subsequent hasColumn
+  // query then returns 25P02 and the whole migration crashes. The
+  // explicit hasColumn check avoids ever throwing in the first
+  // place.
+  if (!(await knex.schema.hasColumn('invoices', 'kind'))) {
+    await knex.schema.alterTable('invoices', (table) => {
+      table.string('kind', 16).notNullable().defaultTo('invoice');
+    });
+  }
 
   if (!(await knex.schema.hasColumn('invoices', 'cancels_invoice_id'))) {
     await knex.schema.alterTable('invoices', (table) => {
@@ -87,12 +90,13 @@ exports.up = async function(knex) {
 
   // Index the discriminator alongside status — the list view filters
   // both ('kind=invoice AND status IN (...)') in nearly every query.
-  // Wrapped in catch so re-runs on a DB that already has the index
-  // don't fail; the column-level hasColumn guards above keep the
-  // rest of the migration idempotent.
-  await knex.schema.alterTable('invoices', (table) => {
-    table.index(['kind', 'status'], 'invoices_kind_status_idx');
-  }).catch(() => {});
+  // Uses raw `CREATE INDEX IF NOT EXISTS` (supported by both Postgres
+  // and SQLite) so a re-run doesn't throw 42P07 "duplicate object" —
+  // which would abort the surrounding transaction in Postgres and
+  // crash the whole migration the same way an aborted column add
+  // would. Knex doesn't expose a portable IF-NOT-EXISTS for indexes
+  // via the schema builder, so we drop to raw SQL here.
+  await knex.raw('CREATE INDEX IF NOT EXISTS invoices_kind_status_idx ON invoices (kind, status)');
 };
 
 exports.down = async function(knex) {
