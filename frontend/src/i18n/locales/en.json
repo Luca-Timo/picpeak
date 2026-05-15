@@ -2900,6 +2900,7 @@
       "openLink": "+ Create new customer",
       "title": "Create new customer",
       "subtitle": "Fill in the details below. Choose \"Save as passive customer\" to create an admin-only record, or \"Save & send portal invitation\" to also email the customer a sign-up link.",
+      "passiveSubtitle": "Adds an admin-only customer record. The customer is not notified and cannot log in until you send them an invitation later.",
       "saveAsPassive": "Save as passive customer",
       "saveAndInvite": "Save & send portal invitation",
       "savedPassiveToast": "Passive customer created.",

@@ -2900,6 +2900,7 @@
       "openLink": "+ Neuen Kunden erstellen",
       "title": "Neuen Kunden erstellen",
       "subtitle": "Geben Sie die Daten unten ein. Wählen Sie „Als passiven Kunden speichern“, um einen reinen Admin-Eintrag zu erstellen, oder „Speichern & Portal-Einladung senden“, um dem Kunden zusätzlich eine Einladungs-E-Mail zu schicken.",
+      "passiveSubtitle": "Erstellt einen reinen Admin-Datensatz. Der Kunde wird nicht benachrichtigt und kann sich erst anmelden, wenn Sie ihm später eine Einladung senden.",
       "saveAsPassive": "Als passiven Kunden speichern",
       "saveAndInvite": "Speichern & Portal-Einladung senden",
       "savedPassiveToast": "Passiver Kunde erstellt.",

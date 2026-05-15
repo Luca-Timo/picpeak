@@ -42,6 +42,17 @@ interface Props {
   onCreated: (customer: CustomerAccountDetail) => void;
   /** Revert the editor card back to the search-only state. */
   onCancel: () => void;
+  /**
+   * Which save action(s) the form should expose.
+   *  - 'both' (default): renders both buttons — used by the quote /
+   *    invoice editors where the admin picks the mode in-place.
+   *  - 'passive': renders only "Save as passive customer".
+   *  - 'invite': renders only "Save & send portal invitation".
+   * The "passive" / "invite" specialisations let CustomerManagementPage
+   * route both header buttons through the same modal — the only
+   * difference between the two flows is which action button shows.
+   */
+  mode?: 'both' | 'passive' | 'invite';
 }
 
 type FormState = {
@@ -91,10 +102,31 @@ function buildPrefill(f: FormState): CustomerInvitePrefill {
   return out;
 }
 
-export const InlineCustomerCreate: React.FC<Props> = ({ onCreated, onCancel }) => {
+export const InlineCustomerCreate: React.FC<Props> = ({ onCreated, onCancel, mode = 'both' }) => {
   const { t } = useTranslation();
   const [form, setForm] = useState<FormState>(empty);
   const [busy, setBusy] = useState<'passive' | 'invite' | null>(null);
+
+  // Resolve a title + subtitle that matches the selected mode. The
+  // 'both' branch keeps the legacy copy so inline (in-editor) callers
+  // see the same wording they had before this prop existed.
+  const heading = mode === 'invite'
+    ? {
+        title: t('customers.invite.title', 'Invite a customer'),
+        subtitle: t('customers.invite.description',
+          'They will receive an email with a link to set up their account. Once they have accepted, you can assign them to events.'),
+      }
+    : mode === 'passive'
+      ? {
+          title: t('customers.create.openButton', 'Create passive customer'),
+          subtitle: t('customers.create.passiveSubtitle',
+            'Adds an admin-only customer record. The customer is not notified and cannot log in until you send them an invitation later.'),
+        }
+      : {
+          title: t('customers.create.title', 'Create new customer'),
+          subtitle: t('customers.create.subtitle',
+            'Fill in the details below. Choose "Save as passive customer" to create an admin-only record, or "Save & send portal invitation" to also email the customer a sign-up link.'),
+        };
 
   // Business-profile default locale powers the preferred-language
   // hint AND seeds the field on mount.
@@ -161,11 +193,10 @@ export const InlineCustomerCreate: React.FC<Props> = ({ onCreated, onCancel }) =
       <div className="flex items-start gap-3 mb-2">
         <div>
           <h4 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-            {t('customers.create.title', 'Create new customer')}
+            {heading.title}
           </h4>
           <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-0.5">
-            {t('customers.create.subtitle',
-              'Fill in the details below. Choose "Save as passive customer" to create an admin-only record, or "Save & send portal invitation" to also email the customer a sign-up link.')}
+            {heading.subtitle}
           </p>
         </div>
         <button
@@ -297,24 +328,32 @@ export const InlineCustomerCreate: React.FC<Props> = ({ onCreated, onCancel }) =
         <Button variant="outline" onClick={onCancel} disabled={busy !== null}>
           {t('common.cancel', 'Cancel')}
         </Button>
-        <Button
-          variant="outline"
-          onClick={() => handleSave('passive')}
-          disabled={busy !== null || !isValid}
-          isLoading={busy === 'passive'}
-          leftIcon={<Save className="w-4 h-4" />}
-        >
-          {t('customers.create.saveAsPassive', 'Save as passive customer')}
-        </Button>
-        <Button
-          variant="primary"
-          onClick={() => handleSave('invite')}
-          disabled={busy !== null || !isValid}
-          isLoading={busy === 'invite'}
-          leftIcon={<Send className="w-4 h-4" />}
-        >
-          {t('customers.create.saveAndInvite', 'Save & send portal invitation')}
-        </Button>
+        {(mode === 'both' || mode === 'passive') && (
+          <Button
+            variant={mode === 'passive' ? 'primary' : 'outline'}
+            onClick={() => handleSave('passive')}
+            disabled={busy !== null || !isValid}
+            isLoading={busy === 'passive'}
+            leftIcon={<Save className="w-4 h-4" />}
+          >
+            {/* Mode 'passive' is the dedicated CTA: promote it to the
+                primary variant so the button hierarchy mirrors what
+                an admin who opened the modal from "Create passive
+                customer" expects. */}
+            {t('customers.create.saveAsPassive', 'Save as passive customer')}
+          </Button>
+        )}
+        {(mode === 'both' || mode === 'invite') && (
+          <Button
+            variant="primary"
+            onClick={() => handleSave('invite')}
+            disabled={busy !== null || !isValid}
+            isLoading={busy === 'invite'}
+            leftIcon={<Send className="w-4 h-4" />}
+          >
+            {t('customers.create.saveAndInvite', 'Save & send portal invitation')}
+          </Button>
+        )}
       </div>
     </div>
   );
