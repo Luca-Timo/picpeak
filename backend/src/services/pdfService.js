@@ -493,6 +493,16 @@ function drawDate(doc, label, value, x, y, width) {
  */
 function drawLineItems(doc, ctx) {
   const { type, locale, lineItems, currency, intlLocale } = ctx;
+  // On a Stornorechnung the line items were snapshotted from the
+  // original at FULL positive amounts (so the DB-level invariant
+  // qty × unit = line_total still holds for both rows of the pair).
+  // The cancellation semantics live on the row-level totals, which
+  // are already negative in the DB. For the customer-facing PDF
+  // we flip the per-line total display sign so each row visually
+  // reads as a credit ("-CHF 300.00") — matches what bookkeepers
+  // expect on a Storno.
+  const isStorno = type === 'invoice' && ctx.doc?.kind === 'storno';
+  const lineTotalSign = isStorno ? -1 : 1;
   const labels = {
     pos:   t(locale, 'table_pos'),
     qty:   t(locale, 'table_qty'),
@@ -585,11 +595,12 @@ function drawLineItems(doc, ctx) {
     const descText = isSubItem ? `\u2022 ${li.description || ''}` : (li.description || '');
     const subItemPriceless = isSubItem && (!li.unitPriceMinor || Number(li.unitPriceMinor) === 0);
     const unitText = subItemPriceless ? '' : formatMinor(li.unitPriceMinor, currency, intlLocale);
+    const displayLineTotal = lineTotalSign * Number(li.lineTotalMinor || 0);
     const lineTotalText = subItemPriceless
       ? ''
       : isSubItem
-        ? `(${formatMinor(li.lineTotalMinor, currency, intlLocale)})`
-        : formatMinor(li.lineTotalMinor, currency, intlLocale);
+        ? `(${formatMinor(displayLineTotal, currency, intlLocale)})`
+        : formatMinor(displayLineTotal, currency, intlLocale);
     const numericColor = isSubItem ? '#666' : '#000';
 
     return {
@@ -1405,9 +1416,44 @@ function renderDocument(type, context) {
       y = drawDate(doc, t(ctx.locale, 'date'), formatDate(ctx.doc.issueDate, ctx.dateFormat),
                    leftX, y, PAGE.contentWidth);
 
+      // Storno discriminator. Drives:
+      //   - page title swap ("Stornorechnung" instead of "Rechnung")
+      //   - mandatory reference line under the title
+      //   - sign flip on line totals (row-level totals are already
+      //     stored negative in the DB, so drawTotals renders them
+      //     naturally — see drawLineItems for the per-item flip)
+      //   - suppression of payment terms / IBAN / QR-bill blocks
+      // `type === 'invoice'` is preserved as the outer document
+      // family — Storni share the invoice renderer surface, only
+      // the cosmetic + accounting-sign branches differ.
+      const isStorno = type === 'invoice' && ctx.doc.kind === 'storno';
+
       // ---- title ----------------------------------------------------
-      const title = type === 'quote' ? t(ctx.locale, 'quote_title') : t(ctx.locale, 'invoice_title');
+      const title = type === 'quote'
+        ? t(ctx.locale, 'quote_title')
+        : isStorno
+          ? t(ctx.locale, 'storno_title')
+          : t(ctx.locale, 'invoice_title');
       y = drawTitle(doc, title, leftX, y + 2);
+
+      // Mandatory Storno reference line — "Bezug: Storno zu Rechnung
+      // R-XXXX vom DATE". This is the §14c-defensible link from the
+      // cancellation document to the invoice it reverses; readers
+      // and Finanzamt auditors need both numbers + the original
+      // issue date to reconstruct the chain from the documents
+      // alone. Stamped FIRST (before sourceQuote / replaces) so
+      // it's the prominent reference on a Storno.
+      if (isStorno && ctx.doc.cancelsInvoice) {
+        const { number, issueDate } = ctx.doc.cancelsInvoice;
+        doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#666');
+        const datePart = issueDate ? ` ${t(ctx.locale, 'reference_dated', { date: formatDate(issueDate, ctx.dateFormat) })}` : '';
+        doc.text(
+          `${t(ctx.locale, 'reference_label')}: ${t(ctx.locale, 'reference_cancels')} ${t(ctx.locale, 'invoice_title')} ${number}${datePart}`,
+          leftX, y, { width: PAGE.contentWidth }
+        );
+        y = doc.y + 6;
+        doc.fillColor('#000');
+      }
 
       // Invoice → source quote cross-reference. We deliberately keep
       // invoice numbers on a strict monotonic sequence (R-YYYY-NNNN)
@@ -1417,8 +1463,8 @@ function renderDocument(type, context) {
       // "Bezug: Angebot Q-…" line under the title. Readers see the
       // provenance without breaking the numbering scheme. Only
       // rendered for invoices that came from a quote; no-op for
-      // standalone invoices.
-      if (type === 'invoice' && ctx.doc.sourceQuoteNumber) {
+      // standalone invoices and Storni (which don't reference quotes).
+      if (type === 'invoice' && !isStorno && ctx.doc.sourceQuoteNumber) {
         doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#666');
         doc.text(
           `${t(ctx.locale, 'reference_label')}: ${t(ctx.locale, 'quote_title')} ${ctx.doc.sourceQuoteNumber}`,
@@ -1431,8 +1477,9 @@ function renderDocument(type, context) {
       // replaces an earlier (cancelled) one, surface "Bezug: Ersetzt
       // Rechnung R-XXXX vom DATE" so the customer (and auditors) can
       // trace the chain. Rendered in the same grey-666 small-print
-      // style as the quote-source reference above.
-      if (type === 'invoice' && ctx.doc.replacesInvoice) {
+      // style as the quote-source reference above. Suppressed on
+      // Storni (which carry their own cancelsInvoice reference).
+      if (type === 'invoice' && !isStorno && ctx.doc.replacesInvoice) {
         const { number, issueDate } = ctx.doc.replacesInvoice;
         doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#666');
         const datePart = issueDate ? ` ${t(ctx.locale, 'reference_dated', { date: formatDate(issueDate, ctx.dateFormat) })}` : '';
@@ -1548,8 +1595,14 @@ function renderDocument(type, context) {
       // Pin the payment block to the fixed anchor too — the totals
       // box can end short of it (e.g. when only Net + Total render
       // with no shipping/VAT), so we snap back unconditionally.
-      y = desiredPaymentY;
-      y = drawPaymentBlock(doc, ctx, leftX, y, PAGE.contentWidth);
+      // Suppressed on Stornorechnungen: a cancellation document is
+      // not a payment instrument — no Zahlungsbedingungen, no IBAN,
+      // no Skonto. Customers reading a Storno expect total clarity
+      // that this is the REVERSAL of an obligation, not a new one.
+      if (!isStorno) {
+        y = desiredPaymentY;
+        y = drawPaymentBlock(doc, ctx, leftX, y, PAGE.contentWidth);
+      }
 
       // ---- folding marks (left edge) --------------------------------
       drawFoldingMarks(doc, ctx.issuer?.foldingMarks);
@@ -1562,7 +1615,9 @@ function renderDocument(type, context) {
       //   - 'swiss' → SwissQRBill payment slip (CHF / EUR within CH/LI)
       //   - 'epc'   → SEPA EPC069-12 QR code (EUR-only, every SEPA bank)
       // Both append a fresh page; 'none' is a no-op.
-      if (type === 'invoice') {
+      // Suppressed on Stornorechnungen — negative-amount QR codes
+      // aren't a defined construct in either spec.
+      if (type === 'invoice' && !isStorno) {
         if (ctx.qrFormat === 'swiss') {
           appendSwissQrBill(doc, ctx);
         } else if (ctx.qrFormat === 'epc') {

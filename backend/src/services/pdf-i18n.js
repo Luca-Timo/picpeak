@@ -16,6 +16,14 @@ const LABELS = {
   en: {
     quote_title: 'Quote',
     invoice_title: 'Invoice',
+    // Stornorechnung (cancellation invoice). Distinct from
+    // `invoice_title` so the renderer can swap the page title when
+    // `doc.kind === 'storno'`. `reference_cancels` powers the
+    // mandatory "Bezug: Storno zu Rechnung R-XXXX vom DATE" line
+    // under the title that the customer/auditor needs to trace the
+    // §14c-defensible reversal.
+    storno_title: 'Cancellation invoice',
+    reference_cancels: 'Cancels',
     date: 'Date',
     quote_number: 'Quote',
     invoice_number: 'Invoice',
@@ -82,6 +90,8 @@ const LABELS = {
   de: {
     quote_title: 'Angebot',
     invoice_title: 'Rechnung',
+    storno_title: 'Stornorechnung',
+    reference_cancels: 'Storno zu',
     date: 'Datum',
     quote_number: 'Angebot',
     invoice_number: 'Rechnung',
@@ -147,6 +157,8 @@ const LABELS = {
     // Machine-translated, flagged for native review.
     quote_title: 'Devis',
     invoice_title: 'Facture',
+    storno_title: 'Avoir',
+    reference_cancels: 'Annule',
     date: 'Date',
     quote_number: 'Devis',
     invoice_number: 'Facture',
@@ -212,6 +224,8 @@ const LABELS = {
     // Machine-translated, flagged for native review.
     quote_title: 'Offerte',
     invoice_title: 'Factuur',
+    storno_title: 'Creditfactuur',
+    reference_cancels: 'Annuleert',
     date: 'Datum',
     quote_number: 'Offerte',
     invoice_number: 'Factuur',
@@ -277,6 +291,8 @@ const LABELS = {
     // Machine-translated, flagged for native review.
     quote_title: 'Orçamento',
     invoice_title: 'Fatura',
+    storno_title: 'Nota de crédito',
+    reference_cancels: 'Cancela',
     date: 'Data',
     quote_number: 'Orçamento',
     invoice_number: 'Fatura',
@@ -342,6 +358,8 @@ const LABELS = {
     // Machine-translated, flagged for native review.
     quote_title: 'Коммерческое предложение',
     invoice_title: 'Счёт',
+    storno_title: 'Сторно-счёт',
+    reference_cancels: 'Сторно к',
     date: 'Дата',
     quote_number: 'Предложение',
     invoice_number: 'Счёт',
