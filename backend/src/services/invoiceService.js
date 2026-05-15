@@ -1151,7 +1151,11 @@ async function createStorno(originalId, adminId, trx = db) {
     status: 'scheduled',
     scheduled_send_at: now,
     issue_date: issueDate,
-    due_date: null,
+    // Storni have no payment due — mirror issue_date to satisfy the
+    // schema's NOT NULL constraint on due_date. The field is dead data
+    // for kind='storno' rows: the PDF renderer suppresses the due-date
+    // line, and the dunning scheduler filters kind='invoice'.
+    due_date: issueDate,
     reminder_level: 0,
     cc_pdf_email: original.cc_pdf_email,
     // No payment block on a Storno — it's not a payment instrument.

@@ -201,7 +201,9 @@ describe('invoiceService.createStorno', () => {
     expect(insertedRow.business_bank_account_id).toBeNull();
     expect(insertedRow.qr_format).toBeNull();
     expect(insertedRow.payment_term_template_id).toBeNull();
-    expect(insertedRow.due_date).toBeNull();
+    // Storni have no real payment due, but the schema's NOT NULL
+    // constraint on due_date forces a value — we mirror issue_date.
+    expect(insertedRow.due_date).toBe(insertedRow.issue_date);
   });
 });
 
