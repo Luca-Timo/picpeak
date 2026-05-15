@@ -134,7 +134,7 @@ describe('invoiceService.reissueInvoice', () => {
 
     const result = await invoiceService.reissueInvoice(1, 42);
     expect(result.id).toBeDefined();
-    expect(result.supersedes).toBe(1);
+    expect(result.replaces).toBe(1);
   });
 });
 

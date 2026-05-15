@@ -70,7 +70,7 @@ export const BillDetailPage: React.FC = () => {
    * a sent invoice. Atomically:
    *   1. Cancels this invoice (status → cancelled)
    *   2. Creates a new scheduled invoice with a fresh number,
-   *      same line items, linked via supersedesInvoiceId
+   *      same line items, linked via replacesInvoiceId
    *   3. Navigates to the new invoice's editor so the admin can
    *      adjust whatever was wrong before sending
    * For invoices that were never sent, use Edit instead — the

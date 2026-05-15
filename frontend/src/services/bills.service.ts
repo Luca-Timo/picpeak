@@ -75,7 +75,7 @@ export interface InvoiceDetail extends InvoiceSummary {
   paymentTermTemplateId?: number | null;
   /** Set when this invoice was created via Cancel & reissue —
    *  points at the cancelled original. Migration 114. */
-  supersedesInvoiceId?: number | null;
+  replacesInvoiceId?: number | null;
 }
 
 export interface InvoicePayment {
@@ -202,10 +202,10 @@ export const billsService = {
   },
 
   /** Cancel & reissue — atomically cancels this invoice and creates
-   *  a fresh scheduled duplicate linked via `supersedesInvoiceId`.
+   *  a fresh scheduled duplicate linked via `replacesInvoiceId`.
    *  Returns the new invoice's id; caller typically navigates to
    *  /admin/clients/bills/:id/edit to adjust before sending. */
-  async reissue(id: number): Promise<{ id: number; supersedes: number }> {
+  async reissue(id: number): Promise<{ id: number; replaces: number }> {
     const { data } = await api.post(`/admin/invoices/${id}/reissue`);
     return data.data || data;
   },

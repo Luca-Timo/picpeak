@@ -384,9 +384,9 @@ export const TaxReportPage: React.FC = () => {
                             {t('taxReport.statusCancelled', 'Cancelled')}
                           </span>
                         )}
-                        {row.supersededByInvoiceNumber && (
+                        {row.replacedByInvoiceNumber && (
                           <span className="ml-1 text-xs text-neutral-500 dark:text-neutral-400 not-italic">
-                            → {row.supersededByInvoiceNumber}
+                            → {row.replacedByInvoiceNumber}
                           </span>
                         )}
                       </td>

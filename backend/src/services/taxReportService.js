@@ -21,7 +21,7 @@
  *     rows:               [{ id, invoiceNumber, issueDate, currency,
  *                            vatRate, customerLabel, eventName,
  *                            netMinor, vatMinor, totalMinor,
- *                            isCancelled, supersededByInvoiceNumber }, …],
+ *                            isCancelled, replacedByInvoiceNumber }, …],
  *     totalsByVatRate:    [{ vatRate, netMinor, vatMinor, totalMinor }, …],
  *     grandTotalNet:      Number (minor units),
  *     grandTotalVat:      Number (minor units),
@@ -119,14 +119,14 @@ function computeReportedAmounts(row) {
  * cancelled row. Used for the "Bezug → R-2026-0043" badge in the UI
  * and PDF. Single batched query, no N+1.
  */
-async function loadSupersedesMap(cancelledIds) {
+async function loadReplacementsMap(cancelledIds) {
   if (!cancelledIds.length) return new Map();
   const successors = await db('invoices')
-    .whereIn('supersedes_invoice_id', cancelledIds)
-    .select('supersedes_invoice_id', 'invoice_number');
+    .whereIn('replaces_invoice_id', cancelledIds)
+    .select('replaces_invoice_id', 'invoice_number');
   const map = new Map();
   for (const s of successors) {
-    map.set(s.supersedes_invoice_id, s.invoice_number);
+    map.set(s.replaces_invoice_id, s.invoice_number);
   }
   return map;
 }
@@ -169,7 +169,7 @@ async function getTaxReport({ from, to, currency } = {}) {
         'invoices.vat_amount_minor',
         'invoices.total_amount_minor',
         'invoices.late_fee_amount_minor',
-        'invoices.supersedes_invoice_id',
+        'invoices.replaces_invoice_id',
         'customer_accounts.email         as customer_email',
         'customer_accounts.display_name  as customer_display_name',
         'customer_accounts.first_name    as customer_first_name',
@@ -181,7 +181,7 @@ async function getTaxReport({ from, to, currency } = {}) {
     // Find replacement invoice numbers for any cancelled rows so the
     // UI can render "Bezug → R-XXXX" without an extra round-trip.
     const cancelledIds = dbRows.filter((r) => r.status === 'cancelled').map((r) => r.id);
-    const supersededByMap = await loadSupersedesMap(cancelledIds);
+    const replacedByMap = await loadReplacementsMap(cancelledIds);
 
     // Bucket totals by VAT rate. Use a string key so 7.7 and 7.70
     // collapse to the same bucket regardless of how the DB rounds.
@@ -217,7 +217,7 @@ async function getTaxReport({ from, to, currency } = {}) {
         currency: r.currency,
         status: r.status,
         isCancelled,
-        supersededByInvoiceNumber: isCancelled ? (supersededByMap.get(r.id) || null) : null,
+        replacedByInvoiceNumber: isCancelled ? (replacedByMap.get(r.id) || null) : null,
         vatRate: ensureRate(r.vat_rate),
         customerLabel: buildCustomerLabel(r),
         eventName: r.event_name || '',

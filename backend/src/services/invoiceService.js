@@ -852,13 +852,14 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       // PDF renderer draws "Bezug: Angebot Q-..." under the title
       // when set. Empty/null suppresses the line (standalone invoice).
       sourceQuoteNumber: sourceQuote?.quote_number || null,
-      // When this invoice supersedes a previous one (migration 114 —
-      // cancel + reissue workflow), the renderer stamps a second
-      // reference line: "Bezug: Ersetzt Rechnung R-XXXX vom DATE".
-      supersedesInvoice: await (async () => {
-        if (!invoice.supersedes_invoice_id) return null;
+      // When this invoice replaces a previously-cancelled one
+      // (migration 114, reissue workflow), the renderer stamps a
+      // second reference line: "Bezug: Ersetzt Rechnung R-XXXX vom
+      // DATE".
+      replacesInvoice: await (async () => {
+        if (!invoice.replaces_invoice_id) return null;
         const prior = await db('invoices')
-          .where({ id: invoice.supersedes_invoice_id })
+          .where({ id: invoice.replaces_invoice_id })
           .select('invoice_number', 'issue_date').first();
         return prior
           ? { number: prior.invoice_number, issueDate: prior.issue_date }
@@ -1063,7 +1064,7 @@ async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, not
  *   2. A new `scheduled` invoice is created with a fresh sequential
  *      number, copying line items + customer + totals + payment
  *      terms + bank + QR + everything the renderer needs
- *   3. The new row's `supersedes_invoice_id` points at the original
+ *   3. The new row's `replaces_invoice_id` points at the original
  *      so the PDF renderer can stamp "Bezug: Ersetzt Rechnung X" and
  *      auditors can trace the chain
  *
@@ -1138,7 +1139,7 @@ async function reissueInvoice(id, adminId) {
 
     // 3. Link the new row to the cancelled original.
     await trx('invoices').where({ id: newId }).update({
-      supersedes_invoice_id: id,
+      replaces_invoice_id: id,
       updated_at: new Date(),
     });
 
@@ -1147,7 +1148,7 @@ async function reissueInvoice(id, adminId) {
         original.event_id || null, `admin:${adminId}`);
     } catch (_) {}
 
-    return { id: newId, supersedes: id };
+    return { id: newId, replaces: id };
   });
 }
 
