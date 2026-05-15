@@ -84,6 +84,9 @@ function transformQuote(q) {
     eventTimeEnd: q.event_time_end,
     expectedDurationHours: q.expected_duration_hours == null ? null : Number(q.expected_duration_hours),
     paymentTermTemplateId: q.payment_term_template_id,
+    // Split payment-term picker (migration 124).
+    paymentNetDaysTemplateId: q.payment_net_days_template_id || null,
+    paymentTimingTemplateId: q.payment_timing_template_id || null,
     netAmountMinor: q.net_amount_minor,
     vatRate: q.vat_rate == null ? null : Number(q.vat_rate),
     vatAmountMinor: q.vat_amount_minor,
@@ -141,6 +144,37 @@ function transformPaymentTermTemplate(t) {
   };
 }
 
+// Split payment-term templates (migration 124). Two transforms because
+// the rows have different shapes — net-days carries Skonto, timing
+// carries the installments array.
+function transformPaymentNetDaysTemplate(t) {
+  if (!t) return null;
+  return {
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    netDays: t.net_days,
+    skontoPercent: t.skonto_percent == null ? null : Number(t.skonto_percent),
+    skontoWithinDays: t.skonto_within_days,
+    isSystem: t.is_system === 1 || t.is_system === true,
+    isActive: t.is_active === 1 || t.is_active === true,
+    displayOrder: t.display_order,
+  };
+}
+
+function transformPaymentTimingTemplate(t) {
+  if (!t) return null;
+  return {
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    installments: typeof t.installments === 'string' ? JSON.parse(t.installments) : t.installments,
+    isSystem: t.is_system === 1 || t.is_system === true,
+    isActive: t.is_active === 1 || t.is_active === true,
+    displayOrder: t.display_order,
+  };
+}
+
 function transformLineItemPreset(p) {
   if (!p) return null;
   return {
@@ -167,6 +201,8 @@ function mapPayloadToService(body) {
     eventTimeStart: 'eventTimeStart', eventTimeEnd: 'eventTimeEnd',
     expectedDurationHours: 'expectedDurationHours',
     paymentTermTemplateId: 'paymentTermTemplateId',
+    paymentNetDaysTemplateId: 'paymentNetDaysTemplateId',
+    paymentTimingTemplateId: 'paymentTimingTemplateId',
     vatRate: 'vatRate', shippingAmountMinor: 'shippingAmountMinor',
     introText: 'introText', outroText: 'outroText',
     internalNotes: 'internalNotes', ccPdfEmail: 'ccPdfEmail',
@@ -264,6 +300,8 @@ const QUOTE_BODY_VALIDATORS = [
   body('eventTimeEnd').optional({ values: 'falsy' }).isString().isLength({ max: 8 }),
   body('expectedDurationHours').optional({ values: 'falsy' }).isFloat({ min: 0, max: 99.99 }),
   body('paymentTermTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  body('paymentNetDaysTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  body('paymentTimingTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('vatRate').optional({ values: 'falsy' }).isFloat({ min: 0, max: 100 }),
   body('shippingAmountMinor').optional({ values: 'falsy' }).isInt({ min: 0 }),
   body('introText').optional({ values: 'falsy' }).isString().isLength({ max: 5000 }),
@@ -319,6 +357,8 @@ router.put(
     body('eventTimeEnd').optional({ values: 'falsy' }).isString().isLength({ max: 8 }),
     body('expectedDurationHours').optional({ values: 'falsy' }).isFloat({ min: 0, max: 99.99 }),
     body('paymentTermTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+    body('paymentNetDaysTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+    body('paymentTimingTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
     body('vatRate').optional({ values: 'falsy' }).isFloat({ min: 0, max: 100 }),
     body('shippingAmountMinor').optional({ values: 'falsy' }).isInt({ min: 0 }),
     body('introText').optional({ values: 'falsy' }).isString().isLength({ max: 5000 }),
@@ -596,6 +636,139 @@ router.delete(
   handleAsync(async (req, res) => {
     validateRequest(req);
     await quoteService.deletePaymentTermTemplate(parseInt(req.params.id, 10));
+    return successResponse(res, { deleted: true });
+  })
+);
+
+// ---------------------------------------------------------------------
+// Presets — payment net-days (migration 124, half of the split)
+// ---------------------------------------------------------------------
+
+router.get(
+  '/presets/payment-net-days',
+  requirePermission('quotes.view'),
+  handleAsync(async (req, res) => {
+    const rows = await quoteService.listPaymentNetDaysTemplates();
+    return successResponse(res, { templates: rows.map(transformPaymentNetDaysTemplate) });
+  })
+);
+
+router.post(
+  '/presets/payment-net-days',
+  requirePermission('quotes.manage'),
+  [
+    body('name').isString().isLength({ min: 1, max: 128 }),
+    // net_days = 0 is "Sofort fällig" — valid.
+    body('netDays').isInt({ min: 0, max: 365 }),
+    body('skontoPercent').optional({ values: 'falsy' }).isFloat({ min: 0, max: 100 }),
+    body('skontoWithinDays').optional({ values: 'falsy' }).isInt({ min: 0, max: 365 }),
+    body('description').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
+    body('displayOrder').optional({ values: 'falsy' }).isInt({ min: 0, max: 9999 }),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const row = await quoteService.createPaymentNetDaysTemplate({
+      name: req.body.name,
+      description: req.body.description,
+      net_days: req.body.netDays,
+      skonto_percent: req.body.skontoPercent,
+      skonto_within_days: req.body.skontoWithinDays,
+      display_order: req.body.displayOrder,
+    });
+    return successResponse(res, { template: transformPaymentNetDaysTemplate(row) }, 201);
+  })
+);
+
+router.put(
+  '/presets/payment-net-days/:id',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    const row = await quoteService.updatePaymentNetDaysTemplate(id, {
+      name: req.body.name,
+      description: req.body.description,
+      net_days: req.body.netDays,
+      skonto_percent: req.body.skontoPercent,
+      skonto_within_days: req.body.skontoWithinDays,
+      display_order: req.body.displayOrder,
+      is_active: req.body.isActive,
+    });
+    return successResponse(res, { template: transformPaymentNetDaysTemplate(row) });
+  })
+);
+
+router.delete(
+  '/presets/payment-net-days/:id',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    await quoteService.deletePaymentNetDaysTemplate(parseInt(req.params.id, 10));
+    return successResponse(res, { deleted: true });
+  })
+);
+
+// ---------------------------------------------------------------------
+// Presets — payment timing (migration 124, other half of the split)
+// ---------------------------------------------------------------------
+
+router.get(
+  '/presets/payment-timing',
+  requirePermission('quotes.view'),
+  handleAsync(async (req, res) => {
+    const rows = await quoteService.listPaymentTimingTemplates();
+    return successResponse(res, { templates: rows.map(transformPaymentTimingTemplate) });
+  })
+);
+
+router.post(
+  '/presets/payment-timing',
+  requirePermission('quotes.manage'),
+  [
+    body('name').isString().isLength({ min: 1, max: 128 }),
+    body('installments').isArray({ min: 1 }),
+    body('description').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
+    body('displayOrder').optional({ values: 'falsy' }).isInt({ min: 0, max: 9999 }),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const row = await quoteService.createPaymentTimingTemplate({
+      name: req.body.name,
+      description: req.body.description,
+      installments: req.body.installments,
+      display_order: req.body.displayOrder,
+    });
+    return successResponse(res, { template: transformPaymentTimingTemplate(row) }, 201);
+  })
+);
+
+router.put(
+  '/presets/payment-timing/:id',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    const row = await quoteService.updatePaymentTimingTemplate(id, {
+      name: req.body.name,
+      description: req.body.description,
+      installments: req.body.installments,
+      display_order: req.body.displayOrder,
+      is_active: req.body.isActive,
+    });
+    return successResponse(res, { template: transformPaymentTimingTemplate(row) });
+  })
+);
+
+router.delete(
+  '/presets/payment-timing/:id',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    await quoteService.deletePaymentTimingTemplate(parseInt(req.params.id, 10));
     return successResponse(res, { deleted: true });
   })
 );

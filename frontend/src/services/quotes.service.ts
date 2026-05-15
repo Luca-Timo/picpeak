@@ -66,6 +66,11 @@ export interface QuoteDetail extends QuoteSummary {
   eventTimeEnd: string | null;
   expectedDurationHours: number | null;
   paymentTermTemplateId: number | null;
+  /** Migration 124 — split payment-term picker. Two new FKs preferred
+   *  by the editor; legacy `paymentTermTemplateId` stays for sent
+   *  quotes authored before the split. */
+  paymentNetDaysTemplateId: number | null;
+  paymentTimingTemplateId: number | null;
   netAmountMinor: number;
   vatRate: number | null;
   vatAmountMinor: number;
@@ -105,6 +110,32 @@ export interface PaymentTermTemplate {
   displayOrder: number;
 }
 
+// Migration 124 — split payment-term picker. Two new template tables
+// replace the conflated PaymentTermTemplate for new quotes/invoices.
+// The old type stays for back-compat with sent documents whose
+// snapshot still references the legacy table.
+export interface PaymentNetDaysTemplate {
+  id: number;
+  name: string;
+  description: string | null;
+  netDays: number;
+  skontoPercent: number | null;
+  skontoWithinDays: number | null;
+  isSystem: boolean;
+  isActive: boolean;
+  displayOrder: number;
+}
+
+export interface PaymentTimingTemplate {
+  id: number;
+  name: string;
+  description: string | null;
+  installments: PaymentTermInstallment[];
+  isSystem: boolean;
+  isActive: boolean;
+  displayOrder: number;
+}
+
 export interface LineItemPreset {
   id: number;
   name: string;
@@ -128,6 +159,10 @@ export interface QuoteCreatePayload {
   eventTimeEnd?: string;
   expectedDurationHours?: number;
   paymentTermTemplateId?: number;
+  /** Migration 124 — split payment-term picker. Both must be set
+   *  together for the new path to engage on the backend. */
+  paymentNetDaysTemplateId?: number;
+  paymentTimingTemplateId?: number;
   vatRate?: number;
   shippingAmountMinor?: number;
   introText?: string;
@@ -245,6 +280,17 @@ export const quotesService = {
 
   async deletePaymentTermTemplate(id: number): Promise<{ deleted: true }> {
     const { data } = await api.delete(`/admin/quotes/presets/payment-terms/${id}`);
+    return data.data || data;
+  },
+
+  // Split payment-term templates (migration 124).
+  async listPaymentNetDaysTemplates(): Promise<{ templates: PaymentNetDaysTemplate[] }> {
+    const { data } = await api.get('/admin/quotes/presets/payment-net-days');
+    return data.data || data;
+  },
+
+  async listPaymentTimingTemplates(): Promise<{ templates: PaymentTimingTemplate[] }> {
+    const { data } = await api.get('/admin/quotes/presets/payment-timing');
     return data.data || data;
   },
 };

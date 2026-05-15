@@ -362,14 +362,34 @@ async function createInvoice(payload, adminId, trx = db) {
   // don't retroactively change rendered invoices. Migration 113.
   let paymentTermTemplateId = null;
   let paymentTermSnapshot = null;
-  if (payload.paymentTermTemplateId) {
+  let paymentNetDaysTemplateId = null;
+  let paymentTimingTemplateId = null;
+  // Migration 124 — prefer the two split FKs. Compose a snapshot from
+  // them in the same shape pdfService + scheduler already consume.
+  // Fall back to the legacy single FK when the caller still uses it.
+  if (payload.paymentNetDaysTemplateId && payload.paymentTimingTemplateId) {
+    const [netDays, timing] = await Promise.all([
+      trx('payment_net_days_templates').where({ id: payload.paymentNetDaysTemplateId }).first(),
+      trx('payment_timing_templates').where({ id: payload.paymentTimingTemplateId }).first(),
+    ]);
+    if (netDays && timing) {
+      paymentNetDaysTemplateId = netDays.id;
+      paymentTimingTemplateId = timing.id;
+      paymentTermSnapshot = JSON.stringify({
+        description: timing.description || netDays.description || null,
+        net_days: netDays.net_days,
+        skonto_percent: netDays.skonto_percent,
+        skonto_within_days: netDays.skonto_within_days,
+        installments: typeof timing.installments === 'string'
+          ? (() => { try { return JSON.parse(timing.installments); } catch { return null; } })()
+          : timing.installments || null,
+      });
+    }
+  } else if (payload.paymentTermTemplateId) {
     const tpl = await trx('payment_term_templates')
       .where({ id: payload.paymentTermTemplateId }).first();
     if (tpl) {
       paymentTermTemplateId = tpl.id;
-      // Match the snapshot shape the quote service emits so the
-      // PDF renderer's build* helpers can read both invoice and
-      // quote snapshots through one code path.
       paymentTermSnapshot = JSON.stringify({
         description: tpl.description || null,
         net_days: tpl.net_days,
@@ -415,6 +435,8 @@ async function createInvoice(payload, adminId, trx = db) {
     business_bank_account_id: bank?.id || null,
     qr_format: payload.qrFormat || null,
     payment_term_template_id: paymentTermTemplateId,
+    payment_net_days_template_id: paymentNetDaysTemplateId,
+    payment_timing_template_id: paymentTimingTemplateId,
     payment_term_snapshot: paymentTermSnapshot,
     created_by_admin_id: adminId,
     created_at: new Date(),
@@ -442,7 +464,9 @@ async function createInvoice(payload, adminId, trx = db) {
 async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, currency, language,
                                           lineItems, totals, installments, eventDate, adminId,
                                           ccPdfEmail, netDays,
-                                          eventName, eventTimeStart, eventTimeEnd }) {
+                                          eventName, eventTimeStart, eventTimeEnd,
+                                          paymentNetDaysTemplateId, paymentTimingTemplateId,
+                                          paymentTermSnapshot }) {
   // netDays drives the due-date offset on every scheduled invoice
   // created here. Defaults to 30 when the caller doesn't pass one;
   // callers in quoteService now pass the converting quote's
@@ -526,6 +550,17 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
       shipping_amount_minor: shippingSlice,
       total_amount_minor: totalSlice,
       cc_pdf_email: ccPdfEmail || null,
+      // Migration 124 — carry the split payment-term FKs over from
+      // the source quote so the converted invoice is editable (when
+      // it eventually unlocks) with the same orthogonal split. The
+      // snapshot itself is the legal record; the FKs are convenience.
+      payment_net_days_template_id: paymentNetDaysTemplateId || null,
+      payment_timing_template_id: paymentTimingTemplateId || null,
+      payment_term_snapshot: paymentTermSnapshot
+        ? (typeof paymentTermSnapshot === 'string'
+          ? paymentTermSnapshot
+          : JSON.stringify(paymentTermSnapshot))
+        : null,
       created_by_admin_id: adminId,
       created_at: new Date(),
       updated_at: new Date(),
@@ -1172,6 +1207,11 @@ async function createStorno(originalId, adminId, trx = db) {
     event_time_start: original.event_time_start || null,
     event_time_end: original.event_time_end || null,
     source_quote_id: null,
+    // Migration 124 — carry the split FKs through onto the Storno row
+    // so the lineage stays consistent if anyone audits the
+    // cancellation document and checks the picker state.
+    payment_net_days_template_id: original.payment_net_days_template_id || null,
+    payment_timing_template_id: original.payment_timing_template_id || null,
     currency: original.currency,
     language: original.language,
     vat_rate: original.vat_rate,

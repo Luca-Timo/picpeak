@@ -117,6 +117,11 @@ function transformInvoice(i) {
     pdfPath: i.pdf_path,
     businessBankAccountId: i.business_bank_account_id,
     paymentTermTemplateId: i.payment_term_template_id || null,
+    // Split payment-term picker (migration 124). Two new FKs; the
+    // editor prefers these. Both must be present for the new path to
+    // engage server-side.
+    paymentNetDaysTemplateId: i.payment_net_days_template_id || null,
+    paymentTimingTemplateId: i.payment_timing_template_id || null,
     // Storno wiring (migration 114). The four FK columns drive the
     // admin UI's banners + action gating:
     //  - kind: 'invoice' | 'storno' — defaults to 'invoice' for rows
@@ -196,6 +201,11 @@ const INVOICE_BODY_VALIDATORS = [
   body('businessBankAccountId').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('qrFormat').optional({ values: 'falsy' }).isIn(['swiss', 'epc', 'none']),
   body('paymentTermTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  // Split payment-term picker (migration 124). Both optional at the
+  // validator level so legacy clients still work; the editor will
+  // require them once it's updated.
+  body('paymentNetDaysTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  body('paymentTimingTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
   // Inline event snapshot (migration 123). Mirrors quotes — kept
   // optional because standalone invoices may not have an event yet.
   body('eventName').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
@@ -235,6 +245,8 @@ function mapPayloadToService(body) {
     eventTimeStart: 'eventTimeStart',
     eventTimeEnd: 'eventTimeEnd',
     paymentTermTemplateId: 'paymentTermTemplateId',
+    paymentNetDaysTemplateId: 'paymentNetDaysTemplateId',
+    paymentTimingTemplateId: 'paymentTimingTemplateId',
   };
   for (const [api, svc] of Object.entries(map)) {
     if (Object.prototype.hasOwnProperty.call(body, api)) out[svc] = body[api];
@@ -517,6 +529,44 @@ router.put(
       } else {
         // Explicit clear — admin picked "no template".
         updates.payment_term_template_id = null;
+        updates.payment_term_snapshot = null;
+      }
+    }
+
+    // Migration 124 — split payment-term picker. When both new FKs are
+    // present, prefer them and re-compose the snapshot from the pair.
+    // The editor sends both together so we don't have to handle the
+    // half-set case; it stays a noop here when only one is supplied.
+    if (
+      Object.prototype.hasOwnProperty.call(payload, 'paymentNetDaysTemplateId')
+      && Object.prototype.hasOwnProperty.call(payload, 'paymentTimingTemplateId')
+    ) {
+      const netDaysId = parseInt(payload.paymentNetDaysTemplateId, 10);
+      const timingId = parseInt(payload.paymentTimingTemplateId, 10);
+      if (netDaysId && timingId) {
+        const [netDays, timing] = await Promise.all([
+          db('payment_net_days_templates').where({ id: netDaysId }).first(),
+          db('payment_timing_templates').where({ id: timingId }).first(),
+        ]);
+        if (netDays && timing) {
+          updates.payment_net_days_template_id = netDays.id;
+          updates.payment_timing_template_id = timing.id;
+          // Clear the legacy FK — the editor is moving off it.
+          updates.payment_term_template_id = null;
+          updates.payment_term_snapshot = JSON.stringify({
+            description: timing.description || netDays.description || null,
+            net_days: netDays.net_days,
+            skonto_percent: netDays.skonto_percent,
+            skonto_within_days: netDays.skonto_within_days,
+            installments: typeof timing.installments === 'string'
+              ? (() => { try { return JSON.parse(timing.installments); } catch { return null; } })()
+              : timing.installments || null,
+          });
+        }
+      } else {
+        // Explicit clear — admin emptied both.
+        updates.payment_net_days_template_id = null;
+        updates.payment_timing_template_id = null;
         updates.payment_term_snapshot = null;
       }
     }

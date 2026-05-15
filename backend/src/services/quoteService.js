@@ -508,6 +508,11 @@ async function createQuote(payload, adminId) {
       event_time_end: payload.eventTimeEnd || null,
       expected_duration_hours: payload.expectedDurationHours == null ? null : ensureNumber(payload.expectedDurationHours),
       payment_term_template_id: payload.paymentTermTemplateId || null,
+      // Migration 124 — split payment-term picker. Editor stops writing
+      // to the legacy single FK once both new ones are present; the
+      // legacy column stays nullable for backward compatibility.
+      payment_net_days_template_id: payload.paymentNetDaysTemplateId || null,
+      payment_timing_template_id: payload.paymentTimingTemplateId || null,
       net_amount_minor: totals.netAmountMinor,
       vat_rate: ensureNumber(payload.vatRate, 0),
       vat_amount_minor: totals.vatAmountMinor,
@@ -599,6 +604,10 @@ async function updateQuote(id, payload, adminId) {
       eventTimeEnd: 'event_time_end',
       expectedDurationHours: 'expected_duration_hours',
       paymentTermTemplateId: 'payment_term_template_id',
+      // Migration 124 — split picker. Both legacy + new FKs accepted
+      // on the update path so the editor can transition without breaking.
+      paymentNetDaysTemplateId: 'payment_net_days_template_id',
+      paymentTimingTemplateId: 'payment_timing_template_id',
       introText: 'intro_text',
       outroText: 'outro_text',
       internalNotes: 'internal_notes',
@@ -934,9 +943,15 @@ async function sendQuote(id, adminId) {
   const pdfPath = await persistDocPdf('quote', quote, buffer);
 
   // Snapshot payment term so future template edits don't mutate the doc.
-  const paymentTermSnapshot = quote.payment_term_template_id
-    ? (await db('payment_term_templates').where({ id: quote.payment_term_template_id }).first())
-    : null;
+  // Migration 124 — prefer the two new split FKs; fall back to the legacy
+  // single FK when the quote was authored before the split was deployed.
+  // Output shape is unchanged: { description, net_days, skonto_percent,
+  // skonto_within_days, installments } — that's what pdfService and the
+  // scheduler already read.
+  const paymentTermSnapshot = await composeSnapshotFromSplitFks(quote)
+    || (quote.payment_term_template_id
+      ? await db('payment_term_templates').where({ id: quote.payment_term_template_id }).first()
+      : null);
 
   // Mint a single shared token; accept and decline are differentiated
   // by the request body. This makes the email link survive a customer
@@ -1302,6 +1317,12 @@ async function convertToInvoiceOnly(quoteId, adminId) {
       eventName: quote.event_name,
       eventTimeStart: quote.event_time_start,
       eventTimeEnd: quote.event_time_end,
+      // Migration 124 — pass the split payment-term FKs + the
+      // composed snapshot through so the converted invoice carries
+      // them on both the FK and snapshot paths.
+      paymentNetDaysTemplateId: quote.payment_net_days_template_id,
+      paymentTimingTemplateId: quote.payment_timing_template_id,
+      paymentTermSnapshot,
       adminId,
       ccPdfEmail: quote.cc_pdf_email,
       // Net 14 / 30 / 60 / 90 carry through from the quote's
@@ -1616,6 +1637,167 @@ async function deletePaymentTermTemplate(id) {
   return { deleted: true };
 }
 
+// ---------------------------------------------------------------------
+// Split payment-term templates — net-days + timing (migration 124).
+//
+// The two new tables decouple the "Net X days" choice from the
+// "payment timing / split" choice. CRUD shape mirrors the legacy
+// payment_term_templates helpers above so adminQuotes routes can drop
+// in matching endpoints without re-deriving validation rules.
+// ---------------------------------------------------------------------
+
+async function listPaymentNetDaysTemplates() {
+  return await db('payment_net_days_templates')
+    .where({ is_active: formatBoolean(true) })
+    .orderBy('display_order', 'asc').orderBy('id', 'asc');
+}
+
+async function createPaymentNetDaysTemplate(payload) {
+  if (payload.net_days == null) {
+    throw new AppError('net_days is required', 400);
+  }
+  const row = {
+    name: payload.name,
+    description: payload.description || null,
+    // Allow 0 ("Sofort fällig"). ensureInt would coerce non-numbers
+    // to 0 which is fine for missing values but we already null-check
+    // above to catch the genuinely-missing case.
+    net_days: ensureInt(payload.net_days),
+    skonto_percent: payload.skonto_percent == null ? null : ensureNumber(payload.skonto_percent),
+    skonto_within_days: payload.skonto_within_days == null ? null : ensureInt(payload.skonto_within_days),
+    is_system: formatBoolean(false),
+    is_active: formatBoolean(true),
+    display_order: ensureInt(payload.display_order),
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
+  const inserted = await db('payment_net_days_templates').insert(row).returning('id');
+  const id = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
+  return await db('payment_net_days_templates').where({ id }).first();
+}
+
+async function updatePaymentNetDaysTemplate(id, payload) {
+  const existing = await db('payment_net_days_templates').where({ id }).first();
+  if (!existing) throw new AppError('Not found', 404);
+  const updates = { updated_at: new Date() };
+  for (const k of ['name', 'description', 'net_days', 'skonto_percent', 'skonto_within_days', 'display_order', 'is_active']) {
+    if (Object.prototype.hasOwnProperty.call(payload, k)) {
+      updates[k] = k === 'is_active' ? formatBoolean(Boolean(payload[k])) : payload[k];
+    }
+  }
+  await db('payment_net_days_templates').where({ id }).update(updates);
+  return await db('payment_net_days_templates').where({ id }).first();
+}
+
+async function deletePaymentNetDaysTemplate(id) {
+  const existing = await db('payment_net_days_templates').where({ id }).first();
+  if (!existing) throw new AppError('Not found', 404);
+  if (existing.is_system) {
+    throw new AppError('Cannot delete a system net-days template', 409);
+  }
+  // Soft-delete — sent quote/invoice snapshots survive independently.
+  await db('payment_net_days_templates').where({ id })
+    .update({ is_active: formatBoolean(false), updated_at: new Date() });
+  return { deleted: true };
+}
+
+async function listPaymentTimingTemplates() {
+  return await db('payment_timing_templates')
+    .where({ is_active: formatBoolean(true) })
+    .orderBy('display_order', 'asc').orderBy('id', 'asc');
+}
+
+async function createPaymentTimingTemplate(payload) {
+  if (!Array.isArray(payload.installments) || payload.installments.length === 0) {
+    throw new AppError('At least one installment is required', 400);
+  }
+  const sum = payload.installments.reduce((s, x) => s + ensureNumber(x.percent, 0), 0);
+  if (Math.abs(sum - 100) > 0.01) {
+    throw new AppError('Installment percentages must sum to 100', 400);
+  }
+  const row = {
+    name: payload.name,
+    description: payload.description || null,
+    installments: JSON.stringify(payload.installments),
+    is_system: formatBoolean(false),
+    is_active: formatBoolean(true),
+    display_order: ensureInt(payload.display_order),
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
+  const inserted = await db('payment_timing_templates').insert(row).returning('id');
+  const id = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
+  return await db('payment_timing_templates').where({ id }).first();
+}
+
+async function updatePaymentTimingTemplate(id, payload) {
+  const existing = await db('payment_timing_templates').where({ id }).first();
+  if (!existing) throw new AppError('Not found', 404);
+  // Same rule as the legacy helper — system rows can be renamed but
+  // their installments array is locked so migrations + docs stay
+  // semantically stable.
+  if (existing.is_system && Object.prototype.hasOwnProperty.call(payload, 'installments')) {
+    delete payload.installments;
+  }
+  const updates = { updated_at: new Date() };
+  for (const k of ['name', 'description', 'display_order', 'is_active']) {
+    if (Object.prototype.hasOwnProperty.call(payload, k)) {
+      updates[k] = k === 'is_active' ? formatBoolean(Boolean(payload[k])) : payload[k];
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'installments')) {
+    updates.installments = JSON.stringify(payload.installments);
+  }
+  await db('payment_timing_templates').where({ id }).update(updates);
+  return await db('payment_timing_templates').where({ id }).first();
+}
+
+/**
+ * Compose a legacy-shape `payment_term_snapshot` JSON object from the
+ * two new split FKs on a quote or invoice row (migration 124).
+ *
+ * Returns null when at least one of the two FKs is unset — the caller
+ * then falls back to reading the legacy `payment_term_template_id`
+ * column for backward compat. We deliberately don't blend partial
+ * data with legacy data; either the split path applies cleanly or it
+ * doesn't.
+ *
+ * Output shape is identical to the legacy template row so downstream
+ * consumers (pdfService, scheduleInvoicesForEvent, dunning) work
+ * without changes:
+ *
+ *   { description, net_days, skonto_percent, skonto_within_days,
+ *     installments }
+ */
+async function composeSnapshotFromSplitFks(row) {
+  if (!row.payment_net_days_template_id || !row.payment_timing_template_id) return null;
+  const netDays = await db('payment_net_days_templates')
+    .where({ id: row.payment_net_days_template_id }).first();
+  const timing = await db('payment_timing_templates')
+    .where({ id: row.payment_timing_template_id }).first();
+  if (!netDays || !timing) return null;
+  return {
+    description: timing.description || netDays.description || null,
+    net_days: netDays.net_days,
+    skonto_percent: netDays.skonto_percent,
+    skonto_within_days: netDays.skonto_within_days,
+    installments: typeof timing.installments === 'string'
+      ? JSON.parse(timing.installments)
+      : timing.installments,
+  };
+}
+
+async function deletePaymentTimingTemplate(id) {
+  const existing = await db('payment_timing_templates').where({ id }).first();
+  if (!existing) throw new AppError('Not found', 404);
+  if (existing.is_system) {
+    throw new AppError('Cannot delete a system timing template', 409);
+  }
+  await db('payment_timing_templates').where({ id })
+    .update({ is_active: formatBoolean(false), updated_at: new Date() });
+  return { deleted: true };
+}
+
 module.exports = {
   // Lifecycle
   listQuotes,
@@ -1642,6 +1824,15 @@ module.exports = {
   createPaymentTermTemplate,
   updatePaymentTermTemplate,
   deletePaymentTermTemplate,
+  // Split payment-term templates (migration 124).
+  listPaymentNetDaysTemplates,
+  createPaymentNetDaysTemplate,
+  updatePaymentNetDaysTemplate,
+  deletePaymentNetDaysTemplate,
+  listPaymentTimingTemplates,
+  createPaymentTimingTemplate,
+  updatePaymentTimingTemplate,
+  deletePaymentTimingTemplate,
 
   // Internals exposed for tests + invoiceService re-use.
   _internal: {

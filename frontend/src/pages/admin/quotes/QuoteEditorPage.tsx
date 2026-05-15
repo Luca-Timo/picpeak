@@ -45,6 +45,11 @@ interface FormState {
   eventTimeEnd: string;
   expectedDurationHours: string;
   paymentTermTemplateId: number | null;
+  // Migration 124 — split payment-term picker. Both required when
+  // saving a new quote; legacy quotes may have these null but their
+  // status='sent' editor is locked anyway.
+  paymentNetDaysTemplateId: number | null;
+  paymentTimingTemplateId: number | null;
   vatRate: number;
   shippingAmount: number;
   introText: string;
@@ -69,6 +74,8 @@ const empty: FormState = {
   eventTimeEnd: '',
   expectedDurationHours: '',
   paymentTermTemplateId: null,
+  paymentNetDaysTemplateId: null,
+  paymentTimingTemplateId: null,
   vatRate: 0,
   shippingAmount: 0,
   introText: '',
@@ -96,6 +103,10 @@ function buildPayload(f: FormState): QuoteCreatePayload {
     eventTimeEnd: f.eventTimeEnd || undefined,
     expectedDurationHours: f.expectedDurationHours ? Number(f.expectedDurationHours) : undefined,
     paymentTermTemplateId: f.paymentTermTemplateId || undefined,
+    // Migration 124 — split picker. Send both; backend ignores either
+    // half unless both are set (legacy single FK still works).
+    paymentNetDaysTemplateId: f.paymentNetDaysTemplateId || undefined,
+    paymentTimingTemplateId: f.paymentTimingTemplateId || undefined,
     vatRate: f.vatRate,
     shippingAmountMinor: toMinor(f.shippingAmount),
     introText: f.introText || undefined,
@@ -186,6 +197,8 @@ export const QuoteEditorPage: React.FC = () => {
         eventTimeEnd: q.eventTimeEnd || '',
         expectedDurationHours: q.expectedDurationHours?.toString() || '',
         paymentTermTemplateId: q.paymentTermTemplateId,
+        paymentNetDaysTemplateId: q.paymentNetDaysTemplateId,
+        paymentTimingTemplateId: q.paymentTimingTemplateId,
         vatRate: Number(q.vatRate || 0),
         shippingAmount: Number(q.shippingAmountMinor || 0) / 100,
         introText: q.introText || '',
@@ -215,10 +228,22 @@ export const QuoteEditorPage: React.FC = () => {
     staleTime: 5000,
   });
 
-  // Payment-term templates + line-item presets
+  // Payment-term templates + line-item presets. Migration 124 split
+  // the legacy single dropdown into Net days + Timing — load both.
+  // The legacy ptTemplates query stays so the installment-preview
+  // helper still resolves for old quotes whose state only has the
+  // legacy FK.
   const { data: ptTemplates } = useQuery({
     queryKey: ['payment-term-templates'],
     queryFn: () => quotesService.listPaymentTermTemplates(),
+  });
+  const { data: netDaysTemplates } = useQuery({
+    queryKey: ['payment-net-days-templates'],
+    queryFn: () => quotesService.listPaymentNetDaysTemplates(),
+  });
+  const { data: timingTemplates } = useQuery({
+    queryKey: ['payment-timing-templates'],
+    queryFn: () => quotesService.listPaymentTimingTemplates(),
   });
   const { data: liPresets } = useQuery({
     queryKey: ['line-item-presets'],
@@ -256,10 +281,35 @@ export const QuoteEditorPage: React.FC = () => {
     setForm((prev) => (prev.ccPdfEmail ? prev : { ...prev, ccPdfEmail: currentAdmin.email }));
   }, [currentAdmin?.email, isEdit]);
 
+  // Auto-default the two new pickers on a brand-new quote once the
+  // template lists are available. "Net 30" is the canonical default;
+  // "Komplettzahlung nach Auslieferung" is the safest single-instalment
+  // timing for a freshly authored quote.
+  const didPrefillPaymentRef = useRef(false);
+  useEffect(() => {
+    if (isEdit) return;
+    if (didPrefillPaymentRef.current) return;
+    if (!netDaysTemplates?.templates?.length || !timingTemplates?.templates?.length) return;
+    const defaultNetDays = netDaysTemplates.templates.find((t) => t.netDays === 30)
+      || netDaysTemplates.templates[0];
+    const defaultTiming = timingTemplates.templates[0];
+    didPrefillPaymentRef.current = true;
+    setForm((prev) => ({
+      ...prev,
+      paymentNetDaysTemplateId: prev.paymentNetDaysTemplateId ?? defaultNetDays.id,
+      paymentTimingTemplateId: prev.paymentTimingTemplateId ?? defaultTiming.id,
+    }));
+  }, [isEdit, netDaysTemplates, timingTemplates]);
+
   const installmentPreview = useMemo<PaymentTermInstallment[]>(() => {
+    // Migration 124 — preview now comes from the timing template when
+    // the new picker is in use. Fall back to the legacy template for
+    // quotes authored before the split so the preview stays useful.
+    const timingTpl = timingTemplates?.templates.find((x) => x.id === form.paymentTimingTemplateId);
+    if (timingTpl) return timingTpl.installments;
     const tpl = ptTemplates?.templates.find((x) => x.id === form.paymentTermTemplateId);
     return tpl?.installments || [];
-  }, [ptTemplates, form.paymentTermTemplateId]);
+  }, [timingTemplates, form.paymentTimingTemplateId, ptTemplates, form.paymentTermTemplateId]);
 
   const handleSave = async (then?: 'send' | 'preview') => {
     if (!form.customerAccountId) {
@@ -498,19 +548,40 @@ export const QuoteEditorPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Section: Payment */}
+      {/* Section: Payment — migration 124 split picker. Two orthogonal
+          dropdowns (Net days × Payment timing) replace the single
+          legacy "Payment conditions" dropdown. The installment preview
+          below now reads from the timing template. */}
       <Card>
         <h3 className="font-semibold mb-2">4. {t('quotes.section.payment', 'Payment conditions')}</h3>
-        <select
-          className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
-          value={form.paymentTermTemplateId || ''}
-          onChange={(e) => setForm((f) => ({ ...f, paymentTermTemplateId: e.target.value ? Number(e.target.value) : null }))}
-        >
-          <option value="">{t('quotes.field.selectPaymentTerm', '— Select payment terms —')}</option>
-          {ptTemplates?.templates.map((tpl) => (
-            <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
-          ))}
-        </select>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium mb-1">{t('quotes.field.paymentNetDays', 'Net days')}</label>
+            <select
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+              value={form.paymentNetDaysTemplateId || ''}
+              onChange={(e) => setForm((f) => ({ ...f, paymentNetDaysTemplateId: e.target.value ? Number(e.target.value) : null }))}
+            >
+              <option value="">{t('quotes.field.selectNetDays', '— Select net days —')}</option>
+              {netDaysTemplates?.templates.map((tpl) => (
+                <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">{t('quotes.field.paymentTiming', 'Payment schedule')}</label>
+            <select
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+              value={form.paymentTimingTemplateId || ''}
+              onChange={(e) => setForm((f) => ({ ...f, paymentTimingTemplateId: e.target.value ? Number(e.target.value) : null }))}
+            >
+              <option value="">{t('quotes.field.selectTiming', '— Select schedule —')}</option>
+              {timingTemplates?.templates.map((tpl) => (
+                <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
         {installmentPreview.length > 0 && (
           <ul className="mt-3 text-sm space-y-1 text-neutral-600 dark:text-neutral-400">
             {installmentPreview.map((inst, i) => (
