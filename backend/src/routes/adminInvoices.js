@@ -117,9 +117,18 @@ function transformInvoice(i) {
     pdfPath: i.pdf_path,
     businessBankAccountId: i.business_bank_account_id,
     paymentTermTemplateId: i.payment_term_template_id || null,
-    /** Id of the invoice this one replaces (migration 114). Set when
-     *  this row was created via Cancel & reissue. */
+    // Storno wiring (migration 114). The four FK columns drive the
+    // admin UI's banners + action gating:
+    //  - kind: 'invoice' | 'storno' — defaults to 'invoice' for rows
+    //    seeded before the column existed (legacy installs).
+    //  - replacesInvoiceId: on a reissued invoice → original cancelled id.
+    //  - cancelsInvoiceId: on a Storno row → invoice it reverses.
+    //  - cancellationStornoId: on a cancelled original → Storno that
+    //    cancelled it (so the detail view can link forward).
+    kind: i.kind || 'invoice',
     replacesInvoiceId: i.replaces_invoice_id || null,
+    cancelsInvoiceId: i.cancels_invoice_id || null,
+    cancellationStornoId: i.cancellation_storno_id || null,
     // `isImported` surfaces the historical-PDF flag to the admin UI
     // so the list / detail page can hide line-item editing on rows
     // that originated from a different billing system (migration 111).
