@@ -297,8 +297,15 @@ export interface CustomerQuote {
 
 export interface CustomerInvoice {
   id: number;
+  /** Document discriminator. 'invoice' is the default; 'storno' rows
+   *  are Stornorechnungen (cancellation invoices) and render with a
+   *  distinct badge + lineage banner. */
+  kind: 'invoice' | 'storno';
   invoiceNumber: string;
-  status: 'sent' | 'paid' | 'overdue';
+  /** `cancelled` only appears on the customer side for invoices that
+   *  were formally reversed via Stornorechnung (cancellation_storno_id
+   *  IS NOT NULL). Soft-cancelled drafts stay hidden server-side. */
+  status: 'sent' | 'paid' | 'overdue' | 'cancelled';
   currency: string;
   issueDate: string;
   dueDate: string;
@@ -315,4 +322,8 @@ export interface CustomerInvoice {
   lateFeeAmountMinor: number;
   reminderLevel: number;
   sentAt: string | null;
+  /** On a Storno row (kind='storno') → id of the invoice it reverses. */
+  cancelsInvoiceId: number | null;
+  /** On a cancelled invoice → id of the Storno that cancelled it. */
+  cancellationStornoId: number | null;
 }

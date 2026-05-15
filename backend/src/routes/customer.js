@@ -463,25 +463,42 @@ router.get('/invoices', customerAuth, async (req, res) => {
     if (!customer || customer.feature_bills === false || customer.feature_bills === 0) {
       return res.status(403).json({ error: 'Invoices are disabled for this account', code: 'CUSTOMER_FEATURE_DISABLED' });
     }
+    // Visibility rules for the customer-facing list:
+    //   - Hide `scheduled` always (drafts the admin is still tweaking).
+    //   - Show `sent`, `overdue`, `paid` always (the customer's
+    //     outstanding + paid history).
+    //   - Show `cancelled` ONLY when `cancellation_storno_id IS NOT NULL`,
+    //     i.e. the cancellation was made customer-visible via a
+    //     Stornorechnung (migration 114). Soft-cancelled drafts stay
+    //     hidden — the customer never saw the draft, so a "cancelled"
+    //     phantom in their list would just be confusing.
+    //   - Show `kind='storno'` rows (status='sent' after sendStorno)
+    //     unconditionally — they're the customer's legal proof of
+    //     cancellation and the only document with the §14c reversal.
     const rows = await dbi('invoices')
       .where({ customer_account_id: req.customer.id })
-      // Hide scheduled invoices that haven't been sent yet — the
-      // customer shouldn't see drafts the admin is still tweaking.
-      .whereNotIn('status', ['scheduled', 'cancelled'])
+      .whereNot('status', 'scheduled')
+      .andWhere(function () {
+        this.whereNot('status', 'cancelled').orWhereNotNull('cancellation_storno_id');
+      })
       .orderBy('issue_date', 'desc')
       .orderBy('id', 'desc')
       .select(
-        'id', 'invoice_number', 'status', 'currency',
+        'id', 'kind', 'invoice_number', 'status', 'currency',
         'issue_date', 'due_date',
         'installment_index', 'installment_total', 'installment_label',
         'net_amount_minor', 'vat_rate', 'vat_amount_minor',
         'shipping_amount_minor', 'total_amount_minor',
         'paid_amount_minor', 'paid_at',
         'late_fee_amount_minor', 'reminder_level', 'sent_at',
+        // Lineage — drives the Storno banner / cancelled-by-Storno
+        // indicator on the customer's bills page.
+        'cancels_invoice_id', 'cancellation_storno_id',
       );
     res.json({
       invoices: rows.map((i) => ({
         id: i.id,
+        kind: i.kind || 'invoice',
         invoiceNumber: i.invoice_number,
         status: i.status,
         currency: i.currency,
@@ -500,6 +517,8 @@ router.get('/invoices', customerAuth, async (req, res) => {
         lateFeeAmountMinor: i.late_fee_amount_minor,
         reminderLevel: i.reminder_level,
         sentAt: i.sent_at,
+        cancelsInvoiceId: i.cancels_invoice_id || null,
+        cancellationStornoId: i.cancellation_storno_id || null,
       })),
     });
   } catch (error) {

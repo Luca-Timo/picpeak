@@ -229,21 +229,40 @@ const InvoiceRow: React.FC<{ inv: CustomerInvoice; onViewPdf: () => void }> = ({
   const paid = Number(inv.paidAmountMinor || 0) / 100;
   const outstanding = Math.max(0, total - paid);
 
-  const statusClass =
-    inv.status === 'paid' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
+  const isStorno = inv.kind === 'storno';
+  const isCancelled = inv.status === 'cancelled';
+  // Outstanding hidden for Storni (negative total → meaningless) and
+  // cancelled invoices (no longer owed). Total still renders so the
+  // customer's bookkeeper can match line totals between the document
+  // pair.
+  const showOutstanding = !isStorno && !isCancelled && outstanding > 0;
+
+  const statusClass = isStorno
+    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300'
+    : inv.status === 'paid' ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
       : inv.status === 'overdue' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
-        : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
+        : inv.status === 'cancelled' ? 'bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300'
+          : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
+
+  // Cancelled invoices and Storni display the absolute total. The
+  // row-level totals on Storno rows are stored negative in the DB,
+  // but the customer-facing list reads more naturally with the
+  // amount and a sign-cue badge alongside ("Cancellation invoice")
+  // than with a leading minus on the number itself.
+  const displayTotal = Math.abs(total);
 
   return (
-    <li className="px-4 py-3">
+    <li className={`px-4 py-3 ${isStorno || isCancelled ? 'bg-neutral-50/50 dark:bg-neutral-800/30' : ''}`}>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-sm">{inv.invoiceNumber}</span>
             <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusClass}`}>
-              {t(`bills.status.${inv.status}`, inv.status)}
+              {isStorno
+                ? t('customer.bills.kind.storno', 'Cancellation invoice')
+                : t(`bills.status.${inv.status}`, inv.status)}
             </span>
-            {inv.installmentTotal > 1 && (
+            {inv.installmentTotal > 1 && !isStorno && (
               <span className="text-xs text-muted-theme">
                 {inv.installmentIndex + 1}/{inv.installmentTotal}
                 {inv.installmentLabel ? ` · ${inv.installmentLabel}` : ''}
@@ -252,21 +271,39 @@ const InvoiceRow: React.FC<{ inv: CustomerInvoice; onViewPdf: () => void }> = ({
           </div>
           <div className="text-sm text-muted-theme mt-1">
             {t('customer.bills.field.issueDate', 'Issued')}: {formatShortDate(inv.issueDate)}
-            {' · '}
-            {t('customer.bills.field.dueDate', 'Due')}: {formatShortDate(inv.dueDate)}
-            {inv.paidAt && (
+            {!isStorno && inv.dueDate && (
+              <> {' · '} {t('customer.bills.field.dueDate', 'Due')}: {formatShortDate(inv.dueDate)}</>
+            )}
+            {inv.paidAt && !isStorno && (
               <> {' · '} {t('customer.bills.field.paidAt', 'Paid')}: {formatShortDate(inv.paidAt)}</>
             )}
           </div>
+          {/* Lineage hint — the legal pair must be discoverable from
+              either end. Storno rows surface the invoice they cancel;
+              cancelled invoices surface the Storno that reversed them
+              (matching the PDF's reference line so the customer's
+              bookkeeper can find both documents). */}
+          {isStorno && inv.cancelsInvoiceId && (
+            <div className="text-xs text-purple-700 dark:text-purple-300 mt-1">
+              {t('customer.bills.cancelsLabel', 'Cancels invoice')} #{inv.cancelsInvoiceId}
+            </div>
+          )}
+          {!isStorno && isCancelled && inv.cancellationStornoId && (
+            <div className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
+              {t('customer.bills.cancelledByLabel', 'Cancelled by cancellation invoice')} #{inv.cancellationStornoId}
+            </div>
+          )}
         </div>
         <div className="text-right">
-          <div className="font-medium tabular-nums">{formatMoney(total, inv.currency)}</div>
-          {outstanding > 0 && (
+          <div className={`font-medium tabular-nums ${isStorno ? 'text-purple-700 dark:text-purple-300' : ''}`}>
+            {isStorno ? '-' : ''}{formatMoney(displayTotal, inv.currency)}
+          </div>
+          {showOutstanding && (
             <div className="text-xs text-red-700 dark:text-red-400 mt-0.5">
               {t('customer.bills.field.outstanding', 'Outstanding')}: {formatMoney(outstanding, inv.currency)}
             </div>
           )}
-          {lateFee > 0 && (
+          {lateFee > 0 && !isStorno && (
             <div className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
               {t('customer.bills.field.lateFee', 'Late fee')}: {formatMoney(lateFee, inv.currency)}
             </div>
