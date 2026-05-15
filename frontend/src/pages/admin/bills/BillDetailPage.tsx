@@ -280,6 +280,9 @@ export const BillDetailPage: React.FC = () => {
 
       <Card>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          {inv.eventName && (
+            <div><div className="text-neutral-500">{t('bills.field.eventName', 'Event')}</div><div>{inv.eventName}{inv.eventDate ? ` · ${inv.eventDate}` : ''}</div></div>
+          )}
           <div><div className="text-neutral-500">{t('bills.field.issueDate', 'Issued')}</div><div>{inv.issueDate}</div></div>
           <div><div className="text-neutral-500">{t('bills.field.dueDate', 'Due')}</div><div>{inv.dueDate}</div></div>
           {inv.scheduledSendAt && <div><div className="text-neutral-500">{t('bills.field.scheduledSendAt', 'Scheduled send')}</div><div>{new Date(inv.scheduledSendAt).toLocaleDateString()}</div></div>}
