@@ -761,7 +761,12 @@ async function searchCustomers(query, { limit = 10 } = {}) {
         .orWhereRaw('LOWER(COALESCE(last_name, \'\')) LIKE ?', [term])
         .orWhereRaw('LOWER(COALESCE(company_name, \'\')) LIKE ?', [term]);
     })
-    .select('id', 'email', 'display_name', 'first_name', 'last_name', 'company_name')
+    // password_hash is required by transformCustomer to compute the
+    // isPassive flag (passwordHash == null = passive / admin-only).
+    // Omitting it caused every search result to render as "Passive —
+    // admin only" because `undefined == null` is true. The hash itself
+    // is dropped by the route's transformCustomer before leaving the API.
+    .select('id', 'email', 'display_name', 'first_name', 'last_name', 'company_name', 'password_hash')
     .orderBy('email', 'asc')
     .limit(limit);
 }
