@@ -260,7 +260,7 @@ export const BillDetailPage: React.FC = () => {
           <p className="text-sm text-purple-900 dark:text-purple-200">
             {t('bills.stornoCancelsLabel', 'This Stornorechnung cancels invoice')}{' '}
             <Link to={`/admin/clients/bills/${inv.cancelsInvoiceId}`} className="font-medium underline">
-              #{inv.cancelsInvoiceId}
+              {inv.cancelsInvoiceNumber || `#${inv.cancelsInvoiceId}`}
             </Link>
             .
           </p>
@@ -271,7 +271,7 @@ export const BillDetailPage: React.FC = () => {
           <p className="text-sm text-amber-900 dark:text-amber-200">
             {t('bills.cancelledByStornoLabel', 'This invoice was cancelled by Stornorechnung')}{' '}
             <Link to={`/admin/clients/bills/${inv.cancellationStornoId}`} className="font-medium underline">
-              #{inv.cancellationStornoId}
+              {inv.cancellationStornoNumber || `#${inv.cancellationStornoId}`}
             </Link>
             .
           </p>

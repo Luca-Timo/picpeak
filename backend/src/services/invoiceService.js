@@ -244,6 +244,12 @@ async function getInvoiceById(id) {
       // the numeric id ("#6"). LEFT join — most invoices come from
       // a quote conversion but standalone invoices don't have one.
       .leftJoin('quotes as src_quote', 'invoices.source_quote_id', 'src_quote.id')
+      // Self-joins for Storno lineage so the detail view can render
+      // "Cancelled by Stornorechnung S-XXXX" / "This Stornorechnung
+      // cancels invoice R-XXXX" using the human invoice_number rather
+      // than the bare DB row id. Same pattern as source_quote_number.
+      .leftJoin('invoices as cancels_inv', 'invoices.cancels_invoice_id', 'cancels_inv.id')
+      .leftJoin('invoices as cancellation_storno', 'invoices.cancellation_storno_id', 'cancellation_storno.id')
       .where('invoices.id', id)
       .select(
         'invoices.*',
@@ -258,6 +264,8 @@ async function getInvoiceById(id) {
         // and only exposes the boolean.
         'customer_accounts.password_hash as customer_password_hash',
         'src_quote.quote_number as source_quote_number',
+        'cancels_inv.invoice_number as cancels_invoice_number',
+        'cancellation_storno.invoice_number as cancellation_storno_number',
       )
       .first();
     if (!invoice) return null;

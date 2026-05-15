@@ -92,10 +92,17 @@ export interface InvoiceDetail extends InvoiceSummary {
    *  invoice this Storno reverses. Drives the "Storno zu Rechnung
    *  R-XXXX" reference rendering in the admin detail view. */
   cancelsInvoiceId?: number | null;
+  /** Human invoice_number of the row referenced by `cancelsInvoiceId`
+   *  (joined server-side). Used so the lineage banner can display
+   *  "R-2026-0007" instead of the bare row id "#7". */
+  cancelsInvoiceNumber?: string | null;
   /** On a CANCELLED original: points at the Storno that cancelled
    *  it. Drives the "Cancelled by Storno S-XXXX" banner shown on
    *  the cancelled invoice's detail view. */
   cancellationStornoId?: number | null;
+  /** Human invoice_number of the row referenced by
+   *  `cancellationStornoId` (joined server-side). */
+  cancellationStornoNumber?: string | null;
 }
 
 export interface InvoicePayment {

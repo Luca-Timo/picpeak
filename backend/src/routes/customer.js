@@ -476,24 +476,30 @@ router.get('/invoices', customerAuth, async (req, res) => {
     //     unconditionally — they're the customer's legal proof of
     //     cancellation and the only document with the §14c reversal.
     const rows = await dbi('invoices')
-      .where({ customer_account_id: req.customer.id })
-      .whereNot('status', 'scheduled')
+      .leftJoin('invoices as cancels_inv', 'invoices.cancels_invoice_id', 'cancels_inv.id')
+      .leftJoin('invoices as cancellation_storno', 'invoices.cancellation_storno_id', 'cancellation_storno.id')
+      .where({ 'invoices.customer_account_id': req.customer.id })
+      .whereNot('invoices.status', 'scheduled')
       .andWhere(function () {
-        this.whereNot('status', 'cancelled').orWhereNotNull('cancellation_storno_id');
+        this.whereNot('invoices.status', 'cancelled').orWhereNotNull('invoices.cancellation_storno_id');
       })
-      .orderBy('issue_date', 'desc')
-      .orderBy('id', 'desc')
+      .orderBy('invoices.issue_date', 'desc')
+      .orderBy('invoices.id', 'desc')
       .select(
-        'id', 'kind', 'invoice_number', 'status', 'currency',
-        'issue_date', 'due_date',
-        'installment_index', 'installment_total', 'installment_label',
-        'net_amount_minor', 'vat_rate', 'vat_amount_minor',
-        'shipping_amount_minor', 'total_amount_minor',
-        'paid_amount_minor', 'paid_at',
-        'late_fee_amount_minor', 'reminder_level', 'sent_at',
+        'invoices.id', 'invoices.kind', 'invoices.invoice_number', 'invoices.status', 'invoices.currency',
+        'invoices.issue_date', 'invoices.due_date',
+        'invoices.installment_index', 'invoices.installment_total', 'invoices.installment_label',
+        'invoices.net_amount_minor', 'invoices.vat_rate', 'invoices.vat_amount_minor',
+        'invoices.shipping_amount_minor', 'invoices.total_amount_minor',
+        'invoices.paid_amount_minor', 'invoices.paid_at',
+        'invoices.late_fee_amount_minor', 'invoices.reminder_level', 'invoices.sent_at',
         // Lineage — drives the Storno banner / cancelled-by-Storno
-        // indicator on the customer's bills page.
-        'cancels_invoice_id', 'cancellation_storno_id',
+        // indicator on the customer's bills page. Self-join the
+        // linked rows so we can surface the human invoice_number,
+        // not just the bare DB row id.
+        'invoices.cancels_invoice_id', 'invoices.cancellation_storno_id',
+        'cancels_inv.invoice_number as cancels_invoice_number',
+        'cancellation_storno.invoice_number as cancellation_storno_number',
       );
     res.json({
       invoices: rows.map((i) => ({
@@ -518,7 +524,9 @@ router.get('/invoices', customerAuth, async (req, res) => {
         reminderLevel: i.reminder_level,
         sentAt: i.sent_at,
         cancelsInvoiceId: i.cancels_invoice_id || null,
+        cancelsInvoiceNumber: i.cancels_invoice_number || null,
         cancellationStornoId: i.cancellation_storno_id || null,
+        cancellationStornoNumber: i.cancellation_storno_number || null,
       })),
     });
   } catch (error) {

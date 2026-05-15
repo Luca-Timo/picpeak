@@ -128,7 +128,9 @@ function transformInvoice(i) {
     kind: i.kind || 'invoice',
     replacesInvoiceId: i.replaces_invoice_id || null,
     cancelsInvoiceId: i.cancels_invoice_id || null,
+    cancelsInvoiceNumber: i.cancels_invoice_number || null,
     cancellationStornoId: i.cancellation_storno_id || null,
+    cancellationStornoNumber: i.cancellation_storno_number || null,
     // `isImported` surfaces the historical-PDF flag to the admin UI
     // so the list / detail page can hide line-item editing on rows
     // that originated from a different billing system (migration 111).

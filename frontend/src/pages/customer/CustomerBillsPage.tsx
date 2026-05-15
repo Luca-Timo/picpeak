@@ -285,12 +285,14 @@ const InvoiceRow: React.FC<{ inv: CustomerInvoice; onViewPdf: () => void }> = ({
               bookkeeper can find both documents). */}
           {isStorno && inv.cancelsInvoiceId && (
             <div className="text-xs text-purple-700 dark:text-purple-300 mt-1">
-              {t('customer.bills.cancelsLabel', 'Cancels invoice')} #{inv.cancelsInvoiceId}
+              {t('customer.bills.cancelsLabel', 'Cancels invoice')}{' '}
+              {inv.cancelsInvoiceNumber || `#${inv.cancelsInvoiceId}`}
             </div>
           )}
           {!isStorno && isCancelled && inv.cancellationStornoId && (
             <div className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-              {t('customer.bills.cancelledByLabel', 'Cancelled by cancellation invoice')} #{inv.cancellationStornoId}
+              {t('customer.bills.cancelledByLabel', 'Cancelled by cancellation invoice')}{' '}
+              {inv.cancellationStornoNumber || `#${inv.cancellationStornoId}`}
             </div>
           )}
         </div>
