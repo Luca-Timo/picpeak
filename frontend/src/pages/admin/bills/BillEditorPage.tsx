@@ -56,6 +56,10 @@ export const BillEditorPage: React.FC = () => {
   const [ccPdfEmail, setCcPdfEmail] = useState('');
   const [lineItems, setLineItems] = useState<EditableLineItem[]>([]);
   const [paymentTermTemplateId, setPaymentTermTemplateId] = useState<number | null>(null);
+  // Migration 124 — split payment-term picker. Net days + Timing are
+  // chosen independently; the backend composes the merged snapshot.
+  const [paymentNetDaysTemplateId, setPaymentNetDaysTemplateId] = useState<number | null>(null);
+  const [paymentTimingTemplateId, setPaymentTimingTemplateId] = useState<number | null>(null);
   // null = use the business-profile default for the chosen currency.
   // A number = explicit per-invoice override pointing at a specific
   // business_bank_accounts row. The backend's
@@ -82,12 +86,21 @@ export const BillEditorPage: React.FC = () => {
   });
   const bankAccounts = bankAccountsData?.bankAccounts || [];
 
-  // Payment-term templates shared with the quote editor — same
-  // dropdown, same data source. Lets the admin pick net-days +
-  // Skonto + installment plan when creating an invoice directly.
+  // Payment-term templates. Migration 124 — keep the legacy list around
+  // for back-compat (lets the editor still resolve preview text on an
+  // invoice authored before the split) but the editor now drives off
+  // the two new lists.
   const { data: ptTemplates } = useQuery({
     queryKey: ['payment-term-templates'],
     queryFn: () => quotesService.listPaymentTermTemplates(),
+  });
+  const { data: netDaysTemplates } = useQuery({
+    queryKey: ['payment-net-days-templates'],
+    queryFn: () => quotesService.listPaymentNetDaysTemplates(),
+  });
+  const { data: timingTemplates } = useQuery({
+    queryKey: ['payment-timing-templates'],
+    queryFn: () => quotesService.listPaymentTimingTemplates(),
   });
 
   const { data: existing, isLoading } = useQuery({
@@ -113,6 +126,8 @@ export const BillEditorPage: React.FC = () => {
       setShipping(Number(inv.shippingAmountMinor || 0) / 100);
       setCcPdfEmail(inv.ccPdfEmail || '');
       setPaymentTermTemplateId(inv.paymentTermTemplateId ?? null);
+      setPaymentNetDaysTemplateId(inv.paymentNetDaysTemplateId ?? null);
+      setPaymentTimingTemplateId(inv.paymentTimingTemplateId ?? null);
       setBusinessBankAccountId(inv.businessBankAccountId ?? null);
       setEventName(inv.eventName || '');
       setEventDate(inv.eventDate || '');
@@ -193,6 +208,23 @@ export const BillEditorPage: React.FC = () => {
     enabled: customerSearch.length >= 2,
   });
 
+  // Migration 124 — auto-default both pickers on a brand-new invoice.
+  // Net 30 + "Komplettzahlung nach Auslieferung" mirror the quote
+  // editor's defaults so the standalone-invoice flow doesn't ship a
+  // blank dropdown.
+  const didPrefillPaymentRef = useRef(false);
+  useEffect(() => {
+    if (isEdit) return;
+    if (didPrefillPaymentRef.current) return;
+    if (!netDaysTemplates?.templates?.length || !timingTemplates?.templates?.length) return;
+    const defaultNetDays = netDaysTemplates.templates.find((t) => t.netDays === 30)
+      || netDaysTemplates.templates[0];
+    const defaultTiming = timingTemplates.templates[0];
+    didPrefillPaymentRef.current = true;
+    setPaymentNetDaysTemplateId((prev) => prev ?? defaultNetDays.id);
+    setPaymentTimingTemplateId((prev) => prev ?? defaultTiming.id);
+  }, [isEdit, netDaysTemplates, timingTemplates]);
+
   const buildPayload = (): InvoiceCreatePayload => ({
     customerAccountId: customerId || 0,
     currency,
@@ -210,6 +242,10 @@ export const BillEditorPage: React.FC = () => {
     // selected; backend falls back to source-quote snapshot or the
     // global crm_invoices_* defaults.
     paymentTermTemplateId: paymentTermTemplateId ?? undefined,
+    // Migration 124 — split picker. Backend engages the new path only
+    // when both are present; legacy single-FK is still accepted.
+    paymentNetDaysTemplateId: paymentNetDaysTemplateId ?? undefined,
+    paymentTimingTemplateId: paymentTimingTemplateId ?? undefined,
     // Per-invoice bank-account override. Sending `null` explicitly
     // (instead of stripping the key with `?? undefined`) ensures the
     // PUT handler can detect "clear this override" — JSON serialises
@@ -475,18 +511,40 @@ export const BillEditorPage: React.FC = () => {
           Optional: leave at "— Select —" to let the renderer fall back
           to the source quote's snapshot, or to the global
           crm_invoices_* defaults for ad-hoc invoices. */}
+      {/* Migration 124 — split payment-term picker. Two side-by-side
+          dropdowns replace the legacy single one. The `ptTemplates`
+          query is still mounted above so legacy invoices whose state
+          only has the single FK still resolve their preview text. */}
       <Card>
         <h3 className="font-semibold mb-2">{t('bills.section.payment', 'Payment conditions')}</h3>
-        <select
-          className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
-          value={paymentTermTemplateId || ''}
-          onChange={(e) => setPaymentTermTemplateId(e.target.value ? Number(e.target.value) : null)}
-        >
-          <option value="">{t('bills.field.selectPaymentTerm', '— Select payment terms —')}</option>
-          {ptTemplates?.templates.map((tpl) => (
-            <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
-          ))}
-        </select>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium mb-1">{t('bills.field.paymentNetDays', 'Net days')}</label>
+            <select
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+              value={paymentNetDaysTemplateId || ''}
+              onChange={(e) => setPaymentNetDaysTemplateId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">{t('bills.field.selectNetDays', '— Select net days —')}</option>
+              {netDaysTemplates?.templates.map((tpl) => (
+                <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">{t('bills.field.paymentTiming', 'Payment schedule')}</label>
+            <select
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+              value={paymentTimingTemplateId || ''}
+              onChange={(e) => setPaymentTimingTemplateId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">{t('bills.field.selectTiming', '— Select schedule —')}</option>
+              {timingTemplates?.templates.map((tpl) => (
+                <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
         <p className="text-xs text-neutral-500 mt-2">
           {t('bills.field.paymentTermHelp',
             'Net days + Skonto for this invoice. Leave blank to inherit from the source quote or the global CRM defaults.')}

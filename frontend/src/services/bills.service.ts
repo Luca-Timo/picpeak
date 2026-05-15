@@ -97,6 +97,11 @@ export interface InvoiceDetail extends InvoiceSummary {
    *  Zahlungsbedingungen block; otherwise it falls back to the
    *  source quote's snapshot or the global crm_invoices_* defaults. */
   paymentTermTemplateId?: number | null;
+  /** Migration 124 — split payment-term picker. The editor prefers
+   *  these over the legacy single FK; null on legacy rows. Both must
+   *  be set together for the new path to engage server-side. */
+  paymentNetDaysTemplateId?: number | null;
+  paymentTimingTemplateId?: number | null;
   /** Set when this invoice was created via Cancel & reissue —
    *  points at the cancelled original. Migration 114. */
   replacesInvoiceId?: number | null;
@@ -155,6 +160,10 @@ export interface InvoiceCreatePayload {
   businessBankAccountId?: number | null;
   qrFormat?: InvoiceQrFormat;
   paymentTermTemplateId?: number | null;
+  // Migration 124 — split payment-term picker. Both required by the
+  // editor in tandem; backend composes the merged snapshot.
+  paymentNetDaysTemplateId?: number | null;
+  paymentTimingTemplateId?: number | null;
   // Inline event snapshot (migration 123). All optional — standalone
   // invoices may have none of these.
   eventName?: string;
