@@ -840,6 +840,13 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       lateFeeAmountMinor: invoice.late_fee_amount_minor || 0,
     },
     doc: {
+      // Document type discriminator. `'invoice'` (default) renders
+      // the standard invoice layout. `'storno'` switches the title
+      // to "Stornorechnung", forces the mandatory "Storno zu …"
+      // reference line, displays signed totals, and suppresses the
+      // payment terms / IBAN / QR-bill sections (cancellation
+      // documents aren't payment instruments).
+      kind: invoice.kind || 'invoice',
       invoiceNumber: invoice.invoice_number,
       issueDate: invoice.issue_date,
       dueDate: invoice.due_date,
@@ -852,13 +859,27 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       // PDF renderer draws "Bezug: Angebot Q-..." under the title
       // when set. Empty/null suppresses the line (standalone invoice).
       sourceQuoteNumber: sourceQuote?.quote_number || null,
-      // When this invoice supersedes a previous one (migration 114 —
-      // cancel + reissue workflow), the renderer stamps a second
-      // reference line: "Bezug: Ersetzt Rechnung R-XXXX vom DATE".
-      supersedesInvoice: await (async () => {
-        if (!invoice.supersedes_invoice_id) return null;
+      // When this invoice replaces a previously-cancelled one
+      // (migration 114, reissue workflow), the renderer stamps a
+      // second reference line: "Bezug: Ersetzt Rechnung R-XXXX vom
+      // DATE".
+      replacesInvoice: await (async () => {
+        if (!invoice.replaces_invoice_id) return null;
         const prior = await db('invoices')
-          .where({ id: invoice.supersedes_invoice_id })
+          .where({ id: invoice.replaces_invoice_id })
+          .select('invoice_number', 'issue_date').first();
+        return prior
+          ? { number: prior.invoice_number, issueDate: prior.issue_date }
+          : null;
+      })(),
+      // Storno reference — populated only on `kind='storno'` rows.
+      // The renderer turns it into the mandatory "Storno zu Rechnung
+      // R-XXXX vom DATE" line under the title. Drives §14c-defensible
+      // traceability: the customer sees explicitly what was reversed.
+      cancelsInvoice: await (async () => {
+        if (!invoice.cancels_invoice_id) return null;
+        const prior = await db('invoices')
+          .where({ id: invoice.cancels_invoice_id })
           .select('invoice_number', 'issue_date').first();
         return prior
           ? { number: prior.invoice_number, issueDate: prior.issue_date }
@@ -953,6 +974,13 @@ async function sendInvoice(id, adminId) {
   const data = await getInvoiceById(id);
   if (!data) throw new AppError('Invoice not found', 404);
   const { invoice, lineItems } = data;
+  // Stornorechnungen go through their own send path — different
+  // email template, different variables, different PDF render
+  // branch. The scheduler's flush loop hits this entry point for
+  // every row in status='scheduled', so the dispatch lives here.
+  if (invoice.kind === 'storno') {
+    return await sendStorno(id, adminId);
+  }
   if (!['scheduled', 'sent', 'overdue'].includes(invoice.status)) {
     throw new AppError(`Cannot send invoice with status '${invoice.status}'`, 409);
   }
@@ -1056,26 +1084,227 @@ async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, not
 }
 
 /**
- * Cancel + reissue an invoice — the legally-correct alternative to
- * post-send editing. Atomic:
- *   1. The original (if not already cancelled) flips to status
- *      'cancelled'
- *   2. A new `scheduled` invoice is created with a fresh sequential
- *      number, copying line items + customer + totals + payment
- *      terms + bank + QR + everything the renderer needs
- *   3. The new row's `supersedes_invoice_id` points at the original
- *      so the PDF renderer can stamp "Bezug: Ersetzt Rechnung X" and
- *      auditors can trace the chain
+ * Materialise a Stornorechnung (cancellation invoice) for an already-
+ * issued original. Atomic:
+ *   1. Insert a new `invoices` row with `kind='storno'`, totals
+ *      negated, no due_date / payment terms / bank account / QR,
+ *      and `cancels_invoice_id` pointing at the original.
+ *   2. Snapshot the original's line items at full positive amounts
+ *      (the sign is carried by the row-level totals; the renderer
+ *      flips line totals visually for `kind='storno'`). Preserves
+ *      the migration-119 sub-item hierarchy via parent_position →
+ *      parent_line_item_id resolution in `insertLineItemsHierarchical`.
+ *   3. Flip the original to `status='cancelled'` and pin its
+ *      `cancellation_storno_id` so the admin detail view can render
+ *      a "Cancelled by Storno S-XXXX" banner.
  *
- * Refuses to act on `scheduled` rows — those are still editable
- * via Edit; reissuing them creates a confusing duplicate. Allows
- * `sent` / `overdue` / `paid` / `cancelled` (caller's
- * responsibility to know whether reissuing a paid invoice makes
- * sense — usually that's a credit-note scenario instead).
+ * Returns the Storno's id. The caller is responsible for actually
+ * sending it (sendStorno) — splitting the create/send seam means
+ * a failed PDF render or email queue doesn't roll back the
+ * cancellation itself; the storno sits in `status='scheduled'`
+ * and the cron picks it up.
+ */
+async function createStorno(originalId, adminId, trx = db) {
+  const original = await trx('invoices').where({ id: originalId }).first();
+  if (!original) throw new AppError('Invoice not found', 404);
+  if (original.kind === 'storno') {
+    throw new AppError('Cannot Storno a Storno', 409, 'IS_STORNO');
+  }
+  if (original.status === 'scheduled') {
+    throw new AppError(
+      'This invoice has not been sent yet — Storno only applies to issued documents.',
+      409,
+      'USE_EDIT_INSTEAD',
+    );
+  }
+  if (original.status === 'cancelled') {
+    throw new AppError('Invoice already cancelled', 409, 'ALREADY_CANCELLED');
+  }
+
+  // Generate the Storno's sequence number from the same gap-free
+  // series as regular invoices (single sequence — decision locked
+  // with the maintainer; satisfies §14 (4) Nr. 4 UStG).
+  const stornoNumber = await nextInvoiceNumber();
+  const now = new Date();
+  const issueDate = now.toISOString().slice(0, 10);
+
+  // Insert the Storno row. Totals negated for accounting integrity
+  // (tax report aggregates by row-level totals, so a Storno
+  // contributes correctly without the renderer needing to flip
+  // signs at report time). Line items below stay positive — the
+  // renderer applies the sign at presentation time.
+  const insertedRow = await trx('invoices').insert({
+    kind: 'storno',
+    invoice_number: stornoNumber,
+    customer_account_id: original.customer_account_id,
+    event_id: original.event_id,
+    source_quote_id: null,
+    currency: original.currency,
+    language: original.language,
+    vat_rate: original.vat_rate,
+    shipping_amount_minor: -ensureInt(original.shipping_amount_minor || 0),
+    net_amount_minor: -ensureInt(original.net_amount_minor),
+    vat_amount_minor: -ensureInt(original.vat_amount_minor),
+    total_amount_minor: -ensureInt(original.total_amount_minor),
+    late_fee_amount_minor: 0,
+    paid_amount_minor: 0,
+    status: 'scheduled',
+    scheduled_send_at: now,
+    issue_date: issueDate,
+    due_date: null,
+    reminder_level: 0,
+    cc_pdf_email: original.cc_pdf_email,
+    // No payment block on a Storno — it's not a payment instrument.
+    business_bank_account_id: null,
+    qr_format: null,
+    payment_term_template_id: null,
+    // Lineage.
+    cancels_invoice_id: original.id,
+    replaces_invoice_id: null,
+    cancellation_storno_id: null,
+    created_at: now,
+    updated_at: now,
+  }).returning('id');
+  const stornoId = Array.isArray(insertedRow)
+    ? (insertedRow[0]?.id ?? insertedRow[0])
+    : insertedRow;
+
+  // Snapshot the original's line items (positive amounts — the
+  // Storno's sign convention lives on the row-level totals + the
+  // renderer flip).
+  const lineItems = await trx('invoice_line_items as li')
+    .leftJoin('invoice_line_items as parent', 'parent.id', 'li.parent_line_item_id')
+    .where('li.invoice_id', originalId)
+    .orderBy('li.position', 'asc')
+    .select('li.*', 'parent.position as parent_position');
+  if (lineItems.length > 0) {
+    const cloned = lineItems.map((li) => ({
+      position: ensureInt(li.position),
+      quantity: li.quantity,
+      description: li.description,
+      unit_price_minor: ensureInt(li.unit_price_minor),
+      discount_percent: ensureNumber(li.discount_percent, 0),
+      line_total_minor: ensureInt(li.line_total_minor),
+      parent_position: li.parent_position == null ? null : ensureInt(li.parent_position),
+      details_text: li.details_text || null,
+    }));
+    const { validateLineItemHierarchy, insertLineItemsHierarchical } = getHierarchyHelpers();
+    validateLineItemHierarchy(cloned);
+    await insertLineItemsHierarchical(trx, 'invoice_line_items', 'invoice_id', stornoId, cloned);
+  }
+
+  // Flip the original to cancelled + link the Storno.
+  await trx('invoices').where({ id: originalId }).update({
+    status: 'cancelled',
+    cancellation_storno_id: stornoId,
+    updated_at: now,
+  });
+
+  try {
+    await logActivity('invoice_cancelled_via_storno',
+      { invoiceId: originalId, stornoId, stornoNumber },
+      original.event_id || null, `admin:${adminId}`);
+  } catch (_) {}
+
+  return stornoId;
+}
+
+/**
+ * Send a Stornorechnung — renders the PDF, persists it on disk,
+ * flips the row to `status='sent'`, and queues the `storno_issued`
+ * email to the customer with the PDF attached.
+ *
+ * Mirrors sendInvoice's shape so the scheduler's flush loop can
+ * delegate uniformly. The email template ships in Phase 3
+ * (renames the dormant `invoice_cancelled` seed); if the worker
+ * picks up the job before the template lands it logs the missing
+ * template — the row stays in `sent` either way.
+ */
+async function sendStorno(stornoId, adminId) {
+  const data = await getInvoiceById(stornoId);
+  if (!data) throw new AppError('Storno not found', 404);
+  const { invoice: storno, lineItems } = data;
+  if (storno.kind !== 'storno') {
+    throw new AppError(`Expected kind='storno', got '${storno.kind}'`, 409);
+  }
+  if (storno.status === 'sent') return { status: 'sent' };
+
+  const customer = await db('customer_accounts').where({ id: storno.customer_account_id }).first();
+  ensureCustomerCanBill(customer);
+
+  const ctx = await buildInvoiceRenderContext(storno, lineItems);
+  const buffer = await pdfService.renderInvoiceToBuffer(ctx);
+
+  // Persist PDF snapshot alongside regular invoices.
+  const fs = require('fs');
+  const path = require('path');
+  const year = new Date(storno.issue_date).getFullYear();
+  const root = path.join(process.cwd(), 'storage', 'business-docs', 'invoice', String(year));
+  fs.mkdirSync(root, { recursive: true });
+  const pdfPath = path.join(root, `${storno.invoice_number}.pdf`);
+  fs.writeFileSync(pdfPath, buffer);
+
+  await db('invoices').where({ id: stornoId }).update({
+    status: 'sent',
+    sent_at: new Date(),
+    pdf_path: pdfPath,
+    updated_at: new Date(),
+  });
+
+  // Look up the original so we can include both numbers in the
+  // email body — customers' bookkeepers expect to see the pair.
+  const originalRow = storno.cancels_invoice_id
+    ? await db('invoices').where({ id: storno.cancels_invoice_id })
+        .select('invoice_number', 'issue_date').first()
+    : null;
+
+  await emailProcessor.queueEmail(storno.event_id || null, customer.email, 'storno_issued', {
+    storno_number: storno.invoice_number,
+    original_invoice_number: originalRow?.invoice_number || '',
+    original_issue_date: originalRow?.issue_date ? formatShortDate(originalRow.issue_date) : '',
+    customer_name: customer.display_name || customer.first_name || customer.email.split('@')[0],
+    total_amount: formatMajor(Math.abs(storno.total_amount_minor), storno.currency, ctx.locale),
+    cc: storno.cc_pdf_email || undefined,
+    attachments: [{
+      filename: `${storno.invoice_number}.pdf`,
+      contentPath: pdfPath,
+      contentType: 'application/pdf',
+    }],
+  });
+
+  try {
+    await logActivity('storno_sent',
+      { stornoId, stornoNumber: storno.invoice_number, originalInvoiceId: storno.cancels_invoice_id || null },
+      storno.event_id || null, `admin:${adminId || 'system'}`);
+  } catch (_) {}
+
+  return { status: 'sent', stornoId };
+}
+
+/**
+ * Reissue an invoice — the legally-correct alternative to post-send
+ * editing.
+ *   1. If the original is still live (sent / overdue / paid),
+ *      generate a Stornorechnung for it via `createStorno` and
+ *      immediately send it to the customer (sendStorno). The
+ *      original flips to `status='cancelled'` and its
+ *      `cancellation_storno_id` is pinned.
+ *   2. Create a fresh `scheduled` invoice with a new sequence
+ *      number, line items snapshotted from the original, and
+ *      `replaces_invoice_id` pointing at the original so the
+ *      renderer can stamp "Bezug: Ersetzt Rechnung R-XXXX".
+ *
+ * If the original is ALREADY cancelled (admin previously cancelled
+ * it via Storno on its own), the cancel step is skipped — only the
+ * replacement is created. `scheduled` originals are rejected
+ * (USE_EDIT_INSTEAD) since drafts don't need legal cancellation.
  */
 async function reissueInvoice(id, adminId) {
   const original = await db('invoices').where({ id }).first();
   if (!original) throw new AppError('Invoice not found', 404);
+  if (original.kind === 'storno') {
+    throw new AppError('Cannot reissue a Storno document', 409, 'IS_STORNO');
+  }
   if (original.status === 'scheduled') {
     throw new AppError(
       'This invoice has not been sent yet — use Edit instead of Cancel & reissue.',
@@ -1084,25 +1313,24 @@ async function reissueInvoice(id, adminId) {
     );
   }
 
-  return await db.transaction(async (trx) => {
-    // 1. Cancel the original (idempotent on already-cancelled rows).
-    if (original.status !== 'cancelled') {
-      await trx('invoices').where({ id }).update({
-        status: 'cancelled',
-        updated_at: new Date(),
-      });
-      try {
-        await logActivity('invoice_cancelled_for_reissue', { invoiceId: id },
-          original.event_id || null, `admin:${adminId}`);
-      } catch (_) {}
+  // Cancel via Storno first if still live. We deliberately commit
+  // the Storno BEFORE creating the replacement so a failed sendStorno
+  // doesn't roll back the cancellation; the storno sits in
+  // status='scheduled' and the cron picks it up. Same resiliency
+  // contract as cancelInvoice.
+  let stornoId = null;
+  if (original.status !== 'cancelled') {
+    stornoId = await db.transaction(async (trx) => createStorno(id, adminId, trx));
+    try { await sendStorno(stornoId, adminId); } catch (err) {
+      logger.warn('sendStorno during reissue failed — scheduler will retry', { stornoId, err: err.message });
     }
+  }
 
-    // 2. Snapshot the line items so the duplicate carries identical
-    //    rows. We re-insert via createInvoice rather than direct DB
-    //    copies so the totals get re-computed authoritatively (any
-    //    rounding drift is recalculated from line items, matching
-    //    the create flow). Self-join carries parent_position across
-    //    so the migration-119 sub-item hierarchy is preserved.
+  // Build the replacement. Same shape as the original — re-uses
+  // createInvoice so totals are recomputed authoritatively from
+  // line items (any rounding drift gets normalised). Self-join
+  // carries parent_position so migration-119 sub-items survive.
+  return await db.transaction(async (trx) => {
     const lineItems = await trx('invoice_line_items as li')
       .leftJoin('invoice_line_items as parent', 'parent.id', 'li.parent_line_item_id')
       .where('li.invoice_id', id)
@@ -1136,18 +1364,18 @@ async function reissueInvoice(id, adminId) {
       lineItems: liPayload,
     }, adminId, trx);
 
-    // 3. Link the new row to the cancelled original.
     await trx('invoices').where({ id: newId }).update({
-      supersedes_invoice_id: id,
+      replaces_invoice_id: id,
       updated_at: new Date(),
     });
 
     try {
-      await logActivity('invoice_reissued', { originalInvoiceId: id, newInvoiceId: newId },
+      await logActivity('invoice_reissued',
+        { originalInvoiceId: id, newInvoiceId: newId, stornoId },
         original.event_id || null, `admin:${adminId}`);
     } catch (_) {}
 
-    return { id: newId, supersedes: id };
+    return { id: newId, replaces: id, stornoId };
   });
 }
 
@@ -1185,17 +1413,65 @@ async function releaseForDelivery(id, adminId) {
   return await sendInvoice(id, adminId);
 }
 
+/**
+ * Cancel an invoice. The behaviour depends on whether the document
+ * was ever issued:
+ *
+ *   - `scheduled` (draft, no PDF emitted): soft cancel — status
+ *     flips to 'cancelled', nothing leaves the system. No Storno is
+ *     generated because no document exists for the customer to
+ *     reverse.
+ *
+ *   - `sent` / `overdue` / `paid` (issued): generate a
+ *     Stornorechnung (cancellation invoice) with its own sequence
+ *     number, attach a signed PDF, and email it to the customer.
+ *     Original flips to 'cancelled' and pins its
+ *     `cancellation_storno_id` for the admin lineage view. This is
+ *     the only §14c-defensible cancellation path under DACH tax law
+ *     once an invoice has been delivered to the recipient.
+ *
+ *     Note we allow `paid` here on purpose — bookkeepers cancel
+ *     paid invoices when issuing refunds. The actual money
+ *     movement (refund, carry-forward as Anzahlung) is handled
+ *     separately; the Storno is the document leg.
+ *
+ *   - `cancelled` (already): 409, `ALREADY_CANCELLED`.
+ *
+ * Returns `{ cancelled: true, stornoId? }` so the caller can
+ * surface "Storno S-XXXX wurde erzeugt" feedback when applicable.
+ */
 async function cancelInvoice(id, adminId) {
   const invoice = await db('invoices').where({ id }).first();
   if (!invoice) throw new AppError('Invoice not found', 404);
-  if (invoice.status === 'paid') {
-    throw new AppError('Cannot cancel a paid invoice', 409);
+  if (invoice.kind === 'storno') {
+    throw new AppError('Cannot cancel a Storno document', 409, 'IS_STORNO');
   }
-  await db('invoices').where({ id }).update({
-    status: 'cancelled', updated_at: new Date(),
-  });
-  try { await logActivity('invoice_cancelled', { invoiceId: id }, invoice.event_id || null, `admin:${adminId}`); } catch (_) {}
-  return { cancelled: true };
+  if (invoice.status === 'cancelled') {
+    throw new AppError('Invoice already cancelled', 409, 'ALREADY_CANCELLED');
+  }
+
+  // Draft path: nothing was issued, soft cancel and we're done.
+  if (invoice.status === 'scheduled') {
+    await db('invoices').where({ id }).update({
+      status: 'cancelled', updated_at: new Date(),
+    });
+    try {
+      await logActivity('invoice_cancelled',
+        { invoiceId: id, viaStorno: false },
+        invoice.event_id || null, `admin:${adminId}`);
+    } catch (_) {}
+    return { cancelled: true, stornoId: null };
+  }
+
+  // Issued path: Storno required. Commit createStorno in its own
+  // transaction so a failed sendStorno doesn't roll back the
+  // cancellation; the scheduler picks up an unsent Storno on the
+  // next tick.
+  const stornoId = await db.transaction(async (trx) => createStorno(id, adminId, trx));
+  try { await sendStorno(stornoId, adminId); } catch (err) {
+    logger.warn('sendStorno after cancelInvoice failed — scheduler will retry', { stornoId, err: err.message });
+  }
+  return { cancelled: true, stornoId };
 }
 
 /**
@@ -1622,7 +1898,12 @@ async function runScheduledTasks() {
     const secondCutoff = new Date(now.getTime() - secondDays * 86400000);
 
     // Pre-reminder check (would-be-level-1).
+    // `kind='invoice'` filter keeps Stornorechnungen out of the
+    // dunning ladder — they have no due_date and no payment
+    // expectation; reminding on them would be a customer-facing
+    // bug.
     const firstBatch = await db('invoices')
+      .where('kind', 'invoice')
       .whereIn('status', ['sent', 'overdue'])
       .where('reminder_level', 0)
       .where('due_date', '<=', firstCutoff)
@@ -1637,6 +1918,7 @@ async function runScheduledTasks() {
 
     // Pre-reminder check (would-be-level-2, including Mahngebühr).
     const secondBatch = await db('invoices')
+      .where('kind', 'invoice')
       .whereIn('status', ['sent', 'overdue'])
       .where('reminder_level', 1)
       .where('due_date', '<=', secondCutoff)
@@ -1682,6 +1964,8 @@ module.exports = {
   cancelInvoice,
   releaseForDelivery,
   reissueInvoice,
+  createStorno,
+  sendStorno,
   queuePaymentCheckEmail,
   getPaymentCheckByToken,
   recordPaymentCheckAction,

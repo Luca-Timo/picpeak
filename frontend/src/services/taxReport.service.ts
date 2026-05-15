@@ -16,7 +16,7 @@ export interface TaxReportRow {
   status: string;
   isCancelled: boolean;
   /** Replacement invoice number when this cancelled row was reissued. */
-  supersededByInvoiceNumber: string | null;
+  replacedByInvoiceNumber: string | null;
   vatRate: number;
   customerLabel: string;
   eventName: string;

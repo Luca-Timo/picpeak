@@ -134,7 +134,102 @@ describe('invoiceService.reissueInvoice', () => {
 
     const result = await invoiceService.reissueInvoice(1, 42);
     expect(result.id).toBeDefined();
-    expect(result.supersedes).toBe(1);
+    expect(result.replaces).toBe(1);
+  });
+});
+
+describe('invoiceService.createStorno', () => {
+  beforeEach(() => resetChains());
+
+  it('rejects when the source invoice does not exist (404)', async () => {
+    pickChainFor('invoices')._firstValue = null;
+    await expect(invoiceService.createStorno(999, 42))
+      .rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('rejects when the source is still scheduled (drafts edit in place)', async () => {
+    pickChainFor('invoices')._firstValue = { id: 1, status: 'scheduled', kind: 'invoice' };
+    await expect(invoiceService.createStorno(1, 42))
+      .rejects.toMatchObject({ statusCode: 409, code: 'USE_EDIT_INSTEAD' });
+  });
+
+  it('rejects when the source is already cancelled (no double-Storno)', async () => {
+    pickChainFor('invoices')._firstValue = { id: 1, status: 'cancelled', kind: 'invoice' };
+    await expect(invoiceService.createStorno(1, 42))
+      .rejects.toMatchObject({ statusCode: 409, code: 'ALREADY_CANCELLED' });
+  });
+
+  it('rejects when asked to Storno a Storno', async () => {
+    pickChainFor('invoices')._firstValue = { id: 1, status: 'sent', kind: 'storno' };
+    await expect(invoiceService.createStorno(1, 42))
+      .rejects.toMatchObject({ statusCode: 409, code: 'IS_STORNO' });
+  });
+
+  it('inserts a Storno row and flips the original on a sent invoice', async () => {
+    // Original is `sent`, no line items, no event.
+    const invoicesChain = pickChainFor('invoices');
+    invoicesChain._firstValue = {
+      id: 1, status: 'sent', kind: 'invoice', customer_account_id: 5,
+      currency: 'CHF', language: 'de', vat_rate: 7.7,
+      net_amount_minor: 30000, vat_amount_minor: 2310,
+      total_amount_minor: 32310, shipping_amount_minor: 0,
+      cc_pdf_email: null, event_id: null,
+    };
+    pickChainFor('invoice_line_items')._selectResult = [];
+    pickChainFor('app_settings')._firstValue = null;
+
+    const stornoId = await invoiceService.createStorno(1, 42);
+    expect(stornoId).toBeDefined();
+
+    // The mock chain's .update() is called twice on `invoices`:
+    //   1) `.insert(...).returning('id')` for the Storno row
+    //   2) `.update({status:'cancelled', cancellation_storno_id})` on the original
+    // We just verify the helpers were exercised on the right table.
+    expect(invoicesChain.insert).toHaveBeenCalled();
+    expect(invoicesChain.update).toHaveBeenCalled();
+    // The Storno insert payload should carry kind='storno' and
+    // negated row-level totals. Inspect the first insert call's
+    // payload to confirm.
+    const insertedRow = invoicesChain.insert.mock.calls[0][0];
+    expect(insertedRow.kind).toBe('storno');
+    expect(insertedRow.net_amount_minor).toBe(-30000);
+    expect(insertedRow.vat_amount_minor).toBe(-2310);
+    expect(insertedRow.total_amount_minor).toBe(-32310);
+    expect(insertedRow.cancels_invoice_id).toBe(1);
+    expect(insertedRow.status).toBe('scheduled');
+    // No payment instrument on a Storno.
+    expect(insertedRow.business_bank_account_id).toBeNull();
+    expect(insertedRow.qr_format).toBeNull();
+    expect(insertedRow.payment_term_template_id).toBeNull();
+    expect(insertedRow.due_date).toBeNull();
+  });
+});
+
+describe('invoiceService.cancelInvoice', () => {
+  beforeEach(() => resetChains());
+
+  it('rejects when the invoice does not exist (404)', async () => {
+    pickChainFor('invoices')._firstValue = null;
+    await expect(invoiceService.cancelInvoice(999, 42))
+      .rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('rejects with ALREADY_CANCELLED when status is cancelled', async () => {
+    pickChainFor('invoices')._firstValue = { id: 1, status: 'cancelled', kind: 'invoice' };
+    await expect(invoiceService.cancelInvoice(1, 42))
+      .rejects.toMatchObject({ statusCode: 409, code: 'ALREADY_CANCELLED' });
+  });
+
+  it('rejects with IS_STORNO when asked to cancel a Storno', async () => {
+    pickChainFor('invoices')._firstValue = { id: 1, status: 'sent', kind: 'storno' };
+    await expect(invoiceService.cancelInvoice(1, 42))
+      .rejects.toMatchObject({ statusCode: 409, code: 'IS_STORNO' });
+  });
+
+  it('soft-cancels a scheduled (draft) invoice without generating a Storno', async () => {
+    pickChainFor('invoices')._firstValue = { id: 1, status: 'scheduled', kind: 'invoice', event_id: null };
+    const result = await invoiceService.cancelInvoice(1, 42);
+    expect(result).toEqual({ cancelled: true, stornoId: null });
   });
 });
 

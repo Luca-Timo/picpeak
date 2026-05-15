@@ -144,3 +144,93 @@ describe('exported letterhead helper', () => {
     expect(typeof pdfService.drawIssuerBlock).toBe('function');
   });
 });
+
+// Storno rendering — smoke-tests that exercise the kind='storno'
+// branch in renderInvoiceToBuffer. We can't search the PDF buffer
+// directly for German strings because PDFKit Flate-compresses
+// content streams, but we CAN verify the renderer:
+//   - completes without throwing on a Storno-shaped context,
+//   - produces a valid %PDF magic header,
+//   - produces a SMALLER document than its invoice counterpart
+//     (no payment block, no QR slip → fewer bytes), proving the
+//     suppression branches actually fire.
+//
+// Visual correctness (title swap, reference line, signed totals) is
+// validated by manual review of a real Storno PDF; the renderer's
+// branch logic is unit-tested in service tests where the inputs
+// can be asserted directly.
+describe('renderInvoiceToBuffer — Storno branch', () => {
+  function buildContext(overrides = {}) {
+    return {
+      locale: 'de',
+      currency: 'CHF',
+      issuer: { companyName: 'AcmeCo' },
+      recipient: {
+        companyName: 'KundenCo', addressLine1: 'Strasse 1',
+        city: 'Bern', postalCode: '3000',
+      },
+      lineItems: [{
+        quantity: 1, description: 'Photo session',
+        unitPriceMinor: 30000, lineTotalMinor: 30000,
+        parentLineItemId: null, parentPosition: null,
+      }],
+      totals: {
+        netAmountMinor: 30000, vatRate: 7.7, vatAmountMinor: 2310,
+        shippingAmountMinor: 0, totalAmountMinor: 32310,
+      },
+      doc: { invoiceNumber: 'R-2026-0042', issueDate: '2026-04-12' },
+      // Bank + payment term are part of the baseline invoice so the
+      // payment block renders a real IBAN + Zahlungsbedingungen
+      // section. The Storno branch suppresses this entirely, which
+      // produces a visible byte-size delta.
+      bank: {
+        accountHolder: 'AcmeCo',
+        iban: 'CH9300762011623852957',
+        bic: 'POFICHBE',
+        currency: 'CHF',
+      },
+      qrFormat: 'none',
+      paymentTerm: { netDays: 30, skontoPercent: 2, skontoWithinDays: 10 },
+      ...overrides,
+    };
+  }
+
+  it('renders a valid Storno PDF (kind="storno", negated totals)', async () => {
+    const buf = await pdfService.renderInvoiceToBuffer(buildContext({
+      totals: {
+        netAmountMinor: -30000, vatRate: 7.7, vatAmountMinor: -2310,
+        shippingAmountMinor: 0, totalAmountMinor: -32310,
+      },
+      doc: {
+        kind: 'storno',
+        invoiceNumber: 'R-2026-0080',
+        issueDate: '2026-05-15',
+        cancelsInvoice: { number: 'R-2026-0042', issueDate: '2026-04-12' },
+      },
+    }));
+    expect(buf.length).toBeGreaterThan(0);
+    expect(buf.slice(0, 4).toString('ascii')).toBe('%PDF');
+  });
+
+  it('produces a smaller PDF than the equivalent invoice (no payment block, no QR slip)', async () => {
+    // Baseline: normal invoice with a payment block.
+    const invoiceBuf = await pdfService.renderInvoiceToBuffer(buildContext());
+    // Storno: same context but kind='storno' → payment block + QR
+    // both suppressed. Payment block alone is ~80pt tall in the
+    // PDF; its absence is reliably detectable as a byte-size delta.
+    const stornoBuf = await pdfService.renderInvoiceToBuffer(buildContext({
+      totals: {
+        netAmountMinor: -30000, vatRate: 7.7, vatAmountMinor: -2310,
+        shippingAmountMinor: 0, totalAmountMinor: -32310,
+      },
+      doc: {
+        kind: 'storno',
+        invoiceNumber: 'R-2026-0080',
+        issueDate: '2026-05-15',
+        cancelsInvoice: { number: 'R-2026-0042', issueDate: '2026-04-12' },
+      },
+    }));
+    expect(stornoBuf.length).toBeGreaterThan(0);
+    expect(stornoBuf.length).toBeLessThan(invoiceBuf.length);
+  });
+});

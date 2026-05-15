@@ -14,14 +14,14 @@
 //   db('invoices').leftJoin(...).leftJoin(...).whereBetween(...)
 //     .where(...).whereIn(...).orderBy(...).select(...)
 // and then for cancelled ids:
-//   db('invoices').whereIn('supersedes_invoice_id', ids).select(...)
+//   db('invoices').whereIn('replaces_invoice_id', ids).select(...)
 //
 // We use one shared chain factory that returns canned rows from
 // `_selectResult` for the main query, and lets us swap the result
-// for the supersedes lookup via a "second-call" hook.
+// for the replacements lookup via a "second-call" hook.
 
 let invoiceRowsForRun = [];
-let supersedesRowsForRun = [];
+let replacementsRowsForRun = [];
 let callCount = 0;
 
 function makeChain(initialRows) {
@@ -42,9 +42,9 @@ function makeChain(initialRows) {
 
 const mockDbFn = jest.fn(() => {
   callCount += 1;
-  // First call: main listing. Second call: supersedes lookup.
+  // First call: main listing. Second call: replacements lookup.
   if (callCount === 1) return makeChain(invoiceRowsForRun);
-  return makeChain(supersedesRowsForRun);
+  return makeChain(replacementsRowsForRun);
 });
 
 jest.mock('../../src/database/db', () => ({
@@ -57,7 +57,7 @@ const { grossUpLateFee, computeReportedAmounts, buildCustomerLabel } = taxReport
 
 beforeEach(() => {
   invoiceRowsForRun = [];
-  supersedesRowsForRun = [];
+  replacementsRowsForRun = [];
   callCount = 0;
   mockDbFn.mockClear();
 });
@@ -179,7 +179,7 @@ describe('getTaxReport', () => {
         id: 1, invoice_number: 'R-2026-0001', issue_date: '2026-01-15',
         currency: 'CHF', status: 'paid', vat_rate: 7.7,
         net_amount_minor: 10000, vat_amount_minor: 770, total_amount_minor: 10770,
-        late_fee_amount_minor: 0, supersedes_invoice_id: null,
+        late_fee_amount_minor: 0, replaces_invoice_id: null,
         customer_company_name: 'ACME GmbH', customer_first_name: null, customer_last_name: null,
         customer_display_name: null, customer_email: null, event_name: 'Wedding A',
       },
@@ -214,7 +214,7 @@ describe('getTaxReport', () => {
         id: 10, invoice_number: 'R-2026-0010', issue_date: '2026-02-01',
         currency: 'CHF', status: 'cancelled', vat_rate: 7.7,
         net_amount_minor: 10000, vat_amount_minor: 770, total_amount_minor: 10770,
-        late_fee_amount_minor: 0, supersedes_invoice_id: null,
+        late_fee_amount_minor: 0, replaces_invoice_id: null,
         customer_company_name: 'ACME GmbH', customer_first_name: null, customer_last_name: null,
         customer_display_name: null, customer_email: null, event_name: 'Wedding A',
       },
@@ -222,13 +222,13 @@ describe('getTaxReport', () => {
         id: 11, invoice_number: 'R-2026-0011', issue_date: '2026-02-02',
         currency: 'CHF', status: 'paid', vat_rate: 7.7,
         net_amount_minor: 10000, vat_amount_minor: 770, total_amount_minor: 10770,
-        late_fee_amount_minor: 0, supersedes_invoice_id: 10,
+        late_fee_amount_minor: 0, replaces_invoice_id: 10,
         customer_company_name: 'ACME GmbH', customer_first_name: null, customer_last_name: null,
         customer_display_name: null, customer_email: null, event_name: 'Wedding A',
       },
     ];
     // The supersedes lookup query: row 11 supersedes row 10.
-    supersedesRowsForRun = [{ supersedes_invoice_id: 10, invoice_number: 'R-2026-0011' }];
+    replacementsRowsForRun = [{ replaces_invoice_id: 10, invoice_number: 'R-2026-0011' }];
 
     const out = await taxReportService.getTaxReport({
       from: '2026-01-01', to: '2026-03-31', currency: 'CHF',
@@ -237,7 +237,7 @@ describe('getTaxReport', () => {
     const cancelled = out.rows.find((r) => r.invoiceNumber === 'R-2026-0010');
     const replacement = out.rows.find((r) => r.invoiceNumber === 'R-2026-0011');
     expect(cancelled.isCancelled).toBe(true);
-    expect(cancelled.supersededByInvoiceNumber).toBe('R-2026-0011');
+    expect(cancelled.replacedByInvoiceNumber).toBe('R-2026-0011');
     expect(replacement.isCancelled).toBe(false);
 
     // Totals: only the replacement counts.
@@ -256,21 +256,21 @@ describe('getTaxReport', () => {
         id: 1, invoice_number: 'R-2026-0001', issue_date: '2026-01-01',
         currency: 'CHF', status: 'paid', vat_rate: 7.7,
         net_amount_minor: 10000, vat_amount_minor: 770, total_amount_minor: 10770,
-        late_fee_amount_minor: 0, supersedes_invoice_id: null,
+        late_fee_amount_minor: 0, replaces_invoice_id: null,
         customer_company_name: 'A', event_name: 'X',
       },
       {
         id: 2, invoice_number: 'R-2026-0002', issue_date: '2026-01-02',
         currency: 'CHF', status: 'paid', vat_rate: 8.1,
         net_amount_minor: 20000, vat_amount_minor: 1620, total_amount_minor: 21620,
-        late_fee_amount_minor: 0, supersedes_invoice_id: null,
+        late_fee_amount_minor: 0, replaces_invoice_id: null,
         customer_company_name: 'B', event_name: 'Y',
       },
       {
         id: 3, invoice_number: 'R-2026-0003', issue_date: '2026-01-03',
         currency: 'CHF', status: 'sent', vat_rate: 8.1,
         net_amount_minor: 5000, vat_amount_minor: 405, total_amount_minor: 5405,
-        late_fee_amount_minor: 0, supersedes_invoice_id: null,
+        late_fee_amount_minor: 0, replaces_invoice_id: null,
         customer_company_name: 'C', event_name: 'Z',
       },
     ];
@@ -297,7 +297,7 @@ describe('getTaxReport', () => {
         currency: 'CHF', status: 'overdue', vat_rate: 7.7,
         net_amount_minor: 10000, vat_amount_minor: 770,
         total_amount_minor: 13270, // 10000 + 770 + 2500 fee
-        late_fee_amount_minor: 2500, supersedes_invoice_id: null,
+        late_fee_amount_minor: 2500, replaces_invoice_id: null,
         customer_company_name: 'ACME', event_name: 'Wedding A',
       },
     ];

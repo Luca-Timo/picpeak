@@ -2812,7 +2812,12 @@
       },
       "filter": {
         "outstanding": "Outstanding (sent + overdue)"
-      }
+      },
+      "kind": {
+        "storno": "Cancellation invoice"
+      },
+      "cancelsLabel": "Cancels invoice",
+      "cancelledByLabel": "Cancelled by cancellation invoice"
     },
     "sort": {
       "label": "Sort",
@@ -2900,6 +2905,7 @@
       "openLink": "+ Create new customer",
       "title": "Create new customer",
       "subtitle": "Fill in the details below. Choose \"Save as passive customer\" to create an admin-only record, or \"Save & send portal invitation\" to also email the customer a sign-up link.",
+      "passiveSubtitle": "Adds an admin-only customer record. The customer is not notified and cannot log in until you send them an invitation later.",
       "saveAsPassive": "Save as passive customer",
       "saveAndInvite": "Save & send portal invitation",
       "savedPassiveToast": "Passive customer created.",
@@ -3253,7 +3259,21 @@
     "confirmReminder": "Send a reminder now?",
     "reminderToast": "Reminder sent.",
     "confirmCancel": "Cancel this invoice?",
+    "confirmCancelDraft": "Cancel this draft invoice? No document goes out.",
+    "confirmCancelIssued": "A Stornorechnung will be generated and emailed to the customer immediately. This cannot be undone. Continue?",
     "cancelledToast": "Invoice cancelled.",
+    "cancelledWithStornoToast": "Invoice cancelled — Stornorechnung issued to the customer.",
+    "confirmReissue": "A Stornorechnung will be issued to the customer for this invoice, and a new scheduled draft will be created with the same line items. The new invoice will reference this one as \"Replaces R-XXXX\". Continue?",
+    "confirmReissueCancelled": "Create a new scheduled invoice with the same line items, linked back to this cancelled one?",
+    "reissuedToast": "Invoice reissued — opening the new draft.",
+    "reissuedWithStornoToast": "Stornorechnung issued — opening the new draft.",
+    "reissue": "Reissue",
+    "cancelAndReissue": "Cancel & reissue",
+    "kind": {
+      "storno": "Stornorechnung"
+    },
+    "stornoCancelsLabel": "This Stornorechnung cancels invoice",
+    "cancelledByStornoLabel": "This invoice was cancelled by Stornorechnung",
     "paymentRecordedToast": "Payment recorded.",
     "sendNow": "Send now",
     "resend": "Resend",

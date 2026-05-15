@@ -140,7 +140,20 @@ export const BillsListPage: React.FC = () => {
                         className="border-t border-neutral-200 dark:border-neutral-700 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800"
                         onClick={() => navigate(`/admin/clients/bills/${inv.id}`)}
                       >
-                        <td className="px-3 py-2 font-mono text-xs">{inv.invoiceNumber}</td>
+                        <td className="px-3 py-2 font-mono text-xs">
+                          {inv.invoiceNumber}
+                          {/* Storno discriminator badge — list rows
+                              don't have a kind column today, so
+                              tucking it inline with the number keeps
+                              the table layout stable while making
+                              cancellation documents instantly
+                              recognisable. */}
+                          {inv.kind === 'storno' && (
+                            <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 uppercase tracking-wide">
+                              {t('bills.kind.storno', 'Storno')}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-2">{inv.customer.companyName || inv.customer.displayName || inv.customer.email}</td>
                         <td className="px-3 py-2 text-xs text-muted-theme">
                           {inv.installmentTotal > 1 ? `${inv.installmentIndex + 1}/${inv.installmentTotal} · ${inv.installmentLabel || ''}` : '—'}

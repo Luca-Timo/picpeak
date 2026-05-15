@@ -11,7 +11,7 @@
  */
 
 let invoiceRowsForRun = [];
-let supersedesRowsForRun = [];
+let replacementsRowsForRun = [];
 let callCount = 0;
 
 function makeChain(initialRows) {
@@ -32,7 +32,7 @@ function makeChain(initialRows) {
 const mockDbFn = jest.fn(() => {
   callCount += 1;
   if (callCount === 1) return makeChain(invoiceRowsForRun);
-  return makeChain(supersedesRowsForRun);
+  return makeChain(replacementsRowsForRun);
 });
 
 jest.mock('../../src/database/db', () => ({
@@ -71,7 +71,7 @@ const taxReportService = require('../../src/services/taxReportService');
 
 beforeEach(() => {
   invoiceRowsForRun = [];
-  supersedesRowsForRun = [];
+  replacementsRowsForRun = [];
   callCount = 0;
   mockDbFn.mockClear();
 });
@@ -80,7 +80,7 @@ const SAMPLE_ROW = (override = {}) => ({
   id: 1, invoice_number: 'R-2026-0001', issue_date: '2026-01-15',
   currency: 'CHF', status: 'paid', vat_rate: 7.7,
   net_amount_minor: 10000, vat_amount_minor: 770, total_amount_minor: 10770,
-  late_fee_amount_minor: 0, supersedes_invoice_id: null,
+  late_fee_amount_minor: 0, replaces_invoice_id: null,
   customer_company_name: 'Test Kunde GmbH', customer_first_name: null,
   customer_last_name: null, customer_display_name: null, customer_email: null,
   event_name: 'Hochzeit Müller',
@@ -110,9 +110,9 @@ describe('renderTaxReportPdf', () => {
   it('renders successfully when cancelled rows are present', async () => {
     invoiceRowsForRun = [
       SAMPLE_ROW({ id: 1, invoice_number: 'R-2026-0001', status: 'cancelled' }),
-      SAMPLE_ROW({ id: 2, invoice_number: 'R-2026-0002', supersedes_invoice_id: 1 }),
+      SAMPLE_ROW({ id: 2, invoice_number: 'R-2026-0002', replaces_invoice_id: 1 }),
     ];
-    supersedesRowsForRun = [{ supersedes_invoice_id: 1, invoice_number: 'R-2026-0002' }];
+    replacementsRowsForRun = [{ replaces_invoice_id: 1, invoice_number: 'R-2026-0002' }];
     const buf = await taxReportService.renderTaxReportPdf({
       from: '2026-01-01', to: '2026-03-31', currency: 'CHF', locale: 'de',
     });

@@ -2812,7 +2812,12 @@
       },
       "filter": {
         "outstanding": "Offen (gesendet + überfällig)"
-      }
+      },
+      "kind": {
+        "storno": "Stornorechnung"
+      },
+      "cancelsLabel": "Hebt Rechnung auf:",
+      "cancelledByLabel": "Aufgehoben durch Stornorechnung"
     },
     "sort": {
       "label": "Sortieren",
@@ -2900,6 +2905,7 @@
       "openLink": "+ Neuen Kunden erstellen",
       "title": "Neuen Kunden erstellen",
       "subtitle": "Geben Sie die Daten unten ein. Wählen Sie „Als passiven Kunden speichern“, um einen reinen Admin-Eintrag zu erstellen, oder „Speichern & Portal-Einladung senden“, um dem Kunden zusätzlich eine Einladungs-E-Mail zu schicken.",
+      "passiveSubtitle": "Erstellt einen reinen Admin-Datensatz. Der Kunde wird nicht benachrichtigt und kann sich erst anmelden, wenn Sie ihm später eine Einladung senden.",
       "saveAsPassive": "Als passiven Kunden speichern",
       "saveAndInvite": "Speichern & Portal-Einladung senden",
       "savedPassiveToast": "Passiver Kunde erstellt.",
@@ -3284,7 +3290,21 @@
     "confirmReminder": "Zahlungserinnerung jetzt senden?",
     "reminderToast": "Zahlungserinnerung gesendet.",
     "confirmCancel": "Diese Rechnung wirklich stornieren? Sie wird ausgegraut und kann nicht mehr bearbeitet werden.",
+    "confirmCancelDraft": "Diesen Rechnungsentwurf verwerfen? Es wird kein Dokument an den Kunden gesendet.",
+    "confirmCancelIssued": "Es wird eine Stornorechnung erzeugt und sofort an den Kunden gesendet. Dies kann nicht rückgängig gemacht werden. Fortfahren?",
     "cancelledToast": "Rechnung storniert.",
+    "cancelledWithStornoToast": "Rechnung storniert — Stornorechnung an den Kunden gesendet.",
+    "confirmReissue": "Für diese Rechnung wird eine Stornorechnung an den Kunden gesendet, und ein neuer Entwurf mit den gleichen Positionen wird angelegt. Die neue Rechnung verweist auf diese als „Ersetzt R-XXXX“. Fortfahren?",
+    "confirmReissueCancelled": "Eine neue Rechnung mit denselben Positionen anlegen, verknüpft mit dieser stornierten Rechnung?",
+    "reissuedToast": "Rechnung neu ausgestellt — Entwurf wird geöffnet.",
+    "reissuedWithStornoToast": "Stornorechnung erzeugt — Entwurf wird geöffnet.",
+    "reissue": "Neu ausstellen",
+    "cancelAndReissue": "Stornieren & neu ausstellen",
+    "kind": {
+      "storno": "Stornorechnung"
+    },
+    "stornoCancelsLabel": "Diese Stornorechnung hebt Rechnung auf:",
+    "cancelledByStornoLabel": "Diese Rechnung wurde aufgehoben durch Stornorechnung",
     "paymentRecordedToast": "Zahlung erfasst.",
     "sendNow": "Jetzt senden",
     "resend": "Erneut senden",

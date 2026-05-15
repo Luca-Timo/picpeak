@@ -61,31 +61,55 @@ export const BillDetailPage: React.FC = () => {
     catch (e: any) { toast.error(e?.response?.data?.error || 'Reminder failed'); }
   };
   const handleCancel = async () => {
-    if (!window.confirm(t('bills.confirmCancel', 'Cancel this invoice?'))) return;
-    try { await billsService.cancel(inv.id); toast.success(t('bills.cancelledToast', 'Invoice cancelled.')); qc.invalidateQueries({ queryKey: ['invoice', id] }); }
-    catch (e: any) { toast.error(e?.response?.data?.error || 'Cancel failed'); }
+    // Confirmation copy depends on whether the invoice has been
+    // issued: drafts get a quiet soft-cancel, but sent/overdue/paid
+    // invoices trigger a Stornorechnung that's emailed to the
+    // customer immediately. We surface that contract explicitly so
+    // admins know it can't be undone.
+    const msg = inv.status === 'scheduled'
+      ? t('bills.confirmCancelDraft', 'Cancel this draft invoice? No document goes out.')
+      : t('bills.confirmCancelIssued',
+        'A Stornorechnung will be generated and emailed to the customer immediately. This cannot be undone. Continue?');
+    if (!window.confirm(msg)) return;
+    try {
+      const result = await billsService.cancel(inv.id);
+      toast.success(result.stornoId
+        ? t('bills.cancelledWithStornoToast', 'Invoice cancelled — Stornorechnung issued to the customer.')
+        : t('bills.cancelledToast', 'Invoice cancelled.'));
+      qc.invalidateQueries({ queryKey: ['invoice', id] });
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || 'Cancel failed');
+    }
   };
   /**
    * Cancel + reissue — the legally-correct alternative to editing
    * a sent invoice. Atomically:
    *   1. Cancels this invoice (status → cancelled)
    *   2. Creates a new scheduled invoice with a fresh number,
-   *      same line items, linked via supersedesInvoiceId
+   *      same line items, linked via replacesInvoiceId
    *   3. Navigates to the new invoice's editor so the admin can
    *      adjust whatever was wrong before sending
    * For invoices that were never sent, use Edit instead — the
    * backend rejects reissue with USE_EDIT_INSTEAD.
    */
   const handleReissue = async () => {
+    // For already-cancelled invoices the backend skips Storno creation
+    // (the original was either soft-cancelled as a draft, or a prior
+    // Storno already exists). For live invoices we explicitly warn
+    // that a Stornorechnung will be issued + emailed.
     const msg = inv.status === 'cancelled'
       ? t('bills.confirmReissueCancelled',
         'Create a new scheduled invoice with the same line items, linked back to this cancelled one?')
       : t('bills.confirmReissue',
-        'Cancel this invoice and create a new scheduled draft with the same line items? The PDF on the new invoice will reference this one as "Replaces R-XXXX".');
+        'A Stornorechnung will be issued to the customer for this invoice, and a new scheduled draft will be created with the same line items. The new invoice will reference this one as "Replaces R-XXXX". Continue?');
     if (!window.confirm(msg)) return;
     try {
       const result = await billsService.reissue(inv.id);
-      toast.success(t('bills.reissuedToast', 'Invoice reissued — opening the new draft.'));
+      toast.success(result.stornoId
+        ? t('bills.reissuedWithStornoToast',
+          'Stornorechnung issued — opening the new draft.')
+        : t('bills.reissuedToast', 'Invoice reissued — opening the new draft.'));
       qc.invalidateQueries({ queryKey: ['invoice', id] });
       qc.invalidateQueries({ queryKey: ['invoices'] });
       navigate(`/admin/clients/bills/${result.id}/edit`);
@@ -144,6 +168,14 @@ export const BillDetailPage: React.FC = () => {
             <ArrowLeft className="w-4 h-4" /> {t('common.back', 'Back')}
           </button>
           <h2 className="text-xl font-bold">{inv.invoiceNumber}
+            {/* Storno discriminator badge — sits next to the number so
+                the admin sees at a glance that this row is a
+                cancellation document, not an invoice. */}
+            {inv.kind === 'storno' && (
+              <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded bg-purple-100 text-purple-800">
+                {t('bills.kind.storno', 'Stornorechnung')}
+              </span>
+            )}
             <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded bg-neutral-100 text-neutral-700">
               {t(`bills.status.${inv.status}`, inv.status)}
             </span>
@@ -154,12 +186,15 @@ export const BillDetailPage: React.FC = () => {
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={handlePreview}><Eye className="w-4 h-4 mr-1" />{t('common.preview', 'Preview')}</Button>
-          {/* Edit is only available before the invoice has been sent
-              — the backend rejects PUTs on any non-scheduled status
-              with code INVOICE_LOCKED. Hide the button rather than
-              show it greyed out so it's clear the workflow has
-              shifted (cancel + reissue for sent invoices). */}
-          {inv.status === 'scheduled' && (
+          {/* The bulk of the action set is gated on `kind === 'invoice'`
+              — a Stornorechnung can't be edited, marked paid,
+              reminded, cancelled, or reissued. The backend enforces
+              these guards (IS_STORNO errors), but hiding the buttons
+              keeps the admin from staring at greyed-out controls.
+              The Send button stays available for storni in the rare
+              edge case where the auto-send during creation failed
+              and the scheduler hasn't retried yet. */}
+          {inv.kind !== 'storno' && inv.status === 'scheduled' && (
             <Button variant="outline" onClick={() => navigate(`/admin/clients/bills/${inv.id}/edit`)}>
               <Edit2 className="w-4 h-4 mr-1" />{t('common.edit', 'Edit')}
             </Button>
@@ -167,13 +202,13 @@ export const BillDetailPage: React.FC = () => {
           {['scheduled', 'sent', 'overdue'].includes(inv.status) && (
             <Button onClick={handleSend}><Send className="w-4 h-4 mr-1" />{inv.status === 'scheduled' ? t('bills.sendNow', 'Send now') : t('bills.resend', 'Resend')}</Button>
           )}
-          {inv.status === 'pending_delivery' && (
+          {inv.kind !== 'storno' && inv.status === 'pending_delivery' && (
             <Button onClick={handleRelease}>
               <Truck className="w-4 h-4 mr-1" />
               {t('bills.releaseForDelivery', 'Mark delivered & send')}
             </Button>
           )}
-          {inv.status !== 'paid' && inv.status !== 'cancelled' && (
+          {inv.kind !== 'storno' && inv.status !== 'paid' && inv.status !== 'cancelled' && (
             <Button variant="outline" onClick={() => {
               // Pre-fill the reference with the invoice number — that's
               // what the admin types 95% of the time, so save them the
@@ -185,12 +220,12 @@ export const BillDetailPage: React.FC = () => {
               <CheckCircle className="w-4 h-4 mr-1" />{t('bills.markPaid', 'Mark paid')}
             </Button>
           )}
-          {(inv.status === 'sent' || inv.status === 'overdue') && inv.reminderLevel < 2 && (
+          {inv.kind !== 'storno' && (inv.status === 'sent' || inv.status === 'overdue') && inv.reminderLevel < 2 && (
             <Button variant="outline" onClick={handleReminder}>
               <BellRing className="w-4 h-4 mr-1" />{t('bills.sendReminder', 'Send reminder')}
             </Button>
           )}
-          {inv.status !== 'paid' && inv.status !== 'cancelled' && (
+          {inv.kind !== 'storno' && inv.status !== 'cancelled' && (
             <Button variant="outline" onClick={handleCancel}>
               <XCircle className="w-4 h-4 mr-1" />{t('common.cancel', 'Cancel')}
             </Button>
@@ -200,8 +235,9 @@ export const BillDetailPage: React.FC = () => {
               already been issued (sent, overdue, paid) or already
               cancelled (no-op cancel + create-new). Hidden for
               scheduled (use Edit) and pending_delivery (Release
-              first if relevant). */}
-          {['sent', 'overdue', 'paid', 'cancelled'].includes(inv.status) && (
+              first if relevant). Hidden on storni — a Storno is the
+              cancellation, not a candidate for further cancellation. */}
+          {inv.kind !== 'storno' && ['sent', 'overdue', 'paid', 'cancelled'].includes(inv.status) && (
             <Button variant="outline" onClick={handleReissue}>
               <RefreshCw className="w-4 h-4 mr-1" />
               {inv.status === 'cancelled'
@@ -211,6 +247,36 @@ export const BillDetailPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Storno lineage banners. Two cases:
+          - This row IS a Storno → show "Cancels Rechnung R-XXXX" with
+            a link back to the original it reverses.
+          - This row is a cancelled invoice with a Storno on file →
+            show "Cancelled by Storno S-XXXX" with a forward link.
+          Both lineage links are clickable so the admin can hop
+          between the document pair without leaving the detail flow. */}
+      {inv.kind === 'storno' && inv.cancelsInvoiceId && (
+        <Card padding="md" className="bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800">
+          <p className="text-sm text-purple-900 dark:text-purple-200">
+            {t('bills.stornoCancelsLabel', 'This Stornorechnung cancels invoice')}{' '}
+            <Link to={`/admin/clients/bills/${inv.cancelsInvoiceId}`} className="font-medium underline">
+              #{inv.cancelsInvoiceId}
+            </Link>
+            .
+          </p>
+        </Card>
+      )}
+      {inv.kind !== 'storno' && inv.status === 'cancelled' && inv.cancellationStornoId && (
+        <Card padding="md" className="bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800">
+          <p className="text-sm text-amber-900 dark:text-amber-200">
+            {t('bills.cancelledByStornoLabel', 'This invoice was cancelled by Stornorechnung')}{' '}
+            <Link to={`/admin/clients/bills/${inv.cancellationStornoId}`} className="font-medium underline">
+              #{inv.cancellationStornoId}
+            </Link>
+            .
+          </p>
+        </Card>
+      )}
 
       <Card>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
