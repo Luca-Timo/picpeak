@@ -15,6 +15,13 @@ export interface TaxReportRow {
   currency: string;
   status: string;
   isCancelled: boolean;
+  /** Document kind discriminator (migration 114). Drives the "Storno"
+   *  badge on rows where kind='storno'. */
+  kind: 'invoice' | 'storno';
+  /** True when this invoice was created via Cancel & reissue
+   *  (replaces_invoice_id is set on a non-cancelled row). Drives the
+   *  "Reissue" badge. */
+  isReissue: boolean;
   /** Replacement invoice number when this cancelled row was reissued. */
   replacedByInvoiceNumber: string | null;
   vatRate: number;

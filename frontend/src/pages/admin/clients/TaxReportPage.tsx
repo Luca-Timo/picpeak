@@ -384,6 +384,20 @@ export const TaxReportPage: React.FC = () => {
                             {t('taxReport.statusCancelled', 'Cancelled')}
                           </span>
                         )}
+                        {/* Storno + Reissue lineage markers — parity
+                            with the admin invoices list so the same
+                            colour scheme distinguishes the three row
+                            kinds at a glance across both surfaces. */}
+                        {row.kind === 'storno' && (
+                          <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-purple-100 text-purple-800 font-semibold not-italic">
+                            {t('bills.kind.storno', 'Storno')}
+                          </span>
+                        )}
+                        {row.isReissue && (
+                          <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-blue-100 text-blue-800 font-semibold not-italic">
+                            {t('bills.kind.reissue', 'Reissue')}
+                          </span>
+                        )}
                         {row.replacedByInvoiceNumber && (
                           <span className="ml-1 text-xs text-neutral-500 dark:text-neutral-400 not-italic">
                             → {row.replacedByInvoiceNumber}
