@@ -154,6 +154,16 @@ export const BillsListPage: React.FC = () => {
                               {t('bills.kind.storno', 'Storno')}
                             </span>
                           )}
+                          {/* Reissue marker — kind='invoice' rows with
+                              replacesInvoiceId set were created from a
+                              Cancel & reissue flow. Distinct colour
+                              from Storno (blue vs purple) so the two
+                              kinds are visually unambiguous. */}
+                          {inv.kind !== 'storno' && inv.replacesInvoiceId && (
+                            <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 uppercase tracking-wide">
+                              {t('bills.kind.reissue', 'Reissue')}
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2">{inv.customer.companyName || inv.customer.displayName || inv.customer.email}</td>
                         <td className="px-3 py-2 truncate max-w-xs">{inv.eventName || '—'}</td>

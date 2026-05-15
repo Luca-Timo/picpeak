@@ -164,6 +164,7 @@ async function getTaxReport({ from, to, currency } = {}) {
         'invoices.issue_date',
         'invoices.currency',
         'invoices.status',
+        'invoices.kind',
         'invoices.vat_rate',
         'invoices.net_amount_minor',
         'invoices.vat_amount_minor',
@@ -220,7 +221,13 @@ async function getTaxReport({ from, to, currency } = {}) {
         issueDate: r.issue_date,
         currency: r.currency,
         status: r.status,
+        // kind + isReissue drive the lineage badges in the tax-tab
+        // table (parity with the admin invoices list). isCancelled
+        // already gates the "Cancelled" badge; isReissue gates a
+        // "Reissue" badge on invoices created via Cancel & reissue.
+        kind: r.kind || 'invoice',
         isCancelled,
+        isReissue: !isCancelled && r.replaces_invoice_id != null,
         replacedByInvoiceNumber: isCancelled ? (replacedByMap.get(r.id) || null) : null,
         vatRate: ensureRate(r.vat_rate),
         customerLabel: buildCustomerLabel(r),

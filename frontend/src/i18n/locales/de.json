@@ -3306,7 +3306,8 @@
     "reissue": "Neu ausstellen",
     "cancelAndReissue": "Stornieren & neu ausstellen",
     "kind": {
-      "storno": "Stornorechnung"
+      "storno": "Stornorechnung",
+      "reissue": "Neu ausgestellt"
     },
     "stornoCancelsLabel": "Diese Stornorechnung hebt Rechnung auf:",
     "cancelledByStornoLabel": "Diese Rechnung wurde aufgehoben durch Stornorechnung",
