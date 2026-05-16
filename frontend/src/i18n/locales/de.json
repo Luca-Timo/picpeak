@@ -3403,7 +3403,18 @@
     "subtitle": "Standardwerte für Angebote und Rechnungen.",
     "section": {
       "quotes": "Angebote",
-      "invoices": "Rechnungen"
+      "invoices": "Rechnungen",
+      "paymentDefaults": "Standard-Zahlungsbedingungen"
+    },
+    "paymentDefaults": {
+      "help": "Wird bei jeder neuen Rechnung und jedem Angebot vorausgewählt. Im Editor lässt sich pro Dokument eine andere Kombination wählen.",
+      "none": "— Kein Standard —"
+    },
+    "crm_invoices_default_payment_net_days_template_id": {
+      "label": "Standard-Zahlungsziel"
+    },
+    "crm_invoices_default_payment_timing_template_id": {
+      "label": "Standard-Zahlungsablauf"
     },
     "crm_quotes_accept_window_minutes": {
       "label": "Antwortfrist nach Versand (Minuten)"

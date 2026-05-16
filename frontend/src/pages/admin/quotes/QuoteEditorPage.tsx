@@ -26,6 +26,7 @@ import { LineItemsTable, type EditableLineItem } from '../../../components/admin
 import { InlineCustomerCreate } from '../../../components/admin/InlineCustomerCreate';
 import { customerAdminService } from '../../../services/customerAdmin.service';
 import { userManagementService } from '../../../services/userManagement.service';
+import { settingsService } from '../../../services/settings.service';
 import { useAdminAuth } from '../../../contexts/AdminAuthContext';
 import { toast } from 'react-toastify';
 
@@ -281,25 +282,51 @@ export const QuoteEditorPage: React.FC = () => {
     setForm((prev) => (prev.ccPdfEmail ? prev : { ...prev, ccPdfEmail: currentAdmin.email }));
   }, [currentAdmin?.email, isEdit]);
 
-  // Auto-default the two new pickers on a brand-new quote once the
-  // template lists are available. "Net 30" is the canonical default;
-  // "Komplettzahlung nach Auslieferung" is the safest single-instalment
-  // timing for a freshly authored quote.
+  // Load the CRM defaults (migration 125 seeded; admin-editable on
+  // the CRM settings page). The prefill effect below prefers these
+  // over hardcoded fallbacks so the per-quote picker becomes a true
+  // override of an admin-configurable global default.
+  const { data: appSettings } = useQuery({
+    queryKey: ['app-settings'],
+    queryFn: () => settingsService.getAllSettings(),
+    enabled: !isEdit,
+  });
+
+  // Auto-default the two new pickers on a brand-new quote. Resolution
+  // order: settings-configured default → "Net 30" + first-timing
+  // hardcoded fallback (for fresh installs missing the seed) → first
+  // available template.
   const didPrefillPaymentRef = useRef(false);
   useEffect(() => {
     if (isEdit) return;
     if (didPrefillPaymentRef.current) return;
     if (!netDaysTemplates?.templates?.length || !timingTemplates?.templates?.length) return;
-    const defaultNetDays = netDaysTemplates.templates.find((t) => t.netDays === 30)
+    // Wait for settings to load so the admin's configured default
+    // wins over the hardcoded fallback. Empty/missing setting → null.
+    if (appSettings === undefined) return;
+
+    const settingNetDaysId = appSettings?.crm_invoices_default_payment_net_days_template_id;
+    const settingTimingId  = appSettings?.crm_invoices_default_payment_timing_template_id;
+    const settingNetDays = settingNetDaysId
+      ? netDaysTemplates.templates.find((t) => t.id === settingNetDaysId)
+      : null;
+    const settingTiming = settingTimingId
+      ? timingTemplates.templates.find((t) => t.id === settingTimingId)
+      : null;
+
+    const defaultNetDays = settingNetDays
+      || netDaysTemplates.templates.find((t) => t.netDays === 30)
       || netDaysTemplates.templates[0];
-    const defaultTiming = timingTemplates.templates[0];
+    const defaultTiming = settingTiming
+      || timingTemplates.templates[0];
+
     didPrefillPaymentRef.current = true;
     setForm((prev) => ({
       ...prev,
       paymentNetDaysTemplateId: prev.paymentNetDaysTemplateId ?? defaultNetDays.id,
       paymentTimingTemplateId: prev.paymentTimingTemplateId ?? defaultTiming.id,
     }));
-  }, [isEdit, netDaysTemplates, timingTemplates]);
+  }, [isEdit, netDaysTemplates, timingTemplates, appSettings]);
 
   const installmentPreview = useMemo<PaymentTermInstallment[]>(() => {
     // Migration 124 — preview now comes from the timing template when

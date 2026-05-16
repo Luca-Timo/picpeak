@@ -3400,7 +3400,18 @@
     "subtitle": "Fine-tune quote and invoice behaviour.",
     "section": {
       "quotes": "Quotes",
-      "invoices": "Invoices"
+      "invoices": "Invoices",
+      "paymentDefaults": "Default payment conditions"
+    },
+    "paymentDefaults": {
+      "help": "Pre-filled on every new quote and invoice. The editor still lets you pick a different combination per document.",
+      "none": "— No default —"
+    },
+    "crm_invoices_default_payment_net_days_template_id": {
+      "label": "Default net days"
+    },
+    "crm_invoices_default_payment_timing_template_id": {
+      "label": "Default payment schedule"
     },
     "crm_quotes_accept_window_minutes": {
       "label": "Accept window (minutes)"

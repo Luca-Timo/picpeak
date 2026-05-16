@@ -16,6 +16,7 @@ import { InlineCustomerCreate } from '../../../components/admin/InlineCustomerCr
 import { LineItemsTable, type EditableLineItem } from '../../../components/admin/LineItemsTable';
 import { customerAdminService } from '../../../services/customerAdmin.service';
 import { userManagementService } from '../../../services/userManagement.service';
+import { settingsService } from '../../../services/settings.service';
 import { useAdminAuth } from '../../../contexts/AdminAuthContext';
 import { toast } from 'react-toastify';
 
@@ -208,22 +209,43 @@ export const BillEditorPage: React.FC = () => {
     enabled: customerSearch.length >= 2,
   });
 
-  // Migration 124 — auto-default both pickers on a brand-new invoice.
-  // Net 30 + "Komplettzahlung nach Auslieferung" mirror the quote
-  // editor's defaults so the standalone-invoice flow doesn't ship a
-  // blank dropdown.
+  // Load the admin-configured CRM defaults (migration 125). The
+  // editor's prefill prefers these over the hardcoded fallbacks below
+  // so the per-invoice picker is a true override.
+  const { data: appSettings } = useQuery({
+    queryKey: ['app-settings'],
+    queryFn: () => settingsService.getAllSettings(),
+    enabled: !isEdit,
+  });
+
+  // Auto-default both pickers on a brand-new invoice. Resolution
+  // order: configured setting → Net 30 / first-timing fallback → first.
   const didPrefillPaymentRef = useRef(false);
   useEffect(() => {
     if (isEdit) return;
     if (didPrefillPaymentRef.current) return;
     if (!netDaysTemplates?.templates?.length || !timingTemplates?.templates?.length) return;
-    const defaultNetDays = netDaysTemplates.templates.find((t) => t.netDays === 30)
+    if (appSettings === undefined) return;
+
+    const settingNetDaysId = appSettings?.crm_invoices_default_payment_net_days_template_id;
+    const settingTimingId  = appSettings?.crm_invoices_default_payment_timing_template_id;
+    const settingNetDays = settingNetDaysId
+      ? netDaysTemplates.templates.find((t) => t.id === settingNetDaysId)
+      : null;
+    const settingTiming = settingTimingId
+      ? timingTemplates.templates.find((t) => t.id === settingTimingId)
+      : null;
+
+    const defaultNetDays = settingNetDays
+      || netDaysTemplates.templates.find((t) => t.netDays === 30)
       || netDaysTemplates.templates[0];
-    const defaultTiming = timingTemplates.templates[0];
+    const defaultTiming = settingTiming
+      || timingTemplates.templates[0];
+
     didPrefillPaymentRef.current = true;
     setPaymentNetDaysTemplateId((prev) => prev ?? defaultNetDays.id);
     setPaymentTimingTemplateId((prev) => prev ?? defaultTiming.id);
-  }, [isEdit, netDaysTemplates, timingTemplates]);
+  }, [isEdit, netDaysTemplates, timingTemplates, appSettings]);
 
   const buildPayload = (): InvoiceCreatePayload => ({
     customerAccountId: customerId || 0,

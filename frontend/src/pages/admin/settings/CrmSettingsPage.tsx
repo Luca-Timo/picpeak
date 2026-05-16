@@ -12,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Save as SaveIcon } from 'lucide-react';
 import { Button, Card, Loading, Input } from '../../../components/common';
 import { settingsService } from '../../../services/settings.service';
+import { quotesService } from '../../../services/quotes.service';
 import { toast } from 'react-toastify';
 
 const SETTING_KEYS = [
@@ -34,6 +35,11 @@ const SETTING_KEYS = [
   'crm_invoices_skonto_business_days',
   'crm_invoices_skonto_percent_default',
   'crm_invoices_number_format',
+  // Default Net days + Payment timing pickers (migration 124+125).
+  // The per-quote/per-invoice picker becomes a true override over
+  // these global defaults — the editor reads these on new documents.
+  'crm_invoices_default_payment_net_days_template_id',
+  'crm_invoices_default_payment_timing_template_id',
 ];
 
 export const CrmSettingsPage: React.FC = () => {
@@ -47,6 +53,17 @@ export const CrmSettingsPage: React.FC = () => {
       for (const key of SETTING_KEYS) out[key] = all[key];
       return out;
     },
+  });
+
+  // Migration 124 — list the split-picker templates so the new
+  // dropdowns can render labels. Same endpoints the editors use.
+  const { data: netDaysTemplates } = useQuery({
+    queryKey: ['payment-net-days-templates'],
+    queryFn: () => quotesService.listPaymentNetDaysTemplates(),
+  });
+  const { data: timingTemplates } = useQuery({
+    queryKey: ['payment-timing-templates'],
+    queryFn: () => quotesService.listPaymentTimingTemplates(),
   });
 
   const [values, setValues] = useState<Record<string, any>>({});
@@ -178,6 +195,52 @@ export const CrmSettingsPage: React.FC = () => {
             label={t('crmSettings.crm_invoices_number_format.label', 'Invoice number format') as string}
             value={values.crm_invoices_number_format ?? ''}
             onChange={(e) => setVal('crm_invoices_number_format', e.target.value)} />
+        </div>
+
+        {/* Default payment-term pickers (migration 124+125). The
+            per-quote / per-invoice editor still always shows the
+            pickers — admin can override per document — but new
+            drafts auto-prefill from these two settings. */}
+        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+          <h4 className="font-semibold mb-2 text-sm">
+            {t('crmSettings.section.paymentDefaults', 'Default payment conditions')}
+          </h4>
+          <p className="text-xs text-neutral-500 mb-3">
+            {t('crmSettings.paymentDefaults.help',
+              'Pre-filled on every new quote and invoice. The editor still lets you pick a different combination per document.')}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                {t('crmSettings.crm_invoices_default_payment_net_days_template_id.label', 'Default net days')}
+              </label>
+              <select
+                className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+                value={values.crm_invoices_default_payment_net_days_template_id ?? ''}
+                onChange={(e) => setVal('crm_invoices_default_payment_net_days_template_id', e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">{t('crmSettings.paymentDefaults.none', '— No default —')}</option>
+                {netDaysTemplates?.templates.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                {t('crmSettings.crm_invoices_default_payment_timing_template_id.label', 'Default payment schedule')}
+              </label>
+              <select
+                className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+                value={values.crm_invoices_default_payment_timing_template_id ?? ''}
+                onChange={(e) => setVal('crm_invoices_default_payment_timing_template_id', e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">{t('crmSettings.paymentDefaults.none', '— No default —')}</option>
+                {timingTemplates?.templates.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
       </Card>
     </div>
