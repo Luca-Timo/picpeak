@@ -1435,6 +1435,16 @@ async function reissueInvoice(id, adminId) {
       businessBankAccountId: original.business_bank_account_id,
       qrFormat: original.qr_format,
       paymentTermTemplateId: original.payment_term_template_id,
+      // Carry the split picker (migration 124) + event snapshot
+      // (migration 123) onto the reissued draft so the admin doesn't
+      // have to re-set them after a Cancel & reissue. createInvoice
+      // already accepts these on both code paths.
+      paymentNetDaysTemplateId: original.payment_net_days_template_id || null,
+      paymentTimingTemplateId: original.payment_timing_template_id || null,
+      eventName: original.event_name || null,
+      eventDate: original.event_date || null,
+      eventTimeStart: original.event_time_start || null,
+      eventTimeEnd: original.event_time_end || null,
       // No installment metadata — reissue defaults to a single
       // standalone invoice. If the admin needs the same split they
       // can run the original conversion again from the quote.
