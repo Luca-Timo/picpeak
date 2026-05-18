@@ -345,6 +345,34 @@ router.post(
   }),
 );
 
+// Convert a fully-signed contract into an event + scheduled invoices.
+// Delegates to quoteService via the contract's source_quote_id; refuses
+// when source_quote_id is null (standalone contracts have no line items
+// to replay).
+router.post(
+  '/:id/convert-to-event',
+  requirePermission('contracts.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await contractService.convertToEvent(parseInt(req.params.id, 10), req.admin?.id);
+    return successResponse(res, result, 200,
+      result.alreadyConverted ? 'Already converted to event' : 'Contract converted to event');
+  }),
+);
+
+// Convert a fully-signed contract into invoice(s) only — no event.
+router.post(
+  '/:id/convert-to-invoice',
+  requirePermission('contracts.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await contractService.convertToInvoiceOnly(parseInt(req.params.id, 10), req.admin?.id);
+    return successResponse(res, result, 200, 'Invoices created from contract');
+  }),
+);
+
 router.post(
   '/:id/countersign',
   requirePermission('contracts.manage'),

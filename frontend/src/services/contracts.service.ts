@@ -182,6 +182,21 @@ export const contractsService = {
     return data.data || data;
   },
 
+  /** Convert a fully-signed contract into an event + scheduled invoices.
+   *  Requires source_quote_id (no line items otherwise). Idempotent — if
+   *  the contract already has converted_event_id set the same event id
+   *  comes back with alreadyConverted: true. */
+  async convertToEvent(id: number): Promise<{ eventId: number; alreadyConverted: boolean }> {
+    const { data } = await api.post(`/admin/contracts/${id}/convert-to-event`);
+    return data.data || data;
+  },
+
+  /** Convert a fully-signed contract directly into invoice(s) — no event. */
+  async convertToInvoice(id: number): Promise<{ installmentsCreated: number }> {
+    const { data } = await api.post(`/admin/contracts/${id}/convert-to-invoice`);
+    return data.data || data;
+  },
+
   async countersign(
     id: number,
     payload: { name: string; signatureDataUrl?: string | null },
