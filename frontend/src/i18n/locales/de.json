@@ -1380,7 +1380,11 @@
       "integrations": "Integrationen",
       "system": "System",
       "appearance": "Inhalt & Erscheinungsbild",
-      "communication": "Kommunikation"
+      "communication": "Kommunikation",
+      "crm": "CRM-Einstellungen"
+    },
+    "contracts": {
+      "title": "Verträge"
     },
     "apiTokens": {
       "title": "API-Tokens",

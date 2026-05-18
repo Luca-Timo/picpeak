@@ -49,7 +49,8 @@ import { CMSPage } from './CMSPage';
 // CRM (#TBD)
 import { SettingsBusinessProfilePage } from './settings/SettingsBusinessProfilePage';
 import { CrmSettingsPage } from './settings/CrmSettingsPage';
-import { Briefcase, Receipt } from 'lucide-react';
+import { BlockLibraryPage } from './contracts/BlockLibraryPage';
+import { Briefcase, Receipt, ScrollText } from 'lucide-react';
 
 // Tab keys driving the inner-nav. Must include every key used in
 // `navGroups` below and in the switch at the bottom of the component.
@@ -76,7 +77,8 @@ type TabType =
   // CRM (#TBD): issuer block for quote/invoice PDFs and per-area
   // CRM behaviour toggles.
   | 'businessProfile'
-  | 'crm';
+  | 'crm'
+  | 'contracts';
 
 interface NavItem {
   key: TabType;
@@ -96,7 +98,7 @@ const ALL_TAB_KEYS: TabType[] = [
   'security', 'imageSecurity', 'seo',
   'apiTokens', 'webhooks',
   'status', 'analytics', 'backup',
-  'businessProfile', 'crm',
+  'businessProfile', 'crm', 'contracts',
 ];
 
 function isValidTab(value: string | null): value is TabType {
@@ -228,13 +230,14 @@ export const SettingsPage: React.FC = () => {
       ],
     },
     {
-      // CRM group — appears once the `quotes` or `bills` global flag is
-      // on. The whole group is hidden when neither feature is enabled so
-      // installs that never opted into the CRM don't see empty tabs.
-      label: t('settings.groups.crm', 'Quotes & Invoices'),
+      // CRM group — issuer block + per-area CRM behaviour toggles +
+      // contract block library. The whole group is shown unconditionally;
+      // individual surfaces enforce their own feature flags when used.
+      label: t('settings.groups.crm', 'CRM-Settings'),
       items: [
         { key: 'businessProfile', label: t('settings.businessProfile.title', 'Business profile'), icon: Briefcase },
         { key: 'crm',             label: t('settings.crm.title',             'CRM behaviour'),    icon: Receipt },
+        { key: 'contracts',       label: t('settings.contracts.title',       'Contracts'),        icon: ScrollText },
       ],
     },
     {
@@ -254,7 +257,7 @@ export const SettingsPage: React.FC = () => {
   // header (FeaturesTab has its own icon+title+description block), skip
   // the Settings shell's section heading so the layout doesn't double
   // up.
-  const TABS_WITH_OWN_HEADER: TabType[] = ['features', 'email', 'branding', 'eventTypes', 'backup', 'cms'];
+  const TABS_WITH_OWN_HEADER: TabType[] = ['features', 'email', 'branding', 'eventTypes', 'backup', 'cms', 'contracts'];
   const showSectionHeading = !TABS_WITH_OWN_HEADER.includes(activeTab);
 
   return (
@@ -384,6 +387,7 @@ export const SettingsPage: React.FC = () => {
           {activeTab === 'backup' && <BackupManagement />}
           {activeTab === 'businessProfile' && <SettingsBusinessProfilePage />}
           {activeTab === 'crm' && <CrmSettingsPage />}
+          {activeTab === 'contracts' && <BlockLibraryPage />}
 
           {activeTab === 'status' && (
             <StatusTab

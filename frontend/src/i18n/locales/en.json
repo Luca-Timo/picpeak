@@ -1019,7 +1019,11 @@
       "integrations": "Integrations",
       "system": "System",
       "appearance": "Content & Appearance",
-      "communication": "Communication"
+      "communication": "Communication",
+      "crm": "CRM-Settings"
+    },
+    "contracts": {
+      "title": "Contracts"
     },
     "apiTokens": {
       "title": "API Tokens",
