@@ -41,7 +41,7 @@ function StatusBadge({ status }: { status: ContractStatus }) {
 
 export const ContractsListPage: React.FC = () => {
   const { t } = useTranslation();
-  const { formatDate } = useLocalizedDate();
+  const { format } = useLocalizedDate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ContractStatus[]>([]);
   const [sort, setSort] = useState<ContractSort>('newest');
@@ -177,7 +177,7 @@ export const ContractsListPage: React.FC = () => {
                           || '—'}
                       </td>
                       <td className="px-3 py-2 max-w-xs truncate">{c.title || '—'}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{formatDate(c.issueDate)}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{c.issueDate ? format(c.issueDate) : '—'}</td>
                       <td className="px-3 py-2"><StatusBadge status={c.status} /></td>
                     </tr>
                   ))}
