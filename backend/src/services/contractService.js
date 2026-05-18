@@ -253,12 +253,22 @@ async function buildRenderContext(contract, inclusions) {
 
   for (const row of sortedInclusions) {
     if (!blocksBySection[row.section]) continue;
-    const bodyEn = row.body_text_snapshot || row.body_text || '';
-    const bodyDe = row.body_text_de_snapshot || row.body_text_de || '';
+    // The inclusion row carries the JOINED block columns aliased with
+    // a `block_` prefix (see getContractById). Pre-send drafts have
+    // null snapshots, so fall through to the live block body.
+    const bodyEn = row.body_text_snapshot || row.block_body_text || '';
+    const bodyDe = row.body_text_de_snapshot || row.block_body_text_de || '';
     const sourceBody = locale === 'de' ? (bodyDe || bodyEn) : (bodyEn || bodyDe);
-    const rendered = renderTemplatedBody(sourceBody, placeholders);
+    // Substitute placeholders, then strip `**bold**` markdown markers
+    // so they don't leak into the PDF literally. The block's name
+    // already provides the bold sub-heading, so the leading
+    // `**Title**` line in seeded bodies is decorative; admins can
+    // still use ** in custom blocks — the markers are quietly
+    // removed at render time.
+    const rendered = renderTemplatedBody(sourceBody, placeholders)
+      .replace(/\*\*([^*]+)\*\*/g, '$1');
     blocksBySection[row.section].push({
-      name: row.name,
+      name: row.block_name,
       section: row.section,
       body: rendered,
     });
