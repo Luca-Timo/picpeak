@@ -1340,6 +1340,23 @@ async function sendInvoice(id, adminId) {
   const customer = await db('customer_accounts').where({ id: invoice.customer_account_id }).first();
   ensureCustomerCanBill(customer);
 
+  // Re-sync the invoice's language from the customer's current
+  // preferred_language at send time when the invoice has never been
+  // sent. Picks up admin language changes made between create and
+  // send (notable for monthly drafts that accumulate for ~30 days,
+  // and for any standalone scheduled invoice where admin updated the
+  // customer record after authoring). Sent / overdue invoices keep
+  // their existing language because they're legal records — the
+  // rendered PDF is the source of truth from the moment it ships.
+  if (invoice.status === 'scheduled' && customer.preferred_language
+      && customer.preferred_language !== invoice.language) {
+    await db('invoices').where({ id }).update({
+      language: customer.preferred_language,
+      updated_at: new Date(),
+    });
+    invoice.language = customer.preferred_language;
+  }
+
   const ctx = await buildInvoiceRenderContext(invoice, lineItems);
   const buffer = await pdfService.renderInvoiceToBuffer(ctx);
 
