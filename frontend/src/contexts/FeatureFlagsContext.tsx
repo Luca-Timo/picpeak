@@ -37,6 +37,10 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   // enables in Settings → Features once they're ready to surface the
   // per-customer Hours card.
   hoursLogging: false,
+  // Contracts (migration 130). Off by default — admin enables in
+  // Settings → Features once they've reviewed the seeded block
+  // library with their lawyer.
+  contracts: false,
 };
 
 export const FEATURE_FLAGS_QUERY_KEY = ['feature-flags'] as const;
@@ -80,6 +84,8 @@ function applyDependencyRules(flags: FeatureFlags): FeatureFlags {
     || out.quotes
     || out.bills
     || out.taxReport
+    || out.hoursLogging
+    || out.contracts
     // future siblings: || out.calendar || out.messaging
   );
   return out;
