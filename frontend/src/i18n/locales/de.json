@@ -2900,6 +2900,50 @@
     }
   },
   "customers": {
+    "field": {
+      "featureHoursLogging": "Stundenerfassung",
+      "hourlyRate": "Standard-Stundensatz",
+      "hourlyRateHint": "Haupteinheiten (z. B. 150.00 für CHF 150). Leer lassen, um pro Eintrag einen Satz zu verlangen."
+    },
+    "hours": {
+      "section": "Stunden",
+      "monthlyHint": "Einträge werden automatisch dem aktuellen monatlichen Entwurf angehängt. Bearbeiten/Löschen möglich, bis der Scheduler den Versand auslöst.",
+      "perEventHint": "Erfasste Einträge bleiben unverrechnet, bis Sie auf „Stunden abrechnen“ klicken — dann wird eine eigenständige Rechnung mit einer Zeile pro Eintrag erzeugt.",
+      "form": {
+        "title": "Neuen Eintrag erfassen",
+        "date": "Datum",
+        "start": "Start",
+        "end": "Ende",
+        "rateOverride": "Satz-Override",
+        "note": "Notiz / Beschreibung",
+        "notePlaceholder": "Was wurde gearbeitet?",
+        "save": "Eintrag hinzufügen"
+      },
+      "col": {
+        "date": "Datum",
+        "range": "Zeit",
+        "hours": "Stunden",
+        "rate": "Satz",
+        "total": "Gesamt",
+        "note": "Notiz",
+        "status": "Status"
+      },
+      "status": {
+        "unbilled": "Offen",
+        "billed": "Verrechnet",
+        "billedOn": "Verrechnet: {{number}}"
+      },
+      "billButton": "Stunden abrechnen",
+      "unbilledCount": "{{count}} offene Einträge, total {{total}}",
+      "empty": "Noch keine Einträge erfasst.",
+      "confirmDelete": "Diesen Eintrag löschen? Wenn er auf einem Entwurf verrechnet wurde, wird die zugehörige Rechnungsposition ebenfalls entfernt.",
+      "locked": "Gesperrt: Rechnung bereits zum Versand vorbereitet",
+      "toast": {
+        "created": "Eintrag erfasst",
+        "deleted": "Eintrag gelöscht",
+        "billed": "Stunden verrechnet"
+      }
+    },
     "create": {
       "openButton": "Passiven Kunden erstellen",
       "openLink": "+ Neuen Kunden erstellen",
