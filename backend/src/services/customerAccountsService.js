@@ -469,6 +469,18 @@ async function listCustomers({ search } = {}) {
       // `isPassive` flag (passwordHash == null). The actual hash
       // never leaves the API — transformCustomer drops it.
       'customer_accounts.password_hash',
+      // Per-customer feature flags + hourly rate (migrations 092/129).
+      // Surfaced on the LIST endpoint so the standalone Hours-logging
+      // page can filter the customer dropdown to only customers with
+      // hours logging enabled, and read the default rate without an
+      // N+1 detail fetch. Without these in the SELECT,
+      // transformCustomer evaluates the four feature_* booleans as
+      // false (column absent → undefined → coerce to false).
+      'customer_accounts.feature_calendar',
+      'customer_accounts.feature_quotes',
+      'customer_accounts.feature_bills',
+      'customer_accounts.feature_hours_logging',
+      'customer_accounts.hourly_rate_minor',
       'customer_accounts.last_login',
       'customer_accounts.created_at',
       db.raw('COUNT(event_customer_assignments.id) as event_count')
