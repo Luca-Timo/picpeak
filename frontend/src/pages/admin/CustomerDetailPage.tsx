@@ -639,7 +639,12 @@ export const CustomerDetailPage: React.FC = () => {
           customerId={customerId}
           customerHourlyRateMinor={form.hourlyRateMinor ?? null}
           billingCadence={(form.billingCadence as any) || customer.billingCadence || 'per_event'}
-          onHourlyRateChange={(v) => setForm((prev) => ({ ...prev, hourlyRateMinor: v } as any))}
+          // compact: history-only + per-event "Bill these hours"
+          // button. Logging lives on the standalone
+          // /admin/clients/hours surface so admins have ONE place to
+          // record new entries; the customer detail page just
+          // surfaces what's already on the books.
+          compact
         />
       )}
 

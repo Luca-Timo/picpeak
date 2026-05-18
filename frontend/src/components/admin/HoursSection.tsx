@@ -25,10 +25,19 @@ export interface HoursSectionProps {
   customerHourlyRateMinor: number | null;
   billingCadence: 'per_event' | 'monthly' | 'quarterly';
   onHourlyRateChange?: (next: number | null) => void;
+  /**
+   * When true, render only the entry-history table + the per-event
+   * "Bill these hours" action. Hides the inline log-entry form and
+   * the default-rate input. Used on the customer detail page now
+   * that logging itself lives on the standalone /admin/clients/hours
+   * surface — the detail page becomes a read-only history view with
+   * the on-demand bill action for per-event customers.
+   */
+  compact?: boolean;
 }
 
 export const HoursSection: React.FC<HoursSectionProps> = ({
-  customerId, customerHourlyRateMinor, billingCadence, onHourlyRateChange,
+  customerId, customerHourlyRateMinor, billingCadence, onHourlyRateChange, compact,
 }) => {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -116,34 +125,37 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
             'Logged entries stay unbilled until you click "Bill these hours" — a standalone invoice is generated with one line per entry.')}
       </p>
 
-      {/* Default rate — read-only on the standalone Hours-logging page
-          (admin edits it from the customer detail page); editable on
-          CustomerDetailPage via the onHourlyRateChange prop. */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-theme mb-1">
-          {t('customers.field.hourlyRate', 'Default hourly rate')}
-        </label>
-        <input
-          type="number"
-          step="0.01"
-          min={0}
-          value={customerHourlyRateMinor != null ? (customerHourlyRateMinor / 100).toFixed(2) : ''}
-          onChange={(e) => {
-            if (!onHourlyRateChange) return;
-            const raw = e.target.value;
-            onHourlyRateChange(raw === '' ? null : Math.round(Number(raw) * 100));
-          }}
-          disabled={!onHourlyRateChange}
-          className="w-40 input"
-          placeholder="150.00"
-        />
-        <p className="text-xs text-muted-theme mt-1">
-          {t('customers.field.hourlyRateHint',
-            'Major units (e.g. 150.00 for CHF 150). Leave blank to require a per-entry override on every block.')}
-        </p>
-      </div>
+      {/* Default rate — hidden in compact mode (history-only on the
+          customer detail page; admin edits the rate elsewhere). */}
+      {!compact && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-theme mb-1">
+            {t('customers.field.hourlyRate', 'Default hourly rate')}
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            min={0}
+            value={customerHourlyRateMinor != null ? (customerHourlyRateMinor / 100).toFixed(2) : ''}
+            onChange={(e) => {
+              if (!onHourlyRateChange) return;
+              const raw = e.target.value;
+              onHourlyRateChange(raw === '' ? null : Math.round(Number(raw) * 100));
+            }}
+            disabled={!onHourlyRateChange}
+            className="w-40 input"
+            placeholder="150.00"
+          />
+          <p className="text-xs text-muted-theme mt-1">
+            {t('customers.field.hourlyRateHint',
+              'Major units (e.g. 150.00 for CHF 150). Leave blank to require a per-entry override on every block.')}
+          </p>
+        </div>
+      )}
 
-      {/* Inline log-new-entry form. */}
+      {/* Inline log-new-entry form — hidden in compact mode. Logging
+          lives on the standalone /admin/clients/hours surface. */}
+      {!compact && (
       <div className="border-t border-neutral-200 dark:border-neutral-700 pt-4 mb-4">
         <h3 className="text-sm font-semibold mb-3">{t('customers.hours.form.title', 'Log new entry')}</h3>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -201,8 +213,11 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
           </Button>
         </div>
       </div>
+      )}
 
-      {/* Bill-these-hours button for per-event customers only. */}
+      {/* Bill-these-hours button for per-event customers only. Stays
+          visible in compact mode so the customer-detail page can
+          still trigger the on-demand billing action. */}
       {!isMonthly && unbilledCount > 0 && (
         <div className="mb-4 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 rounded p-3">
           <span className="text-sm">
