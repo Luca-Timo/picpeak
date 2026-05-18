@@ -24,6 +24,12 @@ export interface TaxReportRow {
   isReissue: boolean;
   /** Replacement invoice number when this cancelled row was reissued. */
   replacedByInvoiceNumber: string | null;
+  /** Aggregated from `invoice_payment_log` — true when any payment for
+   *  this invoice was recorded as Skonto-applied (migration 126). */
+  skontoApplied: boolean;
+  /** Sum of discount in minor units across all Skonto-applied payments
+   *  on this invoice. 0 when `skontoApplied` is false. */
+  skontoAmountMinor: number;
   vatRate: number;
   customerLabel: string;
   eventName: string;

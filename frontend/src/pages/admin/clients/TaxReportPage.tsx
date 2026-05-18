@@ -365,6 +365,7 @@ export const TaxReportPage: React.FC = () => {
                     <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.net', 'Net')}</th>
                     <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.vat', 'VAT')}</th>
                     <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.total', 'Gross')}</th>
+                    <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.skonto', 'Skonto')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
@@ -415,6 +416,16 @@ export const TaxReportPage: React.FC = () => {
                       </td>
                       <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap font-medium">
                         {formatMinor(row.totalMinor, row.currency, intlLocale)}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap"
+                        title={row.skontoApplied
+                          ? t('taxReport.skontoTooltip', 'Paid with Skonto') as string
+                          : undefined}>
+                        {row.skontoApplied ? (
+                          <span className="text-teal-700 dark:text-teal-300">
+                            −{formatMinor(row.skontoAmountMinor, row.currency, intlLocale)}
+                          </span>
+                        ) : ''}
                       </td>
                     </tr>
                   ))}

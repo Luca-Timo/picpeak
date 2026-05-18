@@ -29,8 +29,12 @@ function makeChain(initialRows) {
   };
 }
 
-const mockDbFn = jest.fn(() => {
+const mockDbFn = jest.fn((tableName) => {
   callCount += 1;
+  // Route by table name when supplied — the Skonto aggregate (added
+  // by migration 126) queries `invoice_payment_log`; everything else
+  // (main listing, replacements lookup) hits `invoices`.
+  if (tableName === 'invoice_payment_log') return makeChain([]);
   if (callCount === 1) return makeChain(invoiceRowsForRun);
   return makeChain(replacementsRowsForRun);
 });
@@ -226,8 +230,12 @@ describe('renderTaxReportCsv', () => {
     const { content } = await taxReportService.renderTaxReportCsv({
       from: '2026-01-01', to: '2026-03-31', currency: 'CHF', locale: 'en',
     });
+    // Migration 126 added a trailing Skonto column. The cancelled
+    // marker is now second-to-last; the Skonto cell is empty for
+    // non-Skonto rows. Asserting on a regex keeps the test stable
+    // against future trailing-column additions.
     const dataRow = content.split('\r\n')[1];
-    expect(dataRow.endsWith('"1"')).toBe(true);
+    expect(/"1","[^"]*"$/.test(dataRow)).toBe(true);
   });
 
   it('uses CRLF line endings (RFC 4180) and BOM-free body', async () => {
