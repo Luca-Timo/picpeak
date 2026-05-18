@@ -126,20 +126,33 @@ export const ContractDetailPage: React.FC = () => {
 
   async function handlePdfDownload() {
     if (!numericId) return;
+    // Sync-open BEFORE await so the popup blocker accepts the gesture.
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      toast.error(t('contracts.detail.popupBlocked', 'Allow pop-ups for this site to preview the PDF.') as string);
+      return;
+    }
     try {
       const url = await contractsService.pdfUrl(numericId);
-      window.open(url, '_blank');
+      previewWindow.location.href = url;
     } catch (err: any) {
+      previewWindow.close();
       toast.error(err?.response?.data?.error || 'PDF unavailable');
     }
   }
 
   async function handleSignedPdfDownload() {
     if (!numericId) return;
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      toast.error(t('contracts.detail.popupBlocked', 'Allow pop-ups for this site to preview the PDF.') as string);
+      return;
+    }
     try {
       const url = await contractsService.signedPdfUrl(numericId);
-      window.open(url, '_blank');
+      previewWindow.location.href = url;
     } catch (err: any) {
+      previewWindow.close();
       toast.error(err?.response?.data?.error || 'Signed PDF unavailable');
     }
   }

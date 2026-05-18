@@ -210,10 +210,19 @@ export const ContractEditorPage: React.FC = () => {
       toast.info(t('contracts.editor.previewAfterSave', 'Save the draft first, then preview.') as string);
       return;
     }
+    // Sync-open the placeholder window BEFORE any await so the popup
+    // blocker treats this as a user gesture, then redirect once the
+    // blob URL is ready. Same pattern bills/quotes use.
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      toast.error(t('contracts.editor.popupBlocked', 'Allow pop-ups for this site to preview the PDF.') as string);
+      return;
+    }
     try {
       const url = await contractsService.previewPdfUrl(numericId);
-      window.open(url, '_blank');
+      previewWindow.location.href = url;
     } catch (err: any) {
+      previewWindow.close();
       toast.error(err?.response?.data?.error || t('contracts.editor.previewError', 'Preview failed') as string);
     }
   }
