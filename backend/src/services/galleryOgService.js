@@ -7,7 +7,12 @@ const SOCIAL_CRAWLER_PATTERNS = [
   /facebookexternalhit/i,
   /facebot/i,
   /Twitterbot/i,
+  // WhatsApp's main app crawler is "WhatsApp/X.Y.Z"; the Business
+  // API and some Cloud API senders use "WhatsAppBot" or "wa-bot/" —
+  // detect both so API-driven sends get the rich preview too (#521).
   /WhatsApp/i,
+  /WhatsAppBot/i,
+  /wa-bot/i,
   /Slackbot/i,
   /TelegramBot/i,
   /SkypeUriPreview/i,
@@ -24,7 +29,12 @@ const SOCIAL_CRAWLER_PATTERNS = [
   /Mastodon/i,
   /Bluesky/i,
   /OpenGraph/i,
-  /opengraph/i
+  /opengraph/i,
+  // Generic preview/scrape services commonly used in business
+  // messaging stacks (Twilio, LinkPreview.net, etc.). Match the
+  // canonical lowercase substring; the /i flag handles case.
+  /LinkPreview/i,
+  /Slack-ImgProxy/i
 ];
 
 function isSocialCrawler(userAgent) {

@@ -4,7 +4,33 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>PicPeak - Photo Sharing Platform</title>
+    <!--
+      Static fallback title + Open Graph defaults (#521).
+
+      The runtime SPA updates these once React loads, and social-crawler
+      User-Agents hitting /gallery/<slug> get a per-event rich preview
+      served by backend's galleryOgService instead of this static shell.
+
+      But the third path — link previews fetched by WhatsApp Business
+      API, Twilio, LinkPreview, or any service that caches metadata
+      with a non-crawler UA — gets *this* HTML as-is. Defaulting the
+      title to "PicPeak - Photo Sharing Platform" left every such
+      preview looking unbranded for self-hosted installs.
+
+      Self-hosters set VITE_DEFAULT_TITLE / VITE_DEFAULT_DESCRIPTION
+      at build time (see .env.example) to bake their brand into this
+      fallback. Default values keep the upstream-image behaviour for
+      anyone who doesn't override them.
+    -->
+    <title>%VITE_DEFAULT_TITLE%</title>
+    <meta name="description" content="%VITE_DEFAULT_DESCRIPTION%" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="%VITE_DEFAULT_TITLE%" />
+    <meta property="og:title" content="%VITE_DEFAULT_TITLE%" />
+    <meta property="og:description" content="%VITE_DEFAULT_DESCRIPTION%" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="%VITE_DEFAULT_TITLE%" />
+    <meta name="twitter:description" content="%VITE_DEFAULT_DESCRIPTION%" />
 
     <!-- Pre-React theme bootstrap (#358).
          The browser may paint the very first frame before our inline

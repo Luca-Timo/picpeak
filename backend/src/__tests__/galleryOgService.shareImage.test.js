@@ -35,6 +35,7 @@ const { getStorage } = require('../services/storage');
 const {
   buildOgMetadata,
   handleGalleryOgCover,
+  isSocialCrawler,
 } = require('../services/galleryOgService');
 
 // The service hits two tables in sequence:
@@ -235,5 +236,54 @@ describe('handleGalleryOgCover — 404 unless explicitly opted in', () => {
     await handleGalleryOgCover(req, res);
     expect(res.status).toHaveBeenCalledWith(404);
     expect(ensureThumbnail).not.toHaveBeenCalled();
+  });
+});
+
+// Regression for #521 — WhatsApp Business API + 3rd-party preview
+// services use UAs that aren't "WhatsApp/X.Y.Z". If isSocialCrawler
+// misses them, those requests fall through to the static SPA shell
+// and the link preview ends up unbranded.
+describe('isSocialCrawler — extended bot coverage (#521)', () => {
+  it('matches every UA the README/changelog claims to support', () => {
+    // Pin the contract: each listed UA must hit the crawler path so the
+    // nginx rewrite + backend OG handler stay in sync. Adding a new UA
+    // here without also adding it to nginx.conf would silently regress.
+    const knownBots = [
+      // Main WhatsApp app
+      'WhatsApp/2.23.20.0',
+      // WhatsApp Business / Cloud API variants
+      'WhatsAppBot/1.0',
+      'wa-bot/2.0',
+      // Other messaging app crawlers
+      'facebookexternalhit/1.1',
+      'Twitterbot/1.0',
+      'Slackbot-LinkExpanding 1.0',
+      'TelegramBot (like TwitterBot)',
+      // 3rd-party preview services used by business-messaging stacks
+      'LinkPreview/1.0',
+      'Slack-ImgProxy/1.0',
+    ];
+    for (const ua of knownBots) {
+      expect(isSocialCrawler(ua)).toBe(true);
+    }
+  });
+
+  it('does not match a regular browser UA', () => {
+    const browsers = [
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15',
+      // Browser UA that happens to contain "Mobile" — guard against an
+      // over-broad regex landing on it.
+      'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36',
+    ];
+    for (const ua of browsers) {
+      expect(isSocialCrawler(ua)).toBe(false);
+    }
+  });
+
+  it('returns false for null/empty/undefined UAs', () => {
+    expect(isSocialCrawler(null)).toBe(false);
+    expect(isSocialCrawler(undefined)).toBe(false);
+    expect(isSocialCrawler('')).toBe(false);
   });
 });
