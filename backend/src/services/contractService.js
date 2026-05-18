@@ -259,14 +259,11 @@ async function buildRenderContext(contract, inclusions) {
     const bodyEn = row.body_text_snapshot || row.block_body_text || '';
     const bodyDe = row.body_text_de_snapshot || row.block_body_text_de || '';
     const sourceBody = locale === 'de' ? (bodyDe || bodyEn) : (bodyEn || bodyDe);
-    // Substitute placeholders, then strip `**bold**` markdown markers
-    // so they don't leak into the PDF literally. The block's name
-    // already provides the bold sub-heading, so the leading
-    // `**Title**` line in seeded bodies is decorative; admins can
-    // still use ** in custom blocks — the markers are quietly
-    // removed at render time.
-    const rendered = renderTemplatedBody(sourceBody, placeholders)
-      .replace(/\*\*([^*]+)\*\*/g, '$1');
+    // Substitute placeholders only. The `**bold**` markdown markers
+    // are kept here; pdfService.renderContractToBuffer splits on them
+    // and switches the font to render proper bold runs. The public
+    // page (no bold-rendering UI yet) strips them in publicContracts.
+    const rendered = renderTemplatedBody(sourceBody, placeholders);
     blocksBySection[row.section].push({
       name: row.block_name,
       section: row.section,
@@ -274,35 +271,42 @@ async function buildRenderContext(contract, inclusions) {
     });
   }
 
-  // Resolve the logo path the same way quoteService does.
-  let resolvedLogoPath = profile.logo_path || null;
-  if (!resolvedLogoPath) {
-    const branding = await db('app_settings').where('setting_key', 'branding_logo_url').first();
-    if (branding?.setting_value) {
-      try {
-        const v = JSON.parse(branding.setting_value);
-        if (typeof v === 'string') resolvedLogoPath = v;
-      } catch (_) {
-        resolvedLogoPath = branding.setting_value;
-      }
-    }
-  }
+  // Use the same robust logo resolver quote/invoice use — checks
+  // business_profile.logo_path → app_settings.branding_logo_path →
+  // app_settings.branding_logo_url, with ~7 disk-location candidates
+  // before giving up.
+  const { resolveLogoFile } = require('../utils/resolveLogoFile');
+  const resolvedLogoPath = await resolveLogoFile(profile);
+
+  // Global date format from Settings → General (general_date_format).
+  let dateFormat = null;
+  try {
+    const raw = await getAppSetting('general_date_format');
+    if (raw && typeof raw === 'object' && raw.format) dateFormat = raw;
+    else if (typeof raw === 'string' && raw.trim()) dateFormat = { format: raw.trim() };
+  } catch (_) { /* fall back to default */ }
 
   return {
     locale,
-    dateFormat: locale === 'de' ? 'DD.MM.YYYY' : 'YYYY-MM-DD',
+    dateFormat,
+    // Mirror the quote/invoice issuer shape EXACTLY so drawIssuerBlock
+    // honours the same business-profile toggles (pdf_show_logo,
+    // pdf_show_company_name, pdf_logo_height, pdf_company_name_inline,
+    // pdf_folding_marks) across all three document types. Per maintainer:
+    // contracts reuse the same toggles — no contract-specific knobs.
     issuer: profile ? {
       companyName: profile.company_name,
       addressLine1: profile.address_line1,
       addressLine2: profile.address_line2,
       postalCode: profile.postal_code,
       city: profile.city,
-      country: profile.country_name || null,
-      countryCodeIso: profile.country_code,
+      state: profile.state,
+      countryCode: profile.country_code,
       phone: profile.phone,
       mobile: profile.mobile,
       email: profile.email,
       website: profile.website,
+      footerLine: profile.footer_line,
       vatId: profile.vat_id,
       logoPath: resolvedLogoPath,
       pdfFontTtfPath: profile.pdf_font_ttf_path,
@@ -1051,29 +1055,64 @@ async function convertToInvoiceOnly(contractId, adminId) {
       409, 'CONTRACT_NOT_FULLY_SIGNED',
     );
   }
-  if (!contract.source_quote_id) {
-    throw new AppError(
-      'This contract has no source quote and therefore no line items / payment plan to drive invoice creation. Issue the invoice manually from the bills page.',
-      409, 'NO_SOURCE_QUOTE',
-    );
+
+  // Path A: contract has a source quote → replay its line items +
+  // payment plan via quoteService (full installment schedule).
+  if (contract.source_quote_id) {
+    const quoteService = require('./quoteService');
+    const result = await quoteService.convertToInvoiceOnly(contract.source_quote_id, adminId, { fromContract: true });
+    await db('invoices')
+      .where({ source_quote_id: contract.source_quote_id })
+      .whereNull('source_contract_id')
+      .update({ source_contract_id: contractId });
+    try {
+      await logActivity('contract_converted_to_invoices',
+        { contractId, quoteId: contract.source_quote_id, installments: result.installmentsCreated },
+        null, `admin:${adminId}`);
+    } catch (_) { /* logging is best-effort */ }
+    return result;
   }
 
-  const quoteService = require('./quoteService');
-  const result = await quoteService.convertToInvoiceOnly(contract.source_quote_id, adminId, { fromContract: true });
+  // Path B: standalone contract (no source quote) → create a single
+  // empty draft invoice the admin fills in manually on the bills
+  // editor. Net/VAT/total stay at zero until line items are added.
+  const customer = await db('customer_accounts').where({ id: contract.customer_account_id }).first();
+  ensureCustomerActive(customer);
 
-  // Tag the resulting invoices with the source contract id so the
-  // contract detail page can list them as "resulting invoices".
-  await db('invoices')
-    .where({ source_quote_id: contract.source_quote_id })
-    .whereNull('source_contract_id')
-    .update({ source_contract_id: contractId });
+  const invoiceService = require('./invoiceService');
+  const profile = (await businessProfileService.getProfile()).profile || {};
+  const currency = (profile.default_currency || 'CHF').toUpperCase();
+  const language = contract.language || customer.preferred_language || profile.default_locale || 'de';
+
+  const invoiceId = await invoiceService.createInvoice({
+    customerAccountId: contract.customer_account_id,
+    currency,
+    language,
+    issueDate: new Date().toISOString().slice(0, 10),
+    lineItems: [],
+    vatRate: 0,
+    shippingAmountMinor: 0,
+    ccPdfEmail: null,
+    // Empty draft — status stays 'scheduled' so the admin can edit
+    // line items and send when ready.
+    _skipMonthlyRouting: true,
+  }, adminId);
+
+  // Tag the new invoice with source_contract_id.
+  await db('invoices').where({ id: invoiceId }).update({
+    source_contract_id: contractId,
+    updated_at: new Date(),
+  });
 
   try {
-    await logActivity('contract_converted_to_invoices',
-      { contractId, quoteId: contract.source_quote_id, installments: result.installmentsCreated },
-      null, `admin:${adminId}`);
+    await logActivity('contract_converted_to_empty_invoice',
+      { contractId, invoiceId }, null, `admin:${adminId}`);
   } catch (_) { /* logging is best-effort */ }
-  return result;
+
+  // Match the result shape of the source-quote path so the frontend
+  // toast can use the same translation key. `installmentsCreated` is
+  // always 1 here (single empty invoice).
+  return { installmentsCreated: 1, invoiceId };
 }
 
 async function cancelContract(id, adminId) {

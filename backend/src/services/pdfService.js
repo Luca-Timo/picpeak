@@ -1837,13 +1837,36 @@ function renderContractToBuffer(context) {
           }
         }
 
+        // ---- helper: render body text with inline **bold** support.
+        // Splits on `**text**` markers, switches the font weight per
+        // chunk via PDFKit's continued: true text continuation. The
+        // first chunk anchors at (PAGE.marginLeft, y); subsequent
+        // chunks continue from PDFKit's cursor so wrapping works
+        // across font switches. After rendering, we read doc.y as
+        // the new cursor.
+        function renderBodyMarkdown(text, opts) {
+          const parts = String(text || '').split(/(\*\*[^*]+\*\*)/g).filter((p) => p.length > 0);
+          if (parts.length === 0) return;
+          const last = parts.length - 1;
+          for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            const isBold = part.length > 4 && part.startsWith('**') && part.endsWith('**');
+            const chunk = isBold ? part.slice(2, -2) : part;
+            if (!chunk) continue;
+            doc.font(isBold ? doc._fonts.bold : doc._fonts.body);
+            if (i === 0) {
+              doc.text(chunk, PAGE.marginLeft, y, { ...opts, continued: i < last });
+            } else {
+              doc.text(chunk, { ...opts, continued: i < last });
+            }
+          }
+        }
+
         // ---- intro text ---------------------------------------------
         if (ctx.doc?.introText) {
           doc.font(doc._fonts.body).fontSize(10).fillColor('#000');
           ensureSpace(40);
-          doc.text(String(ctx.doc.introText), PAGE.marginLeft, y, {
-            width: PAGE.contentWidth, align: 'left',
-          });
+          renderBodyMarkdown(ctx.doc.introText, { width: PAGE.contentWidth, align: 'left' });
           y = doc.y + 12;
         }
 
@@ -1875,9 +1898,7 @@ function renderContractToBuffer(context) {
               y = doc.y + 4;
             }
             doc.font(doc._fonts.body).fontSize(10).fillColor('#000');
-            doc.text(String(block.body || ''), PAGE.marginLeft, y, {
-              width: PAGE.contentWidth, align: 'left',
-            });
+            renderBodyMarkdown(block.body, { width: PAGE.contentWidth, align: 'left' });
             y = doc.y + 10;
             // If text rendering pushed past page bottom, PDFKit
             // auto-paginated — sync y to the new doc.y for the next
@@ -1892,9 +1913,7 @@ function renderContractToBuffer(context) {
         if (ctx.doc?.outroText) {
           ensureSpace(40);
           doc.font(doc._fonts.body).fontSize(10).fillColor('#000');
-          doc.text(String(ctx.doc.outroText), PAGE.marginLeft, y, {
-            width: PAGE.contentWidth, align: 'left',
-          });
+          renderBodyMarkdown(ctx.doc.outroText, { width: PAGE.contentWidth, align: 'left' });
           y = doc.y + 16;
         }
 

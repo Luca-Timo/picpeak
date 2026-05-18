@@ -74,7 +74,12 @@ function publicContractView(contract, inclusions, customer, profile, locale) {
     if (!(inc.included === true || inc.included === 1 || inc.included === '1')) continue;
     const bodyEn = inc.body_text_snapshot || inc.block_body_text || '';
     const bodyDe = inc.body_text_de_snapshot || inc.block_body_text_de || '';
-    const body = locale === 'de' ? (bodyDe || bodyEn) : (bodyEn || bodyDe);
+    // Strip `**bold**` markers — the React sign page renders body as
+    // plain `whitespace-pre-line` text and has no inline-bold UI.
+    // The PDF render path keeps the markers and renders them as
+    // proper bold runs via pdfService.renderBodyMarkdown.
+    const body = (locale === 'de' ? (bodyDe || bodyEn) : (bodyEn || bodyDe))
+      .replace(/\*\*([^*]+)\*\*/g, '$1');
     if (!blocksBySection[inc.section]) continue;
     blocksBySection[inc.section].push({
       blockId: inc.block_id,
