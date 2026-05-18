@@ -35,6 +35,7 @@ import {
 } from './pages/admin';
 import { CrmDevelopmentPage } from './pages/admin/clients/CrmDevelopmentPage';
 import { TaxReportPage } from './pages/admin/clients/TaxReportPage';
+import { HoursLoggingPage } from './pages/admin/clients/HoursLoggingPage';
 import { QuoteResponsePage } from './pages/public/QuoteResponsePage';
 import { PaymentCheckPage } from './pages/public/PaymentCheckPage';
 import { AcceptInvitePage } from './pages/public/AcceptInvitePage';
@@ -196,6 +197,14 @@ function App() {
                             <Route path="bills/new" element={<BillEditorPage />} />
                             <Route path="bills/:id" element={<BillDetailPage />} />
                             <Route path="bills/:id/edit" element={<BillEditorPage />} />
+                          </Route>
+
+                          {/* Hour logging (standalone surface) — gated by
+                              `hoursLogging`. Independent of `bills` so admin
+                              can log hours before the full billing surface
+                              is enabled. */}
+                          <Route element={<RequireFeature flag="hoursLogging" />}>
+                            <Route path="hours" element={<HoursLoggingPage />} />
                           </Route>
 
                           {/* Tax / Steuer report — gated by `taxReport`. */}

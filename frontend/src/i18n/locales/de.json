@@ -3119,9 +3119,17 @@
       "accounts": "Konten",
       "quotes": "Angebote",
       "bills": "Rechnungen",
+      "hours": "Stunden",
       "taxReport": "Steuer",
       "development": "Entwicklung"
     }
+  },
+  "hoursLogging": {
+    "title": "Stundenerfassung",
+    "subtitle": "Kunden wählen und abrechenbare Zeit erfassen. Einträge fließen in die nächste Monatsrechnung oder werden für Per-Event-Kunden auf Knopfdruck abgerechnet.",
+    "pickCustomer": "Kunde",
+    "pickPlaceholder": "— Kunde wählen —",
+    "emptyList": "Noch keine Kunden mit aktivierter Stundenerfassung. Aktivieren Sie „Stundenerfassung“ zuerst auf der Kundendetailseite."
   },
   "taxReport": {
     "title": "Steuerliste",
