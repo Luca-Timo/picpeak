@@ -2,10 +2,13 @@
  * Migration: seed `invoice_payment_check_admin` email template
  *
  * The admin receives this when an invoice passes its due date. It
- * contains three signed-token action buttons that open a public
- * web page (no login required):
+ * contains signed-token action buttons that open a public web page
+ * (no login required):
  *
  *   - "Paid in full"        → marks the invoice paid
+ *   - "Paid with Skonto"    → marks the invoice paid at the
+ *                             discounted total (migration 126).
+ *                             Only rendered when Skonto is configured.
  *   - "Partially paid"      → admin enters amount, partial logged,
  *                             reminder fires for the remainder
  *   - "Not paid yet"        → reminder ladder fires (level 1 or 2,
@@ -26,6 +29,9 @@ const EN = {
     <td style="padding: 0 6px;">
       <a href="{{paid_url}}" style="background: #16a34a; color: #fff; padding: 10px 18px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Paid in full</a>
     </td>
+    {{#if has_skonto}}<td style="padding: 0 6px;">
+      <a href="{{skonto_url}}" style="background: #0d9488; color: #fff; padding: 10px 18px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Paid with Skonto ({{skonto_amount}})</a>
+    </td>{{/if}}
     <td style="padding: 0 6px;">
       <a href="{{partial_url}}" style="background: #2563eb; color: #fff; padding: 10px 18px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Partially paid</a>
     </td>
@@ -40,9 +46,10 @@ const EN = {
 Invoice {{invoice_number}} for {{customer_name}}{{#if event_name}} ({{event_name}}){{/if}} was due on {{due_date}}. Total: {{total_amount}}.
 
 Confirm what was received:
-  Paid in full:  {{paid_url}}
-  Partial:       {{partial_url}}
-  Not paid yet:  {{unpaid_url}}
+  Paid in full:           {{paid_url}}{{#if has_skonto}}
+  Paid with Skonto ({{skonto_amount}}): {{skonto_url}}{{/if}}
+  Partial:                {{partial_url}}
+  Not paid yet:           {{unpaid_url}}
 
 Selecting "Not paid yet" or "Partially paid" will queue the customer reminder{{#if late_fee_due}} including a late fee of {{late_fee_amount}}{{/if}}.`,
 };
@@ -57,6 +64,9 @@ const DE = {
     <td style="padding: 0 6px;">
       <a href="{{paid_url}}" style="background: #16a34a; color: #fff; padding: 10px 18px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Vollständig bezahlt</a>
     </td>
+    {{#if has_skonto}}<td style="padding: 0 6px;">
+      <a href="{{skonto_url}}" style="background: #0d9488; color: #fff; padding: 10px 18px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Mit Skonto bezahlt ({{skonto_amount}})</a>
+    </td>{{/if}}
     <td style="padding: 0 6px;">
       <a href="{{partial_url}}" style="background: #2563eb; color: #fff; padding: 10px 18px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Teilweise bezahlt</a>
     </td>
@@ -71,9 +81,10 @@ const DE = {
 Rechnung {{invoice_number}} für {{customer_name}}{{#if event_name}} ({{event_name}}){{/if}} war am {{due_date}} fällig. Gesamtbetrag: {{total_amount}}.
 
 Bitte bestätigen:
-  Vollständig bezahlt:  {{paid_url}}
-  Teilweise:            {{partial_url}}
-  Nicht bezahlt:        {{unpaid_url}}
+  Vollständig bezahlt:            {{paid_url}}{{#if has_skonto}}
+  Mit Skonto bezahlt ({{skonto_amount}}): {{skonto_url}}{{/if}}
+  Teilweise:                      {{partial_url}}
+  Nicht bezahlt:                  {{unpaid_url}}
 
 Bei „Nicht bezahlt" oder „Teilweise bezahlt" wird automatisch die Zahlungserinnerung gesendet{{#if late_fee_due}} inklusive Mahngebühr von {{late_fee_amount}}{{/if}}.`,
 };
@@ -83,7 +94,9 @@ const TEMPLATE = {
   feature_flag: 'bills',
   variables: ['invoice_number', 'customer_name', 'event_name', 'due_date',
     'total_amount', 'paid_url', 'partial_url', 'unpaid_url',
-    'late_fee_due', 'late_fee_amount'],
+    'late_fee_due', 'late_fee_amount',
+    // Migration 126 — Skonto button. Renders only when has_skonto is truthy.
+    'has_skonto', 'skonto_percent', 'skonto_amount', 'skonto_url'],
   en: EN, de: DE,
 };
 

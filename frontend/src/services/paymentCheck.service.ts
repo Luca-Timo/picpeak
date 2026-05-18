@@ -4,7 +4,7 @@
  */
 import { api } from '../config/api';
 
-export type PaymentCheckAction = 'paid_full' | 'partial' | 'unpaid';
+export type PaymentCheckAction = 'paid_full' | 'paid_with_skonto' | 'partial' | 'unpaid';
 
 export interface PaymentCheckView {
   invoiceNumber: string;
@@ -19,6 +19,12 @@ export interface PaymentCheckView {
   status: string;
   reminderLevel: number;
   expiresAt: string;
+  /** Migration 126 — Skonto pre-resolution from the invoice's payment
+   *  terms snapshot. When `hasSkonto` is true the public page renders
+   *  the "Paid with Skonto" action card; otherwise hidden. */
+  hasSkonto: boolean;
+  skontoPercent: number | null;
+  skontoDiscountedTotalMinor: number | null;
 }
 
 export interface PaymentCheckIssuer {
