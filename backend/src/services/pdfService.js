@@ -1734,9 +1734,234 @@ async function renderInvoiceToBuffer(context) {
   return renderDocument('invoice', context);
 }
 
+/**
+ * Render a contract PDF. `context` is the shape produced by
+ * contractService.buildRenderContext: { locale, issuer, recipient, doc,
+ * sections, signatures }. Returns Promise<Buffer>.
+ *
+ * Layout:
+ *   - DIN 5008 envelope window (same as quotes/invoices) so the
+ *     recipient address lines up with envelope windows.
+ *   - Title from doc.title (admin-typed) or t('contract_title').
+ *   - Contract number + issue date right-aligned under the issuer block.
+ *   - intro_text paragraph.
+ *   - For each section: bold heading from t('section_<key>'), then each
+ *     block rendered as a paragraph (block.name bold, then block.body).
+ *   - outro_text paragraph.
+ *   - Two-column signature block at the bottom of the closing page.
+ *     If signature PNGs exist in context.signatures.{customer,admin}.signaturePath
+ *     they're stamped into the box; otherwise blank lines for handwritten
+ *     wet-signing.
+ */
+function renderContractToBuffer(context) {
+  return new Promise((resolve, reject) => {
+    (async () => {
+      try {
+        const ctx = context || {};
+        const locale = ctx.locale || 'de';
+        const doc = new PDFDocument({
+          size: 'A4',
+          bufferPages: true,
+          margins: {
+            top: PAGE.marginTop, bottom: PAGE.marginBottom,
+            left: PAGE.marginLeft, right: PAGE.marginRight,
+          },
+          info: {
+            Title: `${ctx.doc?.contractNumber || 'Contract'}${ctx.recipient?.companyName ? '_' + ctx.recipient.companyName : ''}`,
+            Author: ctx.issuer?.companyName || 'picpeak',
+          },
+        });
+
+        const chunks = [];
+        doc.on('data', (c) => chunks.push(c));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+
+        doc._fonts = { body: FONT_BODY, bold: FONT_BOLD };
+        const registered = registerCustomFonts(doc, ctx.issuer || {});
+        if (registered) doc._fonts = registered;
+
+        // ---- header: issuer + recipient blocks (DIN 5008) ------------
+        const issuerWidth = 180;
+        const issuerX = PAGE.width - PAGE.marginRight - issuerWidth;
+        const issuerY = PAGE.marginTop + 16;
+
+        const issuerEndY = drawIssuerBlock(doc, ctx.issuer || {}, issuerX, issuerY, issuerWidth, locale);
+        const recipientEndY = drawRecipientBlock(doc, ctx.recipient || {}, locale);
+        let y = Math.max(issuerEndY, recipientEndY, ADDR_WINDOW.top + ADDR_WINDOW.height) + 6;
+
+        // ---- contract number + date (right-aligned) ------------------
+        const docNumberForDisplay = ctx.doc?.contractNumber || '';
+        const numberLabel = t(locale, 'contract_number_label');
+        const dateLabel = t(locale, 'date');
+        const issueDateDisplay = formatDate(ctx.doc?.issueDate, locale);
+        const labelColumnWidth = 110;
+        const valueColumnWidth = 120;
+        const blockWidth = labelColumnWidth + valueColumnWidth;
+        const blockRightX = PAGE.width - PAGE.marginRight;
+        const blockLeftX = blockRightX - blockWidth;
+
+        doc.font(doc._fonts.body).fontSize(9).fillColor('#000');
+        // Number row
+        doc.text(numberLabel, blockLeftX, y, { width: labelColumnWidth, align: 'right' });
+        doc.font(doc._fonts.bold).text(
+          docNumberForDisplay,
+          blockLeftX + labelColumnWidth,
+          y,
+          { width: valueColumnWidth, align: 'right' },
+        );
+        y += 14;
+        // Date row
+        doc.font(doc._fonts.body);
+        doc.text(dateLabel, blockLeftX, y, { width: labelColumnWidth, align: 'right' });
+        doc.text(
+          issueDateDisplay,
+          blockLeftX + labelColumnWidth,
+          y,
+          { width: valueColumnWidth, align: 'right' },
+        );
+        y += 22;
+
+        // ---- title --------------------------------------------------
+        const title = ctx.doc?.title || t(locale, 'contract_title');
+        doc.font(doc._fonts.bold).fontSize(18).fillColor('#000');
+        doc.text(title, PAGE.marginLeft, y, { width: PAGE.contentWidth });
+        y = doc.y + 10;
+
+        // ---- helper: ensure space before drawing, paginate if needed.
+        const bottomLimit = PAGE.height - PAGE.marginBottom - 20;
+        function ensureSpace(needed) {
+          if (y + needed > bottomLimit) {
+            doc.addPage();
+            y = PAGE.marginTop;
+          }
+        }
+
+        // ---- intro text ---------------------------------------------
+        if (ctx.doc?.introText) {
+          doc.font(doc._fonts.body).fontSize(10).fillColor('#000');
+          ensureSpace(40);
+          doc.text(String(ctx.doc.introText), PAGE.marginLeft, y, {
+            width: PAGE.contentWidth, align: 'left',
+          });
+          y = doc.y + 12;
+        }
+
+        // ---- sections + blocks --------------------------------------
+        for (const sec of ctx.sections || []) {
+          if (!sec.blocks || sec.blocks.length === 0) continue;
+          ensureSpace(32);
+          doc.font(doc._fonts.bold).fontSize(13).fillColor('#000');
+          doc.text(t(locale, `section_${sec.section}`), PAGE.marginLeft, y, {
+            width: PAGE.contentWidth, align: 'left',
+          });
+          y = doc.y + 6;
+          // Thin separator under the section heading.
+          doc
+            .strokeColor('#888')
+            .lineWidth(0.5)
+            .moveTo(PAGE.marginLeft, y)
+            .lineTo(PAGE.marginLeft + PAGE.contentWidth, y)
+            .stroke();
+          y += 8;
+
+          for (const block of sec.blocks) {
+            ensureSpace(48);
+            if (block.name) {
+              doc.font(doc._fonts.bold).fontSize(10).fillColor('#000');
+              doc.text(String(block.name), PAGE.marginLeft, y, {
+                width: PAGE.contentWidth, align: 'left',
+              });
+              y = doc.y + 4;
+            }
+            doc.font(doc._fonts.body).fontSize(10).fillColor('#000');
+            doc.text(String(block.body || ''), PAGE.marginLeft, y, {
+              width: PAGE.contentWidth, align: 'left',
+            });
+            y = doc.y + 10;
+            // If text rendering pushed past page bottom, PDFKit
+            // auto-paginated — sync y to the new doc.y for the next
+            // block.
+            if (doc.y < y) y = doc.y;
+          }
+
+          y += 6;
+        }
+
+        // ---- outro text ---------------------------------------------
+        if (ctx.doc?.outroText) {
+          ensureSpace(40);
+          doc.font(doc._fonts.body).fontSize(10).fillColor('#000');
+          doc.text(String(ctx.doc.outroText), PAGE.marginLeft, y, {
+            width: PAGE.contentWidth, align: 'left',
+          });
+          y = doc.y + 16;
+        }
+
+        // ---- signature block ----------------------------------------
+        // Two columns: customer (left) + admin (right). Each shows
+        // either the stamped signature image (PNG from disk) + name +
+        // date, or empty lines for hand-signing.
+        const sigBlockHeight = 110;
+        ensureSpace(sigBlockHeight + 20);
+        const sigColWidth = (PAGE.contentWidth - 20) / 2;
+        const sigBoxHeight = 50;
+
+        function drawSignaturePane(x, label, info) {
+          doc.font(doc._fonts.bold).fontSize(10).fillColor('#000');
+          doc.text(label, x, y, { width: sigColWidth });
+          // Signature box (top of the pane).
+          const boxY = y + 14;
+          doc
+            .strokeColor('#cccccc').lineWidth(0.5)
+            .rect(x, boxY, sigColWidth, sigBoxHeight)
+            .stroke();
+          // Stamp the signature image when available.
+          if (info?.signaturePath && fs.existsSync(info.signaturePath)) {
+            try {
+              doc.image(info.signaturePath, x + 4, boxY + 4, {
+                fit: [sigColWidth - 8, sigBoxHeight - 8],
+                align: 'center',
+                valign: 'center',
+              });
+            } catch (_) { /* ignore broken image, leave blank box */ }
+          }
+          // Name + date under the box.
+          const captionY = boxY + sigBoxHeight + 6;
+          doc.font(doc._fonts.body).fontSize(9).fillColor('#000');
+          doc.text(
+            `${t(locale, 'signed_label_name')}: ${info?.name || ''}`,
+            x, captionY, { width: sigColWidth },
+          );
+          doc.text(
+            `${t(locale, 'signed_label_date')}: ${info?.signedAt ? formatDate(info.signedAt, locale) : ''}`,
+            x, captionY + 12, { width: sigColWidth },
+          );
+        }
+
+        drawSignaturePane(
+          PAGE.marginLeft,
+          t(locale, 'signature_customer'),
+          ctx.signatures?.customer,
+        );
+        drawSignaturePane(
+          PAGE.marginLeft + sigColWidth + 20,
+          t(locale, 'signature_admin'),
+          ctx.signatures?.admin,
+        );
+
+        doc.end();
+      } catch (err) {
+        reject(err);
+      }
+    })();
+  });
+}
+
 module.exports = {
   renderQuoteToBuffer,
   renderInvoiceToBuffer,
+  renderContractToBuffer,
   // Building blocks shared with other PDF features (tax report etc.) —
   // they all run through createBaseDocument so the font + orientation
   // story stays consistent.

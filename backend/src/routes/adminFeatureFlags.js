@@ -56,6 +56,12 @@ const KNOWN_FLAGS = [
   // bills — admin who's still in the dogfood phase may want to log
   // hours without enabling the full billing surface yet.
   'hoursLogging',
+  // Contracts (migration 130). Independent of quotes/bills — contracts
+  // are a standalone legal document type with their own composition
+  // (blocks) and signing flow (in-browser canvas + wet-signed PDF
+  // upload). Seeded block bodies are EXAMPLES ONLY; admins must have a
+  // lawyer review before sending. See docs/crm-disclaimers.md.
+  'contracts',
 ];
 
 // Spec defaults for any flag missing from the DB (e.g. a row added by a
@@ -73,6 +79,7 @@ const DEFAULT_FLAGS = {
   clients: false,
   taxReport: false,
   hoursLogging: false,
+  contracts: false,
 };
 
 async function readAllFlags() {
@@ -111,6 +118,7 @@ function applyDependencyRules(flags) {
     || out.bills
     || out.taxReport
     || out.hoursLogging
+    || out.contracts
     // future siblings (out.calendar || out.messaging) go here
   );
   return out;

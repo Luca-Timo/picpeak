@@ -8,6 +8,7 @@ import {
   MessageSquare,
   CalendarDays,
   FileSignature,
+  ScrollText,
   Receipt,
   BarChart3,
   Users,
@@ -214,6 +215,20 @@ export const FeaturesTab: React.FC = () => {
             sidebarLabel={t('settings.features.quotes.sidebar', 'Quotes')}
             enabled={staged.quotes}
             onToggle={(next) => setFlag('quotes', next)}
+          />
+
+          <FeatureCard
+            icon={ScrollText}
+            title={t('settings.features.contracts.title', 'Contracts')}
+            description={t(
+              'settings.features.contracts.description',
+              'Compose contracts from a library of reusable blocks (image rights, NDA, model release, cancellation, jurisdiction…) and have customers sign in-browser or upload a wet-signed PDF. Seeded block bodies are EXAMPLES ONLY — review with your lawyer before sending.',
+            )}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarLabel={t('settings.features.contracts.sidebar', 'Contracts')}
+            enabled={staged.contracts}
+            onToggle={(next) => setFlag('contracts', next)}
           />
 
           <FeatureCard

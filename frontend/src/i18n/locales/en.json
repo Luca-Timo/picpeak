@@ -3532,5 +3532,25 @@
     "intro": "Please accept or decline this quote:",
     "accept": "Accept quote",
     "decline": "Decline"
+  },
+  "contracts": {
+    "title": "Contracts",
+    "subtitle": "Compose contracts from reusable blocks and have customers sign in-browser or upload a wet-signed PDF.",
+    "sections": {
+      "basics": "Basics",
+      "scope": "Scope",
+      "privacy": "Privacy",
+      "commercial": "Commercial",
+      "nda": "Confidentiality",
+      "closing": "Closing provisions"
+    },
+    "status": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "signed_by_customer": "Signed by customer",
+      "signed_by_admin": "Counter-signed",
+      "fully_signed": "Fully signed",
+      "cancelled": "Cancelled"
+    }
   }
 }

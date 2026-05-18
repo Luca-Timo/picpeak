@@ -34,7 +34,14 @@ export type FeatureKey =
   // Hours card on the customer detail page. Independent of `bills`
   // so admin can log hours without enabling the broader billing
   // surface yet.
-  | 'hoursLogging';
+  | 'hoursLogging'
+  // Contracts (migration 130). Standalone legal-document type alongside
+  // quotes / bills, composed from a library of reusable blocks and
+  // signed in-browser (canvas + checkbox) or via wet-signed PDF
+  // upload. Independent of quotes / bills — contracts can be sent on
+  // their own. Seeded block bodies are examples only; admins must
+  // have their lawyer review before sending. See docs/crm-disclaimers.md.
+  | 'contracts';
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 

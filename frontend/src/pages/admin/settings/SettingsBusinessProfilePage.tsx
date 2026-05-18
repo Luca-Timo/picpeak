@@ -211,6 +211,22 @@ export const SettingsBusinessProfilePage: React.FC = () => {
         </div>
       </Card>
 
+      {/* Disclaimer banner for QR-bill / IBAN data. picpeak renders
+          what the operator types — it cannot validate IBAN/BIC, QR-IID
+          or scan-compatibility with any specific bank's e-banking app.
+          See docs/crm-disclaimers.md. */}
+      <div className="mt-4 p-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-900 dark:text-amber-200">
+        <p className="font-medium mb-1">
+          {t('businessProfile.qrDisclaimer.title', 'QR-bill / bank data — verify before going live')}
+        </p>
+        <p className="text-xs">
+          {t(
+            'businessProfile.qrDisclaimer.body',
+            "Picpeak is open source. We render the QR code and IBAN block from the values you typed — we don't validate them. Print a test invoice and scan it with your bank's app before sending real invoices. We are not responsible for any mistakes that come from sending an invoice with bad data on it.",
+          )}
+        </p>
+      </div>
+
       <BankAccountsSection accounts={data?.bankAccounts ?? []} />
     </div>
   );

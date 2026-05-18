@@ -37,6 +37,11 @@ import { CrmDevelopmentPage } from './pages/admin/clients/CrmDevelopmentPage';
 import { TaxReportPage } from './pages/admin/clients/TaxReportPage';
 import { HoursLoggingPage } from './pages/admin/clients/HoursLoggingPage';
 import { QuoteResponsePage } from './pages/public/QuoteResponsePage';
+import { ContractResponsePage } from './pages/public/ContractResponsePage';
+import { ContractsListPage } from './pages/admin/contracts/ContractsListPage';
+import { ContractEditorPage } from './pages/admin/contracts/ContractEditorPage';
+import { ContractDetailPage } from './pages/admin/contracts/ContractDetailPage';
+import { BlockLibraryPage } from './pages/admin/contracts/BlockLibraryPage';
 import { PaymentCheckPage } from './pages/public/PaymentCheckPage';
 import { AcceptInvitePage } from './pages/public/AcceptInvitePage';
 import {
@@ -199,6 +204,17 @@ function App() {
                             <Route path="bills/:id/edit" element={<BillEditorPage />} />
                           </Route>
 
+                          {/* Contracts (CRM) — gated by `contracts`. Independent
+                              of quotes/bills; a free-standing legal document
+                              type composed from a library of reusable blocks. */}
+                          <Route element={<RequireFeature flag="contracts" />}>
+                            <Route path="contracts" element={<ContractsListPage />} />
+                            <Route path="contracts/new" element={<ContractEditorPage />} />
+                            <Route path="contracts/blocks" element={<BlockLibraryPage />} />
+                            <Route path="contracts/:id" element={<ContractDetailPage />} />
+                            <Route path="contracts/:id/edit" element={<ContractEditorPage />} />
+                          </Route>
+
                           {/* Hour logging (standalone surface) — gated by
                               `hoursLogging`. Independent of `bills` so admin
                               can log hours before the full billing surface
@@ -254,6 +270,7 @@ function App() {
                   {/* Public quote accept/decline page (CRM). Token-only,
                       no auth required. */}
                   <Route path="/quote/:token" element={<QuoteResponsePage />} />
+                  <Route path="/contract/:token" element={<ContractResponsePage />} />
 
                   {/* Admin payment-check page (CRM) — token only,
                       no auth. Reached from the "Paid in full /

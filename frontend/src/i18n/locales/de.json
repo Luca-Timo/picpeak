@@ -3535,5 +3535,25 @@
     "intro": "Vielen Dank für Ihre Anfrage. Bitte prüfen Sie das folgende Angebot und antworten Sie unten.",
     "accept": "Angebot annehmen",
     "decline": "Angebot ablehnen"
+  },
+  "contracts": {
+    "title": "Verträge",
+    "subtitle": "Verträge aus wiederverwendbaren Bausteinen zusammenstellen und durch den Kunden im Browser oder per hochgeladenem, handunterschriebenem PDF unterzeichnen lassen.",
+    "sections": {
+      "basics": "Vertragsgrundlagen",
+      "scope": "Leistungsumfang",
+      "privacy": "Persönlichkeitsrechte & Datenschutz",
+      "commercial": "Kaufmännisches",
+      "nda": "Vertraulichkeit",
+      "closing": "Schlussbestimmungen"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "sent": "Gesendet",
+      "signed_by_customer": "Kunde unterzeichnet",
+      "signed_by_admin": "Gegengezeichnet",
+      "fully_signed": "Beidseitig unterzeichnet",
+      "cancelled": "Storniert"
+    }
   }
 }
