@@ -157,6 +157,124 @@ function snapToNextBillingCycle(baseDate, cadence, cycleDay) {
   return baseDate;
 }
 
+/**
+ * Compute the canonical "cadence day" for a given (year, month) using
+ * the customer's `billing_cycle_day`. Migration 128 introduced the
+ * sign-as-discriminator convention:
+ *   positive  1..28 → that day of the month, clamped to month length
+ *   negative -1..-15 → that many days before end of month
+ * Zero falls back to 1 (matches the service-layer clamp).
+ *
+ * Returns a JS Date at local-midnight on the resolved day. Callers
+ * compare against today's date with day-resolution math; the time
+ * component never matters for monthly-bill issuance.
+ */
+function computeMonthlyCadenceDate(year, month /* 0-based */, cycleDay) {
+  const day = Number.isFinite(cycleDay) ? Math.trunc(cycleDay) : 1;
+  const monthLen = new Date(year, month + 1, 0).getDate();
+  let target;
+  if (day > 0) {
+    target = Math.min(day, monthLen);
+  } else if (day < 0) {
+    // -1 → last day; -3 on a 31-day month → 28th
+    target = Math.max(1, monthLen + day);
+  } else {
+    target = 1;
+  }
+  return new Date(year, month, target);
+}
+
+/**
+ * Find or create the running "monthly draft" invoice for a customer.
+ * One draft per customer per current billing period (`monthly_period_end >= today`).
+ * Subsequent saves through createInvoice for the same monthly-mode
+ * customer append line items onto this draft instead of minting fresh
+ * invoices.
+ *
+ * Returns `{ id, row }` for the draft so the caller can append items
+ * + recompute totals without a second query.
+ *
+ * Period bounds:
+ *   start = first calendar day of the month that contains today
+ *   end   = computeMonthlyCadenceDate(year, month, cycle_day) where
+ *           year/month are picked so that the resolved date is in the
+ *           future. If today is already PAST the cadence day for the
+ *           current month, the period rolls to next month — admin
+ *           authoring items after the cadence is "starting the next
+ *           bill", not "appending to one that already fired".
+ */
+async function getOrCreateMonthlyDraft(customer, adminId, trx) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Resolve period_end: prefer the cadence in the current month, but
+  // if it has already passed, roll to next month so the new draft
+  // gathers items toward the NEXT bill.
+  const cycleDay = ensureInt(customer.billing_cycle_day) || 1;
+  let target = computeMonthlyCadenceDate(today.getFullYear(), today.getMonth(), cycleDay);
+  if (target.getTime() < today.getTime()) {
+    const nextMonth = today.getMonth() + 1;
+    target = computeMonthlyCadenceDate(today.getFullYear(), nextMonth, cycleDay);
+  }
+  const periodStart = new Date(target.getFullYear(), target.getMonth(), 1);
+  const periodEnd = target;
+
+  // Look up any existing draft for this customer whose period covers
+  // today. Strict equality on the resolved period bounds — if admin
+  // changes the cadence day mid-period we'll just create a new draft;
+  // the old one still ships on its own cadence.
+  const existing = await trx('invoices')
+    .where({
+      customer_account_id: customer.id,
+      is_monthly_draft: true,
+    })
+    .andWhere('monthly_period_end', '>=', today.toISOString().slice(0, 10))
+    .orderBy('id', 'desc')
+    .first();
+  if (existing) {
+    return { id: existing.id, row: existing, created: false };
+  }
+
+  // None yet — mint one with zero line items + zero totals. The
+  // caller appends items + recomputes immediately after.
+  const profile = (await businessProfileService.getProfile()).profile;
+  const currency = (customer.preferred_currency || profile?.default_currency || 'CHF').toUpperCase();
+  const language = customer.preferred_language || profile?.default_locale || 'de';
+  const invoiceNumber = await nextInvoiceNumber();
+  const bank = await businessProfileService.resolveBankAccountForCurrency(currency, null);
+
+  const row = {
+    invoice_number: invoiceNumber,
+    customer_account_id: customer.id,
+    source_quote_id: null,
+    event_id: null,
+    language,
+    currency,
+    issue_date: periodEnd.toISOString().slice(0, 10),
+    due_date: periodEnd.toISOString().slice(0, 10), // recomputed at issuance time
+    installment_index: 0,
+    installment_total: 1,
+    status: 'scheduled',
+    scheduled_send_at: null, // monthly pass sets this on cadence day
+    net_amount_minor: 0,
+    vat_rate: 0,
+    vat_amount_minor: 0,
+    shipping_amount_minor: 0,
+    total_amount_minor: 0,
+    business_bank_account_id: bank?.id || null,
+    qr_format: null,
+    is_monthly_draft: true,
+    monthly_period_start: periodStart.toISOString().slice(0, 10),
+    monthly_period_end: periodEnd.toISOString().slice(0, 10),
+    created_by_admin_id: adminId,
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
+  const inserted = await trx('invoices').insert(row).returning('id');
+  const id = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
+  return { id, row: { ...row, id }, created: true };
+}
+
 // ---------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------
@@ -183,6 +301,16 @@ async function listInvoices({ filters = {}, sort = 'newest', page = 1, pageSize 
     }
     if (filters.customerAccountId) {
       query = query.where('invoices.customer_account_id', filters.customerAccountId);
+    }
+    // Hide monthly drafts (migration 128) from the default list — they
+    // live on the customer detail page's "Monthly billing queue" card.
+    // Callers that explicitly want them (the customer-detail summary
+    // fetch) pass `includeMonthlyDrafts: true`.
+    if (!filters.includeMonthlyDrafts) {
+      query = query.where(function () {
+        this.where('invoices.is_monthly_draft', false)
+          .orWhereNull('invoices.is_monthly_draft');
+      });
     }
     if (filters.sourceQuoteId) {
       query = query.where('invoices.source_quote_id', filters.sourceQuoteId);
@@ -285,12 +413,105 @@ async function getInvoiceById(id) {
 }
 
 /**
+ * Append line items from a `createInvoice`-shaped payload onto the
+ * customer's running monthly-draft (migration 128). Used when the
+ * customer is billing_cadence='monthly': the admin's editor save
+ * lands here instead of minting a new invoice.
+ *
+ * Pulls the existing draft (or creates a fresh one for the current
+ * period), appends the new line items continuing the position
+ * sequence, recomputes totals across the merged set, and returns the
+ * draft's id so the route layer can fetch + return it.
+ */
+async function appendToMonthlyDraft(payload, customer, adminId, trx) {
+  const draft = await getOrCreateMonthlyDraft(customer, adminId, trx);
+
+  // Load existing line items so we can compute the next `position` and
+  // re-sum totals across the merged set. The migration-119 hierarchy
+  // helpers operate on the merged array so parent_position pointers
+  // remain consistent.
+  const existing = await trx('invoice_line_items')
+    .where({ invoice_id: draft.id })
+    .orderBy('position', 'asc');
+  const nextPosition = existing.length
+    ? Math.max(...existing.map((li) => ensureInt(li.position))) + 1
+    : 1;
+
+  const incoming = Array.isArray(payload.lineItems) ? payload.lineItems : [];
+  const newItems = incoming.map((li, idx) => {
+    const qty = ensureNumber(li.quantity, 1);
+    const unit = ensureInt(li.unit_price_minor);
+    const discount = ensureNumber(li.discount_percent, 0);
+    const lineTotal = Math.round(Math.round(qty * unit) * (1 - discount / 100));
+    const isSubItem = li.parent_position != null && li.parent_position !== '';
+    return {
+      position: nextPosition + idx,
+      quantity: qty,
+      description: String(li.description || ''),
+      unit_price_minor: unit,
+      discount_percent: discount,
+      line_total_minor: lineTotal,
+      parent_position: isSubItem ? ensureInt(li.parent_position) : null,
+      details_text: li.details_text || null,
+    };
+  });
+
+  if (newItems.length > 0) {
+    const { validateLineItemHierarchy, insertLineItemsHierarchical } = getHierarchyHelpers();
+    validateLineItemHierarchy(newItems);
+    await insertLineItemsHierarchical(trx, 'invoice_line_items', 'invoice_id', draft.id, newItems);
+  }
+
+  // Recompute totals across the entire draft so the running figures
+  // shown on the customer-detail "Monthly queue" card stay accurate
+  // as items accumulate. Mirrors createInvoice's totals path.
+  const allItems = await trx('invoice_line_items')
+    .where({ invoice_id: draft.id });
+  let netMinor = 0;
+  for (const li of allItems) {
+    if (li.parent_line_item_id == null) netMinor += ensureInt(li.line_total_minor);
+  }
+  const vatRate = ensureNumber(payload.vatRate, draft.row.vat_rate || 0);
+  const vatMinor = Math.round(netMinor * Number(vatRate) / 100);
+  const shippingMinor = ensureInt(draft.row.shipping_amount_minor);
+  const totalMinor = netMinor + vatMinor + shippingMinor;
+
+  await trx('invoices').where({ id: draft.id }).update({
+    net_amount_minor: netMinor,
+    vat_rate: vatRate,
+    vat_amount_minor: vatMinor,
+    total_amount_minor: totalMinor,
+    updated_at: new Date(),
+  });
+
+  try {
+    await logActivity('monthly_billing_items_queued',
+      { invoiceId: draft.id, customerId: customer.id, itemsAdded: newItems.length },
+      null, `admin:${adminId}`);
+  } catch (_) {}
+
+  return draft.id;
+}
+
+/**
  * Create one invoice. Returns id. Used both manually (admin creates a
  * standalone invoice) and by scheduleInvoicesForEvent (one per installment).
  */
 async function createInvoice(payload, adminId, trx = db) {
   const customer = await trx('customer_accounts').where({ id: payload.customerAccountId }).first();
   ensureCustomerCanBill(customer);
+
+  // Monthly-billing intercept (migration 128). For customers in
+  // billing_cadence='monthly' mode every createInvoice call APPENDS
+  // line items onto the running monthly-draft instead of minting a
+  // fresh invoice. Admin sees the editor flow exactly as before; the
+  // returned id is the draft's id so the UI can redirect to the
+  // accumulator. `_skipMonthlyRouting` is the escape hatch used by
+  // internal helpers that need to mint a non-draft row (e.g. the
+  // accumulator itself, or future test fixtures).
+  if (customer.billing_cadence === 'monthly' && !payload._skipMonthlyRouting) {
+    return await appendToMonthlyDraft(payload, customer, adminId, trx);
+  }
 
   const profile = (await businessProfileService.getProfile()).profile;
   const currency = (payload.currency || profile?.default_currency || 'CHF').toUpperCase();
@@ -471,6 +692,30 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
                                           eventName, eventTimeStart, eventTimeEnd,
                                           paymentNetDaysTemplateId, paymentTimingTemplateId,
                                           paymentTermSnapshot }) {
+  // Monthly-billing intercept (migration 128). Quote → invoice
+  // conversion for a monthly-mode customer doesn't fan out N
+  // installment invoices — the customer pays one consolidated bill
+  // per period. Append the line items to the running draft (creating
+  // it if needed) and return early. The installment / cadence math
+  // below is bypassed; the quote's payment timing is irrelevant once
+  // items flow into the monthly accumulator.
+  if (customer && customer.billing_cadence === 'monthly') {
+    await appendToMonthlyDraft({
+      customerAccountId: customer.id,
+      lineItems: (lineItems || []).map((li) => ({
+        position: li.position,
+        quantity: li.quantity,
+        unit_price_minor: li.unit_price_minor,
+        discount_percent: li.discount_percent,
+        description: li.description,
+        parent_position: li.parent_position,
+        details_text: li.details_text,
+      })),
+      vatRate: totals?.vatRate,
+    }, customer, adminId, trx);
+    return;
+  }
+
   // netDays drives the due-date offset on every scheduled invoice
   // created here. Defaults to 30 when the caller doesn't pass one;
   // callers in quoteService now pass the converting quote's
@@ -1486,6 +1731,12 @@ async function reissueInvoice(id, adminId) {
       businessBankAccountId: original.business_bank_account_id,
       qrFormat: original.qr_format,
       paymentTermTemplateId: original.payment_term_template_id,
+      // Reissue always produces a standalone invoice even when the
+      // customer is on monthly billing — folding the reissued items
+      // into the current period's running draft would conflate two
+      // unrelated billing periods. The escape hatch keeps the
+      // standard createInvoice flow.
+      _skipMonthlyRouting: true,
       // Carry the split picker (migration 124) + event snapshot
       // (migration 123) onto the reissued draft so the admin doesn't
       // have to re-set them after a Cancel & reissue. createInvoice
@@ -2175,7 +2426,70 @@ async function runScheduledTasks() {
     }
   }
 
-  // 2. Overdue payment-check prompts (if reminders enabled).
+  // 2. Monthly-bill issuance (migration 128).
+  //
+  // Walk every monthly draft whose period_end is today-or-earlier.
+  // - If the draft has zero line items, skip silently (empty month
+  //   per user spec — no invoice issued, no email, just a log).
+  // - Otherwise flip is_monthly_draft=false and arm scheduled_send_at
+  //   to `now` so the next flush-pass picks it up and runs the
+  //   standard sendInvoice path. Keeping the issuance one tick away
+  //   from this pass means email queueing + activity log + dunning
+  //   schedule all stay on the existing well-trodden code paths
+  //   instead of duplicating logic here.
+  const monthlyToday = new Date(now);
+  monthlyToday.setHours(0, 0, 0, 0);
+  const dueDrafts = await db('invoices')
+    .where({ is_monthly_draft: true })
+    .andWhere('monthly_period_end', '<=', monthlyToday.toISOString().slice(0, 10))
+    .limit(50);
+  for (const draft of dueDrafts) {
+    try {
+      const items = await db('invoice_line_items').where({ invoice_id: draft.id }).limit(1);
+      if (items.length === 0) {
+        // Empty month — leave the draft alone (admin may still add
+        // items between now and end-of-day) OR mark it consumed so
+        // the next save creates a fresh period draft. We pick the
+        // latter: clear is_monthly_draft so the next createInvoice
+        // for this customer mints a new period.
+        await db('invoices').where({ id: draft.id }).update({
+          is_monthly_draft: false,
+          status: 'cancelled',
+          updated_at: new Date(),
+        });
+        logger.info('Monthly bill skipped — no items queued', {
+          invoiceId: draft.id, customerId: draft.customer_account_id,
+        });
+        try {
+          await logActivity('monthly_bill_skipped_empty',
+            { invoiceId: draft.id, customerId: draft.customer_account_id },
+            null, 'scheduler');
+        } catch (_) {}
+        continue;
+      }
+      // Arm for the flush pass: clear the draft flag, set the send
+      // time to now, recompute due_date from issue_date + the global
+      // crm_invoices_net_days_default (best-effort; admin can override
+      // by editing the draft before the cadence day).
+      const issueDate = monthlyToday.toISOString().slice(0, 10);
+      await db('invoices').where({ id: draft.id }).update({
+        is_monthly_draft: false,
+        issue_date: issueDate,
+        scheduled_send_at: new Date(),
+        updated_at: new Date(),
+      });
+      try {
+        await logActivity('monthly_bill_issued',
+          { invoiceId: draft.id, customerId: draft.customer_account_id,
+            periodEnd: draft.monthly_period_end },
+          null, 'scheduler');
+      } catch (_) {}
+    } catch (err) {
+      logger.error('Monthly bill issuance failed', { invoiceId: draft.id, err: err.message });
+    }
+  }
+
+  // 3. Overdue payment-check prompts (if reminders enabled).
   //
   // NEW behavior (migration 115/116): instead of auto-firing the
   // customer reminder when an invoice goes overdue, we email the

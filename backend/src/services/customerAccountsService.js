@@ -557,10 +557,24 @@ async function updateCustomer(id, updates, updatedByAdminId) {
         const v = String(updates[f] || '').toLowerCase();
         allowed[f] = ['per_event', 'monthly', 'quarterly'].includes(v) ? v : 'per_event';
       } else if (f === 'billing_cycle_day') {
-        // Clamp 1–28 — anything above 28 rolls back to month length at
-        // schedule time anyway, but 1–28 is a saner UI surface.
+        // Sign carries the interpretation:
+        //   positive 1..28  → day-of-month (clamped to month length at
+        //                     schedule time, so cycleDay=28 stays valid
+        //                     in February)
+        //   negative -1..-15 → that many days before end of month
+        //                      (cycleDay=-3 on a 31-day month fires on
+        //                      the 28th; on a 28-day February fires on
+        //                      the 25th)
+        // Zero is meaningless and clamps to 1 so the column never
+        // stores "the 0th of the month".
         const v = parseInt(updates[f], 10);
-        allowed[f] = Number.isFinite(v) ? Math.max(1, Math.min(28, v)) : 1;
+        if (!Number.isFinite(v) || v === 0) {
+          allowed[f] = 1;
+        } else if (v > 0) {
+          allowed[f] = Math.min(28, v);
+        } else {
+          allowed[f] = Math.max(-15, v);
+        }
       } else {
         allowed[f] = updates[f];
       }

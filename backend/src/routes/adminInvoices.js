@@ -126,6 +126,13 @@ function transformInvoice(i) {
     // this as a checkbox so admin can suppress the discount for one
     // invoice without touching the template or global default.
     skontoDisabled: i.skonto_disabled === true || i.skonto_disabled === 1,
+    // Monthly billing (migration 128). isMonthlyDraft=true marks the
+    // accumulator the editor's banner + save-button-label react to.
+    // monthlyPeriodStart/End drive the period banner on the customer
+    // detail page and (later) the PDF header.
+    isMonthlyDraft: i.is_monthly_draft === true || i.is_monthly_draft === 1,
+    monthlyPeriodStart: i.monthly_period_start || null,
+    monthlyPeriodEnd: i.monthly_period_end || null,
     // Storno wiring (migration 114). The four FK columns drive the
     // admin UI's banners + action gating:
     //  - kind: 'invoice' | 'storno' — defaults to 'invoice' for rows
