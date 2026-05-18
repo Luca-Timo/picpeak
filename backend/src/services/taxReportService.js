@@ -573,13 +573,19 @@ async function renderTaxReportPdf({ from, to, currency, locale } = {}) {
         const pageLabel = t(useLocale, 'page_of', {
           current: pageIdx + 1, total: range.count,
         });
-        // y just below the content area, far enough from the
-        // margin that PDFKit's "writing past the bottom margin"
-        // warning doesn't fire.
+        // Position the page label just ABOVE the bottom margin —
+        // keeping the baseline inside the content area prevents
+        // PDFKit's layout engine from auto-paginating when the
+        // 8pt-tall text wouldn't fit between the requested y and
+        // the bottom of the page. The previous +6 offset pushed the
+        // y into the margin, which made PDFKit add a fresh blank
+        // page for every label, doubling the page count. Mirror the
+        // safe `- 12` offset used by the invoice/quote renderer in
+        // pdfService.renderDocument().
         doc.font(fonts.body).fontSize(8).fillColor('#888')
           .text(pageLabel,
             page.width - page.marginRight - 160,
-            page.height - page.marginBottom + 6,
+            page.height - page.marginBottom - 12,
             { width: 160, align: 'right', lineBreak: false });
       }
 

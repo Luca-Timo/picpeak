@@ -149,6 +149,24 @@ describe('renderTaxReportPdf', () => {
     });
     expect(buf.slice(0, 4).toString('ascii')).toBe('%PDF');
   });
+
+  // Regression: the page-number footer used to place its baseline
+  // inside the bottom margin, which made PDFKit auto-paginate one
+  // empty page per existing page (so a 1-page report ended up as 2,
+  // and so on). Counting `/Type /Page` markers in the raw PDF bytes
+  // is the cheapest way to detect a recurrence without parsing the
+  // PDF — every page object in the xref table carries that marker
+  // exactly once.
+  it('does not duplicate pages when stamping the page-number footer', async () => {
+    invoiceRowsForRun = [SAMPLE_ROW()];
+    const buf = await taxReportService.renderTaxReportPdf({
+      from: '2026-01-01', to: '2026-03-31', currency: 'CHF', locale: 'de',
+    });
+    const pageMarkers = buf.toString('binary').match(/\/Type\s*\/Page\b(?!s)/g) || [];
+    // Small single-row report should fit on a single page. The
+    // previous buggy renderer produced 2 (1 content + 1 footer-only).
+    expect(pageMarkers.length).toBe(1);
+  });
 });
 
 describe('renderTaxReportCsv', () => {
