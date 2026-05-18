@@ -23,6 +23,7 @@ const { body, param } = require('express-validator');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const { validateFileType } = require('../utils/fileSecurityUtils');
 const contractService = require('../services/contractService');
+const { getAppSetting } = require('../utils/appSettings');
 const { db } = require('../database/db');
 
 const router = express.Router();
@@ -143,15 +144,22 @@ router.get(
     if (!data) return res.status(404).json({ error: 'Contract not found' });
     const customer = await db('customer_accounts').where({ id: data.contract.customer_account_id }).first();
     const profile = await db('business_profile').where({ id: 1 }).first();
-    return successResponse(res, {
-      contract: publicContractView(
-        data.contract,
-        data.inclusions,
-        customer,
-        profile,
-        data.contract.language || 'de',
-      ),
-    });
+    // Surface the admin-tunable behaviour toggles on the view so the
+    // React page can hide the upload-PDF section when disabled and
+    // enforce the drawn-signature requirement client-side. The server
+    // re-enforces both, so client tampering only changes the UX.
+    const allowPdfUpload = (await getAppSetting('crm_contracts_allow_pdf_upload')) !== false;
+    const requireDrawnSignature = (await getAppSetting('crm_contracts_require_drawn_signature')) === true;
+    const view = publicContractView(
+      data.contract,
+      data.inclusions,
+      customer,
+      profile,
+      data.contract.language || 'de',
+    );
+    view.allowPdfUpload = allowPdfUpload;
+    view.requireDrawnSignature = requireDrawnSignature;
+    return successResponse(res, { contract: view });
   }),
 );
 
@@ -192,6 +200,17 @@ router.post(
   signedPdfUpload.single('file'),
   handleAsync(async (req, res) => {
     validateRequest(req);
+    // Server-side guard for the "allow PDF upload" toggle. When the
+    // admin turns it off in Settings → CRM behaviour → Contracts the
+    // public sign page hides the upload section, but a hand-crafted
+    // POST would still hit this route — refuse here too.
+    const allowPdfUpload = (await getAppSetting('crm_contracts_allow_pdf_upload')) !== false;
+    if (!allowPdfUpload) {
+      return res.status(403).json({
+        error: 'Uploading a wet-signed PDF is disabled for this installation. Please sign in your browser instead.',
+        code: 'UPLOAD_DISABLED',
+      });
+    }
     const tokenRow = await db('contract_action_tokens').where({ token: req.params.token }).first();
     if (!tokenRow) return res.status(404).json({ error: 'Contract not found' });
     if (tokenRow.expires_at && new Date(tokenRow.expires_at).getTime() < Date.now()) {

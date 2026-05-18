@@ -294,6 +294,10 @@ export interface PublicContractView {
     email: string | null;
     website: string | null;
   } | null;
+  /** Admin-set behaviour flags surfaced for the public sign page.
+   *  Server re-enforces both — these only drive the UI. */
+  allowPdfUpload?: boolean;
+  requireDrawnSignature?: boolean;
 }
 
 export const publicContractsService = {

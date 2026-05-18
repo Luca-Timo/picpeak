@@ -692,6 +692,10 @@ async function sendContract(id, adminId) {
 
   const frontendUrl = (await getFrontendBaseUrl()) || 'http://localhost:3000';
   const responseUrl = `${frontendUrl}/contract/${token}`;
+  // Honour the admin's "Attach contract PDF to email" toggle. Default
+  // ON; an admin who prefers a link-only email turns it off and the
+  // customer reaches the PDF via the public sign page instead.
+  const attachPdf = await getAppSetting('crm_contracts_pdf_attachment_enabled');
   await emailProcessor.queueEmail(null, customer.email, 'contract_sent', {
     contract_number: contract.contract_number,
     customer_name: customer.display_name
@@ -701,7 +705,7 @@ async function sendContract(id, adminId) {
     title: contract.title || '',
     event_name: contract.event_name || '',
     valid_until: formatShortDate(contract.valid_until),
-    attachments: pdfPath ? [{
+    attachments: (attachPdf !== false && pdfPath) ? [{
       filename: `${contract.contract_number}.pdf`,
       contentPath: pdfPath,
       contentType: 'application/pdf',
@@ -728,6 +732,18 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
   }
   if (!name || !String(name).trim()) {
     throw new AppError('Your name is required.', 400, 'NAME_REQUIRED');
+  }
+  // Server-side guard for the "require drawn signature" admin toggle.
+  // The public sign page also enforces this client-side, but the
+  // server is the source of truth — a malicious caller posting
+  // directly to /sign with a blank signatureDataUrl would otherwise
+  // bypass the requirement.
+  const requireDrawn = await getAppSetting('crm_contracts_require_drawn_signature');
+  if (requireDrawn === true && (!signatureDataUrl || !String(signatureDataUrl).trim())) {
+    throw new AppError(
+      'A drawn signature is required for this contract — typing your name alone is not sufficient.',
+      400, 'SIGNATURE_REQUIRED',
+    );
   }
   const tokenRow = await db('contract_action_tokens').where({ token }).first();
   if (!tokenRow) throw new AppError('Token not found', 404);

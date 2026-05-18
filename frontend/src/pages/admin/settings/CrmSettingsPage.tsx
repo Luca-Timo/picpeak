@@ -44,6 +44,9 @@ const SETTING_KEYS = [
   // quotes/invoices: {YEAR} {MONTH} {SEQ:04d}. Default 'C-{YEAR}-{SEQ:04d}'.
   'crm_contracts_number_format',
   'crm_contracts_default_valid_days',
+  'crm_contracts_pdf_attachment_enabled',
+  'crm_contracts_require_drawn_signature',
+  'crm_contracts_allow_pdf_upload',
 ];
 
 export const CrmSettingsPage: React.FC = () => {
@@ -247,32 +250,32 @@ export const CrmSettingsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Contracts (migration 130) — number format follows the same
-            {YEAR}/{MONTH}/{SEQ:04d} token convention as quotes/invoices.
-            Default 'C-{YEAR}-{SEQ:04d}' covers most needs; admins who
-            prefix with their own initials (e.g. 'LBM-C-{YEAR}-{SEQ:04d}')
-            edit it here. */}
-        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
-          <h4 className="font-semibold mb-2 text-sm">
-            {t('crmSettings.section.contracts', 'Contracts')}
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Input
-              label={t('crmSettings.crm_contracts_number_format.label', 'Contract number format') as string}
-              value={values.crm_contracts_number_format ?? ''}
-              onChange={(e) => setVal('crm_contracts_number_format', e.target.value)}
-              placeholder="C-{YEAR}-{SEQ:04d}"
-            />
-            <Input type="number" min={1}
-              label={t('crmSettings.crm_contracts_default_valid_days.label', 'Signing window (days)') as string}
-              value={values.crm_contracts_default_valid_days ?? 30}
-              onChange={(e) => setVal('crm_contracts_default_valid_days', Number(e.target.value))} />
-          </div>
-          <p className="text-xs text-neutral-500 mt-2">
-            {t('crmSettings.crm_contracts_number_format.help',
-              'Supported tokens: {YEAR}, {MONTH}, {SEQ:04d}. Example: LBM-C-{YEAR}-{SEQ:04d} → LBM-C-2026-0001.')}
-          </p>
+      </Card>
+
+      {/* Contracts (migration 130). Mirrors the Quotes / Invoices block
+          shape: 3 behaviour toggles, then a 2-column input grid, then
+          the number-format input with helper text. */}
+      <Card>
+        <h3 className="font-semibold mb-3">{t('crmSettings.section.contracts', 'Contracts')}</h3>
+        {checkbox('crm_contracts_pdf_attachment_enabled', 'Attach contract PDF to email')}
+        {checkbox('crm_contracts_require_drawn_signature', 'Require drawn signature (typed name alone is not enough)')}
+        {checkbox('crm_contracts_allow_pdf_upload', 'Allow customer to upload a wet-signed PDF')}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+          <Input type="number" min={1} max={365}
+            label={t('crmSettings.crm_contracts_default_valid_days.label', 'Signing window (days)') as string}
+            value={values.crm_contracts_default_valid_days ?? 30}
+            onChange={(e) => setVal('crm_contracts_default_valid_days', Number(e.target.value))} />
+          <Input
+            label={t('crmSettings.crm_contracts_number_format.label', 'Contract number format') as string}
+            value={values.crm_contracts_number_format ?? ''}
+            onChange={(e) => setVal('crm_contracts_number_format', e.target.value)}
+            placeholder="C-{YEAR}-{SEQ:04d}"
+          />
         </div>
+        <p className="text-xs text-neutral-500 mt-2">
+          {t('crmSettings.crm_contracts_number_format.help',
+            'Supported tokens: {YEAR}, {MONTH}, {SEQ:04d}. Example: LBM-C-{YEAR}-{SEQ:04d} → LBM-C-2026-0001.')}
+        </p>
       </Card>
     </div>
   );

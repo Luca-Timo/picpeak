@@ -319,6 +319,22 @@ const NEW_FEATURE_FLAGS = ['contracts'];
 const CRM_CONTRACT_SETTINGS = [
   { setting_key: 'crm_contracts_number_format', setting_value: 'C-{YEAR}-{SEQ:04d}', setting_type: 'crm' },
   { setting_key: 'crm_contracts_default_valid_days', setting_value: 30, setting_type: 'crm' },
+  // Behaviour toggles surfaced in Settings → CRM-Settings → CRM
+  // behaviour → Contracts. Mirror the quote/invoice toggle shape so
+  // admins find them where they expect.
+  // - pdf_attachment_enabled: when true, sendContract attaches the
+  //   rendered PDF to the customer email alongside the signing link.
+  //   Admins who prefer a leaner email (link only) set this off.
+  // - require_drawn_signature: when true, the public sign page
+  //   rejects submissions where the canvas is empty — typed name +
+  //   "I accept" alone aren't enough. Default off because canvas
+  //   signing on a desktop trackpad is awkward.
+  // - allow_pdf_upload: when true, the public sign page offers
+  //   "Upload a wet-signed PDF" as an alternative path. Off forces
+  //   all customers through the in-browser flow.
+  { setting_key: 'crm_contracts_pdf_attachment_enabled', setting_value: true,  setting_type: 'crm' },
+  { setting_key: 'crm_contracts_require_drawn_signature', setting_value: false, setting_type: 'crm' },
+  { setting_key: 'crm_contracts_allow_pdf_upload',        setting_value: true,  setting_type: 'crm' },
 ];
 
 const CRM_EMAIL_TEMPLATES = {
