@@ -242,6 +242,17 @@ export const quotesService = {
     return data.data || data;
   },
 
+  /** Convert the quote into a fresh draft contract (#contracts feature).
+   *  Leaves the quote in 'accepted' status; the contract becomes the
+   *  active deliverable. After the customer + admin both sign, the
+   *  contract detail page exposes its own convert-to-event /
+   *  convert-to-invoice buttons that re-enter the quote conversion
+   *  path via the contract's source_quote_id. */
+  async convertToContract(id: number): Promise<{ contractId: number; alreadyConverted: boolean }> {
+    const { data } = await api.post(`/admin/quotes/${id}/convert-to-contract`);
+    return data.data || data;
+  },
+
   /** Returns a blob URL the editor can `window.open()` straight into a tab. */
   async pdfUrl(id: number): Promise<string> {
     const res = await api.get(`/admin/quotes/${id}/pdf`, { responseType: 'blob' });

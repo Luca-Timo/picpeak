@@ -253,12 +253,22 @@ async function buildRenderContext(contract, inclusions) {
 
   for (const row of sortedInclusions) {
     if (!blocksBySection[row.section]) continue;
-    const bodyEn = row.body_text_snapshot || row.body_text || '';
-    const bodyDe = row.body_text_de_snapshot || row.body_text_de || '';
+    // The inclusion row carries the JOINED block columns aliased with
+    // a `block_` prefix (see getContractById). Pre-send drafts have
+    // null snapshots, so fall through to the live block body.
+    const bodyEn = row.body_text_snapshot || row.block_body_text || '';
+    const bodyDe = row.body_text_de_snapshot || row.block_body_text_de || '';
     const sourceBody = locale === 'de' ? (bodyDe || bodyEn) : (bodyEn || bodyDe);
-    const rendered = renderTemplatedBody(sourceBody, placeholders);
+    // Substitute placeholders, then strip `**bold**` markdown markers
+    // so they don't leak into the PDF literally. The block's name
+    // already provides the bold sub-heading, so the leading
+    // `**Title**` line in seeded bodies is decorative; admins can
+    // still use ** in custom blocks — the markers are quietly
+    // removed at render time.
+    const rendered = renderTemplatedBody(sourceBody, placeholders)
+      .replace(/\*\*([^*]+)\*\*/g, '$1');
     blocksBySection[row.section].push({
-      name: row.name,
+      name: row.block_name,
       section: row.section,
       body: rendered,
     });
@@ -884,6 +894,188 @@ async function attachSignedPdfUpload(contractId, filePath, uploaderRole) {
   return { status: 'fully_signed', signedPdfPath: filePath };
 }
 
+/**
+ * Convert an accepted quote into a fresh draft contract, pre-populating
+ * the customer, language, title, valid-until window, and source_quote_id
+ * back-pointer. Idempotent — if the quote already has a linked contract
+ * (quote.converted_contract_id set), returns that contract's id without
+ * creating a duplicate.
+ *
+ * Does NOT flip quote.status — the quote stays 'accepted' while the
+ * contract is the active deliverable. The quote→event / quote→invoice
+ * paths are gated against the converted_contract_id back-pointer so an
+ * admin can't accidentally double-spend the quote.
+ */
+async function createFromQuote(quoteId, adminId) {
+  const quote = await db('quotes').where({ id: quoteId }).first();
+  if (!quote) throw new AppError('Quote not found', 404);
+  if (quote.status !== 'accepted') {
+    throw new AppError(`Cannot convert a quote with status '${quote.status}'`, 409, 'QUOTE_NOT_ACCEPTED');
+  }
+  if (quote.converted_contract_id) {
+    return { contractId: quote.converted_contract_id, alreadyConverted: true };
+  }
+  if (quote.converted_event_id) {
+    throw new AppError(
+      'This quote was already converted to an event. Create the contract from the event instead.',
+      409, 'ALREADY_CONVERTED_TO_EVENT',
+    );
+  }
+
+  const customer = await db('customer_accounts').where({ id: quote.customer_account_id }).first();
+  ensureCustomerActive(customer);
+
+  const profile = (await businessProfileService.getProfile()).profile;
+  const validDays = ensureInt(await getAppSetting('crm_contracts_default_valid_days')) || 30;
+  const issueDate = new Date().toISOString().slice(0, 10);
+  const validUntil = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000)
+    .toISOString().slice(0, 10);
+
+  const title = quote.event_name
+    ? `Contract — ${quote.event_name}`
+    : `Contract from quote ${quote.quote_number}`;
+
+  return await db.transaction(async (trx) => {
+    const contractNumber = await nextContractNumber();
+    const inserted = await trx('contracts').insert({
+      contract_number: contractNumber,
+      customer_account_id: quote.customer_account_id,
+      status: 'draft',
+      language: quote.language || customer.preferred_language || profile?.default_locale || 'de',
+      issue_date: issueDate,
+      valid_until: validUntil,
+      title,
+      intro_text: quote.intro_text || null,
+      outro_text: quote.outro_text || null,
+      source_quote_id: quote.id,
+      created_by_admin_id: adminId,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }).returning('id');
+    const contractId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
+
+    // Seed every active system block. Same logic as createContract —
+    // duplicated inline so this stays inside the transaction.
+    const systemBlocks = await trx('contract_blocks')
+      .where({ is_system: true, is_active: true })
+      .orderBy(['section', 'display_order']);
+    const sectionCounters = {};
+    for (const block of systemBlocks) {
+      sectionCounters[block.section] = (sectionCounters[block.section] || 0) + 1;
+      await trx('contract_block_inclusions').insert({
+        contract_id: contractId,
+        block_id: block.id,
+        section: block.section,
+        position: sectionCounters[block.section],
+        body_text_snapshot: null,
+        body_text_de_snapshot: null,
+        included: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+    }
+
+    // Back-pointer so the quote detail page can deep-link to its
+    // resulting contract and the convert-to-event/invoice paths know
+    // to refuse double conversion.
+    await trx('quotes').where({ id: quote.id }).update({
+      converted_contract_id: contractId,
+      updated_at: new Date(),
+    });
+
+    try {
+      await logActivity('contract_created_from_quote',
+        { contractId, contractNumber, quoteId: quote.id, quoteNumber: quote.quote_number },
+        null, `admin:${adminId}`);
+    } catch (_) { /* logging is best-effort */ }
+    logger.info('Contract created from quote', { adminId, contractId, contractNumber, quoteId: quote.id });
+    return { contractId, alreadyConverted: false };
+  });
+}
+
+/**
+ * Convert a fully-signed contract into an event + scheduled invoices.
+ * Delegates to quoteService.convertToEvent using the contract's
+ * source_quote_id so the line items + payment plan come from the
+ * original quote. The quote MUST still be in 'accepted' status (i.e.
+ * not previously converted) — createFromQuote keeps it that way.
+ *
+ * On success the contract's converted_event_id is set (back-pointer)
+ * and the source quote flips to 'converted'.
+ */
+async function convertToEvent(contractId, adminId) {
+  const contract = await db('contracts').where({ id: contractId }).first();
+  if (!contract) throw new AppError('Contract not found', 404);
+  if (contract.status !== 'fully_signed') {
+    throw new AppError(
+      `Cannot convert a contract with status '${contract.status}'. The contract must be fully signed by both parties first.`,
+      409, 'CONTRACT_NOT_FULLY_SIGNED',
+    );
+  }
+  if (contract.converted_event_id) {
+    return { eventId: contract.converted_event_id, alreadyConverted: true };
+  }
+  if (!contract.source_quote_id) {
+    throw new AppError(
+      'This contract has no source quote and therefore no line items / payment plan to drive event creation. Create the event manually from the bills page.',
+      409, 'NO_SOURCE_QUOTE',
+    );
+  }
+
+  // Lazy require to break the contractService ↔ quoteService cycle.
+  const quoteService = require('./quoteService');
+  const result = await quoteService.convertToEvent(contract.source_quote_id, adminId, { fromContract: true });
+
+  await db('contracts').where({ id: contractId }).update({
+    converted_event_id: result.eventId,
+    updated_at: new Date(),
+  });
+  try {
+    await logActivity('contract_converted_to_event',
+      { contractId, eventId: result.eventId, quoteId: contract.source_quote_id },
+      result.eventId, `admin:${adminId}`);
+  } catch (_) { /* logging is best-effort */ }
+  return result;
+}
+
+/**
+ * Convert a fully-signed contract directly into invoice(s) without
+ * creating an event row. Same delegation pattern as convertToEvent.
+ */
+async function convertToInvoiceOnly(contractId, adminId) {
+  const contract = await db('contracts').where({ id: contractId }).first();
+  if (!contract) throw new AppError('Contract not found', 404);
+  if (contract.status !== 'fully_signed') {
+    throw new AppError(
+      `Cannot convert a contract with status '${contract.status}'. The contract must be fully signed by both parties first.`,
+      409, 'CONTRACT_NOT_FULLY_SIGNED',
+    );
+  }
+  if (!contract.source_quote_id) {
+    throw new AppError(
+      'This contract has no source quote and therefore no line items / payment plan to drive invoice creation. Issue the invoice manually from the bills page.',
+      409, 'NO_SOURCE_QUOTE',
+    );
+  }
+
+  const quoteService = require('./quoteService');
+  const result = await quoteService.convertToInvoiceOnly(contract.source_quote_id, adminId, { fromContract: true });
+
+  // Tag the resulting invoices with the source contract id so the
+  // contract detail page can list them as "resulting invoices".
+  await db('invoices')
+    .where({ source_quote_id: contract.source_quote_id })
+    .whereNull('source_contract_id')
+    .update({ source_contract_id: contractId });
+
+  try {
+    await logActivity('contract_converted_to_invoices',
+      { contractId, quoteId: contract.source_quote_id, installments: result.installmentsCreated },
+      null, `admin:${adminId}`);
+  } catch (_) { /* logging is best-effort */ }
+  return result;
+}
+
 async function cancelContract(id, adminId) {
   const contract = await db('contracts').where({ id }).first();
   if (!contract) throw new AppError('Contract not found', 404);
@@ -915,6 +1107,9 @@ module.exports = {
   recordAdminCountersignature,
   attachSignedPdfUpload,
   cancelContract,
+  createFromQuote,
+  convertToEvent,
+  convertToInvoiceOnly,
   // Exported for tests + the public-route preview endpoint.
   _internal: {
     nextContractNumber,

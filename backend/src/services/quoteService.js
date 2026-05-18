@@ -1259,7 +1259,7 @@ async function adminAcceptQuote(id, adminId) {
  * Leaves the quote `accepted` → `converted` state machine intact so
  * the same status badge logic works for both paths.
  */
-async function convertToInvoiceOnly(quoteId, adminId) {
+async function convertToInvoiceOnly(quoteId, adminId, options = {}) {
   const { quote, lineItems } = (await getQuoteById(quoteId)) || {};
   if (!quote) throw new AppError('Quote not found', 404);
   if (quote.status !== 'accepted') {
@@ -1269,6 +1269,16 @@ async function convertToInvoiceOnly(quoteId, adminId) {
     // Already has a linked event — nothing to do here; tell the
     // caller to use the event-detail page for new invoices.
     throw new AppError('This quote was already converted to an event; create the invoice from the event instead.', 409, 'ALREADY_CONVERTED_TO_EVENT');
+  }
+  // Guard against double-spending a quote that already has a contract
+  // in flight. contractService.convertToInvoiceOnly re-enters this
+  // path on the contract→invoice button — it passes
+  // { fromContract: true } so the guard yields.
+  if (quote.converted_contract_id && !options.fromContract) {
+    throw new AppError(
+      'This quote already has a pending contract. Convert the contract to invoices instead, or cancel the contract first.',
+      409, 'CONTRACT_IN_FLIGHT',
+    );
   }
 
   const customer = await db('customer_accounts').where({ id: quote.customer_account_id }).first();
@@ -1350,7 +1360,7 @@ async function convertToInvoiceOnly(quoteId, adminId) {
   });
 }
 
-async function convertToEvent(quoteId, adminId) {
+async function convertToEvent(quoteId, adminId, options = {}) {
   const { quote, lineItems } = (await getQuoteById(quoteId)) || {};
   if (!quote) throw new AppError('Quote not found', 404);
   if (quote.status !== 'accepted') {
@@ -1358,6 +1368,14 @@ async function convertToEvent(quoteId, adminId) {
   }
   if (quote.converted_event_id) {
     return { eventId: quote.converted_event_id, alreadyConverted: true };
+  }
+  // Same guard as convertToInvoiceOnly — refuse if a contract is in
+  // flight unless the contract→event button re-entered this path.
+  if (quote.converted_contract_id && !options.fromContract) {
+    throw new AppError(
+      'This quote already has a pending contract. Convert the contract to an event instead, or cancel the contract first.',
+      409, 'CONTRACT_IN_FLIGHT',
+    );
   }
 
   const customer = await db('customer_accounts').where({ id: quote.customer_account_id }).first();

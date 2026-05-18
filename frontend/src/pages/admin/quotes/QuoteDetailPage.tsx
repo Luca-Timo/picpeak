@@ -7,7 +7,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Eye, Send, Copy, ArrowRightCircle, Edit2, Receipt, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Eye, Send, Copy, ArrowRightCircle, Edit2, Receipt, CheckCircle2, ScrollText } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
 import { quotesService } from '../../../services/quotes.service';
 import { billsService } from '../../../services/bills.service';
@@ -91,6 +91,20 @@ export const QuoteDetailPage: React.FC = () => {
     }
   };
 
+  const handleConvertToContract = async () => {
+    if (!window.confirm(t('quotes.confirmConvertToContract',
+      'Draft a contract from this quote? The customer + admin will both sign before event / invoice creation.'))) return;
+    try {
+      const result = await quotesService.convertToContract(q.id);
+      toast.success(result.alreadyConverted
+        ? (t('quotes.contractAlreadyLinkedToast', 'A contract was already drafted from this quote.') as string)
+        : (t('quotes.convertedToContractToast', 'Contract drafted from this quote.') as string));
+      navigate(`/admin/clients/contracts/${result.contractId}`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Convert failed');
+    }
+  };
+
   /**
    * Admin accept-on-behalf. Used when the customer verbally agrees
    * on the phone — admin flips the quote to accepted immediately so
@@ -163,6 +177,14 @@ export const QuoteDetailPage: React.FC = () => {
                   once converted to either an event or to invoices. */}
               <Button variant="outline" onClick={handleConvertToInvoice}>
                 <Receipt className="w-4 h-4 mr-1" />{t('quotes.convertToInvoice', 'Convert to invoice only')}
+              </Button>
+              {/* Convert to contract — drafts a contract from this
+                  quote, leaves the quote 'accepted' so the contract is
+                  the active deliverable. After both parties sign, the
+                  contract detail page exposes its own convert-to-event
+                  / convert-to-invoice buttons. */}
+              <Button variant="outline" onClick={handleConvertToContract}>
+                <ScrollText className="w-4 h-4 mr-1" />{t('quotes.convertToContract', 'Convert to contract')}
               </Button>
             </>
           )}

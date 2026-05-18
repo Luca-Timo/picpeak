@@ -18,6 +18,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import {
   ArrowLeft, Edit2, Send, X, FileDown, Upload, CheckSquare, ScrollText,
+  ArrowRightCircle, Receipt,
 } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
 import {
@@ -89,6 +90,28 @@ export const ContractDetailPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['contract', numericId] });
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || t('contracts.detail.uploadError', 'Upload failed') as string),
+  });
+
+  const convertToEventMutation = useMutation({
+    mutationFn: () => contractsService.convertToEvent(numericId as number),
+    onSuccess: (result) => {
+      toast.success(result.alreadyConverted
+        ? (t('contracts.detail.alreadyEventToast', 'Already linked to an event.') as string)
+        : (t('contracts.detail.convertedToEventToast', 'Contract converted to event #{{id}}', { id: result.eventId }) as string));
+      queryClient.invalidateQueries({ queryKey: ['contract', numericId] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error || t('contracts.detail.convertError', 'Convert failed') as string),
+  });
+
+  const convertToInvoiceMutation = useMutation({
+    mutationFn: () => contractsService.convertToInvoice(numericId as number),
+    onSuccess: (result) => {
+      toast.success(t('contracts.detail.convertedToInvoiceToast',
+        '{{count}} invoice(s) created from this contract', { count: result.installmentsCreated }) as string);
+      queryClient.invalidateQueries({ queryKey: ['contract', numericId] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error || t('contracts.detail.convertError', 'Convert failed') as string),
   });
 
   if (isLoading) return <Loading />;
@@ -201,6 +224,40 @@ export const ContractDetailPage: React.FC = () => {
             >
               <Upload className="w-4 h-4 mr-1" />
               {t('contracts.detail.uploadSigned', 'Upload signed PDF')}
+            </Button>
+          </>
+        )}
+
+        {/* Forward conversions — only available once both parties have
+            signed AND the contract has a source quote (no line items
+            otherwise). Mirrors the buttons that live on QuoteDetailPage
+            for accepted quotes. */}
+        {c.status === 'fully_signed' && (
+          <>
+            <Button
+              onClick={() => {
+                if (window.confirm(t('contracts.detail.confirmConvertEvent',
+                  'Convert this contract into an event + scheduled invoices?') as string)) {
+                  convertToEventMutation.mutate();
+                }
+              }}
+              disabled={convertToEventMutation.isPending}
+            >
+              <ArrowRightCircle className="w-4 h-4 mr-1" />
+              {t('contracts.detail.convertToEvent', 'Convert to event')}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (window.confirm(t('contracts.detail.confirmConvertInvoice',
+                  'Convert this contract into invoice(s) only? No gallery / event will be created.') as string)) {
+                  convertToInvoiceMutation.mutate();
+                }
+              }}
+              disabled={convertToInvoiceMutation.isPending}
+            >
+              <Receipt className="w-4 h-4 mr-1" />
+              {t('contracts.detail.convertToInvoice', 'Convert to invoice only')}
             </Button>
           </>
         )}

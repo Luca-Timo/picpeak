@@ -450,6 +450,27 @@ router.post(
   })
 );
 
+// Convert to a draft contract — the new middle step between accepted
+// quote and event/invoice generation. The contracts feature flag is
+// checked in contractService (it pulls the same db('feature_flags')
+// row that the adminContracts router gates on); declining at the route
+// layer here would force admins to flip TWO flags to use the workflow.
+router.post(
+  '/:id/convert-to-contract',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    // Lazy require to keep the route file dep-light + avoid the
+    // quoteService ↔ contractService cycle bleeding through.
+    const contractService = require('../services/contractService');
+    const id = parseInt(req.params.id, 10);
+    const result = await contractService.createFromQuote(id, req.admin.id);
+    return successResponse(res, result, 200,
+      result.alreadyConverted ? 'Already linked to a contract' : 'Contract drafted from quote');
+  })
+);
+
 // ---------------------------------------------------------------------
 // PDF — preview (unsaved payload) + download (persisted)
 // ---------------------------------------------------------------------
