@@ -28,6 +28,7 @@ import {
 } from '../../services/customerAdmin.service';
 import { businessProfileService } from '../../services/businessProfile.service';
 import { CustomerCrmPanels } from '../../components/admin/CustomerCrmPanels';
+import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 
 type EditableFields =
   | 'email' | 'salutation' | 'firstName' | 'lastName' | 'displayName'
@@ -35,7 +36,7 @@ type EditableFields =
   | 'addressLine1' | 'addressLine2' | 'postalCode' | 'city' | 'state'
   | 'countryCode' | 'countryName' | 'preferredLanguage' | 'notes'
   | 'featureCalendar' | 'featureQuotes' | 'featureBills' | 'featureHoursLogging'
-  | 'hourlyRateMinor';
+  | 'hourlyRateMinor' | 'billingCadence' | 'billingCycleDay';
 
 const formatDate = (iso: string | null | undefined) => {
   if (!iso) return '—';
@@ -48,6 +49,10 @@ export const CustomerDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const customerId = Number(id);
+  // Master "Hours logging" flag (Settings → Features). When off, the
+  // per-customer toggle in the features card is hidden and the
+  // HoursSection card never renders, regardless of customer state.
+  const { flags } = useFeatureFlags();
 
   const { data: customer, isLoading, error } = useQuery({
     queryKey: ['admin-customer', customerId],
@@ -107,6 +112,8 @@ export const CustomerDetailPage: React.FC = () => {
         featureBills:    customer.featureBills    ?? false,
         featureHoursLogging: customer.featureHoursLogging ?? false,
         hourlyRateMinor: customer.hourlyRateMinor ?? null,
+        billingCadence: customer.billingCadence ?? 'per_event',
+        billingCycleDay: customer.billingCycleDay ?? 1,
       } as any);
     }
   }, [customer, form]);
@@ -126,9 +133,19 @@ export const CustomerDetailPage: React.FC = () => {
       toast.success(t('customers.detail.saved', 'Customer saved'));
     },
     onError: (e: any) => {
-      const msg = e?.response?.status === 409
-        ? t('customers.detail.emailConflict', 'That email is already in use by another customer.')
-        : e?.response?.data?.error || t('customers.detail.saveError', 'Could not save changes.');
+      // Surface field-level validation errors so admin can see WHICH
+      // field failed instead of a generic "Validation failed" toast.
+      // The backend returns details: [{ field, message }] via the
+      // ValidationError class in routeHelpers.js.
+      const details = e?.response?.data?.details;
+      let msg: string;
+      if (e?.response?.status === 409) {
+        msg = t('customers.detail.emailConflict', 'That email is already in use by another customer.');
+      } else if (Array.isArray(details) && details.length > 0) {
+        msg = `${e.response.data.error || 'Validation failed'}: ${details.map((d: any) => `${d.field} (${d.message})`).join(', ')}`;
+      } else {
+        msg = e?.response?.data?.error || t('customers.detail.saveError', 'Could not save changes.');
+      }
       toast.error(msg);
     },
   });
@@ -521,7 +538,12 @@ export const CustomerDetailPage: React.FC = () => {
             { key: 'featureCalendar', labelKey: 'customer.nav.calendar', fallback: 'Calendar' },
             { key: 'featureQuotes',   labelKey: 'customer.nav.quotes',   fallback: 'Quotes' },
             { key: 'featureBills',    labelKey: 'customer.nav.bills',    fallback: 'Bills' },
-            { key: 'featureHoursLogging', labelKey: 'customers.field.featureHoursLogging', fallback: 'Hours logging' },
+            // Hide the per-customer hours toggle when the master flag
+            // is off — admin gets a clear "feature is disabled
+            // globally" signal by the toggle simply not appearing.
+            ...(flags.hoursLogging
+              ? [{ key: 'featureHoursLogging' as const, labelKey: 'customers.field.featureHoursLogging', fallback: 'Hours logging' }]
+              : []),
           ] as const).map(({ key, labelKey, fallback }) => {
             const enabled = !!form[key];
             return (
@@ -555,15 +577,67 @@ export const CustomerDetailPage: React.FC = () => {
         </div>
       </Card>
 
+      {/* Billing cadence (migration 102 + 128). Per-event keeps the
+          standard invoice-per-event flow; monthly accumulates all
+          invoices issued in a period into one consolidated bill that
+          fires on the configured cadence day. Cycle day uses
+          positive 1–28 for day-of-month, negative -1..-15 for days
+          before month end. */}
+      <Card padding="lg">
+        <h2 className="text-lg font-semibold text-theme mb-1 flex items-center gap-2">
+          <Calendar className="w-5 h-5" />
+          {t('customers.billing.section', 'Billing cadence')}
+        </h2>
+        <p className="text-xs text-muted-theme mb-4">
+          {t('customers.billing.hint',
+            'Per-event (default): every invoice is sent on its own schedule. Monthly: all invoices issued in the period accumulate into one bill that fires on the configured day.')}
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-theme mb-1">
+              {t('customers.billing.cadence', 'Billing cadence')}
+            </label>
+            <select
+              value={form.billingCadence || 'per_event'}
+              onChange={(e) => setForm((prev) => ({ ...prev, billingCadence: e.target.value } as any))}
+              className="input w-full"
+            >
+              <option value="per_event">{t('customers.billing.perEvent', 'Per event')}</option>
+              <option value="monthly">{t('customers.billing.monthly', 'Monthly')}</option>
+              <option value="quarterly">{t('customers.billing.quarterly', 'Quarterly')}</option>
+            </select>
+          </div>
+          {form.billingCadence && form.billingCadence !== 'per_event' && (
+            <div>
+              <label className="block text-sm font-medium text-theme mb-1">
+                {t('customers.billing.cycleDay', 'Cycle day')}
+              </label>
+              <input
+                type="number"
+                min={-15}
+                max={28}
+                value={form.billingCycleDay ?? 1}
+                onChange={(e) => setForm((prev) => ({ ...prev, billingCycleDay: Number(e.target.value) } as any))}
+                className="input w-full"
+              />
+              <p className="text-xs text-muted-theme mt-1">
+                {t('customers.billing.cycleDayHint',
+                  '1..28 = day of month. Use negative -1..-15 for "N days before month end" (so -3 fires on the 28th of a 31-day month).')}
+              </p>
+            </div>
+          )}
+        </div>
+      </Card>
+
       {/* Hours section (migration 129). Only renders when the
           feature_hours_logging toggle above is on. Lives between
           features and account-actions so admins see it right after
           flipping the toggle. */}
-      {form.featureHoursLogging && (
+      {flags.hoursLogging && form.featureHoursLogging && (
         <HoursSection
           customerId={customerId}
           customerHourlyRateMinor={form.hourlyRateMinor ?? null}
-          billingCadence={customer.billingCadence || 'per_event'}
+          billingCadence={(form.billingCadence as any) || customer.billingCadence || 'per_event'}
           onHourlyRateChange={(v) => setForm((prev) => ({ ...prev, hourlyRateMinor: v } as any))}
         />
       )}
