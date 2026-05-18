@@ -50,6 +50,12 @@ const KNOWN_FLAGS = [
   // ready to enable it yet) can leave it off. Forced off when `bills`
   // is off (no invoices → nothing to report).
   'taxReport',
+  // Hours logging (migration 129). Master switch for the per-customer
+  // Hours card + the auto-append into monthly draft / "Bill these
+  // hours" flow. Independent of `bills` because hours are an INPUT to
+  // bills — admin who's still in the dogfood phase may want to log
+  // hours without enabling the full billing surface yet.
+  'hoursLogging',
 ];
 
 // Spec defaults for any flag missing from the DB (e.g. a row added by a
@@ -66,6 +72,7 @@ const DEFAULT_FLAGS = {
   userManagement: true,
   clients: false,
   taxReport: false,
+  hoursLogging: false,
 };
 
 async function readAllFlags() {
@@ -103,6 +110,7 @@ function applyDependencyRules(flags) {
     || out.quotes
     || out.bills
     || out.taxReport
+    || out.hoursLogging
     // future siblings (out.calendar || out.messaging) go here
   );
   return out;

@@ -248,6 +248,20 @@ export const FeaturesTab: React.FC = () => {
               'Enable Bills first — the tax report reads from your invoices.',
             ) : undefined}
           />
+
+          <FeatureCard
+            icon={Briefcase}
+            title={t('settings.features.hoursLogging.title', 'Hours logging')}
+            description={t(
+              'settings.features.hoursLogging.description',
+              'Per-customer time tracking. Admin logs date + start/end times + optional rate override + note. Monthly-mode customers auto-accumulate hours into the running monthly draft; per-event customers see a "Bill these hours" button that mints a standalone invoice with one line per entry. Independent of Bills — log hours even before turning the full billing surface on.',
+            )}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarLabel={t('settings.features.hoursLogging.sidebar', 'Hours')}
+            enabled={staged.hoursLogging}
+            onToggle={(next) => setFlag('hoursLogging', next)}
+          />
         </Section>
 
         {/* Insights & Access */}
