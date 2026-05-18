@@ -11,14 +11,15 @@
  * The actual editor lives at /:id/edit and refuses to load when the
  * contract is no longer in draft status.
  */
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
+import SignaturePad from 'signature_pad';
 import {
   ArrowLeft, Edit2, Send, X, FileDown, Upload, CheckSquare, ScrollText,
-  ArrowRightCircle, Receipt,
+  ArrowRightCircle, Receipt, RotateCcw,
 } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
 import {
@@ -46,6 +47,8 @@ export const ContractDetailPage: React.FC = () => {
   const formatDateTime = (v: string | null | undefined) => v ? format(v, 'PPpp') : '—';
   const numericId = id ? parseInt(id, 10) : null;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const countersignCanvasRef = useRef<HTMLCanvasElement>(null);
+  const countersignPadRef = useRef<SignaturePad | null>(null);
 
   const [countersignName, setCountersignName] = useState('');
 
@@ -74,10 +77,20 @@ export const ContractDetailPage: React.FC = () => {
   });
 
   const countersignMutation = useMutation({
-    mutationFn: () => contractsService.countersign(numericId as number, { name: countersignName }),
+    mutationFn: () => {
+      // Capture the canvas signature (if drawn) at submit time so we
+      // send a fresh data URL, not a stale one from an earlier mount.
+      const pad = countersignPadRef.current;
+      const signatureDataUrl = pad && !pad.isEmpty() ? pad.toDataURL('image/png') : null;
+      return contractsService.countersign(numericId as number, {
+        name: countersignName,
+        signatureDataUrl,
+      });
+    },
     onSuccess: () => {
       toast.success(t('contracts.detail.countersignedToast', 'Counter-signed.') as string);
       setCountersignName('');
+      countersignPadRef.current?.clear();
       queryClient.invalidateQueries({ queryKey: ['contract', numericId] });
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || t('contracts.detail.countersignError', 'Counter-sign failed') as string),
@@ -351,32 +364,18 @@ export const ContractDetailPage: React.FC = () => {
         </Card>
       )}
 
-      {/* Counter-sign form */}
+      {/* Counter-sign form. Mirrors the public sign page: typed name +
+          drawn signature (signature_pad) so the rendered PDF carries
+          both signatures, not just typed labels. */}
       {c.status === 'signed_by_customer' && !c.signedByAdminAt && (
-        <Card padding="lg" className="mb-4">
-          <h2 className="font-semibold mb-2">
-            {t('contracts.detail.countersignTitle', 'Counter-sign to make it binding')}
-          </h2>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
-            {t('contracts.detail.countersignHelp', 'Type your name as the issuer. We record IP and timestamp for audit. The PDF is re-rendered with both signature blocks filled in.')}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <input
-              type="text"
-              value={countersignName}
-              onChange={(e) => setCountersignName(e.target.value)}
-              placeholder={t('contracts.detail.signedNamePlaceholder', 'Your full name') as string}
-              className="flex-1 px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
-            />
-            <Button
-              onClick={() => countersignMutation.mutate()}
-              disabled={!countersignName.trim() || countersignMutation.isPending}
-            >
-              <CheckSquare className="w-4 h-4 mr-1" />
-              {t('contracts.detail.confirmCountersign', 'Counter-sign')}
-            </Button>
-          </div>
-        </Card>
+        <CountersignCard
+          name={countersignName}
+          setName={setCountersignName}
+          canvasRef={countersignCanvasRef}
+          padRef={countersignPadRef}
+          onSubmit={() => countersignMutation.mutate()}
+          pending={countersignMutation.isPending}
+        />
       )}
 
       {/* Block summary */}
@@ -400,5 +399,102 @@ export const ContractDetailPage: React.FC = () => {
         )}
       </Card>
     </div>
+  );
+};
+
+/**
+ * Sub-component for the counter-sign card so its useEffect (which
+ * needs the canvas to be in the DOM) only runs when the card is
+ * actually mounted. Keeps the parent component readable.
+ */
+interface CountersignProps {
+  name: string;
+  setName: (v: string) => void;
+  canvasRef: React.RefObject<HTMLCanvasElement>;
+  padRef: React.MutableRefObject<SignaturePad | null>;
+  onSubmit: () => void;
+  pending: boolean;
+}
+
+const CountersignCard: React.FC<CountersignProps> = ({
+  name, setName, canvasRef, padRef, onSubmit, pending,
+}) => {
+  const { t } = useTranslation();
+
+  // Initialise signature_pad once the canvas mounts. Same HiDPI
+  // resize-on-mount trick the public sign page uses so strokes are
+  // sharp on retina displays.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const resize = () => {
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * ratio;
+      canvas.height = rect.height * ratio;
+      const ctx = canvas.getContext('2d');
+      ctx?.scale(ratio, ratio);
+      padRef.current?.clear();
+    };
+    padRef.current = new SignaturePad(canvas, {
+      penColor: '#111',
+      backgroundColor: 'rgba(255, 255, 255, 0)',
+    });
+    resize();
+    window.addEventListener('resize', resize);
+    return () => {
+      window.removeEventListener('resize', resize);
+      padRef.current?.off();
+      padRef.current = null;
+    };
+  }, [canvasRef, padRef]);
+
+  return (
+    <Card padding="lg" className="mb-4">
+      <h2 className="font-semibold mb-2">
+        {t('contracts.detail.countersignTitle', 'Counter-sign to make it binding')}
+      </h2>
+      <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
+        {t('contracts.detail.countersignHelp',
+          'Type your name AND draw your signature below — both are stamped onto the re-rendered PDF. IP and timestamp are recorded for audit.')}
+      </p>
+      <div className="space-y-3">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={t('contracts.detail.signedNamePlaceholder', 'Your full name') as string}
+          className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+        />
+        <div>
+          <label className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">
+            {t('contracts.detail.countersignSignaturePrompt', 'Draw your signature')}
+          </label>
+          <canvas
+            ref={canvasRef}
+            className="w-full h-32 bg-white rounded border border-neutral-300 dark:border-neutral-600 touch-none"
+          />
+          <div className="mt-1 flex justify-end">
+            <button
+              type="button"
+              onClick={() => padRef.current?.clear()}
+              className="text-xs text-neutral-600 dark:text-neutral-400 hover:underline inline-flex items-center gap-1"
+            >
+              <RotateCcw className="w-3 h-3" />
+              {t('contracts.detail.clearSignature', 'Clear')}
+            </button>
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <Button
+            onClick={onSubmit}
+            disabled={!name.trim() || pending}
+          >
+            <CheckSquare className="w-4 h-4 mr-1" />
+            {t('contracts.detail.confirmCountersign', 'Counter-sign')}
+          </Button>
+        </div>
+      </div>
+    </Card>
   );
 };

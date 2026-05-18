@@ -137,6 +137,14 @@ export const ContractResponsePage: React.FC = () => {
       setError(t('publicContract.errorName', 'Please enter your name.') as string);
       return;
     }
+    // Client-side enforcement of the admin's "require drawn signature"
+    // toggle. The server re-checks; this just gives a clearer error
+    // before the round-trip.
+    if (data?.contract.requireDrawnSignature && (!padRef.current || padRef.current.isEmpty())) {
+      setError(t('publicContract.errorSignatureRequired',
+        'A drawn signature is required for this contract.') as string);
+      return;
+    }
     setError(null);
     signMutation.mutate();
   }
@@ -273,7 +281,9 @@ export const ContractResponsePage: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    {t('publicContract.signaturePrompt', 'Draw your signature (optional)')}
+                    {c.requireDrawnSignature
+                      ? t('publicContract.signaturePromptRequired', 'Draw your signature')
+                      : t('publicContract.signaturePrompt', 'Draw your signature (optional)')}
                   </label>
                   <canvas
                     ref={canvasRef}
@@ -319,7 +329,10 @@ export const ContractResponsePage: React.FC = () => {
                 </div>
               </form>
 
-              {/* Alternative: upload wet-signed PDF */}
+              {/* Alternative: upload wet-signed PDF. Hidden when the
+                  admin has turned off the upload path in Settings →
+                  CRM behaviour → Contracts. */}
+              {c.allowPdfUpload !== false && (
               <div className="mt-6 pt-4 border-t border-neutral-200 dark:border-neutral-700">
                 <h3 className="text-sm font-semibold mb-2">
                   {t('publicContract.uploadAlternative', 'Or upload a wet-signed PDF')}
@@ -348,6 +361,7 @@ export const ContractResponsePage: React.FC = () => {
                   </button>
                 </div>
               </div>
+              )}
             </>
           )}
         </div>
