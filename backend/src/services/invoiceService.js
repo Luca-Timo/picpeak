@@ -1166,6 +1166,31 @@ async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, not
       { invoiceId: id, amountMinor: amount, totalPaidMinor: total },
       invoice.event_id || null, `admin:${adminId}`); } catch (_) {}
 
+    // Migration 127 — admin payment-received notification. Fires only
+    // on the transition into 'paid' so admins don't get duplicate
+    // emails when additional payment-log rows are recorded after the
+    // invoice already cleared (rare but possible — e.g. late-fee
+    // top-up). Queued after the transaction so a failed email never
+    // rolls back a recorded payment. Carried Skonto context lets the
+    // template show the discount line conditionally.
+    if (isFull && invoice.status !== 'paid') {
+      try {
+        await queueInvoicePaidAdminNotification({
+          invoice,
+          paidTotalMinor: total,
+          paymentMethod: paymentMethod || invoice.payment_method || null,
+          paymentReference: reference || invoice.payment_reference || null,
+          paidAt: paidAt ? new Date(paidAt) : new Date(),
+          skontoApplied: skontoFlag,
+          skontoAmountMinor: skontoAmountMinor || 0,
+        });
+      } catch (err) {
+        // Notification is best-effort — don't surface a 500 to the
+        // admin when the recorded payment itself succeeded.
+        logger.warn('invoice_paid admin notification failed to queue', { invoiceId: id, err: err.message });
+      }
+    }
+
     return { paidTotalMinor: total, status: isFull ? 'paid' : invoice.status };
   });
 }
@@ -1756,6 +1781,63 @@ async function resolveAdminEmailForInvoice(invoice) {
  * Returns { token, sent: bool, reason? } so callers can log /
  * surface the outcome.
  */
+/**
+ * Queue the admin "payment received" notification (migration 127).
+ * Called from markPaid the first time an invoice transitions into
+ * `status='paid'`. Resolves the admin's address via the same chain
+ * the payment-check email uses (created_by_admin_id → business
+ * profile fallback). Silently no-ops when no admin email can be
+ * resolved — caller logs the warn line.
+ */
+async function queueInvoicePaidAdminNotification({
+  invoice, paidTotalMinor, paymentMethod, paymentReference,
+  paidAt, skontoApplied, skontoAmountMinor,
+}) {
+  const adminContact = await resolveAdminEmailForInvoice(invoice);
+  if (!adminContact?.email) {
+    logger.warn('invoice_paid notification skipped — no admin email resolved',
+      { invoiceId: invoice.id });
+    return;
+  }
+
+  const profile = await db('business_profile').where({ id: 1 }).first();
+  const locale = invoice.language || profile?.default_locale || 'de';
+
+  const customer = await db('customer_accounts').where({ id: invoice.customer_account_id }).first();
+  // Resolve the Skonto percentage at notification time so the
+  // template can render "Paid with Skonto X%" without a second query.
+  // Same resolver the rest of the Skonto surfaces use — null when
+  // skonto_disabled is true or no Skonto is configured.
+  const skontoPercent = skontoApplied
+    ? await resolveSkontoPercentForInvoice(invoice)
+    : null;
+
+  await emailProcessor.queueEmail(invoice.event_id || null, adminContact.email,
+    'invoice_paid_admin_notification', {
+      invoice_number: invoice.invoice_number,
+      customer_name: customer?.company_name
+        || customer?.display_name
+        || [customer?.first_name, customer?.last_name].filter(Boolean).join(' ')
+        || customer?.email || '',
+      event_name: invoice.event_name || '',
+      total_amount: formatMajor(invoice.total_amount_minor, invoice.currency, locale),
+      paid_amount: formatMajor(paidTotalMinor, invoice.currency, locale),
+      payment_method: paymentMethod || '',
+      payment_reference: paymentReference || '',
+      paid_at: formatShortDate(paidAt),
+      skonto_applied: !!skontoApplied,
+      skonto_percent: skontoApplied && skontoPercent ? skontoPercent : '',
+      skonto_discount_amount: skontoApplied
+        ? formatMajor(skontoAmountMinor, invoice.currency, locale)
+        : '',
+    });
+
+  try {
+    await logActivity('invoice_paid_admin_notified', { invoiceId: invoice.id },
+      invoice.event_id || null, 'system');
+  } catch (_) {}
+}
+
 async function queuePaymentCheckEmail(invoiceId, { skipThrottle = false } = {}) {
   const invoice = await db('invoices').where({ id: invoiceId }).first();
   if (!invoice) return { sent: false, reason: 'not_found' };
