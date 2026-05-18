@@ -2713,4 +2713,8 @@ module.exports = {
   appendToMonthlyDraft,
   appendOneLineItemToMonthlyDraft,
   triggerMonthlyBillNow,
+  // Exposed so contractService can mint an invoice number for the
+  // empty-draft path (convert-to-invoice on a contract with no
+  // source quote). Stays gap-free per crm_invoices_number_format.
+  nextInvoiceNumber,
 };

@@ -75,11 +75,15 @@ function publicContractView(contract, inclusions, customer, profile, locale) {
     if (!(inc.included === true || inc.included === 1 || inc.included === '1')) continue;
     const bodyEn = inc.body_text_snapshot || inc.block_body_text || '';
     const bodyDe = inc.body_text_de_snapshot || inc.block_body_text_de || '';
-    // Strip `**bold**` markers — the React sign page renders body as
-    // plain `whitespace-pre-line` text and has no inline-bold UI.
-    // The PDF render path keeps the markers and renders them as
-    // proper bold runs via pdfService.renderBodyMarkdown.
+    // 1) Strip the leading `**Title**\n` line — the block.name is
+    //    already rendered above as a bold sub-heading, so a bold
+    //    first line in the body would duplicate it.
+    // 2) Strip remaining `**bold**` inline markers — the React sign
+    //    page renders body as plain `whitespace-pre-line` text and
+    //    has no inline-bold UI. The PDF path keeps them as bold
+    //    runs via pdfService.renderBodyMarkdown.
     const body = (locale === 'de' ? (bodyDe || bodyEn) : (bodyEn || bodyDe))
+      .replace(/^\s*\*\*[^*\n]+\*\*\s*\n+/, '')
       .replace(/\*\*([^*]+)\*\*/g, '$1');
     if (!blocksBySection[inc.section]) continue;
     blocksBySection[inc.section].push({

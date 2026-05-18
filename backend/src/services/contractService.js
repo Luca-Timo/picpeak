@@ -259,11 +259,15 @@ async function buildRenderContext(contract, inclusions) {
     const bodyEn = row.body_text_snapshot || row.block_body_text || '';
     const bodyDe = row.body_text_de_snapshot || row.block_body_text_de || '';
     const sourceBody = locale === 'de' ? (bodyDe || bodyEn) : (bodyEn || bodyDe);
-    // Substitute placeholders only. The `**bold**` markdown markers
-    // are kept here; pdfService.renderContractToBuffer splits on them
-    // and switches the font to render proper bold runs. The public
-    // page (no bold-rendering UI yet) strips them in publicContracts.
-    const rendered = renderTemplatedBody(sourceBody, placeholders);
+    // Substitute placeholders, then strip any leading `**Title**\n`
+    // line — the block's `name` field is already rendered as a bold
+    // sub-heading by the PDF/public layouts, so a bold first line in
+    // the body produces a duplicated title. Inline `**bold**` markers
+    // elsewhere in the body are preserved (the PDF renders them as
+    // actual bold via renderBodyMarkdown; the public route strips
+    // them since the React page has no inline-bold UI).
+    const rendered = renderTemplatedBody(sourceBody, placeholders)
+      .replace(/^\s*\*\*[^*\n]+\*\*\s*\n+/, '');
     blocksBySection[row.section].push({
       name: row.block_name,
       section: row.section,
@@ -955,9 +959,16 @@ async function createFromQuote(quoteId, adminId) {
     ? `Contract — ${quote.event_name}`
     : `Contract from quote ${quote.quote_number}`;
 
+  // Schema-drift safety: the lineage columns landed in migration 130
+  // as in-place edits. Dev installs that ran 130 BEFORE that edit
+  // won't have these columns yet. hasColumn() lets us skip the
+  // affected writes instead of crashing with a generic 500.
+  const hasContractSourceQuote = await db.schema.hasColumn('contracts', 'source_quote_id');
+  const hasQuoteContractBackPointer = await db.schema.hasColumn('quotes', 'converted_contract_id');
+
   return await db.transaction(async (trx) => {
     const contractNumber = await nextContractNumber();
-    const inserted = await trx('contracts').insert({
+    const contractRow = {
       contract_number: contractNumber,
       customer_account_id: quote.customer_account_id,
       status: 'draft',
@@ -967,11 +978,12 @@ async function createFromQuote(quoteId, adminId) {
       title,
       intro_text: quote.intro_text || null,
       outro_text: quote.outro_text || null,
-      source_quote_id: quote.id,
       created_by_admin_id: adminId,
       created_at: new Date(),
       updated_at: new Date(),
-    }).returning('id');
+    };
+    if (hasContractSourceQuote) contractRow.source_quote_id = quote.id;
+    const inserted = await trx('contracts').insert(contractRow).returning('id');
     const contractId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
     // Seed every active system block. Same logic as createContract —
@@ -997,11 +1009,14 @@ async function createFromQuote(quoteId, adminId) {
 
     // Back-pointer so the quote detail page can deep-link to its
     // resulting contract and the convert-to-event/invoice paths know
-    // to refuse double conversion.
-    await trx('quotes').where({ id: quote.id }).update({
-      converted_contract_id: contractId,
-      updated_at: new Date(),
-    });
+    // to refuse double conversion. Skipped silently when the column
+    // hasn't migrated — the contract is still created cleanly.
+    if (hasQuoteContractBackPointer) {
+      await trx('quotes').where({ id: quote.id }).update({
+        converted_contract_id: contractId,
+        updated_at: new Date(),
+      });
+    }
 
     try {
       await logActivity('contract_created_from_quote',
@@ -1035,27 +1050,105 @@ async function convertToEvent(contractId, adminId) {
   if (contract.converted_event_id) {
     return { eventId: contract.converted_event_id, alreadyConverted: true };
   }
-  if (!contract.source_quote_id) {
-    throw new AppError(
-      'This contract has no source quote and therefore no line items / payment plan to drive event creation. Create the event manually from the bills page.',
-      409, 'NO_SOURCE_QUOTE',
-    );
+
+  const hasContractConvertedEvent = await db.schema.hasColumn('contracts', 'converted_event_id');
+
+  // Path A: source quote present → delegate to quoteService which
+  // replays the full installment schedule into invoices alongside
+  // the event row.
+  if (contract.source_quote_id) {
+    const quoteService = require('./quoteService');
+    const result = await quoteService.convertToEvent(contract.source_quote_id, adminId, { fromContract: true });
+    if (hasContractConvertedEvent) {
+      await db('contracts').where({ id: contractId }).update({
+        converted_event_id: result.eventId,
+        updated_at: new Date(),
+      });
+    }
+    try {
+      await logActivity('contract_converted_to_event',
+        { contractId, eventId: result.eventId, quoteId: contract.source_quote_id },
+        result.eventId, `admin:${adminId}`);
+    } catch (_) { /* logging is best-effort */ }
+    return result;
   }
 
-  // Lazy require to break the contractService ↔ quoteService cycle.
-  const quoteService = require('./quoteService');
-  const result = await quoteService.convertToEvent(contract.source_quote_id, adminId, { fromContract: true });
+  // Path B: standalone contract → mint an empty placeholder event
+  // row the admin fleshes out from the events admin page. Same
+  // column-introspection trick quoteService uses so installs with
+  // old/new host_*/customer_* column variants both work.
+  const customer = await db('customer_accounts').where({ id: contract.customer_account_id }).first();
+  ensureCustomerActive(customer);
+  const adminRow = await db('admin_users').where({ id: adminId }).first();
+  const today = new Date();
+  const oneYearFromNow = new Date(today.getTime());
+  oneYearFromNow.setFullYear(today.getFullYear() + 1);
 
-  await db('contracts').where({ id: contractId }).update({
-    converted_event_id: result.eventId,
+  const fullName = [customer.first_name, customer.last_name].filter(Boolean).join(' ')
+    || customer.display_name || customer.company_name || contract.contract_number;
+  const customerEmail = customer.email || `${contract.contract_number.toLowerCase()}@picpeak.local`;
+  const adminEmail = adminRow?.email || customer.email || 'admin@picpeak.local';
+  const placeholderHash = crypto.randomBytes(32).toString('hex');
+  const shareToken = crypto.randomBytes(32).toString('hex');
+
+  const eventCols = await db('events').columnInfo();
+  const candidate = {
+    slug: `contract-${contract.contract_number.toLowerCase()}-${crypto.randomBytes(3).toString('hex')}`,
+    event_name: contract.title || `Event ${contract.contract_number}`,
+    event_date: contract.issue_date,
+    host_name: fullName,
+    host_email: customerEmail,
+    customer_name: fullName,
+    customer_email: customerEmail,
+    customer_phone: customer.phone,
+    admin_email: adminEmail,
+    event_type: 'wedding',
+    password_hash: placeholderHash,
+    share_link: shareToken,
+    share_token: shareToken,
+    expires_at: oneYearFromNow,
+    is_active: true,
+    is_archived: false,
+    is_draft: true,
+    created_by: adminId,
+    quote_id: null,
+    created_at: new Date(),
     updated_at: new Date(),
-  });
+  };
+  const eventRow = {};
+  for (const [k, v] of Object.entries(candidate)) {
+    if (Object.prototype.hasOwnProperty.call(eventCols, k)) eventRow[k] = v;
+  }
+  const inserted = await db('events').insert(eventRow).returning('id');
+  const eventId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
+
+  // Link the customer so they see the event on their portal once
+  // the admin activates it. Best-effort — older installs without
+  // the junction table still get the event row.
   try {
-    await logActivity('contract_converted_to_event',
-      { contractId, eventId: result.eventId, quoteId: contract.source_quote_id },
-      result.eventId, `admin:${adminId}`);
+    if (await db.schema.hasTable('event_customer_assignments')) {
+      await db('event_customer_assignments').insert({
+        event_id: eventId,
+        customer_account_id: customer.id,
+        assigned_by_admin_id: adminId,
+        assigned_at: new Date(),
+      });
+    }
+  } catch (_) { /* best-effort */ }
+
+  if (hasContractConvertedEvent) {
+    await db('contracts').where({ id: contractId }).update({
+      converted_event_id: eventId,
+      updated_at: new Date(),
+    });
+  }
+
+  try {
+    await logActivity('contract_converted_to_empty_event',
+      { contractId, eventId }, eventId, `admin:${adminId}`);
   } catch (_) { /* logging is best-effort */ }
-  return result;
+
+  return { eventId, alreadyConverted: false };
 }
 
 /**
@@ -1072,15 +1165,22 @@ async function convertToInvoiceOnly(contractId, adminId) {
     );
   }
 
+  // Schema-drift guard — the lineage columns are in-place edits to
+  // migration 130. Skip the back-pointer update silently when the
+  // column hasn't migrated yet.
+  const hasInvoiceContractBackPointer = await db.schema.hasColumn('invoices', 'source_contract_id');
+
   // Path A: contract has a source quote → replay its line items +
   // payment plan via quoteService (full installment schedule).
   if (contract.source_quote_id) {
     const quoteService = require('./quoteService');
     const result = await quoteService.convertToInvoiceOnly(contract.source_quote_id, adminId, { fromContract: true });
-    await db('invoices')
-      .where({ source_quote_id: contract.source_quote_id })
-      .whereNull('source_contract_id')
-      .update({ source_contract_id: contractId });
+    if (hasInvoiceContractBackPointer) {
+      await db('invoices')
+        .where({ source_quote_id: contract.source_quote_id })
+        .whereNull('source_contract_id')
+        .update({ source_contract_id: contractId });
+    }
     try {
       await logActivity('contract_converted_to_invoices',
         { contractId, quoteId: contract.source_quote_id, installments: result.installmentsCreated },
@@ -1089,9 +1189,13 @@ async function convertToInvoiceOnly(contractId, adminId) {
     return result;
   }
 
-  // Path B: standalone contract (no source quote) → create a single
-  // empty draft invoice the admin fills in manually on the bills
-  // editor. Net/VAT/total stay at zero until line items are added.
+  // Path B: standalone contract (no source quote) → direct DB insert
+  // of an empty draft. We deliberately bypass invoiceService.createInvoice
+  // because that runs ensureCustomerCanBill, which throws if the
+  // customer doesn't have feature_bills enabled. Admin clicking
+  // "Convert to invoice" on the contract detail page IS the
+  // authorisation; the admin will fill in line items manually before
+  // sending.
   const customer = await db('customer_accounts').where({ id: contract.customer_account_id }).first();
   ensureCustomerActive(customer);
 
@@ -1099,30 +1203,42 @@ async function convertToInvoiceOnly(contractId, adminId) {
   const profile = (await businessProfileService.getProfile()).profile || {};
   const currency = (profile.default_currency || 'CHF').toUpperCase();
   const language = contract.language || customer.preferred_language || profile.default_locale || 'de';
+  const issueDate = new Date().toISOString().slice(0, 10);
+  const netDays = ensureInt(await getAppSetting('crm_payment_default_net_days')) || 30;
+  const dueDate = new Date(Date.now() + netDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const invoiceId = await invoiceService.createInvoice({
-    customerAccountId: contract.customer_account_id,
-    currency,
+  const invoiceNumber = await invoiceService.nextInvoiceNumber();
+  const invoiceRow = {
+    invoice_number: invoiceNumber,
+    customer_account_id: contract.customer_account_id,
+    source_quote_id: null,
+    event_id: null,
     language,
-    issueDate: new Date().toISOString().slice(0, 10),
-    lineItems: [],
-    vatRate: 0,
-    shippingAmountMinor: 0,
-    ccPdfEmail: null,
-    // Empty draft — status stays 'scheduled' so the admin can edit
-    // line items and send when ready.
-    _skipMonthlyRouting: true,
-  }, adminId);
-
-  // Tag the new invoice with source_contract_id.
-  await db('invoices').where({ id: invoiceId }).update({
-    source_contract_id: contractId,
+    currency,
+    issue_date: issueDate,
+    due_date: dueDate,
+    installment_index: 0,
+    installment_total: 1,
+    status: 'scheduled',
+    net_amount_minor: 0,
+    vat_rate: 0,
+    vat_amount_minor: 0,
+    shipping_amount_minor: 0,
+    total_amount_minor: 0,
+    paid_amount_minor: 0,
+    reminder_level: 0,
+    late_fee_amount_minor: 0,
+    created_by_admin_id: adminId,
+    created_at: new Date(),
     updated_at: new Date(),
-  });
+  };
+  if (hasInvoiceContractBackPointer) invoiceRow.source_contract_id = contractId;
+  const inserted = await db('invoices').insert(invoiceRow).returning('id');
+  const invoiceId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
   try {
     await logActivity('contract_converted_to_empty_invoice',
-      { contractId, invoiceId }, null, `admin:${adminId}`);
+      { contractId, invoiceId, invoiceNumber }, null, `admin:${adminId}`);
   } catch (_) { /* logging is best-effort */ }
 
   // Match the result shape of the source-quote path so the frontend

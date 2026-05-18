@@ -44,6 +44,12 @@ export const ContractEditorPage: React.FC = () => {
   const numericId = id ? parseInt(id, 10) : null;
 
   const [customerAccountId, setCustomerAccountId] = useState<number | null>(null);
+  // Customer label + passive flag mirror the QuoteEditorPage chip so
+  // the admin sees the real name (company / first+last / display name)
+  // and a "Passive — admin only" badge when the customer has no
+  // portal access. Without these the chip would just say "#3".
+  const [customerLabel, setCustomerLabel] = useState('');
+  const [customerIsPassive, setCustomerIsPassive] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [title, setTitle] = useState('');
   const [introText, setIntroText] = useState('');
@@ -81,6 +87,18 @@ export const ContractEditorPage: React.FC = () => {
     if (!existing) return;
     const c = existing.contract;
     setCustomerAccountId(c.customerAccountId);
+    setCustomerLabel(
+      c.customer.companyName
+      || [c.customer.firstName, c.customer.lastName].filter(Boolean).join(' ')
+      || c.customer.displayName
+      || c.customer.email
+      || `#${c.customerAccountId}`,
+    );
+    // Backend transformContract doesn't currently surface isPassive
+    // for contracts. Default to false; the chip just won't show the
+    // badge in that case. (Quote/Bill detail compute this via the
+    // customer.password_hash join — wire later if needed.)
+    setCustomerIsPassive(false);
     setTitle(c.title || '');
     setIntroText(c.introText || '');
     setOutroText(c.outroText || '');
@@ -286,12 +304,19 @@ export const ContractEditorPage: React.FC = () => {
               {t('contracts.editor.customer', 'Customer')}
             </label>
             {customerAccountId ? (
-              <div className="flex items-center gap-2 text-sm">
-                <span className="px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-800">#{customerAccountId}</span>
+              <div className="flex items-center justify-between bg-neutral-50 dark:bg-neutral-800 rounded-md px-3 py-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm">{customerLabel || `#${customerAccountId}`}</span>
+                  {customerIsPassive && (
+                    <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300">
+                      {t('customers.passive.badge', 'Passive — admin only')}
+                    </span>
+                  )}
+                </div>
                 <button
                   type="button"
-                  className="text-accent-dark hover:underline"
-                  onClick={() => setCustomerAccountId(null)}
+                  className="text-sm text-accent-dark hover:underline"
+                  onClick={() => { setCustomerAccountId(null); setCustomerLabel(''); setCustomerIsPassive(false); }}
                 >
                   {t('contracts.editor.changeCustomer', 'Change')}
                 </button>
@@ -311,7 +336,17 @@ export const ContractEditorPage: React.FC = () => {
                       <li key={c.id}>
                         <button
                           type="button"
-                          onClick={() => { setCustomerAccountId(c.id); }}
+                          onClick={() => {
+                            setCustomerAccountId(c.id);
+                            setCustomerLabel(
+                              c.companyName
+                              || [c.firstName, c.lastName].filter(Boolean).join(' ')
+                              || c.displayName
+                              || c.email
+                              || `#${c.id}`,
+                            );
+                            setCustomerIsPassive(Boolean(c.isPassive));
+                          }}
                           className="w-full text-left px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-800"
                         >
                           {c.displayName || c.email} {c.companyName ? `(${c.companyName})` : ''}
