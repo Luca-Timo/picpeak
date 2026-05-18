@@ -14,7 +14,22 @@
  */
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import i18n from '../i18n/config';
 import { customerService, type CustomerProfile } from '../services/customer.service';
+
+/**
+ * Apply a customer's preferred language to the portal UI. The admin-set
+ * `preferred_language` already drives PDF rendering and queued email
+ * locale resolution; this closes the third surface so the portal UI
+ * actually honours the same setting. Swallows errors because i18n init
+ * can race with the auth flow — failing to switch language must never
+ * break login. Pattern lifted from QuoteResponsePage.tsx.
+ */
+function applyCustomerLocale(lang?: string | null) {
+  if (!lang) return;
+  if (lang === i18n.language) return;
+  i18n.changeLanguage(lang).catch(() => {});
+}
 
 export interface CustomerFeatureFlags {
   calendar: boolean;
@@ -113,6 +128,7 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(response.customer));
       sessionStorage.setItem(FEATURES_KEY, JSON.stringify(response.features));
       sessionStorage.setItem(BRANDING_KEY, JSON.stringify(response.branding));
+      applyCustomerLocale(response.customer.preferredLanguage);
     } else {
       // Explicit 401 — server says no.
       setCustomerState(null);
@@ -128,7 +144,13 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
     // cookie is still valid and overwrites stale data.
     try {
       const cached = sessionStorage.getItem(STORAGE_KEY);
-      if (cached) setCustomerState(JSON.parse(cached));
+      if (cached) {
+        const parsed = JSON.parse(cached) as CustomerProfile;
+        setCustomerState(parsed);
+        // Apply the cached locale immediately so a hard refresh doesn't
+        // flash the default language before refreshSession lands.
+        applyCustomerLocale(parsed.preferredLanguage);
+      }
       const cachedFeatures = sessionStorage.getItem(FEATURES_KEY);
       if (cachedFeatures) setFeatures(JSON.parse(cachedFeatures));
       const cachedBranding = sessionStorage.getItem(BRANDING_KEY);
@@ -174,6 +196,7 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
   const setCustomer = (c: CustomerProfile) => {
     setCustomerState(c);
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(c));
+    applyCustomerLocale(c.preferredLanguage);
   };
 
   const setSession = (s: { customer: CustomerProfile; features: CustomerFeatureFlags; branding: CustomerBrandingFlags }) => {
@@ -183,6 +206,7 @@ export const CustomerAuthProvider: React.FC<ProviderProps> = ({ children }) => {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(s.customer));
     sessionStorage.setItem(FEATURES_KEY, JSON.stringify(s.features));
     sessionStorage.setItem(BRANDING_KEY, JSON.stringify(s.branding));
+    applyCustomerLocale(s.customer.preferredLanguage);
   };
 
   const logout = async () => {

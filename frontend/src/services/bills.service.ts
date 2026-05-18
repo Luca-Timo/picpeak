@@ -102,6 +102,16 @@ export interface InvoiceDetail extends InvoiceSummary {
    *  be set together for the new path to engage server-side. */
   paymentNetDaysTemplateId?: number | null;
   paymentTimingTemplateId?: number | null;
+  /** Effective Skonto percentage resolved server-side from the
+   *  invoice's payment-term snapshot (with legacy + global fallback).
+   *  null when no Skonto is configured — used by the BillDetail
+   *  "Record payment" dialog to decide whether to show the
+   *  "Paid with Skonto" checkbox. Migration 126. */
+  skontoPercent?: number | null;
+  /** Per-invoice Skonto opt-out — admin ticked "Disable Skonto" in
+   *  the editor. When true, `skontoPercent` is suppressed regardless
+   *  of what the snapshot / global default offers. Migration 126. */
+  skontoDisabled?: boolean;
   /** Set when this invoice was created via Cancel & reissue —
    *  points at the cancelled original. Migration 114. */
   replacesInvoiceId?: number | null;
@@ -164,6 +174,8 @@ export interface InvoiceCreatePayload {
   // editor in tandem; backend composes the merged snapshot.
   paymentNetDaysTemplateId?: number | null;
   paymentTimingTemplateId?: number | null;
+  // Per-invoice Skonto opt-out (migration 126).
+  skontoDisabled?: boolean;
   // Inline event snapshot (migration 123). All optional — standalone
   // invoices may have none of these.
   eventName?: string;
@@ -224,6 +236,10 @@ export const billsService = {
     paymentMethod?: string;
     reference?: string;
     notes?: string;
+    /** Migration 126 — when true the payment-log row records the
+     *  Skonto discount amount and the invoice is treated as fully
+     *  settled even though paid_amount_minor < total_amount_minor. */
+    skontoApplied?: boolean;
   }): Promise<{ paidTotalMinor: number; status: InvoiceStatus }> {
     const { data } = await api.post(`/admin/invoices/${id}/mark-paid`, payload);
     return data.data || data;

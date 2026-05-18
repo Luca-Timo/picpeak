@@ -122,6 +122,10 @@ function transformInvoice(i) {
     // engage server-side.
     paymentNetDaysTemplateId: i.payment_net_days_template_id || null,
     paymentTimingTemplateId: i.payment_timing_template_id || null,
+    // Migration 126 — per-invoice Skonto opt-out. Editor surfaces
+    // this as a checkbox so admin can suppress the discount for one
+    // invoice without touching the template or global default.
+    skontoDisabled: i.skonto_disabled === true || i.skonto_disabled === 1,
     // Storno wiring (migration 114). The four FK columns drive the
     // admin UI's banners + action gating:
     //  - kind: 'invoice' | 'storno' — defaults to 'invoice' for rows
@@ -206,6 +210,7 @@ const INVOICE_BODY_VALIDATORS = [
   // require them once it's updated.
   body('paymentNetDaysTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('paymentTimingTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  body('skontoDisabled').optional().isBoolean(),
   // Inline event snapshot (migration 123). Mirrors quotes — kept
   // optional because standalone invoices may not have an event yet.
   body('eventName').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
@@ -247,6 +252,7 @@ function mapPayloadToService(body) {
     paymentTermTemplateId: 'paymentTermTemplateId',
     paymentNetDaysTemplateId: 'paymentNetDaysTemplateId',
     paymentTimingTemplateId: 'paymentTimingTemplateId',
+    skontoDisabled: 'skontoDisabled',
   };
   for (const [api, svc] of Object.entries(map)) {
     if (Object.prototype.hasOwnProperty.call(body, api)) out[svc] = body[api];
@@ -315,8 +321,16 @@ router.get(
     const id = parseInt(req.params.id, 10);
     const data = await invoiceService.getInvoiceById(id);
     if (!data) return res.status(404).json({ error: 'Invoice not found' });
+    // Resolve the effective Skonto percentage so the BillDetail
+    // "Record payment" dialog can render the "Paid with Skonto"
+    // checkbox + auto-fill the discounted amount (migration 126).
+    // Reuses the same resolver the payment-check email path uses so
+    // the two surfaces agree on whether the invoice qualifies.
+    const skontoPercent = await invoiceService.resolveSkontoPercentForInvoice(data.invoice);
+    const invoiceOut = transformInvoice(data.invoice);
+    invoiceOut.skontoPercent = skontoPercent || null;
     return successResponse(res, {
-      invoice: transformInvoice(data.invoice),
+      invoice: invoiceOut,
       lineItems: data.lineItems.map(transformLineItem),
       payments: data.payments.map(transformPaymentLog),
     });
@@ -496,6 +510,8 @@ router.put(
       vatRate: 'vat_rate', shippingAmountMinor: 'shipping_amount_minor',
       ccPdfEmail: 'cc_pdf_email', businessBankAccountId: 'business_bank_account_id',
       qrFormat: 'qr_format',
+      // Per-invoice Skonto opt-out (migration 126).
+      skontoDisabled: 'skonto_disabled',
       // Inline event snapshot (migration 123) — editable as long as
       // the invoice is still in 'scheduled' status (this route already
       // gates on that above).
@@ -653,6 +669,7 @@ router.post(
     body('paymentMethod').optional({ values: 'falsy' }).isString().isLength({ max: 64 }),
     body('reference').optional({ values: 'falsy' }).isString().isLength({ max: 128 }),
     body('notes').optional({ values: 'falsy' }).isString().isLength({ max: 5000 }),
+    body('skontoApplied').optional().isBoolean(),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -662,6 +679,7 @@ router.post(
       paymentMethod: req.body.paymentMethod,
       reference: req.body.reference,
       notes: req.body.notes,
+      skontoApplied: req.body.skontoApplied,
     }, req.admin.id);
     return successResponse(res, result);
   })

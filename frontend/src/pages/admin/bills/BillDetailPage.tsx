@@ -29,6 +29,11 @@ export const BillDetailPage: React.FC = () => {
   const [payMethod, setPayMethod] = useState('');
   const [payReference, setPayReference] = useState('');
   const [payNotes, setPayNotes] = useState('');
+  // Migration 126 — admin ticks this when the customer paid the
+  // discounted total within the Skonto window. The dialog auto-fills
+  // the amount with total × (1 - skonto%) when ticked, but admin can
+  // still override it (e.g. partial Skonto + partial waive).
+  const [payWithSkonto, setPayWithSkonto] = useState(false);
 
   if (isLoading || !data) return <Loading />;
   const inv = data.invoice;
@@ -142,9 +147,11 @@ export const BillDetailPage: React.FC = () => {
         paymentMethod: payMethod || undefined,
         reference: payReference || undefined,
         notes: payNotes || undefined,
+        skontoApplied: payWithSkonto,
       });
       setPayDialogOpen(false);
       setPayAmount(''); setPayMethod(''); setPayReference(''); setPayNotes('');
+      setPayWithSkonto(false);
       qc.invalidateQueries({ queryKey: ['invoice', id] });
       toast.success(t('bills.paymentRecordedToast', 'Payment recorded.'));
     } catch (e: any) {
@@ -424,6 +431,36 @@ export const BillDetailPage: React.FC = () => {
             <div className="space-y-3">
               <Input type="number" step="0.01" label={t('bills.payment.amount', 'Amount') as string} value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)} placeholder={String(outstanding.toFixed(2))} />
+              {/* Skonto checkbox (migration 126). Only surfaced when
+                  the invoice's payment terms actually offer Skonto —
+                  the backend resolves skontoPercent from the snapshot
+                  (with legacy + global fallback). Toggling auto-fills
+                  the amount with total × (1 - skonto%); admin can
+                  still override afterwards. */}
+              {inv.skontoPercent != null && inv.skontoPercent > 0 && (
+                <label className="flex items-start gap-2 text-sm py-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={payWithSkonto}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      setPayWithSkonto(next);
+                      if (next) {
+                        const discounted = Math.round(
+                          Number(inv.totalAmountMinor) * (1 - Number(inv.skontoPercent) / 100),
+                        ) / 100;
+                        setPayAmount(discounted.toFixed(2));
+                      }
+                    }}
+                  />
+                  <span>
+                    {t('bills.payment.withSkonto',
+                      'Paid with Skonto ({{percent}}% discount)',
+                      { percent: inv.skontoPercent })}
+                  </span>
+                </label>
+              )}
               {/* Payment method — common methods as a dropdown; we
                   persist the value verbatim so admins can still record
                   an out-of-band method by typing into the Notes field. */}

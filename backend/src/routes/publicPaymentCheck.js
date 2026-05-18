@@ -82,7 +82,7 @@ router.post(
   recordLimiter,
   [
     param('token').isString().isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i),
-    body('action').isIn(['paid_full', 'partial', 'unpaid']),
+    body('action').isIn(['paid_full', 'paid_with_skonto', 'partial', 'unpaid']),
     body('amountMinor').optional({ values: 'falsy' }).isInt({ min: 1 }),
   ],
   handleAsync(async (req, res) => {

@@ -67,6 +67,9 @@ export const BillEditorPage: React.FC = () => {
   // resolveBankAccountForCurrency() already prefers this over the
   // currency-default when set, so we just need to surface a picker.
   const [businessBankAccountId, setBusinessBankAccountId] = useState<number | null>(null);
+  // Migration 126 — per-invoice Skonto opt-out. Default false so new
+  // invoices inherit whatever the template / global default offers.
+  const [skontoDisabled, setSkontoDisabled] = useState(false);
   // Inline event snapshot (migration 123). Mirrors the quote editor's
   // event section — admin can type a free-text label without needing
   // an actual events row, and it carries through to the customer
@@ -130,6 +133,7 @@ export const BillEditorPage: React.FC = () => {
       setPaymentNetDaysTemplateId(inv.paymentNetDaysTemplateId ?? null);
       setPaymentTimingTemplateId(inv.paymentTimingTemplateId ?? null);
       setBusinessBankAccountId(inv.businessBankAccountId ?? null);
+      setSkontoDisabled(Boolean(inv.skontoDisabled));
       setEventName(inv.eventName || '');
       setEventDate(inv.eventDate || '');
       setEventTimeStart(inv.eventTimeStart || '');
@@ -277,6 +281,9 @@ export const BillEditorPage: React.FC = () => {
     // invoices.business_bank_account_id at PDF time, no further
     // lookup needed.
     businessBankAccountId: businessBankAccountId,
+    // Per-invoice Skonto opt-out (migration 126). Always send so the
+    // PUT handler can clear a previously-set opt-out by unchecking.
+    skontoDisabled,
     // Inline event snapshot (migration 123). Empty string → undefined
     // so the backend can distinguish "not provided" from a deliberate
     // clear (which the route's `optional({ values: 'falsy' })` already
@@ -567,6 +574,23 @@ export const BillEditorPage: React.FC = () => {
             </select>
           </div>
         </div>
+        {/* Per-invoice Skonto opt-out (migration 126). Surfaced
+            alongside the payment-term pickers because it's a peer
+            override of the same CRM defaults. Admin ticks this for
+            invoices that shouldn't qualify even when the global
+            default offers Skonto (e.g. Storni, instalments, retainers). */}
+        <label className="flex items-start gap-2 text-sm mt-3 cursor-pointer">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={skontoDisabled}
+            onChange={(e) => setSkontoDisabled(e.target.checked)}
+          />
+          <span>
+            {t('bills.field.skontoDisabled',
+              'Disable Skonto for this invoice (suppresses the early-payment-discount block on the PDF and the "Paid with Skonto" buttons in the admin email / record-payment dialog).')}
+          </span>
+        </label>
         <p className="text-xs text-neutral-500 mt-2">
           {t('bills.field.paymentTermHelp',
             'Net days + Skonto for this invoice. Leave blank to inherit from the source quote or the global CRM defaults.')}

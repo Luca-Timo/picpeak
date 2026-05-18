@@ -438,6 +438,10 @@ async function createInvoice(payload, adminId, trx = db) {
     payment_net_days_template_id: paymentNetDaysTemplateId,
     payment_timing_template_id: paymentTimingTemplateId,
     payment_term_snapshot: paymentTermSnapshot,
+    // Per-invoice Skonto opt-out (migration 126). Defaults to false
+    // — invoice inherits the snapshot/global Skonto config unless
+    // admin explicitly ticks "Disable Skonto" in the editor.
+    skonto_disabled: Boolean(payload.skontoDisabled),
     created_by_admin_id: adminId,
     created_at: new Date(),
     updated_at: new Date(),
@@ -1091,7 +1095,7 @@ async function sendInvoice(id, adminId) {
  * (multiple rows accumulate into `paid_amount_minor`). Status flips
  * to `paid` once the running total meets or exceeds total_amount_minor.
  */
-async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, notes }, adminId) {
+async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, notes, skontoApplied }, adminId) {
   const invoice = await db('invoices').where({ id }).first();
   if (!invoice) throw new AppError('Invoice not found', 404);
   if (invoice.status === 'cancelled') {
@@ -1101,6 +1105,16 @@ async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, not
   if (amount <= 0) {
     throw new AppError('amount must be > 0', 400);
   }
+  // Skonto bookkeeping (migration 126). When the admin ticks "Paid
+  // with Skonto" we store both the flag AND the absolute discount
+  // in minor units. Computing the discount here (instead of in the
+  // renderer at report time) means the value is frozen against
+  // later template/percentage edits — the tax-report row stays
+  // accurate for years.
+  const skontoFlag = Boolean(skontoApplied);
+  const skontoAmountMinor = skontoFlag
+    ? Math.max(0, ensureInt(invoice.total_amount_minor) - amount)
+    : null;
 
   return await db.transaction(async (trx) => {
     await trx('invoice_payment_log').insert({
@@ -1111,6 +1125,8 @@ async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, not
       reference: reference || null,
       notes: notes || null,
       recorded_by_admin_id: adminId,
+      skonto_applied: skontoFlag,
+      skonto_amount_minor: skontoAmountMinor,
       created_at: new Date(),
     });
     const sumRow = await trx('invoice_payment_log').where({ invoice_id: id }).sum('amount_minor as total').first();
@@ -1122,7 +1138,17 @@ async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, not
     // makes nobody happy). Admin can record a separate payment_log
     // row if they did collect the fee; status flips to paid the
     // moment the principal is covered.
-    const isFull = total >= invoice.total_amount_minor;
+    //
+    // Skonto path (migration 126): when the admin flagged this
+    // payment as Skonto-applied, the discounted amount equals the
+    // expected payment — flip to 'paid' even though paid_amount_minor
+    // is strictly less than total_amount_minor. Without this branch
+    // the invoice would sit in 'sent' or 'overdue' forever despite
+    // being legitimately settled.
+    const skontoEffectiveTotal = skontoFlag
+      ? ensureInt(invoice.total_amount_minor) - (skontoAmountMinor || 0)
+      : ensureInt(invoice.total_amount_minor);
+    const isFull = total >= skontoEffectiveTotal;
 
     const update = {
       paid_amount_minor: total,
@@ -1139,6 +1165,31 @@ async function markPaid(id, { amountMinor, paidAt, paymentMethod, reference, not
     try { await logActivity(isFull ? 'invoice_paid' : 'invoice_partial_payment',
       { invoiceId: id, amountMinor: amount, totalPaidMinor: total },
       invoice.event_id || null, `admin:${adminId}`); } catch (_) {}
+
+    // Migration 127 — admin payment-received notification. Fires only
+    // on the transition into 'paid' so admins don't get duplicate
+    // emails when additional payment-log rows are recorded after the
+    // invoice already cleared (rare but possible — e.g. late-fee
+    // top-up). Queued after the transaction so a failed email never
+    // rolls back a recorded payment. Carried Skonto context lets the
+    // template show the discount line conditionally.
+    if (isFull && invoice.status !== 'paid') {
+      try {
+        await queueInvoicePaidAdminNotification({
+          invoice,
+          paidTotalMinor: total,
+          paymentMethod: paymentMethod || invoice.payment_method || null,
+          paymentReference: reference || invoice.payment_reference || null,
+          paidAt: paidAt ? new Date(paidAt) : new Date(),
+          skontoApplied: skontoFlag,
+          skontoAmountMinor: skontoAmountMinor || 0,
+        });
+      } catch (err) {
+        // Notification is best-effort — don't surface a 500 to the
+        // admin when the recorded payment itself succeeded.
+        logger.warn('invoice_paid admin notification failed to queue', { invoiceId: id, err: err.message });
+      }
+    }
 
     return { paidTotalMinor: total, status: isFull ? 'paid' : invoice.status };
   });
@@ -1673,6 +1724,44 @@ async function applyReminder(invoice, lineItems, level, adminId) {
  *   3. business_profile.email as a last resort
  * Returns null when nothing usable is found — caller logs + skips.
  */
+/**
+ * Resolve the effective Skonto percentage for an invoice at the
+ * current moment. Resolution chain (matches pdfService rendering):
+ *   1. invoice.payment_term_snapshot.skonto_percent
+ *   2. source quote's payment_term_snapshot.skonto_percent
+ *   3. global crm_invoices_skonto_percent_default
+ * Returns null when nothing is configured.
+ *
+ * Lifted into a helper so the payment-check action and the email
+ * template (which both need to know "does this invoice qualify for a
+ * Paid-with-Skonto button?") share one source of truth.
+ */
+async function resolveSkontoPercentForInvoice(invoice) {
+  // Per-invoice opt-out (migration 126) wins over every other source.
+  // Admin sets this on Storni / replacement invoices / payment-plan
+  // installments that shouldn't qualify for the discount even when
+  // the global default offers it.
+  if (invoice.skonto_disabled) return null;
+  const parseSnap = (raw) => {
+    if (!raw) return null;
+    if (typeof raw === 'object') return raw;
+    try { return JSON.parse(raw); } catch { return null; }
+  };
+  const invSnap = parseSnap(invoice.payment_term_snapshot);
+  if (invSnap?.skonto_percent != null && Number(invSnap.skonto_percent) > 0) {
+    return Number(invSnap.skonto_percent);
+  }
+  if (invoice.source_quote_id) {
+    const q = await db('quotes').where({ id: invoice.source_quote_id }).select('payment_term_snapshot').first();
+    const qSnap = parseSnap(q?.payment_term_snapshot);
+    if (qSnap?.skonto_percent != null && Number(qSnap.skonto_percent) > 0) {
+      return Number(qSnap.skonto_percent);
+    }
+  }
+  const defaultPct = Number(await getAppSetting('crm_invoices_skonto_percent_default'));
+  return Number.isFinite(defaultPct) && defaultPct > 0 ? defaultPct : null;
+}
+
 async function resolveAdminEmailForInvoice(invoice) {
   if (invoice.created_by_admin_id) {
     const admin = await db('admin_users').where({ id: invoice.created_by_admin_id }).first();
@@ -1692,6 +1781,63 @@ async function resolveAdminEmailForInvoice(invoice) {
  * Returns { token, sent: bool, reason? } so callers can log /
  * surface the outcome.
  */
+/**
+ * Queue the admin "payment received" notification (migration 127).
+ * Called from markPaid the first time an invoice transitions into
+ * `status='paid'`. Resolves the admin's address via the same chain
+ * the payment-check email uses (created_by_admin_id → business
+ * profile fallback). Silently no-ops when no admin email can be
+ * resolved — caller logs the warn line.
+ */
+async function queueInvoicePaidAdminNotification({
+  invoice, paidTotalMinor, paymentMethod, paymentReference,
+  paidAt, skontoApplied, skontoAmountMinor,
+}) {
+  const adminContact = await resolveAdminEmailForInvoice(invoice);
+  if (!adminContact?.email) {
+    logger.warn('invoice_paid notification skipped — no admin email resolved',
+      { invoiceId: invoice.id });
+    return;
+  }
+
+  const profile = await db('business_profile').where({ id: 1 }).first();
+  const locale = invoice.language || profile?.default_locale || 'de';
+
+  const customer = await db('customer_accounts').where({ id: invoice.customer_account_id }).first();
+  // Resolve the Skonto percentage at notification time so the
+  // template can render "Paid with Skonto X%" without a second query.
+  // Same resolver the rest of the Skonto surfaces use — null when
+  // skonto_disabled is true or no Skonto is configured.
+  const skontoPercent = skontoApplied
+    ? await resolveSkontoPercentForInvoice(invoice)
+    : null;
+
+  await emailProcessor.queueEmail(invoice.event_id || null, adminContact.email,
+    'invoice_paid_admin_notification', {
+      invoice_number: invoice.invoice_number,
+      customer_name: customer?.company_name
+        || customer?.display_name
+        || [customer?.first_name, customer?.last_name].filter(Boolean).join(' ')
+        || customer?.email || '',
+      event_name: invoice.event_name || '',
+      total_amount: formatMajor(invoice.total_amount_minor, invoice.currency, locale),
+      paid_amount: formatMajor(paidTotalMinor, invoice.currency, locale),
+      payment_method: paymentMethod || '',
+      payment_reference: paymentReference || '',
+      paid_at: formatShortDate(paidAt),
+      skonto_applied: !!skontoApplied,
+      skonto_percent: skontoApplied && skontoPercent ? skontoPercent : '',
+      skonto_discount_amount: skontoApplied
+        ? formatMajor(skontoAmountMinor, invoice.currency, locale)
+        : '',
+    });
+
+  try {
+    await logActivity('invoice_paid_admin_notified', { invoiceId: invoice.id },
+      invoice.event_id || null, 'system');
+  } catch (_) {}
+}
+
 async function queuePaymentCheckEmail(invoiceId, { skipThrottle = false } = {}) {
   const invoice = await db('invoices').where({ id: invoiceId }).first();
   if (!invoice) return { sent: false, reason: 'not_found' };
@@ -1756,6 +1902,17 @@ async function queuePaymentCheckEmail(invoiceId, { skipThrottle = false } = {}) 
     Number(invoice.total_amount_minor || 0) + lateFeeAlreadyMinor - paidMinor);
   const hasPartial = paidMinor > 0;
 
+  // Resolve Skonto for the optional 4th button (migration 126). Only
+  // surface the button when (a) Skonto is configured for this invoice
+  // AND (b) the customer paid within the Skonto window — past the
+  // window the discount is moot. Both checks are visible to the
+  // template so the email can hide the button conditionally.
+  const skontoPercent = await resolveSkontoPercentForInvoice(invoice);
+  const hasSkonto = !!skontoPercent && skontoPercent > 0;
+  const skontoDiscountedTotalMinor = hasSkonto
+    ? Math.round(Number(invoice.total_amount_minor) * (1 - Number(skontoPercent) / 100))
+    : null;
+
   await emailProcessor.queueEmail(invoice.event_id || null, adminContact.email,
     'invoice_payment_check_admin', {
       invoice_number: invoice.invoice_number,
@@ -1772,6 +1929,14 @@ async function queuePaymentCheckEmail(invoiceId, { skipThrottle = false } = {}) 
       paid_url:    buildUrl('paid_full'),
       partial_url: buildUrl('partial'),
       unpaid_url:  buildUrl('unpaid'),
+      // Skonto button — template uses {{#if has_skonto}} to render the
+      // fourth button only when the invoice qualifies.
+      has_skonto: hasSkonto,
+      skonto_percent: hasSkonto ? skontoPercent : '',
+      skonto_amount: hasSkonto
+        ? formatMajor(skontoDiscountedTotalMinor, invoice.currency, locale)
+        : '',
+      skonto_url: hasSkonto ? buildUrl('paid_with_skonto') : '',
       late_fee_due: willChargeFee,
       late_fee_amount: formatMajor(reminderFeeMinor, invoice.currency, locale),
     });
@@ -1809,6 +1974,17 @@ async function getPaymentCheckByToken(token) {
     Number(invoice.total_amount_minor || 0) + Number(invoice.late_fee_amount_minor || 0)
     - Number(invoice.paid_amount_minor || 0));
 
+  // Surface the Skonto state so the public page can decide whether to
+  // render the "Paid with Skonto" action card (migration 126). Only
+  // applies when the invoice's payment terms actually carry a Skonto
+  // percentage — admin shouldn't see the option on an invoice that
+  // never offered the discount.
+  const skontoPercent = await resolveSkontoPercentForInvoice(invoice);
+  const hasSkonto = !!skontoPercent && skontoPercent > 0;
+  const skontoDiscountedTotalMinor = hasSkonto
+    ? Math.round(Number(invoice.total_amount_minor) * (1 - Number(skontoPercent) / 100))
+    : null;
+
   return {
     invoiceNumber: invoice.invoice_number,
     customer: {
@@ -1827,6 +2003,9 @@ async function getPaymentCheckByToken(token) {
     status: invoice.status,
     reminderLevel: invoice.reminder_level,
     expiresAt: row.expires_at,
+    hasSkonto,
+    skontoPercent: hasSkonto ? skontoPercent : null,
+    skontoDiscountedTotalMinor,
   };
 }
 
@@ -1845,7 +2024,11 @@ async function getPaymentCheckByToken(token) {
  * actually committed.
  */
 async function recordPaymentCheckAction({ token, action, amountMinor, ip, adminId }) {
-  if (!['paid_full', 'partial', 'unpaid'].includes(action)) {
+  // 'paid_with_skonto' (migration 126) is a fourth admin action — the
+  // customer settled the bill within the early-payment-discount window,
+  // so the recorded payment equals total minus the configured Skonto %.
+  // Same token-consumption semantics as 'paid_full'.
+  if (!['paid_full', 'paid_with_skonto', 'partial', 'unpaid'].includes(action)) {
     throw new AppError('Invalid action', 400);
   }
 
@@ -1903,6 +2086,36 @@ async function recordPaymentCheckAction({ token, action, amountMinor, ip, adminI
       notes: 'Confirmed via admin payment-check link',
     }, adminId || invoice.created_by_admin_id);
     return { applied: 'paid_full' };
+  }
+
+  if (action === 'paid_with_skonto') {
+    // Resolve the Skonto percentage at click time so admins can't
+    // accidentally double-discount after the template changed. Same
+    // resolution chain pdfService uses: invoice snapshot → source
+    // quote snapshot → global crm_invoices_skonto_percent_default.
+    const skontoPercent = await resolveSkontoPercentForInvoice(invoice);
+    if (!skontoPercent || skontoPercent <= 0) {
+      throw new AppError('No Skonto configured on this invoice', 409, 'SKONTO_NOT_CONFIGURED');
+    }
+    const discountedTotalMinor = Math.round(
+      Number(invoice.total_amount_minor) * (1 - Number(skontoPercent) / 100),
+    );
+    // Outstanding-aware: if the customer already paid part of the
+    // bill (rare on the Skonto path, but possible after a partial),
+    // record only the remaining slice up to the discounted total.
+    const paidMinor = Number(invoice.paid_amount_minor || 0);
+    const remainingMinor = Math.max(0, discountedTotalMinor - paidMinor);
+    if (remainingMinor <= 0) {
+      throw new AppError('Invoice already paid past the Skonto threshold', 409);
+    }
+    await markPaid(invoice.id, {
+      amountMinor: remainingMinor,
+      paymentMethod: invoice.payment_method || 'bank_transfer',
+      reference: invoice.payment_reference || null,
+      notes: `Confirmed via admin payment-check link (Skonto ${skontoPercent}% applied)`,
+      skontoApplied: true,
+    }, adminId || invoice.created_by_admin_id);
+    return { applied: 'paid_with_skonto', skontoPercent };
   }
 
   if (action === 'partial') {
@@ -2059,4 +2272,5 @@ module.exports = {
   renderInvoicePdfBuffer,
   renderInvoicePdfFromPayload,
   runScheduledTasks,
+  resolveSkontoPercentForInvoice,
 };

@@ -132,6 +132,34 @@ async function loadReplacementsMap(cancelledIds) {
 }
 
 /**
+ * Aggregate Skonto state per invoice from `invoice_payment_log`
+ * (migration 126). Returns Map<invoice_id, { applied, amountMinor }>.
+ * An invoice is considered Skonto-applied if ANY of its payment-log
+ * rows carries the flag — admins occasionally split the discounted
+ * total across multiple rows (e.g. retainer + final).
+ *
+ * Single batched query, no N+1. Empty map when the input list is
+ * empty so the main path can skip the lookup entirely on empty
+ * periods.
+ */
+async function loadSkontoMap(invoiceIds) {
+  if (!invoiceIds.length) return new Map();
+  const rows = await db('invoice_payment_log')
+    .whereIn('invoice_id', invoiceIds)
+    .select('invoice_id', 'skonto_applied', 'skonto_amount_minor');
+  const map = new Map();
+  for (const r of rows) {
+    const flag = r.skonto_applied === true || r.skonto_applied === 1;
+    const amt = Number(r.skonto_amount_minor || 0);
+    const cur = map.get(r.invoice_id) || { applied: false, amountMinor: 0 };
+    if (flag) cur.applied = true;
+    cur.amountMinor += amt;
+    map.set(r.invoice_id, cur);
+  }
+  return map;
+}
+
+/**
  * The main entry point.
  *
  *   getTaxReport({ from: '2026-01-01', to: '2026-03-31', currency: 'CHF' })
@@ -188,6 +216,15 @@ async function getTaxReport({ from, to, currency } = {}) {
     const cancelledIds = dbRows.filter((r) => r.status === 'cancelled').map((r) => r.id);
     const replacedByMap = await loadReplacementsMap(cancelledIds);
 
+    // Skonto aggregate (migration 126). One invoice can have multiple
+    // payment-log rows (partial → top-up → top-up → final); we surface
+    // the row as "paid with Skonto" if ANY of its log rows carries the
+    // flag, and sum the discount across all such rows. Done as a
+    // separate query so the main SELECT doesn't need a GROUP BY (which
+    // would force every selected column into the GROUP under strict
+    // Postgres semantics).
+    const skontoByInvoiceId = await loadSkontoMap(dbRows.map((r) => r.id));
+
     // Bucket totals by VAT rate. Use a string key so 7.7 and 7.70
     // collapse to the same bucket regardless of how the DB rounds.
     const byRate = new Map();
@@ -215,6 +252,7 @@ async function getTaxReport({ from, to, currency } = {}) {
         bucket.totalMinor += reported.totalMinor;
         byRate.set(rateKey, bucket);
       }
+      const skonto = skontoByInvoiceId.get(r.id) || { applied: false, amountMinor: 0 };
       return {
         id: r.id,
         invoiceNumber: r.invoice_number,
@@ -235,6 +273,13 @@ async function getTaxReport({ from, to, currency } = {}) {
         netMinor: reported.netMinor,
         vatMinor: reported.vatMinor,
         totalMinor: reported.totalMinor,
+        // Skonto aggregate (migration 126). `skontoApplied` flags
+        // any row in this invoice's payment log as Skonto-applied;
+        // `skontoAmountMinor` is the summed discount across all such
+        // rows. Both surfaced so the report consumer (UI / PDF / CSV)
+        // can render the column without re-querying the log.
+        skontoApplied: skonto.applied,
+        skontoAmountMinor: skonto.amountMinor,
       };
     });
 
@@ -311,12 +356,17 @@ const TAX_TABLE_COLS = [
   { key: 'idx',      labelKey: 'tax_col_no',       width: 26,  align: 'right' },
   { key: 'date',     labelKey: 'tax_col_date',     width: 60,  align: 'left'  },
   { key: 'invoice',  labelKey: 'tax_col_invoice',  width: 100, align: 'left'  },
-  { key: 'customer', labelKey: 'tax_col_customer', width: 140, align: 'left'  },
-  { key: 'event',    labelKey: 'tax_col_event',    width: 105, align: 'left'  },
+  { key: 'customer', labelKey: 'tax_col_customer', width: 132, align: 'left'  },
+  { key: 'event',    labelKey: 'tax_col_event',    width: 95,  align: 'left'  },
   { key: 'vatRate',  labelKey: 'tax_col_vat_rate', width: 42,  align: 'right' },
-  { key: 'net',      labelKey: 'tax_col_net',      width: 74,  align: 'right' },
-  { key: 'vat',      labelKey: 'tax_col_vat',      width: 68,  align: 'right' },
-  { key: 'total',    labelKey: 'tax_col_total',    width: 86,  align: 'right' },
+  { key: 'net',      labelKey: 'tax_col_net',      width: 70,  align: 'right' },
+  { key: 'vat',      labelKey: 'tax_col_vat',      width: 60,  align: 'right' },
+  { key: 'total',    labelKey: 'tax_col_total',    width: 80,  align: 'right' },
+  // Skonto column (migration 126) — blank for non-Skonto rows so the
+  // column reads quietly until it has data. Shrunk neighbouring text
+  // columns slightly to make space without going over the landscape
+  // content width.
+  { key: 'skonto',   labelKey: 'tax_col_skonto',   width: 56,  align: 'right' },
   { key: 'status',   labelKey: 'tax_col_status',   width: 58,  align: 'left'  },
 ];
 
@@ -364,6 +414,9 @@ function rowCellValues(row, idx, locale, dateFormat) {
     net: formatMinor(row.netMinor, row.currency, intlLocale),
     vat: formatMinor(row.vatMinor, row.currency, intlLocale),
     total: formatMinor(row.totalMinor, row.currency, intlLocale),
+    skonto: row.skontoApplied
+      ? formatMinor(row.skontoAmountMinor, row.currency, intlLocale)
+      : '',
     status: row.isCancelled ? t(locale, 'tax_status_cancelled') : '',
   };
 }
@@ -573,13 +626,19 @@ async function renderTaxReportPdf({ from, to, currency, locale } = {}) {
         const pageLabel = t(useLocale, 'page_of', {
           current: pageIdx + 1, total: range.count,
         });
-        // y just below the content area, far enough from the
-        // margin that PDFKit's "writing past the bottom margin"
-        // warning doesn't fire.
+        // Position the page label just ABOVE the bottom margin —
+        // keeping the baseline inside the content area prevents
+        // PDFKit's layout engine from auto-paginating when the
+        // 8pt-tall text wouldn't fit between the requested y and
+        // the bottom of the page. The previous +6 offset pushed the
+        // y into the margin, which made PDFKit add a fresh blank
+        // page for every label, doubling the page count. Mirror the
+        // safe `- 12` offset used by the invoice/quote renderer in
+        // pdfService.renderDocument().
         doc.font(fonts.body).fontSize(8).fillColor('#888')
           .text(pageLabel,
             page.width - page.marginRight - 160,
-            page.height - page.marginBottom + 6,
+            page.height - page.marginBottom - 12,
             { width: 160, align: 'right', lineBreak: false });
       }
 
@@ -614,6 +673,9 @@ async function renderTaxReportCsv({ from, to, currency, locale } = {}) {
     `${t(useLocale, 'tax_col_vat')} (${report.currency})`,
     `${t(useLocale, 'tax_col_total')} (${report.currency})`,
     t(useLocale, 'tax_status_cancelled'),
+    // Migration 126 — Skonto export. `tax_col_skonto` is the discount
+    // amount in major units; admin's accountant reconciles the line.
+    `${t(useLocale, 'tax_col_skonto')} (${report.currency})`,
   ];
 
   const escape = (cell) => {
@@ -638,6 +700,7 @@ async function renderTaxReportCsv({ from, to, currency, locale } = {}) {
       minorToDotDecimal(row.vatMinor),
       minorToDotDecimal(row.totalMinor),
       row.isCancelled ? '1' : '0',
+      row.skontoApplied ? minorToDotDecimal(row.skontoAmountMinor) : '',
     ].map(escape).join(','));
   });
   // Trailing totals row: blank cells + grand totals at the end so
@@ -650,7 +713,7 @@ async function renderTaxReportCsv({ from, to, currency, locale } = {}) {
     minorToDotDecimal(report.grandTotalNet),
     minorToDotDecimal(report.grandTotalVat),
     minorToDotDecimal(report.grandTotal),
-    '',
+    '', '',
   ].map(escape).join(','));
 
   const content = lines.join('\r\n') + '\r\n';

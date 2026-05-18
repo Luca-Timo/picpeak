@@ -63,7 +63,8 @@ export const PaymentCheckPage: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!action && initialAction && ['paid_full', 'partial', 'unpaid'].includes(initialAction)) {
+    if (!action && initialAction
+      && ['paid_full', 'paid_with_skonto', 'partial', 'unpaid'].includes(initialAction)) {
       setAction(initialAction);
     }
   }, [initialAction, action]);
@@ -175,6 +176,25 @@ export const PaymentCheckPage: React.FC = () => {
             selected={action === 'paid_full'}
             onSelect={() => setAction('paid_full')}
           />
+          {/* Migration 126 — Skonto fast-path. Only rendered when the
+              invoice's payment terms include a Skonto percentage; the
+              backend resolves this and exposes hasSkonto + the
+              discounted total so we don't have to recompute on the
+              client. */}
+          {inv.hasSkonto && inv.skontoDiscountedTotalMinor != null && (
+            <ActionCard
+              label={t('paymentCheck.action.paidSkonto', 'Paid with Skonto')}
+              description={t('paymentCheck.action.paidSkontoHelp',
+                'Customer settled within the Skonto window. Record {{amount}} ({{percent}}% discount) as paid.',
+                {
+                  amount: formatMoney(inv.skontoDiscountedTotalMinor, inv.currency),
+                  percent: inv.skontoPercent,
+                })}
+              icon={<CheckCircle2 className="w-5 h-5" style={{ color: '#0d9488' }} />}
+              selected={action === 'paid_with_skonto'}
+              onSelect={() => setAction('paid_with_skonto')}
+            />
+          )}
           <ActionCard
             label={t('paymentCheck.action.partial', 'Partially paid')}
             description={t('paymentCheck.action.partialHelp',
@@ -368,6 +388,8 @@ const ResultBox: React.FC<{
           <p className="text-sm">
             {result.applied === 'paid_full' && t('paymentCheck.result.paid',
               'Invoice {{n}} marked as paid in full.', { n: inv.invoiceNumber })}
+            {result.applied === 'paid_with_skonto' && t('paymentCheck.result.paidSkonto',
+              'Invoice {{n}} marked as paid with Skonto applied.', { n: inv.invoiceNumber })}
             {result.applied === 'partial' && t('paymentCheck.result.partial',
               'Partial payment logged for invoice {{n}}. Customer reminder queued for the remainder.',
               { n: inv.invoiceNumber })}

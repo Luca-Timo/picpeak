@@ -40,8 +40,12 @@ function makeChain(initialRows) {
   return c;
 }
 
-const mockDbFn = jest.fn(() => {
+const mockDbFn = jest.fn((tableName) => {
   callCount += 1;
+  // Migration 126 added a Skonto aggregate that hits
+  // `invoice_payment_log` — route those explicitly to an empty list so
+  // the test surface stays focused on the invoices/replacements flow.
+  if (tableName === 'invoice_payment_log') return makeChain([]);
   // First call: main listing. Second call: replacements lookup.
   if (callCount === 1) return makeChain(invoiceRowsForRun);
   return makeChain(replacementsRowsForRun);

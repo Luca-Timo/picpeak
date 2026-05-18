@@ -29,8 +29,12 @@ function makeChain(initialRows) {
   };
 }
 
-const mockDbFn = jest.fn(() => {
+const mockDbFn = jest.fn((tableName) => {
   callCount += 1;
+  // Route by table name when supplied — the Skonto aggregate (added
+  // by migration 126) queries `invoice_payment_log`; everything else
+  // (main listing, replacements lookup) hits `invoices`.
+  if (tableName === 'invoice_payment_log') return makeChain([]);
   if (callCount === 1) return makeChain(invoiceRowsForRun);
   return makeChain(replacementsRowsForRun);
 });
@@ -149,6 +153,24 @@ describe('renderTaxReportPdf', () => {
     });
     expect(buf.slice(0, 4).toString('ascii')).toBe('%PDF');
   });
+
+  // Regression: the page-number footer used to place its baseline
+  // inside the bottom margin, which made PDFKit auto-paginate one
+  // empty page per existing page (so a 1-page report ended up as 2,
+  // and so on). Counting `/Type /Page` markers in the raw PDF bytes
+  // is the cheapest way to detect a recurrence without parsing the
+  // PDF — every page object in the xref table carries that marker
+  // exactly once.
+  it('does not duplicate pages when stamping the page-number footer', async () => {
+    invoiceRowsForRun = [SAMPLE_ROW()];
+    const buf = await taxReportService.renderTaxReportPdf({
+      from: '2026-01-01', to: '2026-03-31', currency: 'CHF', locale: 'de',
+    });
+    const pageMarkers = buf.toString('binary').match(/\/Type\s*\/Page\b(?!s)/g) || [];
+    // Small single-row report should fit on a single page. The
+    // previous buggy renderer produced 2 (1 content + 1 footer-only).
+    expect(pageMarkers.length).toBe(1);
+  });
 });
 
 describe('renderTaxReportCsv', () => {
@@ -208,8 +230,12 @@ describe('renderTaxReportCsv', () => {
     const { content } = await taxReportService.renderTaxReportCsv({
       from: '2026-01-01', to: '2026-03-31', currency: 'CHF', locale: 'en',
     });
+    // Migration 126 added a trailing Skonto column. The cancelled
+    // marker is now second-to-last; the Skonto cell is empty for
+    // non-Skonto rows. Asserting on a regex keeps the test stable
+    // against future trailing-column additions.
     const dataRow = content.split('\r\n')[1];
-    expect(dataRow.endsWith('"1"')).toBe(true);
+    expect(/"1","[^"]*"$/.test(dataRow)).toBe(true);
   });
 
   it('uses CRLF line endings (RFC 4180) and BOM-free body', async () => {
