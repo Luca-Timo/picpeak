@@ -3119,9 +3119,17 @@
       "accounts": "Accounts",
       "quotes": "Quotes",
       "bills": "Invoices",
+      "hours": "Hours",
       "taxReport": "Tax",
       "development": "Development"
     }
+  },
+  "hoursLogging": {
+    "title": "Hours logging",
+    "subtitle": "Pick a customer and log billable time blocks. Entries flow into the next monthly bill or are billed on demand for per-event customers.",
+    "pickCustomer": "Customer",
+    "pickPlaceholder": "— Select customer —",
+    "emptyList": "No customers have hours logging enabled yet. Flip \"Hours logging\" on a customer's detail page first."
   },
   "taxReport": {
     "title": "Tax report",

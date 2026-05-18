@@ -14,7 +14,7 @@
 import React from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Briefcase, UserCog, FileText, Receipt, Wrench, Calculator } from 'lucide-react';
+import { Briefcase, UserCog, FileText, Receipt, Wrench, Calculator, Clock } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useFeatureFlags, type FeatureKey } from '../../contexts/FeatureFlagsContext';
 
@@ -59,6 +59,13 @@ export const ClientsLayout: React.FC = () => {
       label: t('clients.subnav.bills', 'Invoices'),
       icon: Receipt,
       featureFlag: 'bills',
+    },
+    {
+      key: 'hours',
+      to: '/admin/clients/hours',
+      label: t('clients.subnav.hours', 'Hours'),
+      icon: Clock,
+      featureFlag: 'hoursLogging',
     },
     {
       key: 'tax-report',
