@@ -330,12 +330,18 @@ router.put('/:id', [
   requirePermission('customers.create'),
   param('id').isInt({ min: 1 }),
   body('email').optional().isEmail().normalizeEmail(),
-  body('salutation').optional().isString().isLength({ max: 32 }),
-  body('first_name').optional().isString().isLength({ max: 80 }),
-  body('last_name').optional().isString().isLength({ max: 80 }),
-  body('display_name').optional().isString().isLength({ max: 120 }),
-  body('phone').optional().isString().isLength({ max: 40 }),
-  body('company_name').optional().isString().isLength({ max: 120 }),
+  // `{ nullable: true }` so a passive customer who has no salutation /
+  // phone / company in their record can still save the page — the
+  // form sends `null` for those empty fields, and plain `.optional()`
+  // (which only skips `undefined`) would reject null at the
+  // subsequent `.isString()` step. Mirrors the existing pattern on
+  // billing_email / vat_id / address_* below.
+  body('salutation').optional({ nullable: true }).isString().isLength({ max: 32 }),
+  body('first_name').optional({ nullable: true }).isString().isLength({ max: 80 }),
+  body('last_name').optional({ nullable: true }).isString().isLength({ max: 80 }),
+  body('display_name').optional({ nullable: true }).isString().isLength({ max: 120 }),
+  body('phone').optional({ nullable: true }).isString().isLength({ max: 40 }),
+  body('company_name').optional({ nullable: true }).isString().isLength({ max: 120 }),
   body('billing_email').optional({ nullable: true }).isString(),
   body('vat_id').optional({ nullable: true }).isString().isLength({ max: 40 }),
   body('address_line1').optional({ nullable: true }).isString().isLength({ max: 255 }),
@@ -345,7 +351,7 @@ router.put('/:id', [
   body('state').optional({ nullable: true }).isString().isLength({ max: 120 }),
   body('country_code').optional({ nullable: true }).isString().isLength({ max: 2 }),
   body('country_name').optional({ nullable: true }).isString().isLength({ max: 120 }),
-  body('preferred_language').optional().isString().isLength({ max: 8 }),
+  body('preferred_language').optional({ nullable: true }).isString().isLength({ max: 8 }),
   body('notes').optional({ nullable: true }).isString(),
   body('is_active').optional().isBoolean(),
   body('feature_calendar').optional().isBoolean(),
