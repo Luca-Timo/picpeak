@@ -40,7 +40,9 @@ export const ContractDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { formatDate, formatDateTime } = useLocalizedDate();
+  const { format } = useLocalizedDate();
+  const formatDate = (v: string | null | undefined) => v ? format(v) : '—';
+  const formatDateTime = (v: string | null | undefined) => v ? format(v, 'PPpp') : '—';
   const numericId = id ? parseInt(id, 10) : null;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
