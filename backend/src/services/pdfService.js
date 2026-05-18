@@ -1412,10 +1412,6 @@ function renderDocument(type, context) {
       // edge to give the body more vertical room.
       let y = Math.max(issuerEndY, recipientEndY, ADDR_WINDOW.top + ADDR_WINDOW.height) + 6;
 
-      // ---- date row (right-aligned, matches reference) --------------
-      y = drawDate(doc, t(ctx.locale, 'date'), formatDate(ctx.doc.issueDate, ctx.dateFormat),
-                   leftX, y, PAGE.contentWidth);
-
       // Storno discriminator. Drives:
       //   - page title swap ("Stornorechnung" instead of "Rechnung")
       //   - mandatory reference line under the title
@@ -1428,6 +1424,39 @@ function renderDocument(type, context) {
       // the cosmetic + accounting-sign branches differ.
       const isStorno = type === 'invoice' && ctx.doc.kind === 'storno';
 
+      // ---- document number (above) + date (below), both right-aligned
+      // The number sits directly under the sender address block so the
+      // customer + accountant find the invoice/quote/Storno reference
+      // exactly where DACH letter convention puts it. The date follows
+      // on its own row with the same right-anchored column structure so
+      // both label-and-value pairs align to the same right edge.
+      const docNumberForDisplay = ctx.doc.invoiceNumber || ctx.doc.quoteNumber || '';
+      const numberLabelKey = type === 'quote' ? 'quote_number_label' : 'invoice_number_label';
+      const metaRight = leftX + PAGE.contentWidth;
+      const metaLabelW = 110; // wider than the date label so "Rechnungsnummer" fits without wrap
+      const metaValueW = 110;
+      if (docNumberForDisplay) {
+        doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#000');
+        doc.text(`${t(ctx.locale, numberLabelKey)}:`,
+          metaRight - metaValueW - metaLabelW, y,
+          { width: metaLabelW, align: 'right', lineBreak: false });
+        doc.text(docNumberForDisplay, metaRight - metaValueW, y,
+          { width: metaValueW, align: 'right', lineBreak: false });
+        y += 14;
+      }
+      // Date row — same right-anchored layout so the two values stack
+      // visually as a single meta block. Replaces the previous
+      // drawDate() call, which lived below the title and used a
+      // tighter column spec.
+      doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#000');
+      doc.text(`${t(ctx.locale, 'date')}:`,
+        metaRight - metaValueW - metaLabelW, y,
+        { width: metaLabelW, align: 'right', lineBreak: false });
+      doc.text(formatDate(ctx.doc.issueDate, ctx.dateFormat),
+        metaRight - metaValueW, y,
+        { width: metaValueW, align: 'right', lineBreak: false });
+      y += 18; // line height + cushion before the title
+
       // ---- title ----------------------------------------------------
       const title = type === 'quote'
         ? t(ctx.locale, 'quote_title')
@@ -1435,23 +1464,6 @@ function renderDocument(type, context) {
           ? t(ctx.locale, 'storno_title')
           : t(ctx.locale, 'invoice_title');
       y = drawTitle(doc, title, leftX, y + 2);
-
-      // ---- document number ------------------------------------------
-      // Stamp the invoice / quote / Storno number directly under the
-      // title so the customer + their accountant don't have to dig
-      // through the file header to find it. Same style as the
-      // reference lines below (greyed body text, leftX-anchored).
-      const docNumberForDisplay = ctx.doc.invoiceNumber || ctx.doc.quoteNumber || '';
-      if (docNumberForDisplay) {
-        const numberLabelKey = type === 'quote' ? 'quote_number_label' : 'invoice_number_label';
-        doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#666');
-        doc.text(
-          `${t(ctx.locale, numberLabelKey)}: ${docNumberForDisplay}`,
-          leftX, y, { width: PAGE.contentWidth },
-        );
-        y = doc.y + 6;
-        doc.fillColor('#000');
-      }
 
       // Mandatory Storno reference line — "Bezug: Storno zu Rechnung
       // R-XXXX vom DATE". This is the §14c-defensible link from the
