@@ -153,7 +153,12 @@ async function listEntries(customerId, { status, limit = 200, offset = 0 } = {})
 async function createEntry(customerId, payload, adminId) {
   const customer = await db('customer_accounts').where({ id: customerId }).first();
   if (!customer) throw new AppError('Customer not found', 404);
-  if (!(customer.feature_hours_logging === true || customer.feature_hours_logging === 1)) {
+  // Both layers must be on: global master switch AND per-customer flag
+  // (matches the quotes/bills AND-logic). Migration 130 added the
+  // global toggle; defaults true on fresh installs.
+  const customerAccountsService = require('./customerAccountsService');
+  const eff = await customerAccountsService.getEffectiveFeaturesForCustomer(customer);
+  if (!eff.hoursLogging) {
     throw new AppError('Hour logging is not enabled for this customer', 409, 'FEATURE_OFF');
   }
 

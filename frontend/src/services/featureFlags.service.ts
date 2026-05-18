@@ -29,7 +29,12 @@ export type FeatureKey =
   // Clients. Independent of `bills` so admins who already use the
   // billing surface don't get a new menu entry automatically; they
   // opt in when they're ready to generate tax reports.
-  | 'taxReport';
+  | 'taxReport'
+  // Hours logging (migration 129). Master switch for the per-customer
+  // Hours card on the customer detail page. Independent of `bills`
+  // so admin can log hours without enabling the broader billing
+  // surface yet.
+  | 'hoursLogging';
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 

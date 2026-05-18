@@ -1226,7 +1226,7 @@ async function getEffectiveFeaturesForCustomer(customerOrId) {
     ? await db('customer_accounts').where('id', customerOrId).first()
     : customerOrId;
   if (!customer) {
-    return { calendar: false, quotes: false, bills: false };
+    return { calendar: false, quotes: false, bills: false, hoursLogging: false };
   }
   const globals = await getCustomerSurfaceGlobals();
   // SQLite returns booleans as 0/1; Postgres returns true/false. The
@@ -1235,10 +1235,17 @@ async function getEffectiveFeaturesForCustomer(customerOrId) {
   // customer toggle on. Normalise both shapes here so the Quotes /
   // Invoices tabs appear consistently.
   const truthy = (v) => v === true || v === 1 || v === '1' || v === 't';
+  // Hours logging gates on the master feature_flags row (Settings →
+  // Features) AND the per-customer flag. The customer_surface
+  // app_settings layer is admin-side-only here — no portal surface
+  // for hours, so we skip the third gate the bills/quotes use.
+  const hoursMaster = await db('feature_flags').where({ key: 'hoursLogging' }).first();
+  const hoursLoggingMaster = hoursMaster ? Boolean(hoursMaster.value) : true;
   return {
     calendar: globals.calendarEnabled && truthy(customer.feature_calendar),
     quotes:   globals.quotesEnabled   && truthy(customer.feature_quotes),
     bills:    globals.billsEnabled    && truthy(customer.feature_bills),
+    hoursLogging: hoursLoggingMaster && truthy(customer.feature_hours_logging),
   };
 }
 

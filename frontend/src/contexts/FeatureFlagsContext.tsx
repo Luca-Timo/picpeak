@@ -33,6 +33,10 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   // Tax / Steuer report sub-tab. Independent toggle; forced off when
   // `bills` is off (no invoices → nothing to report).
   taxReport: false,
+  // Hours logging master (migration 129). Off by default — admin
+  // enables in Settings → Features once they're ready to surface the
+  // per-customer Hours card.
+  hoursLogging: false,
 };
 
 export const FEATURE_FLAGS_QUERY_KEY = ['feature-flags'] as const;
