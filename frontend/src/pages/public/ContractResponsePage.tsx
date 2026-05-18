@@ -4,101 +4,29 @@
  *
  * Two signing paths offered side-by-side:
  *   1. In-browser: customer types their full name, optionally draws a
- *      signature on a small canvas, ticks "I have read and agree", and
- *      submits. Server captures IP + timestamp + the signature image,
- *      re-renders the PDF with the signature stamped, and emails the
- *      admin a notification.
+ *      signature on a small canvas (signature_pad), ticks "I have read
+ *      and agree", and submits. Server captures IP + timestamp + the
+ *      signature image, re-renders the PDF with the signature stamped,
+ *      and emails the admin a notification.
  *   2. Upload wet-signed PDF: customer can sign physically and upload
  *      the PDF instead. Server treats this as the authoritative copy.
  *
- * No external dependency — the canvas drawing is implemented with
- * plain pointer events. Lightweight by design; if a richer signature
- * UX is needed later we can layer signature_pad on top.
+ * Visual treatment matches QuoteResponsePage so admins get a consistent
+ * customer-facing surface: branding-aware dark/light mode via
+ * usePublicDarkMode, issuer logo + name header, neutral card styling.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, Upload, RotateCcw, FileDown } from 'lucide-react';
+import SignaturePad from 'signature_pad';
+import { CheckCircle, Upload, RotateCcw } from 'lucide-react';
+import { Loading } from '../../components/common';
+import { usePublicDarkMode } from '../../hooks/usePublicDarkMode';
 import {
   publicContractsService,
   type ContractBlockSection,
 } from '../../services/contracts.service';
-
-interface SignaturePadHandle {
-  toDataURL(): string;
-  clear(): void;
-  isEmpty(): boolean;
-}
-
-function useSignaturePad(): [
-  React.RefObject<HTMLCanvasElement>,
-  SignaturePadHandle,
-] {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const drewRef = useRef(false);
-
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    let drawing = false;
-    function point(ev: PointerEvent) {
-      const rect = canvas!.getBoundingClientRect();
-      return {
-        x: (ev.clientX - rect.left) * (canvas!.width / rect.width),
-        y: (ev.clientY - rect.top) * (canvas!.height / rect.height),
-      };
-    }
-    function down(ev: PointerEvent) {
-      drawing = true;
-      drewRef.current = true;
-      const p = point(ev);
-      ctx!.beginPath();
-      ctx!.moveTo(p.x, p.y);
-      canvas!.setPointerCapture(ev.pointerId);
-    }
-    function move(ev: PointerEvent) {
-      if (!drawing) return;
-      const p = point(ev);
-      ctx!.lineTo(p.x, p.y);
-      ctx!.stroke();
-    }
-    function up() { drawing = false; }
-
-    canvas.addEventListener('pointerdown', down);
-    canvas.addEventListener('pointermove', move);
-    canvas.addEventListener('pointerup', up);
-    canvas.addEventListener('pointercancel', up);
-    canvas.addEventListener('pointerleave', up);
-
-    return () => {
-      canvas.removeEventListener('pointerdown', down);
-      canvas.removeEventListener('pointermove', move);
-      canvas.removeEventListener('pointerup', up);
-      canvas.removeEventListener('pointercancel', up);
-      canvas.removeEventListener('pointerleave', up);
-    };
-  }, []);
-
-  const handle: SignaturePadHandle = {
-    toDataURL: () => ref.current?.toDataURL('image/png') || '',
-    clear: () => {
-      const canvas = ref.current;
-      const ctx = canvas?.getContext('2d');
-      if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
-      drewRef.current = false;
-    },
-    isEmpty: () => !drewRef.current,
-  };
-  return [ref, handle];
-}
 
 const SECTION_LABELS: Record<ContractBlockSection, { en: string; de: string }> = {
   basics: { en: 'Basics', de: 'Vertragsgrundlagen' },
@@ -113,23 +41,69 @@ export const ContractResponsePage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { token } = useParams<{ token: string }>();
   const queryClient = useQueryClient();
-  const [canvasRef, sig] = useSignaturePad();
+  // Honour branding dark/light mode the same way QuoteResponsePage
+  // does — without this the page renders in light regardless of admin
+  // settings. The wrapper styling below still has `dark:` variants
+  // so the page reads cleanly in either mode.
+  usePublicDarkMode();
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const padRef = useRef<SignaturePad | null>(null);
 
   const [name, setName] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
 
-  const { data, isLoading, error: loadError } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['public-contract', token],
     queryFn: () => publicContractsService.get(token as string),
     enabled: !!token,
     retry: false,
   });
 
+  // Switch UI locale to the contract's language for a consistent
+  // customer experience (matches QuoteResponsePage).
+  useEffect(() => {
+    if (data?.contract.language && data.contract.language !== i18n.language) {
+      i18n.changeLanguage(data.contract.language).catch(() => { /* tolerate */ });
+    }
+  }, [data, i18n]);
+
+  // Initialise signature_pad once the canvas is mounted. Re-sizes the
+  // canvas drawing buffer to its CSS dimensions × devicePixelRatio so
+  // the strokes stay crisp on HiDPI displays — signature_pad's docs
+  // recommend this pattern. Re-runs on window resize so rotating a
+  // phone doesn't break the input.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const resize = () => {
+      const ratio = Math.max(window.devicePixelRatio || 1, 1);
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * ratio;
+      canvas.height = rect.height * ratio;
+      const ctx = canvas.getContext('2d');
+      ctx?.scale(ratio, ratio);
+      padRef.current?.clear(); // canvas resize clears the buffer
+    };
+    padRef.current = new SignaturePad(canvas, {
+      penColor: '#111',
+      backgroundColor: 'rgba(255, 255, 255, 0)',
+    });
+    resize();
+    window.addEventListener('resize', resize);
+    return () => {
+      window.removeEventListener('resize', resize);
+      padRef.current?.off();
+      padRef.current = null;
+    };
+  }, [data]); // re-run if the contract loads after the canvas mounts
+
   const signMutation = useMutation({
     mutationFn: async () => {
-      const signatureDataUrl = sig.isEmpty() ? null : sig.toDataURL();
+      const pad = padRef.current;
+      const signatureDataUrl = pad && !pad.isEmpty() ? pad.toDataURL('image/png') : null;
       return publicContractsService.sign(token as string, {
         name: name.trim(),
         signatureDataUrl,
@@ -167,189 +141,217 @@ export const ContractResponsePage: React.FC = () => {
     signMutation.mutate();
   }
 
-  if (isLoading) return <div className="p-8 text-center">Loading…</div>;
-  if (loadError || !data) {
+  if (isLoading) {
     return (
-      <div className="max-w-2xl mx-auto p-8 text-center">
-        <h1 className="text-xl font-semibold mb-2">
-          {t('publicContract.notFoundTitle', 'Contract not available')}
-        </h1>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          {t('publicContract.notFoundBody', 'This signing link is invalid or expired. Please contact the sender.')}
-        </p>
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-900">
+        <Loading />
+      </div>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center p-6">
+        <div className="max-w-md text-center">
+          <h1 className="text-2xl font-bold mb-2 text-neutral-900 dark:text-neutral-100">
+            {t('publicContract.notFoundTitle', 'Contract not available')}
+          </h1>
+          <p className="text-neutral-600 dark:text-neutral-400">
+            {t('publicContract.notFoundBody', 'This signing link is invalid or expired. Please contact the sender.')}
+          </p>
+        </div>
       </div>
     );
   }
 
   const c = data.contract;
   const locale = (c.language === 'de' ? 'de' : 'en') as 'en' | 'de';
-  const alreadySigned = c.status !== 'sent' && (c.status === 'signed_by_customer' || c.status === 'signed_by_admin' || c.status === 'fully_signed');
+  const alreadySigned =
+    c.status === 'signed_by_customer'
+    || c.status === 'signed_by_admin'
+    || c.status === 'fully_signed';
 
   return (
-    <div className="max-w-3xl mx-auto p-4 md:p-8">
-      {/* Issuer / recipient */}
-      <header className="mb-6 pb-4 border-b border-neutral-200 dark:border-neutral-700">
-        {c.issuer && (
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            {c.issuer.companyName} — {c.issuer.addressLine1}, {c.issuer.postalCode} {c.issuer.city}
-          </p>
-        )}
-        <h1 className="text-2xl md:text-3xl font-bold mt-2">
-          {c.title || t('publicContract.fallbackTitle', 'Contract')}
-        </h1>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
-          <span className="font-mono">{c.contractNumber}</span>
-          {c.recipient && <span> · {c.recipient.companyName || c.recipient.displayName}</span>}
-        </p>
-      </header>
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100">
+      <div className="max-w-3xl mx-auto py-8 px-4">
+        {/* Issuer header — same shape as QuoteResponsePage. */}
+        <div className="text-center mb-6">
+          {c.issuer?.companyName && (
+            <h2 className="text-xl font-bold">{c.issuer.companyName}</h2>
+          )}
+          {c.issuer?.website && (
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">{c.issuer.website}</p>
+          )}
+        </div>
 
-      {/* Intro */}
-      {c.introText && (
-        <p className="mb-6 whitespace-pre-line text-sm leading-6">{c.introText}</p>
-      )}
-
-      {/* Sections + blocks */}
-      {c.sections.map((sec) => (
-        <section key={sec.section} className="mb-8">
-          <h2 className="text-xl font-semibold mb-3 border-b border-neutral-200 dark:border-neutral-700 pb-1">
-            {SECTION_LABELS[sec.section]?.[locale] || sec.section}
-          </h2>
-          {sec.blocks.map((blk) => (
-            <article key={blk.blockId} className="mb-4">
-              <h3 className="font-semibold text-sm mb-1">{blk.name}</h3>
-              <p className="text-sm whitespace-pre-line leading-6">{blk.body}</p>
-            </article>
-          ))}
-        </section>
-      ))}
-
-      {/* Outro */}
-      {c.outroText && (
-        <p className="mb-6 whitespace-pre-line text-sm leading-6">{c.outroText}</p>
-      )}
-
-      {/* Signing area */}
-      <section className="mt-10 p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900">
-        {alreadySigned ? (
-          <div className="text-center py-4">
-            <CheckCircle className="w-12 h-12 mx-auto text-green-600 mb-3" />
-            <h2 className="text-lg font-semibold">
-              {t('publicContract.signed.title', 'Thank you — the contract is signed.')}
-            </h2>
-            {c.signedCustomerName && (
-              <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
-                {t('publicContract.signed.by', 'Signed by')}: {c.signedCustomerName}
-              </p>
-            )}
-            {c.signedByAdminAt && c.signedAdminName && (
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                {t('publicContract.signed.counterBy', 'Counter-signed by')}: {c.signedAdminName}
-              </p>
-            )}
+        {/* Main card */}
+        <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 md:p-8">
+          <div className="flex items-baseline justify-between mb-4 gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold">
+              {c.title || t('publicContract.fallbackTitle', 'Contract')}
+            </h1>
+            <span className="text-xs font-mono px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300">
+              {c.contractNumber}
+            </span>
           </div>
-        ) : (
-          <>
-            <h2 className="text-lg font-semibold mb-3">
-              {t('publicContract.signTitle', 'Sign this contract')}
-            </h2>
 
-            <form onSubmit={handleSign} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  {t('publicContract.nameField', 'Your full name')}
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
-                />
-              </div>
+          {c.recipient && (
+            <div className="mb-4 text-sm text-neutral-700 dark:text-neutral-300">
+              <p className="font-medium">{c.recipient.companyName || c.recipient.displayName}</p>
+              <p className="text-neutral-500 dark:text-neutral-400">{c.recipient.email}</p>
+            </div>
+          )}
 
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  {t('publicContract.signaturePrompt', 'Draw your signature (optional)')}
+          {c.introText && (
+            <p className="whitespace-pre-line text-neutral-700 dark:text-neutral-300 my-4">
+              {c.introText}
+            </p>
+          )}
+
+          {/* Sections + blocks */}
+          {c.sections.map((sec) => (
+            <section key={sec.section} className="mt-6">
+              <h2 className="text-lg font-semibold border-b border-neutral-200 dark:border-neutral-700 pb-1 mb-3">
+                {SECTION_LABELS[sec.section]?.[locale] || sec.section}
+              </h2>
+              {sec.blocks.map((blk) => (
+                <article key={blk.blockId} className="mb-4">
+                  <h3 className="font-semibold text-sm mb-1">{blk.name}</h3>
+                  <p className="text-sm whitespace-pre-line leading-6 text-neutral-700 dark:text-neutral-300">
+                    {blk.body}
+                  </p>
+                </article>
+              ))}
+            </section>
+          ))}
+
+          {c.outroText && (
+            <p className="whitespace-pre-line text-neutral-700 dark:text-neutral-300 mt-6">
+              {c.outroText}
+            </p>
+          )}
+        </div>
+
+        {/* Signing card */}
+        <div className="mt-6 bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 md:p-8">
+          {alreadySigned ? (
+            <div className="text-center py-4">
+              <CheckCircle className="w-12 h-12 mx-auto text-green-600 mb-3" />
+              <h2 className="text-lg font-semibold">
+                {t('publicContract.signed.title', 'Thank you — the contract is signed.')}
+              </h2>
+              {c.signedCustomerName && (
+                <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
+                  {t('publicContract.signed.by', 'Signed by')}: {c.signedCustomerName}
+                </p>
+              )}
+              {c.signedByAdminAt && c.signedAdminName && (
+                <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                  {t('publicContract.signed.counterBy', 'Counter-signed by')}: {c.signedAdminName}
+                </p>
+              )}
+            </div>
+          ) : (
+            <>
+              <h2 className="text-lg font-semibold mb-3">
+                {t('publicContract.signTitle', 'Sign this contract')}
+              </h2>
+
+              <form onSubmit={handleSign} className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    {t('publicContract.nameField', 'Your full name')}
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-sm text-neutral-900 dark:text-neutral-100"
+                    autoComplete="name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    {t('publicContract.signaturePrompt', 'Draw your signature (optional)')}
+                  </label>
+                  <canvas
+                    ref={canvasRef}
+                    className="w-full h-32 bg-white rounded border border-neutral-300 dark:border-neutral-600 touch-none"
+                  />
+                  <div className="mt-1 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => padRef.current?.clear()}
+                      className="text-xs text-neutral-600 dark:text-neutral-400 hover:underline inline-flex items-center gap-1"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      {t('publicContract.clearSignature', 'Clear')}
+                    </button>
+                  </div>
+                </div>
+
+                <label className="flex items-start gap-2 text-sm text-neutral-700 dark:text-neutral-300">
+                  <input
+                    type="checkbox"
+                    checked={accepted}
+                    onChange={(e) => setAccepted(e.target.checked)}
+                    className="mt-1"
+                  />
+                  <span>
+                    {t(
+                      'publicContract.acceptCheckbox',
+                      'I have read this contract and agree to be bound by its terms.',
+                    )}
+                  </span>
                 </label>
-                <canvas
-                  ref={canvasRef}
-                  width={600}
-                  height={150}
-                  className="w-full h-32 bg-white rounded border border-neutral-300 dark:border-neutral-600 touch-none"
-                />
-                <div className="mt-1 flex justify-end">
+
+                {error && <p className="text-sm text-red-600">{error}</p>}
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={signMutation.isPending}
+                    className="px-4 py-2 rounded-md bg-accent-dark text-white text-sm hover:opacity-90 disabled:opacity-50"
+                  >
+                    {t('publicContract.submit', 'Sign contract')}
+                  </button>
+                </div>
+              </form>
+
+              {/* Alternative: upload wet-signed PDF */}
+              <div className="mt-6 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+                <h3 className="text-sm font-semibold mb-2">
+                  {t('publicContract.uploadAlternative', 'Or upload a wet-signed PDF')}
+                </h3>
+                <p className="text-xs text-neutral-600 dark:text-neutral-400 mb-2">
+                  {t(
+                    'publicContract.uploadHint',
+                    'Sign the printed contract by hand, scan it, and upload the PDF here.',
+                  )}
+                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                    className="text-sm text-neutral-700 dark:text-neutral-300"
+                  />
                   <button
                     type="button"
-                    onClick={() => sig.clear()}
-                    className="text-xs text-neutral-600 hover:text-accent-dark inline-flex items-center gap-1"
+                    disabled={!uploadFile || uploadMutation.isPending}
+                    onClick={() => uploadFile && uploadMutation.mutate(uploadFile)}
+                    className="px-3 py-1.5 rounded-md border border-neutral-300 dark:border-neutral-600 text-sm inline-flex items-center gap-1 disabled:opacity-50 text-neutral-700 dark:text-neutral-300"
                   >
-                    <RotateCcw className="w-3 h-3" />
-                    {t('publicContract.clearSignature', 'Clear')}
+                    <Upload className="w-4 h-4" />
+                    {t('publicContract.uploadButton', 'Upload signed PDF')}
                   </button>
                 </div>
               </div>
-
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={accepted}
-                  onChange={(e) => setAccepted(e.target.checked)}
-                  className="mt-1"
-                />
-                <span>
-                  {t(
-                    'publicContract.acceptCheckbox',
-                    'I have read this contract and agree to be bound by its terms.',
-                  )}
-                </span>
-              </label>
-
-              {error && (
-                <p className="text-sm text-red-600">{error}</p>
-              )}
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={signMutation.isPending}
-                  className="px-4 py-2 rounded-md bg-accent-dark text-white text-sm hover:opacity-90 disabled:opacity-50"
-                >
-                  {t('publicContract.submit', 'Sign contract')}
-                </button>
-              </div>
-            </form>
-
-            {/* Alternative: upload wet-signed PDF */}
-            <div className="mt-6 pt-4 border-t border-neutral-200 dark:border-neutral-700">
-              <h3 className="text-sm font-semibold mb-2">
-                {t('publicContract.uploadAlternative', 'Or upload a wet-signed PDF')}
-              </h3>
-              <p className="text-xs text-neutral-600 dark:text-neutral-400 mb-2">
-                {t(
-                  'publicContract.uploadHint',
-                  'Sign the printed contract by hand, scan it, and upload the PDF here.',
-                )}
-              </p>
-              <div className="flex items-center gap-2">
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                  className="text-sm"
-                />
-                <button
-                  type="button"
-                  disabled={!uploadFile || uploadMutation.isPending}
-                  onClick={() => uploadFile && uploadMutation.mutate(uploadFile)}
-                  className="px-3 py-1.5 rounded-md border border-neutral-300 dark:border-neutral-600 text-sm inline-flex items-center gap-1 disabled:opacity-50"
-                >
-                  <Upload className="w-4 h-4" />
-                  {t('publicContract.uploadButton', 'Upload signed PDF')}
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </section>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
