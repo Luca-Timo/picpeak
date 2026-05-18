@@ -12,6 +12,7 @@ const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const customerAccountsService = require('../services/customerAccountsService');
+const customerHoursService = require('../services/customerHoursService');
 
 const router = express.Router();
 
@@ -58,6 +59,12 @@ function transformCustomer(c) {
     featureCalendar: c.feature_calendar === true || c.feature_calendar === 1,
     featureQuotes:   c.feature_quotes   === true || c.feature_quotes   === 1,
     featureBills:    c.feature_bills    === true || c.feature_bills    === 1,
+    // Hours logging (migration 129) — fourth per-customer flag.
+    // Default hourly rate (in minor units) is null when admin hasn't
+    // set one; the editor surfaces it as an empty input and forces a
+    // per-entry override on every logged block.
+    featureHoursLogging: c.feature_hours_logging === true || c.feature_hours_logging === 1,
+    hourlyRateMinor: c.hourly_rate_minor != null ? Number(c.hourly_rate_minor) : null,
     lastLogin: c.last_login,
     createdAt: c.created_at,
     updatedAt: c.updated_at,
@@ -344,12 +351,17 @@ router.put('/:id', [
   body('feature_calendar').optional().isBoolean(),
   body('feature_quotes').optional().isBoolean(),
   body('feature_bills').optional().isBoolean(),
+  // Hours logging (migration 129).
+  body('feature_hours_logging').optional().isBoolean(),
+  body('hourly_rate_minor').optional({ nullable: true }).isInt({ min: 0 }),
   // CRM billing cadence — see migration 102. `per_event` keeps the
   // existing per-event payment plan; monthly/quarterly snap every
   // generated invoice to billing_cycle_day of the next period.
+  // Cycle day spans -15..-1 (days before month end) and 1..28
+  // (day of month) per migration 128 + service-layer clamp.
   body('billing_cadence').optional().isIn(['per_event', 'monthly', 'quarterly']),
-  body('billing_cycle_day').optional().isInt({ min: 1, max: 28 })
-    .withMessage('billing_cycle_day must be 1–28 (clamps to month length anyway)'),
+  body('billing_cycle_day').optional().isInt({ min: -15, max: 28 })
+    .withMessage('billing_cycle_day must be -15..-1 (days before month end) or 1..28 (day of month)'),
 ], handleAsync(async (req, res) => {
   validateRequest(req);
   const customer = await customerAccountsService.updateCustomer(
@@ -470,5 +482,119 @@ router.put('/:id/events', [
   );
   successResponse(res, result);
 }));
+
+// ---------------------------------------------------------------------
+// Hour entries (migration 129).
+//
+// Five endpoints under /api/admin/customers/:id/hour-entries — list,
+// create, update, delete, plus the per-event "Bill these hours"
+// action. Mounted alongside the /events sub-resource above; permission
+// tier is customers.create, same as the rest of the customer-write
+// surface.
+// ---------------------------------------------------------------------
+
+router.get('/:id/hour-entries', [
+  adminAuth,
+  requirePermission('customers.view'),
+  param('id').isInt({ min: 1 }),
+  query('status').optional().isIn(['unbilled', 'billed', 'cancelled']),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const rows = await customerHoursService.listEntries(
+    parseInt(req.params.id, 10),
+    { status: req.query.status },
+  );
+  successResponse(res, { entries: rows.map(transformHourEntry) });
+}));
+
+router.post('/:id/hour-entries', [
+  adminAuth,
+  requirePermission('customers.create'),
+  param('id').isInt({ min: 1 }),
+  body('entryDate').isISO8601(),
+  body('startTime').matches(/^([01]\d|2[0-3]):[0-5]\d$/),
+  body('endTime').matches(/^([01]\d|2[0-3]):[0-5]\d$/),
+  body('hourlyRateMinorOverride').optional({ nullable: true }).isInt({ min: 0 }),
+  body('description').optional({ nullable: true }).isString().isLength({ max: 1000 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const result = await customerHoursService.createEntry(
+    parseInt(req.params.id, 10),
+    req.body,
+    req.admin.id,
+  );
+  successResponse(res, result, 201);
+}));
+
+router.put('/:id/hour-entries/:entryId', [
+  adminAuth,
+  requirePermission('customers.create'),
+  param('id').isInt({ min: 1 }),
+  param('entryId').isInt({ min: 1 }),
+  body('entryDate').optional().isISO8601(),
+  body('startTime').optional().matches(/^([01]\d|2[0-3]):[0-5]\d$/),
+  body('endTime').optional().matches(/^([01]\d|2[0-3]):[0-5]\d$/),
+  body('hourlyRateMinorOverride').optional({ nullable: true }).isInt({ min: 0 }),
+  body('description').optional({ nullable: true }).isString().isLength({ max: 1000 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const result = await customerHoursService.updateEntry(
+    parseInt(req.params.entryId, 10),
+    req.body,
+    req.admin.id,
+  );
+  successResponse(res, result);
+}));
+
+router.delete('/:id/hour-entries/:entryId', [
+  adminAuth,
+  requirePermission('customers.create'),
+  param('id').isInt({ min: 1 }),
+  param('entryId').isInt({ min: 1 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const result = await customerHoursService.deleteEntry(
+    parseInt(req.params.entryId, 10),
+    req.admin.id,
+  );
+  successResponse(res, result);
+}));
+
+router.post('/:id/hour-entries/bill', [
+  adminAuth,
+  requirePermission('customers.create'),
+  param('id').isInt({ min: 1 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const result = await customerHoursService.billUnbilledEntries(
+    parseInt(req.params.id, 10),
+    req.admin.id,
+  );
+  successResponse(res, result, 201);
+}));
+
+function transformHourEntry(h) {
+  return {
+    id: h.id,
+    customerAccountId: h.customer_account_id,
+    entryDate: typeof h.entry_date === 'string' ? h.entry_date.slice(0, 10) : h.entry_date,
+    startTime: h.start_time,
+    endTime: h.end_time,
+    durationMinutes: Number(h.duration_minutes),
+    hourlyRateMinorOverride: h.hourly_rate_minor_override != null ? Number(h.hourly_rate_minor_override) : null,
+    description: h.description,
+    status: h.status,
+    invoiceId: h.invoice_id,
+    invoiceLineItemId: h.invoice_line_item_id,
+    invoiceNumber: h.invoice_number || null,
+    invoiceStatus: h.invoice_status || null,
+    invoiceIsMonthlyDraft: h.invoice_is_monthly_draft === true || h.invoice_is_monthly_draft === 1,
+    invoiceScheduledSendAt: h.invoice_scheduled_send_at,
+    billedAt: h.billed_at,
+    recordedByAdminId: h.recorded_by_admin_id,
+    createdAt: h.created_at,
+    updatedAt: h.updated_at,
+  };
+}
 
 module.exports = router;

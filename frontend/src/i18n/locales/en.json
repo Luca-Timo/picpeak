@@ -2900,6 +2900,50 @@
     }
   },
   "customers": {
+    "field": {
+      "featureHoursLogging": "Hours logging",
+      "hourlyRate": "Default hourly rate",
+      "hourlyRateHint": "Major units (e.g. 150.00 for CHF 150). Leave blank to require a per-entry override on every block."
+    },
+    "hours": {
+      "section": "Hours",
+      "monthlyHint": "Entries auto-append to the current monthly draft. Edit / delete remains possible until the scheduler arms the draft for send.",
+      "perEventHint": "Logged entries stay unbilled until you click \"Bill these hours\" — a standalone invoice is generated with one line per entry.",
+      "form": {
+        "title": "Log new entry",
+        "date": "Date",
+        "start": "Start",
+        "end": "End",
+        "rateOverride": "Rate override",
+        "note": "Note / description",
+        "notePlaceholder": "What was worked on?",
+        "save": "Add entry"
+      },
+      "col": {
+        "date": "Date",
+        "range": "Time",
+        "hours": "Hours",
+        "rate": "Rate",
+        "total": "Total",
+        "note": "Note",
+        "status": "Status"
+      },
+      "status": {
+        "unbilled": "Unbilled",
+        "billed": "Billed",
+        "billedOn": "Billed: {{number}}"
+      },
+      "billButton": "Bill these hours",
+      "unbilledCount": "{{count}} unbilled entries totaling {{total}}",
+      "empty": "No entries logged yet.",
+      "confirmDelete": "Delete this entry? If it has been billed onto a draft, the matching invoice line will also be removed.",
+      "locked": "Locked: invoice already armed for send",
+      "toast": {
+        "created": "Entry logged",
+        "deleted": "Entry deleted",
+        "billed": "Hours billed"
+      }
+    },
     "create": {
       "openButton": "Create passive customer",
       "openLink": "+ Create new customer",

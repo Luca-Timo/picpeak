@@ -494,6 +494,49 @@ async function appendToMonthlyDraft(payload, customer, adminId, trx) {
 }
 
 /**
+ * Append a single, fully-formed line item to the customer's running
+ * monthly draft (migration 128 + 129). Used by customerHoursService
+ * when an hour entry is logged for a monthly-mode customer — we want
+ * the inserted `invoice_line_items.id` back so the entry can be
+ * stamped with the cross-reference.
+ *
+ * `lineItem` is the shape consumed by appendToMonthlyDraft's internal
+ * insertLineItemsHierarchical helper (description, quantity,
+ * unit_price_minor, discount_percent, line_total_minor, etc.). The
+ * `position` field is set internally — caller-supplied positions are
+ * ignored to keep the accumulator's sequence intact.
+ *
+ * Returns { invoiceId, lineItemId } — the draft id plus the id of the
+ * newly-appended row.
+ */
+async function appendOneLineItemToMonthlyDraft(customer, lineItem, adminId, trx) {
+  // Reuse the accumulator path — it handles get-or-create + totals
+  // recompute + activity log. We pass a single-item array.
+  await appendToMonthlyDraft({
+    customerAccountId: customer.id,
+    lineItems: [lineItem],
+    vatRate: 0, // hours logging doesn't ship with VAT today
+  }, customer, adminId, trx);
+
+  // Look up the draft we just appended onto + its tail line item.
+  // Newest insert wins by id desc; we filter by position match so
+  // concurrent appends in another tx don't return the wrong row.
+  const draft = await trx('invoices')
+    .where({ customer_account_id: customer.id, is_monthly_draft: true })
+    .orderBy('id', 'desc')
+    .first();
+  if (!draft) {
+    // Defensive — appendToMonthlyDraft would have created one.
+    throw new AppError('Monthly draft missing after append', 500);
+  }
+  const tail = await trx('invoice_line_items')
+    .where({ invoice_id: draft.id })
+    .orderBy('position', 'desc')
+    .first();
+  return { invoiceId: draft.id, lineItemId: tail?.id || null };
+}
+
+/**
  * Create one invoice. Returns id. Used both manually (admin creates a
  * standalone invoice) and by scheduleInvoicesForEvent (one per installment).
  */
@@ -2587,4 +2630,10 @@ module.exports = {
   renderInvoicePdfFromPayload,
   runScheduledTasks,
   resolveSkontoPercentForInvoice,
+  // Monthly billing accumulator (migration 128) — exposed so
+  // customerHoursService can append hour-logged line items onto the
+  // running draft without duplicating the period/totals logic.
+  getOrCreateMonthlyDraft,
+  appendToMonthlyDraft,
+  appendOneLineItemToMonthlyDraft,
 };

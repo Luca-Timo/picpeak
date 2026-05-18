@@ -16,6 +16,7 @@ import { toast } from 'react-toastify';
 import {
   ArrowLeft, Mail, MapPin, Phone, Building2, Save, Trash2, AlertTriangle,
   CheckCircle2, X, FileText, Calendar, KeyRound, ToggleLeft, Settings as SettingsIcon,
+  Clock,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -33,7 +34,8 @@ type EditableFields =
   | 'phone' | 'companyName' | 'billingEmail' | 'vatId'
   | 'addressLine1' | 'addressLine2' | 'postalCode' | 'city' | 'state'
   | 'countryCode' | 'countryName' | 'preferredLanguage' | 'notes'
-  | 'featureCalendar' | 'featureQuotes' | 'featureBills';
+  | 'featureCalendar' | 'featureQuotes' | 'featureBills' | 'featureHoursLogging'
+  | 'hourlyRateMinor';
 
 const formatDate = (iso: string | null | undefined) => {
   if (!iso) return '—';
@@ -103,11 +105,13 @@ export const CustomerDetailPage: React.FC = () => {
         featureCalendar: customer.featureCalendar ?? false,
         featureQuotes:   customer.featureQuotes   ?? false,
         featureBills:    customer.featureBills    ?? false,
+        featureHoursLogging: customer.featureHoursLogging ?? false,
+        hourlyRateMinor: customer.hourlyRateMinor ?? null,
       } as any);
     }
   }, [customer, form]);
 
-  const toggleFeature = (key: 'featureCalendar' | 'featureQuotes' | 'featureBills') => {
+  const toggleFeature = (key: 'featureCalendar' | 'featureQuotes' | 'featureBills' | 'featureHoursLogging') => {
     setForm((prev) => ({ ...prev, [key]: !prev[key] }) as any);
   };
 
@@ -517,6 +521,7 @@ export const CustomerDetailPage: React.FC = () => {
             { key: 'featureCalendar', labelKey: 'customer.nav.calendar', fallback: 'Calendar' },
             { key: 'featureQuotes',   labelKey: 'customer.nav.quotes',   fallback: 'Quotes' },
             { key: 'featureBills',    labelKey: 'customer.nav.bills',    fallback: 'Bills' },
+            { key: 'featureHoursLogging', labelKey: 'customers.field.featureHoursLogging', fallback: 'Hours logging' },
           ] as const).map(({ key, labelKey, fallback }) => {
             const enabled = !!form[key];
             return (
@@ -549,6 +554,19 @@ export const CustomerDetailPage: React.FC = () => {
           })}
         </div>
       </Card>
+
+      {/* Hours section (migration 129). Only renders when the
+          feature_hours_logging toggle above is on. Lives between
+          features and account-actions so admins see it right after
+          flipping the toggle. */}
+      {form.featureHoursLogging && (
+        <HoursSection
+          customerId={customerId}
+          customerHourlyRateMinor={form.hourlyRateMinor ?? null}
+          billingCadence={customer.billingCadence || 'per_event'}
+          onHourlyRateChange={(v) => setForm((prev) => ({ ...prev, hourlyRateMinor: v } as any))}
+        />
+      )}
 
       {/* Account actions: password reset OR portal invitation
           (#354 follow-up + passive-customer flow). Passive customers
@@ -734,3 +752,297 @@ export const CustomerDetailPage: React.FC = () => {
 };
 
 export default CustomerDetailPage;
+
+// ---------------------------------------------------------------------
+// Hours section card (migration 129).
+//
+// Rendered only when feature_hours_logging is on. Holds the default
+// hourly rate input + the entry list + an inline "Log new entry" form.
+// Talks to the backend via customerAdminService.{list,create,update,
+// delete,billUnbilled}HourEntries — all writes go through react-query
+// invalidation so the list refreshes after every action.
+// ---------------------------------------------------------------------
+interface HoursSectionProps {
+  customerId: number;
+  customerHourlyRateMinor: number | null;
+  billingCadence: 'per_event' | 'monthly' | 'quarterly';
+  onHourlyRateChange: (next: number | null) => void;
+}
+
+const HoursSection: React.FC<HoursSectionProps> = ({
+  customerId, customerHourlyRateMinor, billingCadence, onHourlyRateChange,
+}) => {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startTime, setStartTime] = useState('09:00');
+  const [endTime, setEndTime] = useState('10:00');
+  const [rateOverride, setRateOverride] = useState<string>('');
+  const [description, setDescription] = useState('');
+
+  const { data: entries = [], isLoading } = useQuery({
+    queryKey: ['admin-customer-hour-entries', customerId],
+    queryFn: () => customerAdminService.listHourEntries(customerId),
+    enabled: Number.isFinite(customerId) && customerId > 0,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: () => customerAdminService.createHourEntry(customerId, {
+      entryDate, startTime, endTime,
+      hourlyRateMinorOverride: rateOverride ? Math.round(Number(rateOverride) * 100) : null,
+      description: description || null,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
+      qc.invalidateQueries({ queryKey: ['admin-customer', customerId] });
+      setStartTime('09:00');
+      setEndTime('10:00');
+      setRateOverride('');
+      setDescription('');
+      toast.success(t('customers.hours.toast.created', 'Entry logged'));
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || err?.message || 'Failed to log entry';
+      toast.error(msg);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (entryId: number) => customerAdminService.deleteHourEntry(customerId, entryId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
+      qc.invalidateQueries({ queryKey: ['admin-customer', customerId] });
+      toast.success(t('customers.hours.toast.deleted', 'Entry deleted'));
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.error || 'Failed to delete entry');
+    },
+  });
+
+  const billMutation = useMutation({
+    mutationFn: () => customerAdminService.billUnbilledHourEntries(customerId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
+      qc.invalidateQueries({ queryKey: ['admin-customer', customerId] });
+      toast.success(t('customers.hours.toast.billed', 'Hours billed'));
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.error || 'Failed to bill hours');
+    },
+  });
+
+  const unbilledCount = entries.filter((e) => e.status === 'unbilled').length;
+  const isMonthly = billingCadence === 'monthly';
+
+  // Local lockout check — mirrors customerHoursService.isEntryLocked
+  // so the delete button can be disabled before the request is sent.
+  const isLocked = (entry: typeof entries[number]) => {
+    if (!entry.invoiceId) return false;
+    if (entry.invoiceIsMonthlyDraft) return false;
+    if (entry.invoiceStatus !== 'scheduled') return true;
+    if (!entry.invoiceScheduledSendAt) return false;
+    return new Date(entry.invoiceScheduledSendAt).getTime() <= Date.now();
+  };
+
+  return (
+    <Card padding="lg">
+      <h2 className="text-lg font-semibold text-theme mb-1 flex items-center gap-2">
+        <Clock className="w-5 h-5" />
+        {t('customers.hours.section', 'Hours')}
+      </h2>
+      <p className="text-xs text-muted-theme mb-4">
+        {isMonthly
+          ? t('customers.hours.monthlyHint',
+            'Entries auto-append to the current monthly draft. Edit / delete remains possible until the scheduler arms the draft for send.')
+          : t('customers.hours.perEventHint',
+            'Logged entries stay unbilled until you click "Bill these hours" — a standalone invoice is generated with one line per entry.')}
+      </p>
+
+      {/* Default rate — saved with the customer record via the
+          existing save button on this page. Input is in major units;
+          backend stores minor units. */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-theme mb-1">
+          {t('customers.field.hourlyRate', 'Default hourly rate')}
+        </label>
+        <input
+          type="number"
+          step="0.01"
+          min={0}
+          value={customerHourlyRateMinor != null ? (customerHourlyRateMinor / 100).toFixed(2) : ''}
+          onChange={(e) => {
+            const raw = e.target.value;
+            onHourlyRateChange(raw === '' ? null : Math.round(Number(raw) * 100));
+          }}
+          className="w-40 input"
+          placeholder="150.00"
+        />
+        <p className="text-xs text-muted-theme mt-1">
+          {t('customers.field.hourlyRateHint',
+            'Major units (e.g. 150.00 for CHF 150). Leave blank to require a per-entry override on every block.')}
+        </p>
+      </div>
+
+      {/* Inline log-new-entry form. */}
+      <div className="border-t border-neutral-200 dark:border-neutral-700 pt-4 mb-4">
+        <h3 className="text-sm font-semibold mb-3">{t('customers.hours.form.title', 'Log new entry')}</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div>
+            <label className="block text-xs text-muted-theme mb-1">
+              {t('customers.hours.form.date', 'Date')}
+            </label>
+            <input type="date" value={entryDate}
+              onChange={(e) => setEntryDate(e.target.value)} className="input w-full" />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-theme mb-1">
+              {t('customers.hours.form.start', 'Start')}
+            </label>
+            <input type="time" value={startTime}
+              onChange={(e) => setStartTime(e.target.value)} className="input w-full" />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-theme mb-1">
+              {t('customers.hours.form.end', 'End')}
+            </label>
+            <input type="time" value={endTime}
+              onChange={(e) => setEndTime(e.target.value)} className="input w-full" />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-theme mb-1">
+              {t('customers.hours.form.rateOverride', 'Rate override')}
+            </label>
+            <input type="number" step="0.01" min={0} value={rateOverride}
+              onChange={(e) => setRateOverride(e.target.value)}
+              placeholder={customerHourlyRateMinor != null
+                ? (customerHourlyRateMinor / 100).toFixed(2)
+                : '—'}
+              className="input w-full" />
+          </div>
+        </div>
+        <div className="mt-3">
+          <label className="block text-xs text-muted-theme mb-1">
+            {t('customers.hours.form.note', 'Note / description')}
+          </label>
+          <textarea rows={2} value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="input w-full text-sm"
+            placeholder={t('customers.hours.form.notePlaceholder',
+              'What was worked on?') as string} />
+        </div>
+        <div className="mt-3 flex justify-end">
+          <Button
+            variant="primary"
+            disabled={createMutation.isPending}
+            isLoading={createMutation.isPending}
+            onClick={() => createMutation.mutate()}
+          >
+            {t('customers.hours.form.save', 'Add entry')}
+          </Button>
+        </div>
+      </div>
+
+      {/* Bill-these-hours button for per-event customers only. */}
+      {!isMonthly && unbilledCount > 0 && (
+        <div className="mb-4 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 rounded p-3">
+          <span className="text-sm">
+            {t('customers.hours.unbilledCount',
+              '{{count}} unbilled entries totaling {{total}}',
+              {
+                count: unbilledCount,
+                total: (entries
+                  .filter((e) => e.status === 'unbilled')
+                  .reduce((s, e) => s + ((e.hourlyRateMinorOverride ?? customerHourlyRateMinor ?? 0) * e.durationMinutes / 60), 0) / 100)
+                  .toFixed(2),
+              })}
+          </span>
+          <Button
+            variant="primary"
+            disabled={billMutation.isPending}
+            isLoading={billMutation.isPending}
+            onClick={() => billMutation.mutate()}
+          >
+            {t('customers.hours.billButton', 'Bill these hours')}
+          </Button>
+        </div>
+      )}
+
+      {/* Entry list table. */}
+      {isLoading ? (
+        <p className="text-sm text-muted-theme">{t('common.loading', 'Loading…')}</p>
+      ) : entries.length === 0 ? (
+        <p className="text-sm text-muted-theme">
+          {t('customers.hours.empty', 'No entries logged yet.')}
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase text-muted-theme">
+                <th className="py-2 pr-3">{t('customers.hours.col.date', 'Date')}</th>
+                <th className="py-2 pr-3">{t('customers.hours.col.range', 'Time')}</th>
+                <th className="py-2 pr-3 text-right">{t('customers.hours.col.hours', 'Hours')}</th>
+                <th className="py-2 pr-3 text-right">{t('customers.hours.col.rate', 'Rate')}</th>
+                <th className="py-2 pr-3 text-right">{t('customers.hours.col.total', 'Total')}</th>
+                <th className="py-2 pr-3">{t('customers.hours.col.note', 'Note')}</th>
+                <th className="py-2 pr-3">{t('customers.hours.col.status', 'Status')}</th>
+                <th className="py-2 pr-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((e) => {
+                const rate = e.hourlyRateMinorOverride ?? customerHourlyRateMinor ?? 0;
+                const hours = e.durationMinutes / 60;
+                const total = (hours * rate) / 100;
+                const locked = isLocked(e);
+                return (
+                  <tr key={e.id} className="border-t border-neutral-200 dark:border-neutral-700">
+                    <td className="py-1.5 pr-3 tabular-nums">{e.entryDate}</td>
+                    <td className="py-1.5 pr-3 tabular-nums">{e.startTime}–{e.endTime}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">{hours.toFixed(2)}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">{(rate / 100).toFixed(2)}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums font-medium">{total.toFixed(2)}</td>
+                    <td className="py-1.5 pr-3 max-w-xs truncate" title={e.description || ''}>
+                      {e.description || '—'}
+                    </td>
+                    <td className="py-1.5 pr-3">
+                      {e.status === 'billed' ? (
+                        <span className="text-xs text-green-700 dark:text-green-300">
+                          {e.invoiceNumber
+                            ? t('customers.hours.status.billedOn',
+                              'Billed: {{number}}', { number: e.invoiceNumber })
+                            : t('customers.hours.status.billed', 'Billed')}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-amber-700 dark:text-amber-300">
+                          {t('customers.hours.status.unbilled', 'Unbilled')}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-1.5 pr-3 text-right">
+                      <button
+                        type="button"
+                        disabled={locked || deleteMutation.isPending}
+                        onClick={() => {
+                          if (window.confirm(t('customers.hours.confirmDelete',
+                            'Delete this entry? If it has been billed onto a draft, the matching invoice line will also be removed.') as string)) {
+                            deleteMutation.mutate(e.id);
+                          }
+                        }}
+                        className="text-xs text-red-600 hover:underline disabled:text-neutral-400 disabled:cursor-not-allowed"
+                        title={locked ? t('customers.hours.locked',
+                          'Locked: invoice already armed for send') as string : undefined}
+                      >
+                        {t('common.delete', 'Delete')}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+};

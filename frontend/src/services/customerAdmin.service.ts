@@ -27,6 +27,13 @@ export interface CustomerAccountSummary {
   featureCalendar?: boolean;
   featureQuotes?: boolean;
   featureBills?: boolean;
+  /** Per-customer hour logging (migration 129). When on, the customer
+   *  detail page renders the "Hours" section card. */
+  featureHoursLogging?: boolean;
+  /** Default hourly rate in minor units (e.g. CHF 150.00 = 15000).
+   *  null when admin hasn't set one — each entry then requires a
+   *  per-block override. */
+  hourlyRateMinor?: number | null;
 }
 
 export interface CustomerAccountDetail extends CustomerAccountSummary {
@@ -145,6 +152,12 @@ export const customerAdminService = {
       featureCalendar: 'feature_calendar',
       featureQuotes:   'feature_quotes',
       featureBills:    'feature_bills',
+      featureHoursLogging: 'feature_hours_logging',
+      // Hour-logging default rate (migration 129).
+      hourlyRateMinor: 'hourly_rate_minor',
+      // CRM billing cadence (migration 102 + 128).
+      billingCadence: 'billing_cadence',
+      billingCycleDay: 'billing_cycle_day',
     };
     for (const [k, v] of Object.entries(payload)) {
       if (k in map) snake[map[k]] = v;
@@ -268,4 +281,100 @@ export const customerAdminService = {
     );
     return (response.data as any).data?.invitation ?? (response.data as any).invitation;
   },
+
+  // -------------------------------------------------------------------
+  // Hour entries (migration 129).
+  // -------------------------------------------------------------------
+
+  async listHourEntries(customerId: number, status?: HourEntryStatus): Promise<HourEntry[]> {
+    const response = await api.get<{ data: { entries: HourEntry[] } }>(
+      `/admin/customers/${customerId}/hour-entries`,
+      { params: status ? { status } : undefined },
+    );
+    return ((response.data as any).data?.entries ?? (response.data as any).entries) || [];
+  },
+
+  async createHourEntry(
+    customerId: number,
+    payload: HourEntryCreatePayload,
+  ): Promise<{ id: number; status: HourEntryStatus; invoiceId?: number }> {
+    const response = await api.post(
+      `/admin/customers/${customerId}/hour-entries`,
+      payload,
+    );
+    return (response.data as any).data ?? response.data;
+  },
+
+  async updateHourEntry(
+    customerId: number,
+    entryId: number,
+    payload: HourEntryUpdatePayload,
+  ): Promise<{ id: number }> {
+    const response = await api.put(
+      `/admin/customers/${customerId}/hour-entries/${entryId}`,
+      payload,
+    );
+    return (response.data as any).data ?? response.data;
+  },
+
+  async deleteHourEntry(customerId: number, entryId: number): Promise<{ deleted: true }> {
+    const response = await api.delete(
+      `/admin/customers/${customerId}/hour-entries/${entryId}`,
+    );
+    return (response.data as any).data ?? response.data;
+  },
+
+  /** Per-event flow only — mints a standalone invoice from all
+   *  unbilled entries and stamps them billed. Monthly-mode customers
+   *  auto-bill on save and get a 409 here. */
+  async billUnbilledHourEntries(customerId: number): Promise<{ invoiceId: number; entriesBilled: number }> {
+    const response = await api.post(
+      `/admin/customers/${customerId}/hour-entries/bill`,
+    );
+    return (response.data as any).data ?? response.data;
+  },
 };
+
+// -------------------------------------------------------------------
+// Hour-entry types (migration 129)
+// -------------------------------------------------------------------
+
+export type HourEntryStatus = 'unbilled' | 'billed' | 'cancelled';
+
+export interface HourEntry {
+  id: number;
+  customerAccountId: number;
+  entryDate: string;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  hourlyRateMinorOverride: number | null;
+  description: string | null;
+  status: HourEntryStatus;
+  invoiceId: number | null;
+  invoiceLineItemId: number | null;
+  invoiceNumber: string | null;
+  invoiceStatus: string | null;
+  invoiceIsMonthlyDraft: boolean;
+  invoiceScheduledSendAt: string | null;
+  billedAt: string | null;
+  recordedByAdminId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HourEntryCreatePayload {
+  entryDate: string;        // YYYY-MM-DD
+  startTime: string;        // HH:MM
+  endTime: string;          // HH:MM
+  hourlyRateMinorOverride?: number | null;
+  description?: string | null;
+}
+
+export interface HourEntryUpdatePayload {
+  entryDate?: string;
+  startTime?: string;
+  endTime?: string;
+  hourlyRateMinorOverride?: number | null;
+  description?: string | null;
+}

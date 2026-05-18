@@ -535,11 +535,14 @@ async function updateCustomer(id, updates, updatedByAdminId) {
     'country_code', 'country_name', 'preferred_language', 'notes',
     // Per-customer feature flags (#354 follow-up). Booleans below are
     // coerced via formatBoolean for SQLite compatibility.
-    'feature_calendar', 'feature_quotes', 'feature_bills',
+    'feature_calendar', 'feature_quotes', 'feature_bills', 'feature_hours_logging',
     // CRM billing cadence (migration 102). 'per_event' (default) keeps
     // each invoice firing on its own schedule; monthly/quarterly snap
     // every scheduled invoice to billing_cycle_day of the next period.
     'billing_cadence', 'billing_cycle_day',
+    // Hour-logging default rate (migration 129). Minor units; null
+    // means admin must enter a per-entry override on every entry.
+    'hourly_rate_minor',
   ];
   for (const f of fields) {
     if (updates[f] !== undefined) {
@@ -549,8 +552,21 @@ async function updateCustomer(id, updates, updatedByAdminId) {
         allowed[f] = String(updates[f] || '').trim().toLowerCase();
       } else if (f === 'country_code' && updates[f]) {
         allowed[f] = String(updates[f]).trim().toUpperCase().slice(0, 2);
-      } else if (f === 'feature_calendar' || f === 'feature_quotes' || f === 'feature_bills') {
+      } else if (
+        f === 'feature_calendar' || f === 'feature_quotes'
+        || f === 'feature_bills' || f === 'feature_hours_logging'
+      ) {
         allowed[f] = formatBoolean(updates[f]);
+      } else if (f === 'hourly_rate_minor') {
+        // Default hourly rate. Null clears it (forces per-entry
+        // overrides); otherwise coerce to a non-negative bigint-safe
+        // integer. Anything funky → null.
+        if (updates[f] === null || updates[f] === '') {
+          allowed[f] = null;
+        } else {
+          const v = parseInt(updates[f], 10);
+          allowed[f] = Number.isFinite(v) && v >= 0 ? v : null;
+        }
       } else if (f === 'billing_cadence') {
         // Whitelist enum. Anything else flips to 'per_event' so we
         // never persist garbage that the scheduler can't interpret.
