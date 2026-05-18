@@ -226,15 +226,28 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
     let photoType = 'individual'; // default
     let categoryName = 'individual';
 
-    // Look up the actual category from database if provided
+    // Look up the actual category from database if provided. Scope the
+    // lookup to (event_id = event.id OR is_global = true) — same contract
+    // the public v1 upload route enforces (#500 / #525). Without it, the
+    // admin upload silently accepts any category id including ones that
+    // belong to a different event. The v1 route rejects out-of-scope ids
+    // with 400; mirror that here so admin and v1 stay consistent.
     if (parsedCategoryId && !isNaN(parsedCategoryId)) {
-      const category = await db('photo_categories').where({ id: parsedCategoryId }).first();
-      if (category) {
-        categoryName = category.slug || category.name.toLowerCase().replace(/\s+/g, '_');
-        // Use category slug for type determination
-        if (category.slug === 'collage' || category.slug === 'collages') {
-          photoType = 'collage';
-        }
+      const category = await db('photo_categories')
+        .where({ id: parsedCategoryId })
+        .andWhere(function () {
+          this.where({ event_id: event.id }).orWhere('is_global', true);
+        })
+        .first();
+      if (!category) {
+        return res.status(400).json({
+          error: `Unknown or out-of-scope category_id ${parsedCategoryId}`
+        });
+      }
+      categoryName = category.slug || category.name.toLowerCase().replace(/\s+/g, '_');
+      // Use category slug for type determination
+      if (category.slug === 'collage' || category.slug === 'collages') {
+        photoType = 'collage';
       }
     } else if (category_id === 'collage') {
       // For backwards compatibility, accept string values

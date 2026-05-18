@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { db, logActivity } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
+const { slugify } = require('../utils/slug');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const router = express.Router();
@@ -549,12 +550,10 @@ router.post('/', adminAuth, requirePermission('events.create'), [
       }
     }
     
-    // Generate unique slug
-    const processedEventName = event_name
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '-') // Replace non-alphanumeric with dash
-      .replace(/-+/g, '-')         // Replace multiple dashes with single dash
-      .replace(/^-|-$/g, '');      // Remove leading/trailing dashes
+    // Generate unique slug. Uses the shared util so accented names
+    // (Família, Decoração, etc.) get transliterated instead of dropped
+    // — see backend/src/utils/slug.js for the why (#525).
+    const processedEventName = slugify(event_name);
 
     // Use event_date in slug if provided, otherwise use random suffix
     const slugSuffix = event_date || crypto.randomBytes(3).toString('hex');

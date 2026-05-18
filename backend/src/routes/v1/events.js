@@ -23,6 +23,7 @@ const { apiTokenAuth, requireApiScope } = require('../../middleware/apiTokenAuth
 const { buildShareLinkVariants } = require('../../services/shareLinkService');
 const { generateThumbnail } = require('../../services/imageProcessor');
 const logger = require('../../utils/logger');
+const { slugify } = require('../../utils/slug');
 
 const router = express.Router();
 
@@ -51,8 +52,8 @@ const photoUpload = multer({
   }
 });
 
-const slugify = (s) =>
-  String(s).toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+// slugify now imported from ../../utils/slug — shared with adminEvents
+// and events.js so the diacritic fix from #502 lands here too (#525).
 
 // ──────────────────────────────────────────────────────────────────────────
 // POST /events — create event

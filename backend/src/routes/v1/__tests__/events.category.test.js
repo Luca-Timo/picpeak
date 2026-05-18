@@ -79,6 +79,32 @@ jest.mock('multer', () => {
   return factory;
 });
 
+// Stub sharp so the happy-path test doesn't actually decode an image
+// (the temp file is a 0-byte placeholder — see the beforeAll below).
+jest.mock('sharp', () => jest.fn(() => ({
+  metadata: jest.fn().mockResolvedValue({ width: 1920, height: 1080 }),
+})));
+
+// Thumbnail + storage are network/fs-heavy; stub to constant resolves
+// so the test stays a pure unit test of the route handler's contract.
+jest.mock('../../../services/imageProcessor', () => ({
+  generateThumbnail: jest.fn().mockResolvedValue('thumbnails/fake_thumb.jpg'),
+}));
+
+jest.mock('../../../services/storage', () => ({
+  getStorage: jest.fn(() => ({
+    putFromFile: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
+// webhookService.fire is wrapped in try/catch in the route, so a
+// missing mock would still let the test pass — but stubbing it
+// silences the predictable failure log so the test output stays clean.
+jest.mock('../../../services/webhookService', () => ({
+  fire: jest.fn().mockResolvedValue(undefined),
+}));
+
+const fsSync = require('fs');
 const { db } = require('../../../database/db');
 const eventsRouter = require('../events');
 
@@ -142,6 +168,95 @@ describe('v1 POST /events/:id/photos — category scoping', () => {
 
     expect(response.body).toEqual({
       error: 'Unknown or out-of-scope category_id 7',
+    });
+  });
+});
+
+describe('v1 POST /events/:id/photos — happy path (#525)', () => {
+  const FAKE_TMP = '/tmp/fake-v1-upload.jpg';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Recreate the temp file on every test — the handler calls
+    // fs.unlink(tempPath) after a successful upload, so a beforeAll
+    // would leave the second test without an inode for statSync to
+    // read (manifests as 500 Internal Server Error).
+    fsSync.writeFileSync(FAKE_TMP, '');
+  });
+
+  afterAll(() => {
+    try { fsSync.unlinkSync(FAKE_TMP); } catch { /* may have been unlinked by the handler */ }
+  });
+
+  it('inserts the photo and returns 201 with the resolved category_id', async () => {
+    // Three db() calls in sequence on the happy path:
+    //   1. events lookup
+    //   2. photo_categories lookup (returns a valid in-scope row)
+    //   3. photos insert returning the new id
+    const eventChain = buildChain({
+      firstResult: { id: 42, slug: 'wedding-2026', event_name: 'Wedding 2026' },
+    });
+    const categoryChain = buildChain({
+      firstResult: { id: 7, slug: 'ceremony', name: 'Ceremony', event_id: 42 },
+    });
+    const insertChain = {
+      ...buildChain({ insertResult: [{ id: 101 }] }),
+      returning: jest.fn().mockResolvedValue([{ id: 101 }]),
+    };
+    // Override insert so the returning() call is chainable
+    insertChain.insert = jest.fn(() => insertChain);
+    db.__setImplementations(eventChain, categoryChain, insertChain);
+
+    const response = await request(buildApp())
+      .post('/events/42/photos')
+      .send({ category_id: '7' })
+      .expect(201);
+
+    // Response shape pins the v1 API contract — id + category_id are
+    // the fields the n8n / API-token use case depends on (see #500).
+    expect(response.body).toMatchObject({
+      id: 101,
+      category_id: 7,
+      size_bytes: 0,
+      thumbnail_path: 'thumbnails/fake_thumb.jpg',
+    });
+    expect(response.body.filename).toMatch(/^\d+_[a-f0-9]+\.jpg$/);
+    expect(response.body.path).toMatch(/^wedding-2026\/\d+_[a-f0-9]+\.jpg$/);
+
+    // The insert payload should carry the resolved category_id and the
+    // 'individual' photo type (the test category slug isn't 'collage').
+    const insertedRow = insertChain.insert.mock.calls[0][0];
+    expect(insertedRow).toMatchObject({
+      event_id: 42,
+      category_id: 7,
+      type: 'individual',
+      media_type: 'image',
+      mime_type: 'image/jpeg',
+    });
+  });
+
+  it('flips photo type to collage when the category slug is "collage"', async () => {
+    const eventChain = buildChain({
+      firstResult: { id: 42, slug: 'wedding-2026' },
+    });
+    const categoryChain = buildChain({
+      firstResult: { id: 9, slug: 'collage', name: 'Collage', event_id: 42 },
+    });
+    const insertChain = {
+      ...buildChain(),
+      returning: jest.fn().mockResolvedValue([{ id: 202 }]),
+    };
+    insertChain.insert = jest.fn(() => insertChain);
+    db.__setImplementations(eventChain, categoryChain, insertChain);
+
+    await request(buildApp())
+      .post('/events/42/photos')
+      .send({ category_id: '9' })
+      .expect(201);
+
+    expect(insertChain.insert.mock.calls[0][0]).toMatchObject({
+      category_id: 9,
+      type: 'collage',
     });
   });
 });
