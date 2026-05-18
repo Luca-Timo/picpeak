@@ -184,6 +184,29 @@ export const CustomerDetailPage: React.FC = () => {
     },
   });
 
+  // Admin override — issue the customer's running monthly draft NOW
+  // instead of waiting for the cadence-day scheduler tick. Used when
+  // the customer asks for an out-of-cycle bill or a project wraps
+  // before the configured day. Surfaces backend errors verbatim so
+  // admin sees "No pending monthly bill" / "Draft is empty" when the
+  // queue isn't ready.
+  const triggerMonthlyBillMutation = useMutation({
+    mutationFn: () => customerAdminService.triggerMonthlyBill(customerId),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-customer', customerId] });
+      queryClient.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
+      toast.success(
+        t('customers.billing.triggered',
+          'Monthly bill issued: {{number}}',
+          { number: result.invoiceNumber }),
+      );
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.error
+        || t('customers.billing.triggerError', 'Could not trigger the monthly bill.'));
+    },
+  });
+
   const deactivateMutation = useMutation({
     mutationFn: () => customerAdminService.deactivate(customerId),
     onSuccess: () => {
@@ -661,6 +684,33 @@ export const CustomerDetailPage: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Manual trigger — issue the running monthly draft NOW
+            instead of waiting for the cadence-day scheduler tick.
+            Only shown for monthly-mode customers (per-event has no
+            draft to arm; the equivalent action there is "Bill these
+            hours" on the standalone Hours-logging page). */}
+        {form.billingCadence === 'monthly' && (
+          <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+            <Button
+              variant="outline"
+              disabled={triggerMonthlyBillMutation.isPending}
+              isLoading={triggerMonthlyBillMutation.isPending}
+              onClick={() => {
+                if (window.confirm(t('customers.billing.triggerConfirm',
+                  'Issue this customer\'s monthly bill now? The customer receives the email immediately.') as string)) {
+                  triggerMonthlyBillMutation.mutate();
+                }
+              }}
+            >
+              {t('customers.billing.triggerNow', 'Trigger invoice now')}
+            </Button>
+            <p className="text-xs text-muted-theme mt-2">
+              {t('customers.billing.triggerHint',
+                'Bypasses the cadence day and issues the running draft immediately. Refuses when nothing has been queued for the current period.')}
+            </p>
+          </div>
+        )}
       </Card>
 
       {/* Hours section (migration 129). Only renders when the

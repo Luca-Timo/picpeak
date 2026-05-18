@@ -2448,6 +2448,65 @@ async function recordPaymentCheckAction({ token, action, amountMinor, ip, adminI
 }
 
 /**
+ * Admin override — issue the customer's running monthly draft NOW,
+ * bypassing the cadence-day wait. Mirrors the scheduler's monthly
+ * pass (migration 128): clears is_monthly_draft, sets the issue date
+ * + scheduled_send_at to now, and fires sendInvoice inline so the
+ * email goes out on the next email-queue tick (~60s) instead of
+ * waiting for the next scheduler iteration.
+ *
+ * Refuses when:
+ *   - no draft exists (admin hasn't queued anything yet)
+ *   - the draft has zero line items (nothing to send — same as the
+ *     scheduler's empty-month skip path)
+ *
+ * Returns { invoiceId, invoiceNumber } so the route can surface the
+ * resulting invoice on the response toast.
+ */
+async function triggerMonthlyBillNow(customerId, adminId) {
+  const draft = await db('invoices')
+    .where({ customer_account_id: customerId, is_monthly_draft: true })
+    .orderBy('id', 'desc')
+    .first();
+  if (!draft) {
+    throw new AppError('No pending monthly bill for this customer', 409, 'NO_MONTHLY_DRAFT');
+  }
+  const items = await db('invoice_line_items').where({ invoice_id: draft.id }).limit(1);
+  if (items.length === 0) {
+    throw new AppError('Monthly draft is empty — nothing to bill', 409, 'EMPTY_DRAFT');
+  }
+
+  // Arm the draft: clear the discriminator, pin issue_date to today,
+  // and set scheduled_send_at to now so the flush pass + sendInvoice
+  // path treats it like any other ready-to-send invoice. Logged as a
+  // distinct activity so the audit trail shows admin override vs the
+  // scheduler's automatic fire.
+  const issueDate = new Date().toISOString().slice(0, 10);
+  await db('invoices').where({ id: draft.id }).update({
+    is_monthly_draft: false,
+    issue_date: issueDate,
+    scheduled_send_at: new Date(),
+    updated_at: new Date(),
+  });
+  try {
+    await logActivity('monthly_bill_triggered_manually',
+      { invoiceId: draft.id, customerId, periodEnd: draft.monthly_period_end },
+      null, `admin:${adminId}`);
+  } catch (_) {}
+
+  // Inline send so admin gets immediate feedback (PDF stored, status
+  // flipped to 'sent', email queued). A failure here doesn't roll
+  // back the arming — the scheduler will pick it up on the next tick.
+  try {
+    await sendInvoice(draft.id, adminId);
+  } catch (err) {
+    logger.warn('triggerMonthlyBillNow: inline send failed — scheduler will retry',
+      { invoiceId: draft.id, err: err.message });
+  }
+  return { invoiceId: draft.id, invoiceNumber: draft.invoice_number };
+}
+
+/**
  * Cron tick — find scheduled invoices ready to send + invoices past
  * due date that need a reminder. Called by invoiceSchedulerService.
  */
@@ -2636,4 +2695,5 @@ module.exports = {
   getOrCreateMonthlyDraft,
   appendToMonthlyDraft,
   appendOneLineItemToMonthlyDraft,
+  triggerMonthlyBillNow,
 };

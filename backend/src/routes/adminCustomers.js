@@ -13,6 +13,7 @@ const { requirePermission } = require('../middleware/permissions');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const customerAccountsService = require('../services/customerAccountsService');
 const customerHoursService = require('../services/customerHoursService');
+const invoiceService = require('../services/invoiceService');
 
 const router = express.Router();
 
@@ -602,5 +603,28 @@ function transformHourEntry(h) {
     updatedAt: h.updated_at,
   };
 }
+
+// ---------------------------------------------------------------------
+// Monthly billing — manual trigger (migration 128 admin override).
+//
+// Issues the customer's running monthly draft NOW, bypassing the
+// scheduler's cadence-day wait. Used when admin wants to bill out-of-
+// cycle (e.g. customer requested an early invoice, project completed
+// before cadence day). Permission tier is customers.create — same as
+// the rest of the customer-write surface and matches the rest of the
+// monthly-billing controls.
+// ---------------------------------------------------------------------
+router.post('/:id/trigger-monthly-bill', [
+  adminAuth,
+  requirePermission('customers.create'),
+  param('id').isInt({ min: 1 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const result = await invoiceService.triggerMonthlyBillNow(
+    parseInt(req.params.id, 10),
+    req.admin.id,
+  );
+  successResponse(res, result, 201);
+}));
 
 module.exports = router;

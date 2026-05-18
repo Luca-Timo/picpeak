@@ -333,6 +333,16 @@ export const customerAdminService = {
     );
     return (response.data as any).data ?? response.data;
   },
+
+  /** Admin override — issue the customer's running monthly draft now,
+   *  bypassing the cadence-day wait. 409 when no draft exists or the
+   *  draft is empty. Returns the issued invoice id + number. */
+  async triggerMonthlyBill(customerId: number): Promise<{ invoiceId: number; invoiceNumber: string }> {
+    const response = await api.post(
+      `/admin/customers/${customerId}/trigger-monthly-bill`,
+    );
+    return (response.data as any).data ?? response.data;
+  },
 };
 
 // -------------------------------------------------------------------
