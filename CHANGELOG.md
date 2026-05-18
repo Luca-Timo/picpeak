@@ -5,6 +5,19 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.52.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.51.5-beta.0...v3.52.0-beta.0) (2026-05-18)
+
+
+### Features
+
+* **api/v1:** accept category_id on POST /events/:id/photos ([2d5a2ad](https://github.com/the-luap/picpeak/commit/2d5a2ad78a5f6c101315214399a9c158ff0549da))
+* **api/v1:** accept category_id on POST /events/:id/photos ([6901e26](https://github.com/the-luap/picpeak/commit/6901e2661ed74e69f19c52ce046ee911b818d463))
+
+
+### Bug Fixes
+
+* **api/v1:** scope category lookup to event_owned or global ([92bb9e1](https://github.com/the-luap/picpeak/commit/92bb9e1a12f77ce5e8c1286716198362b2bfdff2))
+
 ## [3.51.5-beta.0](https://github.com/the-luap/picpeak/compare/v3.51.4-beta.0...v3.51.5-beta.0) (2026-05-17)
 
 
