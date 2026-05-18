@@ -576,6 +576,39 @@ export const CustomerDetailPage: React.FC = () => {
             );
           })}
         </div>
+
+        {/* Default hourly rate (migration 129). Only shown when the
+            master `hoursLogging` flag is on AND the per-customer
+            toggle is on — admin shouldn't see a rate field for a
+            customer who isn't using hours logging. The rate is the
+            DEFAULT for new entries; admin can still override on a
+            per-entry basis from the standalone Hours logging page. */}
+        {flags.hoursLogging && form.featureHoursLogging && (
+          <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+            <label className="block text-sm font-medium text-theme mb-1">
+              {t('customers.field.hourlyRate', 'Default hourly rate')}
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min={0}
+              value={form.hourlyRateMinor != null ? (form.hourlyRateMinor / 100).toFixed(2) : ''}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setForm((prev) => ({
+                  ...prev,
+                  hourlyRateMinor: raw === '' ? null : Math.round(Number(raw) * 100),
+                } as any));
+              }}
+              placeholder="150.00"
+              className="w-40 input"
+            />
+            <p className="text-xs text-muted-theme mt-1">
+              {t('customers.field.hourlyRateHint',
+                'Major units (e.g. 150.00 for CHF 150). Leave blank to require a per-entry override on every block.')}
+            </p>
+          </div>
+        )}
       </Card>
 
       {/* Billing cadence (migration 102 + 128). Per-event keeps the
