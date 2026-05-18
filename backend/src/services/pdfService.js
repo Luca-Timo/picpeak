@@ -1436,6 +1436,23 @@ function renderDocument(type, context) {
           : t(ctx.locale, 'invoice_title');
       y = drawTitle(doc, title, leftX, y + 2);
 
+      // ---- document number ------------------------------------------
+      // Stamp the invoice / quote / Storno number directly under the
+      // title so the customer + their accountant don't have to dig
+      // through the file header to find it. Same style as the
+      // reference lines below (greyed body text, leftX-anchored).
+      const docNumberForDisplay = ctx.doc.invoiceNumber || ctx.doc.quoteNumber || '';
+      if (docNumberForDisplay) {
+        const numberLabelKey = type === 'quote' ? 'quote_number_label' : 'invoice_number_label';
+        doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#666');
+        doc.text(
+          `${t(ctx.locale, numberLabelKey)}: ${docNumberForDisplay}`,
+          leftX, y, { width: PAGE.contentWidth },
+        );
+        y = doc.y + 6;
+        doc.fillColor('#000');
+      }
+
       // Mandatory Storno reference line — "Bezug: Storno zu Rechnung
       // R-XXXX vom DATE". This is the §14c-defensible link from the
       // cancellation document to the invoice it reverses; readers

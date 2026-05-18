@@ -539,9 +539,21 @@ async function renderTaxReportPdf({ from, to, currency, locale } = {}) {
 
         // Page break check uses the actual row height we're about to
         // draw, not the old hard-coded constant — long rows can't
-        // sneak past the bottom margin.
+        // sneak past the bottom margin. Pass margins explicitly so the
+        // new page inherits the same 40pt frame as page 1 — without
+        // this, PDFKit's addPage falls back to its 72pt default and
+        // the footer-Y math (`page.height - page.marginBottom - 12`)
+        // ends up positioned for a margin the page doesn't actually
+        // have, which is what made the page-number footer drift onto
+        // the wrong row of subsequent pages.
         if (y + rowH > tableBottomLimit) {
-          doc.addPage({ size: 'A4', layout: 'landscape' });
+          doc.addPage({
+            size: 'A4', layout: 'landscape',
+            margins: {
+              top: page.marginTop, bottom: page.marginBottom,
+              left: page.marginLeft, right: page.marginRight,
+            },
+          });
           y = page.marginTop;
           y = drawTaxTableHeader(doc, leftMargin, y, useLocale, fonts);
           doc.font(fonts.body).fontSize(8.5);
@@ -567,7 +579,27 @@ async function renderTaxReportPdf({ from, to, currency, locale } = {}) {
 
       // Totals block. Lives in the right half of the page so it
       // doesn't fight with the cancelled footnote on the left.
-      const totalsTop = Math.min(y + 12, page.height - page.marginBottom - 100);
+      //
+      // Estimate the totals block height up-front: header (16) +
+      // 13pt per VAT bucket row + divider (8) + three grand-total
+      // rows (39) + a 12pt cushion for the footer below. If that
+      // doesn't fit on the current page, force a new page now —
+      // otherwise PDFKit auto-paginates mid-totals, creating phantom
+      // pages whose footer ends up at unexpected Y positions on the
+      // subsequent bufferedPageRange loop.
+      const totalsHeightEstimate = 16 + (report.totalsByVatRate.length * 13) + 8 + 39 + 12;
+      const footerReserve = 24; // 12 above + 12 of page-number text room
+      if (y + 12 + totalsHeightEstimate + footerReserve > page.height - page.marginBottom) {
+        doc.addPage({
+          size: 'A4', layout: 'landscape',
+          margins: {
+            top: page.marginTop, bottom: page.marginBottom,
+            left: page.marginLeft, right: page.marginRight,
+          },
+        });
+        y = page.marginTop;
+      }
+      const totalsTop = y + 12;
       const totalsBoxWidth = 360;
       const totalsX = page.width - page.marginRight - totalsBoxWidth;
 

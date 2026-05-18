@@ -16,6 +16,8 @@ const LABELS = {
   en: {
     quote_title: 'Quote',
     invoice_title: 'Invoice',
+    quote_number_label: 'Quote number',
+    invoice_number_label: 'Invoice number',
     // Stornorechnung (cancellation invoice). Distinct from
     // `invoice_title` so the renderer can swap the page title when
     // `doc.kind === 'storno'`. `reference_cancels` powers the
@@ -91,6 +93,8 @@ const LABELS = {
   de: {
     quote_title: 'Angebot',
     invoice_title: 'Rechnung',
+    quote_number_label: 'Angebotsnummer',
+    invoice_number_label: 'Rechnungsnummer',
     storno_title: 'Stornorechnung',
     reference_cancels: 'Storno zu',
     date: 'Datum',
@@ -159,6 +163,8 @@ const LABELS = {
     // Machine-translated, flagged for native review.
     quote_title: 'Devis',
     invoice_title: 'Facture',
+    quote_number_label: 'Numéro de devis',
+    invoice_number_label: 'Numéro de facture',
     storno_title: 'Avoir',
     reference_cancels: 'Annule',
     date: 'Date',
@@ -227,6 +233,8 @@ const LABELS = {
     // Machine-translated, flagged for native review.
     quote_title: 'Offerte',
     invoice_title: 'Factuur',
+    quote_number_label: 'Offertenummer',
+    invoice_number_label: 'Factuurnummer',
     storno_title: 'Creditfactuur',
     reference_cancels: 'Annuleert',
     date: 'Datum',
@@ -295,6 +303,8 @@ const LABELS = {
     // Machine-translated, flagged for native review.
     quote_title: 'Orçamento',
     invoice_title: 'Fatura',
+    quote_number_label: 'Número do orçamento',
+    invoice_number_label: 'Número da fatura',
     storno_title: 'Nota de crédito',
     reference_cancels: 'Cancela',
     date: 'Data',
@@ -363,6 +373,8 @@ const LABELS = {
     // Machine-translated, flagged for native review.
     quote_title: 'Коммерческое предложение',
     invoice_title: 'Счёт',
+    quote_number_label: 'Номер предложения',
+    invoice_number_label: 'Номер счёта',
     storno_title: 'Сторно-счёт',
     reference_cancels: 'Сторно к',
     date: 'Дата',
