@@ -227,7 +227,14 @@ const InvoiceRow: React.FC<{ inv: CustomerInvoice; onViewPdf: () => void }> = ({
   const total = Number(inv.totalAmountMinor || 0) / 100;
   const lateFee = Number(inv.lateFeeAmountMinor || 0) / 100;
   const paid = Number(inv.paidAmountMinor || 0) / 100;
-  const outstanding = Math.max(0, total - paid);
+  // Server-side `status` is the source of truth — when it's 'paid',
+  // outstanding MUST be 0 regardless of (total - paid). The Skonto
+  // path (migration 126) intentionally flips status to 'paid' while
+  // paid_amount_minor stays below total_amount_minor by the discount;
+  // raw subtraction would otherwise leave the customer reading "you
+  // still owe the Skonto amount".
+  const isPaid = inv.status === 'paid';
+  const outstanding = isPaid ? 0 : Math.max(0, total - paid);
 
   const isStorno = inv.kind === 'storno';
   const isCancelled = inv.status === 'cancelled';

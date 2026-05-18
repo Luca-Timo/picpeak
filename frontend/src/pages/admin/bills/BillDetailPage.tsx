@@ -164,7 +164,16 @@ export const BillDetailPage: React.FC = () => {
   // mark-paid dialog matches the amount that flips the invoice to
   // status='paid'. The late-fee row above still shows the surcharge
   // separately so admins know what they could optionally collect.
-  const outstanding = (Number(inv.totalAmountMinor || 0) - Number(inv.paidAmountMinor || 0)) / 100;
+  //
+  // When the server has already flipped the invoice to 'paid' — including
+  // the Skonto path where paid_amount_minor < total_amount_minor by the
+  // discount — outstanding MUST read zero. Without this, the Skonto branch
+  // of markPaid leaves the customer-facing UI claiming the discounted
+  // amount is still owed (migration 126 bug surfaced as `total - paid`
+  // doesn't subtract the Skonto discount).
+  const outstanding = inv.status === 'paid'
+    ? 0
+    : (Number(inv.totalAmountMinor || 0) - Number(inv.paidAmountMinor || 0)) / 100;
 
   return (
     <div className="space-y-4">
