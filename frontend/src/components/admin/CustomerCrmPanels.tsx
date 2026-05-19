@@ -15,11 +15,12 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Plus, Receipt } from 'lucide-react';
+import { FileText, Plus, Receipt, ScrollText } from 'lucide-react';
 import { Card, Button, Loading } from '../common';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { quotesService } from '../../services/quotes.service';
 import { billsService } from '../../services/bills.service';
+import { contractsService } from '../../services/contracts.service';
 import { formatMoney } from './LineItemsTable';
 
 interface Props {
@@ -32,6 +33,7 @@ export const CustomerCrmPanels: React.FC<Props> = ({ customerAccountId }) => {
   return (
     <>
       {flags.quotes && <QuotesPanel customerAccountId={customerAccountId} />}
+      {flags.contracts && <ContractsPanel customerAccountId={customerAccountId} />}
       {flags.bills && <InvoicesPanel customerAccountId={customerAccountId} />}
     </>
   );
@@ -88,6 +90,58 @@ const QuotesPanel: React.FC<Props> = ({ customerAccountId }) => {
                   : q.status === 'sent' ? 'bg-blue-100 text-blue-800'
                   : 'bg-neutral-100 text-neutral-700'
               }`}>{t(`quotes.status.${q.status}`, q.status)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+};
+
+const ContractsPanel: React.FC<Props> = ({ customerAccountId }) => {
+  const { t } = useTranslation();
+  const { data, isLoading } = useQuery({
+    queryKey: ['customer-contracts', customerAccountId],
+    queryFn: () => contractsService.list({ customerAccountId, page: 1, pageSize: 10, sort: 'newest' }),
+  });
+
+  return (
+    <Card padding="lg">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-semibold text-theme flex items-center gap-2">
+          <ScrollText className="w-5 h-5" /> {t('customers.detail.contractsSection', 'Contracts')}
+        </h2>
+        <div className="flex gap-2">
+          <Link to={`/admin/clients/contracts?customerAccountId=${customerAccountId}`}>
+            <Button variant="outline" size="sm">{t('common.showAll', 'Show all')}</Button>
+          </Link>
+          <Link to={`/admin/clients/contracts/new?customerAccountId=${customerAccountId}`}>
+            <Button size="sm"><Plus className="w-4 h-4 mr-1" />{t('contracts.list.new', 'New contract')}</Button>
+          </Link>
+        </div>
+      </div>
+
+      {isLoading ? <Loading /> : !data || data.contracts.length === 0 ? (
+        <p className="text-sm text-muted-theme">
+          {t('customers.detail.noContracts', 'No contracts for this customer yet.')}
+        </p>
+      ) : (
+        <ul className="divide-y" style={{ borderColor: 'var(--color-surface-border)' }}>
+          {data.contracts.map((c) => (
+            <li key={c.id} className="py-2 flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <Link to={`/admin/clients/contracts/${c.id}`} className="text-theme hover:underline font-mono text-sm">
+                  {c.contractNumber}
+                </Link>
+                <span className="text-xs text-muted-theme ml-2 truncate">{c.title || c.issueDate}</span>
+              </div>
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                c.status === 'fully_signed' ? 'bg-green-100 text-green-800'
+                  : c.status === 'signed_by_customer' || c.status === 'signed_by_admin' ? 'bg-blue-100 text-blue-800'
+                  : c.status === 'sent' ? 'bg-amber-100 text-amber-800'
+                  : c.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
+                  : 'bg-neutral-100 text-neutral-700'
+              }`}>{t(`contracts.status.${c.status}`, c.status)}</span>
             </li>
           ))}
         </ul>

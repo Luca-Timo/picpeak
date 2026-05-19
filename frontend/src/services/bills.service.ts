@@ -41,6 +41,9 @@ export interface InvoiceSummary {
     isPassive?: boolean;
   };
   sourceQuoteId: number | null;
+  /** Migration 130 — set by contractService.convertToInvoiceOnly when
+   *  the invoice originates from a contract. */
+  sourceContractId?: number | null;
   /** Human-readable quote number of the source quote (joined-in on read).
    *  Surfaced on the invoice detail view so the link reads
    *  "From quote LBM-Q-2026-0006" rather than "From quote #6". */

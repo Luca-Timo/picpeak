@@ -91,6 +91,12 @@ export interface ContractSummary {
   signedCustomerName: string | null;
   signedAdminName: string | null;
   createdByAdminId: number | null;
+  /** Lineage back-pointers (migration 130). Used by the detail page to
+   *  render "Linked quote" + "Linked invoices" panels. Null when the
+   *  contract was created standalone or when the DB lineage columns
+   *  haven't migrated yet. */
+  sourceQuoteId?: number | null;
+  convertedEventId?: number | null;
   createdAt: string;
   updatedAt: string;
   inclusions?: ContractBlockInclusion[];

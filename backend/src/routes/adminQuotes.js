@@ -102,6 +102,10 @@ function transformQuote(q) {
     acceptedAt: q.accepted_at,
     declinedAt: q.declined_at,
     convertedEventId: q.converted_event_id,
+    // Migration 130 lineage. Null until quoteService.createFromQuote
+    // sets it. Surfaced so QuoteDetailPage can render a "Linked
+    // contract" badge alongside the existing resulting-invoices list.
+    convertedContractId: q.converted_contract_id || null,
     pdfPath: q.pdf_path,
     businessBankAccountId: q.business_bank_account_id,
     createdAt: q.created_at,

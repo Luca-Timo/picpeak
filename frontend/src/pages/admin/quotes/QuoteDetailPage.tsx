@@ -239,6 +239,21 @@ export const QuoteDetailPage: React.FC = () => {
         </div>
       </Card>
 
+      {/* Lineage: contract drafted from this quote (migration 130). */}
+      {q.convertedContractId && (
+        <Card>
+          <h3 className="font-semibold mb-3">{t('quotes.section.linkedContract', 'Linked contract')}</h3>
+          <p className="text-sm">
+            <Link
+              to={`/admin/clients/contracts/${q.convertedContractId}`}
+              className="text-primary-600 dark:text-primary-400 hover:underline font-mono"
+            >
+              {t('quotes.linkedContract.viewLink', 'View contract #{{id}}', { id: q.convertedContractId })}
+            </Link>
+          </p>
+        </Card>
+      )}
+
       {linkedInvoices && linkedInvoices.invoices.length > 0 && (
         <Card>
           <h3 className="font-semibold mb-3">{t('quotes.section.linkedInvoices', 'Resulting invoices')}</h3>
