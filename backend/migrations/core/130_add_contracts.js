@@ -335,6 +335,10 @@ const CRM_CONTRACT_SETTINGS = [
   { setting_key: 'crm_contracts_pdf_attachment_enabled', setting_value: true,  setting_type: 'crm' },
   { setting_key: 'crm_contracts_require_drawn_signature', setting_value: false, setting_type: 'crm' },
   { setting_key: 'crm_contracts_allow_pdf_upload',        setting_value: true,  setting_type: 'crm' },
+  // Privacy/GDPR opt-out for storing the customer's IP at signing
+  // time. Default true (corroborating evidence in civil disputes);
+  // operators with strict data-minimisation requirements flip off.
+  { setting_key: 'crm_contracts_store_ip',                setting_value: true,  setting_type: 'crm' },
 ];
 
 // CRM email templates — definitions live in

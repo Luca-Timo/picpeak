@@ -47,6 +47,7 @@ const SETTING_KEYS = [
   'crm_contracts_pdf_attachment_enabled',
   'crm_contracts_require_drawn_signature',
   'crm_contracts_allow_pdf_upload',
+  'crm_contracts_store_ip',
 ];
 
 export const CrmSettingsPage: React.FC = () => {
@@ -260,6 +261,11 @@ export const CrmSettingsPage: React.FC = () => {
         {checkbox('crm_contracts_pdf_attachment_enabled', 'Attach contract PDF to email')}
         {checkbox('crm_contracts_require_drawn_signature', 'Require drawn signature (typed name alone is not enough)')}
         {checkbox('crm_contracts_allow_pdf_upload', 'Allow customer to upload a wet-signed PDF')}
+        {checkbox('crm_contracts_store_ip', "Store signer's IP address (recommended — corroborating evidence in civil disputes)")}
+        <p className="text-xs text-neutral-500 mt-1 ml-6">
+          {t('crmSettings.crm_contracts_store_ip.help',
+            "When off, the customer's and admin's IP at signing time is NOT recorded into the contract row or the public sign-page audit confirmation. Per GDPR data-minimisation principle some operators prefer this — but IP is corroborating identity evidence if the contract is challenged, so we recommend keeping it on.")}
+        </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
           <Input type="number" min={1} max={365}
             label={t('crmSettings.crm_contracts_default_valid_days.label', 'Signing window (days)') as string}
