@@ -1494,6 +1494,84 @@ async function rerenderAndResend(contractId, adminId) {
   return { signedPdfPath: attachmentPath, resent: true };
 }
 
+/**
+ * Recovery helper: admin re-stamps signatures (customer and/or admin)
+ * on a contract whose signature_path columns are null/broken because
+ * the original sign happened before the canvas worked correctly.
+ *
+ * The admin draws BOTH signatures on the detail page — the customer's
+ * signature is admin-attested in this flow (the customer already
+ * agreed via the original sign; this just makes the PDF show
+ * something). Original signed_by_*_at + signed_*_name + signed_*_ip
+ * stay untouched; only the *_signature_path columns + the rendered
+ * PDF get refreshed.
+ *
+ * Available on contracts in status:
+ *   signed_by_customer (re-stamp customer, optionally admin too)
+ *   signed_by_admin    (re-stamp admin, optionally customer too)
+ *   fully_signed       (re-stamp either or both)
+ */
+async function restampSignatures(contractId, { customerSignatureDataUrl, adminSignatureDataUrl }, adminId) {
+  const contract = await db('contracts').where({ id: contractId }).first();
+  if (!contract) throw new AppError('Contract not found', 404);
+  if (!['signed_by_customer', 'signed_by_admin', 'fully_signed'].includes(contract.status)) {
+    throw new AppError(
+      `Cannot re-stamp signatures on a contract in status '${contract.status}'.`,
+      409, 'WRONG_STATUS',
+    );
+  }
+  if (!customerSignatureDataUrl && !adminSignatureDataUrl) {
+    throw new AppError('At least one signature data URL must be provided.', 400, 'NO_SIGNATURE');
+  }
+
+  const updates = { updated_at: new Date() };
+  if (customerSignatureDataUrl) {
+    updates.signed_customer_signature_path = await persistSignatureImage(contract, 'customer', customerSignatureDataUrl);
+  }
+  if (adminSignatureDataUrl) {
+    updates.signed_admin_signature_path = await persistSignatureImage(contract, 'admin', adminSignatureDataUrl);
+  }
+  await db('contracts').where({ id: contract.id }).update(updates);
+
+  // Re-render the PDF so the new signature images get stamped in.
+  // Wet-signed PDF uploads remain authoritative — if signed_pdf_path
+  // already points at an uploaded PDF, we still re-render but the
+  // uploaded PDF stays the public download (signed_pdf_path is only
+  // refreshed when the previous file was a re-render).
+  const refreshed = await getContractById(contract.id);
+  const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
+  const signedBuffer = await pdfService.renderContractToBuffer(ctx);
+  const signedPath = await persistContractPdf(refreshed.contract, signedBuffer,
+    contract.status === 'fully_signed' ? 'fully-signed' : 'partially-signed');
+
+  const isWetSignedUpload = contract.signed_pdf_path
+    && contract.signed_pdf_path.includes('uploads/contracts/signed');
+  if (!isWetSignedUpload) {
+    await db('contracts').where({ id: contract.id }).update({
+      signed_pdf_path: signedPath,
+      updated_at: new Date(),
+    });
+  }
+
+  try {
+    await logActivity('contract_signatures_restamped', {
+      contractId,
+      stamped: {
+        customer: !!customerSignatureDataUrl,
+        admin: !!adminSignatureDataUrl,
+      },
+    }, null, `admin:${adminId}`);
+  } catch (_) { /* logging is best-effort */ }
+
+  return {
+    signedPdfPath: isWetSignedUpload ? contract.signed_pdf_path : signedPath,
+    stamped: {
+      customer: !!customerSignatureDataUrl,
+      admin: !!adminSignatureDataUrl,
+    },
+  };
+}
+
 async function cancelContract(id, adminId) {
   const contract = await db('contracts').where({ id }).first();
   if (!contract) throw new AppError('Contract not found', 404);
@@ -1529,6 +1607,7 @@ module.exports = {
   convertToEvent,
   convertToInvoiceOnly,
   rerenderAndResend,
+  restampSignatures,
   // Exported for tests + the public-route preview endpoint.
   _internal: {
     nextContractNumber,

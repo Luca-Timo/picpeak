@@ -90,6 +90,12 @@ export interface ContractSummary {
   signedByAdminAt: string | null;
   signedCustomerName: string | null;
   signedAdminName: string | null;
+  /** Disk paths to the captured signature PNGs. Surfaced only so the
+   *  UI can show a "(no image)" hint next to evidence rows whose
+   *  customer/admin signature didn't capture (e.g. old canvas bug);
+   *  the paths themselves are never exposed in user-facing strings. */
+  signedCustomerSignaturePath?: string | null;
+  signedAdminSignaturePath?: string | null;
   createdByAdminId: number | null;
   /** Lineage back-pointers (migration 130). Used by the detail page to
    *  render "Linked quote" + "Linked invoices" panels. Null when the
@@ -209,6 +215,18 @@ export const contractsService = {
    *  initial dual-party send failed silently. */
   async resendSigned(id: number): Promise<{ signedPdfPath: string; resent: true }> {
     const { data } = await api.post(`/admin/contracts/${id}/resend-signed`);
+    return data.data || data;
+  },
+
+  /** Re-stamp one or both signature images on a contract whose
+   *  original sign happened before the canvas worked correctly.
+   *  Either dataUrl may be null/omitted — the corresponding image
+   *  is then left untouched. Always re-renders + persists the PDF. */
+  async restampSignatures(
+    id: number,
+    payload: { customerSignatureDataUrl?: string | null; adminSignatureDataUrl?: string | null },
+  ): Promise<{ signedPdfPath: string; stamped: { customer: boolean; admin: boolean } }> {
+    const { data } = await api.post(`/admin/contracts/${id}/restamp-signatures`, payload);
     return data.data || data;
   },
 

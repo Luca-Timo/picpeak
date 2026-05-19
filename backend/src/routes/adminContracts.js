@@ -397,6 +397,34 @@ router.post(
   }),
 );
 
+// Re-stamp one or both signature images on a contract whose original
+// sign happened before the canvas worked correctly. The admin draws
+// the missing signature(s) on the detail page; this endpoint persists
+// the PNGs, updates signature_path columns, and re-renders the PDF.
+// The customer's typed name + timestamp + IP stay untouched — only
+// the image bound to those evidence fields gets refreshed.
+router.post(
+  '/:id/restamp-signatures',
+  requirePermission('contracts.manage'),
+  [
+    param('id').isInt({ min: 1 }),
+    body('customerSignatureDataUrl').optional({ nullable: true }).isString(),
+    body('adminSignatureDataUrl').optional({ nullable: true }).isString(),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await contractService.restampSignatures(
+      parseInt(req.params.id, 10),
+      {
+        customerSignatureDataUrl: req.body.customerSignatureDataUrl || null,
+        adminSignatureDataUrl: req.body.adminSignatureDataUrl || null,
+      },
+      req.admin?.id,
+    );
+    return successResponse(res, result, 200, 'Signatures re-stamped and PDF re-rendered');
+  }),
+);
+
 router.post(
   '/:id/countersign',
   requirePermission('contracts.manage'),

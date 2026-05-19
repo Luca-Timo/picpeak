@@ -395,6 +395,12 @@ export const ContractDetailPage: React.FC = () => {
                 <>
                   <p className="font-medium">{c.signedCustomerName}</p>
                   <p className="text-xs text-neutral-500">{formatDateTime(c.signedByCustomerAt)}</p>
+                  {!c.signedCustomerSignaturePath && (
+                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                      {t('contracts.detail.noSignatureImage',
+                        'No signature image captured — use "Re-stamp signatures" below to add one.')}
+                    </p>
+                  )}
                 </>
               ) : (
                 <p className="text-xs text-neutral-500">—</p>
@@ -408,6 +414,12 @@ export const ContractDetailPage: React.FC = () => {
                 <>
                   <p className="font-medium">{c.signedAdminName}</p>
                   <p className="text-xs text-neutral-500">{formatDateTime(c.signedByAdminAt)}</p>
+                  {!c.signedAdminSignaturePath && (
+                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                      {t('contracts.detail.noSignatureImage',
+                        'No signature image captured — use "Re-stamp signatures" below to add one.')}
+                    </p>
+                  )}
                 </>
               ) : (
                 <p className="text-xs text-neutral-500">—</p>
@@ -428,6 +440,20 @@ export const ContractDetailPage: React.FC = () => {
           padRef={countersignPadRef}
           onSubmit={() => countersignMutation.mutate()}
           pending={countersignMutation.isPending}
+        />
+      )}
+
+      {/* Re-stamp signatures card. Available on any already-signed
+          contract whose customer and/or admin signature image didn't
+          capture. Lets the admin draw the missing signature(s) on
+          their behalf and re-render the PDF. Names + timestamps + IPs
+          stay untouched — this is purely a "the canvas glitched, here
+          is the image we should have captured" recovery. */}
+      {(c.status === 'signed_by_customer' || c.status === 'signed_by_admin' || c.status === 'fully_signed')
+        && (!c.signedCustomerSignaturePath || !c.signedAdminSignaturePath) && (
+        <RestampSignaturesCard
+          contract={c}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['contract', numericId] })}
         />
       )}
 
@@ -601,6 +627,164 @@ const CountersignCard: React.FC<CountersignProps> = ({
             {t('contracts.detail.confirmCountersign', 'Counter-sign')}
           </Button>
         </div>
+      </div>
+    </Card>
+  );
+};
+
+/**
+ * Recovery card: shown when the contract is signed but one or both
+ * signature_path columns are null (image didn't capture). Admin draws
+ * the missing signature(s); we POST the data URL(s) to the
+ * restamp-signatures endpoint which persists the PNG(s), re-renders
+ * the PDF, and refreshes signed_pdf_path.
+ *
+ * Customer's typed name + timestamp + IP stay untouched — only the
+ * stamped image changes. The customer DID agree, we're just fixing
+ * the artefact.
+ */
+interface RestampCardProps {
+  contract: {
+    id: number;
+    signedCustomerSignaturePath?: string | null;
+    signedAdminSignaturePath?: string | null;
+    signedByCustomerAt: string | null;
+    signedByAdminAt: string | null;
+    signedCustomerName: string | null;
+    signedAdminName: string | null;
+  };
+  onSuccess: () => void;
+}
+
+const RestampSignaturesCard: React.FC<RestampCardProps> = ({ contract, onSuccess }) => {
+  const { t } = useTranslation();
+  const customerCanvasRef = useRef<HTMLCanvasElement>(null);
+  const adminCanvasRef = useRef<HTMLCanvasElement>(null);
+  const customerPadRef = useRef<SignaturePad | null>(null);
+  const adminPadRef = useRef<SignaturePad | null>(null);
+
+  // signature_pad init for both canvases. The two effects intentionally
+  // duplicate the HiDPI resize logic — extracting it into a single
+  // shared hook would be cleaner but at this size the duplication is
+  // less code than the abstraction.
+  useEffect(() => {
+    function init(ref: React.RefObject<HTMLCanvasElement>, padRefHolder: React.MutableRefObject<SignaturePad | null>) {
+      const canvas = ref.current;
+      if (!canvas) return () => { /* noop */ };
+      const resize = () => {
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * ratio;
+        canvas.height = rect.height * ratio;
+        const ctx = canvas.getContext('2d');
+        ctx?.scale(ratio, ratio);
+        padRefHolder.current?.clear();
+      };
+      padRefHolder.current = new SignaturePad(canvas, {
+        penColor: '#111',
+        backgroundColor: 'rgba(255, 255, 255, 0)',
+      });
+      resize();
+      window.addEventListener('resize', resize);
+      return () => {
+        window.removeEventListener('resize', resize);
+        padRefHolder.current?.off();
+        padRefHolder.current = null;
+      };
+    }
+    const cleanupCustomer = init(customerCanvasRef, customerPadRef);
+    const cleanupAdmin = init(adminCanvasRef, adminPadRef);
+    return () => { cleanupCustomer(); cleanupAdmin(); };
+  }, []);
+
+  const mutation = useMutation({
+    mutationFn: () => {
+      const customerPad = customerPadRef.current;
+      const adminPad = adminPadRef.current;
+      const customerSignatureDataUrl = customerPad && !customerPad.isEmpty() ? customerPad.toDataURL('image/png') : null;
+      const adminSignatureDataUrl = adminPad && !adminPad.isEmpty() ? adminPad.toDataURL('image/png') : null;
+      if (!customerSignatureDataUrl && !adminSignatureDataUrl) {
+        throw new Error('Draw at least one signature.');
+      }
+      return contractsService.restampSignatures(contract.id, {
+        customerSignatureDataUrl,
+        adminSignatureDataUrl,
+      });
+    },
+    onSuccess: () => {
+      toast.success(t('contracts.detail.restampedToast',
+        'Signatures re-stamped and PDF re-rendered.') as string);
+      customerPadRef.current?.clear();
+      adminPadRef.current?.clear();
+      onSuccess();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error
+      || err?.message
+      || t('contracts.detail.restampError', 'Re-stamp failed') as string),
+  });
+
+  const missingCustomer = !contract.signedCustomerSignaturePath && contract.signedByCustomerAt;
+  const missingAdmin = !contract.signedAdminSignaturePath && contract.signedByAdminAt;
+
+  return (
+    <Card padding="lg" className="mb-4 border-amber-300 dark:border-amber-700">
+      <h2 className="font-semibold mb-2">
+        {t('contracts.detail.restampTitle', 'Re-stamp missing signatures')}
+      </h2>
+      <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
+        {t('contracts.detail.restampHelp',
+          'One or both signatures didn\'t capture an image. Draw the missing signature(s) here and we\'ll re-render the PDF. The typed names, timestamps, and IPs already on file stay untouched.')}
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {missingCustomer && (
+          <div>
+            <label className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">
+              {t('contracts.detail.restampCustomer', 'Customer signature')}{' '}
+              <span className="font-medium">({contract.signedCustomerName})</span>
+            </label>
+            <canvas
+              ref={customerCanvasRef}
+              className="w-full h-24 bg-white rounded border border-neutral-300 dark:border-neutral-600 touch-none"
+            />
+            <button
+              type="button"
+              onClick={() => customerPadRef.current?.clear()}
+              className="mt-1 text-xs text-neutral-600 dark:text-neutral-400 hover:underline inline-flex items-center gap-1"
+            >
+              <RotateCcw className="w-3 h-3" />
+              {t('contracts.detail.clearSignature', 'Clear')}
+            </button>
+          </div>
+        )}
+        {missingAdmin && (
+          <div>
+            <label className="block text-xs text-neutral-600 dark:text-neutral-400 mb-1">
+              {t('contracts.detail.restampAdmin', 'Admin signature')}{' '}
+              <span className="font-medium">({contract.signedAdminName})</span>
+            </label>
+            <canvas
+              ref={adminCanvasRef}
+              className="w-full h-24 bg-white rounded border border-neutral-300 dark:border-neutral-600 touch-none"
+            />
+            <button
+              type="button"
+              onClick={() => adminPadRef.current?.clear()}
+              className="mt-1 text-xs text-neutral-600 dark:text-neutral-400 hover:underline inline-flex items-center gap-1"
+            >
+              <RotateCcw className="w-3 h-3" />
+              {t('contracts.detail.clearSignature', 'Clear')}
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="mt-3 flex justify-end">
+        <Button
+          onClick={() => mutation.mutate()}
+          disabled={mutation.isPending}
+        >
+          <CheckSquare className="w-4 h-4 mr-1" />
+          {t('contracts.detail.confirmRestamp', 'Re-stamp & re-render PDF')}
+        </Button>
       </div>
     </Card>
   );

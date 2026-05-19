@@ -1952,15 +1952,35 @@ function renderContractToBuffer(context) {
             .strokeColor('#cccccc').lineWidth(0.5)
             .rect(x, boxY, sigColWidth, sigBoxHeight)
             .stroke();
-          // Stamp the signature image when available.
-          if (info?.signaturePath && fs.existsSync(info.signaturePath)) {
-            try {
-              doc.image(info.signaturePath, x + 4, boxY + 4, {
-                fit: [sigColWidth - 8, sigBoxHeight - 8],
-                align: 'center',
-                valign: 'center',
+          // Stamp the signature image when available. Previously this
+          // block silently swallowed every failure (file missing on
+          // disk, broken PNG, PDFKit decoding error) so the admin had
+          // no idea why the signature box was empty. Now we log each
+          // skip reason at debug level so the contract-render logs
+          // explain WHY a signature didn't appear.
+          if (info?.signaturePath) {
+            if (!fs.existsSync(info.signaturePath)) {
+              const logger = require('../utils/logger');
+              logger.warn('Contract signature image missing on disk — rendering blank box', {
+                signaturePath: info.signaturePath,
+                signedName: info.name,
+                signedAt: info.signedAt,
               });
-            } catch (_) { /* ignore broken image, leave blank box */ }
+            } else {
+              try {
+                doc.image(info.signaturePath, x + 4, boxY + 4, {
+                  fit: [sigColWidth - 8, sigBoxHeight - 8],
+                  align: 'center',
+                  valign: 'center',
+                });
+              } catch (err) {
+                const logger = require('../utils/logger');
+                logger.error('PDFKit failed to render contract signature image', {
+                  signaturePath: info.signaturePath,
+                  message: err.message,
+                });
+              }
+            }
           }
           // Name + date under the box.
           const captionY = boxY + sigBoxHeight + 6;
