@@ -510,6 +510,12 @@ async function createContract(payload, adminId) {
   const validUntil = payload.validUntil || new Date(Date.now() + validDays * 24 * 60 * 60 * 1000)
     .toISOString().slice(0, 10);
 
+  // Schema-drift guard for the event-snapshot columns added as
+  // in-place migration 130 edits. We only write them when the DB
+  // actually has them; older dev installs that haven't re-migrated
+  // simply skip these fields (contract still saves successfully).
+  const hasEventCols = await db.schema.hasColumn('contracts', 'event_name');
+
   return await db.transaction(async (trx) => {
     const contractNumber = await nextContractNumber();
     const row = {
@@ -526,6 +532,12 @@ async function createContract(payload, adminId) {
       created_at: new Date(),
       updated_at: new Date(),
     };
+    if (hasEventCols) {
+      row.event_name = payload.eventName || null;
+      row.event_date = payload.eventDate || null;
+      row.event_time_start = payload.eventTimeStart || null;
+      row.event_time_end = payload.eventTimeEnd || null;
+    }
     const inserted = await trx('contracts').insert(row).returning('id');
     const contractId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
@@ -579,6 +591,8 @@ async function updateContract(id, payload, adminId) {
     );
   }
 
+  const hasEventCols = await db.schema.hasColumn('contracts', 'event_name');
+
   return await db.transaction(async (trx) => {
     const updates = { updated_at: new Date() };
     const map = {
@@ -589,8 +603,19 @@ async function updateContract(id, payload, adminId) {
       validUntil: 'valid_until',
       issueDate: 'issue_date',
     };
+    // Event-snapshot fields only flow through when the DB has them
+    // (in-place migration 130 edit). Guarded so dev installs that
+    // haven't re-migrated don't crash the update.
+    if (hasEventCols) {
+      Object.assign(map, {
+        eventName: 'event_name',
+        eventDate: 'event_date',
+        eventTimeStart: 'event_time_start',
+        eventTimeEnd: 'event_time_end',
+      });
+    }
     for (const [api, col] of Object.entries(map)) {
-      if (api in payload) updates[col] = payload[api];
+      if (api in payload) updates[col] = payload[api] || null;
     }
     await trx('contracts').where({ id }).update(updates);
 
@@ -1118,6 +1143,7 @@ async function createFromQuote(quoteId, adminId) {
   // affected writes instead of crashing with a generic 500.
   const hasContractSourceQuote = await db.schema.hasColumn('contracts', 'source_quote_id');
   const hasQuoteContractBackPointer = await db.schema.hasColumn('quotes', 'converted_contract_id');
+  const hasContractEventCols = await db.schema.hasColumn('contracts', 'event_name');
 
   return await db.transaction(async (trx) => {
     const contractNumber = await nextContractNumber();
@@ -1136,6 +1162,17 @@ async function createFromQuote(quoteId, adminId) {
       updated_at: new Date(),
     };
     if (hasContractSourceQuote) contractRow.source_quote_id = quote.id;
+    // Propagate the quote's event snapshot — same fields the quote
+    // already carries (set by createQuote). Means contract-from-quote
+    // chains preserve "this contract is for the Wedding Doe / Müller"
+    // labelling all the way through to the resulting invoice's
+    // event_name field.
+    if (hasContractEventCols) {
+      contractRow.event_name = quote.event_name || null;
+      contractRow.event_date = quote.event_date || null;
+      contractRow.event_time_start = quote.event_time_start || null;
+      contractRow.event_time_end = quote.event_time_end || null;
+    }
     const inserted = await trx('contracts').insert(contractRow).returning('id');
     const contractId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
@@ -1247,8 +1284,12 @@ async function convertToEvent(contractId, adminId) {
   const eventCols = await db('events').columnInfo();
   const candidate = {
     slug: `contract-${contract.contract_number.toLowerCase()}-${crypto.randomBytes(3).toString('hex')}`,
-    event_name: contract.title || `Event ${contract.contract_number}`,
-    event_date: contract.issue_date,
+    // Prefer the contract's event_name snapshot (set on the contract
+    // editor or inherited from the source quote) over the contract
+    // title. Falls back to a deterministic placeholder so the event
+    // row never has a blank name.
+    event_name: contract.event_name || contract.title || `Event ${contract.contract_number}`,
+    event_date: contract.event_date || contract.issue_date,
     host_name: fullName,
     host_email: customerEmail,
     customer_name: fullName,
@@ -1360,6 +1401,14 @@ async function convertToInvoiceOnly(contractId, adminId) {
   const netDays = ensureInt(await getAppSetting('crm_payment_default_net_days')) || 30;
   const dueDate = new Date(Date.now() + netDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
+  // Pre-resolve which event-snapshot columns the invoices table has
+  // (migration 123) so we can copy contract.event_name etc onto the
+  // new invoice. Falls back to contract.title when event_name is
+  // empty — gives standalone contracts a useful label even when
+  // the admin didn't fill out the event field.
+  const invoiceHasEventName = await db.schema.hasColumn('invoices', 'event_name');
+  const eventNameSnapshot = (contract.event_name || contract.title || null);
+
   const invoiceNumber = await invoiceService.nextInvoiceNumber();
   const invoiceRow = {
     invoice_number: invoiceNumber,
@@ -1386,6 +1435,16 @@ async function convertToInvoiceOnly(contractId, adminId) {
     updated_at: new Date(),
   };
   if (hasInvoiceContractBackPointer) invoiceRow.source_contract_id = contractId;
+  // Snapshot the contract's event fields onto the invoice so the
+  // BillDetailPage + customer portal show the same "Wedding Doe /
+  // Müller" label that the contract carries. event_name is also the
+  // field the dunning emails reference in their templates.
+  if (invoiceHasEventName) {
+    invoiceRow.event_name = eventNameSnapshot;
+    invoiceRow.event_date = contract.event_date || null;
+    invoiceRow.event_time_start = contract.event_time_start || null;
+    invoiceRow.event_time_end = contract.event_time_end || null;
+  }
   const inserted = await db('invoices').insert(invoiceRow).returning('id');
   const invoiceId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
@@ -1494,6 +1553,84 @@ async function rerenderAndResend(contractId, adminId) {
   return { signedPdfPath: attachmentPath, resent: true };
 }
 
+/**
+ * Recovery helper: admin re-stamps signatures (customer and/or admin)
+ * on a contract whose signature_path columns are null/broken because
+ * the original sign happened before the canvas worked correctly.
+ *
+ * The admin draws BOTH signatures on the detail page — the customer's
+ * signature is admin-attested in this flow (the customer already
+ * agreed via the original sign; this just makes the PDF show
+ * something). Original signed_by_*_at + signed_*_name + signed_*_ip
+ * stay untouched; only the *_signature_path columns + the rendered
+ * PDF get refreshed.
+ *
+ * Available on contracts in status:
+ *   signed_by_customer (re-stamp customer, optionally admin too)
+ *   signed_by_admin    (re-stamp admin, optionally customer too)
+ *   fully_signed       (re-stamp either or both)
+ */
+async function restampSignatures(contractId, { customerSignatureDataUrl, adminSignatureDataUrl }, adminId) {
+  const contract = await db('contracts').where({ id: contractId }).first();
+  if (!contract) throw new AppError('Contract not found', 404);
+  if (!['signed_by_customer', 'signed_by_admin', 'fully_signed'].includes(contract.status)) {
+    throw new AppError(
+      `Cannot re-stamp signatures on a contract in status '${contract.status}'.`,
+      409, 'WRONG_STATUS',
+    );
+  }
+  if (!customerSignatureDataUrl && !adminSignatureDataUrl) {
+    throw new AppError('At least one signature data URL must be provided.', 400, 'NO_SIGNATURE');
+  }
+
+  const updates = { updated_at: new Date() };
+  if (customerSignatureDataUrl) {
+    updates.signed_customer_signature_path = await persistSignatureImage(contract, 'customer', customerSignatureDataUrl);
+  }
+  if (adminSignatureDataUrl) {
+    updates.signed_admin_signature_path = await persistSignatureImage(contract, 'admin', adminSignatureDataUrl);
+  }
+  await db('contracts').where({ id: contract.id }).update(updates);
+
+  // Re-render the PDF so the new signature images get stamped in.
+  // Wet-signed PDF uploads remain authoritative — if signed_pdf_path
+  // already points at an uploaded PDF, we still re-render but the
+  // uploaded PDF stays the public download (signed_pdf_path is only
+  // refreshed when the previous file was a re-render).
+  const refreshed = await getContractById(contract.id);
+  const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
+  const signedBuffer = await pdfService.renderContractToBuffer(ctx);
+  const signedPath = await persistContractPdf(refreshed.contract, signedBuffer,
+    contract.status === 'fully_signed' ? 'fully-signed' : 'partially-signed');
+
+  const isWetSignedUpload = contract.signed_pdf_path
+    && contract.signed_pdf_path.includes('uploads/contracts/signed');
+  if (!isWetSignedUpload) {
+    await db('contracts').where({ id: contract.id }).update({
+      signed_pdf_path: signedPath,
+      updated_at: new Date(),
+    });
+  }
+
+  try {
+    await logActivity('contract_signatures_restamped', {
+      contractId,
+      stamped: {
+        customer: !!customerSignatureDataUrl,
+        admin: !!adminSignatureDataUrl,
+      },
+    }, null, `admin:${adminId}`);
+  } catch (_) { /* logging is best-effort */ }
+
+  return {
+    signedPdfPath: isWetSignedUpload ? contract.signed_pdf_path : signedPath,
+    stamped: {
+      customer: !!customerSignatureDataUrl,
+      admin: !!adminSignatureDataUrl,
+    },
+  };
+}
+
 async function cancelContract(id, adminId) {
   const contract = await db('contracts').where({ id }).first();
   if (!contract) throw new AppError('Contract not found', 404);
@@ -1529,6 +1666,7 @@ module.exports = {
   convertToEvent,
   convertToInvoiceOnly,
   rerenderAndResend,
+  restampSignatures,
   // Exported for tests + the public-route preview endpoint.
   _internal: {
     nextContractNumber,

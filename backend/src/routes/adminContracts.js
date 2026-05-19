@@ -102,6 +102,14 @@ function transformContract(c, inclusions) {
     issueDate: c.issue_date,
     validUntil: c.valid_until,
     title: c.title,
+    // Event snapshot fields (migration 130 in-place edit). Null when
+    // the standalone contract didn't set them OR when the column
+    // hasn't migrated yet on this install — the API surface stays
+    // stable either way.
+    eventName: c.event_name || null,
+    eventDate: c.event_date || null,
+    eventTimeStart: c.event_time_start || null,
+    eventTimeEnd: c.event_time_end || null,
     introText: c.intro_text,
     outroText: c.outro_text,
     pdfPath: c.pdf_path,
@@ -282,6 +290,10 @@ router.post(
     body('customerAccountId').isInt({ min: 1 }),
     body('language').optional({ nullable: true }).isString().isLength({ max: 8 }),
     body('title').optional({ nullable: true }).isString().isLength({ max: 255 }),
+    body('eventName').optional({ nullable: true }).isString().isLength({ max: 255 }),
+    body('eventDate').optional({ nullable: true }).isISO8601(),
+    body('eventTimeStart').optional({ nullable: true }).isString().isLength({ max: 8 }),
+    body('eventTimeEnd').optional({ nullable: true }).isString().isLength({ max: 8 }),
     body('introText').optional({ nullable: true }).isString(),
     body('outroText').optional({ nullable: true }).isString(),
     body('issueDate').optional({ nullable: true }).isISO8601(),
@@ -313,6 +325,10 @@ router.put(
   [
     param('id').isInt({ min: 1 }),
     body('title').optional({ nullable: true }).isString().isLength({ max: 255 }),
+    body('eventName').optional({ nullable: true }).isString().isLength({ max: 255 }),
+    body('eventDate').optional({ nullable: true }).isISO8601(),
+    body('eventTimeStart').optional({ nullable: true }).isString().isLength({ max: 8 }),
+    body('eventTimeEnd').optional({ nullable: true }).isString().isLength({ max: 8 }),
     body('introText').optional({ nullable: true }).isString(),
     body('outroText').optional({ nullable: true }).isString(),
     body('language').optional({ nullable: true }).isString().isLength({ max: 8 }),
@@ -394,6 +410,34 @@ router.post(
     validateRequest(req);
     const result = await contractService.rerenderAndResend(parseInt(req.params.id, 10), req.admin?.id);
     return successResponse(res, result, 200, 'Signed contract re-sent to both parties');
+  }),
+);
+
+// Re-stamp one or both signature images on a contract whose original
+// sign happened before the canvas worked correctly. The admin draws
+// the missing signature(s) on the detail page; this endpoint persists
+// the PNGs, updates signature_path columns, and re-renders the PDF.
+// The customer's typed name + timestamp + IP stay untouched — only
+// the image bound to those evidence fields gets refreshed.
+router.post(
+  '/:id/restamp-signatures',
+  requirePermission('contracts.manage'),
+  [
+    param('id').isInt({ min: 1 }),
+    body('customerSignatureDataUrl').optional({ nullable: true }).isString(),
+    body('adminSignatureDataUrl').optional({ nullable: true }).isString(),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await contractService.restampSignatures(
+      parseInt(req.params.id, 10),
+      {
+        customerSignatureDataUrl: req.body.customerSignatureDataUrl || null,
+        adminSignatureDataUrl: req.body.adminSignatureDataUrl || null,
+      },
+      req.admin?.id,
+    );
+    return successResponse(res, result, 200, 'Signatures re-stamped and PDF re-rendered');
   }),
 );
 
