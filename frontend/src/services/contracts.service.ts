@@ -203,6 +203,15 @@ export const contractsService = {
     return data.data || data;
   },
 
+  /** Re-render the signed PDF (system-render path only — wet-signed
+   *  uploads are preserved) and resend the contract_fully_signed
+   *  email to both parties. Recovery action for contracts where the
+   *  initial dual-party send failed silently. */
+  async resendSigned(id: number): Promise<{ signedPdfPath: string; resent: true }> {
+    const { data } = await api.post(`/admin/contracts/${id}/resend-signed`);
+    return data.data || data;
+  },
+
   async countersign(
     id: number,
     payload: { name: string; signatureDataUrl?: string | null },

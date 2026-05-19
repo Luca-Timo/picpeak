@@ -21,7 +21,7 @@ import { quotesService } from '../../../services/quotes.service';
 import SignaturePad from 'signature_pad';
 import {
   ArrowLeft, Edit2, Send, X, FileDown, Upload, CheckSquare, ScrollText,
-  ArrowRightCircle, Receipt, RotateCcw,
+  ArrowRightCircle, Receipt, RotateCcw, MailCheck,
 } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
 import {
@@ -126,6 +126,17 @@ export const ContractDetailPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['contract', numericId] });
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || t('contracts.detail.uploadError', 'Upload failed') as string),
+  });
+
+  const resendSignedMutation = useMutation({
+    mutationFn: () => contractsService.resendSigned(numericId as number),
+    onSuccess: () => {
+      toast.success(t('contracts.detail.resentSignedToast',
+        'Signed contract re-sent to both parties.') as string);
+      queryClient.invalidateQueries({ queryKey: ['contract', numericId] });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error
+      || t('contracts.detail.resendError', 'Resend failed') as string),
   });
 
   const convertToEventMutation = useMutation({
@@ -251,6 +262,25 @@ export const ContractDetailPage: React.FC = () => {
           <Button variant="outline" onClick={handleSignedPdfDownload}>
             <FileDown className="w-4 h-4 mr-1" />
             {t('contracts.detail.downloadSignedPdf', 'Download signed PDF')}
+          </Button>
+        )}
+        {/* Recovery action — on fully-signed contracts, lets the admin
+            re-render the signed PDF (if a previous render failed) and
+            resend the confirmation email to both parties. Also useful
+            when the customer claims they didn't receive it. */}
+        {c.status === 'fully_signed' && (
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (window.confirm(t('contracts.detail.confirmResendSigned',
+                'Re-send the signed contract PDF to both parties?') as string)) {
+                resendSignedMutation.mutate();
+              }
+            }}
+            disabled={resendSignedMutation.isPending}
+          >
+            <MailCheck className="w-4 h-4 mr-1" />
+            {t('contracts.detail.resendSigned', 'Re-send signed PDF')}
           </Button>
         )}
         {(c.status === 'sent' || c.status === 'signed_by_customer') && (

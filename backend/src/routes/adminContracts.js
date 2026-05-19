@@ -381,6 +381,22 @@ router.post(
   }),
 );
 
+// Re-render the signed PDF (when it's a system render, not a wet-
+// signed upload) and resend the contract_fully_signed email to both
+// parties. Recovery action for contracts where the initial dual-party
+// send failed silently, or where the customer claims they didn't
+// receive the email.
+router.post(
+  '/:id/resend-signed',
+  requirePermission('contracts.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await contractService.rerenderAndResend(parseInt(req.params.id, 10), req.admin?.id);
+    return successResponse(res, result, 200, 'Signed contract re-sent to both parties');
+  }),
+);
+
 router.post(
   '/:id/countersign',
   requirePermission('contracts.manage'),

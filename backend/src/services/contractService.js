@@ -785,23 +785,35 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
     });
   });
 
-  // Re-render the PDF with the signature stamped into the closing
-  // block. Persist alongside the unsigned copy with a `_signed` suffix
-  // so the original system PDF stays available for audit.
+  // Re-render the PDF with the customer signature stamped, store as
+  // the AUTHORITATIVE signed copy in `signed_pdf_path`. We deliberately
+  // leave `pdf_path` (the as-sent unsigned PDF) untouched so audits can
+  // still see the original document the customer was looking at when
+  // they signed. The same column is used by:
+  //   - this path (customer-only signature)
+  //   - the admin counter-sign path (overwrites with the fully-signed
+  //     re-render)
+  //   - the wet-signed PDF upload path (overwrites with the uploaded
+  //     PDF, which becomes authoritative)
+  // The admin "Download signed PDF" button reads c.signedPdfPath, so
+  // it appears as soon as the customer signs.
   const refreshed = await getContractById(contract.id);
   try {
     const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
     const signedBuffer = await pdfService.renderContractToBuffer(ctx);
     const signedPath = await persistContractPdf(refreshed.contract, signedBuffer, 'signed-by-customer');
     await db('contracts').where({ id: contract.id }).update({
-      pdf_path: signedPath,
+      signed_pdf_path: signedPath,
       updated_at: new Date(),
     });
   } catch (err) {
     // Signature recorded; PDF re-render is best-effort. The admin can
-    // re-render manually from the detail page if this fails.
-    logger.warn('Failed to re-render contract PDF after customer signature', {
-      contractId: contract.id, error: err.message,
+    // re-render manually from the detail page if this fails. Logged as
+    // error (not warn) so persistent failures surface in monitoring.
+    logger.error('Failed to re-render contract PDF after customer signature', {
+      contractId: contract.id,
+      message: err.message,
+      stack: err.stack,
     });
   }
 
@@ -858,7 +870,13 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
     updated_at: now,
   });
 
-  // Re-render PDF with both signatures stamped.
+  // Re-render PDF with both signatures stamped, then store it as the
+  // AUTHORITATIVE signed copy. The unsigned `pdf_path` stays put for
+  // audit; the new path lives in `signed_pdf_path` so the admin UI's
+  // "Download signed PDF" button picks it up (the button is gated on
+  // c.signedPdfPath, not c.pdfPath). Same column the wet-signed PDF
+  // upload uses, so both paths converge on a single "signed copy"
+  // discoverable from the web.
   const refreshed = await getContractById(contract.id);
   let signedPath = null;
   try {
@@ -866,12 +884,18 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
     const signedBuffer = await pdfService.renderContractToBuffer(ctx);
     signedPath = await persistContractPdf(refreshed.contract, signedBuffer, newStatus === 'fully_signed' ? 'fully-signed' : 'signed-by-admin');
     await db('contracts').where({ id: contract.id }).update({
-      pdf_path: signedPath,
+      signed_pdf_path: signedPath,
       updated_at: new Date(),
     });
   } catch (err) {
-    logger.warn('Failed to re-render contract PDF after admin signature', {
-      contractId: contract.id, error: err.message,
+    // Bubble the real error into the log — was previously truncated to
+    // just `err.message`, which hides path / permission / image-stamp
+    // failures from `persistContractPdf` and `renderContractToBuffer`.
+    logger.error('Failed to re-render contract PDF after admin signature', {
+      contractId: contract.id,
+      newStatus,
+      message: err.message,
+      stack: err.stack,
     });
   }
 
@@ -882,8 +906,20 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
   // greeting + name. The admin BCC is delivered as "to the issuer"
   // so it lands in the same inbox the contract_sent email originated
   // from.
-  if (newStatus === 'fully_signed' && signedPath) {
+  if (newStatus === 'fully_signed') {
     try {
+      // Pick the best available PDF as the attachment, in priority
+      // order: this counter-sign's freshly-rendered signed copy →
+      // the customer-only signed copy we wrote earlier → the
+      // original unsigned PDF. Falling all the way through to no
+      // attachment is acceptable; the email still goes out with the
+      // contract number so the customer knows it's binding.
+      const refetched = await db('contracts').where({ id: contract.id }).first();
+      const attachmentPath = signedPath
+        || refetched?.signed_pdf_path
+        || refetched?.pdf_path
+        || null;
+
       const customer = await db('customer_accounts').where({ id: contract.customer_account_id }).first();
       const profile = (await businessProfileService.getProfile()).profile || {};
       const adminRow = await db('admin_users').where({ id: adminId }).first();
@@ -891,18 +927,21 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
         || [customer?.first_name, customer?.last_name].filter(Boolean).join(' ')
         || customer?.email?.split('@')[0]
         || '';
-      const attachment = {
-        filename: `${refreshed.contract.contract_number}-signed.pdf`,
-        contentPath: signedPath,
-        contentType: 'application/pdf',
-      };
+      const attachments = attachmentPath
+        ? [{
+          filename: `${refreshed.contract.contract_number}-signed.pdf`,
+          contentPath: attachmentPath,
+          contentType: 'application/pdf',
+        }]
+        : undefined;
+
       // 1. Customer copy
       if (customer?.email) {
         await emailProcessor.queueEmail(null, customer.email, 'contract_fully_signed', {
           contract_number: refreshed.contract.contract_number,
           customer_name: customerName,
           title: refreshed.contract.title || '',
-          attachments: [attachment],
+          attachments,
         });
       }
       // 2. Admin copy. Prefer business_profile.email (the inbox the
@@ -915,12 +954,14 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
           contract_number: refreshed.contract.contract_number,
           customer_name: profile.company_name || adminRow?.first_name || 'Team',
           title: refreshed.contract.title || '',
-          attachments: [attachment],
+          attachments,
         });
       }
     } catch (err) {
-      logger.warn('Failed to send contract_fully_signed emails', {
-        contractId: contract.id, error: err.message,
+      logger.error('Failed to send contract_fully_signed emails', {
+        contractId: contract.id,
+        message: err.message,
+        stack: err.stack,
       });
     }
   }
@@ -1337,6 +1378,89 @@ async function convertToInvoiceOnly(contractId, adminId) {
   return { installmentsCreated: 1, invoiceId };
 }
 
+/**
+ * Recovery helper: re-render the signed PDF + resend the
+ * contract_fully_signed email to both parties. Used by the admin
+ * detail page when:
+ *   - a previous render silently failed (signed_pdf_path is empty
+ *     on a fully_signed contract)
+ *   - the customer reports they didn't receive the email
+ *   - the bodies of the seeded blocks were updated post-signing and
+ *     the admin wants the latest text on file
+ *
+ * Only available on fully_signed contracts. The wet-signed PDF path
+ * is preserved: when signed_pdf_path already points at an uploaded
+ * file (not a re-render path) we DO NOT overwrite — the uploaded PDF
+ * is the authoritative copy. We still resend the email with that
+ * uploaded PDF as the attachment.
+ */
+async function rerenderAndResend(contractId, adminId) {
+  const contract = await db('contracts').where({ id: contractId }).first();
+  if (!contract) throw new AppError('Contract not found', 404);
+  if (contract.status !== 'fully_signed') {
+    throw new AppError(
+      `Re-send is only available on fully-signed contracts (status: ${contract.status})`,
+      409, 'NOT_FULLY_SIGNED',
+    );
+  }
+
+  let attachmentPath = contract.signed_pdf_path || null;
+  // Wet-signed uploads live under uploads/contracts/signed; system
+  // re-renders live under storage/business-docs/contract/<year>.
+  // We only re-render when the current path is missing OR not the
+  // uploaded-PDF path.
+  const isWetSignedUpload = attachmentPath && attachmentPath.includes('uploads/contracts/signed');
+  if (!attachmentPath || !isWetSignedUpload) {
+    const refreshed = await getContractById(contract.id);
+    const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
+    const signedBuffer = await pdfService.renderContractToBuffer(ctx);
+    attachmentPath = await persistContractPdf(refreshed.contract, signedBuffer, 'fully-signed');
+    await db('contracts').where({ id: contract.id }).update({
+      signed_pdf_path: attachmentPath,
+      updated_at: new Date(),
+    });
+  }
+
+  // Resend the dual-party email with the now-guaranteed attachment.
+  const refetched = await db('contracts').where({ id: contract.id }).first();
+  const customer = await db('customer_accounts').where({ id: refetched.customer_account_id }).first();
+  const profile = (await businessProfileService.getProfile()).profile || {};
+  const adminRow = await db('admin_users').where({ id: adminId }).first();
+  const customerName = customer?.display_name
+    || [customer?.first_name, customer?.last_name].filter(Boolean).join(' ')
+    || customer?.email?.split('@')[0]
+    || '';
+  const attachments = [{
+    filename: `${refetched.contract_number}-signed.pdf`,
+    contentPath: attachmentPath,
+    contentType: 'application/pdf',
+  }];
+
+  if (customer?.email) {
+    await emailProcessor.queueEmail(null, customer.email, 'contract_fully_signed', {
+      contract_number: refetched.contract_number,
+      customer_name: customerName,
+      title: refetched.title || '',
+      attachments,
+    });
+  }
+  const adminEmail = profile.email || adminRow?.email;
+  if (adminEmail && adminEmail !== customer?.email) {
+    await emailProcessor.queueEmail(null, adminEmail, 'contract_fully_signed', {
+      contract_number: refetched.contract_number,
+      customer_name: profile.company_name || adminRow?.first_name || 'Team',
+      title: refetched.title || '',
+      attachments,
+    });
+  }
+
+  try {
+    await logActivity('contract_resent_signed', { contractId }, null, `admin:${adminId}`);
+  } catch (_) { /* logging is best-effort */ }
+
+  return { signedPdfPath: attachmentPath, resent: true };
+}
+
 async function cancelContract(id, adminId) {
   const contract = await db('contracts').where({ id }).first();
   if (!contract) throw new AppError('Contract not found', 404);
@@ -1371,6 +1495,7 @@ module.exports = {
   createFromQuote,
   convertToEvent,
   convertToInvoiceOnly,
+  rerenderAndResend,
   // Exported for tests + the public-route preview endpoint.
   _internal: {
     nextContractNumber,
