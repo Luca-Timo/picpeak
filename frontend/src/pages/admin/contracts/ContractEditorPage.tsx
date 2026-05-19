@@ -52,6 +52,13 @@ export const ContractEditorPage: React.FC = () => {
   const [customerIsPassive, setCustomerIsPassive] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [title, setTitle] = useState('');
+  // Event snapshot fields. Mirror the quote editor so the same
+  // "Wedding Doe / Müller" label flows quote → contract → invoice.
+  // Standalone contracts (no source quote) set these directly here.
+  const [eventName, setEventName] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [eventTimeStart, setEventTimeStart] = useState('');
+  const [eventTimeEnd, setEventTimeEnd] = useState('');
   const [introText, setIntroText] = useState('');
   const [outroText, setOutroText] = useState('');
   const [language, setLanguage] = useState('de');
@@ -100,6 +107,10 @@ export const ContractEditorPage: React.FC = () => {
     // customer.password_hash join — wire later if needed.)
     setCustomerIsPassive(false);
     setTitle(c.title || '');
+    setEventName(c.eventName || '');
+    setEventDate(c.eventDate || '');
+    setEventTimeStart(c.eventTimeStart || '');
+    setEventTimeEnd(c.eventTimeEnd || '');
     setIntroText(c.introText || '');
     setOutroText(c.outroText || '');
     setLanguage(c.language || 'de');
@@ -175,6 +186,10 @@ export const ContractEditorPage: React.FC = () => {
         customerAccountId,
         language,
         title: title || null,
+        eventName: eventName || null,
+        eventDate: eventDate || null,
+        eventTimeStart: eventTimeStart || null,
+        eventTimeEnd: eventTimeEnd || null,
         introText: introText || null,
         outroText: outroText || null,
         issueDate,
@@ -202,6 +217,10 @@ export const ContractEditorPage: React.FC = () => {
       if (!numericId) return;
       await contractsService.update(numericId, {
         title: title || null,
+        eventName: eventName || null,
+        eventDate: eventDate || null,
+        eventTimeStart: eventTimeStart || null,
+        eventTimeEnd: eventTimeEnd || null,
         introText: introText || null,
         outroText: outroText || null,
         language,
@@ -396,6 +415,54 @@ export const ContractEditorPage: React.FC = () => {
               {t('contracts.editor.validUntil', 'Sign by (optional)')}
             </label>
             <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+          </div>
+        </div>
+
+        {/* Event snapshot fields. Match the quote editor so the chain
+            quote → contract → invoice carries the same labels. When
+            createFromQuote drafts a contract from an accepted quote
+            these come prefilled from the quote. */}
+        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+          <h3 className="text-sm font-semibold mb-2">
+            {t('contracts.editor.eventSection', 'Event (optional)')}
+          </h3>
+          <p className="text-xs text-neutral-500 mb-3">
+            {t('contracts.editor.eventHelp',
+              'Snapshotted onto the contract and propagated to any event / invoice generated from it. Set this so the customer portal and dunning emails show the right "Wedding Doe / Müller" label.')}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium mb-1">
+                {t('contracts.editor.eventName', 'Event name')}
+              </label>
+              <Input
+                type="text"
+                value={eventName}
+                onChange={(e) => setEventName(e.target.value)}
+                placeholder={t('contracts.editor.eventNamePlaceholder',
+                  'e.g. Wedding Doe / Müller') as string}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                {t('contracts.editor.eventDate', 'Event date')}
+              </label>
+              <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  {t('contracts.editor.eventTimeStart', 'Start')}
+                </label>
+                <Input type="time" value={eventTimeStart} onChange={(e) => setEventTimeStart(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  {t('contracts.editor.eventTimeEnd', 'End')}
+                </label>
+                <Input type="time" value={eventTimeEnd} onChange={(e) => setEventTimeEnd(e.target.value)} />
+              </div>
+            </div>
           </div>
         </div>
 

@@ -102,6 +102,14 @@ function transformContract(c, inclusions) {
     issueDate: c.issue_date,
     validUntil: c.valid_until,
     title: c.title,
+    // Event snapshot fields (migration 130 in-place edit). Null when
+    // the standalone contract didn't set them OR when the column
+    // hasn't migrated yet on this install — the API surface stays
+    // stable either way.
+    eventName: c.event_name || null,
+    eventDate: c.event_date || null,
+    eventTimeStart: c.event_time_start || null,
+    eventTimeEnd: c.event_time_end || null,
     introText: c.intro_text,
     outroText: c.outro_text,
     pdfPath: c.pdf_path,
@@ -282,6 +290,10 @@ router.post(
     body('customerAccountId').isInt({ min: 1 }),
     body('language').optional({ nullable: true }).isString().isLength({ max: 8 }),
     body('title').optional({ nullable: true }).isString().isLength({ max: 255 }),
+    body('eventName').optional({ nullable: true }).isString().isLength({ max: 255 }),
+    body('eventDate').optional({ nullable: true }).isISO8601(),
+    body('eventTimeStart').optional({ nullable: true }).isString().isLength({ max: 8 }),
+    body('eventTimeEnd').optional({ nullable: true }).isString().isLength({ max: 8 }),
     body('introText').optional({ nullable: true }).isString(),
     body('outroText').optional({ nullable: true }).isString(),
     body('issueDate').optional({ nullable: true }).isISO8601(),
@@ -313,6 +325,10 @@ router.put(
   [
     param('id').isInt({ min: 1 }),
     body('title').optional({ nullable: true }).isString().isLength({ max: 255 }),
+    body('eventName').optional({ nullable: true }).isString().isLength({ max: 255 }),
+    body('eventDate').optional({ nullable: true }).isISO8601(),
+    body('eventTimeStart').optional({ nullable: true }).isString().isLength({ max: 8 }),
+    body('eventTimeEnd').optional({ nullable: true }).isString().isLength({ max: 8 }),
     body('introText').optional({ nullable: true }).isString(),
     body('outroText').optional({ nullable: true }).isString(),
     body('language').optional({ nullable: true }).isString().isLength({ max: 8 }),

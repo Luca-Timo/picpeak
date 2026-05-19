@@ -81,6 +81,14 @@ export interface ContractSummary {
   issueDate: string;
   validUntil: string | null;
   title: string | null;
+  /** Event snapshot fields (migration 130 in-place edit). Mirror
+   *  quotes.event_* + invoices.event_* so the label flows through
+   *  quote → contract → invoice unchanged. Null when the standalone
+   *  contract didn't set them OR when the DB hasn't re-migrated yet. */
+  eventName?: string | null;
+  eventDate?: string | null;
+  eventTimeStart?: string | null;
+  eventTimeEnd?: string | null;
   introText: string | null;
   outroText: string | null;
   pdfPath: string | null;
@@ -123,6 +131,11 @@ export interface ContractCreatePayload {
   customerAccountId: number;
   language?: string;
   title?: string | null;
+  /** Event snapshot fields — same shape as the quote editor. */
+  eventName?: string | null;
+  eventDate?: string | null;
+  eventTimeStart?: string | null;
+  eventTimeEnd?: string | null;
   introText?: string | null;
   outroText?: string | null;
   issueDate?: string;
@@ -131,6 +144,10 @@ export interface ContractCreatePayload {
 
 export interface ContractUpdatePayload {
   title?: string | null;
+  eventName?: string | null;
+  eventDate?: string | null;
+  eventTimeStart?: string | null;
+  eventTimeEnd?: string | null;
   introText?: string | null;
   outroText?: string | null;
   language?: string;

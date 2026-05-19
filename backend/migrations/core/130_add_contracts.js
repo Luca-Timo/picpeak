@@ -491,6 +491,16 @@ exports.up = async function(knex) {
 
       // Admin-typed contract title used for the cover and email subject.
       table.string('title', 255);
+      // Event snapshot fields, mirror quotes.event_* + invoices.event_*
+      // (migration 123). Propagated from the source quote on
+      // createFromQuote, then snapshotted onto generated invoices /
+      // events so the label survives even when the contract is later
+      // edited or the source quote is purged. Standalone contracts can
+      // set these directly via the contract editor.
+      table.string('event_name', 255);
+      table.date('event_date');
+      table.string('event_time_start', 8);
+      table.string('event_time_end', 8);
       table.text('intro_text');
       table.text('outro_text');
 
