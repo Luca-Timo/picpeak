@@ -6,6 +6,17 @@
  */
 import { api } from '../config/api';
 
+/** Shape of one row from /admin/contracts/:id/audit-trail. */
+export interface AuditEntry {
+  id: number;
+  activity_type: string;
+  actor_type: string | null;
+  actor_id: number | null;
+  actor_name: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
 export type ContractStatus =
   | 'draft'
   | 'sent'
@@ -93,6 +104,11 @@ export interface ContractSummary {
   outroText: string | null;
   pdfPath: string | null;
   signedPdfPath: string | null;
+  /** SHA-256 hex digest of the on-disk PDF — surfaced for the
+   *  audit-trail panel so the admin (and the customer in their
+   *  audit confirmation) can verify file integrity by re-hashing. */
+  pdfSha256?: string | null;
+  signedPdfSha256?: string | null;
   sentAt: string | null;
   signedByCustomerAt: string | null;
   signedByAdminAt: string | null;
@@ -279,6 +295,15 @@ export const contractsService = {
     return URL.createObjectURL(res.data);
   },
 
+  /** Audit trail — chronological activity_logs entries for this
+   *  contract. Renders the timeline on the detail page so the admin
+   *  has a single-pane view of every event (sent, signed, counter-
+   *  signed, resent emails, conversions). */
+  async auditTrail(id: number): Promise<{ entries: AuditEntry[] }> {
+    const { data } = await api.get(`/admin/contracts/${id}/audit-trail`);
+    return data.data || data;
+  },
+
   // ----- Block library -------------------------------------------------
   async listBlocks(params: { section?: ContractBlockSection; includeInactive?: boolean } = {}): Promise<{ blocks: ContractBlock[] }> {
     const { data } = await api.get('/admin/contracts/blocks', { params });
@@ -319,7 +344,15 @@ export interface PublicContractView {
   signedByAdminAt: string | null;
   signedCustomerName: string | null;
   signedAdminName: string | null;
+  /** Customer + admin IP at signing — surfaced for the audit
+   *  confirmation panel so the customer can verify what we recorded. */
+  signedCustomerIp?: string | null;
+  signedAdminIp?: string | null;
   hasSignedPdf: boolean;
+  /** SHA-256 hashes of the on-disk PDFs — shown in the audit
+   *  confirmation so the customer can re-hash their copy. */
+  pdfSha256?: string | null;
+  signedPdfSha256?: string | null;
   canSign: boolean;
   sections: Array<{
     section: ContractBlockSection;

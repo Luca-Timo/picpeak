@@ -20,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import SignaturePad from 'signature_pad';
-import { CheckCircle, Upload, RotateCcw } from 'lucide-react';
+import { CheckCircle, Upload, RotateCcw, Download, ShieldCheck } from 'lucide-react';
 import { Loading } from '../../components/common';
 import { usePublicDarkMode } from '../../hooks/usePublicDarkMode';
 import {
@@ -243,21 +243,98 @@ export const ContractResponsePage: React.FC = () => {
         {/* Signing card */}
         <div className="mt-6 bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 md:p-8">
           {alreadySigned ? (
-            <div className="text-center py-4">
-              <CheckCircle className="w-12 h-12 mx-auto text-green-600 mb-3" />
-              <h2 className="text-lg font-semibold">
-                {t('publicContract.signed.title', 'Thank you — the contract is signed.')}
-              </h2>
-              {c.signedCustomerName && (
-                <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
-                  {t('publicContract.signed.by', 'Signed by')}: {c.signedCustomerName}
+            <div className="py-2">
+              <div className="text-center mb-5">
+                <CheckCircle className="w-12 h-12 mx-auto text-green-600 mb-3" />
+                <h2 className="text-lg font-semibold">
+                  {t('publicContract.signed.title', 'Thank you — the contract is signed.')}
+                </h2>
+                {c.signedCustomerName && (
+                  <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
+                    {t('publicContract.signed.by', 'Signed by')}: {c.signedCustomerName}
+                  </p>
+                )}
+                {c.signedByAdminAt && c.signedAdminName && (
+                  <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                    {t('publicContract.signed.counterBy', 'Counter-signed by')}: {c.signedAdminName}
+                  </p>
+                )}
+              </div>
+
+              {/* Download button — issue #2. Streams whatever is the
+                  most authoritative copy on disk (signed_pdf_path when
+                  present, otherwise pdf_path). Sync-opens about:blank
+                  pre-fetch so the popup-blocker accepts the gesture. */}
+              <div className="text-center mb-5">
+                <a
+                  href={`/api/public/contracts/${token}/pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-accent-dark text-white text-sm hover:opacity-90"
+                >
+                  <Download className="w-4 h-4" />
+                  {c.hasSignedPdf
+                    ? t('publicContract.downloadSigned', 'Download signed PDF')
+                    : t('publicContract.download', 'Download PDF')}
+                </a>
+              </div>
+
+              {/* Audit confirmation — issue #4. Surfaces every piece
+                  of evidence we recorded so the customer can save /
+                  screenshot it for their own records. Re-hashing the
+                  downloaded PDF and comparing against pdfSha256 is
+                  the cryptographic proof the file wasn't tampered
+                  with after we issued it. */}
+              <details className="border-t border-neutral-200 dark:border-neutral-700 pt-4">
+                <summary className="text-sm font-semibold cursor-pointer inline-flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4" />
+                  {t('publicContract.signed.auditTitle', 'Signing audit trail')}
+                </summary>
+                <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-2 mb-3">
+                  {t('publicContract.signed.auditBody',
+                    'For your records. Save or screenshot this — the SHA-256 hash lets you prove later that the PDF you downloaded is exactly what we issued (re-hash the file you have and compare).')}
                 </p>
-              )}
-              {c.signedByAdminAt && c.signedAdminName && (
-                <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                  {t('publicContract.signed.counterBy', 'Counter-signed by')}: {c.signedAdminName}
-                </p>
-              )}
+                <dl className="text-xs grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-3 gap-y-1.5 font-mono">
+                  <dt className="text-neutral-500">{t('publicContract.signed.contractNumber', 'Contract')}</dt>
+                  <dd>{c.contractNumber}</dd>
+                  {c.signedByCustomerAt && (
+                    <>
+                      <dt className="text-neutral-500">{t('publicContract.signed.signedAt', 'Signed at')}</dt>
+                      <dd>{new Date(c.signedByCustomerAt).toISOString()}</dd>
+                    </>
+                  )}
+                  {c.signedCustomerIp && (
+                    <>
+                      <dt className="text-neutral-500">{t('publicContract.signed.ipAddress', 'IP at signing')}</dt>
+                      <dd>{c.signedCustomerIp}</dd>
+                    </>
+                  )}
+                  {c.signedByAdminAt && (
+                    <>
+                      <dt className="text-neutral-500">{t('publicContract.signed.counterSignedAt', 'Counter-signed at')}</dt>
+                      <dd>{new Date(c.signedByAdminAt).toISOString()}</dd>
+                    </>
+                  )}
+                  {c.signedAdminIp && (
+                    <>
+                      <dt className="text-neutral-500">{t('publicContract.signed.adminIp', 'Counter-sign IP')}</dt>
+                      <dd>{c.signedAdminIp}</dd>
+                    </>
+                  )}
+                  {c.signedPdfSha256 && (
+                    <>
+                      <dt className="text-neutral-500">{t('publicContract.signed.signedSha', 'Signed PDF SHA-256')}</dt>
+                      <dd className="break-all">{c.signedPdfSha256}</dd>
+                    </>
+                  )}
+                  {c.pdfSha256 && (
+                    <>
+                      <dt className="text-neutral-500">{t('publicContract.signed.unsignedSha', 'Original PDF SHA-256')}</dt>
+                      <dd className="break-all">{c.pdfSha256}</dd>
+                    </>
+                  )}
+                </dl>
+              </details>
             </div>
           ) : (
             <>

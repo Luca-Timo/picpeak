@@ -531,7 +531,88 @@ export const ContractDetailPage: React.FC = () => {
           </p>
         )}
       </Card>
+
+      {/* Audit trail (issue #5 from the maintainer plan) — a
+          chronological timeline of every event recorded on this
+          contract, sourced from activity_logs. Shows up below the
+          included blocks at the bottom of the page so it doesn't
+          dominate the layout but is always reachable. */}
+      {numericId && <AuditTrailCard contractId={numericId} />}
     </div>
+  );
+};
+
+/**
+ * Chronological audit timeline. Reads activity_logs entries scoped to
+ * this contract and renders them as a vertical list with timestamp +
+ * actor + a human-readable label per activity_type. Hashes / token
+ * fragments etc. are surfaced in monospace so they're auditor-friendly.
+ */
+const AuditTrailCard: React.FC<{ contractId: number }> = ({ contractId }) => {
+  const { t } = useTranslation();
+  const { format } = useLocalizedDate();
+  const { data, isLoading } = useQuery({
+    queryKey: ['contract-audit-trail', contractId],
+    queryFn: () => contractsService.auditTrail(contractId),
+  });
+
+  if (isLoading) return null;
+  const entries = data?.entries || [];
+  if (entries.length === 0) {
+    return (
+      <Card padding="lg" className="mt-4">
+        <h2 className="font-semibold mb-2">
+          {t('contracts.detail.auditTrail', 'Audit trail')}
+        </h2>
+        <p className="text-sm text-neutral-500">
+          {t('contracts.detail.auditEmpty', 'No audit-log entries yet.')}
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card padding="lg" className="mt-4">
+      <h2 className="font-semibold mb-2 flex items-center gap-2">
+        <ScrollText className="w-4 h-4" />
+        {t('contracts.detail.auditTrail', 'Audit trail')}
+      </h2>
+      <p className="text-xs text-neutral-500 mb-3">
+        {t('contracts.detail.auditTrailHelp',
+          'Every event recorded on this contract. The list is append-only and is the source of truth if the contract is challenged.')}
+      </p>
+      <ol className="space-y-2">
+        {entries.map((e) => {
+          // Friendly label per activity_type. Falls back to the raw
+          // type when an unrecognised entry shows up (forward-
+          // compatible — new activity_types just render their key).
+          const labelKey = `contracts.audit.${e.activity_type}`;
+          const label = t(labelKey, e.activity_type.replace(/^contract_/, '').replace(/_/g, ' '));
+          // Compact metadata preview for the right-hand column.
+          const meta = e.metadata || {};
+          const metaChips = Object.entries(meta)
+            .filter(([k]) => k !== 'contractId')
+            .slice(0, 3) // cap to avoid wall-of-text on conversion entries
+            .map(([k, v]) => `${k}: ${typeof v === 'string' ? v.slice(0, 24) : v}`);
+          return (
+            <li key={e.id} className="flex items-start gap-3 text-sm border-l-2 border-accent-dark pl-3">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium">{label}</div>
+                <div className="text-xs text-neutral-500">
+                  {e.actor_name || e.actor_type || 'system'}
+                  {metaChips.length > 0 && (
+                    <span className="ml-2 font-mono">· {metaChips.join(' · ')}</span>
+                  )}
+                </div>
+              </div>
+              <div className="text-xs text-neutral-500 whitespace-nowrap font-mono">
+                {format(e.created_at, 'yyyy-MM-dd HH:mm')}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </Card>
   );
 };
 

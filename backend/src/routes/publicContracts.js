@@ -112,9 +112,16 @@ function publicContractView(contract, inclusions, customer, profile, locale) {
     signedByAdminAt: contract.signed_by_admin_at,
     signedCustomerName: contract.signed_customer_name,
     signedAdminName: contract.signed_admin_name,
+    signedCustomerIp: contract.signed_customer_ip || null,
+    signedAdminIp: contract.signed_admin_ip || null,
     // signed_pdf_path itself is admin-only; we just flag presence so
     // the public page can show a "wet-signed copy attached" hint.
     hasSignedPdf: !!contract.signed_pdf_path,
+    // SHA-256 of the on-disk PDFs — surfaced so the customer can
+    // re-hash their downloaded copy and confirm it matches what
+    // we issued. Audit-trail evidence #1 from the maintainer plan.
+    pdfSha256: contract.pdf_sha256 || null,
+    signedPdfSha256: contract.signed_pdf_sha256 || null,
     canSign: contract.status === 'sent',
     sections,
     recipient: customer ? {
@@ -235,6 +242,45 @@ router.post(
       used_ip: req.ip || req.headers['x-forwarded-for'] || null,
     });
     return successResponse(res, result);
+  }),
+);
+
+/**
+ * Public PDF download — token-scoped. Once the customer has signed,
+ * they can re-fetch the signed copy from the same link rather than
+ * waiting for the contract_fully_signed email (which only arrives
+ * after admin counter-sign). Streams signed_pdf_path when present,
+ * falls back to pdf_path. 404s if the token / contract is unknown
+ * or the link has expired.
+ */
+router.get(
+  '/:token/pdf',
+  previewLimiter,
+  [param('token').isString().isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i)],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const tokenRow = await db('contract_action_tokens').where({ token: req.params.token }).first();
+    if (!tokenRow) return res.status(404).json({ error: 'Contract not found' });
+    // Expired tokens still allow downloads — the customer may need
+    // their signed copy after the signing window closes.
+    const contract = await db('contracts').where({ id: tokenRow.contract_id }).first();
+    if (!contract) return res.status(404).json({ error: 'Contract not found' });
+
+    const fs = require('fs');
+    const path = require('path');
+    const filePath = contract.signed_pdf_path || contract.pdf_path;
+    if (!filePath || !fs.existsSync(filePath)) {
+      // Render on-demand so the link works even if the on-disk
+      // file was wiped (cleanup, S3 sync, etc.).
+      const contractService = require('../services/contractService');
+      const buf = await contractService.renderContractPdfBuffer(contract.id);
+      res.set('Content-Type', 'application/pdf');
+      res.set('Content-Disposition', `inline; filename="${contract.contract_number}.pdf"`);
+      return res.send(buf);
+    }
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="${path.basename(filePath)}"`);
+    fs.createReadStream(filePath).pipe(res);
   }),
 );
 

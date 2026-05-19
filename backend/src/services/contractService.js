@@ -177,17 +177,54 @@ function formatShortDate(value) {
   return `${dd}.${mm}.${d.getFullYear()}`;
 }
 
+/**
+ * SHA-256 hex digest of a Buffer or file path. Used at every PDF
+ * write so we can persist a content hash alongside the path —
+ * either party can later re-hash the PDF they hold and prove (or
+ * disprove) it matches what we issued.
+ */
+function sha256OfBuffer(buffer) {
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+function sha256OfFile(filePath) {
+  try {
+    return sha256OfBuffer(fs.readFileSync(filePath));
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Write a contract PDF to disk and return both the path AND the
+ * SHA-256 hash of the buffer we just wrote. Callers persist BOTH on
+ * the contracts row so audit defence is single-query: SELECT
+ * pdf_path, pdf_sha256 FROM contracts WHERE id = ? then re-hash the
+ * file on disk and compare.
+ *
+ * History-preserving (per requirement #6): every write appends a
+ * deterministic suffix so old versions stay on disk. The contract
+ * row's `pdf_path` / `signed_pdf_path` always points at the most
+ * recent one; earlier versions remain available for forensic
+ * comparison.
+ */
 async function persistContractPdf(contract, buffer, suffix = '') {
-  if (!contract.contract_number) return null;
+  if (!contract.contract_number) return { filePath: null, sha256: null };
   const year = (contract.issue_date ? new Date(contract.issue_date) : new Date()).getFullYear();
   const root = path.join(process.cwd(), 'storage', 'business-docs', 'contract', String(year));
   fs.mkdirSync(root, { recursive: true });
+  // Always append a millisecond timestamp to the filename so writes
+  // never overwrite an earlier version on disk. Forensic preservation.
+  // Example filenames:
+  //   C-2026-0001_2026-05-19T1830-22-413.pdf                  (unsigned)
+  //   C-2026-0001_signed-by-customer_2026-05-19T1845-10-002.pdf
+  //   C-2026-0001_fully-signed_2026-05-19T1912-44-877.pdf
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const fileName = suffix
-    ? `${contract.contract_number}_${suffix}.pdf`
-    : `${contract.contract_number}.pdf`;
+    ? `${contract.contract_number}_${suffix}_${stamp}.pdf`
+    : `${contract.contract_number}_${stamp}.pdf`;
   const filePath = path.join(root, fileName);
   fs.writeFileSync(filePath, buffer);
-  return filePath;
+  return { filePath, sha256: sha256OfBuffer(buffer) };
 }
 
 async function persistSignatureImage(contract, role, dataUrl) {
@@ -206,6 +243,10 @@ async function persistSignatureImage(contract, role, dataUrl) {
     String(contract.id),
   );
   fs.mkdirSync(root, { recursive: true });
+  // Filename already carries Date.now() so re-stamping a signature
+  // never overwrites an earlier capture — forensic preservation.
+  // Per role, the contract row's signed_*_signature_path always
+  // points at the most recent; older files stay alongside.
   const filePath = path.join(root, `${role}-${Date.now()}.${ext}`);
   fs.writeFileSync(filePath, Buffer.from(match[2], 'base64'));
   return filePath;
@@ -383,6 +424,18 @@ async function buildRenderContext(contract, inclusions) {
         signaturePath: contract.signed_admin_signature_path,
       } : null,
     },
+    // Audit-trail evidence appended to the rendered PDF as a final
+    // page (issue #3). The renderer skips the page when this is null
+    // OR when the contract isn't signed yet, so unsigned PDFs stay
+    // unchanged. Hashes are best-effort: pdfSha256 may be null on
+    // installs that haven't migrated to the new schema column yet —
+    // the page still renders the rest of the evidence.
+    audit: (contract.signed_customer_name || contract.signed_admin_name) ? {
+      contractNumber: contract.contract_number,
+      issuedAt: contract.sent_at,
+      pdfSha256: contract.pdf_sha256 || null,
+      signedPdfSha256: contract.signed_pdf_sha256 || null,
+    } : null,
   };
 }
 
@@ -704,12 +757,17 @@ async function sendContract(id, adminId) {
   const refreshed = await getContractById(id);
   const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
   const buffer = await pdfService.renderContractToBuffer(ctx);
-  const pdfPath = await persistContractPdf(refreshed.contract, buffer);
+  const { filePath: pdfPath, sha256: pdfSha256 } = await persistContractPdf(refreshed.contract, buffer);
 
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = contract.valid_until
     ? new Date(new Date(contract.valid_until).getTime() + 14 * 24 * 60 * 60 * 1000)
     : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+
+  // Schema-drift guard for the new pdf_sha256 column (migration 130
+  // in-place edit). Dev installs that haven't re-migrated skip the
+  // hash write; the send still succeeds.
+  const hasPdfSha = await db.schema.hasColumn('contracts', 'pdf_sha256');
 
   await db.transaction(async (trx) => {
     await trx('contract_action_tokens').insert({
@@ -718,12 +776,14 @@ async function sendContract(id, adminId) {
       expires_at: expiresAt,
       created_at: new Date(),
     });
-    await trx('contracts').where({ id }).update({
+    const updates = {
       status: 'sent',
       sent_at: new Date(),
       pdf_path: pdfPath,
       updated_at: new Date(),
-    });
+    };
+    if (hasPdfSha) updates.pdf_sha256 = pdfSha256;
+    await trx('contracts').where({ id }).update(updates);
   });
 
   const frontendUrl = (await getFrontendBaseUrl()) || 'http://localhost:3000';
@@ -838,11 +898,14 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
   try {
     const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
     const signedBuffer = await pdfService.renderContractToBuffer(ctx);
-    const signedPath = await persistContractPdf(refreshed.contract, signedBuffer, 'signed-by-customer');
-    await db('contracts').where({ id: contract.id }).update({
+    const { filePath: signedPath, sha256: signedSha256 } = await persistContractPdf(refreshed.contract, signedBuffer, 'signed-by-customer');
+    const hasSignedPdfSha = await db.schema.hasColumn('contracts', 'signed_pdf_sha256');
+    const updates = {
       signed_pdf_path: signedPath,
       updated_at: new Date(),
-    });
+    };
+    if (hasSignedPdfSha) updates.signed_pdf_sha256 = signedSha256;
+    await db('contracts').where({ id: contract.id }).update(updates);
   } catch (err) {
     // Signature recorded; PDF re-render is best-effort. The admin can
     // re-render manually from the detail page if this fails. Logged as
@@ -922,14 +985,20 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
   // discoverable from the web.
   const refreshed = await getContractById(contract.id);
   let signedPath = null;
+  let signedSha256 = null;
   try {
     const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
     const signedBuffer = await pdfService.renderContractToBuffer(ctx);
-    signedPath = await persistContractPdf(refreshed.contract, signedBuffer, newStatus === 'fully_signed' ? 'fully-signed' : 'signed-by-admin');
-    await db('contracts').where({ id: contract.id }).update({
+    const persisted = await persistContractPdf(refreshed.contract, signedBuffer, newStatus === 'fully_signed' ? 'fully-signed' : 'signed-by-admin');
+    signedPath = persisted.filePath;
+    signedSha256 = persisted.sha256;
+    const hasSignedPdfSha = await db.schema.hasColumn('contracts', 'signed_pdf_sha256');
+    const updates = {
       signed_pdf_path: signedPath,
       updated_at: new Date(),
-    });
+    };
+    if (hasSignedPdfSha) updates.signed_pdf_sha256 = signedSha256;
+    await db('contracts').where({ id: contract.id }).update(updates);
   } catch (err) {
     // Bubble the real error into the log — was previously truncated to
     // just `err.message`, which hides path / permission / image-stamp
@@ -1042,6 +1111,12 @@ async function attachSignedPdfUpload(contractId, filePath, uploaderRole) {
     status: 'fully_signed',
     updated_at: now,
   };
+  // Hash the uploaded PDF on disk so we can later prove it wasn't
+  // tampered with after upload. Multer wrote the file synchronously
+  // before this handler runs, so reading it here is safe.
+  if (await db.schema.hasColumn('contracts', 'signed_pdf_sha256')) {
+    updates.signed_pdf_sha256 = sha256OfFile(filePath);
+  }
   if (uploaderRole === 'customer' && !contract.signed_by_customer_at) {
     updates.signed_by_customer_at = now;
   }
@@ -1506,11 +1581,15 @@ async function rerenderAndResend(contractId, adminId) {
     const refreshed = await getContractById(contract.id);
     const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
     const signedBuffer = await pdfService.renderContractToBuffer(ctx);
-    attachmentPath = await persistContractPdf(refreshed.contract, signedBuffer, 'fully-signed');
-    await db('contracts').where({ id: contract.id }).update({
+    const persisted = await persistContractPdf(refreshed.contract, signedBuffer, 'fully-signed');
+    attachmentPath = persisted.filePath;
+    const hasSignedPdfSha = await db.schema.hasColumn('contracts', 'signed_pdf_sha256');
+    const updates = {
       signed_pdf_path: attachmentPath,
       updated_at: new Date(),
-    });
+    };
+    if (hasSignedPdfSha) updates.signed_pdf_sha256 = persisted.sha256;
+    await db('contracts').where({ id: contract.id }).update(updates);
   }
 
   // Resend the dual-party email with the now-guaranteed attachment.
@@ -1600,16 +1679,19 @@ async function restampSignatures(contractId, { customerSignatureDataUrl, adminSi
   const refreshed = await getContractById(contract.id);
   const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
   const signedBuffer = await pdfService.renderContractToBuffer(ctx);
-  const signedPath = await persistContractPdf(refreshed.contract, signedBuffer,
+  const { filePath: signedPath, sha256: signedSha256 } = await persistContractPdf(refreshed.contract, signedBuffer,
     contract.status === 'fully_signed' ? 'fully-signed' : 'partially-signed');
 
   const isWetSignedUpload = contract.signed_pdf_path
     && contract.signed_pdf_path.includes('uploads/contracts/signed');
   if (!isWetSignedUpload) {
-    await db('contracts').where({ id: contract.id }).update({
+    const hasSignedPdfSha = await db.schema.hasColumn('contracts', 'signed_pdf_sha256');
+    const updates = {
       signed_pdf_path: signedPath,
       updated_at: new Date(),
-    });
+    };
+    if (hasSignedPdfSha) updates.signed_pdf_sha256 = signedSha256;
+    await db('contracts').where({ id: contract.id }).update(updates);
   }
 
   try {
@@ -1629,6 +1711,33 @@ async function restampSignatures(contractId, { customerSignatureDataUrl, adminSi
       admin: !!adminSignatureDataUrl,
     },
   };
+}
+
+/**
+ * Read the chronological audit trail for a contract from activity_logs.
+ * Matches every `contract_*` activity_type where metadata.contractId
+ * equals this contract's id. Ordered oldest → newest so the UI can
+ * render a vertical timeline. Read-only; used by the admin detail
+ * page's AuditTrailCard.
+ */
+async function getAuditTrail(contractId) {
+  if (!(await db.schema.hasTable('activity_logs'))) return [];
+  // metadata is stored as JSON; SQLite returns it as a string,
+  // Postgres returns it parsed. Normalise on read.
+  const rows = await db('activity_logs')
+    .where('activity_type', 'like', 'contract_%')
+    .orderBy('created_at', 'asc')
+    .select('id', 'activity_type', 'actor_type', 'actor_id', 'actor_name', 'metadata', 'created_at');
+
+  return rows
+    .map((r) => {
+      let meta = r.metadata;
+      if (typeof meta === 'string') {
+        try { meta = JSON.parse(meta); } catch { meta = {}; }
+      }
+      return { ...r, metadata: meta || {} };
+    })
+    .filter((r) => Number(r.metadata?.contractId) === Number(contractId));
 }
 
 async function cancelContract(id, adminId) {
@@ -1667,6 +1776,7 @@ module.exports = {
   convertToInvoiceOnly,
   rerenderAndResend,
   restampSignatures,
+  getAuditTrail,
   // Exported for tests + the public-route preview endpoint.
   _internal: {
     nextContractNumber,
