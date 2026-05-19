@@ -337,7 +337,17 @@ const CRM_CONTRACT_SETTINGS = [
   { setting_key: 'crm_contracts_allow_pdf_upload',        setting_value: true,  setting_type: 'crm' },
 ];
 
-const CRM_EMAIL_TEMPLATES = {
+// CRM email templates — definitions live in
+// backend/src/services/contractEmailTemplates.js so the runtime
+// self-heal helper (ensureContractEmailTemplatesSeeded) reads from the
+// same source as this migration. Keeping them as a require here means
+// adding a new template means editing one file, not two.
+const { CONTRACT_EMAIL_TEMPLATES: CRM_EMAIL_TEMPLATES } = require('../../src/services/contractEmailTemplates');
+
+// Legacy inline definition kept for reference / safety in case the
+// services file gets removed. The require() above wins when present.
+// eslint-disable-next-line no-unused-vars
+const _LEGACY_CRM_EMAIL_TEMPLATES = {
   contract_sent: {
     category: 'contracts', feature_flag: 'contracts',
     variables: ['contract_number', 'customer_name', 'response_url', 'title', 'event_name', 'valid_until'],

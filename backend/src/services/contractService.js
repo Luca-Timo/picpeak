@@ -42,6 +42,7 @@ const { AppError } = require('../utils/errors');
 const businessProfileService = require('./businessProfileService');
 const pdfService = require('./pdfService');
 const emailProcessor = require('./emailProcessor');
+const { ensureContractEmailTemplatesSeeded } = require('./contractEmailTemplates');
 const { getFrontendBaseUrl } = require('../utils/frontendUrl');
 
 const SECTIONS_ORDER = ['basics', 'scope', 'privacy', 'commercial', 'nda', 'closing'];
@@ -643,6 +644,12 @@ async function renderContractPdfBuffer(contractId) {
  * persist, mint a signing token, queue the customer email.
  */
 async function sendContract(id, adminId) {
+  // Self-heal: dev installs that ran migration 130 BEFORE we added
+  // contract_fully_signed to the seed list won't have all three
+  // contract templates in email_templates. Insert any missing rows
+  // before we queue the email. Idempotent + module-cached.
+  await ensureContractEmailTemplatesSeeded(db, logger);
+
   const data = await getContractById(id);
   if (!data) throw new AppError('Contract not found', 404);
   const { contract, inclusions } = data;
@@ -731,6 +738,11 @@ async function sendContract(id, adminId) {
  * to `signed_by_customer`, and queues the admin notification email.
  */
 async function recordCustomerSignature({ token, name, ip, signatureDataUrl, accepted }) {
+  // Self-heal contract email templates. The contract_signed_admin_notification
+  // email fires from this function — if its row is missing, the admin
+  // never learns the customer signed.
+  await ensureContractEmailTemplatesSeeded(db, logger);
+
   if (accepted !== true) {
     throw new AppError('You must confirm that you have read and agree to the terms.', 400, 'TOS_REQUIRED');
   }
@@ -846,6 +858,12 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
  * where admin signs first, e.g. issuer-side framework agreement).
  */
 async function recordAdminCountersignature(contractId, { name, ip, signatureDataUrl }, adminId) {
+  // Self-heal: ensure the contract_fully_signed template exists
+  // before we counter-sign. The dual-party send fires from this
+  // function on the fully_signed transition; without the template
+  // it silently fails and the customer never receives the PDF.
+  await ensureContractEmailTemplatesSeeded(db, logger);
+
   if (!name || !String(name).trim()) {
     throw new AppError('Your name is required.', 400, 'NAME_REQUIRED');
   }
@@ -982,6 +1000,10 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
  * customer).
  */
 async function attachSignedPdfUpload(contractId, filePath, uploaderRole) {
+  // Self-heal contract email templates — same reason as the
+  // sendContract + recordAdminCountersignature paths.
+  await ensureContractEmailTemplatesSeeded(db, logger);
+
   if (!filePath) throw new AppError('No file uploaded', 400);
   const contract = await db('contracts').where({ id: contractId }).first();
   if (!contract) throw new AppError('Contract not found', 404);
@@ -1395,6 +1417,17 @@ async function convertToInvoiceOnly(contractId, adminId) {
  * uploaded PDF as the attachment.
  */
 async function rerenderAndResend(contractId, adminId) {
+  // Self-heal contract email templates. This is the most likely
+  // recovery path the admin reaches when a prior dual-party send
+  // failed silently — including when the failure was caused by the
+  // template being missing in the first place.
+  const newlySeeded = await ensureContractEmailTemplatesSeeded(db, logger);
+  if (newlySeeded.length > 0) {
+    logger.warn('rerenderAndResend self-healed missing email templates', {
+      contractId, seeded: newlySeeded,
+    });
+  }
+
   const contract = await db('contracts').where({ id: contractId }).first();
   if (!contract) throw new AppError('Contract not found', 404);
   if (contract.status !== 'fully_signed') {
