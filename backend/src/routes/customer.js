@@ -609,4 +609,103 @@ router.get('/invoices/:id/pdf', customerAuth, async (req, res) => {
   }
 });
 
+// ---- contracts (customer-facing read-only + PDF + signed-PDF) -------
+// Same shape as /quotes and /invoices. Drafts are hidden; everything
+// from `sent` onwards is visible. Two PDF download endpoints because
+// the signed PDF (stamped with signatures OR a wet-signed upload) is
+// the authoritative copy customers want after both parties sign.
+router.get('/contracts', customerAuth, async (req, res) => {
+  try {
+    const { db: dbi } = require('../database/db');
+    if (!(await dbi.schema.hasTable('contracts'))) {
+      // Feature not migrated on this install yet.
+      return res.json({ contracts: [] });
+    }
+    const rows = await dbi('contracts')
+      .where({ customer_account_id: req.customer.id })
+      .whereNotIn('status', ['draft'])
+      .orderBy('issue_date', 'desc')
+      .orderBy('id', 'desc')
+      .select(
+        'id', 'contract_number', 'status', 'language',
+        'issue_date', 'valid_until', 'title',
+        'sent_at', 'signed_by_customer_at', 'signed_by_admin_at',
+        'signed_customer_name', 'signed_admin_name',
+        'pdf_path', 'signed_pdf_path',
+      );
+
+    // Live tokens for the public sign page so customer dashboard can
+    // deep-link the "Sign now" button on `sent` contracts.
+    const tokensByContract = new Map();
+    if (rows.length > 0 && await dbi.schema.hasTable('contract_action_tokens')) {
+      const tokens = await dbi('contract_action_tokens')
+        .whereIn('contract_id', rows.map((r) => r.id))
+        .whereNull('used_at')
+        .where('expires_at', '>', new Date())
+        .select('contract_id', 'token');
+      for (const tk of tokens) tokensByContract.set(tk.contract_id, tk.token);
+    }
+
+    res.json({
+      contracts: rows.map((c) => ({
+        id: c.id,
+        contractNumber: c.contract_number,
+        status: c.status,
+        language: c.language,
+        issueDate: c.issue_date,
+        validUntil: c.valid_until,
+        title: c.title,
+        sentAt: c.sent_at,
+        signedByCustomerAt: c.signed_by_customer_at,
+        signedByAdminAt: c.signed_by_admin_at,
+        signedCustomerName: c.signed_customer_name,
+        signedAdminName: c.signed_admin_name,
+        // Surface flags only — no paths leaked to the customer.
+        hasPdf: !!c.pdf_path,
+        hasSignedPdf: !!c.signed_pdf_path,
+        responseToken: tokensByContract.get(c.id) || null,
+      })),
+    });
+  } catch (error) {
+    logger.error('Customer contracts list error:', error);
+    res.status(500).json({ error: 'Failed to load contracts' });
+  }
+});
+
+router.get('/contracts/:id/pdf', customerAuth, async (req, res) => {
+  try {
+    const { db: dbi } = require('../database/db');
+    if (!(await dbi.schema.hasTable('contracts'))) {
+      return res.status(404).json({ error: 'Contract not found' });
+    }
+    const contract = await dbi('contracts')
+      .where({ id: parseInt(req.params.id, 10), customer_account_id: req.customer.id })
+      .first();
+    if (!contract) return res.status(404).json({ error: 'Contract not found' });
+    if (contract.status === 'draft') {
+      return res.status(404).json({ error: 'Contract not found' });
+    }
+    // Prefer the wet-signed PDF when present, otherwise the system-
+    // generated PDF (signed in-browser, stamped, or unsigned).
+    const path = require('path');
+    const fs = require('fs');
+    const filePath = contract.signed_pdf_path || contract.pdf_path;
+    if (!filePath || !fs.existsSync(filePath)) {
+      // Render on-demand so customers who hit the link before the
+      // first send still get something usable.
+      const contractService = require('../services/contractService');
+      const buf = await contractService.renderContractPdfBuffer(contract.id);
+      res.set('Content-Type', 'application/pdf');
+      res.set('Content-Disposition', `inline; filename="${contract.contract_number}.pdf"`);
+      return res.send(buf);
+    }
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="${path.basename(filePath)}"`);
+    fs.createReadStream(filePath).pipe(res);
+  } catch (error) {
+    logger.error('Customer contract PDF error:', error);
+    res.status(500).json({ error: 'Failed to render contract PDF' });
+  }
+});
+
 module.exports = router;

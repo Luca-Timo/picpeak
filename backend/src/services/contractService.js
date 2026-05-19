@@ -860,10 +860,11 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
 
   // Re-render PDF with both signatures stamped.
   const refreshed = await getContractById(contract.id);
+  let signedPath = null;
   try {
     const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
     const signedBuffer = await pdfService.renderContractToBuffer(ctx);
-    const signedPath = await persistContractPdf(refreshed.contract, signedBuffer, newStatus === 'fully_signed' ? 'fully-signed' : 'signed-by-admin');
+    signedPath = await persistContractPdf(refreshed.contract, signedBuffer, newStatus === 'fully_signed' ? 'fully-signed' : 'signed-by-admin');
     await db('contracts').where({ id: contract.id }).update({
       pdf_path: signedPath,
       updated_at: new Date(),
@@ -872,6 +873,56 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
     logger.warn('Failed to re-render contract PDF after admin signature', {
       contractId: contract.id, error: err.message,
     });
+  }
+
+  // When the admin's signature is what FINALISED the contract (i.e.
+  // status flipped to fully_signed), email a copy of the freshly
+  // re-rendered PDF to both parties. We send two separate queueEmail
+  // calls so each recipient gets the email rendered with their own
+  // greeting + name. The admin BCC is delivered as "to the issuer"
+  // so it lands in the same inbox the contract_sent email originated
+  // from.
+  if (newStatus === 'fully_signed' && signedPath) {
+    try {
+      const customer = await db('customer_accounts').where({ id: contract.customer_account_id }).first();
+      const profile = (await businessProfileService.getProfile()).profile || {};
+      const adminRow = await db('admin_users').where({ id: adminId }).first();
+      const customerName = customer?.display_name
+        || [customer?.first_name, customer?.last_name].filter(Boolean).join(' ')
+        || customer?.email?.split('@')[0]
+        || '';
+      const attachment = {
+        filename: `${refreshed.contract.contract_number}-signed.pdf`,
+        contentPath: signedPath,
+        contentType: 'application/pdf',
+      };
+      // 1. Customer copy
+      if (customer?.email) {
+        await emailProcessor.queueEmail(null, customer.email, 'contract_fully_signed', {
+          contract_number: refreshed.contract.contract_number,
+          customer_name: customerName,
+          title: refreshed.contract.title || '',
+          attachments: [attachment],
+        });
+      }
+      // 2. Admin copy. Prefer business_profile.email (the inbox the
+      // contract was sent FROM); fall back to the counter-signing
+      // admin's account email so the audit trail still reaches a
+      // human even on installs where business_profile.email is blank.
+      const adminEmail = profile.email || adminRow?.email;
+      if (adminEmail && adminEmail !== customer?.email) {
+        await emailProcessor.queueEmail(null, adminEmail, 'contract_fully_signed', {
+          contract_number: refreshed.contract.contract_number,
+          customer_name: profile.company_name || adminRow?.first_name || 'Team',
+          title: refreshed.contract.title || '',
+          attachments: [attachment],
+        });
+      }
+    } catch (err) {
+      logger.warn('Failed to send contract_fully_signed emails', {
+        contractId: contract.id, error: err.message,
+      });
+    }
   }
 
   try {
@@ -910,6 +961,45 @@ async function attachSignedPdfUpload(contractId, filePath, uploaderRole) {
     updates.signed_by_admin_at = now;
   }
   await db('contracts').where({ id: contractId }).update(updates);
+
+  // attachSignedPdfUpload always transitions to fully_signed (see
+  // updates.status above), so the dual-party send fires here too —
+  // same pattern as recordAdminCountersignature. The uploaded PDF
+  // IS the authoritative copy so we attach it directly.
+  try {
+    const refreshedContract = await db('contracts').where({ id: contractId }).first();
+    const customer = await db('customer_accounts').where({ id: refreshedContract.customer_account_id }).first();
+    const profile = (await businessProfileService.getProfile()).profile || {};
+    const customerName = customer?.display_name
+      || [customer?.first_name, customer?.last_name].filter(Boolean).join(' ')
+      || customer?.email?.split('@')[0]
+      || '';
+    const attachment = {
+      filename: `${refreshedContract.contract_number}-signed.pdf`,
+      contentPath: filePath,
+      contentType: 'application/pdf',
+    };
+    if (customer?.email) {
+      await emailProcessor.queueEmail(null, customer.email, 'contract_fully_signed', {
+        contract_number: refreshedContract.contract_number,
+        customer_name: customerName,
+        title: refreshedContract.title || '',
+        attachments: [attachment],
+      });
+    }
+    if (profile.email && profile.email !== customer?.email) {
+      await emailProcessor.queueEmail(null, profile.email, 'contract_fully_signed', {
+        contract_number: refreshedContract.contract_number,
+        customer_name: profile.company_name || 'Team',
+        title: refreshedContract.title || '',
+        attachments: [attachment],
+      });
+    }
+  } catch (err) {
+    logger.warn('Failed to send contract_fully_signed emails after PDF upload', {
+      contractId, error: err.message,
+    });
+  }
 
   try {
     await logActivity('contract_signed_pdf_uploaded', { contractId, uploaderRole }, null, uploaderRole === 'admin' ? 'admin:upload' : 'customer:public');

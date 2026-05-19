@@ -267,6 +267,20 @@ export const customerService = {
     const res = await api.get(`/customer/quotes/${id}/pdf`, { responseType: 'blob' });
     return URL.createObjectURL(res.data);
   },
+
+  // ---- Contracts (customer-side) ----
+  async listContracts(): Promise<CustomerContract[]> {
+    const response = await api.get<{ contracts: CustomerContract[] }>('/customer/contracts');
+    return response.data.contracts;
+  },
+
+  /** Streams the signed PDF when available, otherwise the system-
+   *  rendered PDF. The backend handles the fallback so the frontend
+   *  just opens whatever it gets back. */
+  async contractPdfUrl(id: number): Promise<string> {
+    const res = await api.get(`/customer/contracts/${id}/pdf`, { responseType: 'blob' });
+    return URL.createObjectURL(res.data);
+  },
 };
 
 export interface CustomerQuote {
@@ -337,4 +351,24 @@ export interface CustomerInvoice {
    *  invoice number on the customer portal bills list. */
   eventName: string | null;
   eventDate: string | null;
+}
+
+export interface CustomerContract {
+  id: number;
+  contractNumber: string;
+  status: 'sent' | 'signed_by_customer' | 'signed_by_admin' | 'fully_signed' | 'cancelled';
+  language: string;
+  issueDate: string;
+  validUntil: string | null;
+  title: string | null;
+  sentAt: string | null;
+  signedByCustomerAt: string | null;
+  signedByAdminAt: string | null;
+  signedCustomerName: string | null;
+  signedAdminName: string | null;
+  hasPdf: boolean;
+  hasSignedPdf: boolean;
+  /** Live signing-link token for `sent` contracts so the dashboard can
+   *  deep-link the public sign page when the customer lost the email. */
+  responseToken: string | null;
 }
