@@ -60,6 +60,12 @@ const TEMPLATES_KEYS = [
   'invoice_reminder_first',
   'invoice_reminder_second',
   'invoice_payment_check_admin',
+  // Contracts (migration 130). contract_fully_signed lands in a later
+  // commit alongside the dual-party send; the dev tester just exercises
+  // the two templates that already exist.
+  'contract_sent',
+  'contract_signed_admin_notification',
+  'contract_fully_signed',
 ];
 
 router.get(
@@ -128,6 +134,24 @@ async function renderSampleInvoicePdfPath(adminId) {
   }
 }
 
+async function renderSampleContractPdfPath(adminId) {
+  if (!(await db.schema.hasTable('contracts'))) return null;
+  const contract = await db('contracts').orderBy('id', 'desc').first();
+  if (!contract) return null;
+  try {
+    const contractService = require('../services/contractService');
+    const buffer = await contractService.renderContractPdfBuffer(contract.id);
+    const dir = path.join(process.cwd(), 'storage', 'business-docs', 'dev-test');
+    fs.mkdirSync(dir, { recursive: true });
+    const filePath = path.join(dir, `contract-sample-${adminId}-${Date.now()}.pdf`);
+    fs.writeFileSync(filePath, buffer);
+    return { path: filePath, filename: `${contract.contract_number}-sample.pdf` };
+  } catch (err) {
+    logger.warn('dev send-test-email: contract PDF render failed', { err: err.message });
+    return null;
+  }
+}
+
 /**
  * Build a payload tailored to each template. All variables map back
  * to the `{{tokens}}` the seeded templates reference, so the email
@@ -165,6 +189,11 @@ async function buildPayloadFor(key, adminId, frontendUrl) {
     partial_url:  `${frontendUrl}/payment-check/${dummyToken}?action=partial`,
     unpaid_url:   `${frontendUrl}/payment-check/${dummyToken}?action=unpaid`,
     accepted_on_behalf: true,
+    // Contract-specific variables. Title + contract_number stand in
+    // for the matching {{tokens}} in the seeded contract templates.
+    contract_number: 'C-DEV-0001',
+    title: 'Wedding contract — Doe / Müller (sample)',
+    signed_customer_name: 'Test Customer',
   };
 
   // Templates with PDF attachments get a real recent record's PDF
@@ -176,6 +205,9 @@ async function buildPayloadFor(key, adminId, frontendUrl) {
     if (pdf) attachments = [{ filename: pdf.filename, contentPath: pdf.path, contentType: 'application/pdf' }];
   } else if (key === 'invoice_sent' || key === 'invoice_reminder_first' || key === 'invoice_reminder_second') {
     const pdf = await renderSampleInvoicePdfPath(adminId);
+    if (pdf) attachments = [{ filename: pdf.filename, contentPath: pdf.path, contentType: 'application/pdf' }];
+  } else if (key === 'contract_sent' || key === 'contract_fully_signed') {
+    const pdf = await renderSampleContractPdfPath(adminId);
     if (pdf) attachments = [{ filename: pdf.filename, contentPath: pdf.path, contentType: 'application/pdf' }];
   }
 
