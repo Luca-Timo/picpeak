@@ -47,6 +47,38 @@ const { getFrontendBaseUrl } = require('../utils/frontendUrl');
 
 const SECTIONS_ORDER = ['basics', 'scope', 'privacy', 'commercial', 'nda', 'closing'];
 
+/**
+ * Build a proper {id, type, name} actor object for logActivity. The
+ * db.js helper silently downgrades string actors (e.g. 'admin:1') to
+ * actor_type='system' with null name, so the audit timeline showed
+ * "system" for every admin-driven event. Fetching the admin's name
+ * once per service call is a small read cost on a non-hot path.
+ *
+ * Pass `customerPublic()` for events triggered by the public token
+ * (customer signing, customer wet-signed PDF upload).
+ */
+async function adminActor(adminId) {
+  if (!adminId) return { type: 'system' };
+  try {
+    const row = await db('admin_users')
+      .where({ id: adminId })
+      .select('id', 'email', 'name', 'first_name', 'last_name')
+      .first();
+    if (!row) return { id: adminId, type: 'admin', name: `Admin #${adminId}` };
+    const fullName = row.name
+      || [row.first_name, row.last_name].filter(Boolean).join(' ')
+      || row.email
+      || `Admin #${adminId}`;
+    return { id: adminId, type: 'admin', name: fullName };
+  } catch (_) {
+    return { id: adminId, type: 'admin', name: `Admin #${adminId}` };
+  }
+}
+
+function customerPublicActor() {
+  return { type: 'customer', name: 'Customer (public link)' };
+}
+
 // ---------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------
@@ -616,7 +648,7 @@ async function createContract(payload, adminId) {
     }
 
     try {
-      await logActivity('contract_created', { contractId, contractNumber, customerAccountId: payload.customerAccountId }, null, `admin:${adminId}`);
+      await logActivity('contract_created', { contractId, contractNumber, customerAccountId: payload.customerAccountId }, null, await adminActor(adminId));
     } catch (_) { /* logging is best-effort */ }
 
     logger.info('Contract created', { adminId, contractId, contractNumber });
@@ -700,7 +732,7 @@ async function updateContract(id, payload, adminId) {
     }
 
     try {
-      await logActivity('contract_updated', { contractId: id }, null, `admin:${adminId}`);
+      await logActivity('contract_updated', { contractId: id }, null, await adminActor(adminId));
     } catch (_) { /* logging is best-effort */ }
     return id;
   });
@@ -809,7 +841,7 @@ async function sendContract(id, adminId) {
   });
 
   try {
-    await logActivity('contract_sent', { contractId: id, token }, null, `admin:${adminId}`);
+    await logActivity('contract_sent', { contractId: id, token }, null, await adminActor(adminId));
   } catch (_) { /* logging is best-effort */ }
 
   logger.info('Contract sent', { adminId, contractId: id });
@@ -934,7 +966,7 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
   }
 
   try {
-    await logActivity('contract_signed_by_customer', { contractId: contract.id, token }, null, 'customer:public');
+    await logActivity('contract_signed_by_customer', { contractId: contract.id, token }, null, customerPublicActor());
   } catch (_) { /* logging is best-effort */ }
 
   return { status: 'signed_by_customer', signedAt: now };
@@ -1079,7 +1111,7 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
   }
 
   try {
-    await logActivity(`contract_${newStatus}`, { contractId: contract.id }, null, `admin:${adminId}`);
+    await logActivity(`contract_${newStatus}`, { contractId: contract.id }, null, await adminActor(adminId));
   } catch (_) { /* logging is best-effort */ }
 
   return { status: newStatus, signedAt: now };
@@ -1165,7 +1197,8 @@ async function attachSignedPdfUpload(contractId, filePath, uploaderRole) {
   }
 
   try {
-    await logActivity('contract_signed_pdf_uploaded', { contractId, uploaderRole }, null, uploaderRole === 'admin' ? 'admin:upload' : 'customer:public');
+    await logActivity('contract_signed_pdf_uploaded', { contractId, uploaderRole }, null,
+      uploaderRole === 'admin' ? { type: 'admin', name: 'Admin (PDF upload)' } : customerPublicActor());
   } catch (_) { /* logging is best-effort */ }
 
   return { status: 'fully_signed', signedPdfPath: filePath };
@@ -1286,7 +1319,7 @@ async function createFromQuote(quoteId, adminId) {
     try {
       await logActivity('contract_created_from_quote',
         { contractId, contractNumber, quoteId: quote.id, quoteNumber: quote.quote_number },
-        null, `admin:${adminId}`);
+        null, await adminActor(adminId));
     } catch (_) { /* logging is best-effort */ }
     logger.info('Contract created from quote', { adminId, contractId, contractNumber, quoteId: quote.id });
     return { contractId, alreadyConverted: false };
@@ -1333,7 +1366,7 @@ async function convertToEvent(contractId, adminId) {
     try {
       await logActivity('contract_converted_to_event',
         { contractId, eventId: result.eventId, quoteId: contract.source_quote_id },
-        result.eventId, `admin:${adminId}`);
+        result.eventId, await adminActor(adminId));
     } catch (_) { /* logging is best-effort */ }
     return result;
   }
@@ -1414,7 +1447,7 @@ async function convertToEvent(contractId, adminId) {
 
   try {
     await logActivity('contract_converted_to_empty_event',
-      { contractId, eventId }, eventId, `admin:${adminId}`);
+      { contractId, eventId }, eventId, await adminActor(adminId));
   } catch (_) { /* logging is best-effort */ }
 
   return { eventId, alreadyConverted: false };
@@ -1453,7 +1486,7 @@ async function convertToInvoiceOnly(contractId, adminId) {
     try {
       await logActivity('contract_converted_to_invoices',
         { contractId, quoteId: contract.source_quote_id, installments: result.installmentsCreated },
-        null, `admin:${adminId}`);
+        null, await adminActor(adminId));
     } catch (_) { /* logging is best-effort */ }
     return result;
   }
@@ -1525,7 +1558,7 @@ async function convertToInvoiceOnly(contractId, adminId) {
 
   try {
     await logActivity('contract_converted_to_empty_invoice',
-      { contractId, invoiceId, invoiceNumber }, null, `admin:${adminId}`);
+      { contractId, invoiceId, invoiceNumber }, null, await adminActor(adminId));
   } catch (_) { /* logging is best-effort */ }
 
   // Match the result shape of the source-quote path so the frontend
@@ -1626,7 +1659,7 @@ async function rerenderAndResend(contractId, adminId) {
   }
 
   try {
-    await logActivity('contract_resent_signed', { contractId }, null, `admin:${adminId}`);
+    await logActivity('contract_resent_signed', { contractId }, null, await adminActor(adminId));
   } catch (_) { /* logging is best-effort */ }
 
   return { signedPdfPath: attachmentPath, resent: true };
@@ -1701,7 +1734,7 @@ async function restampSignatures(contractId, { customerSignatureDataUrl, adminSi
         customer: !!customerSignatureDataUrl,
         admin: !!adminSignatureDataUrl,
       },
-    }, null, `admin:${adminId}`);
+    }, null, await adminActor(adminId));
   } catch (_) { /* logging is best-effort */ }
 
   return {
@@ -1755,7 +1788,7 @@ async function cancelContract(id, adminId) {
     expires_at: new Date(),
   });
   try {
-    await logActivity('contract_cancelled', { contractId: id }, null, `admin:${adminId}`);
+    await logActivity('contract_cancelled', { contractId: id }, null, await adminActor(adminId));
   } catch (_) { /* logging is best-effort */ }
   return { status: 'cancelled' };
 }

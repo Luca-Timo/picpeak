@@ -593,7 +593,17 @@ const AuditTrailCard: React.FC<{ contractId: number }> = ({ contractId }) => {
           const metaChips = Object.entries(meta)
             .filter(([k]) => k !== 'contractId')
             .slice(0, 3) // cap to avoid wall-of-text on conversion entries
-            .map(([k, v]) => `${k}: ${typeof v === 'string' ? v.slice(0, 24) : v}`);
+            .map(([k, v]) => {
+              // Tokens are 64-char hex — show only the first 8 chars
+              // in the UI. Full token is in the DB for forensic
+              // correlation; showing it here would just be noise (and
+              // a small leak if anyone screenshots the audit timeline
+              // before the token is used).
+              if (k === 'token' && typeof v === 'string' && v.length >= 16) {
+                return `token: ${v.slice(0, 8)}…`;
+              }
+              return `${k}: ${typeof v === 'string' ? v.slice(0, 24) : v}`;
+            });
           return (
             <li key={e.id} className="flex items-start gap-3 text-sm border-l-2 border-accent-dark pl-3">
               <div className="flex-1 min-w-0">

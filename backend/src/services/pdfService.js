@@ -1995,6 +1995,27 @@ function renderContractToBuffer(context) {
           );
         }
 
+        // Diagnostic: when the render context says the contract is
+        // signed (audit block present) but signatures.customer or .admin
+        // is null/empty, the upstream buildRenderContext didn't find
+        // the evidence in the DB. Log the shape we were given so the
+        // operator can correlate "PDF shows empty signature box" with
+        // "the DB never had the signature_path / name persisted".
+        if (ctx.audit) {
+          const logger = require('../utils/logger');
+          const summarise = (s) => s ? {
+            hasName: !!s.name,
+            hasSignedAt: !!s.signedAt,
+            hasSignaturePath: !!s.signaturePath,
+            signaturePathExists: s.signaturePath ? fs.existsSync(s.signaturePath) : null,
+          } : null;
+          logger.info('Rendering signed contract PDF', {
+            contractNumber: ctx.doc?.contractNumber,
+            customer: summarise(ctx.signatures?.customer),
+            admin: summarise(ctx.signatures?.admin),
+          });
+        }
+
         drawSignaturePane(
           PAGE.marginLeft,
           t(locale, 'signature_customer'),
