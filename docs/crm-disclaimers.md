@@ -74,6 +74,81 @@ the verification is on you.
 The admin UI surfaces this same note as a banner on the Business
 Profile → Bank Accounts and QR-format settings pages.
 
+## 3. Signature type — picpeak provides SES, not QES
+
+The contract signing flow (typed name + acceptance checkbox + canvas
+signature image + IP address + timestamp + SHA-256 audit page) is a
+**Simple Electronic Signature (SES)** under the EU eIDAS regulation
+and the Swiss ZertES. SES is the same legal tier as DocuSign's basic
+plan, HelloSign's free tier, or Adobe Acrobat Sign without a
+qualified-certificate add-on.
+
+### What SES is legally sufficient for
+
+In DACH (CH, DE, AT, FL), SES is valid and routinely upheld in civil
+court for contracts that **don't** legally require a specific form:
+
+- Photography service agreements
+- Image-rights / model-release clauses
+- Cancellation policies
+- NDAs between private parties
+- Most commercial service contracts
+- Most B2B agreements
+
+For these, picpeak's evidence chain (frozen block bodies + signature
+images + names + IPs + timestamps + content hashes + immutable
+audit-log timeline) is comparable to what an SES provider charging
+€10–30/month delivers. The audit page appended to the signed PDF
+makes the evidence self-contained — the customer can re-hash their
+copy and prove integrity without trusting picpeak's database.
+
+### What SES is NOT sufficient for
+
+Certain documents **legally require Schriftform** (handwritten
+signature on paper) OR a **Qualified Electronic Signature (QES)**
+backed by a certificate from an accredited Trust Service Provider
+(Swisscom Sign, D-Trust, A-Trust, Bundesdruckerei, etc.). The most
+common categories in DACH:
+
+| Jurisdiction | Document type | Statute |
+|---|---|---|
+| DE | Bürgschaft (guaranty) | § 766 BGB |
+| DE | Verbraucherdarlehensvertrag (consumer loan) | § 492 BGB |
+| DE | Befristete Arbeitsverträge (fixed-term employment) | § 14 Abs. 4 TzBfG |
+| DE | Kündigung Arbeitsverhältnis (employment termination) | § 623 BGB |
+| DE | Aufhebungsvertrag (employment cancellation agreement) | § 623 BGB |
+| CH | Bürgschaft above CHF 2'000 | Art. 493 OR |
+| CH | Eheverträge (matrimonial property agreements) | Art. 184 ZGB |
+| AT | Bürgschaftserklärung (guaranty declaration) | § 1346 ABGB |
+
+If you send any of these via picpeak's signing flow, the signature
+is **legally invalid** and the contract may be unenforceable. Use a
+QES provider for these documents.
+
+If you're unsure which category your contract falls into, ask your
+lawyer. The cost of asking is hours; the cost of getting it wrong
+is years.
+
+### What picpeak does NOT provide
+
+- **Identity verification.** Anyone who receives the signing email
+  can sign. There's no second factor (SMS, video ident, ID upload).
+- **Qualified-certificate-based signatures (QES).** Requires a
+  separate service.
+- **External / third-party timestamp.** All timestamps are
+  server-side; an RFC 3161 Trust Service Provider timestamp would
+  close the clock-manipulation defence but isn't currently part of
+  the audit page.
+- **WORM / immutable storage.** Signed PDFs live on the regular
+  filesystem path under `storage/business-docs/contract/<year>/`.
+  Hardening this for high-stakes contracts is an infrastructure-
+  level decision (S3 Object Lock, etc.) outside picpeak's code.
+
+The signing flow is fine for routine photographer-customer
+contracts. For anything with significant economic value or
+Schriftform-bound documents, layer a QES provider on top of
+picpeak's contract management.
+
 ## Why this matters
 
 - **Liability.** Sending an unreviewed contract or a malformed QR-bill

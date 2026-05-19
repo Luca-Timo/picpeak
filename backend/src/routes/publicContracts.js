@@ -185,7 +185,18 @@ router.post(
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const ip = req.ip || req.headers['x-forwarded-for'] || null;
+    // Best-guess client IP. We prefer X-Forwarded-For's first hop
+    // (the actual originating IP behind any number of reverse
+    // proxies) over req.ip because Express only trusts proxies
+    // explicitly listed in `app.set('trust proxy', ...)` — if the
+    // operator runs picpeak behind nginx on a non-private subnet,
+    // req.ip would otherwise record the proxy's IP and ruin the
+    // audit trail. When X-Forwarded-For isn't present (direct
+    // connection) req.ip is the correct value.
+    const forwardedFor = req.headers['x-forwarded-for'];
+    const ip = (typeof forwardedFor === 'string' && forwardedFor.trim())
+      ? forwardedFor.split(',')[0].trim()
+      : (req.ip || null);
     try {
       const result = await contractService.recordCustomerSignature({
         token: req.params.token,
@@ -236,10 +247,18 @@ router.post(
       'customer',
     );
     // Mark the token as used so the link can't be re-played.
+    // IP storage is gated by the crm_contracts_store_ip setting so
+    // privacy-strict operators can opt out — same toggle that gates
+    // the in-browser-sign IP captures.
+    const ff = req.headers['x-forwarded-for'];
+    const rawIp = (typeof ff === 'string' && ff.trim())
+      ? ff.split(',')[0].trim()
+      : (req.ip || null);
+    const storeIpEnabled = (await getAppSetting('crm_contracts_store_ip')) !== false;
     await db('contract_action_tokens').where({ id: tokenRow.id }).update({
       used_at: new Date(),
       used_action: 'uploaded_signed_pdf',
-      used_ip: req.ip || req.headers['x-forwarded-for'] || null,
+      used_ip: storeIpEnabled ? rawIp : null,
     });
     return successResponse(res, result);
   }),

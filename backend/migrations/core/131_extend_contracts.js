@@ -44,6 +44,16 @@
  * Idempotent — every step checks hasColumn before adding.
  */
 
+const NEW_CRM_CONTRACT_SETTINGS = [
+  // Privacy / GDPR opt-out. When false, the customer's IP at sign
+  // time is NOT recorded into contracts.signed_customer_ip /
+  // signed_admin_ip / contract_action_tokens.used_ip. Default true
+  // because IP is corroborating evidence in civil disputes and the
+  // overwhelming-majority case is "record it"; operators with strict
+  // data-minimisation requirements flip it off.
+  { setting_key: 'crm_contracts_store_ip', setting_value: true, setting_type: 'crm' },
+];
+
 exports.up = async function(knex) {
   // ---- contracts: event snapshot fields ---------------------------
   if (await knex.schema.hasTable('contracts')) {
@@ -106,6 +116,22 @@ exports.up = async function(knex) {
       });
     }
   }
+
+  // ---- new CRM contract settings -----------------------------------
+  if (await knex.schema.hasTable('app_settings')) {
+    for (const row of NEW_CRM_CONTRACT_SETTINGS) {
+      const existing = await knex('app_settings')
+        .where('setting_key', row.setting_key)
+        .first();
+      if (!existing) {
+        await knex('app_settings').insert({
+          setting_key: row.setting_key,
+          setting_value: JSON.stringify(row.setting_value),
+          setting_type: row.setting_type,
+        });
+      }
+    }
+  }
 };
 
 exports.down = async function(knex) {
@@ -125,6 +151,13 @@ exports.down = async function(knex) {
         table.dropColumn('source_contract_id');
       });
     }
+  }
+
+  // Drop the new app_setting.
+  if (await knex.schema.hasTable('app_settings')) {
+    await knex('app_settings')
+      .whereIn('setting_key', NEW_CRM_CONTRACT_SETTINGS.map((s) => s.setting_key))
+      .del();
   }
 
   if (await knex.schema.hasTable('contracts')) {

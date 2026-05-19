@@ -60,16 +60,18 @@ const SECTIONS_ORDER = ['basics', 'scope', 'privacy', 'commercial', 'nda', 'clos
 async function adminActor(adminId) {
   if (!adminId) return { type: 'system' };
   try {
+    // admin_users only carries username + email (no first/last/name
+    // columns — confirmed from db.js:265). Prefer username for the
+    // audit timeline because it's the operator-chosen identifier
+    // shown elsewhere in the admin UI; fall back to email when an
+    // older install seeded a row without a username.
     const row = await db('admin_users')
       .where({ id: adminId })
-      .select('id', 'email', 'name', 'first_name', 'last_name')
+      .select('id', 'username', 'email')
       .first();
     if (!row) return { id: adminId, type: 'admin', name: `Admin #${adminId}` };
-    const fullName = row.name
-      || [row.first_name, row.last_name].filter(Boolean).join(' ')
-      || row.email
-      || `Admin #${adminId}`;
-    return { id: adminId, type: 'admin', name: fullName };
+    const displayName = row.username || row.email || `Admin #${adminId}`;
+    return { id: adminId, type: 'admin', name: displayName };
   } catch (_) {
     return { id: adminId, type: 'admin', name: `Admin #${adminId}` };
   }
@@ -77,6 +79,26 @@ async function adminActor(adminId) {
 
 function customerPublicActor() {
   return { type: 'customer', name: 'Customer (public link)' };
+}
+
+/**
+ * Privacy gate for the customer/admin IP captured at signing time.
+ * The `crm_contracts_store_ip` setting (default true) controls
+ * whether the IP is persisted into the DB. When off, this helper
+ * returns null regardless of what the route passed in — same shape
+ * the rest of the code expects, just with no IP data.
+ *
+ * Default-true means upgrades preserve current behaviour. Operators
+ * with strict data-minimisation requirements opt out in Settings →
+ * CRM-Settings → Contracts.
+ */
+async function maybeStoreIp(ip) {
+  if (!ip) return null;
+  const enabled = await getAppSetting('crm_contracts_store_ip');
+  // Default true: only block when explicitly set to false (covers
+  // legacy installs where the row doesn't exist yet).
+  if (enabled === false) return null;
+  return ip;
 }
 
 // ---------------------------------------------------------------------
@@ -898,19 +920,24 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
     : null;
 
   const now = new Date();
+  // Resolve the IP gate ONCE before the transaction so both writes
+  // (contracts row + tokens row) agree. Setting flip mid-transaction
+  // can't happen anyway, but doing it upfront keeps the data
+  // consistent and saves a redundant read.
+  const persistedIp = await maybeStoreIp(ip);
   await db.transaction(async (trx) => {
     await trx('contracts').where({ id: contract.id }).update({
       status: 'signed_by_customer',
       signed_by_customer_at: now,
       signed_customer_name: String(name).trim(),
-      signed_customer_ip: ip || null,
+      signed_customer_ip: persistedIp,
       signed_customer_signature_path: signaturePath,
       updated_at: now,
     });
     await trx('contract_action_tokens').where({ id: tokenRow.id }).update({
       used_at: now,
       used_action: 'signed_by_customer',
-      used_ip: ip || null,
+      used_ip: persistedIp,
     });
   });
 
@@ -999,11 +1026,12 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
 
   const now = new Date();
   const newStatus = contract.status === 'signed_by_customer' ? 'fully_signed' : 'signed_by_admin';
+  const persistedAdminIp = await maybeStoreIp(ip);
   await db('contracts').where({ id: contract.id }).update({
     status: newStatus,
     signed_by_admin_at: now,
     signed_admin_name: String(name).trim(),
-    signed_admin_ip: ip || null,
+    signed_admin_ip: persistedAdminIp,
     signed_admin_signature_path: signaturePath,
     updated_at: now,
   });
