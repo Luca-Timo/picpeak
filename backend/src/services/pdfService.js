@@ -2006,6 +2006,93 @@ function renderContractToBuffer(context) {
           ctx.signatures?.admin,
         );
 
+        // ---- audit page (only on signed contracts) -------------------
+        // Issue #3 from the maintainer plan: append a structured audit
+        // page listing every piece of evidence we recorded so the PDF
+        // is defensible on its own (without needing to open the admin
+        // UI). Lists names, timestamps, IPs, and SHA-256 hashes so
+        // either party can verify file integrity by re-hashing.
+        if (ctx.audit) {
+          doc.addPage();
+          let auditY = PAGE.marginTop;
+          doc.font(doc._fonts.bold).fontSize(16).fillColor('#000');
+          doc.text(t(locale, 'audit_title'), PAGE.marginLeft, auditY, {
+            width: PAGE.contentWidth,
+          });
+          auditY = doc.y + 6;
+          doc.strokeColor('#888').lineWidth(0.5)
+            .moveTo(PAGE.marginLeft, auditY)
+            .lineTo(PAGE.marginLeft + PAGE.contentWidth, auditY)
+            .stroke();
+          auditY += 14;
+
+          doc.font(doc._fonts.body).fontSize(10).fillColor('#000');
+          doc.text(t(locale, 'audit_intro'), PAGE.marginLeft, auditY, {
+            width: PAGE.contentWidth, align: 'left',
+          });
+          auditY = doc.y + 14;
+
+          // Two-column label/value rows. Same shape as the signature
+          // pane captions for visual consistency.
+          const labelW = 180;
+          const valueW = PAGE.contentWidth - labelW;
+          function auditRow(labelKey, value) {
+            if (!value) return;
+            doc.font(doc._fonts.bold).fontSize(9).fillColor('#444');
+            doc.text(t(locale, labelKey), PAGE.marginLeft, auditY, {
+              width: labelW, lineBreak: false, continued: false,
+            });
+            doc.font(doc._fonts.body).fontSize(9).fillColor('#000');
+            doc.text(String(value), PAGE.marginLeft + labelW, auditY, {
+              width: valueW, align: 'left',
+            });
+            auditY = Math.max(auditY + 12, doc.y + 4);
+          }
+
+          auditRow('audit_contract_number', ctx.audit.contractNumber);
+          auditRow('audit_issued_at', ctx.audit.issuedAt ? formatDate(ctx.audit.issuedAt, locale) : null);
+
+          if (ctx.signatures?.customer) {
+            auditY += 6;
+            doc.font(doc._fonts.bold).fontSize(10).fillColor('#000');
+            doc.text(t(locale, 'audit_customer_section'), PAGE.marginLeft, auditY);
+            auditY = doc.y + 4;
+            auditRow('audit_signed_by', ctx.signatures.customer.name);
+            auditRow('audit_signed_at', ctx.signatures.customer.signedAt
+              ? new Date(ctx.signatures.customer.signedAt).toISOString()
+              : null);
+            auditRow('audit_ip', ctx.signatures.customer.ip);
+          }
+          if (ctx.signatures?.admin) {
+            auditY += 6;
+            doc.font(doc._fonts.bold).fontSize(10).fillColor('#000');
+            doc.text(t(locale, 'audit_admin_section'), PAGE.marginLeft, auditY);
+            auditY = doc.y + 4;
+            auditRow('audit_signed_by', ctx.signatures.admin.name);
+            auditRow('audit_signed_at', ctx.signatures.admin.signedAt
+              ? new Date(ctx.signatures.admin.signedAt).toISOString()
+              : null);
+            auditRow('audit_ip', ctx.signatures.admin.ip);
+          }
+
+          // Content hashes. Render in fixed-width style so the digest
+          // is readable even when split across lines.
+          if (ctx.audit.pdfSha256 || ctx.audit.signedPdfSha256) {
+            auditY += 8;
+            doc.font(doc._fonts.bold).fontSize(10).fillColor('#000');
+            doc.text(t(locale, 'audit_integrity_section'), PAGE.marginLeft, auditY);
+            auditY = doc.y + 4;
+            auditRow('audit_unsigned_sha', ctx.audit.pdfSha256);
+            auditRow('audit_signed_sha', ctx.audit.signedPdfSha256);
+          }
+
+          auditY += 14;
+          doc.font(doc._fonts.body).fontSize(8).fillColor('#666');
+          doc.text(t(locale, 'audit_footer'), PAGE.marginLeft, auditY, {
+            width: PAGE.contentWidth, align: 'left',
+          });
+        }
+
         // ---- page numbers ("Page 1 of N" / "Seite 1 von N") ----------
         // Same stamp the quote/invoice renderer uses (line 1680 above).
         // bufferPages:true keeps every page open for switchToPage; we

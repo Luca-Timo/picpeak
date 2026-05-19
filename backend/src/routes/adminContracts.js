@@ -114,6 +114,12 @@ function transformContract(c, inclusions) {
     outroText: c.outro_text,
     pdfPath: c.pdf_path,
     signedPdfPath: c.signed_pdf_path,
+    // Audit defence: SHA-256 hashes of the on-disk PDFs computed at
+    // each write. Either party can re-hash the PDF they hold and
+    // compare against these to prove the file hasn't been tampered
+    // with since we issued it.
+    pdfSha256: c.pdf_sha256 || null,
+    signedPdfSha256: c.signed_pdf_sha256 || null,
     sentAt: c.sent_at,
     signedByCustomerAt: c.signed_by_customer_at,
     signedByAdminAt: c.signed_by_admin_at,
@@ -523,6 +529,19 @@ router.get(
       `inline; filename="${data.contract.contract_number}-signed.pdf"`,
     );
     fs.createReadStream(data.contract.signed_pdf_path).pipe(res);
+  }),
+);
+
+// Audit trail — chronological activity_logs entries for this contract.
+// Used by the AuditTrailCard on the admin detail page; read-only.
+router.get(
+  '/:id/audit-trail',
+  requirePermission('contracts.view'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const entries = await contractService.getAuditTrail(parseInt(req.params.id, 10));
+    return successResponse(res, { entries });
   }),
 );
 

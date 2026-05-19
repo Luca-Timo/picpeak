@@ -511,6 +511,13 @@ exports.up = async function(knex) {
       // is the AUTHORITATIVE signed copy; the system PDF is kept for
       // audit but the signed_pdf is what gets sent + archived.
       table.string('signed_pdf_path', 512);
+      // SHA-256 content hashes of the on-disk PDFs (audit defence).
+      // Computed at every write to the respective path. Lets either
+      // party prove the file hasn't been tampered with after the fact:
+      // re-hash the PDF you hold, compare against what's stored here.
+      // 64-hex char = 32 byte digest.
+      table.string('pdf_sha256', 64);
+      table.string('signed_pdf_sha256', 64);
 
       table.timestamp('sent_at');
       table.timestamp('signed_by_customer_at');
