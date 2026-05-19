@@ -233,9 +233,26 @@ function formatDate(value, dateFormat) {
   }
 }
 
-function localeForIntl(locale) {
-  // pdf-i18n uses bare ISO 639 ('de', 'en'...). Intl wants BCP-47, so
-  // upgrade to a region-anchored locale where helpful.
+/**
+ * Resolve the BCP-47 locale used for number / currency formatting.
+ *
+ * Strategy: the issuer's country code wins. CH/LI/DE/AT issuers all
+ * get the Swiss-style apostrophe thousands separator (e.g. 1'000.00 —
+ * what the local accountant + the bank expects on Stelleabrechnung /
+ * Rechnung), regardless of the document language. Outside the DACH
+ * region we fall through to the bare ISO 639 locale → BCP-47 mapping
+ * so en-GB, pt-PT, etc. keep their conventional formatting.
+ *
+ * Per maintainer: "in FL, CH, DE we write 1'000.00 not 1,000.00".
+ */
+function localeForIntl(locale, issuerCountryCode) {
+  const cc = (issuerCountryCode || '').toUpperCase();
+  if (['CH', 'LI', 'DE', 'AT'].includes(cc)) {
+    // de-CH is the only one of these that uses the apostrophe
+    // separator in Intl.NumberFormat. fr-CH would render 1 000.00
+    // (NBSP) which Swiss accountants don't want either.
+    return 'de-CH';
+  }
   const map = { de: 'de-CH', en: 'en-GB', fr: 'fr-CH', nl: 'nl-NL', pt: 'pt-PT', ru: 'ru-RU' };
   return map[locale] || locale || 'en-GB';
 }
@@ -1708,7 +1725,7 @@ function normaliseContext(type, ctx) {
   return {
     type,
     locale,
-    intlLocale: localeForIntl(locale),
+    intlLocale: localeForIntl(locale, ctx.issuer?.countryCode),
     currency: (ctx.currency || ctx.doc?.currency || ctx.issuer?.defaultCurrency || 'CHF').toUpperCase(),
     issuer: ctx.issuer || {},
     recipient: ctx.recipient || {},
@@ -1968,6 +1985,30 @@ function renderContractToBuffer(context) {
           t(locale, 'signature_admin'),
           ctx.signatures?.admin,
         );
+
+        // ---- page numbers ("Page 1 of N" / "Seite 1 von N") ----------
+        // Same stamp the quote/invoice renderer uses (line 1680 above).
+        // bufferPages:true keeps every page open for switchToPage; we
+        // walk the range after all content is drawn so we know N.
+        try {
+          const range = doc.bufferedPageRange();
+          const total = range.count;
+          for (let i = 0; i < total; i++) {
+            doc.switchToPage(range.start + i);
+            doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8).fillColor('#888');
+            const label = t(locale, 'page_of', { current: i + 1, total });
+            const labelY = doc.page.height - PAGE.marginBottom - 12;
+            const labelW = 120;
+            const labelX = doc.page.width - PAGE.marginRight - labelW;
+            doc.text(label, labelX, labelY, {
+              width: labelW, align: 'right', lineBreak: false,
+            });
+            doc.fillColor('#000');
+          }
+        } catch (err) {
+          const logger = require('../utils/logger');
+          logger.warn('Failed to stamp page numbers on contract PDF', { err: err.message });
+        }
 
         doc.end();
       } catch (err) {

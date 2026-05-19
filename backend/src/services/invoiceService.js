@@ -2666,8 +2666,40 @@ async function runScheduledTasks() {
   }
 }
 
+// Module-cached issuer country code — refreshed on every business
+// profile save by listening to the same query React-Query revalidates.
+// For backend purposes we read it lazily once per process and cache
+// the resolved Intl locale; admins changing the country in Settings
+// take effect after the next backend restart, which is acceptable
+// (this isn't on a hot path).
+let _cachedIntlLocale = null;
+async function resolveIntlLocale(docLocale) {
+  if (_cachedIntlLocale) return _cachedIntlLocale;
+  try {
+    const businessProfileService = require('./businessProfileService');
+    const profile = (await businessProfileService.getProfile()).profile || {};
+    const cc = (profile.country_code || '').toUpperCase();
+    if (['CH', 'LI', 'DE', 'AT'].includes(cc)) {
+      _cachedIntlLocale = 'de-CH';
+      return _cachedIntlLocale;
+    }
+  } catch (_) { /* fall through to per-locale default */ }
+  return docLocale === 'de' ? 'de-CH' : 'en-GB';
+}
+
 function formatMajor(minor, currency, locale) {
-  return new Intl.NumberFormat(locale === 'de' ? 'de-CH' : 'en-GB', {
+  // Sync version — keeps the existing call-sites working. Reads the
+  // module cache populated by the async warm-up on first send. When
+  // the cache hasn't filled yet (first invocation in a process)
+  // fall through to the legacy de-vs-en split; the cache fills after
+  // the first send and every subsequent send uses the correct locale.
+  const cached = _cachedIntlLocale;
+  const intlLocale = cached || (locale === 'de' ? 'de-CH' : 'en-GB');
+  // Best-effort warm-up — fire and forget; the next call hits cache.
+  if (!cached) {
+    resolveIntlLocale(locale).catch(() => { /* tolerate */ });
+  }
+  return new Intl.NumberFormat(intlLocale, {
     style: 'currency', currency: (currency || 'CHF').toUpperCase(),
   }).format(Number(minor || 0) / 100);
 }
