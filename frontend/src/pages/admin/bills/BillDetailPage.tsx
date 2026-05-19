@@ -322,6 +322,19 @@ export const BillDetailPage: React.FC = () => {
               </Link>
             </div>
           )}
+          {/* Migration 130 lineage: invoice generated from a contract.
+              Either standalone (no source quote) or chained from quote
+              → contract → invoice. Both are surfaced; admins can hop
+              up the chain from any link. */}
+          {inv.sourceContractId && (
+            <div>
+              <div className="text-neutral-500">{t('bills.field.sourceContract', 'From contract')}</div>
+              <Link to={`/admin/clients/contracts/${inv.sourceContractId}`}
+                className="text-primary-600 dark:text-primary-400 hover:underline font-mono text-sm">
+                #{inv.sourceContractId}
+              </Link>
+            </div>
+          )}
         </div>
       </Card>
 

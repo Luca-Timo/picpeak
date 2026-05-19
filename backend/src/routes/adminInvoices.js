@@ -88,6 +88,9 @@ function transformInvoice(i) {
     },
     sourceQuoteId: i.source_quote_id,
     sourceQuoteNumber: i.source_quote_number || null,
+    // Migration 130 lineage: set by contractService.convertToInvoiceOnly
+    // so BillDetailPage can render a "From contract" badge.
+    sourceContractId: i.source_contract_id || null,
     eventId: i.event_id,
     language: i.language,
     currency: i.currency,

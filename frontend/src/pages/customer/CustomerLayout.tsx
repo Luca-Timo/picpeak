@@ -25,6 +25,7 @@ import {
   LogOut,
   Menu,
   Receipt,
+  ScrollText,
   User as UserIcon,
   X,
 } from 'lucide-react';
@@ -44,13 +45,14 @@ interface NavItem {
    * Galleries + Profile are always visible; Calendar/Quotes/Bills are
    * gated.
    */
-  feature?: 'calendar' | 'quotes' | 'bills';
+  feature?: 'calendar' | 'quotes' | 'bills' | 'contracts';
 }
 
 const NAV: NavItem[] = [
   { to: '/customer/dashboard', labelKey: 'customer.nav.galleries', fallback: 'Galleries', icon: ImageIcon },
   { to: '/customer/calendar', labelKey: 'customer.nav.calendar', fallback: 'Calendar', icon: Calendar, feature: 'calendar' },
   { to: '/customer/quotes', labelKey: 'customer.nav.quotes', fallback: 'Quotes', icon: FileText, feature: 'quotes' },
+  { to: '/customer/contracts', labelKey: 'customer.nav.contracts', fallback: 'Contracts', icon: ScrollText, feature: 'contracts' },
   { to: '/customer/bills', labelKey: 'customer.nav.bills', fallback: 'Invoices', icon: Receipt, feature: 'bills' },
   { to: '/customer/profile', labelKey: 'customer.nav.profile', fallback: 'Profile', icon: UserIcon },
 ];

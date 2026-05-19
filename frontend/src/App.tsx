@@ -53,6 +53,7 @@ import {
   CustomerCalendarPage,
   CustomerQuotesPage,
   CustomerBillsPage,
+  CustomerContractsPage,
   CustomerResetPasswordPage,
 } from './pages/customer';
 import { CustomerAuthProvider } from './contexts/CustomerAuthContext';
@@ -306,6 +307,7 @@ function App() {
                           <Route path="dashboard" element={<CustomerDashboardPage />} />
                           <Route path="calendar" element={<CustomerCalendarPage />} />
                           <Route path="quotes" element={<CustomerQuotesPage />} />
+                          <Route path="contracts" element={<CustomerContractsPage />} />
                           <Route path="bills" element={<CustomerBillsPage />} />
                           <Route path="profile" element={<CustomerProfilePage />} />
                         </Route>

@@ -35,6 +35,7 @@ export interface CustomerFeatureFlags {
   calendar: boolean;
   quotes: boolean;
   bills: boolean;
+  contracts: boolean;
 }
 
 export interface CustomerBrandingFlags {
@@ -76,7 +77,7 @@ const STORAGE_KEY = 'customer_profile';
 const FEATURES_KEY = 'customer_features';
 const BRANDING_KEY = 'customer_branding';
 
-const DEFAULT_FEATURES: CustomerFeatureFlags = { calendar: false, quotes: false, bills: false };
+const DEFAULT_FEATURES: CustomerFeatureFlags = { calendar: false, quotes: false, bills: false, contracts: false };
 const DEFAULT_BRANDING: CustomerBrandingFlags = { showLogo: true, showCompanyName: true };
 
 interface ProviderProps { children: ReactNode; }

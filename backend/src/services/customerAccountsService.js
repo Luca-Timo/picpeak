@@ -1238,7 +1238,7 @@ async function getEffectiveFeaturesForCustomer(customerOrId) {
     ? await db('customer_accounts').where('id', customerOrId).first()
     : customerOrId;
   if (!customer) {
-    return { calendar: false, quotes: false, bills: false, hoursLogging: false };
+    return { calendar: false, quotes: false, bills: false, hoursLogging: false, contracts: false };
   }
   const globals = await getCustomerSurfaceGlobals();
   // SQLite returns booleans as 0/1; Postgres returns true/false. The
@@ -1253,11 +1253,17 @@ async function getEffectiveFeaturesForCustomer(customerOrId) {
   // for hours, so we skip the third gate the bills/quotes use.
   const hoursMaster = await db('feature_flags').where({ key: 'hoursLogging' }).first();
   const hoursLoggingMaster = hoursMaster ? Boolean(hoursMaster.value) : true;
+  // Contracts (migration 130): no per-customer flag, just the global
+  // feature_flags row. When on, every customer with an active account
+  // sees the Contracts tab on their portal.
+  const contractsMaster = await db('feature_flags').where({ key: 'contracts' }).first();
+  const contractsEnabled = contractsMaster ? Boolean(contractsMaster.value) : false;
   return {
     calendar: globals.calendarEnabled && truthy(customer.feature_calendar),
     quotes:   globals.quotesEnabled   && truthy(customer.feature_quotes),
     bills:    globals.billsEnabled    && truthy(customer.feature_bills),
     hoursLogging: hoursLoggingMaster && truthy(customer.feature_hours_logging),
+    contracts: contractsEnabled,
   };
 }
 

@@ -991,7 +991,7 @@ async function sendQuote(id, adminId) {
     decline_url: `${responseUrl}?action=decline`,
     valid_until: formatShortDate(quote.valid_until),
     event_name: quote.event_name || '',
-    total_amount: formatMajor(quote.total_amount_minor, quote.currency, ctx.locale),
+    total_amount: formatMajor(quote.total_amount_minor, quote.currency, ctx.locale, ctx.issuer?.countryCode),
     cc: quote.cc_pdf_email || undefined,
     attachments: (attachPdf !== false && pdfPath) ? [{
       filename: `${quote.quote_number}.pdf`,
@@ -1008,8 +1008,17 @@ async function sendQuote(id, adminId) {
   return { token, pdfPath };
 }
 
-function formatMajor(minor, currency, locale) {
-  return new Intl.NumberFormat(locale === 'de' ? 'de-CH' : 'en-GB', {
+function formatMajor(minor, currency, locale, issuerCountryCode) {
+  // Per maintainer: every DACH-region issuer (FL/CH/DE/AT) writes
+  // 1'000.00 with an apostrophe separator regardless of document
+  // language. de-CH is the only Intl locale that produces that
+  // format, so we force it whenever the issuer sits in that region.
+  // Outside DACH we still honour the document locale.
+  const cc = (issuerCountryCode || '').toUpperCase();
+  const intlLocale = ['CH', 'LI', 'DE', 'AT'].includes(cc)
+    ? 'de-CH'
+    : (locale === 'de' ? 'de-CH' : 'en-GB');
+  return new Intl.NumberFormat(intlLocale, {
     style: 'currency', currency: (currency || 'CHF').toUpperCase(),
   }).format(Number(minor || 0) / 100);
 }

@@ -370,6 +370,26 @@ const CRM_EMAIL_TEMPLATES = {
       body_text: `Vertrag {{contract_number}}\n\nSehr geehrte/r {{customer_name}},\n\nbitte prüfen und unterzeichnen Sie den Vertrag {{contract_number}}.\n\nÖffnen: {{response_url}}\n\n{{#if valid_until}}Bitte unterzeichnen bis {{valid_until}}.{{/if}}`,
     },
   },
+  contract_fully_signed: {
+    category: 'contracts', feature_flag: 'contracts',
+    variables: ['contract_number', 'customer_name', 'title'],
+    en: {
+      subject: 'Contract {{contract_number}} fully signed',
+      body_html: `<h2>Contract {{contract_number}} — fully signed</h2>
+<p>Dear {{customer_name}},</p>
+<p>Both parties have now signed contract {{contract_number}}{{#if title}} — "{{title}}"{{/if}}. Please find the fully signed PDF attached for your records.</p>
+<p style="font-size: 13px; color: #666;">This is the authoritative signed copy. Keep it alongside the related quote and invoices.</p>`,
+      body_text: `Contract {{contract_number}} is now fully signed by both parties. The signed PDF is attached for your records.`,
+    },
+    de: {
+      subject: 'Vertrag {{contract_number}} vollständig unterzeichnet',
+      body_html: `<h2>Vertrag {{contract_number}} – vollständig unterzeichnet</h2>
+<p>Sehr geehrte/r {{customer_name}},</p>
+<p>der Vertrag {{contract_number}}{{#if title}} – „{{title}}"{{/if}} wurde nun von beiden Parteien unterzeichnet. Im Anhang finden Sie das beidseitig unterzeichnete PDF für Ihre Unterlagen.</p>
+<p style="font-size: 13px; color: #666;">Dies ist die massgebliche unterzeichnete Fassung. Bewahren Sie sie zusammen mit dem zugehörigen Angebot und den Rechnungen auf.</p>`,
+      body_text: `Vertrag {{contract_number}} ist nun beidseitig unterzeichnet. Das unterzeichnete PDF finden Sie im Anhang.`,
+    },
+  },
   contract_signed_admin_notification: {
     category: 'contracts', feature_flag: 'contracts',
     variables: ['contract_number', 'customer_email', 'signed_customer_name', 'admin_dashboard_url'],

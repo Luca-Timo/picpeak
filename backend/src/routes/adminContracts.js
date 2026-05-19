@@ -116,6 +116,14 @@ function transformContract(c, inclusions) {
     signedAdminIp: c.signed_admin_ip,
     signedAdminSignaturePath: c.signed_admin_signature_path,
     createdByAdminId: c.created_by_admin_id,
+    // Lineage back-pointers (migration 130). Surfaced so the
+    // ContractDetailPage can render "Linked quote" + "Linked
+    // invoices" panels alongside the existing block list. The
+    // values are nullable when the back-pointers haven't been
+    // populated (e.g. dev DB without the column migration; the
+    // service writes them through hasColumn guards).
+    sourceQuoteId: c.source_quote_id || null,
+    convertedEventId: c.converted_event_id || null,
     createdAt: c.created_at,
     updatedAt: c.updated_at,
     inclusions: Array.isArray(inclusions)

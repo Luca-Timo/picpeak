@@ -58,6 +58,11 @@ export interface QuoteSummary {
   acceptedAt: string | null;
   declinedAt: string | null;
   convertedEventId: number | null;
+  /** Migration 130 — set by contractService.createFromQuote so the
+   *  QuoteDetailPage can render a "Linked contract" badge alongside
+   *  the existing resulting-invoices list. Null when no contract was
+   *  drafted from the quote. */
+  convertedContractId?: number | null;
   createdAt: string;
 }
 

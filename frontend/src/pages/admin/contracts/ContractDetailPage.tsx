@@ -16,6 +16,8 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
+import { billsService } from '../../../services/bills.service';
+import { quotesService } from '../../../services/quotes.service';
 import SignaturePad from 'signature_pad';
 import {
   ArrowLeft, Edit2, Send, X, FileDown, Upload, CheckSquare, ScrollText,
@@ -56,6 +58,27 @@ export const ContractDetailPage: React.FC = () => {
     queryKey: ['contract', numericId],
     queryFn: () => contractsService.get(numericId as number),
     enabled: numericId !== null,
+  });
+
+  // Lineage: pull the source quote's number AND every invoice whose
+  // source_contract_id matches this contract. Both queries are gated
+  // off `data` so they only fire after the contract loads. React-Query
+  // handles caching so navigating between contract/quote/bill detail
+  // pages doesn't refetch.
+  const sourceQuoteId = data?.contract?.sourceQuoteId ?? null;
+  const { data: sourceQuoteData } = useQuery({
+    queryKey: ['quote', sourceQuoteId],
+    queryFn: () => quotesService.get(sourceQuoteId as number),
+    enabled: !!sourceQuoteId,
+  });
+  const { data: linkedInvoices } = useQuery({
+    queryKey: ['contract-invoices', numericId],
+    queryFn: () => billsService.list({ pageSize: 50 } as any),
+    enabled: numericId !== null,
+    // Filter client-side because the bills endpoint doesn't support
+    // sourceContractId yet. The bills list response is capped at 50
+    // most-recent — sufficient for contract → invoice flows.
+    select: (res) => res?.invoices?.filter((i) => i.sourceContractId === numericId) || [],
   });
 
   const sendMutation = useMutation({
@@ -376,6 +399,60 @@ export const ContractDetailPage: React.FC = () => {
           onSubmit={() => countersignMutation.mutate()}
           pending={countersignMutation.isPending}
         />
+      )}
+
+      {/* Lineage: source quote + resulting event + resulting invoices.
+          Renders only when at least one side has data so contracts
+          created standalone don't show empty panels. Mirrors the
+          "Resulting invoices" pattern on QuoteDetailPage. */}
+      {(sourceQuoteId || c.convertedEventId || (linkedInvoices && linkedInvoices.length > 0)) && (
+        <Card padding="lg" className="mb-4">
+          <h2 className="font-semibold mb-2">{t('contracts.detail.lineage', 'Linked documents')}</h2>
+          <div className="space-y-2 text-sm">
+            {sourceQuoteId && (
+              <div className="flex items-center gap-2">
+                <span className="text-neutral-500 w-32">{t('contracts.detail.fromQuote', 'From quote')}:</span>
+                <Link
+                  to={`/admin/clients/quotes/${sourceQuoteId}`}
+                  className="text-accent-dark hover:underline font-mono"
+                >
+                  {sourceQuoteData?.quote?.quoteNumber || `#${sourceQuoteId}`}
+                </Link>
+              </div>
+            )}
+            {c.convertedEventId && (
+              <div className="flex items-center gap-2">
+                <span className="text-neutral-500 w-32">{t('contracts.detail.convertedToEvent', 'Converted to event')}:</span>
+                <Link
+                  to={`/admin/events/${c.convertedEventId}`}
+                  className="text-accent-dark hover:underline font-mono"
+                >
+                  #{c.convertedEventId}
+                </Link>
+              </div>
+            )}
+            {linkedInvoices && linkedInvoices.length > 0 && (
+              <div className="flex items-start gap-2">
+                <span className="text-neutral-500 w-32 flex-shrink-0">{t('contracts.detail.linkedInvoices', 'Resulting invoices')}:</span>
+                <ul className="space-y-1">
+                  {linkedInvoices.map((inv) => (
+                    <li key={inv.id}>
+                      <Link
+                        to={`/admin/clients/bills/${inv.id}`}
+                        className="text-accent-dark hover:underline font-mono"
+                      >
+                        {inv.invoiceNumber}
+                      </Link>
+                      <span className="ml-2 text-xs text-neutral-500">
+                        {t(`bills.status.${inv.status}`, inv.status)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Card>
       )}
 
       {/* Block summary */}

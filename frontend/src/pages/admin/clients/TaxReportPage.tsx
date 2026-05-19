@@ -131,7 +131,11 @@ export const TaxReportPage: React.FC = () => {
     }
   };
 
-  const intlLocale = i18n.language === 'de' ? 'de-CH' : 'en-GB';
+  // Per maintainer: every CH/LI/DE/AT-based business writes 1'000.00
+  // regardless of document language, so we default to de-CH (the only
+  // Intl locale producing apostrophe thousands). Non-DACH operators
+  // can override later if needed.
+  const intlLocale = 'de-CH';
 
   // Show the per-VAT-rate breakdown only when there are 2+ distinct
   // rates in the period. With a single rate the breakdown is just a
