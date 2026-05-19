@@ -491,16 +491,6 @@ exports.up = async function(knex) {
 
       // Admin-typed contract title used for the cover and email subject.
       table.string('title', 255);
-      // Event snapshot fields, mirror quotes.event_* + invoices.event_*
-      // (migration 123). Propagated from the source quote on
-      // createFromQuote, then snapshotted onto generated invoices /
-      // events so the label survives even when the contract is later
-      // edited or the source quote is purged. Standalone contracts can
-      // set these directly via the contract editor.
-      table.string('event_name', 255);
-      table.date('event_date');
-      table.string('event_time_start', 8);
-      table.string('event_time_end', 8);
       table.text('intro_text');
       table.text('outro_text');
 
@@ -511,13 +501,6 @@ exports.up = async function(knex) {
       // is the AUTHORITATIVE signed copy; the system PDF is kept for
       // audit but the signed_pdf is what gets sent + archived.
       table.string('signed_pdf_path', 512);
-      // SHA-256 content hashes of the on-disk PDFs (audit defence).
-      // Computed at every write to the respective path. Lets either
-      // party prove the file hasn't been tampered with after the fact:
-      // re-hash the PDF you hold, compare against what's stored here.
-      // 64-hex char = 32 byte digest.
-      table.string('pdf_sha256', 64);
-      table.string('signed_pdf_sha256', 64);
 
       table.timestamp('sent_at');
       table.timestamp('signed_by_customer_at');
@@ -533,21 +516,6 @@ exports.up = async function(knex) {
       table.string('signed_admin_ip', 45);
       table.string('signed_admin_signature_path', 512);
 
-      // ---- lineage (conversion lanes between quote → contract → event/invoice)
-      // source_quote_id: set when admin converts an accepted quote into
-      //   a draft contract. Required for converting the contract back
-      //   into event / invoices later (contracts have no line items of
-      //   their own, the original quote's items + payment plan are
-      //   replayed).
-      // converted_event_id: back-pointer set when the contract is
-      //   converted into an event. Mirrors quotes.converted_event_id.
-      //   ON DELETE SET NULL so deleting the event preserves the
-      //   contract's audit trail.
-      table.integer('source_quote_id').unsigned()
-        .references('id').inTable('quotes').onDelete('SET NULL');
-      table.integer('converted_event_id').unsigned()
-        .references('id').inTable('events').onDelete('SET NULL');
-
       table.integer('created_by_admin_id').unsigned()
         .references('id').inTable('admin_users').onDelete('SET NULL');
       table.timestamp('created_at').defaultTo(knex.fn.now());
@@ -556,7 +524,6 @@ exports.up = async function(knex) {
       table.index(['customer_account_id']);
       table.index(['status']);
       table.index(['issue_date']);
-      table.index(['source_quote_id']);
     });
   }
 
@@ -609,30 +576,6 @@ exports.up = async function(knex) {
       table.index(['contract_id']);
       table.index(['expires_at']);
     });
-  }
-
-  // ---- lineage back-pointers on existing tables ------------------------
-  // Mirrors how migration 102 added events.quote_id when quotes shipped:
-  // existing tables get a nullable FK so the conversion flow can record
-  // "this quote produced contract X" / "this invoice was generated from
-  // contract Y" without restructuring the original schema. Idempotent.
-  if (await knex.schema.hasTable('quotes')) {
-    if (!(await knex.schema.hasColumn('quotes', 'converted_contract_id'))) {
-      await knex.schema.alterTable('quotes', (table) => {
-        table.integer('converted_contract_id').unsigned()
-          .references('id').inTable('contracts').onDelete('SET NULL');
-        table.index(['converted_contract_id']);
-      });
-    }
-  }
-  if (await knex.schema.hasTable('invoices')) {
-    if (!(await knex.schema.hasColumn('invoices', 'source_contract_id'))) {
-      await knex.schema.alterTable('invoices', (table) => {
-        table.integer('source_contract_id').unsigned()
-          .references('id').inTable('contracts').onDelete('SET NULL');
-        table.index(['source_contract_id']);
-      });
-    }
   }
 
   // ---- RBAC permissions -------------------------------------------------
@@ -748,24 +691,6 @@ exports.up = async function(knex) {
 };
 
 exports.down = async function(knex) {
-  // Drop the lineage back-pointers BEFORE the contracts table itself —
-  // otherwise the FK constraint on quotes.converted_contract_id /
-  // invoices.source_contract_id blocks the table drop.
-  if (await knex.schema.hasTable('quotes')) {
-    if (await knex.schema.hasColumn('quotes', 'converted_contract_id')) {
-      await knex.schema.alterTable('quotes', (table) => {
-        table.dropColumn('converted_contract_id');
-      });
-    }
-  }
-  if (await knex.schema.hasTable('invoices')) {
-    if (await knex.schema.hasColumn('invoices', 'source_contract_id')) {
-      await knex.schema.alterTable('invoices', (table) => {
-        table.dropColumn('source_contract_id');
-      });
-    }
-  }
-
   await knex.schema.dropTableIfExists('contract_action_tokens');
   await knex.schema.dropTableIfExists('contract_block_inclusions');
   await knex.schema.dropTableIfExists('contracts');
