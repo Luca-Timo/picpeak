@@ -116,12 +116,23 @@ jobs:
             psql -h localhost -U picpeak -d picpeak_drift -c "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename"
             exit 1
           fi
-          migrations_count=$(psql -h localhost -U picpeak -d picpeak_drift -tAc "SELECT CASE WHEN to_regclass('public.migrations') IS NULL THEN 0 ELSE (SELECT count(*) FROM migrations) END")
+          # initializeDatabase() doesn't create the `migrations` tracking
+          # table — that's the migrate:safe runner's job. So in the recovery
+          # scenario, the table either (a) doesn't exist yet or (b) exists
+          # but is empty (e.g. someone created it but didn't populate it).
+          # Both are valid recovery states; check via to_regclass first so
+          # we don't parse a SELECT against a nonexistent table.
+          has_migrations_table=$(psql -h localhost -U picpeak -d picpeak_drift -tAc "SELECT to_regclass('public.migrations')::text")
+          if [ -z "$has_migrations_table" ]; then
+            migrations_count=0
+          else
+            migrations_count=$(psql -h localhost -U picpeak -d picpeak_drift -tAc "SELECT count(*) FROM migrations")
+          fi
           if [ "$migrations_count" != "0" ]; then
             echo "FAIL: migrations table should be empty for the recovery scenario; has $migrations_count rows."
             exit 1
           fi
-          echo "ok: recovery state confirmed (bootstrap tables present, migrations table empty)."
+          echo "ok: recovery state confirmed (bootstrap tables present, migrations table empty or absent)."
 
       # Step 2: run migrate:safe — the test. Before #530's fix in
       # detectExistingSchema, this died at core/029 with a "column
