@@ -106,8 +106,15 @@ const LABELS = {
     signed_label_place: 'Place',
     signed_label_signature: 'Signature',
     signed_at: 'Signed at',
-    // Audit page appended to signed contracts. Renders timestamps,
-    // IPs, and SHA-256 hashes so the PDF is forensically defensible.
+    // Dedicated signature page at the end of every contract PDF.
+    // Stamp service overlays canvas signatures onto the empty boxes
+    // at fixed coordinates; admin / customer labels stay in-place.
+    signature_page_title: 'Signatures',
+    signature_page_prompt: 'Both parties confirm acceptance of the terms above by signing below.',
+    // Audit certificate — separate PDF (no longer in the contract
+    // body) listing timestamps, IPs, and SHA-256 hashes. Generated
+    // by pdfStampService.renderAuditCertificate.
+    audit_certificate_subject: 'Signing audit certificate',
     audit_title: 'Signing audit trail',
     audit_intro: 'The evidence below was recorded automatically when this contract was signed. To verify file integrity, re-hash the PDF you hold with any SHA-256 utility and compare against the digest below — if the values match, the file has not been tampered with since issuing.',
     audit_contract_number: 'Contract number',
@@ -205,6 +212,9 @@ const LABELS = {
     signed_label_place: 'Ort',
     signed_label_signature: 'Unterschrift',
     signed_at: 'Unterzeichnet am',
+    signature_page_title: 'Unterschriften',
+    signature_page_prompt: 'Beide Parteien bestätigen mit ihrer Unterschrift die Annahme der vorstehenden Bedingungen.',
+    audit_certificate_subject: 'Audit-Bescheinigung der Unterzeichnung',
     audit_title: 'Audit-Trail der Unterzeichnung',
     audit_intro: 'Die nachstehenden Belege wurden bei der Unterzeichnung automatisch erfasst. Zur Überprüfung der Dateiintegrität bilden Sie den SHA-256-Hash der Ihnen vorliegenden PDF-Datei und vergleichen ihn mit dem unten angegebenen Wert — bei Übereinstimmung wurde die Datei seit der Ausstellung nicht verändert.',
     audit_contract_number: 'Vertragsnummer',

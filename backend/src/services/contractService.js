@@ -41,6 +41,7 @@ const { getAppSetting } = require('../utils/appSettings');
 const { AppError } = require('../utils/errors');
 const businessProfileService = require('./businessProfileService');
 const pdfService = require('./pdfService');
+const pdfStampService = require('./pdfStampService');
 const emailProcessor = require('./emailProcessor');
 const { ensureContractEmailTemplatesSeeded } = require('./contractEmailTemplates');
 const { getFrontendBaseUrl } = require('../utils/frontendUrl');
@@ -304,6 +305,107 @@ async function persistSignatureImage(contract, role, dataUrl) {
   const filePath = path.join(root, `${role}-${Date.now()}.${ext}`);
   fs.writeFileSync(filePath, Buffer.from(match[2], 'base64'));
   return filePath;
+}
+
+/**
+ * Build the stamp sequence the pdf-lib stamp service expects from a
+ * single contract row. Customer first, admin second — provenance
+ * order matches the visual order on the signature page.
+ *
+ * Used by the recovery paths (rerenderAndResend, restampSignatures).
+ * The hot path (recordCustomerSignature / recordAdminCountersignature)
+ * stamps incrementally so it constructs the stamp inline.
+ */
+function buildSignatureStamps(contract) {
+  const locale = contract.language || 'de';
+  const nameLabel = 'Name';
+  const dateLabel = locale === 'de' ? 'Datum' : 'Date';
+  const stamps = [];
+  if (contract.signed_customer_signature_path) {
+    stamps.push({
+      signaturePngPath: contract.signed_customer_signature_path,
+      role: 'customer',
+      caption: {
+        name: contract.signed_customer_name || '',
+        signedAt: contract.signed_by_customer_at,
+        nameLabel,
+        dateLabel,
+      },
+    });
+  }
+  if (contract.signed_admin_signature_path) {
+    stamps.push({
+      signaturePngPath: contract.signed_admin_signature_path,
+      role: 'admin',
+      caption: {
+        name: contract.signed_admin_name || '',
+        signedAt: contract.signed_by_admin_at,
+        nameLabel,
+        dateLabel,
+      },
+    });
+  }
+  return stamps;
+}
+
+/**
+ * Build the audit-certificate context expected by
+ * pdfStampService.renderAuditCertificate from a fully-signed
+ * contract row. Returns null when the contract isn't signed enough
+ * to warrant a certificate (no customer + no admin signature data).
+ */
+function buildAuditCertContext(contract) {
+  const hasCustomerSig = contract.signed_by_customer_at || contract.signed_customer_name;
+  const hasAdminSig = contract.signed_by_admin_at || contract.signed_admin_name;
+  if (!hasCustomerSig && !hasAdminSig) return null;
+  return {
+    contract: {
+      contract_number: contract.contract_number,
+      sent_at: contract.sent_at,
+      pdf_sha256: contract.pdf_sha256 || null,
+      signed_pdf_sha256: contract.signed_pdf_sha256 || null,
+    },
+    customer: hasCustomerSig ? {
+      name: contract.signed_customer_name,
+      signedAt: contract.signed_by_customer_at,
+      ip: contract.signed_customer_ip,
+    } : null,
+    admin: hasAdminSig ? {
+      name: contract.signed_admin_name,
+      signedAt: contract.signed_by_admin_at,
+      ip: contract.signed_admin_ip,
+    } : null,
+    locale: contract.language || 'de',
+  };
+}
+
+/**
+ * Generate the audit certificate PDF, write it to disk under the same
+ * year directory as the contract PDFs (suffix `audit`), and return
+ * its file path. Returns null when there's nothing to certify or when
+ * rendering fails (the email still goes out without the cert — the
+ * stamped PDF alone remains delivered).
+ */
+async function persistAuditCertificate(contract) {
+  const ctx = buildAuditCertContext(contract);
+  if (!ctx) return null;
+  try {
+    const { buffer } = await pdfStampService.renderAuditCertificate(ctx);
+    const year = (contract.issue_date ? new Date(contract.issue_date) : new Date()).getFullYear();
+    const root = path.join(process.cwd(), 'storage', 'business-docs', 'contract', String(year));
+    fs.mkdirSync(root, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filePath = path.join(root, `${contract.contract_number}_audit_${stamp}.pdf`);
+    fs.writeFileSync(filePath, buffer);
+    return filePath;
+  } catch (err) {
+    logger.error('Failed to render audit certificate', {
+      contractId: contract.id,
+      contractNumber: contract.contract_number,
+      message: err.message,
+    });
+    return null;
+  }
 }
 
 function ensureCustomerActive(customer) {
@@ -941,23 +1043,32 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
     });
   });
 
-  // Re-render the PDF with the customer signature stamped, store as
-  // the AUTHORITATIVE signed copy in `signed_pdf_path`. We deliberately
-  // leave `pdf_path` (the as-sent unsigned PDF) untouched so audits can
-  // still see the original document the customer was looking at when
-  // they signed. The same column is used by:
-  //   - this path (customer-only signature)
-  //   - the admin counter-sign path (overwrites with the fully-signed
-  //     re-render)
-  //   - the wet-signed PDF upload path (overwrites with the uploaded
-  //     PDF, which becomes authoritative)
-  // The admin "Download signed PDF" button reads c.signedPdfPath, so
-  // it appears as soon as the customer signs.
+  // Stamp the customer's signature onto the UNSIGNED PDF on disk.
+  // Byte-immutable approach (see pdfStampService): we read pdf_path
+  // (the immutable as-sent PDF), stamp the customer's signature PNG
+  // at the fixed coordinates on the signature page, save as a new
+  // timestamped file, and update signed_pdf_path. Original file
+  // stays untouched on disk.
   const refreshed = await getContractById(contract.id);
   try {
-    const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
-    const signedBuffer = await pdfService.renderContractToBuffer(ctx);
-    const { filePath: signedPath, sha256: signedSha256 } = await persistContractPdf(refreshed.contract, signedBuffer, 'signed-by-customer');
+    if (!refreshed.contract.pdf_path || !fs.existsSync(refreshed.contract.pdf_path)) {
+      throw new Error(`Unsigned PDF missing on disk at ${refreshed.contract.pdf_path}`);
+    }
+    const originalPdfBuffer = fs.readFileSync(refreshed.contract.pdf_path);
+    const stampedBuffer = await pdfStampService.stampSignature({
+      pdfBuffer: originalPdfBuffer,
+      signaturePngPath: signaturePath,
+      role: 'customer',
+      caption: {
+        name: String(name).trim(),
+        signedAt: now,
+        nameLabel: refreshed.contract.language === 'de' ? 'Name' : 'Name',
+        dateLabel: refreshed.contract.language === 'de' ? 'Datum' : 'Date',
+      },
+    });
+    const { filePath: signedPath, sha256: signedSha256 } = await persistContractPdf(
+      refreshed.contract, stampedBuffer, 'signed-by-customer',
+    );
     const hasSignedPdfSha = await db.schema.hasColumn('contracts', 'signed_pdf_sha256');
     const updates = {
       signed_pdf_path: signedPath,
@@ -1036,20 +1147,35 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
     updated_at: now,
   });
 
-  // Re-render PDF with both signatures stamped, then store it as the
-  // AUTHORITATIVE signed copy. The unsigned `pdf_path` stays put for
-  // audit; the new path lives in `signed_pdf_path` so the admin UI's
-  // "Download signed PDF" button picks it up (the button is gated on
-  // c.signedPdfPath, not c.pdfPath). Same column the wet-signed PDF
-  // upload uses, so both paths converge on a single "signed copy"
-  // discoverable from the web.
+  // Stamp the admin's signature ON TOP of whatever signed_pdf_path
+  // currently holds (the customer-stamped PDF, in the normal flow)
+  // — or directly onto the unsigned pdf_path if the admin is the
+  // first to sign (edge case). Byte-immutable: each prior PDF stays
+  // on disk; the new file is a fresh timestamped version.
   const refreshed = await getContractById(contract.id);
   let signedPath = null;
   let signedSha256 = null;
   try {
-    const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
-    const signedBuffer = await pdfService.renderContractToBuffer(ctx);
-    const persisted = await persistContractPdf(refreshed.contract, signedBuffer, newStatus === 'fully_signed' ? 'fully-signed' : 'signed-by-admin');
+    const baseFile = (refreshed.contract.signed_pdf_path && fs.existsSync(refreshed.contract.signed_pdf_path))
+      ? refreshed.contract.signed_pdf_path
+      : refreshed.contract.pdf_path;
+    if (!baseFile || !fs.existsSync(baseFile)) {
+      throw new Error(`Contract base PDF missing on disk for stamping (signed_pdf_path=${refreshed.contract.signed_pdf_path}, pdf_path=${refreshed.contract.pdf_path})`);
+    }
+    const baseBuffer = fs.readFileSync(baseFile);
+    const stampedBuffer = await pdfStampService.stampSignature({
+      pdfBuffer: baseBuffer,
+      signaturePngPath: signaturePath,
+      role: 'admin',
+      caption: {
+        name: String(name).trim(),
+        signedAt: now,
+        nameLabel: refreshed.contract.language === 'de' ? 'Name' : 'Name',
+        dateLabel: refreshed.contract.language === 'de' ? 'Datum' : 'Date',
+      },
+    });
+    const suffix = newStatus === 'fully_signed' ? 'fully-signed' : 'signed-by-admin';
+    const persisted = await persistContractPdf(refreshed.contract, stampedBuffer, suffix);
     signedPath = persisted.filePath;
     signedSha256 = persisted.sha256;
     const hasSignedPdfSha = await db.schema.hasColumn('contracts', 'signed_pdf_sha256');
@@ -1060,10 +1186,7 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
     if (hasSignedPdfSha) updates.signed_pdf_sha256 = signedSha256;
     await db('contracts').where({ id: contract.id }).update(updates);
   } catch (err) {
-    // Bubble the real error into the log — was previously truncated to
-    // just `err.message`, which hides path / permission / image-stamp
-    // failures from `persistContractPdf` and `renderContractToBuffer`.
-    logger.error('Failed to re-render contract PDF after admin signature', {
+    logger.error('Failed to stamp contract PDF after admin signature', {
       contractId: contract.id,
       newStatus,
       message: err.message,
@@ -1099,13 +1222,30 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
         || [customer?.first_name, customer?.last_name].filter(Boolean).join(' ')
         || customer?.email?.split('@')[0]
         || '';
-      const attachments = attachmentPath
-        ? [{
+      // Generate the audit certificate as a SIBLING document (separate
+      // PDF) and attach it alongside the stamped contract. Audit cert
+      // captures timestamps, IPs, names, and SHA-256 hashes — the legal
+      // provenance record. Reproducible from contract data so safe to
+      // regenerate on demand; we still persist a copy to disk for the
+      // forensic trail.
+      const auditCertPath = await persistAuditCertificate(refetched || refreshed.contract);
+
+      const attachments = [];
+      if (attachmentPath) {
+        attachments.push({
           filename: `${refreshed.contract.contract_number}-signed.pdf`,
           contentPath: attachmentPath,
           contentType: 'application/pdf',
-        }]
-        : undefined;
+        });
+      }
+      if (auditCertPath) {
+        attachments.push({
+          filename: `${refreshed.contract.contract_number}-audit.pdf`,
+          contentPath: auditCertPath,
+          contentType: 'application/pdf',
+        });
+      }
+      const attachmentsArg = attachments.length > 0 ? attachments : undefined;
 
       // 1. Customer copy
       if (customer?.email) {
@@ -1113,7 +1253,7 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
           contract_number: refreshed.contract.contract_number,
           customer_name: customerName,
           title: refreshed.contract.title || '',
-          attachments,
+          attachments: attachmentsArg,
         });
       }
       // 2. Admin copy. Prefer business_profile.email (the inbox the
@@ -1126,7 +1266,7 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
           contract_number: refreshed.contract.contract_number,
           customer_name: profile.company_name || adminRow?.first_name || 'Team',
           title: refreshed.contract.title || '',
-          attachments,
+          attachments: attachmentsArg,
         });
       }
     } catch (err) {
@@ -1197,17 +1337,28 @@ async function attachSignedPdfUpload(contractId, filePath, uploaderRole) {
       || [customer?.first_name, customer?.last_name].filter(Boolean).join(' ')
       || customer?.email?.split('@')[0]
       || '';
-    const attachment = {
+    const attachments = [{
       filename: `${refreshedContract.contract_number}-signed.pdf`,
       contentPath: filePath,
       contentType: 'application/pdf',
-    };
+    }];
+    // Sibling audit certificate — same legal-provenance record as the
+    // in-browser sign path. Best-effort; missing cert doesn't block the
+    // wet-signed PDF from reaching the parties.
+    const auditCertPath = await persistAuditCertificate(refreshedContract);
+    if (auditCertPath) {
+      attachments.push({
+        filename: `${refreshedContract.contract_number}-audit.pdf`,
+        contentPath: auditCertPath,
+        contentType: 'application/pdf',
+      });
+    }
     if (customer?.email) {
       await emailProcessor.queueEmail(null, customer.email, 'contract_fully_signed', {
         contract_number: refreshedContract.contract_number,
         customer_name: customerName,
         title: refreshedContract.title || '',
-        attachments: [attachment],
+        attachments,
       });
     }
     if (profile.email && profile.email !== customer?.email) {
@@ -1215,7 +1366,7 @@ async function attachSignedPdfUpload(contractId, filePath, uploaderRole) {
         contract_number: refreshedContract.contract_number,
         customer_name: profile.company_name || 'Team',
         title: refreshedContract.title || '',
-        attachments: [attachment],
+        attachments,
       });
     }
   } catch (err) {
@@ -1633,23 +1784,35 @@ async function rerenderAndResend(contractId, adminId) {
   }
 
   let attachmentPath = contract.signed_pdf_path || null;
-  // Wet-signed uploads live under uploads/contracts/signed; system
-  // re-renders live under storage/business-docs/contract/<year>.
-  // We only re-render when the current path is missing OR not the
-  // uploaded-PDF path.
+  // Wet-signed uploads live under uploads/contracts/signed; system-
+  // produced PDFs live under storage/business-docs/contract/<year>.
+  // We only re-stamp when the current path is missing OR not an
+  // uploaded-PDF path — wet uploads are authoritative.
   const isWetSignedUpload = attachmentPath && attachmentPath.includes('uploads/contracts/signed');
   if (!attachmentPath || !isWetSignedUpload) {
+    // Stamp signatures onto the immutable unsigned pdf_path using
+    // pdf-lib (NOT a full re-render). This preserves the exact bytes
+    // the customer originally agreed to and side-steps the silent re-
+    // render failure that left signed_pdf_path NULL on prior contracts.
     const refreshed = await getContractById(contract.id);
-    const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
-    const signedBuffer = await pdfService.renderContractToBuffer(ctx);
-    const persisted = await persistContractPdf(refreshed.contract, signedBuffer, 'fully-signed');
+    if (!refreshed.contract.pdf_path || !fs.existsSync(refreshed.contract.pdf_path)) {
+      throw new AppError(
+        `Unsigned PDF missing on disk at ${refreshed.contract.pdf_path}; cannot re-stamp.`,
+        500, 'UNSIGNED_PDF_MISSING',
+      );
+    }
+    const originalBuffer = fs.readFileSync(refreshed.contract.pdf_path);
+    const stamps = buildSignatureStamps(refreshed.contract);
+    const { buffer: stampedBuffer, sha256: signedSha256 } =
+      await pdfStampService.stampSignatures(originalBuffer, stamps);
+    const persisted = await persistContractPdf(refreshed.contract, stampedBuffer, 'fully-signed');
     attachmentPath = persisted.filePath;
     const hasSignedPdfSha = await db.schema.hasColumn('contracts', 'signed_pdf_sha256');
     const updates = {
       signed_pdf_path: attachmentPath,
       updated_at: new Date(),
     };
-    if (hasSignedPdfSha) updates.signed_pdf_sha256 = persisted.sha256;
+    if (hasSignedPdfSha) updates.signed_pdf_sha256 = signedSha256;
     await db('contracts').where({ id: contract.id }).update(updates);
   }
 
@@ -1662,11 +1825,23 @@ async function rerenderAndResend(contractId, adminId) {
     || [customer?.first_name, customer?.last_name].filter(Boolean).join(' ')
     || customer?.email?.split('@')[0]
     || '';
+  // Sibling audit certificate (timestamps + IPs + hashes). Best-effort:
+  // missing certificate doesn't block the email — the stamped contract
+  // alone is the primary attachment.
+  const auditCertPath = await persistAuditCertificate(refetched);
+
   const attachments = [{
     filename: `${refetched.contract_number}-signed.pdf`,
     contentPath: attachmentPath,
     contentType: 'application/pdf',
   }];
+  if (auditCertPath) {
+    attachments.push({
+      filename: `${refetched.contract_number}-audit.pdf`,
+      contentPath: auditCertPath,
+      contentType: 'application/pdf',
+    });
+  }
 
   if (customer?.email) {
     await emailProcessor.queueEmail(null, customer.email, 'contract_fully_signed', {
@@ -1732,15 +1907,29 @@ async function restampSignatures(contractId, { customerSignatureDataUrl, adminSi
   }
   await db('contracts').where({ id: contract.id }).update(updates);
 
-  // Re-render the PDF so the new signature images get stamped in.
+  // Re-stamp signature images onto the immutable unsigned pdf_path
+  // using pdf-lib (NOT a full re-render). This is the recovery path
+  // for contracts where signature images existed on disk but the
+  // earlier re-render approach failed silently and left signed_pdf_path
+  // NULL or pointing at a stale file. We always rebuild the stamp from
+  // pdf_path (the as-sent bytes) so the result is reproducible from
+  // the audit record.
+  //
   // Wet-signed PDF uploads remain authoritative — if signed_pdf_path
-  // already points at an uploaded PDF, we still re-render but the
-  // uploaded PDF stays the public download (signed_pdf_path is only
-  // refreshed when the previous file was a re-render).
+  // already points at an uploaded PDF we still produce a stamped copy
+  // on disk for the audit trail, but signed_pdf_path is not updated.
   const refreshed = await getContractById(contract.id);
-  const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
-  const signedBuffer = await pdfService.renderContractToBuffer(ctx);
-  const { filePath: signedPath, sha256: signedSha256 } = await persistContractPdf(refreshed.contract, signedBuffer,
+  if (!refreshed.contract.pdf_path || !fs.existsSync(refreshed.contract.pdf_path)) {
+    throw new AppError(
+      `Unsigned PDF missing on disk at ${refreshed.contract.pdf_path}; cannot re-stamp.`,
+      500, 'UNSIGNED_PDF_MISSING',
+    );
+  }
+  const originalBuffer = fs.readFileSync(refreshed.contract.pdf_path);
+  const stamps = buildSignatureStamps(refreshed.contract);
+  const { buffer: stampedBuffer, sha256: signedSha256 } =
+    await pdfStampService.stampSignatures(originalBuffer, stamps);
+  const { filePath: signedPath } = await persistContractPdf(refreshed.contract, stampedBuffer,
     contract.status === 'fully_signed' ? 'fully-signed' : 'partially-signed');
 
   const isWetSignedUpload = contract.signed_pdf_path

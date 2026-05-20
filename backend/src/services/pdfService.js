@@ -104,6 +104,38 @@ const CUSTOM_BODY = 'crm-body';
 const CUSTOM_BOLD = 'crm-bold';
 
 /**
+ * Layout constants for the contract signature page (the dedicated
+ * final page of every contract PDF). Both renderContractToBuffer
+ * AND pdfStampService read these — the unsigned render draws empty
+ * boxes at these coordinates; the stamp service later overlays the
+ * signature PNGs at the same coordinates with pdf-lib.
+ *
+ * Coordinates are PDFKit-style (top-left origin, y increases down).
+ * pdfStampService converts to pdf-lib's bottom-left origin internally.
+ *
+ * Changing any value here means re-rendering all unsigned PDFs that
+ * are still pending signature — or the stamps will land in the wrong
+ * place. Leave alone unless redesigning the signature page entirely.
+ */
+const CONTRACT_SIGNATURE_LAYOUT = {
+  // Title row at top of page.
+  titleY: PAGE.marginTop,
+  // Prompt text below title (small instruction line).
+  promptY: PAGE.marginTop + 50,
+  // Y of the "Customer" / "Contractor" labels above each box.
+  paneLabelY: PAGE.marginTop + 100,
+  // Y of the empty signature box itself.
+  boxY: PAGE.marginTop + 114,
+  // Each box is half the content width minus a 20pt gutter.
+  boxWidth: (PAGE.contentWidth - 20) / 2,
+  // Tall enough that a typical canvas signature reads cleanly.
+  boxHeight: 80,
+  // Two side-by-side panes — customer on the left, admin on the right.
+  customerX: PAGE.marginLeft,
+  adminX: PAGE.marginLeft + ((PAGE.contentWidth - 20) / 2) + 20,
+};
+
+/**
  * ISO 3166-1 alpha-2 → full country name, locale-aware. Falls back to
  * the bare code when not in the map (no need to maintain every nation
  * on earth — the user said de + en, with the issuer in LI/CH).
@@ -1934,185 +1966,67 @@ function renderContractToBuffer(context) {
           y = doc.y + 16;
         }
 
-        // ---- signature block ----------------------------------------
-        // Two columns: customer (left) + admin (right). Each shows
-        // either the stamped signature image (PNG from disk) + name +
-        // date, or empty lines for hand-signing.
-        const sigBlockHeight = 110;
-        ensureSpace(sigBlockHeight + 20);
-        const sigColWidth = (PAGE.contentWidth - 20) / 2;
-        const sigBoxHeight = 50;
+        // ---- signature page (dedicated final page, fixed layout) ----
+        // The unsigned PDF ALWAYS contains an empty signature page at
+        // the end, with both signature boxes at FIXED coordinates
+        // (see CONTRACT_SIGNATURE_LAYOUT below). pdfStampService.js
+        // uses those same coordinates to overlay signature PNGs with
+        // pdf-lib AFTER the unsigned PDF is rendered — no re-render
+        // needed at signing time. This is the same model DocuSign /
+        // Adobe Sign use: the original is byte-immutable; signatures
+        // are appended as overlays.
+        //
+        // Audit data (timestamps, IPs, hashes) is rendered as a
+        // SEPARATE "audit certificate" PDF by pdfStampService — not
+        // embedded here — so the contract PDF stays purely
+        // representational and the audit trail is a sibling document
+        // that can be verified independently.
+        doc.addPage();
+        const L = CONTRACT_SIGNATURE_LAYOUT;
 
-        function drawSignaturePane(x, label, info) {
+        // Title row
+        doc.font(doc._fonts.bold).fontSize(16).fillColor('#000');
+        doc.text(t(locale, 'signature_page_title'), PAGE.marginLeft, L.titleY, {
+          width: PAGE.contentWidth, align: 'left',
+        });
+        doc.strokeColor('#888').lineWidth(0.5)
+          .moveTo(PAGE.marginLeft, L.titleY + 22)
+          .lineTo(PAGE.marginLeft + PAGE.contentWidth, L.titleY + 22)
+          .stroke();
+
+        // Closing prompt — generic line so unsigned doc reads coherently
+        doc.font(doc._fonts.body).fontSize(10).fillColor('#000');
+        doc.text(t(locale, 'signature_page_prompt'), PAGE.marginLeft, L.promptY, {
+          width: PAGE.contentWidth, align: 'left',
+        });
+
+        // Two empty signature boxes — customer on the left, admin on
+        // the right. drawn at fixed coordinates so the stamp service
+        // can find them later by constant rather than runtime layout.
+        function drawEmptySignaturePane(x, label, info) {
           doc.font(doc._fonts.bold).fontSize(10).fillColor('#000');
-          doc.text(label, x, y, { width: sigColWidth });
-          // Signature box (top of the pane).
-          const boxY = y + 14;
-          doc
-            .strokeColor('#cccccc').lineWidth(0.5)
-            .rect(x, boxY, sigColWidth, sigBoxHeight)
+          doc.text(label, x, L.paneLabelY, { width: L.boxWidth });
+          doc.strokeColor('#cccccc').lineWidth(0.5)
+            .rect(x, L.boxY, L.boxWidth, L.boxHeight)
             .stroke();
-          // Stamp the signature image when available. Previously this
-          // block silently swallowed every failure (file missing on
-          // disk, broken PNG, PDFKit decoding error) so the admin had
-          // no idea why the signature box was empty. Now we log each
-          // skip reason at debug level so the contract-render logs
-          // explain WHY a signature didn't appear.
-          if (info?.signaturePath) {
-            if (!fs.existsSync(info.signaturePath)) {
-              const logger = require('../utils/logger');
-              logger.warn('Contract signature image missing on disk — rendering blank box', {
-                signaturePath: info.signaturePath,
-                signedName: info.name,
-                signedAt: info.signedAt,
-              });
-            } else {
-              try {
-                doc.image(info.signaturePath, x + 4, boxY + 4, {
-                  fit: [sigColWidth - 8, sigBoxHeight - 8],
-                  align: 'center',
-                  valign: 'center',
-                });
-              } catch (err) {
-                const logger = require('../utils/logger');
-                logger.error('PDFKit failed to render contract signature image', {
-                  signaturePath: info.signaturePath,
-                  message: err.message,
-                });
-              }
-            }
-          }
-          // Name + date under the box.
-          const captionY = boxY + sigBoxHeight + 6;
+          // Caption labels — name + date placeholders that the
+          // stamp service overwrites with the actual values when
+          // the signature is applied. The unsigned PDF shows these
+          // as empty labels.
+          const captionY = L.boxY + L.boxHeight + 6;
           doc.font(doc._fonts.body).fontSize(9).fillColor('#000');
           doc.text(
             `${t(locale, 'signed_label_name')}: ${info?.name || ''}`,
-            x, captionY, { width: sigColWidth },
+            x, captionY, { width: L.boxWidth },
           );
           doc.text(
             `${t(locale, 'signed_label_date')}: ${info?.signedAt ? formatDate(info.signedAt, locale) : ''}`,
-            x, captionY + 12, { width: sigColWidth },
+            x, captionY + 12, { width: L.boxWidth },
           );
         }
 
-        // Diagnostic: when the render context says the contract is
-        // signed (audit block present) but signatures.customer or .admin
-        // is null/empty, the upstream buildRenderContext didn't find
-        // the evidence in the DB. Log the shape we were given so the
-        // operator can correlate "PDF shows empty signature box" with
-        // "the DB never had the signature_path / name persisted".
-        if (ctx.audit) {
-          const logger = require('../utils/logger');
-          const summarise = (s) => s ? {
-            hasName: !!s.name,
-            hasSignedAt: !!s.signedAt,
-            hasSignaturePath: !!s.signaturePath,
-            signaturePathExists: s.signaturePath ? fs.existsSync(s.signaturePath) : null,
-          } : null;
-          logger.info('Rendering signed contract PDF', {
-            contractNumber: ctx.doc?.contractNumber,
-            customer: summarise(ctx.signatures?.customer),
-            admin: summarise(ctx.signatures?.admin),
-          });
-        }
-
-        drawSignaturePane(
-          PAGE.marginLeft,
-          t(locale, 'signature_customer'),
-          ctx.signatures?.customer,
-        );
-        drawSignaturePane(
-          PAGE.marginLeft + sigColWidth + 20,
-          t(locale, 'signature_admin'),
-          ctx.signatures?.admin,
-        );
-
-        // ---- audit page (only on signed contracts) -------------------
-        // Issue #3 from the maintainer plan: append a structured audit
-        // page listing every piece of evidence we recorded so the PDF
-        // is defensible on its own (without needing to open the admin
-        // UI). Lists names, timestamps, IPs, and SHA-256 hashes so
-        // either party can verify file integrity by re-hashing.
-        if (ctx.audit) {
-          doc.addPage();
-          let auditY = PAGE.marginTop;
-          doc.font(doc._fonts.bold).fontSize(16).fillColor('#000');
-          doc.text(t(locale, 'audit_title'), PAGE.marginLeft, auditY, {
-            width: PAGE.contentWidth,
-          });
-          auditY = doc.y + 6;
-          doc.strokeColor('#888').lineWidth(0.5)
-            .moveTo(PAGE.marginLeft, auditY)
-            .lineTo(PAGE.marginLeft + PAGE.contentWidth, auditY)
-            .stroke();
-          auditY += 14;
-
-          doc.font(doc._fonts.body).fontSize(10).fillColor('#000');
-          doc.text(t(locale, 'audit_intro'), PAGE.marginLeft, auditY, {
-            width: PAGE.contentWidth, align: 'left',
-          });
-          auditY = doc.y + 14;
-
-          // Two-column label/value rows. Same shape as the signature
-          // pane captions for visual consistency.
-          const labelW = 180;
-          const valueW = PAGE.contentWidth - labelW;
-          function auditRow(labelKey, value) {
-            if (!value) return;
-            doc.font(doc._fonts.bold).fontSize(9).fillColor('#444');
-            doc.text(t(locale, labelKey), PAGE.marginLeft, auditY, {
-              width: labelW, lineBreak: false, continued: false,
-            });
-            doc.font(doc._fonts.body).fontSize(9).fillColor('#000');
-            doc.text(String(value), PAGE.marginLeft + labelW, auditY, {
-              width: valueW, align: 'left',
-            });
-            auditY = Math.max(auditY + 12, doc.y + 4);
-          }
-
-          auditRow('audit_contract_number', ctx.audit.contractNumber);
-          auditRow('audit_issued_at', ctx.audit.issuedAt ? formatDate(ctx.audit.issuedAt, locale) : null);
-
-          if (ctx.signatures?.customer) {
-            auditY += 6;
-            doc.font(doc._fonts.bold).fontSize(10).fillColor('#000');
-            doc.text(t(locale, 'audit_customer_section'), PAGE.marginLeft, auditY);
-            auditY = doc.y + 4;
-            auditRow('audit_signed_by', ctx.signatures.customer.name);
-            auditRow('audit_signed_at', ctx.signatures.customer.signedAt
-              ? new Date(ctx.signatures.customer.signedAt).toISOString()
-              : null);
-            auditRow('audit_ip', ctx.signatures.customer.ip);
-          }
-          if (ctx.signatures?.admin) {
-            auditY += 6;
-            doc.font(doc._fonts.bold).fontSize(10).fillColor('#000');
-            doc.text(t(locale, 'audit_admin_section'), PAGE.marginLeft, auditY);
-            auditY = doc.y + 4;
-            auditRow('audit_signed_by', ctx.signatures.admin.name);
-            auditRow('audit_signed_at', ctx.signatures.admin.signedAt
-              ? new Date(ctx.signatures.admin.signedAt).toISOString()
-              : null);
-            auditRow('audit_ip', ctx.signatures.admin.ip);
-          }
-
-          // Content hashes. Render in fixed-width style so the digest
-          // is readable even when split across lines.
-          if (ctx.audit.pdfSha256 || ctx.audit.signedPdfSha256) {
-            auditY += 8;
-            doc.font(doc._fonts.bold).fontSize(10).fillColor('#000');
-            doc.text(t(locale, 'audit_integrity_section'), PAGE.marginLeft, auditY);
-            auditY = doc.y + 4;
-            auditRow('audit_unsigned_sha', ctx.audit.pdfSha256);
-            auditRow('audit_signed_sha', ctx.audit.signedPdfSha256);
-          }
-
-          auditY += 14;
-          doc.font(doc._fonts.body).fontSize(8).fillColor('#666');
-          doc.text(t(locale, 'audit_footer'), PAGE.marginLeft, auditY, {
-            width: PAGE.contentWidth, align: 'left',
-          });
-        }
+        drawEmptySignaturePane(L.customerX, t(locale, 'signature_customer'), ctx.signatures?.customer);
+        drawEmptySignaturePane(L.adminX,    t(locale, 'signature_admin'),    ctx.signatures?.admin);
 
         // ---- page numbers ("Page 1 of N" / "Seite 1 von N") ----------
         // Same stamp the quote/invoice renderer uses (line 1680 above).
@@ -2156,6 +2070,13 @@ module.exports = {
   createBaseDocument,
   getPageMetrics,
   drawIssuerBlock,
+  // Shared with pdfStampService — the same coordinates the unsigned
+  // render uses to draw empty signature boxes are used to overlay
+  // signature PNGs at stamping time. Single source of truth.
+  CONTRACT_SIGNATURE_LAYOUT,
+  PAGE,
+  FONT_BODY,
+  FONT_BOLD,
   // Exposed for unit tests + advanced callers.
   _internal: { formatMinor, formatDate, t, registerCustomFonts },
 };
