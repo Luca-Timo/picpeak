@@ -52,15 +52,39 @@ export const useLocalizedDate = () => {
     const dateObj = typeof date === 'string' ? new Date(date) : date;
     return dateFnsFormatDistanceToNow(dateObj, { ...options, locale: getLocale() });
   };
-  
+
+  /**
+   * Date + time, respecting the admin-configured `general_date_format`
+   * for the date half and 24-hour HH:mm for the time half (the operator
+   * locales we ship are all 24-hour). Use everywhere the UI was
+   * previously calling `new Date(...).toLocaleString()`. Examples:
+   *   DD.MM.YYYY → "20.05.2026 14:32"
+   *   YYYY-MM-DD → "2026-05-20 14:32"
+   *
+   * Pass `formatStr` to override (same shape as `format()`).
+   */
+  const formatDateTime = (date: Date | string, formatStr?: string) => {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    let dateFormat = formatStr;
+    if (!dateFormat && settings?.general_date_format) {
+      dateFormat = typeof settings.general_date_format === 'string'
+        ? settings.general_date_format
+        : settings.general_date_format.format || 'PPP';
+    }
+    dateFormat = dateFormat || 'PPP';
+    dateFormat = convertDateFormat(dateFormat);
+    return dateFnsFormat(dateObj, `${dateFormat} HH:mm`, { locale: getLocale() });
+  };
+
   return {
     format,
+    formatDateTime,
     formatDistanceToNow,
     locale: getLocale(),
-    dateFormat: settings?.general_date_format 
+    dateFormat: settings?.general_date_format
       ? convertDateFormat(
-          typeof settings.general_date_format === 'string' 
-            ? settings.general_date_format 
+          typeof settings.general_date_format === 'string'
+            ? settings.general_date_format
             : settings.general_date_format.format || 'PPP'
         )
       : 'PPP'

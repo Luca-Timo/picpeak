@@ -13,6 +13,7 @@ import { LinkedDocumentsCard, type LinkedDocumentRow } from '../../../components
 import { quotesService } from '../../../services/quotes.service';
 import { billsService } from '../../../services/bills.service';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
+import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { toast } from 'react-toastify';
 
 export const QuoteDetailPage: React.FC = () => {
@@ -20,6 +21,7 @@ export const QuoteDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { format: fmtDate, formatDateTime: fmtDateTime } = useLocalizedDate();
   const { data, isLoading } = useQuery({
     queryKey: ['quote', id],
     queryFn: () => quotesService.get(parseInt(id!, 10)),
@@ -195,15 +197,15 @@ export const QuoteDetailPage: React.FC = () => {
       <Card>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div><div className="text-neutral-500">{t('quotes.field.issueDate', 'Issued')}</div><div>{q.issueDate}</div></div>
-          {q.validUntil && <div><div className="text-neutral-500">{t('quotes.field.validUntil', 'Valid until')}</div><div>{q.validUntil}</div></div>}
+          {q.validUntil && <div><div className="text-neutral-500">{t('quotes.field.validUntil', 'Valid until')}</div><div>{fmtDate(q.validUntil)}</div></div>}
           <div><div className="text-neutral-500">{t('quotes.field.eventName', 'Event')}</div><div>{q.eventName || '—'}</div></div>
-          {q.eventDate && <div><div className="text-neutral-500">{t('quotes.field.eventDate', 'Event date')}</div><div>{q.eventDate}{q.eventTimeStart ? ` ${q.eventTimeStart}-${q.eventTimeEnd || ''}` : ''}</div></div>}
-          {q.sentAt && <div><div className="text-neutral-500">{t('quotes.field.sentAt', 'Sent at')}</div><div>{new Date(q.sentAt).toLocaleString()}</div></div>}
-          {q.acceptedAt && <div><div className="text-neutral-500">{t('quotes.field.acceptedAt', 'Accepted at')}</div><div>{new Date(q.acceptedAt).toLocaleString()}</div></div>}
-          {q.declinedAt && <div><div className="text-neutral-500">{t('quotes.field.declinedAt', 'Declined at')}</div><div>{new Date(q.declinedAt).toLocaleString()}</div></div>}
+          {q.eventDate && <div><div className="text-neutral-500">{t('quotes.field.eventDate', 'Event date')}</div><div>{fmtDate(q.eventDate)}{q.eventTimeStart ? ` ${q.eventTimeStart}-${q.eventTimeEnd || ''}` : ''}</div></div>}
+          {q.sentAt && <div><div className="text-neutral-500">{t('quotes.field.sentAt', 'Sent at')}</div><div>{fmtDateTime(q.sentAt)}</div></div>}
+          {q.acceptedAt && <div><div className="text-neutral-500">{t('quotes.field.acceptedAt', 'Accepted at')}</div><div>{fmtDateTime(q.acceptedAt)}</div></div>}
+          {q.declinedAt && <div><div className="text-neutral-500">{t('quotes.field.declinedAt', 'Declined at')}</div><div>{fmtDateTime(q.declinedAt)}</div></div>}
           {q.respondedAt && !responseLocked && (
             <div><div className="text-neutral-500">{t('quotes.field.responseWindow', 'Response window')}</div>
-              <div className="text-amber-700">{t('quotes.responseWindowOpen', 'Open until {{at}}', { at: q.responseLockedAt && new Date(q.responseLockedAt).toLocaleTimeString() })}</div></div>
+              <div className="text-amber-700">{t('quotes.responseWindowOpen', 'Open until {{at}}', { at: q.responseLockedAt ? fmtDateTime(q.responseLockedAt) : '' })}</div></div>
           )}
         </div>
       </Card>

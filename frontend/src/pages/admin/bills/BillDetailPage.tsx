@@ -12,12 +12,14 @@ import { Button, Card, Loading, Input } from '../../../components/common';
 import { LinkedDocumentsCard, type LinkedDocumentRow } from '../../../components/admin/LinkedDocumentsCard';
 import { billsService } from '../../../services/bills.service';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
+import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { toast } from 'react-toastify';
 
 export const BillDetailPage: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { format: fmtDate } = useLocalizedDate();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['invoice', id],
@@ -328,9 +330,9 @@ export const BillDetailPage: React.FC = () => {
           {inv.eventName && (
             <div><div className="text-neutral-500">{t('bills.field.eventName', 'Event')}</div><div>{inv.eventName}{inv.eventDate ? ` · ${inv.eventDate}` : ''}</div></div>
           )}
-          <div><div className="text-neutral-500">{t('bills.field.issueDate', 'Issued')}</div><div>{inv.issueDate}</div></div>
-          <div><div className="text-neutral-500">{t('bills.field.dueDate', 'Due')}</div><div>{inv.dueDate}</div></div>
-          {inv.scheduledSendAt && <div><div className="text-neutral-500">{t('bills.field.scheduledSendAt', 'Scheduled send')}</div><div>{new Date(inv.scheduledSendAt).toLocaleDateString()}</div></div>}
+          <div><div className="text-neutral-500">{t('bills.field.issueDate', 'Issued')}</div><div>{fmtDate(inv.issueDate)}</div></div>
+          <div><div className="text-neutral-500">{t('bills.field.dueDate', 'Due')}</div><div>{fmtDate(inv.dueDate)}</div></div>
+          {inv.scheduledSendAt && <div><div className="text-neutral-500">{t('bills.field.scheduledSendAt', 'Scheduled send')}</div><div>{fmtDate(inv.scheduledSendAt)}</div></div>}
           {inv.installmentTotal > 1 && <div><div className="text-neutral-500">{t('bills.field.installment', 'Installment')}</div><div>{inv.installmentIndex + 1}/{inv.installmentTotal}</div></div>}
           <div><div className="text-neutral-500">{t('bills.field.total', 'Total')}</div><div>{formatMoney(Number(inv.totalAmountMinor || 0) / 100, inv.currency)}</div></div>
           <div><div className="text-neutral-500">{t('bills.field.paid', 'Paid')}</div><div>{formatMoney(Number(inv.paidAmountMinor || 0) / 100, inv.currency)}</div></div>
@@ -440,7 +442,7 @@ export const BillDetailPage: React.FC = () => {
             <tbody>
               {data.payments.map((p) => (
                 <tr key={p.id} className="border-b border-neutral-100 dark:border-neutral-800">
-                  <td className="py-2 pr-4 whitespace-nowrap">{new Date(p.paidAt).toLocaleDateString()}</td>
+                  <td className="py-2 pr-4 whitespace-nowrap">{fmtDate(p.paidAt)}</td>
                   <td className="py-2 px-4 text-right tabular-nums whitespace-nowrap">{formatMoney(Number(p.amountMinor) / 100, inv.currency)}</td>
                   <td className="py-2 pl-4 pr-4 whitespace-nowrap">{p.paymentMethod || '—'}</td>
                   <td className="py-2 pr-4 font-mono text-xs">{p.reference || '—'}</td>

@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 import { Webhook as WebhookIcon, Trash2, Copy, AlertTriangle, Activity, CheckCircle2, XCircle } from 'lucide-react';
 import { Button, Card, Input, Loading } from '../../../components/common';
 import { api } from '../../../config/api';
+import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 
 const WEBHOOK_EVENT_TYPES = [
   'event.created',
@@ -39,6 +40,7 @@ interface WebhookRow {
  */
 export const WebhooksTab: React.FC = () => {
   const { t } = useTranslation();
+  const { formatDateTime: fmtDateTime } = useLocalizedDate();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -304,13 +306,13 @@ export const WebhooksTab: React.FC = () => {
                         {lastEither === 'success' && lastSuccess && (
                           <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            {lastSuccess.toLocaleString()}
+                            {fmtDateTime(lastSuccess)}
                           </span>
                         )}
                         {lastEither === 'failure' && lastFailure && (
                           <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
                             <XCircle className="w-3.5 h-3.5" />
-                            {lastFailure.toLocaleString()}
+                            {fmtDateTime(lastFailure)}
                           </span>
                         )}
                         {lastEither === 'none' && <span className="text-neutral-400">—</span>}

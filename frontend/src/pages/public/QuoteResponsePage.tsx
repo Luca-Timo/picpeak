@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { publicQuotesService } from '../../services/quotes.service';
 import { usePublicDarkMode } from '../../hooks/usePublicDarkMode';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { Loading } from '../../components/common';
 
 function formatMoney(amount: number, currency: string, locale = 'de-CH') {
@@ -43,6 +44,7 @@ function formatShortDate(value: string | null | undefined): string {
 
 export const QuoteResponsePage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const { formatDateTime: fmtDateTime } = useLocalizedDate();
   const { token } = useParams<{ token: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -293,9 +295,9 @@ export const QuoteResponsePage: React.FC = () => {
             {locked ? (
               <p className="text-sm text-neutral-600 dark:text-neutral-400">
                 {responseStatus === 'accepted'
-                  ? t('quoteResponse.acceptedLocked', 'You accepted this quote on {{date}}. The decision is final.', { date: q!.respondedAt ? new Date(q!.respondedAt).toLocaleString() : '' })
+                  ? t('quoteResponse.acceptedLocked', 'You accepted this quote on {{date}}. The decision is final.', { date: q!.respondedAt ? fmtDateTime(q!.respondedAt) : '' })
                   : responseStatus === 'declined'
-                    ? t('quoteResponse.declinedLocked', 'You declined this quote on {{date}}. The decision is final.', { date: q!.respondedAt ? new Date(q!.respondedAt).toLocaleString() : '' })
+                    ? t('quoteResponse.declinedLocked', 'You declined this quote on {{date}}. The decision is final.', { date: q!.respondedAt ? fmtDateTime(q!.respondedAt) : '' })
                     : t('quoteResponse.cannotRespond', 'This quote can no longer be responded to via this link.')}
               </p>
             ) : (

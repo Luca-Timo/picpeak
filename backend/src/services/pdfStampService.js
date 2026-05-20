@@ -39,6 +39,11 @@ function pdfConsts() {
     FONT_BODY: pdfService.FONT_BODY,
     FONT_BOLD: pdfService.FONT_BOLD,
     t: pdfService._internal && pdfService._internal.t,
+    // formatDate respects the `general_date_format` app setting when
+    // a dateFormat arg is passed; with no arg it defaults to the
+    // European DD.MM.YYYY shape (the operator's locale). Used for the
+    // "Datum: ..." line under each signature stamp.
+    formatDate: pdfService._internal && pdfService._internal.formatDate,
   };
 }
 const logger = require('../utils/logger');
@@ -79,7 +84,7 @@ function pdfkitToPdfLib(pageHeight, x, y, w, h) {
  * or the input file.
  */
 async function stampSignature({ pdfBuffer, signaturePngPath, role, caption }) {
-  const { L, FONT_BODY, FONT_BOLD } = pdfConsts();
+  const { L, FONT_BODY, FONT_BOLD, formatDate } = pdfConsts();
   if (!Buffer.isBuffer(pdfBuffer)) {
     throw new Error('stampSignature: pdfBuffer must be a Buffer');
   }
@@ -143,10 +148,15 @@ async function stampSignature({ pdfBuffer, signaturePngPath, role, caption }) {
   // captionY = boxY + boxHeight + 6.
   if (caption && (caption.name || caption.signedAt)) {
     const captionYPdfkit = boxY + boxH + 6;
+    // Use the shared formatDate helper so the "Datum: ..." line
+    // matches the locale-aware DD.MM.YYYY format the rest of the
+    // contract PDF uses (e.g. issue-date headline). Caller may pass
+    // a custom dateFormat via caption.dateFormat for per-document
+    // overrides; without it formatDate defaults to DD.MM.YYYY.
     const lines = [
       `${caption.nameLabel || 'Name'}: ${caption.name || ''}`,
-      `${caption.dateLabel || 'Date'}: ${caption.signedAt
-        ? new Date(caption.signedAt).toISOString().slice(0, 10)
+      `${caption.dateLabel || 'Date'}: ${caption.signedAt && formatDate
+        ? formatDate(caption.signedAt, caption.dateFormat)
         : ''}`,
     ];
     // Overdraw a white rectangle so we replace the unsigned-page's
