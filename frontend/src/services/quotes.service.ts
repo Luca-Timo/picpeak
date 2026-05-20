@@ -63,6 +63,10 @@ export interface QuoteSummary {
    *  the existing resulting-invoices list. Null when no contract was
    *  drafted from the quote. */
   convertedContractId?: number | null;
+  /** Human contract_number of the converted contract (joined-in on
+   *  read). Surfaced so the QuoteDetailPage's Linked-documents card
+   *  shows "Linked contract LBM-C-2026-0010" instead of "#10". */
+  convertedContractNumber?: string | null;
   createdAt: string;
 }
 

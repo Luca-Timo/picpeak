@@ -13,7 +13,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { Clock } from 'lucide-react';
 import { Card, Loading } from '../../../components/common';
 import { HoursSection } from '../../../components/admin/HoursSection';
 import { customerAdminService } from '../../../services/customerAdmin.service';
@@ -55,16 +54,24 @@ export const HoursLoggingPage: React.FC = () => {
   if (isLoading) return <Loading />;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-lg bg-accent-soft text-on-accent-soft flex items-center justify-center">
-          <Clock className="w-5 h-5" />
-        </div>
+    <div className="container py-6">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-theme">
-            {t('hoursLogging.title', 'Hours logging')}
-          </h1>
-          <p className="text-sm text-muted-theme">
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-theme">
+              {t('hoursLogging.title', 'Hours logging')}
+            </h1>
+            {/* Beta badge — matches Customers + Quotes + Contracts +
+                Invoices so the whole /admin/clients tab reads as one
+                product. */}
+            <span
+              className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+              title="Beta — feature is functional but still evolving"
+            >
+              {t('navigation.betaTag', 'Beta')}
+            </span>
+          </div>
+          <p className="text-sm text-muted-theme mt-1">
             {t('hoursLogging.subtitle',
               'Pick a customer and log billable time blocks. Entries flow into the next monthly bill or are billed on demand for per-event customers.')}
           </p>

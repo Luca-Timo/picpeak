@@ -105,7 +105,11 @@ function transformQuote(q) {
     // Migration 130 lineage. Null until quoteService.createFromQuote
     // sets it. Surfaced so QuoteDetailPage can render a "Linked
     // contract" badge alongside the existing resulting-invoices list.
+    // contract_number comes from the conv_contract JOIN — falls back
+    // to null when the converted contract has been deleted (FK is
+    // ON DELETE SET NULL).
     convertedContractId: q.converted_contract_id || null,
+    convertedContractNumber: q.converted_contract_number || null,
     pdfPath: q.pdf_path,
     businessBankAccountId: q.business_bank_account_id,
     createdAt: q.created_at,

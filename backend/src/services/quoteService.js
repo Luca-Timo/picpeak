@@ -436,6 +436,11 @@ async function getQuoteById(id) {
     // block and the editor shows "undefined undefined" in its summary.
     const quote = await db('quotes')
       .leftJoin('customer_accounts', 'quotes.customer_account_id', 'customer_accounts.id')
+      // Migration 130 lineage: the human contract_number of the
+      // contract this quote was converted into, so the detail view
+      // shows "Linked contract LBM-C-2026-0010" instead of just "#10".
+      // LEFT join — most quotes never get converted to a contract.
+      .leftJoin('contracts as conv_contract', 'quotes.converted_contract_id', 'conv_contract.id')
       .where('quotes.id', id)
       .select(
         'quotes.*',
@@ -446,6 +451,7 @@ async function getQuoteById(id) {
         'customer_accounts.company_name as customer_company_name',
         // For transformQuote.customer.isPassive — never leaves the API.
         'customer_accounts.password_hash as customer_password_hash',
+        'conv_contract.contract_number as converted_contract_number',
       )
       .first();
     if (!quote) return null;
