@@ -26,6 +26,7 @@ import { Button, Card, Loading, Input } from '../../../components/common';
 const selectClassName =
   'w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-primary-500';
 import { taxReportService, type TaxReportParams } from '../../../services/taxReport.service';
+import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { toast } from 'react-toastify';
 
 type PeriodPreset = 'thisYear' | 'lastYear' | 'thisQuarter' | 'lastQuarter' | 'custom';
@@ -88,6 +89,7 @@ function triggerBrowserDownload(url: string, filename: string) {
 
 export const TaxReportPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const { format: fmtDate } = useLocalizedDate();
   const [preset, setPreset] = useState<PeriodPreset>('thisYear');
   const initialPeriod = useMemo(() => periodForPreset('thisYear'), []);
   const [from, setFrom] = useState(initialPeriod.from);
@@ -381,7 +383,7 @@ export const TaxReportPage: React.FC = () => {
                         : 'text-neutral-900 dark:text-neutral-100'}
                     >
                       <td className="px-2 py-1.5 text-right tabular-nums">{i + 1}</td>
-                      <td className="px-2 py-1.5 whitespace-nowrap tabular-nums">{row.issueDate.slice(0, 10)}</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap tabular-nums">{fmtDate(row.issueDate.slice(0, 10))}</td>
                       <td className="px-2 py-1.5 whitespace-nowrap">
                         <span className="font-medium">{row.invoiceNumber}</span>
                         {row.isCancelled && (
