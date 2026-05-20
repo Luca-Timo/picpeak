@@ -99,9 +99,16 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick }) => {
   const unreadCount = notificationsData?.unreadCount || 0;
 
   return (
-    <header className="sticky top-0 z-30 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-700">
+    // border-b lives on the inner h-16 row (NOT on the outer <header>)
+    // so the header's bottom border sits at the same y-coordinate as
+    // the sidebar brand row's border-b — both inside a 64px box,
+    // both painted at y=63..64 of that box. Putting border-b on the
+    // outer <header> made it paint AFTER the inner 64px content
+    // (y=64..65), leaving a 1px vertical step where the two horizontal
+    // dividers meet at the sidebar/header junction.
+    <header className="sticky top-0 z-30 bg-white dark:bg-neutral-900">
       <div className="px-4 sm:px-6 lg:px-8">
-        <div className="relative flex items-center justify-between h-16 gap-3">
+        <div className="relative flex items-center justify-between h-16 gap-3 border-b border-neutral-200 dark:border-neutral-700">
           {/* Left side - Menu button, optional left-positioned logo, Date.
               Logo block appears here when logo_position = 'left' (the
               default). For 'center' it's absolutely positioned across
