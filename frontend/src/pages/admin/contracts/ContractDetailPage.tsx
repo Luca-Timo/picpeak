@@ -324,7 +324,12 @@ export const ContractDetailPage: React.FC = () => {
             || (Array.isArray(linkedInvoices) && linkedInvoices.length > 0);
           if (alreadyConverted) {
             return (
-              <Link to={`/admin/clients/bills/new?customerAccountId=${c.customerAccountId}`}>
+              {/* fromContractId tells the bill editor to pre-fill
+                  customer + event snapshot from the contract AND line
+                  items + currency + VAT from the source quote (when
+                  present). Mirrors the convertToInvoiceOnly auto-fill
+                  but for the ad-hoc "extra invoice" flow. */}
+              <Link to={`/admin/clients/bills/new?fromContractId=${c.id}`}>
                 <Button variant="outline">
                   <Receipt className="w-4 h-4 mr-1" />
                   {t('contracts.detail.newInvoice', 'New invoice')}

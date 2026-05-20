@@ -11,6 +11,7 @@ import { ArrowLeft, Eye, Save as SaveIcon } from 'lucide-react';
 import { Button, Card, Loading, Input } from '../../../components/common';
 import { billsService, type InvoiceCreatePayload, type InvoiceQrFormat } from '../../../services/bills.service';
 import { quotesService } from '../../../services/quotes.service';
+import { contractsService } from '../../../services/contracts.service';
 import { businessProfileService } from '../../../services/businessProfile.service';
 import { InlineCustomerCreate } from '../../../components/admin/InlineCustomerCreate';
 import { LineItemsTable, type EditableLineItem } from '../../../components/admin/LineItemsTable';
@@ -203,6 +204,74 @@ export const BillEditorPage: React.FC = () => {
         }
       } catch {
         // Silent fail — admin can still pick the customer manually.
+      }
+    })();
+  }, [isEdit, searchParams, customerId]);
+
+  // Pre-fill from a fully-signed contract when the editor is opened
+  // via `?fromContractId=<id>` (the "New invoice" link on
+  // ContractDetailPage's header, used after the contract has been
+  // converted to event / invoices-only and the admin wants to mint
+  // an ad-hoc invoice on top of the scheduled ones).
+  //
+  // Pulls customer + event snapshot from the contract itself, then
+  // the line items + currency + VAT from the source quote (contracts
+  // don't carry line items themselves — they're composed of free-text
+  // blocks). Standalone contracts (no source quote) still pre-fill
+  // the customer + event snapshot; the admin types the line items.
+  const didPrefillContractRef = useRef(false);
+  useEffect(() => {
+    if (isEdit) return;
+    if (didPrefillContractRef.current) return;
+    const raw = searchParams.get('fromContractId');
+    const cid = raw ? parseInt(raw, 10) : NaN;
+    if (!Number.isFinite(cid) || cid <= 0) return;
+    didPrefillContractRef.current = true;
+    (async () => {
+      try {
+        const { contract } = await contractsService.get(cid);
+        if (!customerId) {
+          setCustomerId(contract.customerAccountId);
+          setCustomerLabel(
+            contract.customer.companyName
+              || [contract.customer.firstName, contract.customer.lastName].filter(Boolean).join(' ')
+              || contract.customer.displayName
+              || contract.customer.email
+              || '',
+          );
+          setCustomerIsPassive(Boolean((contract.customer as any).isPassive));
+        }
+        // Event snapshot — contracts copy these from the source quote
+        // on createFromQuote, then the contract editor can override
+        // them. Either way we prefer the contract's own values here.
+        if (contract.eventName) setEventName(contract.eventName);
+        if (contract.eventDate) setEventDate(contract.eventDate);
+        if (contract.eventTimeStart) setEventTimeStart(contract.eventTimeStart);
+        if (contract.eventTimeEnd) setEventTimeEnd(contract.eventTimeEnd);
+
+        if (contract.sourceQuoteId) {
+          const { quote, lineItems: quoteLineItems } = await quotesService.get(contract.sourceQuoteId);
+          if (quote.currency) setCurrency(quote.currency);
+          if (quote.vatRate != null) setVatRate(Number(quote.vatRate));
+          if (quote.shippingAmountMinor != null) {
+            setShipping(Number(quote.shippingAmountMinor) / 100);
+          }
+          // Map the quote's line items into the editor's editable
+          // shape. ids drop (this is a brand-new invoice; line items
+          // get fresh ids on save) but position + parent linkage are
+          // preserved so the hierarchy carries through.
+          setLineItems((quoteLineItems || []).map((li: any) => ({
+            position: li.position,
+            quantity: Number(li.quantity),
+            description: li.description,
+            unitPrice: Number(li.unitPriceMinor || 0) / 100,
+            discountPercent: Number(li.discountPercent || 0),
+            parentPosition: li.parentPosition ?? null,
+            detailsText: li.detailsText || '',
+          })));
+        }
+      } catch {
+        // Silent fail — admin can still author the invoice manually.
       }
     })();
   }, [isEdit, searchParams, customerId]);
