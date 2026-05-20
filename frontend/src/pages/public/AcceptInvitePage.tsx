@@ -16,6 +16,7 @@ import {
 import { toast } from 'react-toastify';
 
 import { Button, Input, Card, Loading } from '../../components/common';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { api } from '../../config/api';
 
 interface InvitationValidation {
@@ -43,6 +44,7 @@ interface PasswordRequirement {
 
 export const AcceptInvitePage: React.FC = () => {
   const { t } = useTranslation();
+  const { formatDateTime: fmtDateTime } = useLocalizedDate();
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
 
@@ -241,17 +243,13 @@ export const AcceptInvitePage: React.FC = () => {
     return translated;
   };
 
-  // Format expiration date
+  // Format expiration date — respects the admin-configured
+  // `general_date_format` for the date half + 24-hour HH:mm for the
+  // time half (was previously a hardcoded long-form en/locale string
+  // that ignored the setting).
   const formatExpirationDate = (dateString: string): string => {
     try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
+      return fmtDateTime(dateString);
     } catch {
       return dateString;
     }

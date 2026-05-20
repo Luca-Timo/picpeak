@@ -45,9 +45,13 @@ export const ContractDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { format } = useLocalizedDate();
+  // formatDateTime respects the admin-configured `general_date_format`
+  // for the date half + 24-hour HH:mm for the time half. The old local
+  // wrapper around `format(v, 'PPpp')` ignored the setting and always
+  // rendered the date-fns long form ("May 20, 2026 at 14:32").
+  const { format, formatDateTime: fmtDateTime } = useLocalizedDate();
   const formatDate = (v: string | null | undefined) => v ? format(v) : '—';
-  const formatDateTime = (v: string | null | undefined) => v ? format(v, 'PPpp') : '—';
+  const formatDateTime = (v: string | null | undefined) => v ? fmtDateTime(v) : '—';
   const numericId = id ? parseInt(id, 10) : null;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const countersignCanvasRef = useRef<HTMLCanvasElement>(null);

@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import { ArrowLeft, RefreshCw, RotateCw, Send, X, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import { Button, Card, Loading } from '../../components/common';
 import { api } from '../../config/api';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 const WEBHOOK_EVENT_TYPES = [
   'event.created',
@@ -64,6 +65,7 @@ export const WebhookDeliveriesPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const webhookId = parseInt(id || '', 10);
   const queryClient = useQueryClient();
+  const { formatDateTime: fmtDateTime } = useLocalizedDate();
 
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [openDeliveryId, setOpenDeliveryId] = useState<number | null>(null);
@@ -233,7 +235,7 @@ export const WebhookDeliveriesPage: React.FC = () => {
                     onClick={() => setOpenDeliveryId(d.id)}
                   >
                     <td className="py-2.5 pr-3 text-xs text-neutral-600 dark:text-neutral-400">
-                      {new Date(d.created_at).toLocaleString()}
+                      {fmtDateTime(d.created_at)}
                     </td>
                     <td className="py-2.5 pr-3 font-mono text-xs">{d.event_type}</td>
                     <td className="py-2.5 pr-3">

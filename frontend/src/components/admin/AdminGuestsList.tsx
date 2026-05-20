@@ -8,6 +8,7 @@ import { AdminGuestDetail } from './AdminGuestDetail';
 import { GuestSelectionsAggregate } from './GuestSelectionsAggregate';
 import { GuestInviteDialog } from './GuestInviteDialog';
 import { toast } from 'react-toastify';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 interface AdminGuestsListProps {
   eventId: number;
@@ -18,6 +19,7 @@ type View = 'list' | 'aggregate';
 
 export const AdminGuestsList: React.FC<AdminGuestsListProps> = ({ eventId, eventName }) => {
   const { t } = useTranslation();
+  const { format: fmtDate } = useLocalizedDate();
   const queryClient = useQueryClient();
   const [view, setView] = useState<View>('list');
   const [selectedGuest, setSelectedGuest] = useState<AdminGuest | null>(null);
@@ -271,7 +273,7 @@ export const AdminGuestsList: React.FC<AdminGuestsListProps> = ({ eventId, event
                       {guest.stats.ratings}
                     </td>
                     <td className="px-4 py-3 text-sm text-neutral-600 dark:text-neutral-400">
-                      {new Date(guest.last_seen_at).toLocaleDateString()}
+                      {fmtDate(guest.last_seen_at)}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
