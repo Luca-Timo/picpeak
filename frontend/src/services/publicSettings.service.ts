@@ -48,6 +48,9 @@ export interface PublicSettings {
   default_language: string;
   enable_analytics: boolean;
   general_date_format: string | { format: string; locale: string };
+  /** '12h' or '24h' — controls how times are rendered in admin +
+   *  customer views. Storage is always 24h; only display toggles. */
+  general_time_format?: '12h' | '24h';
   enable_recaptcha: boolean;
   recaptcha_site_key: string | null;
   maintenance_mode: boolean;

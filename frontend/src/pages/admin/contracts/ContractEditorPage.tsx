@@ -25,6 +25,7 @@ import {
   CONTRACT_SECTIONS,
 } from '../../../services/contracts.service';
 import { customerAdminService } from '../../../services/customerAdmin.service';
+import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 
 interface BlockRow {
   blockId: number;
@@ -38,6 +39,8 @@ interface BlockRow {
 
 export const ContractEditorPage: React.FC = () => {
   const { t } = useTranslation();
+  const { timeFormat } = useLocalizedDate();
+  const timeInputLang = timeFormat === '12h' ? 'en-US' : 'de-DE';
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
@@ -454,13 +457,13 @@ export const ContractEditorPage: React.FC = () => {
                 <label className="block text-sm font-medium mb-1">
                   {t('contracts.editor.eventTimeStart', 'Start')}
                 </label>
-                <Input type="time" value={eventTimeStart} onChange={(e) => setEventTimeStart(e.target.value)} />
+                <Input type="time" lang={timeInputLang} value={eventTimeStart} onChange={(e) => setEventTimeStart(e.target.value)} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">
                   {t('contracts.editor.eventTimeEnd', 'End')}
                 </label>
-                <Input type="time" value={eventTimeEnd} onChange={(e) => setEventTimeEnd(e.target.value)} />
+                <Input type="time" lang={timeInputLang} value={eventTimeEnd} onChange={(e) => setEventTimeEnd(e.target.value)} />
               </div>
             </div>
           </div>

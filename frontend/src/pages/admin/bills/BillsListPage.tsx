@@ -19,6 +19,7 @@ const STATUSES: InvoiceStatus[] = ['scheduled', 'pending_delivery', 'sent', 'pai
 export const BillsListPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { format: fmtDate } = useLocalizedDate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus[]>([]);
   const [unpaidOnly, setUnpaidOnly] = useState(false);
@@ -170,7 +171,7 @@ export const BillsListPage: React.FC = () => {
                         <td className="px-3 py-2 text-xs text-muted-theme">
                           {inv.installmentTotal > 1 ? `${inv.installmentIndex + 1}/${inv.installmentTotal} · ${inv.installmentLabel || ''}` : '—'}
                         </td>
-                        <td className="px-3 py-2">{inv.dueDate}</td>
+                        <td className="px-3 py-2">{fmtDate(inv.dueDate)}</td>
                         <td className="px-3 py-2 text-right tabular-nums">
                           {formatMoney(Number(inv.totalAmountMinor) / 100, inv.currency)}
                         </td>

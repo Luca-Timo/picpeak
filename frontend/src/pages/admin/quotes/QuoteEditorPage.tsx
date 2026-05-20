@@ -28,6 +28,7 @@ import { customerAdminService } from '../../../services/customerAdmin.service';
 import { userManagementService } from '../../../services/userManagement.service';
 import { settingsService } from '../../../services/settings.service';
 import { useAdminAuth } from '../../../contexts/AdminAuthContext';
+import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { toast } from 'react-toastify';
 
 interface FormState {
@@ -131,6 +132,8 @@ function buildPayload(f: FormState): QuoteCreatePayload {
 
 export const QuoteEditorPage: React.FC = () => {
   const { t } = useTranslation();
+  const { timeFormat } = useLocalizedDate();
+  const timeInputLang = timeFormat === '12h' ? 'en-US' : 'de-DE';
   const { id } = useParams<{ id?: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -534,9 +537,9 @@ export const QuoteEditorPage: React.FC = () => {
             onChange={(e) => setForm((f) => ({ ...f, eventName: e.target.value }))} />
           <Input type="date" label={t('quotes.field.eventDate', 'Event date') as string} value={form.eventDate}
             onChange={(e) => setForm((f) => ({ ...f, eventDate: e.target.value }))} />
-          <Input type="time" label={t('quotes.field.eventTimeStart', 'Start time') as string} value={form.eventTimeStart}
+          <Input type="time" lang={timeInputLang} label={t('quotes.field.eventTimeStart', 'Start time') as string} value={form.eventTimeStart}
             onChange={(e) => setForm((f) => ({ ...f, eventTimeStart: e.target.value }))} />
-          <Input type="time" label={t('quotes.field.eventTimeEnd', 'End time') as string} value={form.eventTimeEnd}
+          <Input type="time" lang={timeInputLang} label={t('quotes.field.eventTimeEnd', 'End time') as string} value={form.eventTimeEnd}
             onChange={(e) => setForm((f) => ({ ...f, eventTimeEnd: e.target.value }))} />
           <Input type="number" step="0.5" label={t('quotes.field.expectedDuration', 'Expected duration (h)') as string}
             value={form.expectedDurationHours}

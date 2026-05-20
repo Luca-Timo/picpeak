@@ -19,6 +19,7 @@ import { toast } from 'react-toastify';
 import { Clock } from 'lucide-react';
 import { Button, Card } from '../common';
 import { customerAdminService } from '../../services/customerAdmin.service';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 export interface HoursSectionProps {
   customerId: number;
@@ -41,6 +42,13 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
 }) => {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const { format: fmtDate, formatTime: fmtTime, timeFormat } = useLocalizedDate();
+  // `lang` hint on <input type="time"> nudges Chrome/Edge to render the
+  // picker in the matching clock convention (de-DE → 24h, en-US → 12h).
+  // Safari/Firefox follow OS locale and ignore this — that's a browser
+  // limitation, not something we can fix in the page. The underlying
+  // value stays HH:mm (24h) regardless of how the picker presents it.
+  const timeInputLang = timeFormat === '12h' ? 'en-US' : 'de-DE';
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('10:00');
@@ -170,14 +178,14 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
             <label className="block text-xs text-muted-theme mb-1">
               {t('customers.hours.form.start', 'Start')}
             </label>
-            <input type="time" value={startTime}
+            <input type="time" lang={timeInputLang} value={startTime}
               onChange={(e) => setStartTime(e.target.value)} className="input w-full" />
           </div>
           <div>
             <label className="block text-xs text-muted-theme mb-1">
               {t('customers.hours.form.end', 'End')}
             </label>
-            <input type="time" value={endTime}
+            <input type="time" lang={timeInputLang} value={endTime}
               onChange={(e) => setEndTime(e.target.value)} className="input w-full" />
           </div>
           <div>
@@ -272,8 +280,8 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
                 const locked = isLocked(e);
                 return (
                   <tr key={e.id} className="border-t border-neutral-200 dark:border-neutral-700">
-                    <td className="py-1.5 pr-3 tabular-nums">{e.entryDate}</td>
-                    <td className="py-1.5 pr-3 tabular-nums">{e.startTime}–{e.endTime}</td>
+                    <td className="py-1.5 pr-3 tabular-nums">{fmtDate(e.entryDate)}</td>
+                    <td className="py-1.5 pr-3 tabular-nums">{fmtTime(e.startTime)}–{fmtTime(e.endTime)}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums">{hours.toFixed(2)}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums">{(rate / 100).toFixed(2)}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums font-medium">{total.toFixed(2)}</td>

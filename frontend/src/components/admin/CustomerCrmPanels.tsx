@@ -22,6 +22,7 @@ import { quotesService } from '../../services/quotes.service';
 import { billsService } from '../../services/bills.service';
 import { contractsService } from '../../services/contracts.service';
 import { formatMoney } from './LineItemsTable';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 interface Props {
   customerAccountId: number;
@@ -41,6 +42,7 @@ export const CustomerCrmPanels: React.FC<Props> = ({ customerAccountId }) => {
 
 const QuotesPanel: React.FC<Props> = ({ customerAccountId }) => {
   const { t } = useTranslation();
+  const { format: fmtDate } = useLocalizedDate();
   const { data, isLoading } = useQuery({
     queryKey: ['customer-quotes', customerAccountId],
     queryFn: () => quotesService.list({ customerAccountId, page: 1, pageSize: 10, sort: 'newest' }),
@@ -81,7 +83,7 @@ const QuotesPanel: React.FC<Props> = ({ customerAccountId }) => {
                 <Link to={`/admin/clients/quotes/${q.id}`} className="text-theme hover:underline font-mono text-sm">
                   {q.quoteNumber}
                 </Link>
-                <span className="text-xs text-muted-theme ml-2">{q.eventName || q.issueDate}</span>
+                <span className="text-xs text-muted-theme ml-2">{q.eventName || fmtDate(q.issueDate)}</span>
               </div>
               <span className="text-sm tabular-nums">{formatMoney(Number(q.totalAmountMinor) / 100, q.currency)}</span>
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${
@@ -100,6 +102,7 @@ const QuotesPanel: React.FC<Props> = ({ customerAccountId }) => {
 
 const ContractsPanel: React.FC<Props> = ({ customerAccountId }) => {
   const { t } = useTranslation();
+  const { format: fmtDate } = useLocalizedDate();
   const { data, isLoading } = useQuery({
     queryKey: ['customer-contracts', customerAccountId],
     queryFn: () => contractsService.list({ customerAccountId, page: 1, pageSize: 10, sort: 'newest' }),
@@ -133,7 +136,7 @@ const ContractsPanel: React.FC<Props> = ({ customerAccountId }) => {
                 <Link to={`/admin/clients/contracts/${c.id}`} className="text-theme hover:underline font-mono text-sm">
                   {c.contractNumber}
                 </Link>
-                <span className="text-xs text-muted-theme ml-2 truncate">{c.title || c.issueDate}</span>
+                <span className="text-xs text-muted-theme ml-2 truncate">{c.title || fmtDate(c.issueDate)}</span>
               </div>
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                 c.status === 'fully_signed' ? 'bg-green-100 text-green-800'
@@ -152,6 +155,7 @@ const ContractsPanel: React.FC<Props> = ({ customerAccountId }) => {
 
 const InvoicesPanel: React.FC<Props> = ({ customerAccountId }) => {
   const { t } = useTranslation();
+  const { format: fmtDate } = useLocalizedDate();
   const { data, isLoading } = useQuery({
     queryKey: ['customer-invoices', customerAccountId],
     queryFn: () => billsService.list({ customerAccountId, page: 1, pageSize: 10, sort: 'newest' }),
@@ -187,7 +191,7 @@ const InvoicesPanel: React.FC<Props> = ({ customerAccountId }) => {
                   {inv.invoiceNumber}
                 </Link>
                 <span className="text-xs text-muted-theme ml-2">
-                  {inv.dueDate}
+                  {fmtDate(inv.dueDate)}
                   {inv.installmentTotal > 1 ? ` · ${inv.installmentIndex + 1}/${inv.installmentTotal}` : ''}
                 </span>
               </div>
