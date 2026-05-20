@@ -3541,6 +3541,9 @@
     "accept": "Angebot annehmen",
     "decline": "Angebot ablehnen"
   },
+  "linkedDocuments": {
+    "title": "Verknüpfte Dokumente"
+  },
   "contracts": {
     "title": "Verträge",
     "subtitle": "Verträge aus wiederverwendbaren Bausteinen zusammenstellen und durch den Kunden im Browser oder per hochgeladenem, handunterschriebenem PDF unterzeichnen lassen.",

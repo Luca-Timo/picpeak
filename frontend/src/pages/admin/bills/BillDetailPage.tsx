@@ -9,6 +9,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Send, CheckCircle, BellRing, XCircle, Truck, Edit2, RefreshCw } from 'lucide-react';
 import { Button, Card, Loading, Input } from '../../../components/common';
+import { LinkedDocumentsCard, type LinkedDocumentRow } from '../../../components/admin/LinkedDocumentsCard';
 import { billsService } from '../../../services/bills.service';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
 import { toast } from 'react-toastify';
@@ -294,6 +295,34 @@ export const BillDetailPage: React.FC = () => {
         </Card>
       )}
 
+      {/* Unified "Linked documents" lineage card — same shape as the
+          quote + contract detail pages. Surfaces the upstream provenance
+          chain (quote → contract → invoice). Storno relationships stay
+          in the coloured callout cards above because they're warnings,
+          not just lineage. */}
+      {(() => {
+        const rows: LinkedDocumentRow[] = [];
+        if (inv.sourceQuoteId) {
+          rows.push({
+            label: t('bills.field.sourceQuote', 'From quote'),
+            links: [{
+              to: `/admin/clients/quotes/${inv.sourceQuoteId}`,
+              label: inv.sourceQuoteNumber || `#${inv.sourceQuoteId}`,
+            }],
+          });
+        }
+        if (inv.sourceContractId) {
+          rows.push({
+            label: t('bills.field.sourceContract', 'From contract'),
+            links: [{
+              to: `/admin/clients/contracts/${inv.sourceContractId}`,
+              label: inv.sourceContractNumber || `#${inv.sourceContractId}`,
+            }],
+          });
+        }
+        return <LinkedDocumentsCard rows={rows} />;
+      })()}
+
       <Card>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           {inv.eventName && (
@@ -308,33 +337,11 @@ export const BillDetailPage: React.FC = () => {
           <div><div className="text-neutral-500">{t('bills.field.outstanding', 'Outstanding')}</div>
             <div className={outstanding > 0 ? 'text-red-700 font-medium' : ''}>{formatMoney(outstanding, inv.currency)}</div></div>
           {inv.lateFeeAmountMinor > 0 && <div><div className="text-neutral-500">{t('bills.field.lateFee', 'Late fee')}</div><div className="text-amber-700">{formatMoney(Number(inv.lateFeeAmountMinor) / 100, inv.currency)}</div></div>}
-          {/* Cross-link back to the source quote — the invoice number
-              follows its own monotonic sequence (R-YYYY-NNNN) for
-              tax compliance, so this link is the only place admins
-              see the quote provenance. Customers see the same info
-              as a "Bezug: Angebot Q-..." line on the PDF. */}
-          {inv.sourceQuoteId && (
-            <div>
-              <div className="text-neutral-500">{t('bills.field.sourceQuote', 'From quote')}</div>
-              <Link to={`/admin/clients/quotes/${inv.sourceQuoteId}`}
-                className="text-primary-600 dark:text-primary-400 hover:underline font-mono text-sm">
-                {inv.sourceQuoteNumber || `#${inv.sourceQuoteId}`}
-              </Link>
-            </div>
-          )}
-          {/* Migration 130 lineage: invoice generated from a contract.
-              Either standalone (no source quote) or chained from quote
-              → contract → invoice. Both are surfaced; admins can hop
-              up the chain from any link. */}
-          {inv.sourceContractId && (
-            <div>
-              <div className="text-neutral-500">{t('bills.field.sourceContract', 'From contract')}</div>
-              <Link to={`/admin/clients/contracts/${inv.sourceContractId}`}
-                className="text-primary-600 dark:text-primary-400 hover:underline font-mono text-sm">
-                {inv.sourceContractNumber || `#${inv.sourceContractId}`}
-              </Link>
-            </div>
-          )}
+          {/* Source-quote / source-contract cross-links moved out of
+              the top stats grid into the unified Linked-documents card
+              above, mirroring the quote + contract detail pages. The
+              customers see the same provenance as a "Bezug: ..." line
+              on the PDF itself. */}
         </div>
       </Card>
 

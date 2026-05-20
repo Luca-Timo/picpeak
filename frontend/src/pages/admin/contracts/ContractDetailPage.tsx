@@ -24,6 +24,7 @@ import {
   ArrowRightCircle, Receipt, RotateCcw, MailCheck,
 } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
+import { LinkedDocumentsCard, type LinkedDocumentRow } from '../../../components/admin/LinkedDocumentsCard';
 import {
   contractsService,
   type ContractStatus,
@@ -490,58 +491,40 @@ export const ContractDetailPage: React.FC = () => {
       )}
 
       {/* Lineage: source quote + resulting event + resulting invoices.
-          Renders only when at least one side has data so contracts
-          created standalone don't show empty panels. Mirrors the
-          "Resulting invoices" pattern on QuoteDetailPage. */}
-      {(sourceQuoteId || c.convertedEventId || (linkedInvoices && linkedInvoices.length > 0)) && (
-        <Card padding="lg" className="mb-4">
-          <h2 className="font-semibold mb-2">{t('contracts.detail.lineage', 'Linked documents')}</h2>
-          <div className="space-y-2 text-sm">
-            {sourceQuoteId && (
-              <div className="flex items-center gap-2">
-                <span className="text-neutral-500 w-32">{t('contracts.detail.fromQuote', 'From quote')}:</span>
-                <Link
-                  to={`/admin/clients/quotes/${sourceQuoteId}`}
-                  className="text-accent-dark hover:underline font-mono"
-                >
-                  {sourceQuoteData?.quote?.quoteNumber || `#${sourceQuoteId}`}
-                </Link>
-              </div>
-            )}
-            {c.convertedEventId && (
-              <div className="flex items-center gap-2">
-                <span className="text-neutral-500 w-32">{t('contracts.detail.convertedToEvent', 'Converted to event')}:</span>
-                <Link
-                  to={`/admin/events/${c.convertedEventId}`}
-                  className="text-accent-dark hover:underline font-mono"
-                >
-                  #{c.convertedEventId}
-                </Link>
-              </div>
-            )}
-            {linkedInvoices && linkedInvoices.length > 0 && (
-              <div className="flex items-start gap-2">
-                <span className="text-neutral-500 w-32 flex-shrink-0">{t('contracts.detail.linkedInvoices', 'Resulting invoices')}:</span>
-                <ul className="space-y-1">
-                  {linkedInvoices.map((inv) => (
-                    <li key={inv.id}>
-                      <Link
-                        to={`/admin/clients/bills/${inv.id}`}
-                        className="text-accent-dark hover:underline font-mono"
-                      >
-                        {inv.invoiceNumber}
-                      </Link>
-                      <span className="ml-2 text-xs text-neutral-500">
-                        {t(`bills.status.${inv.status}`, inv.status)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
+          Uses the shared LinkedDocumentsCard so quote / contract /
+          invoice detail pages all render this section identically. */}
+      {(() => {
+        const rows: LinkedDocumentRow[] = [];
+        if (sourceQuoteId) {
+          rows.push({
+            label: t('contracts.detail.fromQuote', 'From quote'),
+            links: [{
+              to: `/admin/clients/quotes/${sourceQuoteId}`,
+              label: sourceQuoteData?.quote?.quoteNumber || `#${sourceQuoteId}`,
+            }],
+          });
+        }
+        if (c.convertedEventId) {
+          rows.push({
+            label: t('contracts.detail.convertedToEvent', 'Converted to event'),
+            links: [{
+              to: `/admin/events/${c.convertedEventId}`,
+              label: `#${c.convertedEventId}`,
+            }],
+          });
+        }
+        if (linkedInvoices && linkedInvoices.length > 0) {
+          rows.push({
+            label: t('contracts.detail.linkedInvoices', 'Resulting invoices'),
+            links: linkedInvoices.map((inv) => ({
+              to: `/admin/clients/bills/${inv.id}`,
+              label: inv.invoiceNumber,
+              status: t(`bills.status.${inv.status}`, inv.status) as string,
+            })),
+          });
+        }
+        return <LinkedDocumentsCard rows={rows} className="mb-4" />;
+      })()}
 
       {/* Block summary */}
       <Card padding="lg">

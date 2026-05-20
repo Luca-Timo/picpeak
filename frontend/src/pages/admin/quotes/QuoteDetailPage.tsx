@@ -9,6 +9,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Send, Copy, ArrowRightCircle, Edit2, Receipt, CheckCircle2, ScrollText } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
+import { LinkedDocumentsCard, type LinkedDocumentRow } from '../../../components/admin/LinkedDocumentsCard';
 import { quotesService } from '../../../services/quotes.service';
 import { billsService } from '../../../services/bills.service';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
@@ -239,60 +240,42 @@ export const QuoteDetailPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Lineage: contract drafted from this quote (migration 130). */}
-      {q.convertedContractId && (
-        <Card>
-          <h3 className="font-semibold mb-3">{t('quotes.section.linkedContract', 'Linked contract')}</h3>
-          <p className="text-sm">
-            <Link
-              to={`/admin/clients/contracts/${q.convertedContractId}`}
-              className="text-primary-600 dark:text-primary-400 hover:underline font-mono"
-            >
-              {t('quotes.linkedContract.viewLink', 'View contract #{{id}}', { id: q.convertedContractId })}
-            </Link>
-          </p>
-        </Card>
-      )}
-
-      {linkedInvoices && linkedInvoices.invoices.length > 0 && (
-        <Card>
-          <h3 className="font-semibold mb-3">{t('quotes.section.linkedInvoices', 'Resulting invoices')}</h3>
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-neutral-200 dark:border-neutral-700">
-              <th className="text-left py-2">{t('bills.field.number', 'Invoice')}</th>
-              <th className="text-left py-2">{t('bills.field.status', 'Status')}</th>
-              <th className="text-left py-2">{t('bills.field.dueDate', 'Due')}</th>
-              <th className="text-right py-2">{t('bills.field.total', 'Total')}</th>
-            </tr></thead>
-            <tbody>
-              {linkedInvoices.invoices.map((inv) => (
-                <tr key={inv.id} className="border-b border-neutral-100 dark:border-neutral-800">
-                  <td className="py-2">
-                    <Link to={`/admin/clients/bills/${inv.id}`}
-                      className="text-primary-600 dark:text-primary-400 hover:underline font-mono">
-                      {inv.invoiceNumber}
-                    </Link>
-                    {inv.installmentTotal > 1 && (
-                      <span className="ml-2 text-xs text-neutral-500">
-                        {inv.installmentIndex + 1}/{inv.installmentTotal}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2">
-                    <span className="text-xs font-medium px-2 py-0.5 rounded bg-neutral-100 text-neutral-700">
-                      {t(`bills.status.${inv.status}`, inv.status)}
-                    </span>
-                  </td>
-                  <td className="py-2">{inv.dueDate}</td>
-                  <td className="py-2 text-right tabular-nums">
-                    {formatMoney(Number(inv.totalAmountMinor || 0) / 100, inv.currency)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      )}
+      {/* Unified "Linked documents" lineage card — same shape as the
+          contract + invoice detail pages. Renders only when there's at
+          least one cross-reference; quotes that never converted show
+          nothing. Linked contract first (lifecycle predecessor of the
+          resulting invoices), then the invoices themselves. Per-invoice
+          due date + total stay accessible by clicking through to the
+          bill detail page. */}
+      {(() => {
+        const rows: LinkedDocumentRow[] = [];
+        if (q.convertedContractId) {
+          rows.push({
+            label: t('quotes.section.linkedContract', 'Linked contract'),
+            links: [{
+              to: `/admin/clients/contracts/${q.convertedContractId}`,
+              label: q.convertedContractNumber || `#${q.convertedContractId}`,
+            }],
+          });
+        }
+        if (linkedInvoices && linkedInvoices.invoices.length > 0) {
+          rows.push({
+            label: t('quotes.section.linkedInvoices', 'Resulting invoices'),
+            links: linkedInvoices.invoices.map((inv) => ({
+              to: `/admin/clients/bills/${inv.id}`,
+              label: inv.invoiceNumber,
+              // Status pill + installment marker (e.g. "Sent · 1/3")
+              // when this invoice is one of several installments — the
+              // detail page has the full breakdown but admins want the
+              // headline tag here.
+              status: inv.installmentTotal > 1
+                ? `${t(`bills.status.${inv.status}`, inv.status)} · ${inv.installmentIndex + 1}/${inv.installmentTotal}`
+                : t(`bills.status.${inv.status}`, inv.status) as string,
+            })),
+          });
+        }
+        return <LinkedDocumentsCard rows={rows} />;
+      })()}
 
       {q.internalNotes && (
         <Card>

@@ -3538,6 +3538,9 @@
     "accept": "Accept quote",
     "decline": "Decline"
   },
+  "linkedDocuments": {
+    "title": "Linked documents"
+  },
   "contracts": {
     "title": "Contracts",
     "subtitle": "Compose contracts from reusable blocks and have customers sign in-browser or upload a wet-signed PDF.",
