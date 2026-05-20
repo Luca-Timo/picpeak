@@ -17,20 +17,26 @@
       title to "PicPeak - Photo Sharing Platform" left every such
       preview looking unbranded for self-hosted installs.
 
-      Self-hosters set VITE_DEFAULT_TITLE / VITE_DEFAULT_DESCRIPTION
-      at build time (see .env.example) to bake their brand into this
-      fallback. Default values keep the upstream-image behaviour for
-      anyone who doesn't override them.
+      ${BRAND_TITLE} / ${BRAND_DESCRIPTION} are replaced at *container
+      start* by the frontend image's docker-entrypoint.sh (envsubst on
+      an index.html.tpl snapshot taken at image build). That keeps the
+      tokens working even for self-hosters running the pre-built GHCR
+      image — set BRAND_TITLE in compose env and the next container
+      restart picks it up. No frontend rebuild needed.
+
+      Vite dev server doesn't run the entrypoint, so dev mode shows the
+      literal tokens in the tab title — acceptable since dev sessions
+      don't care about social previews.
     -->
-    <title>%VITE_DEFAULT_TITLE%</title>
-    <meta name="description" content="%VITE_DEFAULT_DESCRIPTION%" />
+    <title>${BRAND_TITLE}</title>
+    <meta name="description" content="${BRAND_DESCRIPTION}" />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="%VITE_DEFAULT_TITLE%" />
-    <meta property="og:title" content="%VITE_DEFAULT_TITLE%" />
-    <meta property="og:description" content="%VITE_DEFAULT_DESCRIPTION%" />
+    <meta property="og:site_name" content="${BRAND_TITLE}" />
+    <meta property="og:title" content="${BRAND_TITLE}" />
+    <meta property="og:description" content="${BRAND_DESCRIPTION}" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="%VITE_DEFAULT_TITLE%" />
-    <meta name="twitter:description" content="%VITE_DEFAULT_DESCRIPTION%" />
+    <meta name="twitter:title" content="${BRAND_TITLE}" />
+    <meta name="twitter:description" content="${BRAND_DESCRIPTION}" />
 
     <!-- Pre-React theme bootstrap (#358).
          The browser may paint the very first frame before our inline

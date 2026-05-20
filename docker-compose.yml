@@ -121,6 +121,10 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=${NODE_ENV:-production}
+      # Static social-preview brand (#521) — substituted into
+      # index.html at container start; see frontend/docker-entrypoint.sh.
+      - BRAND_TITLE=${BRAND_TITLE:-PicPeak}
+      - BRAND_DESCRIPTION=${BRAND_DESCRIPTION:-Photo gallery shared with PicPeak.}
     ports:
       - "${FRONTEND_PORT:-3000}:80"
     depends_on:

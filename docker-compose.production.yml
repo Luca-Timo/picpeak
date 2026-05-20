@@ -88,6 +88,16 @@ services:
     container_name: picpeak-frontend
     # Note: Pre-built frontend uses Nginx to proxy /api to backend:3001.
     # Prefer keeping API base as '/api' in builds to avoid CORS.
+    environment:
+      # Substituted into index.html at container start (see frontend/
+      # docker-entrypoint.sh) so social link previews reaching the
+      # static SPA shell (WhatsApp Business API, Twilio, LinkPreview,
+      # etc. — see #521) show the configured brand instead of the
+      # generic "PicPeak" default. Defaults applied when unset; restart
+      # the frontend container after changing for the new title to
+      # take effect.
+      - BRAND_TITLE=${BRAND_TITLE:-PicPeak}
+      - BRAND_DESCRIPTION=${BRAND_DESCRIPTION:-Photo gallery shared with PicPeak.}
     ports:
       - "${FRONTEND_PORT:-3000}:80"
     networks:
