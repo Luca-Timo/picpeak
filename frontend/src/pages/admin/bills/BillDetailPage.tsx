@@ -331,7 +331,7 @@ export const BillDetailPage: React.FC = () => {
               <div className="text-neutral-500">{t('bills.field.sourceContract', 'From contract')}</div>
               <Link to={`/admin/clients/contracts/${inv.sourceContractId}`}
                 className="text-primary-600 dark:text-primary-400 hover:underline font-mono text-sm">
-                #{inv.sourceContractId}
+                {inv.sourceContractNumber || `#${inv.sourceContractId}`}
               </Link>
             </div>
           )}

@@ -48,6 +48,10 @@ export interface InvoiceSummary {
    *  Surfaced on the invoice detail view so the link reads
    *  "From quote LBM-Q-2026-0006" rather than "From quote #6". */
   sourceQuoteNumber?: string | null;
+  /** Human-readable contract number of the source contract (joined-in
+   *  on read). Surfaced on the invoice detail view so the link reads
+   *  "From contract LBM-C-2026-0010" rather than "From contract #10". */
+  sourceContractNumber?: string | null;
   eventId: number | null;
   /** Inline event snapshot (migration 123). Free-text label for the
    *  event the invoice relates to. Persists independently of the

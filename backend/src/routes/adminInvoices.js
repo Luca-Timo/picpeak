@@ -89,8 +89,12 @@ function transformInvoice(i) {
     sourceQuoteId: i.source_quote_id,
     sourceQuoteNumber: i.source_quote_number || null,
     // Migration 130 lineage: set by contractService.convertToInvoiceOnly
-    // so BillDetailPage can render a "From contract" badge.
+    // so BillDetailPage can render a "From contract" badge. The number
+    // (e.g. LBM-C-2026-0010) comes from the src_contract JOIN; the id
+    // is kept as a fallback for invoices generated before the JOIN
+    // was wired in.
     sourceContractId: i.source_contract_id || null,
+    sourceContractNumber: i.source_contract_number || null,
     eventId: i.event_id,
     language: i.language,
     currency: i.currency,
