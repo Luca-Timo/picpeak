@@ -103,6 +103,33 @@ export const CrmSettingsPage: React.FC = () => {
       <span>{t(`crmSettings.${k}.label`, label)}</span>
     </label>
   );
+  /**
+   * Checkbox variant for settings whose backend semantics treat
+   * `undefined` (row missing from app_settings) as ON — e.g.
+   * `crm_contracts_allow_pdf_upload` reads `getAppSetting(...) !== false`,
+   * so a missing row behaves as if checked. Without this variant the
+   * UI would render an unchecked box while the feature is actually
+   * running, which misleads admins on installs whose DB ran an earlier
+   * version of migration 130 (before these settings were added to the
+   * seed list).
+   *
+   * Stored booleans (true / false) always win; the default only fills
+   * in when the value is null/undefined.
+   */
+  const checkboxDefaultOn = (k: string, label: string) => {
+    const stored = values[k];
+    const effective = stored === undefined || stored === null ? true : !!stored;
+    return (
+      <label className="flex items-center gap-2 text-sm py-1">
+        <input
+          type="checkbox"
+          checked={effective}
+          onChange={(e) => setVal(k, e.target.checked)}
+        />
+        <span>{t(`crmSettings.${k}.label`, label)}</span>
+      </label>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -258,10 +285,16 @@ export const CrmSettingsPage: React.FC = () => {
           the number-format input with helper text. */}
       <Card>
         <h3 className="font-semibold mb-3">{t('crmSettings.section.contracts', 'Contracts')}</h3>
-        {checkbox('crm_contracts_pdf_attachment_enabled', 'Attach contract PDF to email')}
+        {/* Three of these four toggles use `!== false` semantics on
+            the backend — a missing app_settings row behaves as if
+            checked. `checkboxDefaultOn` mirrors that so the UI tells
+            the truth on installs whose DB never received the seed
+            rows. `require_drawn_signature` uses `=== true` (default
+            off) so it stays on the plain `checkbox`. */}
+        {checkboxDefaultOn('crm_contracts_pdf_attachment_enabled', 'Attach contract PDF to email')}
         {checkbox('crm_contracts_require_drawn_signature', 'Require drawn signature (typed name alone is not enough)')}
-        {checkbox('crm_contracts_allow_pdf_upload', 'Allow customer to upload a wet-signed PDF')}
-        {checkbox('crm_contracts_store_ip', "Store signer's IP address (recommended — corroborating evidence in civil disputes)")}
+        {checkboxDefaultOn('crm_contracts_allow_pdf_upload', 'Allow customer to upload a wet-signed PDF')}
+        {checkboxDefaultOn('crm_contracts_store_ip', "Store signer's IP address (recommended — corroborating evidence in civil disputes)")}
         <p className="text-xs text-neutral-500 mt-1 ml-6">
           {t('crmSettings.crm_contracts_store_ip.help',
             "When off, the customer's and admin's IP at signing time is NOT recorded into the contract row or the public sign-page audit confirmation. Per GDPR data-minimisation principle some operators prefer this — but IP is corroborating identity evidence if the contract is challenged, so we recommend keeping it on.")}
