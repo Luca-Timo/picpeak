@@ -23,7 +23,7 @@ import {
   UserPlus, UserCog, Trash2, Search, X, AlertTriangle, CheckCircle2, Clock,
 } from 'lucide-react';
 import { InlineCustomerCreate } from '../../components/admin/InlineCustomerCreate';
-import { format } from 'date-fns';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 import { Button, Card, Input, Loading } from '../../components/common';
 import {
@@ -34,14 +34,17 @@ import {
 
 type TabType = 'customers' | 'invitations';
 
-const formatDate = (iso: string | null | undefined) => {
-  if (!iso) return '—';
-  try { return format(new Date(iso), 'PP'); } catch { return '—'; }
-};
-
 export const CustomerManagementPage: React.FC = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  // formatDate respects the admin-configured `general_date_format`
+  // (DD.MM.YYYY by default) instead of the date-fns long-form 'PP'
+  // (which always rendered "May 8, 2026" regardless of the setting).
+  const { format: fmtDate } = useLocalizedDate();
+  const formatDate = (iso: string | null | undefined) => {
+    if (!iso) return '—';
+    try { return fmtDate(new Date(iso)); } catch { return '—'; }
+  };
   const [activeTab, setActiveTab] = useState<TabType>('customers');
   const [searchTerm, setSearchTerm] = useState('');
   // Single state drives the unified create/invite modal. Both header
