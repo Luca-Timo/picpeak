@@ -29,6 +29,8 @@ import {
 import { businessProfileService } from '../../services/businessProfile.service';
 import { CustomerCrmPanels } from '../../components/admin/CustomerCrmPanels';
 import { HoursSection } from '../../components/admin/HoursSection';
+import { formatMoney } from '../../components/admin/LineItemsTable';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 
 type EditableFields =
@@ -60,6 +62,19 @@ export const CustomerDetailPage: React.FC = () => {
     queryFn: () => customerAdminService.get(customerId),
     enabled: Number.isFinite(customerId) && customerId > 0,
   });
+
+  // Open monthly draft preview (migration 128). Powers the
+  // "Pending in this month's bill" list shown between the cadence
+  // controls and the Trigger button. null until the first invoice
+  // line is appended; refetched on every trigger / invoice mutation.
+  const { format: fmtDate } = useLocalizedDate();
+  const { data: monthlyDraftRes } = useQuery({
+    queryKey: ['admin-customer-monthly-draft', customerId],
+    queryFn: () => customerAdminService.getMonthlyDraft(customerId),
+    enabled: Number.isFinite(customerId) && customerId > 0
+      && (customer?.billingCadence === 'monthly'),
+  });
+  const monthlyDraft = monthlyDraftRes?.draft || null;
 
   // Business-profile default locale powers the "Preferred language"
   // dropdown's helper hint — admins see which language a brand-new
@@ -195,6 +210,10 @@ export const CustomerDetailPage: React.FC = () => {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['admin-customer', customerId] });
       queryClient.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
+      // Clear the draft preview so the list collapses to empty
+      // immediately after the trigger ships — a new draft is minted
+      // on the next createInvoice / hour-entry append.
+      queryClient.invalidateQueries({ queryKey: ['admin-customer-monthly-draft', customerId] });
       toast.success(
         t('customers.billing.triggered',
           'Monthly bill issued: {{number}}',
@@ -684,6 +703,82 @@ export const CustomerDetailPage: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Preview of the open monthly draft (migration 128). Shows
+            every line item queued for the customer's current billing
+            period so admin sees exactly what "Trigger invoice now"
+            would ship. Hidden when no draft exists yet (admin hasn't
+            saved anything onto the period). */}
+        {form.billingCadence === 'monthly' && monthlyDraft && monthlyDraft.lineItems.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-theme">
+                {t('customers.billing.draftPreview.title',
+                  'Pending in this month\'s bill')}
+              </h3>
+              <span className="text-xs text-muted-theme">
+                {t('customers.billing.draftPreview.periodRange',
+                  '{{number}} · {{from}} – {{to}}',
+                  {
+                    number: monthlyDraft.invoiceNumber,
+                    from: fmtDate(monthlyDraft.periodStart),
+                    to: fmtDate(monthlyDraft.periodEnd),
+                  })}
+              </span>
+            </div>
+            <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-neutral-50 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
+                  <tr>
+                    <th className="px-3 py-2 text-left w-12">#</th>
+                    <th className="px-3 py-2 text-left">
+                      {t('crm.lineItems.description', 'Description')}
+                    </th>
+                    <th className="px-3 py-2 text-right w-20">
+                      {t('crm.lineItems.quantity', 'Qty')}
+                    </th>
+                    <th className="px-3 py-2 text-right w-28">
+                      {t('crm.lineItems.unitPrice', 'Unit')}
+                    </th>
+                    <th className="px-3 py-2 text-right w-28">
+                      {t('crm.lineItems.total', 'Total')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyDraft.lineItems.map((li) => (
+                    <tr key={li.id} className="border-t border-neutral-200 dark:border-neutral-700">
+                      <td className="px-3 py-1.5 tabular-nums text-muted-theme">{li.position}</td>
+                      <td className="px-3 py-1.5">
+                        {li.parentPosition != null && (
+                          <span className="text-muted-theme mr-1">↳</span>
+                        )}
+                        {li.description}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">{li.quantity}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">
+                        {formatMoney(li.unitPriceMinor / 100, monthlyDraft.currency)}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">
+                        {formatMoney(li.lineTotalMinor / 100, monthlyDraft.currency)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-neutral-50 dark:bg-neutral-800">
+                  <tr className="border-t-2 border-neutral-300 dark:border-neutral-600">
+                    <td colSpan={4} className="px-3 py-2 text-right font-medium">
+                      {t('crm.lineItems.total', 'Total')}
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                      {formatMoney(monthlyDraft.totalAmountMinor / 100, monthlyDraft.currency)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Manual trigger — issue the running monthly draft NOW
             instead of waiting for the cadence-day scheduler tick.
