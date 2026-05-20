@@ -10,12 +10,14 @@ import { Plus, Search } from 'lucide-react';
 import { quotesService, type QuoteStatus, type QuoteSort } from '../../../services/quotes.service';
 import { Button, Card, Loading } from '../../../components/common';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
+import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 
 const STATUSES: QuoteStatus[] = ['draft', 'sent', 'accepted', 'declined', 'expired', 'converted'];
 
 export const QuotesListPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { format: fmtDate } = useLocalizedDate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<QuoteStatus[]>([]);
   const [sort, setSort] = useState<QuoteSort>('newest');
@@ -126,7 +128,7 @@ export const QuotesListPage: React.FC = () => {
                         <td className="px-3 py-2 font-mono text-xs">{q.quoteNumber}</td>
                         <td className="px-3 py-2">{q.customer.companyName || q.customer.displayName || q.customer.email}</td>
                         <td className="px-3 py-2 truncate max-w-xs">{q.eventName || '—'}</td>
-                        <td className="px-3 py-2">{q.issueDate}</td>
+                        <td className="px-3 py-2">{fmtDate(q.issueDate)}</td>
                         <td className="px-3 py-2 text-right tabular-nums">
                           {formatMoney(Number(q.totalAmountMinor) / 100, q.currency)}
                         </td>
