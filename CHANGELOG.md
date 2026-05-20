@@ -5,6 +5,14 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.54.2-beta.0](https://github.com/the-luap/picpeak/compare/v3.54.1-beta.0...v3.54.2-beta.0) (2026-05-20)
+
+
+### Bug Fixes
+
+* **feedback:** three guest-mode bugs from [#538](https://github.com/the-luap/picpeak/issues/538) (filter, like state, count leak) ([c900be9](https://github.com/the-luap/picpeak/commit/c900be92dd490b21aabb10fd56b6fbc3da444ee0))
+* **feedback:** three guest-mode bugs reported in [#538](https://github.com/the-luap/picpeak/issues/538) ([5311588](https://github.com/the-luap/picpeak/commit/5311588baf3c6acfc971cb014a142d6b4b153aa1))
+
 ## [3.54.1-beta.0](https://github.com/the-luap/picpeak/compare/v3.54.0-beta.0...v3.54.1-beta.0) (2026-05-20)
 
 
