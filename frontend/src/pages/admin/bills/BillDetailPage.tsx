@@ -218,8 +218,21 @@ export const BillDetailPage: React.FC = () => {
               <Edit2 className="w-4 h-4 mr-1" />{t('common.edit', 'Edit')}
             </Button>
           )}
-          {['scheduled', 'sent', 'overdue'].includes(inv.status) && (
+          {/* Send button: hidden on monthly drafts (migration 128).
+              Drafts ship only via "Trigger invoice now" on the customer
+              detail page OR via the scheduled cadence-day flush —
+              never directly. Clicking Send on a draft would early-ship
+              the running accumulator AND leave is_monthly_draft=true,
+              causing the next line-item save to silently append onto
+              the already-sent row. Backend also enforces this. */}
+          {['scheduled', 'sent', 'overdue'].includes(inv.status) && !inv.isMonthlyDraft && (
             <Button onClick={handleSend}><Send className="w-4 h-4 mr-1" />{inv.status === 'scheduled' ? t('bills.sendNow', 'Send now') : t('bills.resend', 'Resend')}</Button>
+          )}
+          {inv.isMonthlyDraft && (
+            <span className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">
+              {t('bills.monthlyDraftBadge',
+                'Monthly draft — ships via the customer\'s cadence day or "Trigger invoice now"')}
+            </span>
           )}
           {inv.kind !== 'storno' && inv.status === 'pending_delivery' && (
             <Button onClick={handleRelease}>

@@ -627,4 +627,19 @@ router.post('/:id/trigger-monthly-bill', [
   successResponse(res, result, 201);
 }));
 
+// Preview the customer's open monthly draft (line items + totals) so
+// the customer-detail page can show "what will ship on the next cycle
+// day". Returns null draft when nothing has been queued yet. Same
+// permission scope as the trigger endpoint — both read/operate on
+// the same row.
+router.get('/:id/monthly-draft', [
+  adminAuth,
+  requirePermission('customers.create'),
+  param('id').isInt({ min: 1 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const draft = await invoiceService.getMonthlyDraft(parseInt(req.params.id, 10));
+  successResponse(res, { draft });
+}));
+
 module.exports = router;

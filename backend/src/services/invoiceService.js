@@ -1349,6 +1349,20 @@ async function sendInvoice(id, adminId) {
   if (!['scheduled', 'sent', 'overdue'].includes(invoice.status)) {
     throw new AppError(`Cannot send invoice with status '${invoice.status}'`, 409);
   }
+  // Monthly-draft guard (migration 128). Rows flagged
+  // is_monthly_draft=true accumulate line items across the period
+  // and must ONLY be issued via triggerMonthlyBillNow / the scheduled
+  // monthly flush — both clear the flag before re-entering this
+  // function. Without this guard, admin clicks on a draft's Send
+  // button would ship the running accumulator early AND leave the
+  // flag set, so subsequent createInvoice calls would silently
+  // append onto the same already-sent row.
+  if (invoice.is_monthly_draft === true || invoice.is_monthly_draft === 1) {
+    throw new AppError(
+      'This invoice is a monthly draft — use "Trigger invoice now" on the customer detail page, or wait for the scheduled cycle day.',
+      409, 'MONTHLY_DRAFT_NOT_SENDABLE',
+    );
+  }
   const customer = await db('customer_accounts').where({ id: invoice.customer_account_id }).first();
   ensureCustomerCanBill(customer);
 
@@ -2492,6 +2506,48 @@ async function recordPaymentCheckAction({ token, action, amountMinor, ip, adminI
  * Returns { invoiceId, invoiceNumber } so the route can surface the
  * resulting invoice on the response toast.
  */
+/**
+ * Read the customer's running monthly draft + its line items so the
+ * customer-detail page can preview what will ship on the next cycle
+ * day. Returns null when no open draft exists (admin hasn't queued
+ * anything yet for the current period). Used by GET
+ * /admin/customers/:id/monthly-draft.
+ */
+async function getMonthlyDraft(customerId) {
+  const draft = await db('invoices')
+    .where({ customer_account_id: customerId, is_monthly_draft: true })
+    .orderBy('id', 'desc')
+    .first();
+  if (!draft) return null;
+  const lineItems = await db('invoice_line_items as li')
+    .leftJoin('invoice_line_items as parent', 'parent.id', 'li.parent_line_item_id')
+    .where('li.invoice_id', draft.id)
+    .orderBy('li.position', 'asc')
+    .select('li.*', 'parent.position as parent_position');
+  return {
+    id: draft.id,
+    invoiceNumber: draft.invoice_number,
+    currency: draft.currency,
+    periodStart: draft.monthly_period_start,
+    periodEnd: draft.monthly_period_end,
+    netAmountMinor: draft.net_amount_minor,
+    vatRate: draft.vat_rate == null ? null : Number(draft.vat_rate),
+    vatAmountMinor: draft.vat_amount_minor,
+    totalAmountMinor: draft.total_amount_minor,
+    lineItems: lineItems.map((li) => ({
+      id: li.id,
+      position: li.position,
+      quantity: Number(li.quantity),
+      description: li.description,
+      unitPriceMinor: ensureInt(li.unit_price_minor),
+      discountPercent: Number(li.discount_percent || 0),
+      lineTotalMinor: ensureInt(li.line_total_minor),
+      parentPosition: li.parent_position == null ? null : ensureInt(li.parent_position),
+      detailsText: li.details_text || '',
+    })),
+  };
+}
+
 async function triggerMonthlyBillNow(customerId, adminId) {
   const draft = await db('invoices')
     .where({ customer_account_id: customerId, is_monthly_draft: true })
@@ -2754,6 +2810,7 @@ module.exports = {
   // customerHoursService can append hour-logged line items onto the
   // running draft without duplicating the period/totals logic.
   getOrCreateMonthlyDraft,
+  getMonthlyDraft,
   appendToMonthlyDraft,
   appendOneLineItemToMonthlyDraft,
   triggerMonthlyBillNow,

@@ -343,7 +343,45 @@ export const customerAdminService = {
     );
     return (response.data as any).data ?? response.data;
   },
+
+  /** Preview the customer's open monthly draft (line items + totals).
+   *  Returns null when nothing has been queued for the current period. */
+  async getMonthlyDraft(customerId: number): Promise<{ draft: MonthlyDraftPreview | null }> {
+    const response = await api.get(
+      `/admin/customers/${customerId}/monthly-draft`,
+    );
+    return (response.data as any).data ?? response.data;
+  },
 };
+
+/** Open monthly bill accumulator preview (migration 128). One row in
+ *  the invoices table with is_monthly_draft=true that gathers every
+ *  invoice line created for this customer during the current period;
+ *  ships on the cadence day or via triggerMonthlyBill. */
+export interface MonthlyDraftPreview {
+  id: number;
+  invoiceNumber: string;
+  currency: string;
+  periodStart: string;
+  periodEnd: string;
+  netAmountMinor: number;
+  vatRate: number | null;
+  vatAmountMinor: number;
+  totalAmountMinor: number;
+  lineItems: MonthlyDraftLineItem[];
+}
+
+export interface MonthlyDraftLineItem {
+  id: number;
+  position: number;
+  quantity: number;
+  description: string;
+  unitPriceMinor: number;
+  discountPercent: number;
+  lineTotalMinor: number;
+  parentPosition: number | null;
+  detailsText: string;
+}
 
 // -------------------------------------------------------------------
 // Hour-entry types (migration 129)
