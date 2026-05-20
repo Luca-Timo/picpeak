@@ -93,18 +93,32 @@ const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSid
         />
       </div>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen">
+      {/* Main content. `scrollbar-gutter: stable` on the column itself
+          (via the inline style) reserves the scrollbar gutter once at
+          the column level — so the header sits in the full column
+          width AND lines up with the sidebar's right edge, while
+          <main>'s scroll content honors the same gutter and never
+          shifts when content overflows. Without this, the header and
+          main each made their own decisions about the gutter, leaving
+          a visible ~15px notch on the right edge of the header's
+          border between the column's content area and the scrollbar. */}
+      <div
+        className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto"
+        style={{ scrollbarGutter: 'stable' }}
+      >
         {/* Header - disabled when password change required */}
         <div className={mustChangePassword ? 'pointer-events-none opacity-50' : ''}>
           <AdminHeader onMenuClick={() => setSidebarOpen(true)} />
         </div>
-        
+
         {/* Maintenance mode banner */}
         <MaintenanceBanner />
 
-        {/* Page content - disabled when password change required */}
-        <main id="main-content" className={`flex-1 px-4 sm:px-6 lg:px-8 py-8 overflow-y-auto ${mustChangePassword ? 'opacity-50 pointer-events-none' : ''}`}>
+        {/* Page content - disabled when password change required.
+            overflow moved up to the column so the scrollbar gutter is
+            reserved once at the column level (see above). main now
+            just contributes its content + padding. */}
+        <main id="main-content" className={`flex-1 px-4 sm:px-6 lg:px-8 py-8 ${mustChangePassword ? 'opacity-50 pointer-events-none' : ''}`}>
           <Outlet />
         </main>
       </div>
