@@ -309,38 +309,59 @@ export const ContractDetailPage: React.FC = () => {
         )}
 
         {/* Forward conversions — only available once both parties have
-            signed AND the contract has a source quote (no line items
-            otherwise). Mirrors the buttons that live on QuoteDetailPage
-            for accepted quotes. */}
-        {c.status === 'fully_signed' && (
-          <>
-            <Button
-              onClick={() => {
-                if (window.confirm(t('contracts.detail.confirmConvertEvent',
-                  'Convert this contract into an event + scheduled invoices?') as string)) {
-                  convertToEventMutation.mutate();
-                }
-              }}
-              disabled={convertToEventMutation.isPending}
-            >
-              <ArrowRightCircle className="w-4 h-4 mr-1" />
-              {t('contracts.detail.convertToEvent', 'Convert to event')}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (window.confirm(t('contracts.detail.confirmConvertInvoice',
-                  'Convert this contract into invoice(s) only? No gallery / event will be created.') as string)) {
-                  convertToInvoiceMutation.mutate();
-                }
-              }}
-              disabled={convertToInvoiceMutation.isPending}
-            >
-              <Receipt className="w-4 h-4 mr-1" />
-              {t('contracts.detail.convertToInvoice', 'Convert to invoice only')}
-            </Button>
-          </>
-        )}
+            signed. The two "Convert to ..." buttons replay the source
+            quote's installment schedule (so they require a source
+            quote OR a standalone-contract path the backend handles).
+            Once conversion has happened (event row created OR at least
+            one invoice already references this contract) the source
+            quote is in 'converted' status and both convert calls would
+            error. We swap them for a "New invoice" link that mints an
+            ad-hoc invoice — admins commonly want extra invoices on
+            top of the scheduled ones (out-of-pocket expenses, change
+            requests, etc.). */}
+        {c.status === 'fully_signed' && (() => {
+          const alreadyConverted = !!c.convertedEventId
+            || (Array.isArray(linkedInvoices) && linkedInvoices.length > 0);
+          if (alreadyConverted) {
+            return (
+              <Link to={`/admin/clients/bills/new?customerAccountId=${c.customerAccountId}`}>
+                <Button variant="outline">
+                  <Receipt className="w-4 h-4 mr-1" />
+                  {t('contracts.detail.newInvoice', 'New invoice')}
+                </Button>
+              </Link>
+            );
+          }
+          return (
+            <>
+              <Button
+                onClick={() => {
+                  if (window.confirm(t('contracts.detail.confirmConvertEvent',
+                    'Convert this contract into an event + scheduled invoices?') as string)) {
+                    convertToEventMutation.mutate();
+                  }
+                }}
+                disabled={convertToEventMutation.isPending}
+              >
+                <ArrowRightCircle className="w-4 h-4 mr-1" />
+                {t('contracts.detail.convertToEvent', 'Convert to event')}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (window.confirm(t('contracts.detail.confirmConvertInvoice',
+                    'Convert this contract into invoice(s) only? No gallery / event will be created.') as string)) {
+                    convertToInvoiceMutation.mutate();
+                  }
+                }}
+                disabled={convertToInvoiceMutation.isPending}
+              >
+                <Receipt className="w-4 h-4 mr-1" />
+                {t('contracts.detail.convertToInvoice', 'Convert to invoice only')}
+              </Button>
+            </>
+          );
+        })()}
       </div>
 
       {/* Recipient + dates */}
