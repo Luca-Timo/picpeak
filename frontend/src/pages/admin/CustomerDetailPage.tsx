@@ -578,29 +578,40 @@ export const CustomerDetailPage: React.FC = () => {
         </p>
         <div className="space-y-3">
           {([
-            { key: 'featureCalendar', labelKey: 'customer.nav.calendar', fallback: 'Calendar' },
-            { key: 'featureQuotes',   labelKey: 'customer.nav.quotes',   fallback: 'Quotes' },
-            { key: 'featureBills',    labelKey: 'customer.nav.bills',    fallback: 'Bills' },
+            // `badge` controls which status pill is shown:
+            //   - 'soon' (amber) for tabs that still don't have a
+            //     customer-facing surface (Calendar)
+            //   - 'new' (green) for shipped customer-facing tabs that
+            //     are recent additions to the admin's vocabulary so
+            //     they catch the eye when reviewing per-customer
+            //     overrides. Matches Settings → Features StatusBadge.
+            { key: 'featureCalendar', labelKey: 'customer.nav.calendar', fallback: 'Calendar', badge: 'soon' as const },
+            { key: 'featureQuotes',   labelKey: 'customer.nav.quotes',   fallback: 'Quotes',   badge: 'new'  as const },
+            { key: 'featureBills',    labelKey: 'customer.nav.bills',    fallback: 'Bills',    badge: 'new'  as const },
             // Hide the per-customer hours toggle when the master flag
             // is off — admin gets a clear "feature is disabled
             // globally" signal by the toggle simply not appearing.
             ...(flags.hoursLogging
-              ? [{ key: 'featureHoursLogging' as const, labelKey: 'customers.field.featureHoursLogging', fallback: 'Hours logging' }]
+              ? [{ key: 'featureHoursLogging' as const, labelKey: 'customers.field.featureHoursLogging', fallback: 'Hours logging', badge: 'new' as const }]
               : []),
-          ] as const).map(({ key, labelKey, fallback }) => {
+          ] as const).map(({ key, labelKey, fallback, badge }) => {
             const enabled = !!form[key];
             return (
               <label key={key} className="flex items-center justify-between gap-3 cursor-pointer">
                 <span className="text-sm font-medium text-theme flex items-center gap-2">
                   {t(labelKey, fallback)}
-                  {/* Soon badge — these tabs are still coming-soon stubs;
-                      this keeps the admin honest when looking at the
-                      toggles. */}
-                  <span
-                    className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                  >
-                    {t('customer.nav.soon', 'Soon')}
-                  </span>
+                  {/* Status pill — 'soon' = amber, 'new' = green.
+                      Colors match Settings → Features StatusBadge so
+                      the two surfaces feel consistent. */}
+                  {badge === 'soon' ? (
+                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      {t('customer.nav.soon', 'Soon')}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                      {t('customer.nav.new', 'New')}
+                    </span>
+                  )}
                 </span>
                 <button
                   type="button"
