@@ -1991,6 +1991,7 @@
       "customers": "Customers",
       "calendar": "Calendar",
       "quotes": "Quotes",
+      "contracts": "Contracts",
       "billing": "Billing"
     },
     "featureOff": "Feature off",

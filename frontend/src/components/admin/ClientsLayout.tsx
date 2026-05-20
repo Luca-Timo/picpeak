@@ -61,18 +61,18 @@ export const ClientsLayout: React.FC = () => {
       featureFlag: 'contracts',
     },
     {
-      key: 'bills',
-      to: '/admin/clients/bills',
-      label: t('clients.subnav.bills', 'Invoices'),
-      icon: Receipt,
-      featureFlag: 'bills',
-    },
-    {
       key: 'hours',
       to: '/admin/clients/hours',
       label: t('clients.subnav.hours', 'Hours'),
       icon: Clock,
       featureFlag: 'hoursLogging',
+    },
+    {
+      key: 'bills',
+      to: '/admin/clients/bills',
+      label: t('clients.subnav.bills', 'Invoices'),
+      icon: Receipt,
+      featureFlag: 'bills',
     },
     {
       key: 'tax-report',
