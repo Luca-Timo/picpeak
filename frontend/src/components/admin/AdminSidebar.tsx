@@ -137,7 +137,14 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
 
   return (
     <div
-      className={`fixed inset-y-0 left-0 z-50 ${widthClasses} bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-700 transform transition-all duration-200 ease-in-out lg:relative lg:translate-x-0 lg:h-screen ${
+      // Right edge drawn via box-shadow rather than `border-r` so the
+      // brand row's `border-b` can extend to the sidebar's full width
+      // and meet the header's `border-b` cleanly at the L-junction. A
+      // 1px border-r would shrink the brand row's content by 1px and
+      // leave a visible step in the horizontal divider where the
+      // sidebar meets the main column. Shadow uses the same neutral
+      // border colors so it looks identical to the previous border.
+      className={`fixed inset-y-0 left-0 z-50 ${widthClasses} bg-white dark:bg-neutral-900 shadow-[1px_0_0_0_theme(colors.neutral.200)] dark:shadow-[1px_0_0_0_theme(colors.neutral.700)] transform transition-all duration-200 ease-in-out lg:relative lg:translate-x-0 lg:h-screen ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       }`}
     >
