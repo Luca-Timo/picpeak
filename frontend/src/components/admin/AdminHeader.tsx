@@ -134,12 +134,20 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick }) => {
                 left cluster has only the mobile menu (which is
                 hidden on xl+), so a divider would be floating on
                 its own with nothing to separate. */}
-            <div className={`hidden xl:block ml-1 ${
+            {/* Explicit `flex items-center` (not just block) + the
+                self-stretch on the border-l variant so the divider
+                covers the full header row, AND the text baseline sits
+                exactly on the same y-axis as the brand-block / sidebar
+                logo to its left. The previous `hidden xl:block` left
+                the <p> inheriting its block-level vertical position,
+                which read as slightly off-centre next to the larger
+                logo image. */}
+            <div className={`hidden xl:flex items-center self-stretch ml-1 ${
               logoPosition === 'left' && !logoInSidebar
                 ? 'pl-3 border-l border-neutral-200 dark:border-neutral-700'
                 : ''
             }`}>
-              <p className="text-base text-neutral-700 dark:text-neutral-300">
+              <p className="text-base leading-none text-neutral-700 dark:text-neutral-300 m-0">
                 {format(new Date(), 'PPPP')}
               </p>
             </div>
