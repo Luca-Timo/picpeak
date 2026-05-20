@@ -378,6 +378,38 @@ export const ContractDetailPage: React.FC = () => {
                 {formatDateTime(c.sentAt)}
               </p>
             )}
+            {/* Inline lineage badges so the linked invoice / source
+                quote numbers are visible at-a-glance, matching the
+                "From contract" badge layout on BillDetailPage's top
+                stats. The full lineage card below still lists all
+                linked invoices with status, but the most common
+                lookup ("which invoice did this contract become?") now
+                surfaces without scrolling. */}
+            {sourceQuoteId && (
+              <p className="text-xs">
+                <span className="text-neutral-500">{t('contracts.detail.fromQuote', 'From quote')}: </span>
+                <Link
+                  to={`/admin/clients/quotes/${sourceQuoteId}`}
+                  className="text-accent-dark hover:underline font-mono"
+                >
+                  {sourceQuoteData?.quote?.quoteNumber || `#${sourceQuoteId}`}
+                </Link>
+              </p>
+            )}
+            {linkedInvoices && linkedInvoices.length > 0 && (
+              <p className="text-xs">
+                <span className="text-neutral-500">{t('contracts.detail.linkedInvoice', 'Invoice')}: </span>
+                <Link
+                  to={`/admin/clients/bills/${linkedInvoices[0].id}`}
+                  className="text-accent-dark hover:underline font-mono"
+                >
+                  {linkedInvoices[0].invoiceNumber}
+                </Link>
+                {linkedInvoices.length > 1 && (
+                  <span className="text-neutral-500"> (+{linkedInvoices.length - 1})</span>
+                )}
+              </p>
+            )}
           </div>
         </div>
       </Card>

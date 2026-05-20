@@ -60,9 +60,15 @@ const TEMPLATES_KEYS = [
   'invoice_reminder_first',
   'invoice_reminder_second',
   'invoice_payment_check_admin',
-  // Contracts (migration 130). contract_fully_signed lands in a later
-  // commit alongside the dual-party send; the dev tester just exercises
-  // the two templates that already exist.
+  // Contracts (migration 130). All three flows are exercised:
+  //   - contract_sent: admin → customer, with a sample contract PDF
+  //   - contract_signed_admin_notification: customer-signed ping back
+  //     to the admin (no attachment in the real flow either)
+  //   - contract_fully_signed: dual-party send when both signatures
+  //     are in. Real flow attaches the stamped contract + audit cert;
+  //     the dev tester attaches the stamped contract only (the audit
+  //     cert is reproducible from contract data so its absence here
+  //     doesn't change what's being tested — the template body).
   'contract_sent',
   'contract_signed_admin_notification',
   'contract_fully_signed',

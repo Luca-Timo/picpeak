@@ -2,16 +2,20 @@
  * Admin → Contracts list page.
  *
  * Lists every contract (filterable by status + customer + search) with
- * a "New contract" button and a "Block library" shortcut. Mirrors the
- * BillsListPage / QuotesListPage layout so it slots into the existing
- * /admin/clients sub-nav without visual surprise.
+ * a "New contract" button and a "Block library" shortcut. Visual
+ * shape mirrors BillsListPage / QuotesListPage so the three lists
+ * under /admin/clients feel like one product — same container wrapper,
+ * same h1 + BETA badge, same Button component for actions, same table
+ * head + row-hover + click-row-to-open behaviour. Contract-specific
+ * columns (Number, Customer, Title, Issued, Status) and the per-status
+ * badge palette are preserved.
  */
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Search, BookOpen, ScrollText } from 'lucide-react';
-import { Card, Loading } from '../../../components/common';
+import { Plus, Search, BookOpen } from 'lucide-react';
+import { Button, Card, Loading } from '../../../components/common';
 import {
   contractsService,
   type ContractStatus,
@@ -23,24 +27,9 @@ const STATUSES: ContractStatus[] = [
   'draft', 'sent', 'signed_by_customer', 'signed_by_admin', 'fully_signed', 'cancelled',
 ];
 
-function StatusBadge({ status }: { status: ContractStatus }) {
-  const { t } = useTranslation();
-  const cls =
-    status === 'fully_signed'      ? 'bg-green-100 text-green-800'
-    : status === 'signed_by_customer' ? 'bg-blue-100 text-blue-800'
-    : status === 'signed_by_admin' ? 'bg-blue-100 text-blue-800'
-    : status === 'sent'            ? 'bg-amber-100 text-amber-800'
-    : status === 'cancelled'       ? 'bg-neutral-200 text-neutral-600'
-    : 'bg-neutral-100 text-neutral-700';
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cls}`}>
-      {t(`contracts.status.${status}`, status)}
-    </span>
-  );
-}
-
 export const ContractsListPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { format } = useLocalizedDate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ContractStatus[]>([]);
@@ -56,39 +45,43 @@ export const ContractsListPage: React.FC = () => {
     }),
   });
 
-  function toggleStatus(s: ContractStatus) {
+  const toggleStatus = (s: ContractStatus) => {
+    setStatusFilter((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
     setPage(1);
-    setStatusFilter((cur) => cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]);
-  }
+  };
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 
   return (
-    <div>
-      <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+    <div className="container py-6">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
-            <ScrollText className="w-6 h-6" />
-            {t('contracts.title', 'Contracts')}
-          </h1>
-          <p className="text-neutral-600 dark:text-neutral-400 mt-1">
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-theme">{t('contracts.title', 'Contracts')}</h1>
+            {/* Beta badge — matches Customers + Quotes + Invoices. */}
+            <span
+              className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+              title="Beta — feature is functional but still evolving"
+            >
+              {t('navigation.betaTag', 'Beta')}
+            </span>
+          </div>
+          <p className="text-sm text-muted-theme mt-1">
             {t('contracts.subtitle', 'Compose contracts from reusable blocks and have customers sign in-browser or upload a wet-signed PDF.')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link
-            to="/admin/clients/contracts/blocks"
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700"
-          >
-            <BookOpen className="w-4 h-4" />
-            {t('contracts.list.blocksLibrary', 'Block library')}
+        <div className="flex gap-2">
+          <Link to="/admin/clients/contracts/blocks">
+            <Button variant="outline">
+              <BookOpen className="w-4 h-4 mr-1" />
+              {t('contracts.list.blocksLibrary', 'Block library')}
+            </Button>
           </Link>
-          <Link
-            to="/admin/clients/contracts/new"
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-accent-dark text-white text-sm hover:opacity-90"
-          >
-            <Plus className="w-4 h-4" />
-            {t('contracts.list.new', 'New contract')}
+          <Link to="/admin/clients/contracts/new">
+            <Button>
+              <Plus className="w-4 h-4 mr-1" />
+              {t('contracts.list.new', 'New contract')}
+            </Button>
           </Link>
         </div>
       </div>
@@ -120,98 +113,89 @@ export const ContractsListPage: React.FC = () => {
           {STATUSES.map((s) => {
             const active = statusFilter.includes(s);
             return (
-              <button
-                key={s}
-                type="button"
-                onClick={() => toggleStatus(s)}
+              <button key={s} type="button" onClick={() => toggleStatus(s)}
                 className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                   active
                     ? 'bg-accent-dark text-white border-accent-dark'
                     : 'bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-300 dark:border-neutral-600'
                 }`}
-              >
-                {t(`contracts.status.${s}`, s)}
-              </button>
+              >{t(`contracts.status.${s}`, s)}</button>
             );
           })}
         </div>
 
+        {/* Body of the same card — table or empty state. Matches the
+            single-card layout used by Customers / Quotes / Invoices. */}
         <div className="mt-4">
-          {isLoading ? (
-            <Loading />
-          ) : !data || data.contracts.length === 0 ? (
-            <p className="text-center text-neutral-500 py-8">
-              {t('contracts.list.empty', 'No contracts yet.')}
-            </p>
+          {isLoading ? <Loading /> : !data || data.contracts.length === 0 ? (
+            <p className="text-center text-muted-theme py-8">{t('contracts.list.empty', 'No contracts yet.')}</p>
           ) : (
             <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-neutral-50 dark:bg-neutral-900 text-left">
-                  <tr>
-                    <th className="px-3 py-2">{t('contracts.list.table.number', 'Number')}</th>
-                    <th className="px-3 py-2">{t('contracts.list.table.customer', 'Customer')}</th>
-                    <th className="px-3 py-2">{t('contracts.list.table.title', 'Title')}</th>
-                    <th className="px-3 py-2">{t('contracts.list.table.issueDate', 'Issued')}</th>
-                    <th className="px-3 py-2">{t('contracts.list.table.status', 'Status')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.contracts.map((c) => (
-                    <tr
-                      key={c.id}
-                      className="border-t border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-900/60"
-                    >
-                      <td className="px-3 py-2">
-                        <Link
-                          to={`/admin/clients/contracts/${c.id}`}
-                          className="font-mono text-accent-dark hover:underline"
-                        >
-                          {c.contractNumber}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-2">
-                        {c.customer.companyName
-                          || [c.customer.firstName, c.customer.lastName].filter(Boolean).join(' ')
-                          || c.customer.displayName
-                          || c.customer.email
-                          || '—'}
-                      </td>
-                      <td className="px-3 py-2 max-w-xs truncate">{c.title || '—'}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{c.issueDate ? format(c.issueDate) : '—'}</td>
-                      <td className="px-3 py-2"><StatusBadge status={c.status} /></td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-neutral-50 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
+                    <tr>
+                      <th className="px-3 py-2 text-left">{t('contracts.list.table.number', 'Number')}</th>
+                      <th className="px-3 py-2 text-left">{t('contracts.list.table.customer', 'Customer')}</th>
+                      <th className="px-3 py-2 text-left">{t('contracts.list.table.title', 'Title')}</th>
+                      <th className="px-3 py-2 text-left">{t('contracts.list.table.issueDate', 'Issued')}</th>
+                      <th className="px-3 py-2 text-left">{t('contracts.list.table.status', 'Status')}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {data.contracts.map((c) => (
+                      <tr key={c.id}
+                        className="border-t border-neutral-200 dark:border-neutral-700 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800"
+                        onClick={() => navigate(`/admin/clients/contracts/${c.id}`)}
+                      >
+                        <td className="px-3 py-2 font-mono text-xs">{c.contractNumber}</td>
+                        <td className="px-3 py-2">
+                          {c.customer.companyName
+                            || [c.customer.firstName, c.customer.lastName].filter(Boolean).join(' ')
+                            || c.customer.displayName
+                            || c.customer.email
+                            || '—'}
+                        </td>
+                        <td className="px-3 py-2 truncate max-w-xs">{c.title || '—'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{c.issueDate ? format(c.issueDate) : '—'}</td>
+                        <td className="px-3 py-2">
+                          {/* Per-status palette preserved — green for the
+                              terminal "fully_signed", blue for either-side
+                              signed, amber for sent (awaiting customer),
+                              grey for cancelled, neutral for draft. */}
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                            c.status === 'fully_signed' ? 'bg-green-100 text-green-800'
+                              : c.status === 'signed_by_customer' || c.status === 'signed_by_admin' ? 'bg-blue-100 text-blue-800'
+                              : c.status === 'sent' ? 'bg-amber-100 text-amber-800'
+                              : c.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
+                              : 'bg-neutral-100 text-neutral-700'
+                          }`}>{t(`contracts.status.${c.status}`, c.status)}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {totalPages > 1 && (
+                <div className="flex justify-between items-center px-3 py-2 border-t border-neutral-200 dark:border-neutral-700 text-sm">
+                  <span className="text-muted-theme">
+                    {t('contracts.list.pagination', 'Page {{page}} of {{total}} · {{count}} contracts', {
+                      page, total: totalPages, count: data.total,
+                    })}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                      {t('common.previous', 'Previous')}
+                    </Button>
+                    <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                      {t('common.next', 'Next')}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
-
-        {data && data.total > data.pageSize && (
-          <div className="mt-4 flex items-center justify-between text-sm">
-            <span>
-              {t('contracts.list.pageOf', 'Page {{page}} of {{total}}', { page, total: totalPages })}
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1 rounded border border-neutral-300 dark:border-neutral-600 disabled:opacity-50"
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="px-3 py-1 rounded border border-neutral-300 dark:border-neutral-600 disabled:opacity-50"
-              >
-                ›
-              </button>
-            </div>
-          </div>
-        )}
       </Card>
     </div>
   );

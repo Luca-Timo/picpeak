@@ -283,6 +283,12 @@ async function listInvoices({ filters = {}, sort = 'newest', page = 1, pageSize 
   return await withRetry(async () => {
     let query = db('invoices')
       .leftJoin('customer_accounts', 'invoices.customer_account_id', 'customer_accounts.id')
+      // Surface the source contract's human contract_number (mirror of
+      // the src_quote JOIN in getInvoiceById) so list rows + detail
+      // page can render "From contract LBM-C-2026-0010" instead of
+      // the bare DB id "#10". LEFT join — most invoices have no
+      // source contract.
+      .leftJoin('contracts as src_contract', 'invoices.source_contract_id', 'src_contract.id')
       .select(
         'invoices.*',
         'customer_accounts.email as customer_email',
@@ -294,6 +300,7 @@ async function listInvoices({ filters = {}, sort = 'newest', page = 1, pageSize 
         // round-trip.
         'customer_accounts.password_hash as customer_password_hash',
         'customer_accounts.company_name as customer_company_name',
+        'src_contract.contract_number as source_contract_number',
       );
 
     if (Array.isArray(filters.status) && filters.status.length > 0) {
@@ -372,6 +379,10 @@ async function getInvoiceById(id) {
       // the numeric id ("#6"). LEFT join — most invoices come from
       // a quote conversion but standalone invoices don't have one.
       .leftJoin('quotes as src_quote', 'invoices.source_quote_id', 'src_quote.id')
+      // Migration 130 lineage: source contract's human contract_number
+      // so the detail view shows "From contract LBM-C-2026-0010"
+      // instead of "#10". Same LEFT-join shape as src_quote.
+      .leftJoin('contracts as src_contract', 'invoices.source_contract_id', 'src_contract.id')
       // Self-joins for Storno lineage so the detail view can render
       // "Cancelled by Stornorechnung S-XXXX" / "This Stornorechnung
       // cancels invoice R-XXXX" using the human invoice_number rather
@@ -392,6 +403,7 @@ async function getInvoiceById(id) {
         // and only exposes the boolean.
         'customer_accounts.password_hash as customer_password_hash',
         'src_quote.quote_number as source_quote_number',
+        'src_contract.contract_number as source_contract_number',
         'cancels_inv.invoice_number as cancels_invoice_number',
         'cancellation_storno.invoice_number as cancellation_storno_number',
       )
