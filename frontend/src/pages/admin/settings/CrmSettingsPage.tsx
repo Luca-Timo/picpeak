@@ -48,6 +48,15 @@ const SETTING_KEYS = [
   'crm_contracts_require_drawn_signature',
   'crm_contracts_allow_pdf_upload',
   'crm_contracts_store_ip',
+  // Dashboard CRM-overview tile visibility (per-tile). Default ON;
+  // explicit false hides the tile. Stored as one boolean per tile so
+  // admins can mix-and-match — e.g. someone who only bills hourly
+  // hides the quotes pipeline + the per-status invoice breakdown
+  // but keeps the revenue / outstanding tiles.
+  'crm_overview_show_revenue',
+  'crm_overview_show_outstanding',
+  'crm_overview_show_quotes',
+  'crm_overview_show_invoices',
 ];
 
 export const CrmSettingsPage: React.FC = () => {
@@ -315,6 +324,25 @@ export const CrmSettingsPage: React.FC = () => {
           {t('crmSettings.crm_contracts_number_format.help',
             'Supported tokens: {YEAR}, {MONTH}, {SEQ:04d}. Example: LBM-C-{YEAR}-{SEQ:04d} → LBM-C-2026-0001.')}
         </p>
+      </Card>
+
+      {/* Dashboard CRM overview — per-tile visibility. All settings
+          default ON; the checkbox shows checked when the value is
+          unset, matching the contracts card's pattern. The dashboard
+          component reads these via /public/settings and hides the
+          matching tile when the value is explicit false. */}
+      <Card>
+        <h3 className="font-semibold mb-1">
+          {t('crmSettings.section.dashboardOverview', 'Dashboard CRM overview')}
+        </h3>
+        <p className="text-xs text-neutral-500 mb-3">
+          {t('crmSettings.section.dashboardOverviewHint',
+            'Hide CRM overview tiles on the admin dashboard. All tiles render by default; uncheck to hide.')}
+        </p>
+        {checkboxDefaultOn('crm_overview_show_revenue', 'Revenue tiles (30 / 90 / 365 days)')}
+        {checkboxDefaultOn('crm_overview_show_outstanding', 'Outstanding payments tile')}
+        {checkboxDefaultOn('crm_overview_show_quotes', 'Quotes pipeline (per-status)')}
+        {checkboxDefaultOn('crm_overview_show_invoices', 'Invoices pipeline (per-status)')}
       </Card>
     </div>
   );
