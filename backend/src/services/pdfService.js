@@ -1953,6 +1953,110 @@ function renderContractToBuffer(context) {
             // auto-paginated — sync y to the new doc.y for the next
             // block.
             if (doc.y < y) y = doc.y;
+
+            // Special-case: when the block is the
+            // `quote_line_items_table` system block AND the contract
+            // was generated from a quote, draw a real formatted line-
+            // items table immediately after the body text. Columns
+            // mirror drawLineItems (#, Qty, Description, Unit, Total)
+            // but inlined here because the contract document has no
+            // `lineItems` ctx the standalone helper expects.
+            if (
+              block.slug === 'quote_line_items_table'
+              && ctx.quoteLineItems
+              && ctx.quoteLineItems.length > 0
+            ) {
+              const currency = (ctx.quoteCurrency || 'CHF').toUpperCase();
+              // Column widths sum to PAGE.contentWidth (515.28). Same
+              // shape as drawLineItems' no-discount variant. The desc
+              // column is widest; numeric columns stay narrow + right-
+              // aligned.
+              const widths = [30, 275, 55, 70, 85];
+              const colX = [PAGE.marginLeft];
+              for (let i = 1; i < widths.length; i++) colX[i] = colX[i - 1] + widths[i - 1];
+              const headers = [
+                t(locale, 'table_pos'),
+                t(locale, 'table_description'),
+                t(locale, 'table_qty'),
+                t(locale, 'table_unit_price'),
+                t(locale, 'table_line_total'),
+              ];
+              const headerAligns = ['left', 'left', 'right', 'right', 'right'];
+
+              const ROW_MIN_HEIGHT = 18;
+              const PAD_X = 4;
+
+              ensureSpace(ROW_MIN_HEIGHT + 4);
+
+              // Header row — bold + bottom border.
+              doc.font(doc._fonts.bold).fontSize(10).fillColor('#000');
+              const headerStartY = y;
+              let headerMaxBottom = y;
+              for (let i = 0; i < headers.length; i++) {
+                doc.text(headers[i], colX[i] + PAD_X, y + 3, {
+                  width: widths[i] - PAD_X * 2,
+                  align: headerAligns[i],
+                });
+                if (doc.y > headerMaxBottom) headerMaxBottom = doc.y;
+              }
+              const headerBottom = Math.max(headerMaxBottom, headerStartY + ROW_MIN_HEIGHT);
+              doc.strokeColor('#000').lineWidth(1)
+                .moveTo(PAGE.marginLeft, headerBottom)
+                .lineTo(PAGE.marginLeft + PAGE.contentWidth, headerBottom)
+                .stroke();
+              y = headerBottom + 1;
+
+              // Data rows. Sub-items (parent_position != null) render
+              // with a "↳ " prefix + 8pt indent in the description
+              // column and an empty position column. Numeric values
+              // come from minor-unit BigInts via formatMinor.
+              doc.font(doc._fonts.body).fontSize(10).fillColor('#000');
+              let topLevelCount = 0;
+              for (const li of ctx.quoteLineItems) {
+                const isSub = li.parent_position != null;
+                const posLabel = isSub ? '' : String(++topLevelCount);
+                const descPrefix = isSub ? '\u21B3 ' : '';
+                const descIndent = isSub ? 8 : 0;
+                const qtyText = (() => {
+                  const q = Number(li.quantity || 0);
+                  return Number.isInteger(q) ? String(q) : String(q);
+                })();
+                const unitText = formatMinor(li.unit_price_minor, currency, 'de-CH');
+                const lineTotalText = formatMinor(li.line_total_minor, currency, 'de-CH');
+
+                const cells = [
+                  { text: posLabel, width: widths[0], align: 'left', x: colX[0] },
+                  { text: `${descPrefix}${li.description || ''}`, width: widths[1] - descIndent, align: 'left', x: colX[1] + descIndent },
+                  { text: qtyText, width: widths[2], align: 'right', x: colX[2] },
+                  { text: unitText, width: widths[3], align: 'right', x: colX[3] },
+                  { text: lineTotalText, width: widths[4], align: 'right', x: colX[4] },
+                ];
+
+                // Measure tallest cell so the row's bottom is the max
+                // of all column heights + a minimum row height.
+                ensureSpace(ROW_MIN_HEIGHT + 2);
+                const rowStartY = y;
+                let rowMaxBottom = y;
+                for (const c of cells) {
+                  doc.text(c.text, c.x + PAD_X, y + 3, {
+                    width: c.width - PAD_X * 2,
+                    align: c.align,
+                  });
+                  if (doc.y > rowMaxBottom) rowMaxBottom = doc.y;
+                }
+                const rowBottom = Math.max(rowMaxBottom, rowStartY + ROW_MIN_HEIGHT);
+                // Thin grey divider under each row.
+                doc.strokeColor('#cccccc').lineWidth(0.5)
+                  .moveTo(PAGE.marginLeft, rowBottom)
+                  .lineTo(PAGE.marginLeft + PAGE.contentWidth, rowBottom)
+                  .stroke();
+                y = rowBottom + 1;
+              }
+
+              y += 10;
+              doc.y = y;
+              doc.fillColor('#000');
+            }
           }
 
           y += 6;

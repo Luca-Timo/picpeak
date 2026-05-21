@@ -132,6 +132,34 @@ exports.up = async function(knex) {
       }
     }
   }
+
+  // New system block for quote line-items table — pulled in by
+  // contractService.buildRenderContext when a contract has a source
+  // quote, then rendered as a real PDF table by renderContractToBuffer
+  // after the body text. Idempotent on slug.
+  if (await knex.schema.hasTable('contract_blocks')) {
+    const existing = await knex('contract_blocks')
+      .where('slug', 'quote_line_items_table').first();
+    if (!existing) {
+      const maxOrderRow = await knex('contract_blocks')
+        .where('section', 'scope')
+        .max('display_order as max').first();
+      const nextOrder = (maxOrderRow?.max || 0) + 1;
+      await knex('contract_blocks').insert({
+        slug: 'quote_line_items_table',
+        section: 'scope',
+        name: 'Quote line items',
+        description: 'Auto-inserts the source quote\'s line items as a table. Body text appears above the table.',
+        body_text: 'Service items per quote {{source_quote_number}}:',
+        body_text_de: 'Leistungspositionen gemäß Angebot {{source_quote_number}}:',
+        is_system: true,
+        is_active: true,
+        display_order: nextOrder,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+    }
+  }
 };
 
 exports.down = async function(knex) {
