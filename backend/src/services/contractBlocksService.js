@@ -13,9 +13,77 @@
  */
 
 const { db, withRetry } = require('../database/db');
+const logger = require('../utils/logger');
 const { AppError } = require('../utils/errors');
 
 const ALLOWED_SECTIONS = ['basics', 'scope', 'privacy', 'commercial', 'nda', 'closing'];
+
+/**
+ * System blocks added to the seed AFTER migration 131 was already
+ * deployed to beta. knex won't re-run an already-applied migration,
+ * so the new system blocks listed here need a runtime self-heal —
+ * same pattern as `ensureContractEmailTemplatesSeeded` for templates.
+ *
+ * Each entry must carry every column the row needs. `slug` is the
+ * uniqueness key; the seeder is no-op when the row already exists.
+ * EN/DE bodies only — non-EN/DE locales stay null until the admin
+ * fills them in via the block library UI.
+ */
+const RUNTIME_SEEDED_BLOCKS = [
+  {
+    slug: 'quote_line_items_table',
+    section: 'scope',
+    name: 'Quote line items',
+    description: 'Auto-inserts the source quote\'s line items as a table. Body text appears above the table.',
+    body_text: 'Service items per quote {{source_quote_number}}:',
+    body_text_de: 'Leistungspositionen gemäß Angebot {{source_quote_number}}:',
+    is_system: true,
+    is_active: true,
+  },
+];
+
+// Module-scope flag so the seed check runs once per process. The
+// underlying queries are still idempotent — this just saves the round
+// trip on every listBlocks / createContract call.
+let _systemBlocksSeeded = false;
+
+/**
+ * Self-heal: insert any RUNTIME_SEEDED_BLOCKS entries that don't yet
+ * exist in contract_blocks. Called from listBlocks + createContract
+ * paths so new system blocks appear automatically on installs that
+ * applied an earlier version of migration 131. Idempotent.
+ */
+async function ensureSystemBlocksSeeded() {
+  if (_systemBlocksSeeded) return [];
+  if (!(await db.schema.hasTable('contract_blocks'))) return [];
+  const newlyInserted = [];
+  for (const def of RUNTIME_SEEDED_BLOCKS) {
+    try {
+      const existing = await db('contract_blocks').where({ slug: def.slug }).first();
+      if (existing) continue;
+      // display_order = current MAX in the target section + 1 so the
+      // new block sorts to the end. Matches the migration's behaviour.
+      const maxOrderRow = await db('contract_blocks')
+        .where({ section: def.section })
+        .max('display_order as max').first();
+      const nextOrder = (maxOrderRow?.max || 0) + 1;
+      await db('contract_blocks').insert({
+        ...def,
+        display_order: nextOrder,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+      newlyInserted.push(def.slug);
+      logger.info(`Self-healed missing system contract block at runtime: ${def.slug}`);
+    } catch (err) {
+      logger.error(`Failed to seed system contract block ${def.slug}`, { message: err.message });
+      // Keep _systemBlocksSeeded=false so the next call retries.
+      return newlyInserted;
+    }
+  }
+  _systemBlocksSeeded = true;
+  return newlyInserted;
+}
 
 function ensureSection(section) {
   if (!ALLOWED_SECTIONS.includes(section)) {
@@ -42,6 +110,11 @@ function slugify(name) {
 }
 
 async function listBlocks({ section, includeInactive = false } = {}) {
+  // Self-heal before reading so the new system block (added to the
+  // already-deployed migration 131 in feat/crm) appears in the
+  // library UI immediately on first GET, without needing a fresh
+  // install. Safe to call repeatedly — guarded by _systemBlocksSeeded.
+  await ensureSystemBlocksSeeded();
   return await withRetry(async () => {
     let q = db('contract_blocks').select('*');
     if (section) q = q.where({ section });
@@ -209,5 +282,6 @@ module.exports = {
   createBlock,
   updateBlock,
   deleteBlock,
+  ensureSystemBlocksSeeded,
   ALLOWED_SECTIONS,
 };

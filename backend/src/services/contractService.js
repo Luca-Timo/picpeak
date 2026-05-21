@@ -44,6 +44,7 @@ const pdfService = require('./pdfService');
 const pdfStampService = require('./pdfStampService');
 const emailProcessor = require('./emailProcessor');
 const { ensureContractEmailTemplatesSeeded } = require('./contractEmailTemplates');
+const { ensureSystemBlocksSeeded } = require('./contractBlocksService');
 const { getFrontendBaseUrl } = require('../utils/frontendUrl');
 
 const SECTIONS_ORDER = ['basics', 'scope', 'privacy', 'commercial', 'nda', 'closing'];
@@ -777,6 +778,12 @@ async function getContractById(id) {
  * new contract.
  */
 async function createContract(payload, adminId) {
+  // Self-heal: ensure runtime-seeded system blocks (e.g. the
+  // quote_line_items_table added after migration 131 was deployed)
+  // exist before we copy active system blocks into the new contract's
+  // inclusion list. Idempotent — only fires if rows are missing.
+  await ensureSystemBlocksSeeded();
+
   const customer = await db('customer_accounts').where({ id: payload.customerAccountId }).first();
   ensureCustomerActive(customer);
 
@@ -1464,6 +1471,12 @@ async function attachSignedPdfUpload(contractId, filePath, uploaderRole) {
  * admin can't accidentally double-spend the quote.
  */
 async function createFromQuote(quoteId, adminId) {
+  // Same self-heal as createContract — the quote-conversion path seeds
+  // the contract with every active system block, and the new
+  // quote_line_items_table block needs to be present for it to land
+  // in the default inclusion list.
+  await ensureSystemBlocksSeeded();
+
   const quote = await db('quotes').where({ id: quoteId }).first();
   if (!quote) throw new AppError('Quote not found', 404);
   if (quote.status !== 'accepted') {
