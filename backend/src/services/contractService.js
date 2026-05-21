@@ -192,6 +192,17 @@ async function buildPlaceholderContext(contract, customer) {
   const skontoPercentDefault = await getAppSetting('crm_invoices_skonto_percent_default');
   const skontoWithinDaysDefault = ensureInt(await getAppSetting('crm_invoices_skonto_business_days')) || 5;
 
+  // {{source_quote_number}} placeholder — substituted into the body of
+  // the `quote_line_items_table` system block (and any admin-authored
+  // block that wants to reference the quote). Empty string when the
+  // contract wasn't generated from a quote.
+  let sourceQuoteNumber = '';
+  if (contract.source_quote_id) {
+    const srcQuote = await db('quotes').where({ id: contract.source_quote_id })
+      .select('quote_number').first();
+    if (srcQuote) sourceQuoteNumber = srcQuote.quote_number || '';
+  }
+
   const customerName = customer
     ? (customer.company_name
         || [customer.first_name, customer.last_name].filter(Boolean).join(' ')
@@ -220,6 +231,7 @@ async function buildPlaceholderContext(contract, customer) {
     currency: (profile.default_currency || 'CHF').toUpperCase(),
     issuer_company_name: issuerCompany,
     issuer_address: issuerAddress,
+    source_quote_number: sourceQuoteNumber,
   };
 }
 
@@ -435,6 +447,28 @@ async function buildRenderContext(contract, inclusions) {
   const profile = (await businessProfileService.getProfile()).profile || {};
   const placeholders = await buildPlaceholderContext(contract, customer);
 
+  // Pull source-quote line items when this contract was generated from a
+  // quote. Surfaced on the render context so the renderer can draw a real
+  // table at the location of the `quote_line_items_table` system block.
+  // Sub-items keep their parent's position via the LEFT JOIN so the
+  // renderer can indent them with a `↳` prefix.
+  let quoteLineItems = [];
+  let quoteCurrency = null;
+  let quoteNumber = null;
+  if (contract.source_quote_id) {
+    const srcQuote = await db('quotes').where({ id: contract.source_quote_id })
+      .select('quote_number', 'currency').first();
+    if (srcQuote) {
+      quoteCurrency = srcQuote.currency;
+      quoteNumber = srcQuote.quote_number;
+      quoteLineItems = await db('quote_line_items as li')
+        .leftJoin('quote_line_items as parent', 'parent.id', 'li.parent_line_item_id')
+        .where('li.quote_id', contract.source_quote_id)
+        .orderBy('li.position', 'asc')
+        .select('li.*', 'parent.position as parent_position');
+    }
+  }
+
   const locale = contract.language || customer?.preferred_language || profile.default_locale || 'de';
 
   // Group inclusions by section + render each block body.
@@ -467,6 +501,7 @@ async function buildRenderContext(contract, inclusions) {
     const rendered = renderTemplatedBody(sourceBody, placeholders)
       .replace(/^\s*\*\*[^*\n]+\*\*\s*\n+/, '');
     blocksBySection[row.section].push({
+      slug: row.block_slug || null,
       name: row.block_name,
       section: row.section,
       body: rendered,
@@ -564,6 +599,13 @@ async function buildRenderContext(contract, inclusions) {
     sections: SECTIONS_ORDER
       .map((section) => ({ section, blocks: blocksBySection[section] }))
       .filter((s) => s.blocks.length > 0),
+    // Source-quote line items, surfaced at the top level so the PDF
+    // renderer can draw a formatted table where the
+    // `quote_line_items_table` system block is included. Empty array
+    // when the contract has no source quote.
+    quoteLineItems,
+    quoteCurrency,
+    quoteSourceNumber: quoteNumber,
     // Signature evidence (used by the PDF renderer to stamp signatures
     // into the closing section when present).
     signatures: {
