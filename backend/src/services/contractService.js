@@ -488,9 +488,24 @@ async function buildRenderContext(contract, inclusions) {
     // The inclusion row carries the JOINED block columns aliased with
     // a `block_` prefix (see getContractById). Pre-send drafts have
     // null snapshots, so fall through to the live block body.
+    // Migration 131 added ru/pt/nl/fr columns. The body resolver
+    // picks the locale-matching column first, falls back through
+    // DE → EN, so an admin can stage translations one locale at a
+    // time without breaking contracts in other languages.
     const bodyEn = row.body_text_snapshot || row.block_body_text || '';
     const bodyDe = row.body_text_de_snapshot || row.block_body_text_de || '';
-    const sourceBody = locale === 'de' ? (bodyDe || bodyEn) : (bodyEn || bodyDe);
+    const bodyRu = row.block_body_text_ru || '';
+    const bodyPt = row.block_body_text_pt || '';
+    const bodyNl = row.block_body_text_nl || '';
+    const bodyFr = row.block_body_text_fr || '';
+    const localeBody = ({
+      de: bodyDe,
+      ru: bodyRu,
+      pt: bodyPt,
+      nl: bodyNl,
+      fr: bodyFr,
+    })[locale] || '';
+    const sourceBody = localeBody || bodyEn || bodyDe;
     // Substitute placeholders, then strip any leading `**Title**\n`
     // line — the block's `name` field is already rendered as a bold
     // sub-heading by the PDF/public layouts, so a bold first line in
@@ -735,6 +750,17 @@ async function getContractById(id) {
         'blk.description as block_description',
         'blk.body_text as block_body_text',
         'blk.body_text_de as block_body_text_de',
+        // Migration 131 — locale variants. Pulled with column-existence
+        // guard so installs that haven't run migration 131 still load
+        // contracts (just without the new columns).
+        ...(await db.schema.hasColumn('contract_blocks', 'body_text_ru')
+          ? ['blk.body_text_ru as block_body_text_ru'] : []),
+        ...(await db.schema.hasColumn('contract_blocks', 'body_text_pt')
+          ? ['blk.body_text_pt as block_body_text_pt'] : []),
+        ...(await db.schema.hasColumn('contract_blocks', 'body_text_nl')
+          ? ['blk.body_text_nl as block_body_text_nl'] : []),
+        ...(await db.schema.hasColumn('contract_blocks', 'body_text_fr')
+          ? ['blk.body_text_fr as block_body_text_fr'] : []),
         'blk.is_system as block_is_system',
       );
     return { contract, inclusions };

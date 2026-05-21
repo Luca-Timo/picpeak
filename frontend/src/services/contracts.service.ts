@@ -50,6 +50,13 @@ export interface ContractBlock {
   description: string | null;
   bodyText: string;
   bodyTextDe: string | null;
+  /** Migration 131 — locale-variant bodies. Null until the admin
+   *  fills them in via the block library editor. Render context falls
+   *  back EN when the contract's locale has no translation. */
+  bodyTextRu: string | null;
+  bodyTextPt: string | null;
+  bodyTextNl: string | null;
+  bodyTextFr: string | null;
   isSystem: boolean;
   isActive: boolean;
   displayOrder: number;
@@ -180,6 +187,10 @@ export interface ContractBlockCreatePayload {
   name: string;
   bodyText: string;
   bodyTextDe?: string | null;
+  bodyTextRu?: string | null;
+  bodyTextPt?: string | null;
+  bodyTextNl?: string | null;
+  bodyTextFr?: string | null;
   description?: string | null;
   displayOrder?: number;
   isActive?: boolean;
