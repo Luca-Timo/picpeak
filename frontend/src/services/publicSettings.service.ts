@@ -51,6 +51,12 @@ export interface PublicSettings {
   /** '12h' or '24h' — controls how times are rendered in admin +
    *  customer views. Storage is always 24h; only display toggles. */
   general_time_format?: '12h' | '24h';
+  /** Dashboard CRM-overview tile visibility. All default true; only
+   *  explicit false hides the matching tile. */
+  crm_overview_show_revenue?: boolean;
+  crm_overview_show_outstanding?: boolean;
+  crm_overview_show_quotes?: boolean;
+  crm_overview_show_invoices?: boolean;
   enable_recaptcha: boolean;
   recaptcha_site_key: string | null;
   maintenance_mode: boolean;

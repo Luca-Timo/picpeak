@@ -412,7 +412,19 @@ router.get('/crm-stats', adminAuth, async (req, res) => {
 
     if (canSeeBills) {
       try {
-        const rows = await db('invoices').select('status').count('id as count').groupBy('status');
+        // Same exclusions as the outstanding calc — Stornorechnungen
+        // and monthly drafts skew the per-status counts (Sent
+        // includes both real outstanding invoices and credit-note
+        // rows; Scheduled includes mid-period accumulators that the
+        // admin doesn't think of as "queued invoices" yet).
+        const rows = await db('invoices')
+          .andWhere(function() {
+            this.whereNot('kind', 'storno').orWhereNull('kind');
+          })
+          .andWhere(function() {
+            this.where('is_monthly_draft', false).orWhereNull('is_monthly_draft');
+          })
+          .select('status').count('id as count').groupBy('status');
         for (const r of rows) {
           if (r.status in invoiceCounts) invoiceCounts[r.status] = Number(r.count) || 0;
         }
@@ -420,11 +432,15 @@ router.get('/crm-stats', adminAuth, async (req, res) => {
         // Revenue windows: sum of `paid_amount_minor` for invoices
         // marked PAID where paid_at falls inside the window. Using
         // paid_amount (not total) so partial payments are tracked
-        // accurately.
+        // accurately. Stornos excluded — they're never status='paid'
+        // in normal flow but the guard is defensive.
         const winSum = async (cutoff) => {
           const row = await db('invoices')
             .where('status', 'paid')
             .where('paid_at', '>=', cutoff)
+            .andWhere(function() {
+              this.whereNot('kind', 'storno').orWhereNull('kind');
+            })
             .sum('paid_amount_minor as total')
             .first();
           return Number(row?.total || 0);
@@ -437,8 +453,25 @@ router.get('/crm-stats', adminAuth, async (req, res) => {
         // paid (sent + overdue). Outstanding = total - paid. We sum
         // the gap per row rather than `total - sum(paid)` so partial
         // payments contribute correctly.
+        //
+        // Exclusions:
+        //   - kind='storno' rows. Stornorechnungen carry status='sent'
+        //     and total_amount_minor < 0; without the filter they slip
+        //     through the status check and inflate `invoiceCount` by 1
+        //     per Storno (the per-row gap math correctly returns 0 for
+        //     the amount, but the row still counts). They're
+        //     accounting-side credit notes, not money the customer
+        //     owes.
+        //   - is_monthly_draft=true rows. Drafts ship via the monthly
+        //     cycle and aren't owed money until they leave draft state.
         const openRows = await db('invoices')
           .whereIn('status', ['sent', 'overdue'])
+          .andWhere(function() {
+            this.whereNot('kind', 'storno').orWhereNull('kind');
+          })
+          .andWhere(function() {
+            this.where('is_monthly_draft', false).orWhereNull('is_monthly_draft');
+          })
           .select('total_amount_minor', 'paid_amount_minor', 'late_fee_amount_minor');
         for (const r of openRows) {
           const total = Number(r.total_amount_minor || 0) + Number(r.late_fee_amount_minor || 0);

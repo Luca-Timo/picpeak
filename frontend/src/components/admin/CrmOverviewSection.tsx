@@ -24,6 +24,7 @@ import {
 import { Card } from '../common';
 import { fetchCrmOverview, type CrmOverviewStats } from '../../services/bills.service';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
+import { usePublicSettings } from '../../hooks/usePublicSettings';
 
 function formatMoney(amountMinor: number, currency: string, locale = 'de-CH') {
   return new Intl.NumberFormat(locale, {
@@ -35,6 +36,7 @@ function formatMoney(amountMinor: number, currency: string, locale = 'de-CH') {
 export const CrmOverviewSection: React.FC = () => {
   const { t } = useTranslation();
   const { flags } = useFeatureFlags();
+  const { data: publicSettings } = usePublicSettings();
 
   // Outer gate: hide the entire CRM block when the parent feature
   // flag is off. The query is also skipped so we don't hit the
@@ -44,6 +46,20 @@ export const CrmOverviewSection: React.FC = () => {
   const billsOn   = clientsOn && !!flags.bills;
   const anyCrm    = quotesOn || billsOn;
 
+  // Per-tile visibility (admin pref in Settings → CRM behaviour). All
+  // default true; only explicit false hides the matching tile. We
+  // resolve via `!== false` so the very first render — before
+  // publicSettings finishes loading — shows everything, then settles.
+  const showRevenue     = publicSettings?.crm_overview_show_revenue !== false;
+  const showOutstanding = publicSettings?.crm_overview_show_outstanding !== false;
+  const showQuotes      = publicSettings?.crm_overview_show_quotes !== false;
+  const showInvoices    = publicSettings?.crm_overview_show_invoices !== false;
+  // Compute which sub-sections actually render so we can skip the
+  // outer block entirely when the admin hid everything.
+  const billsRevenueRow = billsOn && (showRevenue || showOutstanding);
+  const quotesBlock     = quotesOn && showQuotes;
+  const invoicesBlock   = billsOn && showInvoices;
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['crm-overview'],
     queryFn: () => fetchCrmOverview(),
@@ -51,6 +67,8 @@ export const CrmOverviewSection: React.FC = () => {
   });
 
   if (!anyCrm) return null;
+  // Admin hid every CRM tile — render nothing, including the heading.
+  if (!billsRevenueRow && !quotesBlock && !invoicesBlock) return null;
   if (isLoading) return null;
   if (isError || !data) {
     // Surface a tiny inline notice when the section is enabled by
@@ -80,38 +98,47 @@ export const CrmOverviewSection: React.FC = () => {
         {t('crmOverview.title', 'CRM overview')}
       </h2>
 
-      {/* Revenue + outstanding (bills feature only) */}
-      {billsOn && (
+      {/* Revenue + outstanding (bills feature only). Revenue trio and
+          outstanding tile are gated independently — admins who only
+          want the outstanding figure (or vice versa) can hide either
+          via Settings → CRM behaviour. */}
+      {billsRevenueRow && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard
-            icon={<TrendingUp className="w-5 h-5" />}
-            label={t('crmOverview.revenue.month', 'Revenue · last 30 days')}
-            value={formatMoney(d.revenue.monthMinor, cur)}
-          />
-          <StatCard
-            icon={<TrendingUp className="w-5 h-5" />}
-            label={t('crmOverview.revenue.quarter', 'Revenue · last 90 days')}
-            value={formatMoney(d.revenue.quarterMinor, cur)}
-          />
-          <StatCard
-            icon={<TrendingUp className="w-5 h-5" />}
-            label={t('crmOverview.revenue.year', 'Revenue · last 365 days')}
-            value={formatMoney(d.revenue.yearMinor, cur)}
-          />
-          <StatCard
-            icon={<Wallet className="w-5 h-5 text-red-600" />}
-            label={t('crmOverview.outstanding', 'Outstanding payments')}
-            value={formatMoney(d.outstanding.totalMinor, cur)}
-            sub={t('crmOverview.outstandingSub', '{{count}} invoice(s) unpaid', {
-              count: d.outstanding.invoiceCount,
-            })}
-            to="/admin/clients/bills?unpaidOnly=true"
-          />
+          {showRevenue && (
+            <>
+              <StatCard
+                icon={<TrendingUp className="w-5 h-5" />}
+                label={t('crmOverview.revenue.month', 'Revenue · last 30 days')}
+                value={formatMoney(d.revenue.monthMinor, cur)}
+              />
+              <StatCard
+                icon={<TrendingUp className="w-5 h-5" />}
+                label={t('crmOverview.revenue.quarter', 'Revenue · last 90 days')}
+                value={formatMoney(d.revenue.quarterMinor, cur)}
+              />
+              <StatCard
+                icon={<TrendingUp className="w-5 h-5" />}
+                label={t('crmOverview.revenue.year', 'Revenue · last 365 days')}
+                value={formatMoney(d.revenue.yearMinor, cur)}
+              />
+            </>
+          )}
+          {showOutstanding && (
+            <StatCard
+              icon={<Wallet className="w-5 h-5 text-red-600" />}
+              label={t('crmOverview.outstanding', 'Outstanding payments')}
+              value={formatMoney(d.outstanding.totalMinor, cur)}
+              sub={t('crmOverview.outstandingSub', '{{count}} invoice(s) unpaid', {
+                count: d.outstanding.invoiceCount,
+              })}
+              to="/admin/clients/bills?unpaidOnly=true"
+            />
+          )}
         </div>
       )}
 
       {/* Quotes pipeline (quotes feature only) */}
-      {quotesOn && (
+      {quotesBlock && (
         <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-base font-semibold flex items-center gap-2">
@@ -164,7 +191,7 @@ export const CrmOverviewSection: React.FC = () => {
       )}
 
       {/* Invoices pipeline (bills feature only) */}
-      {billsOn && (
+      {invoicesBlock && (
         <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-base font-semibold flex items-center gap-2">
