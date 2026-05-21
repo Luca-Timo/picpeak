@@ -213,7 +213,12 @@ export const BlockLibraryPage: React.FC = () => {
   const setCurrentBody = (v: string) => setBodies((prev) => ({ ...prev, [editingLang]: v }));
 
   return (
-    <div className="container py-6">
+    // No `container py-6` wrapper — this page is rendered inside the
+    // System Settings shell, which already provides outer padding +
+    // its own width. The email-templates tab next door uses the same
+    // bare layout; adding our own container made the contracts grid
+    // measurably narrower than the email grid.
+    <div>
       <div className="mb-4 flex items-center gap-3 flex-wrap">
         <Link
           to="/admin/clients/contracts"
@@ -411,36 +416,36 @@ export const BlockLibraryPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-4">
-                  {/* Section + Name side-by-side. Section locked when
-                      editing a system block — matches the old dialog
-                      behaviour. */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                        {t('contracts.blocks.dialog.section', 'Section')}
-                      </label>
-                      <select
-                        value={section}
-                        onChange={(e) => setSection(e.target.value as ContractBlockSection)}
-                        disabled={selection.mode === 'edit' && selection.block.isSystem}
-                        className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm disabled:opacity-50"
-                      >
-                        {CONTRACT_SECTIONS.map((s) => (
-                          <option key={s} value={s}>{t(`contracts.sections.${s}`, s)}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                        {t('contracts.blocks.dialog.name', 'Name')}
-                      </label>
-                      <input
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
-                      />
-                    </div>
+                  {/* Name above Section, stacked vertically — Name is
+                      the primary identifier and reads best at full
+                      width; Section is a one-of-six dropdown that
+                      doesn't need to share row space. Section stays
+                      locked when editing a system block. */}
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                      {t('contracts.blocks.dialog.name', 'Name')}
+                    </label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                      {t('contracts.blocks.dialog.section', 'Section')}
+                    </label>
+                    <select
+                      value={section}
+                      onChange={(e) => setSection(e.target.value as ContractBlockSection)}
+                      disabled={selection.mode === 'edit' && selection.block.isSystem}
+                      className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm disabled:opacity-50"
+                    >
+                      {CONTRACT_SECTIONS.map((s) => (
+                        <option key={s} value={s}>{t(`contracts.sections.${s}`, s)}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
