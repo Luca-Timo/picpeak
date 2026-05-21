@@ -1,30 +1,32 @@
 /**
  * Admin → Contract block library.
  *
- * Two-column layout (modelled on EmailConfigPage):
- *   - Left sidebar: "+ New block" button at the top, then blocks
- *     grouped by section. Active blocks render bright; inactive
- *     dim with opacity-50. System blocks carry a small badge.
- *   - Right panel: editor for the currently-selected block (or the
- *     new-block form when "+ New block" was clicked). EN/DE bodies
- *     swap via a language tab inside the editor; the active toggle
- *     fires an update immediately on flip.
+ * Two-column layout intentionally mirroring EmailConfigPage's Templates
+ * tab so admins navigate one shape across all template-style editors:
+ *   - Left: sticky sidebar with sections (basics / scope / privacy /
+ *     commercial / nda / closing) as uppercase headings, blocks listed
+ *     below each, "+ New block" button at the top. Selected block
+ *     uses `tile-selected`; non-selected blocks use the same
+ *     `bg-neutral-50 dark:bg-neutral-700` palette as the email tabs.
+ *     Inactive blocks render `opacity-50`.
+ *   - Right: edit panel with language tabs (EN/DE/RU/PT/NL/FR) at the
+ *     top, then Section + Name + Description + Body fields. Active
+ *     toggle + Save + Delete actions. New-block mode renders the same
+ *     form with empty values and an enabled Section dropdown.
  *
- * Admin can:
- *   - Edit any block (body text fully editable for system blocks too,
- *     so the lawyer-reviewed version replaces the seeded example in
- *     place)
- *   - Toggle blocks active/inactive
- *   - Create new admin-authored blocks
- *   - Delete admin-authored blocks (system blocks refuse delete)
+ * Schema: contract_blocks carries body_text + body_text_<locale> for
+ * each of the six locales (migration 130 seeded EN+DE; migration 131
+ * added RU/PT/NL/FR as nullable). Translation completeness shown in
+ * the sidebar pill (e.g. "3/6") matches the email-templates display.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
+import { SUPPORTED_LANGUAGES } from '../../../components/common/LanguageSelector';
 import {
   contractsService,
   type ContractBlock,
@@ -32,50 +34,96 @@ import {
   CONTRACT_SECTIONS,
 } from '../../../services/contracts.service';
 
+// Locale → block column mapping. Keys mirror SUPPORTED_LANGUAGES.code;
+// values are the ContractBlock field names. Used to resolve which body
+// to show / save when the language tab changes.
+const BODY_FIELD_BY_LOCALE: Record<string, keyof ContractBlock> = {
+  en: 'bodyText',
+  de: 'bodyTextDe',
+  ru: 'bodyTextRu',
+  pt: 'bodyTextPt',
+  nl: 'bodyTextNl',
+  fr: 'bodyTextFr',
+};
+
+/** Payload-key version of the same map — what the create/update API
+ *  expects on POST/PUT. EN uses `bodyText`, others use `bodyText<Lang>`. */
+const PAYLOAD_KEY_BY_LOCALE: Record<string, string> = {
+  en: 'bodyText',
+  de: 'bodyTextDe',
+  ru: 'bodyTextRu',
+  pt: 'bodyTextPt',
+  nl: 'bodyTextNl',
+  fr: 'bodyTextFr',
+};
+
+/** Selection state — either editing an existing block or composing
+ *  a new one. Null = empty right panel (initial state). */
 type Selection =
-  | { mode: 'new' }
   | { mode: 'edit'; block: ContractBlock }
+  | { mode: 'new' }
   | null;
 
 export const BlockLibraryPage: React.FC = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<Selection>(null);
+  const [selection, setSelection] = useState<Selection>(null);
+  const [editingLang, setEditingLang] = useState<string>('en');
   const [showInactive, setShowInactive] = useState(false);
+
+  // Local form state mirrors the active selection. Reset whenever the
+  // selection changes (via the useEffect below) so editing one block,
+  // switching to another, doesn't leak unsaved changes.
+  const [section, setSection] = useState<ContractBlockSection>('basics');
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [bodies, setBodies] = useState<Record<string, string>>({});
 
   const { data, isLoading } = useQuery({
     queryKey: ['contracts', 'blocks', { showInactive }],
     queryFn: () => contractsService.listBlocks({ includeInactive: showInactive }),
   });
-
   const blocks = data?.blocks || [];
 
-  // Keep the selected edit-block fresh after a save so the editor
-  // reflects what the server actually persisted (e.g. trimmed name,
-  // server-set timestamps). Selection by id is stable across reloads.
+  // Auto-select the first block on initial load so the right panel
+  // isn't empty by default — matches the email templates UX.
   useEffect(() => {
-    if (selected?.mode !== 'edit') return;
-    const refreshed = blocks.find((b) => b.id === selected.block.id);
-    if (refreshed && refreshed !== selected.block) {
-      setSelected({ mode: 'edit', block: refreshed });
+    if (selection === null && blocks.length > 0) {
+      setSelection({ mode: 'edit', block: blocks[0] });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blocks]);
+  }, [blocks, selection]);
 
-  const grouped: Record<ContractBlockSection, ContractBlock[]> = useMemo(() => {
-    const g: Record<ContractBlockSection, ContractBlock[]> = {
-      basics: [], scope: [], privacy: [], commercial: [], nda: [], closing: [],
-    };
-    for (const b of blocks) g[b.section]?.push(b);
-    return g;
-  }, [blocks]);
+  // Sync local form state to the selection. On mode='new', clear
+  // everything. On mode='edit', copy fields from the block.
+  useEffect(() => {
+    if (selection?.mode === 'edit') {
+      const b = selection.block;
+      setSection(b.section);
+      setName(b.name);
+      setDescription(b.description || '');
+      setBodies({
+        en: b.bodyText || '',
+        de: b.bodyTextDe || '',
+        ru: b.bodyTextRu || '',
+        pt: b.bodyTextPt || '',
+        nl: b.bodyTextNl || '',
+        fr: b.bodyTextFr || '',
+      });
+    } else if (selection?.mode === 'new') {
+      setSection('basics');
+      setName('');
+      setDescription('');
+      setBodies({ en: '', de: '', ru: '', pt: '', nl: '', fr: '' });
+    }
+    setEditingLang('en');
+  }, [selection]);
 
   const createMutation = useMutation({
     mutationFn: (payload: any) => contractsService.createBlock(payload),
     onSuccess: (res) => {
       toast.success(t('contracts.blocks.createdToast', 'Block created.') as string);
       queryClient.invalidateQueries({ queryKey: ['contracts', 'blocks'] });
-      if (res?.block) setSelected({ mode: 'edit', block: res.block });
+      if (res.block) setSelection({ mode: 'edit', block: res.block });
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || t('contracts.blocks.createError', 'Create failed') as string),
   });
@@ -85,9 +133,7 @@ export const BlockLibraryPage: React.FC = () => {
     onSuccess: (res) => {
       toast.success(t('contracts.blocks.updatedToast', 'Block updated.') as string);
       queryClient.invalidateQueries({ queryKey: ['contracts', 'blocks'] });
-      if (res?.block && selected?.mode === 'edit') {
-        setSelected({ mode: 'edit', block: res.block });
-      }
+      if (res.block) setSelection({ mode: 'edit', block: res.block });
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || t('contracts.blocks.updateError', 'Update failed') as string),
   });
@@ -97,13 +143,77 @@ export const BlockLibraryPage: React.FC = () => {
     onSuccess: () => {
       toast.success(t('contracts.blocks.deletedToast', 'Block deleted.') as string);
       queryClient.invalidateQueries({ queryKey: ['contracts', 'blocks'] });
-      setSelected(null);
+      setSelection(null);
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || t('contracts.blocks.deleteError', 'Delete failed') as string),
   });
 
+  // Group blocks by section for sidebar rendering. Empty sections are
+  // skipped so the sidebar doesn't show stub headings.
+  const grouped = useMemo(() => {
+    const g: Record<ContractBlockSection, ContractBlock[]> = {
+      basics: [], scope: [], privacy: [], commercial: [], nda: [], closing: [],
+    };
+    for (const b of blocks) g[b.section]?.push(b);
+    return g;
+  }, [blocks]);
+
+  // Count populated bodies for the sidebar pill (e.g. "3/6" = three
+  // locales have body text, three are blank). Mirrors the email
+  // templates' translationCount badge.
+  const translationCount = (b: ContractBlock) =>
+    SUPPORTED_LANGUAGES.filter((lang) => {
+      const field = BODY_FIELD_BY_LOCALE[lang.code];
+      return field && !!(b[field] as string | null | undefined)?.toString().trim();
+    }).length;
+
+  const buildPayload = () => {
+    const payload: Record<string, any> = {
+      section,
+      name: name.trim(),
+      description: description.trim() || null,
+      isActive: selection?.mode === 'edit' ? selection.block.isActive : true,
+    };
+    for (const lang of SUPPORTED_LANGUAGES) {
+      const key = PAYLOAD_KEY_BY_LOCALE[lang.code];
+      const val = (bodies[lang.code] || '').trim();
+      // EN is required; other locales are sent only when non-empty
+      // so clearing a textarea reliably nulls the column.
+      if (lang.code === 'en') {
+        payload[key] = bodies.en;
+      } else {
+        payload[key] = val ? bodies[lang.code] : null;
+      }
+    }
+    return payload;
+  };
+
+  const canSave = !!name.trim() && !!(bodies.en || '').trim();
+  const isPending = createMutation.isPending || updateMutation.isPending;
+
+  const handleSave = () => {
+    if (!canSave) return;
+    const payload = buildPayload();
+    if (selection?.mode === 'edit') {
+      updateMutation.mutate({ id: selection.block.id, payload });
+    } else if (selection?.mode === 'new') {
+      createMutation.mutate(payload);
+    }
+  };
+
+  const handleToggleActive = () => {
+    if (selection?.mode !== 'edit') return;
+    updateMutation.mutate({
+      id: selection.block.id,
+      payload: { isActive: !selection.block.isActive },
+    });
+  };
+
+  const currentBody = bodies[editingLang] || '';
+  const setCurrentBody = (v: string) => setBodies((prev) => ({ ...prev, [editingLang]: v }));
+
   return (
-    <div>
+    <div className="container py-6">
       <div className="mb-4 flex items-center gap-3 flex-wrap">
         <Link
           to="/admin/clients/contracts"
@@ -112,16 +222,18 @@ export const BlockLibraryPage: React.FC = () => {
           <ArrowLeft className="w-4 h-4" />
           {t('contracts.blocks.back', 'Back to contracts')}
         </Link>
-        <h1 className="text-2xl font-bold flex-1">
+        <h1 className="text-2xl font-bold flex-1 text-theme">
           {t('contracts.blocks.title', 'Contract block library')}
         </h1>
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex items-center gap-2 text-sm text-muted-theme">
           <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
           {t('contracts.blocks.showInactive', 'Show inactive')}
         </label>
       </div>
 
-      {/* Disclaimer banner */}
+      {/* Disclaimer banner — kept; the seeded blocks come with a legal
+          disclaimer per the maintainer's "legal/financial defaults are
+          examples only" rule. */}
       <div className="mb-4 p-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-900 dark:text-amber-200">
         <p className="font-medium mb-1">
           {t('contracts.blocks.disclaimerTitle', 'Examples only — have your lawyer review')}
@@ -129,298 +241,244 @@ export const BlockLibraryPage: React.FC = () => {
         <p className="text-xs">
           {t(
             'contracts.blocks.disclaimerBody',
-            'The 12 seeded "System" blocks are written by the picpeak maintainer, not by a lawyer. They are intended as starting points only — review and adapt every block you intend to send with your own lawyer. Edits to system blocks are persisted; replace the seeded body text with the lawyer-reviewed version in place. See docs/crm-disclaimers.md.',
+            'The seeded "System" blocks are written by the picpeak maintainer, not by a lawyer. They are intended as starting points only — review and adapt every block you intend to send with your own lawyer. Edits to system blocks are persisted; replace the seeded body text with the lawyer-reviewed version in place.',
           )}
         </p>
       </div>
 
       {isLoading ? <Loading /> : (
-        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
-          {/* Left column — sidebar list */}
-          <Card padding="sm" className="self-start">
-            <Button
-              variant={selected?.mode === 'new' ? 'primary' : 'outline'}
-              onClick={() => setSelected({ mode: 'new' })}
-              className="mb-3 w-full"
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              {t('contracts.blocks.new', 'New block')}
-            </Button>
-
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Sidebar — same shape as EmailConfigPage templates sidebar:
+              Card padding="sm" + h3 + +New button up top, then a
+              section-grouped list of block tiles. */}
+          <Card padding="sm">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+                {t('contracts.blocks.sidebarHeading', 'Blocks')}
+              </h3>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setSelection({ mode: 'new' })}
+                leftIcon={<Plus className="w-4 h-4" />}
+              >
+                {t('contracts.blocks.new', 'New block')}
+              </Button>
+            </div>
             <div className="space-y-5">
-              {CONTRACT_SECTIONS.map((section) => (
-                <div key={section}>
-                  <h4 className="px-1 mb-2 text-[11px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                    {t(`contracts.sections.${section}`, section)}
-                  </h4>
-                  {grouped[section].length === 0 ? (
-                    <p className="px-1 text-xs text-neutral-400 dark:text-neutral-500">
-                      {t('contracts.blocks.empty', 'No blocks in this section.')}
-                    </p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {grouped[section].map((b) => {
-                        const isSelected = selected?.mode === 'edit' && selected.block.id === b.id;
+              {CONTRACT_SECTIONS.map((sec) => {
+                const items = grouped[sec];
+                if (!items || items.length === 0) return null;
+                return (
+                  <div key={sec}>
+                    <h4 className="px-1 mb-2 text-[11px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                      {t(`contracts.sections.${sec}`, sec)}
+                    </h4>
+                    <div className="space-y-2">
+                      {items.map((b) => {
+                        const isSelected = selection?.mode === 'edit' && selection.block.id === b.id;
+                        const count = translationCount(b);
                         return (
                           <button
-                            type="button"
                             key={b.id}
-                            onClick={() => setSelected({ mode: 'edit', block: b })}
-                            className={`w-full text-left p-2 rounded-md border transition-colors ${
+                            onClick={() => setSelection({ mode: 'edit', block: b })}
+                            className={`w-full text-left p-3 rounded-lg transition-colors ${
                               isSelected
-                                ? 'border-accent bg-accent/10 dark:bg-accent/20'
-                                : b.isActive
-                                  ? 'border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700'
-                                  : 'border-neutral-200 dark:border-neutral-700 opacity-50 hover:opacity-75'
-                            }`}
+                                ? 'tile-selected'
+                                : 'bg-neutral-50 dark:bg-neutral-700 border-2 border-transparent hover:bg-neutral-100 dark:hover:bg-neutral-600'
+                            } ${!b.isActive ? 'opacity-50' : ''}`}
                           >
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-medium text-sm truncate">{b.name}</span>
-                              {b.isSystem && (
-                                <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-700">
-                                  {t('contracts.blocks.systemBadge', 'System')}
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-medium text-neutral-900 dark:text-neutral-100 truncate">
+                                {b.name}
+                              </p>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                {b.isSystem && (
+                                  <span
+                                    className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-neutral-200 dark:bg-neutral-600 text-neutral-700 dark:text-neutral-300"
+                                    title={t('contracts.blocks.systemBadge', 'System') as string}
+                                  >
+                                    {t('contracts.blocks.systemBadge', 'System')}
+                                  </span>
+                                )}
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-200 dark:bg-neutral-600 text-neutral-600 dark:text-neutral-300">
+                                  {count}/{SUPPORTED_LANGUAGES.length}
                                 </span>
-                              )}
-                              {!b.isActive && (
-                                <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700">
-                                  {t('contracts.blocks.inactive', 'Inactive')}
-                                </span>
-                              )}
+                              </div>
                             </div>
                             {b.description && (
-                              <p className="text-xs text-neutral-500 mt-1 truncate">{b.description}</p>
+                              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1 truncate">
+                                {b.description}
+                              </p>
                             )}
                           </button>
                         );
                       })}
                     </div>
-                  )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
+              {blocks.length === 0 && (
+                <p className="text-center text-sm text-muted-theme py-6">
+                  {t('contracts.blocks.empty', 'No blocks yet.')}
+                </p>
+              )}
             </div>
           </Card>
 
-          {/* Right column — editor for the selected block (or the
-              new-block form when "+ New" was clicked) */}
-          <Card padding="lg">
-            {selected === null ? (
-              <p className="text-sm text-neutral-500">
-                {t('contracts.blocks.selectPrompt', 'Select a block on the left, or click "+ New block" to create one.')}
-              </p>
+          {/* Right panel — edit / create form. lg:col-span-2 matches the
+              email-templates layout exactly. */}
+          <div className="lg:col-span-2">
+            {selection === null ? (
+              <Card padding="md">
+                <p className="text-center text-muted-theme py-8">
+                  {t('contracts.blocks.selectPrompt', 'Select a block on the left or create a new one to start editing.')}
+                </p>
+              </Card>
             ) : (
-              <BlockEditor
-                key={selected.mode === 'edit' ? `edit-${selected.block.id}` : 'new'}
-                selection={selected}
-                onSave={(payload) => {
-                  if (selected.mode === 'new') {
-                    createMutation.mutate(payload);
-                  } else {
-                    updateMutation.mutate({ id: selected.block.id, payload });
-                  }
-                }}
-                onToggleActive={(next) => {
-                  if (selected.mode === 'edit') {
-                    updateMutation.mutate({
-                      id: selected.block.id,
-                      payload: { isActive: next },
-                    });
-                  }
-                }}
-                onDelete={() => {
-                  if (
-                    selected.mode === 'edit'
-                    && window.confirm(t('contracts.blocks.deleteConfirm', 'Delete this block?') as string)
-                  ) {
-                    deleteMutation.mutate(selected.block.id);
-                  }
-                }}
-                pending={createMutation.isPending || updateMutation.isPending || deleteMutation.isPending}
-              />
+              <Card padding="md">
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                  <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+                    {selection.mode === 'new'
+                      ? t('contracts.blocks.dialog.createTitle', 'New block')
+                      : t('contracts.blocks.dialog.editTitle', 'Edit block')}
+                  </h3>
+                  <div className="flex gap-2 items-center flex-wrap">
+                    {selection.mode === 'edit' && (
+                      <label className="flex items-center gap-2 text-sm text-muted-theme mr-2">
+                        <input
+                          type="checkbox"
+                          checked={selection.block.isActive}
+                          onChange={handleToggleActive}
+                        />
+                        {selection.block.isActive
+                          ? t('contracts.blocks.active', 'Active')
+                          : t('contracts.blocks.inactive', 'Inactive')}
+                      </label>
+                    )}
+                    {selection.mode === 'edit' && !selection.block.isSystem && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (window.confirm(t('contracts.blocks.deleteConfirm', 'Delete this block?') as string)) {
+                            deleteMutation.mutate(selection.block.id);
+                          }
+                        }}
+                        leftIcon={<Trash2 className="w-4 h-4" />}
+                      >
+                        {t('contracts.blocks.delete', 'Delete')}
+                      </Button>
+                    )}
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={handleSave}
+                      isLoading={isPending}
+                      disabled={!canSave}
+                      leftIcon={<Save className="w-4 h-4" />}
+                    >
+                      {t('contracts.blocks.save', 'Save')}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Language tabs — identical pill row to EmailConfigPage. */}
+                <div className="flex flex-wrap gap-1 mb-4 p-1 bg-neutral-100 dark:bg-neutral-700 rounded-lg">
+                  {SUPPORTED_LANGUAGES.map((lang) => {
+                    const filled = !!(bodies[lang.code] || '').trim();
+                    return (
+                      <button
+                        key={lang.code}
+                        onClick={() => setEditingLang(lang.code)}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+                          editingLang === lang.code
+                            ? 'bg-white dark:bg-neutral-800 text-accent-dark shadow-sm'
+                            : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200'
+                        }`}
+                      >
+                        <lang.Flag />
+                        <span>{lang.name}</span>
+                        {!filled && lang.code !== 'en' && (
+                          <span
+                            className="w-1.5 h-1.5 rounded-full bg-amber-400"
+                            title={t('contracts.blocks.noTranslation', 'No translation yet') as string}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="space-y-4">
+                  {/* Section + Name side-by-side. Section locked when
+                      editing a system block — matches the old dialog
+                      behaviour. */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                        {t('contracts.blocks.dialog.section', 'Section')}
+                      </label>
+                      <select
+                        value={section}
+                        onChange={(e) => setSection(e.target.value as ContractBlockSection)}
+                        disabled={selection.mode === 'edit' && selection.block.isSystem}
+                        className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm disabled:opacity-50"
+                      >
+                        {CONTRACT_SECTIONS.map((s) => (
+                          <option key={s} value={s}>{t(`contracts.sections.${s}`, s)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                        {t('contracts.blocks.dialog.name', 'Name')}
+                      </label>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                      {t('contracts.blocks.dialog.description', 'Description (admin hint)')}
+                    </label>
+                    <input
+                      type="text"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                      {t('contracts.blocks.dialog.body', 'Body')} ({SUPPORTED_LANGUAGES.find((l) => l.code === editingLang)?.name || editingLang})
+                    </label>
+                    <textarea
+                      rows={14}
+                      value={currentBody}
+                      onChange={(e) => setCurrentBody(e.target.value)}
+                      className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm font-mono"
+                    />
+                  </div>
+
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    {t(
+                      'contracts.blocks.dialog.placeholderHint',
+                      'You can use {{customer_name}}, {{event_name}}, {{event_date}}, {{net_days}}, {{skonto_percent}}, {{skonto_within_days}}, {{cancellation_30d_percent}}, {{currency}}, {{issuer_company_name}}, {{issuer_address}}, {{contract_number}}, {{source_quote_number}} as placeholders — substituted when the contract is rendered.',
+                    )}
+                  </p>
+                </div>
+              </Card>
             )}
-          </Card>
-        </div>
-      )}
-    </div>
-  );
-};
-
-interface EditorProps {
-  selection: Exclude<Selection, null>;
-  onSave: (payload: any) => void;
-  onToggleActive: (next: boolean) => void;
-  onDelete: () => void;
-  pending: boolean;
-}
-
-const BlockEditor: React.FC<EditorProps> = ({ selection, onSave, onToggleActive, onDelete, pending }) => {
-  const { t } = useTranslation();
-  const b = selection.mode === 'edit' ? selection.block : null;
-
-  const [section, setSection] = useState<ContractBlockSection>(b?.section ?? 'basics');
-  const [name, setName] = useState(b?.name ?? '');
-  const [description, setDescription] = useState(b?.description ?? '');
-  const [bodyText, setBodyText] = useState(b?.bodyText ?? '');
-  const [bodyTextDe, setBodyTextDe] = useState(b?.bodyTextDe ?? '');
-  const [bodyLang, setBodyLang] = useState<'en' | 'de'>('en');
-
-  const isSystem = !!b?.isSystem;
-  const isActive = b?.isActive ?? true;
-  const canSave = name.trim().length > 0 && bodyText.trim().length > 0;
-
-  return (
-    <div>
-      <h3 className="font-semibold mb-3">
-        {selection.mode === 'new'
-          ? t('contracts.blocks.dialog.createTitle', 'New block')
-          : t('contracts.blocks.dialog.editTitle', 'Edit block')}
-      </h3>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            {t('contracts.blocks.dialog.section', 'Section')}
-          </label>
-          <select
-            value={section}
-            onChange={(e) => setSection(e.target.value as ContractBlockSection)}
-            disabled={isSystem}
-            className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm disabled:opacity-50"
-          >
-            {CONTRACT_SECTIONS.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">
-            {t('contracts.blocks.dialog.name', 'Name')}
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
-          />
-        </div>
-      </div>
-
-      <div className="mb-3">
-        <label className="block text-sm font-medium mb-1">
-          {t('contracts.blocks.dialog.description', 'Description (admin hint)')}
-        </label>
-        <input
-          type="text"
-          value={description ?? ''}
-          onChange={(e) => setDescription(e.target.value)}
-          className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
-        />
-      </div>
-
-      <div className="mb-3">
-        <div className="flex items-center justify-between mb-1.5">
-          <label className="block text-sm font-medium">
-            {t('contracts.blocks.dialog.body', 'Body')}
-          </label>
-          <div className="flex rounded-md border border-neutral-300 dark:border-neutral-600 overflow-hidden text-xs">
-            <button
-              type="button"
-              onClick={() => setBodyLang('en')}
-              className={`px-3 py-1 ${
-                bodyLang === 'en'
-                  ? 'bg-accent text-white'
-                  : 'bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700'
-              }`}
-            >
-              {t('contracts.blocks.dialog.langEn', 'English')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setBodyLang('de')}
-              className={`px-3 py-1 border-l border-neutral-300 dark:border-neutral-600 ${
-                bodyLang === 'de'
-                  ? 'bg-accent text-white'
-                  : 'bg-white dark:bg-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-700'
-              }`}
-            >
-              {t('contracts.blocks.dialog.langDe', 'German')}
-            </button>
           </div>
         </div>
-        {bodyLang === 'en' ? (
-          <textarea
-            rows={8}
-            value={bodyText}
-            onChange={(e) => setBodyText(e.target.value)}
-            className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm font-mono"
-          />
-        ) : (
-          <textarea
-            rows={8}
-            value={bodyTextDe ?? ''}
-            onChange={(e) => setBodyTextDe(e.target.value)}
-            className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm font-mono"
-          />
-        )}
-      </div>
-
-      <p className="text-xs text-neutral-500 mb-3">
-        {t(
-          'contracts.blocks.dialog.placeholderHint',
-          'You can use {{customer_name}}, {{event_name}}, {{event_date}}, {{net_days}}, {{skonto_percent}}, {{skonto_within_days}}, {{cancellation_30d_percent}}, {{currency}}, {{issuer_company_name}}, {{issuer_address}}, {{contract_number}}, {{source_quote_number}} as placeholders — substituted when the contract is rendered.',
-        )}
-      </p>
-
-      {/* Active toggle — only shown in edit mode; flip fires an
-          update immediately. In new mode the block is created active
-          by default on the server. */}
-      {selection.mode === 'edit' && (
-        <label className="flex items-center gap-2 text-sm mb-4 select-none">
-          <input
-            type="checkbox"
-            checked={isActive}
-            disabled={pending}
-            onChange={(e) => onToggleActive(e.target.checked)}
-          />
-          <span className="font-medium">
-            {t('contracts.blocks.dialog.active', 'Active')}
-          </span>
-          <span className="text-xs text-neutral-500">
-            {isActive
-              ? t('contracts.blocks.dialog.activeHint', 'Available to be added to contracts.')
-              : t('contracts.blocks.dialog.inactiveHint', 'Hidden from the contract editor.')}
-          </span>
-        </label>
       )}
-
-      <div className="flex justify-between gap-2 flex-wrap">
-        <div>
-          {selection.mode === 'edit' && !isSystem && (
-            <Button
-              variant="outline"
-              onClick={onDelete}
-              disabled={pending}
-              className="text-red-600 border-red-300 hover:bg-red-50"
-            >
-              <Trash2 className="w-4 h-4 mr-1" />
-              {t('contracts.blocks.dialog.delete', 'Delete')}
-            </Button>
-          )}
-        </div>
-        <Button
-          disabled={pending || !canSave}
-          onClick={() => onSave({
-            section,
-            name: name.trim(),
-            description: description?.trim() || null,
-            bodyText,
-            bodyTextDe: bodyTextDe?.trim() ? bodyTextDe : null,
-          })}
-        >
-          {selection.mode === 'new'
-            ? t('contracts.blocks.dialog.create', 'Create')
-            : t('contracts.blocks.dialog.save', 'Save')}
-        </Button>
-      </div>
     </div>
   );
 };

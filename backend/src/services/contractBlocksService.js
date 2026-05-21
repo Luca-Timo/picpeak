@@ -92,6 +92,20 @@ async function createBlock(payload) {
     created_at: new Date(),
     updated_at: new Date(),
   };
+  // Schema-drift guard — migration 131 adds these columns. On installs
+  // that haven't migrated yet, only EN+DE bodies persist; the other
+  // four fields are accepted from the payload but silently dropped.
+  for (const [field, payloadKey] of [
+    ['body_text_ru', 'bodyTextRu'],
+    ['body_text_pt', 'bodyTextPt'],
+    ['body_text_nl', 'bodyTextNl'],
+    ['body_text_fr', 'bodyTextFr'],
+  ]) {
+    if (payload[payloadKey] != null
+        && await db.schema.hasColumn('contract_blocks', field)) {
+      row[field] = payload[payloadKey] ? String(payload[payloadKey]) : null;
+    }
+  }
 
   const inserted = await db('contract_blocks').insert(row).returning('id');
   const id = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
@@ -130,6 +144,20 @@ async function updateBlock(id, payload) {
   }
   if ('bodyTextDe' in payload) {
     updates.body_text_de = payload.bodyTextDe ? String(payload.bodyTextDe) : null;
+  }
+  // Same schema-drift guard as createBlock — accept ru/pt/nl/fr only
+  // when the column actually exists, so beta installs running this
+  // service against a not-yet-migrated DB don't throw.
+  for (const [field, payloadKey] of [
+    ['body_text_ru', 'bodyTextRu'],
+    ['body_text_pt', 'bodyTextPt'],
+    ['body_text_nl', 'bodyTextNl'],
+    ['body_text_fr', 'bodyTextFr'],
+  ]) {
+    if (payloadKey in payload
+        && await db.schema.hasColumn('contract_blocks', field)) {
+      updates[field] = payload[payloadKey] ? String(payload[payloadKey]) : null;
+    }
   }
   if ('isActive' in payload) {
     updates.is_active = payload.isActive !== false;

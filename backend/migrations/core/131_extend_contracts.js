@@ -133,6 +133,23 @@ exports.up = async function(knex) {
     }
   }
 
+  // ---- contract_blocks: 4 additional language columns --------------
+  // The block library UI was originally seeded with EN + DE only.
+  // We now mirror the email-templates surface, which supports six
+  // user-fluent locales: EN, DE, RU, PT, NL, FR. Add the four
+  // missing columns as nullable text so admins can fill them in.
+  // The PDF renderer falls back to EN when the contract's locale
+  // isn't translated, so leaving these NULL is safe.
+  if (await knex.schema.hasTable('contract_blocks')) {
+    for (const col of ['body_text_ru', 'body_text_pt', 'body_text_nl', 'body_text_fr']) {
+      if (!(await knex.schema.hasColumn('contract_blocks', col))) {
+        await knex.schema.alterTable('contract_blocks', (table) => {
+          table.text(col);
+        });
+      }
+    }
+  }
+
   // New system block for quote line-items table — pulled in by
   // contractService.buildRenderContext when a contract has a source
   // quote, then rendered as a real PDF table by renderContractToBuffer
@@ -186,6 +203,18 @@ exports.down = async function(knex) {
     await knex('app_settings')
       .whereIn('setting_key', NEW_CRM_CONTRACT_SETTINGS.map((s) => s.setting_key))
       .del();
+  }
+
+  // Drop the extra language columns + the seeded line-items block.
+  if (await knex.schema.hasTable('contract_blocks')) {
+    await knex('contract_blocks').where('slug', 'quote_line_items_table').del();
+    for (const col of ['body_text_fr', 'body_text_nl', 'body_text_pt', 'body_text_ru']) {
+      if (await knex.schema.hasColumn('contract_blocks', col)) {
+        await knex.schema.alterTable('contract_blocks', (table) => {
+          table.dropColumn(col);
+        });
+      }
+    }
   }
 
   if (await knex.schema.hasTable('contracts')) {
