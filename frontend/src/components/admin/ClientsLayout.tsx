@@ -109,22 +109,22 @@ export const ClientsLayout: React.FC = () => {
       <div>
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-            {t('clients.title', 'Clients')}
+            {t('clients.title', 'CRM')}
           </h1>
           <p className="text-neutral-600 dark:text-neutral-400 mt-1">
-            {t('clients.subtitle', 'Customer accounts, scheduling, quotes and billing for recurring clients.')}
+            {t('clients.subtitle', 'Customer accounts, scheduling, quotes and billing — everything for recurring clients in one place.')}
           </p>
         </div>
 
         <div className="rounded-xl border border-dashed border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 p-8 text-center">
           <Briefcase className="w-10 h-10 mx-auto mb-3 text-neutral-400" />
           <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
-            {t('clients.empty.title', 'No client features enabled')}
+            {t('clients.empty.title', 'No CRM features enabled')}
           </h2>
           <p className="text-sm text-neutral-600 dark:text-neutral-400">
             {t(
               'clients.empty.body',
-              'Enable Accounts (or another Clients sub-feature) under Settings → Features to get started.',
+              'Enable Accounts (or another CRM sub-feature) under Settings → Features to get started.',
             )}
           </p>
         </div>
@@ -136,10 +136,10 @@ export const ClientsLayout: React.FC = () => {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-          {t('clients.title', 'Clients')}
+          {t('clients.title', 'CRM')}
         </h1>
         <p className="text-neutral-600 dark:text-neutral-400 mt-1">
-          {t('clients.subtitle', 'Customer accounts, scheduling, quotes and billing for recurring clients.')}
+          {t('clients.subtitle', 'Customer accounts, scheduling, quotes and billing — everything for recurring clients in one place.')}
         </p>
       </div>
 
@@ -148,7 +148,7 @@ export const ClientsLayout: React.FC = () => {
            in one tap on touch devices, no horizontal scroll. */}
         <div className="lg:hidden">
           <label htmlFor="clients-section" className="sr-only">
-            {t('clients.navAriaLabel', 'Clients navigation')}
+            {t('clients.navAriaLabel', 'CRM navigation')}
           </label>
           <select
             id="clients-section"
@@ -165,7 +165,7 @@ export const ClientsLayout: React.FC = () => {
         {/* Desktop: sticky left rail */}
         <aside className="hidden lg:block">
           <nav
-            aria-label={t('clients.navAriaLabel', 'Clients navigation')}
+            aria-label={t('clients.navAriaLabel', 'CRM navigation')}
             className="sticky top-6 space-y-1"
           >
             {enabledItems.map((item) => {

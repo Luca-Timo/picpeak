@@ -172,7 +172,7 @@
     "cmsPages": "CMS-Seiten",
     "users": "Benutzer",
     "calendar": "Kalender",
-    "clients": "Kunden",
+    "clients": "CRM",
     "betaTag": "Beta"
   },
   "eventTypes": {
@@ -1462,7 +1462,7 @@
         "sales": "Vertrieb",
         "insights": "Auswertungen & Zugriff",
         "customers": "Kunden",
-        "clients": "Kunden"
+        "clients": "CRM"
       },
       "status": {
         "stable": "stabil",
@@ -1521,12 +1521,12 @@
         "warning": "Bestehende Benutzerkonten bleiben gültig; die Admin-Oberfläche für deren Verwaltung wird ausgeblendet, bis Sie dies wieder aktivieren."
       },
       "customerPortal": {
-        "title": "Kunden",
-        "description": "Persistente Kunden-Logins. Wiederkehrende Kunden sehen alle zugewiesenen Galerien an einem Ort — keine Passwörter pro Event. Kunden melden sich unter /customer/login an, verwaltet werden sie unter Kunden → Konten."
+        "title": "Kundenkonten",
+        "description": "Persistente Kunden-Logins. Wiederkehrende Kunden sehen alle zugewiesenen Galerien an einem Ort — keine Passwörter pro Event. Kunden melden sich unter /customer/login an, verwaltet werden sie unter CRM → Konten."
       },
       "clients": {
-        "title": "Kunden",
-        "description": "Hauptschalter für den Kunden-Bereich in der Seitenleiste. Aus blendet den Bereich und alle Unterfunktionen aus, unabhängig von deren individuellen Schaltern – beim erneuten Einschalten wird der vorherige Zustand wiederhergestellt."
+        "title": "CRM",
+        "description": "Hauptschalter für den CRM-Bereich in der Seitenleiste. Aus blendet den Bereich und alle Unterfunktionen aus, unabhängig von deren individuellen Schaltern – beim erneuten Einschalten wird der vorherige Zustand wiederhergestellt."
       }
     },
     "customerSurface": {
@@ -3124,12 +3124,12 @@
     }
   },
   "clients": {
-    "title": "Kunden",
-    "subtitle": "Kundenkonten, Termine, Angebote und Rechnungen für wiederkehrende Kunden.",
-    "navAriaLabel": "Kunden-Navigation",
+    "title": "CRM",
+    "subtitle": "Kundenkonten, Termine, Angebote und Rechnungen — alles für wiederkehrende Kunden an einem Ort.",
+    "navAriaLabel": "CRM-Navigation",
     "empty": {
-      "title": "Keine Kunden-Funktionen aktiviert",
-      "body": "Aktiviere „Konten\" (oder eine andere Kunden-Unterfunktion) unter Einstellungen → Funktionen, um loszulegen."
+      "title": "Keine CRM-Funktionen aktiviert",
+      "body": "Aktiviere „Konten\" (oder eine andere CRM-Unterfunktion) unter Einstellungen → Funktionen, um loszulegen."
     },
     "subnav": {
       "accounts": "Konten",

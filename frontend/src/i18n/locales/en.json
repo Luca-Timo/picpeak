@@ -172,7 +172,7 @@
     "cmsPages": "CMS Pages",
     "users": "Users",
     "calendar": "Calendar",
-    "clients": "Clients",
+    "clients": "CRM",
     "betaTag": "Beta"
   },
   "archives": {
@@ -1101,7 +1101,7 @@
         "sales": "Sales",
         "insights": "Insights & Access",
         "customers": "Customers",
-        "clients": "Clients"
+        "clients": "CRM"
       },
       "status": {
         "stable": "stable",
@@ -1160,12 +1160,12 @@
         "warning": "Existing user accounts stay valid; the admin UI for managing them will be hidden until you re-enable this."
       },
       "customerPortal": {
-        "title": "Clients",
-        "description": "Persistent customer logins. Recurring clients see all their assigned galleries from one place — no per-event passwords. Customers log in at /customer/login and you manage them under Clients → Accounts."
+        "title": "Customer Accounts",
+        "description": "Persistent customer logins. Recurring clients see all their assigned galleries from one place — no per-event passwords. Customers log in at /customer/login and you manage them under CRM → Accounts."
       },
       "clients": {
-        "title": "Clients",
-        "description": "Master switch for the Clients sidebar section. Off hides the section and every sub-feature below regardless of their individual toggles — re-enable to restore them to whatever you set last."
+        "title": "CRM",
+        "description": "Master switch for the CRM sidebar section. Off hides the section and every sub-feature below regardless of their individual toggles — re-enable to restore them to whatever you set last."
       }
     },
     "customerSurface": {
@@ -3124,12 +3124,12 @@
     }
   },
   "clients": {
-    "title": "Clients",
-    "subtitle": "Customer accounts, scheduling, quotes and billing for recurring clients.",
-    "navAriaLabel": "Clients navigation",
+    "title": "CRM",
+    "subtitle": "Customer accounts, scheduling, quotes and billing — everything for recurring clients in one place.",
+    "navAriaLabel": "CRM navigation",
     "empty": {
-      "title": "No client features enabled",
-      "body": "Enable Accounts (or another Clients sub-feature) under Settings → Features to get started."
+      "title": "No CRM features enabled",
+      "body": "Enable Accounts (or another CRM sub-feature) under Settings → Features to get started."
     },
     "subnav": {
       "accounts": "Accounts",
