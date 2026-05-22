@@ -743,6 +743,9 @@
     "eventName": "Veranstaltungsname",
     "eventType": "Veranstaltungstyp",
     "eventDate": "Veranstaltungsdatum",
+    "fullDay": "Ganztägig",
+    "eventTimeStart": "Startzeit",
+    "eventTimeEnd": "Endzeit",
     "hostEmail": "E-Mail des Kunden",
     "hostName": "Name des Kunden",
     "hostNamePlaceholder": "Max Mustermann",
@@ -1484,8 +1487,13 @@
       },
       "calendar": {
         "title": "Kalender",
-        "description": "Alle anstehenden und vergangenen Veranstaltungen in einer Monats-/Wochenansicht. Optional Buchungen von Kunden annehmen.",
+        "description": "Admin-Kalender mit Terminen, erfassten Stunden und offenen Angeboten/Verträgen in einer Ansicht. Stunden lassen sich direkt im Kalender per Drag erfassen.",
         "sidebar": "Kalender"
+      },
+      "calendarBooking": {
+        "title": "Kundenbuchung",
+        "description": "Kunden sehen freie Slots auf einem öffentlichen Kalender und können direkt buchen. In Kürze verfügbar.",
+        "sidebar": "Buchung"
       },
       "quotes": {
         "title": "Angebote",
@@ -3123,10 +3131,55 @@
     "subnav": {
       "accounts": "Konten",
       "quotes": "Angebote",
-      "bills": "Rechnungen",
+      "contracts": "Verträge",
       "hours": "Stunden",
+      "calendar": "Kalender",
+      "bills": "Rechnungen",
       "taxReport": "Steuer",
       "development": "Entwicklung"
+    }
+  },
+  "calendar": {
+    "pageTitle": "Kalender",
+    "subtitle": "Termine, erfasste Stunden und offene Angebote/Verträge in einer Ansicht.",
+    "viewMonth": "Monat",
+    "viewWeek": "Woche",
+    "loading": "Einträge werden geladen…",
+    "legend": {
+      "events": "Termine",
+      "hours": "Stunden",
+      "pendingQuotes": "Offene Angebote",
+      "pendingContracts": "Offene Verträge",
+      "hoursLocked": "Gesperrt (abgerechnet)"
+    },
+    "hourEntry": {
+      "createTitle": "Stunden erfassen",
+      "customerLabel": "Kunde",
+      "customerSearch": "Nach E-Mail oder Firma suchen…",
+      "descriptionLabel": "Beschreibung (optional)",
+      "descriptionPlaceholder": "Bearbeitung / Shooting / Anreise…",
+      "startLabel": "Start",
+      "endLabel": "Ende",
+      "submit": "Stunden speichern",
+      "saving": "Speichern…",
+      "cancel": "Abbrechen",
+      "close": "Schließen",
+      "delete": "Löschen",
+      "confirmDelete": "Diese erfassten Stunden löschen? Das kann nicht rückgängig gemacht werden.",
+      "created": "Stunden erfasst.",
+      "createFailed": "Speichern fehlgeschlagen: {{message}}",
+      "saved": "Stunden aktualisiert.",
+      "saveFailed": "Speichern fehlgeschlagen: {{message}}",
+      "movedToast": "Stunden aktualisiert.",
+      "moveFailed": "Verschieben fehlgeschlagen: {{message}}",
+      "resizedToast": "Stunden aktualisiert.",
+      "resizeFailed": "Größe ändern fehlgeschlagen: {{message}}",
+      "deleted": "Stunden gelöscht.",
+      "deleteFailed": "Löschen fehlgeschlagen: {{message}}",
+      "lockedBadge": "Gesperrt",
+      "lockedTooltip": "Bereits abgerechnet — Rechnung stornieren, um zu bearbeiten.",
+      "noDescription": "Keine Beschreibung.",
+      "untitledCustomer": "Stunden"
     }
   },
   "hoursLogging": {
@@ -3432,6 +3485,7 @@
       "website": "Webseite",
       "defaultCurrency": "Standardwährung",
       "defaultLocale": "Standardsprache",
+      "timezone": "Zeitzone (IANA)",
       "vatLabel": "MwSt-Bezeichnung",
       "vatRateDefault": "Standard-MwSt-Satz %",
       "defaultQrFormat": "Standard-QR-Format",
