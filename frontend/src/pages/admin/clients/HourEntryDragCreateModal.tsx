@@ -47,8 +47,21 @@ export interface HourEntryDragCreateModalProps {
   endTime: string;
   /** Close the modal without saving. */
   onClose: () => void;
-  /** Called after a successful create; the page invalidates queries. */
-  onCreated: () => void;
+  /**
+   * Called after a successful create. Receives the saved entry's
+   * details so the parent can imperatively add it to FullCalendar
+   * (`calendarRef.getApi().addEvent(...)`) — bypasses FC's
+   * events-prop diffing which was silently dropping new entries (H.1).
+   */
+  onCreated: (created: {
+    id: number;
+    customerAccountId: number;
+    customerName: string | null;
+    entryDate: string;
+    startTime: string;
+    endTime: string;
+    description: string | null;
+  }) => void;
 }
 
 export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> = ({
@@ -77,54 +90,38 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
         description: description.trim() || null,
       });
     },
-    // G.3 — F.7's `await refetchQueries` swap didn't reliably make the
-    // new block visible (user reproduced the bug on the post-F.7
-    // bundle). Switching to an OPTIMISTIC cache update via
-    // `setQueriesData` so the freshly-saved entry is inserted into
-    // every cached `calendar-items` query the moment the POST returns,
-    // independent of any refetch timing or FullCalendar event-prop
-    // diffing. Then we kick off a background refetch to reconcile
-    // server-side computed fields (status / customerName from joins),
-    // but the modal can close immediately — the block is already on
-    // screen.
+    // H.1 — Three prior approaches (F.7 await refetch, G.3 setQueriesData
+    // optimistic) didn't reliably make the new block visible. The user
+    // reproduced "disappears" on all three. Root cause: FullCalendar's
+    // React wrapper diffs the `events` prop by content hash and was
+    // silently dropping the just-added entry.
     //
-    // The optimistic item carries `locked: false` because a brand-new
-    // unbilled entry never satisfies isEntryLocked. customerName comes
-    // from the picker's label state so the chip's title reads cleanly.
-    onSuccess: async (result) => {
+    // This commit hands off the created entry to the PARENT (CalendarPage),
+    // which uses FC's imperative `addEvent` API to push the chip directly
+    // into FC's eventStore — bypasses React state, the useQuery cache,
+    // AND the events-prop diffing. The block appears as soon as the
+    // modal closes.
+    //
+    // Background invalidate still runs so a subsequent navigation or
+    // refresh syncs against the server-computed shape (customerName
+    // from joins, status updates).
+    onSuccess: (result) => {
       toast.success(t('calendar.hourEntry.created', 'Hours logged.'));
       if (customerId) {
-        const optimisticItem = {
-          kind: 'hours' as const,
+        onCreated({
           id: result.id,
           customerAccountId: customerId,
+          customerName: customerLabel || null,
           entryDate,
           startTime,
           endTime,
           description: description.trim() || null,
-          status: result.status,
-          invoiceId: result.invoiceId ?? null,
-          invoiceStatus: null,
-          locked: false,
-          customerName: customerLabel || null,
-        };
-        // Merge into every cached calendar-items query (different
-        // date ranges may each have their own cache entry).
-        queryClient.setQueriesData(
-          { queryKey: ['calendar-items'] },
-          (old: { items?: unknown[]; range?: unknown } | undefined) => {
-            if (!old || !Array.isArray(old.items)) return old;
-            return { ...old, items: [...old.items, optimisticItem] };
-          },
-        );
+        });
       }
-      // Background refetch — the optimistic insert already covered the
-      // visual; this reconciles any joined fields (e.g. customerName
-      // resolved server-side, locked-state recomputation). No await:
-      // modal closes immediately.
+      // Reconcile in the background — parent already handled the
+      // visual via FC addEvent. No await; modal closes immediately.
       queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
       queryClient.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
-      onCreated();
     },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
