@@ -14,7 +14,7 @@ import { customerAdminService } from '../../../services/customerAdmin.service';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { toast } from 'react-toastify';
 
-const STATUSES: InvoiceStatus[] = ['scheduled', 'pending_delivery', 'sent', 'paid', 'overdue', 'cancelled'];
+const STATUSES: InvoiceStatus[] = ['scheduled', 'pending_delivery', 'sent', 'paid', 'overdue', 'cancelled', 'skipped'];
 
 export const BillsListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -181,6 +181,7 @@ export const BillsListPage: React.FC = () => {
                               : inv.status === 'overdue' ? 'bg-red-100 text-red-800'
                               : inv.status === 'sent' ? 'bg-blue-100 text-blue-800'
                               : inv.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
+                              : inv.status === 'skipped' ? 'bg-neutral-100 text-neutral-500 italic'
                               : 'bg-amber-100 text-amber-800'
                           }`}>{t(`bills.status.${inv.status}`, inv.status)}</span>
                         </td>

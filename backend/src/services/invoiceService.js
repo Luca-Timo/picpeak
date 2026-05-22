@@ -2676,9 +2676,16 @@ async function runScheduledTasks() {
         // the next save creates a fresh period draft. We pick the
         // latter: clear is_monthly_draft so the next createInvoice
         // for this customer mints a new period.
+        //
+        // Status is 'skipped', not 'cancelled': the latter implies
+        // an admin (or Storno) deliberately voided a real invoice;
+        // an empty monthly period is a "nothing happened" non-event
+        // that we still record for audit-trail continuity. Listing
+        // queries that aggregate cancelled rows (e.g. the Bills list
+        // cancellation footnote) should not pull skipped rows in.
         await db('invoices').where({ id: draft.id }).update({
           is_monthly_draft: false,
-          status: 'cancelled',
+          status: 'skipped',
           updated_at: new Date(),
         });
         logger.info('Monthly bill skipped — no items queued', {
