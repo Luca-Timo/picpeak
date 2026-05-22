@@ -47,10 +47,8 @@ const { formatMinor, formatDate } = pdfService._internal;
 // for audit visibility; the totals math filters it out separately.
 const REPORTABLE_STATUSES = ['sent', 'paid', 'overdue', 'pending_delivery', 'cancelled'];
 
-function ensureInt(v) {
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) ? n : 0;
-}
+// D.2 — `ensureInt` consolidated into utils/numericHelpers.
+const { ensureInt } = require('../utils/numericHelpers');
 
 function ensureRate(v) {
   if (v === null || v === undefined || v === '') return 0;

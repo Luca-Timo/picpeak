@@ -54,17 +54,8 @@ const VALID_QUOTE_TRANSITIONS = {
 // Helpers
 // ---------------------------------------------------------------------
 
-function ensureInt(value) {
-  const n = parseInt(value, 10);
-  if (Number.isNaN(n)) return 0;
-  return n;
-}
-
-function ensureNumber(value, fallback = 0) {
-  if (value === null || value === undefined || value === '') return fallback;
-  const n = Number(value);
-  return Number.isNaN(n) ? fallback : n;
-}
+// `ensureInt` + `ensureNumber` moved to utils/numericHelpers (D.2 cleanup).
+const { ensureInt, ensureNumber } = require('../utils/numericHelpers');
 
 /**
  * Compute line totals + document totals authoritatively from the

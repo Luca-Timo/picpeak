@@ -49,7 +49,7 @@
  * preferredLanguage so the doc renders in their locale by default).
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Button, Input } from '../common';
@@ -97,11 +97,21 @@ export const CustomerPicker: React.FC<CustomerPickerProps> = ({
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
+  // Debounce the search term before it hits the API. The previous
+  // shape fired one search request per keystroke; on a passive-
+  // customer list of 500+ rows, that's hundreds of /api/admin/customers
+  // calls during a single look-up. 250ms is below the perceptual
+  // threshold for typing.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedSearch(search), 250);
+    return () => window.clearTimeout(handle);
+  }, [search]);
 
   const { data: options = [] } = useQuery({
-    queryKey: ['crm-customer-picker', search],
-    queryFn: () => customerAdminService.search(search),
-    enabled: !readOnly && !value && !creating && search.trim().length >= 2,
+    queryKey: ['crm-customer-picker', debouncedSearch],
+    queryFn: () => customerAdminService.search(debouncedSearch),
+    enabled: !readOnly && !value && !creating && debouncedSearch.trim().length >= 2,
   });
 
   if (value) {

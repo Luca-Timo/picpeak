@@ -117,11 +117,8 @@ async function maybeStoreIp(ip) {
 // Helpers
 // ---------------------------------------------------------------------
 
-function ensureInt(value) {
-  const n = parseInt(value, 10);
-  if (Number.isNaN(n)) return 0;
-  return n;
-}
+// D.2 — `ensureInt` consolidated into utils/numericHelpers.
+const { ensureInt } = require('../utils/numericHelpers');
 
 function formatNumberInTemplate(format, year, seq) {
   return format

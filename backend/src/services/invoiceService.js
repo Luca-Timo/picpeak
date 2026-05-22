@@ -39,17 +39,8 @@ function getHierarchyHelpers() {
   return require('./quoteService')._internal;
 }
 
-// Reused tiny helpers identical to quoteService — duplicated rather
-// than imported to keep services decoupled.
-function ensureInt(value) {
-  const n = parseInt(value, 10);
-  return Number.isNaN(n) ? 0 : n;
-}
-function ensureNumber(value, fallback = 0) {
-  if (value === null || value === undefined || value === '') return fallback;
-  const n = Number(value);
-  return Number.isNaN(n) ? fallback : n;
-}
+// D.2 — `ensureInt` + `ensureNumber` consolidated into utils/numericHelpers.
+const { ensureInt, ensureNumber } = require('../utils/numericHelpers');
 
 function formatNumberInTemplate(format, year, seq) {
   return format
