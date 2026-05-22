@@ -69,7 +69,12 @@ export const BlockLibraryPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [selection, setSelection] = useState<Selection>(null);
   const [editingLang, setEditingLang] = useState<string>('en');
-  const [showInactive, setShowInactive] = useState(false);
+  // The block library is the admin's authoring surface — inactive
+  // blocks are always shown so admins can find blocks they previously
+  // deactivated (the "Inactive" badge keeps the state obvious). The
+  // toggle below now lets admins HIDE inactive blocks if they want a
+  // cleaner view, but defaults to false so nothing disappears.
+  const [hideInactive, setHideInactive] = useState(false);
 
   // Local form state mirrors the active selection. Reset whenever the
   // selection changes (via the useEffect below) so editing one block,
@@ -80,8 +85,12 @@ export const BlockLibraryPage: React.FC = () => {
   const [bodies, setBodies] = useState<Record<string, string>>({});
 
   const { data, isLoading } = useQuery({
-    queryKey: ['contracts', 'blocks', { showInactive }],
-    queryFn: () => contractsService.listBlocks({ includeInactive: showInactive }),
+    queryKey: ['contracts', 'blocks', { hideInactive }],
+    // Always fetch every block; client-side filter is purely for
+    // visual hide. Keeps the cache consistent across toggle flips
+    // and means the new-block flow can land in any section without
+    // re-fetching.
+    queryFn: () => contractsService.listBlocks({ includeInactive: true }),
   });
   const blocks = data?.blocks || [];
 
@@ -149,14 +158,21 @@ export const BlockLibraryPage: React.FC = () => {
   });
 
   // Group blocks by section for sidebar rendering. Empty sections are
-  // skipped so the sidebar doesn't show stub headings.
+  // skipped so the sidebar doesn't show stub headings. Inactive blocks
+  // included by default; hideInactive=true filters them out for admins
+  // who want a cleaner view (the selection survives the filter — if
+  // the selected block becomes hidden, the right panel still shows it
+  // so the admin can re-activate without re-finding it).
   const grouped = useMemo(() => {
     const g: Record<ContractBlockSection, ContractBlock[]> = {
       basics: [], scope: [], privacy: [], commercial: [], nda: [], closing: [],
     };
-    for (const b of blocks) g[b.section]?.push(b);
+    for (const b of blocks) {
+      if (hideInactive && !b.isActive) continue;
+      g[b.section]?.push(b);
+    }
     return g;
-  }, [blocks]);
+  }, [blocks, hideInactive]);
 
   // Count populated bodies for the sidebar pill (e.g. "3/6" = three
   // locales have body text, three are blank). Mirrors the email
@@ -231,8 +247,8 @@ export const BlockLibraryPage: React.FC = () => {
           {t('contracts.blocks.title', 'Contract block library')}
         </h1>
         <label className="flex items-center gap-2 text-sm text-muted-theme">
-          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-          {t('contracts.blocks.showInactive', 'Show inactive')}
+          <input type="checkbox" checked={hideInactive} onChange={(e) => setHideInactive(e.target.checked)} />
+          {t('contracts.blocks.hideInactive', 'Hide inactive')}
         </label>
       </div>
 
@@ -471,6 +487,36 @@ export const BlockLibraryPage: React.FC = () => {
                       className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm font-mono"
                     />
                   </div>
+
+                  {/* Special-block preview: quote_line_items_table
+                      generates an actual PDF table from the source
+                      quote's line items at render time. The block's
+                      body text is just the intro paragraph above the
+                      table; without this callout the admin had no way
+                      to know the table existed (it appears in the PDF
+                      but nowhere in the block editor). */}
+                  {selection.mode === 'edit' && selection.block.slug === 'quote_line_items_table' && (
+                    <div className="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 p-3 text-sm text-blue-900 dark:text-blue-200">
+                      <p className="font-medium mb-1">
+                        {t('contracts.blocks.quoteLineItems.calloutTitle',
+                          'Auto-generated table follows the body')}
+                      </p>
+                      <p className="text-xs">
+                        {t('contracts.blocks.quoteLineItems.calloutBody',
+                          'When this block is included in a contract that was created from a quote, the PDF inserts a real table of the source quote\'s line items (#, Description, Qty, Unit, Total) immediately after the body text above. Sub-items render indented with a ↳ marker. Contracts without a source quote skip the table and render only the body.')}
+                      </p>
+                      <p className="text-xs mt-2 opacity-80">
+                        {t('contracts.blocks.quoteLineItems.previewExample',
+                          'Example rendered output:')}
+                      </p>
+                      <pre className="mt-1 text-[11px] font-mono bg-white/50 dark:bg-neutral-900/40 rounded p-2 overflow-x-auto">
+{`#   Description                      Qty    Unit       Total
+1   Photography session              1      CHF 800    CHF 800
+2   Photo prints                     2      CHF 15     CHF 30
+       ↳ Extra retouching            1      CHF 20     CHF 20`}
+                      </pre>
+                    </div>
+                  )}
 
                   <p className="text-xs text-neutral-500 dark:text-neutral-400">
                     {t(
