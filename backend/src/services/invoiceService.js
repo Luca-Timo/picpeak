@@ -1107,6 +1107,21 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
     };
   }
 
+  // Per-invoice Skonto opt-out (migration 126). The
+  // `resolveSkontoPercentForInvoice` helper above already respects
+  // this for payment-tracking surfaces, but the PDF render path was
+  // assembling `paymentTerm.skontoPercent/Days` from the snapshot or
+  // global defaults and ignoring the flag — so ticking "Disable
+  // Skonto" on the invoice cleared it from "Paid with Skonto" buttons
+  // but still printed the discount row on the PDF. Zero out both
+  // fields here so pdfService.drawPaymentBlock's
+  // `paymentTerm?.skontoPercent && paymentTerm?.skontoWithinDays`
+  // guard suppresses the row.
+  if (invoice.skonto_disabled) {
+    paymentTerm.skontoPercent = null;
+    paymentTerm.skontoWithinDays = null;
+  }
+
   // Global date format from Settings → General (general_date_format).
   // Stored as JSON `{ format, locale }`; missing or malformed entries
   // fall back to DD.MM.YYYY in the renderer.

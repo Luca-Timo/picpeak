@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 
 import { Button, Card, Input, Loading } from '../../components/common';
+import { DecimalInput } from '../../components/common/DecimalInput';
 import { AssignedEventsDialog } from '../../components/admin/AssignedEventsDialog';
 import {
   customerAdminService,
@@ -88,6 +89,11 @@ export const CustomerDetailPage: React.FC = () => {
     staleTime: 5 * 60 * 1000,
   });
   const profileDefaultLocale = profileSnapshot?.profile?.defaultLocale || 'en';
+  // #3 — the hourly-rate hint used to hardcode "CHF" in its example.
+  // Pull the configured default currency so installs running EUR /
+  // USD / GBP get a meaningful example instead of one referencing a
+  // currency they don't use.
+  const profileDefaultCurrency = profileSnapshot?.profile?.defaultCurrency || 'CHF';
   const LOCALE_LABELS: Record<string, string> = {
     en: 'English', de: 'Deutsch', fr: 'Français',
     nl: 'Nederlands', pt: 'Português', ru: 'Русский',
@@ -644,16 +650,13 @@ export const CustomerDetailPage: React.FC = () => {
             <label className="block text-sm font-medium text-theme mb-1">
               {t('customers.field.hourlyRate', 'Default hourly rate')}
             </label>
-            <input
-              type="number"
-              step="0.01"
-              min={0}
-              value={form.hourlyRateMinor != null ? (form.hourlyRateMinor / 100).toFixed(2) : ''}
-              onChange={(e) => {
-                const raw = e.target.value;
+            <DecimalInput
+              value={form.hourlyRateMinor != null ? form.hourlyRateMinor / 100 : NaN}
+              fractionDigits={2}
+              onChange={(n) => {
                 setForm((prev) => ({
                   ...prev,
-                  hourlyRateMinor: raw === '' ? null : Math.round(Number(raw) * 100),
+                  hourlyRateMinor: Number.isFinite(n) ? Math.max(0, Math.round(n * 100)) : null,
                 } as any));
               }}
               placeholder="150.00"
@@ -661,7 +664,8 @@ export const CustomerDetailPage: React.FC = () => {
             />
             <p className="text-xs text-muted-theme mt-1">
               {t('customers.field.hourlyRateHint',
-                'Major units (e.g. 150.00 for CHF 150). Leave blank to require a per-entry override on every block.')}
+                'Major units (e.g. 150.00 for {{currency}} 150). Leave blank to require a per-entry override on every block.',
+                { currency: profileDefaultCurrency })}
             </p>
           </div>
         )}

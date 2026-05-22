@@ -118,10 +118,10 @@ export const FeaturesTab: React.FC = () => {
             child below is on), so there's no explicit parent toggle —
             admins just enable the specific feature they want and the
             section appears automatically. */}
-        <Section title={t('settings.features.sections.clients', 'Clients')}>
+        <Section title={t('settings.features.sections.clients', 'CRM')}>
           <FeatureCard
             icon={UserCog}
-            title={t('settings.features.customerPortal.title', 'Clients')}
+            title={t('settings.features.customerPortal.title', 'Customer Accounts')}
             description={t(
               'settings.features.customerPortal.description',
               'Persistent customer logins. Recurring clients see all their assigned galleries from one place — no per-event passwords. Customers log in at /customer/login and you manage them under Clients → Accounts.',
@@ -132,7 +132,7 @@ export const FeaturesTab: React.FC = () => {
             // admin clicks first, not the deeper "Accounts" sub-nav.
             // Keeps the wording consistent with what's actually visible
             // in the menu bar.
-            sidebarLabel={t('navigation.clients', 'Clients')}
+            sidebarLabel={t('navigation.clients', 'CRM')}
             enabled={staged.customerPortal}
             onToggle={(next) => setFlag('customerPortal', next)}
           />
@@ -285,7 +285,7 @@ export const FeaturesTab: React.FC = () => {
             title={t('settings.features.hoursLogging.title', 'Hours logging')}
             description={t(
               'settings.features.hoursLogging.description',
-              'Per-customer time tracking. Admin logs date + start/end times + optional rate override + note. Monthly-mode customers auto-accumulate hours into the running monthly draft; per-event customers see a "Bill these hours" button that mints a standalone invoice with one line per entry. Independent of Bills — log hours even before turning the full billing surface on.',
+              'Per-customer time tracking. Admin logs date + start/end times + optional rate override + note. Monthly-mode customers auto-accumulate hours into the running monthly draft; per-event customers see a "Create draft invoice" button that mints a standalone draft invoice with one line per entry. Independent of Bills — log hours even before turning the full billing surface on.',
             )}
             status="new"
             statusLabel={statusLabel('new')}

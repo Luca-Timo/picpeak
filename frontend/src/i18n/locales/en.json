@@ -172,7 +172,7 @@
     "cmsPages": "CMS Pages",
     "users": "Users",
     "calendar": "Calendar",
-    "clients": "Clients",
+    "clients": "CRM",
     "betaTag": "Beta"
   },
   "archives": {
@@ -1101,7 +1101,7 @@
         "sales": "Sales",
         "insights": "Insights & Access",
         "customers": "Customers",
-        "clients": "Clients"
+        "clients": "CRM"
       },
       "status": {
         "stable": "stable",
@@ -1160,12 +1160,12 @@
         "warning": "Existing user accounts stay valid; the admin UI for managing them will be hidden until you re-enable this."
       },
       "customerPortal": {
-        "title": "Clients",
-        "description": "Persistent customer logins. Recurring clients see all their assigned galleries from one place — no per-event passwords. Customers log in at /customer/login and you manage them under Clients → Accounts."
+        "title": "Customer Accounts",
+        "description": "Persistent customer logins. Recurring clients see all their assigned galleries from one place — no per-event passwords. Customers log in at /customer/login and you manage them under CRM → Accounts."
       },
       "clients": {
-        "title": "Clients",
-        "description": "Master switch for the Clients sidebar section. Off hides the section and every sub-feature below regardless of their individual toggles — re-enable to restore them to whatever you set last."
+        "title": "CRM",
+        "description": "Master switch for the CRM sidebar section. Off hides the section and every sub-feature below regardless of their individual toggles — re-enable to restore them to whatever you set last."
       }
     },
     "customerSurface": {
@@ -2788,7 +2788,8 @@
       "quotes": "Quotes",
       "bills": "Invoices",
       "profile": "Profile",
-      "soon": "Soon"
+      "soon": "Soon",
+      "new": "New"
     },
     "comingSoon": {
       "tag": "Coming soon"
@@ -2916,17 +2917,20 @@
     "field": {
       "featureHoursLogging": "Hours logging",
       "hourlyRate": "Default hourly rate",
-      "hourlyRateHint": "Major units (e.g. 150.00 for CHF 150). Leave blank to require a per-entry override on every block."
+      "hourlyRateHint": "Major units (e.g. 150.00 for {{currency}} 150). Leave blank to require a per-entry override on every block."
     },
     "hours": {
       "section": "Hours",
       "monthlyHint": "Entries auto-append to the current monthly draft. Edit / delete remains possible until the scheduler arms the draft for send.",
-      "perEventHint": "Logged entries stay unbilled until you click \"Bill these hours\" — a standalone invoice is generated with one line per entry.",
+      "perEventHint": "Logged entries stay unbilled until you click \"Create draft invoice\" — a standalone draft invoice is generated with one line per entry, ready for you to review before sending.",
       "form": {
         "title": "Log new entry",
         "date": "Date",
         "start": "Start",
         "end": "End",
+        "duration": "Duration",
+        "durationPlaceholder": "1h · 1.5 · 1:30",
+        "durationHint": "Type a duration to auto-fill End: 1h, 1.5, 1,5 or 1:30",
         "rateOverride": "Rate override",
         "note": "Note / description",
         "notePlaceholder": "What was worked on?",
@@ -2946,7 +2950,7 @@
         "billed": "Billed",
         "billedOn": "Billed: {{number}}"
       },
-      "billButton": "Bill these hours",
+      "billButton": "Create draft invoice",
       "unbilledCount": "{{count}} unbilled entries totaling {{total}}",
       "empty": "No entries logged yet.",
       "confirmDelete": "Delete this entry? If it has been billed onto a draft, the matching invoice line will also be removed.",
@@ -3073,6 +3077,7 @@
       "city": "City",
       "state": "State / region",
       "countryCode": "Country (ISO 2)",
+      "countryName": "Country (full name)",
       "notesHint": "Visible only to admins. Never shown to the customer.",
       "featuresSection": "Customer features",
       "featuresHint": "Per-customer overrides for the customer-surface tabs. The global toggles in Settings → Customer Surface are the master switch — when global is OFF nobody sees the tab, regardless of what you set here. Defaults are ON, so flip a switch OFF to hide a tab for this specific customer.",
@@ -3086,9 +3091,30 @@
       },
       "quotesSection": "Quotes",
       "noQuotes": "No quotes for this customer yet.",
+      "contractsSection": "Contracts",
+      "noContracts": "No contracts for this customer yet.",
       "billsSection": "Invoices",
       "noBills": "No invoices for this customer yet.",
       "manageEvents": "Manage galleries"
+    },
+    "billing": {
+      "section": "Billing cadence",
+      "hint": "Per-event (default): every invoice is sent on its own schedule. Monthly: all invoices issued in the period accumulate into one bill that fires on the configured day.",
+      "cadence": "Billing cadence",
+      "perEvent": "Per event",
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "cycleDay": "Cycle day",
+      "cycleDayHint": "1..28 = day of month. Use negative -1..-15 for \"N days before month end\" (so -3 fires on the 28th of a 31-day month).",
+      "triggerNow": "Trigger invoice now",
+      "triggerConfirm": "Issue this customer's monthly bill now? The customer receives the email immediately.",
+      "triggerHint": "Bypasses the cadence day and issues the running draft immediately. Refuses when nothing has been queued for the current period.",
+      "triggered": "Monthly bill issued: {{number}}",
+      "triggerError": "Could not trigger the monthly bill.",
+      "draftPreview": {
+        "title": "Pending in this month's bill",
+        "periodRange": "{{number}} · {{from}} – {{to}}"
+      }
     },
     "reactivate": {
       "button": "Reactivate",
@@ -3124,12 +3150,12 @@
     }
   },
   "clients": {
-    "title": "Clients",
-    "subtitle": "Customer accounts, scheduling, quotes and billing for recurring clients.",
-    "navAriaLabel": "Clients navigation",
+    "title": "CRM",
+    "subtitle": "Customer accounts, scheduling, quotes and billing — everything for recurring clients in one place.",
+    "navAriaLabel": "CRM navigation",
     "empty": {
-      "title": "No client features enabled",
-      "body": "Enable Accounts (or another Clients sub-feature) under Settings → Features to get started."
+      "title": "No CRM features enabled",
+      "body": "Enable Accounts (or another CRM sub-feature) under Settings → Features to get started."
     },
     "subnav": {
       "accounts": "Accounts",
@@ -3191,7 +3217,9 @@
     "subtitle": "Pick a customer and log billable time blocks. Entries flow into the next monthly bill or are billed on demand for per-event customers.",
     "pickCustomer": "Customer",
     "pickPlaceholder": "— Select customer —",
-    "emptyList": "No customers have hours logging enabled yet. Flip \"Hours logging\" on a customer's detail page first."
+    "emptyList": "No customers have hours logging enabled yet. Flip \"Hours logging\" on a customer's detail page first.",
+    "searchPlaceholder": "Search by email or company…",
+    "customerLoggingDisabled": "This customer has hour logging disabled. Enable it on the customer's detail page to log hours."
   },
   "taxReport": {
     "title": "Tax report",
@@ -3425,8 +3453,19 @@
       "eventName": "Event",
       "eventDate": "Event date",
       "eventTimeStart": "Start time",
-      "eventTimeEnd": "End time"
+      "eventTimeEnd": "End time",
+      "customer": "Customer",
+      "invoiceNumber": "Invoice number",
+      "paidAmount": "Paid amount (optional)",
+      "pdfFile": "PDF file"
     },
+    "import": "Import historical",
+    "importTitle": "Import historical invoice",
+    "importHelp": "Attach a PDF from a previous billing system. The customer sees this original document in their portal — picpeak does not regenerate it.",
+    "importedToast": "Invoice imported.",
+    "importError": "Import failed",
+    "importing": "Importing…",
+    "noMatch": "No matches",
     "section": {
       "lineItems": "Line items",
       "paymentLog": "Payment log",
@@ -3473,7 +3512,8 @@
     },
     "field": {
       "companyName": "Company name",
-      "vatId": "VAT ID",
+      "vatId": "VAT ID (USt-IdNr.)",
+      "taxId": "Tax number (Steuernummer)",
       "addressLine1": "Address line 1",
       "addressLine2": "Address line 2",
       "postalCode": "Postal code",
@@ -3618,6 +3658,9 @@
       "signed_by_admin": "Counter-signed",
       "fully_signed": "Fully signed",
       "cancelled": "Cancelled"
+    },
+    "list": {
+      "new": "New contract"
     }
   }
 }

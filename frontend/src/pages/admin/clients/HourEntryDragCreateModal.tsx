@@ -24,7 +24,7 @@
  * from the backend and the toast surfaces the error.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
@@ -204,6 +204,25 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
     createMutation.mutate();
   };
 
+  // I.6 — close on Escape via a document-level listener. A React
+  // onKeyDown on the modal's outer div ONLY fires when focus is
+  // already inside the modal subtree — but after the modal opens
+  // (from FullCalendar's `select` callback), focus stays on FC's
+  // canvas / body, so the bubbled-up handler never sees the keydown.
+  // Listening on document catches Escape regardless of where focus
+  // sits. Guarded against the mutation being in-flight so the admin
+  // can't cancel mid-save and end up with a saved-but-modal-closed
+  // race.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !createMutation.isPending) {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [createMutation.isPending, onClose]);
+
   return (
     <div
       role="dialog"
@@ -211,14 +230,8 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 p-4"
       onClick={(e) => {
         // Click on the backdrop closes; clicks inside the card stop
-        // here.
+        // here. (Esc handled via document-level listener above.)
         if (e.target === e.currentTarget) onClose();
-      }}
-      onKeyDown={(e) => {
-        // Esc closes — standard modal expectation. We don't trap focus
-        // explicitly; the backdrop click + this Esc handler are the
-        // two close paths.
-        if (e.key === 'Escape' && !createMutation.isPending) onClose();
       }}
     >
       <Card padding="lg" className="w-full max-w-md">

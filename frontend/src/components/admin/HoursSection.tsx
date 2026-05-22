@@ -19,8 +19,9 @@ import { toast } from 'react-toastify';
 import { Clock } from 'lucide-react';
 import { Button, Card } from '../common';
 import { DecimalInput } from '../common/DecimalInput';
-import { parseLocaleDecimal } from '../../utils/parsers';
+import { parseLocaleDecimal, parseDuration } from '../../utils/parsers';
 import { customerAdminService } from '../../services/customerAdmin.service';
+import { businessProfileService } from '../../services/businessProfile.service';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 export interface HoursSectionProps {
@@ -54,14 +55,42 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('10:00');
+  const [duration, setDuration] = useState<string>('');
   const [rateOverride, setRateOverride] = useState<string>('');
   const [description, setDescription] = useState('');
+
+  // Duration shortcut — admin types "1.5", "1,5", "1:30" or "1h" and
+  // the end-time jumps to start + duration. Pure convenience; the End
+  // input still works for explicit times. Empty / unparseable input is
+  // a no-op so a typo doesn't overwrite a freshly-edited End.
+  const applyDuration = (raw: string) => {
+    const minutes = parseDuration(raw);
+    if (minutes == null) return;
+    const [hh, mm] = startTime.split(':').map(Number);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return;
+    const totalEnd = Math.min(hh * 60 + mm + minutes, 24 * 60 - 1);
+    const eh = Math.floor(totalEnd / 60).toString().padStart(2, '0');
+    const em = (totalEnd % 60).toString().padStart(2, '0');
+    setEndTime(`${eh}:${em}`);
+  };
 
   const { data: entries = [], isLoading } = useQuery({
     queryKey: ['admin-customer-hour-entries', customerId],
     queryFn: () => customerAdminService.listHourEntries(customerId),
     enabled: Number.isFinite(customerId) && customerId > 0,
   });
+
+  // Pull the configured default currency so the hint can show
+  // "{{currency}} 150" instead of the hardcoded "CHF 150". Same cache
+  // key as CustomerDetailPage so a single round-trip serves both
+  // mount points. 5-minute stale window — the value changes via
+  // Settings → Business profile, not during a hours-logging session.
+  const { data: profileSnapshot } = useQuery({
+    queryKey: ['business-profile-snapshot'],
+    queryFn: () => businessProfileService.get(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const profileDefaultCurrency = profileSnapshot?.profile?.defaultCurrency || 'CHF';
 
   const createMutation = useMutation({
     mutationFn: () => customerAdminService.createHourEntry(customerId, {
@@ -79,6 +108,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
       qc.invalidateQueries({ queryKey: ['admin-customer', customerId] });
       setStartTime('09:00');
       setEndTime('10:00');
+      setDuration('');
       setRateOverride('');
       setDescription('');
       toast.success(t('customers.hours.toast.created', 'Entry logged'));
@@ -137,7 +167,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
           ? t('customers.hours.monthlyHint',
             'Entries auto-append to the current monthly draft. Edit / delete remains possible until the scheduler arms the draft for send.')
           : t('customers.hours.perEventHint',
-            'Logged entries stay unbilled until you click "Bill these hours" — a standalone invoice is generated with one line per entry.')}
+            'Logged entries stay unbilled until you click "Create draft invoice" — a standalone draft invoice is generated with one line per entry, ready for you to review before sending.')}
       </p>
 
       {/* Default rate — hidden in compact mode (history-only on the
@@ -164,7 +194,8 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
           />
           <p className="text-xs text-muted-theme mt-1">
             {t('customers.field.hourlyRateHint',
-              'Major units (e.g. 150.00 for CHF 150). Leave blank to require a per-entry override on every block.')}
+              'Major units (e.g. 150.00 for {{currency}} 150). Leave blank to require a per-entry override on every block.',
+              { currency: profileDefaultCurrency })}
           </p>
         </div>
       )}
@@ -174,7 +205,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
       {!compact && (
       <div className="border-t border-neutral-200 dark:border-neutral-700 pt-4 mb-4">
         <h3 className="text-sm font-semibold mb-3">{t('customers.hours.form.title', 'Log new entry')}</h3>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <div>
             <label className="block text-xs text-muted-theme mb-1">
               {t('customers.hours.form.date', 'Date')}
@@ -195,6 +226,27 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
             </label>
             <input type="time" lang={timeInputLang} value={endTime}
               onChange={(e) => setEndTime(e.target.value)} className="input w-full" />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-theme mb-1">
+              {t('customers.hours.form.duration', 'Duration')}
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+              onBlur={(e) => applyDuration(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  applyDuration((e.target as HTMLInputElement).value);
+                }
+              }}
+              placeholder={t('customers.hours.form.durationPlaceholder', '1h · 1.5 · 1:30') as string}
+              title={t('customers.hours.form.durationHint',
+                'Type a duration to auto-fill End: 1h, 1.5, 1,5 or 1:30') as string}
+              className="input w-full" />
           </div>
           <div>
             <label className="block text-xs text-muted-theme mb-1">
@@ -256,7 +308,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
             isLoading={billMutation.isPending}
             onClick={() => billMutation.mutate()}
           >
-            {t('customers.hours.billButton', 'Bill these hours')}
+            {t('customers.hours.billButton', 'Create draft invoice')}
           </Button>
         </div>
       )}

@@ -172,7 +172,7 @@
     "cmsPages": "CMS-Seiten",
     "users": "Benutzer",
     "calendar": "Kalender",
-    "clients": "Kunden",
+    "clients": "CRM",
     "betaTag": "Beta"
   },
   "eventTypes": {
@@ -1462,7 +1462,7 @@
         "sales": "Vertrieb",
         "insights": "Auswertungen & Zugriff",
         "customers": "Kunden",
-        "clients": "Kunden"
+        "clients": "CRM"
       },
       "status": {
         "stable": "stabil",
@@ -1521,12 +1521,12 @@
         "warning": "Bestehende Benutzerkonten bleiben gültig; die Admin-Oberfläche für deren Verwaltung wird ausgeblendet, bis Sie dies wieder aktivieren."
       },
       "customerPortal": {
-        "title": "Kunden",
-        "description": "Persistente Kunden-Logins. Wiederkehrende Kunden sehen alle zugewiesenen Galerien an einem Ort — keine Passwörter pro Event. Kunden melden sich unter /customer/login an, verwaltet werden sie unter Kunden → Konten."
+        "title": "Kundenkonten",
+        "description": "Persistente Kunden-Logins. Wiederkehrende Kunden sehen alle zugewiesenen Galerien an einem Ort — keine Passwörter pro Event. Kunden melden sich unter /customer/login an, verwaltet werden sie unter CRM → Konten."
       },
       "clients": {
-        "title": "Kunden",
-        "description": "Hauptschalter für den Kunden-Bereich in der Seitenleiste. Aus blendet den Bereich und alle Unterfunktionen aus, unabhängig von deren individuellen Schaltern – beim erneuten Einschalten wird der vorherige Zustand wiederhergestellt."
+        "title": "CRM",
+        "description": "Hauptschalter für den CRM-Bereich in der Seitenleiste. Aus blendet den Bereich und alle Unterfunktionen aus, unabhängig von deren individuellen Schaltern – beim erneuten Einschalten wird der vorherige Zustand wiederhergestellt."
       }
     },
     "customerSurface": {
@@ -2788,7 +2788,8 @@
       "quotes": "Angebote",
       "bills": "Rechnungen",
       "profile": "Profil",
-      "soon": "Bald"
+      "soon": "Bald",
+      "new": "Neu"
     },
     "comingSoon": {
       "tag": "Demnächst"
@@ -2916,17 +2917,20 @@
     "field": {
       "featureHoursLogging": "Stundenerfassung",
       "hourlyRate": "Standard-Stundensatz",
-      "hourlyRateHint": "Haupteinheiten (z. B. 150.00 für CHF 150). Leer lassen, um pro Eintrag einen Satz zu verlangen."
+      "hourlyRateHint": "Haupteinheiten (z. B. 150.00 für {{currency}} 150). Leer lassen, um pro Eintrag einen Satz zu verlangen."
     },
     "hours": {
       "section": "Stunden",
       "monthlyHint": "Einträge werden automatisch dem aktuellen monatlichen Entwurf angehängt. Bearbeiten/Löschen möglich, bis der Scheduler den Versand auslöst.",
-      "perEventHint": "Erfasste Einträge bleiben unverrechnet, bis Sie auf „Stunden abrechnen“ klicken — dann wird eine eigenständige Rechnung mit einer Zeile pro Eintrag erzeugt.",
+      "perEventHint": "Erfasste Einträge bleiben unverrechnet, bis Sie auf „Rechnungsentwurf erstellen“ klicken — dann wird ein eigenständiger Rechnungsentwurf mit einer Zeile pro Eintrag erzeugt, den Sie vor dem Versand prüfen können.",
       "form": {
         "title": "Neuen Eintrag erfassen",
         "date": "Datum",
         "start": "Start",
         "end": "Ende",
+        "duration": "Dauer",
+        "durationPlaceholder": "1h · 1,5 · 1:30",
+        "durationHint": "Dauer eingeben, um Ende automatisch zu setzen: 1h, 1.5, 1,5 oder 1:30",
         "rateOverride": "Satz-Override",
         "note": "Notiz / Beschreibung",
         "notePlaceholder": "Was wurde gearbeitet?",
@@ -2946,7 +2950,7 @@
         "billed": "Verrechnet",
         "billedOn": "Verrechnet: {{number}}"
       },
-      "billButton": "Stunden abrechnen",
+      "billButton": "Rechnungsentwurf erstellen",
       "unbilledCount": "{{count}} offene Einträge, total {{total}}",
       "empty": "Noch keine Einträge erfasst.",
       "confirmDelete": "Diesen Eintrag löschen? Wenn er auf einem Entwurf verrechnet wurde, wird die zugehörige Rechnungsposition ebenfalls entfernt.",
@@ -3073,6 +3077,7 @@
       "city": "Stadt",
       "state": "Bundesland / Region",
       "countryCode": "Land (ISO-2)",
+      "countryName": "Land (vollständiger Name)",
       "notesHint": "Nur für Administratoren sichtbar. Wird dem Kunden nie gezeigt.",
       "featuresSection": "Kundenfunktionen",
       "featuresHint": "Pro-Kunde-Überschreibungen für die Kundenoberflächen-Tabs. Die globalen Schalter in Einstellungen → Kundenoberfläche sind der Master-Schalter — wenn global AUS, sieht niemand den Tab, unabhängig von der Einstellung hier. Standard ist AN, schalte einen Eintrag AUS, um diesen Tab für diesen Kunden auszublenden.",
@@ -3087,8 +3092,29 @@
       "manageEvents": "Galerien verwalten",
       "quotesSection": "Angebote",
       "noQuotes": "Noch keine Angebote für diesen Kunden.",
+      "contractsSection": "Verträge",
+      "noContracts": "Noch keine Verträge für diesen Kunden.",
       "billsSection": "Rechnungen",
       "noBills": "Noch keine Rechnungen für diesen Kunden."
+    },
+    "billing": {
+      "section": "Abrechnungsrhythmus",
+      "hint": "Per-Event (Standard): jede Rechnung wird einzeln versendet. Monatlich: alle Rechnungen einer Periode werden zu einer Sammelrechnung gebündelt, die am konfigurierten Stichtag ausgelöst wird.",
+      "cadence": "Abrechnungsrhythmus",
+      "perEvent": "Per Event",
+      "monthly": "Monatlich",
+      "quarterly": "Quartalsweise",
+      "cycleDay": "Stichtag",
+      "cycleDayHint": "1..28 = Tag im Monat. Negativ -1..-15 für „N Tage vor Monatsende“ (so löst -3 in einem 31-Tage-Monat am 28. aus).",
+      "triggerNow": "Rechnung jetzt ausstellen",
+      "triggerConfirm": "Monatsrechnung für diesen Kunden jetzt ausstellen? Der Kunde erhält die E-Mail sofort.",
+      "triggerHint": "Überspringt den Stichtag und stellt den aktuellen Entwurf sofort aus. Wird abgelehnt, wenn für die aktuelle Periode nichts erfasst wurde.",
+      "triggered": "Monatsrechnung ausgestellt: {{number}}",
+      "triggerError": "Monatsrechnung konnte nicht ausgelöst werden.",
+      "draftPreview": {
+        "title": "Offen für die Rechnung dieses Monats",
+        "periodRange": "{{number}} · {{from}} – {{to}}"
+      }
     },
     "reactivate": {
       "button": "Reaktivieren",
@@ -3124,12 +3150,12 @@
     }
   },
   "clients": {
-    "title": "Kunden",
-    "subtitle": "Kundenkonten, Termine, Angebote und Rechnungen für wiederkehrende Kunden.",
-    "navAriaLabel": "Kunden-Navigation",
+    "title": "CRM",
+    "subtitle": "Kundenkonten, Termine, Angebote und Rechnungen — alles für wiederkehrende Kunden an einem Ort.",
+    "navAriaLabel": "CRM-Navigation",
     "empty": {
-      "title": "Keine Kunden-Funktionen aktiviert",
-      "body": "Aktiviere „Konten\" (oder eine andere Kunden-Unterfunktion) unter Einstellungen → Funktionen, um loszulegen."
+      "title": "Keine CRM-Funktionen aktiviert",
+      "body": "Aktiviere „Konten\" (oder eine andere CRM-Unterfunktion) unter Einstellungen → Funktionen, um loszulegen."
     },
     "subnav": {
       "accounts": "Konten",
@@ -3191,7 +3217,9 @@
     "subtitle": "Kunden wählen und abrechenbare Zeit erfassen. Einträge fließen in die nächste Monatsrechnung oder werden für Per-Event-Kunden auf Knopfdruck abgerechnet.",
     "pickCustomer": "Kunde",
     "pickPlaceholder": "— Kunde wählen —",
-    "emptyList": "Noch keine Kunden mit aktivierter Stundenerfassung. Aktivieren Sie „Stundenerfassung“ zuerst auf der Kundendetailseite."
+    "emptyList": "Noch keine Kunden mit aktivierter Stundenerfassung. Aktivieren Sie „Stundenerfassung“ zuerst auf der Kundendetailseite.",
+    "searchPlaceholder": "Nach E-Mail oder Firma suchen…",
+    "customerLoggingDisabled": "Bei diesem Kunden ist die Stundenerfassung deaktiviert. Aktiviere sie auf der Kundendetailseite, um Stunden zu erfassen."
   },
   "taxReport": {
     "title": "Steuerliste",
@@ -3383,8 +3411,19 @@
       "eventName": "Anlass",
       "eventDate": "Anlassdatum",
       "eventTimeStart": "Startzeit",
-      "eventTimeEnd": "Endzeit"
+      "eventTimeEnd": "Endzeit",
+      "customer": "Kunde",
+      "invoiceNumber": "Rechnungsnummer",
+      "paidAmount": "Bereits bezahlt (optional)",
+      "pdfFile": "PDF-Datei"
     },
+    "import": "Historische Rechnung importieren",
+    "importTitle": "Historische Rechnung importieren",
+    "importHelp": "Hänge ein PDF aus einem früheren Abrechnungssystem an. Der Kunde sieht dieses Originaldokument in seinem Portal — picpeak erzeugt es nicht neu.",
+    "importedToast": "Rechnung importiert.",
+    "importError": "Import fehlgeschlagen",
+    "importing": "Importiere…",
+    "noMatch": "Keine Treffer",
     "title": "Rechnungen",
     "subtitle": "Rechnungen planen, versenden, Zahlungen erfassen und überfällige Rechnungen mahnen.",
     "new": "Neue Rechnung",
@@ -3476,7 +3515,8 @@
     },
     "field": {
       "companyName": "Firmenname",
-      "vatId": "USt-IdNr / MwSt-Nr",
+      "vatId": "USt-IdNr.",
+      "taxId": "Steuernummer",
       "addressLine1": "Adresszeile 1",
       "addressLine2": "Adresszeile 2",
       "postalCode": "PLZ",
@@ -3621,6 +3661,9 @@
       "signed_by_admin": "Gegengezeichnet",
       "fully_signed": "Beidseitig unterzeichnet",
       "cancelled": "Storniert"
+    },
+    "list": {
+      "new": "Neuer Vertrag"
     }
   }
 }

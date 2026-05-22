@@ -64,8 +64,14 @@ export const SettingsBusinessProfilePage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Input label={t('businessProfile.field.companyName', 'Company name') as string} value={profile.companyName}
             onChange={(e) => setProfile({ ...profile, companyName: e.target.value })} />
-          <Input label={t('businessProfile.field.vatId', 'VAT ID') as string} value={profile.vatId}
+          <Input label={t('businessProfile.field.vatId', 'VAT ID (USt-IdNr.)') as string} value={profile.vatId}
             onChange={(e) => setProfile({ ...profile, vatId: e.target.value })} />
+          {/* Migration 139 — Steuernummer. Distinct from VAT-ID. §14
+              UStG requires one or both on every invoice; many
+              Kleinunternehmer (§19 UStG) only have this. */}
+          <Input label={t('businessProfile.field.taxId', 'Tax number (Steuernummer)') as string}
+            value={profile.taxId}
+            onChange={(e) => setProfile({ ...profile, taxId: e.target.value })} />
           <Input label={t('businessProfile.field.addressLine1', 'Address line 1') as string} value={profile.addressLine1}
             onChange={(e) => setProfile({ ...profile, addressLine1: e.target.value })} />
           <Input label={t('businessProfile.field.addressLine2', 'Address line 2') as string} value={profile.addressLine2}
