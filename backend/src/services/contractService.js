@@ -1402,6 +1402,13 @@ async function attachSignedPdfUpload(contractId, filePath, uploaderRole) {
     status: 'fully_signed',
     updated_at: now,
   };
+  // Migration 135 — durable wet-upload discriminator. Persists the
+  // "this row holds an authoritative wet upload, do not auto-overwrite"
+  // signal as a column rather than inferring from the file path. See
+  // the migration body for the full rationale.
+  if (await db.schema.hasColumn('contracts', 'signed_pdf_is_wet_upload')) {
+    updates.signed_pdf_is_wet_upload = true;
+  }
   // Hash the uploaded PDF on disk so we can later prove it wasn't
   // tampered with after upload. Multer wrote the file synchronously
   // before this handler runs, so reading it here is safe.
@@ -1881,11 +1888,18 @@ async function rerenderAndResend(contractId, adminId) {
   }
 
   let attachmentPath = contract.signed_pdf_path || null;
-  // Wet-signed uploads live under uploads/contracts/signed; system-
-  // produced PDFs live under storage/business-docs/contract/<year>.
-  // We only re-stamp when the current path is missing OR not an
-  // uploaded-PDF path — wet uploads are authoritative.
-  const isWetSignedUpload = attachmentPath && attachmentPath.includes('uploads/contracts/signed');
+  // Migration 135 — `signed_pdf_is_wet_upload` is the durable
+  // authoritative-source discriminator. It's set TRUE only by
+  // attachSignedPdfUpload, so any non-wet path here is a system
+  // stamp safe to replace. We still null-check the path so missing
+  // (re-stamp recovery) cases trigger the re-stamp branch below.
+  const hasWetFlagColumn = await db.schema.hasColumn('contracts', 'signed_pdf_is_wet_upload');
+  const isWetSignedUpload = hasWetFlagColumn
+    ? (contract.signed_pdf_is_wet_upload === true || contract.signed_pdf_is_wet_upload === 1)
+    // Fallback ONLY for installs where the migration hasn't applied yet:
+    // preserve the historical substring rule so we don't accidentally
+    // overwrite uploads on an un-migrated DB.
+    : !!(attachmentPath && attachmentPath.includes('uploads/contracts/signed'));
   if (!attachmentPath || !isWetSignedUpload) {
     // Stamp signatures onto the immutable unsigned pdf_path using
     // pdf-lib (NOT a full re-render). This preserves the exact bytes
@@ -2029,8 +2043,14 @@ async function restampSignatures(contractId, { customerSignatureDataUrl, adminSi
   const { filePath: signedPath } = await persistContractPdf(refreshed.contract, stampedBuffer,
     contract.status === 'fully_signed' ? 'fully-signed' : 'partially-signed');
 
-  const isWetSignedUpload = contract.signed_pdf_path
-    && contract.signed_pdf_path.includes('uploads/contracts/signed');
+  // Migration 135 — read the discriminator column. Fall back to the
+  // historical substring rule only when the column is absent (un-
+  // migrated install) so we never accidentally overwrite a wet upload.
+  const hasWetFlagColumn = await db.schema.hasColumn('contracts', 'signed_pdf_is_wet_upload');
+  const isWetSignedUpload = hasWetFlagColumn
+    ? (contract.signed_pdf_is_wet_upload === true || contract.signed_pdf_is_wet_upload === 1)
+    : !!(contract.signed_pdf_path
+      && contract.signed_pdf_path.includes('uploads/contracts/signed'));
   if (!isWetSignedUpload) {
     const hasSignedPdfSha = await db.schema.hasColumn('contracts', 'signed_pdf_sha256');
     const updates = {
