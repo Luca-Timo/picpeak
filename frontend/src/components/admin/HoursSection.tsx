@@ -21,6 +21,7 @@ import { Button, Card } from '../common';
 import { DecimalInput } from '../common/DecimalInput';
 import { parseLocaleDecimal, parseDuration } from '../../utils/parsers';
 import { customerAdminService } from '../../services/customerAdmin.service';
+import { businessProfileService } from '../../services/businessProfile.service';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 export interface HoursSectionProps {
@@ -78,6 +79,18 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
     queryFn: () => customerAdminService.listHourEntries(customerId),
     enabled: Number.isFinite(customerId) && customerId > 0,
   });
+
+  // Pull the configured default currency so the hint can show
+  // "{{currency}} 150" instead of the hardcoded "CHF 150". Same cache
+  // key as CustomerDetailPage so a single round-trip serves both
+  // mount points. 5-minute stale window — the value changes via
+  // Settings → Business profile, not during a hours-logging session.
+  const { data: profileSnapshot } = useQuery({
+    queryKey: ['business-profile-snapshot'],
+    queryFn: () => businessProfileService.get(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const profileDefaultCurrency = profileSnapshot?.profile?.defaultCurrency || 'CHF';
 
   const createMutation = useMutation({
     mutationFn: () => customerAdminService.createHourEntry(customerId, {
@@ -181,7 +194,8 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
           />
           <p className="text-xs text-muted-theme mt-1">
             {t('customers.field.hourlyRateHint',
-              'Major units (e.g. 150.00 for CHF 150). Leave blank to require a per-entry override on every block.')}
+              'Major units (e.g. 150.00 for {{currency}} 150). Leave blank to require a per-entry override on every block.',
+              { currency: profileDefaultCurrency })}
           </p>
         </div>
       )}

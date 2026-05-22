@@ -69,6 +69,10 @@ function buildIssuerBlock(profile, logoPath, options = {}) {
     website: profile.website,
     footerLine: profile.footer_line,
     vatId: profile.vat_id,
+    // Steuernummer (migration 139). Rendered alongside VAT-ID on the
+    // PDF issuer block — §14 UStG requires one or both on every
+    // invoice. Kleinunternehmer without a USt-IdNr. carry only this.
+    taxId: profile.tax_id || null,
     // pre-resolved absolute path; renderer never re-resolves.
     logoPath,
     pdfFontTtfPath: profile.pdf_font_ttf_path,

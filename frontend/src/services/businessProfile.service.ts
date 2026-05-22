@@ -28,6 +28,10 @@ export interface BusinessProfile {
   email: string;
   website: string;
   vatId: string;
+  /** Local tax number (Steuernummer in DE/AT). Distinct from vatId
+   *  (USt-IdNr.); §14 UStG accepts either on invoices, and the issuer
+   *  block on every PDF renders both when present. Migration 139. */
+  taxId: string;
   vatLabel: string;
   vatRateDefault: number | null;
   defaultCurrency: string;

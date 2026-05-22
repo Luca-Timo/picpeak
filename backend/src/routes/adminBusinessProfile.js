@@ -137,6 +137,9 @@ function transformProfile(p) {
     email: p.email || '',
     website: p.website || '',
     vatId: p.vat_id || '',
+    // Steuernummer (migration 139). Distinct from VAT-ID; both can
+    // appear on the invoice issuer block to satisfy §14 UStG.
+    taxId: p.tax_id || '',
     vatLabel: p.vat_label || 'MwSt.',
     vatRateDefault: p.vat_rate_default == null ? null : Number(p.vat_rate_default),
     defaultCurrency: p.default_currency || 'CHF',
@@ -339,6 +342,8 @@ router.put(
     body('email').optional({ values: 'falsy' }).isEmail().withMessage('Invalid issuer email'),
     body('website').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
     body('vatId').optional({ values: 'falsy' }).isString().isLength({ max: 64 }),
+    // Migration 139 — Steuernummer (DE/AT). Free-text up to 64 chars.
+    body('taxId').optional({ values: 'falsy' }).isString().isLength({ max: 64 }),
     body('vatLabel').optional({ values: 'falsy' }).isString().isLength({ max: 64 }),
     body('vatRateDefault').optional({ values: 'falsy' }).isFloat({ min: 0, max: 100 }),
     body('defaultCurrency').optional({ values: 'falsy' }).isString().isLength({ min: 3, max: 3 }),
@@ -385,6 +390,7 @@ router.put(
       email: 'email',
       website: 'website',
       vatId: 'vat_id',
+      taxId: 'tax_id',
       vatLabel: 'vat_label',
       vatRateDefault: 'vat_rate_default',
       defaultCurrency: 'default_currency',

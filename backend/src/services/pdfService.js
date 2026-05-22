@@ -401,6 +401,9 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
     issuer.email   ? ['Email:',  issuer.email]   : null,
     issuer.website ? ['Web:',    issuer.website] : null,
     issuer.vatId   ? ['VAT:',    issuer.vatId]   : null,
+    // Migration 139 — Steuernummer (DE/AT local tax number). Distinct
+    // from VAT-ID; both can appear simultaneously.
+    issuer.taxId   ? ['Tax:',    issuer.taxId]   : null,
   ].filter(Boolean);
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8.5);
   for (const [label, value] of contactRows) {

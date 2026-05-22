@@ -35,6 +35,10 @@ const ALLOWED_PROFILE_FIELDS = [
   'email',
   'website',
   'vat_id',
+  // Steuernummer (migration 139). DE/AT §14 UStG accepts either
+  // USt-IdNr. (vat_id) or local tax number (tax_id) on invoices; many
+  // Kleinunternehmer only have the latter.
+  'tax_id',
   'vat_label',
   'vat_rate_default',
   'default_currency',
@@ -128,7 +132,7 @@ function sanitiseProfilePayload(payload) {
   // when the admin pastes from a printed letterhead.
   for (const field of ['company_name', 'address_line1', 'address_line2',
     'city', 'state', 'country_name', 'phone', 'mobile', 'email', 'website',
-    'vat_id', 'vat_label', 'footer_line', 'logo_path']) {
+    'vat_id', 'tax_id', 'vat_label', 'footer_line', 'logo_path']) {
     if (typeof updates[field] === 'string') {
       updates[field] = updates[field].trim();
     }

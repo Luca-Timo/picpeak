@@ -89,6 +89,11 @@ export const CustomerDetailPage: React.FC = () => {
     staleTime: 5 * 60 * 1000,
   });
   const profileDefaultLocale = profileSnapshot?.profile?.defaultLocale || 'en';
+  // #3 — the hourly-rate hint used to hardcode "CHF" in its example.
+  // Pull the configured default currency so installs running EUR /
+  // USD / GBP get a meaningful example instead of one referencing a
+  // currency they don't use.
+  const profileDefaultCurrency = profileSnapshot?.profile?.defaultCurrency || 'CHF';
   const LOCALE_LABELS: Record<string, string> = {
     en: 'English', de: 'Deutsch', fr: 'Français',
     nl: 'Nederlands', pt: 'Português', ru: 'Русский',
@@ -659,7 +664,8 @@ export const CustomerDetailPage: React.FC = () => {
             />
             <p className="text-xs text-muted-theme mt-1">
               {t('customers.field.hourlyRateHint',
-                'Major units (e.g. 150.00 for CHF 150). Leave blank to require a per-entry override on every block.')}
+                'Major units (e.g. 150.00 for {{currency}} 150). Leave blank to require a per-entry override on every block.',
+                { currency: profileDefaultCurrency })}
             </p>
           </div>
         )}

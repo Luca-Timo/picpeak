@@ -2917,7 +2917,7 @@
     "field": {
       "featureHoursLogging": "Stundenerfassung",
       "hourlyRate": "Standard-Stundensatz",
-      "hourlyRateHint": "Haupteinheiten (z. B. 150.00 für CHF 150). Leer lassen, um pro Eintrag einen Satz zu verlangen."
+      "hourlyRateHint": "Haupteinheiten (z. B. 150.00 für {{currency}} 150). Leer lassen, um pro Eintrag einen Satz zu verlangen."
     },
     "hours": {
       "section": "Stunden",
@@ -3515,7 +3515,8 @@
     },
     "field": {
       "companyName": "Firmenname",
-      "vatId": "USt-IdNr / MwSt-Nr",
+      "vatId": "USt-IdNr.",
+      "taxId": "Steuernummer",
       "addressLine1": "Adresszeile 1",
       "addressLine2": "Adresszeile 2",
       "postalCode": "PLZ",
