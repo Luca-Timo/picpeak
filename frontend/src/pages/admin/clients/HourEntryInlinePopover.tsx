@@ -22,7 +22,7 @@
  * modal. Reusing the pattern keeps the visual language consistent.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Lock, Trash2 } from 'lucide-react';
@@ -117,6 +117,18 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
     updateMutation.mutate();
   };
 
+  // I.6 — document-level Escape listener (same reasoning as the
+  // drag-create modal: focus is usually on FC's canvas when this
+  // popover opens, so the onKeyDown handler on the outer div never
+  // sees the keydown).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !busy) onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [busy, onClose]);
+
   return (
     <div
       role="dialog"
@@ -124,12 +136,6 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
-      }}
-      onKeyDown={(e) => {
-        // Esc closes (same as drag-create modal). Enter is handled
-        // by the inner <form> for the editable mode; the locked mode
-        // has no submittable input so Enter does nothing.
-        if (e.key === 'Escape' && !busy) onClose();
       }}
     >
       <Card padding="lg" className="w-full max-w-md">
