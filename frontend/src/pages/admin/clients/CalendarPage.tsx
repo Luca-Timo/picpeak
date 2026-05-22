@@ -457,10 +457,17 @@ export const CalendarPage: React.FC = () => {
         />
       )}
 
-      {/* Per-instance CSS for the dashed quote/contract chips. Tailwind
-          can't reach inline FC chip styles, so we override with a small
-          local rule. The locked-hours grey is applied via backgroundColor
-          inline (above), no class needed. */}
+      {/* Per-instance CSS:
+          - dashed quote/contract chips (Tailwind can't reach inline FC
+            chip styles, so we override with a small local rule).
+          - F.5 — FC's prev/next/today buttons styled to match picpeak's
+            .btn-outline / .btn-primary tokens. FC ships its own
+            .fc-button-primary class; we override the relevant rules
+            and bind to the CSS variables the rest of the admin theme
+            uses (--color-accent-dark, --color-surface-border,
+            --color-muted-text). The "today" / disabled-edge buttons
+            and the active state (selected view) all read from these
+            vars so the calendar respects custom branding palettes. */}
       <style>{`
         .cal-dashed {
           border-style: dashed !important;
@@ -472,6 +479,49 @@ export const CalendarPage: React.FC = () => {
         }
         .cal-hours-locked {
           opacity: 0.7;
+        }
+
+        /* FC button restyle — match picpeak admin .btn-outline shape. */
+        .fc .fc-button-primary {
+          background-color: transparent;
+          border: 1px solid var(--color-surface-border);
+          color: var(--color-muted-text);
+          text-transform: none;
+          font-weight: 500;
+          box-shadow: none;
+          transition: opacity 0.15s, background-color 0.15s;
+        }
+        .fc .fc-button-primary:hover:not(:disabled) {
+          opacity: 0.8;
+          background-color: transparent;
+          border-color: var(--color-surface-border);
+          color: var(--color-muted-text);
+        }
+        .fc .fc-button-primary:focus,
+        .fc .fc-button-primary:focus-visible {
+          box-shadow: 0 0 0 2px var(--color-accent-dark);
+          outline: none;
+        }
+        /* "today" / active view button — picpeak's primary fill. */
+        .fc .fc-button-primary:not(:disabled).fc-button-active,
+        .fc .fc-button-primary:not(:disabled):active {
+          background-color: var(--color-accent-dark);
+          border-color: var(--color-accent-dark);
+          color: white;
+        }
+        .fc .fc-button-primary:disabled {
+          opacity: 0.5;
+          background-color: transparent;
+          border-color: var(--color-surface-border);
+          color: var(--color-muted-text);
+        }
+        /* Toolbar title (month / week range) reads the regular text
+           colour rather than FC's hardcoded #333 so dark mode looks
+           right. */
+        .fc .fc-toolbar-title {
+          color: var(--color-text);
+          font-size: 1.125rem;
+          font-weight: 600;
         }
       `}</style>
     </div>
