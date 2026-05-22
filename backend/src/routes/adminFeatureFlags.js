@@ -119,7 +119,11 @@ function applyDependencyRules(flags) {
     || out.taxReport
     || out.hoursLogging
     || out.contracts
-    // future siblings (out.calendar || out.messaging) go here
+    // Migration 137 — admin calendar lights up the Clients section.
+    // (calendarBooking is gated behind `calendar` so adding the parent
+    // is sufficient.)
+    || out.calendar
+    // future siblings (out.messaging) go here
   );
   return out;
 }

@@ -67,6 +67,10 @@ const ALLOWED_PROFILE_FIELDS = [
   // show the full payment block; these only affect quote PDFs.
   'pdf_quote_show_net_days',
   'pdf_quote_show_skonto',
+  // IANA timezone string for the admin calendar (migration 137). Used
+  // by the calendar UI to render timed blocks in the operator's
+  // working tz. Admin-only; never exposed via publicSettings.
+  'timezone',
 ];
 
 const ALLOWED_BANK_FIELDS = [
