@@ -424,8 +424,9 @@ export const CalendarPage: React.FC = () => {
           }}
           // Week starts on Monday for the operator's EU market.
           firstDay={1}
-          slotMinTime="06:00:00"
-          slotMaxTime="22:00:00"
+          // Per user spec: full 24h in week view (was 06:00-22:00).
+          slotMinTime="00:00:00"
+          slotMaxTime="24:00:00"
           slotDuration="00:30:00"
           height="auto"
           expandRows
@@ -570,6 +571,22 @@ export const CalendarPage: React.FC = () => {
           color: var(--color-text);
           font-size: 1.125rem;
           font-weight: 600;
+        }
+
+        /* Week-view day dividers. FC's defaults render the vertical
+           borders in a colour that's nearly invisible against the dark
+           theme. Pin them to --color-surface-border so each day is
+           visually delimited at the same weight as the rest of the
+           admin UI (Card borders, table cells, etc.). */
+        .fc .fc-timegrid-col,
+        .fc .fc-daygrid-day,
+        .fc .fc-col-header-cell {
+          border-color: var(--color-surface-border) !important;
+        }
+        .fc .fc-scrollgrid,
+        .fc .fc-scrollgrid td,
+        .fc .fc-scrollgrid th {
+          border-color: var(--color-surface-border) !important;
         }
       `}</style>
     </div>
