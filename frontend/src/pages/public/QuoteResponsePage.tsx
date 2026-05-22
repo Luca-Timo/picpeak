@@ -12,7 +12,7 @@
  *   - Localised based on the quote's stored language; falls back to
  *     browser language.
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
@@ -20,12 +20,7 @@ import { publicQuotesService } from '../../services/quotes.service';
 import { usePublicDarkMode } from '../../hooks/usePublicDarkMode';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { Loading } from '../../components/common';
-
-function formatMoney(amount: number, currency: string, locale = 'de-CH') {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency', currency: (currency || 'CHF').toUpperCase(),
-  }).format(amount);
-}
+import { formatMoney } from '../../utils/money';
 
 /**
  * Format a date string as DD.MM.YYYY (the customer-facing format used
@@ -95,35 +90,35 @@ export const QuoteResponsePage: React.FC = () => {
     } finally { setBusy(false); }
   }, [token, refetch, t, tosAccepted]);
 
-  // ONE-CLICK ACCEPT / DECLINE FROM EMAIL
-  // The Accept / Decline links in the customer email carry the
-  // chosen action as a query string, e.g. /quote/<token>?action=accept.
-  // Auto-submit it as soon as the page loads — the customer's click
-  // in the email IS their response; no second click on the page.
-  // After firing we strip the query string so a refresh doesn't
-  // re-submit and the page stays a normal read-only view of the
-  // (now-locked) quote.
+  // PRE-SELECTED ACTION FROM EMAIL LINK
   //
-  // EXCEPTION: when the global ToS toggle is on, auto-submit is
-  // DISABLED for the accept path. We still need the customer to tick
-  // the consent box, so the action carries through to the buttons in
-  // the page body. Decline auto-submits normally because it doesn't
-  // need consent.
-  const autoSubmittedRef = useRef(false);
+  // The Accept / Decline links in the customer email carry the chosen
+  // action as a query string, e.g. /quote/<token>?action=accept.
+  //
+  // SECURITY: this MUST NOT auto-submit. Link prefetchers (Outlook
+  // Safe Links, some Slack-like clients, Edge's tab-preview pre-fetch,
+  // antivirus URL scanners) will GET the URL before the customer
+  // ever clicks — auto-submission would silently flip the quote
+  // state from a prefetch. Confirmed-clicked actions only.
+  //
+  // Instead we surface the intent via `preselectedAction` so the
+  // matching CTA is visually highlighted on the page; the customer
+  // confirms by clicking the on-page button. One human click is
+  // required regardless of how they arrived.
+  const preselectedAction = (() => {
+    const raw = searchParams.get('action');
+    return raw === 'accept' || raw === 'decline' ? raw : null;
+  })();
+
+  // Strip ?action= from the URL once the page is loaded so a refresh
+  // doesn't keep the highlight (and so the URL in the browser bar /
+  // history loses the action hint after first read). Idempotent.
   useEffect(() => {
-    if (autoSubmittedRef.current) return;
-    if (!q || !token) return;
-    const action = searchParams.get('action');
-    if (action !== 'accept' && action !== 'decline') return;
-    if (!q.canRespond) return;
-    if (action === 'accept' && q.tos?.required && !tosAccepted) return; // wait for tick
-    autoSubmittedRef.current = true;
-    handleRespond(action as 'accept' | 'decline').finally(() => {
-      const next = new URLSearchParams(searchParams);
-      next.delete('action');
-      setSearchParams(next, { replace: true });
-    });
-  }, [q, token, searchParams, setSearchParams, handleRespond, tosAccepted]);
+    if (!searchParams.get('action')) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('action');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   if (isLoading) return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-900">
@@ -344,17 +339,33 @@ export const QuoteResponsePage: React.FC = () => {
                   </div>
                 )}
 
+                {/* Pre-selected from email link: gentle highlight on
+                    the matching CTA via a glowing focus ring, plus a
+                    short tip line. The customer still has to click —
+                    see the preselectedAction comment above for why
+                    auto-submit is unsafe (link prefetchers). */}
+                {preselectedAction && (
+                  <p className="text-center text-sm text-neutral-600 dark:text-neutral-300 mb-3">
+                    {preselectedAction === 'accept'
+                      ? t('quoteResponse.preselectAcceptHint', 'You followed the "Accept" link from the email — click the button below to confirm.')
+                      : t('quoteResponse.preselectDeclineHint', 'You followed the "Decline" link from the email — click the button below to confirm.')}
+                  </p>
+                )}
                 <div className="flex justify-center gap-3 flex-wrap">
                   <button
                     type="button"
                     disabled={busy || (q!.tos?.required && !tosAccepted)}
                     onClick={() => handleRespond('accept')}
-                    className="px-6 py-3 rounded-md bg-green-600 hover:bg-green-700 text-white font-medium disabled:opacity-50"
+                    className={`px-6 py-3 rounded-md bg-green-600 hover:bg-green-700 text-white font-medium disabled:opacity-50 ${
+                      preselectedAction === 'accept' ? 'ring-4 ring-green-300 dark:ring-green-700 ring-offset-2 ring-offset-white dark:ring-offset-neutral-900' : ''
+                    }`}
                   >{t('quoteResponse.accept', 'Accept quote')}</button>
                   <button
                     type="button" disabled={busy}
                     onClick={() => handleRespond('decline')}
-                    className="px-6 py-3 rounded-md border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 font-medium disabled:opacity-50"
+                    className={`px-6 py-3 rounded-md border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 font-medium disabled:opacity-50 ${
+                      preselectedAction === 'decline' ? 'ring-4 ring-neutral-400 dark:ring-neutral-500 ring-offset-2 ring-offset-white dark:ring-offset-neutral-900' : ''
+                    }`}
                   >{t('quoteResponse.decline', 'Decline')}</button>
                 </div>
               </>

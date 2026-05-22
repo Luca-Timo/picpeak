@@ -25,6 +25,7 @@ const logger = require('../utils/logger');
 const { getAppSetting } = require('../utils/appSettings');
 const { AppError } = require('../utils/errors');
 const { formatBoolean } = require('../utils/dbCompat');
+const { claimNextSequence } = require('../utils/documentSequences');
 const businessProfileService = require('./businessProfileService');
 const pdfService = require('./pdfService');
 const emailProcessor = require('./emailProcessor');
@@ -57,24 +58,16 @@ function formatNumberInTemplate(format, year, seq) {
     .replace(/\{SEQ\}/g, String(seq));
 }
 
-async function nextInvoiceNumber() {
+// Atomic gap-free invoice number generator. See utils/documentSequences.js
+// for the locking story; migration 132 created the underlying table.
+// The previous SELECT-MAX-then-INSERT path raced under concurrent
+// admin creates and emitted a random `R-2026-AB12C3` after 5 retries,
+// breaking the §14 UStG single-sequence requirement.
+async function nextInvoiceNumber(trx) {
   const format = (await getAppSetting('crm_invoices_number_format')) || 'R-{YEAR}-{SEQ:04d}';
   const year = new Date().getFullYear();
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    const yearPrefix = formatNumberInTemplate(format, year, 0).slice(0, -4);
-    const rows = await db('invoices')
-      .where('invoice_number', 'like', `${yearPrefix}%`)
-      .select('invoice_number');
-    let maxSeq = 0;
-    for (const r of rows) {
-      const m = r.invoice_number.match(/(\d+)\s*$/);
-      if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
-    }
-    const candidate = formatNumberInTemplate(format, year, maxSeq + 1);
-    const exists = await db('invoices').where({ invoice_number: candidate }).first();
-    if (!exists) return candidate;
-  }
-  return `R-${new Date().getFullYear()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+  const seq = await claimNextSequence('invoice', year, trx);
+  return formatNumberInTemplate(format, year, seq);
 }
 
 function ensureCustomerCanBill(customer) {
@@ -124,13 +117,26 @@ function computeDueDate(scheduledSendAt, netDays = 30) {
  * acceptance — instead the invoice fires on `billing_cycle_day` of the
  * next period.
  *
- * `cycleDay` is clamped to the destination month's length (e.g. day 31
- * in February rolls back to Feb 28/29). This protects the scheduler
- * from "missing" bills.
+ * `cycleDay` honours the sign-as-discriminator convention from
+ * migration 128: positive 1..28 = that day of the month; negative
+ * -1..-15 = that many days before end of month. Resolution is
+ * delegated to `computeMonthlyCadenceDate` so the two helpers can't
+ * disagree about what "-3 cycle day" means.
+ *
+ * Day numbers beyond the destination month's length are clamped
+ * (e.g. day 31 in February rolls back to Feb 28/29). Negative days
+ * are clamped to day 1 minimum (extreme values like -40 don't blow
+ * past the start of the month).
+ *
+ * History: a prior version of this function did
+ * `Math.max(1, Math.min(31, ensureInt(cycleDay) || 1))`, silently
+ * clamping every negative value to 1 — so a customer configured
+ * with cycle_day=-3 (last 3 days of month) got billed on day 1
+ * instead. Audit finding: monthly cycle sign convention bug.
  */
 function snapToNextBillingCycle(baseDate, cadence, cycleDay) {
   if (!cadence || cadence === 'per_event') return baseDate;
-  const day = Math.max(1, Math.min(31, ensureInt(cycleDay) || 1));
+  const day = Number.isFinite(ensureInt(cycleDay)) ? ensureInt(cycleDay) : 1;
   const d = new Date(baseDate.getTime());
 
   if (cadence === 'monthly') {
@@ -138,20 +144,15 @@ function snapToNextBillingCycle(baseDate, cadence, cycleDay) {
     // before cycleDay this month and the base date is in the same month,
     // we still move forward to NEXT month so accepting a quote on
     // Jan 5 (cycleDay=1) fires on Feb 1, not Jan 5.
-    const target = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-    const monthLen = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
-    target.setDate(Math.min(day, monthLen));
-    return target;
+    const nextMonth = d.getMonth() + 1;
+    return computeMonthlyCadenceDate(d.getFullYear(), nextMonth, day);
   }
 
   if (cadence === 'quarterly') {
     // First month of the next quarter. Quarter starts: Jan, Apr, Jul, Oct.
     const month = d.getMonth();
     const nextQuarterMonth = (Math.floor(month / 3) + 1) * 3; // 0,3,6,9
-    const target = new Date(d.getFullYear(), nextQuarterMonth, 1);
-    const monthLen = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
-    target.setDate(Math.min(day, monthLen));
-    return target;
+    return computeMonthlyCadenceDate(d.getFullYear(), nextQuarterMonth, day);
   }
 
   return baseDate;
@@ -176,7 +177,12 @@ function computeMonthlyCadenceDate(year, month /* 0-based */, cycleDay) {
   if (day > 0) {
     target = Math.min(day, monthLen);
   } else if (day < 0) {
-    // -1 → last day; -3 on a 31-day month → 28th
+    // Sign-as-discriminator: -N = N days before month end. Documented
+    // in the admin UI hint as "Use negative -1..-15 for 'N days before
+    // month end' (so -3 fires on the 28th of a 31-day month)".
+    // Formula: monthLen + day → -3 + 31 = 28 ✓.
+    // Clamped to day 1 minimum so extreme values (-40) don't blow
+    // past the start of the month.
     target = Math.max(1, monthLen + day);
   } else {
     target = 1;
@@ -219,17 +225,22 @@ async function getOrCreateMonthlyDraft(customer, adminId, trx) {
   const periodStart = new Date(target.getFullYear(), target.getMonth(), 1);
   const periodEnd = target;
 
-  // Look up any existing draft for this customer whose period covers
-  // today. Strict equality on the resolved period bounds — if admin
-  // changes the cadence day mid-period we'll just create a new draft;
-  // the old one still ships on its own cadence.
+  // Look up any existing open draft for this customer. We deliberately
+  // do NOT filter by monthly_period_end here — only one draft can be
+  // open per customer at a time (enforced by the partial unique index
+  // created in migration 133). If the scheduler hasn't yet promoted an
+  // expired draft, it's still the canonical landing spot for any new
+  // items the admin queues; promoting it is the scheduler's job, not
+  // ours. forUpdate() locks the row on Postgres so concurrent appenders
+  // serialize on totals recomputation; SQLite's transaction write-lock
+  // gives us the same guarantee implicitly.
   const existing = await trx('invoices')
     .where({
       customer_account_id: customer.id,
       is_monthly_draft: true,
     })
-    .andWhere('monthly_period_end', '>=', today.toISOString().slice(0, 10))
     .orderBy('id', 'desc')
+    .forUpdate()
     .first();
   if (existing) {
     return { id: existing.id, row: existing, created: false };
@@ -240,7 +251,7 @@ async function getOrCreateMonthlyDraft(customer, adminId, trx) {
   const profile = (await businessProfileService.getProfile()).profile;
   const currency = (customer.preferred_currency || profile?.default_currency || 'CHF').toUpperCase();
   const language = customer.preferred_language || profile?.default_locale || 'de';
-  const invoiceNumber = await nextInvoiceNumber();
+  const invoiceNumber = await nextInvoiceNumber(trx);
   const bank = await businessProfileService.resolveBankAccountForCurrency(currency, null);
 
   const row = {
@@ -270,9 +281,35 @@ async function getOrCreateMonthlyDraft(customer, adminId, trx) {
     created_at: new Date(),
     updated_at: new Date(),
   };
-  const inserted = await trx('invoices').insert(row).returning('id');
-  const id = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
-  return { id, row: { ...row, id }, created: true };
+  try {
+    const inserted = await trx('invoices').insert(row).returning('id');
+    const id = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
+    return { id, row: { ...row, id }, created: true };
+  } catch (err) {
+    // Partial-unique-index violation: another transaction snuck a draft
+    // in between our SELECT and INSERT. Re-SELECT the winner and return
+    // it — concurrent callers converge on the same draft row instead
+    // of double-billing the customer. The error string varies by
+    // driver: Postgres → SQLSTATE 23505; better-sqlite3 → 'UNIQUE
+    // constraint failed'; node-sqlite3 → 'SQLITE_CONSTRAINT'.
+    const msg = String(err && err.message || '');
+    const isUniqueViolation =
+      err && err.code === '23505' ||
+      /unique/i.test(msg) ||
+      /sqlite_constraint/i.test(msg);
+    if (!isUniqueViolation) throw err;
+    const winner = await trx('invoices')
+      .where({ customer_account_id: customer.id, is_monthly_draft: true })
+      .orderBy('id', 'desc')
+      .first();
+    if (!winner) {
+      // No row to return despite the unique-violation — this would
+      // mean the winning transaction rolled back after we lost the
+      // race. Surface the original error so the caller can retry.
+      throw err;
+    }
+    return { id: winner.id, row: winner, created: false };
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -2639,9 +2676,16 @@ async function runScheduledTasks() {
         // the next save creates a fresh period draft. We pick the
         // latter: clear is_monthly_draft so the next createInvoice
         // for this customer mints a new period.
+        //
+        // Status is 'skipped', not 'cancelled': the latter implies
+        // an admin (or Storno) deliberately voided a real invoice;
+        // an empty monthly period is a "nothing happened" non-event
+        // that we still record for audit-trail continuity. Listing
+        // queries that aggregate cancelled rows (e.g. the Bills list
+        // cancellation footnote) should not pull skipped rows in.
         await db('invoices').where({ id: draft.id }).update({
           is_monthly_draft: false,
-          status: 'cancelled',
+          status: 'skipped',
           updated_at: new Date(),
         });
         logger.info('Monthly bill skipped — no items queued', {

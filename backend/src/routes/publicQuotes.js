@@ -18,6 +18,8 @@ const rateLimit = require('express-rate-limit');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const quoteService = require('../services/quoteService');
 const { db } = require('../database/db');
+const { clientIpForAudit } = require('../utils/clientIp');
+const { loadActionToken } = require('../utils/publicTokenGuards');
 
 const router = express.Router();
 
@@ -113,11 +115,11 @@ router.get(
   [param('token').isString().isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i)],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const tokenRow = await db('quote_action_tokens').where({ token: req.params.token }).first();
-    if (!tokenRow) return res.status(404).json({ error: 'Quote not found' });
-    if (tokenRow.expires_at && new Date(tokenRow.expires_at).getTime() < Date.now()) {
-      return res.status(410).json({ error: 'This link has expired' });
-    }
+    const tokenRow = await loadActionToken(req, res, {
+      tableName: 'quote_action_tokens',
+      token: req.params.token,
+    });
+    if (!tokenRow) return;
     const data = await quoteService.getQuoteById(tokenRow.quote_id);
     if (!data) return res.status(404).json({ error: 'Quote not found' });
 
@@ -155,7 +157,9 @@ router.post(
   handleAsync(async (req, res) => {
     validateRequest(req);
     try {
-      const ip = req.ip || req.headers['x-forwarded-for'] || null;
+      // See utils/clientIp.js — trust req.ip (configured via Express
+      // trust-proxy), never read X-Forwarded-For directly.
+      const ip = clientIpForAudit(req);
       const result = await quoteService.recordResponse({
         token: req.params.token,
         action: req.body.action,

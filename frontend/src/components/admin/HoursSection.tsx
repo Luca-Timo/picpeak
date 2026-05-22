@@ -18,6 +18,8 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import { Clock } from 'lucide-react';
 import { Button, Card } from '../common';
+import { DecimalInput } from '../common/DecimalInput';
+import { parseLocaleDecimal } from '../../utils/parsers';
 import { customerAdminService } from '../../services/customerAdmin.service';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
@@ -64,7 +66,12 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
   const createMutation = useMutation({
     mutationFn: () => customerAdminService.createHourEntry(customerId, {
       entryDate, startTime, endTime,
-      hourlyRateMinorOverride: rateOverride ? Math.round(Number(rateOverride) * 100) : null,
+      // Locale-tolerant: "12,50" and "12.50" both yield 1250.
+      hourlyRateMinorOverride: (() => {
+        if (!rateOverride) return null;
+        const n = parseLocaleDecimal(rateOverride);
+        return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null;
+      })(),
       description: description || null,
     }),
     onSuccess: () => {
@@ -140,15 +147,16 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
           <label className="block text-sm font-medium text-theme mb-1">
             {t('customers.field.hourlyRate', 'Default hourly rate')}
           </label>
-          <input
-            type="number"
-            step="0.01"
-            min={0}
-            value={customerHourlyRateMinor != null ? (customerHourlyRateMinor / 100).toFixed(2) : ''}
-            onChange={(e) => {
+          <DecimalInput
+            value={customerHourlyRateMinor != null ? customerHourlyRateMinor / 100 : NaN}
+            fractionDigits={2}
+            onChange={(n) => {
               if (!onHourlyRateChange) return;
-              const raw = e.target.value;
-              onHourlyRateChange(raw === '' ? null : Math.round(Number(raw) * 100));
+              if (!Number.isFinite(n)) {
+                onHourlyRateChange(null);
+                return;
+              }
+              onHourlyRateChange(Math.max(0, Math.round(n * 100)));
             }}
             disabled={!onHourlyRateChange}
             className="w-40 input"
@@ -192,7 +200,10 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
             <label className="block text-xs text-muted-theme mb-1">
               {t('customers.hours.form.rateOverride', 'Rate override')}
             </label>
-            <input type="number" step="0.01" min={0} value={rateOverride}
+            <input
+              type="text"
+              inputMode="decimal"
+              value={rateOverride}
               onChange={(e) => setRateOverride(e.target.value)}
               placeholder={customerHourlyRateMinor != null
                 ? (customerHourlyRateMinor / 100).toFixed(2)

@@ -3294,7 +3294,8 @@
       "sent": "Gesendet",
       "paid": "Bezahlt",
       "overdue": "Überfällig",
-      "cancelled": "Storniert"
+      "cancelled": "Storniert",
+      "skipped": "Übersprungen (leerer Monat)"
     },
     "field": {
       "number": "Rechnung",

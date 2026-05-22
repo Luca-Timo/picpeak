@@ -24,6 +24,8 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, X, ArrowUp, ArrowDown, Save as SaveIcon, ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react';
 import { Button } from '../common';
+import { DecimalInput } from '../common/DecimalInput';
+import { formatMoney } from '../../utils/money';
 
 export interface EditableLineItem {
   id?: number;
@@ -57,12 +59,6 @@ interface Props {
   onChange: (items: EditableLineItem[]) => void;
   presets?: LineItemPresetMinimal[];
   onSaveAsPreset?: (item: EditableLineItem) => void;
-}
-
-function formatMoney(amount: number, currency: string, locale = 'de-CH') {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency', currency: (currency || 'CHF').toUpperCase(),
-  }).format(amount);
 }
 
 function nextFreshPosition(items: EditableLineItem[]) {
@@ -301,11 +297,10 @@ export const LineItemsTable: React.FC<Props> = ({
                       </div>
                     </td>
                     <td className="px-2 py-2 align-top">
-                      <input
-                        type="number" step="0.01" min="0"
+                      <DecimalInput
                         className={`w-20 rounded border border-neutral-300 dark:border-neutral-600 px-2 py-1 text-sm ${disabledInputClass}`}
                         value={li.quantity}
-                        onChange={(e) => setItem(idx, { quantity: Number(e.target.value) })}
+                        onChange={(n) => setItem(idx, { quantity: Number.isFinite(n) ? n : 0 })}
                         disabled={parentAutoTotaled}
                         title={parentAutoTotaled ? t('crm.lineItems.autoTotaledHint', 'Total auto-computed from sub-items below') as string : undefined}
                       />
@@ -344,22 +339,25 @@ export const LineItemsTable: React.FC<Props> = ({
                       )}
                     </td>
                     <td className="px-2 py-2 align-top">
-                      <input
-                        type="number" step="0.01" min="0"
+                      <DecimalInput
                         className={`w-24 rounded border border-neutral-300 dark:border-neutral-600 px-2 py-1 text-sm text-right ${disabledInputClass}`}
                         value={li.unitPrice}
-                        onChange={(e) => setItem(idx, { unitPrice: Number(e.target.value) })}
+                        fractionDigits={2}
+                        onChange={(n) => setItem(idx, { unitPrice: Number.isFinite(n) ? n : 0 })}
                         disabled={parentAutoTotaled}
                         title={parentAutoTotaled ? t('crm.lineItems.autoTotaledHint', 'Total auto-computed from sub-items below') as string : undefined}
                       />
                     </td>
                     {showDiscount && (
                       <td className="px-2 py-2 align-top">
-                        <input
-                          type="number" step="0.1" min="0" max="100"
+                        <DecimalInput
                           className={`w-20 rounded border border-neutral-300 dark:border-neutral-600 px-2 py-1 text-sm text-right ${disabledInputClass}`}
                           value={li.discountPercent}
-                          onChange={(e) => setItem(idx, { discountPercent: Number(e.target.value) })}
+                          onChange={(n) => {
+                            // Clamp to 0..100 — match the original input's min/max.
+                            const clamped = !Number.isFinite(n) ? 0 : Math.max(0, Math.min(100, n));
+                            setItem(idx, { discountPercent: clamped });
+                          }}
                           disabled={parentAutoTotaled}
                           title={parentAutoTotaled ? t('crm.lineItems.autoTotaledHint', 'Total auto-computed from sub-items below') as string : undefined}
                         />
@@ -459,4 +457,7 @@ export const LineItemsTable: React.FC<Props> = ({
   );
 };
 
+// `formatMoney` is now the canonical helper from utils/money. Re-exported
+// here so call-sites that historically imported from this file
+// (CustomerCrmPanels, page-level summaries) keep working without churn.
 export { formatMoney };

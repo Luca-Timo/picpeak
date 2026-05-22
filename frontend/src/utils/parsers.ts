@@ -160,6 +160,60 @@ export const toArray = <T>(value: unknown, defaultValue: T[] = []): T[] => {
   return defaultValue;
 };
 
+/**
+ * Locale-tolerant decimal parser. Accepts strings using either '.' or
+ * ',' as the decimal separator and either thousand-separator
+ * convention (German "1.234,50" or English "1,234.50"). Crucially, this
+ * is what we use to read CRM money/quantity fields whose <input> is
+ * typed by humans in either an EN or DE locale — `Number('12,50')`
+ * silently returns NaN, which the call-sites then coerce to 0, eating
+ * real money.
+ *
+ * Heuristic when both separators appear: the LAST one is the decimal
+ * separator; all earlier instances of either symbol are thousands and
+ * are stripped. When only one separator appears, it's treated as the
+ * decimal separator. Leading/trailing whitespace, currency glyphs
+ * (€, $, CHF, etc.), and stray spaces inside the number are tolerated.
+ *
+ * Returns `NaN` when the input can't be coerced — callers should check
+ * with `Number.isFinite` before persisting.
+ *
+ * Examples:
+ *   parseLocaleDecimal('12,50')      // → 12.5   (DE)
+ *   parseLocaleDecimal('12.50')      // → 12.5   (EN)
+ *   parseLocaleDecimal('1.234,50')   // → 1234.5 (DE with thousands)
+ *   parseLocaleDecimal('1,234.50')   // → 1234.5 (EN with thousands)
+ *   parseLocaleDecimal('-7,5')       // → -7.5
+ *   parseLocaleDecimal('€ 12,50')    // → 12.5
+ *   parseLocaleDecimal('')           // → NaN
+ *   parseLocaleDecimal('foo')        // → NaN
+ */
+export const parseLocaleDecimal = (value: unknown): number => {
+  if (typeof value === 'number') return value;
+  if (value === null || value === undefined) return NaN;
+  let s = String(value).trim();
+  if (!s) return NaN;
+  // Strip whitespace + common currency symbols; leave digits, signs,
+  // and the two separator characters.
+  s = s.replace(/[\s€$£¥]/g, '').replace(/CHF/gi, '');
+  const lastDot = s.lastIndexOf('.');
+  const lastComma = s.lastIndexOf(',');
+  if (lastDot === -1 && lastComma === -1) {
+    // No separator — pure integer or noise.
+    const n = Number(s);
+    return Number.isFinite(n) ? n : NaN;
+  }
+  // The later separator wins as the decimal point; earlier separators
+  // of either type are treated as thousands and stripped.
+  const decimalAt = Math.max(lastDot, lastComma);
+  const intPart = s.slice(0, decimalAt).replace(/[.,]/g, '');
+  const fracPart = s.slice(decimalAt + 1);
+  if (!fracPart && !intPart) return NaN;
+  const normalised = `${intPart}.${fracPart}`;
+  const n = Number(normalised);
+  return Number.isFinite(n) ? n : NaN;
+};
+
 // Re-export with alternative names for backwards compatibility
 export const parseBooleanInput = toBoolean;
 export const parseNumberInput = toNumber;

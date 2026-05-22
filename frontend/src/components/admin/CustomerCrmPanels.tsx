@@ -201,6 +201,7 @@ const InvoicesPanel: React.FC<Props> = ({ customerAccountId }) => {
                   : inv.status === 'overdue' ? 'bg-red-100 text-red-800'
                   : inv.status === 'sent' ? 'bg-blue-100 text-blue-800'
                   : inv.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
+                  : inv.status === 'skipped' ? 'bg-neutral-100 text-neutral-500 italic'
                   : 'bg-amber-100 text-amber-800'
               }`}>{t(`bills.status.${inv.status}`, inv.status)}</span>
             </li>

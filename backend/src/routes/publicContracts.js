@@ -24,6 +24,8 @@ const { handleAsync, validateRequest, successResponse } = require('../utils/rout
 const { validateFileType } = require('../utils/fileSecurityUtils');
 const contractService = require('../services/contractService');
 const { getAppSetting } = require('../utils/appSettings');
+const { clientIpForAudit } = require('../utils/clientIp');
+const { loadActionToken, preMulterTokenGuard } = require('../utils/publicTokenGuards');
 const { db } = require('../database/db');
 
 const router = express.Router();
@@ -112,8 +114,13 @@ function publicContractView(contract, inclusions, customer, profile, locale) {
     signedByAdminAt: contract.signed_by_admin_at,
     signedCustomerName: contract.signed_customer_name,
     signedAdminName: contract.signed_admin_name,
+    // The customer's own IP is fine to surface back — it's THEIR
+    // identifier on the audit trail. The admin's IP is NOT exposed
+    // publicly: it's a counter-party's identifier (operator's office /
+    // home network) and shouldn't reach the customer's browser via
+    // a token-only-secret endpoint. Admin sees their own IP on the
+    // admin detail page; customer doesn't need it.
     signedCustomerIp: contract.signed_customer_ip || null,
-    signedAdminIp: contract.signed_admin_ip || null,
     // signed_pdf_path itself is admin-only; we just flag presence so
     // the public page can show a "wet-signed copy attached" hint.
     hasSignedPdf: !!contract.signed_pdf_path,
@@ -146,11 +153,11 @@ router.get(
   [param('token').isString().isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i)],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const tokenRow = await db('contract_action_tokens').where({ token: req.params.token }).first();
-    if (!tokenRow) return res.status(404).json({ error: 'Contract not found' });
-    if (tokenRow.expires_at && new Date(tokenRow.expires_at).getTime() < Date.now()) {
-      return res.status(410).json({ error: 'This link has expired' });
-    }
+    const tokenRow = await loadActionToken(req, res, {
+      tableName: 'contract_action_tokens',
+      token: req.params.token,
+    });
+    if (!tokenRow) return;
     const data = await contractService.getContractById(tokenRow.contract_id);
     if (!data) return res.status(404).json({ error: 'Contract not found' });
     const customer = await db('customer_accounts').where({ id: data.contract.customer_account_id }).first();
@@ -185,18 +192,13 @@ router.post(
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    // Best-guess client IP. We prefer X-Forwarded-For's first hop
-    // (the actual originating IP behind any number of reverse
-    // proxies) over req.ip because Express only trusts proxies
-    // explicitly listed in `app.set('trust proxy', ...)` — if the
-    // operator runs picpeak behind nginx on a non-private subnet,
-    // req.ip would otherwise record the proxy's IP and ruin the
-    // audit trail. When X-Forwarded-For isn't present (direct
-    // connection) req.ip is the correct value.
-    const forwardedFor = req.headers['x-forwarded-for'];
-    const ip = (typeof forwardedFor === 'string' && forwardedFor.trim())
-      ? forwardedFor.split(',')[0].trim()
-      : (req.ip || null);
+    // Audit IP source: req.ip ONLY. See utils/clientIp.js for the
+    // full rationale — reading X-Forwarded-For directly bypassed
+    // Express's trust-proxy safety net and let direct (non-proxied)
+    // POSTs spoof the audit IP, defeating the legal-evidence promise
+    // of the contract signing flow. Operators whose nginx topology
+    // needs different trust rules adjust `TRUST_PROXY` in server.js.
+    const ip = clientIpForAudit(req);
     try {
       const result = await contractService.recordCustomerSignature({
         token: req.params.token,
@@ -215,29 +217,38 @@ router.post(
   }),
 );
 
+// Server-side guard for the "allow PDF upload" toggle. When the admin
+// turns it off in Settings → CRM behaviour → Contracts the public sign
+// page hides the upload section, but a hand-crafted POST would still
+// hit this route — refuse here too BEFORE multer reads the body so a
+// disabled-toggle install never writes attacker bytes to disk.
+async function uploadSignedPdfSettingGuard(req, res, next) {
+  const allowPdfUpload = (await getAppSetting('crm_contracts_allow_pdf_upload')) !== false;
+  if (!allowPdfUpload) {
+    return res.status(403).json({
+      error: 'Uploading a wet-signed PDF is disabled for this installation. Please sign in your browser instead.',
+      code: 'UPLOAD_DISABLED',
+    });
+  }
+  next();
+}
+
 router.post(
   '/:token/upload-signed-pdf',
   respondLimiter,
   [param('token').isString().isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i)],
+  // CRITICAL ORDERING: setting guard + token guard run BEFORE multer.
+  // Previously these checks lived after multer.single, which meant a
+  // disabled-toggle install OR an expired/invalid token still cost a
+  // disk write — captured tokens could be replayed to spam the disk
+  // up to multer's 10 MB cap per request. Pre-multer rejection costs
+  // a DB lookup and nothing more.
+  uploadSignedPdfSettingGuard,
+  preMulterTokenGuard('contract_action_tokens'),
   signedPdfUpload.single('file'),
   handleAsync(async (req, res) => {
     validateRequest(req);
-    // Server-side guard for the "allow PDF upload" toggle. When the
-    // admin turns it off in Settings → CRM behaviour → Contracts the
-    // public sign page hides the upload section, but a hand-crafted
-    // POST would still hit this route — refuse here too.
-    const allowPdfUpload = (await getAppSetting('crm_contracts_allow_pdf_upload')) !== false;
-    if (!allowPdfUpload) {
-      return res.status(403).json({
-        error: 'Uploading a wet-signed PDF is disabled for this installation. Please sign in your browser instead.',
-        code: 'UPLOAD_DISABLED',
-      });
-    }
-    const tokenRow = await db('contract_action_tokens').where({ token: req.params.token }).first();
-    if (!tokenRow) return res.status(404).json({ error: 'Contract not found' });
-    if (tokenRow.expires_at && new Date(tokenRow.expires_at).getTime() < Date.now()) {
-      return res.status(410).json({ error: 'This link has expired' });
-    }
+    const tokenRow = req.publicTokenRow; // attached by preMulterTokenGuard
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded', code: 'NO_FILE' });
     }
@@ -249,11 +260,9 @@ router.post(
     // Mark the token as used so the link can't be re-played.
     // IP storage is gated by the crm_contracts_store_ip setting so
     // privacy-strict operators can opt out — same toggle that gates
-    // the in-browser-sign IP captures.
-    const ff = req.headers['x-forwarded-for'];
-    const rawIp = (typeof ff === 'string' && ff.trim())
-      ? ff.split(',')[0].trim()
-      : (req.ip || null);
+    // the in-browser-sign IP captures. See utils/clientIp.js for
+    // why we trust req.ip only.
+    const rawIp = clientIpForAudit(req);
     const storeIpEnabled = (await getAppSetting('crm_contracts_store_ip')) !== false;
     await db('contract_action_tokens').where({ id: tokenRow.id }).update({
       used_at: new Date(),
@@ -269,8 +278,21 @@ router.post(
  * they can re-fetch the signed copy from the same link rather than
  * waiting for the contract_fully_signed email (which only arrives
  * after admin counter-sign). Streams signed_pdf_path when present,
- * falls back to pdf_path. 404s if the token / contract is unknown
- * or the link has expired.
+ * falls back to pdf_path. Returns 410 once the link has expired.
+ *
+ * Security note: this route deliberately honours `expires_at` now —
+ * previous behaviour was "expired tokens still allow downloads, the
+ * customer may need their signed copy after the window closes" but
+ * that turned the token into a permanent unauthenticated download
+ * URL once leaked (referer headers, browser history, email forward).
+ * Customers needing a post-expiry copy receive the signed PDF in the
+ * `contract_fully_signed` email, OR the admin can issue a fresh
+ * download link via the admin detail page.
+ *
+ * Future enhancement (audit: "public token model rework"): swap the
+ * long-lived contract token for a short-lived download sub-token
+ * (~5 min) generated after sign, so the download URL itself never
+ * embeds the long-lived secret. Tracked in the CRM backlog.
  */
 router.get(
   '/:token/pdf',
@@ -278,27 +300,33 @@ router.get(
   [param('token').isString().isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i)],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const tokenRow = await db('contract_action_tokens').where({ token: req.params.token }).first();
-    if (!tokenRow) return res.status(404).json({ error: 'Contract not found' });
-    // Expired tokens still allow downloads — the customer may need
-    // their signed copy after the signing window closes.
+    const tokenRow = await loadActionToken(req, res, {
+      tableName: 'contract_action_tokens',
+      token: req.params.token,
+    });
+    if (!tokenRow) return;
     const contract = await db('contracts').where({ id: tokenRow.contract_id }).first();
     if (!contract) return res.status(404).json({ error: 'Contract not found' });
 
     const fs = require('fs');
     const path = require('path');
     const filePath = contract.signed_pdf_path || contract.pdf_path;
+    // Content-Disposition: attachment + Referrer-Policy: no-referrer
+    // so the long-lived contract token doesn't leak via referer
+    // headers if the customer opens the PDF in an external viewer
+    // that loads remote resources.
+    res.set('Referrer-Policy', 'no-referrer');
     if (!filePath || !fs.existsSync(filePath)) {
       // Render on-demand so the link works even if the on-disk
       // file was wiped (cleanup, S3 sync, etc.).
       const contractService = require('../services/contractService');
       const buf = await contractService.renderContractPdfBuffer(contract.id);
       res.set('Content-Type', 'application/pdf');
-      res.set('Content-Disposition', `inline; filename="${contract.contract_number}.pdf"`);
+      res.set('Content-Disposition', `attachment; filename="${contract.contract_number}.pdf"`);
       return res.send(buf);
     }
     res.set('Content-Type', 'application/pdf');
-    res.set('Content-Disposition', `inline; filename="${path.basename(filePath)}"`);
+    res.set('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
     fs.createReadStream(filePath).pipe(res);
   }),
 );

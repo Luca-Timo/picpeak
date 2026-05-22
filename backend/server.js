@@ -47,9 +47,28 @@ const secureImagesRoutes = require('./src/routes/secureImages');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Trust proxy headers (required for Traefik/nginx)
-// Set to specific number of proxies or loopback to be more secure
-app.set('trust proxy', 'loopback, linklocal, uniquelocal');
+// Trust proxy headers (required for Traefik/nginx).
+//
+// `req.ip` is computed by Express by walking X-Forwarded-For from
+// right-to-left and stopping at the first hop NOT in this list, so
+// the value picpeak audits (signing IPs, payment-check actions,
+// rate-limit keys) is the originating client IP behind any number
+// of trusted reverse proxies.
+//
+// Default: 'loopback, linklocal, uniquelocal' — covers localhost,
+// link-local (169.254.0.0/16), and unique-local IPv6 (fc00::/7).
+// Standard for nginx-in-front-of-Node deployments on the same host
+// and for Docker bridge networks. Operators with unusual topologies
+// (load balancer in a public subnet, multi-hop NAT) override via
+// TRUST_PROXY env, accepting any value Express accepts: a number,
+// 'loopback', 'linklocal', 'uniquelocal', a CIDR, a comma list, or
+// 'true' (trust ALL proxies — only safe behind a fully-controlled
+// reverse-proxy chain).
+//
+// NEVER read req.headers['x-forwarded-for'] directly in audit paths
+// — see utils/clientIp.js for the rationale.
+const trustProxySetting = process.env.TRUST_PROXY || 'loopback, linklocal, uniquelocal';
+app.set('trust proxy', trustProxySetting === 'true' ? true : trustProxySetting);
 
 // Security middleware with custom CSP
 // In native HTTP installs, do NOT force HTTPS for subresources.

@@ -26,13 +26,10 @@ import {
 } from '../../services/paymentCheck.service';
 import { usePublicDarkMode } from '../../hooks/usePublicDarkMode';
 import { Loading } from '../../components/common';
-
-function formatMoney(minor: number, currency: string, locale = 'de-CH') {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: (currency || 'CHF').toUpperCase(),
-  }).format(Number(minor || 0) / 100);
-}
+import { formatMoneyMinor } from '../../utils/money';
+// All call-sites in this file pass minor units — alias to the
+// minor-aware helper so the rest of the file is untouched.
+const formatMoney = formatMoneyMinor;
 
 function formatShortDate(value: string | null | undefined): string {
   if (!value) return '';

@@ -355,10 +355,11 @@ export interface PublicContractView {
   signedByAdminAt: string | null;
   signedCustomerName: string | null;
   signedAdminName: string | null;
-  /** Customer + admin IP at signing — surfaced for the audit
-   *  confirmation panel so the customer can verify what we recorded. */
+  /** Customer IP at signing — surfaced to the customer so they can
+   *  verify what we recorded about THEM. Admin's counter-sign IP is
+   *  intentionally NOT in this shape; it's the operator's identifier
+   *  and not part of the customer's audit surface. */
   signedCustomerIp?: string | null;
-  signedAdminIp?: string | null;
   hasSignedPdf: boolean;
   /** SHA-256 hashes of the on-disk PDFs — shown in the audit
    *  confirmation so the customer can re-hash their copy. */

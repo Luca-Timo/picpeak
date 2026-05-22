@@ -26,12 +26,10 @@ import { fetchCrmOverview, type CrmOverviewStats } from '../../services/bills.se
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
 
-function formatMoney(amountMinor: number, currency: string, locale = 'de-CH') {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: (currency || 'CHF').toUpperCase(),
-  }).format(Number(amountMinor || 0) / 100);
-}
+import { formatMoneyMinor } from '../../utils/money';
+// Local alias preserved so call-sites in this file keep their
+// minor-units semantics. The unified helper handles the /100 conversion.
+const formatMoney = formatMoneyMinor;
 
 export const CrmOverviewSection: React.FC = () => {
   const { t } = useTranslation();

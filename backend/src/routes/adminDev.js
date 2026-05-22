@@ -2,19 +2,29 @@
  * Admin → Dev tools
  *
  * Internal-use endpoints surfaced via the "Development" sub-tab
- * under Clients. Strictly gated behind:
+ * under Clients. Strictly gated behind THREE layers:
  *   - admin auth + `settings.edit` permission
  *   - the `crmDevelopment` feature flag (defense-in-depth — the
  *     frontend hides the tab when off, this check stops API
  *     callers from poking endpoints that aren't supposed to fire)
+ *   - the `PICPEAK_ENABLE_DEV_TOOLS=1` environment variable
+ *     (production-safety hard gate — a stray feature flag flip in
+ *     a real install can't enable these endpoints)
  *
  * Currently exposes:
  *   POST /send-test-email   queue any CRM email template to the
  *                           currently-logged-in admin's mailbox,
- *                           with mock data (real PDF attached when
- *                           the install has at least one matching
- *                           record on file, otherwise just the
- *                           text body)
+ *                           with SYNTHETIC data only (PDFs are
+ *                           rendered from hard-coded sample data,
+ *                           never from real customer records)
+ *
+ * Security history: a prior version of this route queried real
+ * customer records (`SELECT … FROM quotes ORDER BY id DESC LIMIT 1`)
+ * to source the sample PDFs, which leaked one customer's invoice to
+ * a different admin's inbox in multi-admin installs. The synthetic-
+ * only data path closes that leak; the env gate prevents accidental
+ * production exposure if the feature flag is ever flipped on by
+ * mistake.
  */
 
 const express = require('express');
@@ -26,14 +36,30 @@ const { requirePermission } = require('../middleware/permissions');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const { db } = require('../database/db');
 const emailProcessor = require('../services/emailProcessor');
-const quoteService = require('../services/quoteService');
-const invoiceService = require('../services/invoiceService');
+const pdfService = require('../services/pdfService');
 const { AppError } = require('../utils/errors');
 const logger = require('../utils/logger');
 
 const router = express.Router();
 
 router.use(adminAuth);
+
+/**
+ * Production-safety gate. Even if the crmDevelopment feature flag is
+ * accidentally enabled in a production install (one wrong DB toggle),
+ * this env check prevents the endpoints from doing anything. Operators
+ * who genuinely want dev tools in a non-production environment set
+ * PICPEAK_ENABLE_DEV_TOOLS=1 in the env file.
+ */
+router.use(handleAsync(async (req, res, next) => {
+  if (process.env.PICPEAK_ENABLE_DEV_TOOLS !== '1') {
+    return res.status(403).json({
+      error: 'CRM development tools are disabled (PICPEAK_ENABLE_DEV_TOOLS env var not set)',
+      code: 'CRM_DEV_ENV_DISABLED',
+    });
+  }
+  next();
+}));
 
 /**
  * Gate every endpoint below the crmDevelopment feature flag.
@@ -92,6 +118,7 @@ router.get(
 );
 
 const FRONTEND_URL_FALLBACK = 'https://app.example.com';
+const DEV_TEST_DIR = () => path.join(process.cwd(), 'storage', 'business-docs', 'dev-test');
 
 function fakeMoney(major, currency, locale = 'de') {
   return new Intl.NumberFormat(locale === 'de' ? 'de-CH' : 'en-GB', {
@@ -104,58 +131,216 @@ function fakeShortDate(d) {
 }
 
 /**
- * For attachment-bearing templates, render a real PDF from the most
- * recent matching record if any exists. Returns null when nothing
- * usable is on file — caller drops the attachment and queues the
- * email body only.
+ * Keep the dev-test PDF directory bounded: retain only the 7 newest
+ * files per cleanup pass. Each test-email render writes a fresh file;
+ * without cleanup the directory grows unbounded.
+ *
+ * Best-effort: failures are logged and swallowed (cleanup never blocks
+ * the test-email flow).
  */
-async function renderSampleQuotePdfPath(adminId) {
-  const quote = await db('quotes').orderBy('id', 'desc').first();
-  if (!quote) return null;
+function pruneDevTestDir() {
   try {
-    const buffer = await quoteService.renderQuotePdfBuffer(quote.id);
-    const dir = path.join(process.cwd(), 'storage', 'business-docs', 'dev-test');
-    fs.mkdirSync(dir, { recursive: true });
-    const filePath = path.join(dir, `quote-sample-${adminId}-${Date.now()}.pdf`);
-    fs.writeFileSync(filePath, buffer);
-    return { path: filePath, filename: `${quote.quote_number}-sample.pdf` };
+    const dir = DEV_TEST_DIR();
+    if (!fs.existsSync(dir)) return;
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.pdf'))
+      .map((e) => {
+        const full = path.join(dir, e.name);
+        return { full, mtime: fs.statSync(full).mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime); // newest first
+    for (const old of entries.slice(7)) {
+      try { fs.unlinkSync(old.full); } catch (_) { /* best-effort */ }
+    }
   } catch (err) {
-    logger.warn('dev send-test-email: quote PDF render failed', { err: err.message });
-    return null;
+    logger.warn('dev send-test-email: cleanup of dev-test dir failed', { err: err.message });
   }
 }
-async function renderSampleInvoicePdfPath(adminId) {
-  const invoice = await db('invoices').orderBy('id', 'desc').first();
-  if (!invoice) return null;
+
+/**
+ * Shared synthetic issuer + recipient blocks used by all three
+ * sample-PDF builders. The issuer pulls from `business_profile` so
+ * the admin sees their own brand on the test PDF (logo, address,
+ * fonts) — that's the operator's own data, safe to render. The
+ * recipient block is fully synthetic so no customer PII is ever
+ * embedded.
+ *
+ * Returning `null` for issuer is acceptable; pdfService's
+ * normaliseContext defaults each missing field. We still fetch the
+ * profile when available to make the test render look realistic.
+ */
+async function buildSyntheticParties() {
+  let profile = {};
   try {
-    const buffer = await invoiceService.renderInvoicePdfBuffer(invoice.id);
-    const dir = path.join(process.cwd(), 'storage', 'business-docs', 'dev-test');
-    fs.mkdirSync(dir, { recursive: true });
-    const filePath = path.join(dir, `invoice-sample-${adminId}-${Date.now()}.pdf`);
-    fs.writeFileSync(filePath, buffer);
-    return { path: filePath, filename: `${invoice.invoice_number}-sample.pdf` };
+    const businessProfileService = require('../services/businessProfileService');
+    profile = (await businessProfileService.getProfile()).profile || {};
+  } catch (_) {
+    // Fresh install with no business_profile row: render with
+    // generic defaults below.
+  }
+  const issuer = {
+    companyName: profile.company_name || 'Sample Studio',
+    addressLine1: profile.address_line1 || 'Beispielstrasse 1',
+    addressLine2: profile.address_line2,
+    postalCode: profile.postal_code || '8000',
+    city: profile.city || 'Zürich',
+    state: profile.state,
+    countryCode: profile.country_code || 'CH',
+    phone: profile.phone,
+    mobile: profile.mobile,
+    email: profile.email || 'studio@example.test',
+    website: profile.website,
+    footerLine: profile.footer_line,
+    vatId: profile.vat_id,
+    logoPath: null, // skip logo file lookup for the synthetic render
+    pdfFontTtfPath: profile.pdf_font_ttf_path,
+    pdfFontFamily: profile.pdf_font_family || null,
+    countryName: profile.country_name || null,
+    showLogo: false,
+    showCompanyName: true,
+    logoHeight: 56,
+    companyNameInline: false,
+    foldingMarks: 'none',
+    quoteShowNetDays: false,
+    quoteShowSkonto: false,
+  };
+  const recipient = {
+    issuerLine: profile.company_name
+      ? `${profile.company_name} * ${profile.address_line1 || ''} * ${profile.postal_code || ''} ${profile.city || ''}`
+      : '',
+    companyName: 'Sample Customer GmbH',
+    hasCompany: true,
+    attentionLine: 'z. Hd. Maria Sample',
+    salutation: 'Frau',
+    lastName: 'Sample',
+    addressLine1: 'Musterstrasse 1',
+    addressLine2: null,
+    postalCode: '8000',
+    city: 'Zürich',
+    country: null,
+    countryCodeIso: 'CH',
+  };
+  return { issuer, recipient };
+}
+
+const SYNTHETIC_LINE_ITEMS = [
+  { quantity: 1, description: 'Photo session (sample)', unitPriceMinor: 80000, discountPercent: 0, lineTotalMinor: 80000, parentLineItemId: null, parentPosition: null, detailsText: null },
+  { quantity: 2, description: 'Photo prints A4 (sample)', unitPriceMinor: 1500, discountPercent: 0, lineTotalMinor: 3000, parentLineItemId: null, parentPosition: null, detailsText: null },
+];
+const SYNTHETIC_TOTALS = { netAmountMinor: 83000, vatRate: 7.7, vatAmountMinor: 6391, shippingAmountMinor: 0, totalAmountMinor: 89391 };
+
+/**
+ * Render a sample QUOTE PDF from synthetic data — no DB read of real
+ * quotes. Uses pdfService.renderQuoteToBuffer directly with a render
+ * context matching the shape produced by quoteService.buildRenderContext.
+ */
+async function renderSyntheticQuotePdf(adminId) {
+  try {
+    const { issuer, recipient } = await buildSyntheticParties();
+    const today = new Date();
+    const ctx = {
+      locale: 'de',
+      currency: 'CHF',
+      qrFormat: 'none',
+      issuer,
+      recipient,
+      lineItems: SYNTHETIC_LINE_ITEMS,
+      totals: SYNTHETIC_TOTALS,
+      doc: {
+        quoteNumber: 'Q-DEV-0001',
+        issueDate: today,
+        validUntil: new Date(today.getTime() + 14 * 86400000),
+        introText: 'Sample quote — synthetic data only. Not a real customer record.',
+        outroText: null,
+        totalAmountMinor: SYNTHETIC_TOTALS.totalAmountMinor,
+      },
+      bank: null,
+      paymentTerm: null,
+    };
+    const buffer = await pdfService.renderQuoteToBuffer(ctx);
+    return writeSyntheticPdf(buffer, `quote-sample-${adminId}-${Date.now()}.pdf`, 'Q-DEV-0001-sample.pdf');
   } catch (err) {
-    logger.warn('dev send-test-email: invoice PDF render failed', { err: err.message });
+    logger.warn('dev send-test-email: synthetic quote PDF render failed', { err: err.message });
     return null;
   }
 }
 
-async function renderSampleContractPdfPath(adminId) {
-  if (!(await db.schema.hasTable('contracts'))) return null;
-  const contract = await db('contracts').orderBy('id', 'desc').first();
-  if (!contract) return null;
+async function renderSyntheticInvoicePdf(adminId) {
   try {
-    const contractService = require('../services/contractService');
-    const buffer = await contractService.renderContractPdfBuffer(contract.id);
-    const dir = path.join(process.cwd(), 'storage', 'business-docs', 'dev-test');
-    fs.mkdirSync(dir, { recursive: true });
-    const filePath = path.join(dir, `contract-sample-${adminId}-${Date.now()}.pdf`);
-    fs.writeFileSync(filePath, buffer);
-    return { path: filePath, filename: `${contract.contract_number}-sample.pdf` };
+    const { issuer, recipient } = await buildSyntheticParties();
+    const today = new Date();
+    const ctx = {
+      locale: 'de',
+      currency: 'CHF',
+      qrFormat: 'none',
+      issuer,
+      recipient,
+      lineItems: SYNTHETIC_LINE_ITEMS,
+      totals: SYNTHETIC_TOTALS,
+      doc: {
+        invoiceNumber: 'R-DEV-0001',
+        issueDate: today,
+        dueDate: new Date(today.getTime() + 30 * 86400000),
+        introText: 'Sample invoice — synthetic data only. Not a real customer record.',
+        outroText: null,
+        kind: 'invoice',
+        lateFeeMinor: 0,
+      },
+      bank: null,
+      paymentTerm: null,
+    };
+    const buffer = await pdfService.renderInvoiceToBuffer(ctx);
+    return writeSyntheticPdf(buffer, `invoice-sample-${adminId}-${Date.now()}.pdf`, 'R-DEV-0001-sample.pdf');
   } catch (err) {
-    logger.warn('dev send-test-email: contract PDF render failed', { err: err.message });
+    logger.warn('dev send-test-email: synthetic invoice PDF render failed', { err: err.message });
     return null;
   }
+}
+
+async function renderSyntheticContractPdf(adminId) {
+  try {
+    const { issuer, recipient } = await buildSyntheticParties();
+    const today = new Date();
+    const ctx = {
+      locale: 'de',
+      dateFormat: null,
+      issuer,
+      recipient,
+      today,
+      doc: {
+        contractNumber: 'C-DEV-0001',
+        title: 'Sample contract — synthetic data only',
+        issueDate: today,
+        validUntil: new Date(today.getTime() + 30 * 86400000),
+        introText: null,
+        outroText: null,
+      },
+      sections: [{
+        section: 'basics',
+        blocks: [{
+          slug: 'basics_service',
+          name: 'Subject of contract (sample)',
+          section: 'basics',
+          body: 'This is a synthetic dev-test contract. Not a real customer agreement.',
+        }],
+      }],
+      signatures: { customer: null, admin: null },
+    };
+    const buffer = await pdfService.renderContractToBuffer(ctx);
+    return writeSyntheticPdf(buffer, `contract-sample-${adminId}-${Date.now()}.pdf`, 'C-DEV-0001-sample.pdf');
+  } catch (err) {
+    logger.warn('dev send-test-email: synthetic contract PDF render failed', { err: err.message });
+    return null;
+  }
+}
+
+function writeSyntheticPdf(buffer, onDiskName, attachmentName) {
+  const dir = DEV_TEST_DIR();
+  fs.mkdirSync(dir, { recursive: true });
+  const filePath = path.join(dir, onDiskName);
+  fs.writeFileSync(filePath, buffer);
+  pruneDevTestDir();
+  return { path: filePath, filename: attachmentName };
 }
 
 /**
@@ -172,8 +357,8 @@ async function buildPayloadFor(key, adminId, frontendUrl) {
   const validUntil = new Date(today.getTime() + 14 * 86400000);
 
   const common = {
-    customer_name: 'Test Customer',
-    customer_email: 'test.customer@example.com',
+    customer_name: 'Sample Customer',
+    customer_email: 'sample.customer@example.test',
     event_name: 'Sample Event',
     invoice_number: 'R-DEV-0001',
     quote_number: 'Q-DEV-0001',
@@ -198,22 +383,22 @@ async function buildPayloadFor(key, adminId, frontendUrl) {
     // Contract-specific variables. Title + contract_number stand in
     // for the matching {{tokens}} in the seeded contract templates.
     contract_number: 'C-DEV-0001',
-    title: 'Wedding contract — Doe / Müller (sample)',
-    signed_customer_name: 'Test Customer',
+    title: 'Sample contract — synthetic data only',
+    signed_customer_name: 'Sample Customer',
   };
 
-  // Templates with PDF attachments get a real recent record's PDF
-  // when one exists; otherwise the email goes out without
-  // attachments (still functionally readable).
+  // Templates with PDF attachments get a SYNTHETIC sample PDF. Never
+  // pulls from real records on disk — every render builds from
+  // hardcoded sample data via the renderSynthetic*Pdf helpers above.
   let attachments;
   if (key === 'quote_sent' || key === 'quote_accepted_customer') {
-    const pdf = await renderSampleQuotePdfPath(adminId);
+    const pdf = await renderSyntheticQuotePdf(adminId);
     if (pdf) attachments = [{ filename: pdf.filename, contentPath: pdf.path, contentType: 'application/pdf' }];
   } else if (key === 'invoice_sent' || key === 'invoice_reminder_first' || key === 'invoice_reminder_second') {
-    const pdf = await renderSampleInvoicePdfPath(adminId);
+    const pdf = await renderSyntheticInvoicePdf(adminId);
     if (pdf) attachments = [{ filename: pdf.filename, contentPath: pdf.path, contentType: 'application/pdf' }];
   } else if (key === 'contract_sent' || key === 'contract_fully_signed') {
-    const pdf = await renderSampleContractPdfPath(adminId);
+    const pdf = await renderSyntheticContractPdf(adminId);
     if (pdf) attachments = [{ filename: pdf.filename, contentPath: pdf.path, contentType: 'application/pdf' }];
   }
 

@@ -28,6 +28,43 @@ import {
   type ContractBlockSection,
 } from '../../services/contracts.service';
 
+/**
+ * Maximum width of the exported signature PNG. The on-screen canvas
+ * uses CSS-pixel size × devicePixelRatio for crisp strokes; without
+ * downscaling, a 4× retina display exports a multi-MB PNG that
+ * trips the server's SIGNATURE_TOO_LARGE cap (1 MB base64). 800 px
+ * is wide enough to render the signature legibly when stamped onto
+ * the contract PDF (printed at 4 inches × 200 dpi).
+ */
+const MAX_SIGNATURE_WIDTH = 800;
+
+/**
+ * Export the signature canvas as a downscaled PNG data URL.
+ * Renders the source canvas onto a temporary canvas at
+ * MAX_SIGNATURE_WIDTH (preserving aspect ratio), then exports via
+ * toDataURL. The pad parameter is passed for the empty-state check
+ * + the fallback path when downscaling can't run.
+ */
+function downscaleSignature(pad: SignaturePad, sourceCanvas: HTMLCanvasElement): string {
+  const srcW = sourceCanvas.width;
+  const srcH = sourceCanvas.height;
+  if (srcW <= MAX_SIGNATURE_WIDTH) {
+    return pad.toDataURL('image/png');
+  }
+  const scale = MAX_SIGNATURE_WIDTH / srcW;
+  const targetW = MAX_SIGNATURE_WIDTH;
+  const targetH = Math.round(srcH * scale);
+  const dst = document.createElement('canvas');
+  dst.width = targetW;
+  dst.height = targetH;
+  const ctx = dst.getContext('2d');
+  if (!ctx) return pad.toDataURL('image/png');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(sourceCanvas, 0, 0, srcW, srcH, 0, 0, targetW, targetH);
+  return dst.toDataURL('image/png');
+}
+
 const SECTION_LABELS: Record<ContractBlockSection, { en: string; de: string }> = {
   basics: { en: 'Basics', de: 'Vertragsgrundlagen' },
   scope: { en: 'Scope', de: 'Leistungsumfang' },
@@ -103,7 +140,19 @@ export const ContractResponsePage: React.FC = () => {
   const signMutation = useMutation({
     mutationFn: async () => {
       const pad = padRef.current;
-      const signatureDataUrl = pad && !pad.isEmpty() ? pad.toDataURL('image/png') : null;
+      // Downscale the signature image before exporting. The canvas is
+      // sized to its CSS dimensions × devicePixelRatio (resize effect
+      // above) so on a 4× retina display we'd otherwise ship a ~1 MB
+      // PNG to the server. Cap the export at MAX_SIGNATURE_WIDTH px
+      // wide — preserves the visual fidelity needed for a legible
+      // signature stamp while keeping the payload well under the
+      // server's SIGNATURE_TOO_LARGE cap (1 MB base64). The
+      // downscale uses a temporary canvas + drawImage to bilinear-
+      // sample; signature_pad has no built-in export-size option.
+      const canvas = canvasRef.current;
+      const signatureDataUrl = (pad && canvas && !pad.isEmpty())
+        ? downscaleSignature(pad, canvas)
+        : null;
       return publicContractsService.sign(token as string, {
         name: name.trim(),
         signatureDataUrl,
@@ -315,12 +364,11 @@ export const ContractResponsePage: React.FC = () => {
                       <dd>{new Date(c.signedByAdminAt).toISOString()}</dd>
                     </>
                   )}
-                  {c.signedAdminIp && (
-                    <>
-                      <dt className="text-neutral-500">{t('publicContract.signed.adminIp', 'Counter-sign IP')}</dt>
-                      <dd>{c.signedAdminIp}</dd>
-                    </>
-                  )}
+                  {/* Admin counter-sign IP intentionally NOT rendered
+                      to the customer — it's the operator's identifier,
+                      not part of what the customer needs to audit. The
+                      backend no longer ships signedAdminIp on the
+                      public payload as of A.6 security hardening. */}
                   {c.signedPdfSha256 && (
                     <>
                       <dt className="text-neutral-500">{t('publicContract.signed.signedSha', 'Signed PDF SHA-256')}</dt>

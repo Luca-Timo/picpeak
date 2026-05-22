@@ -3400,7 +3400,8 @@
       "sent": "Sent",
       "paid": "Paid",
       "overdue": "Overdue",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "skipped": "Skipped (empty month)"
     }
   },
   "businessProfile": {
