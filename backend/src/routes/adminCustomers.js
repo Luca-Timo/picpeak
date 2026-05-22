@@ -328,7 +328,10 @@ router.get('/:id', [
 
 router.put('/:id', [
   adminAuth,
-  requirePermission('customers.create'),
+  // Migration 134 — record-edit scope split out of customers.create.
+  // Roles that previously held customers.create were granted
+  // customers.edit on upgrade so behavior is preserved.
+  requirePermission('customers.edit'),
   param('id').isInt({ min: 1 }),
   body('email').optional().isEmail().normalizeEmail(),
   // `{ nullable: true }` so a passive customer who has no salutation /
@@ -476,7 +479,11 @@ router.post('/:id/password-reset', [
  */
 router.put('/:id/events', [
   adminAuth,
-  requirePermission('customers.create'),
+  // Migration 134 — event-assignment scope split out of customers.create.
+  // Lets an admin grant a coordinator the ability to re-target a customer
+  // between weddings without also unlocking VAT-ID / billing-address
+  // edits on every customer they can see.
+  requirePermission('customers.events'),
   param('id').isInt({ min: 1 }),
   body('event_ids').isArray(),
   body('event_ids.*').isInt({ min: 1 }),
@@ -516,7 +523,9 @@ router.get('/:id/hour-entries', [
 
 router.post('/:id/hour-entries', [
   adminAuth,
-  requirePermission('customers.create'),
+  // Migration 134 — hour entries are customer-scoped writes; same scope
+  // as customer record edits, narrower than invite/create.
+  requirePermission('customers.edit'),
   param('id').isInt({ min: 1 }),
   body('entryDate').isISO8601(),
   body('startTime').matches(/^([01]\d|2[0-3]):[0-5]\d$/),
@@ -535,7 +544,7 @@ router.post('/:id/hour-entries', [
 
 router.put('/:id/hour-entries/:entryId', [
   adminAuth,
-  requirePermission('customers.create'),
+  requirePermission('customers.edit'),
   param('id').isInt({ min: 1 }),
   param('entryId').isInt({ min: 1 }),
   body('entryDate').optional().isISO8601(),
@@ -555,7 +564,7 @@ router.put('/:id/hour-entries/:entryId', [
 
 router.delete('/:id/hour-entries/:entryId', [
   adminAuth,
-  requirePermission('customers.create'),
+  requirePermission('customers.edit'),
   param('id').isInt({ min: 1 }),
   param('entryId').isInt({ min: 1 }),
 ], handleAsync(async (req, res) => {
@@ -569,7 +578,7 @@ router.delete('/:id/hour-entries/:entryId', [
 
 router.post('/:id/hour-entries/bill', [
   adminAuth,
-  requirePermission('customers.create'),
+  requirePermission('customers.edit'),
   param('id').isInt({ min: 1 }),
 ], handleAsync(async (req, res) => {
   validateRequest(req);
@@ -616,7 +625,10 @@ function transformHourEntry(h) {
 // ---------------------------------------------------------------------
 router.post('/:id/trigger-monthly-bill', [
   adminAuth,
-  requirePermission('customers.create'),
+  // Migration 134 — admin-override fire is a customer-scoped write,
+  // not a create. Roles holding customers.create were granted
+  // customers.edit on upgrade so this still works for existing admins.
+  requirePermission('customers.edit'),
   param('id').isInt({ min: 1 }),
 ], handleAsync(async (req, res) => {
   validateRequest(req);
@@ -634,7 +646,9 @@ router.post('/:id/trigger-monthly-bill', [
 // the same row.
 router.get('/:id/monthly-draft', [
   adminAuth,
-  requirePermission('customers.create'),
+  // Migration 134 — kept aligned with /trigger-monthly-bill above;
+  // the same role that can fire the draft should be able to preview it.
+  requirePermission('customers.edit'),
   param('id').isInt({ min: 1 }),
 ], handleAsync(async (req, res) => {
   validateRequest(req);
