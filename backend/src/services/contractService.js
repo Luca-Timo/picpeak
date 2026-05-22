@@ -295,11 +295,36 @@ async function persistContractPdf(contract, buffer, suffix = '') {
   return { filePath, sha256: sha256OfBuffer(buffer) };
 }
 
+// Maximum decoded signature image size. Defends against a customer
+// (or attacker holding a captured signing token) POSTing a multi-MB
+// signature data URL to fill the disk. A typical signature_pad PNG
+// is 10–80 KB; even with retina upscaling we don't expect to see
+// 1 MB. The cap is enforced on the BASE64 length before decoding so
+// we never allocate the full Buffer for an oversized payload.
+//
+// The frontend (ContractResponsePage) downscales the canvas to a
+// fixed max width before exporting via `toDataURL`, so well-behaved
+// clients land well under this cap. This server-side check is the
+// authoritative guard.
+const MAX_SIGNATURE_BASE64_BYTES = 1024 * 1024; // 1 MB of base64 → ~750 KB decoded
+
 async function persistSignatureImage(contract, role, dataUrl) {
   if (!dataUrl || typeof dataUrl !== 'string') return null;
+  if (dataUrl.length > MAX_SIGNATURE_BASE64_BYTES + 100 /* prefix slack */) {
+    throw new AppError(
+      `Signature image exceeds the ${Math.round(MAX_SIGNATURE_BASE64_BYTES / 1024)} KB cap`,
+      413, 'SIGNATURE_TOO_LARGE',
+    );
+  }
   const match = dataUrl.match(/^data:image\/(png|jpeg);base64,(.+)$/);
   if (!match) {
     throw new AppError('Signature must be a base64-encoded PNG or JPEG data URL', 400, 'BAD_SIGNATURE_FORMAT');
+  }
+  if (match[2].length > MAX_SIGNATURE_BASE64_BYTES) {
+    throw new AppError(
+      `Signature image exceeds the ${Math.round(MAX_SIGNATURE_BASE64_BYTES / 1024)} KB cap`,
+      413, 'SIGNATURE_TOO_LARGE',
+    );
   }
   const ext = match[1] === 'jpeg' ? 'jpg' : 'png';
   const root = path.join(
