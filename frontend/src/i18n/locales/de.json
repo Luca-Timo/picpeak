@@ -3490,7 +3490,13 @@
       "customer": "Kunde",
       "invoiceNumber": "Rechnungsnummer",
       "paidAmount": "Bereits bezahlt (optional)",
-      "pdfFile": "PDF-Datei"
+      "pdfFile": "PDF-Datei",
+      "ccPdfCustom": "Eigene E-Mail-Adresse",
+      "ccPdfEmailPlaceholder": "name@beispiel.de",
+      "ccPdfPickFromAdmins": "Aus Admin-Liste wählen:",
+      "paymentTermHelp": "Zahlungsziel + Skonto für diese Rechnung. Leer lassen, um die Werte vom Quell-Angebot oder den globalen CRM-Standardwerten zu übernehmen.",
+      "skontoDisabled": "Skonto für diese Rechnung deaktivieren (unterdrückt den Skonto-Block im PDF sowie die „Mit Skonto bezahlt“-Buttons in der Admin-E-Mail / im Zahlung-erfassen-Dialog).",
+      "sourceContract": "Vom Vertrag"
     },
     "import": "Historische Rechnung importieren",
     "importTitle": "Historische Rechnung importieren",
@@ -3529,6 +3535,10 @@
     },
     "confirmSend": "Diese Rechnung jetzt an den Kunden senden?",
     "sentToast": "Rechnung an Kunden gesendet.",
+    "confirmRelease": "Fotos jetzt als geliefert markieren und Rechnung an den Kunden senden?",
+    "releaseForDelivery": "Geliefert markieren & senden",
+    "releasedToast": "Lieferungs-Rechnung gesendet.",
+    "monthlyDraftBadge": "Monats-Entwurf — wird am Stichtag des Kunden oder über „Rechnung jetzt ausstellen“ verschickt",
     "confirmReminder": "Zahlungserinnerung jetzt senden?",
     "reminderToast": "Zahlungserinnerung gesendet.",
     "confirmCancel": "Diese Rechnung wirklich stornieren? Sie wird ausgegraut und kann nicht mehr bearbeitet werden.",
@@ -3558,7 +3568,8 @@
       "paymentLog": "Zahlungsverlauf",
       "customer": "Kunde",
       "event": "Anlassdetails",
-      "details": "Details"
+      "details": "Details",
+      "payment": "Zahlungsbedingungen"
     },
     "noPayments": "Noch keine Zahlungen erfasst.",
     "payment": {
@@ -3566,7 +3577,15 @@
       "amount": "Betrag",
       "method": "Methode",
       "reference": "Referenz",
-      "notes": "Notizen"
+      "notes": "Notizen",
+      "methodPlaceholder": "Methode wählen…",
+      "methods": {
+        "card": "Karte",
+        "cash": "Bar",
+        "paypal": "PayPal",
+        "twint": "TWINT"
+      },
+      "withSkonto": "Mit Skonto bezahlt ({{percent}}% Rabatt)"
     },
     "recordPayment": "Zahlung erfassen",
     "savedToast": "Rechnung gespeichert.",
@@ -3575,7 +3594,8 @@
     "qrFormat": {
       "none": "Keiner (Override)",
       "swiss": "Swiss QR-Bill",
-      "epc": "EPC QR (SEPA)"
+      "epc": "EPC QR (SEPA)",
+      "profileDefault": "Standard aus Geschäftsprofil verwenden"
     }
   },
   "businessProfile": {

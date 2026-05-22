@@ -3478,6 +3478,10 @@
     },
     "confirmSend": "Send invoice to customer now?",
     "sentToast": "Invoice sent.",
+    "confirmRelease": "Mark the photos as delivered and send this invoice to the customer now?",
+    "releaseForDelivery": "Mark delivered & send",
+    "releasedToast": "Delivery invoice sent.",
+    "monthlyDraftBadge": "Monthly draft — ships via the customer's cadence day or \"Trigger invoice now\"",
     "confirmReminder": "Send a reminder now?",
     "reminderToast": "Reminder sent.",
     "confirmCancel": "Cancel this invoice?",
@@ -3532,7 +3536,13 @@
       "customer": "Customer",
       "invoiceNumber": "Invoice number",
       "paidAmount": "Paid amount (optional)",
-      "pdfFile": "PDF file"
+      "pdfFile": "PDF file",
+      "ccPdfCustom": "Custom email",
+      "ccPdfEmailPlaceholder": "name@example.com",
+      "ccPdfPickFromAdmins": "Pick from admins:",
+      "paymentTermHelp": "Net days + Skonto for this invoice. Leave blank to inherit from the source quote or the global CRM defaults.",
+      "skontoDisabled": "Disable Skonto for this invoice (suppresses the early-payment-discount block on the PDF and the \"Paid with Skonto\" buttons in the admin email / record-payment dialog).",
+      "sourceContract": "From contract"
     },
     "import": "Import historical",
     "importTitle": "Import historical invoice",
@@ -3546,7 +3556,8 @@
       "paymentLog": "Payment log",
       "customer": "Customer",
       "event": "Event details",
-      "details": "Details"
+      "details": "Details",
+      "payment": "Payment conditions"
     },
     "noPayments": "No payments recorded yet.",
     "payment": {
@@ -3554,7 +3565,15 @@
       "amount": "Amount",
       "method": "Method",
       "reference": "Reference",
-      "notes": "Notes"
+      "notes": "Notes",
+      "methodPlaceholder": "Select method…",
+      "methods": {
+        "card": "Card",
+        "cash": "Cash",
+        "paypal": "PayPal",
+        "twint": "TWINT"
+      },
+      "withSkonto": "Paid with Skonto ({{percent}}% discount)"
     },
     "recordPayment": "Record payment",
     "savedToast": "Invoice saved.",
@@ -3563,7 +3582,8 @@
     "qrFormat": {
       "none": "None",
       "swiss": "Swiss QR-bill",
-      "epc": "EPC QR (SEPA)"
+      "epc": "EPC QR (SEPA)",
+      "profileDefault": "Use business profile default"
     },
     "status": {
       "scheduled": "Scheduled",
