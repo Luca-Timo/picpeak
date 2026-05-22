@@ -147,6 +147,10 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
               value={customerId}
               label={customerLabel}
               isPassive={customerIsPassive}
+              // F.6 — surface the hours-logging-eligible badge so admin
+              // sees up front that a customer with feature_hours_logging
+              // OFF would 409 the save.
+              requireFeature="hoursLogging"
               onSelect={(c: CustomerSummary) => {
                 setCustomerId(c.id);
                 setCustomerLabel(

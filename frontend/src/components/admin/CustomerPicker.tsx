@@ -82,6 +82,16 @@ export interface CustomerPickerProps {
    * editors can pass a doc-type-flavoured label.
    */
   searchPlaceholder?: string;
+  /**
+   * F.6 — surface a feature-gate badge so the admin sees up front that
+   * selecting a particular customer won't work for this surface (e.g.
+   * the calendar's hour-entry drag-create modal would 409 the backend
+   * on a customer whose `feature_hours_logging` is OFF).
+   * Currently only 'hoursLogging' is supported; pass undefined to
+   * skip the badge entirely (default for quote / bill / contract
+   * editors which don't care about hour-logging eligibility).
+   */
+  requireFeature?: 'hoursLogging';
 }
 
 export const CustomerPicker: React.FC<CustomerPickerProps> = ({
@@ -93,6 +103,7 @@ export const CustomerPicker: React.FC<CustomerPickerProps> = ({
   onClear,
   readOnly = false,
   searchPlaceholder,
+  requireFeature,
 }) => {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
@@ -156,25 +167,39 @@ export const CustomerPicker: React.FC<CustomerPickerProps> = ({
       />
       {options.length > 0 && (
         <ul className="mt-2 rounded-md border border-neutral-200 dark:border-neutral-700 divide-y divide-neutral-200 dark:divide-neutral-700">
-          {options.map((c) => (
-            <li key={c.id}>
-              <button
-                type="button"
-                onClick={() => onSelect(c)}
-                className="w-full text-left px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-sm"
-              >
-                <span className="font-medium">
-                  {c.companyName || c.displayName || c.email}
-                </span>
-                <span className="text-neutral-500 ml-2">{c.email}</span>
-                {c.isPassive && (
-                  <span className="ml-2 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300">
-                    {t('customers.passive.badge', 'Passive — admin only')}
+          {options.map((c) => {
+            // F.6 — gate badge for the calendar's hour-entry create
+            // modal. Selecting a customer with feature_hours_logging
+            // OFF would 409 the backend; warn up front. We still allow
+            // the click so the admin can open the customer's detail
+            // page to flip the flag from a separate tab.
+            const hourLoggingOff =
+              requireFeature === 'hoursLogging' && c.featureHoursLogging === false;
+            return (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(c)}
+                  className="w-full text-left px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-sm"
+                >
+                  <span className="font-medium">
+                    {c.companyName || c.displayName || c.email}
                   </span>
-                )}
-              </button>
-            </li>
-          ))}
+                  <span className="text-neutral-500 ml-2">{c.email}</span>
+                  {c.isPassive && (
+                    <span className="ml-2 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300">
+                      {t('customers.passive.badge', 'Passive — admin only')}
+                    </span>
+                  )}
+                  {hourLoggingOff && (
+                    <span className="ml-2 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
+                      {t('customers.hoursLoggingDisabled.badge', 'Hour logging disabled')}
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
       <button
