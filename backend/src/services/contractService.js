@@ -41,6 +41,7 @@ const { getAppSetting } = require('../utils/appSettings');
 const { AppError } = require('../utils/errors');
 const { claimNextSequence } = require('../utils/documentSequences');
 const businessProfileService = require('./businessProfileService');
+const { buildIssuerBlock, buildRecipientBlock } = require('./_renderContext');
 const pdfService = require('./pdfService');
 const pdfStampService = require('./pdfStampService');
 const emailProcessor = require('./emailProcessor');
@@ -563,62 +564,12 @@ async function buildRenderContext(contract, inclusions) {
     // pdf_show_company_name, pdf_logo_height, pdf_company_name_inline,
     // pdf_folding_marks) across all three document types. Per maintainer:
     // contracts reuse the same toggles — no contract-specific knobs.
-    issuer: profile ? {
-      companyName: profile.company_name,
-      addressLine1: profile.address_line1,
-      addressLine2: profile.address_line2,
-      postalCode: profile.postal_code,
-      city: profile.city,
-      state: profile.state,
-      countryCode: profile.country_code,
-      phone: profile.phone,
-      mobile: profile.mobile,
-      email: profile.email,
-      website: profile.website,
-      footerLine: profile.footer_line,
-      vatId: profile.vat_id,
-      logoPath: resolvedLogoPath,
-      pdfFontTtfPath: profile.pdf_font_ttf_path,
-      pdfFontFamily: profile.pdf_font_family || null,
-      countryName: profile.country_name || null,
-      showLogo: profile.pdf_show_logo == null ? true
-        : (profile.pdf_show_logo === true || profile.pdf_show_logo === 1 || profile.pdf_show_logo === '1'),
-      showCompanyName: profile.pdf_show_company_name == null ? true
-        : (profile.pdf_show_company_name === true || profile.pdf_show_company_name === 1 || profile.pdf_show_company_name === '1'),
-      logoHeight: profile.pdf_logo_height == null ? 56 : Number(profile.pdf_logo_height),
-      companyNameInline: profile.pdf_company_name_inline === true || profile.pdf_company_name_inline === 1 || profile.pdf_company_name_inline === '1',
-      foldingMarks: profile.pdf_folding_marks || 'none',
-    } : {},
-    recipient: (() => {
-      const trimmedCompany = (customer?.company_name || '').trim();
-      const personFull = [customer?.first_name, customer?.last_name]
-        .map((s) => (s || '').trim()).filter(Boolean).join(' ');
-      const header = trimmedCompany
-        || personFull
-        || (customer?.display_name || '').trim()
-        || customer?.email
-        || '';
-      const attentionParts = [customer?.salutation, personFull].filter(Boolean);
-      const attentionLine = attentionParts.length > 0 && trimmedCompany
-        ? `z. Hd. ${attentionParts.join(' ')}`
-        : '';
-      return {
-        issuerLine: profile?.company_name
-          ? `${profile.company_name} * ${profile.address_line1 || ''} * ${profile.postal_code || ''} ${profile.city || ''}`
-          : '',
-        companyName: header,
-        hasCompany: !!trimmedCompany,
-        attentionLine,
-        salutation: customer?.salutation || null,
-        lastName: (customer?.last_name || '').trim() || null,
-        addressLine1: customer?.address_line1,
-        addressLine2: customer?.address_line2,
-        postalCode: customer?.postal_code,
-        city: customer?.city,
-        country: customer?.country_name || null,
-        countryCodeIso: customer?.country_code,
-      };
-    })(),
+    // Shared issuer + recipient builders. Contracts use the base toggle
+    // set (no quote-only payment-block fields). The renderer-aware
+    // recipient gating means contractService's previously-drifted
+    // local attentionLine logic now matches quote + invoice exactly.
+    issuer: buildIssuerBlock(profile, resolvedLogoPath),
+    recipient: buildRecipientBlock(profile, customer),
     doc: {
       contractNumber: contract.contract_number,
       title: contract.title || '',
