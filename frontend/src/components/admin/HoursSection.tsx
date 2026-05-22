@@ -137,7 +137,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
           ? t('customers.hours.monthlyHint',
             'Entries auto-append to the current monthly draft. Edit / delete remains possible until the scheduler arms the draft for send.')
           : t('customers.hours.perEventHint',
-            'Logged entries stay unbilled until you click "Bill these hours" — a standalone invoice is generated with one line per entry.')}
+            'Logged entries stay unbilled until you click "Create draft invoice" — a standalone draft invoice is generated with one line per entry, ready for you to review before sending.')}
       </p>
 
       {/* Default rate — hidden in compact mode (history-only on the
@@ -256,7 +256,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
             isLoading={billMutation.isPending}
             onClick={() => billMutation.mutate()}
           >
-            {t('customers.hours.billButton', 'Bill these hours')}
+            {t('customers.hours.billButton', 'Create draft invoice')}
           </Button>
         </div>
       )}

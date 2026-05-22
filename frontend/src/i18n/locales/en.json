@@ -2788,7 +2788,8 @@
       "quotes": "Quotes",
       "bills": "Invoices",
       "profile": "Profile",
-      "soon": "Soon"
+      "soon": "Soon",
+      "new": "New"
     },
     "comingSoon": {
       "tag": "Coming soon"
@@ -2921,7 +2922,7 @@
     "hours": {
       "section": "Hours",
       "monthlyHint": "Entries auto-append to the current monthly draft. Edit / delete remains possible until the scheduler arms the draft for send.",
-      "perEventHint": "Logged entries stay unbilled until you click \"Bill these hours\" — a standalone invoice is generated with one line per entry.",
+      "perEventHint": "Logged entries stay unbilled until you click \"Create draft invoice\" — a standalone draft invoice is generated with one line per entry, ready for you to review before sending.",
       "form": {
         "title": "Log new entry",
         "date": "Date",
@@ -2946,7 +2947,7 @@
         "billed": "Billed",
         "billedOn": "Billed: {{number}}"
       },
-      "billButton": "Bill these hours",
+      "billButton": "Create draft invoice",
       "unbilledCount": "{{count}} unbilled entries totaling {{total}}",
       "empty": "No entries logged yet.",
       "confirmDelete": "Delete this entry? If it has been billed onto a draft, the matching invoice line will also be removed.",
@@ -3073,6 +3074,7 @@
       "city": "City",
       "state": "State / region",
       "countryCode": "Country (ISO 2)",
+      "countryName": "Country (full name)",
       "notesHint": "Visible only to admins. Never shown to the customer.",
       "featuresSection": "Customer features",
       "featuresHint": "Per-customer overrides for the customer-surface tabs. The global toggles in Settings → Customer Surface are the master switch — when global is OFF nobody sees the tab, regardless of what you set here. Defaults are ON, so flip a switch OFF to hide a tab for this specific customer.",
@@ -3086,9 +3088,30 @@
       },
       "quotesSection": "Quotes",
       "noQuotes": "No quotes for this customer yet.",
+      "contractsSection": "Contracts",
+      "noContracts": "No contracts for this customer yet.",
       "billsSection": "Invoices",
       "noBills": "No invoices for this customer yet.",
       "manageEvents": "Manage galleries"
+    },
+    "billing": {
+      "section": "Billing cadence",
+      "hint": "Per-event (default): every invoice is sent on its own schedule. Monthly: all invoices issued in the period accumulate into one bill that fires on the configured day.",
+      "cadence": "Billing cadence",
+      "perEvent": "Per event",
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "cycleDay": "Cycle day",
+      "cycleDayHint": "1..28 = day of month. Use negative -1..-15 for \"N days before month end\" (so -3 fires on the 28th of a 31-day month).",
+      "triggerNow": "Trigger invoice now",
+      "triggerConfirm": "Issue this customer's monthly bill now? The customer receives the email immediately.",
+      "triggerHint": "Bypasses the cadence day and issues the running draft immediately. Refuses when nothing has been queued for the current period.",
+      "triggered": "Monthly bill issued: {{number}}",
+      "triggerError": "Could not trigger the monthly bill.",
+      "draftPreview": {
+        "title": "Pending in this month's bill",
+        "periodRange": "{{number}} · {{from}} – {{to}}"
+      }
     },
     "reactivate": {
       "button": "Reactivate",
@@ -3425,8 +3448,19 @@
       "eventName": "Event",
       "eventDate": "Event date",
       "eventTimeStart": "Start time",
-      "eventTimeEnd": "End time"
+      "eventTimeEnd": "End time",
+      "customer": "Customer",
+      "invoiceNumber": "Invoice number",
+      "paidAmount": "Paid amount (optional)",
+      "pdfFile": "PDF file"
     },
+    "import": "Import historical",
+    "importTitle": "Import historical invoice",
+    "importHelp": "Attach a PDF from a previous billing system. The customer sees this original document in their portal — picpeak does not regenerate it.",
+    "importedToast": "Invoice imported.",
+    "importError": "Import failed",
+    "importing": "Importing…",
+    "noMatch": "No matches",
     "section": {
       "lineItems": "Line items",
       "paymentLog": "Payment log",
@@ -3618,6 +3652,9 @@
       "signed_by_admin": "Counter-signed",
       "fully_signed": "Fully signed",
       "cancelled": "Cancelled"
+    },
+    "list": {
+      "new": "New contract"
     }
   }
 }
