@@ -306,10 +306,14 @@ export const CalendarPage: React.FC = () => {
         entryDate, startTime, endTime,
       });
       toast.success(t('calendar.hourEntry.movedToast', 'Hours updated.'));
-      queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
-      queryClient.invalidateQueries({
-        queryKey: ['admin-customer-hour-entries', item.customerAccountId],
-      });
+      // F.7 — refetch (not just invalidate) so the calendar visibly
+      // reflects the move/resize before any subsequent user action.
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['calendar-items'] }),
+        queryClient.refetchQueries({
+          queryKey: ['admin-customer-hour-entries', item.customerAccountId],
+        }),
+      ]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(t('calendar.hourEntry.moveFailed', { message: msg, defaultValue: `Couldn't move: ${msg}` }) as string);
@@ -344,10 +348,14 @@ export const CalendarPage: React.FC = () => {
         entryDate, startTime, endTime,
       });
       toast.success(t('calendar.hourEntry.resizedToast', 'Hours updated.'));
-      queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
-      queryClient.invalidateQueries({
-        queryKey: ['admin-customer-hour-entries', item.customerAccountId],
-      });
+      // F.7 — refetch (not just invalidate) so the calendar visibly
+      // reflects the move/resize before any subsequent user action.
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['calendar-items'] }),
+        queryClient.refetchQueries({
+          queryKey: ['admin-customer-hour-entries', item.customerAccountId],
+        }),
+      ]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(t('calendar.hourEntry.resizeFailed', { message: msg, defaultValue: `Couldn't resize: ${msg}` }) as string);
@@ -444,8 +452,20 @@ export const CalendarPage: React.FC = () => {
           entryDate={dragCreateState.entryDate}
           startTime={dragCreateState.startTime}
           endTime={dragCreateState.endTime}
-          onClose={() => setDragCreateState(null)}
-          onCreated={() => setDragCreateState(null)}
+          onClose={() => {
+            // F.7 — clear FC's drag-mirror highlight when the modal
+            // closes WITHOUT a save. Without this, the dashed selection
+            // sticks around until the next user interaction.
+            calendarRef.current?.getApi().unselect();
+            setDragCreateState(null);
+          }}
+          onCreated={() => {
+            // F.7 — same here. The newly-created green block is already
+            // in the cache (refetch ran before onCreated), so clearing
+            // the mirror leaves a clean visual handoff.
+            calendarRef.current?.getApi().unselect();
+            setDragCreateState(null);
+          }}
         />
       )}
 

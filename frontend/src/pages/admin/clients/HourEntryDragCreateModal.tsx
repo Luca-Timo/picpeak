@@ -77,14 +77,19 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
         description: description.trim() || null,
       });
     },
-    onSuccess: () => {
+    // F.7 — async + refetchQueries (instead of invalidateQueries) so the
+    // modal stays open until the calendar has the new entry in cache.
+    // Previously the modal closed synchronously after the POST returned
+    // and the refetch ran in the background — there was a ~200-500ms
+    // window where the calendar showed neither the drag-mirror (cleared
+    // by modal unmount) nor the new green block (refetch still in
+    // flight). The admin perceived the saved block "disappearing".
+    onSuccess: async () => {
       toast.success(t('calendar.hourEntry.created', 'Hours logged.'));
-      // Refetch the calendar's items AND the standalone hours page if
-      // it's mounted; both keys are invalidated wholesale (calendar-
-      // items has a date-range tail but invalidating the prefix is
-      // enough for react-query 5).
-      queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['calendar-items'] }),
+        queryClient.refetchQueries({ queryKey: ['admin-customer-hour-entries', customerId] }),
+      ]);
       onCreated();
     },
     onError: (err: unknown) => {

@@ -52,12 +52,16 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
   const [endTime, setEndTime] = useState(item.endTime);
   const [description, setDescription] = useState(item.description || '');
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
-    queryClient.invalidateQueries({
+  // F.7 — refetch before the modal closes so the calendar shows the
+  // updated entry immediately (avoids the brief "block disappears"
+  // gap reported on drag-create). Returns the promise so onSuccess
+  // can await it.
+  const refetchAll = () => Promise.all([
+    queryClient.refetchQueries({ queryKey: ['calendar-items'] }),
+    queryClient.refetchQueries({
       queryKey: ['admin-customer-hour-entries', item.customerAccountId],
-    });
-  };
+    }),
+  ]);
 
   const updateMutation = useMutation({
     mutationFn: () => customerAdminService.updateHourEntry(
@@ -69,9 +73,9 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
         description: description.trim() || null,
       },
     ),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t('calendar.hourEntry.saved', 'Hours updated.'));
-      invalidate();
+      await refetchAll();
       onMutated();
     },
     onError: (err: unknown) => {
@@ -82,9 +86,9 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
 
   const deleteMutation = useMutation({
     mutationFn: () => customerAdminService.deleteHourEntry(item.customerAccountId, item.id),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t('calendar.hourEntry.deleted', 'Hours deleted.'));
-      invalidate();
+      await refetchAll();
       onMutated();
     },
     onError: (err: unknown) => {
