@@ -116,6 +116,14 @@ export interface ContractSummary {
    *  audit confirmation) can verify file integrity by re-hashing. */
   pdfSha256?: string | null;
   signedPdfSha256?: string | null;
+  /** Migration 136 — post-sign PDF re-stamp failure marker. When non-
+   *  null, the most recent stamp attempt threw and the contract is in
+   *  an orphan state (status is signed_by_customer or signed_by_admin
+   *  but signed_pdf_path is missing). Detail page surfaces a recovery
+   *  banner pointing at the resend-signed / restamp-signatures admin
+   *  routes. Cleared by any successful subsequent stamp. */
+  signedPdfRenderFailedAt?: string | null;
+  signedPdfRenderError?: string | null;
   sentAt: string | null;
   signedByCustomerAt: string | null;
   signedByAdminAt: string | null;

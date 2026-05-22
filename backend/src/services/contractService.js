@@ -1166,6 +1166,12 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
       updated_at: new Date(),
     };
     if (hasSignedPdfSha) updates.signed_pdf_sha256 = signedSha256;
+    // Migration 136 — clear any pre-existing render-failed marker; the
+    // most recent stamp attempt just succeeded.
+    if (await db.schema.hasColumn('contracts', 'signed_pdf_render_failed_at')) {
+      updates.signed_pdf_render_failed_at = null;
+      updates.signed_pdf_render_error = null;
+    }
     await db('contracts').where({ id: contract.id }).update(updates);
   } catch (err) {
     // Signature recorded; PDF re-render is best-effort. The admin can
@@ -1176,6 +1182,26 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
       message: err.message,
       stack: err.stack,
     });
+    // Migration 136 — surface the failure on the contract row so the
+    // admin detail page can render a recovery banner instead of the
+    // admin only discovering this through monitoring. err.message is
+    // truncated to 2 KB; the full stack stays in server logs.
+    try {
+      if (await db.schema.hasColumn('contracts', 'signed_pdf_render_failed_at')) {
+        await db('contracts').where({ id: contract.id }).update({
+          signed_pdf_render_failed_at: new Date(),
+          signed_pdf_render_error: String(err.message || 'Unknown error').slice(0, 2048),
+          updated_at: new Date(),
+        });
+      }
+    } catch (markErr) {
+      // Marker write itself failed — log + swallow so the customer
+      // sign response still succeeds. The orphan stays orphan but
+      // we've at least surfaced both errors.
+      logger.error('Failed to record signed_pdf_render_failed marker', {
+        contractId: contract.id, message: markErr.message,
+      });
+    }
   }
 
   // Notify admin.
@@ -1275,6 +1301,10 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
       updated_at: new Date(),
     };
     if (hasSignedPdfSha) updates.signed_pdf_sha256 = signedSha256;
+    if (await db.schema.hasColumn('contracts', 'signed_pdf_render_failed_at')) {
+      updates.signed_pdf_render_failed_at = null;
+      updates.signed_pdf_render_error = null;
+    }
     await db('contracts').where({ id: contract.id }).update(updates);
   } catch (err) {
     logger.error('Failed to stamp contract PDF after admin signature', {
@@ -1283,6 +1313,21 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
       message: err.message,
       stack: err.stack,
     });
+    // Migration 136 — mirror the customer-sign branch: persist a
+    // recovery marker so the admin detail page can surface a banner.
+    try {
+      if (await db.schema.hasColumn('contracts', 'signed_pdf_render_failed_at')) {
+        await db('contracts').where({ id: contract.id }).update({
+          signed_pdf_render_failed_at: new Date(),
+          signed_pdf_render_error: String(err.message || 'Unknown error').slice(0, 2048),
+          updated_at: new Date(),
+        });
+      }
+    } catch (markErr) {
+      logger.error('Failed to record signed_pdf_render_failed marker (admin sign)', {
+        contractId: contract.id, message: markErr.message,
+      });
+    }
   }
 
   // When the admin's signature is what FINALISED the contract (i.e.
@@ -1924,6 +1969,12 @@ async function rerenderAndResend(contractId, adminId) {
       updated_at: new Date(),
     };
     if (hasSignedPdfSha) updates.signed_pdf_sha256 = signedSha256;
+    // Migration 136 — this branch is a recovery path; clear any
+    // existing failed-render marker.
+    if (await db.schema.hasColumn('contracts', 'signed_pdf_render_failed_at')) {
+      updates.signed_pdf_render_failed_at = null;
+      updates.signed_pdf_render_error = null;
+    }
     await db('contracts').where({ id: contract.id }).update(updates);
   }
 
@@ -2058,6 +2109,11 @@ async function restampSignatures(contractId, { customerSignatureDataUrl, adminSi
       updated_at: new Date(),
     };
     if (hasSignedPdfSha) updates.signed_pdf_sha256 = signedSha256;
+    // Migration 136 — restamp is a recovery path; clear the marker.
+    if (await db.schema.hasColumn('contracts', 'signed_pdf_render_failed_at')) {
+      updates.signed_pdf_render_failed_at = null;
+      updates.signed_pdf_render_error = null;
+    }
     await db('contracts').where({ id: contract.id }).update(updates);
   }
 

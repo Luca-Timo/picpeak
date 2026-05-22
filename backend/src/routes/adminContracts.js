@@ -120,6 +120,12 @@ function transformContract(c, inclusions) {
     // with since we issued it.
     pdfSha256: c.pdf_sha256 || null,
     signedPdfSha256: c.signed_pdf_sha256 || null,
+    // Migration 136 — surface the post-sign re-stamp failure marker so
+    // the admin detail page can render a recovery banner. Null when
+    // the most recent stamp succeeded (or the migration hasn't run on
+    // this install — the front-end branches on truthiness).
+    signedPdfRenderFailedAt: c.signed_pdf_render_failed_at || null,
+    signedPdfRenderError: c.signed_pdf_render_error || null,
     sentAt: c.sent_at,
     signedByCustomerAt: c.signed_by_customer_at,
     signedByAdminAt: c.signed_by_admin_at,
