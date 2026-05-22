@@ -13,7 +13,7 @@ import { billsService, type InvoiceCreatePayload, type InvoiceQrFormat } from '.
 import { quotesService } from '../../../services/quotes.service';
 import { contractsService } from '../../../services/contracts.service';
 import { businessProfileService } from '../../../services/businessProfile.service';
-import { InlineCustomerCreate } from '../../../components/admin/InlineCustomerCreate';
+import { CustomerPicker } from '../../../components/admin/CustomerPicker';
 import { LineItemsTable, type EditableLineItem } from '../../../components/admin/LineItemsTable';
 import { customerAdminService } from '../../../services/customerAdmin.service';
 import { userManagementService } from '../../../services/userManagement.service';
@@ -43,10 +43,7 @@ export const BillEditorPage: React.FC = () => {
   // badge next to the label. Driven by the same isPassive boolean
   // the backend exposes on transformInvoice.customer + transformQuote.customer.
   const [customerIsPassive, setCustomerIsPassive] = useState(false);
-  const [customerSearch, setCustomerSearch] = useState('');
-  // Toggle: when true, the customer card hides the search and shows
-  // the inline-create form (passive customer or "save & invite").
-  const [creatingCustomer, setCreatingCustomer] = useState(false);
+  // Customer search + inline-create state moved into <CustomerPicker> (C.5).
   const [currency, setCurrency] = useState('CHF');
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState('');
@@ -94,14 +91,10 @@ export const BillEditorPage: React.FC = () => {
   });
   const bankAccounts = bankAccountsData?.bankAccounts || [];
 
-  // Payment-term templates. Migration 124 — keep the legacy list around
-  // for back-compat (lets the editor still resolve preview text on an
-  // invoice authored before the split) but the editor now drives off
-  // the two new lists.
-  const { data: ptTemplates } = useQuery({
-    queryKey: ['payment-term-templates'],
-    queryFn: () => quotesService.listPaymentTermTemplates(),
-  });
+  // Migration 124 split the legacy payment-term template into Net days
+  // + Timing. The editor now drives entirely off the two split lists;
+  // the legacy `ptTemplates` query was kept around "for back-compat
+  // preview text" but never read. Removed (D.1 cleanup).
   const { data: netDaysTemplates } = useQuery({
     queryKey: ['payment-net-days-templates'],
     queryFn: () => quotesService.listPaymentNetDaysTemplates(),
@@ -279,11 +272,7 @@ export const BillEditorPage: React.FC = () => {
     })();
   }, [isEdit, searchParams, customerId]);
 
-  const { data: customerOptions } = useQuery({
-    queryKey: ['customer-search', customerSearch],
-    queryFn: () => customerAdminService.search(customerSearch),
-    enabled: customerSearch.length >= 2,
-  });
+  // Customer autocomplete moved into <CustomerPicker> (C.5).
 
   // Load the admin-configured CRM defaults (migration 125). The
   // editor's prefill prefers these over the hardcoded fallbacks below
@@ -445,65 +434,27 @@ export const BillEditorPage: React.FC = () => {
 
       <Card>
         <h3 className="font-semibold mb-2">{t('bills.section.customer', 'Customer')}</h3>
-        {customerId ? (
-          <div className="flex items-center justify-between bg-neutral-50 dark:bg-neutral-800 rounded-md px-3 py-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm">{customerLabel}</span>
-              {customerIsPassive && (
-                <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300">
-                  {t('customers.passive.badge', 'Passive — admin only')}
-                </span>
-              )}
-            </div>
-            <Button variant="outline" size="sm" onClick={() => { setCustomerId(null); setCustomerLabel(''); setCustomerIsPassive(false); }}>
-              {t('common.change', 'Change')}
-            </Button>
-          </div>
-        ) : creatingCustomer ? (
-          <InlineCustomerCreate
-            onCancel={() => setCreatingCustomer(false)}
-            onCreated={(c) => {
-              setCustomerId(c.id);
-              setCustomerLabel(c.companyName || c.displayName || c.email);
-              setCustomerIsPassive(Boolean(c.isPassive));
-              setCreatingCustomer(false);
-            }}
-          />
-        ) : (
-          <>
-            <Input placeholder={t('bills.customerSearch', 'Search by email or company…') as string}
-              value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} />
-            {customerOptions && customerOptions.length > 0 && (
-              <ul className="mt-2 rounded-md border border-neutral-200 dark:border-neutral-700 divide-y divide-neutral-200 dark:divide-neutral-700">
-                {customerOptions.map((c) => (
-                  <li key={c.id}>
-                    <button type="button" className="w-full text-left px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-sm"
-                      onClick={() => {
-                        setCustomerId(c.id);
-                        setCustomerLabel(c.companyName || c.displayName || c.email);
-                        setCustomerIsPassive(Boolean(c.isPassive));
-                      }}>
-                      <span className="font-medium">{c.companyName || c.displayName || c.email}</span>
-                      <span className="text-neutral-500 ml-2">{c.email}</span>
-                      {c.isPassive && (
-                        <span className="ml-2 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300">
-                          {t('customers.passive.badge', 'Passive — admin only')}
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <button
-              type="button"
-              onClick={() => setCreatingCustomer(true)}
-              className="mt-3 inline-flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:underline"
-            >
-              {t('customers.create.openLink', '+ Create new customer')}
-            </button>
-          </>
-        )}
+        <CustomerPicker
+          value={customerId}
+          label={customerLabel}
+          isPassive={customerIsPassive}
+          onSelect={(c) => {
+            setCustomerId(c.id);
+            setCustomerLabel(c.companyName || c.displayName || c.email);
+            setCustomerIsPassive(Boolean(c.isPassive));
+          }}
+          onCreate={(c) => {
+            setCustomerId(c.id);
+            setCustomerLabel(c.companyName || c.displayName || c.email);
+            setCustomerIsPassive(Boolean(c.isPassive));
+          }}
+          onClear={() => {
+            setCustomerId(null);
+            setCustomerLabel('');
+            setCustomerIsPassive(false);
+          }}
+          searchPlaceholder={t('bills.customerSearch', 'Search by email or company…') as string}
+        />
       </Card>
 
       {/* Event snapshot section (migration 123). Mirrors the quote

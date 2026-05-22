@@ -20,7 +20,7 @@
  * for editor ergonomics, then converted to minor (25000) when persisting.
  * The conversion happens at the save boundary in the parent page.
  */
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, X, ArrowUp, ArrowDown, Save as SaveIcon, ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react';
 import { Button } from '../common';
@@ -214,12 +214,30 @@ export const LineItemsTable: React.FC<Props> = ({
    * Matches the backend resolveParentTotalsFromSubItems() rule
    * (migration 119) so the editor mirrors what gets persisted.
    */
+  // D.4 — memoize the per-parent child-pricing aggregates. The previous
+  // shape rescanned `items` on every call, and the helpers were called
+  // inside the JSX loop AND from the subtotal reduce — so on a 20-item
+  // quote each keystroke ran ~O(n²) array scans. Build a Map once per
+  // render and read O(1) afterwards.
+  const childPricingByParent = useMemo(() => {
+    const map = new Map<number, { hasPriced: boolean; pricedSum: number }>();
+    for (const c of items) {
+      if (c.parentPosition == null) continue;
+      if (!(c.unitPrice > 0)) continue;
+      const cur = map.get(c.parentPosition) || { hasPriced: false, pricedSum: 0 };
+      cur.hasPriced = true;
+      cur.pricedSum += rawLineTotal(c);
+      map.set(c.parentPosition, cur);
+    }
+    return map;
+    // rawLineTotal is a pure function of the closure's `items`; the
+    // dependency array gets the items snapshot directly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
   const hasPricedChildren = (parentPos: number) =>
-    items.some((c) => c.parentPosition === parentPos && c.unitPrice > 0);
+    childPricingByParent.get(parentPos)?.hasPriced || false;
   const pricedChildrenSum = (parentPos: number) =>
-    items
-      .filter((c) => c.parentPosition === parentPos && c.unitPrice > 0)
-      .reduce((s, c) => s + rawLineTotal(c), 0);
+    childPricingByParent.get(parentPos)?.pricedSum || 0;
 
   /** Resolved line total: parent auto-sums when sub-items are priced. */
   const lineTotal = (li: EditableLineItem) => {

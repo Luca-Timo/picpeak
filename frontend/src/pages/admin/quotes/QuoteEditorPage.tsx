@@ -23,7 +23,7 @@ import {
   type PaymentTermInstallment,
 } from '../../../services/quotes.service';
 import { LineItemsTable, type EditableLineItem } from '../../../components/admin/LineItemsTable';
-import { InlineCustomerCreate } from '../../../components/admin/InlineCustomerCreate';
+import { CustomerPicker } from '../../../components/admin/CustomerPicker';
 import { customerAdminService } from '../../../services/customerAdmin.service';
 import { userManagementService } from '../../../services/userManagement.service';
 import { settingsService } from '../../../services/settings.service';
@@ -172,10 +172,8 @@ export const QuoteEditorPage: React.FC = () => {
       }
     })();
   }, [isEdit, searchParams]);
-  const [customerSearch, setCustomerSearch] = useState('');
-  // Toggle: when true, the customer card hides the search and shows
-  // the inline-create form (passive customer or "save & invite").
-  const [creatingCustomer, setCreatingCustomer] = useState(false);
+  // Customer search + inline-create state now lives inside
+  // <CustomerPicker> (migration C.5 extraction).
 
   // Load existing quote
   const { data: existing, isLoading } = useQuery({
@@ -224,13 +222,7 @@ export const QuoteEditorPage: React.FC = () => {
     }
   }, [existing]);
 
-  // Customer autocomplete
-  const { data: customerOptions } = useQuery({
-    queryKey: ['customer-search', customerSearch],
-    queryFn: () => customerAdminService.search(customerSearch),
-    enabled: customerSearch.length >= 2,
-    staleTime: 5000,
-  });
+  // Customer autocomplete moved into <CustomerPicker> (C.5).
 
   // Payment-term templates + line-item presets. Migration 124 split
   // the legacy single dropdown into Net days + Timing — load both.
@@ -457,76 +449,30 @@ export const QuoteEditorPage: React.FC = () => {
       {/* Section: Customer */}
       <Card>
         <h3 className="font-semibold mb-2">1. {t('quotes.section.customer', 'Customer')}</h3>
-        {form.customerAccountId ? (
-          <div className="flex items-center justify-between bg-neutral-50 dark:bg-neutral-800 rounded-md px-3 py-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm">{form.customerLabel}</span>
-              {form.customerIsPassive && (
-                <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300">
-                  {t('customers.passive.badge', 'Passive — admin only')}
-                </span>
-              )}
-            </div>
-            <Button variant="outline" size="sm" onClick={() => setForm((f) => ({ ...f, customerAccountId: null, customerLabel: '', customerIsPassive: false }))}>
-              {t('common.change', 'Change')}
-            </Button>
-          </div>
-        ) : creatingCustomer ? (
-          <InlineCustomerCreate
-            onCancel={() => setCreatingCustomer(false)}
-            onCreated={(c) => {
-              setForm((f) => ({
-                ...f,
-                customerAccountId: c.id,
-                customerLabel: c.companyName || c.displayName || c.email,
-                customerIsPassive: Boolean(c.isPassive),
-                // Inherit the new customer's language so the quote
-                // gets rendered in their locale by default.
-                language: f.language || c.preferredLanguage || 'de',
-              }));
-              setCreatingCustomer(false);
-            }}
-          />
-        ) : (
-          <>
-            <Input
-              placeholder={t('quotes.customerSearch', 'Search customer by email or company…') as string}
-              value={customerSearch}
-              onChange={(e) => setCustomerSearch(e.target.value)}
-            />
-            {customerOptions && customerOptions.length > 0 && (
-              <ul className="mt-2 rounded-md border border-neutral-200 dark:border-neutral-700 divide-y divide-neutral-200 dark:divide-neutral-700">
-                {customerOptions.map((c) => (
-                  <li key={c.id}>
-                    <button type="button" className="w-full text-left px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-sm"
-                      onClick={() => setForm((f) => ({
-                        ...f,
-                        customerAccountId: c.id,
-                        customerLabel: c.companyName || c.displayName || c.email,
-                        customerIsPassive: Boolean(c.isPassive),
-                      }))}
-                    >
-                      <span className="font-medium">{c.companyName || c.displayName || c.email}</span>
-                      <span className="text-neutral-500 ml-2">{c.email}</span>
-                      {c.isPassive && (
-                        <span className="ml-2 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300">
-                          {t('customers.passive.badge', 'Passive — admin only')}
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <button
-              type="button"
-              onClick={() => setCreatingCustomer(true)}
-              className="mt-3 inline-flex items-center gap-1 text-sm text-primary-600 dark:text-primary-400 hover:underline"
-            >
-              {t('customers.create.openLink', '+ Create new customer')}
-            </button>
-          </>
-        )}
+        <CustomerPicker
+          value={form.customerAccountId}
+          label={form.customerLabel}
+          isPassive={form.customerIsPassive}
+          onSelect={(c) => setForm((f) => ({
+            ...f,
+            customerAccountId: c.id,
+            customerLabel: c.companyName || c.displayName || c.email,
+            customerIsPassive: Boolean(c.isPassive),
+          }))}
+          onCreate={(c) => setForm((f) => ({
+            ...f,
+            customerAccountId: c.id,
+            customerLabel: c.companyName || c.displayName || c.email,
+            customerIsPassive: Boolean(c.isPassive),
+            // Inherit the new customer's language so the quote
+            // gets rendered in their locale by default.
+            language: f.language || c.preferredLanguage || 'de',
+          }))}
+          onClear={() => setForm((f) => ({
+            ...f, customerAccountId: null, customerLabel: '', customerIsPassive: false,
+          }))}
+          searchPlaceholder={t('quotes.customerSearch', 'Search customer by email or company…') as string}
+        />
       </Card>
 
       {/* Section: Event */}

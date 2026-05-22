@@ -18,7 +18,6 @@ import {
   CheckCircle2, X, FileText, Calendar, KeyRound, ToggleLeft, Settings as SettingsIcon,
   Clock,
 } from 'lucide-react';
-import { format } from 'date-fns';
 
 import { Button, Card, Input, Loading } from '../../components/common';
 import { AssignedEventsDialog } from '../../components/admin/AssignedEventsDialog';
@@ -41,10 +40,14 @@ type EditableFields =
   | 'featureCalendar' | 'featureQuotes' | 'featureBills' | 'featureHoursLogging'
   | 'hourlyRateMinor' | 'billingCadence' | 'billingCycleDay';
 
-const formatDate = (iso: string | null | undefined) => {
-  if (!iso) return '—';
-  try { return format(new Date(iso), 'PP'); } catch { return '—'; }
-};
+// `fmtDate` (from useLocalizedDate, below) is the single canonical date
+// formatter. It honors the admin's `general_date_format` setting AND
+// the active i18next locale. Per memory:
+//   `feedback_respect_general_format_settings.md` — every displayed
+//   date must route through useLocalizedDate(). Previously this file
+//   had a local `formatDate(iso)` using date-fns 'PP' that ignored
+//   both settings and locale — two rows on the same customer page
+//   were rendering dates in two different formats.
 
 export const CustomerDetailPage: React.FC = () => {
   const { t } = useTranslation();
@@ -470,8 +473,8 @@ export const CustomerDetailPage: React.FC = () => {
                   {ev.eventName}
                 </Link>
                 <span className="text-xs text-muted-theme">
-                  {ev.eventDate ? formatDate(ev.eventDate) : ''}
-                  {ev.expiresAt ? ` · ${t('customers.detail.expires', 'expires')} ${formatDate(ev.expiresAt)}` : ''}
+                  {ev.eventDate ? fmtDate(ev.eventDate) : ''}
+                  {ev.expiresAt ? ` · ${t('customers.detail.expires', 'expires')} ${fmtDate(ev.expiresAt)}` : ''}
                 </span>
               </li>
             ))}

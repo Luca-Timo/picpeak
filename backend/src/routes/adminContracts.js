@@ -26,6 +26,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const { assertContractPdfPath } = require('../utils/safePath');
 const { body, param, query } = require('express-validator');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
@@ -120,6 +121,12 @@ function transformContract(c, inclusions) {
     // with since we issued it.
     pdfSha256: c.pdf_sha256 || null,
     signedPdfSha256: c.signed_pdf_sha256 || null,
+    // Migration 136 — surface the post-sign re-stamp failure marker so
+    // the admin detail page can render a recovery banner. Null when
+    // the most recent stamp succeeded (or the migration hasn't run on
+    // this install — the front-end branches on truthiness).
+    signedPdfRenderFailedAt: c.signed_pdf_render_failed_at || null,
+    signedPdfRenderError: c.signed_pdf_render_error || null,
     sentAt: c.sent_at,
     signedByCustomerAt: c.signed_by_customer_at,
     signedByAdminAt: c.signed_by_admin_at,
@@ -515,12 +522,18 @@ router.get(
     if (!fs.existsSync(data.contract.pdf_path)) {
       return res.status(404).json({ error: 'PDF file missing from disk', code: 'PDF_MISSING_ON_DISK' });
     }
+    // Defence-in-depth: reject any path that resolves outside the
+    // contract storage roots before we open the stream. Today the DB
+    // paths are always written by the service layer, but a future
+    // migration bug or hand-edited row should not turn this endpoint
+    // into an arbitrary-file-read primitive.
+    const safePath = assertContractPdfPath(data.contract.pdf_path);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
       `inline; filename="${data.contract.contract_number}.pdf"`,
     );
-    fs.createReadStream(data.contract.pdf_path).pipe(res);
+    fs.createReadStream(safePath).pipe(res);
   }),
 );
 
@@ -538,12 +551,13 @@ router.get(
     if (!fs.existsSync(data.contract.signed_pdf_path)) {
       return res.status(404).json({ error: 'Signed PDF missing from disk', code: 'SIGNED_PDF_MISSING_ON_DISK' });
     }
+    const safePath = assertContractPdfPath(data.contract.signed_pdf_path);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
       `inline; filename="${data.contract.contract_number}-signed.pdf"`,
     );
-    fs.createReadStream(data.contract.signed_pdf_path).pipe(res);
+    fs.createReadStream(safePath).pipe(res);
   }),
 );
 

@@ -31,12 +31,7 @@ import { formatMoneyMinor } from '../../utils/money';
 // minor-aware helper so the rest of the file is untouched.
 const formatMoney = formatMoneyMinor;
 
-function formatShortDate(value: string | null | undefined): string {
-  if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
-}
+import { formatShortDate } from '../../utils/dateShort';
 
 export const PaymentCheckPage: React.FC = () => {
   const { t } = useTranslation();

@@ -34,6 +34,7 @@ const { AppError } = require('../utils/errors');
 const { formatBoolean } = require('../utils/dbCompat');
 const { claimNextSequence } = require('../utils/documentSequences');
 const businessProfileService = require('./businessProfileService');
+const { buildIssuerBlock, buildRecipientBlock } = require('./_renderContext');
 const pdfService = require('./pdfService');
 const emailProcessor = require('./emailProcessor');
 const { getFrontendBaseUrl } = require('../utils/frontendUrl');
@@ -53,17 +54,8 @@ const VALID_QUOTE_TRANSITIONS = {
 // Helpers
 // ---------------------------------------------------------------------
 
-function ensureInt(value) {
-  const n = parseInt(value, 10);
-  if (Number.isNaN(n)) return 0;
-  return n;
-}
-
-function ensureNumber(value, fallback = 0) {
-  if (value === null || value === undefined || value === '') return fallback;
-  const n = Number(value);
-  return Number.isNaN(n) ? fallback : n;
-}
+// `ensureInt` + `ensureNumber` moved to utils/numericHelpers (D.2 cleanup).
+const { ensureInt, ensureNumber } = require('../utils/numericHelpers');
 
 /**
  * Compute line totals + document totals authoritatively from the
@@ -707,112 +699,12 @@ async function buildRenderContext(quote, lineItems) {
     currency: quote.currency,
     qrFormat: 'none', // quotes never carry a Swiss QR-bill
     dateFormat,
-    issuer: profile ? {
-      companyName: profile.company_name,
-      addressLine1: profile.address_line1,
-      addressLine2: profile.address_line2,
-      postalCode: profile.postal_code,
-      city: profile.city,
-      state: profile.state,
-      countryCode: profile.country_code,
-      phone: profile.phone,
-      mobile: profile.mobile,
-      email: profile.email,
-      website: profile.website,
-      footerLine: profile.footer_line,
-      vatId: profile.vat_id,
-      // PDF renderer resolves this relative to the storage/ root.
-      // `resolvedLogoPath` falls back to the global branding logo
-      // (app_settings.branding_logo_url) when the dedicated
-      // business_profile.logo_path is empty.
-      logoPath: resolvedLogoPath,
-      // Custom TTF used by pdfService when set; falls back to
-      // Helvetica when null or the file is missing on disk.
-      pdfFontTtfPath: profile.pdf_font_ttf_path,
-      // Bundled-fonts dropdown (migration 121). When set,
-      // pdfService loads <family>/400.ttf + <family>/700.ttf from
-      // backend/assets/fonts/. Priority: pdfFontTtfPath wins if both
-      // are present.
-      pdfFontFamily: profile.pdf_font_family || null,
-      // Free-text country name override (migration 107). Used verbatim
-      // by the PDF renderer when set; otherwise falls back to the
-      // COUNTRY_NAMES lookup on the ISO country_code.
-      countryName: profile.country_name || null,
-      // Visibility toggles (migration 106). Default true when the
-      // column is missing on older installs that haven't migrated
-      // yet — preserves the previously implicit "always show" state.
-      showLogo: profile.pdf_show_logo == null ? true
-        : (profile.pdf_show_logo === true || profile.pdf_show_logo === 1 || profile.pdf_show_logo === '1'),
-      showCompanyName: profile.pdf_show_company_name == null ? true
-        : (profile.pdf_show_company_name === true || profile.pdf_show_company_name === 1 || profile.pdf_show_company_name === '1'),
-      // Layout customisation (migration 108).
-      logoHeight: profile.pdf_logo_height == null ? 56 : Number(profile.pdf_logo_height),
-      companyNameInline: profile.pdf_company_name_inline === true || profile.pdf_company_name_inline === 1 || profile.pdf_company_name_inline === '1',
-      foldingMarks: profile.pdf_folding_marks || 'none',
-      // Quote payment-block toggles (migration 110). Read only on
-      // the quote path — invoices ignore these and always show the
-      // full payment block. Default FALSE when the column is missing
-      // (a quote is an offer, not a demand for payment; admins opt
-      // IN via the Business profile UI when they want the net-days
-      // / Skonto rows on quotes).
-      quoteShowNetDays: profile.pdf_quote_show_net_days === true || profile.pdf_quote_show_net_days === 1 || profile.pdf_quote_show_net_days === '1',
-      quoteShowSkonto:  profile.pdf_quote_show_skonto  === true || profile.pdf_quote_show_skonto  === 1 || profile.pdf_quote_show_skonto  === '1',
-    } : {},
-    recipient: (() => {
-      // Recipient first-line rule (maintainer spec):
-      //   1. If customer.company_name is set → bold company name on
-      //      line 1, then "z. Hd. <person>" on line 2.
-      //   2. Else → bold full person name on line 1, NO "z. Hd."
-      //      attention line (avoids the "Luca Bresch / z. Hd. Luca
-      //      Bresch" duplication).
-      //
-      // We trim each field defensively because empty strings ("")
-      // are truthy in JSON payloads after `||` short-circuiting
-      // unless we coerce empty → null first. Without the trim a
-      // customer row saved with company_name = "" (instead of NULL)
-      // would engage the company-header path with a blank line.
-      const trimmedCompany = (customer?.company_name || '').trim();
-      const personFull = [customer?.first_name, customer?.last_name]
-        .map((s) => (s || '').trim()).filter(Boolean).join(' ');
-      const headerWithCompany = !!trimmedCompany;
-      const header = trimmedCompany
-        || personFull
-        || (customer?.display_name || '').trim()
-        || customer?.email
-        || '';
-      // Attention line only meaningful with a company; mention the
-      // salutation honorific when set (Herr/Frau/Dr.).
-      const attentionParts = [customer?.salutation, personFull].filter(Boolean);
-      const attentionLine = attentionParts.length > 0 ? `z. Hd. ${attentionParts.join(' ')}` : '';
-      return {
-        issuerLine: profile?.company_name
-          ? `${profile.company_name} * ${profile.address_line1 || ''} * ${profile.postal_code || ''} ${profile.city || ''}`
-          : '',
-        companyName: header,
-        hasCompany: headerWithCompany,
-        attentionLine,
-        // Honorific + last name surfaced for the personalised
-        // salutation line ("Sehr geehrter Herr Bresch,"). Both must
-        // be present for personalisation to fire; otherwise the
-        // generic locale greeting is used.
-        salutation: customer?.salutation || null,
-        lastName: (customer?.last_name || '').trim() || null,
-        addressLine1: customer?.address_line1,
-        addressLine2: customer?.address_line2,
-        postalCode: customer?.postal_code,
-        city: customer?.city,
-        // Country is rendered by pdfService via countryName() using
-        // the doc locale. Pass the ISO code so the renderer can
-        // resolve the right localised string ("Liechtenstein" vs
-        // "Schweiz") for both quote and invoice surfaces.
-        // Country name override (migration 107). When the customer
-        // record has a free-text country name, the PDF uses it
-        // verbatim; otherwise the renderer falls back to the locale-
-        // aware COUNTRY_NAMES lookup on countryCodeIso.
-        country: customer?.country_name || null,
-        countryCodeIso: customer?.country_code,
-      };
-    })(),
+    // Issuer + recipient blocks are shared across all three doc services.
+    // The quote variant opts into the two extra payment-block toggles.
+    // See backend/src/services/_renderContext.js for the spec + drift
+    // history.
+    issuer: buildIssuerBlock(profile, resolvedLogoPath, { quoteToggles: true }),
+    recipient: buildRecipientBlock(profile, customer),
     bank: bank ? {
       accountHolder: bank.account_holder || profile?.company_name,
       iban: bank.iban,

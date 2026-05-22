@@ -373,6 +373,31 @@ export const ContractDetailPage: React.FC = () => {
         })()}
       </div>
 
+      {/* Migration 136 — recovery banner. The post-sign PDF stamp is
+          best-effort (wrapped in try/catch so signature evidence
+          persists even when pdf-lib chokes). When the most recent
+          attempt failed, signed_pdf_render_failed_at is non-null and
+          we surface it here so the admin can hit "Re-send signed PDF"
+          (which re-stamps from the immutable pdf_path) without having
+          to discover the orphan state via monitoring. */}
+      {c.signedPdfRenderFailedAt && (
+        <Card padding="lg" className="mb-4 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/30">
+          <h2 className="font-semibold mb-1 text-red-900 dark:text-red-200">
+            {t('contracts.detail.renderFailedTitle',
+              'Signed PDF stamp failed — re-stamp required')}
+          </h2>
+          <p className="text-sm text-red-900 dark:text-red-200">
+            {t('contracts.detail.renderFailedBody',
+              'The signature evidence is recorded, but the stamped PDF was not generated on the last attempt. Click "Re-send signed PDF" above to re-stamp from the original document and resend.')}
+          </p>
+          {c.signedPdfRenderError && (
+            <p className="mt-2 text-xs font-mono text-red-800 dark:text-red-300 break-words">
+              {c.signedPdfRenderError}
+            </p>
+          )}
+        </Card>
+      )}
+
       {/* Recipient + dates */}
       <Card padding="lg" className="mb-4">
         <h2 className="font-semibold mb-2">{t('contracts.detail.parties', 'Parties')}</h2>
@@ -595,7 +620,11 @@ export const ContractDetailPage: React.FC = () => {
  */
 const AuditTrailCard: React.FC<{ contractId: number }> = ({ contractId }) => {
   const { t } = useTranslation();
-  const { format } = useLocalizedDate();
+  // formatDateTime honors `general_date_format` + `general_time_format`
+  // from admin Settings; previously this card was rendering audit
+  // timestamps with a hardcoded `yyyy-MM-dd HH:mm` format that bypassed
+  // both. Memory: feedback_respect_general_format_settings.md.
+  const { formatDateTime: fmtDateTime } = useLocalizedDate();
   const { data, isLoading } = useQuery({
     queryKey: ['contract-audit-trail', contractId],
     queryFn: () => contractsService.auditTrail(contractId),
@@ -661,7 +690,7 @@ const AuditTrailCard: React.FC<{ contractId: number }> = ({ contractId }) => {
                 </div>
               </div>
               <div className="text-xs text-neutral-500 whitespace-nowrap font-mono">
-                {format(e.created_at, 'yyyy-MM-dd HH:mm')}
+                {fmtDateTime(e.created_at)}
               </div>
             </li>
           );

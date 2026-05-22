@@ -187,7 +187,15 @@ router.post('/invite', [
       expiresAt: invitation.expiresAt,
     },
   };
-  if (process.env.NODE_ENV !== 'production') {
+  // C.7 — hardened token echo. The previous shape gated on
+  // `NODE_ENV !== 'production'`, which is true in dev AND when the
+  // variable is unset entirely (some hosting setups never set
+  // NODE_ENV in their entrypoint). That meant the raw invitation
+  // token could leak in production-shaped deployments where the env
+  // happened to be unset. Now requires an EXPLICIT opt-in
+  // (`PICPEAK_ECHO_INVITE_TOKEN=1`) so a misconfigured production
+  // host fails closed instead of open.
+  if (process.env.PICPEAK_ECHO_INVITE_TOKEN === '1') {
     payload.invitation.token = invitation.token;
   }
   successResponse(res, payload, 201);
@@ -305,8 +313,10 @@ router.post('/:id/send-invite', [
       expiresAt: invitation.expiresAt,
     },
   };
-  // Echo the token in dev so e2e tests can skip the email-channel round-trip.
-  if (process.env.NODE_ENV !== 'production') {
+  // C.7 — see the matching gate on POST /invite. Explicit opt-in
+  // (`PICPEAK_ECHO_INVITE_TOKEN=1`) fails closed when NODE_ENV is
+  // unset in a production-shaped deployment.
+  if (process.env.PICPEAK_ECHO_INVITE_TOKEN === '1') {
     payload.invitation.token = invitation.token;
   }
   successResponse(res, payload, 201);
