@@ -100,9 +100,16 @@ function customerPublicActor() {
 async function maybeStoreIp(ip) {
   if (!ip) return null;
   const enabled = await getAppSetting('crm_contracts_store_ip');
-  // Default true: only block when explicitly set to false (covers
-  // legacy installs where the row doesn't exist yet).
+  // Default true: only block when EXPLICITLY opted out. The audit
+  // flagged that `enabled === false` missed legacy installs where
+  // app_settings stored the toggle as a string ('false', '0') — those
+  // would slip through and the IP would still get persisted despite
+  // the operator's intent. Cover string/number/bool variants
+  // defensively. Anything else (null, undefined, true) preserves
+  // the default-on behavior.
   if (enabled === false) return null;
+  if (enabled === 0 || enabled === '0') return null;
+  if (typeof enabled === 'string' && enabled.toLowerCase() === 'false') return null;
   return ip;
 }
 
@@ -1086,6 +1093,7 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
   // can't happen anyway, but doing it upfront keeps the data
   // consistent and saves a redundant read.
   const persistedIp = await maybeStoreIp(ip);
+  try {
   await db.transaction(async (trx) => {
     await trx('contracts').where({ id: contract.id }).update({
       status: 'signed_by_customer',
@@ -1101,6 +1109,25 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
       used_ip: persistedIp,
     });
   });
+  } catch (txErr) {
+    // C.7 — clean up the orphan signature PNG we wrote before the
+    // transaction. The DB rollback already undid the contract +
+    // token writes; the file would otherwise sit forever in
+    // storage/business-docs/contract/.../signatures/. Best-effort
+    // unlink — if the cleanup itself fails, log and re-throw the
+    // original transaction error so the caller still sees the real
+    // failure cause.
+    if (signaturePath) {
+      try {
+        if (fs.existsSync(signaturePath)) fs.unlinkSync(signaturePath);
+      } catch (cleanupErr) {
+        logger.warn('Orphan signature PNG cleanup failed', {
+          path: signaturePath, message: cleanupErr.message,
+        });
+      }
+    }
+    throw txErr;
+  }
 
   // Stamp the customer's signature onto the UNSIGNED PDF on disk.
   // Byte-immutable approach (see pdfStampService): we read pdf_path
@@ -1223,6 +1250,7 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
   const now = new Date();
   const newStatus = contract.status === 'signed_by_customer' ? 'fully_signed' : 'signed_by_admin';
   const persistedAdminIp = await maybeStoreIp(ip);
+  try {
   await db('contracts').where({ id: contract.id }).update({
     status: newStatus,
     signed_by_admin_at: now,
@@ -1231,6 +1259,21 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
     signed_admin_signature_path: signaturePath,
     updated_at: now,
   });
+  } catch (updateErr) {
+    // C.7 — clean up the orphan signature PNG if the contract row
+    // update threw. Best-effort; log on cleanup failure and re-throw
+    // the original update error.
+    if (signaturePath) {
+      try {
+        if (fs.existsSync(signaturePath)) fs.unlinkSync(signaturePath);
+      } catch (cleanupErr) {
+        logger.warn('Orphan admin signature PNG cleanup failed', {
+          path: signaturePath, message: cleanupErr.message,
+        });
+      }
+    }
+    throw updateErr;
+  }
 
   // Stamp the admin's signature ON TOP of whatever signed_pdf_path
   // currently holds (the customer-stamped PDF, in the normal flow)

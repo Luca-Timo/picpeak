@@ -310,6 +310,7 @@ router.get(
 
     const fs = require('fs');
     const path = require('path');
+    const { assertContractPdfPath } = require('../utils/safePath');
     const filePath = contract.signed_pdf_path || contract.pdf_path;
     // Content-Disposition: attachment + Referrer-Policy: no-referrer
     // so the long-lived contract token doesn't leak via referer
@@ -325,9 +326,16 @@ router.get(
       res.set('Content-Disposition', `attachment; filename="${contract.contract_number}.pdf"`);
       return res.send(buf);
     }
+    // C.7 — defence-in-depth: reject if filePath resolves outside the
+    // contract storage roots. The customer signing token is far less
+    // privileged than an admin, so getting this wrong has higher blast
+    // radius (a forged token could otherwise read any file the node
+    // process has access to). assertContractPdfPath throws AppError
+    // which the error middleware converts to a clean 403/404.
+    const safePath = assertContractPdfPath(filePath);
     res.set('Content-Type', 'application/pdf');
-    res.set('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
-    fs.createReadStream(filePath).pipe(res);
+    res.set('Content-Disposition', `attachment; filename="${path.basename(safePath)}"`);
+    fs.createReadStream(safePath).pipe(res);
   }),
 );
 

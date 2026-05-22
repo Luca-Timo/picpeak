@@ -26,6 +26,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const { assertContractPdfPath } = require('../utils/safePath');
 const { body, param, query } = require('express-validator');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
@@ -521,12 +522,18 @@ router.get(
     if (!fs.existsSync(data.contract.pdf_path)) {
       return res.status(404).json({ error: 'PDF file missing from disk', code: 'PDF_MISSING_ON_DISK' });
     }
+    // Defence-in-depth: reject any path that resolves outside the
+    // contract storage roots before we open the stream. Today the DB
+    // paths are always written by the service layer, but a future
+    // migration bug or hand-edited row should not turn this endpoint
+    // into an arbitrary-file-read primitive.
+    const safePath = assertContractPdfPath(data.contract.pdf_path);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
       `inline; filename="${data.contract.contract_number}.pdf"`,
     );
-    fs.createReadStream(data.contract.pdf_path).pipe(res);
+    fs.createReadStream(safePath).pipe(res);
   }),
 );
 
@@ -544,12 +551,13 @@ router.get(
     if (!fs.existsSync(data.contract.signed_pdf_path)) {
       return res.status(404).json({ error: 'Signed PDF missing from disk', code: 'SIGNED_PDF_MISSING_ON_DISK' });
     }
+    const safePath = assertContractPdfPath(data.contract.signed_pdf_path);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
       `inline; filename="${data.contract.contract_number}-signed.pdf"`,
     );
-    fs.createReadStream(data.contract.signed_pdf_path).pipe(res);
+    fs.createReadStream(safePath).pipe(res);
   }),
 );
 
