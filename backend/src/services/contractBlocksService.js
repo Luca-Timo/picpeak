@@ -15,6 +15,7 @@
 const { db, withRetry } = require('../database/db');
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errors');
+const { hasColumnCached } = require('../utils/schemaCache');
 
 const ALLOWED_SECTIONS = ['basics', 'scope', 'privacy', 'commercial', 'nda', 'closing'];
 
@@ -175,7 +176,7 @@ async function createBlock(payload) {
     ['body_text_fr', 'bodyTextFr'],
   ]) {
     if (payload[payloadKey] != null
-        && await db.schema.hasColumn('contract_blocks', field)) {
+        && await hasColumnCached('contract_blocks', field)) {
       row[field] = payload[payloadKey] ? String(payload[payloadKey]) : null;
     }
   }
@@ -228,7 +229,7 @@ async function updateBlock(id, payload) {
     ['body_text_fr', 'bodyTextFr'],
   ]) {
     if (payloadKey in payload
-        && await db.schema.hasColumn('contract_blocks', field)) {
+        && await hasColumnCached('contract_blocks', field)) {
       updates[field] = payload[payloadKey] ? String(payload[payloadKey]) : null;
     }
   }

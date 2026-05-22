@@ -40,6 +40,7 @@ const logger = require('../utils/logger');
 const { getAppSetting } = require('../utils/appSettings');
 const { AppError } = require('../utils/errors');
 const { claimNextSequence } = require('../utils/documentSequences');
+const { hasColumnCached } = require('../utils/schemaCache');
 const businessProfileService = require('./businessProfileService');
 const { buildIssuerBlock, buildRecipientBlock } = require('./_renderContext');
 const pdfService = require('./pdfService');
@@ -721,13 +722,13 @@ async function getContractById(id) {
         // Migration 131 — locale variants. Pulled with column-existence
         // guard so installs that haven't run migration 131 still load
         // contracts (just without the new columns).
-        ...(await db.schema.hasColumn('contract_blocks', 'body_text_ru')
+        ...(await hasColumnCached('contract_blocks', 'body_text_ru')
           ? ['blk.body_text_ru as block_body_text_ru'] : []),
-        ...(await db.schema.hasColumn('contract_blocks', 'body_text_pt')
+        ...(await hasColumnCached('contract_blocks', 'body_text_pt')
           ? ['blk.body_text_pt as block_body_text_pt'] : []),
-        ...(await db.schema.hasColumn('contract_blocks', 'body_text_nl')
+        ...(await hasColumnCached('contract_blocks', 'body_text_nl')
           ? ['blk.body_text_nl as block_body_text_nl'] : []),
-        ...(await db.schema.hasColumn('contract_blocks', 'body_text_fr')
+        ...(await hasColumnCached('contract_blocks', 'body_text_fr')
           ? ['blk.body_text_fr as block_body_text_fr'] : []),
         'blk.is_system as block_is_system',
       );
@@ -765,7 +766,7 @@ async function createContract(payload, adminId) {
   // in-place migration 130 edits. We only write them when the DB
   // actually has them; older dev installs that haven't re-migrated
   // simply skip these fields (contract still saves successfully).
-  const hasEventCols = await db.schema.hasColumn('contracts', 'event_name');
+  const hasEventCols = await hasColumnCached('contracts', 'event_name');
 
   return await db.transaction(async (trx) => {
     const contractNumber = await nextContractNumber();
@@ -842,7 +843,7 @@ async function updateContract(id, payload, adminId) {
     );
   }
 
-  const hasEventCols = await db.schema.hasColumn('contracts', 'event_name');
+  const hasEventCols = await hasColumnCached('contracts', 'event_name');
 
   return await db.transaction(async (trx) => {
     const updates = { updated_at: new Date() };
@@ -878,16 +879,32 @@ async function updateContract(id, payload, adminId) {
       // Recompute per-section position so we don't trust caller order
       // for ordering integrity; caller controls only the section
       // sequence via the order of items in payload.blocks.
+      //
+      // Previously this loop did one SELECT per block to look up its
+      // section. On a contract with 12 included blocks that's 12
+      // round-trips inside the transaction — pure N+1. Batch the
+      // lookup into a single WHERE…IN, build a Map, and read it in
+      // the loop. The insert itself stays sequential because the
+      // editor's payload size is bounded (<30 blocks in practice) and
+      // a single batch insert would lose row-by-row insert ordering
+      // guarantees we don't actually need.
+      const blockIds = [
+        ...new Set(payload.blocks.map((e) => e.blockId).filter((id) => Number.isFinite(id))),
+      ];
+      const blocksFound = blockIds.length > 0
+        ? await trx('contract_blocks').whereIn('id', blockIds).select('id', 'section')
+        : [];
+      const sectionByBlockId = new Map(blocksFound.map((b) => [b.id, b.section]));
       const sectionCounters = {};
       for (const entry of payload.blocks) {
-        const block = await trx('contract_blocks').where({ id: entry.blockId }).first();
-        if (!block) continue;
-        sectionCounters[block.section] = (sectionCounters[block.section] || 0) + 1;
+        const section = sectionByBlockId.get(entry.blockId);
+        if (!section) continue;
+        sectionCounters[section] = (sectionCounters[section] || 0) + 1;
         await trx('contract_block_inclusions').insert({
           contract_id: id,
-          block_id: block.id,
-          section: block.section,
-          position: ensureInt(entry.position) || sectionCounters[block.section],
+          block_id: entry.blockId,
+          section,
+          position: ensureInt(entry.position) || sectionCounters[section],
           body_text_snapshot: null,
           body_text_de_snapshot: null,
           included: entry.included === false ? false : true,
@@ -965,7 +982,7 @@ async function sendContract(id, adminId) {
   // Schema-drift guard for the new pdf_sha256 column (migration 130
   // in-place edit). Dev installs that haven't re-migrated skip the
   // hash write; the send still succeeds.
-  const hasPdfSha = await db.schema.hasColumn('contracts', 'pdf_sha256');
+  const hasPdfSha = await hasColumnCached('contracts', 'pdf_sha256');
 
   await db.transaction(async (trx) => {
     await trx('contract_action_tokens').insert({
@@ -1111,7 +1128,7 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
     const { filePath: signedPath, sha256: signedSha256 } = await persistContractPdf(
       refreshed.contract, stampedBuffer, 'signed-by-customer',
     );
-    const hasSignedPdfSha = await db.schema.hasColumn('contracts', 'signed_pdf_sha256');
+    const hasSignedPdfSha = await hasColumnCached('contracts', 'signed_pdf_sha256');
     const updates = {
       signed_pdf_path: signedPath,
       updated_at: new Date(),
@@ -1119,7 +1136,7 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
     if (hasSignedPdfSha) updates.signed_pdf_sha256 = signedSha256;
     // Migration 136 — clear any pre-existing render-failed marker; the
     // most recent stamp attempt just succeeded.
-    if (await db.schema.hasColumn('contracts', 'signed_pdf_render_failed_at')) {
+    if (await hasColumnCached('contracts', 'signed_pdf_render_failed_at')) {
       updates.signed_pdf_render_failed_at = null;
       updates.signed_pdf_render_error = null;
     }
@@ -1138,7 +1155,7 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
     // admin only discovering this through monitoring. err.message is
     // truncated to 2 KB; the full stack stays in server logs.
     try {
-      if (await db.schema.hasColumn('contracts', 'signed_pdf_render_failed_at')) {
+      if (await hasColumnCached('contracts', 'signed_pdf_render_failed_at')) {
         await db('contracts').where({ id: contract.id }).update({
           signed_pdf_render_failed_at: new Date(),
           signed_pdf_render_error: String(err.message || 'Unknown error').slice(0, 2048),
@@ -1246,13 +1263,13 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
     const persisted = await persistContractPdf(refreshed.contract, stampedBuffer, suffix);
     signedPath = persisted.filePath;
     signedSha256 = persisted.sha256;
-    const hasSignedPdfSha = await db.schema.hasColumn('contracts', 'signed_pdf_sha256');
+    const hasSignedPdfSha = await hasColumnCached('contracts', 'signed_pdf_sha256');
     const updates = {
       signed_pdf_path: signedPath,
       updated_at: new Date(),
     };
     if (hasSignedPdfSha) updates.signed_pdf_sha256 = signedSha256;
-    if (await db.schema.hasColumn('contracts', 'signed_pdf_render_failed_at')) {
+    if (await hasColumnCached('contracts', 'signed_pdf_render_failed_at')) {
       updates.signed_pdf_render_failed_at = null;
       updates.signed_pdf_render_error = null;
     }
@@ -1267,7 +1284,7 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
     // Migration 136 — mirror the customer-sign branch: persist a
     // recovery marker so the admin detail page can surface a banner.
     try {
-      if (await db.schema.hasColumn('contracts', 'signed_pdf_render_failed_at')) {
+      if (await hasColumnCached('contracts', 'signed_pdf_render_failed_at')) {
         await db('contracts').where({ id: contract.id }).update({
           signed_pdf_render_failed_at: new Date(),
           signed_pdf_render_error: String(err.message || 'Unknown error').slice(0, 2048),
@@ -1402,13 +1419,13 @@ async function attachSignedPdfUpload(contractId, filePath, uploaderRole) {
   // "this row holds an authoritative wet upload, do not auto-overwrite"
   // signal as a column rather than inferring from the file path. See
   // the migration body for the full rationale.
-  if (await db.schema.hasColumn('contracts', 'signed_pdf_is_wet_upload')) {
+  if (await hasColumnCached('contracts', 'signed_pdf_is_wet_upload')) {
     updates.signed_pdf_is_wet_upload = true;
   }
   // Hash the uploaded PDF on disk so we can later prove it wasn't
   // tampered with after upload. Multer wrote the file synchronously
   // before this handler runs, so reading it here is safe.
-  if (await db.schema.hasColumn('contracts', 'signed_pdf_sha256')) {
+  if (await hasColumnCached('contracts', 'signed_pdf_sha256')) {
     updates.signed_pdf_sha256 = sha256OfFile(filePath);
   }
   if (uploaderRole === 'customer' && !contract.signed_by_customer_at) {
@@ -1528,9 +1545,9 @@ async function createFromQuote(quoteId, adminId) {
   // as in-place edits. Dev installs that ran 130 BEFORE that edit
   // won't have these columns yet. hasColumn() lets us skip the
   // affected writes instead of crashing with a generic 500.
-  const hasContractSourceQuote = await db.schema.hasColumn('contracts', 'source_quote_id');
-  const hasQuoteContractBackPointer = await db.schema.hasColumn('quotes', 'converted_contract_id');
-  const hasContractEventCols = await db.schema.hasColumn('contracts', 'event_name');
+  const hasContractSourceQuote = await hasColumnCached('contracts', 'source_quote_id');
+  const hasQuoteContractBackPointer = await hasColumnCached('quotes', 'converted_contract_id');
+  const hasContractEventCols = await hasColumnCached('contracts', 'event_name');
 
   return await db.transaction(async (trx) => {
     const contractNumber = await nextContractNumber();
@@ -1628,7 +1645,7 @@ async function convertToEvent(contractId, adminId) {
     return { eventId: contract.converted_event_id, alreadyConverted: true };
   }
 
-  const hasContractConvertedEvent = await db.schema.hasColumn('contracts', 'converted_event_id');
+  const hasContractConvertedEvent = await hasColumnCached('contracts', 'converted_event_id');
 
   // Path A: source quote present → delegate to quoteService which
   // replays the full installment schedule into invoices alongside
@@ -1749,7 +1766,7 @@ async function convertToInvoiceOnly(contractId, adminId) {
   // Schema-drift guard — the lineage columns are in-place edits to
   // migration 130. Skip the back-pointer update silently when the
   // column hasn't migrated yet.
-  const hasInvoiceContractBackPointer = await db.schema.hasColumn('invoices', 'source_contract_id');
+  const hasInvoiceContractBackPointer = await hasColumnCached('invoices', 'source_contract_id');
 
   // Path A: contract has a source quote → replay its line items +
   // payment plan via quoteService (full installment schedule).
@@ -1793,7 +1810,7 @@ async function convertToInvoiceOnly(contractId, adminId) {
   // new invoice. Falls back to contract.title when event_name is
   // empty — gives standalone contracts a useful label even when
   // the admin didn't fill out the event field.
-  const invoiceHasEventName = await db.schema.hasColumn('invoices', 'event_name');
+  const invoiceHasEventName = await hasColumnCached('invoices', 'event_name');
   const eventNameSnapshot = (contract.event_name || contract.title || null);
 
   const invoiceNumber = await invoiceService.nextInvoiceNumber();
@@ -1889,7 +1906,7 @@ async function rerenderAndResend(contractId, adminId) {
   // attachSignedPdfUpload, so any non-wet path here is a system
   // stamp safe to replace. We still null-check the path so missing
   // (re-stamp recovery) cases trigger the re-stamp branch below.
-  const hasWetFlagColumn = await db.schema.hasColumn('contracts', 'signed_pdf_is_wet_upload');
+  const hasWetFlagColumn = await hasColumnCached('contracts', 'signed_pdf_is_wet_upload');
   const isWetSignedUpload = hasWetFlagColumn
     ? (contract.signed_pdf_is_wet_upload === true || contract.signed_pdf_is_wet_upload === 1)
     // Fallback ONLY for installs where the migration hasn't applied yet:
@@ -1914,7 +1931,7 @@ async function rerenderAndResend(contractId, adminId) {
       await pdfStampService.stampSignatures(originalBuffer, stamps);
     const persisted = await persistContractPdf(refreshed.contract, stampedBuffer, 'fully-signed');
     attachmentPath = persisted.filePath;
-    const hasSignedPdfSha = await db.schema.hasColumn('contracts', 'signed_pdf_sha256');
+    const hasSignedPdfSha = await hasColumnCached('contracts', 'signed_pdf_sha256');
     const updates = {
       signed_pdf_path: attachmentPath,
       updated_at: new Date(),
@@ -1922,7 +1939,7 @@ async function rerenderAndResend(contractId, adminId) {
     if (hasSignedPdfSha) updates.signed_pdf_sha256 = signedSha256;
     // Migration 136 — this branch is a recovery path; clear any
     // existing failed-render marker.
-    if (await db.schema.hasColumn('contracts', 'signed_pdf_render_failed_at')) {
+    if (await hasColumnCached('contracts', 'signed_pdf_render_failed_at')) {
       updates.signed_pdf_render_failed_at = null;
       updates.signed_pdf_render_error = null;
     }
@@ -2048,20 +2065,20 @@ async function restampSignatures(contractId, { customerSignatureDataUrl, adminSi
   // Migration 135 — read the discriminator column. Fall back to the
   // historical substring rule only when the column is absent (un-
   // migrated install) so we never accidentally overwrite a wet upload.
-  const hasWetFlagColumn = await db.schema.hasColumn('contracts', 'signed_pdf_is_wet_upload');
+  const hasWetFlagColumn = await hasColumnCached('contracts', 'signed_pdf_is_wet_upload');
   const isWetSignedUpload = hasWetFlagColumn
     ? (contract.signed_pdf_is_wet_upload === true || contract.signed_pdf_is_wet_upload === 1)
     : !!(contract.signed_pdf_path
       && contract.signed_pdf_path.includes('uploads/contracts/signed'));
   if (!isWetSignedUpload) {
-    const hasSignedPdfSha = await db.schema.hasColumn('contracts', 'signed_pdf_sha256');
+    const hasSignedPdfSha = await hasColumnCached('contracts', 'signed_pdf_sha256');
     const updates = {
       signed_pdf_path: signedPath,
       updated_at: new Date(),
     };
     if (hasSignedPdfSha) updates.signed_pdf_sha256 = signedSha256;
     // Migration 136 — restamp is a recovery path; clear the marker.
-    if (await db.schema.hasColumn('contracts', 'signed_pdf_render_failed_at')) {
+    if (await hasColumnCached('contracts', 'signed_pdf_render_failed_at')) {
       updates.signed_pdf_render_failed_at = null;
       updates.signed_pdf_render_error = null;
     }
@@ -2096,22 +2113,38 @@ async function restampSignatures(contractId, { customerSignatureDataUrl, adminSi
  */
 async function getAuditTrail(contractId) {
   if (!(await db.schema.hasTable('activity_logs'))) return [];
-  // metadata is stored as JSON; SQLite returns it as a string,
-  // Postgres returns it parsed. Normalise on read.
+  // Push the metadata.contractId filter into SQL instead of fetching
+  // every contract_* row and filtering in JS. The previous shape
+  // scanned the entire history every time the detail page loaded —
+  // O(rows-since-CRM-launch) per request. Both Postgres and SQLite
+  // store metadata as a JSON-encoded string here, so we match on
+  // a literal substring that covers either compact or whitespaced
+  // JSON encodings — `"contractId":<n>` or `"contractId": <n>` —
+  // bounded by the activity_type prefix so the search hits the
+  // contract_* slice of the index.
+  //
+  // The substring patterns intentionally don't anchor on word
+  // boundaries; activity_logs.metadata never contains a contractId
+  // key collision with another id-shaped value because logActivity
+  // serialises only what callers pass.
+  const id = Number(contractId);
+  if (!Number.isFinite(id)) return [];
   const rows = await db('activity_logs')
     .where('activity_type', 'like', 'contract_%')
+    .andWhere(function () {
+      this.where('metadata', 'like', `%"contractId":${id}%`)
+        .orWhere('metadata', 'like', `%"contractId": ${id}%`);
+    })
     .orderBy('created_at', 'asc')
     .select('id', 'activity_type', 'actor_type', 'actor_id', 'actor_name', 'metadata', 'created_at');
 
-  return rows
-    .map((r) => {
-      let meta = r.metadata;
-      if (typeof meta === 'string') {
-        try { meta = JSON.parse(meta); } catch { meta = {}; }
-      }
-      return { ...r, metadata: meta || {} };
-    })
-    .filter((r) => Number(r.metadata?.contractId) === Number(contractId));
+  return rows.map((r) => {
+    let meta = r.metadata;
+    if (typeof meta === 'string') {
+      try { meta = JSON.parse(meta); } catch { meta = {}; }
+    }
+    return { ...r, metadata: meta || {} };
+  });
 }
 
 async function cancelContract(id, adminId) {
