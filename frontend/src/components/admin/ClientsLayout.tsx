@@ -47,6 +47,13 @@ export const ClientsLayout: React.FC = () => {
       featureFlag: 'customerPortal',
     },
     {
+      key: 'calendar',
+      to: '/admin/clients/calendar',
+      label: t('clients.subnav.calendar', 'Calendar'),
+      icon: Calendar,
+      featureFlag: 'calendar',
+    },
+    {
       key: 'quotes',
       to: '/admin/clients/quotes',
       label: t('clients.subnav.quotes', 'Quotes'),
@@ -66,13 +73,6 @@ export const ClientsLayout: React.FC = () => {
       label: t('clients.subnav.hours', 'Hours'),
       icon: Clock,
       featureFlag: 'hoursLogging',
-    },
-    {
-      key: 'calendar',
-      to: '/admin/clients/calendar',
-      label: t('clients.subnav.calendar', 'Calendar'),
-      icon: Calendar,
-      featureFlag: 'calendar',
     },
     {
       key: 'bills',
