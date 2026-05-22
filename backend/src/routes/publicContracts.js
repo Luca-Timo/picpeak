@@ -114,8 +114,13 @@ function publicContractView(contract, inclusions, customer, profile, locale) {
     signedByAdminAt: contract.signed_by_admin_at,
     signedCustomerName: contract.signed_customer_name,
     signedAdminName: contract.signed_admin_name,
+    // The customer's own IP is fine to surface back — it's THEIR
+    // identifier on the audit trail. The admin's IP is NOT exposed
+    // publicly: it's a counter-party's identifier (operator's office /
+    // home network) and shouldn't reach the customer's browser via
+    // a token-only-secret endpoint. Admin sees their own IP on the
+    // admin detail page; customer doesn't need it.
     signedCustomerIp: contract.signed_customer_ip || null,
-    signedAdminIp: contract.signed_admin_ip || null,
     // signed_pdf_path itself is admin-only; we just flag presence so
     // the public page can show a "wet-signed copy attached" hint.
     hasSignedPdf: !!contract.signed_pdf_path,

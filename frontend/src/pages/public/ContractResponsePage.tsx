@@ -364,12 +364,11 @@ export const ContractResponsePage: React.FC = () => {
                       <dd>{new Date(c.signedByAdminAt).toISOString()}</dd>
                     </>
                   )}
-                  {c.signedAdminIp && (
-                    <>
-                      <dt className="text-neutral-500">{t('publicContract.signed.adminIp', 'Counter-sign IP')}</dt>
-                      <dd>{c.signedAdminIp}</dd>
-                    </>
-                  )}
+                  {/* Admin counter-sign IP intentionally NOT rendered
+                      to the customer — it's the operator's identifier,
+                      not part of what the customer needs to audit. The
+                      backend no longer ships signedAdminIp on the
+                      public payload as of A.6 security hardening. */}
                   {c.signedPdfSha256 && (
                     <>
                       <dt className="text-neutral-500">{t('publicContract.signed.signedSha', 'Signed PDF SHA-256')}</dt>
