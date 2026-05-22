@@ -225,17 +225,22 @@ async function getOrCreateMonthlyDraft(customer, adminId, trx) {
   const periodStart = new Date(target.getFullYear(), target.getMonth(), 1);
   const periodEnd = target;
 
-  // Look up any existing draft for this customer whose period covers
-  // today. Strict equality on the resolved period bounds — if admin
-  // changes the cadence day mid-period we'll just create a new draft;
-  // the old one still ships on its own cadence.
+  // Look up any existing open draft for this customer. We deliberately
+  // do NOT filter by monthly_period_end here — only one draft can be
+  // open per customer at a time (enforced by the partial unique index
+  // created in migration 133). If the scheduler hasn't yet promoted an
+  // expired draft, it's still the canonical landing spot for any new
+  // items the admin queues; promoting it is the scheduler's job, not
+  // ours. forUpdate() locks the row on Postgres so concurrent appenders
+  // serialize on totals recomputation; SQLite's transaction write-lock
+  // gives us the same guarantee implicitly.
   const existing = await trx('invoices')
     .where({
       customer_account_id: customer.id,
       is_monthly_draft: true,
     })
-    .andWhere('monthly_period_end', '>=', today.toISOString().slice(0, 10))
     .orderBy('id', 'desc')
+    .forUpdate()
     .first();
   if (existing) {
     return { id: existing.id, row: existing, created: false };
@@ -246,7 +251,7 @@ async function getOrCreateMonthlyDraft(customer, adminId, trx) {
   const profile = (await businessProfileService.getProfile()).profile;
   const currency = (customer.preferred_currency || profile?.default_currency || 'CHF').toUpperCase();
   const language = customer.preferred_language || profile?.default_locale || 'de';
-  const invoiceNumber = await nextInvoiceNumber();
+  const invoiceNumber = await nextInvoiceNumber(trx);
   const bank = await businessProfileService.resolveBankAccountForCurrency(currency, null);
 
   const row = {
@@ -276,9 +281,35 @@ async function getOrCreateMonthlyDraft(customer, adminId, trx) {
     created_at: new Date(),
     updated_at: new Date(),
   };
-  const inserted = await trx('invoices').insert(row).returning('id');
-  const id = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
-  return { id, row: { ...row, id }, created: true };
+  try {
+    const inserted = await trx('invoices').insert(row).returning('id');
+    const id = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
+    return { id, row: { ...row, id }, created: true };
+  } catch (err) {
+    // Partial-unique-index violation: another transaction snuck a draft
+    // in between our SELECT and INSERT. Re-SELECT the winner and return
+    // it — concurrent callers converge on the same draft row instead
+    // of double-billing the customer. The error string varies by
+    // driver: Postgres → SQLSTATE 23505; better-sqlite3 → 'UNIQUE
+    // constraint failed'; node-sqlite3 → 'SQLITE_CONSTRAINT'.
+    const msg = String(err && err.message || '');
+    const isUniqueViolation =
+      err && err.code === '23505' ||
+      /unique/i.test(msg) ||
+      /sqlite_constraint/i.test(msg);
+    if (!isUniqueViolation) throw err;
+    const winner = await trx('invoices')
+      .where({ customer_account_id: customer.id, is_monthly_draft: true })
+      .orderBy('id', 'desc')
+      .first();
+    if (!winner) {
+      // No row to return despite the unique-violation — this would
+      // mean the winning transaction rolled back after we lost the
+      // race. Surface the original error so the caller can retry.
+      throw err;
+    }
+    return { id: winner.id, row: winner, created: false };
+  }
 }
 
 // ---------------------------------------------------------------------

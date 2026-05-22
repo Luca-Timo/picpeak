@@ -37,7 +37,9 @@ function makeChain() {
     andWhere: jest.fn(function () { return this; }),
     orderBy: jest.fn(function () { return this; }),
     limit: jest.fn(function () { return this; }),
-    select: jest.fn(function () { return Promise.resolve(this._selectResult); }),
+    // select is both chainable (`.select('col').first()`) and awaitable
+    // via the chain's `then` (`await q.select(...)` returns `_selectResult`).
+    select: jest.fn(function () { return this; }),
     sum: jest.fn(function () { return this; }),
     count: jest.fn(function () { return this; }),
     clone: jest.fn(function () { return this; }),
@@ -50,7 +52,10 @@ function makeChain() {
     returning: jest.fn(function () { return Promise.resolve(this._insertResult); }),
     del: jest.fn(function () { return Promise.resolve(1); }),
     onConflict: jest.fn(function () { return this; }),
+    ignore: jest.fn(function () { return Promise.resolve(1); }),
     merge: jest.fn(function () { return Promise.resolve(1); }),
+    increment: jest.fn(function () { return this; }),
+    forUpdate: jest.fn(function () { return this; }),
     leftJoin: jest.fn(function () { return this; }),
   };
   chains.push(c);
@@ -131,6 +136,8 @@ describe('invoiceService.reissueInvoice', () => {
     };
     pickChainFor('invoice_line_items')._selectResult = [];
     pickChainFor('app_settings')._firstValue = null;
+    // document_sequences row used by claimNextSequence.
+    pickChainFor('document_sequences')._firstValue = { current_value: 42 };
 
     const result = await invoiceService.reissueInvoice(1, 42);
     expect(result.id).toBeDefined();
@@ -177,6 +184,8 @@ describe('invoiceService.createStorno', () => {
     };
     pickChainFor('invoice_line_items')._selectResult = [];
     pickChainFor('app_settings')._firstValue = null;
+    // document_sequences row used by claimNextSequence.
+    pickChainFor('document_sequences')._firstValue = { current_value: 42 };
 
     const stornoId = await invoiceService.createStorno(1, 42);
     expect(stornoId).toBeDefined();
