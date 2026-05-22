@@ -177,13 +177,13 @@ function computeMonthlyCadenceDate(year, month /* 0-based */, cycleDay) {
   if (day > 0) {
     target = Math.min(day, monthLen);
   } else if (day < 0) {
-    // Sign-as-discriminator: -N = the N-th day from the end of the
-    // month, inclusive. -1 = last day; -3 on a 31-day month = 29th
-    // (31, 30, 29 counting back); -3 on a 28-day Feb = 26th.
-    // Formula: monthLen + day + 1 → -1 + 31 + 1 = 31 ✓.
+    // Sign-as-discriminator: -N = N days before month end. Documented
+    // in the admin UI hint as "Use negative -1..-15 for 'N days before
+    // month end' (so -3 fires on the 28th of a 31-day month)".
+    // Formula: monthLen + day → -3 + 31 = 28 ✓.
     // Clamped to day 1 minimum so extreme values (-40) don't blow
     // past the start of the month.
-    target = Math.max(1, monthLen + day + 1);
+    target = Math.max(1, monthLen + day);
   } else {
     target = 1;
   }
