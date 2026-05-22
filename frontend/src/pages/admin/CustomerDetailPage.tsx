@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 
 import { Button, Card, Input, Loading } from '../../components/common';
+import { DecimalInput } from '../../components/common/DecimalInput';
 import { AssignedEventsDialog } from '../../components/admin/AssignedEventsDialog';
 import {
   customerAdminService,
@@ -644,16 +645,13 @@ export const CustomerDetailPage: React.FC = () => {
             <label className="block text-sm font-medium text-theme mb-1">
               {t('customers.field.hourlyRate', 'Default hourly rate')}
             </label>
-            <input
-              type="number"
-              step="0.01"
-              min={0}
-              value={form.hourlyRateMinor != null ? (form.hourlyRateMinor / 100).toFixed(2) : ''}
-              onChange={(e) => {
-                const raw = e.target.value;
+            <DecimalInput
+              value={form.hourlyRateMinor != null ? form.hourlyRateMinor / 100 : NaN}
+              fractionDigits={2}
+              onChange={(n) => {
                 setForm((prev) => ({
                   ...prev,
-                  hourlyRateMinor: raw === '' ? null : Math.round(Number(raw) * 100),
+                  hourlyRateMinor: Number.isFinite(n) ? Math.max(0, Math.round(n * 100)) : null,
                 } as any));
               }}
               placeholder="150.00"

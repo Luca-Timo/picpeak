@@ -214,6 +214,53 @@ export const parseLocaleDecimal = (value: unknown): number => {
   return Number.isFinite(n) ? n : NaN;
 };
 
+/**
+ * Parse a duration shortcut into whole minutes.
+ *
+ * Accepts the three formats the maintainer types into the hours-log
+ * form so they don't have to compute end-time mentally for a known
+ * duration:
+ *   - "1h", "2h", "0.5h", "1,5h" → hours, optional decimal
+ *   - "1.5", "1,5", "0.75"       → bare decimal hours (DE comma OK)
+ *   - "1:30", "0:45"             → H:MM
+ *
+ * Returns the duration in MINUTES (so call-sites adding to a start time
+ * don't have to round). Returns `null` for empty, unparseable, or
+ * negative input — the caller should ignore null instead of substituting
+ * a default, so a typo doesn't silently overwrite an end-time the admin
+ * already set.
+ *
+ * Examples:
+ *   parseDuration('1h')    → 60
+ *   parseDuration('1.5')   → 90
+ *   parseDuration('1,5')   → 90
+ *   parseDuration('1:30')  → 90
+ *   parseDuration('0:45')  → 45
+ *   parseDuration('')      → null
+ *   parseDuration('1:99')  → null
+ */
+export const parseDuration = (value: unknown): number | null => {
+  if (typeof value !== 'string') return null;
+  const s = value.trim().toLowerCase();
+  if (!s) return null;
+
+  // H:MM form.
+  const colonMatch = s.match(/^(\d+):([0-5]\d)$/);
+  if (colonMatch) {
+    const h = Number(colonMatch[1]);
+    const m = Number(colonMatch[2]);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+    const total = h * 60 + m;
+    return total > 0 ? total : null;
+  }
+
+  // Strip a trailing 'h' (with optional whitespace).
+  const stripped = s.replace(/\s*h$/, '');
+  const hours = parseLocaleDecimal(stripped);
+  if (!Number.isFinite(hours) || hours <= 0) return null;
+  return Math.round(hours * 60);
+};
+
 // Re-export with alternative names for backwards compatibility
 export const parseBooleanInput = toBoolean;
 export const parseNumberInput = toNumber;

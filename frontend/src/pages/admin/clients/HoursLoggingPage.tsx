@@ -10,52 +10,46 @@
  * (both behaviours live inside HoursSection — this page is just the
  * customer picker on top).
  */
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Loading } from '../../../components/common';
+import { Card } from '../../../components/common';
 import { HoursSection } from '../../../components/admin/HoursSection';
-import { customerAdminService } from '../../../services/customerAdmin.service';
+import {
+  CustomerPicker,
+  type CustomerSummary,
+} from '../../../components/admin/CustomerPicker';
+import {
+  customerAdminService,
+  type CustomerAccountDetail,
+} from '../../../services/customerAdmin.service';
 
 export const HoursLoggingPage: React.FC = () => {
   const { t } = useTranslation();
+
+  // Picker state mirrors the contract from CustomerPicker — parent owns
+  // the id + display label + passive flag triple. This makes the page
+  // consistent with the Quote / Bill / Contract editors (#9) instead of
+  // the old plain <select> that scrolled through ALL customers.
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [customerLabel, setCustomerLabel] = useState('');
+  const [customerIsPassive, setCustomerIsPassive] = useState(false);
+  // Tracks the picked customer's hour-logging eligibility so the
+  // HoursSection only renders for eligible customers (matches the
+  // calendar drag-create modal's guard).
+  const [customerHoursAllowed, setCustomerHoursAllowed] = useState(true);
 
-  // Pull the full customer list and filter client-side. The backend
-  // listCustomers doesn't currently accept a feature filter — the
-  // list is small enough that filtering in JS is fine, and we'd
-  // need the per-customer rate / cadence anyway to pass into
-  // HoursSection.
-  const { data: customers = [], isLoading } = useQuery({
-    queryKey: ['admin-customers-list-for-hours'],
-    queryFn: () => customerAdminService.list(),
-  });
-
-  const eligible = useMemo(
-    () => customers.filter((c) => c.featureHoursLogging === true),
-    [customers],
-  );
-
-  const selectedSummary = useMemo(
-    () => eligible.find((c) => c.id === selectedId) || null,
-    [eligible, selectedId],
-  );
-
-  // Fetch the full customer record once a selection is made — the
-  // summary doesn't carry billingCadence, and the HoursSection's
-  // monthly-vs-per-event hint copy needs it. Cached so a re-select
-  // of the same customer hits memory.
+  // Fetch the full customer record once a selection is made — needed
+  // for billingCadence + hourlyRateMinor.
   const { data: selectedDetail } = useQuery({
     queryKey: ['admin-customer', selectedId],
     queryFn: () => customerAdminService.get(selectedId as number),
     enabled: !!selectedId,
   });
 
-  if (isLoading) return <Loading />;
-
   return (
-    <div className="container py-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="container py-6 space-y-6">
+      <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-theme">
@@ -79,35 +73,53 @@ export const HoursLoggingPage: React.FC = () => {
       </div>
 
       <Card padding="lg">
-        <label className="block text-sm font-medium text-theme mb-1">
+        <label className="block text-sm font-medium text-theme mb-2">
           {t('hoursLogging.pickCustomer', 'Customer')}
         </label>
-        <select
-          value={selectedId ?? ''}
-          onChange={(e) => setSelectedId(e.target.value ? Number(e.target.value) : null)}
-          className="input w-full md:w-96"
-        >
-          <option value="">{t('hoursLogging.pickPlaceholder', '— Select customer —')}</option>
-          {eligible.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.companyName || c.displayName
+        <CustomerPicker
+          value={selectedId}
+          label={customerLabel}
+          isPassive={customerIsPassive}
+          requireFeature="hoursLogging"
+          onSelect={(c: CustomerSummary) => {
+            setSelectedId(c.id);
+            setCustomerLabel(
+              c.companyName
                 || [c.firstName, c.lastName].filter(Boolean).join(' ')
-                || c.email}
-            </option>
-          ))}
-        </select>
-        {eligible.length === 0 && (
-          <p className="text-xs text-muted-theme mt-2">
-            {t('hoursLogging.emptyList',
-              'No customers have hours logging enabled yet. Flip "Hours logging" on a customer\'s detail page first.')}
+                || c.displayName
+                || c.email
+                || `#${c.id}`,
+            );
+            setCustomerIsPassive(Boolean(c.isPassive));
+            setCustomerHoursAllowed(c.featureHoursLogging !== false);
+          }}
+          onCreate={(c: CustomerAccountDetail) => {
+            setSelectedId(c.id);
+            setCustomerLabel(c.companyName || c.displayName || c.email || `#${c.id}`);
+            setCustomerIsPassive(Boolean(c.isPassive));
+            setCustomerHoursAllowed(c.featureHoursLogging !== false);
+          }}
+          onClear={() => {
+            setSelectedId(null);
+            setCustomerLabel('');
+            setCustomerIsPassive(false);
+            setCustomerHoursAllowed(true);
+          }}
+          searchPlaceholder={t('hoursLogging.searchPlaceholder',
+            'Search by email or company…') as string}
+        />
+        {selectedId && !customerHoursAllowed && (
+          <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+            {t('hoursLogging.customerLoggingDisabled',
+              "This customer has hour logging disabled. Enable it on the customer's detail page to log hours.")}
           </p>
         )}
       </Card>
 
-      {selectedSummary && (
+      {selectedId && customerHoursAllowed && (
         <HoursSection
-          customerId={selectedSummary.id}
-          customerHourlyRateMinor={selectedDetail?.hourlyRateMinor ?? selectedSummary.hourlyRateMinor ?? null}
+          customerId={selectedId}
+          customerHourlyRateMinor={selectedDetail?.hourlyRateMinor ?? null}
           billingCadence={(selectedDetail?.billingCadence as any) || 'per_event'}
         />
       )}

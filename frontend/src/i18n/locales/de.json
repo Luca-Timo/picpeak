@@ -2928,6 +2928,9 @@
         "date": "Datum",
         "start": "Start",
         "end": "Ende",
+        "duration": "Dauer",
+        "durationPlaceholder": "1h · 1,5 · 1:30",
+        "durationHint": "Dauer eingeben, um Ende automatisch zu setzen: 1h, 1.5, 1,5 oder 1:30",
         "rateOverride": "Satz-Override",
         "note": "Notiz / Beschreibung",
         "notePlaceholder": "Was wurde gearbeitet?",
@@ -3214,7 +3217,9 @@
     "subtitle": "Kunden wählen und abrechenbare Zeit erfassen. Einträge fließen in die nächste Monatsrechnung oder werden für Per-Event-Kunden auf Knopfdruck abgerechnet.",
     "pickCustomer": "Kunde",
     "pickPlaceholder": "— Kunde wählen —",
-    "emptyList": "Noch keine Kunden mit aktivierter Stundenerfassung. Aktivieren Sie „Stundenerfassung“ zuerst auf der Kundendetailseite."
+    "emptyList": "Noch keine Kunden mit aktivierter Stundenerfassung. Aktivieren Sie „Stundenerfassung“ zuerst auf der Kundendetailseite.",
+    "searchPlaceholder": "Nach E-Mail oder Firma suchen…",
+    "customerLoggingDisabled": "Bei diesem Kunden ist die Stundenerfassung deaktiviert. Aktiviere sie auf der Kundendetailseite, um Stunden zu erfassen."
   },
   "taxReport": {
     "title": "Steuerliste",

@@ -2928,6 +2928,9 @@
         "date": "Date",
         "start": "Start",
         "end": "End",
+        "duration": "Duration",
+        "durationPlaceholder": "1h · 1.5 · 1:30",
+        "durationHint": "Type a duration to auto-fill End: 1h, 1.5, 1,5 or 1:30",
         "rateOverride": "Rate override",
         "note": "Note / description",
         "notePlaceholder": "What was worked on?",
@@ -3214,7 +3217,9 @@
     "subtitle": "Pick a customer and log billable time blocks. Entries flow into the next monthly bill or are billed on demand for per-event customers.",
     "pickCustomer": "Customer",
     "pickPlaceholder": "— Select customer —",
-    "emptyList": "No customers have hours logging enabled yet. Flip \"Hours logging\" on a customer's detail page first."
+    "emptyList": "No customers have hours logging enabled yet. Flip \"Hours logging\" on a customer's detail page first.",
+    "searchPlaceholder": "Search by email or company…",
+    "customerLoggingDisabled": "This customer has hour logging disabled. Enable it on the customer's detail page to log hours."
   },
   "taxReport": {
     "title": "Tax report",
