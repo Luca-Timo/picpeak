@@ -68,7 +68,11 @@ const KNOWN_FLAGS = [
 // new release that hasn't run its migration yet on this instance).
 const DEFAULT_FLAGS = {
   galleries: true,
-  reminderEmails: true,
+  // F.3 — reminderEmails is a placeholder card in the Features tab
+  // (lockedReason: NOT_YET_AVAILABLE). Default FALSE so it matches
+  // the locked-but-off visual state of messaging / calendarBooking
+  // instead of being a confusing "on but locked".
+  reminderEmails: false,
   calendar: false,
   calendarBooking: false,
   quotes: false,

@@ -149,10 +149,10 @@ export const FeaturesTab: React.FC = () => {
             title={t('settings.features.reminderEmails.title', 'Reminder Emails')}
             description={t(
               'settings.features.reminderEmails.description',
-              'Automatic nudges to guests before their gallery expires and to admins about pending uploads.',
+              'Automatic nudges to guests before their gallery expires and to admins about pending uploads. Coming soon.',
             )}
-            status="stable"
-            statusLabel={statusLabel('stable')}
+            status="roadmap"
+            statusLabel={statusLabel('roadmap')}
             sidebarHidden
             sidebarHiddenLabel={sidebarHiddenLabel}
             enabled={staged.reminderEmails}
@@ -166,10 +166,10 @@ export const FeaturesTab: React.FC = () => {
             title={t('settings.features.messaging.title', 'Messaging')}
             description={t(
               'settings.features.messaging.description',
-              'In-app threads with guests, attached to a gallery. Email is genuinely fine for most teams — this is for studios that want everything in one place.',
+              'In-app threads with guests, attached to a gallery. Email is genuinely fine for most teams — this is for studios that want everything in one place. Coming soon.',
             )}
-            status="experimental"
-            statusLabel={statusLabel('experimental')}
+            status="roadmap"
+            statusLabel={statusLabel('roadmap')}
             sidebarLabel={t('settings.features.messaging.sidebar', 'Messages')}
             enabled={staged.messaging}
             onToggle={() => { /* locked */ }}
