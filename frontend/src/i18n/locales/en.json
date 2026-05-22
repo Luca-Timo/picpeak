@@ -383,6 +383,9 @@
     "eventName": "Event Name",
     "eventType": "Event Type",
     "eventDate": "Event Date",
+    "fullDay": "Full day",
+    "eventTimeStart": "Start time",
+    "eventTimeEnd": "End time",
     "hostEmail": "Customer Email",
     "hostName": "Customer Name",
     "hostNamePlaceholder": "John Smith",
@@ -1123,8 +1126,13 @@
       },
       "calendar": {
         "title": "Calendar",
-        "description": "See all upcoming and past events on a month/week view. Optionally accept new bookings from clients.",
+        "description": "Admin-only calendar showing events, logged hours, and pending quotes/contracts in one view. Drag-create hours directly on the calendar.",
         "sidebar": "Calendar"
+      },
+      "calendarBooking": {
+        "title": "Customer booking",
+        "description": "Let customers see free slots on a public calendar and book directly. Coming soon.",
+        "sidebar": "Booking"
       },
       "quotes": {
         "title": "Quotes",
@@ -3123,10 +3131,55 @@
     "subnav": {
       "accounts": "Accounts",
       "quotes": "Quotes",
-      "bills": "Invoices",
+      "contracts": "Contracts",
       "hours": "Hours",
+      "calendar": "Calendar",
+      "bills": "Invoices",
       "taxReport": "Tax",
       "development": "Development"
+    }
+  },
+  "calendar": {
+    "pageTitle": "Calendar",
+    "subtitle": "Events, logged hours, and pending quotes/contracts in one view.",
+    "viewMonth": "Month",
+    "viewWeek": "Week",
+    "loading": "Loading items…",
+    "legend": {
+      "events": "Events",
+      "hours": "Hours",
+      "pendingQuotes": "Pending quotes",
+      "pendingContracts": "Pending contracts",
+      "hoursLocked": "Locked (billed)"
+    },
+    "hourEntry": {
+      "createTitle": "Log hours",
+      "customerLabel": "Customer",
+      "customerSearch": "Search by email or company…",
+      "descriptionLabel": "Description (optional)",
+      "descriptionPlaceholder": "Editing / shoot / travel…",
+      "startLabel": "Start",
+      "endLabel": "End",
+      "submit": "Save hours",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "close": "Close",
+      "delete": "Delete",
+      "confirmDelete": "Delete these logged hours? This cannot be undone.",
+      "created": "Hours logged.",
+      "createFailed": "Couldn't save: {{message}}",
+      "saved": "Hours updated.",
+      "saveFailed": "Couldn't save: {{message}}",
+      "movedToast": "Hours updated.",
+      "moveFailed": "Couldn't move: {{message}}",
+      "resizedToast": "Hours updated.",
+      "resizeFailed": "Couldn't resize: {{message}}",
+      "deleted": "Hours deleted.",
+      "deleteFailed": "Couldn't delete: {{message}}",
+      "lockedBadge": "Locked",
+      "lockedTooltip": "Already billed — Storno the invoice to edit.",
+      "noDescription": "No description.",
+      "untitledCustomer": "Hours"
     }
   },
   "hoursLogging": {
@@ -3429,6 +3482,7 @@
       "website": "Website",
       "defaultCurrency": "Default currency",
       "defaultLocale": "Default locale",
+      "timezone": "Timezone (IANA)",
       "vatLabel": "VAT label (e.g. MwSt., VAT)",
       "vatRateDefault": "Default VAT rate %",
       "defaultQrFormat": "Default invoice QR",

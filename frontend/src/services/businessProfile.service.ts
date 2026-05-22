@@ -70,6 +70,11 @@ export interface BusinessProfile {
    *  lines in the payment-conditions block of QUOTE PDFs. Invoices
    *  always show these regardless. Migration 110; defaults FALSE. */
   pdfQuoteShowSkonto: boolean;
+  /** IANA timezone string for the admin calendar (e.g. "Europe/Zurich",
+   *  "America/New_York"). Migration 137. Admin-only — never exposed
+   *  via publicSettings. When null/empty, the calendar UI falls back
+   *  to the browser's `Intl.DateTimeFormat().resolvedOptions().timeZone`. */
+  timezone: string | null;
   createdAt: string;
   updatedAt: string;
 }

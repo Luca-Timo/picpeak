@@ -157,6 +157,9 @@ function transformProfile(p) {
     pdfCompanyNameInline: p.pdf_company_name_inline === true || p.pdf_company_name_inline === 1 || p.pdf_company_name_inline === '1',
     pdfQuoteShowNetDays: p.pdf_quote_show_net_days === true || p.pdf_quote_show_net_days === 1 || p.pdf_quote_show_net_days === '1',
     pdfQuoteShowSkonto:  p.pdf_quote_show_skonto  === true || p.pdf_quote_show_skonto  === 1 || p.pdf_quote_show_skonto  === '1',
+    // Migration 137 — IANA timezone for the admin calendar. Null when
+    // the admin hasn't picked one; frontend falls back to the browser.
+    timezone: p.timezone || null,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
   };
@@ -359,6 +362,10 @@ router.put(
     body('pdfLogoHeight').optional({ values: 'falsy' }).isInt({ min: 24, max: 200 }),
     body('pdfQuoteShowNetDays').optional().isBoolean(),
     body('pdfQuoteShowSkonto').optional().isBoolean(),
+    // Migration 137 — admin calendar timezone (IANA string e.g.
+    // "Europe/Zurich"). Free-text; backend stores up to 64 chars.
+    // Frontend falls back to browser Intl when this is blank.
+    body('timezone').optional({ values: 'falsy', nullable: true }).isString().isLength({ max: 64 }),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -393,6 +400,8 @@ router.put(
       pdfLogoHeight: 'pdf_logo_height',
       pdfQuoteShowNetDays: 'pdf_quote_show_net_days',
       pdfQuoteShowSkonto: 'pdf_quote_show_skonto',
+      // Migration 137 — admin calendar timezone.
+      timezone: 'timezone',
     };
     for (const [api, db] of Object.entries(map)) {
       if (Object.prototype.hasOwnProperty.call(req.body, api)) {

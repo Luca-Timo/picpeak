@@ -86,7 +86,9 @@ function applyDependencyRules(flags: FeatureFlags): FeatureFlags {
     || out.taxReport
     || out.hoursLogging
     || out.contracts
-    // future siblings: || out.calendar || out.messaging
+    // Migration 137 — admin calendar lights up the Clients section.
+    || out.calendar
+    // future siblings: || out.messaging
   );
   return out;
 }

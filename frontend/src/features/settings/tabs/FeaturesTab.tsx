@@ -185,12 +185,28 @@ export const FeaturesTab: React.FC = () => {
             title={t('settings.features.calendar.title', 'Calendar')}
             description={t(
               'settings.features.calendar.description',
-              'See all upcoming and past events on a month/week view. Optionally accept new bookings from clients.',
+              'Admin-only calendar showing events, logged hours, and pending quotes/contracts in one view. Drag-create hours directly on the calendar.',
             )}
-            status="beta"
-            statusLabel={statusLabel('beta')}
+            status="new"
+            statusLabel={statusLabel('new')}
             sidebarLabel={t('settings.features.calendar.sidebar', 'Calendar')}
             enabled={staged.calendar}
+            onToggle={(next) => setFlag('calendar', next)}
+          />
+          {/* Customer-facing booking — placeholder. UI-disabled per
+              spec; backend dependency rule already gates it on
+              `calendar`. Re-enable when the booking flow ships. */}
+          <FeatureCard
+            icon={CalendarDays}
+            title={t('settings.features.calendarBooking.title', 'Customer booking')}
+            description={t(
+              'settings.features.calendarBooking.description',
+              'Let customers see free slots on a public calendar and book directly. Coming soon.',
+            )}
+            status="roadmap"
+            statusLabel={statusLabel('roadmap')}
+            sidebarLabel={t('settings.features.calendarBooking.sidebar', 'Booking')}
+            enabled={staged.calendarBooking}
             onToggle={() => { /* locked */ }}
             disabled
             lockedReason={NOT_YET_AVAILABLE}
