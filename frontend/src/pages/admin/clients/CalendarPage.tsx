@@ -315,8 +315,19 @@ export const CalendarPage: React.FC = () => {
         }),
       ]);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error(t('calendar.hourEntry.moveFailed', { message: msg, defaultValue: `Couldn't move: ${msg}` }) as string);
+      // I.2 — friendly toast when the hour-logging flag is off
+      // server-side; raw axios message otherwise.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const e = err as any;
+      const code = e?.response?.data?.code;
+      const serverMsg = e?.response?.data?.error;
+      if (code === 'FEATURE_OFF') {
+        toast.error(t('calendar.hourEntry.featureOffToast',
+          'Hour logging is disabled for this customer. Enable it on the customer detail page first.') as string);
+      } else {
+        const msg = serverMsg || (err instanceof Error ? err.message : String(err));
+        toast.error(t('calendar.hourEntry.moveFailed', { message: msg, defaultValue: `Couldn't move: ${msg}` }) as string);
+      }
       arg.revert();
     }
   };
@@ -357,8 +368,19 @@ export const CalendarPage: React.FC = () => {
         }),
       ]);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error(t('calendar.hourEntry.resizeFailed', { message: msg, defaultValue: `Couldn't resize: ${msg}` }) as string);
+      // I.2 — friendly toast on FEATURE_OFF (per-customer hour
+      // logging disabled server-side); raw message otherwise.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const e = err as any;
+      const code = e?.response?.data?.code;
+      const serverMsg = e?.response?.data?.error;
+      if (code === 'FEATURE_OFF') {
+        toast.error(t('calendar.hourEntry.featureOffToast',
+          'Hour logging is disabled for this customer. Enable it on the customer detail page first.') as string);
+      } else {
+        const msg = serverMsg || (err instanceof Error ? err.message : String(err));
+        toast.error(t('calendar.hourEntry.resizeFailed', { message: msg, defaultValue: `Couldn't resize: ${msg}` }) as string);
+      }
       arg.revert();
     }
   };

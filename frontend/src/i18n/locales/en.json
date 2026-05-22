@@ -3180,6 +3180,7 @@
       "deleted": "Hours deleted.",
       "deleteFailed": "Couldn't delete: {{message}}",
       "lockedBadge": "Locked",
+      "featureOffToast": "Hour logging is disabled for this customer. Enable it on the customer detail page first.",
       "lockedTooltip": "Already billed — Storno the invoice to edit.",
       "noDescription": "No description.",
       "untitledCustomer": "Hours"

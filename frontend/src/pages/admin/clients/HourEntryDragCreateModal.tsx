@@ -122,13 +122,37 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
           description: description.trim() || null,
         });
       }
-      // Reconcile in the background — parent already handled the
-      // visual via FC addEvent. No await; modal closes immediately.
-      queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
+      // I.2 — DO NOT invalidate ['calendar-items'] here. That triggered
+      // a background refetch; the refetched response updates the
+      // events prop; FullCalendar then resets its internal eventStore
+      // from the new array, WIPING the chip H.1's imperative
+      // addEvent just added. Net effect: the user saw the chip
+      // disappear immediately on close. Parent's addEvent is the
+      // visual source of truth until the next datesSet (week nav)
+      // refreshes from the server naturally.
+      //
+      // The per-customer hour-entries query (used by the standalone
+      // hours page) is on a different observer, so invalidating it
+      // doesn't affect FC.
       queryClient.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
     },
     onError: (err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
+      // I.2 — detect FEATURE_OFF (server-side hour logging disabled)
+      // and surface a human message instead of the raw axios string.
+      // The lone backend path that emits this code is
+      // customerHoursService.createEntry's per-customer + master flag
+      // check; on drag-move/resize this can fire if the per-customer
+      // flag changed since the entry was created.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const e = err as any;
+      const code = e?.response?.data?.code;
+      const serverMsg = e?.response?.data?.error;
+      if (code === 'FEATURE_OFF') {
+        toast.error(t('calendar.hourEntry.featureOffToast',
+          'Hour logging is disabled for this customer. Enable it on the customer detail page first.') as string);
+        return;
+      }
+      const msg = serverMsg || (err instanceof Error ? err.message : String(err));
       toast.error(t('calendar.hourEntry.createFailed', { message: msg, defaultValue: `Couldn't save: ${msg}` }) as string);
     },
   });
