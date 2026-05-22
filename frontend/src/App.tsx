@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastContainer } from 'react-toastify';
@@ -36,6 +36,10 @@ import {
 import { CrmDevelopmentPage } from './pages/admin/clients/CrmDevelopmentPage';
 import { TaxReportPage } from './pages/admin/clients/TaxReportPage';
 import { HoursLoggingPage } from './pages/admin/clients/HoursLoggingPage';
+// E.6 — Calendar page lazy-loaded so the ~200 KB FullCalendar bundle
+// (carved into its own chunk in vite.config.ts) doesn't ship with the
+// main app. Only pages that visit /admin/clients/calendar fetch it.
+const CalendarPage = lazy(() => import('./pages/admin/clients/CalendarPage').then((m) => ({ default: m.CalendarPage })));
 import { QuoteResponsePage } from './pages/public/QuoteResponsePage';
 import { ContractResponsePage } from './pages/public/ContractResponsePage';
 import { ContractsListPage } from './pages/admin/contracts/ContractsListPage';
@@ -60,7 +64,7 @@ import { CustomerAuthProvider } from './contexts/CustomerAuthContext';
 import { AdminLayout, AdminAuthWrapper } from './components/admin';
 import { ClientsLayout } from './components/admin/ClientsLayout';
 import { RequireFeature } from './components/admin/RequireFeature';
-import { PageErrorBoundary, OfflineIndicator, SkipLink, DynamicFavicon, RobotsMetaTags, CMSContentBlock } from './components/common';
+import { PageErrorBoundary, OfflineIndicator, SkipLink, DynamicFavicon, RobotsMetaTags, CMSContentBlock, Loading } from './components/common';
 import { MaintenanceWrapper } from './components/MaintenanceWrapper';
 import { GlobalThemeProvider } from './components/GlobalThemeProvider';
 import { usePublicSettings } from './hooks/usePublicSettings';
@@ -222,6 +226,20 @@ function App() {
                               is enabled. */}
                           <Route element={<RequireFeature flag="hoursLogging" />}>
                             <Route path="hours" element={<HoursLoggingPage />} />
+                          </Route>
+
+                          {/* Admin calendar (migration 137) — gated by
+                              `calendar`. Lazy-loaded so the FullCalendar
+                              bundle stays out of the main chunk. */}
+                          <Route element={<RequireFeature flag="calendar" />}>
+                            <Route
+                              path="calendar"
+                              element={
+                                <Suspense fallback={<Loading />}>
+                                  <CalendarPage />
+                                </Suspense>
+                              }
+                            />
                           </Route>
 
                           {/* Tax / Steuer report — gated by `taxReport`. */}
