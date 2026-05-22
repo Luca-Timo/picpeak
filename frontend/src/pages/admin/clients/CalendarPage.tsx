@@ -33,6 +33,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import FullCalendar from '@fullcalendar/react';
 import type {
   EventInput,
@@ -45,6 +46,11 @@ import type { EventResizeDoneArg } from '@fullcalendar/interaction';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
+// F.4 — bundle locales for the languages picpeak speaks. Importing
+// the locale module registers it with FC's locale registry; the
+// `locale` prop then resolves to it by code. Other locales (fr/nl/
+// pt/ru) fall back to English day/month names.
+import deLocale from '@fullcalendar/core/locales/de';
 import { Card, Button, Loading } from '../../../components/common';
 import {
   calendarService,
@@ -163,10 +169,27 @@ function bufferedRange(active: { start: Date; end: Date }) {
 }
 
 export const CalendarPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const calendarRef = useRef<FullCalendar | null>(null);
+  // F.4 — admin's general_time_format drives FC's time labels.
+  // dateFormat is consumed only for the (deferred) custom title
+  // formatter; FC's built-in title/header formatting follows the
+  // `locale` prop below for now.
+  const { timeFormat } = useLocalizedDate();
+  const fcHour12 = timeFormat === '12h';
+  // Single Intl.DateTimeFormatOptions object reused by slotLabelFormat
+  // and eventTimeFormat so the time-grid axis and event-chip prefixes
+  // stay in sync. 24h installs see "14:00"; 12h installs see "2:00 PM".
+  const fcTimeFormat: Intl.DateTimeFormatOptions = useMemo(() => ({
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: fcHour12,
+    // 24h installs prefer no leading zero on the hour ("9:00" not "09:00");
+    // FC accepts the `meridiem: false` shortcut for that.
+    meridiem: fcHour12 ? 'short' : false,
+  } as Intl.DateTimeFormatOptions), [fcHour12]);
 
   // View persisted in localStorage (E.5 / E.6 — utils/calendarPrefs.ts).
   const [view, setView] = useState<CalendarView>(() => getCalendarView());
@@ -376,6 +399,16 @@ export const CalendarPage: React.FC = () => {
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
           initialView={view}
           timeZone={resolvedTz}
+          // F.4 — language + time format come from picpeak settings.
+          // `locales` registers the locales we ship; `locale` picks the
+          // active one by i18next language code. Unknown languages
+          // fall back to FC's default English. Times are gated on the
+          // admin's general_time_format via the shared fcTimeFormat
+          // object below.
+          locales={[deLocale]}
+          locale={i18n.language || 'en'}
+          slotLabelFormat={fcTimeFormat}
+          eventTimeFormat={fcTimeFormat}
           headerToolbar={{
             left: 'prev,next today',
             center: 'title',
