@@ -20,12 +20,7 @@ import { publicQuotesService } from '../../services/quotes.service';
 import { usePublicDarkMode } from '../../hooks/usePublicDarkMode';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { Loading } from '../../components/common';
-
-function formatMoney(amount: number, currency: string, locale = 'de-CH') {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency', currency: (currency || 'CHF').toUpperCase(),
-  }).format(amount);
-}
+import { formatMoney } from '../../utils/money';
 
 /**
  * Format a date string as DD.MM.YYYY (the customer-facing format used

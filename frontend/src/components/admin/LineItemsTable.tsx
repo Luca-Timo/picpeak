@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus, X, ArrowUp, ArrowDown, Save as SaveIcon, ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react';
 import { Button } from '../common';
 import { DecimalInput } from '../common/DecimalInput';
+import { formatMoney } from '../../utils/money';
 
 export interface EditableLineItem {
   id?: number;
@@ -58,12 +59,6 @@ interface Props {
   onChange: (items: EditableLineItem[]) => void;
   presets?: LineItemPresetMinimal[];
   onSaveAsPreset?: (item: EditableLineItem) => void;
-}
-
-function formatMoney(amount: number, currency: string, locale = 'de-CH') {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency', currency: (currency || 'CHF').toUpperCase(),
-  }).format(amount);
 }
 
 function nextFreshPosition(items: EditableLineItem[]) {
@@ -462,4 +457,7 @@ export const LineItemsTable: React.FC<Props> = ({
   );
 };
 
+// `formatMoney` is now the canonical helper from utils/money. Re-exported
+// here so call-sites that historically imported from this file
+// (CustomerCrmPanels, page-level summaries) keep working without churn.
 export { formatMoney };

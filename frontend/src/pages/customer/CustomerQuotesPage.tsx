@@ -16,10 +16,7 @@ import { FileText, ExternalLink, Download } from 'lucide-react';
 import { customerService, type CustomerQuote } from '../../services/customer.service';
 import { Card, Loading } from '../../components/common';
 import { toast } from 'react-toastify';
-
-function formatMoney(amount: number, currency: string, locale = 'de-CH') {
-  return new Intl.NumberFormat(locale, { style: 'currency', currency: (currency || 'CHF').toUpperCase() }).format(amount);
-}
+import { formatMoney } from '../../utils/money';
 function formatShortDate(value: string | null | undefined): string {
   if (!value) return '';
   const d = new Date(value);
