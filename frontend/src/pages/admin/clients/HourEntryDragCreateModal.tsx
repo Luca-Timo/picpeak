@@ -78,6 +78,10 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
   const [customerId, setCustomerId] = useState<number | null>(null);
   const [customerLabel, setCustomerLabel] = useState('');
   const [customerIsPassive, setCustomerIsPassive] = useState(false);
+  // H.2 — track the picked customer's hour-logging eligibility so the
+  // Save button can refuse the click upfront. Backend still 409s on
+  // save as a defence-in-depth; this is the matching UI guard.
+  const [customerHoursAllowed, setCustomerHoursAllowed] = useState(true);
   const [description, setDescription] = useState('');
 
   const createMutation = useMutation({
@@ -129,7 +133,9 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
     },
   });
 
-  const canSubmit = !!customerId && !createMutation.isPending;
+  // H.2 — refuse the click when the picked customer has hour logging
+  // OFF (backend would 409 anyway; this skips the round-trip + toast).
+  const canSubmit = !!customerId && customerHoursAllowed && !createMutation.isPending;
 
   // Submit handler shared by the Save button + the wrapping form's
   // implicit Enter-key submit. Wrapped in a single guard so a stale
@@ -197,19 +203,39 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
                     || `#${c.id}`,
                 );
                 setCustomerIsPassive(Boolean(c.isPassive));
+                // H.2 — refuse Save when feature_hours_logging is OFF.
+                // featureHoursLogging is optional on the search summary
+                // (defaults false on un-G.2 backends); treat undefined
+                // as eligible so older backends don't block all saves.
+                setCustomerHoursAllowed(c.featureHoursLogging !== false);
               }}
               onCreate={(c: CustomerAccountDetail) => {
                 setCustomerId(c.id);
                 setCustomerLabel(c.companyName || c.displayName || c.email || `#${c.id}`);
                 setCustomerIsPassive(Boolean(c.isPassive));
+                // Freshly-created customers default with hour-logging
+                // disabled until admin flips it on per-customer.
+                setCustomerHoursAllowed(c.featureHoursLogging !== false);
               }}
               onClear={() => {
                 setCustomerId(null);
                 setCustomerLabel('');
                 setCustomerIsPassive(false);
+                setCustomerHoursAllowed(true);
               }}
               searchPlaceholder={t('calendar.hourEntry.customerSearch', 'Search by email or company…') as string}
             />
+            {/* H.2 — explicit warning when the picked customer is
+                ineligible. Without this the admin sees only the
+                badge on the option row, then a 409 toast after Save.
+                With this, the Save button is disabled and the reason
+                is visible. */}
+            {customerId && !customerHoursAllowed && (
+              <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                {t('calendar.hourEntry.customerLoggingDisabled',
+                  "This customer has hour logging disabled. Enable it on the customer's detail page to log hours.")}
+              </p>
+            )}
           </div>
 
           <div>
