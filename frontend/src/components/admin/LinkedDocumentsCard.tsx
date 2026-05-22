@@ -69,7 +69,7 @@ export const LinkedDocumentsCard: React.FC<LinkedDocumentsCardProps> = ({ rows, 
             // invoices, multiple entries) align cleanly with the label.
             className="flex flex-col md:flex-row md:items-start md:gap-3"
           >
-            <span className="text-neutral-600 dark:text-neutral-300 md:w-40 md:flex-shrink-0">
+            <span className="text-neutral-700 dark:text-neutral-200 md:w-40 md:flex-shrink-0">
               {row.label}:
             </span>
             <div className="flex flex-col gap-1">

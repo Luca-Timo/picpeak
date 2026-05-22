@@ -378,7 +378,7 @@ export const ContractDetailPage: React.FC = () => {
         <h2 className="font-semibold mb-2">{t('contracts.detail.parties', 'Parties')}</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <div>
-            <p className="text-xs uppercase text-neutral-500 tracking-wide">
+            <p className="text-xs uppercase text-neutral-500 dark:text-neutral-400 tracking-wide">
               {t('contracts.detail.customer', 'Customer')}
             </p>
             <p className="font-medium">
@@ -387,25 +387,25 @@ export const ContractDetailPage: React.FC = () => {
                 || c.customer.displayName
                 || c.customer.email}
             </p>
-            <p className="text-xs text-neutral-500">{c.customer.email}</p>
+            <p className="text-xs text-neutral-600 dark:text-neutral-300">{c.customer.email}</p>
           </div>
           <div>
-            <p className="text-xs uppercase text-neutral-500 tracking-wide">
+            <p className="text-xs uppercase text-neutral-500 dark:text-neutral-400 tracking-wide">
               {t('contracts.detail.dates', 'Dates')}
             </p>
             <p className="text-xs">
-              <span className="text-neutral-500">{t('contracts.detail.issued', 'Issued')}: </span>
+              <span className="text-neutral-600 dark:text-neutral-300">{t('contracts.detail.issued', 'Issued')}: </span>
               {formatDate(c.issueDate)}
             </p>
             {c.validUntil && (
               <p className="text-xs">
-                <span className="text-neutral-500">{t('contracts.detail.signBy', 'Sign by')}: </span>
+                <span className="text-neutral-600 dark:text-neutral-300">{t('contracts.detail.signBy', 'Sign by')}: </span>
                 {formatDate(c.validUntil)}
               </p>
             )}
             {c.sentAt && (
               <p className="text-xs">
-                <span className="text-neutral-500">{t('contracts.detail.sentAt', 'Sent at')}: </span>
+                <span className="text-neutral-600 dark:text-neutral-300">{t('contracts.detail.sentAt', 'Sent at')}: </span>
                 {formatDateTime(c.sentAt)}
               </p>
             )}
@@ -418,7 +418,7 @@ export const ContractDetailPage: React.FC = () => {
                 surfaces without scrolling. */}
             {sourceQuoteId && (
               <p className="text-xs">
-                <span className="text-neutral-500">{t('contracts.detail.fromQuote', 'From quote')}: </span>
+                <span className="text-neutral-600 dark:text-neutral-300">{t('contracts.detail.fromQuote', 'From quote')}: </span>
                 <Link
                   to={`/admin/clients/quotes/${sourceQuoteId}`}
                   className="text-accent-dark hover:underline font-mono"
@@ -429,7 +429,7 @@ export const ContractDetailPage: React.FC = () => {
             )}
             {linkedInvoices && linkedInvoices.length > 0 && (
               <p className="text-xs">
-                <span className="text-neutral-500">{t('contracts.detail.linkedInvoice', 'Invoice')}: </span>
+                <span className="text-neutral-600 dark:text-neutral-300">{t('contracts.detail.linkedInvoice', 'Invoice')}: </span>
                 <Link
                   to={`/admin/clients/bills/${linkedInvoices[0].id}`}
                   className="text-accent-dark hover:underline font-mono"
@@ -437,7 +437,7 @@ export const ContractDetailPage: React.FC = () => {
                   {linkedInvoices[0].invoiceNumber}
                 </Link>
                 {linkedInvoices.length > 1 && (
-                  <span className="text-neutral-500"> (+{linkedInvoices.length - 1})</span>
+                  <span className="text-neutral-600 dark:text-neutral-300"> (+{linkedInvoices.length - 1})</span>
                 )}
               </p>
             )}
@@ -451,13 +451,13 @@ export const ContractDetailPage: React.FC = () => {
           <h2 className="font-semibold mb-2">{t('contracts.detail.signatures', 'Signatures')}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div className="p-3 rounded border border-neutral-200 dark:border-neutral-700">
-              <p className="text-xs uppercase text-neutral-500 tracking-wide">
+              <p className="text-xs uppercase text-neutral-500 dark:text-neutral-400 tracking-wide">
                 {t('contracts.detail.signedByCustomer', 'Signed by customer')}
               </p>
               {c.signedByCustomerAt ? (
                 <>
                   <p className="font-medium">{c.signedCustomerName}</p>
-                  <p className="text-xs text-neutral-500">{formatDateTime(c.signedByCustomerAt)}</p>
+                  <p className="text-xs text-neutral-600 dark:text-neutral-300">{formatDateTime(c.signedByCustomerAt)}</p>
                   {!c.signedCustomerSignaturePath && (
                     <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
                       {t('contracts.detail.noSignatureImage',
@@ -466,17 +466,17 @@ export const ContractDetailPage: React.FC = () => {
                   )}
                 </>
               ) : (
-                <p className="text-xs text-neutral-500">—</p>
+                <p className="text-xs text-neutral-600 dark:text-neutral-300">—</p>
               )}
             </div>
             <div className="p-3 rounded border border-neutral-200 dark:border-neutral-700">
-              <p className="text-xs uppercase text-neutral-500 tracking-wide">
+              <p className="text-xs uppercase text-neutral-500 dark:text-neutral-400 tracking-wide">
                 {t('contracts.detail.signedByAdmin', 'Counter-signed')}
               </p>
               {c.signedByAdminAt ? (
                 <>
                   <p className="font-medium">{c.signedAdminName}</p>
-                  <p className="text-xs text-neutral-500">{formatDateTime(c.signedByAdminAt)}</p>
+                  <p className="text-xs text-neutral-600 dark:text-neutral-300">{formatDateTime(c.signedByAdminAt)}</p>
                   {!c.signedAdminSignaturePath && (
                     <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
                       {t('contracts.detail.noSignatureImage',
@@ -485,7 +485,7 @@ export const ContractDetailPage: React.FC = () => {
                   )}
                 </>
               ) : (
-                <p className="text-xs text-neutral-500">—</p>
+                <p className="text-xs text-neutral-600 dark:text-neutral-300">—</p>
               )}
             </div>
           </div>

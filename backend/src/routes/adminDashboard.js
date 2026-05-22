@@ -470,8 +470,16 @@ router.get('/crm-stats', adminAuth, async (req, res) => {
             this.whereNot('kind', 'storno').orWhereNull('kind');
           })
           .andWhere(function() {
+            // Belt-and-braces: a Storno is uniquely identified by
+            // having `cancels_invoice_id` set (migration 114). Even
+            // if `kind` is somehow NULL on a Storno row, this catches
+            // it. NULL on regular invoices passes through unchanged.
+            this.whereNull('cancels_invoice_id');
+          })
+          .andWhere(function() {
             this.where('is_monthly_draft', false).orWhereNull('is_monthly_draft');
           })
+          .andWhere('total_amount_minor', '>=', 0)
           .select('total_amount_minor', 'paid_amount_minor', 'late_fee_amount_minor');
         for (const r of openRows) {
           const total = Number(r.total_amount_minor || 0) + Number(r.late_fee_amount_minor || 0);
