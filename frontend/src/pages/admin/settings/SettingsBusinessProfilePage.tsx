@@ -112,6 +112,17 @@ export const SettingsBusinessProfilePage: React.FC = () => {
             maxLength={3} onChange={(e) => setProfile({ ...profile, defaultCurrency: e.target.value.toUpperCase() })} />
           <Input label={t('businessProfile.field.defaultLocale', 'Default locale') as string} value={profile.defaultLocale}
             maxLength={8} onChange={(e) => setProfile({ ...profile, defaultLocale: e.target.value })} />
+          {/* Migration 137 — IANA timezone string for the admin calendar.
+              Free-text; backend caps at 64 chars. When blank the calendar
+              UI falls back to the browser's `Intl.DateTimeFormat()
+              .resolvedOptions().timeZone`. */}
+          <Input
+            label={t('businessProfile.field.timezone', 'Timezone (IANA)') as string}
+            value={profile.timezone || ''}
+            maxLength={64}
+            placeholder={Intl.DateTimeFormat().resolvedOptions().timeZone}
+            onChange={(e) => setProfile({ ...profile, timezone: e.target.value || null })}
+          />
           <Input label={t('businessProfile.field.vatLabel', 'VAT label (e.g. MwSt., VAT)') as string} value={profile.vatLabel}
             onChange={(e) => setProfile({ ...profile, vatLabel: e.target.value })} />
           <Input type="number" step="0.01" label={t('businessProfile.field.vatRateDefault', 'Default VAT rate %') as string}
