@@ -18,6 +18,7 @@ const rateLimit = require('express-rate-limit');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const quoteService = require('../services/quoteService');
 const { db } = require('../database/db');
+const { clientIpForAudit } = require('../utils/clientIp');
 
 const router = express.Router();
 
@@ -155,7 +156,9 @@ router.post(
   handleAsync(async (req, res) => {
     validateRequest(req);
     try {
-      const ip = req.ip || req.headers['x-forwarded-for'] || null;
+      // See utils/clientIp.js — trust req.ip (configured via Express
+      // trust-proxy), never read X-Forwarded-For directly.
+      const ip = clientIpForAudit(req);
       const result = await quoteService.recordResponse({
         token: req.params.token,
         action: req.body.action,
