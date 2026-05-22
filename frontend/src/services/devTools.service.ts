@@ -14,7 +14,15 @@ export type CrmEmailTemplateKey =
   | 'invoice_sent'
   | 'invoice_reminder_first'
   | 'invoice_reminder_second'
-  | 'invoice_payment_check_admin';
+  | 'invoice_payment_check_admin'
+  // Contracts (migration 130). Backend exposes all three flows via the
+  // dev tester (admin → customer send, customer-signed ping, dual-party
+  // fully-signed). Without these in the union, useQuery returns rows
+  // whose `key` doesn't resolve to a label and they render as raw
+  // template_key strings.
+  | 'contract_sent'
+  | 'contract_signed_admin_notification'
+  | 'contract_fully_signed';
 
 export interface DevEmailTemplateStatus {
   key: CrmEmailTemplateKey;
