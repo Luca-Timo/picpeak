@@ -341,17 +341,17 @@ export const BillDetailPage: React.FC = () => {
       <Card>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           {inv.eventName && (
-            <div><div className="text-neutral-500">{t('bills.field.eventName', 'Event')}</div><div>{inv.eventName}{inv.eventDate ? ` · ${inv.eventDate}` : ''}</div></div>
+            <div><div className="text-neutral-600 dark:text-neutral-300">{t('bills.field.eventName', 'Event')}</div><div>{inv.eventName}{inv.eventDate ? ` · ${inv.eventDate}` : ''}</div></div>
           )}
-          <div><div className="text-neutral-500">{t('bills.field.issueDate', 'Issued')}</div><div>{fmtDate(inv.issueDate)}</div></div>
-          <div><div className="text-neutral-500">{t('bills.field.dueDate', 'Due')}</div><div>{fmtDate(inv.dueDate)}</div></div>
-          {inv.scheduledSendAt && <div><div className="text-neutral-500">{t('bills.field.scheduledSendAt', 'Scheduled send')}</div><div>{fmtDate(inv.scheduledSendAt)}</div></div>}
-          {inv.installmentTotal > 1 && <div><div className="text-neutral-500">{t('bills.field.installment', 'Installment')}</div><div>{inv.installmentIndex + 1}/{inv.installmentTotal}</div></div>}
-          <div><div className="text-neutral-500">{t('bills.field.total', 'Total')}</div><div>{formatMoney(Number(inv.totalAmountMinor || 0) / 100, inv.currency)}</div></div>
-          <div><div className="text-neutral-500">{t('bills.field.paid', 'Paid')}</div><div>{formatMoney(Number(inv.paidAmountMinor || 0) / 100, inv.currency)}</div></div>
-          <div><div className="text-neutral-500">{t('bills.field.outstanding', 'Outstanding')}</div>
+          <div><div className="text-neutral-600 dark:text-neutral-300">{t('bills.field.issueDate', 'Issued')}</div><div>{fmtDate(inv.issueDate)}</div></div>
+          <div><div className="text-neutral-600 dark:text-neutral-300">{t('bills.field.dueDate', 'Due')}</div><div>{fmtDate(inv.dueDate)}</div></div>
+          {inv.scheduledSendAt && <div><div className="text-neutral-600 dark:text-neutral-300">{t('bills.field.scheduledSendAt', 'Scheduled send')}</div><div>{fmtDate(inv.scheduledSendAt)}</div></div>}
+          {inv.installmentTotal > 1 && <div><div className="text-neutral-600 dark:text-neutral-300">{t('bills.field.installment', 'Installment')}</div><div>{inv.installmentIndex + 1}/{inv.installmentTotal}</div></div>}
+          <div><div className="text-neutral-600 dark:text-neutral-300">{t('bills.field.total', 'Total')}</div><div>{formatMoney(Number(inv.totalAmountMinor || 0) / 100, inv.currency)}</div></div>
+          <div><div className="text-neutral-600 dark:text-neutral-300">{t('bills.field.paid', 'Paid')}</div><div>{formatMoney(Number(inv.paidAmountMinor || 0) / 100, inv.currency)}</div></div>
+          <div><div className="text-neutral-600 dark:text-neutral-300">{t('bills.field.outstanding', 'Outstanding')}</div>
             <div className={outstanding > 0 ? 'text-red-700 font-medium' : ''}>{formatMoney(outstanding, inv.currency)}</div></div>
-          {inv.lateFeeAmountMinor > 0 && <div><div className="text-neutral-500">{t('bills.field.lateFee', 'Late fee')}</div><div className="text-amber-700">{formatMoney(Number(inv.lateFeeAmountMinor) / 100, inv.currency)}</div></div>}
+          {inv.lateFeeAmountMinor > 0 && <div><div className="text-neutral-600 dark:text-neutral-300">{t('bills.field.lateFee', 'Late fee')}</div><div className="text-amber-700">{formatMoney(Number(inv.lateFeeAmountMinor) / 100, inv.currency)}</div></div>}
           {/* Source-quote / source-contract cross-links moved out of
               the top stats grid into the unified Linked-documents card
               above, mirroring the quote + contract detail pages. The
