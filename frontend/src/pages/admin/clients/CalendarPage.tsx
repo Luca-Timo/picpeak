@@ -34,6 +34,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
+import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import FullCalendar from '@fullcalendar/react';
 import type {
   EventInput,
@@ -173,6 +174,15 @@ export const CalendarPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const calendarRef = useRef<FullCalendar | null>(null);
+  // I.3 — master `hoursLogging` flag gates ALL hour-entry interactions
+  // on the calendar (drag-create / drag-move / drag-resize / inline
+  // edit). When off, the calendar stays read-only: existing entries
+  // still render so the admin sees their history, but no new ones can
+  // be created and existing ones can't be moved. The Customers detail
+  // page is where the per-customer flag is set; THIS gate is the
+  // global Settings → Features master switch.
+  const { flags } = useFeatureFlags();
+  const hoursLoggingEnabled = !!flags.hoursLogging;
   // F.4 — admin's general_time_format drives FC's time labels.
   // dateFormat is consumed only for the (deferred) custom title
   // formatter; FC's built-in title/header formatting follows the
@@ -268,12 +278,21 @@ export const CalendarPage: React.FC = () => {
    * full-day range (no times) — guard against that so we don't open the
    * modal with HH:MM=00:00–00:00 across a multi-day span. Single-day,
    * sub-24h selects with explicit times are the supported case.
+   *
+   * I.3 — refuse if master hoursLogging flag is off. The backend would
+   * 409 the save anyway; this prevents the modal from opening in the
+   * first place. Toast tells the admin where to enable it.
    */
   const handleDateSelect = (sel: DateSelectArg) => {
-    if (sel.allDay) return; // Month-view click; not the time-grid drag we want.
+    if (sel.allDay) return;
     const startDay = sel.start.toISOString().slice(0, 10);
     const endDay = sel.end.toISOString().slice(0, 10);
-    if (startDay !== endDay) return; // Cross-day drag — not a single hour-entry.
+    if (startDay !== endDay) return;
+    if (!hoursLoggingEnabled) {
+      toast.error(t('calendar.hourEntry.featureOffToast', 'Hour logging is disabled.') as string);
+      calendarRef.current?.getApi().unselect();
+      return;
+    }
     const hh = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     setDragCreateState({ entryDate: startDay, startTime: hh(sel.start), endTime: hh(sel.end) });
   };
@@ -459,9 +478,13 @@ export const CalendarPage: React.FC = () => {
           // filters the draggable surface to unlocked hour entries
           // (mapItemToFcEvent above). `selectable` enables the
           // drag-to-create gesture on empty slots in week view.
-          selectable
+          // I.3 — master hoursLogging gates all drag interactions
+          // (drag-to-create, drag-move, drag-resize). When off, the
+          // calendar is read-only; existing entries still render so
+          // history stays visible.
+          selectable={hoursLoggingEnabled}
           selectMirror
-          editable
+          editable={hoursLoggingEnabled}
           // FullCalendar quirk: selecting on the all-day row fires
           // with allDay=true; the drag-create handler ignores those.
           eventDrop={handleEventDrop}

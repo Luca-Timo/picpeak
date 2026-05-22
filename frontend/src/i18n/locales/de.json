@@ -3180,7 +3180,7 @@
       "deleted": "Stunden gelöscht.",
       "deleteFailed": "Löschen fehlgeschlagen: {{message}}",
       "lockedBadge": "Gesperrt",
-      "featureOffToast": "Stundenerfassung ist für diesen Kunden deaktiviert. Bitte zuerst auf der Kundendetailseite aktivieren.",
+      "featureOffToast": "Stundenerfassung ist deaktiviert.",
       "lockedTooltip": "Bereits abgerechnet — Rechnung stornieren, um zu bearbeiten.",
       "noDescription": "Keine Beschreibung.",
       "untitledCustomer": "Stunden"

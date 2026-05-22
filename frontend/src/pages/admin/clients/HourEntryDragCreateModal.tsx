@@ -112,6 +112,48 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
     onSuccess: (result) => {
       toast.success(t('calendar.hourEntry.created', 'Hours logged.'));
       if (customerId) {
+        // I.4 — merge the new entry into EVERY cached calendar-items
+        // range. addEvent (in the parent's onCreated handler) gives
+        // us the immediate visual; this keeps the react-query cache
+        // honest so when the admin navigates to next week and back,
+        // the cached payload for the original range still contains
+        // the new entry — otherwise FC rebuilds its eventStore from
+        // a stale cache and wipes the chip.
+        //
+        // We deliberately do NOT invalidate — invalidate would refetch
+        // immediately and FC's events-prop diffing has been shown to
+        // drop the new entry mid-session (the reason H.1 went
+        // imperative in the first place). setQueriesData mutates the
+        // cache in-place; the visual is delivered by addEvent now and
+        // by the cache on every subsequent datesSet.
+        const optimisticItem = {
+          kind: 'hours' as const,
+          id: result.id,
+          customerAccountId: customerId,
+          entryDate,
+          startTime,
+          endTime,
+          description: description.trim() || null,
+          status: result.status,
+          invoiceId: result.invoiceId ?? null,
+          invoiceStatus: null,
+          locked: false,
+          customerName: customerLabel || null,
+        };
+        queryClient.setQueriesData(
+          { queryKey: ['calendar-items'] },
+          (old: { items?: unknown[]; range?: unknown } | undefined) => {
+            if (!old || !Array.isArray(old.items)) return old;
+            // Don't double-insert if a competing tab's refetch already
+            // delivered the entry.
+            const already = old.items.some((it: unknown) => {
+              const x = it as { kind?: string; id?: number };
+              return !!x && x.kind === 'hours' && x.id === result.id;
+            });
+            if (already) return old;
+            return { ...old, items: [...old.items, optimisticItem] };
+          },
+        );
         onCreated({
           id: result.id,
           customerAccountId: customerId,
@@ -122,15 +164,6 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
           description: description.trim() || null,
         });
       }
-      // I.2 — DO NOT invalidate ['calendar-items'] here. That triggered
-      // a background refetch; the refetched response updates the
-      // events prop; FullCalendar then resets its internal eventStore
-      // from the new array, WIPING the chip H.1's imperative
-      // addEvent just added. Net effect: the user saw the chip
-      // disappear immediately on close. Parent's addEvent is the
-      // visual source of truth until the next datesSet (week nav)
-      // refreshes from the server naturally.
-      //
       // The per-customer hour-entries query (used by the standalone
       // hours page) is on a different observer, so invalidating it
       // doesn't affect FC.
