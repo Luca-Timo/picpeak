@@ -799,13 +799,18 @@ async function createContract(payload, adminId) {
 
     // Seed with every active system block, toggled on. Per-section
     // position = display_order from the source block.
+    //
+    // D.3 — batched insert. Previously this loop fired one INSERT per
+    // block (12+ round-trips inside the transaction on a fresh contract).
+    // Batched into a single `.insert(rows)` since the row count is
+    // bounded (system block count) and the inserts are independent.
     const systemBlocks = await trx('contract_blocks')
       .where({ is_system: true, is_active: true })
       .orderBy(['section', 'display_order']);
     const sectionCounters = {};
-    for (const block of systemBlocks) {
+    const inclusionRows = systemBlocks.map((block) => {
       sectionCounters[block.section] = (sectionCounters[block.section] || 0) + 1;
-      await trx('contract_block_inclusions').insert({
+      return {
         contract_id: contractId,
         block_id: block.id,
         section: block.section,
@@ -815,7 +820,10 @@ async function createContract(payload, adminId) {
         included: true,
         created_at: new Date(),
         updated_at: new Date(),
-      });
+      };
+    });
+    if (inclusionRows.length > 0) {
+      await trx('contract_block_inclusions').insert(inclusionRows);
     }
 
     try {
@@ -1620,15 +1628,15 @@ async function createFromQuote(quoteId, adminId) {
     const inserted = await trx('contracts').insert(contractRow).returning('id');
     const contractId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
-    // Seed every active system block. Same logic as createContract —
-    // duplicated inline so this stays inside the transaction.
+    // Seed every active system block. Same shape as createContract.
+    // D.3 — batched insert (one DB round-trip vs N).
     const systemBlocks = await trx('contract_blocks')
       .where({ is_system: true, is_active: true })
       .orderBy(['section', 'display_order']);
     const sectionCounters = {};
-    for (const block of systemBlocks) {
+    const inclusionRows = systemBlocks.map((block) => {
       sectionCounters[block.section] = (sectionCounters[block.section] || 0) + 1;
-      await trx('contract_block_inclusions').insert({
+      return {
         contract_id: contractId,
         block_id: block.id,
         section: block.section,
@@ -1638,7 +1646,10 @@ async function createFromQuote(quoteId, adminId) {
         included: true,
         created_at: new Date(),
         updated_at: new Date(),
-      });
+      };
+    });
+    if (inclusionRows.length > 0) {
+      await trx('contract_block_inclusions').insert(inclusionRows);
     }
 
     // Back-pointer so the quote detail page can deep-link to its
