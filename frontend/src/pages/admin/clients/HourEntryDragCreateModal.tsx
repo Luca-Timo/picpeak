@@ -47,8 +47,21 @@ export interface HourEntryDragCreateModalProps {
   endTime: string;
   /** Close the modal without saving. */
   onClose: () => void;
-  /** Called after a successful create; the page invalidates queries. */
-  onCreated: () => void;
+  /**
+   * Called after a successful create. Receives the saved entry's
+   * details so the parent can imperatively add it to FullCalendar
+   * (`calendarRef.getApi().addEvent(...)`) — bypasses FC's
+   * events-prop diffing which was silently dropping new entries (H.1).
+   */
+  onCreated: (created: {
+    id: number;
+    customerAccountId: number;
+    customerName: string | null;
+    entryDate: string;
+    startTime: string;
+    endTime: string;
+    description: string | null;
+  }) => void;
 }
 
 export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> = ({
@@ -65,6 +78,10 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
   const [customerId, setCustomerId] = useState<number | null>(null);
   const [customerLabel, setCustomerLabel] = useState('');
   const [customerIsPassive, setCustomerIsPassive] = useState(false);
+  // H.2 — track the picked customer's hour-logging eligibility so the
+  // Save button can refuse the click upfront. Backend still 409s on
+  // save as a defence-in-depth; this is the matching UI guard.
+  const [customerHoursAllowed, setCustomerHoursAllowed] = useState(true);
   const [description, setDescription] = useState('');
 
   const createMutation = useMutation({
@@ -77,54 +94,38 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
         description: description.trim() || null,
       });
     },
-    // G.3 — F.7's `await refetchQueries` swap didn't reliably make the
-    // new block visible (user reproduced the bug on the post-F.7
-    // bundle). Switching to an OPTIMISTIC cache update via
-    // `setQueriesData` so the freshly-saved entry is inserted into
-    // every cached `calendar-items` query the moment the POST returns,
-    // independent of any refetch timing or FullCalendar event-prop
-    // diffing. Then we kick off a background refetch to reconcile
-    // server-side computed fields (status / customerName from joins),
-    // but the modal can close immediately — the block is already on
-    // screen.
+    // H.1 — Three prior approaches (F.7 await refetch, G.3 setQueriesData
+    // optimistic) didn't reliably make the new block visible. The user
+    // reproduced "disappears" on all three. Root cause: FullCalendar's
+    // React wrapper diffs the `events` prop by content hash and was
+    // silently dropping the just-added entry.
     //
-    // The optimistic item carries `locked: false` because a brand-new
-    // unbilled entry never satisfies isEntryLocked. customerName comes
-    // from the picker's label state so the chip's title reads cleanly.
-    onSuccess: async (result) => {
+    // This commit hands off the created entry to the PARENT (CalendarPage),
+    // which uses FC's imperative `addEvent` API to push the chip directly
+    // into FC's eventStore — bypasses React state, the useQuery cache,
+    // AND the events-prop diffing. The block appears as soon as the
+    // modal closes.
+    //
+    // Background invalidate still runs so a subsequent navigation or
+    // refresh syncs against the server-computed shape (customerName
+    // from joins, status updates).
+    onSuccess: (result) => {
       toast.success(t('calendar.hourEntry.created', 'Hours logged.'));
       if (customerId) {
-        const optimisticItem = {
-          kind: 'hours' as const,
+        onCreated({
           id: result.id,
           customerAccountId: customerId,
+          customerName: customerLabel || null,
           entryDate,
           startTime,
           endTime,
           description: description.trim() || null,
-          status: result.status,
-          invoiceId: result.invoiceId ?? null,
-          invoiceStatus: null,
-          locked: false,
-          customerName: customerLabel || null,
-        };
-        // Merge into every cached calendar-items query (different
-        // date ranges may each have their own cache entry).
-        queryClient.setQueriesData(
-          { queryKey: ['calendar-items'] },
-          (old: { items?: unknown[]; range?: unknown } | undefined) => {
-            if (!old || !Array.isArray(old.items)) return old;
-            return { ...old, items: [...old.items, optimisticItem] };
-          },
-        );
+        });
       }
-      // Background refetch — the optimistic insert already covered the
-      // visual; this reconciles any joined fields (e.g. customerName
-      // resolved server-side, locked-state recomputation). No await:
-      // modal closes immediately.
+      // Reconcile in the background — parent already handled the
+      // visual via FC addEvent. No await; modal closes immediately.
       queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
       queryClient.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
-      onCreated();
     },
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
@@ -132,7 +133,9 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
     },
   });
 
-  const canSubmit = !!customerId && !createMutation.isPending;
+  // H.2 — refuse the click when the picked customer has hour logging
+  // OFF (backend would 409 anyway; this skips the round-trip + toast).
+  const canSubmit = !!customerId && customerHoursAllowed && !createMutation.isPending;
 
   // Submit handler shared by the Save button + the wrapping form's
   // implicit Enter-key submit. Wrapped in a single guard so a stale
@@ -200,19 +203,39 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
                     || `#${c.id}`,
                 );
                 setCustomerIsPassive(Boolean(c.isPassive));
+                // H.2 — refuse Save when feature_hours_logging is OFF.
+                // featureHoursLogging is optional on the search summary
+                // (defaults false on un-G.2 backends); treat undefined
+                // as eligible so older backends don't block all saves.
+                setCustomerHoursAllowed(c.featureHoursLogging !== false);
               }}
               onCreate={(c: CustomerAccountDetail) => {
                 setCustomerId(c.id);
                 setCustomerLabel(c.companyName || c.displayName || c.email || `#${c.id}`);
                 setCustomerIsPassive(Boolean(c.isPassive));
+                // Freshly-created customers default with hour-logging
+                // disabled until admin flips it on per-customer.
+                setCustomerHoursAllowed(c.featureHoursLogging !== false);
               }}
               onClear={() => {
                 setCustomerId(null);
                 setCustomerLabel('');
                 setCustomerIsPassive(false);
+                setCustomerHoursAllowed(true);
               }}
               searchPlaceholder={t('calendar.hourEntry.customerSearch', 'Search by email or company…') as string}
             />
+            {/* H.2 — explicit warning when the picked customer is
+                ineligible. Without this the admin sees only the
+                badge on the option row, then a 409 toast after Save.
+                With this, the Save button is disabled and the reason
+                is visible. */}
+            {customerId && !customerHoursAllowed && (
+              <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                {t('calendar.hourEntry.customerLoggingDisabled',
+                  "This customer has hour logging disabled. Enable it on the customer's detail page to log hours.")}
+              </p>
+            )}
           </div>
 
           <div>

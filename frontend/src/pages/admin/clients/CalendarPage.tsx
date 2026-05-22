@@ -424,8 +424,9 @@ export const CalendarPage: React.FC = () => {
           }}
           // Week starts on Monday for the operator's EU market.
           firstDay={1}
-          slotMinTime="06:00:00"
-          slotMaxTime="22:00:00"
+          // Per user spec: full 24h in week view (was 06:00-22:00).
+          slotMinTime="00:00:00"
+          slotMaxTime="24:00:00"
           slotDuration="00:30:00"
           height="auto"
           expandRows
@@ -453,16 +454,44 @@ export const CalendarPage: React.FC = () => {
           startTime={dragCreateState.startTime}
           endTime={dragCreateState.endTime}
           onClose={() => {
-            // F.7 — clear FC's drag-mirror highlight when the modal
-            // closes WITHOUT a save. Without this, the dashed selection
-            // sticks around until the next user interaction.
             calendarRef.current?.getApi().unselect();
             setDragCreateState(null);
           }}
-          onCreated={() => {
-            // F.7 — same here. The newly-created green block is already
-            // in the cache (refetch ran before onCreated), so clearing
-            // the mirror leaves a clean visual handoff.
+          onCreated={(created) => {
+            // H.1 — push the new chip into FC's eventStore directly so
+            // it appears immediately, independent of the useQuery cache
+            // and the events-prop diffing that was silently dropping
+            // the new entry. The background invalidate from the modal
+            // will eventually replace this with the server-shaped row.
+            calendarRef.current?.getApi().addEvent({
+              id: `hours-${created.id}`,
+              title: created.customerName
+                ? `${created.customerName} — ${created.description || ''}`.trim().replace(/—\s*$/, '')
+                : created.description || 'Hours',
+              start: `${created.entryDate}T${created.startTime}`,
+              end: `${created.entryDate}T${created.endTime}`,
+              backgroundColor: '#10B981',
+              borderColor: '#10B981',
+              editable: true,
+              durationEditable: true,
+              startEditable: true,
+              extendedProps: {
+                item: {
+                  kind: 'hours' as const,
+                  id: created.id,
+                  customerAccountId: created.customerAccountId,
+                  entryDate: created.entryDate,
+                  startTime: created.startTime,
+                  endTime: created.endTime,
+                  description: created.description,
+                  status: 'unbilled' as const,
+                  invoiceId: null,
+                  invoiceStatus: null,
+                  locked: false,
+                  customerName: created.customerName,
+                },
+              },
+            });
             calendarRef.current?.getApi().unselect();
             setDragCreateState(null);
           }}
@@ -542,6 +571,22 @@ export const CalendarPage: React.FC = () => {
           color: var(--color-text);
           font-size: 1.125rem;
           font-weight: 600;
+        }
+
+        /* Week-view day dividers. FC's defaults render the vertical
+           borders in a colour that's nearly invisible against the dark
+           theme. Pin them to --color-surface-border so each day is
+           visually delimited at the same weight as the rest of the
+           admin UI (Card borders, table cells, etc.). */
+        .fc .fc-timegrid-col,
+        .fc .fc-daygrid-day,
+        .fc .fc-col-header-cell {
+          border-color: var(--color-surface-border) !important;
+        }
+        .fc .fc-scrollgrid,
+        .fc .fc-scrollgrid td,
+        .fc .fc-scrollgrid th {
+          border-color: var(--color-surface-border) !important;
         }
       `}</style>
     </div>

@@ -249,14 +249,14 @@ export const FeaturesTab: React.FC = () => {
 
           <FeatureCard
             icon={Receipt}
-            title={t('settings.features.bills.title', 'Bills')}
+            title={t('settings.features.bills.title', 'Invoices')}
             description={t(
               'settings.features.bills.description',
-              'Generate a bill from any accepted quote. Mark paid manually — no payment processor integration.',
+              'Generate an invoice from any accepted quote. Mark paid manually — no payment processor integration.',
             )}
             status="new"
             statusLabel={statusLabel('new')}
-            sidebarLabel={t('settings.features.bills.sidebar', 'Bills')}
+            sidebarLabel={t('settings.features.bills.sidebar', 'Invoices')}
             enabled={staged.bills}
             onToggle={(next) => setFlag('bills', next)}
           />

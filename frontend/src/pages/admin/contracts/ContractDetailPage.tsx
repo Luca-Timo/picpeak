@@ -13,6 +13,7 @@
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
@@ -42,6 +43,8 @@ function statusBadgeClass(status: ContractStatus): string {
 
 export const ContractDetailPage: React.FC = () => {
   const { t } = useTranslation();
+  // H.5 — gate the "Convert to invoice" action when `bills` is off.
+  const { flags } = useFeatureFlags();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -332,6 +335,10 @@ export const ContractDetailPage: React.FC = () => {
             // currency + VAT from the source quote (when present).
             // Mirrors the convertToInvoiceOnly auto-fill but for the
             // ad-hoc "extra invoice" flow.
+            // H.5 — gate behind the `bills` flag; without it the
+            // /admin/clients/bills/new route is hidden + the button
+            // would lead nowhere.
+            if (!flags.bills) return null;
             return (
               <Link to={`/admin/clients/bills/new?fromContractId=${c.id}`}>
                 <Button variant="outline">
@@ -355,19 +362,21 @@ export const ContractDetailPage: React.FC = () => {
                 <ArrowRightCircle className="w-4 h-4 mr-1" />
                 {t('contracts.detail.convertToEvent', 'Convert to event')}
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (window.confirm(t('contracts.detail.confirmConvertInvoice',
-                    'Convert this contract into invoice(s) only? No gallery / event will be created.') as string)) {
-                    convertToInvoiceMutation.mutate();
-                  }
-                }}
-                disabled={convertToInvoiceMutation.isPending}
-              >
-                <Receipt className="w-4 h-4 mr-1" />
-                {t('contracts.detail.convertToInvoice', 'Convert to invoice only')}
-              </Button>
+              {flags.bills && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (window.confirm(t('contracts.detail.confirmConvertInvoice',
+                      'Convert this contract into invoice(s) only? No gallery / event will be created.') as string)) {
+                      convertToInvoiceMutation.mutate();
+                    }
+                  }}
+                  disabled={convertToInvoiceMutation.isPending}
+                >
+                  <Receipt className="w-4 h-4 mr-1" />
+                  {t('contracts.detail.convertToInvoice', 'Convert to invoice only')}
+                </Button>
+              )}
             </>
           );
         })()}

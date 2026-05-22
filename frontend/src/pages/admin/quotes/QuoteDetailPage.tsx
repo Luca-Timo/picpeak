@@ -14,10 +14,16 @@ import { quotesService } from '../../../services/quotes.service';
 import { billsService } from '../../../services/bills.service';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
+import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import { toast } from 'react-toastify';
 
 export const QuoteDetailPage: React.FC = () => {
   const { t } = useTranslation();
+  // H.4 / H.5 — hide the convert-to-{contract,invoice} buttons when
+  // the matching feature flag is off. Backend would refuse the convert
+  // anyway because the routes are gated, but rendering a button that
+  // 404s on click is bad UX.
+  const { flags } = useFeatureFlags();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -177,18 +183,24 @@ export const QuoteDetailPage: React.FC = () => {
               </Button>
               {/* Direct convert-to-invoice for engagements without a
                   photo deliverable (consulting, hire, etc). Hidden
-                  once converted to either an event or to invoices. */}
-              <Button variant="outline" onClick={handleConvertToInvoice}>
-                <Receipt className="w-4 h-4 mr-1" />{t('quotes.convertToInvoice', 'Convert to invoice only')}
-              </Button>
+                  once converted to either an event or to invoices.
+                  H.5 — also hidden when the `bills` feature is off. */}
+              {flags.bills && (
+                <Button variant="outline" onClick={handleConvertToInvoice}>
+                  <Receipt className="w-4 h-4 mr-1" />{t('quotes.convertToInvoice', 'Convert to invoice only')}
+                </Button>
+              )}
               {/* Convert to contract — drafts a contract from this
                   quote, leaves the quote 'accepted' so the contract is
                   the active deliverable. After both parties sign, the
                   contract detail page exposes its own convert-to-event
-                  / convert-to-invoice buttons. */}
-              <Button variant="outline" onClick={handleConvertToContract}>
-                <ScrollText className="w-4 h-4 mr-1" />{t('quotes.convertToContract', 'Convert to contract')}
-              </Button>
+                  / convert-to-invoice buttons.
+                  H.4 — hidden when the `contracts` feature is off. */}
+              {flags.contracts && (
+                <Button variant="outline" onClick={handleConvertToContract}>
+                  <ScrollText className="w-4 h-4 mr-1" />{t('quotes.convertToContract', 'Convert to contract')}
+                </Button>
+              )}
             </>
           )}
         </div>

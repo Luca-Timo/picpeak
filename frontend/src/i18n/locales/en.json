@@ -1140,9 +1140,9 @@
         "sidebar": "Quotes"
       },
       "bills": {
-        "title": "Bills",
-        "description": "Generate a bill from any accepted quote. Mark paid manually — no payment processor integration.",
-        "sidebar": "Bills"
+        "title": "Invoices",
+        "description": "Generate an invoice from any accepted quote. Mark paid manually — no payment processor integration.",
+        "sidebar": "Invoices"
       },
       "taxReport": {
         "title": "Tax report",
