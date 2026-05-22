@@ -19,6 +19,7 @@ const { handleAsync, validateRequest, successResponse } = require('../utils/rout
 const quoteService = require('../services/quoteService');
 const { db } = require('../database/db');
 const { clientIpForAudit } = require('../utils/clientIp');
+const { loadActionToken } = require('../utils/publicTokenGuards');
 
 const router = express.Router();
 
@@ -114,11 +115,11 @@ router.get(
   [param('token').isString().isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i)],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const tokenRow = await db('quote_action_tokens').where({ token: req.params.token }).first();
-    if (!tokenRow) return res.status(404).json({ error: 'Quote not found' });
-    if (tokenRow.expires_at && new Date(tokenRow.expires_at).getTime() < Date.now()) {
-      return res.status(410).json({ error: 'This link has expired' });
-    }
+    const tokenRow = await loadActionToken(req, res, {
+      tableName: 'quote_action_tokens',
+      token: req.params.token,
+    });
+    if (!tokenRow) return;
     const data = await quoteService.getQuoteById(tokenRow.quote_id);
     if (!data) return res.status(404).json({ error: 'Quote not found' });
 
