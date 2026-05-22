@@ -221,7 +221,19 @@ export const CalendarPage: React.FC = () => {
     queryKey: ['calendar-items', range?.from, range?.to],
     queryFn: () => calendarService.list(range as { from: string; to: string }),
     enabled: !!range,
-    staleTime: 30_000, // Tight enough to feel live, loose enough to skip refetch on view nav.
+    // I.5 — staleTime bumped to 5 min so navigation away from the
+    // calendar and back within a reasonable window reads cache only;
+    // no refetch fires that could (per the bug the user keeps
+    // reporting) overwrite the local optimistic-merged items with a
+    // server response that's missing the freshly-saved entry. After
+    // 5 min the natural staleness kicks in + the entry is in the DB
+    // anyway by then. gcTime stays at the default 5 min so the cache
+    // entry survives a brief nav away.
+    staleTime: 5 * 60_000,
+    // Don't refetch on every remount — the cache is the source of
+    // truth for the duration of the staleTime. datesSet (a real range
+    // change) still triggers a fresh fetch via the queryKey change.
+    refetchOnMount: false,
   });
 
   // Resolve the timezone the calendar should render in. business_profile
