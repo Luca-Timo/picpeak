@@ -620,7 +620,11 @@ export const ContractDetailPage: React.FC = () => {
  */
 const AuditTrailCard: React.FC<{ contractId: number }> = ({ contractId }) => {
   const { t } = useTranslation();
-  const { format } = useLocalizedDate();
+  // formatDateTime honors `general_date_format` + `general_time_format`
+  // from admin Settings; previously this card was rendering audit
+  // timestamps with a hardcoded `yyyy-MM-dd HH:mm` format that bypassed
+  // both. Memory: feedback_respect_general_format_settings.md.
+  const { formatDateTime: fmtDateTime } = useLocalizedDate();
   const { data, isLoading } = useQuery({
     queryKey: ['contract-audit-trail', contractId],
     queryFn: () => contractsService.auditTrail(contractId),
@@ -686,7 +690,7 @@ const AuditTrailCard: React.FC<{ contractId: number }> = ({ contractId }) => {
                 </div>
               </div>
               <div className="text-xs text-neutral-500 whitespace-nowrap font-mono">
-                {format(e.created_at, 'yyyy-MM-dd HH:mm')}
+                {fmtDateTime(e.created_at)}
               </div>
             </li>
           );

@@ -62,6 +62,11 @@ export const CrmOverviewSection: React.FC = () => {
     queryKey: ['crm-overview'],
     queryFn: () => fetchCrmOverview(),
     enabled: anyCrm,
+    // Dashboard tile aggregates — admin opens this on every dashboard
+    // load; refetching the full aggregate on every mount adds DB load
+    // without observable benefit. 60s window covers the typical
+    // "click into a contract / click back" pattern.
+    staleTime: 60_000,
   });
 
   if (!anyCrm) return null;

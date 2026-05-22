@@ -46,6 +46,12 @@ const QuotesPanel: React.FC<Props> = ({ customerAccountId }) => {
   const { data, isLoading } = useQuery({
     queryKey: ['customer-quotes', customerAccountId],
     queryFn: () => quotesService.list({ customerAccountId, page: 1, pageSize: 10, sort: 'newest' }),
+    // Customer detail page mounts these three panels together. Without
+    // staleTime they all refetch on every visit + every queryClient
+    // touch elsewhere. 30s lets a quick tab-out/tab-in not re-hit the
+    // API; admin mutations invalidate the cache explicitly when they
+    // need fresh data.
+    staleTime: 30_000,
   });
 
   return (
@@ -106,6 +112,7 @@ const ContractsPanel: React.FC<Props> = ({ customerAccountId }) => {
   const { data, isLoading } = useQuery({
     queryKey: ['customer-contracts', customerAccountId],
     queryFn: () => contractsService.list({ customerAccountId, page: 1, pageSize: 10, sort: 'newest' }),
+    staleTime: 30_000,
   });
 
   return (
@@ -159,6 +166,7 @@ const InvoicesPanel: React.FC<Props> = ({ customerAccountId }) => {
   const { data, isLoading } = useQuery({
     queryKey: ['customer-invoices', customerAccountId],
     queryFn: () => billsService.list({ customerAccountId, page: 1, pageSize: 10, sort: 'newest' }),
+    staleTime: 30_000,
   });
 
   return (
