@@ -33,6 +33,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import FullCalendar from '@fullcalendar/react';
 import type {
   EventInput,
@@ -45,6 +46,11 @@ import type { EventResizeDoneArg } from '@fullcalendar/interaction';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
+// F.4 — bundle locales for the languages picpeak speaks. Importing
+// the locale module registers it with FC's locale registry; the
+// `locale` prop then resolves to it by code. Other locales (fr/nl/
+// pt/ru) fall back to English day/month names.
+import deLocale from '@fullcalendar/core/locales/de';
 import { Card, Button, Loading } from '../../../components/common';
 import {
   calendarService,
@@ -163,10 +169,27 @@ function bufferedRange(active: { start: Date; end: Date }) {
 }
 
 export const CalendarPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const calendarRef = useRef<FullCalendar | null>(null);
+  // F.4 — admin's general_time_format drives FC's time labels.
+  // dateFormat is consumed only for the (deferred) custom title
+  // formatter; FC's built-in title/header formatting follows the
+  // `locale` prop below for now.
+  const { timeFormat } = useLocalizedDate();
+  const fcHour12 = timeFormat === '12h';
+  // Single Intl.DateTimeFormatOptions object reused by slotLabelFormat
+  // and eventTimeFormat so the time-grid axis and event-chip prefixes
+  // stay in sync. 24h installs see "14:00"; 12h installs see "2:00 PM".
+  const fcTimeFormat: Intl.DateTimeFormatOptions = useMemo(() => ({
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: fcHour12,
+    // 24h installs prefer no leading zero on the hour ("9:00" not "09:00");
+    // FC accepts the `meridiem: false` shortcut for that.
+    meridiem: fcHour12 ? 'short' : false,
+  } as Intl.DateTimeFormatOptions), [fcHour12]);
 
   // View persisted in localStorage (E.5 / E.6 — utils/calendarPrefs.ts).
   const [view, setView] = useState<CalendarView>(() => getCalendarView());
@@ -283,10 +306,14 @@ export const CalendarPage: React.FC = () => {
         entryDate, startTime, endTime,
       });
       toast.success(t('calendar.hourEntry.movedToast', 'Hours updated.'));
-      queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
-      queryClient.invalidateQueries({
-        queryKey: ['admin-customer-hour-entries', item.customerAccountId],
-      });
+      // F.7 — refetch (not just invalidate) so the calendar visibly
+      // reflects the move/resize before any subsequent user action.
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['calendar-items'] }),
+        queryClient.refetchQueries({
+          queryKey: ['admin-customer-hour-entries', item.customerAccountId],
+        }),
+      ]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(t('calendar.hourEntry.moveFailed', { message: msg, defaultValue: `Couldn't move: ${msg}` }) as string);
@@ -321,10 +348,14 @@ export const CalendarPage: React.FC = () => {
         entryDate, startTime, endTime,
       });
       toast.success(t('calendar.hourEntry.resizedToast', 'Hours updated.'));
-      queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
-      queryClient.invalidateQueries({
-        queryKey: ['admin-customer-hour-entries', item.customerAccountId],
-      });
+      // F.7 — refetch (not just invalidate) so the calendar visibly
+      // reflects the move/resize before any subsequent user action.
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['calendar-items'] }),
+        queryClient.refetchQueries({
+          queryKey: ['admin-customer-hour-entries', item.customerAccountId],
+        }),
+      ]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(t('calendar.hourEntry.resizeFailed', { message: msg, defaultValue: `Couldn't resize: ${msg}` }) as string);
@@ -376,6 +407,16 @@ export const CalendarPage: React.FC = () => {
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
           initialView={view}
           timeZone={resolvedTz}
+          // F.4 — language + time format come from picpeak settings.
+          // `locales` registers the locales we ship; `locale` picks the
+          // active one by i18next language code. Unknown languages
+          // fall back to FC's default English. Times are gated on the
+          // admin's general_time_format via the shared fcTimeFormat
+          // object below.
+          locales={[deLocale]}
+          locale={i18n.language || 'en'}
+          slotLabelFormat={fcTimeFormat}
+          eventTimeFormat={fcTimeFormat}
           headerToolbar={{
             left: 'prev,next today',
             center: 'title',
@@ -411,8 +452,20 @@ export const CalendarPage: React.FC = () => {
           entryDate={dragCreateState.entryDate}
           startTime={dragCreateState.startTime}
           endTime={dragCreateState.endTime}
-          onClose={() => setDragCreateState(null)}
-          onCreated={() => setDragCreateState(null)}
+          onClose={() => {
+            // F.7 — clear FC's drag-mirror highlight when the modal
+            // closes WITHOUT a save. Without this, the dashed selection
+            // sticks around until the next user interaction.
+            calendarRef.current?.getApi().unselect();
+            setDragCreateState(null);
+          }}
+          onCreated={() => {
+            // F.7 — same here. The newly-created green block is already
+            // in the cache (refetch ran before onCreated), so clearing
+            // the mirror leaves a clean visual handoff.
+            calendarRef.current?.getApi().unselect();
+            setDragCreateState(null);
+          }}
         />
       )}
 
@@ -424,10 +477,17 @@ export const CalendarPage: React.FC = () => {
         />
       )}
 
-      {/* Per-instance CSS for the dashed quote/contract chips. Tailwind
-          can't reach inline FC chip styles, so we override with a small
-          local rule. The locked-hours grey is applied via backgroundColor
-          inline (above), no class needed. */}
+      {/* Per-instance CSS:
+          - dashed quote/contract chips (Tailwind can't reach inline FC
+            chip styles, so we override with a small local rule).
+          - F.5 — FC's prev/next/today buttons styled to match picpeak's
+            .btn-outline / .btn-primary tokens. FC ships its own
+            .fc-button-primary class; we override the relevant rules
+            and bind to the CSS variables the rest of the admin theme
+            uses (--color-accent-dark, --color-surface-border,
+            --color-muted-text). The "today" / disabled-edge buttons
+            and the active state (selected view) all read from these
+            vars so the calendar respects custom branding palettes. */}
       <style>{`
         .cal-dashed {
           border-style: dashed !important;
@@ -439,6 +499,49 @@ export const CalendarPage: React.FC = () => {
         }
         .cal-hours-locked {
           opacity: 0.7;
+        }
+
+        /* FC button restyle — match picpeak admin .btn-outline shape. */
+        .fc .fc-button-primary {
+          background-color: transparent;
+          border: 1px solid var(--color-surface-border);
+          color: var(--color-muted-text);
+          text-transform: none;
+          font-weight: 500;
+          box-shadow: none;
+          transition: opacity 0.15s, background-color 0.15s;
+        }
+        .fc .fc-button-primary:hover:not(:disabled) {
+          opacity: 0.8;
+          background-color: transparent;
+          border-color: var(--color-surface-border);
+          color: var(--color-muted-text);
+        }
+        .fc .fc-button-primary:focus,
+        .fc .fc-button-primary:focus-visible {
+          box-shadow: 0 0 0 2px var(--color-accent-dark);
+          outline: none;
+        }
+        /* "today" / active view button — picpeak's primary fill. */
+        .fc .fc-button-primary:not(:disabled).fc-button-active,
+        .fc .fc-button-primary:not(:disabled):active {
+          background-color: var(--color-accent-dark);
+          border-color: var(--color-accent-dark);
+          color: white;
+        }
+        .fc .fc-button-primary:disabled {
+          opacity: 0.5;
+          background-color: transparent;
+          border-color: var(--color-surface-border);
+          color: var(--color-muted-text);
+        }
+        /* Toolbar title (month / week range) reads the regular text
+           colour rather than FC's hardcoded #333 so dark mode looks
+           right. */
+        .fc .fc-toolbar-title {
+          color: var(--color-text);
+          font-size: 1.125rem;
+          font-weight: 600;
         }
       `}</style>
     </div>

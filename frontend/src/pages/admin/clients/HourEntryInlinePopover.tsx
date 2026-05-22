@@ -52,12 +52,16 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
   const [endTime, setEndTime] = useState(item.endTime);
   const [description, setDescription] = useState(item.description || '');
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
-    queryClient.invalidateQueries({
+  // F.7 — refetch before the modal closes so the calendar shows the
+  // updated entry immediately (avoids the brief "block disappears"
+  // gap reported on drag-create). Returns the promise so onSuccess
+  // can await it.
+  const refetchAll = () => Promise.all([
+    queryClient.refetchQueries({ queryKey: ['calendar-items'] }),
+    queryClient.refetchQueries({
       queryKey: ['admin-customer-hour-entries', item.customerAccountId],
-    });
-  };
+    }),
+  ]);
 
   const updateMutation = useMutation({
     mutationFn: () => customerAdminService.updateHourEntry(
@@ -69,9 +73,9 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
         description: description.trim() || null,
       },
     ),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t('calendar.hourEntry.saved', 'Hours updated.'));
-      invalidate();
+      await refetchAll();
       onMutated();
     },
     onError: (err: unknown) => {
@@ -82,9 +86,9 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
 
   const deleteMutation = useMutation({
     mutationFn: () => customerAdminService.deleteHourEntry(item.customerAccountId, item.id),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(t('calendar.hourEntry.deleted', 'Hours deleted.'));
-      invalidate();
+      await refetchAll();
       onMutated();
     },
     onError: (err: unknown) => {
@@ -95,6 +99,12 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
 
   const busy = updateMutation.isPending || deleteMutation.isPending;
 
+  const submit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (item.locked || busy) return;
+    updateMutation.mutate();
+  };
+
   return (
     <div
       role="dialog"
@@ -102,6 +112,12 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
+      }}
+      onKeyDown={(e) => {
+        // Esc closes (same as drag-create modal). Enter is handled
+        // by the inner <form> for the editable mode; the locked mode
+        // has no submittable input so Enter does nothing.
+        if (e.key === 'Escape' && !busy) onClose();
       }}
     >
       <Card padding="lg" className="w-full max-w-md">
@@ -136,7 +152,7 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
             {item.description || t('calendar.hourEntry.noDescription', 'No description.')}
           </p>
         ) : (
-          <div className="space-y-3">
+          <form onSubmit={submit} className="space-y-3" id="hour-entry-edit-form">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium mb-1">
@@ -171,7 +187,7 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
                 maxLength={1000}
               />
             </div>
-          </div>
+          </form>
         )}
 
         <div className="mt-5 flex items-center justify-between gap-2">
@@ -191,11 +207,11 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
             </Button>
           )}
           <div className="flex items-center gap-2 ml-auto">
-            <Button variant="outline" onClick={onClose} disabled={busy}>
+            <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
               {t('calendar.hourEntry.close', 'Close')}
             </Button>
             {!item.locked && (
-              <Button onClick={() => updateMutation.mutate()} disabled={busy}>
+              <Button type="submit" form="hour-entry-edit-form" disabled={busy}>
                 {updateMutation.isPending
                   ? t('calendar.hourEntry.saving', 'Saving…')
                   : t('calendar.hourEntry.submit', 'Save')}

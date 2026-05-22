@@ -2979,6 +2979,9 @@
       "detailHint": "Dieser Kunde hat keinen Portalzugang (reiner Admin-Eintrag). Klicken Sie unten, um eine Portal-Einladung per E-Mail zu senden. Bestehende Rechnungen, Angebote und Galerie-Zuweisungen bleiben beim Annehmen der Einladung erhalten.",
       "deactivatedHint": "Bitte den Kunden zuerst reaktivieren, bevor die Einladung gesendet wird."
     },
+    "hoursLoggingDisabled": {
+      "badge": "Stundenerfassung deaktiviert"
+    },
     "pageTitle": "Kunden",
     "pageSubtitle": "Wiederkehrende Kundenkonten, die sich unter /customer/login anmelden können.",
     "unnamed": "Unbenannt",

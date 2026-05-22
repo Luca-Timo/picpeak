@@ -11,7 +11,11 @@ export type { FeatureKey, FeatureFlags };
 // hasn't run its migration yet on this instance).
 export const DEFAULT_FLAGS: FeatureFlags = {
   galleries: true,
-  reminderEmails: true,
+  // F.3 — these three are placeholders. The UI cards are locked
+  // (lockedReason: NOT_YET_AVAILABLE) because the underlying flows
+  // aren't implemented yet. Default FALSE so the toggle isn't
+  // confusingly "on but locked".
+  reminderEmails: false,
   calendar: false,
   calendarBooking: false,
   quotes: false,

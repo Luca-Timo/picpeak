@@ -77,14 +77,19 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
         description: description.trim() || null,
       });
     },
-    onSuccess: () => {
+    // F.7 — async + refetchQueries (instead of invalidateQueries) so the
+    // modal stays open until the calendar has the new entry in cache.
+    // Previously the modal closed synchronously after the POST returned
+    // and the refetch ran in the background — there was a ~200-500ms
+    // window where the calendar showed neither the drag-mirror (cleared
+    // by modal unmount) nor the new green block (refetch still in
+    // flight). The admin perceived the saved block "disappearing".
+    onSuccess: async () => {
       toast.success(t('calendar.hourEntry.created', 'Hours logged.'));
-      // Refetch the calendar's items AND the standalone hours page if
-      // it's mounted; both keys are invalidated wholesale (calendar-
-      // items has a date-range tail but invalidating the prefix is
-      // enough for react-query 5).
-      queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['calendar-items'] }),
+        queryClient.refetchQueries({ queryKey: ['admin-customer-hour-entries', customerId] }),
+      ]);
       onCreated();
     },
     onError: (err: unknown) => {
@@ -95,6 +100,16 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
 
   const canSubmit = !!customerId && !createMutation.isPending;
 
+  // Submit handler shared by the Save button + the wrapping form's
+  // implicit Enter-key submit. Wrapped in a single guard so a stale
+  // press with no customer selected just no-ops instead of throwing
+  // through the mutationFn.
+  const submit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!canSubmit) return;
+    createMutation.mutate();
+  };
+
   return (
     <div
       role="dialog"
@@ -104,6 +119,12 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
         // Click on the backdrop closes; clicks inside the card stop
         // here.
         if (e.target === e.currentTarget) onClose();
+      }}
+      onKeyDown={(e) => {
+        // Esc closes — standard modal expectation. We don't trap focus
+        // explicitly; the backdrop click + this Esc handler are the
+        // two close paths.
+        if (e.key === 'Escape' && !createMutation.isPending) onClose();
       }}
     >
       <Card padding="lg" className="w-full max-w-md">
@@ -116,6 +137,11 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
               via the inline-edit popover (also in this commit). */}
           {entryDate} · {startTime}–{endTime}
         </p>
+        {/* Wrap fields in a form so pressing Enter inside the
+            description input fires the submit handler — matches the
+            keyboard expectation on every other admin modal. The Save
+            button keeps its onClick for users who navigate via mouse. */}
+        <form onSubmit={submit}>
 
         <div className="space-y-3">
           <div>
@@ -126,6 +152,10 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
               value={customerId}
               label={customerLabel}
               isPassive={customerIsPassive}
+              // F.6 — surface the hours-logging-eligible badge so admin
+              // sees up front that a customer with feature_hours_logging
+              // OFF would 409 the save.
+              requireFeature="hoursLogging"
               onSelect={(c: CustomerSummary) => {
                 setCustomerId(c.id);
                 setCustomerLabel(
@@ -165,11 +195,16 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
         </div>
 
         <div className="mt-5 flex items-center justify-end gap-2">
-          <Button variant="outline" onClick={onClose} disabled={createMutation.isPending}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={createMutation.isPending}
+          >
             {t('calendar.hourEntry.cancel', 'Cancel')}
           </Button>
           <Button
-            onClick={() => createMutation.mutate()}
+            type="submit"
             disabled={!canSubmit}
           >
             {createMutation.isPending
@@ -177,6 +212,7 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
               : t('calendar.hourEntry.submit', 'Save hours')}
           </Button>
         </div>
+        </form>
       </Card>
     </div>
   );
