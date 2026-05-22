@@ -27,15 +27,7 @@ import { formatMoney } from '../../utils/money';
  * on the PDF too). Accepts ISO strings, Date objects, or already-short
  * "YYYY-MM-DD" forms; returns the original if parsing fails.
  */
-function formatShortDate(value: string | null | undefined): string {
-  if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  return `${dd}.${mm}.${yyyy}`;
-}
+import { formatShortDate } from '../../utils/dateShort';
 
 export const QuoteResponsePage: React.FC = () => {
   const { t, i18n } = useTranslation();

@@ -14,12 +14,7 @@ import { customerService, type CustomerContract } from '../../services/customer.
 import { Card, Loading } from '../../components/common';
 import { toast } from 'react-toastify';
 
-function formatShortDate(value: string | null | undefined): string {
-  if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
-}
+import { formatShortDate } from '../../utils/dateShort';
 
 type SortKey = 'newest' | 'oldest';
 type StatusFilter =
