@@ -808,7 +808,17 @@ async function searchCustomers(query, { limit = 10 } = {}) {
     // Omitting it caused every search result to render as "Passive —
     // admin only" because `undefined == null` is true. The hash itself
     // is dropped by the route's transformCustomer before leaving the API.
-    .select('id', 'email', 'display_name', 'first_name', 'last_name', 'company_name', 'password_hash')
+    //
+    // G.2 — `feature_hours_logging` is required by the calendar's
+    // drag-create modal (F.6) so the CustomerPicker can render the
+    // "Hour logging disabled" badge. Omitting it from this SELECT
+    // caused the badge to appear on EVERY search result regardless
+    // of the actual per-customer flag, because transformCustomer
+    // coerces undefined → false.
+    .select(
+      'id', 'email', 'display_name', 'first_name', 'last_name', 'company_name',
+      'password_hash', 'feature_hours_logging',
+    )
     .orderBy('email', 'asc')
     .limit(limit);
 }

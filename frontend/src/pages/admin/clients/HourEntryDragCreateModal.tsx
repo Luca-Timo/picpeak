@@ -77,19 +77,53 @@ export const HourEntryDragCreateModal: React.FC<HourEntryDragCreateModalProps> =
         description: description.trim() || null,
       });
     },
-    // F.7 — async + refetchQueries (instead of invalidateQueries) so the
-    // modal stays open until the calendar has the new entry in cache.
-    // Previously the modal closed synchronously after the POST returned
-    // and the refetch ran in the background — there was a ~200-500ms
-    // window where the calendar showed neither the drag-mirror (cleared
-    // by modal unmount) nor the new green block (refetch still in
-    // flight). The admin perceived the saved block "disappearing".
-    onSuccess: async () => {
+    // G.3 — F.7's `await refetchQueries` swap didn't reliably make the
+    // new block visible (user reproduced the bug on the post-F.7
+    // bundle). Switching to an OPTIMISTIC cache update via
+    // `setQueriesData` so the freshly-saved entry is inserted into
+    // every cached `calendar-items` query the moment the POST returns,
+    // independent of any refetch timing or FullCalendar event-prop
+    // diffing. Then we kick off a background refetch to reconcile
+    // server-side computed fields (status / customerName from joins),
+    // but the modal can close immediately — the block is already on
+    // screen.
+    //
+    // The optimistic item carries `locked: false` because a brand-new
+    // unbilled entry never satisfies isEntryLocked. customerName comes
+    // from the picker's label state so the chip's title reads cleanly.
+    onSuccess: async (result) => {
       toast.success(t('calendar.hourEntry.created', 'Hours logged.'));
-      await Promise.all([
-        queryClient.refetchQueries({ queryKey: ['calendar-items'] }),
-        queryClient.refetchQueries({ queryKey: ['admin-customer-hour-entries', customerId] }),
-      ]);
+      if (customerId) {
+        const optimisticItem = {
+          kind: 'hours' as const,
+          id: result.id,
+          customerAccountId: customerId,
+          entryDate,
+          startTime,
+          endTime,
+          description: description.trim() || null,
+          status: result.status,
+          invoiceId: result.invoiceId ?? null,
+          invoiceStatus: null,
+          locked: false,
+          customerName: customerLabel || null,
+        };
+        // Merge into every cached calendar-items query (different
+        // date ranges may each have their own cache entry).
+        queryClient.setQueriesData(
+          { queryKey: ['calendar-items'] },
+          (old: { items?: unknown[]; range?: unknown } | undefined) => {
+            if (!old || !Array.isArray(old.items)) return old;
+            return { ...old, items: [...old.items, optimisticItem] };
+          },
+        );
+      }
+      // Background refetch — the optimistic insert already covered the
+      // visual; this reconciles any joined fields (e.g. customerName
+      // resolved server-side, locked-state recomputation). No await:
+      // modal closes immediately.
+      queryClient.invalidateQueries({ queryKey: ['calendar-items'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
       onCreated();
     },
     onError: (err: unknown) => {
