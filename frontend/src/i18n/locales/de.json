@@ -3221,6 +3221,81 @@
     "searchPlaceholder": "Nach E-Mail oder Firma suchen…",
     "customerLoggingDisabled": "Bei diesem Kunden ist die Stundenerfassung deaktiviert. Aktiviere sie auf der Kundendetailseite, um Stunden zu erfassen."
   },
+  "crmDev": {
+    "title": "CRM-Entwicklung",
+    "subtitle": "Interne Werkzeuge zur Überprüfung von CRM-Abläufen. Standardmäßig ausgeblendet — Aktivierung über Einstellungen → Funktionen → Entwicklung.",
+    "warning": "Diese Werkzeuge lösen echte Nebeneffekte aus (E-Mails, Statusänderungen). Nur gegen Testdaten verwenden.",
+    "envDisabled": {
+      "title": "Entwicklungs-Tools durch Umgebungsschutz blockiert",
+      "body": "Setze PICPEAK_ENABLE_DEV_TOOLS=1 in der Backend-Env-Datei und starte den Server neu. Der Funktions-Schalter allein reicht nicht — dies ist eine bewusste Produktiv-Schutzschicht.",
+      "cardHint": "E-Mail-Vorlagen können nicht geladen werden, solange der Entwicklungs-Tools-Umgebungsschutz nicht geöffnet ist."
+    },
+    "paymentCheck": {
+      "title": "Zahlungsprüfung-E-Mail testen (echte Rechnung)",
+      "help": "Sendet die Admin-Zahlungsprüfung-E-Mail für eine echte gesendete/überfällige Rechnung und umgeht dabei die 24-Stunden-Sperre. Die drei Buttons in der E-Mail enthalten echte signierte Tokens — ein Klick verändert den Rechnungsstatus.",
+      "selectInvoice": "Gesendete oder überfällige Rechnung",
+      "selectPlaceholder": "— Rechnung auswählen —",
+      "noneAvailable": "Keine gesendeten oder überfälligen Rechnungen vorhanden.",
+      "send": "Test-E-Mail senden",
+      "sending": "Wird eingereiht …",
+      "sentToast": "Test-E-Mail eingereiht. Bitte das Postfach des Empfängers prüfen."
+    },
+    "templates": {
+      "title": "Beliebige CRM-E-Mail an mich senden (Mock-Daten)",
+      "help": "Reiht die gewählte Vorlage mit Platzhalterwerten an die eigene Admin-Adresse ein. Wenn die Installation echte Angebote/Rechnungen enthält, wird das passende PDF angehängt, damit die vollständige Ausgabe geprüft werden kann.",
+      "notSeeded": "Nicht eingespielt",
+      "send": "An mich senden",
+      "sending": "Wird eingereiht …",
+      "sentToast": "Eingereiht an {{to}}.",
+      "empty": "Keine CRM-E-Mail-Vorlagen gefunden — bitte Migrationen ausführen.",
+      "label": {
+        "quote_sent": {
+          "title": "Angebot gesendet (an Kunden)",
+          "description": "Wird beim Versand eines Angebots ausgelöst — enthält das PDF sowie Annehmen-/Ablehnen-Links."
+        },
+        "quote_accepted_customer": {
+          "title": "Angebot angenommen — Kundenbestätigung",
+          "description": "Wird an den Kunden gesendet, nachdem er (oder der Admin in seinem Namen) das Angebot angenommen hat. Enthält PDF."
+        },
+        "quote_accepted_admin": {
+          "title": "Angebot angenommen — Admin-Benachrichtigung",
+          "description": "Benachrichtigt den Admin, dass ein Angebot vom Kunden angenommen wurde."
+        },
+        "quote_declined_admin": {
+          "title": "Angebot abgelehnt — Admin-Benachrichtigung",
+          "description": "Benachrichtigt den Admin, dass ein Angebot vom Kunden abgelehnt wurde."
+        },
+        "invoice_sent": {
+          "title": "Rechnung gesendet (an Kunden)",
+          "description": "Wird beim Versand einer Rechnung ausgelöst — enthält das PDF."
+        },
+        "invoice_reminder_first": {
+          "title": "Zahlungserinnerung — erste",
+          "description": "Erste Erinnerung an den Kunden. Noch keine Mahngebühr."
+        },
+        "invoice_reminder_second": {
+          "title": "Zahlungserinnerung — zweite (mit Mahngebühr)",
+          "description": "Zweite Erinnerung mit zusätzlicher Mahngebühr."
+        },
+        "invoice_payment_check_admin": {
+          "title": "Zahlungsprüfung (Admin)",
+          "description": "Admin-E-Mail mit drei Buttons, die signierte Tokens enthalten."
+        },
+        "contract_sent": {
+          "title": "Vertrag gesendet (an Kunden)",
+          "description": "Versand Admin → Kunde mit dem unsignierten Vertrags-PDF im Anhang."
+        },
+        "contract_signed_admin_notification": {
+          "title": "Vertrag unterzeichnet — Admin-Benachrichtigung",
+          "description": "Rückmeldung an den Admin, nachdem der Kunde unterzeichnet hat. Ohne Anhang."
+        },
+        "contract_fully_signed": {
+          "title": "Vertrag beidseitig unterzeichnet",
+          "description": "Beidseitiger Versand, sobald beide Unterschriften vorliegen. Gestempeltes Vertrags-PDF im Anhang."
+        }
+      }
+    }
+  },
   "taxReport": {
     "title": "Steuerliste",
     "intro": "Periodenbezogene Umsatzliste mit Netto- und MwSt-Aufschlüsselung, gruppiert nach MwSt-Satz. Stornierte Rechnungen bleiben für die lückenlose Nummernfolge sichtbar, sind aber nicht in den Summen enthalten.",

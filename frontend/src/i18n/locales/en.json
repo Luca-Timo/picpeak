@@ -3221,6 +3221,81 @@
     "searchPlaceholder": "Search by email or company…",
     "customerLoggingDisabled": "This customer has hour logging disabled. Enable it on the customer's detail page to log hours."
   },
+  "crmDev": {
+    "title": "CRM Development",
+    "subtitle": "Internal tools for verifying CRM flows. Hidden by default — enabled via Settings → Features → Development.",
+    "warning": "These tools fire real side effects (emails, status changes). Use against test data.",
+    "envDisabled": {
+      "title": "Dev tools blocked by env gate",
+      "body": "Set PICPEAK_ENABLE_DEV_TOOLS=1 in your backend env file and restart the server. The feature flag alone is not enough — this is a deliberate production-safety guard.",
+      "cardHint": "Email templates can't be listed until the dev-tools env gate is opened."
+    },
+    "paymentCheck": {
+      "title": "Test payment-check email (real invoice)",
+      "help": "Fires the admin payment-check email for a real sent/overdue invoice, bypassing the 24h throttle. The three buttons in the email are real signed tokens — clicking them will affect the invoice status.",
+      "selectInvoice": "Sent or overdue invoice",
+      "selectPlaceholder": "— Pick an invoice —",
+      "noneAvailable": "No sent or overdue invoices in the database.",
+      "send": "Send test email",
+      "sending": "Queuing…",
+      "sentToast": "Test email queued. Check the recipient's inbox."
+    },
+    "templates": {
+      "title": "Send any CRM email to me (mock data)",
+      "help": "Queues the chosen template to your own admin email with placeholder values. When the install has a real quote / invoice on file, the appropriate PDF is attached so you can verify the full output.",
+      "notSeeded": "Not seeded",
+      "send": "Send to me",
+      "sending": "Queuing…",
+      "sentToast": "Queued to {{to}}.",
+      "empty": "No CRM email templates found — run migrations to seed them.",
+      "label": {
+        "quote_sent": {
+          "title": "Quote sent (to customer)",
+          "description": "Fires when a quote is sent — includes the PDF attachment + accept/decline links."
+        },
+        "quote_accepted_customer": {
+          "title": "Quote accepted — customer confirmation",
+          "description": "Sent to the customer after they (or the admin on their behalf) accept the quote. Includes PDF."
+        },
+        "quote_accepted_admin": {
+          "title": "Quote accepted — admin notification",
+          "description": "Notifies the admin that a quote was accepted by the customer."
+        },
+        "quote_declined_admin": {
+          "title": "Quote declined — admin notification",
+          "description": "Notifies the admin that a quote was declined by the customer."
+        },
+        "invoice_sent": {
+          "title": "Invoice sent (to customer)",
+          "description": "Fires when an invoice is sent — includes the PDF attachment."
+        },
+        "invoice_reminder_first": {
+          "title": "Invoice reminder — first",
+          "description": "First reminder to the customer. No late fee yet."
+        },
+        "invoice_reminder_second": {
+          "title": "Invoice reminder — second (with Mahngebühr)",
+          "description": "Second reminder with the late fee surcharge added."
+        },
+        "invoice_payment_check_admin": {
+          "title": "Payment-check (admin)",
+          "description": "Admin email with the three signed-token action buttons."
+        },
+        "contract_sent": {
+          "title": "Contract sent (to customer)",
+          "description": "Admin → customer send with the unsigned contract PDF attached."
+        },
+        "contract_signed_admin_notification": {
+          "title": "Contract signed — admin notification",
+          "description": "Customer-signed ping back to the admin. No attachment."
+        },
+        "contract_fully_signed": {
+          "title": "Contract fully signed (dual-party)",
+          "description": "Dual-party send once both signatures are in. Stamped contract PDF attached."
+        }
+      }
+    }
+  },
   "taxReport": {
     "title": "Tax report",
     "intro": "Period-scoped revenue list with net + VAT breakdown grouped by VAT rate. Cancelled invoices stay visible for audit-trail continuity but are excluded from totals.",
