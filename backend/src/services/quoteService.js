@@ -32,6 +32,7 @@ const logger = require('../utils/logger');
 const { getAppSetting } = require('../utils/appSettings');
 const { AppError } = require('../utils/errors');
 const { formatBoolean } = require('../utils/dbCompat');
+const { claimNextSequence } = require('../utils/documentSequences');
 const businessProfileService = require('./businessProfileService');
 const pdfService = require('./pdfService');
 const emailProcessor = require('./emailProcessor');
@@ -299,28 +300,15 @@ function formatNumberInTemplate(format, year, seq) {
     .replace(/\{SEQ\}/g, String(seq));
 }
 
-async function nextQuoteNumber() {
+// Atomic gap-free quote number generator. See utils/documentSequences.js
+// for the locking story; migration 132 created the underlying table.
+// The previous SELECT-MAX-then-INSERT path raced under concurrent
+// admin creates and could emit `Q-2026-AB12C3` after 5 retries.
+async function nextQuoteNumber(trx) {
   const format = (await getAppSetting('crm_quotes_number_format')) || 'Q-{YEAR}-{SEQ:04d}';
   const year = new Date().getFullYear();
-  // Find the highest existing seq for this year + base prefix. Loop on
-  // unique-key collisions (concurrent admins) up to 5 times.
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    const yearPrefix = formatNumberInTemplate(format, year, 0).slice(0, -4);
-    const rows = await db('quotes')
-      .where('quote_number', 'like', `${yearPrefix}%`)
-      .select('quote_number');
-    let maxSeq = 0;
-    for (const r of rows) {
-      const m = r.quote_number.match(/(\d+)\s*$/);
-      if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
-    }
-    const candidate = formatNumberInTemplate(format, year, maxSeq + 1);
-    const exists = await db('quotes').where({ quote_number: candidate }).first();
-    if (!exists) return candidate;
-  }
-  // Fall back to a UUID-suffixed number — guaranteed unique. Should
-  // basically never trigger.
-  return `Q-${new Date().getFullYear()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+  const seq = await claimNextSequence('quote', year, trx);
+  return formatNumberInTemplate(format, year, seq);
 }
 
 function ensureCustomerFeatureEnabled(customer, feature) {

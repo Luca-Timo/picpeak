@@ -25,6 +25,7 @@ const logger = require('../utils/logger');
 const { getAppSetting } = require('../utils/appSettings');
 const { AppError } = require('../utils/errors');
 const { formatBoolean } = require('../utils/dbCompat');
+const { claimNextSequence } = require('../utils/documentSequences');
 const businessProfileService = require('./businessProfileService');
 const pdfService = require('./pdfService');
 const emailProcessor = require('./emailProcessor');
@@ -57,24 +58,16 @@ function formatNumberInTemplate(format, year, seq) {
     .replace(/\{SEQ\}/g, String(seq));
 }
 
-async function nextInvoiceNumber() {
+// Atomic gap-free invoice number generator. See utils/documentSequences.js
+// for the locking story; migration 132 created the underlying table.
+// The previous SELECT-MAX-then-INSERT path raced under concurrent
+// admin creates and emitted a random `R-2026-AB12C3` after 5 retries,
+// breaking the §14 UStG single-sequence requirement.
+async function nextInvoiceNumber(trx) {
   const format = (await getAppSetting('crm_invoices_number_format')) || 'R-{YEAR}-{SEQ:04d}';
   const year = new Date().getFullYear();
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    const yearPrefix = formatNumberInTemplate(format, year, 0).slice(0, -4);
-    const rows = await db('invoices')
-      .where('invoice_number', 'like', `${yearPrefix}%`)
-      .select('invoice_number');
-    let maxSeq = 0;
-    for (const r of rows) {
-      const m = r.invoice_number.match(/(\d+)\s*$/);
-      if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
-    }
-    const candidate = formatNumberInTemplate(format, year, maxSeq + 1);
-    const exists = await db('invoices').where({ invoice_number: candidate }).first();
-    if (!exists) return candidate;
-  }
-  return `R-${new Date().getFullYear()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+  const seq = await claimNextSequence('invoice', year, trx);
+  return formatNumberInTemplate(format, year, seq);
 }
 
 function ensureCustomerCanBill(customer) {
@@ -124,13 +117,26 @@ function computeDueDate(scheduledSendAt, netDays = 30) {
  * acceptance — instead the invoice fires on `billing_cycle_day` of the
  * next period.
  *
- * `cycleDay` is clamped to the destination month's length (e.g. day 31
- * in February rolls back to Feb 28/29). This protects the scheduler
- * from "missing" bills.
+ * `cycleDay` honours the sign-as-discriminator convention from
+ * migration 128: positive 1..28 = that day of the month; negative
+ * -1..-15 = that many days before end of month. Resolution is
+ * delegated to `computeMonthlyCadenceDate` so the two helpers can't
+ * disagree about what "-3 cycle day" means.
+ *
+ * Day numbers beyond the destination month's length are clamped
+ * (e.g. day 31 in February rolls back to Feb 28/29). Negative days
+ * are clamped to day 1 minimum (extreme values like -40 don't blow
+ * past the start of the month).
+ *
+ * History: a prior version of this function did
+ * `Math.max(1, Math.min(31, ensureInt(cycleDay) || 1))`, silently
+ * clamping every negative value to 1 — so a customer configured
+ * with cycle_day=-3 (last 3 days of month) got billed on day 1
+ * instead. Audit finding: monthly cycle sign convention bug.
  */
 function snapToNextBillingCycle(baseDate, cadence, cycleDay) {
   if (!cadence || cadence === 'per_event') return baseDate;
-  const day = Math.max(1, Math.min(31, ensureInt(cycleDay) || 1));
+  const day = Number.isFinite(ensureInt(cycleDay)) ? ensureInt(cycleDay) : 1;
   const d = new Date(baseDate.getTime());
 
   if (cadence === 'monthly') {
@@ -138,20 +144,15 @@ function snapToNextBillingCycle(baseDate, cadence, cycleDay) {
     // before cycleDay this month and the base date is in the same month,
     // we still move forward to NEXT month so accepting a quote on
     // Jan 5 (cycleDay=1) fires on Feb 1, not Jan 5.
-    const target = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-    const monthLen = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
-    target.setDate(Math.min(day, monthLen));
-    return target;
+    const nextMonth = d.getMonth() + 1;
+    return computeMonthlyCadenceDate(d.getFullYear(), nextMonth, day);
   }
 
   if (cadence === 'quarterly') {
     // First month of the next quarter. Quarter starts: Jan, Apr, Jul, Oct.
     const month = d.getMonth();
     const nextQuarterMonth = (Math.floor(month / 3) + 1) * 3; // 0,3,6,9
-    const target = new Date(d.getFullYear(), nextQuarterMonth, 1);
-    const monthLen = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
-    target.setDate(Math.min(day, monthLen));
-    return target;
+    return computeMonthlyCadenceDate(d.getFullYear(), nextQuarterMonth, day);
   }
 
   return baseDate;
@@ -176,8 +177,13 @@ function computeMonthlyCadenceDate(year, month /* 0-based */, cycleDay) {
   if (day > 0) {
     target = Math.min(day, monthLen);
   } else if (day < 0) {
-    // -1 → last day; -3 on a 31-day month → 28th
-    target = Math.max(1, monthLen + day);
+    // Sign-as-discriminator: -N = the N-th day from the end of the
+    // month, inclusive. -1 = last day; -3 on a 31-day month = 29th
+    // (31, 30, 29 counting back); -3 on a 28-day Feb = 26th.
+    // Formula: monthLen + day + 1 → -1 + 31 + 1 = 31 ✓.
+    // Clamped to day 1 minimum so extreme values (-40) don't blow
+    // past the start of the month.
+    target = Math.max(1, monthLen + day + 1);
   } else {
     target = 1;
   }

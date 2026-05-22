@@ -39,6 +39,7 @@ const { db, withRetry, logActivity } = require('../database/db');
 const logger = require('../utils/logger');
 const { getAppSetting } = require('../utils/appSettings');
 const { AppError } = require('../utils/errors');
+const { claimNextSequence } = require('../utils/documentSequences');
 const businessProfileService = require('./businessProfileService');
 const pdfService = require('./pdfService');
 const pdfStampService = require('./pdfStampService');
@@ -122,27 +123,17 @@ function formatNumberInTemplate(format, year, seq) {
 }
 
 /**
- * Gap-free per-year contract number sequence. Same shape as
- * nextQuoteNumber / nextInvoiceNumber so format tokens are consistent.
+ * Gap-free per-year contract number sequence. See
+ * utils/documentSequences.js for the locking story; migration 132
+ * created the underlying table. Atomic against concurrent admin
+ * creates — the previous SELECT-MAX-then-INSERT raced and could
+ * emit `C-2026-AB12C3` after 5 retries.
  */
-async function nextContractNumber() {
+async function nextContractNumber(trx) {
   const format = (await getAppSetting('crm_contracts_number_format')) || 'C-{YEAR}-{SEQ:04d}';
   const year = new Date().getFullYear();
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    const yearPrefix = formatNumberInTemplate(format, year, 0).slice(0, -4);
-    const rows = await db('contracts')
-      .where('contract_number', 'like', `${yearPrefix}%`)
-      .select('contract_number');
-    let maxSeq = 0;
-    for (const r of rows) {
-      const m = r.contract_number.match(/(\d+)\s*$/);
-      if (m) maxSeq = Math.max(maxSeq, parseInt(m[1], 10));
-    }
-    const candidate = formatNumberInTemplate(format, year, maxSeq + 1);
-    const exists = await db('contracts').where({ contract_number: candidate }).first();
-    if (!exists) return candidate;
-  }
-  return `C-${new Date().getFullYear()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+  const seq = await claimNextSequence('contract', year, trx);
+  return formatNumberInTemplate(format, year, seq);
 }
 
 /**
