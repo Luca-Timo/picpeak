@@ -91,14 +91,10 @@ export const BillEditorPage: React.FC = () => {
   });
   const bankAccounts = bankAccountsData?.bankAccounts || [];
 
-  // Payment-term templates. Migration 124 — keep the legacy list around
-  // for back-compat (lets the editor still resolve preview text on an
-  // invoice authored before the split) but the editor now drives off
-  // the two new lists.
-  const { data: ptTemplates } = useQuery({
-    queryKey: ['payment-term-templates'],
-    queryFn: () => quotesService.listPaymentTermTemplates(),
-  });
+  // Migration 124 split the legacy payment-term template into Net days
+  // + Timing. The editor now drives entirely off the two split lists;
+  // the legacy `ptTemplates` query was kept around "for back-compat
+  // preview text" but never read. Removed (D.1 cleanup).
   const { data: netDaysTemplates } = useQuery({
     queryKey: ['payment-net-days-templates'],
     queryFn: () => quotesService.listPaymentNetDaysTemplates(),

@@ -16,12 +16,11 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
-import { ArrowLeft, Eye, Send, Save } from 'lucide-react';
+import { ArrowLeft, Eye, Save } from 'lucide-react';
 import { Button, Card, Input, Loading } from '../../../components/common';
 import {
   contractsService,
   type ContractBlockSection,
-  type ContractDetail,
   CONTRACT_SECTIONS,
 } from '../../../services/contracts.service';
 import { CustomerPicker } from '../../../components/admin/CustomerPicker';
