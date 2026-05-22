@@ -79,7 +79,19 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
       onMutated();
     },
     onError: (err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
+      // I.2 — friendly toast on FEATURE_OFF; backend would have
+      // 409'd if the customer's flag flipped since this entry was
+      // created.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const e = err as any;
+      const code = e?.response?.data?.code;
+      const serverMsg = e?.response?.data?.error;
+      if (code === 'FEATURE_OFF') {
+        toast.error(t('calendar.hourEntry.featureOffToast',
+          'Hour logging is disabled for this customer. Enable it on the customer detail page first.') as string);
+        return;
+      }
+      const msg = serverMsg || (err instanceof Error ? err.message : String(err));
       toast.error(t('calendar.hourEntry.saveFailed', { message: msg, defaultValue: `Couldn't save: ${msg}` }) as string);
     },
   });
