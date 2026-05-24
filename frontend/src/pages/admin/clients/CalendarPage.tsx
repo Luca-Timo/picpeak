@@ -486,6 +486,22 @@ export const CalendarPage: React.FC = () => {
           locale={i18n.language || 'en'}
           slotLabelFormat={fcTimeFormat}
           eventTimeFormat={fcTimeFormat}
+          // Week-view column headers. FC's default in en-US renders as
+          // "Thu 5/21" (M/D), which is wrong for DE / CH operators who
+          // expect day.month. Override with a function that prefixes
+          // the locale-aware short weekday and uses an explicit DD.MM.
+          // date — matches the project-wide convention in
+          // useLocalizedDate (per feedback_respect_general_format_settings.md).
+          dayHeaderFormat={(arg) => {
+            const d = arg.date;
+            const day = String(d.getUTCDate()).padStart(2, '0');
+            const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+            const weekday = d.toLocaleDateString(i18n.language || 'en', {
+              weekday: 'short',
+              timeZone: 'UTC',
+            });
+            return `${weekday} ${day}.${month}.`;
+          }}
           headerToolbar={{
             left: 'prev,next today',
             center: 'title',
@@ -515,7 +531,6 @@ export const CalendarPage: React.FC = () => {
           editable={hoursLoggingEnabled}
           // FullCalendar quirk: selecting on the all-day row fires
           // with allDay=true; the drag-create handler ignores those.
-          events={fcEvents}
           eventDrop={handleEventDrop}
           eventResize={handleEventResize}
           select={handleDateSelect}
@@ -647,20 +662,25 @@ export const CalendarPage: React.FC = () => {
           font-weight: 600;
         }
 
-        /* Week-view day dividers. FC's defaults render the vertical
-           borders in a colour that's nearly invisible against the dark
-           theme. Pin them to --color-surface-border so each day is
-           visually delimited at the same weight as the rest of the
-           admin UI (Card borders, table cells, etc.). */
-        .fc .fc-timegrid-col,
-        .fc .fc-daygrid-day,
-        .fc .fc-col-header-cell {
-          border-color: var(--color-surface-border) !important;
+        /* Week-view day dividers. FC v6 reads the border color from
+           the --fc-border-color CSS variable. The previous shape only
+           overrode border-color on a handful of selectors, which
+           didn't bring the vertical day-divider lines back in the
+           time grid because FC's CSS variable was still pointing at a
+           near-transparent default. Setting --fc-border-color on .fc
+           propagates to every internal rule (cols, header cells,
+           scrollgrid, etc.) and restores the dividers.
+           The explicit border-right on .fc-timegrid-col is a belt-
+           and-suspenders for FC builds that drop the column border
+           on certain grid widths. */
+        .fc {
+          --fc-border-color: var(--color-surface-border);
         }
-        .fc .fc-scrollgrid,
-        .fc .fc-scrollgrid td,
-        .fc .fc-scrollgrid th {
-          border-color: var(--color-surface-border) !important;
+        .fc .fc-timegrid-col {
+          border-right: 1px solid var(--color-surface-border) !important;
+        }
+        .fc .fc-timegrid-col:last-child {
+          border-right: none !important;
         }
       `}</style>
     </div>
