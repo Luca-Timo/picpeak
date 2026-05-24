@@ -247,12 +247,28 @@ export const CalendarPage: React.FC = () => {
     || Intl.DateTimeFormat().resolvedOptions().timeZone
     || 'UTC';
 
-  // Map backend → FC event shape. Recomputed on every items change;
-  // the cost is tiny relative to FC's render path.
-  const fcEvents = useMemo(
-    () => (itemsResp?.items || []).map(mapItemToFcEvent),
-    [itemsResp],
-  );
+  // Sync the fetched items into FC's eventStore imperatively whenever
+  // the response changes. The previous shape passed `events={fcEvents}`
+  // to FullCalendar, but the React wrapper's prop-diffing path has
+  // proven unreliable on the `[] → [N entries]` transition that fires
+  // after a hard refresh: the new entries silently fail to render
+  // until the next interaction. H.1 already established this pattern
+  // for newly-created entries (addEvent on the FC API); extending it
+  // to the full set on every itemsResp change makes refresh reliable.
+  //
+  // The setQueriesData merge in HourEntryDragCreateModal still feeds
+  // through here — when a new entry is added via addEvent in
+  // onCreated and the cache mutates, the next itemsResp reference
+  // shift triggers this effect to remove + re-add, ensuring the
+  // optimistic entry survives the round-trip.
+  useEffect(() => {
+    const api = calendarRef.current?.getApi();
+    if (!api || !itemsResp) return;
+    api.getEvents().forEach((e) => e.remove());
+    for (const item of itemsResp.items) {
+      api.addEvent(mapItemToFcEvent(item));
+    }
+  }, [itemsResp]);
 
   // Persist view changes. We don't use FC's viewClassNames or similar
   // — the explicit toggle buttons drive both the FC instance + the
@@ -297,15 +313,23 @@ export const CalendarPage: React.FC = () => {
    */
   const handleDateSelect = (sel: DateSelectArg) => {
     if (sel.allDay) return;
-    const startDay = sel.start.toISOString().slice(0, 10);
-    const endDay = sel.end.toISOString().slice(0, 10);
+    // Use local-component extraction (matches handleEventDrop /
+    // handleEventResize). The previous `.toISOString().slice(0, 10)`
+    // path read UTC, so a drag-select on Wed 01:00 in Berlin (UTC+2)
+    // shifted entryDate back to Tuesday's UTC date — the entry was
+    // saved under the wrong day and "disappeared" from the visible
+    // week on the next refresh.
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const startDay = ymd(sel.start);
+    const endDay = ymd(sel.end);
     if (startDay !== endDay) return;
     if (!hoursLoggingEnabled) {
       toast.error(t('calendar.hourEntry.featureOffToast', 'Hour logging is disabled.') as string);
       calendarRef.current?.getApi().unselect();
       return;
     }
-    const hh = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const hh = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
     setDragCreateState({ entryDate: startDay, startTime: hh(sel.start), endTime: hh(sel.end) });
   };
 
@@ -502,6 +526,9 @@ export const CalendarPage: React.FC = () => {
           eventDrop={handleEventDrop}
           eventResize={handleEventResize}
           select={handleDateSelect}
+          // events prop omitted on purpose — managed imperatively via
+          // the itemsResp useEffect above so prop-diffing doesn't drop
+          // entries on the initial fetch after a hard refresh.
         />
       </Card>
 
