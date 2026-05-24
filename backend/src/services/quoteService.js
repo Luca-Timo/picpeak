@@ -509,6 +509,11 @@ async function createQuote(payload, adminId) {
       internal_notes: payload.internalNotes || null,
       cc_pdf_email: payload.ccPdfEmail || null,
       business_bank_account_id: bank?.id || null,
+      // Migration 140 — cross-document lineage UUID. A freshly-created
+      // quote is always the root of its deal chain; mint a new one
+      // here and let convertQuoteToContract / convertQuoteToInvoices
+      // propagate it down.
+      deal_uuid: crypto.randomUUID(),
       created_by_admin_id: adminId,
       created_at: new Date(),
       updated_at: new Date(),
@@ -1234,6 +1239,9 @@ async function convertToInvoiceOnly(quoteId, adminId, options = {}) {
       // selected payment-term template so each scheduled invoice's
       // due_date reflects what the customer agreed to on the quote.
       netDays: paymentTermSnapshot?.net_days,
+      // Migration 140 — every spawned invoice inherits the source
+      // quote's deal_uuid so quote + N invoices group under one deal.
+      dealUuid: quote.deal_uuid,
     });
 
     // Mark quote `converted` without a converted_event_id so the
@@ -1386,6 +1394,9 @@ async function convertToEvent(quoteId, adminId, options = {}) {
       // Net 14 / 30 / 60 / 90 carry through from the quote's
       // payment-term template (same as convertToInvoiceOnly).
       netDays: paymentTermSnapshot?.net_days,
+      // Migration 140 — propagate the quote's deal_uuid down through
+      // every spawned invoice (same as convertToInvoiceOnly above).
+      dealUuid: quote.deal_uuid,
     });
 
     await trx('quotes').where({ id: quote.id }).update({

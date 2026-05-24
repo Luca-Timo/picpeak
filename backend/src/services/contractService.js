@@ -784,6 +784,10 @@ async function createContract(payload, adminId) {
       title: payload.title || null,
       intro_text: payload.introText || null,
       outro_text: payload.outroText || null,
+      // Migration 140 — standalone contract is a deal root; mint a
+      // fresh UUID. The createFromQuote path (line ~1557) sets this
+      // from the source quote's deal_uuid instead.
+      deal_uuid: crypto.randomUUID(),
       created_by_admin_id: adminId,
       created_at: new Date(),
       updated_at: new Date(),
@@ -1614,6 +1618,11 @@ async function createFromQuote(quoteId, adminId) {
       updated_at: new Date(),
     };
     if (hasContractSourceQuote) contractRow.source_quote_id = quote.id;
+    // Migration 140 — contract from quote inherits the quote's
+    // deal_uuid so both documents belong to the same deal chain.
+    // Falls back to a fresh UUID only if the source quote predates the
+    // backfill (shouldn't happen on a migrated install, but defensive).
+    contractRow.deal_uuid = quote.deal_uuid || crypto.randomUUID();
     // Propagate the quote's event snapshot — same fields the quote
     // already carries (set by createQuote). Means contract-from-quote
     // chains preserve "this contract is for the Wedding Doe / Müller"
@@ -1890,6 +1899,10 @@ async function convertToInvoiceOnly(contractId, adminId) {
     updated_at: new Date(),
   };
   if (hasInvoiceContractBackPointer) invoiceRow.source_contract_id = contractId;
+  // Migration 140 — invoice inherits the contract's deal_uuid so the
+  // contract + invoice belong to the same deal chain. Fresh UUID if
+  // the contract predates the backfill (defensive).
+  invoiceRow.deal_uuid = contract.deal_uuid || crypto.randomUUID();
   // Snapshot the contract's event fields onto the invoice so the
   // BillDetailPage + customer portal show the same "Wedding Doe /
   // Müller" label that the contract carries. event_name is also the

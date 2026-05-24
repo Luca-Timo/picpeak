@@ -103,6 +103,33 @@ function computeDueDate(scheduledSendAt, netDays = 30) {
 }
 
 /**
+ * Resolve the deal_uuid for a new invoice row (migration 140). Priority:
+ *
+ *   1. `payload.dealUuid` — explicit caller override. Used by
+ *      spawnInstallmentInvoices (all siblings share one uuid),
+ *      Storno (inherits from cancelled invoice), and reissue
+ *      (inherits from the cancelled original).
+ *   2. The source quote's deal_uuid, if `payload.sourceQuoteId` is set.
+ *   3. The source contract's deal_uuid, if `payload.sourceContractId`
+ *      is set.
+ *   4. Fresh mint — standalone invoices that aren't part of any chain.
+ *
+ * Returns a UUID string. Never returns null.
+ */
+async function resolveDealUuid(trx, payload) {
+  if (payload?.dealUuid) return payload.dealUuid;
+  if (payload?.sourceQuoteId) {
+    const q = await trx('quotes').where({ id: payload.sourceQuoteId }).first('deal_uuid');
+    if (q?.deal_uuid) return q.deal_uuid;
+  }
+  if (payload?.sourceContractId) {
+    const c = await trx('contracts').where({ id: payload.sourceContractId }).first('deal_uuid');
+    if (c?.deal_uuid) return c.deal_uuid;
+  }
+  return crypto.randomUUID();
+}
+
+/**
  * Snap a baseline date to the next billing-cycle boundary for a
  * customer on a fixed cadence. Used by scheduleInvoicesForEvent so
  * monthly / quarterly customers don't get billed immediately on quote
@@ -269,6 +296,10 @@ async function getOrCreateMonthlyDraft(customer, adminId, trx) {
     is_monthly_draft: true,
     monthly_period_start: periodStart.toISOString().slice(0, 10),
     monthly_period_end: periodEnd.toISOString().slice(0, 10),
+    // Migration 140 — each monthly-draft cycle is its own deal (no
+    // quote/contract chain). Fresh UUID at creation; subsequent line
+    // appends just mutate this same row, so the uuid sticks.
+    deal_uuid: crypto.randomUUID(),
     created_by_admin_id: adminId,
     created_at: new Date(),
     updated_at: new Date(),
@@ -747,6 +778,11 @@ async function createInvoice(payload, adminId, trx = db) {
     // — invoice inherits the snapshot/global Skonto config unless
     // admin explicitly ticks "Disable Skonto" in the editor.
     skonto_disabled: Boolean(payload.skontoDisabled),
+    // Migration 140 — deal_uuid lineage. Priority: explicit payload
+    // (used by spawnInstallmentInvoices and Storno/reissue callers to
+    // force a specific value), source quote, source contract,
+    // otherwise fresh mint.
+    deal_uuid: await resolveDealUuid(trx, payload),
     created_by_admin_id: adminId,
     created_at: new Date(),
     updated_at: new Date(),
@@ -775,7 +811,7 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
                                           ccPdfEmail, netDays,
                                           eventName, eventTimeStart, eventTimeEnd,
                                           paymentNetDaysTemplateId, paymentTimingTemplateId,
-                                          paymentTermSnapshot }) {
+                                          paymentTermSnapshot, dealUuid }) {
   // Monthly-billing intercept (migration 128). Quote → invoice
   // conversion for a monthly-mode customer doesn't fan out N
   // installment invoices — the customer pays one consolidated bill
@@ -894,6 +930,12 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
           ? paymentTermSnapshot
           : JSON.stringify(paymentTermSnapshot))
         : null,
+      // Migration 140 — every installment sibling shares one deal_uuid
+      // (passed in from the converting caller, ultimately the source
+      // quote's value). Defensive fallback to a fresh UUID if the
+      // caller didn't pass one — shouldn't happen on a migrated
+      // install but keeps the column non-null.
+      deal_uuid: dealUuid || crypto.randomUUID(),
       created_by_admin_id: adminId,
       created_at: new Date(),
       updated_at: new Date(),
@@ -1587,6 +1629,9 @@ async function createStorno(originalId, adminId, trx = db) {
     cancels_invoice_id: original.id,
     replaces_invoice_id: null,
     cancellation_storno_id: null,
+    // Migration 140 — Storno belongs to the same deal as the invoice
+    // it cancels; both render together in the lineage view.
+    deal_uuid: original.deal_uuid || crypto.randomUUID(),
     created_at: now,
     updated_at: now,
   }).returning('id');
@@ -1803,6 +1848,10 @@ async function reissueInvoice(id, adminId) {
       // standalone invoice. If the admin needs the same split they
       // can run the original conversion again from the quote.
       lineItems: liPayload,
+      // Migration 140 — reissue inherits the cancelled original's
+      // deal_uuid so Storno + replacement + cancelled all group
+      // under one deal lineage view.
+      dealUuid: original.deal_uuid || null,
     }, adminId, trx);
 
     await trx('invoices').where({ id: newId }).update({
