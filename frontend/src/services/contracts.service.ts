@@ -103,6 +103,8 @@ export interface ContractBlockInclusion {
 export interface ContractSummary {
   id: number;
   contractNumber: string;
+  /** Cross-document lineage UUID (migration 140). See QuoteSummary. */
+  dealUuid: string | null;
   customerAccountId: number;
   customer: {
     email: string | null;

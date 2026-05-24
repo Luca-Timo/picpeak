@@ -99,6 +99,10 @@ function transformContract(c, inclusions) {
       preferredLanguage: c.customer_preferred_language,
     },
     status: c.status,
+    // Migration 140 — cross-document lineage UUID. See adminQuotes
+    // transform for the same note; lets the lineage card fetch every
+    // related doc in one query.
+    dealUuid: c.deal_uuid || null,
     language: c.language,
     issueDate: c.issue_date,
     validUntil: c.valid_until,

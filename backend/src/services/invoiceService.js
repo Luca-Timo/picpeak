@@ -103,6 +103,33 @@ function computeDueDate(scheduledSendAt, netDays = 30) {
 }
 
 /**
+ * Resolve the deal_uuid for a new invoice row (migration 140). Priority:
+ *
+ *   1. `payload.dealUuid` — explicit caller override. Used by
+ *      spawnInstallmentInvoices (all siblings share one uuid),
+ *      Storno (inherits from cancelled invoice), and reissue
+ *      (inherits from the cancelled original).
+ *   2. The source quote's deal_uuid, if `payload.sourceQuoteId` is set.
+ *   3. The source contract's deal_uuid, if `payload.sourceContractId`
+ *      is set.
+ *   4. Fresh mint — standalone invoices that aren't part of any chain.
+ *
+ * Returns a UUID string. Never returns null.
+ */
+async function resolveDealUuid(trx, payload) {
+  if (payload?.dealUuid) return payload.dealUuid;
+  if (payload?.sourceQuoteId) {
+    const q = await trx('quotes').where({ id: payload.sourceQuoteId }).first('deal_uuid');
+    if (q?.deal_uuid) return q.deal_uuid;
+  }
+  if (payload?.sourceContractId) {
+    const c = await trx('contracts').where({ id: payload.sourceContractId }).first('deal_uuid');
+    if (c?.deal_uuid) return c.deal_uuid;
+  }
+  return crypto.randomUUID();
+}
+
+/**
  * Snap a baseline date to the next billing-cycle boundary for a
  * customer on a fixed cadence. Used by scheduleInvoicesForEvent so
  * monthly / quarterly customers don't get billed immediately on quote
@@ -269,6 +296,10 @@ async function getOrCreateMonthlyDraft(customer, adminId, trx) {
     is_monthly_draft: true,
     monthly_period_start: periodStart.toISOString().slice(0, 10),
     monthly_period_end: periodEnd.toISOString().slice(0, 10),
+    // Migration 140 — each monthly-draft cycle is its own deal (no
+    // quote/contract chain). Fresh UUID at creation; subsequent line
+    // appends just mutate this same row, so the uuid sticks.
+    deal_uuid: crypto.randomUUID(),
     created_by_admin_id: adminId,
     created_at: new Date(),
     updated_at: new Date(),
@@ -594,7 +625,8 @@ async function createInvoice(payload, adminId, trx = db) {
   // internal helpers that need to mint a non-draft row (e.g. the
   // accumulator itself, or future test fixtures).
   if (customer.billing_cadence === 'monthly' && !payload._skipMonthlyRouting) {
-    return await appendToMonthlyDraft(payload, customer, adminId, trx);
+    const draft = await appendToMonthlyDraft(payload, customer, adminId, trx);
+    return { invoiceIds: draft?.id ? [draft.id] : [] };
   }
 
   const profile = (await businessProfileService.getProfile()).profile;
@@ -707,6 +739,57 @@ async function createInvoice(payload, adminId, trx = db) {
     }
   }
 
+  // Multi-installment auto-route. Priority:
+  //   1. payload.installments  (explicit override from the ad-hoc
+  //      editor panel — wins over any saved template)
+  //   2. snapshot.installments (loaded from the picked payment-timing
+  //      template above)
+  // If either yields ≥2 entries we delegate to spawnInstallmentInvoices
+  // (the same loop used by quote→invoice conversion) and return the
+  // array of created IDs. Single-installment plans fall through to
+  // the single-row insert below.
+  let installmentsForSpawn = null;
+  if (Array.isArray(payload.installments) && payload.installments.length > 1) {
+    installmentsForSpawn = payload.installments;
+  } else if (paymentTermSnapshot) {
+    const parsedSnap = typeof paymentTermSnapshot === 'string'
+      ? (() => { try { return JSON.parse(paymentTermSnapshot); } catch { return null; } })()
+      : paymentTermSnapshot;
+    if (parsedSnap && Array.isArray(parsedSnap.installments) && parsedSnap.installments.length > 1) {
+      installmentsForSpawn = parsedSnap.installments;
+    }
+  }
+  if (installmentsForSpawn) {
+    return await spawnInstallmentInvoices({
+      trx,
+      eventId: payload.eventId || null,
+      quoteId: payload.sourceQuoteId || null,
+      customer,
+      currency,
+      language,
+      lineItems: items,
+      totals: {
+        net: netMinor,
+        vatRate,
+        vat: vatMinor,
+        shipping: shippingMinor,
+        total: totalMinor,
+      },
+      installments: installmentsForSpawn,
+      eventDate: payload.eventDate || null,
+      adminId,
+      ccPdfEmail: payload.ccPdfEmail || null,
+      netDays: resolvedNetDays,
+      eventName: payload.eventName || null,
+      eventTimeStart: payload.eventTimeStart || null,
+      eventTimeEnd: payload.eventTimeEnd || null,
+      paymentNetDaysTemplateId,
+      paymentTimingTemplateId,
+      paymentTermSnapshot,
+      dealUuid: await resolveDealUuid(trx, payload),
+    });
+  }
+
   const row = {
     invoice_number: invoiceNumber,
     customer_account_id: payload.customerAccountId,
@@ -747,6 +830,11 @@ async function createInvoice(payload, adminId, trx = db) {
     // — invoice inherits the snapshot/global Skonto config unless
     // admin explicitly ticks "Disable Skonto" in the editor.
     skonto_disabled: Boolean(payload.skontoDisabled),
+    // Migration 140 — deal_uuid lineage. Priority: explicit payload
+    // (used by spawnInstallmentInvoices and Storno/reissue callers to
+    // force a specific value), source quote, source contract,
+    // otherwise fresh mint.
+    deal_uuid: await resolveDealUuid(trx, payload),
     created_by_admin_id: adminId,
     created_at: new Date(),
     updated_at: new Date(),
@@ -761,21 +849,34 @@ async function createInvoice(payload, adminId, trx = db) {
   }
 
   try { await logActivity('invoice_created', { invoiceId, invoiceNumber }, payload.eventId || null, `admin:${adminId}`); } catch (_) {}
-  return invoiceId;
+  return { invoiceIds: [invoiceId] };
 }
 
 /**
- * Fan-out helper called by quoteService.convertToEvent. Creates one
- * invoice row per installment with the right scheduled_send_at.
+ * Fan-out helper. Creates one invoice row per installment with the
+ * right `scheduled_send_at`, sequential invoice numbers, and per-
+ * slice totals. Used by:
+ *
+ *   - quoteService.convertToEvent / convertToInvoiceOnly — quote
+ *     conversion with multi-installment payment plans.
+ *   - createInvoice (this file) — when the standalone editor path
+ *     submits an installment array.
  *
  * Expects to be called inside an existing transaction.
+ *
+ * Returns `{ invoiceIds: number[] }` — ordered by installment_index
+ * so callers can navigate to the first or report N IDs.
+ *
+ * The legacy export name `scheduleInvoicesForEvent` is preserved as
+ * an alias for backward compatibility with quoteService callers; new
+ * code should reach for the clearer `spawnInstallmentInvoices`.
  */
-async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, currency, language,
+async function spawnInstallmentInvoices({ trx, eventId, quoteId, customer, currency, language,
                                           lineItems, totals, installments, eventDate, adminId,
                                           ccPdfEmail, netDays,
                                           eventName, eventTimeStart, eventTimeEnd,
                                           paymentNetDaysTemplateId, paymentTimingTemplateId,
-                                          paymentTermSnapshot }) {
+                                          paymentTermSnapshot, dealUuid }) {
   // Monthly-billing intercept (migration 128). Quote → invoice
   // conversion for a monthly-mode customer doesn't fan out N
   // installment invoices — the customer pays one consolidated bill
@@ -784,7 +885,7 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
   // below is bypassed; the quote's payment timing is irrelevant once
   // items flow into the monthly accumulator.
   if (customer && customer.billing_cadence === 'monthly') {
-    await appendToMonthlyDraft({
+    const draft = await appendToMonthlyDraft({
       customerAccountId: customer.id,
       lineItems: (lineItems || []).map((li) => ({
         position: li.position,
@@ -797,7 +898,7 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
       })),
       vatRate: totals?.vatRate,
     }, customer, adminId, trx);
-    return;
+    return { invoiceIds: draft?.id ? [draft.id] : [] };
   }
 
   // netDays drives the due-date offset on every scheduled invoice
@@ -807,6 +908,7 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
   const resolvedNetDays = ensureInt(netDays) || 30;
   const total = installments.length;
   const acceptanceTime = new Date();
+  const invoiceIds = [];
 
   for (let i = 0; i < total; i++) {
     const inst = installments[i];
@@ -894,6 +996,12 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
           ? paymentTermSnapshot
           : JSON.stringify(paymentTermSnapshot))
         : null,
+      // Migration 140 — every installment sibling shares one deal_uuid
+      // (passed in from the converting caller, ultimately the source
+      // quote's value). Defensive fallback to a fresh UUID if the
+      // caller didn't pass one — shouldn't happen on a migrated
+      // install but keeps the column non-null.
+      deal_uuid: dealUuid || crypto.randomUUID(),
       created_by_admin_id: adminId,
       created_at: new Date(),
       updated_at: new Date(),
@@ -989,8 +1097,13 @@ async function scheduleInvoicesForEvent({ trx, eventId, quoteId, customer, curre
       await logActivity('invoice_scheduled', { invoiceId, invoiceNumber, eventId, quoteId, scheduledSendAt },
         eventId, `admin:${adminId}`);
     } catch (_) {}
+    invoiceIds.push(invoiceId);
   }
+  return { invoiceIds };
 }
+
+// Backward-compat alias — older callers reference this name.
+const scheduleInvoicesForEvent = spawnInstallmentInvoices;
 
 async function buildInvoiceRenderContext(invoice, lineItems) {
   const { profile } = await businessProfileService.getProfile();
@@ -1587,6 +1700,9 @@ async function createStorno(originalId, adminId, trx = db) {
     cancels_invoice_id: original.id,
     replaces_invoice_id: null,
     cancellation_storno_id: null,
+    // Migration 140 — Storno belongs to the same deal as the invoice
+    // it cancels; both render together in the lineage view.
+    deal_uuid: original.deal_uuid || crypto.randomUUID(),
     created_at: now,
     updated_at: now,
   }).returning('id');
@@ -1771,7 +1887,7 @@ async function reissueInvoice(id, adminId) {
       details_text: li.details_text || null,
     }));
 
-    const newId = await createInvoice({
+    const { invoiceIds: reissuedIds } = await createInvoice({
       customerAccountId: original.customer_account_id,
       sourceQuoteId: original.source_quote_id || null,
       eventId: original.event_id || null,
@@ -1803,7 +1919,14 @@ async function reissueInvoice(id, adminId) {
       // standalone invoice. If the admin needs the same split they
       // can run the original conversion again from the quote.
       lineItems: liPayload,
+      // Migration 140 — reissue inherits the cancelled original's
+      // deal_uuid so Storno + replacement + cancelled all group
+      // under one deal lineage view.
+      dealUuid: original.deal_uuid || null,
     }, adminId, trx);
+    // Reissue always produces a single invoice (no installments
+    // forced), so the array length is 1.
+    const newId = reissuedIds[0];
 
     await trx('invoices').where({ id: newId }).update({
       replaces_invoice_id: id,
@@ -2763,6 +2886,7 @@ module.exports = {
   listInvoices,
   getInvoiceById,
   createInvoice,
+  spawnInstallmentInvoices,
   scheduleInvoicesForEvent,
   sendInvoice,
   sendReminder,

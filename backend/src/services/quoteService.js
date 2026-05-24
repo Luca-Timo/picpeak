@@ -499,6 +499,14 @@ async function createQuote(payload, adminId) {
       // legacy column stays nullable for backward compatibility.
       payment_net_days_template_id: payload.paymentNetDaysTemplateId || null,
       payment_timing_template_id: payload.paymentTimingTemplateId || null,
+      // Migration 142 — ad-hoc installments override (commit #6). When
+      // the editor's InstallmentsPanel is set the array lands here;
+      // composeSnapshotFromSplitFks then substitutes it for the
+      // template's installments field at every snapshot-read site
+      // (send, convertToEvent, convertToInvoiceOnly).
+      payment_term_installments_override: Array.isArray(payload.installments) && payload.installments.length > 0
+        ? JSON.stringify(payload.installments)
+        : null,
       net_amount_minor: totals.netAmountMinor,
       vat_rate: ensureNumber(payload.vatRate, 0),
       vat_amount_minor: totals.vatAmountMinor,
@@ -509,6 +517,11 @@ async function createQuote(payload, adminId) {
       internal_notes: payload.internalNotes || null,
       cc_pdf_email: payload.ccPdfEmail || null,
       business_bank_account_id: bank?.id || null,
+      // Migration 140 — cross-document lineage UUID. A freshly-created
+      // quote is always the root of its deal chain; mint a new one
+      // here and let convertQuoteToContract / convertQuoteToInvoices
+      // propagate it down.
+      deal_uuid: crypto.randomUUID(),
       created_by_admin_id: adminId,
       created_at: new Date(),
       updated_at: new Date(),
@@ -606,6 +619,15 @@ async function updateQuote(id, payload, adminId) {
       if (Object.prototype.hasOwnProperty.call(payload, api)) {
         updates[col] = payload[api];
       }
+    }
+    // Migration 142 — ad-hoc installments override (commit #6). Treated
+    // separately because it needs JSON encoding + "empty array means
+    // clear the override" semantics.
+    if (Object.prototype.hasOwnProperty.call(payload, 'installments')) {
+      updates.payment_term_installments_override =
+        Array.isArray(payload.installments) && payload.installments.length > 0
+          ? JSON.stringify(payload.installments)
+          : null;
     }
     await trx('quotes').where({ id }).update(updates);
 
@@ -1234,6 +1256,9 @@ async function convertToInvoiceOnly(quoteId, adminId, options = {}) {
       // selected payment-term template so each scheduled invoice's
       // due_date reflects what the customer agreed to on the quote.
       netDays: paymentTermSnapshot?.net_days,
+      // Migration 140 — every spawned invoice inherits the source
+      // quote's deal_uuid so quote + N invoices group under one deal.
+      dealUuid: quote.deal_uuid,
     });
 
     // Mark quote `converted` without a converted_event_id so the
@@ -1386,6 +1411,9 @@ async function convertToEvent(quoteId, adminId, options = {}) {
       // Net 14 / 30 / 60 / 90 carry through from the quote's
       // payment-term template (same as convertToInvoiceOnly).
       netDays: paymentTermSnapshot?.net_days,
+      // Migration 140 — propagate the quote's deal_uuid down through
+      // every spawned invoice (same as convertToInvoiceOnly above).
+      dealUuid: quote.deal_uuid,
     });
 
     await trx('quotes').where({ id: quote.id }).update({
@@ -1689,14 +1717,30 @@ async function composeSnapshotFromSplitFks(row) {
   const timing = await db('payment_timing_templates')
     .where({ id: row.payment_timing_template_id }).first();
   if (!netDays || !timing) return null;
+  // Migration 142 — ad-hoc installments override. When the quote
+  // carries a populated `payment_term_installments_override`, those
+  // rows replace the template's installments in the snapshot. Keeps
+  // every other snapshot field (net_days / skonto) coming from the
+  // chosen templates so the override only touches what the admin
+  // explicitly customised.
+  let override = null;
+  if (row.payment_term_installments_override) {
+    try {
+      override = typeof row.payment_term_installments_override === 'string'
+        ? JSON.parse(row.payment_term_installments_override)
+        : row.payment_term_installments_override;
+      if (!Array.isArray(override) || override.length === 0) override = null;
+    } catch (_) { override = null; }
+  }
+  const templateInstallments = typeof timing.installments === 'string'
+    ? JSON.parse(timing.installments)
+    : timing.installments;
   return {
     description: timing.description || netDays.description || null,
     net_days: netDays.net_days,
     skonto_percent: netDays.skonto_percent,
     skonto_within_days: netDays.skonto_within_days,
-    installments: typeof timing.installments === 'string'
-      ? JSON.parse(timing.installments)
-      : timing.installments,
+    installments: override || templateInstallments,
   };
 }
 

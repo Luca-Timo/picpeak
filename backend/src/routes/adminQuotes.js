@@ -74,6 +74,10 @@ function transformQuote(q) {
       isPassive: q.customer_password_hash == null,
     },
     status: q.status,
+    // Migration 140 — cross-document lineage UUID. Lets the frontend
+    // call /api/admin/deals/:uuid/documents in one shot to render the
+    // full lineage (quote + contract + N invoices + Storni).
+    dealUuid: q.deal_uuid || null,
     language: q.language,
     currency: q.currency,
     issueDate: q.issue_date,
@@ -211,6 +215,9 @@ function mapPayloadToService(body) {
     paymentTermTemplateId: 'paymentTermTemplateId',
     paymentNetDaysTemplateId: 'paymentNetDaysTemplateId',
     paymentTimingTemplateId: 'paymentTimingTemplateId',
+    // Ad-hoc installments override (commit #6). Stored on quotes
+    // as payment_term_installments_override via migration 142.
+    installments: 'installments',
     vatRate: 'vatRate', shippingAmountMinor: 'shippingAmountMinor',
     introText: 'introText', outroText: 'outroText',
     internalNotes: 'internalNotes', ccPdfEmail: 'ccPdfEmail',
@@ -310,6 +317,14 @@ const QUOTE_BODY_VALIDATORS = [
   body('paymentTermTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('paymentNetDaysTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('paymentTimingTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  // Ad-hoc installments override (commit #6 of the deal_uuid PR).
+  // Each row carries { label, percent, trigger, offset_days }; the
+  // service validates internal consistency (percents sum to 100).
+  body('installments').optional().isArray(),
+  body('installments.*.label').optional({ values: 'falsy' }).isString().isLength({ max: 128 }),
+  body('installments.*.percent').optional({ values: 'falsy' }).isFloat({ min: 0, max: 100 }),
+  body('installments.*.trigger').optional({ values: 'falsy' }).isIn(['quote_accepted', 'before_event', 'after_event', 'after_delivery', 'fixed_date']),
+  body('installments.*.offset_days').optional({ values: 'falsy' }).isInt(),
   body('vatRate').optional({ values: 'falsy' }).isFloat({ min: 0, max: 100 }),
   body('shippingAmountMinor').optional({ values: 'falsy' }).isInt({ min: 0 }),
   body('introText').optional({ values: 'falsy' }).isString().isLength({ max: 5000 }),

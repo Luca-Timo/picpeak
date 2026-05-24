@@ -10,6 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Send, Copy, ArrowRightCircle, Edit2, Receipt, CheckCircle2, ScrollText } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
 import { LinkedDocumentsCard, type LinkedDocumentRow } from '../../../components/admin/LinkedDocumentsCard';
+import { DocumentLineageCard } from '../../../components/admin/DocumentLineageCard';
 import { quotesService } from '../../../services/quotes.service';
 import { billsService } from '../../../services/bills.service';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
@@ -290,6 +291,15 @@ export const QuoteDetailPage: React.FC = () => {
         }
         return <LinkedDocumentsCard rows={rows} />;
       })()}
+
+      {/* Cross-document lineage via deal_uuid (migration 140). One UUID
+          groups every quote / contract / invoice / Storno / reissue
+          for this engagement; admin sees the full chain in one card. */}
+      <DocumentLineageCard
+        dealUuid={q.dealUuid}
+        current={{ kind: 'quote', id: q.id }}
+        className="mt-4"
+      />
 
       {q.internalNotes && (
         <Card>

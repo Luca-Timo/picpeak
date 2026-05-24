@@ -3589,6 +3589,8 @@
     },
     "recordPayment": "Zahlung erfassen",
     "savedToast": "Rechnung gespeichert.",
+    "savedToastMulti": "{{n}} Rechnungen erstellt.",
+    "saveAndSpawn": "{{n}} Rechnungen erstellen",
     "edit": "Rechnung bearbeiten",
     "customerSearch": "Kunde nach E-Mail oder Firma suchen…",
     "qrFormat": {
@@ -3655,7 +3657,18 @@
     "section": {
       "quotes": "Angebote",
       "invoices": "Rechnungen",
-      "paymentDefaults": "Standard-Zahlungsbedingungen"
+      "paymentDefaults": "Standard-Zahlungsbedingungen",
+      "installmentDefaults": "Standard-Trigger für Teilzahlungen"
+    },
+    "installmentDefaults": {
+      "help": "Vorbelegung der Trigger für neue Zeilen im Teilzahlungs-Panel. Pro-Dokument-Anpassungen überschreiben; bestehende Dokumente behalten ihren gespeicherten Plan.",
+      "trigger": {
+        "quote_accepted": "Bei Unterzeichnung / Erstellung",
+        "before_event": "Vor dem Anlass",
+        "after_event": "Nach dem Anlass",
+        "after_delivery": "Bei Lieferung (manuelle Freigabe)",
+        "fixed_date": "Festes Datum"
+      }
     },
     "paymentDefaults": {
       "help": "Wird bei jeder neuen Rechnung und jedem Angebot vorausgewählt. Im Editor lässt sich pro Dokument eine andere Kombination wählen.",
@@ -3693,6 +3706,15 @@
     },
     "crm_invoices_skonto_business_days": {
       "label": "Skonto-Frist (Werktage)"
+    },
+    "crm_invoices_installment_trigger_first": {
+      "label": "Trigger erste Teilzahlung"
+    },
+    "crm_invoices_installment_days_before_event": {
+      "label": "Tage vor dem Anlass (mittlere Teilzahlung)"
+    },
+    "crm_invoices_installment_days_after_event": {
+      "label": "Tage nach dem Anlass (letzte Teilzahlung)"
     },
     "crm_invoices_number_format": {
       "label": "Format Rechnungsnummer"
@@ -3737,6 +3759,41 @@
   },
   "linkedDocuments": {
     "title": "Verknüpfte Dokumente"
+  },
+  "dealLineage": {
+    "title": "Verknüpfte Dokumente",
+    "quotes": "Angebote",
+    "contracts": "Verträge",
+    "invoices": "Rechnungen",
+    "loading": "Verknüpfte Dokumente werden geladen…",
+    "error": "Verknüpfte Dokumente konnten nicht geladen werden.",
+    "empty": "Noch keine weiteren Dokumente in diesem Vorgang. Neue Rechnungen, Verträge oder Teilzahlungen erscheinen hier, sobald sie erstellt werden."
+  },
+  "installments": {
+    "enableLabel": "In Teilzahlungen aufteilen",
+    "advancedToggle": "Dynamische Trigger verwenden",
+    "simpleToggle": "Einfache Datumsauswahl verwenden",
+    "simpleHint": "Jede Zeile wird an einem festen Datum versendet. Wechsle zu dynamischen Triggern für Pläne, die an das Anlassdatum oder die Lieferung gekoppelt sind.",
+    "advancedHint": "Wähle einen Trigger (Angebot angenommen, vor/nach Anlass, bei Lieferung, festes Datum) und einen Offset in Tagen. Trigger lösen sich neu auf, wenn sich das Anlassdatum später verschiebt.",
+    "percent": "%",
+    "label": "Bezeichnung",
+    "labelPlaceholder": "Anzahlung / vor Anlass …",
+    "sendOn": "Versanddatum",
+    "trigger": "Trigger",
+    "offsetDays": "Offset (Tage)",
+    "onDeliveryHint": "Bei Lieferung — Admin gibt manuell frei. Für Änderungen auf erweitert umschalten.",
+    "addRow": "Teilzahlung hinzufügen",
+    "removeRow": "Zeile entfernen",
+    "total": "Summe",
+    "mustSumTo100": "muss 100 % ergeben",
+    "firstRowDefaultLabel": "Anzahlung",
+    "triggerOption": {
+      "quote_accepted": "Bei Unterzeichnung / Erstellung",
+      "before_event": "Vor dem Anlass",
+      "after_event": "Nach dem Anlass",
+      "after_delivery": "Bei Lieferung (manuelle Freigabe)",
+      "fixed_date": "Festes Datum"
+    }
   },
   "contracts": {
     "title": "Verträge",

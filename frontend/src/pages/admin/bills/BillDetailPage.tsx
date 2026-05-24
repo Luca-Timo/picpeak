@@ -10,6 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Send, CheckCircle, BellRing, XCircle, Truck, Edit2, RefreshCw } from 'lucide-react';
 import { Button, Card, Loading, Input } from '../../../components/common';
 import { LinkedDocumentsCard, type LinkedDocumentRow } from '../../../components/admin/LinkedDocumentsCard';
+import { DocumentLineageCard } from '../../../components/admin/DocumentLineageCard';
 import { billsService } from '../../../services/bills.service';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
@@ -337,6 +338,13 @@ export const BillDetailPage: React.FC = () => {
         }
         return <LinkedDocumentsCard rows={rows} />;
       })()}
+
+      {/* Cross-document lineage via deal_uuid (migration 140). */}
+      <DocumentLineageCard
+        dealUuid={inv.dealUuid}
+        current={{ kind: 'invoice', id: inv.id }}
+        className="mt-4"
+      />
 
       <Card>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">

@@ -15,6 +15,7 @@ import { contractsService } from '../../../services/contracts.service';
 import { businessProfileService } from '../../../services/businessProfile.service';
 import { CustomerPicker } from '../../../components/admin/CustomerPicker';
 import { LineItemsTable, type EditableLineItem } from '../../../components/admin/LineItemsTable';
+import { InstallmentsPanel } from '../../../components/admin/InstallmentsPanel';
 import { customerAdminService } from '../../../services/customerAdmin.service';
 import { userManagementService } from '../../../services/userManagement.service';
 import { settingsService } from '../../../services/settings.service';
@@ -71,6 +72,10 @@ export const BillEditorPage: React.FC = () => {
   // Migration 126 — per-invoice Skonto opt-out. Default false so new
   // invoices inherit whatever the template / global default offers.
   const [skontoDisabled, setSkontoDisabled] = useState(false);
+  // Ad-hoc installments (commit #6). null = single-invoice mode.
+  // Array = the plan; backend spawns N invoices on save when length≥2.
+  const [installments, setInstallments] = useState<import('../../../services/quotes.service').PaymentTermInstallment[] | null>(null);
+  const [installmentsValid, setInstallmentsValid] = useState(true);
   // Inline event snapshot (migration 123). Mirrors the quote editor's
   // event section — admin can type a free-text label without needing
   // an actual events row, and it carries through to the customer
@@ -345,6 +350,10 @@ export const BillEditorPage: React.FC = () => {
     // Per-invoice Skonto opt-out (migration 126). Always send so the
     // PUT handler can clear a previously-set opt-out by unchecking.
     skontoDisabled,
+    // Ad-hoc installments (commit #6). When set with ≥2 rows backend
+    // spawns N invoices via spawnInstallmentInvoices and returns
+    // { invoiceIds: [...] }; single-row or null → single invoice.
+    installments: installments || undefined,
     // Inline event snapshot (migration 123). Empty string → undefined
     // so the backend can distinguish "not provided" from a deliberate
     // clear (which the route's `optional({ values: 'falsy' })` already
@@ -384,9 +393,17 @@ export const BillEditorPage: React.FC = () => {
       if (then === 'preview') {
         const url = await billsService.pdfUrl(saved.invoice.id);
         if (previewWindow) previewWindow.location.href = url;
+      } else if (saved.invoiceIds && saved.invoiceIds.length > 1) {
+        // Multi-installment spawn: backend created N invoices. Toast
+        // the count and redirect to the first sibling.
+        toast.success(t('bills.savedToastMulti',
+          'Created {{n}} invoices.', { n: saved.invoiceIds.length }));
       } else {
         toast.success(t('bills.savedToast', 'Invoice saved.'));
       }
+      // Redirect to the first invoice (single case = the only invoice;
+      // multi case = first installment, admin navigates to siblings
+      // via the lineage card).
       navigate(`/admin/clients/bills/${saved.invoice.id}`);
     } catch (err: any) {
       if (previewWindow) previewWindow.close();
@@ -426,8 +443,11 @@ export const BillEditorPage: React.FC = () => {
           <Button variant="outline" onClick={handlePreviewUnsaved} disabled={busy}>
             <Eye className="w-4 h-4 mr-1" />{t('common.preview', 'Preview')}
           </Button>
-          <Button onClick={() => handleSave()} disabled={busy}>
-            <SaveIcon className="w-4 h-4 mr-1" />{t('common.save', 'Save')}
+          <Button onClick={() => handleSave()} disabled={busy || !installmentsValid}>
+            <SaveIcon className="w-4 h-4 mr-1" />
+            {installments && installments.length > 1
+              ? t('bills.saveAndSpawn', 'Create {{n}} invoices', { n: installments.length })
+              : t('common.save', 'Save')}
           </Button>
         </div>
       </div>
@@ -618,6 +638,19 @@ export const BillEditorPage: React.FC = () => {
           {t('bills.field.paymentTermHelp',
             'Net days + Skonto for this invoice. Leave blank to inherit from the source quote or the global CRM defaults.')}
         </p>
+
+        {/* Ad-hoc installments panel (commit #6). When the admin builds
+            a multi-row plan and clicks Save, the backend spawns one
+            invoice per row via spawnInstallmentInvoices (commit #4)
+            and returns the array of new ids. */}
+        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+          <InstallmentsPanel
+            value={installments}
+            onChange={setInstallments}
+            onValidityChange={setInstallmentsValid}
+            eventDate={eventDate || null}
+          />
+        </div>
       </Card>
 
       <Card>

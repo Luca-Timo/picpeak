@@ -32,6 +32,9 @@ export interface InvoiceSummary {
    *  views. */
   kind: InvoiceKind;
   invoiceNumber: string;
+  /** Cross-document lineage UUID (migration 140). See the equivalent
+   *  field on QuoteSummary. */
+  dealUuid: string | null;
   customerAccountId: number;
   customer: {
     email: string | null;
@@ -157,6 +160,9 @@ export interface InvoiceWithLineItems {
   invoice: InvoiceDetail;
   lineItems: QuoteLineItem[];
   payments: InvoicePayment[];
+  /** Migration 140 + commit #4. Always present on create; single
+   *  invoice = one-element array, multi-installment spawn = N. */
+  invoiceIds?: number[];
 }
 
 export interface InvoiceCreatePayload {
@@ -187,6 +193,11 @@ export interface InvoiceCreatePayload {
   paymentTimingTemplateId?: number | null;
   // Per-invoice Skonto opt-out (migration 126).
   skontoDisabled?: boolean;
+  // Ad-hoc installments (commit #6 of the deal_uuid PR). When set
+  // with ≥2 rows, backend spawns N invoices via
+  // spawnInstallmentInvoices and returns invoiceIds[]. Single row or
+  // omitted → single invoice.
+  installments?: import('./quotes.service').PaymentTermInstallment[];
   // Inline event snapshot (migration 123). All optional — standalone
   // invoices may have none of these.
   eventName?: string;

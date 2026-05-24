@@ -34,6 +34,10 @@ export interface QuoteLineItem {
 export interface QuoteSummary {
   id: number;
   quoteNumber: string;
+  /** Cross-document lineage UUID (migration 140). Used by the
+   *  DocumentLineageCard on the detail page to fetch every other
+   *  doc — contract, invoices, Storni — that shares this deal. */
+  dealUuid: string | null;
   customerAccountId: number;
   customer: {
     email: string | null;
@@ -172,6 +176,10 @@ export interface QuoteCreatePayload {
    *  together for the new path to engage on the backend. */
   paymentNetDaysTemplateId?: number;
   paymentTimingTemplateId?: number;
+  /** Ad-hoc installments (commit #6). Overrides the picked timing
+   *  template's installments on the snapshot. Empty/missing = use
+   *  the template's value as-is. */
+  installments?: PaymentTermInstallment[];
   vatRate?: number;
   shippingAmountMinor?: number;
   introText?: string;

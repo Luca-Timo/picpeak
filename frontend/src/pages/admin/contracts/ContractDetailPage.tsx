@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
 import { LinkedDocumentsCard, type LinkedDocumentRow } from '../../../components/admin/LinkedDocumentsCard';
+import { DocumentLineageCard } from '../../../components/admin/DocumentLineageCard';
 import {
   contractsService,
   type ContractStatus,
@@ -590,6 +591,13 @@ export const ContractDetailPage: React.FC = () => {
         }
         return <LinkedDocumentsCard rows={rows} className="mb-4" />;
       })()}
+
+      {/* Cross-document lineage via deal_uuid (migration 140). */}
+      <DocumentLineageCard
+        dealUuid={c.dealUuid}
+        current={{ kind: 'contract', id: c.id }}
+        className="mb-4"
+      />
 
       {/* Block summary */}
       <Card padding="lg">

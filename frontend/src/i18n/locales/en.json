@@ -3577,6 +3577,8 @@
     },
     "recordPayment": "Record payment",
     "savedToast": "Invoice saved.",
+    "savedToastMulti": "Created {{n}} invoices.",
+    "saveAndSpawn": "Create {{n}} invoices",
     "edit": "Edit invoice",
     "customerSearch": "Search by email or company…",
     "qrFormat": {
@@ -3652,11 +3654,22 @@
     "section": {
       "quotes": "Quotes",
       "invoices": "Invoices",
-      "paymentDefaults": "Default payment conditions"
+      "paymentDefaults": "Default payment conditions",
+      "installmentDefaults": "Default installment triggers"
     },
     "paymentDefaults": {
       "help": "Pre-filled on every new quote and invoice. The editor still lets you pick a different combination per document.",
       "none": "— No default —"
+    },
+    "installmentDefaults": {
+      "help": "Pre-fill the trigger for fresh rows in the Installments panel. Per-document edits override; existing documents keep their snapshotted plan.",
+      "trigger": {
+        "quote_accepted": "At signing / creation",
+        "before_event": "Before event",
+        "after_event": "After event",
+        "after_delivery": "On delivery (manual release)",
+        "fixed_date": "Fixed date"
+      }
     },
     "crm_invoices_default_payment_net_days_template_id": {
       "label": "Default net days"
@@ -3690,6 +3703,15 @@
     },
     "crm_invoices_skonto_business_days": {
       "label": "Skonto window (business days)"
+    },
+    "crm_invoices_installment_trigger_first": {
+      "label": "First installment trigger"
+    },
+    "crm_invoices_installment_days_before_event": {
+      "label": "Days before event (middle installment)"
+    },
+    "crm_invoices_installment_days_after_event": {
+      "label": "Days after event (final installment)"
     },
     "crm_invoices_number_format": {
       "label": "Invoice number format"
@@ -3734,6 +3756,41 @@
   },
   "linkedDocuments": {
     "title": "Linked documents"
+  },
+  "dealLineage": {
+    "title": "Related documents",
+    "quotes": "Quotes",
+    "contracts": "Contracts",
+    "invoices": "Invoices",
+    "loading": "Loading related documents…",
+    "error": "Could not load related documents.",
+    "empty": "No other documents share this deal yet. New invoices, contracts, or installments will show up here once created."
+  },
+  "installments": {
+    "enableLabel": "Split into installments",
+    "advancedToggle": "Use dynamic triggers",
+    "simpleToggle": "Use simple date picker",
+    "simpleHint": "Each row fires on a specific date. Switch to dynamic triggers for plans tied to event date or delivery.",
+    "advancedHint": "Pick a trigger (quote accepted, before/after event, on delivery, fixed date) plus offset in days. Triggers re-resolve if the event date later shifts.",
+    "percent": "%",
+    "label": "Label",
+    "labelPlaceholder": "Anzahlung / before event …",
+    "sendOn": "Send on",
+    "trigger": "Trigger",
+    "offsetDays": "Offset (days)",
+    "onDeliveryHint": "On delivery — admin releases manually. Switch to advanced to change.",
+    "addRow": "Add installment",
+    "removeRow": "Remove row",
+    "total": "Total",
+    "mustSumTo100": "must sum to 100%",
+    "firstRowDefaultLabel": "Down payment",
+    "triggerOption": {
+      "quote_accepted": "At signing / creation",
+      "before_event": "Before event",
+      "after_event": "After event",
+      "after_delivery": "On delivery (manual release)",
+      "fixed_date": "Fixed date"
+    }
   },
   "contracts": {
     "title": "Contracts",
