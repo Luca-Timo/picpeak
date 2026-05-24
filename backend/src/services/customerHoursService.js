@@ -415,12 +415,16 @@ async function billUnbilledEntries(customerId, adminId) {
       return { ...li, position: idx + 1 };
     });
 
-    const invoiceId = await invoiceService.createInvoice({
+    // No installment metadata — hour-billing always mints a single
+    // standalone invoice. createInvoice returns `{ invoiceIds: [N] }`
+    // since migration 140 / the spawner refactor; extract the one id.
+    const { invoiceIds } = await invoiceService.createInvoice({
       customerAccountId: customer.id,
       lineItems,
       // Reuse the customer/business currency-fallback chain inside
-      // createInvoice. No installment metadata — single standalone bill.
+      // createInvoice.
     }, adminId, trx);
+    const invoiceId = invoiceIds[0];
 
     // Locate the newly-inserted line item ids in insertion order so
     // each entry gets stamped with its specific row.

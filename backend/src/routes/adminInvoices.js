@@ -363,11 +363,19 @@ router.post(
   [body('customerAccountId').isInt({ min: 1 }), ...INVOICE_BODY_VALIDATORS],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const id = await invoiceService.createInvoice(mapPayloadToService(req.body), req.admin.id);
-    const data = await invoiceService.getInvoiceById(id);
+    // createInvoice always returns `{ invoiceIds: number[] }` —
+    // single-installment / standalone case is a one-element array,
+    // multi-installment is N (auto-routed through
+    // spawnInstallmentInvoices). The response surfaces the first
+    // invoice's payload (the one the editor redirects to) plus the
+    // full id list so the editor can show "N invoices created".
+    const { invoiceIds } = await invoiceService.createInvoice(mapPayloadToService(req.body), req.admin.id);
+    const firstId = invoiceIds[0];
+    const data = await invoiceService.getInvoiceById(firstId);
     return successResponse(res, {
       invoice: transformInvoice(data.invoice),
       lineItems: data.lineItems.map(transformLineItem),
+      invoiceIds,
     }, 201, 'Invoice created');
   })
 );
