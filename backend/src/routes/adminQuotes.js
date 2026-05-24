@@ -74,6 +74,10 @@ function transformQuote(q) {
       isPassive: q.customer_password_hash == null,
     },
     status: q.status,
+    // Migration 140 — cross-document lineage UUID. Lets the frontend
+    // call /api/admin/deals/:uuid/documents in one shot to render the
+    // full lineage (quote + contract + N invoices + Storni).
+    dealUuid: q.deal_uuid || null,
     language: q.language,
     currency: q.currency,
     issueDate: q.issue_date,

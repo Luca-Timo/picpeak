@@ -86,6 +86,10 @@ function transformInvoice(i) {
       // boolean — the hash itself is dropped here.
       isPassive: i.customer_password_hash == null,
     },
+    // Migration 140 — cross-document lineage UUID. See adminQuotes
+    // transform for the rationale; lets the lineage card pull the
+    // whole deal in one query.
+    dealUuid: i.deal_uuid || null,
     sourceQuoteId: i.source_quote_id,
     sourceQuoteNumber: i.source_quote_number || null,
     // Migration 130 lineage: set by contractService.convertToInvoiceOnly
