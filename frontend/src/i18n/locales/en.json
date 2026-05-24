@@ -3757,6 +3757,15 @@
   "linkedDocuments": {
     "title": "Linked documents"
   },
+  "dealLineage": {
+    "title": "Related documents",
+    "quotes": "Quotes",
+    "contracts": "Contracts",
+    "invoices": "Invoices",
+    "loading": "Loading related documents…",
+    "error": "Could not load related documents.",
+    "empty": "No other documents share this deal yet. New invoices, contracts, or installments will show up here once created."
+  },
   "installments": {
     "enableLabel": "Split into installments",
     "advancedToggle": "Use dynamic triggers",

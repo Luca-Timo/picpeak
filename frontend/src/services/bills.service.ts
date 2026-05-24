@@ -32,6 +32,9 @@ export interface InvoiceSummary {
    *  views. */
   kind: InvoiceKind;
   invoiceNumber: string;
+  /** Cross-document lineage UUID (migration 140). See the equivalent
+   *  field on QuoteSummary. */
+  dealUuid: string | null;
   customerAccountId: number;
   customer: {
     email: string | null;

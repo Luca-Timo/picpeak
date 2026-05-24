@@ -34,6 +34,10 @@ export interface QuoteLineItem {
 export interface QuoteSummary {
   id: number;
   quoteNumber: string;
+  /** Cross-document lineage UUID (migration 140). Used by the
+   *  DocumentLineageCard on the detail page to fetch every other
+   *  doc — contract, invoices, Storni — that shares this deal. */
+  dealUuid: string | null;
   customerAccountId: number;
   customer: {
     email: string | null;

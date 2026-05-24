@@ -3760,6 +3760,15 @@
   "linkedDocuments": {
     "title": "Verknüpfte Dokumente"
   },
+  "dealLineage": {
+    "title": "Verknüpfte Dokumente",
+    "quotes": "Angebote",
+    "contracts": "Verträge",
+    "invoices": "Rechnungen",
+    "loading": "Verknüpfte Dokumente werden geladen…",
+    "error": "Verknüpfte Dokumente konnten nicht geladen werden.",
+    "empty": "Noch keine weiteren Dokumente in diesem Vorgang. Neue Rechnungen, Verträge oder Teilzahlungen erscheinen hier, sobald sie erstellt werden."
+  },
   "installments": {
     "enableLabel": "In Teilzahlungen aufteilen",
     "advancedToggle": "Dynamische Trigger verwenden",
