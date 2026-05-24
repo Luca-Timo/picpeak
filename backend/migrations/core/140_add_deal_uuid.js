@@ -8,42 +8,30 @@
  * Storno + reissue chains). New documents inherit the UUID from their
  * parent; orphan creates mint a fresh one.
  *
- * Existing data is backfilled here. The walker has two phases:
+ * Existing data is backfilled in strict dependency order so chained
+ * docs share one uuid:
  *
- *   Pass A (downward) — for any row missing deal_uuid, copy from any
- *   parent whose deal_uuid is already set. Parent references:
- *     - contracts.source_quote_id          → quotes.deal_uuid
- *     - invoices.source_quote_id           → quotes.deal_uuid
- *     - invoices.source_contract_id        → contracts.deal_uuid
- *     - invoices.cancels_invoice_id        → invoices.deal_uuid
- *     - invoices.replaces_invoice_id       → invoices.deal_uuid
+ *   1. Quotes — always roots in the deal-lineage sense. Each NULL
+ *      quote gets a fresh uuid.
+ *   2. Contracts — inherit from source_quote_id if present; else
+ *      mint fresh. By this point every referenced quote already has
+ *      a uuid, so chains resolve cleanly in one pass.
+ *   3. Invoices — multi-pass loop, inheritance priority:
+ *        source_quote_id → source_contract_id → cancels_invoice_id
+ *        → replaces_invoice_id, first hit wins.
+ *      Multiple passes because Storno + reissue chains reference
+ *      other invoices: a Storno of invoice X needs X minted first.
+ *      Any invoice still unresolved after 10 passes is a true
+ *      orphan and gets a fresh uuid.
  *
- *   Pass B (upward) — for any row missing deal_uuid, copy from any
- *   child that already has one. Catches the case where the leaf was
- *   minted first (e.g. an invoice that got a UUID via a sibling) and
- *   its parent quote is still bare.
- *
- *   Pass C (orphan) — anything still NULL gets a fresh UUID. Then we
- *   loop back to A+B so the fresh UUID propagates to children.
- *
- * Loop converges because each pass either assigns a UUID (state
- * change) or doesn't (terminate). Idempotent: re-running the migration
- * is a no-op because every row already has a deal_uuid.
+ * Idempotent — every step uses `whereNull('deal_uuid')` so re-running
+ * the migration is a no-op on rows that already have a uuid.
  *
  * Schema choice: knex `table.uuid()` maps to `uuid` on Postgres and
  * `char(36)` on SQLite — cross-dialect safe.
  */
 
 const crypto = require('crypto');
-
-// Ordered tuples of (childTable, fkColumn, parentTable) used by Pass A.
-const DOWNWARD_LINKS = [
-  ['contracts', 'source_quote_id', 'quotes'],
-  ['invoices', 'source_quote_id', 'quotes'],
-  ['invoices', 'source_contract_id', 'contracts'],
-  ['invoices', 'cancels_invoice_id', 'invoices'],
-  ['invoices', 'replaces_invoice_id', 'invoices'],
-];
 
 async function addColumn(knex, table) {
   if (!(await knex.schema.hasTable(table))) return;
@@ -64,103 +52,105 @@ async function dropColumn(knex, table) {
 }
 
 /**
- * One downward propagation pass. Returns the number of rows updated.
- * SQLite + Postgres both accept a correlated subquery in UPDATE; we
- * use this shape rather than UPDATE…FROM to stay portable.
+ * Backfill in strict dependency order so chained docs share one
+ * uuid. A naive "mint a uuid for every NULL row, then propagate"
+ * approach silently fails because by the time propagation runs,
+ * every chained row already has its own uuid and the WHERE-NULL
+ * filter skips them — producing N independent uuids for what should
+ * have been one connected component.
+ *
+ * Order:
+ *   1. Quotes — always roots in the deal-lineage sense. Each NULL
+ *      quote gets a fresh uuid.
+ *   2. Contracts — inherit from source_quote_id if present, else
+ *      fresh.
+ *   3. Invoices — inherit from source_quote_id → source_contract_id
+ *      → cancels_invoice_id → replaces_invoice_id, first hit wins.
+ *      Looped because Storno + reissue chains reference other
+ *      invoices: a Storno of invoice X needs X to already have a
+ *      uuid before it can inherit. Up to 10 passes; any invoice
+ *      whose chain still resolves to NULL after that gets a fresh
+ *      uuid (true orphan).
+ *
+ * Idempotent: every step uses `whereNull('deal_uuid')` so re-running
+ * is a no-op on rows that already have a uuid.
  */
-async function downwardPass(knex) {
-  let updated = 0;
-  for (const [child, fk, parent] of DOWNWARD_LINKS) {
-    const hasChild = await knex.schema.hasTable(child);
-    const hasParent = await knex.schema.hasTable(parent);
-    if (!hasChild || !hasParent) continue;
-    const hasChildFk = await knex.schema.hasColumn(child, fk);
-    if (!hasChildFk) continue;
-    // Pull (child_id, parent.deal_uuid) for child rows without a uuid
-    // whose parent does have one, and write them back. Doing this in
-    // node-land sidesteps cross-dialect UPDATE FROM quirks.
-    const rows = await knex(child)
-      .leftJoin(parent, `${child}.${fk}`, `${parent}.id`)
-      .whereNull(`${child}.deal_uuid`)
-      .whereNotNull(`${parent}.deal_uuid`)
-      .select(`${child}.id`, `${parent}.deal_uuid as parent_uuid`);
+async function backfill(knex) {
+  // 1. Quotes — fresh uuid per row.
+  if (await knex.schema.hasTable('quotes')) {
+    const rows = await knex('quotes').whereNull('deal_uuid').select('id');
     for (const r of rows) {
-      await knex(child).where({ id: r.id }).update({ deal_uuid: r.parent_uuid });
-      updated += 1;
+      await knex('quotes').where({ id: r.id }).update({ deal_uuid: crypto.randomUUID() });
     }
   }
-  return updated;
-}
 
-/**
- * One upward propagation pass. For each table, look at any child
- * row that DOES have a deal_uuid pointing at this row, and copy back.
- * Uses the same DOWNWARD_LINKS table inverted.
- */
-async function upwardPass(knex) {
-  let updated = 0;
-  for (const [child, fk, parent] of DOWNWARD_LINKS) {
-    const hasChild = await knex.schema.hasTable(child);
-    const hasParent = await knex.schema.hasTable(parent);
-    if (!hasChild || !hasParent) continue;
-    const hasChildFk = await knex.schema.hasColumn(child, fk);
-    if (!hasChildFk) continue;
-    // For each parent row without a uuid, find SOME child with the FK
-    // pointing at it that has one. First match wins; subsequent
-    // children with the same uuid are no-ops because they're already
-    // consistent (siblings share a uuid by construction).
-    const candidates = await knex(parent)
-      .whereNull(`${parent}.deal_uuid`)
-      .select('id');
-    for (const cand of candidates) {
-      const childRow = await knex(child)
-        .where({ [fk]: cand.id })
-        .whereNotNull('deal_uuid')
-        .first('deal_uuid');
-      if (childRow) {
-        await knex(parent).where({ id: cand.id }).update({ deal_uuid: childRow.deal_uuid });
+  // 2. Contracts — inherit from source_quote_id if available.
+  if (await knex.schema.hasTable('contracts')) {
+    const hasSourceQuoteFk = await knex.schema.hasColumn('contracts', 'source_quote_id');
+    const rows = await knex('contracts')
+      .whereNull('deal_uuid')
+      .select(['id', ...(hasSourceQuoteFk ? ['source_quote_id'] : [])]);
+    for (const c of rows) {
+      let uuid = null;
+      if (hasSourceQuoteFk && c.source_quote_id) {
+        const q = await knex('quotes').where({ id: c.source_quote_id }).first('deal_uuid');
+        uuid = q?.deal_uuid || null;
+      }
+      uuid = uuid || crypto.randomUUID();
+      await knex('contracts').where({ id: c.id }).update({ deal_uuid: uuid });
+    }
+  }
+
+  // 3. Invoices — multi-pass inheritance because Storno + reissue
+  //    chains reference other invoices. Each pass picks up rows
+  //    whose chain root now has a uuid.
+  if (!(await knex.schema.hasTable('invoices'))) return;
+  const hasSrcQuote = await knex.schema.hasColumn('invoices', 'source_quote_id');
+  const hasSrcContract = await knex.schema.hasColumn('invoices', 'source_contract_id');
+  const hasCancels = await knex.schema.hasColumn('invoices', 'cancels_invoice_id');
+  const hasReplaces = await knex.schema.hasColumn('invoices', 'replaces_invoice_id');
+  const invoiceSelectCols = ['id'];
+  if (hasSrcQuote) invoiceSelectCols.push('source_quote_id');
+  if (hasSrcContract) invoiceSelectCols.push('source_contract_id');
+  if (hasCancels) invoiceSelectCols.push('cancels_invoice_id');
+  if (hasReplaces) invoiceSelectCols.push('replaces_invoice_id');
+
+  for (let iter = 0; iter < 10; iter += 1) {
+    const rows = await knex('invoices').whereNull('deal_uuid').select(invoiceSelectCols);
+    if (rows.length === 0) break;
+    let updated = 0;
+    for (const inv of rows) {
+      let uuid = null;
+      if (hasSrcQuote && inv.source_quote_id) {
+        const q = await knex('quotes').where({ id: inv.source_quote_id }).first('deal_uuid');
+        uuid = q?.deal_uuid || null;
+      }
+      if (!uuid && hasSrcContract && inv.source_contract_id) {
+        const c = await knex('contracts').where({ id: inv.source_contract_id }).first('deal_uuid');
+        uuid = c?.deal_uuid || null;
+      }
+      if (!uuid && hasCancels && inv.cancels_invoice_id) {
+        const i = await knex('invoices').where({ id: inv.cancels_invoice_id }).first('deal_uuid');
+        uuid = i?.deal_uuid || null;
+      }
+      if (!uuid && hasReplaces && inv.replaces_invoice_id) {
+        const i = await knex('invoices').where({ id: inv.replaces_invoice_id }).first('deal_uuid');
+        uuid = i?.deal_uuid || null;
+      }
+      if (uuid) {
+        await knex('invoices').where({ id: inv.id }).update({ deal_uuid: uuid });
         updated += 1;
       }
     }
-  }
-  return updated;
-}
-
-/**
- * Mint a fresh UUID for every row still missing one. Runs after
- * propagation has converged. Then we re-run propagation so the new
- * UUIDs reach their connected component.
- */
-async function mintOrphans(knex) {
-  let minted = 0;
-  for (const table of ['quotes', 'contracts', 'invoices']) {
-    if (!(await knex.schema.hasTable(table))) continue;
-    const rows = await knex(table).whereNull('deal_uuid').select('id');
-    for (const r of rows) {
-      await knex(table).where({ id: r.id }).update({ deal_uuid: crypto.randomUUID() });
-      minted += 1;
+    if (updated === 0) {
+      // None of the remaining rows resolved through their chain.
+      // These are true orphans (no parent FKs set OR all parents
+      // unreachable). Mint fresh and break out.
+      for (const inv of rows) {
+        await knex('invoices').where({ id: inv.id }).update({ deal_uuid: crypto.randomUUID() });
+      }
+      break;
     }
-  }
-  return minted;
-}
-
-async function backfill(knex) {
-  // Phase 1: propagate any existing deal_uuids (none yet on first run,
-  // but the same code path handles incremental re-application).
-  for (let i = 0; i < 10; i += 1) {
-    const a = await downwardPass(knex);
-    const b = await upwardPass(knex);
-    if (a + b === 0) break;
-  }
-  // Phase 2: orphans get fresh UUIDs.
-  const minted = await mintOrphans(knex);
-  if (minted === 0) return;
-  // Phase 3: propagate the fresh UUIDs through their connected
-  // components (orphans may have descendants that were also NULL).
-  for (let i = 0; i < 10; i += 1) {
-    const a = await downwardPass(knex);
-    const b = await upwardPass(knex);
-    if (a + b === 0) break;
   }
 }
 
