@@ -247,28 +247,26 @@ export const CalendarPage: React.FC = () => {
     || Intl.DateTimeFormat().resolvedOptions().timeZone
     || 'UTC';
 
-  // Sync the fetched items into FC's eventStore imperatively whenever
-  // the response changes. The previous shape passed `events={fcEvents}`
-  // to FullCalendar, but the React wrapper's prop-diffing path has
-  // proven unreliable on the `[] → [N entries]` transition that fires
-  // after a hard refresh: the new entries silently fail to render
-  // until the next interaction. H.1 already established this pattern
-  // for newly-created entries (addEvent on the FC API); extending it
-  // to the full set on every itemsResp change makes refresh reliable.
+  // Map backend → FC event shape. Recomputed on every items change;
+  // the cost is tiny relative to FC's render path.
+  const fcEvents = useMemo(
+    () => (itemsResp?.items || []).map(mapItemToFcEvent),
+    [itemsResp],
+  );
+
+  // Force FullCalendar to remount once data first arrives. The events
+  // prop's diff path on @fullcalendar/react 6.1 has proven unreliable
+  // on the `[] → [N entries]` transition that fires after a hard
+  // refresh — entries silently fail to render until the next
+  // interaction. Mounting FC fresh with the events already in hand
+  // bypasses that diff entirely.
   //
-  // The setQueriesData merge in HourEntryDragCreateModal still feeds
-  // through here — when a new entry is added via addEvent in
-  // onCreated and the cache mutates, the next itemsResp reference
-  // shift triggers this effect to remove + re-add, ensuring the
-  // optimistic entry survives the round-trip.
-  useEffect(() => {
-    const api = calendarRef.current?.getApi();
-    if (!api || !itemsResp) return;
-    api.getEvents().forEach((e) => e.remove());
-    for (const item of itemsResp.items) {
-      api.addEvent(mapItemToFcEvent(item));
-    }
-  }, [itemsResp]);
+  // The key transitions exactly once per page load: `'empty'` while
+  // the first useQuery fetch is in flight, then `'loaded'` for the
+  // rest of the session. Subsequent events-prop updates (range
+  // changes, drag-create cache merges) flow through the normal diff
+  // path; the issue is specific to the first non-empty render.
+  const fcKey = itemsResp ? 'loaded' : 'empty';
 
   // Persist view changes. We don't use FC's viewClassNames or similar
   // — the explicit toggle buttons drive both the FC instance + the
@@ -480,6 +478,7 @@ export const CalendarPage: React.FC = () => {
           </div>
         )}
         <FullCalendar
+          key={fcKey}
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
           initialView={view}
@@ -523,12 +522,10 @@ export const CalendarPage: React.FC = () => {
           editable={hoursLoggingEnabled}
           // FullCalendar quirk: selecting on the all-day row fires
           // with allDay=true; the drag-create handler ignores those.
+          events={fcEvents}
           eventDrop={handleEventDrop}
           eventResize={handleEventResize}
           select={handleDateSelect}
-          // events prop omitted on purpose — managed imperatively via
-          // the itemsResp useEffect above so prop-diffing doesn't drop
-          // entries on the initial fetch after a hard refresh.
         />
       </Card>
 
