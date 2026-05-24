@@ -91,9 +91,17 @@ function mapItemToFcEvent(item: CalendarItem): EventInput {
     startEditable: editable,
   };
 
-  const dateStr = (item as { eventDate?: string; entryDate?: string }).eventDate
+  // Backend should return YYYY-MM-DD, but a prior bug (a pg date
+  // column round-tripping as a full ISO timestamp like
+  // "2026-05-18T00:00:00.000Z") slipped through and ended up
+  // concatenated into FC start strings as
+  // "2026-05-18T00:00:00.000ZT09:00", which FC parsed to NaN and
+  // silently dropped. Slice to 10 chars here as a safety belt so any
+  // future Date-vs-string drift on the backend can't repeat that.
+  const rawDate = (item as { eventDate?: string; entryDate?: string }).eventDate
     || (item as { entryDate?: string }).entryDate
     || '';
+  const dateStr = typeof rawDate === 'string' ? rawDate.slice(0, 10) : '';
 
   if (item.kind === 'event') {
     base.title = item.eventName || 'Event';
@@ -253,20 +261,6 @@ export const CalendarPage: React.FC = () => {
     () => (itemsResp?.items || []).map(mapItemToFcEvent),
     [itemsResp],
   );
-
-  // Force FullCalendar to remount once data first arrives. The events
-  // prop's diff path on @fullcalendar/react 6.1 has proven unreliable
-  // on the `[] → [N entries]` transition that fires after a hard
-  // refresh — entries silently fail to render until the next
-  // interaction. Mounting FC fresh with the events already in hand
-  // bypasses that diff entirely.
-  //
-  // The key transitions exactly once per page load: `'empty'` while
-  // the first useQuery fetch is in flight, then `'loaded'` for the
-  // rest of the session. Subsequent events-prop updates (range
-  // changes, drag-create cache merges) flow through the normal diff
-  // path; the issue is specific to the first non-empty render.
-  const fcKey = itemsResp ? 'loaded' : 'empty';
 
   // Persist view changes. We don't use FC's viewClassNames or similar
   // — the explicit toggle buttons drive both the FC instance + the
@@ -478,7 +472,6 @@ export const CalendarPage: React.FC = () => {
           </div>
         )}
         <FullCalendar
-          key={fcKey}
           ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
           initialView={view}

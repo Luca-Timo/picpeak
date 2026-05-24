@@ -77,6 +77,36 @@ const PENDING_QUOTE_STATUSES = ['sent', 'accepted'];
 const PENDING_CONTRACT_STATUSES = ['signed_by_customer', 'fully_signed'];
 
 /**
+ * Normalise a date column value to the `YYYY-MM-DD` string the
+ * frontend mapper expects.
+ *
+ * Different drivers return the value differently:
+ *   - SQLite (dev) returns a string like "2026-05-18" — slice it.
+ *   - node-postgres (prod) returns a JS Date set to UTC midnight of
+ *     the stored day — extract the UTC components.
+ *
+ * The previous shape kept the Date object as-is in the JSON response
+ * ("2026-05-18T00:00:00.000Z"), which the frontend then concatenated
+ * with the entry time as `${dateStr}T${time}` to feed FullCalendar.
+ * The resulting `"2026-05-18T00:00:00.000ZT09:00"` was invalid ISO,
+ * FC parsed it to NaN, and the entry silently failed to render —
+ * making logged hours "disappear" on every hard refresh (entries
+ * created in-session still appeared because the imperative addEvent
+ * received a clean YYYY-MM-DD from the modal).
+ */
+function toIsoDateString(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value.slice(0, 10);
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const y = value.getUTCFullYear();
+    const m = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(value.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return null;
+}
+
+/**
  * GET /api/admin/calendar/items?from=YYYY-MM-DD&to=YYYY-MM-DD
  *
  * Returns `{ items: [...], range: { from, to } }`.
@@ -136,7 +166,7 @@ router.get(
       id: r.id,
       slug: r.slug,
       eventName: r.event_name,
-      eventDate: typeof r.event_date === 'string' ? r.event_date.slice(0, 10) : r.event_date,
+      eventDate: toIsoDateString(r.event_date),
       eventTimeStart: r.event_time_start || null,
       eventTimeEnd: r.event_time_end || null,
       isFullDay: hasEventCalendarCols
@@ -194,7 +224,7 @@ router.get(
         kind: 'hours',
         id: r.id,
         customerAccountId: r.customer_account_id,
-        entryDate: typeof r.entry_date === 'string' ? r.entry_date.slice(0, 10) : r.entry_date,
+        entryDate: toIsoDateString(r.entry_date),
         startTime: r.start_time,
         endTime: r.end_time,
         description: r.description || null,
@@ -230,7 +260,7 @@ router.get(
       id: r.id,
       quoteNumber: r.quote_number,
       eventName: r.event_name || null,
-      eventDate: typeof r.event_date === 'string' ? r.event_date.slice(0, 10) : r.event_date,
+      eventDate: toIsoDateString(r.event_date),
       eventTimeStart: r.event_time_start || null,
       eventTimeEnd: r.event_time_end || null,
       status: r.status,
@@ -263,7 +293,7 @@ router.get(
       id: r.id,
       contractNumber: r.contract_number,
       eventName: r.event_name || null,
-      eventDate: typeof r.event_date === 'string' ? r.event_date.slice(0, 10) : r.event_date,
+      eventDate: toIsoDateString(r.event_date),
       eventTimeStart: r.event_time_start || null,
       eventTimeEnd: r.event_time_end || null,
       status: r.status,
