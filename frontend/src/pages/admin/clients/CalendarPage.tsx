@@ -665,30 +665,24 @@ export const CalendarPage: React.FC = () => {
         }
 
         /* Week-view day dividers.
-           FC v6 reads its general border color from --fc-border-color,
-           which we pin to --color-surface-border so the header cells
-           and slot lines pick up the admin theme. That alone restores
-           the horizontal hour/half-hour lines and the column header
-           dividers, but FC strips the VERTICAL border between time-
-           grid body columns to keep event chips visually clean — so
-           we have to put it back by hand on every day column
-           (.fc-timegrid-col + .fc-day + the inner cols-table tds).
-           Targeting all three is belt-and-suspenders against FC
-           shifting selectors between minor versions. The
-           :last-of-type rule strips the trailing border so the right
-           edge of the calendar doesn't double up against the Card. */
+           Pin --fc-border-color so FC's header cells + horizontal
+           slot lines pick up the admin theme. The vertical dividers
+           in the time-grid body need a separate trick: FC v6 either
+           merges the day columns into one wide cell or sets a zero
+           border more specifically than our rule can override, so
+           plain border-left doesn't render. Use box-shadow with
+           "inset 1px 0 0" instead — it draws a 1px line inside the
+           column without affecting layout, survives border-collapse,
+           and isn't clipped by overflow:hidden. Apply on every
+           selector that maps to a day column so the rule works
+           regardless of which DOM shape FC ends up rendering. */
         .fc {
           --fc-border-color: var(--color-surface-border);
         }
-        .fc .fc-timegrid-col,
-        .fc .fc-day,
-        .fc .fc-timegrid-cols > table > tbody > tr > td {
-          border-left: 1px solid var(--color-surface-border) !important;
-        }
-        .fc .fc-timegrid-col:first-of-type,
-        .fc .fc-day:first-child,
-        .fc .fc-timegrid-cols > table > tbody > tr > td:first-child {
-          border-left: none !important;
+        .fc .fc-timegrid-col:not(:first-of-type),
+        .fc .fc-day:not(:first-child),
+        .fc .fc-timegrid-cols > table > tbody > tr > td:not(:first-child) {
+          box-shadow: inset 1px 0 0 var(--color-surface-border);
         }
       `}</style>
     </div>
