@@ -228,6 +228,15 @@ const INVOICE_BODY_VALIDATORS = [
   // require them once it's updated.
   body('paymentNetDaysTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('paymentTimingTemplateId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  // Ad-hoc installments override (commit #6 of the deal_uuid PR).
+  // When the array has ≥2 rows with percent>0, createInvoice routes
+  // through spawnInstallmentInvoices (commit #4) and returns
+  // invoiceIds[].
+  body('installments').optional().isArray(),
+  body('installments.*.label').optional({ values: 'falsy' }).isString().isLength({ max: 128 }),
+  body('installments.*.percent').optional({ values: 'falsy' }).isFloat({ min: 0, max: 100 }),
+  body('installments.*.trigger').optional({ values: 'falsy' }).isIn(['quote_accepted', 'before_event', 'after_event', 'after_delivery', 'fixed_date']),
+  body('installments.*.offset_days').optional({ values: 'falsy' }).isInt(),
   body('skontoDisabled').optional().isBoolean(),
   // Inline event snapshot (migration 123). Mirrors quotes — kept
   // optional because standalone invoices may not have an event yet.
@@ -271,6 +280,10 @@ function mapPayloadToService(body) {
     paymentNetDaysTemplateId: 'paymentNetDaysTemplateId',
     paymentTimingTemplateId: 'paymentTimingTemplateId',
     skontoDisabled: 'skontoDisabled',
+    // Ad-hoc installment plan from the InstallmentsPanel. When the
+    // array has ≥2 entries with percent > 0, createInvoice routes
+    // through spawnInstallmentInvoices (commit #4).
+    installments: 'installments',
   };
   for (const [api, svc] of Object.entries(map)) {
     if (Object.prototype.hasOwnProperty.call(body, api)) out[svc] = body[api];

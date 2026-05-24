@@ -3589,6 +3589,8 @@
     },
     "recordPayment": "Zahlung erfassen",
     "savedToast": "Rechnung gespeichert.",
+    "savedToastMulti": "{{n}} Rechnungen erstellt.",
+    "saveAndSpawn": "{{n}} Rechnungen erstellen",
     "edit": "Rechnung bearbeiten",
     "customerSearch": "Kunde nach E-Mail oder Firma suchen…",
     "qrFormat": {
@@ -3757,6 +3759,32 @@
   },
   "linkedDocuments": {
     "title": "Verknüpfte Dokumente"
+  },
+  "installments": {
+    "enableLabel": "In Teilzahlungen aufteilen",
+    "advancedToggle": "Dynamische Trigger verwenden",
+    "simpleToggle": "Einfache Datumsauswahl verwenden",
+    "simpleHint": "Jede Zeile wird an einem festen Datum versendet. Wechsle zu dynamischen Triggern für Pläne, die an das Anlassdatum oder die Lieferung gekoppelt sind.",
+    "advancedHint": "Wähle einen Trigger (Angebot angenommen, vor/nach Anlass, bei Lieferung, festes Datum) und einen Offset in Tagen. Trigger lösen sich neu auf, wenn sich das Anlassdatum später verschiebt.",
+    "percent": "%",
+    "label": "Bezeichnung",
+    "labelPlaceholder": "Anzahlung / vor Anlass …",
+    "sendOn": "Versanddatum",
+    "trigger": "Trigger",
+    "offsetDays": "Offset (Tage)",
+    "onDeliveryHint": "Bei Lieferung — Admin gibt manuell frei. Für Änderungen auf erweitert umschalten.",
+    "addRow": "Teilzahlung hinzufügen",
+    "removeRow": "Zeile entfernen",
+    "total": "Summe",
+    "mustSumTo100": "muss 100 % ergeben",
+    "firstRowDefaultLabel": "Anzahlung",
+    "triggerOption": {
+      "quote_accepted": "Bei Unterzeichnung / Erstellung",
+      "before_event": "Vor dem Anlass",
+      "after_event": "Nach dem Anlass",
+      "after_delivery": "Bei Lieferung (manuelle Freigabe)",
+      "fixed_date": "Festes Datum"
+    }
   },
   "contracts": {
     "title": "Verträge",

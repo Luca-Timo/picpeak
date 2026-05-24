@@ -24,6 +24,7 @@ import {
 } from '../../../services/quotes.service';
 import { LineItemsTable, type EditableLineItem } from '../../../components/admin/LineItemsTable';
 import { CustomerPicker } from '../../../components/admin/CustomerPicker';
+import { InstallmentsPanel } from '../../../components/admin/InstallmentsPanel';
 import { customerAdminService } from '../../../services/customerAdmin.service';
 import { userManagementService } from '../../../services/userManagement.service';
 import { settingsService } from '../../../services/settings.service';
@@ -60,6 +61,9 @@ interface FormState {
   ccPdfEmail: string;
   businessBankAccountId: number | null;
   lineItems: EditableLineItem[];
+  // Ad-hoc installments (commit #6). null = use the payment-timing
+  // template's installments; array = explicit per-quote override.
+  installments?: import('../../../services/quotes.service').PaymentTermInstallment[] | null;
 }
 
 const empty: FormState = {
@@ -86,6 +90,7 @@ const empty: FormState = {
   ccPdfEmail: '',
   businessBankAccountId: null,
   lineItems: [],
+  installments: null,
 };
 
 function toMinor(amount: number) {
@@ -109,6 +114,9 @@ function buildPayload(f: FormState): QuoteCreatePayload {
     // half unless both are set (legacy single FK still works).
     paymentNetDaysTemplateId: f.paymentNetDaysTemplateId || undefined,
     paymentTimingTemplateId: f.paymentTimingTemplateId || undefined,
+    // Ad-hoc installments (commit #6) — overrides the template's
+    // installments on the snapshot. Sent only when populated.
+    installments: f.installments && f.installments.length > 0 ? f.installments : undefined,
     vatRate: f.vatRate,
     shippingAmountMinor: toMinor(f.shippingAmount),
     introText: f.introText || undefined,
@@ -141,6 +149,7 @@ export const QuoteEditorPage: React.FC = () => {
   const isEdit = id && id !== 'new';
 
   const [form, setForm] = useState<FormState>(empty);
+  const [installmentsValid, setInstallmentsValid] = useState(true);
   const [busy, setBusy] = useState(false);
 
   // Pre-fill the customer when the editor is opened from a customer
@@ -437,10 +446,10 @@ export const QuoteEditorPage: React.FC = () => {
           <Button variant="outline" onClick={handlePreviewUnsaved} disabled={busy}>
             <Eye className="w-4 h-4 mr-1" />{t('quotes.preview', 'Preview PDF')}
           </Button>
-          <Button variant="outline" onClick={() => handleSave()} disabled={busy}>
+          <Button variant="outline" onClick={() => handleSave()} disabled={busy || !installmentsValid}>
             {t('common.save', 'Save')}
           </Button>
-          <Button onClick={() => handleSave('send')} disabled={busy}>
+          <Button onClick={() => handleSave('send')} disabled={busy || !installmentsValid}>
             <Send className="w-4 h-4 mr-1" />{t('quotes.saveAndSend', 'Save & send')}
           </Button>
         </div>
@@ -565,6 +574,19 @@ export const QuoteEditorPage: React.FC = () => {
             ))}
           </ul>
         )}
+
+        {/* Ad-hoc installments panel (commit #6). Overrides the
+            timing-template preview above when set. The plan is
+            snapshotted onto the quote and spawns N invoices on
+            conversion via convertQuoteToInvoices. */}
+        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+          <InstallmentsPanel
+            value={form.installments ?? null}
+            onChange={(next) => setForm((f) => ({ ...f, installments: next }))}
+            onValidityChange={setInstallmentsValid}
+            eventDate={form.eventDate || null}
+          />
+        </div>
       </Card>
 
       {/* Section: Extras */}
