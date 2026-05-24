@@ -3756,6 +3756,23 @@
     },
     "list": {
       "new": "New contract"
+    },
+    "detail": {
+      "integrity": {
+        "title": "PDF integrity check",
+        "help": "Re-hashes the unsigned + signed PDFs on disk and compares them to the SHA-256 stored when the document was issued. Catches backup corruption or manual edits since the customer received their copy.",
+        "verify": "Verify",
+        "reverify": "Re-verify",
+        "unsignedTitle": "Unsigned PDF",
+        "signedTitle": "Signed PDF",
+        "match": "Hash matches",
+        "mismatch": "Hash mismatch — file altered",
+        "missing": "File missing from disk",
+        "notIssued": "Not yet issued",
+        "expected": "expected",
+        "actual": "actual",
+        "error": "Integrity check failed."
+      }
     }
   }
 }
