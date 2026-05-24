@@ -3655,7 +3655,18 @@
     "section": {
       "quotes": "Angebote",
       "invoices": "Rechnungen",
-      "paymentDefaults": "Standard-Zahlungsbedingungen"
+      "paymentDefaults": "Standard-Zahlungsbedingungen",
+      "installmentDefaults": "Standard-Trigger für Teilzahlungen"
+    },
+    "installmentDefaults": {
+      "help": "Vorbelegung der Trigger für neue Zeilen im Teilzahlungs-Panel. Pro-Dokument-Anpassungen überschreiben; bestehende Dokumente behalten ihren gespeicherten Plan.",
+      "trigger": {
+        "quote_accepted": "Bei Unterzeichnung / Erstellung",
+        "before_event": "Vor dem Anlass",
+        "after_event": "Nach dem Anlass",
+        "after_delivery": "Bei Lieferung (manuelle Freigabe)",
+        "fixed_date": "Festes Datum"
+      }
     },
     "paymentDefaults": {
       "help": "Wird bei jeder neuen Rechnung und jedem Angebot vorausgewählt. Im Editor lässt sich pro Dokument eine andere Kombination wählen.",
@@ -3693,6 +3704,15 @@
     },
     "crm_invoices_skonto_business_days": {
       "label": "Skonto-Frist (Werktage)"
+    },
+    "crm_invoices_installment_trigger_first": {
+      "label": "Trigger erste Teilzahlung"
+    },
+    "crm_invoices_installment_days_before_event": {
+      "label": "Tage vor dem Anlass (mittlere Teilzahlung)"
+    },
+    "crm_invoices_installment_days_after_event": {
+      "label": "Tage nach dem Anlass (letzte Teilzahlung)"
     },
     "crm_invoices_number_format": {
       "label": "Format Rechnungsnummer"

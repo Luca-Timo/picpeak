@@ -3652,11 +3652,22 @@
     "section": {
       "quotes": "Quotes",
       "invoices": "Invoices",
-      "paymentDefaults": "Default payment conditions"
+      "paymentDefaults": "Default payment conditions",
+      "installmentDefaults": "Default installment triggers"
     },
     "paymentDefaults": {
       "help": "Pre-filled on every new quote and invoice. The editor still lets you pick a different combination per document.",
       "none": "— No default —"
+    },
+    "installmentDefaults": {
+      "help": "Pre-fill the trigger for fresh rows in the Installments panel. Per-document edits override; existing documents keep their snapshotted plan.",
+      "trigger": {
+        "quote_accepted": "At signing / creation",
+        "before_event": "Before event",
+        "after_event": "After event",
+        "after_delivery": "On delivery (manual release)",
+        "fixed_date": "Fixed date"
+      }
     },
     "crm_invoices_default_payment_net_days_template_id": {
       "label": "Default net days"
@@ -3690,6 +3701,15 @@
     },
     "crm_invoices_skonto_business_days": {
       "label": "Skonto window (business days)"
+    },
+    "crm_invoices_installment_trigger_first": {
+      "label": "First installment trigger"
+    },
+    "crm_invoices_installment_days_before_event": {
+      "label": "Days before event (middle installment)"
+    },
+    "crm_invoices_installment_days_after_event": {
+      "label": "Days after event (final installment)"
     },
     "crm_invoices_number_format": {
       "label": "Invoice number format"

@@ -34,6 +34,11 @@ const SETTING_KEYS = [
   'crm_invoices_late_fee_label',
   'crm_invoices_skonto_business_days',
   'crm_invoices_skonto_percent_default',
+  // Installment defaults (migration 141) — pre-populate fresh ad-hoc
+  // rows in the Quote / Invoice editors' Installments panel.
+  'crm_invoices_installment_trigger_first',
+  'crm_invoices_installment_days_before_event',
+  'crm_invoices_installment_days_after_event',
   'crm_invoices_number_format',
   // Default Net days + Payment timing pickers (migration 124+125).
   // The per-quote/per-invoice picker becomes a true override over
@@ -239,6 +244,47 @@ export const CrmSettingsPage: React.FC = () => {
             label={t('crmSettings.crm_invoices_number_format.label', 'Invoice number format') as string}
             value={values.crm_invoices_number_format ?? ''}
             onChange={(e) => setVal('crm_invoices_number_format', e.target.value)} />
+        </div>
+
+        {/* Installment defaults (migration 141). Pre-populate fresh
+            ad-hoc rows in the Quote / Invoice editors' Installments
+            panel — admins type these defaults exactly once instead of
+            on every new multi-installment plan. Per-document edits
+            still override. */}
+        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+          <h4 className="font-semibold mb-2 text-sm">
+            {t('crmSettings.section.installmentDefaults', 'Default installment triggers')}
+          </h4>
+          <p className="text-xs text-neutral-500 mb-3">
+            {t('crmSettings.installmentDefaults.help',
+              'Pre-fill the trigger for fresh rows in the Installments panel. Per-document edits override; existing documents keep their snapshotted plan.')}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                {t('crmSettings.crm_invoices_installment_trigger_first.label', 'First installment trigger')}
+              </label>
+              <select
+                value={values.crm_invoices_installment_trigger_first ?? 'quote_accepted'}
+                onChange={(e) => setVal('crm_invoices_installment_trigger_first', e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+              >
+                <option value="quote_accepted">{t('crmSettings.installmentDefaults.trigger.quote_accepted', 'At signing / creation')}</option>
+                <option value="before_event">{t('crmSettings.installmentDefaults.trigger.before_event', 'Before event')}</option>
+                <option value="after_event">{t('crmSettings.installmentDefaults.trigger.after_event', 'After event')}</option>
+                <option value="after_delivery">{t('crmSettings.installmentDefaults.trigger.after_delivery', 'On delivery (manual release)')}</option>
+                <option value="fixed_date">{t('crmSettings.installmentDefaults.trigger.fixed_date', 'Fixed date')}</option>
+              </select>
+            </div>
+            <Input type="number" min={0}
+              label={t('crmSettings.crm_invoices_installment_days_before_event.label', 'Days before event (middle installment)') as string}
+              value={values.crm_invoices_installment_days_before_event ?? 14}
+              onChange={(e) => setVal('crm_invoices_installment_days_before_event', Number(e.target.value))} />
+            <Input type="number" min={0}
+              label={t('crmSettings.crm_invoices_installment_days_after_event.label', 'Days after event (final installment)') as string}
+              value={values.crm_invoices_installment_days_after_event ?? 14}
+              onChange={(e) => setVal('crm_invoices_installment_days_after_event', Number(e.target.value))} />
+          </div>
         </div>
 
         {/* Default payment-term pickers (migration 124+125). The
