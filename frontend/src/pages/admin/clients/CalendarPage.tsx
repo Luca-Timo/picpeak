@@ -488,11 +488,13 @@ export const CalendarPage: React.FC = () => {
           eventTimeFormat={fcTimeFormat}
           // Week-view column headers. FC's default in en-US renders as
           // "Thu 5/21" (M/D), which is wrong for DE / CH operators who
-          // expect day.month. Override with a function that prefixes
-          // the locale-aware short weekday and uses an explicit DD.MM.
-          // date — matches the project-wide convention in
-          // useLocalizedDate (per feedback_respect_general_format_settings.md).
-          dayHeaderFormat={(arg) => {
+          // expect day.month. dayHeaderContent (NOT dayHeaderFormat,
+          // which only accepts an Intl options object in FC v6 and
+          // throws if handed a function) returns the rendered string
+          // directly. Locale-aware short weekday + explicit DD.MM. to
+          // match the project-wide useLocalizedDate convention (per
+          // feedback_respect_general_format_settings.md).
+          dayHeaderContent={(arg) => {
             const d = arg.date;
             const day = String(d.getUTCDate()).padStart(2, '0');
             const month = String(d.getUTCMonth() + 1).padStart(2, '0');
