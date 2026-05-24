@@ -6,6 +6,24 @@
  */
 import { api } from '../config/api';
 
+/** One leg of the integrity-check response (unsigned or signed PDF).
+ *  `expected` is the stored SHA-256 column value; `actual` is freshly
+ *  computed off the file on disk. `match` is true only when both are
+ *  set and equal. `present:false` means the file doesn't exist on
+ *  disk — usually expected for `signed` until the customer signs. */
+export interface ContractIntegrityLeg {
+  path: string | null;
+  present: boolean;
+  expected: string | null;
+  actual: string | null;
+  match: boolean;
+}
+
+export interface ContractIntegrityResult {
+  unsigned: ContractIntegrityLeg;
+  signed: ContractIntegrityLeg;
+}
+
 /** Shape of one row from /admin/contracts/:id/audit-trail. */
 export interface AuditEntry {
   id: number;
@@ -320,6 +338,16 @@ export const contractsService = {
    *  signed, resent emails, conversions). */
   async auditTrail(id: number): Promise<{ entries: AuditEntry[] }> {
     const { data } = await api.get(`/admin/contracts/${id}/audit-trail`);
+    return data.data || data;
+  },
+
+  /** Integrity check — re-hashes the unsigned + signed PDF on disk
+   *  and compares each to the stored SHA-256 column from migration
+   *  131. Used by the IntegrityCheckCard on ContractDetailPage; the
+   *  admin clicks once to confirm no backup-corruption / manual edit
+   *  has altered the document since it was issued. */
+  async verifyIntegrity(id: number): Promise<ContractIntegrityResult> {
+    const { data } = await api.get(`/admin/contracts/${id}/verify-integrity`);
     return data.data || data;
   },
 

@@ -23,6 +23,7 @@ import SignaturePad from 'signature_pad';
 import {
   ArrowLeft, Edit2, Send, X, FileDown, Upload, CheckSquare, ScrollText,
   ArrowRightCircle, Receipt, RotateCcw, MailCheck,
+  ShieldCheck, CheckCircle2, XCircle,
 } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
 import { LinkedDocumentsCard, type LinkedDocumentRow } from '../../../components/admin/LinkedDocumentsCard';
@@ -616,8 +617,130 @@ export const ContractDetailPage: React.FC = () => {
           contract, sourced from activity_logs. Shows up below the
           included blocks at the bottom of the page so it doesn't
           dominate the layout but is always reachable. */}
+      {numericId && <IntegrityCheckCard contractId={numericId} />}
       {numericId && <AuditTrailCard contractId={numericId} />}
     </div>
+  );
+};
+
+/**
+ * Re-hashes the unsigned + signed PDFs on disk and compares each to
+ * the SHA-256 column persisted at write time (migration 131). The
+ * customer already has both expected hashes via the audit-certificate
+ * attached to their signing emails; this card is the admin-side
+ * equivalent so they don't have to drop to a shell to run
+ * `shasum -a 256`.
+ *
+ * The query is lazy: we don't auto-fire on mount because re-hashing
+ * does file I/O on the server, and most page views don't need it.
+ * Admin clicks "Verify" to trigger the check.
+ */
+const IntegrityCheckCard: React.FC<{ contractId: number }> = ({ contractId }) => {
+  const { t } = useTranslation();
+  const { data, isFetching, refetch, isSuccess, error } = useQuery({
+    queryKey: ['contract-integrity', contractId],
+    queryFn: () => contractsService.verifyIntegrity(contractId),
+    enabled: false,
+    retry: false,
+    gcTime: 0,
+  });
+
+  const renderLeg = (legKey: 'unsigned' | 'signed') => {
+    if (!data) return null;
+    const leg = data[legKey];
+    const titleKey = legKey === 'unsigned'
+      ? 'contracts.detail.integrity.unsignedTitle'
+      : 'contracts.detail.integrity.signedTitle';
+    const titleFallback = legKey === 'unsigned' ? 'Unsigned PDF' : 'Signed PDF';
+    let badge: React.ReactNode;
+    if (!leg.path) {
+      badge = (
+        <span className="inline-flex items-center gap-1 text-xs text-neutral-500">
+          {t('contracts.detail.integrity.notIssued', 'Not yet issued')}
+        </span>
+      );
+    } else if (!leg.present) {
+      badge = (
+        <span className="inline-flex items-center gap-1 text-xs text-red-700 dark:text-red-300">
+          <XCircle className="w-3.5 h-3.5" />
+          {t('contracts.detail.integrity.missing', 'File missing from disk')}
+        </span>
+      );
+    } else if (leg.match) {
+      badge = (
+        <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-300">
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          {t('contracts.detail.integrity.match', 'Hash matches')}
+        </span>
+      );
+    } else {
+      badge = (
+        <span className="inline-flex items-center gap-1 text-xs text-red-700 dark:text-red-300">
+          <XCircle className="w-3.5 h-3.5" />
+          {t('contracts.detail.integrity.mismatch', 'Hash mismatch — file altered')}
+        </span>
+      );
+    }
+    return (
+      <div className="border border-neutral-200 dark:border-neutral-700 rounded p-3 space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm font-medium">{t(titleKey, titleFallback)}</span>
+          {badge}
+        </div>
+        {leg.path && (
+          <p className="text-[11px] text-neutral-500 font-mono break-all" title={leg.path}>
+            {leg.path}
+          </p>
+        )}
+        {(leg.expected || leg.actual) && (
+          <dl className="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-0.5 text-[11px] font-mono">
+            <dt className="text-neutral-500">{t('contracts.detail.integrity.expected', 'expected')}</dt>
+            <dd className="break-all">{leg.expected || '—'}</dd>
+            <dt className="text-neutral-500">{t('contracts.detail.integrity.actual', 'actual')}</dt>
+            <dd className={leg.match ? 'break-all' : 'break-all text-red-700 dark:text-red-300'}>
+              {leg.actual || '—'}
+            </dd>
+          </dl>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <Card padding="lg" className="mt-4">
+      <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+        <h2 className="font-semibold flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4" />
+          {t('contracts.detail.integrity.title', 'PDF integrity check')}
+        </h2>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          isLoading={isFetching}
+        >
+          {isSuccess
+            ? t('contracts.detail.integrity.reverify', 'Re-verify')
+            : t('contracts.detail.integrity.verify', 'Verify')}
+        </Button>
+      </div>
+      <p className="text-xs text-neutral-500 mb-3">
+        {t('contracts.detail.integrity.help',
+          'Re-hashes the unsigned + signed PDFs on disk and compares them to the SHA-256 stored when the document was issued. Catches backup corruption or manual edits since the customer received their copy.')}
+      </p>
+      {error && (
+        <p className="text-sm text-red-700 dark:text-red-300">
+          {t('contracts.detail.integrity.error', 'Integrity check failed.')}
+        </p>
+      )}
+      {data && (
+        <div className="space-y-2">
+          {renderLeg('unsigned')}
+          {renderLeg('signed')}
+        </div>
+      )}
+    </Card>
   );
 };
 

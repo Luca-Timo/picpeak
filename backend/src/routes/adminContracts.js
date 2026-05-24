@@ -574,6 +574,22 @@ router.get(
   }),
 );
 
+// Integrity check — re-hashes pdf_path + signed_pdf_path on disk and
+// compares to the stored pdf_sha256 / signed_pdf_sha256 (migration
+// 131). Lets the admin confirm a contract PDF on disk still matches
+// what was issued, catching backup-corruption / manual-edit cases
+// without needing to drop to a shell.
+router.get(
+  '/:id/verify-integrity',
+  requirePermission('contracts.view'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await contractService.verifyIntegrity(parseInt(req.params.id, 10));
+    return successResponse(res, result);
+  }),
+);
+
 router.get(
   '/:id/preview',
   requirePermission('contracts.view'),

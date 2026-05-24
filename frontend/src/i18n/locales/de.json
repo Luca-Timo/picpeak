@@ -3759,6 +3759,23 @@
     },
     "list": {
       "new": "Neuer Vertrag"
+    },
+    "detail": {
+      "integrity": {
+        "title": "PDF-Integritätsprüfung",
+        "help": "Berechnet die SHA-256-Hashes der unsignierten und signierten PDFs neu und vergleicht sie mit den beim Ausstellen gespeicherten Werten. Deckt Backup-Beschädigungen oder nachträgliche Änderungen an der Kundenkopie auf.",
+        "verify": "Prüfen",
+        "reverify": "Erneut prüfen",
+        "unsignedTitle": "Unsigniertes PDF",
+        "signedTitle": "Signiertes PDF",
+        "match": "Hash stimmt überein",
+        "mismatch": "Hash weicht ab — Datei verändert",
+        "missing": "Datei auf dem Server nicht gefunden",
+        "notIssued": "Noch nicht ausgestellt",
+        "expected": "erwartet",
+        "actual": "tatsächlich",
+        "error": "Integritätsprüfung fehlgeschlagen."
+      }
     }
   }
 }
