@@ -664,25 +664,31 @@ export const CalendarPage: React.FC = () => {
           font-weight: 600;
         }
 
-        /* Week-view day dividers. FC v6 reads the border color from
-           the --fc-border-color CSS variable. The previous shape only
-           overrode border-color on a handful of selectors, which
-           didn't bring the vertical day-divider lines back in the
-           time grid because FC's CSS variable was still pointing at a
-           near-transparent default. Setting --fc-border-color on .fc
-           propagates to every internal rule (cols, header cells,
-           scrollgrid, etc.) and restores the dividers.
-           The explicit border-right on .fc-timegrid-col is a belt-
-           and-suspenders for FC builds that drop the column border
-           on certain grid widths. */
+        /* Week-view day dividers.
+           FC v6 reads its general border color from --fc-border-color,
+           which we pin to --color-surface-border so the header cells
+           and slot lines pick up the admin theme. That alone restores
+           the horizontal hour/half-hour lines and the column header
+           dividers, but FC strips the VERTICAL border between time-
+           grid body columns to keep event chips visually clean — so
+           we have to put it back by hand on every day column
+           (.fc-timegrid-col + .fc-day + the inner cols-table tds).
+           Targeting all three is belt-and-suspenders against FC
+           shifting selectors between minor versions. The
+           :last-of-type rule strips the trailing border so the right
+           edge of the calendar doesn't double up against the Card. */
         .fc {
           --fc-border-color: var(--color-surface-border);
         }
-        .fc .fc-timegrid-col {
-          border-right: 1px solid var(--color-surface-border) !important;
+        .fc .fc-timegrid-col,
+        .fc .fc-day,
+        .fc .fc-timegrid-cols > table > tbody > tr > td {
+          border-left: 1px solid var(--color-surface-border) !important;
         }
-        .fc .fc-timegrid-col:last-child {
-          border-right: none !important;
+        .fc .fc-timegrid-col:first-of-type,
+        .fc .fc-day:first-child,
+        .fc .fc-timegrid-cols > table > tbody > tr > td:first-child {
+          border-left: none !important;
         }
       `}</style>
     </div>
