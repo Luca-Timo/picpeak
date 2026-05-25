@@ -58,6 +58,7 @@ const emailProcessor = require('./emailProcessor');
 const { getAppSetting } = require('../utils/appSettings');
 const { hasColumnCached } = require('../utils/schemaCache');
 const logger = require('../utils/logger');
+const { ensureEventReminderTemplatesSeeded } = require('./eventReminderTemplates');
 
 const DEFAULT_DAYS_BEFORE = 2;
 const TEMPLATE_KEY_DEFAULT = 'event_reminder_default';
@@ -136,6 +137,15 @@ async function runEventReminderPass() {
       schemaWarnLogged = true;
     }
     return { scanned: 0, sent: 0, skipped: 0 };
+  }
+
+  // Self-heal the seeded templates. Idempotent — only inserts missing
+  // rows and backfills empty translations, never overwrites edits.
+  // Runs once per process (module-level cache); subsequent ticks no-op.
+  try {
+    await ensureEventReminderTemplatesSeeded(db, logger);
+  } catch (err) {
+    logger.error('Event reminder template self-heal failed', { message: err.message });
   }
 
   const globalDaysBefore = Number(await getAppSetting('crm_event_reminders_days_before'));

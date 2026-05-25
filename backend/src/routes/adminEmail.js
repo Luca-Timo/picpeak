@@ -303,6 +303,16 @@ async function getTemplateTranslations(templateId, template) {
 // Get email templates
 router.get('/templates', adminAuth, requirePermission('email.view'), async (req, res) => {
   try {
+    // Self-heal: ensure the seeded event-reminder templates exist + are
+    // backfilled with example content on already-migrated installs. The
+    // function is idempotent and short-circuits via a module-level cache
+    // after one successful pass, so this is free on subsequent calls.
+    try {
+      const { ensureEventReminderTemplatesSeeded } = require('../services/eventReminderTemplates');
+      const log = require('../utils/logger');
+      await ensureEventReminderTemplatesSeeded(db, log);
+    } catch (_e) { /* non-fatal */ }
+
     const templates = await db('email_templates')
       .select('*')
       .orderBy('template_key');
