@@ -3754,9 +3754,6 @@
     "accept": "Accept quote",
     "decline": "Decline"
   },
-  "linkedDocuments": {
-    "title": "Linked documents"
-  },
   "dealLineage": {
     "title": "Related documents",
     "quotes": "Quotes",
