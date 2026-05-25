@@ -1028,6 +1028,9 @@
     "contracts": {
       "title": "Contracts"
     },
+    "reminderTemplates": {
+      "title": "Reminder emails"
+    },
     "apiTokens": {
       "title": "API Tokens",
       "createError": "Failed to create token",
@@ -3753,6 +3756,41 @@
     "intro": "Please accept or decline this quote:",
     "accept": "Accept quote",
     "decline": "Decline"
+  },
+  "reminderTemplates": {
+    "title": "Pre-event reminder emails",
+    "globalSection": "Global behaviour",
+    "globalHelp": "Off by default — turn on to start sending pre-event reminders. The offset below is the default; each event can override on its detail page.",
+    "enableLabel": "Send pre-event reminder emails",
+    "daysBeforeLabel": "Days before the event",
+    "saveSettings": "Save global settings",
+    "settingsSaved": "Reminder settings saved.",
+    "settingsSaveError": "Could not save reminder settings.",
+    "templatesSection": "Templates",
+    "templatesHelp": "One template per event type, plus a catch-all default. Per-type templates inherit fields from the default until you save your first edit.",
+    "defaultLabel": "Default (catch-all)",
+    "usesDefault": "Default",
+    "willCreateOnSave": "This event type uses the default template. The fields below are pre-filled from the default; saving will create a dedicated template for this event type.",
+    "variablesHint": "Available variables: {{customer_name}}, {{event_name}}, {{event_date}}, {{event_type}}, {{days_before}}, {{business_name}}",
+    "subjectLabel": "Subject",
+    "bodyTextLabel": "Body (plain text)",
+    "bodyHtmlLabel": "Body (HTML)",
+    "saveTemplate": "Save template",
+    "saved": "Template saved.",
+    "saveError": "Could not save template."
+  },
+  "eventReminderOverride": {
+    "title": "Pre-event reminder",
+    "save": "Save override",
+    "help": "Per-event override for the customer reminder. Global on-off + default offset live under Settings → Reminder emails. Anything left blank here inherits the global setting / resolved template.",
+    "disabledLabel": "Disable the reminder for this event (no email goes out)",
+    "offsetLabel": "Days before the event (override) — leave blank to inherit",
+    "offsetPlaceholder": "Leave blank to use the global default",
+    "bodyOverrideLabel": "Custom body for this event (overrides the resolved template body)",
+    "bodyOverridePlaceholder": "Leave blank to use the template body. Variables like {{customer_name}}, {{event_name}}, {{event_date}} still work here.",
+    "saved": "Reminder override saved.",
+    "saveError": "Could not save reminder override.",
+    "invalidOffset": "Offset must be a non-negative integer or blank."
   },
   "dealLineage": {
     "title": "Related documents",

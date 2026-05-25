@@ -60,6 +60,7 @@ import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { Button, Input, Card, Loading, MarkdownContent } from '../../components/common';
 import { EventCategoryManager, AdminPhotoGrid, AdminPhotoViewer, PhotoFilters, PasswordResetModal, ThemeCustomizerEnhanced, ThemeDisplay, HeroPhotoSelector, FocalPointPicker, PhotoUploadModal, FeedbackSettings, FeedbackModerationPanel, EventRenameDialog, PhotoFilterPanel, PhotoExportMenu, AdminGuestsList } from '../../components/admin';
 import { CustomerAccountPicker } from '../../components/admin/CustomerAccountPicker';
+import { EventReminderOverrideCard } from '../../components/admin/EventReminderOverrideCard';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { eventsService } from '../../services/events.service';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
@@ -2048,6 +2049,17 @@ export const EventDetailsPage: React.FC = () => {
               )}
             </div>
           </Card>
+
+          {/* Pre-event reminder override (migration 143) */}
+          <EventReminderOverrideCard
+            eventId={event.id}
+            initial={{
+              event_reminder_disabled: event.event_reminder_disabled,
+              event_reminder_offset_days: event.event_reminder_offset_days,
+              event_reminder_body_override: event.event_reminder_body_override,
+            }}
+            onSaved={() => refetchEvent()}
+          />
 
           {/* Actions */}
           {!event.is_archived && (

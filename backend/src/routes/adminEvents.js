@@ -1124,6 +1124,15 @@ router.put('/:id', adminAuth, requirePermission('events.edit'), requireEventOwne
   body('welcome_message').optional({ nullable: true, checkFalsy: true }).trim(),
   body('color_theme').optional({ nullable: true }),
   body('allow_user_uploads').optional().isBoolean(),
+  // Migration 143 — per-event reminder overrides. All three are
+  // optional; nullable values are accepted so admins can clear an
+  // override (e.g. drop a custom offset back to the global default).
+  body('event_reminder_disabled').optional().isBoolean(),
+  body('event_reminder_offset_days').optional({ nullable: true })
+    .custom((v) => v === null || (Number.isInteger(Number(v)) && Number(v) >= 0))
+    .withMessage('event_reminder_offset_days must be a non-negative integer or null'),
+  body('event_reminder_body_override').optional({ nullable: true, checkFalsy: true })
+    .isString().isLength({ max: 10_000 }),
   body('customer_name').optional({ nullable: true, checkFalsy: true }).trim(),
   body('customer_email').optional().isEmail().normalizeEmail(),
   body('customer_phone').optional({ nullable: true, checkFalsy: true })

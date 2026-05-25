@@ -39,6 +39,10 @@ const SETTING_KEYS = [
   'crm_invoices_installment_trigger_first',
   'crm_invoices_installment_days_before_event',
   'crm_invoices_installment_days_after_event',
+  // Pre-event customer reminders (migration 143) — toggles managed
+  // on Settings → Reminder emails (their own dedicated tab) so the
+  // template editor and the global enable/days-before settings live
+  // in one place.
   'crm_invoices_number_format',
   // Default Net days + Payment timing pickers (migration 124+125).
   // The per-quote/per-invoice picker becomes a true override over
@@ -286,6 +290,11 @@ export const CrmSettingsPage: React.FC = () => {
               onChange={(e) => setVal('crm_invoices_installment_days_after_event', Number(e.target.value))} />
           </div>
         </div>
+
+        {/* Pre-event customer reminders moved to their own dedicated
+            tab — Settings → Reminder emails — modelled on the
+            BlockLibrary two-column layout. Toggles + per-type
+            templates live there in one place. */}
 
         {/* Default payment-term pickers (migration 124+125). The
             per-quote / per-invoice editor still always shows the

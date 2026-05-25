@@ -119,5 +119,27 @@ export const useLocalizedDate = () => {
      *  rendering a native <input type="time"> (always 24h value
      *  internally) vs a custom 12h-styled control if needed. */
     timeFormat: (settings?.general_time_format === '12h' ? '12h' : '24h') as '12h' | '24h',
+    /** BCP-47 language tag to pin on `<input type="date">` so the
+     *  browser-rendered placeholder + parsing match the admin's
+     *  configured `general_date_format`. Chrome/Edge honour this;
+     *  Safari/Firefox follow OS locale regardless (no way around it
+     *  without a custom date-picker component).
+     *
+     *  Mapping derives from the format string's first token:
+     *    DD/dd  → de-DE  (renders TT.MM.JJJJ)
+     *    YYYY/yyyy → en-CA  (renders YYYY-MM-DD)
+     *    MM     → en-US  (renders MM/DD/YYYY)
+     *    fallback → i18n.language. */
+    dateInputLang: (() => {
+      const raw = settings?.general_date_format;
+      const fmt = typeof raw === 'string' ? raw : raw?.format;
+      if (fmt) {
+        const head = fmt.trim().slice(0, 2).toUpperCase();
+        if (head === 'DD') return 'de-DE';
+        if (head === 'YY') return 'en-CA';
+        if (head === 'MM') return 'en-US';
+      }
+      return i18n.language || 'en';
+    })(),
   };
 };

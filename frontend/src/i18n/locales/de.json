@@ -1389,6 +1389,9 @@
     "contracts": {
       "title": "Verträge"
     },
+    "reminderTemplates": {
+      "title": "Erinnerungs-E-Mails"
+    },
     "apiTokens": {
       "title": "API-Tokens",
       "createError": "Token konnte nicht erstellt werden",
@@ -3756,6 +3759,41 @@
     "intro": "Vielen Dank für Ihre Anfrage. Bitte prüfen Sie das folgende Angebot und antworten Sie unten.",
     "accept": "Angebot annehmen",
     "decline": "Angebot ablehnen"
+  },
+  "reminderTemplates": {
+    "title": "Erinnerungs-E-Mails vor dem Anlass",
+    "globalSection": "Globales Verhalten",
+    "globalHelp": "Standardmässig aus — aktiviere, um Erinnerungen zu senden. Der unten gesetzte Offset ist der Standard; jeder Anlass kann ihn auf der Detailseite überschreiben.",
+    "enableLabel": "Erinnerungs-E-Mails vor dem Anlass senden",
+    "daysBeforeLabel": "Tage vor dem Anlass",
+    "saveSettings": "Globale Einstellungen speichern",
+    "settingsSaved": "Erinnerungs-Einstellungen gespeichert.",
+    "settingsSaveError": "Erinnerungs-Einstellungen konnten nicht gespeichert werden.",
+    "templatesSection": "Vorlagen",
+    "templatesHelp": "Eine Vorlage pro Anlass-Typ plus eine Standard-Vorlage als Auffang-Lösung. Pro-Typ-Vorlagen erben die Felder von der Standard-Vorlage, bis du die erste Anpassung speicherst.",
+    "defaultLabel": "Standard (Auffang)",
+    "usesDefault": "Standard",
+    "willCreateOnSave": "Dieser Anlass-Typ verwendet die Standard-Vorlage. Die Felder unten sind aus der Standard-Vorlage vorbelegt; beim Speichern wird eine eigene Vorlage für diesen Anlass-Typ erstellt.",
+    "variablesHint": "Verfügbare Variablen: {{customer_name}}, {{event_name}}, {{event_date}}, {{event_type}}, {{days_before}}, {{business_name}}",
+    "subjectLabel": "Betreff",
+    "bodyTextLabel": "Text (Klartext)",
+    "bodyHtmlLabel": "Text (HTML)",
+    "saveTemplate": "Vorlage speichern",
+    "saved": "Vorlage gespeichert.",
+    "saveError": "Vorlage konnte nicht gespeichert werden."
+  },
+  "eventReminderOverride": {
+    "title": "Erinnerung vor dem Event",
+    "save": "Override speichern",
+    "help": "Event-spezifischer Override für die Kundenerinnerung. Globaler An/Aus-Schalter und Standard-Offset liegen unter Einstellungen → Erinnerungs-E-Mails. Was hier leer bleibt, übernimmt die globale Einstellung bzw. die aufgelöste Vorlage.",
+    "disabledLabel": "Erinnerung für dieses Event deaktivieren (es wird keine E-Mail verschickt)",
+    "offsetLabel": "Tage vor dem Event (Override) — leer lassen für Standard",
+    "offsetPlaceholder": "Leer lassen, um den globalen Standard zu verwenden",
+    "bodyOverrideLabel": "Eigener Text für dieses Event (überschreibt den Vorlagentext)",
+    "bodyOverridePlaceholder": "Leer lassen, um den Vorlagentext zu verwenden. Variablen wie {{customer_name}}, {{event_name}}, {{event_date}} funktionieren auch hier.",
+    "saved": "Erinnerungs-Override gespeichert.",
+    "saveError": "Erinnerungs-Override konnte nicht gespeichert werden.",
+    "invalidOffset": "Offset muss eine nicht-negative ganze Zahl oder leer sein."
   },
   "dealLineage": {
     "title": "Verknüpfte Dokumente",
