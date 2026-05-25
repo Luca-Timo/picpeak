@@ -89,7 +89,7 @@ function triggerBrowserDownload(url: string, filename: string) {
 
 export const TaxReportPage: React.FC = () => {
   const { t, i18n } = useTranslation();
-  const { format: fmtDate } = useLocalizedDate();
+  const { format: fmtDate, dateInputLang } = useLocalizedDate();
   const [preset, setPreset] = useState<PeriodPreset>('thisYear');
   const initialPeriod = useMemo(() => periodForPreset('thisYear'), []);
   const [from, setFrom] = useState(initialPeriod.from);
@@ -202,6 +202,7 @@ export const TaxReportPage: React.FC = () => {
                 <Input
                   id="period-from"
                   type="date"
+                  lang={dateInputLang}
                   value={from}
                   onChange={(e) => { setFrom(e.target.value); setPreset('custom'); }}
                 />
@@ -213,6 +214,7 @@ export const TaxReportPage: React.FC = () => {
                 <Input
                   id="period-to"
                   type="date"
+                  lang={dateInputLang}
                   value={to}
                   onChange={(e) => { setTo(e.target.value); setPreset('custom'); }}
                 />
