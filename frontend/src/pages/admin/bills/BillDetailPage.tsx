@@ -9,7 +9,6 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Send, CheckCircle, BellRing, XCircle, Truck, Edit2, RefreshCw } from 'lucide-react';
 import { Button, Card, Loading, Input } from '../../../components/common';
-import { LinkedDocumentsCard, type LinkedDocumentRow } from '../../../components/admin/LinkedDocumentsCard';
 import { DocumentLineageCard } from '../../../components/admin/DocumentLineageCard';
 import { billsService } from '../../../services/bills.service';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
@@ -311,35 +310,10 @@ export const BillDetailPage: React.FC = () => {
         </Card>
       )}
 
-      {/* Unified "Linked documents" lineage card — same shape as the
-          quote + contract detail pages. Surfaces the upstream provenance
-          chain (quote → contract → invoice). Storno relationships stay
-          in the coloured callout cards above because they're warnings,
-          not just lineage. */}
-      {(() => {
-        const rows: LinkedDocumentRow[] = [];
-        if (inv.sourceQuoteId) {
-          rows.push({
-            label: t('bills.field.sourceQuote', 'From quote'),
-            links: [{
-              to: `/admin/clients/quotes/${inv.sourceQuoteId}`,
-              label: inv.sourceQuoteNumber || `#${inv.sourceQuoteId}`,
-            }],
-          });
-        }
-        if (inv.sourceContractId) {
-          rows.push({
-            label: t('bills.field.sourceContract', 'From contract'),
-            links: [{
-              to: `/admin/clients/contracts/${inv.sourceContractId}`,
-              label: inv.sourceContractNumber || `#${inv.sourceContractId}`,
-            }],
-          });
-        }
-        return <LinkedDocumentsCard rows={rows} />;
-      })()}
-
-      {/* Cross-document lineage via deal_uuid (migration 140). */}
+      {/* Cross-document lineage via deal_uuid (migration 140). Replaces
+          the per-FK LinkedDocumentsCard. Storno relationships stay in
+          the coloured callout cards above — those are warnings, not
+          just lineage. */}
       <DocumentLineageCard
         dealUuid={inv.dealUuid}
         current={{ kind: 'invoice', id: inv.id }}

@@ -9,7 +9,6 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Send, Copy, ArrowRightCircle, Edit2, Receipt, CheckCircle2, ScrollText } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
-import { LinkedDocumentsCard, type LinkedDocumentRow } from '../../../components/admin/LinkedDocumentsCard';
 import { DocumentLineageCard } from '../../../components/admin/DocumentLineageCard';
 import { quotesService } from '../../../services/quotes.service';
 import { billsService } from '../../../services/bills.service';
@@ -36,14 +35,6 @@ export const QuoteDetailPage: React.FC = () => {
   });
 
   // Reciprocal lookup — pulls every invoice whose source_quote_id
-  // points at this quote so the admin can jump straight to the bills
-  // that came out of the conversion. Hidden when empty.
-  const { data: linkedInvoices } = useQuery({
-    queryKey: ['quote', id, 'linkedInvoices'],
-    queryFn: () => billsService.list({ sourceQuoteId: parseInt(id!, 10), pageSize: 50 }),
-    enabled: !!id,
-  });
-
   if (isLoading || !data) return <Loading />;
   const q = data.quote;
 
@@ -255,46 +246,10 @@ export const QuoteDetailPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Unified "Linked documents" lineage card — same shape as the
-          contract + invoice detail pages. Renders only when there's at
-          least one cross-reference; quotes that never converted show
-          nothing. Linked contract first (lifecycle predecessor of the
-          resulting invoices), then the invoices themselves. Per-invoice
-          due date + total stay accessible by clicking through to the
-          bill detail page. */}
-      {(() => {
-        const rows: LinkedDocumentRow[] = [];
-        if (q.convertedContractId) {
-          rows.push({
-            label: t('quotes.section.linkedContract', 'Linked contract'),
-            links: [{
-              to: `/admin/clients/contracts/${q.convertedContractId}`,
-              label: q.convertedContractNumber || `#${q.convertedContractId}`,
-            }],
-          });
-        }
-        if (linkedInvoices && linkedInvoices.invoices.length > 0) {
-          rows.push({
-            label: t('quotes.section.linkedInvoices', 'Resulting invoices'),
-            links: linkedInvoices.invoices.map((inv) => ({
-              to: `/admin/clients/bills/${inv.id}`,
-              label: inv.invoiceNumber,
-              // Status pill + installment marker (e.g. "Sent · 1/3")
-              // when this invoice is one of several installments — the
-              // detail page has the full breakdown but admins want the
-              // headline tag here.
-              status: inv.installmentTotal > 1
-                ? `${t(`bills.status.${inv.status}`, inv.status)} · ${inv.installmentIndex + 1}/${inv.installmentTotal}`
-                : t(`bills.status.${inv.status}`, inv.status) as string,
-            })),
-          });
-        }
-        return <LinkedDocumentsCard rows={rows} />;
-      })()}
-
       {/* Cross-document lineage via deal_uuid (migration 140). One UUID
           groups every quote / contract / invoice / Storno / reissue
-          for this engagement; admin sees the full chain in one card. */}
+          for this engagement; admin sees the full chain in one card.
+          Replaces the previous per-FK LinkedDocumentsCard. */}
       <DocumentLineageCard
         dealUuid={q.dealUuid}
         current={{ kind: 'quote', id: q.id }}

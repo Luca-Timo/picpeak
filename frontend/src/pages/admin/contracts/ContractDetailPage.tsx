@@ -26,7 +26,6 @@ import {
   ShieldCheck, CheckCircle2, XCircle,
 } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
-import { LinkedDocumentsCard, type LinkedDocumentRow } from '../../../components/admin/LinkedDocumentsCard';
 import { DocumentLineageCard } from '../../../components/admin/DocumentLineageCard';
 import {
   contractsService,
@@ -556,48 +555,27 @@ export const ContractDetailPage: React.FC = () => {
         />
       )}
 
-      {/* Lineage: source quote + resulting event + resulting invoices.
-          Uses the shared LinkedDocumentsCard so quote / contract /
-          invoice detail pages all render this section identically. */}
-      {(() => {
-        const rows: LinkedDocumentRow[] = [];
-        if (sourceQuoteId) {
-          rows.push({
-            label: t('contracts.detail.fromQuote', 'From quote'),
-            links: [{
-              to: `/admin/clients/quotes/${sourceQuoteId}`,
-              label: sourceQuoteData?.quote?.quoteNumber || `#${sourceQuoteId}`,
-            }],
-          });
-        }
-        if (c.convertedEventId) {
-          rows.push({
-            label: t('contracts.detail.convertedToEvent', 'Converted to event'),
-            links: [{
-              to: `/admin/events/${c.convertedEventId}`,
-              label: `#${c.convertedEventId}`,
-            }],
-          });
-        }
-        if (linkedInvoices && linkedInvoices.length > 0) {
-          rows.push({
-            label: t('contracts.detail.linkedInvoices', 'Resulting invoices'),
-            links: linkedInvoices.map((inv) => ({
-              to: `/admin/clients/bills/${inv.id}`,
-              label: inv.invoiceNumber,
-              status: t(`bills.status.${inv.status}`, inv.status) as string,
-            })),
-          });
-        }
-        return <LinkedDocumentsCard rows={rows} className="mb-4" />;
-      })()}
-
-      {/* Cross-document lineage via deal_uuid (migration 140). */}
+      {/* Cross-document lineage via deal_uuid (migration 140). Replaces
+          the per-FK LinkedDocumentsCard for quotes / contracts /
+          invoices / Storni. Events sit outside the deal_uuid group, so
+          a converted-event link gets its own small badge below. */}
       <DocumentLineageCard
         dealUuid={c.dealUuid}
         current={{ kind: 'contract', id: c.id }}
         className="mb-4"
       />
+      {c.convertedEventId && (
+        <Card padding="md" className="mb-4">
+          <p className="text-sm">
+            <span className="text-muted-theme mr-2">
+              {t('contracts.detail.convertedToEvent', 'Converted to event')}:
+            </span>
+            <Link to={`/admin/events/${c.convertedEventId}`} className="font-medium text-primary-600 dark:text-primary-400 hover:underline">
+              #{c.convertedEventId}
+            </Link>
+          </p>
+        </Card>
+      )}
 
       {/* Block summary */}
       <Card padding="lg">
