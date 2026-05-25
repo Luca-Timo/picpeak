@@ -87,61 +87,12 @@ exports.up = async function (knex) {
   const cols = await knex('email_templates').columnInfo();
   const hasTranslations = await knex.schema.hasTable('email_template_translations');
 
-  const en = {
-    subject: 'Reminder: your event with us is in {{days_before}} days',
-    body_text: `Hi {{customer_name}},
-
-A quick reminder that your event "{{event_name}}" is coming up on {{event_date}}.
-
-A few quick prep notes from our side:
-
-- Please make sure there's enough space for the camera + lighting setup at the location.
-- Let us know in advance about any special access requirements (gates, codes, contacts on site).
-- If anything has changed since we last spoke (timeline, guest count, location), reply to this email so we can adjust.
-
-Looking forward to it.
-
-Best regards,
-{{business_name}}`,
-    body_html: `<p>Hi {{customer_name}},</p>
-<p>A quick reminder that your event "<strong>{{event_name}}</strong>" is coming up on <strong>{{event_date}}</strong>.</p>
-<p>A few quick prep notes from our side:</p>
-<ul>
-  <li>Please make sure there's enough space for the camera + lighting setup at the location.</li>
-  <li>Let us know in advance about any special access requirements (gates, codes, contacts on site).</li>
-  <li>If anything has changed since we last spoke (timeline, guest count, location), reply to this email so we can adjust.</li>
-</ul>
-<p>Looking forward to it.</p>
-<p>Best regards,<br>{{business_name}}</p>`,
-  };
-
-  const de = {
-    subject: 'Erinnerung: Ihr Anlass mit uns ist in {{days_before}} Tagen',
-    body_text: `Hallo {{customer_name}},
-
-eine kurze Erinnerung, dass Ihr Anlass „{{event_name}}" am {{event_date}} stattfindet.
-
-Ein paar kurze Hinweise zur Vorbereitung:
-
-- Bitte stellen Sie sicher, dass am Veranstaltungsort genügend Platz für den Kamera- und Beleuchtungsaufbau vorhanden ist.
-- Lassen Sie uns vorab wissen, ob es besondere Zugangshinweise gibt (Tore, Codes, Ansprechpersonen vor Ort).
-- Falls sich seit unserem letzten Gespräch etwas geändert hat (Ablauf, Gästezahl, Ort), antworten Sie kurz auf diese E-Mail, damit wir uns abstimmen können.
-
-Wir freuen uns darauf.
-
-Beste Grüsse,
-{{business_name}}`,
-    body_html: `<p>Hallo {{customer_name}},</p>
-<p>eine kurze Erinnerung, dass Ihr Anlass „<strong>{{event_name}}</strong>" am <strong>{{event_date}}</strong> stattfindet.</p>
-<p>Ein paar kurze Hinweise zur Vorbereitung:</p>
-<ul>
-  <li>Bitte stellen Sie sicher, dass am Veranstaltungsort genügend Platz für den Kamera- und Beleuchtungsaufbau vorhanden ist.</li>
-  <li>Lassen Sie uns vorab wissen, ob es besondere Zugangshinweise gibt (Tore, Codes, Ansprechpersonen vor Ort).</li>
-  <li>Falls sich seit unserem letzten Gespräch etwas geändert hat (Ablauf, Gästezahl, Ort), antworten Sie kurz auf diese E-Mail, damit wir uns abstimmen können.</li>
-</ul>
-<p>Wir freuen uns darauf.</p>
-<p>Beste Grüsse,<br>{{business_name}}</p>`,
-  };
+  // Empty starter content — admin writes the real subject/body via the
+  // Settings → Reminder emails page (no hard-coded copy in the
+  // migration). Variables stay declared on the master row so the
+  // editor knows which `{{tokens}}` are available.
+  const en = { subject: '', body_text: '', body_html: '' };
+  const de = { subject: '', body_text: '', body_html: '' };
 
   const masterRow = {
     template_key: 'event_reminder_default',

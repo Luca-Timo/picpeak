@@ -3779,6 +3779,19 @@
     "saved": "Template saved.",
     "saveError": "Could not save template."
   },
+  "eventReminderOverride": {
+    "title": "Pre-event reminder",
+    "save": "Save override",
+    "help": "Per-event override for the customer reminder. Global on-off + default offset live under Settings → Reminder emails. Anything left blank here inherits the global setting / resolved template.",
+    "disabledLabel": "Disable the reminder for this event (no email goes out)",
+    "offsetLabel": "Days before the event (override) — leave blank to inherit",
+    "offsetPlaceholder": "Leave blank to use the global default",
+    "bodyOverrideLabel": "Custom body for this event (overrides the resolved template body)",
+    "bodyOverridePlaceholder": "Leave blank to use the template body. Variables like {{customer_name}}, {{event_name}}, {{event_date}} still work here.",
+    "saved": "Reminder override saved.",
+    "saveError": "Could not save reminder override.",
+    "invalidOffset": "Offset must be a non-negative integer or blank."
+  },
   "dealLineage": {
     "title": "Related documents",
     "quotes": "Quotes",

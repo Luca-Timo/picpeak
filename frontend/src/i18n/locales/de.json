@@ -3782,6 +3782,19 @@
     "saved": "Vorlage gespeichert.",
     "saveError": "Vorlage konnte nicht gespeichert werden."
   },
+  "eventReminderOverride": {
+    "title": "Erinnerung vor dem Event",
+    "save": "Override speichern",
+    "help": "Event-spezifischer Override für die Kundenerinnerung. Globaler An/Aus-Schalter und Standard-Offset liegen unter Einstellungen → Erinnerungs-E-Mails. Was hier leer bleibt, übernimmt die globale Einstellung bzw. die aufgelöste Vorlage.",
+    "disabledLabel": "Erinnerung für dieses Event deaktivieren (es wird keine E-Mail verschickt)",
+    "offsetLabel": "Tage vor dem Event (Override) — leer lassen für Standard",
+    "offsetPlaceholder": "Leer lassen, um den globalen Standard zu verwenden",
+    "bodyOverrideLabel": "Eigener Text für dieses Event (überschreibt den Vorlagentext)",
+    "bodyOverridePlaceholder": "Leer lassen, um den Vorlagentext zu verwenden. Variablen wie {{customer_name}}, {{event_name}}, {{event_date}} funktionieren auch hier.",
+    "saved": "Erinnerungs-Override gespeichert.",
+    "saveError": "Erinnerungs-Override konnte nicht gespeichert werden.",
+    "invalidOffset": "Offset muss eine nicht-negative ganze Zahl oder leer sein."
+  },
   "dealLineage": {
     "title": "Verknüpfte Dokumente",
     "quotes": "Angebote",
