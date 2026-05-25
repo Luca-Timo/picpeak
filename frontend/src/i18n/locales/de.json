@@ -1389,6 +1389,9 @@
     "contracts": {
       "title": "Verträge"
     },
+    "reminderTemplates": {
+      "title": "Erinnerungs-E-Mails"
+    },
     "apiTokens": {
       "title": "API-Tokens",
       "createError": "Token konnte nicht erstellt werden",
@@ -3658,11 +3661,7 @@
       "quotes": "Angebote",
       "invoices": "Rechnungen",
       "paymentDefaults": "Standard-Zahlungsbedingungen",
-      "installmentDefaults": "Standard-Trigger für Teilzahlungen",
-      "eventReminders": "Erinnerungen vor dem Anlass"
-    },
-    "eventReminders": {
-      "help": "Sende dem Kunden N Tage vor dem Anlass eine Erinnerungs-E-Mail. Pro-Anlass-Überschreibung (deaktivieren, eigener Text, eigener Offset) steht auf der Anlass-Detailseite zur Verfügung. Pro-Anlass-Typ-Vorlagen folgen dem Schlüssel „event_reminder_<event_type>“ mit Fallback auf „event_reminder_default“."
+      "installmentDefaults": "Standard-Trigger für Teilzahlungen"
     },
     "installmentDefaults": {
       "help": "Vorbelegung der Trigger für neue Zeilen im Teilzahlungs-Panel. Pro-Dokument-Anpassungen überschreiben; bestehende Dokumente behalten ihren gespeicherten Plan.",
@@ -3720,12 +3719,6 @@
     "crm_invoices_installment_days_after_event": {
       "label": "Tage nach dem Anlass (letzte Teilzahlung)"
     },
-    "crm_event_reminders_enabled": {
-      "label": "Erinnerungs-E-Mails vor dem Anlass senden"
-    },
-    "crm_event_reminders_days_before": {
-      "label": "Tage vor dem Anlass (Standard-Offset)"
-    },
     "crm_invoices_number_format": {
       "label": "Format Rechnungsnummer"
     },
@@ -3766,6 +3759,28 @@
     "intro": "Vielen Dank für Ihre Anfrage. Bitte prüfen Sie das folgende Angebot und antworten Sie unten.",
     "accept": "Angebot annehmen",
     "decline": "Angebot ablehnen"
+  },
+  "reminderTemplates": {
+    "title": "Erinnerungs-E-Mails vor dem Anlass",
+    "globalSection": "Globales Verhalten",
+    "globalHelp": "Standardmässig aus — aktiviere, um Erinnerungen zu senden. Der unten gesetzte Offset ist der Standard; jeder Anlass kann ihn auf der Detailseite überschreiben.",
+    "enableLabel": "Erinnerungs-E-Mails vor dem Anlass senden",
+    "daysBeforeLabel": "Tage vor dem Anlass",
+    "saveSettings": "Globale Einstellungen speichern",
+    "settingsSaved": "Erinnerungs-Einstellungen gespeichert.",
+    "settingsSaveError": "Erinnerungs-Einstellungen konnten nicht gespeichert werden.",
+    "templatesSection": "Vorlagen",
+    "templatesHelp": "Eine Vorlage pro Anlass-Typ plus eine Standard-Vorlage als Auffang-Lösung. Pro-Typ-Vorlagen erben die Felder von der Standard-Vorlage, bis du die erste Anpassung speicherst.",
+    "defaultLabel": "Standard (Auffang)",
+    "usesDefault": "Standard",
+    "willCreateOnSave": "Dieser Anlass-Typ verwendet die Standard-Vorlage. Die Felder unten sind aus der Standard-Vorlage vorbelegt; beim Speichern wird eine eigene Vorlage für diesen Anlass-Typ erstellt.",
+    "variablesHint": "Verfügbare Variablen: {{customer_name}}, {{event_name}}, {{event_date}}, {{event_type}}, {{days_before}}, {{business_name}}",
+    "subjectLabel": "Betreff",
+    "bodyTextLabel": "Text (Klartext)",
+    "bodyHtmlLabel": "Text (HTML)",
+    "saveTemplate": "Vorlage speichern",
+    "saved": "Vorlage gespeichert.",
+    "saveError": "Vorlage konnte nicht gespeichert werden."
   },
   "dealLineage": {
     "title": "Verknüpfte Dokumente",

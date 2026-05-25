@@ -1028,6 +1028,9 @@
     "contracts": {
       "title": "Contracts"
     },
+    "reminderTemplates": {
+      "title": "Reminder emails"
+    },
     "apiTokens": {
       "title": "API Tokens",
       "createError": "Failed to create token",
@@ -3655,11 +3658,7 @@
       "quotes": "Quotes",
       "invoices": "Invoices",
       "paymentDefaults": "Default payment conditions",
-      "installmentDefaults": "Default installment triggers",
-      "eventReminders": "Pre-event customer reminders"
-    },
-    "eventReminders": {
-      "help": "Send a customer reminder N days before the event date. Per-event override (disable, custom body, custom offset) is available on each event's detail page. Per-type templates use the key \"event_reminder_<event_type>\" and fall back to \"event_reminder_default\"."
+      "installmentDefaults": "Default installment triggers"
     },
     "paymentDefaults": {
       "help": "Pre-filled on every new quote and invoice. The editor still lets you pick a different combination per document.",
@@ -3717,12 +3716,6 @@
     "crm_invoices_installment_days_after_event": {
       "label": "Days after event (final installment)"
     },
-    "crm_event_reminders_enabled": {
-      "label": "Send pre-event reminder emails"
-    },
-    "crm_event_reminders_days_before": {
-      "label": "Days before the event (default offset)"
-    },
     "crm_invoices_number_format": {
       "label": "Invoice number format"
     },
@@ -3763,6 +3756,28 @@
     "intro": "Please accept or decline this quote:",
     "accept": "Accept quote",
     "decline": "Decline"
+  },
+  "reminderTemplates": {
+    "title": "Pre-event reminder emails",
+    "globalSection": "Global behaviour",
+    "globalHelp": "Off by default — turn on to start sending pre-event reminders. The offset below is the default; each event can override on its detail page.",
+    "enableLabel": "Send pre-event reminder emails",
+    "daysBeforeLabel": "Days before the event",
+    "saveSettings": "Save global settings",
+    "settingsSaved": "Reminder settings saved.",
+    "settingsSaveError": "Could not save reminder settings.",
+    "templatesSection": "Templates",
+    "templatesHelp": "One template per event type, plus a catch-all default. Per-type templates inherit fields from the default until you save your first edit.",
+    "defaultLabel": "Default (catch-all)",
+    "usesDefault": "Default",
+    "willCreateOnSave": "This event type uses the default template. The fields below are pre-filled from the default; saving will create a dedicated template for this event type.",
+    "variablesHint": "Available variables: {{customer_name}}, {{event_name}}, {{event_date}}, {{event_type}}, {{days_before}}, {{business_name}}",
+    "subjectLabel": "Subject",
+    "bodyTextLabel": "Body (plain text)",
+    "bodyHtmlLabel": "Body (HTML)",
+    "saveTemplate": "Save template",
+    "saved": "Template saved.",
+    "saveError": "Could not save template."
   },
   "dealLineage": {
     "title": "Related documents",

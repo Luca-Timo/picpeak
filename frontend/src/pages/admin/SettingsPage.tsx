@@ -49,8 +49,9 @@ import { CMSPage } from './CMSPage';
 // CRM (#TBD)
 import { SettingsBusinessProfilePage } from './settings/SettingsBusinessProfilePage';
 import { CrmSettingsPage } from './settings/CrmSettingsPage';
+import { ReminderTemplatesPage } from './settings/ReminderTemplatesPage';
 import { BlockLibraryPage } from './contracts/BlockLibraryPage';
-import { Briefcase, Receipt, ScrollText } from 'lucide-react';
+import { Briefcase, Receipt, ScrollText, Mail } from 'lucide-react';
 
 // Tab keys driving the inner-nav. Must include every key used in
 // `navGroups` below and in the switch at the bottom of the component.
@@ -78,7 +79,8 @@ type TabType =
   // CRM behaviour toggles.
   | 'businessProfile'
   | 'crm'
-  | 'contracts';
+  | 'contracts'
+  | 'reminderTemplates';
 
 interface NavItem {
   key: TabType;
@@ -98,7 +100,7 @@ const ALL_TAB_KEYS: TabType[] = [
   'security', 'imageSecurity', 'seo',
   'apiTokens', 'webhooks',
   'status', 'analytics', 'backup',
-  'businessProfile', 'crm', 'contracts',
+  'businessProfile', 'crm', 'contracts', 'reminderTemplates',
 ];
 
 function isValidTab(value: string | null): value is TabType {
@@ -235,9 +237,10 @@ export const SettingsPage: React.FC = () => {
       // individual surfaces enforce their own feature flags when used.
       label: t('settings.groups.crm', 'CRM-Settings'),
       items: [
-        { key: 'businessProfile', label: t('settings.businessProfile.title', 'Business profile'), icon: Briefcase },
-        { key: 'crm',             label: t('settings.crm.title',             'CRM behaviour'),    icon: Receipt },
-        { key: 'contracts',       label: t('settings.contracts.title',       'Contracts'),        icon: ScrollText },
+        { key: 'businessProfile',    label: t('settings.businessProfile.title', 'Business profile'), icon: Briefcase },
+        { key: 'crm',                label: t('settings.crm.title',             'CRM behaviour'),    icon: Receipt },
+        { key: 'contracts',          label: t('settings.contracts.title',       'Contracts'),        icon: ScrollText },
+        { key: 'reminderTemplates',  label: t('settings.reminderTemplates.title', 'Reminder emails'), icon: Mail },
       ],
     },
     {
@@ -257,7 +260,7 @@ export const SettingsPage: React.FC = () => {
   // header (FeaturesTab has its own icon+title+description block), skip
   // the Settings shell's section heading so the layout doesn't double
   // up.
-  const TABS_WITH_OWN_HEADER: TabType[] = ['features', 'email', 'branding', 'eventTypes', 'backup', 'cms', 'contracts'];
+  const TABS_WITH_OWN_HEADER: TabType[] = ['features', 'email', 'branding', 'eventTypes', 'backup', 'cms', 'contracts', 'reminderTemplates'];
   const showSectionHeading = !TABS_WITH_OWN_HEADER.includes(activeTab);
 
   return (
@@ -388,6 +391,7 @@ export const SettingsPage: React.FC = () => {
           {activeTab === 'businessProfile' && <SettingsBusinessProfilePage />}
           {activeTab === 'crm' && <CrmSettingsPage />}
           {activeTab === 'contracts' && <BlockLibraryPage />}
+          {activeTab === 'reminderTemplates' && <ReminderTemplatesPage />}
 
           {activeTab === 'status' && (
             <StatusTab

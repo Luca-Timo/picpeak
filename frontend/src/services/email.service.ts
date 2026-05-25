@@ -91,6 +91,22 @@ export const emailService = {
     await api.put(`/admin/email/templates/${key}`, data);
   },
 
+  /** Create a new email template. Used by ReminderTemplatesPage to
+   *  spawn a per-event-type reminder (e.g. `event_reminder_wedding`)
+   *  initialised with the default catch-all's content. Returns 409 if
+   *  the key already exists. */
+  async createTemplate(payload: {
+    template_key: string;
+    translations: Record<string, EmailTemplateTranslation>;
+    category?: string;
+    subcategory?: string;
+    feature_flag?: string;
+    variables?: string[];
+  }): Promise<{ template_key: string; id: number }> {
+    const response = await api.post<{ template_key: string; id: number }>('/admin/email/templates', payload);
+    return response.data;
+  },
+
   // Preview email template
   async previewTemplate(key: string, previewData: Record<string, string>, language: string = 'en'): Promise<EmailPreview> {
     const response = await api.post<EmailPreview>(
