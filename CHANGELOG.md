@@ -5,6 +5,14 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.54.6-beta.0](https://github.com/the-luap/picpeak/compare/v3.54.5-beta.0...v3.54.6-beta.0) (2026-05-25)
+
+
+### Bug Fixes
+
+* **api/v1:** accept color_theme + create feedback row on event create ([#550](https://github.com/the-luap/picpeak/issues/550)) ([7ef0e40](https://github.com/the-luap/picpeak/commit/7ef0e40e7cee2ab6eeea4fe75c558e930e31241d))
+* **api/v1:** accept color_theme + create feedback row on event create ([#550](https://github.com/the-luap/picpeak/issues/550)) ([1b521e7](https://github.com/the-luap/picpeak/commit/1b521e761c3e2cc6c885d03ef746aa7e77e6f067))
+
 ## [3.54.5-beta.0](https://github.com/the-luap/picpeak/compare/v3.54.4-beta.0...v3.54.5-beta.0) (2026-05-22)
 
 
