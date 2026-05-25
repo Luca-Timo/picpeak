@@ -3655,7 +3655,11 @@
       "quotes": "Quotes",
       "invoices": "Invoices",
       "paymentDefaults": "Default payment conditions",
-      "installmentDefaults": "Default installment triggers"
+      "installmentDefaults": "Default installment triggers",
+      "eventReminders": "Pre-event customer reminders"
+    },
+    "eventReminders": {
+      "help": "Send a customer reminder N days before the event date. Per-event override (disable, custom body, custom offset) is available on each event's detail page. Per-type templates use the key \"event_reminder_<event_type>\" and fall back to \"event_reminder_default\"."
     },
     "paymentDefaults": {
       "help": "Pre-filled on every new quote and invoice. The editor still lets you pick a different combination per document.",
@@ -3712,6 +3716,12 @@
     },
     "crm_invoices_installment_days_after_event": {
       "label": "Days after event (final installment)"
+    },
+    "crm_event_reminders_enabled": {
+      "label": "Send pre-event reminder emails"
+    },
+    "crm_event_reminders_days_before": {
+      "label": "Days before the event (default offset)"
     },
     "crm_invoices_number_format": {
       "label": "Invoice number format"

@@ -39,6 +39,12 @@ const SETTING_KEYS = [
   'crm_invoices_installment_trigger_first',
   'crm_invoices_installment_days_before_event',
   'crm_invoices_installment_days_after_event',
+  // Pre-event customer reminders (migration 143). Off by default —
+  // admin opts in. Per-event override lives on each event's detail
+  // page so a single noisy event can be silenced without flipping
+  // the global toggle.
+  'crm_event_reminders_enabled',
+  'crm_event_reminders_days_before',
   'crm_invoices_number_format',
   // Default Net days + Payment timing pickers (migration 124+125).
   // The per-quote/per-invoice picker becomes a true override over
@@ -284,6 +290,33 @@ export const CrmSettingsPage: React.FC = () => {
               label={t('crmSettings.crm_invoices_installment_days_after_event.label', 'Days after event (final installment)') as string}
               value={values.crm_invoices_installment_days_after_event ?? 14}
               onChange={(e) => setVal('crm_invoices_installment_days_after_event', Number(e.target.value))} />
+          </div>
+        </div>
+
+        {/* Pre-event customer reminders (migration 143). Hourly cron
+            picks events within the window and sends a per-type
+            reminder email (event_reminder_<event_type> with fallback
+            to event_reminder_default). Per-event override lives on
+            each event's detail page. */}
+        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+          <h4 className="font-semibold mb-2 text-sm">
+            {t('crmSettings.section.eventReminders', 'Pre-event customer reminders')}
+          </h4>
+          <p className="text-xs text-neutral-500 mb-3">
+            {t('crmSettings.eventReminders.help',
+              'Send a customer reminder N days before the event date. Per-event override (disable, custom body, custom offset) is available on each event\'s detail page. Per-type templates use the key "event_reminder_<event_type>" and fall back to "event_reminder_default".')}
+          </p>
+          {checkbox('crm_event_reminders_enabled',
+            t('crmSettings.crm_event_reminders_enabled.label',
+              'Send pre-event reminder emails') as string)}
+          <div className="mt-3">
+            <Input type="number" min={0} max={365}
+              label={t('crmSettings.crm_event_reminders_days_before.label',
+                'Days before the event (default offset)') as string}
+              value={values.crm_event_reminders_days_before ?? 2}
+              onChange={(e) => setVal('crm_event_reminders_days_before', Number(e.target.value))}
+              className="md:w-64"
+            />
           </div>
         </div>
 

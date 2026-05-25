@@ -63,6 +63,12 @@ const DEFAULT_DAYS_BEFORE = 2;
 const TEMPLATE_KEY_DEFAULT = 'event_reminder_default';
 const TEMPLATE_KEY_PREFIX = 'event_reminder_';
 
+// One-shot guard: the "schema not migrated" warn would otherwise fire
+// once per cron tick (≈ hourly) on installs that haven't applied
+// migration 143 yet. Log on the first encounter only — subsequent
+// ticks no-op silently.
+let schemaWarnLogged = false;
+
 /**
  * Lookup the most specific available template for an event_type slug.
  * Returns the template_key string. The email_processor handles missing
@@ -125,7 +131,10 @@ async function runEventReminderPass() {
   // instead of throwing.
   const hasCols = await hasColumnCached('events', 'event_reminder_sent_at');
   if (!hasCols) {
-    logger.info('Event reminder pass skipped — schema not yet migrated');
+    if (!schemaWarnLogged) {
+      logger.warn('Event reminder pass skipped — schema not yet migrated (run migration 143). Suppressing further warnings until restart.');
+      schemaWarnLogged = true;
+    }
     return { scanned: 0, sent: 0, skipped: 0 };
   }
 
@@ -216,9 +225,20 @@ async function runEventReminderPass() {
     }
   }
 
-  if (sent + skipped > 0) {
-    logger.info('Event reminder pass complete', {
+  // Production-quiet: only log when something actually happened
+  // (a send or a skipped row inside the trigger window). Empty passes
+  // — common when there are no upcoming events — stay silent so the
+  // hourly cron doesn't paper the logs.
+  if (sent > 0) {
+    logger.info('Event reminder pass: sent reminders', {
       scanned: rows.length, sent, skipped,
+    });
+  } else if (skipped > 0) {
+    // skipped > 0 with sent === 0 means at least one event WAS in the
+    // window but couldn't be sent (missing email, send error). Log at
+    // info so it's visible without being noisy on healthy passes.
+    logger.info('Event reminder pass: rows skipped (no-send)', {
+      scanned: rows.length, skipped,
     });
   }
   return { scanned: rows.length, sent, skipped };
