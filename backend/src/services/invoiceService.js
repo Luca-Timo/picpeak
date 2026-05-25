@@ -633,7 +633,11 @@ async function createInvoice(payload, adminId, trx = db) {
   const currency = (payload.currency || profile?.default_currency || 'CHF').toUpperCase();
   const language = payload.language || customer.preferred_language || profile?.default_locale || 'de';
 
-  const invoiceNumber = await nextInvoiceNumber();
+  // Sequence number is claimed BELOW the installment auto-route so a
+  // multi-installment save doesn't waste a number. When installments
+  // are present, spawnInstallmentInvoices claims one number per
+  // sibling and we never reach the single-row insert that would have
+  // used `invoiceNumber` here.
   const issueDate = payload.issueDate || new Date().toISOString().slice(0, 10);
   const scheduledSendAt = payload.scheduledSendAt ? new Date(payload.scheduledSendAt) : null;
   // Resolve the selected payment-term template's net_days BEFORE
@@ -790,6 +794,11 @@ async function createInvoice(payload, adminId, trx = db) {
     });
   }
 
+  // Claim the sequence number HERE — after the installment auto-route
+  // has been ruled out. Previously this was at the top of the function
+  // which leaked one number per multi-installment save (the spawner
+  // claims its own numbers and never used this one).
+  const invoiceNumber = await nextInvoiceNumber();
   const row = {
     invoice_number: invoiceNumber,
     customer_account_id: payload.customerAccountId,
