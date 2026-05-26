@@ -838,8 +838,8 @@ exports.up = async function (knex) {
       // Back-pointer to the contract this quote spawned (mig 131).
       // Quote detail page deep-links to the contract; service refuses
       // double conversion to event/invoice when this is set.
-      table.integer('converted_contract_id').unsigned()
-        .references('id').inTable('contracts').onDelete('SET NULL');
+      // FK added below after contracts table exists (forward ref).
+      table.integer('converted_contract_id').unsigned();
 
       table.string('pdf_path', 512);
       table.integer('business_bank_account_id').unsigned()
@@ -934,8 +934,8 @@ exports.up = async function (knex) {
         .references('id').inTable('quotes').onDelete('SET NULL');
       // Back-pointer to the source contract (mig 131) when the invoice
       // was created from a signed contract rather than a quote.
-      table.integer('source_contract_id').unsigned()
-        .references('id').inTable('contracts').onDelete('SET NULL');
+      // FK added below after contracts table exists (forward ref).
+      table.integer('source_contract_id').unsigned();
       table.integer('event_id').unsigned()
         .references('id').inTable('events').onDelete('SET NULL');
       // Storno + reissue self-refs (mig 114). ON DELETE SET NULL so
@@ -1290,6 +1290,31 @@ exports.up = async function (knex) {
       table.index(['source_quote_id']);
       table.index('deal_uuid', 'contracts_deal_uuid_idx');
     });
+  }
+
+  // Deferred FKs: quotes.converted_contract_id + invoices.source_contract_id
+  // both reference contracts(id), but the contracts table is created after
+  // quotes/invoices in this migration (lineage flows quote → contract →
+  // invoice, but the back-pointers were added in later originals — see
+  // migs 131 + 141). Add the constraints now that contracts exists.
+  // Wrapped in try/catch so a re-run on a DB that already has them is a
+  // no-op (matches the events.hero_photo_id pattern in db.js).
+  for (const [parent, column] of [
+    ['quotes', 'converted_contract_id'],
+    ['invoices', 'source_contract_id'],
+  ]) {
+    try {
+      await knex.schema.alterTable(parent, (table) => {
+        table.foreign(column)
+          .references('id').inTable('contracts')
+          .onDelete('SET NULL');
+      });
+    } catch (err) {
+      const msg = err?.message || '';
+      if (!/already exists|duplicate|exists/i.test(msg)) {
+        throw err;
+      }
+    }
   }
 
   if (!(await knex.schema.hasTable('contract_block_inclusions'))) {
