@@ -3804,7 +3804,17 @@
     "invoices": "Rechnungen",
     "loading": "Verknüpfte Dokumente werden geladen…",
     "error": "Verknüpfte Dokumente konnten nicht geladen werden.",
-    "empty": "Noch keine weiteren Dokumente in diesem Vorgang. Neue Rechnungen, Verträge oder Teilzahlungen erscheinen hier, sobald sie erstellt werden."
+    "empty": "Noch keine weiteren Dokumente in diesem Vorgang. Neue Rechnungen, Verträge oder Teilzahlungen erscheinen hier, sobald sie erstellt werden.",
+    "editPlan": "Plan bearbeiten",
+    "editPlanModalTitle": "Teilzahlungsplan bearbeiten",
+    "editPlanHelp": "Den Plan atomar umformen: Prozente, Bezeichnungen, Trigger ändern, Zeilen hinzufügen oder entfernen. Der Plan-Gesamtbetrag bleibt fix; bestehende Rechnungsnummern werden wo möglich beibehalten. Nicht mehr möglich, sobald eine Rechnung versendet wurde.",
+    "editPlanWarning": "Beim Entfernen von Zeilen werden deren Rechnungsnummern gelöscht (die Nummernfolge kann sie nicht freigeben — §14 UStG-Kontinuitätspflicht). Neue Zeilen vergeben frische Nummern.",
+    "editPlanSave": "Plan speichern",
+    "editPlanSuccess": "Teilzahlungsplan aktualisiert.",
+    "editPlanLocked": "Plan kann nicht mehr bearbeitet werden — mindestens eine Rechnung wurde versendet oder storniert.",
+    "editPlanPercentSumError": "Prozente müssen sich auf 100 summieren.",
+    "editPlanGeneralError": "Plan konnte nicht aktualisiert werden.",
+    "editPlanEmpty": "Plan darf nicht leer sein."
   },
   "installments": {
     "enableLabel": "In Teilzahlungen aufteilen",
