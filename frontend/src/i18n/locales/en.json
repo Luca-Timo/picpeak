@@ -3801,7 +3801,17 @@
     "invoices": "Invoices",
     "loading": "Loading related documents…",
     "error": "Could not load related documents.",
-    "empty": "No other documents share this deal yet. New invoices, contracts, or installments will show up here once created."
+    "empty": "No other documents share this deal yet. New invoices, contracts, or installments will show up here once created.",
+    "editPlan": "Edit plan",
+    "editPlanModalTitle": "Edit installment plan",
+    "editPlanHelp": "Atomically reshape this plan: change percents, labels, triggers, add or remove rows. The plan total stays fixed; existing invoice numbers are kept where possible. Refused once any invoice has shipped.",
+    "editPlanWarning": "Trimming rows deletes their invoice numbers (the sequence cannot release them — a §14 UStG continuity rule). Adding rows claims fresh numbers.",
+    "editPlanSave": "Save plan",
+    "editPlanSuccess": "Installment plan updated.",
+    "editPlanLocked": "Plan can no longer be edited — at least one invoice has shipped or been cancelled.",
+    "editPlanPercentSumError": "Percents must sum to 100.",
+    "editPlanGeneralError": "Could not update plan.",
+    "editPlanEmpty": "Plan cannot be empty."
   },
   "installments": {
     "enableLabel": "Split into installments",
