@@ -14,7 +14,7 @@
  * picker (customers don't have roles — access is boolean per event,
  * managed via the event form's CustomerAccountPicker).
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -46,7 +46,18 @@ export const CustomerManagementPage: React.FC = () => {
     try { return fmtDate(new Date(iso)); } catch { return '—'; }
   };
   const [activeTab, setActiveTab] = useState<TabType>('customers');
+  // `searchTerm` is the live controlled-input value (keeps the box
+  // responsive). `debouncedTerm` lags 250ms behind so the filter +
+  // table re-render only fire after the user pauses typing — matches
+  // the pattern used in CustomerPicker for the same reason. Filtering
+  // is client-side so this doesn't change network shape; the win is
+  // on the render side for installs with many rows.
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedTerm, setDebouncedTerm] = useState('');
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedTerm(searchTerm), 250);
+    return () => window.clearTimeout(handle);
+  }, [searchTerm]);
   // Single state drives the unified create/invite modal. Both header
   // buttons open the SAME modal (InlineCustomerCreate) — only the
   // mode-specific action button is rendered inside, so the admin's
@@ -68,22 +79,22 @@ export const CustomerManagementPage: React.FC = () => {
 
   const filteredCustomers = useMemo(() => {
     const list = customers || [];
-    if (!searchTerm.trim()) return list;
-    const term = searchTerm.trim().toLowerCase();
+    if (!debouncedTerm.trim()) return list;
+    const term = debouncedTerm.trim().toLowerCase();
     return list.filter((c) =>
       c.email.toLowerCase().includes(term)
       || (c.displayName || '').toLowerCase().includes(term)
       || (c.lastName || '').toLowerCase().includes(term)
       || (c.companyName || '').toLowerCase().includes(term)
     );
-  }, [customers, searchTerm]);
+  }, [customers, debouncedTerm]);
 
   const filteredInvitations = useMemo(() => {
     const list = invitations || [];
-    if (!searchTerm.trim()) return list;
-    const term = searchTerm.trim().toLowerCase();
+    if (!debouncedTerm.trim()) return list;
+    const term = debouncedTerm.trim().toLowerCase();
     return list.filter((i) => i.email.toLowerCase().includes(term));
-  }, [invitations, searchTerm]);
+  }, [invitations, debouncedTerm]);
 
   const deactivateMutation = useMutation({
     mutationFn: (id: number) => customerAdminService.deactivate(id),
