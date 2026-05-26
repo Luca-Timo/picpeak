@@ -168,6 +168,19 @@ export const settingsService = {
     return response.data;
   },
 
+  // Get a subset of settings by key. Use this when a caller knows
+  // exactly which keys it needs — saves transferring (and JSON-parsing)
+  // the ~100-row dict. The backend accepts a comma-separated list and
+  // returns the same shape as getAllSettings(), just narrower.
+  async getSettings(keys: string[]): Promise<Record<string, any>> {
+    if (!keys || keys.length === 0) return {};
+    const response = await api.get<Record<string, any>>(
+      '/admin/settings',
+      { params: { keys: keys.join(',') } },
+    );
+    return response.data;
+  },
+
   // Get settings by type
   async getSettingsByType(type: 'branding' | 'theme' | 'general'): Promise<Record<string, any>> {
     const response = await api.get<Record<string, any>>(`/admin/settings/${type}`);

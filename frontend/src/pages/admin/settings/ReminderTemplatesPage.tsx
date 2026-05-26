@@ -62,9 +62,15 @@ export const ReminderTemplatesPage: React.FC = () => {
   const queryClient = useQueryClient();
 
   // ---- Global toggles ---------------------------------------------------
+  // Only two keys are read on this page — fetch just those instead of
+  // the full ~100-row app_settings dict. Saves transferring + parsing
+  // every unrelated setting.
   const { data: settings } = useQuery({
     queryKey: ['reminder-settings'],
-    queryFn: () => settingsService.getAllSettings(),
+    queryFn: () => settingsService.getSettings([
+      'crm_event_reminders_enabled',
+      'crm_event_reminders_days_before',
+    ]),
   });
   const [enabled, setEnabled] = useState<boolean>(false);
   const [daysBefore, setDaysBefore] = useState<number>(2);

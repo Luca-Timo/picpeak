@@ -94,11 +94,24 @@ const faviconUpload = multer({
   }
 });
 
-// Get all settings
+// Get all settings, or a subset when ?keys=k1,k2,… is supplied.
+// Many caller pages only need a handful of keys (e.g. ReminderTemplates
+// reads 2 of the ~100 rows). The keys filter is allowlist-bounded by
+// what's stored, so passing unknown keys just returns them as `null`
+// — no enumeration risk beyond what GET / returned already.
 router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) => {
   try {
-    const settings = await db('app_settings').select('*');
-    
+    const keysParam = typeof req.query.keys === 'string' ? req.query.keys : null;
+    const keysFilter = keysParam
+      ? keysParam.split(',').map((k) => k.trim()).filter(Boolean).slice(0, 100)
+      : null;
+
+    const query = db('app_settings').select('*');
+    if (keysFilter && keysFilter.length > 0) {
+      query.whereIn('setting_key', keysFilter);
+    }
+    const settings = await query;
+
     // Convert to object format
     const settingsObject = {};
     settings.forEach(setting => {
