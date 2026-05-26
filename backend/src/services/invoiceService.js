@@ -26,6 +26,7 @@ const { getAppSetting } = require('../utils/appSettings');
 const { AppError } = require('../utils/errors');
 const { formatBoolean } = require('../utils/dbCompat');
 const { claimNextSequence } = require('../utils/documentSequences');
+const { formatShortDate } = require('../utils/dateFormatter');
 const businessProfileService = require('./businessProfileService');
 const { buildIssuerBlock, buildRecipientBlock } = require('./_renderContext');
 const pdfService = require('./pdfService');
@@ -3254,20 +3255,6 @@ function formatMajor(minor, currency, locale) {
   return new Intl.NumberFormat(intlLocale, {
     style: 'currency', currency: (currency || 'CHF').toUpperCase(),
   }).format(Number(minor || 0) / 100);
-}
-
-/**
- * Format a date as DD.MM.YYYY for customer-facing email templates.
- * Duplicate of the helper in quoteService — kept local to avoid the
- * services growing a circular dep.
- */
-function formatShortDate(value) {
-  if (!value) return '';
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${dd}.${mm}.${d.getFullYear()}`;
 }
 
 module.exports = {

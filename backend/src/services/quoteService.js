@@ -33,6 +33,7 @@ const { getAppSetting } = require('../utils/appSettings');
 const { AppError } = require('../utils/errors');
 const { formatBoolean } = require('../utils/dbCompat');
 const { claimNextSequence } = require('../utils/documentSequences');
+const { formatShortDate } = require('../utils/dateFormatter');
 const businessProfileService = require('./businessProfileService');
 const { buildIssuerBlock, buildRecipientBlock } = require('./_renderContext');
 const pdfService = require('./pdfService');
@@ -929,22 +930,6 @@ function formatMajor(minor, currency, locale, issuerCountryCode) {
   return new Intl.NumberFormat(intlLocale, {
     style: 'currency', currency: (currency || 'CHF').toUpperCase(),
   }).format(Number(minor || 0) / 100);
-}
-
-/**
- * Format a date as DD.MM.YYYY for customer-facing email templates.
- * Accepts the value the DB returns (could be a Date, ISO string, or
- * already a YYYY-MM-DD string). Returns '' for nullish input so the
- * `{{#if valid_until}}…{{/if}}` block in the template still hides
- * cleanly when no expiry is set.
- */
-function formatShortDate(value) {
-  if (!value) return '';
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${dd}.${mm}.${d.getFullYear()}`;
 }
 
 /**

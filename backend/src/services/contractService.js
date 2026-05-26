@@ -41,6 +41,7 @@ const { getAppSetting } = require('../utils/appSettings');
 const { AppError } = require('../utils/errors');
 const { claimNextSequence } = require('../utils/documentSequences');
 const { hasColumnCached } = require('../utils/schemaCache');
+const { formatShortDate } = require('../utils/dateFormatter');
 const businessProfileService = require('./businessProfileService');
 const { buildIssuerBlock, buildRecipientBlock } = require('./_renderContext');
 const pdfService = require('./pdfService');
@@ -231,15 +232,6 @@ async function buildPlaceholderContext(contract, customer) {
     issuer_address: issuerAddress,
     source_quote_number: sourceQuoteNumber,
   };
-}
-
-function formatShortDate(value) {
-  if (!value) return '';
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${dd}.${mm}.${d.getFullYear()}`;
 }
 
 /**
