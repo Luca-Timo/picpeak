@@ -5,6 +5,14 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.54.7-beta.0](https://github.com/the-luap/picpeak/compare/v3.54.6-beta.0...v3.54.7-beta.0) (2026-05-26)
+
+
+### Bug Fixes
+
+* **lightbox:** restrict Web Share save-to-Photos path to iOS ([#554](https://github.com/the-luap/picpeak/issues/554)) ([578397b](https://github.com/the-luap/picpeak/commit/578397bc6b27b56ccf3bf1f2f244e0e0053c493a))
+* **lightbox:** restrict Web Share save-to-Photos path to iOS ([#554](https://github.com/the-luap/picpeak/issues/554)) ([2a309c7](https://github.com/the-luap/picpeak/commit/2a309c75a74be3af3eb67758f8d65f801ef3019a))
+
 ## [3.54.6-beta.0](https://github.com/the-luap/picpeak/compare/v3.54.5-beta.0...v3.54.6-beta.0) (2026-05-25)
 
 
