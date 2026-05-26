@@ -574,6 +574,11 @@ export const CustomerDetailPage: React.FC = () => {
           often, but they need to live above the destructive
           "Account actions" row so the feature surface and its
           actions read as one unit. */}
+      {/* Hide the whole Card when every flag that could surface a
+          toggle inside it is OFF — an empty "Customer features" card
+          with just a title + hint reads as broken. The Card reappears
+          the moment any master flag is re-enabled. */}
+      {(flags.calendar || flags.quotes || flags.bills || flags.hoursLogging) && (
       <Card padding="lg">
         <h2 className="text-lg font-semibold text-theme mb-1 flex items-center gap-2">
           <ToggleLeft className="w-5 h-5" />
@@ -587,19 +592,28 @@ export const CustomerDetailPage: React.FC = () => {
         </p>
         <div className="space-y-3">
           {([
+            // Each per-customer toggle hides when its master feature
+            // flag is OFF — the toggle would do nothing in that state
+            // and only confuses the admin. The "feature is disabled
+            // globally" signal is conveyed by the row simply not
+            // appearing, mirroring the hoursLogging pattern below.
+            //
             // `badge` controls which status pill is shown:
             //   - 'soon' (amber) for tabs that still don't have a
-            //     customer-facing surface (Calendar)
+            //     customer-facing surface (Calendar booking)
             //   - 'new' (green) for shipped customer-facing tabs that
             //     are recent additions to the admin's vocabulary so
             //     they catch the eye when reviewing per-customer
             //     overrides. Matches Settings → Features StatusBadge.
-            { key: 'featureCalendar', labelKey: 'customer.nav.calendar', fallback: 'Calendar', badge: 'soon' as const },
-            { key: 'featureQuotes',   labelKey: 'customer.nav.quotes',   fallback: 'Quotes',   badge: 'new'  as const },
-            { key: 'featureBills',    labelKey: 'customer.nav.bills',    fallback: 'Bills',    badge: 'new'  as const },
-            // Hide the per-customer hours toggle when the master flag
-            // is off — admin gets a clear "feature is disabled
-            // globally" signal by the toggle simply not appearing.
+            ...(flags.calendar
+              ? [{ key: 'featureCalendar' as const, labelKey: 'customer.nav.calendar', fallback: 'Calendar', badge: 'soon' as const }]
+              : []),
+            ...(flags.quotes
+              ? [{ key: 'featureQuotes' as const,   labelKey: 'customer.nav.quotes',   fallback: 'Quotes',   badge: 'new'  as const }]
+              : []),
+            ...(flags.bills
+              ? [{ key: 'featureBills' as const,    labelKey: 'customer.nav.bills',    fallback: 'Bills',    badge: 'new'  as const }]
+              : []),
             ...(flags.hoursLogging
               ? [{ key: 'featureHoursLogging' as const, labelKey: 'customers.field.featureHoursLogging', fallback: 'Hours logging', badge: 'new' as const }]
               : []),
@@ -670,6 +684,7 @@ export const CustomerDetailPage: React.FC = () => {
           </div>
         )}
       </Card>
+      )}
 
       {/* Billing cadence (migration 102 + 128). Per-event keeps the
           standard invoice-per-event flow; monthly accumulates all
