@@ -20,6 +20,8 @@ const logger = require('../utils/logger');
 const { buildShareLinkVariants } = require('../services/shareLinkService');
 const { parseBooleanInput, parseStringInput } = require('../utils/parsers');
 const eventTypeService = require('../services/eventTypeService');
+const { normaliseEventTimeTriple } = require('../services/eventService');
+const { hasColumnCached } = require('../utils/schemaCache');
 const { validateFileType } = require('../utils/fileSecurityUtils');
 const { requireEventOwnership } = require('../middleware/ownership');
 const { getFrontendBaseUrl } = require('../utils/frontendUrl');
@@ -334,6 +336,12 @@ router.post('/', adminAuth, requirePermission('events.create'), [
   }),
   body('event_name').notEmpty().trim(),
   body('event_date').optional({ values: 'falsy' }).isDate(),
+  // Migration 137 — calendar time fields.
+  body('event_time_start').optional({ values: 'falsy' }).matches(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .withMessage('event_time_start must be HH:MM 24h'),
+  body('event_time_end').optional({ values: 'falsy' }).matches(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .withMessage('event_time_end must be HH:MM 24h'),
+  body('is_full_day').optional().isBoolean().toBoolean(),
   body('customer_name').optional().trim(),
   body('customer_email').optional({ values: 'falsy' }).isEmail().normalizeEmail(),
   body('customer_phone').optional({ nullable: true, checkFalsy: true })
@@ -425,6 +433,11 @@ router.post('/', adminAuth, requirePermission('events.create'), [
       event_type,
       event_name,
       event_date,
+      // Migration 137 — calendar time fields. is_full_day defaults to
+      // true at the service layer when undefined (legacy form payloads).
+      event_time_start,
+      event_time_end,
+      is_full_day,
       admin_email,
       password,
       welcome_message = '',
@@ -634,12 +647,24 @@ router.post('/', adminAuth, requirePermission('events.create'), [
           ? protectionDefaults.enable_devtools_protection
           : true;
 
+    // Migration 137 — normalise calendar time triple. Throws AppError
+    // 400 when is_full_day=false but times are malformed/inverted.
+    const calendarTriple = normaliseEventTimeTriple({
+      event_time_start, event_time_end, is_full_day,
+    });
+    const calendarColumnsExist = await hasColumnCached('events', 'is_full_day');
+
     // Insert into database
     const insertResult = await db('events').insert({
       slug,
       event_type,
       event_name,
       event_date: event_date || null,
+      ...(calendarColumnsExist ? {
+        event_time_start: calendarTriple.event_time_start,
+        event_time_end: calendarTriple.event_time_end,
+        is_full_day: formatBoolean(calendarTriple.is_full_day),
+      } : {}),
       ...(customerColumnsAvailable ? { customer_name: customerName, customer_email: customerEmail } : {}),
       ...(customerPhone ? { customer_phone: customerPhone } : {}),
       host_name: customerName || null,
@@ -1102,12 +1127,30 @@ router.post('/:id/publish', adminAuth, requirePermission('events.edit'), require
 // Update event
 router.put('/:id', adminAuth, requirePermission('events.edit'), requireEventOwnership, [
   body('event_name').optional().trim().notEmpty(),
+  body('event_date').optional({ values: 'falsy' }).isDate(),
+  // Migration 137 — calendar time fields. Same regex/range rule as POST.
+  body('event_time_start').optional({ values: 'falsy', nullable: true })
+    .matches(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .withMessage('event_time_start must be HH:MM 24h'),
+  body('event_time_end').optional({ values: 'falsy', nullable: true })
+    .matches(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .withMessage('event_time_end must be HH:MM 24h'),
+  body('is_full_day').optional().isBoolean().toBoolean(),
   body('admin_email').optional().isEmail(),
   body('is_active').optional().isBoolean(),
   body('expires_at').optional({ nullable: true, checkFalsy: true }).isISO8601(),
   body('welcome_message').optional({ nullable: true, checkFalsy: true }).trim(),
   body('color_theme').optional({ nullable: true }),
   body('allow_user_uploads').optional().isBoolean(),
+  // Migration 143 — per-event reminder overrides. All three are
+  // optional; nullable values are accepted so admins can clear an
+  // override (e.g. drop a custom offset back to the global default).
+  body('event_reminder_disabled').optional().isBoolean(),
+  body('event_reminder_offset_days').optional({ nullable: true })
+    .custom((v) => v === null || (Number.isInteger(Number(v)) && Number(v) >= 0))
+    .withMessage('event_reminder_offset_days must be a non-negative integer or null'),
+  body('event_reminder_body_override').optional({ nullable: true, checkFalsy: true })
+    .isString().isLength({ max: 10_000 }),
   body('customer_name').optional({ nullable: true, checkFalsy: true }).trim(),
   body('customer_email').optional().isEmail().normalizeEmail(),
   body('customer_phone').optional({ nullable: true, checkFalsy: true })
@@ -1290,6 +1333,32 @@ router.put('/:id', adminAuth, requirePermission('events.edit'), requireEventOwne
     // the UPDATE statement throws "column does not exist" and crashes
     // the entire edit with 500 Failed to update event.
     delete updates.customer_account_ids;
+
+    // Migration 137 — calendar time triple. Renormalise only when at
+    // least one of the three fields was supplied; otherwise leave the
+    // row's current values alone. is_full_day=true forces both times
+    // to null. Drop the fields silently on un-migrated installs.
+    const timeFieldsTouched = (
+      Object.prototype.hasOwnProperty.call(updates, 'event_time_start')
+      || Object.prototype.hasOwnProperty.call(updates, 'event_time_end')
+      || Object.prototype.hasOwnProperty.call(updates, 'is_full_day')
+    );
+    if (timeFieldsTouched) {
+      if (await hasColumnCached('events', 'is_full_day')) {
+        const triple = normaliseEventTimeTriple({
+          event_time_start: updates.event_time_start,
+          event_time_end: updates.event_time_end,
+          is_full_day: updates.is_full_day,
+        });
+        updates.event_time_start = triple.event_time_start;
+        updates.event_time_end = triple.event_time_end;
+        updates.is_full_day = formatBoolean(triple.is_full_day);
+      } else {
+        delete updates.event_time_start;
+        delete updates.event_time_end;
+        delete updates.is_full_day;
+      }
+    }
 
     // Log the update request for debugging
     logger.debug('Update event request', {

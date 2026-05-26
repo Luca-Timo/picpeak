@@ -23,7 +23,6 @@ const { db } = require('../database/db');
 const watermarkService = require('./watermarkService');
 const { resolvePhotoStorageKey, resolvePhotoFilePath } = require('./photoResolver');
 const { getStorage } = require('./storage');
-const { getUseOriginalFilenames, getZipEntryNames } = require('./downloadFilenameService');
 const logger = require('../utils/logger');
 
 const DEBOUNCE_MS = 5000;
@@ -135,11 +134,6 @@ class DownloadZipService {
       tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'picpeak-zipbuild-'));
       const tmpPath = path.join(tmpDir, `${crypto.randomBytes(4).toString('hex')}-all.zip`);
 
-      // #493: resolve display filenames (with collision suffix) before the
-      // streaming starts so the loop just indexes the precomputed array.
-      const useOriginal = await getUseOriginalFilenames();
-      const entryNames = getZipEntryNames(photos, useOriginal);
-
       // Build zip — level 0 (store only) since photos are already compressed
       await new Promise((resolve, reject) => {
         const output = fs.createWriteStream(tmpPath);
@@ -153,21 +147,19 @@ class DownloadZipService {
         const hasMultipleTypes = uniqueTypes > 1;
 
         const addPhotos = async () => {
-          for (let i = 0; i < photos.length; i += 1) {
-            const photo = photos[i];
+          for (const photo of photos) {
             // Check if build was invalidated
             if (this.versions.get(eventId) !== version) {
               archive.abort();
               return reject(new Error('Build invalidated'));
             }
 
-            const entryName = entryNames[i];
             let archiveName;
             if (hasMultipleTypes) {
               const folderName = photo.type === 'individual' ? 'Individual Photos' : 'Collages';
-              archiveName = path.join(folderName, entryName);
+              archiveName = path.join(folderName, photo.filename);
             } else {
-              archiveName = entryName;
+              archiveName = photo.filename;
             }
 
             // External-mode photos still live on local disk; managed photos go

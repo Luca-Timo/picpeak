@@ -303,6 +303,16 @@ async function getTemplateTranslations(templateId, template) {
 // Get email templates
 router.get('/templates', adminAuth, requirePermission('email.view'), async (req, res) => {
   try {
+    // Self-heal: ensure the seeded event-reminder templates exist + are
+    // backfilled with example content on already-migrated installs. The
+    // function is idempotent and short-circuits via a module-level cache
+    // after one successful pass, so this is free on subsequent calls.
+    try {
+      const { ensureEventReminderTemplatesSeeded } = require('../services/eventReminderTemplates');
+      const log = require('../utils/logger');
+      await ensureEventReminderTemplatesSeeded(db, log);
+    } catch (_e) { /* non-fatal */ }
+
     const templates = await db('email_templates')
       .select('*')
       .orderBy('template_key');
@@ -449,6 +459,94 @@ router.put('/templates/:key', [
   } catch (error) {
     console.error('Email template update error:', error);
     res.status(500).json({ error: 'Failed to update email template' });
+  }
+});
+
+// Create a new email template. Used by the ReminderTemplatesPage to
+// mint a per-event-type reminder (template_key like
+// `event_reminder_<slug_prefix>`). Idempotent at the API level — if
+// the key already exists we return 409 so the caller knows to PUT
+// instead.
+router.post('/templates', [
+  adminAuth,
+  requirePermission('email.edit'),
+], async (req, res) => {
+  try {
+    const {
+      template_key: templateKey,
+      translations,
+      category,
+      subcategory,
+      feature_flag: featureFlag,
+      variables,
+    } = req.body;
+    if (!templateKey || typeof templateKey !== 'string' || !/^[a-z0-9_]+$/.test(templateKey)) {
+      return res.status(400).json({ error: 'template_key must be a snake_case identifier' });
+    }
+    if (!translations || typeof translations !== 'object') {
+      return res.status(400).json({ error: 'translations object is required' });
+    }
+
+    const existing = await db('email_templates').where({ template_key: templateKey }).first();
+    if (existing) {
+      return res.status(409).json({
+        error: 'Template already exists. Use PUT /templates/:key to update.',
+        code: 'TEMPLATE_EXISTS',
+      });
+    }
+
+    const cols = await db('email_templates').columnInfo();
+    const enContent = translations.en || {};
+
+    // Build the master row. The legacy single-row columns are populated
+    // from EN so older readers that don't consult the translations
+    // table still see something sensible.
+    const masterRow = { template_key: templateKey };
+    if (variables && 'variables' in cols) masterRow.variables = JSON.stringify(variables);
+    if (category && 'category' in cols) masterRow.category = category;
+    if (subcategory && 'subcategory' in cols) masterRow.subcategory = subcategory;
+    if (featureFlag && 'feature_flag' in cols) masterRow.feature_flag = featureFlag;
+    if ('created_at' in cols) masterRow.created_at = new Date();
+    if ('updated_at' in cols) masterRow.updated_at = new Date();
+    for (const colName of Object.keys(cols)) {
+      if (colName === 'subject' || /^subject_[a-z]{2,3}$/i.test(colName)) {
+        masterRow[colName] = enContent.subject || '';
+      } else if (colName === 'body_html' || /^body_html_[a-z]{2,3}$/i.test(colName)) {
+        masterRow[colName] = enContent.body_html || '';
+      } else if (colName === 'body_text' || /^body_text_[a-z]{2,3}$/i.test(colName)) {
+        masterRow[colName] = enContent.body_text || '';
+      }
+    }
+
+    const inserted = await db('email_templates').insert(masterRow).returning('id');
+    const templateId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
+
+    // Per-language rows in email_template_translations.
+    const hasTranslations = await db.schema.hasTable('email_template_translations');
+    if (hasTranslations && templateId) {
+      for (const [language, content] of Object.entries(translations)) {
+        if (!content || typeof content !== 'object') continue;
+        await db('email_template_translations').insert({
+          template_id: templateId,
+          language,
+          subject: content.subject || '',
+          body_html: content.body_html || '',
+          body_text: content.body_text || '',
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      }
+    }
+
+    await logActivity('email_template_created',
+      { template_key: templateKey, languages: Object.keys(translations) },
+      null,
+      { type: 'admin', id: req.admin.id, name: req.admin.username });
+
+    return res.status(201).json({ template_key: templateKey, id: templateId });
+  } catch (error) {
+    console.error('Email template create error:', error);
+    return res.status(500).json({ error: 'Failed to create email template' });
   }
 });
 

@@ -56,9 +56,7 @@ router.post('/', adminAuth, requirePermission('settings.edit'), [
     const { name, slug, is_global = true, event_id = null } = req.body;
     
     // Generate slug if not provided
-    const categorySlug = slug || name
-      .normalize('NFD').replace(/[̀-ͯ]/g, '')
-      .toLowerCase()
+    const categorySlug = slug || name.toLowerCase()
       .replace(/[^\w\s-]/g, '')
       .replace(/\s+/g, '-')
       .replace(/-+/g, '-')
@@ -130,9 +128,7 @@ router.put('/:id', adminAuth, requirePermission('settings.edit'), [
 
     const updateData = {
       name,
-      slug: name
-        .normalize('NFD').replace(/[̀-ͯ]/g, '')
-        .toLowerCase()
+      slug: name.toLowerCase()
         .replace(/[^\w\s-]/g, '')
         .replace(/\s+/g, '-')
         .replace(/-+/g, '-')

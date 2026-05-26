@@ -109,8 +109,29 @@ async function getRecipientLanguage(email, eventId = null) {
       logger.error('Error fetching event language:', error);
     }
   }
-  
-  // Second priority: Check app_settings for general default language
+
+  // Second priority: customer_accounts.preferred_language matched by
+  // recipient email. Honours the customer's own preference instead of
+  // the app-wide default — fixes the CRM bug where every quote /
+  // invoice / customer email shipped in the app default language
+  // (German on a German-locale install) even when the customer was
+  // explicitly set to English. Falls through silently on miss so admin
+  // recipients (no customer_accounts row) still see the app default.
+  if (email) {
+    try {
+      const customer = await db('customer_accounts')
+        .where('email', String(email).toLowerCase().trim())
+        .select('preferred_language')
+        .first();
+      if (customer && customer.preferred_language) {
+        return customer.preferred_language;
+      }
+    } catch (error) {
+      logger.debug('Skip customer_accounts language lookup', { error: error.message });
+    }
+  }
+
+  // Third priority: Check app_settings for general default language
   try {
     const langSetting = await db('app_settings')
       .where('setting_key', 'general_default_language')
@@ -124,7 +145,7 @@ async function getRecipientLanguage(email, eventId = null) {
     logger.error('Error fetching app settings language:', error);
   }
   
-  // Third priority: Check email configs for default language
+  // Fourth priority: Check email configs for default language
   try {
     const emailConfig = await db('email_configs').first();
     if (emailConfig && emailConfig.default_language) {
@@ -133,8 +154,8 @@ async function getRecipientLanguage(email, eventId = null) {
   } catch (error) {
     logger.error('Error fetching email config language:', error);
   }
-  
-  // Fourth priority: Check if the email domain suggests a language
+
+  // Fifth priority: Check if the email domain suggests a language
   if (email) {
     const domain = email.toLowerCase();
     const domainLanguageMap = [
@@ -675,13 +696,34 @@ async function sendTemplateEmail(to, templateKey, variables) {
     // Process template with variables
     const { subject, htmlBody, textBody } = await processTemplate(template, variables, language);
 
+    // Optional plumbing — quote/invoice emails set these. Attachments
+    // are passed by callers as [{ filename, contentPath }] where the
+    // file is already written to disk; nodemailer streams it.
+    const ccList = Array.isArray(variables.cc)
+      ? variables.cc.filter(Boolean)
+      : (typeof variables.cc === 'string' && variables.cc.trim())
+        ? variables.cc.split(/[,;]+/).map((s) => s.trim()).filter(Boolean)
+        : undefined;
+    const attachments = Array.isArray(variables.attachments)
+      ? variables.attachments
+          .filter((a) => a && (a.contentPath || a.path || a.content))
+          .map((a) => ({
+            filename: a.filename,
+            path: a.contentPath || a.path,
+            content: a.content,
+            contentType: a.contentType,
+          }))
+      : undefined;
+
     // Send email
     const info = await transporter.sendMail({
       from: `${config.from_name} <${config.from_email}>`,
       to: to,
+      cc: ccList,
       subject: subject,
       html: htmlBody,
-      text: textBody || htmlToText(htmlBody)
+      text: textBody || htmlToText(htmlBody),
+      attachments,
     });
 
     logger.info(`Email sent successfully: ${info.messageId} (${language})`);
@@ -709,9 +751,17 @@ async function processEmailQueue() {
     
     let pendingEmails = [];
     try {
+      // Pick up emails that are pending AND either have no `scheduled_at`
+      // or whose scheduled_at is in the past. Used by CRM invoices to
+      // queue split-payment emails relative to the event date.
+      const now = new Date();
       pendingEmails = await db('email_queue')
         .where('status', 'pending')
         .where('retry_count', '<', 3)
+        .andWhere(function() {
+          this.whereNull('scheduled_at').orWhere('scheduled_at', '<=', now);
+        })
+        .orderBy('scheduled_at', 'asc')
         .orderBy('created_at', 'asc')
         .limit(10);
     } catch (dbError) {
@@ -776,22 +826,35 @@ async function processEmailQueue() {
   }
 }
 
-// Queue an email for sending
-async function queueEmail(eventId, recipientEmail, emailType, emailData) {
+// Queue an email for sending. Optionally takes a 5th `options` arg:
+//   options.scheduledAt — Date | ISO string; row only picks up once
+//                         this moment has passed (used by CRM split-
+//                         payment invoices). NULL = send immediately.
+// Attachments + cc travel inside `emailData` (keys: attachments, cc)
+// so callers don't need a new signature for every email shape.
+async function queueEmail(eventId, recipientEmail, emailType, emailData, options = {}) {
   try {
     // Add eventId to emailData for language detection
     emailData.eventId = eventId;
-    await db('email_queue').insert({
+    const row = {
       event_id: eventId,
       recipient_email: recipientEmail,
       email_type: emailType,
       email_data: JSON.stringify(emailData),
       status: 'pending',
       retry_count: 0,
-      created_at: new Date()
-    });
-    
-    logger.info(`Email queued: ${emailType} to ${recipientEmail}`);
+      created_at: new Date(),
+    };
+    if (options.scheduledAt) {
+      row.scheduled_at = options.scheduledAt instanceof Date
+        ? options.scheduledAt
+        : new Date(options.scheduledAt);
+    }
+    await db('email_queue').insert(row);
+
+    logger.info(`Email queued: ${emailType} to ${recipientEmail}${
+      options.scheduledAt ? ` (scheduled ${row.scheduled_at.toISOString()})` : ''
+    }`);
   } catch (error) {
     logger.error('Error queueing email:', error);
     throw error;

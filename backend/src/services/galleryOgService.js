@@ -118,12 +118,17 @@ function frontendBase() {
   return (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
 }
 
-function formatEventDate(value) {
+// Render the event date for the OG preview card respecting the
+// admin-configured `general_date_format` (defaults to DD.MM.YYYY when
+// unset). Previously hardcoded en-US "May 20, 2026" which ignored the
+// operator's locale.
+async function formatEventDate(value) {
   if (!value) return null;
   try {
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const { formatDate } = require('../utils/dateFormatter');
+    return await formatDate(d);
   } catch {
     return null;
   }
@@ -147,7 +152,7 @@ async function buildOgMetadata(slug, requestPath) {
   }
 
   const eventName = event.event_name || 'Photo Gallery';
-  const eventDate = formatEventDate(event.event_date);
+  const eventDate = await formatEventDate(event.event_date);
   const titleParts = [eventName];
   if (siteName && siteName !== eventName) titleParts.push(siteName);
   const title = titleParts.join(' — ');
