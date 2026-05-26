@@ -3657,6 +3657,7 @@
     "savedToast": "CRM-Einstellungen gespeichert.",
     "title": "CRM-Einstellungen",
     "subtitle": "Standardwerte für Angebote und Rechnungen.",
+    "emptyState": "Aktuell sind keine CRM-Funktionen aktiv. Aktiviere Angebote, Rechnungen oder Verträge unter Einstellungen → Features, damit die passenden Konfigurationen hier erscheinen.",
     "section": {
       "quotes": "Angebote",
       "invoices": "Rechnungen",

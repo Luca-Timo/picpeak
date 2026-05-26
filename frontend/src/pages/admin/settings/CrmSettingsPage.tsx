@@ -13,6 +13,7 @@ import { Save as SaveIcon } from 'lucide-react';
 import { Button, Card, Loading, Input } from '../../../components/common';
 import { settingsService } from '../../../services/settings.service';
 import { quotesService } from '../../../services/quotes.service';
+import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import { toast } from 'react-toastify';
 
 const SETTING_KEYS = [
@@ -71,6 +72,17 @@ const SETTING_KEYS = [
 export const CrmSettingsPage: React.FC = () => {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const { flags } = useFeatureFlags();
+  // Show each section only when the corresponding master flag is on —
+  // configuring Skonto on quotes is pointless when quotes itself is
+  // disabled. The dashboard-overview tile section depends on quotes
+  // OR bills (the per-tile checkboxes inside govern quote-pipeline +
+  // invoice-pipeline + revenue tiles, all of which are CRM-money).
+  const showQuotes = !!flags.quotes;
+  const showInvoices = !!flags.bills;
+  const showContracts = !!flags.contracts;
+  const showDashboardOverview = !!(flags.quotes || flags.bills);
+  const anySection = showQuotes || showInvoices || showContracts || showDashboardOverview;
   const { data, isLoading } = useQuery({
     queryKey: ['settings', 'crm'],
     queryFn: async () => {
@@ -158,11 +170,21 @@ export const CrmSettingsPage: React.FC = () => {
             {t('crmSettings.subtitle', 'Fine-tune quote and invoice behaviour.')}
           </p>
         </div>
-        <Button onClick={() => saveAll.mutate()} disabled={saveAll.isPending}>
+        <Button onClick={() => saveAll.mutate()} disabled={saveAll.isPending || !anySection}>
           <SaveIcon className="w-4 h-4 mr-1" />{t('common.save', 'Save')}
         </Button>
       </div>
 
+      {!anySection && (
+        <Card>
+          <p className="text-sm text-muted-theme">
+            {t('crmSettings.emptyState',
+              'No CRM features are currently enabled. Turn on Quotes, Invoices, or Contracts in Settings → Features to see the matching configuration here.')}
+          </p>
+        </Card>
+      )}
+
+      {showQuotes && (
       <Card>
         <h3 className="font-semibold mb-3">{t('crmSettings.section.quotes', 'Quotes')}</h3>
         {checkbox('crm_quotes_pdf_attachment_enabled', 'Attach quote PDF to email')}
@@ -213,7 +235,9 @@ export const CrmSettingsPage: React.FC = () => {
           </div>
         </div>
       </Card>
+      )}
 
+      {showInvoices && (
       <Card>
         <h3 className="font-semibold mb-3">{t('crmSettings.section.invoices', 'Invoices')}</h3>
         {checkbox('crm_invoices_qr_enabled', 'Render payment QR on invoice PDFs')}
@@ -343,10 +367,12 @@ export const CrmSettingsPage: React.FC = () => {
         </div>
 
       </Card>
+      )}
 
-      {/* Contracts (migration 130). Mirrors the Quotes / Invoices block
-          shape: 3 behaviour toggles, then a 2-column input grid, then
-          the number-format input with helper text. */}
+      {showContracts && (
+      /* Contracts (migration 130). Mirrors the Quotes / Invoices block
+         shape: 3 behaviour toggles, then a 2-column input grid, then
+         the number-format input with helper text. */
       <Card>
         <h3 className="font-semibold mb-3">{t('crmSettings.section.contracts', 'Contracts')}</h3>
         {/* Three of these four toggles use `!== false` semantics on
@@ -380,12 +406,14 @@ export const CrmSettingsPage: React.FC = () => {
             'Supported tokens: {YEAR}, {MONTH}, {SEQ:04d}. Example: LBM-C-{YEAR}-{SEQ:04d} → LBM-C-2026-0001.')}
         </p>
       </Card>
+      )}
 
-      {/* Dashboard CRM overview — per-tile visibility. All settings
-          default ON; the checkbox shows checked when the value is
-          unset, matching the contracts card's pattern. The dashboard
-          component reads these via /public/settings and hides the
-          matching tile when the value is explicit false. */}
+      {showDashboardOverview && (
+      /* Dashboard CRM overview — per-tile visibility. All settings
+         default ON; the checkbox shows checked when the value is
+         unset, matching the contracts card's pattern. The dashboard
+         component reads these via /public/settings and hides the
+         matching tile when the value is explicit false. */
       <Card>
         <h3 className="font-semibold mb-1">
           {t('crmSettings.section.dashboardOverview', 'Dashboard CRM overview')}
@@ -399,6 +427,7 @@ export const CrmSettingsPage: React.FC = () => {
         {checkboxDefaultOn('crm_overview_show_quotes', 'Quotes pipeline (per-status)')}
         {checkboxDefaultOn('crm_overview_show_invoices', 'Invoices pipeline (per-status)')}
       </Card>
+      )}
     </div>
   );
 };
