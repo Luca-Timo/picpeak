@@ -13,8 +13,14 @@ const { resolvePhotoFilePath } = require('../services/photoResolver');
 const { getEventShareToken, resolveShareIdentifier, buildShareLinkVariants } = require('../services/shareLinkService');
 const { handleAsync } = require('../utils/routeHelpers');
 const { NotFoundError } = require('../utils/errors');
-const { ensureThumbnail, ensureHeroImage, withLocalCopy } = require('../services/imageProcessor');
+const { ensureThumbnail, ensureHeroImage, ensurePreviewImage, withLocalCopy } = require('../services/imageProcessor');
 const downloadZipService = require('../services/downloadZipService');
+const {
+  getUseOriginalFilenames,
+  pickRawDownloadName,
+  getZipEntryNames,
+} = require('../services/downloadFilenameService');
+const { buildContentDisposition } = require('../utils/filenameSanitizer');
 const { getStorage } = require('../services/storage');
 const fs = require('fs');
 
@@ -399,6 +405,38 @@ router.get('/:slug/photos', verifyGalleryAccess, async (req, res) => {
       fragmentation_level: req.event.fragmentation_level || 3,
       overlay_protection: req.event.overlay_protection !== false
     };
+
+    // Lightbox preview tier (#492). When the admin opts in, the
+    // photos response carries a preview_url alongside url/thumbnail_url
+    // — the lightbox uses preview_url when present and falls back to
+    // url when not, so existing galleries continue working before
+    // any preview has actually been generated.
+    let lightboxPreviewEnabled = false;
+    try {
+      const setting = await db('app_settings')
+        .where('setting_key', 'lightbox_preview_enabled')
+        .first();
+      if (setting) {
+        const raw = setting.setting_value;
+        // setting_value is JSON-stringified per migration 104; tolerate
+        // raw boolean/string for forward-compat.
+        const parsed = typeof raw === 'string' ? (() => {
+          try { return JSON.parse(raw); } catch { return raw; }
+        })() : raw;
+        lightboxPreviewEnabled = parsed === true || parsed === 'true' || parsed === 1;
+      }
+    } catch (e) {
+      // Setting missing / DB blip → fall back to off so the lightbox
+      // keeps working with the original. logger.debug to avoid noise.
+      logger.debug('lightbox_preview_enabled lookup failed, treating as off', { error: e?.message });
+    }
+
+    // #508: when the admin has flipped the "use original camera filenames"
+    // toggle (#493), the lightbox surfaces each photo's original_filename
+    // alongside the position counter so the photographer can map a guest's
+    // selection back to source files. Tied to the same toggle as downloads —
+    // one switch controls both surfaces.
+    const useOriginalFilenames = await getUseOriginalFilenames();
     
 
     res.json({
@@ -427,6 +465,9 @@ router.get('/:slug/photos', verifyGalleryAccess, async (req, res) => {
         hero_image_anchor: req.event.hero_image_anchor || 'center',
         default_photo_sort: req.event.default_photo_sort || 'upload_date_desc',
         download_zip_ready: !!(req.event.download_zip_path && req.event.download_zip_generated_at),
+        // Mirror of the admin-side toggle so the lightbox can decide
+        // whether to surface original camera filenames (#508).
+        use_original_filenames: useOriginalFilenames,
         ...protectionSettings
       },
       categories: categories,
@@ -441,10 +482,24 @@ router.get('/:slug/photos', verifyGalleryAccess, async (req, res) => {
         return {
           id: photo.id,
           filename: photo.filename,
+          // Raw camera filename (or null for pre-migration-062 uploads).
+          // The lightbox renders it when `use_original_filenames` is on.
+          original_filename: photo.original_filename || null,
           url: photoUrl,
           thumbnail_url: photo.thumbnail_path ? `/api/gallery/${req.params.slug}/thumbnail/${photo.id}${wmQuery}` : null,
           // Hero-optimized image URL (1920x1080) for full-width hero sections
           hero_url: `/api/gallery/${req.params.slug}/hero/${photo.id}${wmQuery}`,
+          // Lightbox preview URL (#492). Only emitted when the admin
+          // has flipped lightbox_preview_enabled — the frontend
+          // lightbox reads preview_url with a fallback to url so
+          // installs that haven't opted in keep loading the original
+          // (current behaviour). Skipped for videos since they don't
+          // get a preview tier; lightbox will use the original .url.
+          preview_url: lightboxPreviewEnabled
+            && photo.media_type !== 'video'
+            && (!photo.mime_type || !photo.mime_type.startsWith('video/'))
+            ? `/api/gallery/${req.params.slug}/preview/${photo.id}${wmQuery}`
+            : null,
           secure_url_template: `/api/secure-images/${req.params.slug}/secure/${photo.id}/{{token}}`,
           download_url_template: `/api/secure-images/${req.params.slug}/secure-download/${photo.id}/{{token}}`,
           type: photo.type,
@@ -596,6 +651,13 @@ router.get('/:slug/download/:photoId', verifyGalleryAccess, async (req, res) => 
     const eventWatermarkEnabled = req.event.watermark_downloads === true || req.event.watermark_downloads === 1;
     const shouldApplyWatermark = (watermarkSettings && watermarkSettings.enabled) || eventWatermarkEnabled;
 
+    // #493: if the admin enabled "use original filenames", surface the
+    // pre-rename camera filename in Content-Disposition. Storage path is
+    // unchanged — only the user-visible download name is swapped.
+    const useOriginal = await getUseOriginalFilenames();
+    const downloadName = pickRawDownloadName(photo, useOriginal);
+    const contentDisposition = buildContentDisposition(downloadName);
+
     if (shouldApplyWatermark) {
       // Apply watermark and send
       // Use event watermark text if available, otherwise fall back to global settings
@@ -608,14 +670,21 @@ router.get('/:slug/download/:photoId', verifyGalleryAccess, async (req, res) => 
 
       res.set({
         'Content-Type': photo.mime_type || 'image/jpeg',
-        'Content-Disposition': `attachment; filename="${photo.filename}"`,
+        'Content-Disposition': contentDisposition,
         'Content-Length': watermarkedBuffer.length
       });
 
       res.send(watermarkedBuffer);
     } else {
-      // Send original file
-      res.download(filePath, photo.filename, (downloadError) => {
+      // res.download() builds Content-Disposition itself but doesn't emit the
+      // RFC 5987 filename* parameter, so unicode camera filenames would lose
+      // their bytes on download. Set the header explicitly and stream the
+      // file with res.sendFile-equivalent semantics.
+      res.set({
+        'Content-Type': photo.mime_type || 'image/jpeg',
+        'Content-Disposition': contentDisposition,
+      });
+      res.sendFile(filePath, (downloadError) => {
         if (downloadError) {
           logger.error('Error streaming gallery download', {
             slug: req.params.slug,
@@ -737,14 +806,20 @@ router.get('/:slug/download-all', verifyGalleryAccess, async (req, res) => {
     // Add photos to archive — managed photos via storage backend, external via local path.
     const { resolvePhotoStorageKey } = require('../services/photoResolver');
     const storage = getStorage();
-    for (const photo of photos) {
+    // #493: resolve a unique display filename per photo up-front so collisions
+    // get a deterministic `_1` suffix before the entries hit the archive.
+    const useOriginalBulk = await getUseOriginalFilenames();
+    const bulkEntryNames = getZipEntryNames(photos, useOriginalBulk);
+    for (let i = 0; i < photos.length; i += 1) {
+      const photo = photos[i];
       const storageKey = resolvePhotoStorageKey(req.event, photo);
+      const entryName = bulkEntryNames[i];
       let archiveName;
       if (hasMultipleTypes) {
         const folderName = photo.type === 'individual' ? 'Individual Photos' : 'Collages';
-        archiveName = path.join(folderName, photo.filename);
+        archiveName = path.join(folderName, entryName);
       } else {
-        archiveName = photo.filename;
+        archiveName = entryName;
       }
 
       try {
@@ -865,8 +940,12 @@ router.post('/:slug/download-selected', verifyGalleryAccess, async (req, res) =>
     const { resolvePhotoStorageKey: resolveSelectedKey } = require('../services/photoResolver');
     const { withLocalCopy: withSelectedLocalCopy } = require('../services/imageProcessor');
     const selectedStorage = getStorage();
-    for (const photo of photos) {
-      const name = photo.filename || `photo-${photo.id}.jpg`;
+    // #493: same display-name resolution as bulk download, with dedup.
+    const useOriginalSelected = await getUseOriginalFilenames();
+    const selectedEntryNames = getZipEntryNames(photos, useOriginalSelected);
+    for (let i = 0; i < photos.length; i += 1) {
+      const photo = photos[i];
+      const name = selectedEntryNames[i] || `photo-${photo.id}.jpg`;
       const storageKey = resolveSelectedKey(req.event, photo);
       try {
         if (shouldApplyWatermark && effectiveSettings) {
@@ -1332,6 +1411,101 @@ router.get('/:slug/hero/:photoId',
         eventId: req.event?.id
       });
       // Fall back to original photo on any error
+      res.redirect(`/api/gallery/${req.params.slug}/photo/${req.params.photoId}`);
+    }
+  }
+);
+
+// Lightbox preview tier (#492). Aspect-preserved JPEG capped at 1920px
+// long edge — admin-controlled opt-in via app_settings.lightbox_preview_enabled.
+// Mirrors the hero route shape: same auth, ETag from preview mtime,
+// fall back to original on any failure so the lightbox never shows a
+// broken image. The watermark application path is preserved so a
+// preview surfaced in the lightbox carries the same protection a
+// guest would see on the full original.
+router.get('/:slug/preview/:photoId',
+  verifyGalleryAccess,
+  async (req, res) => {
+    try {
+      const { photoId } = req.params;
+
+      const photo = await db('photos')
+        .where({ id: photoId, event_id: req.event.id })
+        .first();
+
+      if (!photo) {
+        return res.status(404).json({ error: 'Photo not found' });
+      }
+
+      if (photo.visibility === 'hidden' && req.accessLevel !== 'client') {
+        return res.status(403).json({ error: 'Photo not available' });
+      }
+
+      // Videos don't get a preview tier — fall through to the regular
+      // photo endpoint (which serves the source). The frontend should
+      // already be checking media_type before requesting /preview but
+      // belt-and-braces in case a stale tab does.
+      const isVideo = photo.media_type === 'video' || (photo.mime_type && photo.mime_type.startsWith('video/'));
+      if (isVideo) {
+        return res.redirect(`/api/gallery/${req.params.slug}/photo/${photoId}`);
+      }
+
+      // Lazy generation: ensurePreviewImage returns null on any
+      // failure (corrupt source, sharp OOM, storage unavailable, …).
+      // Fall back to the original so the lightbox always renders.
+      const previewPath = await ensurePreviewImage(photo);
+      if (!previewPath) {
+        logger.warn(`Failed to generate preview for photo ${photoId}, falling back to original`);
+        return res.redirect(`/api/gallery/${req.params.slug}/photo/${photoId}`);
+      }
+
+      const storage = getStorage();
+      const stat = await storage.stat(previewPath);
+      if (!stat) {
+        logger.error('Preview file does not exist in storage backend', {
+          slug: req.params.slug, photoId, eventId: req.event.id, previewPath,
+        });
+        return res.redirect(`/api/gallery/${req.params.slug}/photo/${photoId}`);
+      }
+
+      const mtimeMs = stat.mtime ? stat.mtime.getTime() : 0;
+      const watermarkSettings = await watermarkService.getWatermarkSettings();
+      const watermarkHash = watermarkSettings?.enabled
+        ? `-wm${watermarkSettings.opacity}${watermarkSettings.position}${watermarkSettings.size}`
+        : '-nowm';
+      const etag = `"preview-${photoId}-${mtimeMs}${watermarkHash}"`;
+      if (req.headers['if-none-match'] === etag) {
+        return res.status(304).end();
+      }
+
+      res.set({
+        'Content-Type': 'image/jpeg',
+        // Cache aggressively — preview only changes on photo
+        // re-upload (which generates a new preview key) or settings
+        // regenerate (which writes a new mtime + ETag).
+        'Cache-Control': 'private, max-age=3600',
+        'Cross-Origin-Resource-Policy': 'cross-origin',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Preview-Image': 'true',
+        'ETag': etag,
+      });
+
+      if (watermarkSettings && watermarkSettings.enabled) {
+        const watermarkedBuffer = await withLocalCopy(previewPath, (localPath) =>
+          watermarkService.applyWatermark(localPath, watermarkSettings)
+        );
+        res.send(watermarkedBuffer);
+      } else {
+        res.setHeader('Content-Length', stat.size);
+        const stream = await storage.get(previewPath);
+        stream.pipe(res);
+      }
+    } catch (error) {
+      logger.error('Error serving preview image:', {
+        error: error.message,
+        photoId: req.params.photoId,
+        eventId: req.event?.id,
+      });
       res.redirect(`/api/gallery/${req.params.slug}/photo/${req.params.photoId}`);
     }
   }
