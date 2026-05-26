@@ -98,6 +98,16 @@ const TEMPLATES_KEYS = [
   'contract_sent',
   'contract_signed_admin_notification',
   'contract_fully_signed',
+  // Pre-event reminder emails (migration 143). The runtime resolver
+  // picks `event_reminder_<events.event_type>` with fallback to
+  // `event_reminder_default`. The dev tester exposes every seeded
+  // template so the maintainer can eyeball each category's body
+  // without staging a real event for each.
+  'event_reminder_default',
+  'event_reminder_wedding',
+  'event_reminder_birthday',
+  'event_reminder_corporate',
+  'event_reminder_other',
 ];
 
 router.get(
@@ -355,11 +365,20 @@ async function buildPayloadFor(key, adminId, frontendUrl) {
   const today = new Date();
   const dueDate = new Date(today.getTime() - 5 * 86400000);
   const validUntil = new Date(today.getTime() + 14 * 86400000);
+  // Pre-event reminder mock: pretend the event is 2 days out (the
+  // global default for `crm_event_reminders_days_before`). Renders
+  // {{event_date}} + {{days_before}} for the event_reminder_*
+  // templates.
+  const eventDate = new Date(today.getTime() + 2 * 86400000);
+  const businessProfile = await db('business_profile').first().catch(() => null);
 
   const common = {
     customer_name: 'Sample Customer',
     customer_email: 'sample.customer@example.test',
     event_name: 'Sample Event',
+    event_date: fakeShortDate(eventDate),
+    days_before: 2,
+    business_name: businessProfile?.legal_name || 'Sample Studio',
     invoice_number: 'R-DEV-0001',
     quote_number: 'Q-DEV-0001',
     total_amount: fakeMoney(total, 'CHF'),

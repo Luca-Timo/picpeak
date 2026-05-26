@@ -22,7 +22,16 @@ export type CrmEmailTemplateKey =
   // template_key strings.
   | 'contract_sent'
   | 'contract_signed_admin_notification'
-  | 'contract_fully_signed';
+  | 'contract_fully_signed'
+  // Pre-event reminder emails (migration 143). One template per
+  // event_type with a catch-all default. Backend resolves
+  // `event_reminder_<event_type>` then falls back to
+  // `event_reminder_default`.
+  | 'event_reminder_default'
+  | 'event_reminder_wedding'
+  | 'event_reminder_birthday'
+  | 'event_reminder_corporate'
+  | 'event_reminder_other';
 
 export interface DevEmailTemplateStatus {
   key: CrmEmailTemplateKey;

@@ -3317,6 +3317,26 @@
         "contract_fully_signed": {
           "title": "Vertrag beidseitig unterzeichnet",
           "description": "Beidseitiger Versand, sobald beide Unterschriften vorliegen. Gestempeltes Vertrags-PDF im Anhang."
+        },
+        "event_reminder_default": {
+          "title": "Event-Erinnerung — Standard (Fallback)",
+          "description": "Vor-Event-Erinnerung, wenn keine kategoriespezifische Vorlage zutrifft."
+        },
+        "event_reminder_wedding": {
+          "title": "Event-Erinnerung — Hochzeit",
+          "description": "Vor-Event-Erinnerung für Events mit event_type=wedding."
+        },
+        "event_reminder_birthday": {
+          "title": "Event-Erinnerung — Geburtstag",
+          "description": "Vor-Event-Erinnerung für Events mit event_type=birthday."
+        },
+        "event_reminder_corporate": {
+          "title": "Event-Erinnerung — Firma",
+          "description": "Vor-Event-Erinnerung für Events mit event_type=corporate."
+        },
+        "event_reminder_other": {
+          "title": "Event-Erinnerung — Sonstiges",
+          "description": "Vor-Event-Erinnerung für Events mit event_type=other."
         }
       }
     }

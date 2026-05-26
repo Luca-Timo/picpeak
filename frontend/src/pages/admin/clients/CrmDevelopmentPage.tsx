@@ -98,6 +98,36 @@ const TEMPLATE_LABEL_KEYS: Record<
     descKey: 'crmDev.templates.label.contract_fully_signed.description',
     descFallback: 'Dual-party send once both signatures are in. Stamped contract PDF attached.',
   },
+  event_reminder_default: {
+    titleKey: 'crmDev.templates.label.event_reminder_default.title',
+    titleFallback: 'Event reminder — default (catch-all)',
+    descKey: 'crmDev.templates.label.event_reminder_default.description',
+    descFallback: 'Pre-event nudge used when no per-category template matches.',
+  },
+  event_reminder_wedding: {
+    titleKey: 'crmDev.templates.label.event_reminder_wedding.title',
+    titleFallback: 'Event reminder — wedding',
+    descKey: 'crmDev.templates.label.event_reminder_wedding.description',
+    descFallback: 'Pre-event nudge for events with event_type=wedding.',
+  },
+  event_reminder_birthday: {
+    titleKey: 'crmDev.templates.label.event_reminder_birthday.title',
+    titleFallback: 'Event reminder — birthday',
+    descKey: 'crmDev.templates.label.event_reminder_birthday.description',
+    descFallback: 'Pre-event nudge for events with event_type=birthday.',
+  },
+  event_reminder_corporate: {
+    titleKey: 'crmDev.templates.label.event_reminder_corporate.title',
+    titleFallback: 'Event reminder — corporate',
+    descKey: 'crmDev.templates.label.event_reminder_corporate.description',
+    descFallback: 'Pre-event nudge for events with event_type=corporate.',
+  },
+  event_reminder_other: {
+    titleKey: 'crmDev.templates.label.event_reminder_other.title',
+    titleFallback: 'Event reminder — other',
+    descKey: 'crmDev.templates.label.event_reminder_other.description',
+    descFallback: 'Pre-event nudge for events with event_type=other.',
+  },
 };
 
 export const CrmDevelopmentPage: React.FC = () => {
