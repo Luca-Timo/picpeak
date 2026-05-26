@@ -29,6 +29,7 @@ import { Trash2, Plus } from 'lucide-react';
 import { Button, Input } from '../common';
 import type { PaymentTermInstallment } from '../../services/quotes.service';
 import { useInstallmentDefaults } from '../../hooks/useInstallmentDefaults';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 export type InstallmentPlan = PaymentTermInstallment[];
 
@@ -68,6 +69,7 @@ export const InstallmentsPanel: React.FC<InstallmentsPanelProps> = ({
   value, onChange, onValidityChange, eventDate, disabled,
 }) => {
   const { t } = useTranslation();
+  const { dateInputLang } = useLocalizedDate();
   const defaults = useInstallmentDefaults();
   const [advanced, setAdvanced] = React.useState(false);
 
@@ -230,6 +232,7 @@ export const InstallmentsPanel: React.FC<InstallmentsPanelProps> = ({
                     ) : (
                       <Input
                         type="date"
+                        lang={dateInputLang}
                         value={previewDate(row) || ''}
                         onChange={(e) => {
                           const next = e.target.value;
