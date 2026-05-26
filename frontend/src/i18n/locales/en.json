@@ -1136,7 +1136,7 @@
       },
       "reminderEmails": {
         "title": "Reminder Emails",
-        "description": "Automatic nudges to guests before their gallery expires and to admins about pending uploads."
+        "description": "Automatic pre-event nudge to customers N days before their event date. Per-category templates (concert, corporate, wedding, …) editable in Settings → Reminder templates; per-event override on the event detail page."
       },
       "messaging": {
         "title": "Messaging",

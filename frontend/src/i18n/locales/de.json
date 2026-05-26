@@ -1497,7 +1497,7 @@
       },
       "reminderEmails": {
         "title": "Erinnerungs-E-Mails",
-        "description": "Automatische Erinnerungen an Gäste vor Ablauf ihrer Galerie und an Admins über ausstehende Uploads."
+        "description": "Automatische Vor-Event-Erinnerung an Kunden N Tage vor dem Eventdatum. Vorlagen pro Kategorie (Konzert, Firma, Hochzeit, …) unter Einstellungen → Erinnerungsvorlagen; Übersteuerung pro Event auf der Event-Detailseite."
       },
       "messaging": {
         "title": "Nachrichten",

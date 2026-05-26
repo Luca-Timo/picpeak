@@ -149,16 +149,14 @@ export const FeaturesTab: React.FC = () => {
             title={t('settings.features.reminderEmails.title', 'Reminder Emails')}
             description={t(
               'settings.features.reminderEmails.description',
-              'Automatic nudges to guests before their gallery expires and to admins about pending uploads. Coming soon.',
+              'Automatic pre-event nudge to customers N days before their event date. Per-category templates (concert, corporate, wedding, …) editable in Settings → Reminder templates; per-event override on the event detail page.',
             )}
-            status="roadmap"
-            statusLabel={statusLabel('roadmap')}
+            status="beta"
+            statusLabel={statusLabel('beta')}
             sidebarHidden
             sidebarHiddenLabel={sidebarHiddenLabel}
             enabled={staged.reminderEmails}
-            onToggle={() => { /* locked */ }}
-            disabled
-            lockedReason={NOT_YET_AVAILABLE}
+            onToggle={(next) => setFlag('reminderEmails', next)}
           />
 
           <FeatureCard
