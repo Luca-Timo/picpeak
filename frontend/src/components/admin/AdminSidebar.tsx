@@ -82,10 +82,16 @@ const navigation: NavItem[] = [
     permission: 'customers.view',
     featureFlag: 'clients',
     // Hide the entry when the parent is on but no sub-feature is —
-    // there's nothing inside ClientsLayout to link to. Add future
-    // sub-flags (calendar, quotes, bills, messaging) here as they
-    // ship; the entry reappears the moment any of them is enabled.
-    featureFlagsAny: ['customerPortal', 'quotes', 'bills'],
+    // there's nothing inside ClientsLayout to link to. Mirror the same
+    // set used to derive the parent `clients` flag in
+    // FeatureFlagsContext (see clientsDependsOn) so the two checks
+    // can't disagree: any sub-feature on lights up the entry, all off
+    // hides it. Future siblings (e.g. `messaging`) get appended here
+    // AND in the context derivation.
+    featureFlagsAny: [
+      'customerPortal', 'crmDevelopment', 'quotes', 'bills',
+      'taxReport', 'hoursLogging', 'contracts', 'calendar',
+    ],
   },
 ];
 
