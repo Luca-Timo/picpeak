@@ -18,11 +18,13 @@
  */
 
 const express = require('express');
-const { param } = require('express-validator');
+const { param, body } = require('express-validator');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const dealsService = require('../services/dealsService');
+const invoiceService = require('../services/invoiceService');
+const { db } = require('../database/db');
 
 const router = express.Router();
 router.use(adminAuth);
@@ -37,6 +39,43 @@ router.get(
   handleAsync(async (req, res) => {
     validateRequest(req);
     const result = await dealsService.getDealDocuments(req.params.uuid);
+    return successResponse(res, result);
+  }),
+);
+
+/**
+ * Atomically reshape an installment plan after siblings have spawned.
+ * Delegates to invoiceService.updateInstallmentPlan inside a transaction.
+ * See that service function for the guard/reuse/grow/trim semantics.
+ *
+ * 400 — invalid input (validator or service-side percent sum / unknown
+ *       trigger / single-invoice deal).
+ * 404 — deal_uuid owns no invoices.
+ * 409 — at least one sibling is past `scheduled`/`pending_delivery`, or
+ *       the deal contains a Storno.
+ */
+router.put(
+  '/:uuid/installment-plan',
+  requirePermission('bills.manage'),
+  [
+    param('uuid').isString().isLength({ min: 32, max: 36 }),
+    body('installments').isArray({ min: 1 }),
+    body('installments.*.percent').isFloat({ min: 0, max: 100 }),
+    body('installments.*.trigger').isIn([
+      'quote_accepted', 'before_event', 'after_event', 'after_delivery', 'fixed_date',
+    ]),
+    body('installments.*.offset_days').isInt(),
+    body('installments.*.label').optional({ values: 'falsy' }).isString().isLength({ max: 200 }),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const adminId = req.admin?.id;
+    const result = await db.transaction((trx) => invoiceService.updateInstallmentPlan({
+      trx,
+      dealUuid: req.params.uuid,
+      installments: req.body.installments,
+      adminId,
+    }));
     return successResponse(res, result);
   }),
 );
