@@ -691,7 +691,9 @@ export const CustomerDetailPage: React.FC = () => {
           invoices issued in a period into one consolidated bill that
           fires on the configured cadence day. Cycle day uses
           positive 1–28 for day-of-month, negative -1..-15 for days
-          before month end. */}
+          before month end. Hidden entirely when the bills feature is
+          off — admin has nothing to bill, so cadence is moot. */}
+      {flags.bills && (
       <Card padding="lg">
         <h2 className="text-lg font-semibold text-theme mb-1 flex items-center gap-2">
           <Calendar className="w-5 h-5" />
@@ -840,6 +842,7 @@ export const CustomerDetailPage: React.FC = () => {
           </div>
         )}
       </Card>
+      )}
 
       {/* Hours section (migration 129). Only renders when the
           feature_hours_logging toggle above is on. Lives between
