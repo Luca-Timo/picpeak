@@ -7,7 +7,6 @@ import {
   Lock,
   Eye,
   EyeOff,
-  AlertCircle,
   CheckCircle,
   Mail,
   Shield,
@@ -381,14 +380,6 @@ export const AcceptInvitePage: React.FC = () => {
         {/* Registration Form */}
         <Card padding="lg">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Form Error */}
-            {errors.form && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-red-800">{errors.form}</p>
-              </div>
-            )}
-
             {/* Username Field */}
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-neutral-700 mb-1">
