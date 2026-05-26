@@ -14,7 +14,16 @@ export interface BrandingSettings {
   favicon_url?: string;
   logo_size?: 'small' | 'medium' | 'large' | 'xlarge' | 'custom';
   logo_max_height?: number;
-  logo_position?: 'left' | 'center' | 'right';
+  /**
+   * Logo placement.
+   * - 'left' | 'center' | 'right': position inside the gallery header bar.
+   * - 'sidepanel': moved out of the gallery header into the admin
+   *   sidebar's brand row (replaces the "PicPeak Admin" text; switches
+   *   to the favicon when the sidebar is collapsed). The gallery
+   *   silently falls back to 'left' for its own rendering since it has
+   *   no sidepanel.
+   */
+  logo_position?: 'left' | 'center' | 'right' | 'sidepanel';
   logo_display_header?: boolean;
   logo_display_hero?: boolean;
   logo_display_mode?: 'logo_only' | 'text_only' | 'logo_and_text';
@@ -163,6 +172,19 @@ export const settingsService = {
   // Get all settings
   async getAllSettings(): Promise<Record<string, any>> {
     const response = await api.get<Record<string, any>>('/admin/settings');
+    return response.data;
+  },
+
+  // Get a subset of settings by key. Use this when a caller knows
+  // exactly which keys it needs — saves transferring (and JSON-parsing)
+  // the ~100-row dict. The backend accepts a comma-separated list and
+  // returns the same shape as getAllSettings(), just narrower.
+  async getSettings(keys: string[]): Promise<Record<string, any>> {
+    if (!keys || keys.length === 0) return {};
+    const response = await api.get<Record<string, any>>(
+      '/admin/settings',
+      { params: { keys: keys.join(',') } },
+    );
     return response.data;
   },
 

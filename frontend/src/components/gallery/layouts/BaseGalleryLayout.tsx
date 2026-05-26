@@ -36,9 +36,6 @@ export interface BaseGalleryLayoutProps {
   // Client visibility controls (#172)
   isClient?: boolean;
   onToggleVisibility?: (photoId: number, currentVisibility: string) => void;
-  // Mirror of the admin original-filename toggle (#508). Forwarded to the
-  // lightbox by layouts that mount their own (story/premium).
-  showOriginalFilename?: boolean;
 }
 
 export abstract class BaseGalleryLayout<T extends BaseGalleryLayoutProps = BaseGalleryLayoutProps> extends React.Component<T> {

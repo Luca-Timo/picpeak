@@ -28,7 +28,6 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
   // bytes-on-wire for that file, so the UI can show "Processing…"
   // instead of a static 100% bar while the backend works.
   const [processingFiles, setProcessingFiles] = useState<{ [key: string]: boolean }>({});
-  const [isDragOver, setIsDragOver] = useState(false);
 
   const { data: publicSettings } = usePublicSettings();
 
@@ -42,9 +41,11 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
     [publicSettings?.allowed_file_types]
   );
 
-  // Shared filter pipeline for both <input> change and drag-and-drop (#504).
-  const addFiles = (incoming: File[]) => {
-    const validFiles = incoming.filter((file) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(e.target.files || []);
+
+    // Validate file types
+    const validFiles = selectedFiles.filter(file => {
       if (!allowedMimeTypes.includes(file.type)) {
         toast.error(`Invalid file type: ${file.name}`);
         return false;
@@ -56,38 +57,8 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
       }
       return true;
     });
-    if (validFiles.length === 0) return;
-    setFiles((prev) => [...prev, ...validFiles]);
-  };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    addFiles(Array.from(e.target.files || []));
-    // Reset so re-selecting the same file fires onChange again.
-    if (e.target.value) e.target.value = '';
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = 'copy';
-    if (!isDragOver) setIsDragOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // dragleave fires for every child node — only flip off when the cursor
-    // leaves the zone itself.
-    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-    if (uploading) return;
-    addFiles(Array.from(e.dataTransfer.files || []));
+    setFiles(prev => [...prev, ...validFiles]);
   };
 
   const removeFile = (index: number) => {
@@ -183,18 +154,10 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
 
         {/* Scrollable Content */}
         <div className="flex-1 p-4 sm:p-6 overflow-y-auto min-h-0">
-            {/* Upload Area — accepts both click-to-pick and drag-and-drop (#504). */}
+            {/* Upload Area */}
             <div className="mb-4 sm:mb-6">
               <label className="block">
-                <div
-                  className={`border-2 border-dashed rounded-lg p-6 sm:p-8 text-center hover:border-accent-dark transition-colors cursor-pointer ${
-                    isDragOver ? 'border-accent-dark bg-accent-dark/10' : 'border-surface'
-                  }`}
-                  onDragOver={handleDragOver}
-                  onDragEnter={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                >
+                <div className="border-2 border-dashed border-surface rounded-lg p-6 sm:p-8 text-center hover:border-accent-dark transition-colors cursor-pointer">
                   <Upload className="w-10 h-10 sm:w-12 sm:h-12 text-neutral-400 mx-auto mb-3" />
                   <p className="text-sm font-medium text-muted-theme mb-1">
                     {t('upload.clickToUpload')}

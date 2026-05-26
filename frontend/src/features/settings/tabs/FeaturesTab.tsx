@@ -8,11 +8,14 @@ import {
   MessageSquare,
   CalendarDays,
   FileSignature,
+  ScrollText,
   Receipt,
   BarChart3,
   Users,
   UserCog,
   Briefcase,
+  Wrench,
+  Calculator,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card } from '../../../components/common';
@@ -115,10 +118,10 @@ export const FeaturesTab: React.FC = () => {
             child below is on), so there's no explicit parent toggle —
             admins just enable the specific feature they want and the
             section appears automatically. */}
-        <Section title={t('settings.features.sections.clients', 'Clients')}>
+        <Section title={t('settings.features.sections.clients', 'CRM')}>
           <FeatureCard
             icon={UserCog}
-            title={t('settings.features.customerPortal.title', 'Clients')}
+            title={t('settings.features.customerPortal.title', 'Customer Accounts')}
             description={t(
               'settings.features.customerPortal.description',
               'Persistent customer logins. Recurring clients see all their assigned galleries from one place — no per-event passwords. Customers log in at /customer/login and you manage them under Clients → Accounts.',
@@ -129,7 +132,7 @@ export const FeaturesTab: React.FC = () => {
             // admin clicks first, not the deeper "Accounts" sub-nav.
             // Keeps the wording consistent with what's actually visible
             // in the menu bar.
-            sidebarLabel={t('navigation.clients', 'Clients')}
+            sidebarLabel={t('navigation.clients', 'CRM')}
             enabled={staged.customerPortal}
             onToggle={(next) => setFlag('customerPortal', next)}
           />
@@ -146,10 +149,10 @@ export const FeaturesTab: React.FC = () => {
             title={t('settings.features.reminderEmails.title', 'Reminder Emails')}
             description={t(
               'settings.features.reminderEmails.description',
-              'Automatic nudges to guests before their gallery expires and to admins about pending uploads.',
+              'Automatic nudges to guests before their gallery expires and to admins about pending uploads. Coming soon.',
             )}
-            status="stable"
-            statusLabel={statusLabel('stable')}
+            status="roadmap"
+            statusLabel={statusLabel('roadmap')}
             sidebarHidden
             sidebarHiddenLabel={sidebarHiddenLabel}
             enabled={staged.reminderEmails}
@@ -163,10 +166,10 @@ export const FeaturesTab: React.FC = () => {
             title={t('settings.features.messaging.title', 'Messaging')}
             description={t(
               'settings.features.messaging.description',
-              'In-app threads with guests, attached to a gallery. Email is genuinely fine for most teams — this is for studios that want everything in one place.',
+              'In-app threads with guests, attached to a gallery. Email is genuinely fine for most teams — this is for studios that want everything in one place. Coming soon.',
             )}
-            status="experimental"
-            statusLabel={statusLabel('experimental')}
+            status="roadmap"
+            statusLabel={statusLabel('roadmap')}
             sidebarLabel={t('settings.features.messaging.sidebar', 'Messages')}
             enabled={staged.messaging}
             onToggle={() => { /* locked */ }}
@@ -182,12 +185,28 @@ export const FeaturesTab: React.FC = () => {
             title={t('settings.features.calendar.title', 'Calendar')}
             description={t(
               'settings.features.calendar.description',
-              'See all upcoming and past events on a month/week view. Optionally accept new bookings from clients.',
+              'Admin-only calendar showing events, logged hours, and pending quotes/contracts in one view. Drag-create hours directly on the calendar.',
             )}
-            status="beta"
-            statusLabel={statusLabel('beta')}
+            status="new"
+            statusLabel={statusLabel('new')}
             sidebarLabel={t('settings.features.calendar.sidebar', 'Calendar')}
             enabled={staged.calendar}
+            onToggle={(next) => setFlag('calendar', next)}
+          />
+          {/* Customer-facing booking — placeholder. UI-disabled per
+              spec; backend dependency rule already gates it on
+              `calendar`. Re-enable when the booking flow ships. */}
+          <FeatureCard
+            icon={CalendarDays}
+            title={t('settings.features.calendarBooking.title', 'Customer booking')}
+            description={t(
+              'settings.features.calendarBooking.description',
+              'Let customers see free slots on a public calendar and book directly. Coming soon.',
+            )}
+            status="roadmap"
+            statusLabel={statusLabel('roadmap')}
+            sidebarLabel={t('settings.features.calendarBooking.sidebar', 'Booking')}
+            enabled={staged.calendarBooking}
             onToggle={() => { /* locked */ }}
             disabled
             lockedReason={NOT_YET_AVAILABLE}
@@ -196,6 +215,10 @@ export const FeaturesTab: React.FC = () => {
 
         {/* Sales */}
         <Section title={t('settings.features.sections.sales', 'Sales')}>
+          {/* Quotes + Bills shipped in the CRM PR (#TBD). The old
+              placeholder lockedReason / disabled props are removed so
+              the toggles actually save. The sub-page surfaces under
+              /admin/clients/{quotes,bills} are gated independently. */}
           <FeatureCard
             icon={FileSignature}
             title={t('settings.features.quotes.title', 'Quotes')}
@@ -207,25 +230,68 @@ export const FeaturesTab: React.FC = () => {
             statusLabel={statusLabel('new')}
             sidebarLabel={t('settings.features.quotes.sidebar', 'Quotes')}
             enabled={staged.quotes}
-            onToggle={() => { /* locked */ }}
-            disabled
-            lockedReason={NOT_YET_AVAILABLE}
+            onToggle={(next) => setFlag('quotes', next)}
+          />
+
+          <FeatureCard
+            icon={ScrollText}
+            title={t('settings.features.contracts.title', 'Contracts')}
+            description={t(
+              'settings.features.contracts.description',
+              'Compose contracts from a library of reusable blocks (image rights, NDA, model release, cancellation, jurisdiction…) and have customers sign in-browser or upload a wet-signed PDF. Seeded block bodies are EXAMPLES ONLY — review with your lawyer before sending.',
+            )}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarLabel={t('settings.features.contracts.sidebar', 'Contracts')}
+            enabled={staged.contracts}
+            onToggle={(next) => setFlag('contracts', next)}
           />
 
           <FeatureCard
             icon={Receipt}
-            title={t('settings.features.bills.title', 'Bills')}
+            title={t('settings.features.bills.title', 'Invoices')}
             description={t(
               'settings.features.bills.description',
-              'Generate a bill from any accepted quote. Mark paid manually — no payment processor integration.',
+              'Generate an invoice from any accepted quote. Mark paid manually — no payment processor integration.',
             )}
-            status="roadmap"
-            statusLabel={statusLabel('roadmap')}
-            sidebarLabel={t('settings.features.bills.sidebar', 'Bills')}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarLabel={t('settings.features.bills.sidebar', 'Invoices')}
             enabled={staged.bills}
-            onToggle={() => { /* locked */ }}
-            disabled
-            lockedReason={NOT_YET_AVAILABLE}
+            onToggle={(next) => setFlag('bills', next)}
+          />
+
+          <FeatureCard
+            icon={Calculator}
+            title={t('settings.features.taxReport.title', 'Tax report')}
+            description={t(
+              'settings.features.taxReport.description',
+              'Period-scoped revenue list with net + VAT breakdown grouped by VAT rate. Export as PDF (landscape, company letterhead) or CSV for your accountant. Cancelled invoices stay visible for a gap-free audit trail but are excluded from totals.',
+            )}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarLabel={t('settings.features.taxReport.sidebar', 'Tax')}
+            enabled={staged.taxReport}
+            onToggle={(next) => setFlag('taxReport', next)}
+            disabled={!staged.bills}
+            lockedReason={!staged.bills ? t(
+              'settings.features.taxReport.requiresBills',
+              'Enable Bills first — the tax report reads from your invoices.',
+            ) : undefined}
+          />
+
+          <FeatureCard
+            icon={Briefcase}
+            title={t('settings.features.hoursLogging.title', 'Hours logging')}
+            description={t(
+              'settings.features.hoursLogging.description',
+              'Per-customer time tracking. Admin logs date + start/end times + optional rate override + note. Monthly-mode customers auto-accumulate hours into the running monthly draft; per-event customers see a "Create draft invoice" button that mints a standalone draft invoice with one line per entry. Independent of Bills — log hours even before turning the full billing surface on.',
+            )}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarLabel={t('settings.features.hoursLogging.sidebar', 'Hours')}
+            enabled={staged.hoursLogging}
+            onToggle={(next) => setFlag('hoursLogging', next)}
           />
         </Section>
 
@@ -261,6 +327,20 @@ export const FeaturesTab: React.FC = () => {
               'settings.features.userManagement.warning',
               'Existing user accounts stay valid; the admin UI for managing them will be hidden until you re-enable this.',
             )}
+          />
+
+          <FeatureCard
+            icon={Wrench}
+            title={t('settings.features.crmDevelopment.title', 'CRM developer tools')}
+            description={t(
+              'settings.features.crmDevelopment.description',
+              'Internal helpers for verifying CRM flows (e.g. fire the admin payment-check email instantly, bypass throttles). Surfaces as a "Development" sub-tab under Clients. Strictly opt-in — fires real side effects, use against test data only.',
+            )}
+            status="experimental"
+            statusLabel={statusLabel('experimental')}
+            sidebarLabel={t('settings.features.crmDevelopment.sidebar', 'Development')}
+            enabled={staged.crmDevelopment}
+            onToggle={(next) => setFlag('crmDevelopment', next)}
           />
         </Section>
       </Card>

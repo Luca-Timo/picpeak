@@ -5,9 +5,11 @@ import { toast } from 'react-toastify';
 import { Save, RotateCcw, Code, AlertTriangle, Check } from 'lucide-react';
 import { Button, Card, Loading } from '../common';
 import { cssTemplatesService, CssTemplate } from '../../services/cssTemplates.service';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 export const CssTemplateEditor: React.FC = () => {
   const { t } = useTranslation();
+  const { formatDateTime: fmtDateTime } = useLocalizedDate();
   const queryClient = useQueryClient();
   const [activeSlot, setActiveSlot] = useState(1);
   const [localTemplates, setLocalTemplates] = useState<CssTemplate[]>([]);
@@ -228,7 +230,7 @@ export const CssTemplateEditor: React.FC = () => {
             {/* Last Updated */}
             {activeTemplate.updated_at && (
               <p className="text-xs text-neutral-400 dark:text-neutral-500 text-right">
-                {t('cssTemplates.lastUpdated', 'Last updated')}: {new Date(activeTemplate.updated_at).toLocaleString()}
+                {t('cssTemplates.lastUpdated', 'Last updated')}: {fmtDateTime(activeTemplate.updated_at)}
               </p>
             )}
           </div>

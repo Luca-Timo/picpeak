@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastContainer } from 'react-toastify';
@@ -24,8 +24,29 @@ import {
   UserManagementPage,
   CustomerManagementPage,
   CustomerDetailPage,
-  WebhookDeliveriesPage
+  WebhookDeliveriesPage,
+  // CRM routes (#TBD) — feature-flagged at the route layer via RequireFeature.
+  QuotesListPage,
+  QuoteEditorPage,
+  QuoteDetailPage,
+  BillsListPage,
+  BillEditorPage,
+  BillDetailPage,
 } from './pages/admin';
+import { CrmDevelopmentPage } from './pages/admin/clients/CrmDevelopmentPage';
+import { TaxReportPage } from './pages/admin/clients/TaxReportPage';
+import { HoursLoggingPage } from './pages/admin/clients/HoursLoggingPage';
+// E.6 — Calendar page lazy-loaded so the ~200 KB FullCalendar bundle
+// (carved into its own chunk in vite.config.ts) doesn't ship with the
+// main app. Only pages that visit /admin/clients/calendar fetch it.
+const CalendarPage = lazy(() => import('./pages/admin/clients/CalendarPage').then((m) => ({ default: m.CalendarPage })));
+import { QuoteResponsePage } from './pages/public/QuoteResponsePage';
+import { ContractResponsePage } from './pages/public/ContractResponsePage';
+import { ContractsListPage } from './pages/admin/contracts/ContractsListPage';
+import { ContractEditorPage } from './pages/admin/contracts/ContractEditorPage';
+import { ContractDetailPage } from './pages/admin/contracts/ContractDetailPage';
+import { BlockLibraryPage } from './pages/admin/contracts/BlockLibraryPage';
+import { PaymentCheckPage } from './pages/public/PaymentCheckPage';
 import { AcceptInvitePage } from './pages/public/AcceptInvitePage';
 import {
   CustomerLoginPage,
@@ -36,13 +57,14 @@ import {
   CustomerCalendarPage,
   CustomerQuotesPage,
   CustomerBillsPage,
+  CustomerContractsPage,
   CustomerResetPasswordPage,
 } from './pages/customer';
 import { CustomerAuthProvider } from './contexts/CustomerAuthContext';
 import { AdminLayout, AdminAuthWrapper } from './components/admin';
 import { ClientsLayout } from './components/admin/ClientsLayout';
 import { RequireFeature } from './components/admin/RequireFeature';
-import { PageErrorBoundary, OfflineIndicator, SkipLink, DynamicFavicon, RobotsMetaTags, CMSContentBlock } from './components/common';
+import { PageErrorBoundary, OfflineIndicator, SkipLink, DynamicFavicon, RobotsMetaTags, CMSContentBlock, Loading } from './components/common';
 import { MaintenanceWrapper } from './components/MaintenanceWrapper';
 import { GlobalThemeProvider } from './components/GlobalThemeProvider';
 import { usePublicSettings } from './hooks/usePublicSettings';
@@ -172,12 +194,67 @@ function App() {
                             <Route path="accounts" element={<CustomerManagementPage />} />
                             <Route path="accounts/:id" element={<CustomerDetailPage />} />
                           </Route>
+                          {/* Quotes (CRM) — gated by `quotes`. */}
+                          <Route element={<RequireFeature flag="quotes" />}>
+                            <Route path="quotes" element={<QuotesListPage />} />
+                            <Route path="quotes/new" element={<QuoteEditorPage />} />
+                            <Route path="quotes/:id" element={<QuoteDetailPage />} />
+                            <Route path="quotes/:id/edit" element={<QuoteEditorPage />} />
+                          </Route>
+                          {/* Bills / invoices (CRM) — gated by `bills`. */}
+                          <Route element={<RequireFeature flag="bills" />}>
+                            <Route path="bills" element={<BillsListPage />} />
+                            <Route path="bills/new" element={<BillEditorPage />} />
+                            <Route path="bills/:id" element={<BillDetailPage />} />
+                            <Route path="bills/:id/edit" element={<BillEditorPage />} />
+                          </Route>
+
+                          {/* Contracts (CRM) — gated by `contracts`. Independent
+                              of quotes/bills; a free-standing legal document
+                              type composed from a library of reusable blocks. */}
+                          <Route element={<RequireFeature flag="contracts" />}>
+                            <Route path="contracts" element={<ContractsListPage />} />
+                            <Route path="contracts/new" element={<ContractEditorPage />} />
+                            <Route path="contracts/blocks" element={<BlockLibraryPage />} />
+                            <Route path="contracts/:id" element={<ContractDetailPage />} />
+                            <Route path="contracts/:id/edit" element={<ContractEditorPage />} />
+                          </Route>
+
+                          {/* Hour logging (standalone surface) — gated by
+                              `hoursLogging`. Independent of `bills` so admin
+                              can log hours before the full billing surface
+                              is enabled. */}
+                          <Route element={<RequireFeature flag="hoursLogging" />}>
+                            <Route path="hours" element={<HoursLoggingPage />} />
+                          </Route>
+
+                          {/* Admin calendar (migration 137) — gated by
+                              `calendar`. Lazy-loaded so the FullCalendar
+                              bundle stays out of the main chunk. */}
+                          <Route element={<RequireFeature flag="calendar" />}>
+                            <Route
+                              path="calendar"
+                              element={
+                                <Suspense fallback={<Loading />}>
+                                  <CalendarPage />
+                                </Suspense>
+                              }
+                            />
+                          </Route>
+
+                          {/* Tax / Steuer report — gated by `taxReport`. */}
+                          <Route element={<RequireFeature flag="taxReport" />}>
+                            <Route path="tax-report" element={<TaxReportPage />} />
+                          </Route>
+                          {/* Developer tools — gated by `crmDevelopment`. */}
+                          <Route element={<RequireFeature flag="crmDevelopment" />}>
+                            <Route path="development" element={<CrmDevelopmentPage />} />
+                          </Route>
                           {/* Default: send /admin/clients (no sub-path) to
-                              the first available sub-feature. Today that's
-                              always accounts; when calendar/quotes ship they
-                              get their own routes here and the empty-state
-                              in ClientsLayout handles the rare "parent on,
-                              all children off" case. */}
+                              the first enabled sub-feature. accounts comes
+                              first because it predates the others. The empty
+                              state inside ClientsLayout handles "parent on,
+                              all children off". */}
                           <Route index element={<Navigate to="/admin/clients/accounts" replace />} />
                         </Route>
                       </Route>
@@ -209,6 +286,17 @@ function App() {
                   {/* Public invitation acceptance page */}
                   <Route path="/invite/:token" element={<AcceptInvitePage />} />
 
+                  {/* Public quote accept/decline page (CRM). Token-only,
+                      no auth required. */}
+                  <Route path="/quote/:token" element={<QuoteResponsePage />} />
+                  <Route path="/contract/:token" element={<ContractResponsePage />} />
+
+                  {/* Admin payment-check page (CRM) — token only,
+                      no auth. Reached from the "Paid in full /
+                      Partial / Not paid" buttons in the payment-
+                      check email. */}
+                  <Route path="/payment-check/:token" element={<PaymentCheckPage />} />
+
                   {/* Customer surface (#354). Strictly separate provider /
                       cookie / API surface from /admin/*. The customerPortal
                       feature flag hides the *admin-side* surfaces (sidebar
@@ -237,6 +325,7 @@ function App() {
                           <Route path="dashboard" element={<CustomerDashboardPage />} />
                           <Route path="calendar" element={<CustomerCalendarPage />} />
                           <Route path="quotes" element={<CustomerQuotesPage />} />
+                          <Route path="contracts" element={<CustomerContractsPage />} />
                           <Route path="bills" element={<CustomerBillsPage />} />
                           <Route path="profile" element={<CustomerProfilePage />} />
                         </Route>

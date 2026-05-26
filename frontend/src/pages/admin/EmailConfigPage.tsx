@@ -39,6 +39,13 @@ const CATEGORY_ORDER: readonly string[] = [
   'customers',
   'calendar',
   'quotes',
+  // 'contracts' sits between quotes and billing — matches the
+  // quote → contract → invoice document flow + the order of the
+  // Admin → Clients sub-nav so admins find the right bucket at a
+  // glance. Migration 130 seeds rows with category='contracts';
+  // before this entry existed they fell through to 'core' via the
+  // unknown-category fallback below.
+  'contracts',
   'billing',
 ] as const;
 

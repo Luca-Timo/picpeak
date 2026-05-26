@@ -25,6 +25,11 @@ export interface GeneralSettings {
   use_original_filenames_for_downloads: boolean;
   default_language: string;
   date_format: { format: string; locale: string };
+  /** '12h' or '24h' — controls how times are RENDERED across admin
+   *  + customer-facing views (formatDateTime / formatTime). The
+   *  underlying storage is always HH:mm (24h); only the visual
+   *  presentation toggles. Default '24h' (operator's locale). */
+  time_format: '12h' | '24h';
 }
 
 export interface SecuritySettings {
@@ -101,7 +106,8 @@ export function useSettingsState() {
     short_gallery_urls: false,
     use_original_filenames_for_downloads: false,
     default_language: 'en',
-    date_format: { format: 'dd/MM/yyyy', locale: 'en-GB' }
+    date_format: { format: 'dd/MM/yyyy', locale: 'en-GB' },
+    time_format: '24h'
   });
 
   // Security settings state
@@ -192,7 +198,8 @@ export function useSettingsState() {
           ? (typeof settings.general_date_format === 'string'
               ? { format: settings.general_date_format, locale: settings.general_date_format.includes('MM/dd') ? 'en-US' : 'en-GB' }
               : settings.general_date_format)
-          : { format: 'dd/MM/yyyy', locale: 'en-GB' }
+          : { format: 'dd/MM/yyyy', locale: 'en-GB' },
+        time_format: settings.general_time_format === '12h' ? '12h' : '24h'
       });
 
       setSecuritySettings({

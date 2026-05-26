@@ -124,7 +124,11 @@
     "saveChanges": "Save changes",
     "resetChanges": "Reset Changes",
     "dismiss": "Dismiss",
-    "discard": "Discard"
+    "discard": "Discard",
+    "preview": "Preview",
+    "duplicate": "Duplicate",
+    "showAll": "Show all",
+    "confirm": "Confirm"
   },
   "upload": {
     "photoCategory": "Photo Category",
@@ -168,7 +172,8 @@
     "cmsPages": "CMS Pages",
     "users": "Users",
     "calendar": "Calendar",
-    "clients": "Clients"
+    "clients": "CRM",
+    "betaTag": "Beta"
   },
   "archives": {
     "title": "Archives",
@@ -378,6 +383,9 @@
     "eventName": "Event Name",
     "eventType": "Event Type",
     "eventDate": "Event Date",
+    "fullDay": "Full day",
+    "eventTimeStart": "Start time",
+    "eventTimeEnd": "End time",
     "hostEmail": "Customer Email",
     "hostName": "Customer Name",
     "hostNamePlaceholder": "John Smith",
@@ -1030,7 +1038,14 @@
       "integrations": "Integrations",
       "system": "System",
       "appearance": "Content & Appearance",
-      "communication": "Communication"
+      "communication": "Communication",
+      "crm": "CRM-Settings"
+    },
+    "contracts": {
+      "title": "Contracts"
+    },
+    "reminderTemplates": {
+      "title": "Reminder emails"
     },
     "apiTokens": {
       "title": "API Tokens",
@@ -1105,7 +1120,7 @@
         "sales": "Sales",
         "insights": "Insights & Access",
         "customers": "Customers",
-        "clients": "Clients"
+        "clients": "CRM"
       },
       "status": {
         "stable": "stable",
@@ -1130,8 +1145,13 @@
       },
       "calendar": {
         "title": "Calendar",
-        "description": "See all upcoming and past events on a month/week view. Optionally accept new bookings from clients.",
+        "description": "Admin-only calendar showing events, logged hours, and pending quotes/contracts in one view. Drag-create hours directly on the calendar.",
         "sidebar": "Calendar"
+      },
+      "calendarBooking": {
+        "title": "Customer booking",
+        "description": "Let customers see free slots on a public calendar and book directly. Coming soon.",
+        "sidebar": "Booking"
       },
       "quotes": {
         "title": "Quotes",
@@ -1139,9 +1159,15 @@
         "sidebar": "Quotes"
       },
       "bills": {
-        "title": "Bills",
-        "description": "Generate a bill from any accepted quote. Mark paid manually — no payment processor integration.",
-        "sidebar": "Bills"
+        "title": "Invoices",
+        "description": "Generate an invoice from any accepted quote. Mark paid manually — no payment processor integration.",
+        "sidebar": "Invoices"
+      },
+      "taxReport": {
+        "title": "Tax report",
+        "description": "Period-scoped revenue list with net + VAT breakdown grouped by VAT rate. Export as PDF (landscape, company letterhead) or CSV for your accountant. Cancelled invoices stay visible for a gap-free audit trail but are excluded from totals.",
+        "sidebar": "Tax",
+        "requiresBills": "Enable Bills first — the tax report reads from your invoices."
       },
       "analytics": {
         "title": "Analytics",
@@ -1153,12 +1179,12 @@
         "warning": "Existing user accounts stay valid; the admin UI for managing them will be hidden until you re-enable this."
       },
       "customerPortal": {
-        "title": "Clients",
-        "description": "Persistent customer logins. Recurring clients see all their assigned galleries from one place — no per-event passwords. Customers log in at /customer/login and you manage them under Clients → Accounts."
+        "title": "Customer Accounts",
+        "description": "Persistent customer logins. Recurring clients see all their assigned galleries from one place — no per-event passwords. Customers log in at /customer/login and you manage them under CRM → Accounts."
       },
       "clients": {
-        "title": "Clients",
-        "description": "Master switch for the Clients sidebar section. Off hides the section and every sub-feature below regardless of their individual toggles — re-enable to restore them to whatever you set last."
+        "title": "CRM",
+        "description": "Master switch for the CRM sidebar section. Off hides the section and every sub-feature below regardless of their individual toggles — re-enable to restore them to whatever you set last."
       }
     },
     "customerSurface": {
@@ -1361,6 +1387,12 @@
     "saveTheme": "Save Theme",
     "previewLayout": "Preview Layout",
     "livePreview": "Live Preview",
+    "pdfTypography": "PDF typography",
+    "pdfTypographyHelp": "Used for invoice + quote letterheads. Pick one of the bundled fonts, or leave on default to use Helvetica.",
+    "pdfFontFamily": "Body font",
+    "pdfFontFamilyDefault": "Use Helvetica (default)",
+    "pdfFontFamilyMissing": "missing",
+    "pdfFontSavedToast": "PDF font saved.",
     "heroPlaceholderText": "Your event's hero photo will appear here",
     "whiteLabel": "White Label",
     "hidePoweredBy": "Hide \"Powered by PicPeak\" branding",
@@ -1375,6 +1407,11 @@
     "logoMaxHeight": "Maximum Height (pixels)",
     "logoMaxHeightHelp": "Set a custom maximum height for the logo (20-200 pixels)",
     "logoPosition": "Logo Position in Header",
+    "positionLeft": "Left",
+    "positionCenter": "Center",
+    "positionRight": "Right",
+    "positionSidepanel": "Sidebar",
+    "positionSidepanelHelp": "The logo appears in the admin sidebar instead of the header. When the sidebar is collapsed, the favicon is shown.",
     "logoDisplayMode": "Display Mode",
     "logoOnly": "Logo Only",
     "textOnly": "Company Name Only",
@@ -1987,6 +2024,7 @@
       "customers": "Customers",
       "calendar": "Calendar",
       "quotes": "Quotes",
+      "contracts": "Contracts",
       "billing": "Billing"
     },
     "featureOff": "Feature off",
@@ -2773,9 +2811,10 @@
       "galleries": "Galleries",
       "calendar": "Calendar",
       "quotes": "Quotes",
-      "bills": "Bills",
+      "bills": "Invoices",
       "profile": "Profile",
-      "soon": "Soon"
+      "soon": "Soon",
+      "new": "New"
     },
     "comingSoon": {
       "tag": "Coming soon"
@@ -2786,11 +2825,51 @@
     },
     "quotes": {
       "title": "Quotes",
-      "body": "Review and accept quotes for upcoming shoots in one place. We're still building this — for now, your photographer will keep sending quotes the usual way."
+      "subtitle": "Every quote your photographer has sent you. Click an open quote to accept or decline.",
+      "empty": "No quotes yet.",
+      "disabled": "This feature is currently disabled for your account. Please contact your photographer if you expected to see quotes here.",
+      "loadError": "Could not load quotes.",
+      "noEventName": "—",
+      "openToRespond": "Open to respond",
+      "viewPdf": "View PDF",
+      "popupBlocked": "Allow pop-ups for this site to view the quote PDF."
     },
     "bills": {
-      "title": "Bills",
-      "body": "Invoices and payment history for your sessions will be available here. We'll send you an email when this is live."
+      "title": "Invoices",
+      "subtitle": "Every invoice your photographer has sent you. Click \"View PDF\" to download.",
+      "empty": "No invoices yet.",
+      "disabled": "This feature is currently disabled for your account. Please contact your photographer if you expected to see invoices here.",
+      "loadError": "Could not load invoices.",
+      "viewPdf": "View PDF",
+      "popupBlocked": "Allow pop-ups for this site to view the invoice PDF.",
+      "field": {
+        "issueDate": "Issued",
+        "dueDate": "Due",
+        "paidAt": "Paid",
+        "outstanding": "Outstanding",
+        "lateFee": "Late fee"
+      },
+      "filter": {
+        "outstanding": "Outstanding (sent + overdue)"
+      },
+      "kind": {
+        "storno": "Cancellation invoice"
+      },
+      "cancelsLabel": "Cancels invoice",
+      "cancelledByLabel": "Cancelled by cancellation invoice"
+    },
+    "sort": {
+      "label": "Sort",
+      "newest": "Newest first",
+      "oldest": "Oldest first",
+      "priceDesc": "Price (high to low)",
+      "priceAsc": "Price (low to high)"
+    },
+    "filter": {
+      "label": "Filter",
+      "all": "All",
+      "countAll": "{{count}} total",
+      "countFiltered": "{{visible}} of {{total}}"
     },
     "profile": {
       "title": "Customer profile",
@@ -2860,6 +2939,78 @@
     }
   },
   "customers": {
+    "field": {
+      "featureHoursLogging": "Hours logging",
+      "hourlyRate": "Default hourly rate",
+      "hourlyRateHint": "Major units (e.g. 150.00 for {{currency}} 150). Leave blank to require a per-entry override on every block."
+    },
+    "hours": {
+      "section": "Hours",
+      "monthlyHint": "Entries auto-append to the current monthly draft. Edit / delete remains possible until the scheduler arms the draft for send.",
+      "perEventHint": "Logged entries stay unbilled until you click \"Create draft invoice\" — a standalone draft invoice is generated with one line per entry, ready for you to review before sending.",
+      "form": {
+        "title": "Log new entry",
+        "date": "Date",
+        "start": "Start",
+        "end": "End",
+        "duration": "Duration",
+        "durationPlaceholder": "1h · 1.5 · 1:30",
+        "durationHint": "Type a duration to auto-fill End: 1h, 1.5, 1,5 or 1:30",
+        "rateOverride": "Rate override",
+        "note": "Note / description",
+        "notePlaceholder": "What was worked on?",
+        "save": "Add entry"
+      },
+      "col": {
+        "date": "Date",
+        "range": "Time",
+        "hours": "Hours",
+        "rate": "Rate",
+        "total": "Total",
+        "note": "Note",
+        "status": "Status"
+      },
+      "status": {
+        "unbilled": "Unbilled",
+        "billed": "Billed",
+        "billedOn": "Billed: {{number}}"
+      },
+      "billButton": "Create draft invoice",
+      "unbilledCount": "{{count}} unbilled entries totaling {{total}}",
+      "empty": "No entries logged yet.",
+      "confirmDelete": "Delete this entry? If it has been billed onto a draft, the matching invoice line will also be removed.",
+      "locked": "Locked: invoice already armed for send",
+      "toast": {
+        "created": "Entry logged",
+        "deleted": "Entry deleted",
+        "billed": "Hours billed"
+      }
+    },
+    "create": {
+      "openButton": "Create passive customer",
+      "openLink": "+ Create new customer",
+      "title": "Create new customer",
+      "subtitle": "Fill in the details below. Choose \"Save as passive customer\" to create an admin-only record, or \"Save & send portal invitation\" to also email the customer a sign-up link.",
+      "passiveSubtitle": "Adds an admin-only customer record. The customer is not notified and cannot log in until you send them an invitation later.",
+      "saveAsPassive": "Save as passive customer",
+      "saveAndInvite": "Save & send portal invitation",
+      "savedPassiveToast": "Passive customer created.",
+      "savedActiveToast": "Customer created and portal invitation sent.",
+      "inviteFailedToast": "Customer saved (passive). Invitation email failed — retry from the customer detail page.",
+      "emailRequired": "A valid email is required."
+    },
+    "passive": {
+      "badge": "Passive — admin only",
+      "activeLabel": "Has portal access",
+      "sendInvite": "Send portal invitation",
+      "sendInviteToast": "Portal invitation sent.",
+      "alreadyActive": "Customer already has portal access — no invitation needed.",
+      "detailHint": "This customer has no portal access (admin-only record). Click below to email them a portal sign-up link. The customer's existing invoices, quotes, and gallery assignments are preserved when they claim the invitation.",
+      "deactivatedHint": "Reactivate the customer before sending the invitation."
+    },
+    "hoursLoggingDisabled": {
+      "badge": "Hour logging disabled"
+    },
     "pageTitle": "Customers",
     "pageSubtitle": "Recurring customer accounts that can log in at /customer/login.",
     "unnamed": "Unnamed",
@@ -2935,6 +3086,7 @@
       "noEvents": "Not assigned to any events yet. Add this customer to an event from the event form.",
       "email": "Email",
       "preferredLanguage": "Preferred language",
+      "preferredLanguageHint": "Drives portal UI and quote/invoice PDF locale. New customers default to the business-profile language ({{lang}}); override here per customer.",
       "salutation": "Salutation",
       "salutationNone": "—",
       "firstName": "First name",
@@ -2950,6 +3102,7 @@
       "city": "City",
       "state": "State / region",
       "countryCode": "Country (ISO 2)",
+      "countryName": "Country (full name)",
       "notesHint": "Visible only to admins. Never shown to the customer.",
       "featuresSection": "Customer features",
       "featuresHint": "Per-customer overrides for the customer-surface tabs. The global toggles in Settings → Customer Surface are the master switch — when global is OFF nobody sees the tab, regardless of what you set here. Defaults are ON, so flip a switch OFF to hide a tab for this specific customer.",
@@ -2961,7 +3114,32 @@
         "error": "Could not send password reset",
         "inactive": "Reactivate the customer before sending a reset."
       },
+      "quotesSection": "Quotes",
+      "noQuotes": "No quotes for this customer yet.",
+      "contractsSection": "Contracts",
+      "noContracts": "No contracts for this customer yet.",
+      "billsSection": "Invoices",
+      "noBills": "No invoices for this customer yet.",
       "manageEvents": "Manage galleries"
+    },
+    "billing": {
+      "section": "Billing cadence",
+      "hint": "Per-event (default): every invoice is sent on its own schedule. Monthly: all invoices issued in the period accumulate into one bill that fires on the configured day.",
+      "cadence": "Billing cadence",
+      "perEvent": "Per event",
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "cycleDay": "Cycle day",
+      "cycleDayHint": "1..28 = day of month. Use negative -1..-15 for \"N days before month end\" (so -3 fires on the 28th of a 31-day month).",
+      "triggerNow": "Trigger invoice now",
+      "triggerConfirm": "Issue this customer's monthly bill now? The customer receives the email immediately.",
+      "triggerHint": "Bypasses the cadence day and issues the running draft immediately. Refuses when nothing has been queued for the current period.",
+      "triggered": "Monthly bill issued: {{number}}",
+      "triggerError": "Could not trigger the monthly bill.",
+      "draftPreview": {
+        "title": "Pending in this month's bill",
+        "periodRange": "{{number}} · {{from}} – {{to}}"
+      }
     },
     "reactivate": {
       "button": "Reactivate",
@@ -2997,15 +3175,731 @@
     }
   },
   "clients": {
-    "title": "Clients",
-    "subtitle": "Customer accounts, scheduling, quotes and billing for recurring clients.",
-    "navAriaLabel": "Clients navigation",
+    "title": "CRM",
+    "subtitle": "Customer accounts, scheduling, quotes and billing — everything for recurring clients in one place.",
+    "navAriaLabel": "CRM navigation",
     "empty": {
-      "title": "No client features enabled",
-      "body": "Enable Accounts (or another Clients sub-feature) under Settings → Features to get started."
+      "title": "No CRM features enabled",
+      "body": "Enable Accounts (or another CRM sub-feature) under Settings → Features to get started."
     },
     "subnav": {
-      "accounts": "Accounts"
+      "accounts": "Accounts",
+      "quotes": "Quotes",
+      "contracts": "Contracts",
+      "hours": "Hours",
+      "calendar": "Calendar",
+      "bills": "Invoices",
+      "taxReport": "Tax",
+      "development": "Development"
+    }
+  },
+  "calendar": {
+    "pageTitle": "Calendar",
+    "subtitle": "Events, logged hours, and pending quotes/contracts in one view.",
+    "viewMonth": "Month",
+    "viewWeek": "Week",
+    "loading": "Loading items…",
+    "legend": {
+      "events": "Events",
+      "hours": "Hours",
+      "pendingQuotes": "Pending quotes",
+      "pendingContracts": "Pending contracts",
+      "hoursLocked": "Locked (billed)"
+    },
+    "hourEntry": {
+      "createTitle": "Log hours",
+      "customerLabel": "Customer",
+      "customerSearch": "Search by email or company…",
+      "descriptionLabel": "Description (optional)",
+      "descriptionPlaceholder": "Editing / shoot / travel…",
+      "startLabel": "Start",
+      "endLabel": "End",
+      "submit": "Save hours",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "close": "Close",
+      "delete": "Delete",
+      "confirmDelete": "Delete these logged hours? This cannot be undone.",
+      "created": "Hours logged.",
+      "createFailed": "Couldn't save: {{message}}",
+      "saved": "Hours updated.",
+      "saveFailed": "Couldn't save: {{message}}",
+      "movedToast": "Hours updated.",
+      "moveFailed": "Couldn't move: {{message}}",
+      "resizedToast": "Hours updated.",
+      "resizeFailed": "Couldn't resize: {{message}}",
+      "deleted": "Hours deleted.",
+      "deleteFailed": "Couldn't delete: {{message}}",
+      "lockedBadge": "Locked",
+      "featureOffToast": "Hour logging is disabled.",
+      "lockedTooltip": "Already billed — Storno the invoice to edit.",
+      "noDescription": "No description.",
+      "untitledCustomer": "Hours"
+    }
+  },
+  "hoursLogging": {
+    "title": "Hours logging",
+    "subtitle": "Pick a customer and log billable time blocks. Entries flow into the next monthly bill or are billed on demand for per-event customers.",
+    "pickCustomer": "Customer",
+    "pickPlaceholder": "— Select customer —",
+    "emptyList": "No customers have hours logging enabled yet. Flip \"Hours logging\" on a customer's detail page first.",
+    "searchPlaceholder": "Search by email or company…",
+    "customerLoggingDisabled": "This customer has hour logging disabled. Enable it on the customer's detail page to log hours."
+  },
+  "crmDev": {
+    "title": "CRM Development",
+    "subtitle": "Internal tools for verifying CRM flows. Hidden by default — enabled via Settings → Features → Development.",
+    "warning": "These tools fire real side effects (emails, status changes). Use against test data.",
+    "envDisabled": {
+      "title": "Dev tools blocked by env gate",
+      "body": "Set PICPEAK_ENABLE_DEV_TOOLS=1 in your backend env file and restart the server. The feature flag alone is not enough — this is a deliberate production-safety guard.",
+      "cardHint": "Email templates can't be listed until the dev-tools env gate is opened."
+    },
+    "paymentCheck": {
+      "title": "Test payment-check email (real invoice)",
+      "help": "Fires the admin payment-check email for a real sent/overdue invoice, bypassing the 24h throttle. The three buttons in the email are real signed tokens — clicking them will affect the invoice status.",
+      "selectInvoice": "Sent or overdue invoice",
+      "selectPlaceholder": "— Pick an invoice —",
+      "noneAvailable": "No sent or overdue invoices in the database.",
+      "send": "Send test email",
+      "sending": "Queuing…",
+      "sentToast": "Test email queued. Check the recipient's inbox."
+    },
+    "templates": {
+      "title": "Send any CRM email to me (mock data)",
+      "help": "Queues the chosen template to your own admin email with placeholder values. When the install has a real quote / invoice on file, the appropriate PDF is attached so you can verify the full output.",
+      "notSeeded": "Not seeded",
+      "send": "Send to me",
+      "sending": "Queuing…",
+      "sentToast": "Queued to {{to}}.",
+      "empty": "No CRM email templates found — run migrations to seed them.",
+      "label": {
+        "quote_sent": {
+          "title": "Quote sent (to customer)",
+          "description": "Fires when a quote is sent — includes the PDF attachment + accept/decline links."
+        },
+        "quote_accepted_customer": {
+          "title": "Quote accepted — customer confirmation",
+          "description": "Sent to the customer after they (or the admin on their behalf) accept the quote. Includes PDF."
+        },
+        "quote_accepted_admin": {
+          "title": "Quote accepted — admin notification",
+          "description": "Notifies the admin that a quote was accepted by the customer."
+        },
+        "quote_declined_admin": {
+          "title": "Quote declined — admin notification",
+          "description": "Notifies the admin that a quote was declined by the customer."
+        },
+        "invoice_sent": {
+          "title": "Invoice sent (to customer)",
+          "description": "Fires when an invoice is sent — includes the PDF attachment."
+        },
+        "invoice_reminder_first": {
+          "title": "Invoice reminder — first",
+          "description": "First reminder to the customer. No late fee yet."
+        },
+        "invoice_reminder_second": {
+          "title": "Invoice reminder — second (with Mahngebühr)",
+          "description": "Second reminder with the late fee surcharge added."
+        },
+        "invoice_payment_check_admin": {
+          "title": "Payment-check (admin)",
+          "description": "Admin email with the three signed-token action buttons."
+        },
+        "contract_sent": {
+          "title": "Contract sent (to customer)",
+          "description": "Admin → customer send with the unsigned contract PDF attached."
+        },
+        "contract_signed_admin_notification": {
+          "title": "Contract signed — admin notification",
+          "description": "Customer-signed ping back to the admin. No attachment."
+        },
+        "contract_fully_signed": {
+          "title": "Contract fully signed (dual-party)",
+          "description": "Dual-party send once both signatures are in. Stamped contract PDF attached."
+        }
+      }
+    }
+  },
+  "taxReport": {
+    "title": "Tax report",
+    "intro": "Period-scoped revenue list with net + VAT breakdown grouped by VAT rate. Cancelled invoices stay visible for audit-trail continuity but are excluded from totals.",
+    "filters": {
+      "period": "Period",
+      "thisYear": "This year",
+      "lastYear": "Last year",
+      "thisQuarter": "This quarter",
+      "lastQuarter": "Last quarter",
+      "custom": "Custom range",
+      "from": "From",
+      "to": "To",
+      "currency": "Currency"
+    },
+    "exportPdf": "Export PDF",
+    "exportCsv": "Export CSV",
+    "exportFailed": "Export failed. Please try again.",
+    "errorTitle": "Could not load tax report",
+    "empty": "No invoices in this period.",
+    "statusCancelled": "Cancelled",
+    "totalsByVatRate": "Totals by VAT rate",
+    "grandTotalNet": "Total net",
+    "grandTotalVat": "Total VAT",
+    "grandTotalGross": "Total gross",
+    "cancelledFootnote": "{{count}} cancelled invoice(s) — amounts excluded from totals (shown for audit-trail continuity).",
+    "col": {
+      "date": "Date",
+      "invoice": "Invoice",
+      "customer": "Customer",
+      "event": "Event",
+      "vatRate": "VAT %",
+      "net": "Net",
+      "vat": "VAT",
+      "total": "Gross"
+    }
+  },
+  "quotes": {
+    "errors": {
+      "popupBlocked": "Allow pop-ups for this site to preview the PDF.",
+      "customerRequired": "Pick a customer first.",
+      "customerFeatureDisabled": "This customer has Quotes disabled. Enable Quotes on the customer detail page first."
+    },
+    "confirmSend": "Send this quote to the customer now?",
+    "sentToast": "Quote sent to customer.",
+    "confirmConvert": "Convert this accepted quote into an event + scheduled invoices?",
+    "convertedToast": "Quote converted to event #{{id}}",
+    "send": "Send",
+    "resend": "Resend",
+    "convert": "Convert to event",
+    "field": {
+      "issueDate": "Issued",
+      "validUntil": "Valid until",
+      "eventName": "Event",
+      "eventDate": "Event date",
+      "sentAt": "Sent at",
+      "acceptedAt": "Accepted at",
+      "declinedAt": "Declined at",
+      "responseWindow": "Response window",
+      "eventTimeStart": "Start time",
+      "eventTimeEnd": "End time",
+      "expectedDuration": "Expected duration (h)",
+      "vatRate": "VAT rate %",
+      "shipping": "Shipping amount",
+      "currency": "Currency",
+      "selectPaymentTerm": "— Select payment terms —",
+      "paymentNetDays": "Net days",
+      "paymentTiming": "Payment schedule",
+      "selectNetDays": "— Select net days —",
+      "selectTiming": "— Select schedule —",
+      "introText": "Intro text",
+      "outroText": "Outro text",
+      "ccPdfEmail": "CC PDF to (extra recipient)",
+      "ccPdfEmailPlaceholder": "name@example.com",
+      "ccPdfPickFromAdmins": "Pick from admins:",
+      "ccPdfCustom": "Custom email",
+      "internalNotes": "Internal notes (not on PDF)"
+    },
+    "responseWindowOpen": "Open until {{at}}",
+    "section": {
+      "lineItems": "Line items",
+      "internalNotes": "Internal notes",
+      "customer": "Customer",
+      "event": "Event details",
+      "payment": "Payment conditions",
+      "extras": "Intro / outro / extras"
+    },
+    "savedToast": "Quote saved as draft.",
+    "edit": "Edit quote",
+    "new": "New quote",
+    "preview": "Preview PDF",
+    "saveAndSend": "Save & send",
+    "customerSearch": "Search customer by email or company…",
+    "title": "Quotes",
+    "subtitle": "Send, track and convert quotes into events.",
+    "searchPlaceholder": "Search by number, customer, event…",
+    "sort": {
+      "newest": "Newest first",
+      "oldest": "Oldest first",
+      "customerAsc": "Customer A→Z",
+      "valueAsc": "Value low→high",
+      "valueDesc": "Value high→low"
+    },
+    "empty": "No quotes yet.",
+    "table": {
+      "customer": "Customer",
+      "event": "Event",
+      "issueDate": "Issued",
+      "total": "Total",
+      "status": "Status"
+    },
+    "pagination": "Page {{page}} of {{total}} · {{count}} quotes",
+    "status": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "accepted": "Accepted",
+      "declined": "Declined",
+      "expired": "Expired",
+      "converted": "Converted"
+    },
+    "trigger": {
+      "quote_accepted": "on acceptance",
+      "before_event": "before event",
+      "after_event": "after event",
+      "after_delivery": "after delivery",
+      "fixed_date": "on fixed date"
+    }
+  },
+  "crm": {
+    "lineItems": {
+      "quantity": "Qty",
+      "description": "Description",
+      "unitPrice": "Unit",
+      "total": "Total",
+      "subtotal": "Subtotal",
+      "vat": "VAT",
+      "position": "Pos.",
+      "discount": "Rabatt %",
+      "descriptionPlaceholder": "Description (multi-line OK)",
+      "saveAsPreset": "Save as preset",
+      "empty": "No line items yet — add one to get started.",
+      "addRow": "Add row",
+      "addFromPreset": "Add from preset…",
+      "shipping": "Shipping",
+      "addSubItem": "Add sub-item",
+      "detailsAdd": "+ Add details / notes",
+      "detailsFilled": "Details",
+      "detailsPlaceholder": "Optional notes — fine print, package inclusions, conditions…",
+      "autoTotaledHint": "Total auto-computed from sub-items below",
+      "autoTotaledNote": "= sum of sub-items"
+    }
+  },
+  "bills": {
+    "title": "Invoices",
+    "subtitle": "Schedule, send, track payments and chase late invoices.",
+    "new": "New invoice",
+    "searchPlaceholder": "Search by number or customer…",
+    "sort": {
+      "newest": "Newest first",
+      "dueAsc": "Due soon first",
+      "dueDesc": "Due latest first",
+      "customerAsc": "Customer A→Z",
+      "valueAsc": "Value low→high",
+      "valueDesc": "Value high→low"
+    },
+    "filter": {
+      "unpaidOnly": "Unpaid only"
+    },
+    "empty": "No invoices yet.",
+    "table": {
+      "customer": "Customer",
+      "event": "Event",
+      "installment": "Installment",
+      "dueDate": "Due",
+      "total": "Total",
+      "status": "Status"
+    },
+    "errors": {
+      "popupBlocked": "Allow pop-ups for this site to preview the PDF.",
+      "customerRequired": "Pick a customer first."
+    },
+    "confirmSend": "Send invoice to customer now?",
+    "sentToast": "Invoice sent.",
+    "confirmRelease": "Mark the photos as delivered and send this invoice to the customer now?",
+    "releaseForDelivery": "Mark delivered & send",
+    "releasedToast": "Delivery invoice sent.",
+    "monthlyDraftBadge": "Monthly draft — ships via the customer's cadence day or \"Trigger invoice now\"",
+    "confirmReminder": "Send a reminder now?",
+    "reminderToast": "Reminder sent.",
+    "confirmCancel": "Cancel this invoice?",
+    "confirmCancelDraft": "Cancel this draft invoice? No document goes out.",
+    "confirmCancelIssued": "A Stornorechnung will be generated and emailed to the customer immediately. This cannot be undone. Continue?",
+    "cancelledToast": "Invoice cancelled.",
+    "cancelledWithStornoToast": "Invoice cancelled — Stornorechnung issued to the customer.",
+    "confirmReissue": "A Stornorechnung will be issued to the customer for this invoice, and a new scheduled draft will be created with the same line items. The new invoice will reference this one as \"Replaces R-XXXX\". Continue?",
+    "confirmReissueCancelled": "Create a new scheduled invoice with the same line items, linked back to this cancelled one?",
+    "reissuedToast": "Invoice reissued — opening the new draft.",
+    "reissuedWithStornoToast": "Stornorechnung issued — opening the new draft.",
+    "reissue": "Reissue",
+    "cancelAndReissue": "Cancel & reissue",
+    "kind": {
+      "storno": "Stornorechnung",
+      "reissue": "Reissue"
+    },
+    "stornoCancelsLabel": "This Stornorechnung cancels invoice",
+    "cancelledByStornoLabel": "This invoice was cancelled by Stornorechnung",
+    "paymentRecordedToast": "Payment recorded.",
+    "sendNow": "Send now",
+    "resend": "Resend",
+    "markPaid": "Mark paid",
+    "sendReminder": "Send reminder",
+    "field": {
+      "issueDate": "Issued",
+      "dueDate": "Due",
+      "scheduledSendAt": "Scheduled send",
+      "installment": "Installment",
+      "total": "Total",
+      "paid": "Paid",
+      "outstanding": "Outstanding",
+      "lateFee": "Late fee",
+      "qrFormat": "Payment QR format",
+      "vatRate": "VAT rate %",
+      "shipping": "Shipping",
+      "currency": "Currency",
+      "ccPdfEmail": "CC PDF to (extra recipient)",
+      "sourceQuote": "From quote",
+      "businessBankAccount": "Payment account",
+      "bankAccountProfileDefault": "Use business profile default for {{currency}}",
+      "bankAccountDefaultBadge": "(default)",
+      "bankAccountHelp": "Overrides the profile default for this invoice only. Leave on default to inherit the currency-matched account from Settings → Business profile.",
+      "paymentNetDays": "Net days",
+      "paymentTiming": "Payment schedule",
+      "selectNetDays": "— Select net days —",
+      "selectTiming": "— Select schedule —",
+      "eventName": "Event",
+      "eventDate": "Event date",
+      "eventTimeStart": "Start time",
+      "eventTimeEnd": "End time",
+      "customer": "Customer",
+      "invoiceNumber": "Invoice number",
+      "paidAmount": "Paid amount (optional)",
+      "pdfFile": "PDF file",
+      "ccPdfCustom": "Custom email",
+      "ccPdfEmailPlaceholder": "name@example.com",
+      "ccPdfPickFromAdmins": "Pick from admins:",
+      "paymentTermHelp": "Net days + Skonto for this invoice. Leave blank to inherit from the source quote or the global CRM defaults.",
+      "skontoDisabled": "Disable Skonto for this invoice (suppresses the early-payment-discount block on the PDF and the \"Paid with Skonto\" buttons in the admin email / record-payment dialog).",
+      "sourceContract": "From contract"
+    },
+    "import": "Import historical",
+    "importTitle": "Import historical invoice",
+    "importHelp": "Attach a PDF from a previous billing system. The customer sees this original document in their portal — picpeak does not regenerate it.",
+    "importedToast": "Invoice imported.",
+    "importError": "Import failed",
+    "importing": "Importing…",
+    "noMatch": "No matches",
+    "section": {
+      "lineItems": "Line items",
+      "paymentLog": "Payment log",
+      "customer": "Customer",
+      "event": "Event details",
+      "details": "Details",
+      "payment": "Payment conditions"
+    },
+    "noPayments": "No payments recorded yet.",
+    "payment": {
+      "paidAt": "Date",
+      "amount": "Amount",
+      "method": "Method",
+      "reference": "Reference",
+      "notes": "Notes",
+      "methodPlaceholder": "Select method…",
+      "methods": {
+        "card": "Card",
+        "cash": "Cash",
+        "paypal": "PayPal",
+        "twint": "TWINT"
+      },
+      "withSkonto": "Paid with Skonto ({{percent}}% discount)"
+    },
+    "recordPayment": "Record payment",
+    "savedToast": "Invoice saved.",
+    "savedToastMulti": "Created {{n}} invoices.",
+    "saveAndSpawn": "Create {{n}} invoices",
+    "edit": "Edit invoice",
+    "customerSearch": "Search by email or company…",
+    "qrFormat": {
+      "none": "None",
+      "swiss": "Swiss QR-bill",
+      "epc": "EPC QR (SEPA)",
+      "profileDefault": "Use business profile default"
+    },
+    "status": {
+      "scheduled": "Scheduled",
+      "pending_delivery": "Awaiting delivery",
+      "sent": "Sent",
+      "paid": "Paid",
+      "overdue": "Overdue",
+      "cancelled": "Cancelled",
+      "skipped": "Skipped (empty month)"
+    }
+  },
+  "businessProfile": {
+    "savedToast": "Business profile saved.",
+    "title": "Business profile",
+    "subtitle": "Issuer block shown on every quote and invoice PDF.",
+    "section": {
+      "company": "Company",
+      "contact": "Contact",
+      "defaults": "Defaults",
+      "banks": "Bank accounts"
+    },
+    "field": {
+      "companyName": "Company name",
+      "vatId": "VAT ID (USt-IdNr.)",
+      "taxId": "Tax number (Steuernummer)",
+      "addressLine1": "Address line 1",
+      "addressLine2": "Address line 2",
+      "postalCode": "Postal code",
+      "city": "City",
+      "state": "State / Region",
+      "countryCode": "Country (ISO 3166)",
+      "phone": "Phone",
+      "mobile": "Mobile",
+      "email": "Email",
+      "website": "Website",
+      "defaultCurrency": "Default currency",
+      "defaultLocale": "Default locale",
+      "timezone": "Timezone (IANA)",
+      "vatLabel": "VAT label (e.g. MwSt., VAT)",
+      "vatRateDefault": "Default VAT rate %",
+      "defaultQrFormat": "Default invoice QR",
+      "footerLine": "PDF footer line"
+    },
+    "qrFormat": {
+      "none": "None",
+      "swiss": "Swiss QR-bill (CH / LI)",
+      "epc": "EPC QR (SEPA / EUR)"
+    },
+    "bankCreatedToast": "Bank account added.",
+    "bankDeletedToast": "Bank account removed.",
+    "addBank": "Add account",
+    "bank": {
+      "label": "Label",
+      "accountHolder": "Account holder",
+      "currency": "Currency",
+      "isDefault": "Default for this currency",
+      "makeDefault": "Make default",
+      "confirmDelete": "Remove this bank account?"
+    },
+    "noBanks": "No bank accounts configured yet."
+  },
+  "crmSettings": {
+    "savedToast": "CRM settings saved.",
+    "title": "CRM settings",
+    "subtitle": "Fine-tune quote and invoice behaviour.",
+    "emptyState": "No CRM features are currently enabled. Turn on Quotes, Invoices, or Contracts in Settings → Features to see the matching configuration here.",
+    "section": {
+      "quotes": "Quotes",
+      "invoices": "Invoices",
+      "paymentDefaults": "Default payment conditions",
+      "installmentDefaults": "Default installment triggers"
+    },
+    "paymentDefaults": {
+      "help": "Pre-filled on every new quote and invoice. The editor still lets you pick a different combination per document.",
+      "none": "— No default —"
+    },
+    "installmentDefaults": {
+      "help": "Pre-fill the trigger for fresh rows in the Installments panel. Per-document edits override; existing documents keep their snapshotted plan.",
+      "trigger": {
+        "quote_accepted": "At signing / creation",
+        "before_event": "Before event",
+        "after_event": "After event",
+        "after_delivery": "On delivery (manual release)",
+        "fixed_date": "Fixed date"
+      }
+    },
+    "crm_invoices_default_payment_net_days_template_id": {
+      "label": "Default net days"
+    },
+    "crm_invoices_default_payment_timing_template_id": {
+      "label": "Default payment schedule"
+    },
+    "crm_quotes_accept_window_minutes": {
+      "label": "Accept window (minutes)"
+    },
+    "crm_quotes_default_valid_days": {
+      "label": "Default validity (days)"
+    },
+    "crm_quotes_number_format": {
+      "label": "Quote number format"
+    },
+    "crm_invoices_reminder_first_days": {
+      "label": "First reminder after (days past due)"
+    },
+    "crm_invoices_reminder_second_days": {
+      "label": "Second reminder after (days past due)"
+    },
+    "crm_invoices_late_fee_minor": {
+      "label": "Late fee (minor units / Rappen)"
+    },
+    "crm_invoices_late_fee_label": {
+      "label": "Late fee label"
+    },
+    "crm_invoices_skonto_percent_default": {
+      "label": "Skonto rate (default %)"
+    },
+    "crm_invoices_skonto_business_days": {
+      "label": "Skonto window (business days)"
+    },
+    "crm_invoices_installment_trigger_first": {
+      "label": "First installment trigger"
+    },
+    "crm_invoices_installment_days_before_event": {
+      "label": "Days before event (middle installment)"
+    },
+    "crm_invoices_installment_days_after_event": {
+      "label": "Days after event (final installment)"
+    },
+    "crm_invoices_number_format": {
+      "label": "Invoice number format"
+    },
+    "crm_quotes_pdf_attachment_enabled": {
+      "label": "Attach quote PDF to email"
+    },
+    "crm_quotes_skonto_enabled": {
+      "label": "Allow early-payment discount (Skonto) on quotes"
+    },
+    "crm_invoices_qr_enabled": {
+      "label": "Render payment QR on invoice PDFs"
+    },
+    "crm_invoices_reminders_enabled": {
+      "label": "Send automatic reminders for overdue invoices"
+    },
+    "crm_invoices_late_fee_enabled": {
+      "label": "Add a late fee on the second reminder"
+    }
+  },
+  "quoteResponse": {
+    "notFound": "Quote not found",
+    "notFoundBody": "This link may have expired or been revoked. Please contact the photographer for a new quote.",
+    "locked": "Your response window has closed and the decision is now final.",
+    "title": "Quote",
+    "event": "Event",
+    "issueDate": "Issued",
+    "validUntil": "valid until",
+    "description": "Description",
+    "qty": "Qty",
+    "unit": "Unit",
+    "total": "Total",
+    "subtotal": "Subtotal",
+    "vat": "VAT",
+    "acceptedLocked": "You accepted this quote on {{date}}. The decision is final.",
+    "declinedLocked": "You declined this quote on {{date}}. The decision is final.",
+    "cannotRespond": "This quote can no longer be responded to via this link.",
+    "changeWithin": "You can change your response until {{at}}.",
+    "intro": "Please accept or decline this quote:",
+    "accept": "Accept quote",
+    "decline": "Decline"
+  },
+  "reminderTemplates": {
+    "title": "Pre-event reminder emails",
+    "globalSection": "Global behaviour",
+    "globalHelp": "Off by default — turn on to start sending pre-event reminders. The offset below is the default; each event can override on its detail page.",
+    "enableLabel": "Send pre-event reminder emails",
+    "daysBeforeLabel": "Days before the event",
+    "saveSettings": "Save global settings",
+    "settingsSaved": "Reminder settings saved.",
+    "settingsSaveError": "Could not save reminder settings.",
+    "sidebarHeading": "Templates",
+    "sectionTemplates": "Templates",
+    "defaultLabel": "Default (catch-all)",
+    "usesDefault": "Default",
+    "usesDefaultTooltip": "No dedicated template yet — this event type falls back to the default. Edit + save here to create one.",
+    "willCreateOnSave": "This event type uses the default template. The fields below are pre-filled from the default; saving will create a dedicated template for this event type.",
+    "variablesHint": "Available variables: {{customer_name}}, {{event_name}}, {{event_date}}, {{event_type}}, {{days_before}}, {{business_name}} — substituted when the email is rendered.",
+    "subjectLabel": "Subject",
+    "subjectPlaceholder": "Email subject",
+    "bodyLabel": "Body",
+    "noTranslation": "No translation yet",
+    "saveTemplate": "Save template",
+    "saved": "Template saved.",
+    "saveError": "Could not save template."
+  },
+  "eventReminderOverride": {
+    "title": "Pre-event reminder",
+    "save": "Save override",
+    "help": "Per-event override for the customer reminder. Global on-off + default offset live under Settings → Reminder emails. Anything left blank here inherits the global setting / resolved template.",
+    "disabledLabel": "Disable the reminder for this event (no email goes out)",
+    "offsetLabel": "Days before the event (override) — leave blank to inherit",
+    "offsetPlaceholder": "Leave blank to use the global default",
+    "bodyOverrideLabel": "Custom body for this event (overrides the resolved template body)",
+    "bodyOverridePlaceholder": "Leave blank to use the template body. Variables like {{customer_name}}, {{event_name}}, {{event_date}} still work here.",
+    "saved": "Reminder override saved.",
+    "saveError": "Could not save reminder override.",
+    "invalidOffset": "Offset must be a non-negative integer or blank."
+  },
+  "dealLineage": {
+    "title": "Related documents",
+    "quotes": "Quotes",
+    "contracts": "Contracts",
+    "invoices": "Invoices",
+    "loading": "Loading related documents…",
+    "error": "Could not load related documents.",
+    "empty": "No other documents share this deal yet. New invoices, contracts, or installments will show up here once created.",
+    "editPlan": "Edit plan",
+    "editPlanModalTitle": "Edit installment plan",
+    "editPlanHelp": "Atomically reshape this plan: change percents, labels, triggers, add or remove rows. The plan total stays fixed; existing invoice numbers are kept where possible. Refused once any invoice has shipped.",
+    "editPlanWarning": "Trimming rows deletes their invoice numbers (the sequence cannot release them — a §14 UStG continuity rule). Adding rows claims fresh numbers.",
+    "editPlanSave": "Save plan",
+    "editPlanSuccess": "Installment plan updated.",
+    "editPlanLocked": "Plan can no longer be edited — at least one invoice has shipped or been cancelled.",
+    "editPlanPercentSumError": "Percents must sum to 100.",
+    "editPlanGeneralError": "Could not update plan.",
+    "editPlanEmpty": "Plan cannot be empty."
+  },
+  "installments": {
+    "enableLabel": "Split into installments",
+    "advancedToggle": "Use dynamic triggers",
+    "simpleToggle": "Use simple date picker",
+    "simpleHint": "Each row fires on a specific date. Switch to dynamic triggers for plans tied to event date or delivery.",
+    "advancedHint": "Pick a trigger (quote accepted, before/after event, on delivery, fixed date) plus offset in days. Triggers re-resolve if the event date later shifts.",
+    "percent": "%",
+    "label": "Label",
+    "labelPlaceholder": "Anzahlung / before event …",
+    "sendOn": "Send on",
+    "trigger": "Trigger",
+    "offsetDays": "Offset (days)",
+    "onDeliveryHint": "On delivery — admin releases manually. Switch to advanced to change.",
+    "addRow": "Add installment",
+    "removeRow": "Remove row",
+    "total": "Total",
+    "mustSumTo100": "must sum to 100%",
+    "firstRowDefaultLabel": "Down payment",
+    "triggerOption": {
+      "quote_accepted": "At signing / creation",
+      "before_event": "Before event",
+      "after_event": "After event",
+      "after_delivery": "On delivery (manual release)",
+      "fixed_date": "Fixed date"
+    }
+  },
+  "contracts": {
+    "title": "Contracts",
+    "subtitle": "Compose contracts from reusable blocks and have customers sign in-browser or upload a wet-signed PDF.",
+    "sections": {
+      "basics": "Basics",
+      "scope": "Scope",
+      "privacy": "Privacy",
+      "commercial": "Commercial",
+      "nda": "Confidentiality",
+      "closing": "Closing provisions"
+    },
+    "status": {
+      "draft": "Draft",
+      "sent": "Sent",
+      "signed_by_customer": "Signed by customer",
+      "signed_by_admin": "Counter-signed",
+      "fully_signed": "Fully signed",
+      "cancelled": "Cancelled"
+    },
+    "list": {
+      "new": "New contract"
+    },
+    "detail": {
+      "integrity": {
+        "title": "PDF integrity check",
+        "help": "Re-hashes the unsigned + signed PDFs on disk and compares them to the SHA-256 stored when the document was issued. Catches backup corruption or manual edits since the customer received their copy.",
+        "verify": "Verify",
+        "reverify": "Re-verify",
+        "unsignedTitle": "Unsigned PDF",
+        "signedTitle": "Signed PDF",
+        "match": "Hash matches",
+        "mismatch": "Hash mismatch — file altered",
+        "missing": "File missing from disk",
+        "notIssued": "Not yet issued",
+        "expected": "expected",
+        "actual": "actual",
+        "error": "Integrity check failed."
+      }
     }
   }
 }

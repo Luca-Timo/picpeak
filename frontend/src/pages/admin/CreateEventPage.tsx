@@ -36,6 +36,13 @@ interface FormData {
   event_type: string;
   event_name: string;
   event_date: string;
+  // Migration 137 — calendar time fields. Defaults to full-day so the
+  // existing UX is unchanged for admins who never touch the toggle.
+  // When `is_full_day` is true, the time fields are ignored by the
+  // backend regardless of their value.
+  event_time_start: string;
+  event_time_end: string;
+  is_full_day: boolean;
   customer_name: string;
   customer_email: string;
   customer_phone: string;
@@ -101,6 +108,9 @@ export const CreateEventPage: React.FC = () => {
     event_type: 'wedding',
     event_name: '',
     event_date: new Date().toISOString().split('T')[0], // Initialize with ISO date format
+    event_time_start: '',
+    event_time_end: '',
+    is_full_day: true,
     customer_name: '',
     customer_email: '',
     customer_phone: '',
@@ -434,6 +444,12 @@ export const CreateEventPage: React.FC = () => {
       event_type: formData.event_type,
       event_name: formData.event_name,
       event_date: formData.event_date || undefined,
+      // Migration 137 — calendar time fields. Backend normalises the
+      // triple: when is_full_day is true the times are nulled out
+      // regardless of value, so it's safe to always send them.
+      event_time_start: formData.is_full_day ? undefined : formData.event_time_start,
+      event_time_end: formData.is_full_day ? undefined : formData.event_time_end,
+      is_full_day: formData.is_full_day,
       customer_name: formData.customer_name,
       customer_email: formData.customer_email,
       ...(phoneFieldEnabled && formData.customer_phone ? { customer_phone: formData.customer_phone.trim() } : {}),
@@ -579,6 +595,42 @@ export const CreateEventPage: React.FC = () => {
                 error={errors.event_date}
                 leftIcon={<Calendar className="w-5 h-5" />}
               />
+            </div>
+
+            {/* Migration 137 — calendar time fields. Full-day events stay
+                full-day; admins who unchecks "Full day" get two HH:MM
+                inputs that flow into the events row's event_time_start /
+                event_time_end columns and drive how the admin calendar
+                renders the event (block vs all-day banner). 15-minute
+                snap matches the calendar's drag-create grid. */}
+            <div className="mt-3 space-y-2">
+              <label className="inline-flex items-center gap-2 text-sm text-neutral-800 dark:text-neutral-200">
+                <input
+                  type="checkbox"
+                  checked={formData.is_full_day}
+                  onChange={(e) => setFormData({ ...formData, is_full_day: e.target.checked })}
+                  className="rounded border-neutral-300 dark:border-neutral-600"
+                />
+                {t('events.fullDay', 'Full day')}
+              </label>
+              {!formData.is_full_day && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    type="time"
+                    step={900}
+                    label={t('events.eventTimeStart', 'Start time') as string}
+                    value={formData.event_time_start}
+                    onChange={handleInputChange('event_time_start')}
+                  />
+                  <Input
+                    type="time"
+                    step={900}
+                    label={t('events.eventTimeEnd', 'End time') as string}
+                    value={formData.event_time_end}
+                    onChange={handleInputChange('event_time_end')}
+                  />
+                </div>
+              )}
             </div>
 
             <div>

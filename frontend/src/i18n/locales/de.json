@@ -124,7 +124,11 @@
     "saveChanges": "Änderungen speichern",
     "resetChanges": "Änderungen zurücksetzen",
     "dismiss": "Schließen",
-    "discard": "Verwerfen"
+    "discard": "Verwerfen",
+    "preview": "Vorschau",
+    "duplicate": "Duplizieren",
+    "showAll": "Alle anzeigen",
+    "confirm": "Bestätigen"
   },
   "upload": {
     "photoCategory": "Fotokategorie",
@@ -168,7 +172,8 @@
     "cmsPages": "CMS-Seiten",
     "users": "Benutzer",
     "calendar": "Kalender",
-    "clients": "Kunden"
+    "clients": "CRM",
+    "betaTag": "Beta"
   },
   "eventTypes": {
     "title": "Veranstaltungsarten",
@@ -738,6 +743,9 @@
     "eventName": "Veranstaltungsname",
     "eventType": "Veranstaltungstyp",
     "eventDate": "Veranstaltungsdatum",
+    "fullDay": "Ganztägig",
+    "eventTimeStart": "Startzeit",
+    "eventTimeEnd": "Endzeit",
     "hostEmail": "E-Mail des Kunden",
     "hostName": "Name des Kunden",
     "hostNamePlaceholder": "Max Mustermann",
@@ -1391,7 +1399,14 @@
       "integrations": "Integrationen",
       "system": "System",
       "appearance": "Inhalt & Erscheinungsbild",
-      "communication": "Kommunikation"
+      "communication": "Kommunikation",
+      "crm": "CRM-Einstellungen"
+    },
+    "contracts": {
+      "title": "Verträge"
+    },
+    "reminderTemplates": {
+      "title": "Erinnerungs-E-Mails"
     },
     "apiTokens": {
       "title": "API-Tokens",
@@ -1466,7 +1481,7 @@
         "sales": "Vertrieb",
         "insights": "Auswertungen & Zugriff",
         "customers": "Kunden",
-        "clients": "Kunden"
+        "clients": "CRM"
       },
       "status": {
         "stable": "stabil",
@@ -1491,8 +1506,13 @@
       },
       "calendar": {
         "title": "Kalender",
-        "description": "Alle anstehenden und vergangenen Veranstaltungen in einer Monats-/Wochenansicht. Optional Buchungen von Kunden annehmen.",
+        "description": "Admin-Kalender mit Terminen, erfassten Stunden und offenen Angeboten/Verträgen in einer Ansicht. Stunden lassen sich direkt im Kalender per Drag erfassen.",
         "sidebar": "Kalender"
+      },
+      "calendarBooking": {
+        "title": "Kundenbuchung",
+        "description": "Kunden sehen freie Slots auf einem öffentlichen Kalender und können direkt buchen. In Kürze verfügbar.",
+        "sidebar": "Buchung"
       },
       "quotes": {
         "title": "Angebote",
@@ -1504,6 +1524,12 @@
         "description": "Generieren Sie eine Rechnung aus jedem angenommenen Angebot. Manuell als bezahlt markieren — keine Integration mit Zahlungsanbietern.",
         "sidebar": "Rechnungen"
       },
+      "taxReport": {
+        "title": "Steuerliste",
+        "description": "Periodenbezogene Umsatzliste mit Netto- und MwSt-Aufschlüsselung, gruppiert nach MwSt-Satz. Exportieren Sie als PDF (Querformat, Firmenbriefkopf) oder CSV für Ihre Buchhaltung. Stornierte Rechnungen bleiben für die lückenlose Nummernfolge sichtbar, sind aber nicht in den Summen enthalten.",
+        "sidebar": "Steuer",
+        "requiresBills": "Bitte zuerst Rechnungen aktivieren — die Steuerliste liest aus Ihren Rechnungen."
+      },
       "analytics": {
         "title": "Statistiken",
         "description": "Speichernutzung, Galerie-Aufrufe, Download-Zahlen und Statistiken pro Veranstaltung."
@@ -1514,12 +1540,12 @@
         "warning": "Bestehende Benutzerkonten bleiben gültig; die Admin-Oberfläche für deren Verwaltung wird ausgeblendet, bis Sie dies wieder aktivieren."
       },
       "customerPortal": {
-        "title": "Kunden",
-        "description": "Persistente Kunden-Logins. Wiederkehrende Kunden sehen alle zugewiesenen Galerien an einem Ort — keine Passwörter pro Event. Kunden melden sich unter /customer/login an, verwaltet werden sie unter Kunden → Konten."
+        "title": "Kundenkonten",
+        "description": "Persistente Kunden-Logins. Wiederkehrende Kunden sehen alle zugewiesenen Galerien an einem Ort — keine Passwörter pro Event. Kunden melden sich unter /customer/login an, verwaltet werden sie unter CRM → Konten."
       },
       "clients": {
-        "title": "Kunden",
-        "description": "Hauptschalter für den Kunden-Bereich in der Seitenleiste. Aus blendet den Bereich und alle Unterfunktionen aus, unabhängig von deren individuellen Schaltern – beim erneuten Einschalten wird der vorherige Zustand wiederhergestellt."
+        "title": "CRM",
+        "description": "Hauptschalter für den CRM-Bereich in der Seitenleiste. Aus blendet den Bereich und alle Unterfunktionen aus, unabhängig von deren individuellen Schaltern – beim erneuten Einschalten wird der vorherige Zustand wiederhergestellt."
       }
     },
     "customerSurface": {
@@ -1691,6 +1717,12 @@
     "saveTheme": "Design speichern",
     "previewLayout": "Vorschau-Layout",
     "livePreview": "Live-Vorschau",
+    "pdfTypography": "PDF-Schriftart",
+    "pdfTypographyHelp": "Wird für Rechnungs- und Angebotsbriefköpfe verwendet. Wähle eine der mitgelieferten Schriftarten aus oder belasse den Standard, um Helvetica zu verwenden.",
+    "pdfFontFamily": "Fließtext-Schrift",
+    "pdfFontFamilyDefault": "Helvetica verwenden (Standard)",
+    "pdfFontFamilyMissing": "nicht verfügbar",
+    "pdfFontSavedToast": "PDF-Schriftart gespeichert.",
     "heroPlaceholderText": "Das Hero-Foto Ihrer Veranstaltung wird hier angezeigt",
     "whiteLabel": "White Label",
     "hidePoweredBy": "\"Powered by PicPeak\" Branding ausblenden",
@@ -1705,6 +1737,11 @@
     "logoMaxHeight": "Maximale Höhe (Pixel)",
     "logoMaxHeightHelp": "Legen Sie eine benutzerdefinierte maximale Höhe für das Logo fest (20-200 Pixel)",
     "logoPosition": "Logo-Position im Header",
+    "positionLeft": "Links",
+    "positionCenter": "Zentriert",
+    "positionRight": "Rechts",
+    "positionSidepanel": "Seitenleiste",
+    "positionSidepanelHelp": "Das Logo erscheint statt im Header in der Admin-Seitenleiste. Bei eingeklappter Seitenleiste wird das Favicon angezeigt.",
     "logoDisplayMode": "Anzeigemodus",
     "logoOnly": "Nur Logo",
     "textOnly": "Nur Firmenname",
@@ -2333,6 +2370,7 @@
       "customers": "Kunden",
       "calendar": "Kalender",
       "quotes": "Angebote",
+      "contracts": "Verträge",
       "billing": "Rechnungen"
     },
     "featureOff": "Funktion aus",
@@ -2775,7 +2813,8 @@
       "quotes": "Angebote",
       "bills": "Rechnungen",
       "profile": "Profil",
-      "soon": "Bald"
+      "soon": "Bald",
+      "new": "Neu"
     },
     "comingSoon": {
       "tag": "Demnächst"
@@ -2786,11 +2825,51 @@
     },
     "quotes": {
       "title": "Angebote",
-      "body": "Angebote für kommende Shoots an einem Ort prüfen und annehmen. Wir bauen das noch — bis dahin schickt dir dein Fotograf Angebote wie gewohnt."
+      "subtitle": "Alle Angebote, die dir dein Fotograf gesendet hat. Klicke auf ein offenes Angebot, um es anzunehmen oder abzulehnen.",
+      "empty": "Noch keine Angebote.",
+      "disabled": "Diese Funktion ist für dein Konto aktuell deaktiviert. Bitte wende dich an deinen Fotografen, falls du hier Angebote erwartest.",
+      "loadError": "Angebote konnten nicht geladen werden.",
+      "noEventName": "—",
+      "openToRespond": "Öffnen zum Antworten",
+      "viewPdf": "PDF anzeigen",
+      "popupBlocked": "Erlaube Pop-ups für diese Seite, um das Angebots-PDF anzuzeigen."
     },
     "bills": {
       "title": "Rechnungen",
-      "body": "Rechnungen und Zahlungshistorie zu deinen Shoots findest du hier. Wir senden eine E-Mail, sobald es live ist."
+      "subtitle": "Alle Rechnungen, die dir dein Fotograf gesendet hat. Klicke auf „PDF anzeigen“, um sie herunterzuladen.",
+      "empty": "Noch keine Rechnungen.",
+      "disabled": "Diese Funktion ist für dein Konto aktuell deaktiviert. Bitte wende dich an deinen Fotografen, falls du hier Rechnungen erwartest.",
+      "loadError": "Rechnungen konnten nicht geladen werden.",
+      "viewPdf": "PDF anzeigen",
+      "popupBlocked": "Erlaube Pop-ups für diese Seite, um das Rechnungs-PDF anzuzeigen.",
+      "field": {
+        "issueDate": "Ausgestellt",
+        "dueDate": "Fällig",
+        "paidAt": "Bezahlt",
+        "outstanding": "Offen",
+        "lateFee": "Mahngebühr"
+      },
+      "filter": {
+        "outstanding": "Offen (gesendet + überfällig)"
+      },
+      "kind": {
+        "storno": "Stornorechnung"
+      },
+      "cancelsLabel": "Hebt Rechnung auf:",
+      "cancelledByLabel": "Aufgehoben durch Stornorechnung"
+    },
+    "sort": {
+      "label": "Sortieren",
+      "newest": "Neueste zuerst",
+      "oldest": "Älteste zuerst",
+      "priceDesc": "Preis (hoch nach niedrig)",
+      "priceAsc": "Preis (niedrig nach hoch)"
+    },
+    "filter": {
+      "label": "Filter",
+      "all": "Alle",
+      "countAll": "{{count}} insgesamt",
+      "countFiltered": "{{visible}} von {{total}}"
     },
     "profile": {
       "title": "Kundenprofil",
@@ -2860,6 +2939,78 @@
     }
   },
   "customers": {
+    "field": {
+      "featureHoursLogging": "Stundenerfassung",
+      "hourlyRate": "Standard-Stundensatz",
+      "hourlyRateHint": "Haupteinheiten (z. B. 150.00 für {{currency}} 150). Leer lassen, um pro Eintrag einen Satz zu verlangen."
+    },
+    "hours": {
+      "section": "Stunden",
+      "monthlyHint": "Einträge werden automatisch dem aktuellen monatlichen Entwurf angehängt. Bearbeiten/Löschen möglich, bis der Scheduler den Versand auslöst.",
+      "perEventHint": "Erfasste Einträge bleiben unverrechnet, bis Sie auf „Rechnungsentwurf erstellen“ klicken — dann wird ein eigenständiger Rechnungsentwurf mit einer Zeile pro Eintrag erzeugt, den Sie vor dem Versand prüfen können.",
+      "form": {
+        "title": "Neuen Eintrag erfassen",
+        "date": "Datum",
+        "start": "Start",
+        "end": "Ende",
+        "duration": "Dauer",
+        "durationPlaceholder": "1h · 1,5 · 1:30",
+        "durationHint": "Dauer eingeben, um Ende automatisch zu setzen: 1h, 1.5, 1,5 oder 1:30",
+        "rateOverride": "Satz-Override",
+        "note": "Notiz / Beschreibung",
+        "notePlaceholder": "Was wurde gearbeitet?",
+        "save": "Eintrag hinzufügen"
+      },
+      "col": {
+        "date": "Datum",
+        "range": "Zeit",
+        "hours": "Stunden",
+        "rate": "Satz",
+        "total": "Gesamt",
+        "note": "Notiz",
+        "status": "Status"
+      },
+      "status": {
+        "unbilled": "Offen",
+        "billed": "Verrechnet",
+        "billedOn": "Verrechnet: {{number}}"
+      },
+      "billButton": "Rechnungsentwurf erstellen",
+      "unbilledCount": "{{count}} offene Einträge, total {{total}}",
+      "empty": "Noch keine Einträge erfasst.",
+      "confirmDelete": "Diesen Eintrag löschen? Wenn er auf einem Entwurf verrechnet wurde, wird die zugehörige Rechnungsposition ebenfalls entfernt.",
+      "locked": "Gesperrt: Rechnung bereits zum Versand vorbereitet",
+      "toast": {
+        "created": "Eintrag erfasst",
+        "deleted": "Eintrag gelöscht",
+        "billed": "Stunden verrechnet"
+      }
+    },
+    "create": {
+      "openButton": "Passiven Kunden erstellen",
+      "openLink": "+ Neuen Kunden erstellen",
+      "title": "Neuen Kunden erstellen",
+      "subtitle": "Geben Sie die Daten unten ein. Wählen Sie „Als passiven Kunden speichern“, um einen reinen Admin-Eintrag zu erstellen, oder „Speichern & Portal-Einladung senden“, um dem Kunden zusätzlich eine Einladungs-E-Mail zu schicken.",
+      "passiveSubtitle": "Erstellt einen reinen Admin-Datensatz. Der Kunde wird nicht benachrichtigt und kann sich erst anmelden, wenn Sie ihm später eine Einladung senden.",
+      "saveAsPassive": "Als passiven Kunden speichern",
+      "saveAndInvite": "Speichern & Portal-Einladung senden",
+      "savedPassiveToast": "Passiver Kunde erstellt.",
+      "savedActiveToast": "Kunde erstellt und Portal-Einladung gesendet.",
+      "inviteFailedToast": "Kunde gespeichert (passiv). Einladungs-E-Mail fehlgeschlagen — bitte aus dem Kundendetail erneut versuchen.",
+      "emailRequired": "Eine gültige E-Mail-Adresse ist erforderlich."
+    },
+    "passive": {
+      "badge": "Passiv — nur Admin",
+      "activeLabel": "Portalzugang aktiv",
+      "sendInvite": "Portal-Einladung senden",
+      "sendInviteToast": "Portal-Einladung gesendet.",
+      "alreadyActive": "Der Kunde hat bereits Portalzugang — keine Einladung nötig.",
+      "detailHint": "Dieser Kunde hat keinen Portalzugang (reiner Admin-Eintrag). Klicken Sie unten, um eine Portal-Einladung per E-Mail zu senden. Bestehende Rechnungen, Angebote und Galerie-Zuweisungen bleiben beim Annehmen der Einladung erhalten.",
+      "deactivatedHint": "Bitte den Kunden zuerst reaktivieren, bevor die Einladung gesendet wird."
+    },
+    "hoursLoggingDisabled": {
+      "badge": "Stundenerfassung deaktiviert"
+    },
     "pageTitle": "Kunden",
     "pageSubtitle": "Wiederkehrende Kundenkonten, die sich unter /customer/login anmelden können.",
     "unnamed": "Unbenannt",
@@ -2935,6 +3086,7 @@
       "noEvents": "Noch keinem Event zugewiesen. Fügen Sie diesen Kunden über das Event-Formular hinzu.",
       "email": "E-Mail",
       "preferredLanguage": "Bevorzugte Sprache",
+      "preferredLanguageHint": "Steuert die Portal-Sprache sowie die Sprache von Angebots- und Rechnungs-PDFs. Neue Kunden erben standardmässig die Sprache aus dem Geschäftsprofil ({{lang}}); hier kann pro Kunde überschrieben werden.",
       "salutation": "Anrede",
       "salutationNone": "—",
       "firstName": "Vorname",
@@ -2950,6 +3102,7 @@
       "city": "Stadt",
       "state": "Bundesland / Region",
       "countryCode": "Land (ISO-2)",
+      "countryName": "Land (vollständiger Name)",
       "notesHint": "Nur für Administratoren sichtbar. Wird dem Kunden nie gezeigt.",
       "featuresSection": "Kundenfunktionen",
       "featuresHint": "Pro-Kunde-Überschreibungen für die Kundenoberflächen-Tabs. Die globalen Schalter in Einstellungen → Kundenoberfläche sind der Master-Schalter — wenn global AUS, sieht niemand den Tab, unabhängig von der Einstellung hier. Standard ist AN, schalte einen Eintrag AUS, um diesen Tab für diesen Kunden auszublenden.",
@@ -2961,7 +3114,32 @@
         "error": "Passwort-Reset konnte nicht gesendet werden",
         "inactive": "Aktiviere den Kunden, bevor du einen Reset sendest."
       },
-      "manageEvents": "Galerien verwalten"
+      "manageEvents": "Galerien verwalten",
+      "quotesSection": "Angebote",
+      "noQuotes": "Noch keine Angebote für diesen Kunden.",
+      "contractsSection": "Verträge",
+      "noContracts": "Noch keine Verträge für diesen Kunden.",
+      "billsSection": "Rechnungen",
+      "noBills": "Noch keine Rechnungen für diesen Kunden."
+    },
+    "billing": {
+      "section": "Abrechnungsrhythmus",
+      "hint": "Per-Event (Standard): jede Rechnung wird einzeln versendet. Monatlich: alle Rechnungen einer Periode werden zu einer Sammelrechnung gebündelt, die am konfigurierten Stichtag ausgelöst wird.",
+      "cadence": "Abrechnungsrhythmus",
+      "perEvent": "Per Event",
+      "monthly": "Monatlich",
+      "quarterly": "Quartalsweise",
+      "cycleDay": "Stichtag",
+      "cycleDayHint": "1..28 = Tag im Monat. Negativ -1..-15 für „N Tage vor Monatsende“ (so löst -3 in einem 31-Tage-Monat am 28. aus).",
+      "triggerNow": "Rechnung jetzt ausstellen",
+      "triggerConfirm": "Monatsrechnung für diesen Kunden jetzt ausstellen? Der Kunde erhält die E-Mail sofort.",
+      "triggerHint": "Überspringt den Stichtag und stellt den aktuellen Entwurf sofort aus. Wird abgelehnt, wenn für die aktuelle Periode nichts erfasst wurde.",
+      "triggered": "Monatsrechnung ausgestellt: {{number}}",
+      "triggerError": "Monatsrechnung konnte nicht ausgelöst werden.",
+      "draftPreview": {
+        "title": "Offen für die Rechnung dieses Monats",
+        "periodRange": "{{number}} · {{from}} – {{to}}"
+      }
     },
     "reactivate": {
       "button": "Reaktivieren",
@@ -2997,15 +3175,734 @@
     }
   },
   "clients": {
-    "title": "Kunden",
-    "subtitle": "Kundenkonten, Termine, Angebote und Rechnungen für wiederkehrende Kunden.",
-    "navAriaLabel": "Kunden-Navigation",
+    "title": "CRM",
+    "subtitle": "Kundenkonten, Termine, Angebote und Rechnungen — alles für wiederkehrende Kunden an einem Ort.",
+    "navAriaLabel": "CRM-Navigation",
     "empty": {
-      "title": "Keine Kunden-Funktionen aktiviert",
-      "body": "Aktiviere „Konten\" (oder eine andere Kunden-Unterfunktion) unter Einstellungen → Funktionen, um loszulegen."
+      "title": "Keine CRM-Funktionen aktiviert",
+      "body": "Aktiviere „Konten\" (oder eine andere CRM-Unterfunktion) unter Einstellungen → Funktionen, um loszulegen."
     },
     "subnav": {
-      "accounts": "Konten"
+      "accounts": "Konten",
+      "quotes": "Angebote",
+      "contracts": "Verträge",
+      "hours": "Stunden",
+      "calendar": "Kalender",
+      "bills": "Rechnungen",
+      "taxReport": "Steuer",
+      "development": "Entwicklung"
+    }
+  },
+  "calendar": {
+    "pageTitle": "Kalender",
+    "subtitle": "Termine, erfasste Stunden und offene Angebote/Verträge in einer Ansicht.",
+    "viewMonth": "Monat",
+    "viewWeek": "Woche",
+    "loading": "Einträge werden geladen…",
+    "legend": {
+      "events": "Termine",
+      "hours": "Stunden",
+      "pendingQuotes": "Offene Angebote",
+      "pendingContracts": "Offene Verträge",
+      "hoursLocked": "Gesperrt (abgerechnet)"
+    },
+    "hourEntry": {
+      "createTitle": "Stunden erfassen",
+      "customerLabel": "Kunde",
+      "customerSearch": "Nach E-Mail oder Firma suchen…",
+      "descriptionLabel": "Beschreibung (optional)",
+      "descriptionPlaceholder": "Bearbeitung / Shooting / Anreise…",
+      "startLabel": "Start",
+      "endLabel": "Ende",
+      "submit": "Stunden speichern",
+      "saving": "Speichern…",
+      "cancel": "Abbrechen",
+      "close": "Schließen",
+      "delete": "Löschen",
+      "confirmDelete": "Diese erfassten Stunden löschen? Das kann nicht rückgängig gemacht werden.",
+      "created": "Stunden erfasst.",
+      "createFailed": "Speichern fehlgeschlagen: {{message}}",
+      "saved": "Stunden aktualisiert.",
+      "saveFailed": "Speichern fehlgeschlagen: {{message}}",
+      "movedToast": "Stunden aktualisiert.",
+      "moveFailed": "Verschieben fehlgeschlagen: {{message}}",
+      "resizedToast": "Stunden aktualisiert.",
+      "resizeFailed": "Größe ändern fehlgeschlagen: {{message}}",
+      "deleted": "Stunden gelöscht.",
+      "deleteFailed": "Löschen fehlgeschlagen: {{message}}",
+      "lockedBadge": "Gesperrt",
+      "featureOffToast": "Stundenerfassung ist deaktiviert.",
+      "lockedTooltip": "Bereits abgerechnet — Rechnung stornieren, um zu bearbeiten.",
+      "noDescription": "Keine Beschreibung.",
+      "untitledCustomer": "Stunden"
+    }
+  },
+  "hoursLogging": {
+    "title": "Stundenerfassung",
+    "subtitle": "Kunden wählen und abrechenbare Zeit erfassen. Einträge fließen in die nächste Monatsrechnung oder werden für Per-Event-Kunden auf Knopfdruck abgerechnet.",
+    "pickCustomer": "Kunde",
+    "pickPlaceholder": "— Kunde wählen —",
+    "emptyList": "Noch keine Kunden mit aktivierter Stundenerfassung. Aktivieren Sie „Stundenerfassung“ zuerst auf der Kundendetailseite.",
+    "searchPlaceholder": "Nach E-Mail oder Firma suchen…",
+    "customerLoggingDisabled": "Bei diesem Kunden ist die Stundenerfassung deaktiviert. Aktiviere sie auf der Kundendetailseite, um Stunden zu erfassen."
+  },
+  "crmDev": {
+    "title": "CRM-Entwicklung",
+    "subtitle": "Interne Werkzeuge zur Überprüfung von CRM-Abläufen. Standardmäßig ausgeblendet — Aktivierung über Einstellungen → Funktionen → Entwicklung.",
+    "warning": "Diese Werkzeuge lösen echte Nebeneffekte aus (E-Mails, Statusänderungen). Nur gegen Testdaten verwenden.",
+    "envDisabled": {
+      "title": "Entwicklungs-Tools durch Umgebungsschutz blockiert",
+      "body": "Setze PICPEAK_ENABLE_DEV_TOOLS=1 in der Backend-Env-Datei und starte den Server neu. Der Funktions-Schalter allein reicht nicht — dies ist eine bewusste Produktiv-Schutzschicht.",
+      "cardHint": "E-Mail-Vorlagen können nicht geladen werden, solange der Entwicklungs-Tools-Umgebungsschutz nicht geöffnet ist."
+    },
+    "paymentCheck": {
+      "title": "Zahlungsprüfung-E-Mail testen (echte Rechnung)",
+      "help": "Sendet die Admin-Zahlungsprüfung-E-Mail für eine echte gesendete/überfällige Rechnung und umgeht dabei die 24-Stunden-Sperre. Die drei Buttons in der E-Mail enthalten echte signierte Tokens — ein Klick verändert den Rechnungsstatus.",
+      "selectInvoice": "Gesendete oder überfällige Rechnung",
+      "selectPlaceholder": "— Rechnung auswählen —",
+      "noneAvailable": "Keine gesendeten oder überfälligen Rechnungen vorhanden.",
+      "send": "Test-E-Mail senden",
+      "sending": "Wird eingereiht …",
+      "sentToast": "Test-E-Mail eingereiht. Bitte das Postfach des Empfängers prüfen."
+    },
+    "templates": {
+      "title": "Beliebige CRM-E-Mail an mich senden (Mock-Daten)",
+      "help": "Reiht die gewählte Vorlage mit Platzhalterwerten an die eigene Admin-Adresse ein. Wenn die Installation echte Angebote/Rechnungen enthält, wird das passende PDF angehängt, damit die vollständige Ausgabe geprüft werden kann.",
+      "notSeeded": "Nicht eingespielt",
+      "send": "An mich senden",
+      "sending": "Wird eingereiht …",
+      "sentToast": "Eingereiht an {{to}}.",
+      "empty": "Keine CRM-E-Mail-Vorlagen gefunden — bitte Migrationen ausführen.",
+      "label": {
+        "quote_sent": {
+          "title": "Angebot gesendet (an Kunden)",
+          "description": "Wird beim Versand eines Angebots ausgelöst — enthält das PDF sowie Annehmen-/Ablehnen-Links."
+        },
+        "quote_accepted_customer": {
+          "title": "Angebot angenommen — Kundenbestätigung",
+          "description": "Wird an den Kunden gesendet, nachdem er (oder der Admin in seinem Namen) das Angebot angenommen hat. Enthält PDF."
+        },
+        "quote_accepted_admin": {
+          "title": "Angebot angenommen — Admin-Benachrichtigung",
+          "description": "Benachrichtigt den Admin, dass ein Angebot vom Kunden angenommen wurde."
+        },
+        "quote_declined_admin": {
+          "title": "Angebot abgelehnt — Admin-Benachrichtigung",
+          "description": "Benachrichtigt den Admin, dass ein Angebot vom Kunden abgelehnt wurde."
+        },
+        "invoice_sent": {
+          "title": "Rechnung gesendet (an Kunden)",
+          "description": "Wird beim Versand einer Rechnung ausgelöst — enthält das PDF."
+        },
+        "invoice_reminder_first": {
+          "title": "Zahlungserinnerung — erste",
+          "description": "Erste Erinnerung an den Kunden. Noch keine Mahngebühr."
+        },
+        "invoice_reminder_second": {
+          "title": "Zahlungserinnerung — zweite (mit Mahngebühr)",
+          "description": "Zweite Erinnerung mit zusätzlicher Mahngebühr."
+        },
+        "invoice_payment_check_admin": {
+          "title": "Zahlungsprüfung (Admin)",
+          "description": "Admin-E-Mail mit drei Buttons, die signierte Tokens enthalten."
+        },
+        "contract_sent": {
+          "title": "Vertrag gesendet (an Kunden)",
+          "description": "Versand Admin → Kunde mit dem unsignierten Vertrags-PDF im Anhang."
+        },
+        "contract_signed_admin_notification": {
+          "title": "Vertrag unterzeichnet — Admin-Benachrichtigung",
+          "description": "Rückmeldung an den Admin, nachdem der Kunde unterzeichnet hat. Ohne Anhang."
+        },
+        "contract_fully_signed": {
+          "title": "Vertrag beidseitig unterzeichnet",
+          "description": "Beidseitiger Versand, sobald beide Unterschriften vorliegen. Gestempeltes Vertrags-PDF im Anhang."
+        }
+      }
+    }
+  },
+  "taxReport": {
+    "title": "Steuerliste",
+    "intro": "Periodenbezogene Umsatzliste mit Netto- und MwSt-Aufschlüsselung, gruppiert nach MwSt-Satz. Stornierte Rechnungen bleiben für die lückenlose Nummernfolge sichtbar, sind aber nicht in den Summen enthalten.",
+    "filters": {
+      "period": "Zeitraum",
+      "thisYear": "Dieses Jahr",
+      "lastYear": "Letztes Jahr",
+      "thisQuarter": "Dieses Quartal",
+      "lastQuarter": "Letztes Quartal",
+      "custom": "Benutzerdefiniert",
+      "from": "Von",
+      "to": "Bis",
+      "currency": "Währung"
+    },
+    "exportPdf": "PDF exportieren",
+    "exportCsv": "CSV exportieren",
+    "exportFailed": "Export fehlgeschlagen. Bitte erneut versuchen.",
+    "errorTitle": "Steuerliste konnte nicht geladen werden",
+    "empty": "Keine Rechnungen in diesem Zeitraum.",
+    "statusCancelled": "Storniert",
+    "totalsByVatRate": "Summen nach MwSt-Satz",
+    "grandTotalNet": "Gesamt Netto",
+    "grandTotalVat": "Gesamt MwSt.",
+    "grandTotalGross": "Gesamt Brutto",
+    "cancelledFootnote": "{{count}} stornierte Rechnung(en) — Beträge nicht in den Summen enthalten (für lückenlose Nummernfolge dargestellt).",
+    "col": {
+      "date": "Datum",
+      "invoice": "Rechnung",
+      "customer": "Kunde",
+      "event": "Anlass",
+      "vatRate": "MwSt %",
+      "net": "Netto",
+      "vat": "MwSt.",
+      "total": "Brutto"
+    }
+  },
+  "quotes": {
+    "status": {
+      "draft": "Entwurf",
+      "sent": "Gesendet",
+      "accepted": "Angenommen",
+      "declined": "Abgelehnt",
+      "expired": "Abgelaufen",
+      "converted": "Umgewandelt"
+    },
+    "errors": {
+      "popupBlocked": "Erlauben Sie Pop-ups für diese Seite, um die PDF-Vorschau anzuzeigen.",
+      "customerRequired": "Bitte zuerst einen Kunden auswählen.",
+      "customerFeatureDisabled": "Bei diesem Kunden sind Angebote deaktiviert. Aktivieren Sie Angebote zuerst in den Kundendetails."
+    },
+    "confirmSend": "Dieses Angebot jetzt an den Kunden senden?",
+    "sentToast": "Angebot an Kunden gesendet.",
+    "confirmConvert": "Dieses angenommene Angebot in einen Anlass + geplante Rechnungen umwandeln?",
+    "convertedToast": "Angebot in Anlass #{{id}} umgewandelt",
+    "send": "Senden",
+    "resend": "Erneut senden",
+    "convert": "In Anlass umwandeln",
+    "field": {
+      "issueDate": "Ausgestellt am",
+      "validUntil": "Gültig bis",
+      "eventName": "Anlass",
+      "eventDate": "Anlassdatum",
+      "sentAt": "Gesendet am",
+      "acceptedAt": "Angenommen am",
+      "declinedAt": "Abgelehnt am",
+      "responseWindow": "Antwortfrist",
+      "eventTimeStart": "Startzeit",
+      "eventTimeEnd": "Endzeit",
+      "expectedDuration": "Voraussichtliche Dauer (h)",
+      "vatRate": "MwSt-Satz %",
+      "shipping": "Versandkosten",
+      "currency": "Währung",
+      "selectPaymentTerm": "— Zahlungsbedingungen wählen —",
+      "paymentNetDays": "Zahlungsziel",
+      "paymentTiming": "Zahlungsablauf",
+      "selectNetDays": "— Zahlungsziel wählen —",
+      "selectTiming": "— Zahlungsablauf wählen —",
+      "introText": "Einleitungstext",
+      "outroText": "Schlusstext",
+      "ccPdfEmail": "PDF-Kopie an (zusätzlicher Empfänger)",
+      "ccPdfEmailPlaceholder": "name@example.com",
+      "ccPdfPickFromAdmins": "Aus Admins auswählen:",
+      "ccPdfCustom": "Eigene E-Mail-Adresse",
+      "internalNotes": "Interne Notizen (nicht auf der PDF)"
+    },
+    "responseWindowOpen": "Offen bis {{at}}",
+    "section": {
+      "lineItems": "Positionen",
+      "internalNotes": "Interne Notizen",
+      "customer": "Kunde",
+      "event": "Anlassdetails",
+      "payment": "Zahlungsbedingungen",
+      "extras": "Einleitung / Schluss / Extras"
+    },
+    "savedToast": "Angebot als Entwurf gespeichert.",
+    "edit": "Angebot bearbeiten",
+    "new": "Neues Angebot",
+    "preview": "PDF-Vorschau",
+    "saveAndSend": "Speichern & senden",
+    "customerSearch": "Kunde nach E-Mail oder Firma suchen…",
+    "title": "Angebote",
+    "subtitle": "Angebote versenden, verfolgen und in Anlässe umwandeln.",
+    "searchPlaceholder": "Nach Nummer, Kunde, Anlass suchen…",
+    "sort": {
+      "newest": "Neueste zuerst",
+      "oldest": "Älteste zuerst",
+      "customerAsc": "Kunde A→Z",
+      "valueAsc": "Betrag aufsteigend",
+      "valueDesc": "Betrag absteigend"
+    },
+    "empty": "Noch keine Angebote.",
+    "table": {
+      "customer": "Kunde",
+      "event": "Anlass",
+      "issueDate": "Ausgestellt",
+      "total": "Gesamt",
+      "status": "Status"
+    },
+    "pagination": "Seite {{page}} von {{total}} · {{count}} Angebote",
+    "trigger": {
+      "quote_accepted": "bei Annahme",
+      "before_event": "vor dem Anlass",
+      "after_event": "nach dem Anlass",
+      "after_delivery": "nach Lieferung",
+      "fixed_date": "an festem Datum"
+    }
+  },
+  "crm": {
+    "lineItems": {
+      "quantity": "Anzahl",
+      "description": "Beschreibung",
+      "unitPrice": "Einzelpreis",
+      "total": "Summe",
+      "subtotal": "Zwischensumme",
+      "vat": "MwSt.",
+      "position": "Pos.",
+      "discount": "Rabatt %",
+      "descriptionPlaceholder": "Beschreibung (mehrere Zeilen möglich)",
+      "saveAsPreset": "Als Vorlage speichern",
+      "empty": "Noch keine Positionen — fügen Sie eine hinzu, um zu starten.",
+      "addRow": "Position hinzufügen",
+      "addFromPreset": "Aus Vorlage hinzufügen…",
+      "shipping": "Versand",
+      "addSubItem": "Unterposition hinzufügen",
+      "detailsAdd": "+ Notiz / Details hinzufügen",
+      "detailsFilled": "Details",
+      "detailsPlaceholder": "Optionale Notizen — Kleingedrucktes, Paketinhalte, Bedingungen…",
+      "autoTotaledHint": "Summe automatisch aus den Unterpositionen berechnet",
+      "autoTotaledNote": "= Σ Unterpositionen"
+    }
+  },
+  "bills": {
+    "status": {
+      "scheduled": "Geplant",
+      "pending_delivery": "Wartet auf Lieferung",
+      "sent": "Gesendet",
+      "paid": "Bezahlt",
+      "overdue": "Überfällig",
+      "cancelled": "Storniert",
+      "skipped": "Übersprungen (leerer Monat)"
+    },
+    "field": {
+      "number": "Rechnung",
+      "status": "Status",
+      "dueDate": "Fällig",
+      "total": "Gesamt",
+      "sourceQuote": "Vom Angebot",
+      "issueDate": "Ausgestellt am",
+      "scheduledSendAt": "Geplanter Versand (optional)",
+      "installment": "Rate",
+      "paid": "Bezahlt",
+      "outstanding": "Offen",
+      "lateFee": "Mahngebühr",
+      "qrFormat": "Zahlungs-QR-Format",
+      "vatRate": "MwSt-Satz %",
+      "shipping": "Versand",
+      "currency": "Währung",
+      "ccPdfEmail": "PDF-Kopie an (zusätzlicher Empfänger)",
+      "sourceQuote": "Aus Angebot",
+      "businessBankAccount": "Zahlungskonto",
+      "bankAccountProfileDefault": "Geschäftsprofil-Standard für {{currency}} verwenden",
+      "bankAccountDefaultBadge": "(Standard)",
+      "bankAccountHelp": "Überschreibt den Profil-Standard nur für diese Rechnung. Auf «Standard» belassen, um das passende Konto aus Einstellungen → Geschäftsprofil zu übernehmen.",
+      "paymentNetDays": "Zahlungsziel",
+      "paymentTiming": "Zahlungsablauf",
+      "selectNetDays": "— Zahlungsziel wählen —",
+      "selectTiming": "— Zahlungsablauf wählen —",
+      "eventName": "Anlass",
+      "eventDate": "Anlassdatum",
+      "eventTimeStart": "Startzeit",
+      "eventTimeEnd": "Endzeit",
+      "customer": "Kunde",
+      "invoiceNumber": "Rechnungsnummer",
+      "paidAmount": "Bereits bezahlt (optional)",
+      "pdfFile": "PDF-Datei",
+      "ccPdfCustom": "Eigene E-Mail-Adresse",
+      "ccPdfEmailPlaceholder": "name@beispiel.de",
+      "ccPdfPickFromAdmins": "Aus Admin-Liste wählen:",
+      "paymentTermHelp": "Zahlungsziel + Skonto für diese Rechnung. Leer lassen, um die Werte vom Quell-Angebot oder den globalen CRM-Standardwerten zu übernehmen.",
+      "skontoDisabled": "Skonto für diese Rechnung deaktivieren (unterdrückt den Skonto-Block im PDF sowie die „Mit Skonto bezahlt“-Buttons in der Admin-E-Mail / im Zahlung-erfassen-Dialog).",
+      "sourceContract": "Vom Vertrag"
+    },
+    "import": "Historische Rechnung importieren",
+    "importTitle": "Historische Rechnung importieren",
+    "importHelp": "Hänge ein PDF aus einem früheren Abrechnungssystem an. Der Kunde sieht dieses Originaldokument in seinem Portal — picpeak erzeugt es nicht neu.",
+    "importedToast": "Rechnung importiert.",
+    "importError": "Import fehlgeschlagen",
+    "importing": "Importiere…",
+    "noMatch": "Keine Treffer",
+    "title": "Rechnungen",
+    "subtitle": "Rechnungen planen, versenden, Zahlungen erfassen und überfällige Rechnungen mahnen.",
+    "new": "Neue Rechnung",
+    "searchPlaceholder": "Nach Nummer oder Kunde suchen…",
+    "sort": {
+      "newest": "Neueste zuerst",
+      "dueAsc": "Fällig zuerst",
+      "dueDesc": "Fällig zuletzt",
+      "customerAsc": "Kunde A→Z",
+      "valueAsc": "Betrag aufsteigend",
+      "valueDesc": "Betrag absteigend"
+    },
+    "filter": {
+      "unpaidOnly": "Nur unbezahlt"
+    },
+    "empty": "Noch keine Rechnungen.",
+    "table": {
+      "customer": "Kunde",
+      "event": "Anlass",
+      "installment": "Rate",
+      "dueDate": "Fällig",
+      "total": "Gesamt",
+      "status": "Status"
+    },
+    "errors": {
+      "popupBlocked": "Erlauben Sie Pop-ups für diese Seite, um die PDF-Vorschau anzuzeigen.",
+      "customerRequired": "Bitte zuerst einen Kunden auswählen."
+    },
+    "confirmSend": "Diese Rechnung jetzt an den Kunden senden?",
+    "sentToast": "Rechnung an Kunden gesendet.",
+    "confirmRelease": "Fotos jetzt als geliefert markieren und Rechnung an den Kunden senden?",
+    "releaseForDelivery": "Geliefert markieren & senden",
+    "releasedToast": "Lieferungs-Rechnung gesendet.",
+    "monthlyDraftBadge": "Monats-Entwurf — wird am Stichtag des Kunden oder über „Rechnung jetzt ausstellen“ verschickt",
+    "confirmReminder": "Zahlungserinnerung jetzt senden?",
+    "reminderToast": "Zahlungserinnerung gesendet.",
+    "confirmCancel": "Diese Rechnung wirklich stornieren? Sie wird ausgegraut und kann nicht mehr bearbeitet werden.",
+    "confirmCancelDraft": "Diesen Rechnungsentwurf verwerfen? Es wird kein Dokument an den Kunden gesendet.",
+    "confirmCancelIssued": "Es wird eine Stornorechnung erzeugt und sofort an den Kunden gesendet. Dies kann nicht rückgängig gemacht werden. Fortfahren?",
+    "cancelledToast": "Rechnung storniert.",
+    "cancelledWithStornoToast": "Rechnung storniert — Stornorechnung an den Kunden gesendet.",
+    "confirmReissue": "Für diese Rechnung wird eine Stornorechnung an den Kunden gesendet, und ein neuer Entwurf mit den gleichen Positionen wird angelegt. Die neue Rechnung verweist auf diese als „Ersetzt R-XXXX“. Fortfahren?",
+    "confirmReissueCancelled": "Eine neue Rechnung mit denselben Positionen anlegen, verknüpft mit dieser stornierten Rechnung?",
+    "reissuedToast": "Rechnung neu ausgestellt — Entwurf wird geöffnet.",
+    "reissuedWithStornoToast": "Stornorechnung erzeugt — Entwurf wird geöffnet.",
+    "reissue": "Neu ausstellen",
+    "cancelAndReissue": "Stornieren & neu ausstellen",
+    "kind": {
+      "storno": "Stornorechnung",
+      "reissue": "Neu ausgestellt"
+    },
+    "stornoCancelsLabel": "Diese Stornorechnung hebt Rechnung auf:",
+    "cancelledByStornoLabel": "Diese Rechnung wurde aufgehoben durch Stornorechnung",
+    "paymentRecordedToast": "Zahlung erfasst.",
+    "sendNow": "Jetzt senden",
+    "resend": "Erneut senden",
+    "markPaid": "Als bezahlt markieren",
+    "sendReminder": "Erinnerung senden",
+    "section": {
+      "lineItems": "Positionen",
+      "paymentLog": "Zahlungsverlauf",
+      "customer": "Kunde",
+      "event": "Anlassdetails",
+      "details": "Details",
+      "payment": "Zahlungsbedingungen"
+    },
+    "noPayments": "Noch keine Zahlungen erfasst.",
+    "payment": {
+      "paidAt": "Bezahlt am",
+      "amount": "Betrag",
+      "method": "Methode",
+      "reference": "Referenz",
+      "notes": "Notizen",
+      "methodPlaceholder": "Methode wählen…",
+      "methods": {
+        "card": "Karte",
+        "cash": "Bar",
+        "paypal": "PayPal",
+        "twint": "TWINT"
+      },
+      "withSkonto": "Mit Skonto bezahlt ({{percent}}% Rabatt)"
+    },
+    "recordPayment": "Zahlung erfassen",
+    "savedToast": "Rechnung gespeichert.",
+    "savedToastMulti": "{{n}} Rechnungen erstellt.",
+    "saveAndSpawn": "{{n}} Rechnungen erstellen",
+    "edit": "Rechnung bearbeiten",
+    "customerSearch": "Kunde nach E-Mail oder Firma suchen…",
+    "qrFormat": {
+      "none": "Keiner (Override)",
+      "swiss": "Swiss QR-Bill",
+      "epc": "EPC QR (SEPA)",
+      "profileDefault": "Standard aus Geschäftsprofil verwenden"
+    }
+  },
+  "businessProfile": {
+    "savedToast": "Geschäftsprofil gespeichert.",
+    "title": "Geschäftsprofil",
+    "subtitle": "Briefkopf, Kontaktdaten und Standardwerte für Angebote und Rechnungen.",
+    "section": {
+      "company": "Firma",
+      "contact": "Kontakt",
+      "defaults": "Standardwerte",
+      "banks": "Bankverbindungen"
+    },
+    "field": {
+      "companyName": "Firmenname",
+      "vatId": "USt-IdNr.",
+      "taxId": "Steuernummer",
+      "addressLine1": "Adresszeile 1",
+      "addressLine2": "Adresszeile 2",
+      "postalCode": "PLZ",
+      "city": "Ort",
+      "state": "Kanton / Bundesland",
+      "countryCode": "Land",
+      "phone": "Telefon",
+      "mobile": "Mobil",
+      "email": "E-Mail",
+      "website": "Webseite",
+      "defaultCurrency": "Standardwährung",
+      "defaultLocale": "Standardsprache",
+      "timezone": "Zeitzone (IANA)",
+      "vatLabel": "MwSt-Bezeichnung",
+      "vatRateDefault": "Standard-MwSt-Satz %",
+      "defaultQrFormat": "Standard-QR-Format",
+      "footerLine": "Fusszeile"
+    },
+    "qrFormat": {
+      "none": "Kein QR",
+      "swiss": "Swiss QR-Bill",
+      "epc": "EPC QR (SEPA)"
+    },
+    "bankCreatedToast": "Bankverbindung hinzugefügt.",
+    "bankDeletedToast": "Bankverbindung gelöscht.",
+    "addBank": "Bankverbindung hinzufügen",
+    "bank": {
+      "label": "Bezeichnung",
+      "accountHolder": "Kontoinhaber",
+      "currency": "Währung",
+      "isDefault": "Standard",
+      "makeDefault": "Als Standard",
+      "confirmDelete": "Diese Bankverbindung wirklich löschen?"
+    },
+    "noBanks": "Noch keine Bankverbindungen hinterlegt."
+  },
+  "crmSettings": {
+    "savedToast": "CRM-Einstellungen gespeichert.",
+    "title": "CRM-Einstellungen",
+    "subtitle": "Standardwerte für Angebote und Rechnungen.",
+    "emptyState": "Aktuell sind keine CRM-Funktionen aktiv. Aktiviere Angebote, Rechnungen oder Verträge unter Einstellungen → Features, damit die passenden Konfigurationen hier erscheinen.",
+    "section": {
+      "quotes": "Angebote",
+      "invoices": "Rechnungen",
+      "paymentDefaults": "Standard-Zahlungsbedingungen",
+      "installmentDefaults": "Standard-Trigger für Teilzahlungen"
+    },
+    "installmentDefaults": {
+      "help": "Vorbelegung der Trigger für neue Zeilen im Teilzahlungs-Panel. Pro-Dokument-Anpassungen überschreiben; bestehende Dokumente behalten ihren gespeicherten Plan.",
+      "trigger": {
+        "quote_accepted": "Bei Unterzeichnung / Erstellung",
+        "before_event": "Vor dem Anlass",
+        "after_event": "Nach dem Anlass",
+        "after_delivery": "Bei Lieferung (manuelle Freigabe)",
+        "fixed_date": "Festes Datum"
+      }
+    },
+    "paymentDefaults": {
+      "help": "Wird bei jeder neuen Rechnung und jedem Angebot vorausgewählt. Im Editor lässt sich pro Dokument eine andere Kombination wählen.",
+      "none": "— Kein Standard —"
+    },
+    "crm_invoices_default_payment_net_days_template_id": {
+      "label": "Standard-Zahlungsziel"
+    },
+    "crm_invoices_default_payment_timing_template_id": {
+      "label": "Standard-Zahlungsablauf"
+    },
+    "crm_quotes_accept_window_minutes": {
+      "label": "Antwortfrist nach Versand (Minuten)"
+    },
+    "crm_quotes_default_valid_days": {
+      "label": "Standard-Gültigkeit Angebot (Tage)"
+    },
+    "crm_quotes_number_format": {
+      "label": "Format Angebotsnummer"
+    },
+    "crm_invoices_reminder_first_days": {
+      "label": "Erste Mahnung nach (Tagen)"
+    },
+    "crm_invoices_reminder_second_days": {
+      "label": "Zweite Mahnung nach (Tagen)"
+    },
+    "crm_invoices_late_fee_minor": {
+      "label": "Mahngebühr (Rappen / Cent)"
+    },
+    "crm_invoices_late_fee_label": {
+      "label": "Bezeichnung Mahngebühr"
+    },
+    "crm_invoices_skonto_percent_default": {
+      "label": "Standard-Skonto %"
+    },
+    "crm_invoices_skonto_business_days": {
+      "label": "Skonto-Frist (Werktage)"
+    },
+    "crm_invoices_installment_trigger_first": {
+      "label": "Trigger erste Teilzahlung"
+    },
+    "crm_invoices_installment_days_before_event": {
+      "label": "Tage vor dem Anlass (mittlere Teilzahlung)"
+    },
+    "crm_invoices_installment_days_after_event": {
+      "label": "Tage nach dem Anlass (letzte Teilzahlung)"
+    },
+    "crm_invoices_number_format": {
+      "label": "Format Rechnungsnummer"
+    },
+    "crm_quotes_pdf_attachment_enabled": {
+      "label": "PDF an E-Mail anhängen (Angebote)"
+    },
+    "crm_quotes_skonto_enabled": {
+      "label": "Skonto auf Angeboten aktivieren"
+    },
+    "crm_invoices_qr_enabled": {
+      "label": "Zahlungs-QR auf Rechnungen aktivieren"
+    },
+    "crm_invoices_reminders_enabled": {
+      "label": "Automatische Mahnungen aktivieren"
+    },
+    "crm_invoices_late_fee_enabled": {
+      "label": "Mahngebühr aktivieren"
+    }
+  },
+  "quoteResponse": {
+    "notFound": "Angebot nicht gefunden",
+    "notFoundBody": "Dieser Angebotslink ist nicht mehr gültig.",
+    "locked": "Dieses Angebot kann nicht mehr beantwortet werden.",
+    "title": "Angebot",
+    "event": "Anlass",
+    "issueDate": "Ausgestellt am",
+    "validUntil": "Gültig bis",
+    "description": "Beschreibung",
+    "qty": "Anzahl",
+    "unit": "Einzelpreis",
+    "total": "Gesamt",
+    "subtotal": "Zwischensumme",
+    "vat": "MwSt.",
+    "acceptedLocked": "Dieses Angebot wurde bereits angenommen.",
+    "declinedLocked": "Dieses Angebot wurde abgelehnt.",
+    "cannotRespond": "Es ist nicht mehr möglich, auf dieses Angebot zu antworten.",
+    "changeWithin": "Sie können Ihre Antwort innerhalb von {{minutes}} Minuten ändern.",
+    "intro": "Vielen Dank für Ihre Anfrage. Bitte prüfen Sie das folgende Angebot und antworten Sie unten.",
+    "accept": "Angebot annehmen",
+    "decline": "Angebot ablehnen"
+  },
+  "reminderTemplates": {
+    "title": "Erinnerungs-E-Mails vor dem Anlass",
+    "globalSection": "Globales Verhalten",
+    "globalHelp": "Standardmässig aus — aktiviere, um Erinnerungen zu senden. Der unten gesetzte Offset ist der Standard; jeder Anlass kann ihn auf der Detailseite überschreiben.",
+    "enableLabel": "Erinnerungs-E-Mails vor dem Anlass senden",
+    "daysBeforeLabel": "Tage vor dem Anlass",
+    "saveSettings": "Globale Einstellungen speichern",
+    "settingsSaved": "Erinnerungs-Einstellungen gespeichert.",
+    "settingsSaveError": "Erinnerungs-Einstellungen konnten nicht gespeichert werden.",
+    "sidebarHeading": "Vorlagen",
+    "sectionTemplates": "Vorlagen",
+    "defaultLabel": "Standard (Auffang)",
+    "usesDefault": "Standard",
+    "usesDefaultTooltip": "Noch keine eigene Vorlage — dieser Anlass-Typ nutzt die Standard-Vorlage. Bearbeite + speichere hier, um eine eigene zu erstellen.",
+    "willCreateOnSave": "Dieser Anlass-Typ verwendet die Standard-Vorlage. Die Felder unten sind aus der Standard-Vorlage vorbelegt; beim Speichern wird eine eigene Vorlage für diesen Anlass-Typ erstellt.",
+    "variablesHint": "Verfügbare Variablen: {{customer_name}}, {{event_name}}, {{event_date}}, {{event_type}}, {{days_before}}, {{business_name}} — werden beim Versand der E-Mail ersetzt.",
+    "subjectLabel": "Betreff",
+    "subjectPlaceholder": "Betreff der E-Mail",
+    "bodyLabel": "Text",
+    "noTranslation": "Noch keine Übersetzung",
+    "saveTemplate": "Vorlage speichern",
+    "saved": "Vorlage gespeichert.",
+    "saveError": "Vorlage konnte nicht gespeichert werden."
+  },
+  "eventReminderOverride": {
+    "title": "Erinnerung vor dem Event",
+    "save": "Override speichern",
+    "help": "Event-spezifischer Override für die Kundenerinnerung. Globaler An/Aus-Schalter und Standard-Offset liegen unter Einstellungen → Erinnerungs-E-Mails. Was hier leer bleibt, übernimmt die globale Einstellung bzw. die aufgelöste Vorlage.",
+    "disabledLabel": "Erinnerung für dieses Event deaktivieren (es wird keine E-Mail verschickt)",
+    "offsetLabel": "Tage vor dem Event (Override) — leer lassen für Standard",
+    "offsetPlaceholder": "Leer lassen, um den globalen Standard zu verwenden",
+    "bodyOverrideLabel": "Eigener Text für dieses Event (überschreibt den Vorlagentext)",
+    "bodyOverridePlaceholder": "Leer lassen, um den Vorlagentext zu verwenden. Variablen wie {{customer_name}}, {{event_name}}, {{event_date}} funktionieren auch hier.",
+    "saved": "Erinnerungs-Override gespeichert.",
+    "saveError": "Erinnerungs-Override konnte nicht gespeichert werden.",
+    "invalidOffset": "Offset muss eine nicht-negative ganze Zahl oder leer sein."
+  },
+  "dealLineage": {
+    "title": "Verknüpfte Dokumente",
+    "quotes": "Angebote",
+    "contracts": "Verträge",
+    "invoices": "Rechnungen",
+    "loading": "Verknüpfte Dokumente werden geladen…",
+    "error": "Verknüpfte Dokumente konnten nicht geladen werden.",
+    "empty": "Noch keine weiteren Dokumente in diesem Vorgang. Neue Rechnungen, Verträge oder Teilzahlungen erscheinen hier, sobald sie erstellt werden.",
+    "editPlan": "Plan bearbeiten",
+    "editPlanModalTitle": "Teilzahlungsplan bearbeiten",
+    "editPlanHelp": "Den Plan atomar umformen: Prozente, Bezeichnungen, Trigger ändern, Zeilen hinzufügen oder entfernen. Der Plan-Gesamtbetrag bleibt fix; bestehende Rechnungsnummern werden wo möglich beibehalten. Nicht mehr möglich, sobald eine Rechnung versendet wurde.",
+    "editPlanWarning": "Beim Entfernen von Zeilen werden deren Rechnungsnummern gelöscht (die Nummernfolge kann sie nicht freigeben — §14 UStG-Kontinuitätspflicht). Neue Zeilen vergeben frische Nummern.",
+    "editPlanSave": "Plan speichern",
+    "editPlanSuccess": "Teilzahlungsplan aktualisiert.",
+    "editPlanLocked": "Plan kann nicht mehr bearbeitet werden — mindestens eine Rechnung wurde versendet oder storniert.",
+    "editPlanPercentSumError": "Prozente müssen sich auf 100 summieren.",
+    "editPlanGeneralError": "Plan konnte nicht aktualisiert werden.",
+    "editPlanEmpty": "Plan darf nicht leer sein."
+  },
+  "installments": {
+    "enableLabel": "In Teilzahlungen aufteilen",
+    "advancedToggle": "Dynamische Trigger verwenden",
+    "simpleToggle": "Einfache Datumsauswahl verwenden",
+    "simpleHint": "Jede Zeile wird an einem festen Datum versendet. Wechsle zu dynamischen Triggern für Pläne, die an das Anlassdatum oder die Lieferung gekoppelt sind.",
+    "advancedHint": "Wähle einen Trigger (Angebot angenommen, vor/nach Anlass, bei Lieferung, festes Datum) und einen Offset in Tagen. Trigger lösen sich neu auf, wenn sich das Anlassdatum später verschiebt.",
+    "percent": "%",
+    "label": "Bezeichnung",
+    "labelPlaceholder": "Anzahlung / vor Anlass …",
+    "sendOn": "Versanddatum",
+    "trigger": "Trigger",
+    "offsetDays": "Offset (Tage)",
+    "onDeliveryHint": "Bei Lieferung — Admin gibt manuell frei. Für Änderungen auf erweitert umschalten.",
+    "addRow": "Teilzahlung hinzufügen",
+    "removeRow": "Zeile entfernen",
+    "total": "Summe",
+    "mustSumTo100": "muss 100 % ergeben",
+    "firstRowDefaultLabel": "Anzahlung",
+    "triggerOption": {
+      "quote_accepted": "Bei Unterzeichnung / Erstellung",
+      "before_event": "Vor dem Anlass",
+      "after_event": "Nach dem Anlass",
+      "after_delivery": "Bei Lieferung (manuelle Freigabe)",
+      "fixed_date": "Festes Datum"
+    }
+  },
+  "contracts": {
+    "title": "Verträge",
+    "subtitle": "Verträge aus wiederverwendbaren Bausteinen zusammenstellen und durch den Kunden im Browser oder per hochgeladenem, handunterschriebenem PDF unterzeichnen lassen.",
+    "sections": {
+      "basics": "Vertragsgrundlagen",
+      "scope": "Leistungsumfang",
+      "privacy": "Persönlichkeitsrechte & Datenschutz",
+      "commercial": "Kaufmännisches",
+      "nda": "Vertraulichkeit",
+      "closing": "Schlussbestimmungen"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "sent": "Gesendet",
+      "signed_by_customer": "Kunde unterzeichnet",
+      "signed_by_admin": "Gegengezeichnet",
+      "fully_signed": "Beidseitig unterzeichnet",
+      "cancelled": "Storniert"
+    },
+    "list": {
+      "new": "Neuer Vertrag"
+    },
+    "detail": {
+      "integrity": {
+        "title": "PDF-Integritätsprüfung",
+        "help": "Berechnet die SHA-256-Hashes der unsignierten und signierten PDFs neu und vergleicht sie mit den beim Ausstellen gespeicherten Werten. Deckt Backup-Beschädigungen oder nachträgliche Änderungen an der Kundenkopie auf.",
+        "verify": "Prüfen",
+        "reverify": "Erneut prüfen",
+        "unsignedTitle": "Unsigniertes PDF",
+        "signedTitle": "Signiertes PDF",
+        "match": "Hash stimmt überein",
+        "mismatch": "Hash weicht ab — Datei verändert",
+        "missing": "Datei auf dem Server nicht gefunden",
+        "notIssued": "Noch nicht ausgestellt",
+        "expected": "erwartet",
+        "actual": "tatsächlich",
+        "error": "Integritätsprüfung fehlgeschlagen."
+      }
     }
   }
 }
