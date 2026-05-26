@@ -16,14 +16,15 @@
  * busy on the common case.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { FileText, ScrollText, Receipt, AlertTriangle } from 'lucide-react';
-import { Card } from '../common';
+import { FileText, ScrollText, Receipt, AlertTriangle, Pencil } from 'lucide-react';
+import { Button, Card } from '../common';
 import { formatMoneyMinor } from '../../utils/money';
 import { api } from '../../config/api';
+import { EditInstallmentPlanModal } from './EditInstallmentPlanModal';
 
 export interface DocumentLineageCardProps {
   dealUuid: string | null | undefined;
@@ -52,9 +53,12 @@ interface DealInvoiceItem extends DealItemBase {
   invoiceKind: 'invoice' | 'storno';
   paidAmountMinor?: number;
   dueDate?: string;
+  eventDate?: string | null;
   installmentIndex?: number;
   installmentTotal?: number;
   installmentLabel?: string | null;
+  installmentTrigger?: string | null;
+  installmentOffsetDays?: number;
   isMonthlyDraft?: boolean;
 }
 
@@ -65,10 +69,13 @@ interface DealLineageResponse {
   invoices: DealInvoiceItem[];
 }
 
+const EDITABLE_PLAN_STATUSES = new Set(['scheduled', 'pending_delivery']);
+
 export const DocumentLineageCard: React.FC<DocumentLineageCardProps> = ({
   dealUuid, current, className = '',
 }) => {
   const { t } = useTranslation();
+  const [showEditPlan, setShowEditPlan] = useState(false);
   const { data, isLoading, error } = useQuery({
     queryKey: ['deal-lineage', dealUuid],
     queryFn: async () => {
@@ -104,6 +111,16 @@ export const DocumentLineageCard: React.FC<DocumentLineageCardProps> = ({
 
   const { quotes, contracts, invoices } = data;
   const totalCount = quotes.length + contracts.length + invoices.length;
+
+  // Reshape gesture is offered when this deal holds a multi-installment
+  // plan AND every invoice is still pre-customer. Server re-checks on
+  // save; if a sibling shipped between render and click, the 409 path
+  // in the modal handles the race.
+  const hasMultiInstallment = invoices.some((i) => (i.installmentTotal || 0) > 1);
+  const allInvoicesEditable = invoices.length > 0
+    && invoices.every((i) => i.invoiceKind !== 'storno'
+      && EDITABLE_PLAN_STATUSES.has(i.status));
+  const canEditPlan = hasMultiInstallment && allInvoicesEditable;
   // Only ONE doc total = the current one. No siblings to surface.
   if (totalCount <= 1) {
     return (
@@ -172,6 +189,17 @@ export const DocumentLineageCard: React.FC<DocumentLineageCardProps> = ({
           icon={<Receipt className="w-4 h-4" />}
           label={t('dealLineage.invoices', 'Invoices')}
           count={invoices.length}
+          action={canEditPlan ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowEditPlan(true)}
+              leftIcon={<Pencil className="w-3.5 h-3.5" />}
+              className="ml-auto"
+            >
+              {t('dealLineage.editPlan', 'Edit plan')}
+            </Button>
+          ) : undefined}
         >
           {invoices.map((i) => {
             const isStorno = i.invoiceKind === 'storno';
@@ -196,6 +224,26 @@ export const DocumentLineageCard: React.FC<DocumentLineageCardProps> = ({
           })}
         </Group>
       )}
+
+      {canEditPlan && dealUuid && (
+        <EditInstallmentPlanModal
+          isOpen={showEditPlan}
+          onClose={() => setShowEditPlan(false)}
+          dealUuid={dealUuid}
+          siblings={invoices.map((i) => ({
+            id: i.id,
+            number: i.number,
+            status: i.status,
+            totalAmountMinor: i.totalAmountMinor,
+            installmentIndex: i.installmentIndex,
+            installmentTotal: i.installmentTotal,
+            installmentLabel: i.installmentLabel,
+            installmentTrigger: i.installmentTrigger,
+            installmentOffsetDays: i.installmentOffsetDays,
+          }))}
+          eventDate={invoices.find((i) => i.eventDate)?.eventDate || null}
+        />
+      )}
     </Card>
   );
 };
@@ -205,12 +253,14 @@ const Group: React.FC<{
   label: string;
   count: number;
   children: React.ReactNode;
-}> = ({ icon, label, count, children }) => (
+  action?: React.ReactNode;
+}> = ({ icon, label, count, children, action }) => (
   <div className="mb-3 last:mb-0">
     <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-theme mb-1">
       {icon}
       <span>{label}</span>
       <span>({count})</span>
+      {action}
     </div>
     <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
       {children}

@@ -22,6 +22,23 @@
 
 const { db } = require('../database/db');
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+function deriveOffsetDays(invoice) {
+  if (!invoice.installment_trigger) return 0;
+  if (invoice.installment_trigger === 'after_delivery') return 0;
+  const sched = invoice.scheduled_send_at
+    ? new Date(invoice.scheduled_send_at) : null;
+  if (!sched || Number.isNaN(sched.getTime())) return 0;
+  const anchor = (invoice.installment_trigger === 'before_event'
+    || invoice.installment_trigger === 'after_event')
+    ? invoice.event_date
+    : invoice.issue_date;
+  if (!anchor) return 0;
+  const anchorDate = new Date(anchor);
+  if (Number.isNaN(anchorDate.getTime())) return 0;
+  return Math.round((sched.getTime() - anchorDate.getTime()) / MS_PER_DAY);
+}
+
 /**
  * Fetch every document — quotes, contracts, invoices — sharing the
  * given `deal_uuid`. Each row carries enough state for the lineage
@@ -72,7 +89,11 @@ async function getDealDocuments(dealUuid) {
         'total_amount_minor', 'paid_amount_minor',
         'issue_date', 'due_date',
         'event_name', 'event_date',
+        // installment_trigger + scheduled_send_at let the lineage card
+        // derive the per-slice trigger/offset_days needed to seed the
+        // Edit Plan modal without a second round-trip.
         'installment_index', 'installment_total', 'installment_label',
+        'installment_trigger', 'scheduled_send_at',
         'is_monthly_draft',
         'created_at',
       ),
@@ -121,6 +142,15 @@ async function getDealDocuments(dealUuid) {
       installmentIndex: i.installment_index,
       installmentTotal: i.installment_total,
       installmentLabel: i.installment_label,
+      installmentTrigger: i.installment_trigger || null,
+      // Approximate the original offset_days from the resolved
+      // scheduled_send_at — exact round-trip would need a dedicated
+      // column. The Edit Plan modal uses this as a seed; admin can
+      // override. Anchor by trigger:
+      //   - before_event / after_event → days from event_date
+      //   - after_delivery             → 0 (waits indefinitely)
+      //   - quote_accepted / fixed_date → days from issue_date
+      installmentOffsetDays: deriveOffsetDays(i),
       isMonthlyDraft: Boolean(i.is_monthly_draft),
       createdAt: i.created_at,
     })),
