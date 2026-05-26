@@ -12,7 +12,7 @@
  * All writes go through react-query invalidation so the entry list
  * refreshes after every action.
  */
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
@@ -143,7 +143,21 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
     },
   });
 
-  const unbilledCount = entries.filter((e) => e.status === 'unbilled').length;
+  // Single pass — both the count and the money total live behind the
+  // same filter. Memoised so a parent re-render (e.g. the
+  // CustomerDetailPage form state changing) doesn't reshuffle the
+  // entries array in JS on every keystroke.
+  const { unbilledCount, unbilledTotalMajor } = useMemo(() => {
+    let count = 0;
+    let minor = 0;
+    for (const e of entries) {
+      if (e.status !== 'unbilled') continue;
+      count += 1;
+      const rateMinor = e.hourlyRateMinorOverride ?? customerHourlyRateMinor ?? 0;
+      minor += rateMinor * e.durationMinutes / 60;
+    }
+    return { unbilledCount: count, unbilledTotalMajor: minor / 100 };
+  }, [entries, customerHourlyRateMinor]);
   const isMonthly = billingCadence === 'monthly';
 
   // Local lockout check — mirrors customerHoursService.isEntryLocked
@@ -296,10 +310,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
               '{{count}} unbilled entries totaling {{total}}',
               {
                 count: unbilledCount,
-                total: (entries
-                  .filter((e) => e.status === 'unbilled')
-                  .reduce((s, e) => s + ((e.hourlyRateMinorOverride ?? customerHourlyRateMinor ?? 0) * e.durationMinutes / 60), 0) / 100)
-                  .toFixed(2),
+                total: unbilledTotalMajor.toFixed(2),
               })}
           </span>
           <Button

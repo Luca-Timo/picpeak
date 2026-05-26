@@ -3,7 +3,7 @@
  * exposes the action set: Preview PDF, Send, Mark paid (modal), Send
  * reminder (manual escalation), Cancel.
  */
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -37,6 +37,69 @@ export const BillDetailPage: React.FC = () => {
   // the amount with total × (1 - skonto%) when ticked, but admin can
   // still override it (e.g. partial Skonto + partial waive).
   const [payWithSkonto, setPayWithSkonto] = useState(false);
+
+  // Pre-build the line-item rows once per data change. Previously this
+  // was an inline IIFE inside the JSX, rebuilding the array (and N
+  // <tr> elements) on every render of the page — every payment-dialog
+  // input keystroke triggered the full reshape. The hook lives above
+  // the early-return so the rules of hooks stay happy; it returns []
+  // while data is loading.
+  const lineItemRows = useMemo<React.ReactNode[]>(() => {
+    if (!data) return [];
+    // Migration 119 hierarchy: top-level items get 1, 2, 3…, sub-items
+    // render as N.M under their parent (indented, greyed, line total
+    // in parens, empty price cells when unit_price = 0). Details_text
+    // rows render as a small italic line below their parent. Mirrors
+    // the customer-facing QuoteResponsePage table.
+    let topCount = 0;
+    let subCount = 0;
+    const rows: React.ReactNode[] = [];
+    const currency = data.invoice.currency;
+    for (const li of data.lineItems) {
+      const isSub = li.parentLineItemId != null || li.parentPosition != null;
+      if (!isSub) { topCount += 1; subCount = 0; } else { subCount += 1; }
+      const priceless = isSub && (!li.unitPriceMinor || Number(li.unitPriceMinor) === 0);
+      rows.push(
+        <tr
+          key={`row-${li.id ?? li.position}`}
+          className={`border-b border-neutral-100 dark:border-neutral-800 ${
+            isSub ? 'text-neutral-500 dark:text-neutral-400' : ''
+          }`}
+        >
+          <td className="py-2">{isSub ? `${topCount}.${subCount}` : topCount}</td>
+          <td className="py-2">{Number(li.quantity)}</td>
+          <td className={`py-2 whitespace-pre-line ${isSub ? 'pl-6' : ''}`}>
+            {isSub ? '• ' : ''}{li.description}
+          </td>
+          <td className="py-2 text-right tabular-nums">
+            {priceless ? '' : formatMoney(Number(li.unitPriceMinor || 0) / 100, currency)}
+          </td>
+          <td className={`py-2 text-right tabular-nums ${isSub ? 'italic' : ''}`}>
+            {priceless
+              ? ''
+              : isSub
+                ? `(${formatMoney(Number(li.lineTotalMinor || 0) / 100, currency)})`
+                : formatMoney(Number(li.lineTotalMinor || 0) / 100, currency)}
+          </td>
+        </tr>
+      );
+      if (li.detailsText && String(li.detailsText).trim().length > 0) {
+        rows.push(
+          <tr key={`details-${li.id ?? li.position}`} className="border-b border-neutral-100 dark:border-neutral-800">
+            <td className="py-1"></td>
+            <td className="py-1"></td>
+            <td
+              className={`py-1 text-xs italic text-neutral-500 dark:text-neutral-400 whitespace-pre-line ${isSub ? 'pl-10' : 'pl-4'}`}
+              colSpan={3}
+            >
+              {li.detailsText}
+            </td>
+          </tr>
+        );
+      }
+    }
+    return rows;
+  }, [data]);
 
   if (isLoading || !data) return <Loading />;
   const inv = data.invoice;
@@ -352,68 +415,7 @@ export const BillDetailPage: React.FC = () => {
             <th className="text-right py-2">{t('crm.lineItems.unitPrice', 'Unit')}</th>
             <th className="text-right py-2">{t('crm.lineItems.total', 'Total')}</th>
           </tr></thead>
-          <tbody>
-            {(() => {
-              // Migration 119 hierarchy: top-level items get 1, 2, 3…,
-              // sub-items render as N.M under their parent (indented,
-              // greyed, line total in parens, empty price cells when
-              // unit_price = 0). Details_text rows render as a small
-              // italic line below their parent. Mirrors the
-              // customer-facing QuoteResponsePage table.
-              let topCount = 0;
-              let subCount = 0;
-              const rows: React.ReactNode[] = [];
-              for (const li of data.lineItems) {
-                const isSub = li.parentLineItemId != null || li.parentPosition != null;
-                if (!isSub) {
-                  topCount += 1;
-                  subCount = 0;
-                } else {
-                  subCount += 1;
-                }
-                const priceless = isSub && (!li.unitPriceMinor || Number(li.unitPriceMinor) === 0);
-                rows.push(
-                  <tr
-                    key={`row-${li.id ?? li.position}`}
-                    className={`border-b border-neutral-100 dark:border-neutral-800 ${
-                      isSub ? 'text-neutral-500 dark:text-neutral-400' : ''
-                    }`}
-                  >
-                    <td className="py-2">{isSub ? `${topCount}.${subCount}` : topCount}</td>
-                    <td className="py-2">{Number(li.quantity)}</td>
-                    <td className={`py-2 whitespace-pre-line ${isSub ? 'pl-6' : ''}`}>
-                      {isSub ? '• ' : ''}{li.description}
-                    </td>
-                    <td className="py-2 text-right tabular-nums">
-                      {priceless ? '' : formatMoney(Number(li.unitPriceMinor || 0) / 100, inv.currency)}
-                    </td>
-                    <td className={`py-2 text-right tabular-nums ${isSub ? 'italic' : ''}`}>
-                      {priceless
-                        ? ''
-                        : isSub
-                          ? `(${formatMoney(Number(li.lineTotalMinor || 0) / 100, inv.currency)})`
-                          : formatMoney(Number(li.lineTotalMinor || 0) / 100, inv.currency)}
-                    </td>
-                  </tr>
-                );
-                if (li.detailsText && String(li.detailsText).trim().length > 0) {
-                  rows.push(
-                    <tr key={`details-${li.id ?? li.position}`} className="border-b border-neutral-100 dark:border-neutral-800">
-                      <td className="py-1"></td>
-                      <td className="py-1"></td>
-                      <td
-                        className={`py-1 text-xs italic text-neutral-500 dark:text-neutral-400 whitespace-pre-line ${isSub ? 'pl-10' : 'pl-4'}`}
-                        colSpan={3}
-                      >
-                        {li.detailsText}
-                      </td>
-                    </tr>
-                  );
-                }
-              }
-              return rows;
-            })()}
-          </tbody>
+          <tbody>{lineItemRows}</tbody>
         </table>
       </Card>
 
