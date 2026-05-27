@@ -777,6 +777,16 @@ async function startServer() {
     
     // Initialize email transporter and start queue processor
     await initializeTransporter();
+    // Seed CRM / contract / event-reminder email templates and recover
+    // any queue rows that exhausted retries because their template
+    // didn't exist yet. Runs once per boot via module-level caches in
+    // each seeder. See _emailTemplateBoot.js for the full rationale.
+    try {
+      const { seedEmailTemplatesAndRecoverQueue } = require('./src/services/_emailTemplateBoot');
+      await seedEmailTemplatesAndRecoverQueue(db, logger);
+    } catch (err) {
+      logger.warn('Email template self-heal failed at boot:', err.message);
+    }
     startEmailQueueProcessor();
     
     // Start webhook delivery worker (#327)
