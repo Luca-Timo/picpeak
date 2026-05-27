@@ -51,6 +51,7 @@ describe('galleryService.savePhotoToDevice — iOS gating (#554)', () => {
 
     vi.spyOn(galleryService, 'fetchPhotoBlob').mockResolvedValue(fetchedBlob as any);
     vi.spyOn(galleryService, 'triggerBrowserDownload').mockImplementation(() => undefined);
+    vi.spyOn(galleryService, 'triggerDirectDownload').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
@@ -69,13 +70,18 @@ describe('galleryService.savePhotoToDevice — iOS gating (#554)', () => {
     expect(share).toHaveBeenCalledTimes(1);
     expect(canShare).toHaveBeenCalledWith({ files: expect.any(Array) });
     expect(galleryService.triggerBrowserDownload).not.toHaveBeenCalled();
+    expect(galleryService.triggerDirectDownload).not.toHaveBeenCalled();
   });
 
-  it('falls through to a regular download on Android even when canShare({files}) is true', async () => {
-    // This is the bug #554 fixes — canShare is true on Chrome Android too,
-    // but the Android share sheet has no "Save Image" action so the user
-    // sees a useless app-picker. The gating must be UA-based, not
-    // capability-based.
+  it('navigates straight to the download URL on Android (no blob round-trip)', async () => {
+    // #554 fix: canShare is true on Chrome Android but the share sheet
+    // has no "Save Image" action, so the share path is iOS-only. The
+    // follow-up issue (Rekoo-PS, post-#556) was that the Android
+    // fallback fetched the blob through JS before clicking <a download>,
+    // adding ~5s of dead air before the browser's download UI appeared
+    // and prompting users to re-click. Going straight to the download
+    // URL hands the fetch to the browser, which shows its own progress
+    // immediately — no spinner needed.
     const share = vi.fn().mockResolvedValue(undefined);
     const canShare = vi.fn().mockReturnValue(true);
     installNavigator({ userAgent: ANDROID_UA, share, canShare });
@@ -83,21 +89,23 @@ describe('galleryService.savePhotoToDevice — iOS gating (#554)', () => {
     await galleryService.savePhotoToDevice('slug', 1, 'fallback.jpg');
 
     expect(share).not.toHaveBeenCalled();
-    // canShare may or may not be probed on Android; what matters is the
-    // share() call doesn't happen and a download is triggered instead.
-    expect(galleryService.triggerBrowserDownload).toHaveBeenCalledTimes(1);
-    expect(galleryService.triggerBrowserDownload).toHaveBeenCalledWith(
-      fetchedBlob.blob,
-      'IMG_0001.jpg',
+    expect(galleryService.fetchPhotoBlob).not.toHaveBeenCalled();
+    expect(galleryService.triggerBrowserDownload).not.toHaveBeenCalled();
+    expect(galleryService.triggerDirectDownload).toHaveBeenCalledTimes(1);
+    expect(galleryService.triggerDirectDownload).toHaveBeenCalledWith(
+      expect.stringMatching(/\/gallery\/slug\/download\/1$/),
+      'fallback.jpg',
     );
   });
 
-  it('falls through to a regular download on desktop Safari (no share / canShare APIs)', async () => {
+  it('navigates straight to the download URL on desktop Safari (no share / canShare APIs)', async () => {
     installNavigator({ userAgent: DESKTOP_UA });
 
     await galleryService.savePhotoToDevice('slug', 1, 'fallback.jpg');
 
-    expect(galleryService.triggerBrowserDownload).toHaveBeenCalledTimes(1);
+    expect(galleryService.fetchPhotoBlob).not.toHaveBeenCalled();
+    expect(galleryService.triggerBrowserDownload).not.toHaveBeenCalled();
+    expect(galleryService.triggerDirectDownload).toHaveBeenCalledTimes(1);
   });
 
   it('detects iPadOS 13+ (reports as MacIntel + touch) as iOS', async () => {
@@ -115,6 +123,7 @@ describe('galleryService.savePhotoToDevice — iOS gating (#554)', () => {
 
     expect(share).toHaveBeenCalledTimes(1);
     expect(galleryService.triggerBrowserDownload).not.toHaveBeenCalled();
+    expect(galleryService.triggerDirectDownload).not.toHaveBeenCalled();
   });
 
   it('does NOT treat a regular Mac (MacIntel + no touch) as iOS', async () => {
@@ -131,7 +140,7 @@ describe('galleryService.savePhotoToDevice — iOS gating (#554)', () => {
     await galleryService.savePhotoToDevice('slug', 1, 'fallback.jpg');
 
     expect(share).not.toHaveBeenCalled();
-    expect(galleryService.triggerBrowserDownload).toHaveBeenCalledTimes(1);
+    expect(galleryService.triggerDirectDownload).toHaveBeenCalledTimes(1);
   });
 
   it('does not fall back to download when the user dismisses the iOS share sheet (AbortError)', async () => {

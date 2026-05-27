@@ -372,6 +372,12 @@ export const EventDetailsPage: React.FC = () => {
   const [logoUploading, setLogoUploading] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<ThemeConfig | null>(null);
   const [currentPresetName, setCurrentPresetName] = useState<string>('default');
+  // Tracks whether the admin actually interacted with the theme picker
+  // during this edit session. Prevents the save handler from writing the
+  // initial display state back to `events.color_theme`, which silently
+  // overwrote branding inheritance on events with a NULL color_theme
+  // (API-created events — #550 follow-up).
+  const [themeChanged, setThemeChanged] = useState(false);
   const [cssTemplates, setCssTemplates] = useState<EnabledTemplate[]>([]);
 
   // Fetch CSS templates when component mounts or editing starts
@@ -643,10 +649,20 @@ export const EventDetailsPage: React.FC = () => {
         setCurrentPresetName('default');
       }
     } else {
-      setCurrentTheme(GALLERY_THEME_PRESETS.default.config);
-      setCurrentPresetName('default');
+      // No color_theme stored — the gallery renders with the site
+      // branding theme as a fallback. Mirror that here so the picker
+      // shows the same palette the admin sees on the gallery, rather
+      // than the hardcoded Classic Grid preset that has nothing to do
+      // with their branding (#550 follow-up). currentPresetName=custom
+      // because the inherited config isn't a named preset; combined
+      // with themeChanged=false below, saving without touching the
+      // picker leaves color_theme NULL and preserves inheritance.
+      const branding = publicSettings?.theme_config as ThemeConfig | undefined;
+      setCurrentTheme(branding ?? GALLERY_THEME_PRESETS.default.config);
+      setCurrentPresetName(branding ? 'custom' : 'default');
     }
-    
+    setThemeChanged(false);
+
     setIsEditing(true);
   };
 
@@ -765,7 +781,11 @@ export const EventDetailsPage: React.FC = () => {
     if (editForm.welcome_message !== undefined && editForm.welcome_message !== null) {
       updateData.welcome_message = editForm.welcome_message;
     }
-    if (themeToSave) {
+    // Only persist color_theme when the admin actually interacted with
+    // the picker. Writing the initial display state back to the row
+    // silently overwrote NULL (= "inherit branding") with the picker's
+    // default preset on any save (#550 follow-up).
+    if (themeChanged && themeToSave) {
       updateData.color_theme = themeToSave;
     }
     if (editForm.upload_category_id !== undefined) {
@@ -2210,10 +2230,12 @@ export const EventDetailsPage: React.FC = () => {
                 onChange={(theme) => {
                   setCurrentTheme(theme);
                   setEditForm(prev => ({ ...prev, color_theme: JSON.stringify(theme) }));
+                  setThemeChanged(true);
                 }}
                 presetName={currentPresetName}
                 onPresetChange={(presetName) => {
                   setCurrentPresetName(presetName);
+                  setThemeChanged(true);
                   if (presetName !== 'custom') {
                     const preset = GALLERY_THEME_PRESETS[presetName];
                     if (preset) {
@@ -2248,6 +2270,7 @@ export const EventDetailsPage: React.FC = () => {
                   setCurrentTheme(merged);
                   setCurrentPresetName('custom');
                   setEditForm(prev => ({ ...prev, color_theme: JSON.stringify(merged) }));
+                  setThemeChanged(true);
                   toast.success(t('toast.brandingPaletteSynced', 'Palette synced from Branding.'));
                 }}
                 isPreviewMode={true}
