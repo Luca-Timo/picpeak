@@ -3798,7 +3798,7 @@
     "acceptedLocked": "Dieses Angebot wurde bereits angenommen.",
     "declinedLocked": "Dieses Angebot wurde abgelehnt.",
     "cannotRespond": "Es ist nicht mehr möglich, auf dieses Angebot zu antworten.",
-    "changeWithin": "Sie können Ihre Antwort innerhalb von {{minutes}} Minuten ändern.",
+    "changeWithin": "Sie können Ihre Antwort bis {{at}} ändern.",
     "intro": "Vielen Dank für Ihre Anfrage. Bitte prüfen Sie das folgende Angebot und antworten Sie unten.",
     "accept": "Angebot annehmen",
     "decline": "Angebot ablehnen"
