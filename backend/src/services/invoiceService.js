@@ -812,7 +812,9 @@ async function createInvoice(payload, adminId, trx = db) {
   // has been ruled out. Previously this was at the top of the function
   // which leaked one number per multi-installment save (the spawner
   // claims its own numbers and never used this one).
-  const invoiceNumber = await nextInvoiceNumber();
+  // Pass trx so the sequence claim joins our outer transaction —
+  // SQLite deadlocks otherwise (1-connection default).
+  const invoiceNumber = await nextInvoiceNumber(trx);
   const row = {
     invoice_number: invoiceNumber,
     customer_account_id: payload.customerAccountId,
@@ -976,7 +978,7 @@ async function spawnInstallmentInvoices({ trx, eventId, quoteId, customer, curre
     const rowStatus = isDeliveryTrigger ? 'pending_delivery' : 'scheduled';
     const rowScheduledSendAt = isDeliveryTrigger ? null : scheduledSendAt;
 
-    const invoiceNumber = await nextInvoiceNumber();
+    const invoiceNumber = await nextInvoiceNumber(trx);
     const dueDate = computeDueDate(scheduledSendAt, resolvedNetDays).toISOString().slice(0, 10);
 
     const row = {
@@ -2049,7 +2051,9 @@ async function createStorno(originalId, adminId, trx = db) {
   // Generate the Storno's sequence number from the same gap-free
   // series as regular invoices (single sequence — decision locked
   // with the maintainer; satisfies §14 (4) Nr. 4 UStG).
-  const stornoNumber = await nextInvoiceNumber();
+  // Pass trx so the sequence claim joins the caller's transaction —
+  // SQLite deadlocks otherwise (1-connection default).
+  const stornoNumber = await nextInvoiceNumber(trx);
   const now = new Date();
   const issueDate = now.toISOString().slice(0, 10);
 

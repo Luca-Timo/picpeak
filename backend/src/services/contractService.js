@@ -765,7 +765,9 @@ async function createContract(payload, adminId) {
   const hasEventCols = await hasColumnCached('contracts', 'event_name');
 
   return await db.transaction(async (trx) => {
-    const contractNumber = await nextContractNumber();
+    // Pass trx so the sequence claim joins our outer transaction —
+    // SQLite deadlocks otherwise (1-connection default).
+    const contractNumber = await nextContractNumber(trx);
     const row = {
       contract_number: contractNumber,
       customer_account_id: payload.customerAccountId,
@@ -1594,7 +1596,9 @@ async function createFromQuote(quoteId, adminId) {
   const hasContractEventCols = await hasColumnCached('contracts', 'event_name');
 
   return await db.transaction(async (trx) => {
-    const contractNumber = await nextContractNumber();
+    // Pass trx so the sequence claim joins our outer transaction —
+    // SQLite deadlocks otherwise (1-connection default).
+    const contractNumber = await nextContractNumber(trx);
     const contractRow = {
       contract_number: contractNumber,
       customer_account_id: quote.customer_account_id,

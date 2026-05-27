@@ -491,7 +491,11 @@ async function createQuote(payload, adminId) {
   const bank = await businessProfileService.resolveBankAccountForCurrency(currency, payload.businessBankAccountId);
 
   return await db.transaction(async (trx) => {
-    const quoteNumber = await nextQuoteNumber();
+    // SQLite's 1-connection default deadlocks when claimNextSequence
+    // opens its own micro-transaction inside this outer one — thread
+    // trx so both run on the same connection. Postgres tolerates
+    // either form but the consistency is worth it.
+    const quoteNumber = await nextQuoteNumber(trx);
     const row = {
       quote_number: quoteNumber,
       customer_account_id: payload.customerAccountId,
