@@ -2122,7 +2122,8 @@
       "configuration": "Configuration",
       "history": "Backup History",
       "restore": "Restore",
-      "integrity": "Integrity"
+      "integrity": "Integrity",
+      "coverage": "Coverage"
     },
     "integrity": {
       "title": "Document integrity",
@@ -2153,6 +2154,51 @@
         "rowId": "Row id",
         "column": "Column",
         "detail": "Detail"
+      }
+    },
+    "coverage": {
+      "title": "Backup coverage",
+      "description": "Shows what the next backup will include, skip, or silently miss. The database block confirms the dump strategy. The \"drift\" section flags subdirectories that exist on disk but are not in the backup configuration — usually a sign that a new feature shipped without a matching backup_paths row.",
+      "refresh": "Refresh",
+      "error": "Could not load coverage report: {{message}}",
+      "generatedAt": "Coverage generated: {{when}}",
+      "fallbackInUse": "The backup_paths table is missing. The walker is using its legacy hard-coded fallback. Migration 108 may not have run — check server logs and re-run migrations.",
+      "database": {
+        "title": "Database",
+        "mode": "Mode",
+        "modeInline": "Inline dump on every backup",
+        "modeScheduled": "Scheduled-only (inline opted out)",
+        "lastDump": "Last dump",
+        "lastDumpSize": "Size",
+        "noDump": "No dump on file yet",
+        "staleLabel": "Status",
+        "stale": "Stale — older than 26h"
+      },
+      "summary": {
+        "title": "Summary",
+        "willScan": "Will scan",
+        "skippedByToggle": "Skipped (toggle off)",
+        "skippedByFlag": "Skipped (feature flag)",
+        "missingOnDisk": "Missing on disk",
+        "drift": "Unconfigured on disk (drift)"
+      },
+      "paths": {
+        "heading": "Configured paths",
+        "path": "Path",
+        "coverage": "Coverage",
+        "featureFlag": "Feature flag",
+        "description": "Description"
+      },
+      "coverage": {
+        "willScan": "Will scan",
+        "skippedByToggle": "Off",
+        "skippedByFlag": "Gated off",
+        "missingOnDisk": "Missing on disk"
+      },
+      "drift": {
+        "heading": "Drift detected: subdirectories not covered by any backup_paths row",
+        "caption": "These directories exist on disk but the walker will skip them. Either add a backup_paths row, move the files into a covered location, or — if they are runtime caches — confirm they are safe to exclude.",
+        "none": "No drift detected — every top-level subdirectory under STORAGE_PATH is either in backup_paths or in the expected non-backup allow-list."
       }
     },
     "status": {

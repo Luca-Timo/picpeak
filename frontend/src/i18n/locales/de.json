@@ -231,7 +231,8 @@
       "configuration": "Konfiguration",
       "history": "Backup-Verlauf",
       "restore": "Wiederherstellung",
-      "integrity": "Integrität"
+      "integrity": "Integrität",
+      "coverage": "Abdeckung"
     },
     "integrity": {
       "title": "Dokumentintegrität",
@@ -262,6 +263,51 @@
         "rowId": "Zeilen-ID",
         "column": "Spalte",
         "detail": "Detail"
+      }
+    },
+    "coverage": {
+      "title": "Backup-Abdeckung",
+      "description": "Zeigt, was das nächste Backup einschließt, überspringt oder stillschweigend verfehlt. Der Datenbank-Block bestätigt die Dump-Strategie. Der \"Drift\"-Abschnitt markiert Unterverzeichnisse, die auf der Festplatte existieren, aber nicht in der Backup-Konfiguration stehen — meist ein Hinweis darauf, dass eine neue Funktion ohne passende backup_paths-Zeile ausgeliefert wurde.",
+      "refresh": "Aktualisieren",
+      "error": "Abdeckungs-Bericht konnte nicht geladen werden: {{message}}",
+      "generatedAt": "Abdeckung erstellt: {{when}}",
+      "fallbackInUse": "Die Tabelle backup_paths fehlt. Der Walker nutzt seine fest verdrahtete Legacy-Fallback-Liste. Migration 108 wurde möglicherweise nicht ausgeführt — prüfen Sie die Server-Logs und führen Sie die Migrationen erneut aus.",
+      "database": {
+        "title": "Datenbank",
+        "mode": "Modus",
+        "modeInline": "Inline-Dump bei jedem Backup",
+        "modeScheduled": "Nur geplant (Inline abgewählt)",
+        "lastDump": "Letzter Dump",
+        "lastDumpSize": "Größe",
+        "noDump": "Noch kein Dump vorhanden",
+        "staleLabel": "Status",
+        "stale": "Veraltet — älter als 26 Std."
+      },
+      "summary": {
+        "title": "Zusammenfassung",
+        "willScan": "Wird gescannt",
+        "skippedByToggle": "Übersprungen (Schalter aus)",
+        "skippedByFlag": "Übersprungen (Feature-Flag)",
+        "missingOnDisk": "Auf Festplatte fehlend",
+        "drift": "Nicht konfiguriert auf Festplatte (Drift)"
+      },
+      "paths": {
+        "heading": "Konfigurierte Pfade",
+        "path": "Pfad",
+        "coverage": "Abdeckung",
+        "featureFlag": "Feature-Flag",
+        "description": "Beschreibung"
+      },
+      "coverage": {
+        "willScan": "Wird gescannt",
+        "skippedByToggle": "Aus",
+        "skippedByFlag": "Per Flag aus",
+        "missingOnDisk": "Auf Festplatte fehlend"
+      },
+      "drift": {
+        "heading": "Drift erkannt: Unterverzeichnisse ohne backup_paths-Zeile",
+        "caption": "Diese Verzeichnisse existieren auf der Festplatte, werden vom Walker aber übersprungen. Entweder eine backup_paths-Zeile hinzufügen, die Dateien in ein abgedecktes Verzeichnis verschieben, oder — wenn es sich um Laufzeit-Caches handelt — bestätigen, dass der Ausschluss sicher ist.",
+        "none": "Kein Drift erkannt — jedes Top-Level-Unterverzeichnis unter STORAGE_PATH steht entweder in backup_paths oder in der erwarteten Nicht-Backup-Allow-List."
       }
     },
     "status": {

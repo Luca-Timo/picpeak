@@ -800,6 +800,18 @@ async function startServer() {
     const { startS3AutoImporter } = require('./src/services/s3AutoImporter');
     startS3AutoImporter();
 
+    // Self-heal the `backup_paths` table before the backup service
+    // starts — the file-backup walker reads from it, so missing
+    // canonical rows (a new subdirectory shipped by a future feature)
+    // get re-seeded here on every boot. See _backupPathsBoot.js for
+    // the full rationale; pattern mirrors _emailTemplateBoot.js.
+    try {
+      const { seedBackupPathsAtBoot } = require('./src/services/_backupPathsBoot');
+      await seedBackupPathsAtBoot(db, logger);
+    } catch (err) {
+      logger.warn('backup_paths self-heal failed at boot:', err.message);
+    }
+
     // Start backup service
     await startBackupService();
 
