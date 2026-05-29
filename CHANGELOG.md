@@ -5,6 +5,18 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.57.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.56.0-beta.0...v3.57.0-beta.0) (2026-05-29)
+
+
+### Features
+
+* **admin:** clickable version links + update-available modal with changelog & upgrade command ([48cf112](https://github.com/the-luap/picpeak/commit/48cf1121e546e112cd37d94f7924a808c020dd8f))
+
+
+### Documentation
+
+* **release:** establish stable-channel cadence + promotion process ([e537923](https://github.com/the-luap/picpeak/commit/e537923857b4b6000d715bba23a78f8685b44ee6))
+
 ## [3.56.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.55.0-beta.0...v3.56.0-beta.0) (2026-05-29)
 
 
