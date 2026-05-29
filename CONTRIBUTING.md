@@ -79,6 +79,15 @@ cp .env.example .env
 docker-compose -f docker-compose.dev.yml up
 ```
 
+**After pulling changes that touch `backend/package.json` / `backend/package-lock.json` (or the frontend equivalents)**, rebuild the affected image so the live-mounted source can `require()` the new deps:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --build backend
+# (or `frontend`, or both)
+```
+
+The dev compose bakes `node_modules` into the image while live-mounting `./backend/src` and `./frontend/src` from disk. A dep added on disk won't be picked up until the image is rebuilt — typical symptom is a `MODULE_NOT_FOUND` restart loop on the affected container.
+
 ### Running Tests
 
 ```bash
