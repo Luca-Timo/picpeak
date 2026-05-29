@@ -14,6 +14,7 @@ const { handleAsync, validateRequest, successResponse } = require('../utils/rout
 const customerAccountsService = require('../services/customerAccountsService');
 const customerHoursService = require('../services/customerHoursService');
 const invoiceService = require('../services/invoiceService');
+const { IDENTITY_PRESERVING_NORMALIZE_EMAIL } = require('../utils/emailNormalization');
 
 const router = express.Router();
 
@@ -141,7 +142,7 @@ router.get('/invitations', [
 router.post('/invite', [
   adminAuth,
   requirePermission('customers.create'),
-  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('email').isEmail().normalizeEmail(IDENTITY_PRESERVING_NORMALIZE_EMAIL).withMessage('Valid email is required'),
   // Optional prefill — admin can stash any subset of customer profile fields
   // on the invitation. The customer sees them pre-populated on the accept
   // form and can edit before submitting. Validators are deliberately lax:
@@ -227,7 +228,7 @@ router.delete('/invitations/:id', [
 router.post('/', [
   adminAuth,
   requirePermission('customers.create'),
-  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('email').isEmail().normalizeEmail(IDENTITY_PRESERVING_NORMALIZE_EMAIL).withMessage('Valid email is required'),
   body('prefill').optional().isObject(),
   body('prefill.salutation').optional({ nullable: true }).isString().isLength({ max: 32 }),
   body('prefill.first_name').optional({ nullable: true }).isString().isLength({ max: 80 }),
@@ -343,7 +344,7 @@ router.put('/:id', [
   // customers.edit on upgrade so behavior is preserved.
   requirePermission('customers.edit'),
   param('id').isInt({ min: 1 }),
-  body('email').optional().isEmail().normalizeEmail(),
+  body('email').optional().isEmail().normalizeEmail(IDENTITY_PRESERVING_NORMALIZE_EMAIL),
   // `{ nullable: true }` so a passive customer who has no salutation /
   // phone / company in their record can still save the page — the
   // form sends `null` for those empty fields, and plain `.optional()`

@@ -13,6 +13,7 @@ const router = express.Router();
 const { buildShareLinkVariants } = require('../services/shareLinkService');
 const { parseBooleanInput, parseStringInput } = require('../utils/parsers');
 const eventTypeService = require('../services/eventTypeService');
+const { IDENTITY_PRESERVING_NORMALIZE_EMAIL } = require('../utils/emailNormalization');
 
 // Use parseStringInput from shared parsers for customer data extraction
 const getCustomerNameFromPayload = (payload = {}) => parseStringInput(payload.customer_name);
@@ -67,7 +68,7 @@ router.post('/', adminAuth, [
   body('event_name').notEmpty(),
   body('event_date').isDate(),
   body('customer_name').notEmpty().trim(),
-  body('customer_email').isEmail().normalizeEmail(),
+  body('customer_email').isEmail().normalizeEmail(IDENTITY_PRESERVING_NORMALIZE_EMAIL),
   body('admin_email').isEmail(),
   body('require_password').optional().isBoolean(),
   body('password').optional().isString().custom((value, { req }) => {
@@ -257,7 +258,7 @@ router.get('/', adminAuth, async (req, res) => {
 // Update event
 router.put('/:id', adminAuth, [
   body('customer_name').optional().trim().notEmpty(),
-  body('customer_email').optional().isEmail().normalizeEmail(),
+  body('customer_email').optional().isEmail().normalizeEmail(IDENTITY_PRESERVING_NORMALIZE_EMAIL),
   body('require_password').optional().isBoolean()
 ], async (req, res) => {
   try {

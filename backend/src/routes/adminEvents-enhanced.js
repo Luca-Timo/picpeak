@@ -4,6 +4,7 @@
 const { validatePasswordInContext, getBcryptRounds } = require('../utils/passwordValidation');
 const { buildShareLinkVariants } = require('../services/shareLinkService');
 const { requirePermission } = require('../middleware/permissions');
+const { IDENTITY_PRESERVING_NORMALIZE_EMAIL } = require('../utils/emailNormalization');
 
 // Enhanced event creation with password validation
 // Note: This is a partial/reference file - dynamic event type validation should be implemented
@@ -12,8 +13,8 @@ router.post('/', adminAuth, requirePermission('events.create'), [
   body('event_type').notEmpty().trim(), // Dynamic validation via eventTypeService
   body('event_name').notEmpty().trim(),
   body('event_date').isDate(),
-  body('customer_email').isEmail().normalizeEmail(),
-  body('admin_email').isEmail().normalizeEmail(),
+  body('customer_email').isEmail().normalizeEmail(IDENTITY_PRESERVING_NORMALIZE_EMAIL),
+  body('admin_email').isEmail().normalizeEmail(IDENTITY_PRESERVING_NORMALIZE_EMAIL),
   body('password').notEmpty(), // Remove the weak isLength validation
   body('expiration_days').isInt({ min: 1, max: 365 }).optional(),
   body('welcome_message').optional().trim(),

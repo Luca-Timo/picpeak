@@ -9,6 +9,7 @@ const { validatePasswordStrength } = require('../utils/passwordGenerator');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const { NotFoundError, ConflictError, ValidationError } = require('../utils/errors');
 const { setAdminAuthCookie } = require('../utils/tokenUtils');
+const { IDENTITY_PRESERVING_NORMALIZE_EMAIL } = require('../utils/emailNormalization');
 const router = express.Router();
 
 // Get admin profile
@@ -36,7 +37,7 @@ router.put('/profile', [
     .trim()
     .isEmail()
     .withMessage('A valid email address is required')
-    .normalizeEmail()
+    .normalizeEmail(IDENTITY_PRESERVING_NORMALIZE_EMAIL)
 ], handleAsync(async (req, res) => {
   validateRequest(req);
 

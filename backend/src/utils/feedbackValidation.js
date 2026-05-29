@@ -1,5 +1,6 @@
 const { body, param, validationResult } = require('express-validator');
 const validator = require('validator');
+const { IDENTITY_PRESERVING_NORMALIZE_EMAIL } = require('./emailNormalization');
 
 /**
  * Validation rules for feedback submission
@@ -19,7 +20,7 @@ const feedbackValidationRules = {
       .optional()
       .trim()
       .isEmail()
-      .normalizeEmail()
+      .normalizeEmail(IDENTITY_PRESERVING_NORMALIZE_EMAIL)
       .withMessage('Invalid email address')
   ],
   
@@ -33,7 +34,7 @@ const feedbackValidationRules = {
       .optional()
       .trim()
       .isEmail()
-      .normalizeEmail()
+      .normalizeEmail(IDENTITY_PRESERVING_NORMALIZE_EMAIL)
   ],
   
   favorite: [
@@ -46,7 +47,7 @@ const feedbackValidationRules = {
       .optional()
       .trim()
       .isEmail()
-      .normalizeEmail()
+      .normalizeEmail(IDENTITY_PRESERVING_NORMALIZE_EMAIL)
   ],
   
   comment: [
@@ -67,7 +68,7 @@ const feedbackValidationRules = {
       .optional()
       .trim()
       .isEmail()
-      .normalizeEmail()
+      .normalizeEmail(IDENTITY_PRESERVING_NORMALIZE_EMAIL)
       .withMessage('Invalid email address')
   ]
 };
