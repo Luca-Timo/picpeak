@@ -77,7 +77,10 @@ describe('backupIntegrityService.verifyDocumentArtefacts', () => {
 
   it('flags a contract whose signed_pdf_path file is missing', async () => {
     // Reference a file that we deliberately never create on disk.
-    const [{ id }] = await db('contracts').insert({
+    // knex's `.returning('id')` returns `[{ id: N }]` on Postgres and
+    // newer SQLite, but `[N]` (plain int) on some SQLite versions —
+    // unwrap both shapes the same way the crmDb test harness does.
+    const inserted = await db('contracts').insert({
       customer_account_id: customerId,
       contract_number: 'C-2026-MISSING',
       status: 'sent',
@@ -85,7 +88,7 @@ describe('backupIntegrityService.verifyDocumentArtefacts', () => {
       signed_pdf_path: 'business-docs/contract/2026/C-2026-MISSING.pdf',
       created_at: new Date(),
     }).returning('id');
-    const contractId = typeof id === 'object' ? id.id : id;
+    const contractId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
     const report = await backupIntegrityService.verifyDocumentArtefacts({ scope: ['contract'] });
     const hit = report.missing.find((m) => m.rowId === contractId);
@@ -123,7 +126,7 @@ describe('backupIntegrityService.verifyDocumentArtefacts', () => {
       'business-docs/contract/2026/C-2026-TAMPER.pdf',
       'tampered bytes on disk',
     );
-    const [{ id }] = await db('contracts').insert({
+    const inserted = await db('contracts').insert({
       customer_account_id: customerId,
       contract_number: 'C-2026-TAMPER',
       status: 'fully_signed',
@@ -134,7 +137,7 @@ describe('backupIntegrityService.verifyDocumentArtefacts', () => {
       signed_pdf_sha256: sha256('the ORIGINAL bytes the customer signed'),
       created_at: new Date(),
     }).returning('id');
-    const contractId = typeof id === 'object' ? id.id : id;
+    const contractId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
     const report = await backupIntegrityService.verifyDocumentArtefacts({ scope: ['contract'] });
     const hit = report.hashMismatches.find((m) => m.rowId === contractId);
