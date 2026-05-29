@@ -29,6 +29,14 @@ jest.mock('../services/storage', () => ({
   getStorage: jest.fn(),
 }));
 
+// dateFormatter.formatDate queries `app_settings` for general_date_format,
+// which would add a third unmocked db() call to every buildOgMetadata path.
+// The format itself is irrelevant to the cover-vs-logo contract this file
+// pins — short-circuit it to a stable string so the tests stay focused.
+jest.mock('../utils/dateFormatter', () => ({
+  formatDate: jest.fn().mockResolvedValue('12.06.2026'),
+}));
+
 const { db } = require('../database/db');
 const { ensureThumbnail } = require('../services/imageProcessor');
 const { getStorage } = require('../services/storage');

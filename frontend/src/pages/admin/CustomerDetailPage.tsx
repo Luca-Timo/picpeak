@@ -16,28 +16,40 @@ import { toast } from 'react-toastify';
 import {
   ArrowLeft, Mail, MapPin, Phone, Building2, Save, Trash2, AlertTriangle,
   CheckCircle2, X, FileText, Calendar, KeyRound, ToggleLeft, Settings as SettingsIcon,
+  Clock,
 } from 'lucide-react';
-import { format } from 'date-fns';
 
 import { Button, Card, Input, Loading } from '../../components/common';
 import { SUPPORTED_LANGUAGES } from '../../components/common/LanguageSelector';
+import { DecimalInput } from '../../components/common/DecimalInput';
 import { AssignedEventsDialog } from '../../components/admin/AssignedEventsDialog';
 import {
   customerAdminService,
   type CustomerAccountDetail,
 } from '../../services/customerAdmin.service';
+import { businessProfileService } from '../../services/businessProfile.service';
+import { CustomerCrmPanels } from '../../components/admin/CustomerCrmPanels';
+import { HoursSection } from '../../components/admin/HoursSection';
+import { formatMoney } from '../../components/admin/LineItemsTable';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
+import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 
 type EditableFields =
   | 'email' | 'salutation' | 'firstName' | 'lastName' | 'displayName'
   | 'phone' | 'companyName' | 'billingEmail' | 'vatId'
   | 'addressLine1' | 'addressLine2' | 'postalCode' | 'city' | 'state'
-  | 'countryCode' | 'preferredLanguage' | 'notes'
-  | 'featureCalendar' | 'featureQuotes' | 'featureBills';
+  | 'countryCode' | 'countryName' | 'preferredLanguage' | 'notes'
+  | 'featureCalendar' | 'featureQuotes' | 'featureBills' | 'featureHoursLogging'
+  | 'hourlyRateMinor' | 'billingCadence' | 'billingCycleDay';
 
-const formatDate = (iso: string | null | undefined) => {
-  if (!iso) return '—';
-  try { return format(new Date(iso), 'PP'); } catch { return '—'; }
-};
+// `fmtDate` (from useLocalizedDate, below) is the single canonical date
+// formatter. It honors the admin's `general_date_format` setting AND
+// the active i18next locale. Per memory:
+//   `feedback_respect_general_format_settings.md` — every displayed
+//   date must route through useLocalizedDate(). Previously this file
+//   had a local `formatDate(iso)` using date-fns 'PP' that ignored
+//   both settings and locale — two rows on the same customer page
+//   were rendering dates in two different formats.
 
 export const CustomerDetailPage: React.FC = () => {
   const { t } = useTranslation();
@@ -45,12 +57,48 @@ export const CustomerDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const customerId = Number(id);
+  // Master "Hours logging" flag (Settings → Features). When off, the
+  // per-customer toggle in the features card is hidden and the
+  // HoursSection card never renders, regardless of customer state.
+  const { flags } = useFeatureFlags();
 
   const { data: customer, isLoading, error } = useQuery({
     queryKey: ['admin-customer', customerId],
     queryFn: () => customerAdminService.get(customerId),
     enabled: Number.isFinite(customerId) && customerId > 0,
   });
+
+  // Open monthly draft preview (migration 128). Powers the
+  // "Pending in this month's bill" list shown between the cadence
+  // controls and the Trigger button. null until the first invoice
+  // line is appended; refetched on every trigger / invoice mutation.
+  const { format: fmtDate } = useLocalizedDate();
+  const { data: monthlyDraftRes } = useQuery({
+    queryKey: ['admin-customer-monthly-draft', customerId],
+    queryFn: () => customerAdminService.getMonthlyDraft(customerId),
+    enabled: Number.isFinite(customerId) && customerId > 0
+      && (customer?.billingCadence === 'monthly'),
+  });
+  const monthlyDraft = monthlyDraftRes?.draft || null;
+
+  // Business-profile default locale powers the "Preferred language"
+  // dropdown's helper hint — admins see which language a brand-new
+  // customer would inherit and decide whether to override it.
+  const { data: profileSnapshot } = useQuery({
+    queryKey: ['business-profile-snapshot'],
+    queryFn: () => businessProfileService.get(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const profileDefaultLocale = profileSnapshot?.profile?.defaultLocale || 'en';
+  // #3 — the hourly-rate hint used to hardcode "CHF" in its example.
+  // Pull the configured default currency so installs running EUR /
+  // USD / GBP get a meaningful example instead of one referencing a
+  // currency they don't use.
+  const profileDefaultCurrency = profileSnapshot?.profile?.defaultCurrency || 'CHF';
+  const LOCALE_LABELS: Record<string, string> = {
+    en: 'English', de: 'Deutsch', fr: 'Français',
+    nl: 'Nederlands', pt: 'Português', ru: 'Русский',
+  };
 
   const [form, setForm] = useState<Partial<Pick<CustomerAccountDetail, EditableFields>>>({});
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
@@ -82,16 +130,21 @@ export const CustomerDetailPage: React.FC = () => {
         city: customer.city,
         state: customer.state,
         countryCode: customer.countryCode,
+        countryName: customer.countryName,
         preferredLanguage: customer.preferredLanguage,
         notes: customer.notes,
         featureCalendar: customer.featureCalendar ?? false,
         featureQuotes:   customer.featureQuotes   ?? false,
         featureBills:    customer.featureBills    ?? false,
+        featureHoursLogging: customer.featureHoursLogging ?? false,
+        hourlyRateMinor: customer.hourlyRateMinor ?? null,
+        billingCadence: customer.billingCadence ?? 'per_event',
+        billingCycleDay: customer.billingCycleDay ?? 1,
       } as any);
     }
   }, [customer, form]);
 
-  const toggleFeature = (key: 'featureCalendar' | 'featureQuotes' | 'featureBills') => {
+  const toggleFeature = (key: 'featureCalendar' | 'featureQuotes' | 'featureBills' | 'featureHoursLogging') => {
     setForm((prev) => ({ ...prev, [key]: !prev[key] }) as any);
   };
 
@@ -106,9 +159,19 @@ export const CustomerDetailPage: React.FC = () => {
       toast.success(t('customers.detail.saved', 'Customer saved'));
     },
     onError: (e: any) => {
-      const msg = e?.response?.status === 409
-        ? t('customers.detail.emailConflict', 'That email is already in use by another customer.')
-        : e?.response?.data?.error || t('customers.detail.saveError', 'Could not save changes.');
+      // Surface field-level validation errors so admin can see WHICH
+      // field failed instead of a generic "Validation failed" toast.
+      // The backend returns details: [{ field, message }] via the
+      // ValidationError class in routeHelpers.js.
+      const details = e?.response?.data?.details;
+      let msg: string;
+      if (e?.response?.status === 409) {
+        msg = t('customers.detail.emailConflict', 'That email is already in use by another customer.');
+      } else if (Array.isArray(details) && details.length > 0) {
+        msg = `${e.response.data.error || 'Validation failed'}: ${details.map((d: any) => `${d.field} (${d.message})`).join(', ')}`;
+      } else {
+        msg = e?.response?.data?.error || t('customers.detail.saveError', 'Could not save changes.');
+      }
       toast.error(msg);
     },
   });
@@ -124,6 +187,53 @@ export const CustomerDetailPage: React.FC = () => {
     mutationFn: () => customerAdminService.sendPasswordReset(customerId),
     onSuccess: () => toast.success(t('customers.detail.passwordReset.success', 'Password reset email sent')),
     onError: () => toast.error(t('customers.detail.passwordReset.error', 'Could not send password reset')),
+  });
+
+  // Promote a passive customer to active by firing the standard
+  // portal-invitation email. On success we invalidate the customer
+  // query so the badge + the "Has portal access" copy update once
+  // the customer actually claims the invite (next reload).
+  const sendInviteMutation = useMutation({
+    mutationFn: () => customerAdminService.sendInvite(customerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-customer', customerId] });
+      toast.success(t('customers.passive.sendInviteToast', 'Portal invitation sent.'));
+    },
+    onError: (err: any) => {
+      if (err?.response?.data?.code === 'CUSTOMER_ALREADY_ACTIVE') {
+        toast.error(t('customers.passive.alreadyActive',
+          'Customer already has portal access — no invitation needed.'));
+      } else {
+        toast.error(err?.response?.data?.error || err?.message || t('common.error', 'Something went wrong.'));
+      }
+    },
+  });
+
+  // Admin override — issue the customer's running monthly draft NOW
+  // instead of waiting for the cadence-day scheduler tick. Used when
+  // the customer asks for an out-of-cycle bill or a project wraps
+  // before the configured day. Surfaces backend errors verbatim so
+  // admin sees "No pending monthly bill" / "Draft is empty" when the
+  // queue isn't ready.
+  const triggerMonthlyBillMutation = useMutation({
+    mutationFn: () => customerAdminService.triggerMonthlyBill(customerId),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-customer', customerId] });
+      queryClient.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
+      // Clear the draft preview so the list collapses to empty
+      // immediately after the trigger ships — a new draft is minted
+      // on the next createInvoice / hour-entry append.
+      queryClient.invalidateQueries({ queryKey: ['admin-customer-monthly-draft', customerId] });
+      toast.success(
+        t('customers.billing.triggered',
+          'Monthly bill issued: {{number}}',
+          { number: result.invoiceNumber }),
+      );
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.error
+        || t('customers.billing.triggerError', 'Could not trigger the monthly bill.'));
+    },
   });
 
   const deactivateMutation = useMutation({
@@ -196,7 +306,7 @@ export const CustomerDetailPage: React.FC = () => {
             <p className="text-sm text-muted-theme truncate">{customer.email}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col items-end gap-1">
           {customer.isActive ? (
             <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-accent)' }}>
               <CheckCircle2 className="w-3.5 h-3.5" />
@@ -206,6 +316,21 @@ export const CustomerDetailPage: React.FC = () => {
             <span className="inline-flex items-center gap-1 text-xs text-red-600">
               <X className="w-3.5 h-3.5" />
               {t('customers.status.inactive', 'Deactivated')}
+            </span>
+          )}
+          {customer.isPassive ? (
+            <span
+              className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
+              title={t(
+                'customers.passive.detailHint',
+                'This customer has no portal access (admin-only record). Click "Send portal invitation" below to email them a sign-up link.',
+              ) as string}
+            >
+              {t('customers.passive.badge', 'Passive — admin only')}
+            </span>
+          ) : (
+            <span className="text-[11px] text-muted-theme">
+              {t('customers.passive.activeLabel', 'Has portal access')}
             </span>
           )}
         </div>
@@ -224,7 +349,7 @@ export const CustomerDetailPage: React.FC = () => {
           <div>
             <label className="block text-sm font-medium text-theme mb-1">{t('customers.detail.preferredLanguage', 'Preferred language')}</label>
             <select
-              value={form.preferredLanguage || 'en'}
+              value={form.preferredLanguage || profileDefaultLocale}
               onChange={setField('preferredLanguage')}
               className="input"
             >
@@ -235,6 +360,11 @@ export const CustomerDetailPage: React.FC = () => {
                 <option key={lang.code} value={lang.code}>{lang.name}</option>
               ))}
             </select>
+            <p className="text-xs text-neutral-500 mt-1">
+              {t('customers.detail.preferredLanguageHint',
+                'Drives portal UI and quote/invoice PDF locale. New customers default to the business-profile language ({{lang}}); override here per customer.',
+                { lang: LOCALE_LABELS[profileDefaultLocale] || profileDefaultLocale.toUpperCase() })}
+            </p>
           </div>
         </div>
       </Card>
@@ -350,8 +480,8 @@ export const CustomerDetailPage: React.FC = () => {
                   {ev.eventName}
                 </Link>
                 <span className="text-xs text-muted-theme">
-                  {ev.eventDate ? formatDate(ev.eventDate) : ''}
-                  {ev.expiresAt ? ` · ${t('customers.detail.expires', 'expires')} ${formatDate(ev.expiresAt)}` : ''}
+                  {ev.eventDate ? fmtDate(ev.eventDate) : ''}
+                  {ev.expiresAt ? ` · ${t('customers.detail.expires', 'expires')} ${fmtDate(ev.expiresAt)}` : ''}
                 </span>
               </li>
             ))}
@@ -408,18 +538,48 @@ export const CustomerDetailPage: React.FC = () => {
             <Input value={form.state || ''} onChange={setField('state')} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-theme mb-1">{t('customers.detail.countryCode', 'Country (ISO 2)')}</label>
+            <label className="block text-sm font-medium text-theme mb-1">{t('customers.detail.countryCode', 'Country abbreviation (FL, CH, DE …)')}</label>
             <Input
               value={form.countryCode || ''}
               onChange={setField('countryCode')}
               maxLength={2}
-              placeholder="e.g. CH"
+              placeholder="FL"
+            />
+          </div>
+          <div>
+            {/* Free-text country name override (migration 107). When
+                left empty the PDF renderer falls back to the locale-
+                aware lookup on the abbreviation; useful when the
+                abbreviation isn't an ISO code (e.g. "FL" for
+                Liechtenstein, which is "LI" in ISO). */}
+            <label className="block text-sm font-medium text-theme mb-1">{t('customers.detail.countryName', 'Country (full name)')}</label>
+            <Input
+              value={form.countryName || ''}
+              onChange={setField('countryName')}
+              placeholder="Liechtenstein"
             />
           </div>
         </div>
       </Card>
 
-      {/* Per-customer feature flags (#354 follow-up) */}
+      {/* Quotes + Invoices history (CRM #TBD).
+          Each panel renders a compact list scoped to this customer. The
+          panels are independently feature-flagged so they vanish for
+          installs that haven't turned the master quotes/bills flag on.
+          The flag check lives in <CustomerCrmPanels /> so this page
+          doesn't need to import useFeatureFlags directly. */}
+      <CustomerCrmPanels customerAccountId={customer.id} />
+
+      {/* Per-customer feature flags (#354 follow-up). Sits
+          second-to-last by request — admins glance at these least
+          often, but they need to live above the destructive
+          "Account actions" row so the feature surface and its
+          actions read as one unit. */}
+      {/* Hide the whole Card when every flag that could surface a
+          toggle inside it is OFF — an empty "Customer features" card
+          with just a title + hint reads as broken. The Card reappears
+          the moment any master flag is re-enabled. */}
+      {(flags.calendar || flags.quotes || flags.bills || flags.hoursLogging) && (
       <Card padding="lg">
         <h2 className="text-lg font-semibold text-theme mb-1 flex items-center gap-2">
           <ToggleLeft className="w-5 h-5" />
@@ -433,23 +593,49 @@ export const CustomerDetailPage: React.FC = () => {
         </p>
         <div className="space-y-3">
           {([
-            { key: 'featureCalendar', labelKey: 'customer.nav.calendar', fallback: 'Calendar' },
-            { key: 'featureQuotes',   labelKey: 'customer.nav.quotes',   fallback: 'Quotes' },
-            { key: 'featureBills',    labelKey: 'customer.nav.bills',    fallback: 'Bills' },
-          ] as const).map(({ key, labelKey, fallback }) => {
+            // Each per-customer toggle hides when its master feature
+            // flag is OFF — the toggle would do nothing in that state
+            // and only confuses the admin. The "feature is disabled
+            // globally" signal is conveyed by the row simply not
+            // appearing, mirroring the hoursLogging pattern below.
+            //
+            // `badge` controls which status pill is shown:
+            //   - 'soon' (amber) for tabs that still don't have a
+            //     customer-facing surface (Calendar booking)
+            //   - 'new' (green) for shipped customer-facing tabs that
+            //     are recent additions to the admin's vocabulary so
+            //     they catch the eye when reviewing per-customer
+            //     overrides. Matches Settings → Features StatusBadge.
+            ...(flags.calendar
+              ? [{ key: 'featureCalendar' as const, labelKey: 'customer.nav.calendar', fallback: 'Calendar', badge: 'soon' as const }]
+              : []),
+            ...(flags.quotes
+              ? [{ key: 'featureQuotes' as const,   labelKey: 'customer.nav.quotes',   fallback: 'Quotes',   badge: 'new'  as const }]
+              : []),
+            ...(flags.bills
+              ? [{ key: 'featureBills' as const,    labelKey: 'customer.nav.bills',    fallback: 'Bills',    badge: 'new'  as const }]
+              : []),
+            ...(flags.hoursLogging
+              ? [{ key: 'featureHoursLogging' as const, labelKey: 'customers.field.featureHoursLogging', fallback: 'Hours logging', badge: 'new' as const }]
+              : []),
+          ] as const).map(({ key, labelKey, fallback, badge }) => {
             const enabled = !!form[key];
             return (
               <label key={key} className="flex items-center justify-between gap-3 cursor-pointer">
                 <span className="text-sm font-medium text-theme flex items-center gap-2">
                   {t(labelKey, fallback)}
-                  {/* Soon badge — these tabs are still coming-soon stubs;
-                      this keeps the admin honest when looking at the
-                      toggles. */}
-                  <span
-                    className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                  >
-                    {t('customer.nav.soon', 'Soon')}
-                  </span>
+                  {/* Status pill — 'soon' = amber, 'new' = green.
+                      Colors match Settings → Features StatusBadge so
+                      the two surfaces feel consistent. */}
+                  {badge === 'soon' ? (
+                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      {t('customer.nav.soon', 'Soon')}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                      {t('customer.nav.new', 'New')}
+                    </span>
+                  )}
                 </span>
                 <button
                   type="button"
@@ -467,33 +653,273 @@ export const CustomerDetailPage: React.FC = () => {
             );
           })}
         </div>
-      </Card>
 
-      {/* Account actions: password reset (#354 follow-up) */}
+        {/* Default hourly rate (migration 129). Only shown when the
+            master `hoursLogging` flag is on AND the per-customer
+            toggle is on — admin shouldn't see a rate field for a
+            customer who isn't using hours logging. The rate is the
+            DEFAULT for new entries; admin can still override on a
+            per-entry basis from the standalone Hours logging page. */}
+        {flags.hoursLogging && form.featureHoursLogging && (
+          <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+            <label className="block text-sm font-medium text-theme mb-1">
+              {t('customers.field.hourlyRate', 'Default hourly rate')}
+            </label>
+            <DecimalInput
+              value={form.hourlyRateMinor != null ? form.hourlyRateMinor / 100 : NaN}
+              fractionDigits={2}
+              onChange={(n) => {
+                setForm((prev) => ({
+                  ...prev,
+                  hourlyRateMinor: Number.isFinite(n) ? Math.max(0, Math.round(n * 100)) : null,
+                } as any));
+              }}
+              placeholder="150.00"
+              className="w-40 input"
+            />
+            <p className="text-xs text-muted-theme mt-1">
+              {t('customers.field.hourlyRateHint',
+                'Major units (e.g. 150.00 for {{currency}} 150). Leave blank to require a per-entry override on every block.',
+                { currency: profileDefaultCurrency })}
+            </p>
+          </div>
+        )}
+      </Card>
+      )}
+
+      {/* Billing cadence (migration 102 + 128). Per-event keeps the
+          standard invoice-per-event flow; monthly accumulates all
+          invoices issued in a period into one consolidated bill that
+          fires on the configured cadence day. Cycle day uses
+          positive 1–28 for day-of-month, negative -1..-15 for days
+          before month end. Hidden entirely when the bills feature is
+          off — admin has nothing to bill, so cadence is moot. */}
+      {flags.bills && (
+      <Card padding="lg">
+        <h2 className="text-lg font-semibold text-theme mb-1 flex items-center gap-2">
+          <Calendar className="w-5 h-5" />
+          {t('customers.billing.section', 'Billing cadence')}
+        </h2>
+        <p className="text-xs text-muted-theme mb-4">
+          {t('customers.billing.hint',
+            'Per-event (default): every invoice is sent on its own schedule. Monthly: all invoices issued in the period accumulate into one bill that fires on the configured day.')}
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-theme mb-1">
+              {t('customers.billing.cadence', 'Billing cadence')}
+            </label>
+            <select
+              value={form.billingCadence || 'per_event'}
+              onChange={(e) => setForm((prev) => ({ ...prev, billingCadence: e.target.value } as any))}
+              className="input w-full"
+            >
+              <option value="per_event">{t('customers.billing.perEvent', 'Per event')}</option>
+              <option value="monthly">{t('customers.billing.monthly', 'Monthly')}</option>
+              <option value="quarterly">{t('customers.billing.quarterly', 'Quarterly')}</option>
+            </select>
+          </div>
+          {form.billingCadence && form.billingCadence !== 'per_event' && (
+            <div>
+              <label className="block text-sm font-medium text-theme mb-1">
+                {t('customers.billing.cycleDay', 'Cycle day')}
+              </label>
+              <input
+                type="number"
+                min={-15}
+                max={28}
+                value={form.billingCycleDay ?? 1}
+                onChange={(e) => setForm((prev) => ({ ...prev, billingCycleDay: Number(e.target.value) } as any))}
+                className="input w-full"
+              />
+              <p className="text-xs text-muted-theme mt-1">
+                {t('customers.billing.cycleDayHint',
+                  '1..28 = day of month. Use negative -1..-15 for "N days before month end" (so -3 fires on the 28th of a 31-day month).')}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Preview of the open monthly draft (migration 128). Shows
+            every line item queued for the customer's current billing
+            period so admin sees exactly what "Trigger invoice now"
+            would ship. Hidden when no draft exists yet (admin hasn't
+            saved anything onto the period). */}
+        {form.billingCadence === 'monthly' && monthlyDraft && monthlyDraft.lineItems.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-theme">
+                {t('customers.billing.draftPreview.title',
+                  'Pending in this month\'s bill')}
+              </h3>
+              <span className="text-xs text-muted-theme">
+                {t('customers.billing.draftPreview.periodRange',
+                  '{{number}} · {{from}} – {{to}}',
+                  {
+                    number: monthlyDraft.invoiceNumber,
+                    from: fmtDate(monthlyDraft.periodStart),
+                    to: fmtDate(monthlyDraft.periodEnd),
+                  })}
+              </span>
+            </div>
+            <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-neutral-50 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
+                  <tr>
+                    <th className="px-3 py-2 text-left w-12">#</th>
+                    <th className="px-3 py-2 text-left">
+                      {t('crm.lineItems.description', 'Description')}
+                    </th>
+                    <th className="px-3 py-2 text-right w-20">
+                      {t('crm.lineItems.quantity', 'Qty')}
+                    </th>
+                    <th className="px-3 py-2 text-right w-28">
+                      {t('crm.lineItems.unitPrice', 'Unit')}
+                    </th>
+                    <th className="px-3 py-2 text-right w-28">
+                      {t('crm.lineItems.total', 'Total')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlyDraft.lineItems.map((li) => (
+                    <tr key={li.id} className="border-t border-neutral-200 dark:border-neutral-700">
+                      <td className="px-3 py-1.5 tabular-nums text-muted-theme">{li.position}</td>
+                      <td className="px-3 py-1.5">
+                        {li.parentPosition != null && (
+                          <span className="text-muted-theme mr-1">↳</span>
+                        )}
+                        {li.description}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">{li.quantity}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">
+                        {formatMoney(li.unitPriceMinor / 100, monthlyDraft.currency)}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">
+                        {formatMoney(li.lineTotalMinor / 100, monthlyDraft.currency)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-neutral-50 dark:bg-neutral-800">
+                  <tr className="border-t-2 border-neutral-300 dark:border-neutral-600">
+                    <td colSpan={4} className="px-3 py-2 text-right font-medium">
+                      {t('crm.lineItems.total', 'Total')}
+                    </td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                      {formatMoney(monthlyDraft.totalAmountMinor / 100, monthlyDraft.currency)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Manual trigger — issue the running monthly draft NOW
+            instead of waiting for the cadence-day scheduler tick.
+            Only shown for monthly-mode customers (per-event has no
+            draft to arm; the equivalent action there is "Bill these
+            hours" on the standalone Hours-logging page). */}
+        {form.billingCadence === 'monthly' && (
+          <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+            <Button
+              variant="outline"
+              disabled={triggerMonthlyBillMutation.isPending}
+              isLoading={triggerMonthlyBillMutation.isPending}
+              onClick={() => {
+                if (window.confirm(t('customers.billing.triggerConfirm',
+                  'Issue this customer\'s monthly bill now? The customer receives the email immediately.') as string)) {
+                  triggerMonthlyBillMutation.mutate();
+                }
+              }}
+            >
+              {t('customers.billing.triggerNow', 'Trigger invoice now')}
+            </Button>
+            <p className="text-xs text-muted-theme mt-2">
+              {t('customers.billing.triggerHint',
+                'Bypasses the cadence day and issues the running draft immediately. Refuses when nothing has been queued for the current period.')}
+            </p>
+          </div>
+        )}
+      </Card>
+      )}
+
+      {/* Hours section (migration 129). Only renders when the
+          feature_hours_logging toggle above is on. Lives between
+          features and account-actions so admins see it right after
+          flipping the toggle. */}
+      {flags.hoursLogging && form.featureHoursLogging && (
+        <HoursSection
+          customerId={customerId}
+          customerHourlyRateMinor={form.hourlyRateMinor ?? null}
+          billingCadence={(form.billingCadence as any) || customer.billingCadence || 'per_event'}
+          // compact: history-only + per-event "Bill these hours"
+          // button. Logging lives on the standalone
+          // /admin/clients/hours surface so admins have ONE place to
+          // record new entries; the customer detail page just
+          // surfaces what's already on the books.
+          compact
+        />
+      )}
+
+      {/* Account actions: password reset OR portal invitation
+          (#354 follow-up + passive-customer flow). Passive customers
+          don't have a password to reset — the equivalent action is
+          firing the standard portal-invitation email. We show ONE
+          card with the right action based on the customer's state. */}
       <Card padding="lg">
         <h2 className="text-lg font-semibold text-theme mb-1 flex items-center gap-2">
           <KeyRound className="w-5 h-5" />
           {t('customers.detail.passwordSection', 'Account actions')}
         </h2>
-        <p className="text-xs text-muted-theme mb-4">
-          {t(
-            'customers.detail.passwordHint',
-            'Sends a 7-day single-use reset link to the customer\'s email. The customer\'s current password keeps working until they click the link and set a new one.'
-          )}
-        </p>
-        <Button
-          variant="outline"
-          leftIcon={<KeyRound className="w-4 h-4" />}
-          isLoading={passwordResetMutation.isPending}
-          disabled={!customer.isActive}
-          onClick={() => passwordResetMutation.mutate()}
-        >
-          {t('customers.detail.passwordReset.button', 'Send password reset email')}
-        </Button>
-        {!customer.isActive && (
-          <p className="text-xs text-muted-theme mt-2">
-            {t('customers.detail.passwordReset.inactive', 'Reactivate the customer before sending a reset.')}
-          </p>
+        {customer.isPassive ? (
+          <>
+            <p className="text-xs text-muted-theme mb-4">
+              {t(
+                'customers.passive.detailHint',
+                'This customer has no portal access (admin-only record). Click below to email them a portal sign-up link. The customer\'s existing invoices, quotes, and gallery assignments are preserved when they claim the invitation.',
+              )}
+            </p>
+            <Button
+              variant="primary"
+              leftIcon={<KeyRound className="w-4 h-4" />}
+              isLoading={sendInviteMutation.isPending}
+              disabled={!customer.isActive || sendInviteMutation.isPending}
+              onClick={() => sendInviteMutation.mutate()}
+            >
+              {t('customers.passive.sendInvite', 'Send portal invitation')}
+            </Button>
+            {!customer.isActive && (
+              <p className="text-xs text-muted-theme mt-2">
+                {t('customers.passive.deactivatedHint',
+                  'Reactivate the customer before sending the invitation.')}
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-muted-theme mb-4">
+              {t(
+                'customers.detail.passwordHint',
+                'Sends a 7-day single-use reset link to the customer\'s email. The customer\'s current password keeps working until they click the link and set a new one.'
+              )}
+            </p>
+            <Button
+              variant="outline"
+              leftIcon={<KeyRound className="w-4 h-4" />}
+              isLoading={passwordResetMutation.isPending}
+              disabled={!customer.isActive}
+              onClick={() => passwordResetMutation.mutate()}
+            >
+              {t('customers.detail.passwordReset.button', 'Send password reset email')}
+            </Button>
+            {!customer.isActive && (
+              <p className="text-xs text-muted-theme mt-2">
+                {t('customers.detail.passwordReset.inactive', 'Reactivate the customer before sending a reset.')}
+              </p>
+            )}
+          </>
         )}
       </Card>
 

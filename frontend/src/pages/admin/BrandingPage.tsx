@@ -6,14 +6,19 @@ import { ThemeCustomizerEnhanced, GalleryPreview } from '../../components/admin'
 import { useTheme, type ThemeConfig, GALLERY_THEME_PRESETS } from '../../contexts/ThemeContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { settingsService, type BrandingSettings } from '../../services/settings.service';
+import { businessProfileService } from '../../services/businessProfile.service';
 import { useTranslation } from 'react-i18next';
 import { buildResourceUrl } from '../../utils/url';
-import { useFeatureEnabled } from '../../contexts/FeatureFlagsContext';
+import { useFeatureEnabled, useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { CustomerDashboardBrandingCard } from '../../components/admin/CustomerDashboardBrandingCard';
+import { PdfTypographyCard } from '../../components/admin/PdfTypographyCard';
 
 export const BrandingPage: React.FC = () => {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
+  // Used to gate the PDF typography card — when no PDF-producing
+  // feature is enabled the setting has no surface to apply to.
+  const { flags } = useFeatureFlags();
   const [brandingSettings, setBrandingSettings] = useState<BrandingSettings>({
     company_name: '',
     company_tagline: '',
@@ -49,6 +54,11 @@ export const BrandingPage: React.FC = () => {
   const [currentTheme, setCurrentTheme] = useState<ThemeConfig>(theme);
   const [currentThemeName, setCurrentThemeName] = useState('default');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  // PDF body font selection (migration 121). Lives on this page so the
+  // top-level Save button can persist it together with branding +
+  // theme — no card-local save button. Null = "no preference,
+  // fall back to Helvetica" — same encoding the column uses.
+  const [pdfFontFamily, setPdfFontFamily] = useState<string | null>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch current settings
@@ -61,6 +71,17 @@ export const BrandingPage: React.FC = () => {
   const { data: themeSettings } = useQuery({
     queryKey: ['admin-settings', 'theme'],
     queryFn: () => settingsService.getSettingsByType('theme'),
+  });
+
+  // Fetch business profile snapshot — needed to hydrate the PDF
+  // typography card with the saved pdfFontFamily value. The PDF
+  // typography card is rendered only when a PDF-producing feature is
+  // enabled, but the query is cheap and the page already issues other
+  // settings queries on mount, so we always fetch.
+  const { data: businessProfileSnapshot } = useQuery({
+    queryKey: ['business-profile-snapshot'],
+    queryFn: () => businessProfileService.get(),
+    staleTime: 5 * 60 * 1000,
   });
 
   // Update branding mutation
@@ -103,6 +124,13 @@ export const BrandingPage: React.FC = () => {
       setBrandingSettings(prev => ({ ...prev, ...formatted }));
     }
   }, [settings]);
+
+  // Hydrate the PDF font selection once the business profile arrives.
+  useEffect(() => {
+    if (businessProfileSnapshot?.profile) {
+      setPdfFontFamily(businessProfileSnapshot.profile.pdfFontFamily || null);
+    }
+  }, [businessProfileSnapshot?.profile?.pdfFontFamily]);
 
   // Initialize theme from database
   useEffect(() => {
@@ -255,16 +283,27 @@ export const BrandingPage: React.FC = () => {
         ...brandingSettings,
         logo_url: currentTheme.logoUrl || brandingSettings.logo_url || ''
       };
-      
+
       // Save branding settings to database
       await brandingMutation.mutateAsync(updatedBrandingSettings);
-      
+
       // Save theme settings to database
       await themeMutation.mutateAsync(currentTheme);
-      
+
+      // Persist PDF font family if it changed. Skipped when the value
+      // matches the snapshot to avoid touching business_profile on
+      // every Branding save (the row carries unrelated settings).
+      const savedPdfFontFamily = businessProfileSnapshot?.profile?.pdfFontFamily || null;
+      if (savedPdfFontFamily !== pdfFontFamily) {
+        await businessProfileService.update({
+          pdfFontFamily: pdfFontFamily ? pdfFontFamily : null,
+        });
+        queryClient.invalidateQueries({ queryKey: ['business-profile-snapshot'] });
+      }
+
       // Apply theme globally
       setTheme(currentTheme);
-      
+
       // Update local state to reflect saved values
       setBrandingSettings(updatedBrandingSettings);
     } catch (error) {
@@ -620,13 +659,19 @@ export const BrandingPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Logo Position */}
+              {/* Logo Position
+                  - left / center / right: position inside the gallery header bar.
+                  - sidepanel: moves the logo out of the gallery header
+                    and into the admin sidebar's brand row (replaces the
+                    "PicPeak Admin" text; the favicon takes over when
+                    the sidebar is collapsed). The gallery falls back
+                    to 'left' for its own rendering. */}
               <div>
                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
                   {t('branding.logoPosition', 'Logo Position in Header')}
                 </label>
-                <div className="flex gap-2">
-                  {(['left', 'center', 'right'] as const).map((position) => (
+                <div className="flex flex-wrap gap-2">
+                  {(['sidepanel', 'left', 'center', 'right'] as const).map((position) => (
                     <button
                       key={position}
                       type="button"
@@ -641,6 +686,12 @@ export const BrandingPage: React.FC = () => {
                     </button>
                   ))}
                 </div>
+                {brandingSettings.logo_position === 'sidepanel' && (
+                  <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-2">
+                    {t('branding.positionSidepanelHelp',
+                      'The logo appears in the admin sidebar instead of the header. When the sidebar is collapsed, the favicon is shown.')}
+                  </p>
+                )}
               </div>
 
               {/* Display Mode */}
@@ -953,7 +1004,14 @@ export const BrandingPage: React.FC = () => {
             </label>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left side - Theme Customizer */}
+            {/* Left side - Theme Customizer.
+                The PDF typography card is injected via the
+                customizer's `slotBeforeCustomCss` so it sits
+                immediately after the web Typography & Style section
+                and before the (often bulky) Custom CSS editor —
+                keeps all typography choices visually grouped.
+                Hidden when no PDF-producing feature is on; persisted
+                via the top-level Save button (handleSave). */}
             <div>
               <ThemeCustomizerEnhanced
                 value={currentTheme}
@@ -964,19 +1022,24 @@ export const BrandingPage: React.FC = () => {
                 hideActions={true}
                 forceColorMode={brandingSettings.force_color_mode ?? null}
                 onForceColorModeChange={handleForceColorModeChange}
+                slotBeforeCustomCss={
+                  (flags.quotes || flags.bills || flags.taxReport)
+                    ? <PdfTypographyCard value={pdfFontFamily} onChange={setPdfFontFamily} />
+                    : null
+                }
               />
             </div>
-            
+
             {/* Right side - Gallery Preview */}
             <div className="lg:sticky lg:top-4 lg:h-fit">
               <Card className="p-4">
                 <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-3">
                   {t('branding.livePreview')}
                 </h3>
-                <GalleryPreview 
+                <GalleryPreview
                   theme={currentTheme}
                   branding={brandingSettings}
-                  className="shadow-lg" 
+                  className="shadow-lg"
                 />
               </Card>
             </div>

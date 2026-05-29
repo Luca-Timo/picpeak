@@ -11,7 +11,11 @@ export type { FeatureKey, FeatureFlags };
 // hasn't run its migration yet on this instance).
 export const DEFAULT_FLAGS: FeatureFlags = {
   galleries: true,
-  reminderEmails: true,
+  // F.3 — these three are placeholders. The UI cards are locked
+  // (lockedReason: NOT_YET_AVAILABLE) because the underlying flows
+  // aren't implemented yet. Default FALSE so the toggle isn't
+  // confusingly "on but locked".
+  reminderEmails: false,
   calendar: false,
   calendarBooking: false,
   quotes: false,
@@ -28,6 +32,19 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   // logins are opt-in. Migration 095 flips this to TRUE on existing
   // installs (events>0).
   customerPortal: false,
+  // CRM developer tools sub-tab. Strictly opt-in.
+  crmDevelopment: false,
+  // Tax / Steuer report sub-tab. Independent toggle; forced off when
+  // `bills` is off (no invoices → nothing to report).
+  taxReport: false,
+  // Hours logging master (migration 129). Off by default — admin
+  // enables in Settings → Features once they're ready to surface the
+  // per-customer Hours card.
+  hoursLogging: false,
+  // Contracts (migration 130). Off by default — admin enables in
+  // Settings → Features once they've reviewed the seeded block
+  // library with their lawyer.
+  contracts: false,
 };
 
 export const FEATURE_FLAGS_QUERY_KEY = ['feature-flags'] as const;
@@ -59,6 +76,7 @@ function applyDependencyRules(flags: FeatureFlags): FeatureFlags {
   out.galleries = true;                            // foundation — always on
   if (out.quotes === false) out.bills = false;     // bills depend on quotes
   if (out.calendar === false) out.calendarBooking = false;  // booking depends on calendar
+  if (out.bills === false) out.taxReport = false;  // tax report depends on bills
   // Clients parent flag is DERIVED from its children. Admins don't
   // toggle it directly — enabling any CRM-area sub-feature
   // (Accounts today; future Calendar / Quotes / Bills / Messaging)
@@ -66,7 +84,15 @@ function applyDependencyRules(flags: FeatureFlags): FeatureFlags {
   // disabling all of them hides it again.
   out.clients = Boolean(
     out.customerPortal
-    // future siblings: || out.calendar || out.quotes || out.bills || out.messaging
+    || out.crmDevelopment
+    || out.quotes
+    || out.bills
+    || out.taxReport
+    || out.hoursLogging
+    || out.contracts
+    // Migration 137 — admin calendar lights up the Clients section.
+    || out.calendar
+    // future siblings: || out.messaging
   );
   return out;
 }

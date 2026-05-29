@@ -14,15 +14,16 @@
  * picker (customers don't have roles — access is boolean per event,
  * managed via the event form's CustomerAccountPicker).
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import {
-  UserPlus, Mail, Trash2, Search, X, AlertTriangle, CheckCircle2, Clock,
+  UserPlus, UserCog, Trash2, Search, X, AlertTriangle, CheckCircle2, Clock,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { InlineCustomerCreate } from '../../components/admin/InlineCustomerCreate';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 import { Button, Card, Input, Loading } from '../../components/common';
 import {
@@ -33,269 +34,37 @@ import {
 
 type TabType = 'customers' | 'invitations';
 
-const formatDate = (iso: string | null | undefined) => {
-  if (!iso) return '—';
-  try { return format(new Date(iso), 'PP'); } catch { return '—'; }
-};
-
-/**
- * Invite modal with optional prefill (#354 follow-up).
- *
- * Email is the only required field. Everything else is collected behind
- * a "Add contact details" toggle so a fast invite stays one-click. When
- * filled, the values are stashed on the invitation row and re-rendered
- * pre-populated on the customer's accept page (where the customer can
- * still edit before submitting).
- */
-const InviteModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onInvited: () => void;
-}> = ({ isOpen, onClose, onInvited }) => {
-  const { t } = useTranslation();
-  const [email, setEmail] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [showPrefill, setShowPrefill] = useState(false);
-  const [prefill, setPrefill] = useState({
-    salutation: '', first_name: '', last_name: '', display_name: '',
-    phone: '', company_name: '', vat_id: '',
-    address_line1: '', address_line2: '', postal_code: '', city: '', state: '', country_code: '',
-  });
-
-  const updatePrefill = (key: keyof typeof prefill, value: string) => {
-    setPrefill((p) => ({ ...p, [key]: value }));
-  };
-
-  const reset = () => {
-    setEmail('');
-    setError(null);
-    setShowPrefill(false);
-    setPrefill({
-      salutation: '', first_name: '', last_name: '', display_name: '',
-      phone: '', company_name: '', vat_id: '',
-      address_line1: '', address_line2: '', postal_code: '', city: '', state: '', country_code: '',
-    });
-  };
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError(t('customers.invite.invalidEmail', 'Please enter a valid email'));
-      return;
-    }
-    setSubmitting(true);
-    try {
-      // Strip empty values so the backend stores `null`/nothing for fields
-      // the admin didn't actually fill in. Saves a round trip through
-      // the backend's sanitiser and keeps the JSON payload small.
-      const cleaned: Record<string, string> = {};
-      for (const [k, v] of Object.entries(prefill)) {
-        const trimmed = v.trim();
-        if (trimmed) cleaned[k] = trimmed;
-      }
-      await customerAdminService.invite(
-        email.trim(),
-        Object.keys(cleaned).length > 0 ? cleaned : undefined,
-      );
-      toast.success(t('customers.invite.success', 'Invitation sent'));
-      reset();
-      onInvited();
-      onClose();
-    } catch (e: any) {
-      const msg = e?.response?.status === 409
-        ? t('customers.invite.conflict', 'A customer with this email already exists or has a pending invitation.')
-        : e?.response?.data?.error || t('customers.invite.error', 'Could not send invitation.');
-      setError(msg);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8 overflow-y-auto">
-      <div className="w-full max-w-2xl rounded-xl shadow-lg my-auto" style={{ backgroundColor: 'var(--color-surface)' }}>
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-theme">
-              {t('customers.invite.title', 'Invite a customer')}
-            </h2>
-            <button
-              type="button"
-              onClick={() => { reset(); onClose(); }}
-              className="p-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-700"
-              aria-label={t('common.close', 'Close')}
-            >
-              <X className="w-5 h-5 text-muted-theme" />
-            </button>
-          </div>
-          <p className="text-sm text-muted-theme mb-4">
-            {t('customers.invite.description',
-              'They\'ll receive an email with a link to set up their account. Once they\'ve accepted, you can assign them to events.')}
-          </p>
-          <form onSubmit={submit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-theme mb-1">
-                {t('customers.invite.email', 'Email')} <span className="text-red-500">*</span>
-              </label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                error={error || undefined}
-                leftIcon={<Mail className="w-5 h-5 text-neutral-400" />}
-                autoFocus
-              />
-            </div>
-
-            <div className="border-t pt-4" style={{ borderColor: 'var(--color-surface-border)' }}>
-              <button
-                type="button"
-                onClick={() => setShowPrefill((v) => !v)}
-                className="text-sm font-medium hover:underline"
-                style={{ color: 'var(--color-accent)' }}
-              >
-                {showPrefill
-                  ? t('customers.invite.hidePrefill', '− Hide contact details')
-                  : t('customers.invite.showPrefill', '+ Add contact details (optional)')}
-              </button>
-              <p className="mt-1 text-xs text-muted-theme">
-                {t('customers.invite.prefillHint',
-                  'Anything you fill in will be pre-populated on the customer\'s sign-up page — they can still edit it.')}
-              </p>
-            </div>
-
-            {showPrefill && (
-              <div className="space-y-4 pt-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-theme mb-1">
-                      {t('customer.profile.field.salutation', 'Salutation')}
-                    </label>
-                    <select
-                      value={prefill.salutation}
-                      onChange={(e) => updatePrefill('salutation', e.target.value)}
-                      className="w-full rounded-lg border px-3 h-10 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-                      style={{
-                        backgroundColor: 'var(--color-surface)',
-                        borderColor: 'var(--color-surface-border)',
-                        color: 'var(--color-text)',
-                      }}
-                    >
-                      <option value="">{t('customer.profile.salutation.none', '— Not specified —')}</option>
-                      <option value="Herr">{t('customer.profile.salutation.herr', 'Mr.')}</option>
-                      <option value="Frau">{t('customer.profile.salutation.frau', 'Ms.')}</option>
-                      <option value="Mx">{t('customer.profile.salutation.mx', 'Mx')}</option>
-                      <option value="Dr">{t('customer.profile.salutation.dr', 'Dr.')}</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-theme mb-1">
-                      {t('customer.profile.field.displayName', 'Display name')}
-                    </label>
-                    <Input value={prefill.display_name} onChange={(e) => updatePrefill('display_name', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-theme mb-1">
-                      {t('customer.profile.field.firstName', 'First name')}
-                    </label>
-                    <Input value={prefill.first_name} onChange={(e) => updatePrefill('first_name', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-theme mb-1">
-                      {t('customer.profile.field.lastName', 'Last name')}
-                    </label>
-                    <Input value={prefill.last_name} onChange={(e) => updatePrefill('last_name', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-theme mb-1">
-                      {t('customer.profile.field.phone', 'Phone')}
-                    </label>
-                    <Input value={prefill.phone} onChange={(e) => updatePrefill('phone', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-theme mb-1">
-                      {t('customer.profile.field.companyName', 'Company name')}
-                    </label>
-                    <Input value={prefill.company_name} onChange={(e) => updatePrefill('company_name', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-theme mb-1">
-                      {t('customer.profile.field.vatId', 'VAT ID')}
-                    </label>
-                    <Input value={prefill.vat_id} onChange={(e) => updatePrefill('vat_id', e.target.value)} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
-                  <div className="sm:col-span-6">
-                    <label className="block text-sm font-medium text-theme mb-1">
-                      {t('customer.profile.field.addressLine1', 'Address line 1')}
-                    </label>
-                    <Input value={prefill.address_line1} onChange={(e) => updatePrefill('address_line1', e.target.value)} />
-                  </div>
-                  <div className="sm:col-span-6">
-                    <label className="block text-sm font-medium text-theme mb-1">
-                      {t('customer.profile.field.addressLine2', 'Address line 2')}
-                    </label>
-                    <Input value={prefill.address_line2} onChange={(e) => updatePrefill('address_line2', e.target.value)} />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-theme mb-1">
-                      {t('customer.profile.field.postalCode', 'Postal code')}
-                    </label>
-                    <Input value={prefill.postal_code} onChange={(e) => updatePrefill('postal_code', e.target.value)} />
-                  </div>
-                  <div className="sm:col-span-3">
-                    <label className="block text-sm font-medium text-theme mb-1">
-                      {t('customer.profile.field.city', 'City')}
-                    </label>
-                    <Input value={prefill.city} onChange={(e) => updatePrefill('city', e.target.value)} />
-                  </div>
-                  <div className="sm:col-span-1">
-                    <label className="block text-sm font-medium text-theme mb-1">
-                      {t('customer.profile.field.countryCode', 'Country')}
-                    </label>
-                    <Input
-                      value={prefill.country_code}
-                      onChange={(e) => updatePrefill('country_code', e.target.value.toUpperCase().slice(0, 2))}
-                      placeholder="DE"
-                      maxLength={2}
-                    />
-                  </div>
-                  <div className="sm:col-span-3">
-                    <label className="block text-sm font-medium text-theme mb-1">
-                      {t('customer.profile.field.state', 'State / region')}
-                    </label>
-                    <Input value={prefill.state} onChange={(e) => updatePrefill('state', e.target.value)} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => { reset(); onClose(); }}>
-                {t('common.cancel', 'Cancel')}
-              </Button>
-              <Button type="submit" variant="primary" isLoading={submitting} leftIcon={<UserPlus className="w-4 h-4" />}>
-                {t('customers.invite.submit', 'Send invitation')}
-              </Button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 export const CustomerManagementPage: React.FC = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  // formatDate respects the admin-configured `general_date_format`
+  // (DD.MM.YYYY by default) instead of the date-fns long-form 'PP'
+  // (which always rendered "May 8, 2026" regardless of the setting).
+  const { format: fmtDate } = useLocalizedDate();
+  const formatDate = (iso: string | null | undefined) => {
+    if (!iso) return '—';
+    try { return fmtDate(new Date(iso)); } catch { return '—'; }
+  };
   const [activeTab, setActiveTab] = useState<TabType>('customers');
+  // `searchTerm` is the live controlled-input value (keeps the box
+  // responsive). `debouncedTerm` lags 250ms behind so the filter +
+  // table re-render only fire after the user pauses typing — matches
+  // the pattern used in CustomerPicker for the same reason. Filtering
+  // is client-side so this doesn't change network shape; the win is
+  // on the render side for installs with many rows.
   const [searchTerm, setSearchTerm] = useState('');
-  const [inviteOpen, setInviteOpen] = useState(false);
+  const [debouncedTerm, setDebouncedTerm] = useState('');
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedTerm(searchTerm), 250);
+    return () => window.clearTimeout(handle);
+  }, [searchTerm]);
+  // Single state drives the unified create/invite modal. Both header
+  // buttons open the SAME modal (InlineCustomerCreate) — only the
+  // mode-specific action button is rendered inside, so the admin's
+  // choice between "create passive" and "invite" is locked in by
+  // which trigger they clicked but the form fields stay identical.
+  // `null` = closed.
+  const [createMode, setCreateMode] = useState<'passive' | 'invite' | null>(null);
   const [confirm, setConfirm] = useState<{ kind: 'deactivate'; id: number; name: string } | { kind: 'cancelInvite'; id: number; email: string } | null>(null);
 
   const { data: customers, isLoading: customersLoading, error: customersError } = useQuery({
@@ -310,22 +79,22 @@ export const CustomerManagementPage: React.FC = () => {
 
   const filteredCustomers = useMemo(() => {
     const list = customers || [];
-    if (!searchTerm.trim()) return list;
-    const term = searchTerm.trim().toLowerCase();
+    if (!debouncedTerm.trim()) return list;
+    const term = debouncedTerm.trim().toLowerCase();
     return list.filter((c) =>
       c.email.toLowerCase().includes(term)
       || (c.displayName || '').toLowerCase().includes(term)
       || (c.lastName || '').toLowerCase().includes(term)
       || (c.companyName || '').toLowerCase().includes(term)
     );
-  }, [customers, searchTerm]);
+  }, [customers, debouncedTerm]);
 
   const filteredInvitations = useMemo(() => {
     const list = invitations || [];
-    if (!searchTerm.trim()) return list;
-    const term = searchTerm.trim().toLowerCase();
+    if (!debouncedTerm.trim()) return list;
+    const term = debouncedTerm.trim().toLowerCase();
     return list.filter((i) => i.email.toLowerCase().includes(term));
-  }, [invitations, searchTerm]);
+  }, [invitations, debouncedTerm]);
 
   const deactivateMutation = useMutation({
     mutationFn: (id: number) => customerAdminService.deactivate(id),
@@ -397,9 +166,14 @@ export const CustomerManagementPage: React.FC = () => {
             {t('customers.pageSubtitle', 'Recurring customer accounts that can log in at /customer/login.')}
           </p>
         </div>
-        <Button variant="primary" leftIcon={<UserPlus className="w-4 h-4" />} onClick={() => setInviteOpen(true)}>
-          {t('customers.invite.button', 'Invite customer')}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" leftIcon={<UserCog className="w-4 h-4" />} onClick={() => setCreateMode('passive')}>
+            {t('customers.create.openButton', 'Create passive customer')}
+          </Button>
+          <Button variant="primary" leftIcon={<UserPlus className="w-4 h-4" />} onClick={() => setCreateMode('invite')}>
+            {t('customers.invite.button', 'Invite customer')}
+          </Button>
+        </div>
       </div>
 
       <Card padding="lg">
@@ -453,17 +227,28 @@ export const CustomerManagementPage: React.FC = () => {
                       <td className="px-3 py-3 text-muted-theme">{c.eventCount ?? 0}</td>
                       <td className="px-3 py-3 text-muted-theme">{formatDate(c.lastLogin)}</td>
                       <td className="px-3 py-3">
-                        {c.isActive ? (
-                          <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-accent)' }}>
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            {t('customers.status.active', 'Active')}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs text-red-600">
-                            <X className="w-3.5 h-3.5" />
-                            {t('customers.status.inactive', 'Deactivated')}
-                          </span>
-                        )}
+                        <div className="flex flex-col gap-1">
+                          {c.isActive ? (
+                            <span className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--color-accent)' }}>
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              {t('customers.status.active', 'Active')}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs text-red-600">
+                              <X className="w-3.5 h-3.5" />
+                              {t('customers.status.inactive', 'Deactivated')}
+                            </span>
+                          )}
+                          {/* Passive customers (no portal access). The
+                              status badge sits on its own line so a
+                              passive deactivated customer can still
+                              show both states clearly. */}
+                          {c.isPassive && (
+                            <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
+                              {t('customers.passive.badge', 'Passive — admin only')}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-3 text-right">
                         {c.isActive && (
@@ -540,11 +325,37 @@ export const CustomerManagementPage: React.FC = () => {
         )}
       </Card>
 
-      <InviteModal
-        isOpen={inviteOpen}
-        onClose={() => setInviteOpen(false)}
-        onInvited={() => queryClient.invalidateQueries({ queryKey: ['admin-customer-invitations'] })}
-      />
+      {/* Unified create / invite modal. The form is identical in both
+          modes — only the bottom action button differs (Save as
+          passive vs. Save & send portal invitation). Both flows go
+          through InlineCustomerCreate's existing
+          createDirect-then-sendInvite path, so the customer row is
+          materialised immediately and the "Invitations" tab refreshes
+          on success to surface the pending invite in the invite case. */}
+      {createMode !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={() => setCreateMode(null)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-xl shadow-lg max-h-[90vh] overflow-y-auto"
+            style={{ backgroundColor: 'var(--color-surface)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <InlineCustomerCreate
+                mode={createMode}
+                onCancel={() => setCreateMode(null)}
+                onCreated={() => {
+                  setCreateMode(null);
+                  queryClient.invalidateQueries({ queryKey: ['admin-customers'] });
+                  queryClient.invalidateQueries({ queryKey: ['admin-customer-invitations'] });
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">

@@ -14,7 +14,12 @@ export interface PublicSettings {
   branding_logo_url: string;
   branding_logo_size?: string;
   branding_logo_max_height?: number;
-  branding_logo_position?: 'left' | 'center' | 'right';
+  /**
+   * Logo placement. 'left' | 'center' | 'right' = inside the gallery
+   * header. 'sidepanel' = moved into the admin sidebar's brand row
+   * (admin chrome only — gallery falls back to 'left').
+   */
+  branding_logo_position?: 'left' | 'center' | 'right' | 'sidepanel';
   branding_logo_display_mode?: 'logo_only' | 'text_only' | 'logo_and_text';
   branding_logo_display_header?: boolean;
   branding_logo_display_hero?: boolean;
@@ -46,6 +51,15 @@ export interface PublicSettings {
   default_language: string;
   enable_analytics: boolean;
   general_date_format: string | { format: string; locale: string };
+  /** '12h' or '24h' — controls how times are rendered in admin +
+   *  customer views. Storage is always 24h; only display toggles. */
+  general_time_format?: '12h' | '24h';
+  /** Dashboard CRM-overview tile visibility. All default true; only
+   *  explicit false hides the matching tile. */
+  crm_overview_show_revenue?: boolean;
+  crm_overview_show_outstanding?: boolean;
+  crm_overview_show_quotes?: boolean;
+  crm_overview_show_invoices?: boolean;
   enable_recaptcha: boolean;
   recaptcha_site_key: string | null;
   maintenance_mode: boolean;

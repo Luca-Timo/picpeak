@@ -34,7 +34,7 @@ interface GalleryLayoutProps {
     logo_url?: string;
     logo_size?: 'small' | 'medium' | 'large' | 'xlarge' | 'custom';
     logo_max_height?: number;
-    logo_position?: 'left' | 'center' | 'right';
+    logo_position?: 'left' | 'center' | 'right' | 'sidepanel';
     logo_display_header?: boolean;
     logo_display_hero?: boolean;
     logo_display_mode?: 'logo_only' | 'text_only' | 'logo_and_text';
@@ -174,9 +174,13 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
     };
   };
   
-  // Determine logo position classes
+  // Determine logo position classes. 'sidepanel' is an admin-chrome
+  // option (logo lives in the admin sidebar) and has no analogue in
+  // the gallery — fall back to 'left' here so customer galleries keep
+  // showing the logo somewhere sensible.
   const getLogoPositionClass = () => {
-    const position = brandingSettings?.logo_position || 'left';
+    const raw = brandingSettings?.logo_position || 'left';
+    const position = raw === 'sidepanel' ? 'left' : raw;
     return {
       left: 'justify-start',
       center: 'justify-center',

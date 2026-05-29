@@ -105,6 +105,19 @@ router.get('/', async (req, res) => {
       default_language: settingsObject.general_default_language || 'en',
       enable_analytics: settingsObject.general_enable_analytics !== false,
       general_date_format: settingsObject.general_date_format || 'PPP',
+      // '12h' / '24h' — controls how times are rendered in admin +
+      // customer views via the useLocalizedDate hook. The underlying
+      // storage is always HH:mm (24h); only the displayed form toggles.
+      // Default '24h' to match the operator's CH/DE locale.
+      general_time_format: settingsObject.general_time_format === '12h' ? '12h' : '24h',
+      // CRM overview tile visibility (admin-only — these are surfaced
+      // via the public-settings endpoint because the dashboard reads
+      // them on mount and the value never depends on auth state. All
+      // four default ON; only explicit false hides the tile.
+      crm_overview_show_revenue: settingsObject.crm_overview_show_revenue !== false,
+      crm_overview_show_outstanding: settingsObject.crm_overview_show_outstanding !== false,
+      crm_overview_show_quotes: settingsObject.crm_overview_show_quotes !== false,
+      crm_overview_show_invoices: settingsObject.crm_overview_show_invoices !== false,
       enable_recaptcha: settingsObject.security_enable_recaptcha === true || settingsObject.security_enable_recaptcha === 'true',
       recaptcha_site_key: settingsObject.security_recaptcha_site_key || null,
       maintenance_mode: settingsObject.general_maintenance_mode === true || settingsObject.general_maintenance_mode === 'true',

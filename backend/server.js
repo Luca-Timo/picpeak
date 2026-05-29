@@ -20,6 +20,7 @@ const path = require('path');
 const { initializeDatabase, db } = require('./src/database/db');
 const { startFileWatcher } = require('./src/services/fileWatcher');
 const { startExpirationChecker } = require('./src/services/expirationChecker');
+const { startInvoiceScheduler } = require('./src/services/invoiceSchedulerService');
 const { initializeTransporter, startEmailQueueProcessor } = require('./src/services/emailProcessor');
 const { startBackupService } = require('./src/services/backupService');
 const { startScheduledBackups } = require('./src/services/databaseBackup');
@@ -46,9 +47,28 @@ const secureImagesRoutes = require('./src/routes/secureImages');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Trust proxy headers (required for Traefik/nginx)
-// Set to specific number of proxies or loopback to be more secure
-app.set('trust proxy', 'loopback, linklocal, uniquelocal');
+// Trust proxy headers (required for Traefik/nginx).
+//
+// `req.ip` is computed by Express by walking X-Forwarded-For from
+// right-to-left and stopping at the first hop NOT in this list, so
+// the value picpeak audits (signing IPs, payment-check actions,
+// rate-limit keys) is the originating client IP behind any number
+// of trusted reverse proxies.
+//
+// Default: 'loopback, linklocal, uniquelocal' — covers localhost,
+// link-local (169.254.0.0/16), and unique-local IPv6 (fc00::/7).
+// Standard for nginx-in-front-of-Node deployments on the same host
+// and for Docker bridge networks. Operators with unusual topologies
+// (load balancer in a public subnet, multi-hop NAT) override via
+// TRUST_PROXY env, accepting any value Express accepts: a number,
+// 'loopback', 'linklocal', 'uniquelocal', a CIDR, a comma list, or
+// 'true' (trust ALL proxies — only safe behind a fully-controlled
+// reverse-proxy chain).
+//
+// NEVER read req.headers['x-forwarded-for'] directly in audit paths
+// — see utils/clientIp.js for the rationale.
+const trustProxySetting = process.env.TRUST_PROXY || 'loopback, linklocal, uniquelocal';
+app.set('trust proxy', trustProxySetting === 'true' ? true : trustProxySetting);
 
 // Security middleware with custom CSP
 // In native HTTP installs, do NOT force HTTPS for subresources.
@@ -620,9 +640,30 @@ app.use('/api/admin/users', require('./src/routes/adminUsers'));
 const { noStoreCache } = require('./src/middleware/noStoreCache');
 app.use('/api/admin/customers', noStoreCache, require('./src/routes/adminCustomers'));
 // Customer-side surface (#354). Strictly separate from /api/admin/* —
-// distinct token type, distinct cookie, distinct middleware.
+// distinct token type, distinct cookie, distinct middleware. The
+// noStoreCache wrapper (upstream) prevents stale customer-portal
+// data from being served after logout. The CRM-area route-flag
+// gate was reverted upstream and lives in the UI now.
 app.use('/api/customer/auth', noStoreCache, require('./src/routes/customerAuth'));
 app.use('/api/customer', noStoreCache, require('./src/routes/customer'));
+
+// --- CRM (#TBD) -------------------------------------------------------
+// Quotes / Invoices / Contracts / Calendar / Tax report / Deals lineage.
+// Business profile (issuer block for PDFs) lives at
+// /api/admin/business-profile, gated by the existing settings.manage
+// permission rather than a CRM-specific one. The public endpoints
+// host the customer-side accept/decline / sign / payment-check pages.
+app.use('/api/admin/business-profile', require('./src/routes/adminBusinessProfile'));
+app.use('/api/admin/quotes',     require('./src/routes/adminQuotes'));
+app.use('/api/admin/invoices',   require('./src/routes/adminInvoices'));
+app.use('/api/admin/contracts',  require('./src/routes/adminContracts'));
+app.use('/api/admin/calendar',   require('./src/routes/adminCalendar'));
+app.use('/api/admin/deals',      require('./src/routes/adminDeals'));
+app.use('/api/admin/tax-report', require('./src/routes/adminTaxReport'));
+app.use('/api/admin/dev',        require('./src/routes/adminDev'));
+app.use('/api/public/quotes',  require('./src/routes/publicQuotes'));
+app.use('/api/public/contracts', require('./src/routes/publicContracts'));
+app.use('/api/public/payment-check', require('./src/routes/publicPaymentCheck'));
 app.use('/api/admin/event-types', require('./src/routes/adminEventTypes'));
 app.use('/api/admin/api-tokens', require('./src/routes/adminApiTokens'));
 app.use('/api/admin/webhooks', require('./src/routes/adminWebhooks'));
@@ -729,9 +770,23 @@ async function startServer() {
     
     // Start expiration checker
     startExpirationChecker();
+    // CRM invoice scheduler: hourly tick to flush scheduled-send invoices
+    // + run the overdue reminder ladder. No-op when the `bills` feature
+    // flag is OFF (the service short-circuits on empty result sets).
+    startInvoiceScheduler();
     
     // Initialize email transporter and start queue processor
     await initializeTransporter();
+    // Seed CRM / contract / event-reminder email templates and recover
+    // any queue rows that exhausted retries because their template
+    // didn't exist yet. Runs once per boot via module-level caches in
+    // each seeder. See _emailTemplateBoot.js for the full rationale.
+    try {
+      const { seedEmailTemplatesAndRecoverQueue } = require('./src/services/_emailTemplateBoot');
+      await seedEmailTemplatesAndRecoverQueue(db, logger);
+    } catch (err) {
+      logger.warn('Email template self-heal failed at boot:', err.message);
+    }
     startEmailQueueProcessor();
     
     // Start webhook delivery worker (#327)

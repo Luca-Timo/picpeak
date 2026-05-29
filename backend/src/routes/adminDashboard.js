@@ -353,4 +353,176 @@ router.get('/analytics', adminAuth, requirePermission('analytics.view'), async (
   }
 });
 
+/**
+ * CRM overview stats — quote / invoice counts by status, rolling
+ * revenue windows, outstanding payments. Used by the CRM Overview
+ * tab at /admin/clients/overview.
+ *
+ * Permission gate: `bills.view` OR `quotes.view` — either CRM
+ * sub-feature unlocks the headline numbers.
+ *
+ * Currency handling: aggregates sum naively across currencies.
+ * Multi-currency installs get a `currency` field set to the
+ * business profile's default; admins running mixed-currency books
+ * should treat the headline figure as approximate. A multi-currency
+ * breakdown can be added later.
+ */
+router.get('/crm-stats', adminAuth, async (req, res) => {
+  try {
+    // Either CRM permission is enough — both sub-features stand
+    // alone (one studio may bill manually but quote via picpeak,
+    // another might invoice but not quote). Permissions aren't
+    // attached to req.admin synchronously; we have to ask the DB
+    // via userHasAnyPermission so our inline check matches the
+    // behaviour of the requirePermission middleware used elsewhere.
+    const { userHasAnyPermission } = require('../middleware/permissions');
+    const canSeeBills  = await userHasAnyPermission(req.admin.id, ['bills.view']);
+    const canSeeQuotes = await userHasAnyPermission(req.admin.id, ['quotes.view']);
+    if (!canSeeBills && !canSeeQuotes) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
+    const monthCutoff   = new Date(now -  30 * DAY);
+    const quarterCutoff = new Date(now -  90 * DAY);
+    const yearCutoff    = new Date(now - 365 * DAY);
+
+    // ---- quotes: counts by status ---------------------------------
+    let quoteCounts = { draft: 0, sent: 0, accepted: 0, declined: 0, expired: 0, converted: 0 };
+    if (canSeeQuotes) {
+      try {
+        const rows = await db('quotes').select('status').count('id as count').groupBy('status');
+        for (const r of rows) {
+          if (r.status in quoteCounts) quoteCounts[r.status] = Number(r.count) || 0;
+        }
+      } catch (e) {
+        // Table may not exist on installs without CRM migrations.
+        // Treat as all-zero so the page still renders.
+      }
+    }
+
+    // ---- invoices: counts by status -------------------------------
+    let invoiceCounts = { scheduled: 0, sent: 0, paid: 0, overdue: 0, cancelled: 0 };
+    let revenueMonthMinor = 0;
+    let revenueQuarterMinor = 0;
+    let revenueYearMinor = 0;
+    let outstandingTotalMinor = 0;
+    let outstandingCount = 0;
+
+    if (canSeeBills) {
+      try {
+        // Same exclusions as the outstanding calc — Stornorechnungen
+        // and monthly drafts skew the per-status counts (Sent
+        // includes both real outstanding invoices and credit-note
+        // rows; Scheduled includes mid-period accumulators that the
+        // admin doesn't think of as "queued invoices" yet).
+        const rows = await db('invoices')
+          .andWhere(function() {
+            this.whereNot('kind', 'storno').orWhereNull('kind');
+          })
+          .andWhere(function() {
+            this.where('is_monthly_draft', false).orWhereNull('is_monthly_draft');
+          })
+          .select('status').count('id as count').groupBy('status');
+        for (const r of rows) {
+          if (r.status in invoiceCounts) invoiceCounts[r.status] = Number(r.count) || 0;
+        }
+
+        // Revenue windows: sum of `paid_amount_minor` for invoices
+        // marked PAID where paid_at falls inside the window. Using
+        // paid_amount (not total) so partial payments are tracked
+        // accurately. Stornos excluded — they're never status='paid'
+        // in normal flow but the guard is defensive.
+        const winSum = async (cutoff) => {
+          const row = await db('invoices')
+            .where('status', 'paid')
+            .where('paid_at', '>=', cutoff)
+            .andWhere(function() {
+              this.whereNot('kind', 'storno').orWhereNull('kind');
+            })
+            .sum('paid_amount_minor as total')
+            .first();
+          return Number(row?.total || 0);
+        };
+        revenueMonthMinor   = await winSum(monthCutoff);
+        revenueQuarterMinor = await winSum(quarterCutoff);
+        revenueYearMinor    = await winSum(yearCutoff);
+
+        // Outstanding: every invoice that's been sent but not fully
+        // paid (sent + overdue). Outstanding = total - paid. We sum
+        // the gap per row rather than `total - sum(paid)` so partial
+        // payments contribute correctly.
+        //
+        // Exclusions:
+        //   - kind='storno' rows. Stornorechnungen carry status='sent'
+        //     and total_amount_minor < 0; without the filter they slip
+        //     through the status check and inflate `invoiceCount` by 1
+        //     per Storno (the per-row gap math correctly returns 0 for
+        //     the amount, but the row still counts). They're
+        //     accounting-side credit notes, not money the customer
+        //     owes.
+        //   - is_monthly_draft=true rows. Drafts ship via the monthly
+        //     cycle and aren't owed money until they leave draft state.
+        const openRows = await db('invoices')
+          .whereIn('status', ['sent', 'overdue'])
+          .andWhere(function() {
+            this.whereNot('kind', 'storno').orWhereNull('kind');
+          })
+          .andWhere(function() {
+            // Belt-and-braces: a Storno is uniquely identified by
+            // having `cancels_invoice_id` set (migration 114). Even
+            // if `kind` is somehow NULL on a Storno row, this catches
+            // it. NULL on regular invoices passes through unchanged.
+            this.whereNull('cancels_invoice_id');
+          })
+          .andWhere(function() {
+            this.where('is_monthly_draft', false).orWhereNull('is_monthly_draft');
+          })
+          .andWhere('total_amount_minor', '>=', 0)
+          .select('total_amount_minor', 'paid_amount_minor', 'late_fee_amount_minor');
+        for (const r of openRows) {
+          const total = Number(r.total_amount_minor || 0) + Number(r.late_fee_amount_minor || 0);
+          const paid  = Number(r.paid_amount_minor || 0);
+          const gap   = Math.max(0, total - paid);
+          if (gap > 0) {
+            outstandingTotalMinor += gap;
+            outstandingCount += 1;
+          }
+        }
+      } catch (e) {
+        // Table missing — treat as empty (same as quotes above).
+      }
+    }
+
+    // Default currency for the headline figure. Pull from
+    // business_profile.default_currency when present; the renderer
+    // accepts the same fallback chain we use elsewhere.
+    let currency = 'CHF';
+    try {
+      const profile = await db('business_profile').where({ id: 1 }).first();
+      if (profile?.default_currency) currency = String(profile.default_currency).toUpperCase();
+    } catch (_) { /* leave default */ }
+
+    res.json({
+      currency,
+      quotes: quoteCounts,
+      invoices: invoiceCounts,
+      revenue: {
+        monthMinor:   revenueMonthMinor,
+        quarterMinor: revenueQuarterMinor,
+        yearMinor:    revenueYearMinor,
+      },
+      outstanding: {
+        totalMinor: outstandingTotalMinor,
+        invoiceCount: outstandingCount,
+      },
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    require('../utils/logger').error('CRM stats error:', error);
+    res.status(500).json({ error: 'Failed to load CRM stats' });
+  }
+});
+
 module.exports = router;

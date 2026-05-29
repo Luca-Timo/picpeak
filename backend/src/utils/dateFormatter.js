@@ -97,6 +97,27 @@ async function formatDate(date, language = 'en') {
   }
 }
 
+/**
+ * Sync DD.MM.YYYY formatter used by quote / invoice / contract render
+ * contexts. Unlike `formatDate` above, this never consults app_settings
+ * — it's intended for fixed-format use inside templates already rendered
+ * for a specific document type. Three services used to ship a local
+ * copy each; this is the single source.
+ *
+ * - falsy input → empty string (template's {{#if ...}} block hides)
+ * - invalid date → the original value coerced to String (defensive
+ *   passthrough; matches the prior behaviour of the three local copies)
+ */
+function formatShortDate(value) {
+  if (!value) return '';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}.${mm}.${d.getFullYear()}`;
+}
+
 module.exports = {
-  formatDate
+  formatDate,
+  formatShortDate,
 };

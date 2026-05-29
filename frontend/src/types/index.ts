@@ -69,6 +69,11 @@ export interface Event {
   client_share_token?: string;
   // Default photo sort order
   default_photo_sort?: string;
+  // Pre-event reminder override (migration 143)
+  event_reminder_disabled?: boolean;
+  event_reminder_offset_days?: number | null;
+  event_reminder_body_override?: string | null;
+  event_reminder_sent_at?: string | null;
 }
 
 export type GalleryAccessLevel = 'guest' | 'client';

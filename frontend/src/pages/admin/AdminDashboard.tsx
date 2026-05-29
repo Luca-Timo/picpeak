@@ -18,6 +18,7 @@ import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 import { Button, Card, Loading } from '../../components/common';
 import { UpdateNotification } from '../../components/admin/UpdateNotification';
+import { CrmOverviewSection } from '../../components/admin/CrmOverviewSection';
 import { useQuery } from '@tanstack/react-query';
 import { eventsService } from '../../services/events.service';
 import { adminService, ActivityType } from '../../services/admin.service';
@@ -47,11 +48,20 @@ export const AdminDashboard: React.FC = () => {
     queryFn: () => adminService.getRecentActivity(10),
   });
 
-  // Fetch system health
+  // Fetch system health. 30s cadence is fine for a freshness dashboard,
+  // but we explicitly opt out of background polling so an idle browser
+  // tab doesn't keep pinging the backend (24 calls/hr → 0 calls/hr
+  // when the admin tabs away). React-query's default for this flag is
+  // already `false`, but making it explicit documents the intent so a
+  // future refactor doesn't accidentally flip it on.
+  // staleTime lets a focus-regain after <30s skip the immediate
+  // refetch — the interval re-fires on its own schedule.
   const { data: systemHealth } = useQuery({
     queryKey: ['admin-system-health'],
     queryFn: () => adminService.getSystemHealth(),
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+    staleTime: 30000,
   });
 
   // Fetch the next 5 expiring events directly from the server. Previously
@@ -300,6 +310,14 @@ export const AdminDashboard: React.FC = () => {
 
         </Card>
       </div>
+
+      {/* CRM overview — quote / invoice pipeline + revenue +
+          outstanding. The section internally gates on the `clients`
+          feature flag (renders nothing when off), and further hides
+          the quotes / invoices subsections individually when their
+          sub-flag is off. Lives at the bottom so admins who don't
+          use the CRM see no visual difference. */}
+      <CrmOverviewSection />
 
     </div>
   );

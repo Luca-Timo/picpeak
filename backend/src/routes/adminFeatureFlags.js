@@ -41,13 +41,38 @@ const KNOWN_FLAGS = [
   // Customer-side portal surface (#354). Gates /customer/* routes
   // and the Accounts sub-page under Clients. See migration 095.
   'customerPortal',
+  // CRM developer tools sub-tab — internal helpers (test the
+  // payment-check email flow without waiting 30 days, etc.).
+  // Strictly opt-in.
+  'crmDevelopment',
+  // Tax / Steuer report sub-tab under Clients. Independent toggle so
+  // admins who use Bills but don't need the tax export (or aren't
+  // ready to enable it yet) can leave it off. Forced off when `bills`
+  // is off (no invoices → nothing to report).
+  'taxReport',
+  // Hours logging (migration 129). Master switch for the per-customer
+  // Hours card + the auto-append into monthly draft / "Bill these
+  // hours" flow. Independent of `bills` because hours are an INPUT to
+  // bills — admin who's still in the dogfood phase may want to log
+  // hours without enabling the full billing surface yet.
+  'hoursLogging',
+  // Contracts (migration 130). Independent of quotes/bills — contracts
+  // are a standalone legal document type with their own composition
+  // (blocks) and signing flow (in-browser canvas + wet-signed PDF
+  // upload). Seeded block bodies are EXAMPLES ONLY; admins must have a
+  // lawyer review before sending. See docs/crm-disclaimers.md.
+  'contracts',
 ];
 
 // Spec defaults for any flag missing from the DB (e.g. a row added by a
 // new release that hasn't run its migration yet on this instance).
 const DEFAULT_FLAGS = {
   galleries: true,
-  reminderEmails: true,
+  // F.3 — reminderEmails is a placeholder card in the Features tab
+  // (lockedReason: NOT_YET_AVAILABLE). Default FALSE so it matches
+  // the locked-but-off visual state of messaging / calendarBooking
+  // instead of being a confusing "on but locked".
+  reminderEmails: false,
   calendar: false,
   calendarBooking: false,
   quotes: false,
@@ -56,6 +81,9 @@ const DEFAULT_FLAGS = {
   analytics: true,
   userManagement: true,
   clients: false,
+  taxReport: false,
+  hoursLogging: false,
+  contracts: false,
 };
 
 async function readAllFlags() {
@@ -76,6 +104,10 @@ function applyDependencyRules(flags) {
   // Sub-features can't outlive their parents.
   if (out.quotes === false) out.bills = false;
   if (out.calendar === false) out.calendarBooking = false;
+  // Tax report only makes sense when bills are on — turning bills off
+  // implicitly turns the tax report off too. Admins enabling tax
+  // report must first enable bills.
+  if (out.bills === false) out.taxReport = false;
   // Clients parent flag is DERIVED from its children. Admins don't
   // toggle it directly in the Features tab — they enable a specific
   // sub-feature (Accounts today; Calendar/Quotes/Bills/Messaging
@@ -85,7 +117,17 @@ function applyDependencyRules(flags) {
   // ever drifts (e.g. partial migration run).
   out.clients = Boolean(
     out.customerPortal
-    // future siblings (out.calendar || out.quotes || out.bills || out.messaging) go here
+    || out.crmDevelopment
+    || out.quotes
+    || out.bills
+    || out.taxReport
+    || out.hoursLogging
+    || out.contracts
+    // Migration 137 — admin calendar lights up the Clients section.
+    // (calendarBooking is gated behind `calendar` so adding the parent
+    // is sufficient.)
+    || out.calendar
+    // future siblings (out.messaging) go here
   );
   return out;
 }

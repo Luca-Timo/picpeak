@@ -46,6 +46,13 @@ import { BrandingPage } from './BrandingPage';
 import { EventTypesPage } from './EventTypesPage';
 import { BackupManagement } from './BackupManagement';
 import { CMSPage } from './CMSPage';
+// CRM (#TBD)
+import { SettingsBusinessProfilePage } from './settings/SettingsBusinessProfilePage';
+import { CrmSettingsPage } from './settings/CrmSettingsPage';
+import { ReminderTemplatesPage } from './settings/ReminderTemplatesPage';
+import { BlockLibraryPage } from './contracts/BlockLibraryPage';
+import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
+import { Briefcase, Receipt, ScrollText, Mail } from 'lucide-react';
 
 // Tab keys driving the inner-nav. Must include every key used in
 // `navGroups` below and in the switch at the bottom of the component.
@@ -68,7 +75,13 @@ type TabType =
   | 'webhooks'
   | 'status'
   | 'analytics'
-  | 'backup';
+  | 'backup'
+  // CRM (#TBD): issuer block for quote/invoice PDFs and per-area
+  // CRM behaviour toggles.
+  | 'businessProfile'
+  | 'crm'
+  | 'contracts'
+  | 'reminderTemplates';
 
 interface NavItem {
   key: TabType;
@@ -88,6 +101,7 @@ const ALL_TAB_KEYS: TabType[] = [
   'security', 'imageSecurity', 'seo',
   'apiTokens', 'webhooks',
   'status', 'analytics', 'backup',
+  'businessProfile', 'crm', 'contracts', 'reminderTemplates',
 ];
 
 function isValidTab(value: string | null): value is TabType {
@@ -97,6 +111,7 @@ function isValidTab(value: string | null): value is TabType {
 export const SettingsPage: React.FC = () => {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { flags } = useFeatureFlags();
 
   // Read ?tab=… on mount; default to Features per the redesign.
   const initialTab: TabType = isValidTab(searchParams.get('tab'))
@@ -219,6 +234,26 @@ export const SettingsPage: React.FC = () => {
       ],
     },
     {
+      // CRM group. businessProfile is always relevant (the issuer block
+      // feeds every PDF, gallery hero, footer, etc — even with zero
+      // CRM features). The remaining items hide when their matching
+      // master flag is off so admins don't navigate to a tab that
+      // configures a feature they can't actually use.
+      label: t('settings.groups.crm', 'CRM-Settings'),
+      items: [
+        { key: 'businessProfile',    label: t('settings.businessProfile.title', 'Business profile'), icon: Briefcase },
+        ...(flags.quotes || flags.bills || flags.contracts
+          ? [{ key: 'crm' as const,                label: t('settings.crm.title',             'CRM behaviour'),    icon: Receipt }]
+          : []),
+        ...(flags.contracts
+          ? [{ key: 'contracts' as const,          label: t('settings.contracts.title',       'Contracts'),        icon: ScrollText }]
+          : []),
+        ...(flags.reminderEmails
+          ? [{ key: 'reminderTemplates' as const,  label: t('settings.reminderTemplates.title', 'Reminder emails'), icon: Mail }]
+          : []),
+      ],
+    },
+    {
       label: t('settings.groups.system', 'System'),
       items: [
         { key: 'status',    label: t('settings.systemStatus.title'),               icon: Activity },
@@ -231,11 +266,23 @@ export const SettingsPage: React.FC = () => {
   const allItems = navGroups.flatMap((g) => g.items);
   const activeItem = allItems.find((i) => i.key === activeTab) ?? allItems[0];
 
+  // If the active tab refers to an item that's now hidden (e.g. admin
+  // landed on ?tab=reminderTemplates after disabling reminderEmails),
+  // snap to the first visible item so the content area doesn't render
+  // a hidden tab's UI. Effect re-fires when flags toggle live.
+  useEffect(() => {
+    const visibleKeys = allItems.map((i) => i.key);
+    if (!visibleKeys.includes(activeTab) && visibleKeys.length > 0) {
+      setActiveTab(visibleKeys[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flags.quotes, flags.bills, flags.contracts, flags.reminderEmails, activeTab]);
+
   // For tabs that mount existing top-level pages OR bring their own
   // header (FeaturesTab has its own icon+title+description block), skip
   // the Settings shell's section heading so the layout doesn't double
   // up.
-  const TABS_WITH_OWN_HEADER: TabType[] = ['features', 'email', 'branding', 'eventTypes', 'backup', 'cms'];
+  const TABS_WITH_OWN_HEADER: TabType[] = ['features', 'email', 'branding', 'eventTypes', 'backup', 'cms', 'contracts', 'reminderTemplates'];
   const showSectionHeading = !TABS_WITH_OWN_HEADER.includes(activeTab);
 
   return (
@@ -363,6 +410,10 @@ export const SettingsPage: React.FC = () => {
           {activeTab === 'cms' && <CMSPage />}
           {activeTab === 'email' && <EmailConfigPage />}
           {activeTab === 'backup' && <BackupManagement />}
+          {activeTab === 'businessProfile' && <SettingsBusinessProfilePage />}
+          {activeTab === 'crm' && <CrmSettingsPage />}
+          {activeTab === 'contracts' && <BlockLibraryPage />}
+          {activeTab === 'reminderTemplates' && <ReminderTemplatesPage />}
 
           {activeTab === 'status' && (
             <StatusTab

@@ -368,4 +368,346 @@ router.post('/profile/password', [
   }
 });
 
+// ---- quotes (customer-facing read-only) ------------------------------
+// Lists quotes belonging to the logged-in customer. Scoped strictly to
+// the customer's own customer_account_id so a stale or stolen token can
+// never see another customer's quotes. Returns the same shape the admin
+// list does, minus fields that are admin-only (internal_notes, pdf_path,
+// created_by_admin_id). Disabled when the customer has `feature_quotes`
+// off OR the global `quotes` flag is off — the frontend's RequireFeature
+// already hides the sidebar entry, but we belt-and-braces it here so a
+// direct API hit gets a 403 instead of leaking rows.
+router.get('/quotes', customerAuth, async (req, res) => {
+  try {
+    const { db: dbi } = require('../database/db');
+    // Customer-feature gate. is_active is enforced by customerAuth.
+    const customer = await dbi('customer_accounts').where({ id: req.customer.id }).first();
+    if (!customer || customer.feature_quotes === false || customer.feature_quotes === 0) {
+      return res.status(403).json({ error: 'Quotes are disabled for this account', code: 'CUSTOMER_FEATURE_DISABLED' });
+    }
+    const rows = await dbi('quotes')
+      .where({ customer_account_id: req.customer.id })
+      // Hide drafts — they're admin scratch work; nothing has been
+      // sent to the customer yet. Mirrors the invoice list above
+      // which suppresses 'scheduled' + 'cancelled' for the same
+      // reason. Customers should only see quotes the admin has
+      // actually issued (sent / accepted / declined / expired /
+      // converted).
+      .whereNotIn('status', ['draft'])
+      .orderBy('issue_date', 'desc')
+      .orderBy('id', 'desc')
+      .select(
+        'id', 'quote_number', 'status', 'currency',
+        'issue_date', 'valid_until', 'event_name', 'event_date',
+        'net_amount_minor', 'vat_rate', 'vat_amount_minor',
+        'shipping_amount_minor', 'total_amount_minor',
+        'intro_text', 'outro_text',
+        'sent_at', 'responded_at', 'response_locked_at',
+        'accepted_at', 'declined_at',
+      );
+
+    // Look up the active accept/decline token for each non-locked
+    // quote so the customer dashboard can deep-link back into the
+    // public response page when the admin already sent it. We avoid
+    // re-issuing tokens here — the dashboard is for review, not
+    // re-sending.
+    const tokensByQuote = new Map();
+    if (rows.length > 0) {
+      const tokens = await dbi('quote_action_tokens')
+        .whereIn('quote_id', rows.map((r) => r.id))
+        .whereNull('used_at')
+        .where('expires_at', '>', new Date())
+        .select('quote_id', 'token');
+      for (const t of tokens) tokensByQuote.set(t.quote_id, t.token);
+    }
+
+    res.json({
+      quotes: rows.map((q) => ({
+        id: q.id,
+        quoteNumber: q.quote_number,
+        status: q.status,
+        currency: q.currency,
+        issueDate: q.issue_date,
+        validUntil: q.valid_until,
+        eventName: q.event_name,
+        eventDate: q.event_date,
+        netAmountMinor: q.net_amount_minor,
+        vatRate: q.vat_rate == null ? null : Number(q.vat_rate),
+        vatAmountMinor: q.vat_amount_minor,
+        shippingAmountMinor: q.shipping_amount_minor,
+        totalAmountMinor: q.total_amount_minor,
+        introText: q.intro_text,
+        outroText: q.outro_text,
+        sentAt: q.sent_at,
+        respondedAt: q.responded_at,
+        responseLockedAt: q.response_locked_at,
+        acceptedAt: q.accepted_at,
+        declinedAt: q.declined_at,
+        responseToken: tokensByQuote.get(q.id) || null,
+      })),
+    });
+  } catch (error) {
+    logger.error('Customer quotes list error:', error);
+    res.status(500).json({ error: 'Failed to load quotes' });
+  }
+});
+
+// ---- invoices (customer-facing read-only + PDF) ----------------------
+// Mirrors /quotes — list owned by the customer with the same feature
+// gate. Adds a PDF download endpoint so customers can grab the rendered
+// invoice from their dashboard.
+router.get('/invoices', customerAuth, async (req, res) => {
+  try {
+    const { db: dbi } = require('../database/db');
+    const customer = await dbi('customer_accounts').where({ id: req.customer.id }).first();
+    if (!customer || customer.feature_bills === false || customer.feature_bills === 0) {
+      return res.status(403).json({ error: 'Invoices are disabled for this account', code: 'CUSTOMER_FEATURE_DISABLED' });
+    }
+    // Visibility rules for the customer-facing list:
+    //   - Hide `scheduled` always (drafts the admin is still tweaking).
+    //   - Show `sent`, `overdue`, `paid` always (the customer's
+    //     outstanding + paid history).
+    //   - Show `cancelled` ONLY when `cancellation_storno_id IS NOT NULL`,
+    //     i.e. the cancellation was made customer-visible via a
+    //     Stornorechnung (migration 114). Soft-cancelled drafts stay
+    //     hidden — the customer never saw the draft, so a "cancelled"
+    //     phantom in their list would just be confusing.
+    //   - Show `kind='storno'` rows (status='sent' after sendStorno)
+    //     unconditionally — they're the customer's legal proof of
+    //     cancellation and the only document with the §14c reversal.
+    const rows = await dbi('invoices')
+      .leftJoin('invoices as cancels_inv', 'invoices.cancels_invoice_id', 'cancels_inv.id')
+      .leftJoin('invoices as cancellation_storno', 'invoices.cancellation_storno_id', 'cancellation_storno.id')
+      .where({ 'invoices.customer_account_id': req.customer.id })
+      .whereNot('invoices.status', 'scheduled')
+      .whereNot('invoices.status', 'skipped')
+      .andWhere(function () {
+        this.whereNot('invoices.status', 'cancelled').orWhereNotNull('invoices.cancellation_storno_id');
+      })
+      .orderBy('invoices.issue_date', 'desc')
+      .orderBy('invoices.id', 'desc')
+      .select(
+        'invoices.id', 'invoices.kind', 'invoices.invoice_number', 'invoices.status', 'invoices.currency',
+        'invoices.issue_date', 'invoices.due_date',
+        // Inline event snapshot (migration 123) — the customer portal
+        // shows event_name next to the invoice number, mirroring the
+        // quotes list.
+        'invoices.event_name', 'invoices.event_date',
+        'invoices.installment_index', 'invoices.installment_total', 'invoices.installment_label',
+        'invoices.net_amount_minor', 'invoices.vat_rate', 'invoices.vat_amount_minor',
+        'invoices.shipping_amount_minor', 'invoices.total_amount_minor',
+        'invoices.paid_amount_minor', 'invoices.paid_at',
+        'invoices.late_fee_amount_minor', 'invoices.reminder_level', 'invoices.sent_at',
+        // Lineage — drives the Storno banner / cancelled-by-Storno
+        // indicator on the customer's bills page. Self-join the
+        // linked rows so we can surface the human invoice_number,
+        // not just the bare DB row id.
+        'invoices.cancels_invoice_id', 'invoices.cancellation_storno_id',
+        'cancels_inv.invoice_number as cancels_invoice_number',
+        'cancellation_storno.invoice_number as cancellation_storno_number',
+      );
+    res.json({
+      invoices: rows.map((i) => ({
+        id: i.id,
+        kind: i.kind || 'invoice',
+        invoiceNumber: i.invoice_number,
+        status: i.status,
+        currency: i.currency,
+        issueDate: i.issue_date,
+        dueDate: i.due_date,
+        installmentIndex: i.installment_index,
+        installmentTotal: i.installment_total,
+        installmentLabel: i.installment_label,
+        netAmountMinor: i.net_amount_minor,
+        vatRate: i.vat_rate == null ? null : Number(i.vat_rate),
+        vatAmountMinor: i.vat_amount_minor,
+        shippingAmountMinor: i.shipping_amount_minor,
+        totalAmountMinor: i.total_amount_minor,
+        paidAmountMinor: i.paid_amount_minor,
+        paidAt: i.paid_at,
+        lateFeeAmountMinor: i.late_fee_amount_minor,
+        reminderLevel: i.reminder_level,
+        sentAt: i.sent_at,
+        cancelsInvoiceId: i.cancels_invoice_id || null,
+        cancelsInvoiceNumber: i.cancels_invoice_number || null,
+        cancellationStornoId: i.cancellation_storno_id || null,
+        cancellationStornoNumber: i.cancellation_storno_number || null,
+        eventName: i.event_name || null,
+        eventDate: i.event_date || null,
+      })),
+    });
+  } catch (error) {
+    logger.error('Customer invoice list error:', error);
+    res.status(500).json({ error: 'Failed to load invoices' });
+  }
+});
+
+/**
+ * Customer-side quote PDF — mirrors the invoice PDF endpoint above.
+ * The customer can re-download any quote that's been sent to them
+ * (the public response page also uses this view). Draft quotes are
+ * hidden — they're not yet meant for the customer.
+ */
+router.get('/quotes/:id/pdf', customerAuth, async (req, res) => {
+  try {
+    // Feature-gate identically to /quotes (list endpoint).
+    if (req.customer.feature_quotes === false || req.customer.feature_quotes === 0 || req.customer.feature_quotes === '0') {
+      return res.status(403).json({ error: 'Quotes are disabled for this account' });
+    }
+    const { db: dbi } = require('../database/db');
+    const quote = await dbi('quotes')
+      .where({ id: parseInt(req.params.id, 10), customer_account_id: req.customer.id })
+      .first();
+    if (!quote) return res.status(404).json({ error: 'Quote not found' });
+    if (quote.status === 'draft') {
+      // Drafts aren't visible to the customer.
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+    const quoteService = require('../services/quoteService');
+    const buf = await quoteService.renderQuotePdfBuffer(quote.id);
+    const { buildPdfFilename } = require('../utils/pdfFilename');
+    const customer = await dbi('customer_accounts').where({ id: req.customer.id }).first();
+    const filename = buildPdfFilename({
+      docNumber: quote.quote_number,
+      customer,
+      fallback: `quote-${quote.id}`,
+    });
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="${filename}"`);
+    res.send(buf);
+  } catch (error) {
+    logger.error('Customer quote PDF error:', error);
+    res.status(500).json({ error: 'Failed to render quote PDF' });
+  }
+});
+
+router.get('/invoices/:id/pdf', customerAuth, async (req, res) => {
+  try {
+    const { db: dbi } = require('../database/db');
+    const invoice = await dbi('invoices')
+      .where({ id: parseInt(req.params.id, 10), customer_account_id: req.customer.id })
+      .first();
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    if (['scheduled', 'cancelled', 'skipped'].includes(invoice.status)) {
+      // Don't expose scheduled drafts, cancelled docs, or
+      // skipped empty-monthly placeholders.
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+    const invoiceService = require('../services/invoiceService');
+    const buf = await invoiceService.renderInvoicePdfBuffer(invoice.id);
+    const { buildPdfFilename } = require('../utils/pdfFilename');
+    const customer = await dbi('customer_accounts').where({ id: req.customer.id }).first();
+    const filename = buildPdfFilename({
+      docNumber: invoice.invoice_number,
+      customer,
+      fallback: `invoice-${invoice.id}`,
+    });
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="${filename}"`);
+    res.send(buf);
+  } catch (error) {
+    logger.error('Customer invoice PDF error:', error);
+    res.status(500).json({ error: 'Failed to render invoice PDF' });
+  }
+});
+
+// ---- contracts (customer-facing read-only + PDF + signed-PDF) -------
+// Same shape as /quotes and /invoices. Drafts are hidden; everything
+// from `sent` onwards is visible. Two PDF download endpoints because
+// the signed PDF (stamped with signatures OR a wet-signed upload) is
+// the authoritative copy customers want after both parties sign.
+router.get('/contracts', customerAuth, async (req, res) => {
+  try {
+    const { db: dbi } = require('../database/db');
+    if (!(await dbi.schema.hasTable('contracts'))) {
+      // Feature not migrated on this install yet.
+      return res.json({ contracts: [] });
+    }
+    const rows = await dbi('contracts')
+      .where({ customer_account_id: req.customer.id })
+      .whereNotIn('status', ['draft'])
+      .orderBy('issue_date', 'desc')
+      .orderBy('id', 'desc')
+      .select(
+        'id', 'contract_number', 'status', 'language',
+        'issue_date', 'valid_until', 'title',
+        'sent_at', 'signed_by_customer_at', 'signed_by_admin_at',
+        'signed_customer_name', 'signed_admin_name',
+        'pdf_path', 'signed_pdf_path',
+      );
+
+    // Live tokens for the public sign page so customer dashboard can
+    // deep-link the "Sign now" button on `sent` contracts.
+    const tokensByContract = new Map();
+    if (rows.length > 0 && await dbi.schema.hasTable('contract_action_tokens')) {
+      const tokens = await dbi('contract_action_tokens')
+        .whereIn('contract_id', rows.map((r) => r.id))
+        .whereNull('used_at')
+        .where('expires_at', '>', new Date())
+        .select('contract_id', 'token');
+      for (const tk of tokens) tokensByContract.set(tk.contract_id, tk.token);
+    }
+
+    res.json({
+      contracts: rows.map((c) => ({
+        id: c.id,
+        contractNumber: c.contract_number,
+        status: c.status,
+        language: c.language,
+        issueDate: c.issue_date,
+        validUntil: c.valid_until,
+        title: c.title,
+        sentAt: c.sent_at,
+        signedByCustomerAt: c.signed_by_customer_at,
+        signedByAdminAt: c.signed_by_admin_at,
+        signedCustomerName: c.signed_customer_name,
+        signedAdminName: c.signed_admin_name,
+        // Surface flags only — no paths leaked to the customer.
+        hasPdf: !!c.pdf_path,
+        hasSignedPdf: !!c.signed_pdf_path,
+        responseToken: tokensByContract.get(c.id) || null,
+      })),
+    });
+  } catch (error) {
+    logger.error('Customer contracts list error:', error);
+    res.status(500).json({ error: 'Failed to load contracts' });
+  }
+});
+
+router.get('/contracts/:id/pdf', customerAuth, async (req, res) => {
+  try {
+    const { db: dbi } = require('../database/db');
+    if (!(await dbi.schema.hasTable('contracts'))) {
+      return res.status(404).json({ error: 'Contract not found' });
+    }
+    const contract = await dbi('contracts')
+      .where({ id: parseInt(req.params.id, 10), customer_account_id: req.customer.id })
+      .first();
+    if (!contract) return res.status(404).json({ error: 'Contract not found' });
+    if (contract.status === 'draft') {
+      return res.status(404).json({ error: 'Contract not found' });
+    }
+    // Prefer the wet-signed PDF when present, otherwise the system-
+    // generated PDF (signed in-browser, stamped, or unsigned).
+    const path = require('path');
+    const fs = require('fs');
+    const filePath = contract.signed_pdf_path || contract.pdf_path;
+    if (!filePath || !fs.existsSync(filePath)) {
+      // Render on-demand so customers who hit the link before the
+      // first send still get something usable.
+      const contractService = require('../services/contractService');
+      const buf = await contractService.renderContractPdfBuffer(contract.id);
+      res.set('Content-Type', 'application/pdf');
+      res.set('Content-Disposition', `inline; filename="${contract.contract_number}.pdf"`);
+      return res.send(buf);
+    }
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="${path.basename(filePath)}"`);
+    fs.createReadStream(filePath).pipe(res);
+  } catch (error) {
+    logger.error('Customer contract PDF error:', error);
+    res.status(500).json({ error: 'Failed to render contract PDF' });
+  }
+});
+
 module.exports = router;
