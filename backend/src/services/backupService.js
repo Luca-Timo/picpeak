@@ -814,6 +814,66 @@ async function runBackupInternal(isManual = false) {
     }).returning('id');
     runId = insertResult[0]?.id || insertResult[0];
 
+    // Inline database dump (default ON). Previously, runBackup only LOOKED UP
+    // an existing database dump via getDatabaseBackupInfo and silently shipped
+    // a files-only manifest when none was found — admins clicking "Run Backup
+    // Now" got an apparent success that omitted every customer / quote /
+    // invoice / contract row. Triggering pg_dump (or the SQLite copy) here
+    // makes "file backup" always include a fresh database snapshot. Admins
+    // who run their own scheduled dumps via backup_database_schedule can opt
+    // out with backup_database_inline_dump = false; the fail-loud guard
+    // below still catches the case where no recent dump exists.
+    //
+    // Default ON is encoded as "skip only when explicitly false". `undefined`
+    // (setting not yet inserted on existing installs) falls through to the
+    // ON path, which is the data-loss-safe default. normalizeBoolean(undefined)
+    // returns false, so checking inequality against false would inadvertently
+    // disable on unset — guard with `!== undefined` first.
+    const inlineDumpExplicitlyOff = config.backup_database_inline_dump !== undefined
+      && config.backup_database_inline_dump !== null
+      && normalizeBoolean(config.backup_database_inline_dump) === false;
+    if (!inlineDumpExplicitlyOff) {
+      logger.info('Running inline database dump before file backup...');
+      const { databaseBackupService } = require('./databaseBackup');
+      const dumpResult = await databaseBackupService.backup({});
+      logger.info(`Inline database dump completed: ${dumpResult.path} ` +
+        `(${(dumpResult.size / 1024 / 1024).toFixed(2)} MB)`);
+    }
+
+    // Fail-loud guard: a "file backup" without a DB component is a data-loss
+    // trap. Whether the dump came from the inline step above or from a
+    // separately-scheduled database backup, we require a usable dump file
+    // before proceeding. Throws — the catch block marks the backup_runs row
+    // failed with this error_message and emails the admin if configured.
+    const dbInfoCheck = await service.getDatabaseBackupInfo();
+    if (!dbInfoCheck.backupFile) {
+      throw new Error(
+        'No database backup available to include in this file backup. ' +
+        'Either keep backup_database_inline_dump enabled (default) or configure ' +
+        'backup_database_schedule and let it run at least once first.'
+      );
+    }
+    try {
+      const dumpStat = await fs.stat(dbInfoCheck.backupFile);
+      if (!dumpStat.size || dumpStat.size === 0) {
+        throw new Error(
+          `Database backup file at ${dbInfoCheck.backupFile} is empty (0 bytes). ` +
+          'Refusing to proceed with file backup to avoid shipping a manifest with no DB content.'
+        );
+      }
+    } catch (statErr) {
+      // fs.stat throws if file doesn't exist; preserve the more specific
+      // empty-file error from the inner block.
+      if (statErr.code === 'ENOENT') {
+        throw new Error(
+          `Database backup file at ${dbInfoCheck.backupFile} is missing from disk. ` +
+          'Refusing to proceed with file backup; configure backup_database_schedule or ' +
+          'keep backup_database_inline_dump enabled.'
+        );
+      }
+      throw statErr;
+    }
+
     const files = await service.getFilesToBackup(config.backup_include_archived);
     logger.info(`Found ${files.length} files to check for backup`);
 
