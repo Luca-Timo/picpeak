@@ -164,6 +164,7 @@ async function getRecipientLanguage(email, eventId = null) {
       { domains: ['.br', '.pt'], language: 'pt' },
       { domains: ['.ru', '.su'], language: 'ru' },
       { domains: ['.es'], language: 'es' },
+      { domains: ['.si'], language: 'sl' },
     ];
     for (const { domains, language: lang } of domainLanguageMap) {
       if (domains.some(d => domain.endsWith(d))) {
