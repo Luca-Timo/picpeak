@@ -5,6 +5,19 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.56.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.55.0-beta.0...v3.56.0-beta.0) (2026-05-29)
+
+
+### Features
+
+* CRM module — quotes, contracts, invoices, hours, calendar, tax ([5f0fcc2](https://github.com/the-luap/picpeak/commit/5f0fcc225c29ce0f4410c5aba5ecd5a3a6d07259))
+
+
+### Bug Fixes
+
+* **crm:** thread trx through sequence-claim sites to unblock SQLite ([d1aecaa](https://github.com/the-luap/picpeak/commit/d1aecaa1804c0039744eb79a4032d1ed923e0b85))
+* **quote-response:** compute minutes-remaining for the DE changeWithin string ([5ce0b6e](https://github.com/the-luap/picpeak/commit/5ce0b6edc3fef41f2f22dd585a668f471ac47a2e))
+
 ## [3.55.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.54.7-beta.0...v3.55.0-beta.0) (2026-05-27)
 
 
