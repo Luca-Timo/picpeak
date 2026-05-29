@@ -13,7 +13,18 @@ let cachedTimeout = null;
 let cacheExpiry = 0;
 const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes - reduced DB queries
 
-// Clean up expired sessions every 5 minutes
+// Clean up expired sessions every 5 minutes.
+//
+// `.unref()` so this timer doesn't keep the event loop alive on its
+// own — without it, every jest worker that requires this module
+// (directly or transitively via server.js / a middleware-importing
+// route file) gets stuck and either prints the "worker failed to
+// exit gracefully" warning or, under high CI load, force-kills mid-
+// test and takes an unrelated suite down with it (we hit this with
+// integration/storageBackend.test.js on PR #555). Production
+// behaviour is unchanged: the timer fires every 5 min as long as
+// the server has anything else keeping the loop alive (HTTP server,
+// other intervals), which is always.
 setInterval(() => {
   const now = Date.now();
   for (const [token, lastActivity] of sessions.entries()) {
@@ -21,7 +32,7 @@ setInterval(() => {
       sessions.delete(token);
     }
   }
-}, 5 * 60 * 1000);
+}, 5 * 60 * 1000).unref();
 
 async function getSessionTimeout() {
   const now = Date.now();
