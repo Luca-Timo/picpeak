@@ -22,6 +22,7 @@ const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const { verifyDocumentArtefacts } = require('../services/backupIntegrityService');
+const { getCoverageReport } = require('../services/backupCoverageService');
 
 const router = express.Router();
 
@@ -57,6 +58,28 @@ router.get(
       }
     }
     const report = await verifyDocumentArtefacts({ scope });
+    return successResponse(res, { report });
+  }),
+);
+
+/**
+ * GET /api/admin/system-health/backup-coverage
+ *
+ * Stage C of the backup-hardening plan. Returns the data-driven
+ * coverage report — what the next "Run Backup Now" will include /
+ * skip / silently miss, plus the database-dump status block.
+ *
+ * Read-only, on-demand. No scope parameter — the report is cheap
+ * (only top-level directory listing under STORAGE_PATH, no recursion).
+ *
+ * See backupCoverageService.js for the full rationale and the
+ * coverage-classification rules.
+ */
+router.get(
+  '/backup-coverage',
+  requirePermission('settings.view'),
+  handleAsync(async (req, res) => {
+    const report = await getCoverageReport();
     return successResponse(res, { report });
   }),
 );

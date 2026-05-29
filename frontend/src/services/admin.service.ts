@@ -245,6 +245,58 @@ export interface BackupIntegrityReport {
   existsButNoHash: BackupIntegrityExistsButNoHashRow[];
 }
 
+// ---- Backup-coverage (Stage C of backup-hardening plan) -----------------
+
+export type BackupPathCoverage =
+  | 'will-scan'
+  | 'skipped-by-toggle'
+  | 'skipped-by-feature-flag'
+  | 'missing-on-disk';
+
+export interface BackupCoveragePath {
+  path: string;
+  includeInDefault: boolean;
+  featureFlag: string | null;
+  featureFlagValue: boolean | null;
+  displayOrder: number;
+  description: string | null;
+  existsOnDisk: boolean;
+  coverage: BackupPathCoverage;
+}
+
+export interface BackupCoverageDatabase {
+  mode: 'inline' | 'scheduled-only';
+  inlineDumpExplicitlyDisabled: boolean;
+  lastDumpAt: string | null;
+  lastDumpType: string | null;
+  lastDumpSizeBytes: number;
+  lastDumpFilePath: string | null;
+  lastDumpAgeMs: number | null;
+  lastDumpStale: boolean | null;
+  ok: boolean;
+}
+
+export interface BackupCoverageReport {
+  generatedAt: string;
+  database: BackupCoverageDatabase;
+  paths: BackupCoveragePath[];
+  drift: {
+    unconfiguredOnDisk: string[];
+    expectedNonBackupDirs: string[];
+  };
+  summary: {
+    configuredCount: number;
+    willScanCount: number;
+    skippedByToggleCount: number;
+    skippedByFeatureFlagCount: number;
+    missingOnDiskCount: number;
+    driftCount: number;
+    tableMissingFallbackInUse: boolean;
+    databaseOk: boolean;
+    overallOk: boolean;
+  };
+}
+
 export interface AdminProfile {
   id: number;
   username: string;
@@ -315,6 +367,16 @@ export const adminService = {
     const response = await api.get<{ report: BackupIntegrityReport }>(
       '/admin/system-health/backup-integrity',
       { params },
+    );
+    return response.data.report;
+  },
+
+  // Backup-coverage diagnostic (Stage C). Answers "what will the
+  // next backup actually include / skip / silently miss?" — read-only,
+  // no parameters. See backupCoverageService.js for the full report shape.
+  async getBackupCoverage(): Promise<BackupCoverageReport> {
+    const response = await api.get<{ report: BackupCoverageReport }>(
+      '/admin/system-health/backup-coverage',
     );
     return response.data.report;
   },
