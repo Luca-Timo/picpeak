@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 const { formatBoolean } = require('../utils/dbCompat');
 const logger = require('../utils/logger');
-const { checkForUpdates, getCurrentChannel } = require('../services/updateCheckService');
+const { checkForUpdates, getCurrentChannel, getReleasesSince } = require('../services/updateCheckService');
 const { detectEnvironment, generateUpdateInstructions } = require('../services/environmentService');
 const {
   checkAndNotifyUpdates,
@@ -68,6 +68,33 @@ router.get('/updates', adminAuth, requirePermission('settings.view'), async (req
   } catch (error) {
     logger.error('Error checking for updates:', error);
     res.status(500).json({ error: 'Failed to check for updates' });
+  }
+});
+
+// Aggregated changelog — every release between current and latest in
+// the user's channel. Powers the update-available modal (#567) so the
+// admin can read release notes for ALL versions they're behind on, not
+// just the latest. Body is raw GitHub-flavoured markdown; rendering is
+// the client's job (frontend uses `marked`).
+router.get('/updates/changelog', adminAuth, requirePermission('settings.view'), async (req, res) => {
+  try {
+    const updateCheckEnabled = process.env.UPDATE_CHECK_ENABLED !== 'false';
+    if (!updateCheckEnabled) {
+      return res.json({ enabled: false, releases: [] });
+    }
+
+    const updateInfo = await checkForUpdates();
+    const releases = await getReleasesSince(updateInfo.current, updateInfo.channel);
+
+    res.json({
+      enabled: true,
+      current: updateInfo.current,
+      channel: updateInfo.channel,
+      releases,
+    });
+  } catch (error) {
+    logger.error('Error fetching update changelog:', error);
+    res.status(500).json({ error: 'Failed to fetch changelog' });
   }
 });
 
