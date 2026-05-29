@@ -230,6 +230,45 @@ router.post('/:id/deactivate', [
 }));
 
 /**
+ * POST /:id/activate
+ * Re-activate a previously deactivated user — symmetric counterpart
+ * to /deactivate. Same permission tier; reverting a deactivation is
+ * the same scope of action as performing one.
+ *
+ * #574 follow-up: before this endpoint existed, deactivation was a
+ * one-way door from the UI.
+ */
+router.post('/:id/activate', [
+  adminAuth,
+  requirePermission('users.delete'),
+  param('id').isInt({ min: 1 }).withMessage('Valid user ID is required')
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  await userManagementService.activateAdminUser(parseInt(req.params.id), req.admin.id);
+  successResponse(res, { message: 'User activated successfully' });
+}));
+
+/**
+ * DELETE /:id
+ * Hard-delete an admin user. Caller should typically deactivate
+ * first; the UI nudges this order. FK rules in core migrations
+ * cascade-delete the user's pending invitations + api_tokens and
+ * SET NULL on created_by_admin_id columns elsewhere.
+ *
+ * Requires: users.delete permission. Self-delete + last-super-admin
+ * are blocked in the service.
+ */
+router.delete('/:id', [
+  adminAuth,
+  requirePermission('users.delete'),
+  param('id').isInt({ min: 1 }).withMessage('Valid user ID is required')
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  await userManagementService.deleteAdminUser(parseInt(req.params.id), req.admin.id);
+  successResponse(res, { message: 'User deleted successfully' });
+}));
+
+/**
  * POST /:id/reset-password
  * Reset user password
  * Requires: super_admin role
