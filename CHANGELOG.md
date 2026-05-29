@@ -5,6 +5,14 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.59.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.58.0-beta.0...v3.59.0-beta.0) (2026-05-29)
+
+
+### Features
+
+* **admin/users:** reactivate + delete actions for deactivated admin users ([c4a9b36](https://github.com/the-luap/picpeak/commit/c4a9b3636fc7a9209ae724acb7c8cffe141d93ea))
+* **admin/users:** reactivate + delete actions for deactivated admin users ([dfcebcc](https://github.com/the-luap/picpeak/commit/dfcebccee98a551980ad2be78a8356fd39894f8a))
+
 ## [3.58.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.57.2-beta.0...v3.58.0-beta.0) (2026-05-29)
 
 
