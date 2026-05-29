@@ -11,8 +11,15 @@ set -e
 # other than root skip this branch — they own permissions themselves and hit
 # the preflight check below instead.
 if [ "$(id -u)" = "0" ]; then
-  if ! chown -R nodejs:nodejs /app/storage /app/data /app/logs 2>/dev/null; then
-    echo "ERROR: failed to chown /app/storage, /app/data, /app/logs to nodejs (UID 1001)." >&2
+  # /backup is the docker-compose `./backup:/backup` mount used by the
+  # CRM + database backup writers. It's only chowned when it actually
+  # exists as a bind mount — installs that don't mount it (e.g. native
+  # / k8s deployments using a different backup destination) skip
+  # cleanly via the `[ -d /backup ]` guard.
+  _chown_dirs="/app/storage /app/data /app/logs"
+  [ -d /backup ] && _chown_dirs="$_chown_dirs /backup"
+  if ! chown -R nodejs:nodejs $_chown_dirs 2>/dev/null; then
+    echo "ERROR: failed to chown $_chown_dirs to nodejs (UID 1001)." >&2
     echo "  This usually means the host filesystem rejects chown (e.g. NFS without root squash" >&2
     echo "  disabled, or a SELinux/AppArmor policy blocking the operation)." >&2
     echo "  Workaround: pre-chown the host directories to 1001:1001 and pin 'user: \"1001:1001\"'" >&2
@@ -29,7 +36,15 @@ fi
 # followed by a confusing migration error and a restart loop.
 _uid="$(id -u)"
 _gid="$(id -g)"
-for _dir in /app/storage /app/data /app/logs; do
+# /backup is included here for symmetry with the root branch above:
+# when the compose `user:` override is set, the host operator is
+# expected to have chowned the bind mount themselves. Skip the
+# check when the mount isn't present so non-bind-mounted setups
+# (e.g. backup destination configured to local storage path) still
+# boot cleanly.
+_writable_dirs="/app/storage /app/data /app/logs"
+[ -d /backup ] && _writable_dirs="$_writable_dirs /backup"
+for _dir in $_writable_dirs; do
   if [ ! -w "$_dir" ]; then
     echo "ERROR: $_dir is not writable by UID $_uid." >&2
     echo "  Either drop the 'user:' override from your compose file so the container starts as" >&2
