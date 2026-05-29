@@ -97,7 +97,7 @@ Note on Docker file permissions
 
 ## 🔄 Release Channels
 
-PicPeak offers two release channels for different needs:
+PicPeak offers two release channels for different needs. Stable promotions are cut from a known-good beta point every 4–6 weeks — see [RELEASING.md](RELEASING.md) for the maintainer's promotion criteria and cadence policy.
 
 ### Stable Channel (Recommended)
 - Production-ready releases
