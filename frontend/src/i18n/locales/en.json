@@ -2121,7 +2121,39 @@
       "dashboard": "Dashboard",
       "configuration": "Configuration",
       "history": "Backup History",
-      "restore": "Restore"
+      "restore": "Restore",
+      "integrity": "Integrity"
+    },
+    "integrity": {
+      "title": "Document integrity",
+      "description": "Verifies every CRM document (quote / contract / invoice / signature) referenced from the database actually exists on disk and — where a hash is stored — its bytes still match. Read-only, on-demand.",
+      "runNow": "Run check now",
+      "running": "Checking…",
+      "error": "Check failed: {{message}}",
+      "scannedAt": "Last checked: {{when}}",
+      "emptyState": "No check has been run yet in this session. Click \"Run check now\" to scan the document estate.",
+      "summary": {
+        "total": "Total",
+        "verifiedOk": "Hash-verified",
+        "existsButNoHash": "Exists only",
+        "existsButNoHashHint": "File found, but no SHA-256 is stored for it (quote/invoice PDFs, signature drawings). Existence-only is weaker evidence in a dispute.",
+        "missingFiles": "Missing",
+        "hashMismatches": "Hash mismatches"
+      },
+      "missing": {
+        "heading": "Missing files",
+        "caption": "These rows reference a path that does not exist on disk. After a restore, this means the artefact was lost from the backup chain; for fresh installs, it usually means the file was deleted manually."
+      },
+      "hashMismatches": {
+        "heading": "Hash mismatches",
+        "caption": "The file exists but its current bytes do not match the SHA-256 captured at issue / sign time. Indicates tampering, bit-rot, or a restore that pulled in a different copy than the original."
+      },
+      "results": {
+        "table": "Table",
+        "rowId": "Row id",
+        "column": "Column",
+        "detail": "Detail"
+      }
     },
     "status": {
       "inProgress": "Backup in progress...",
@@ -2408,7 +2440,8 @@
         "restoreLogs": "Restore Logs",
         "success": {
           "title": "Restore Completed Successfully",
-          "message": "Your data has been restored. Please verify everything is working correctly."
+          "message": "Your data has been restored. Please verify everything is working correctly.",
+          "verifyIntegrity": "Verify document integrity now"
         }
       },
       "actions": {

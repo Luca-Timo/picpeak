@@ -660,6 +660,7 @@ app.use('/api/admin/contracts',  require('./src/routes/adminContracts'));
 app.use('/api/admin/calendar',   require('./src/routes/adminCalendar'));
 app.use('/api/admin/deals',      require('./src/routes/adminDeals'));
 app.use('/api/admin/tax-report', require('./src/routes/adminTaxReport'));
+app.use('/api/admin/system-health', require('./src/routes/adminSystemHealth'));
 app.use('/api/admin/dev',        require('./src/routes/adminDev'));
 app.use('/api/public/quotes',  require('./src/routes/publicQuotes'));
 app.use('/api/public/contracts', require('./src/routes/publicContracts'));

@@ -201,6 +201,50 @@ export interface Activity {
   createdAt: string;
 }
 
+// Backup-integrity verifier — diagnostic endpoint that walks every
+// CRM document-artefact path column and confirms files exist on disk
+// (plus SHA-256 match where the schema stores one). Mirrors the
+// shape returned by backupIntegrityService.verifyDocumentArtefacts.
+export type BackupIntegrityScope =
+  | 'quote'
+  | 'contract'
+  | 'contract-signature'
+  | 'invoice';
+
+export interface BackupIntegrityMissingRow {
+  table: string;
+  rowId: number;
+  column: string;
+  expectedPath: string;
+}
+
+export interface BackupIntegrityHashMismatchRow extends BackupIntegrityMissingRow {
+  expectedSha: string;
+  actualSha: string;
+}
+
+export interface BackupIntegrityExistsButNoHashRow {
+  table: string;
+  rowId: number;
+  column: string;
+  path: string;
+}
+
+export interface BackupIntegrityReport {
+  scannedAt: string;
+  scopes: BackupIntegrityScope[];
+  summary: {
+    totalRows: number;
+    verifiedOk: number;
+    missingFiles: number;
+    hashMismatches: number;
+    existsButNoHash: number;
+  };
+  missing: BackupIntegrityMissingRow[];
+  hashMismatches: BackupIntegrityHashMismatchRow[];
+  existsButNoHash: BackupIntegrityExistsButNoHashRow[];
+}
+
 export interface AdminProfile {
   id: number;
   username: string;
@@ -260,6 +304,19 @@ export const adminService = {
   async getSystemHealth(): Promise<SystemHealth> {
     const response = await api.get<SystemHealth>('/admin/dashboard/health');
     return response.data;
+  },
+
+  // Backup-integrity verifier (read-only diagnostic). `scope` filters
+  // which document classes to walk; omit for a full scan.
+  async getBackupIntegrity(
+    scope?: BackupIntegrityScope[],
+  ): Promise<BackupIntegrityReport> {
+    const params = scope && scope.length > 0 ? { scope: scope.join(',') } : undefined;
+    const response = await api.get<{ report: BackupIntegrityReport }>(
+      '/admin/system-health/backup-integrity',
+      { params },
+    );
+    return response.data.report;
   },
 
   // Format activity message

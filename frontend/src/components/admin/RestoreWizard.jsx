@@ -21,7 +21,8 @@ import {
   Eye,
   Calendar,
   Clock,
-  AlertCircle
+  AlertCircle,
+  ShieldCheck
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
@@ -29,7 +30,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Button, Card, Input, Loading } from '../common';
 import { api } from '../../config/api';
 
-export const RestoreWizard = () => {
+export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
   const { t } = useTranslation();
   const [currentStep, setCurrentStep] = useState(0);
   
@@ -650,13 +651,33 @@ export const RestoreWizard = () => {
           <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
             <div className="flex">
               <CheckCircle className="h-5 w-5 text-green-400 mt-0.5" />
-              <div className="ml-3">
+              <div className="ml-3 flex-1">
                 <h3 className="text-sm font-medium text-green-800 dark:text-green-200">
                   {t('backup.restore.progress.success.title')}
                 </h3>
                 <p className="mt-1 text-sm text-green-700 dark:text-green-300">
                   {t('backup.restore.progress.success.message')}
                 </p>
+                {/* Post-restore CTA: jump to the integrity check (D2). The
+                    audit trail captured at sign / issue time is worth
+                    nothing if the documents it refers to are missing
+                    from the restored copy — verifier surfaces that
+                    drift in one click before the admin trusts the
+                    restored state. */}
+                {onVerifyIntegrity && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={onVerifyIntegrity}
+                    leftIcon={<ShieldCheck className="w-4 h-4" />}
+                  >
+                    {t(
+                      'backup.restore.progress.success.verifyIntegrity',
+                      'Verify document integrity now',
+                    )}
+                  </Button>
+                )}
               </div>
             </div>
           </div>

@@ -230,7 +230,39 @@
       "dashboard": "Dashboard",
       "configuration": "Konfiguration",
       "history": "Backup-Verlauf",
-      "restore": "Wiederherstellung"
+      "restore": "Wiederherstellung",
+      "integrity": "Integrität"
+    },
+    "integrity": {
+      "title": "Dokumentintegrität",
+      "description": "Prüft, ob jedes in der Datenbank referenzierte CRM-Dokument (Angebot / Vertrag / Rechnung / Unterschrift) tatsächlich auf der Festplatte existiert und — sofern ein Hash gespeichert ist — die Datei-Bytes weiterhin übereinstimmen. Nur lesend, auf Abruf.",
+      "runNow": "Prüfung starten",
+      "running": "Prüfe…",
+      "error": "Prüfung fehlgeschlagen: {{message}}",
+      "scannedAt": "Zuletzt geprüft: {{when}}",
+      "emptyState": "In dieser Sitzung wurde noch keine Prüfung ausgeführt. Klicke auf \"Prüfung starten\", um den Dokumentbestand zu durchsuchen.",
+      "summary": {
+        "total": "Gesamt",
+        "verifiedOk": "Hash-verifiziert",
+        "existsButNoHash": "Nur Existenz",
+        "existsButNoHashHint": "Datei gefunden, aber kein SHA-256 gespeichert (Angebots-/Rechnungs-PDFs, Unterschrifts-Zeichnungen). Nur-Existenz ist im Streitfall schwächeres Beweismaterial.",
+        "missingFiles": "Fehlend",
+        "hashMismatches": "Hash-Abweichungen"
+      },
+      "missing": {
+        "heading": "Fehlende Dateien",
+        "caption": "Diese Zeilen verweisen auf einen Pfad, der nicht auf der Festplatte existiert. Nach einer Wiederherstellung bedeutet das, dass das Artefakt aus der Sicherungskette verloren ging; bei frischen Installationen wurde die Datei meist manuell gelöscht."
+      },
+      "hashMismatches": {
+        "heading": "Hash-Abweichungen",
+        "caption": "Die Datei existiert, aber ihre aktuellen Bytes stimmen nicht mit dem zum Ausstellungs-/Signierzeitpunkt erfassten SHA-256 überein. Deutet auf Manipulation, Bit-Rot oder eine Wiederherstellung mit einer abweichenden Kopie hin."
+      },
+      "results": {
+        "table": "Tabelle",
+        "rowId": "Zeilen-ID",
+        "column": "Spalte",
+        "detail": "Detail"
+      }
     },
     "status": {
       "inProgress": "Backup läuft...",
@@ -517,7 +549,8 @@
         "restoreLogs": "Wiederherstellungsprotokolle",
         "success": {
           "title": "Wiederherstellung erfolgreich abgeschlossen",
-          "message": "Ihre Daten wurden wiederhergestellt. Bitte überprüfen Sie, ob alles korrekt funktioniert."
+          "message": "Ihre Daten wurden wiederhergestellt. Bitte überprüfen Sie, ob alles korrekt funktioniert.",
+          "verifyIntegrity": "Dokumentintegrität jetzt prüfen"
         }
       },
       "actions": {

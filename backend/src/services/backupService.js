@@ -372,6 +372,21 @@ async function getFilesToBackupInternal(includeArchived = true) {
   // by the original backup walk before this addition.
   await scanDirectory(path.join(storagePath, 'heroes'), files, storagePath);
   await scanDirectory(path.join(storagePath, 'uploads'), files, storagePath);
+  // CRM document estate — every PDF and signature artefact the
+  // service persists for legal-evidence purposes:
+  //   - business-docs/quote/<year>/*.pdf
+  //   - business-docs/contract/<year>/*.pdf  (system-rendered + wet uploads)
+  //   - business-docs/contract/signatures/<contract_id>/*.{png,jpg}
+  //     (drawn signatures, forensic-preserved per Date.now() filename)
+  //   - business-docs/invoice/<year>/*.pdf  (issued invoices + Storno)
+  //   - business-docs/invoice-imports/<year>/*.pdf  (admin-imported
+  //     historical invoices — irrecoverable if not backed up)
+  // Without this scan, the audit trail (signed_pdf_sha256, signed_*
+  // _ip, accepted_at, etc.) survives the restore but the documents
+  // those values refer to do not, leaving every CRM *_path column a
+  // broken FK. scanDirectory short-circuits on ENOENT so installs
+  // that never used CRM features won't error.
+  await scanDirectory(path.join(storagePath, 'business-docs'), files, storagePath);
 
   return files;
 }
