@@ -118,4 +118,113 @@ async function seedMinimal(db) {
   return { adminId, customerId };
 }
 
-module.exports = { bootCrmDb, seedMinimal };
+// ---------------------------------------------------------------------
+// Route-test helpers (#570) — building blocks for the CRM HTTP layer
+// tests. Kept here so every supertest suite shares the same minting +
+// app-wiring shape and a refactor lands in one place.
+// ---------------------------------------------------------------------
+
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+const express = require('express');
+const cookieParser = require('cookie-parser');
+
+/**
+ * Promote a seeded admin into a role (default `super_admin`) so
+ * `requirePermission(...)` checks pass. seedMinimal creates an admin
+ * without a role — that's good for negative tests (expect 403) but
+ * happy-path tests need the role assignment.
+ *
+ * Returns the role id the admin was assigned to.
+ */
+async function assignAdminRole(db, adminId, roleName = 'super_admin') {
+  const role = await db('roles').where({ name: roleName }).first();
+  if (!role) {
+    throw new Error(`Role '${roleName}' not seeded — check the test DB`);
+  }
+  await db('admin_users').where({ id: adminId }).update({ role_id: role.id });
+  return role.id;
+}
+
+/**
+ * Mint an admin JWT in the same shape adminAuth middleware expects.
+ * The tests inject this via `Authorization: Bearer <token>`.
+ */
+function mintAdminToken(adminId, { expiresIn = '1h', extraClaims = {} } = {}) {
+  process.env.JWT_SECRET = process.env.JWT_SECRET || 'crm-route-test-secret';
+  return jwt.sign(
+    { id: adminId, type: 'admin', iat: Math.floor(Date.now() / 1000), ...extraClaims },
+    process.env.JWT_SECRET,
+    { expiresIn, issuer: 'picpeak-auth' }
+  );
+}
+
+/**
+ * Insert a row into one of the public-token tables for testing the
+ * loadActionToken guard outcomes. Returns the generated 64-hex token.
+ *
+ * Usage:
+ *   await createPublicToken(db, 'quote_action_tokens', { quote_id: q.id });
+ *   await createPublicToken(db, 'quote_action_tokens', { quote_id: q.id, expires_at: pastDate });
+ *   await createPublicToken(db, 'quote_action_tokens', { quote_id: q.id, used_at: new Date() });
+ *   await createPublicToken(db, 'quote_action_tokens', { quote_id: q.id, expires_at: null });
+ */
+async function createPublicToken(db, tableName, opts = {}) {
+  const token = opts.token || crypto.randomBytes(32).toString('hex');
+  const expiresAt = opts.expires_at === null
+    ? null
+    : (opts.expires_at || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+  // Serialise Date → ISO string. Bare Date objects round-tripped
+  // inconsistently through knex+SQLite — sometimes as epoch ms,
+  // sometimes via .toString() → literal "[object Object]" which then
+  // parses back to NaN and silently defeats the expiry guard.
+  const toStorable = (v) => (v instanceof Date ? v.toISOString() : v);
+  const row = {
+    ...opts,
+    token,
+    expires_at: toStorable(expiresAt),
+    created_at: toStorable(new Date()),
+  };
+  await db(tableName).insert(row);
+  return token;
+}
+
+/**
+ * Build an Express app with the requested route file mounted. Mirrors
+ * the production app's middleware shape (json + cookies) but skips
+ * everything else (CORS, helmet, rate limiters) — route tests pin the
+ * handler's contract, not the surrounding cross-cutting concerns.
+ *
+ * Example:
+ *   const app = buildRouteApp('/api/public/quotes',
+ *     require('../../src/routes/publicQuotes'));
+ */
+function buildRouteApp(mount, router) {
+  const app = express();
+  app.use(express.json());
+  app.use(cookieParser());
+  app.use(mount, router);
+  // Catch-all error handler. Mirrors the real middleware/errorHandler:
+  // AppError subclasses (ValidationError, NotFoundError, etc.) use
+  // `.statusCode` (NOT `.status` — getting that wrong silently maps
+  // every 400 / 404 / 410 to 500 in tests).
+  // eslint-disable-next-line no-unused-vars
+  app.use((err, req, res, next) => {
+    const statusCode = err.statusCode || err.status || 500;
+    res.status(statusCode).json({
+      error: err.message || 'Internal error',
+      code: err.code,
+      ...(err.details ? { details: err.details } : {}),
+    });
+  });
+  return app;
+}
+
+module.exports = {
+  bootCrmDb,
+  seedMinimal,
+  assignAdminRole,
+  mintAdminToken,
+  createPublicToken,
+  buildRouteApp,
+};
