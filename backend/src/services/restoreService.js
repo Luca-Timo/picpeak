@@ -847,12 +847,60 @@ class RestoreService {
         // the `postgres` DB is restricted to superusers.
         const maintenanceDb = process.env.DB_CHECK_DB || 'postgres';
 
+        // The backend's own knex pool holds N active connections to
+        // the target database (default 5-25 per knexfile.js). PostgreSQL
+        // refuses DROP DATABASE while any session is connected:
+        //   ERROR: database "X" is being accessed by other users
+        //   DETAIL: There are N other sessions using the database.
+        // We have to evict those sessions ourselves before issuing the
+        // DROP. Two-step approach:
+        //   1. Close knex's own pool so we don't fight ourselves.
+        //   2. pg_terminate_backend() the rest (other server replicas,
+        //      pg_stat_activity stragglers, leftover idle txns).
+        //
+        // After CREATE DATABASE, knex will lazily re-open the pool on
+        // the next query — handled by db.js's connection retry logic.
+        this.log('warn', 'Closing knex pool before dropping target database...');
+        try { await db.destroy(); } catch (poolErr) {
+          this.log('warn', `Pool destroy threw (continuing): ${poolErr.message}`);
+        }
+
+        this.log('warn', 'Terminating any remaining sessions on target database...', {
+          target: database,
+        });
+        // pg_terminate_backend takes a pid. Kill every session against
+        // the target DB except our own connection (which is to the
+        // maintenance DB anyway). Wrapped in `SELECT ... FROM ... WHERE`
+        // so we get one psql round-trip instead of N.
+        await spawnAsync('psql', [
+          '-h', host, '-p', String(port), '-U', user, '-d', maintenanceDb,
+          '-c',
+          `SELECT pg_terminate_backend(pid) FROM pg_stat_activity ` +
+          `WHERE datname = '${database.replace(/'/g, "''")}' AND pid <> pg_backend_pid()`,
+        ], { env });
+
         // Drop and recreate database (extremely dangerous!)
         this.log('warn', 'Dropping and recreating PostgreSQL database...', {
           target: database, via: maintenanceDb,
         });
 
-        await spawnAsync('psql', ['-h', host, '-p', String(port), '-U', user, '-d', maintenanceDb, '-c', `DROP DATABASE IF EXISTS "${database}"`], { env });
+        // WITH (FORCE) on Postgres 13+ kills any remaining connections
+        // atomically with the DROP. On older Postgres the FORCE option
+        // doesn't exist, so we fall back to plain DROP IF EXISTS — by
+        // which point pg_terminate_backend should have cleared the
+        // table. Try FORCE first, fall back to plain on syntax error.
+        try {
+          await spawnAsync('psql', ['-h', host, '-p', String(port), '-U', user, '-d', maintenanceDb,
+            '-c', `DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`], { env });
+        } catch (forceErr) {
+          // PG < 13: WITH (FORCE) is a syntax error. Plain DROP after
+          // our pg_terminate_backend pass should now succeed.
+          this.log('info', 'DROP DATABASE WITH (FORCE) not supported — falling back to plain DROP', {
+            error: forceErr.message,
+          });
+          await spawnAsync('psql', ['-h', host, '-p', String(port), '-U', user, '-d', maintenanceDb,
+            '-c', `DROP DATABASE IF EXISTS "${database}"`], { env });
+        }
 
         await spawnAsync('psql', ['-h', host, '-p', String(port), '-U', user, '-d', maintenanceDb, '-c', `CREATE DATABASE "${database}"`], { env });
 
