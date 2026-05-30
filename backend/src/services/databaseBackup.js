@@ -309,8 +309,23 @@ class DatabaseBackupService {
       // Get current schema version
       const schemaVersion = await this.getCurrentSchemaVersion();
       
-      // Create backup run record with version info
-      const [runId] = await db('database_backup_runs').insert({
+      // Create backup run record with version info.
+      //
+      // Insert shape divergence between SQLite + Postgres made the old
+      // `const [runId] = await db(...).insert({...})` form throw
+      // "(intermediate value) is not iterable" on Postgres installs:
+      //
+      //   - SQLite-via-knex: insert() returns `[lastInsertId]` (array)
+      //   - Postgres-via-knex: insert() without .returning() returns an
+      //     empty object / row count — not iterable
+      //
+      // Bug went undetected until Stage A wired this method into the
+      // "Run Backup Now" inline-dump path — before that, only the
+      // scheduled-cron + dedicated-admin-page callers exercised it,
+      // and Ralf's install had never triggered either. Cure: same
+      // explicit `.returning('id')` + dual-shape coalesce pattern that
+      // `backupService.js:949` uses for its own `backup_runs` insert.
+      const insertResult = await db('database_backup_runs').insert({
         started_at: startTime,
         status: 'running',
         backup_type: this.dbType,
@@ -324,8 +339,9 @@ class DatabaseBackupService {
           node_env: process.env.NODE_ENV || 'production',
           db_type: this.dbType
         })
-      });
-      
+      }).returning('id');
+      const runId = insertResult[0]?.id || insertResult[0];
+
       backupRun = { id: runId };
       
       // Get initial checksums
