@@ -906,6 +906,52 @@ class RestoreService {
 
         // Restore from backup — this one DOES connect to the target DB.
         await spawnFromFile('psql', ['-h', host, '-p', String(port), '-U', user, '-d', database], restoreFile, { env });
+
+        // Re-sync every SERIAL / IDENTITY sequence in the public schema
+        // to MAX(id)+1 of its owning table. pg_dump emits setval()
+        // statements, but they don't always land cleanly when:
+        //   - the dump has `--clean` (the setval may execute before
+        //     the rebuilt rows, depending on dump ordering)
+        //   - the in-process knex pool had a cached sequence value
+        //     before db.destroy() (already mitigated, but defensive)
+        //   - rows were inserted mid-restore (the pre-restore safety
+        //     backup creates a database_backup_runs row before DROP)
+        // Result if skipped: every subsequent INSERT into a serial-id
+        // table fails with `duplicate key value violates unique
+        // constraint "<table>_pkey"`. Surfaced on Ralf's install as
+        // "A record with this value already exists" on every CRUD
+        // action AND `database_backup_runs_pkey` violation on the
+        // next Run Backup Now. Fix is a single DO block that walks
+        // pg_class + pg_attribute and setval()s each sequence to
+        // GREATEST(MAX(<col>), 1). Cheap (a few ms even on large
+        // schemas), safe (doesn't touch row data), idempotent.
+        this.log('info', 'Re-syncing PostgreSQL sequences to MAX(id) of each table...');
+        await spawnAsync('psql', [
+          '-h', host, '-p', String(port), '-U', user, '-d', database,
+          '-c',
+          `DO $$
+DECLARE
+  r RECORD;
+  max_id BIGINT;
+BEGIN
+  FOR r IN
+    SELECT n.nspname AS schema_name, t.relname AS table_name, a.attname AS column_name,
+           pg_get_serial_sequence(quote_ident(n.nspname) || '.' || quote_ident(t.relname), a.attname) AS seq_name
+    FROM pg_class t
+    JOIN pg_namespace n ON n.oid = t.relnamespace
+    JOIN pg_attribute a ON a.attrelid = t.oid
+    WHERE n.nspname = 'public'
+      AND t.relkind = 'r'
+      AND a.attnum > 0
+      AND NOT a.attisdropped
+      AND pg_get_serial_sequence(quote_ident(n.nspname) || '.' || quote_ident(t.relname), a.attname) IS NOT NULL
+  LOOP
+    EXECUTE format('SELECT COALESCE(MAX(%I), 0) FROM %I.%I', r.column_name, r.schema_name, r.table_name) INTO max_id;
+    EXECUTE format('SELECT setval(%L, %s, true)', r.seq_name, GREATEST(max_id, 1));
+  END LOOP;
+END $$;`
+        ], { env });
+        this.log('info', 'Sequence resync completed');
       }
 
       // Re-initialize database connection
