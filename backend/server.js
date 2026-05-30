@@ -812,6 +812,18 @@ async function startServer() {
       logger.warn('backup_paths self-heal failed at boot:', err.message);
     }
 
+    // Self-heal restore-meta settings — currently just
+    // `restore_allow_force` defaulting to ON so fresh installs can
+    // recover from disaster without a SQL incantation. Only seeds on
+    // FRESH installs (existing rows, true or false, are preserved).
+    // See _restoreSettingsBoot.js for the full rationale.
+    try {
+      const { seedRestoreSettingsAtBoot } = require('./src/services/_restoreSettingsBoot');
+      await seedRestoreSettingsAtBoot(db, logger);
+    } catch (err) {
+      logger.warn('restore-settings self-heal failed at boot:', err.message);
+    }
+
     // Start backup service
     await startBackupService();
 
