@@ -270,12 +270,53 @@ class RestoreService {
     } catch (error) {
       this.log('error', 'Restore failed', { error: error.message, stack: error.stack });
 
-      // Update restore run record
+      // Always attempt rollback when a pre-restore backup exists.
+      // Historically rollback was only triggered when post-restore
+      // verification failed (inside the try block) — anything that
+      // threw earlier (path-resolution bugs, pg_restore failure, file
+      // copy errors) left the destination half-clobbered and forced
+      // the admin to do another reset-from-volume cycle before the
+      // next attempt could be honest. Fixing the rollback here closes
+      // the "every failed restore makes the next one worse" footgun.
+      let rollbackAttempted = false;
+      let rollbackSucceeded = false;
+      let rollbackError = null;
+      if (this.preRestoreBackupPath) {
+        rollbackAttempted = true;
+        try {
+          this.log('info', 'Attempting rollback from pre-restore safety backup', {
+            path: this.preRestoreBackupPath,
+          });
+          await this.attemptRollback(this.preRestoreBackupPath);
+          rollbackSucceeded = true;
+          this.log('info', 'Rollback completed');
+        } catch (rbErr) {
+          rollbackError = rbErr.message;
+          this.log('error', 'Rollback FAILED — install may be in a partial state',
+            { error: rbErr.message, stack: rbErr.stack });
+        }
+      } else {
+        this.log('warn', 'No pre-restore backup available — cannot auto-rollback. ' +
+          'Destination may be in a partial state. Verify business-docs/ and the DB before retrying.');
+      }
+
+      // Update restore run record. We persist BOTH the original
+      // restore failure AND the rollback status so the admin can tell
+      // from a single SQL query which scenario they're in:
+      //   - rollback succeeded → destination is back to pre-restore state, safe to retry
+      //   - rollback failed   → partial state, admin must inspect before next attempt
+      //   - rollback skipped  → user opted out via skipPreBackup; same as above
       if (restoreRun) {
+        const failureMessage = rollbackAttempted
+          ? (rollbackSucceeded
+              ? `${error.message} (rolled back successfully to pre-restore state)`
+              : `${error.message} | ROLLBACK ALSO FAILED: ${rollbackError} — destination is in a partial state, inspect before retrying`)
+          : `${error.message} (no pre-restore backup available — destination may be partial)`;
         await db('restore_runs').where('id', restoreRun.id).update({
           completed_at: new Date(),
           status: 'failed',
-          error_message: error.message,
+          error_message: failureMessage,
+          was_rollback_attempted: rollbackAttempted,
           restore_log: JSON.stringify(this.restoreLog)
         });
       }
@@ -283,7 +324,9 @@ class RestoreService {
       // Send failure notification
       await this.sendRestoreNotification('failure', {
         error: error.message,
-        restoreType: options.restoreType
+        restoreType: options.restoreType,
+        rollbackAttempted,
+        rollbackSucceeded,
       });
 
       throw error;
