@@ -206,12 +206,20 @@ class DatabaseBackupService {
       '--format=plain',
       '--encoding=UTF8'
     ];
-    
-    // Add transaction support for consistency
-    if (!options.noTransaction) {
-      pgDumpOptions.push('--single-transaction');
-    }
-    
+
+    // NOTE: do NOT add `--single-transaction` here. It looks like
+    // the right flag for "consistent snapshot" but it isn't a pg_dump
+    // option — it belongs to pg_restore / psql and pg_dump rejects it
+    // with `unrecognized option: single-transaction` (exit code 1).
+    // pg_dump already wraps the entire export in a single REPEATABLE
+    // READ snapshot automatically (since Postgres 9.x), so consistency
+    // is built in. If we ever need stricter cross-pg-cluster snapshot
+    // sharing, use `--snapshot=<id>` — but the typical inline-dump
+    // path doesn't need it. Bug went undetected until Stage A wired
+    // this code into the user-facing "Run Backup Now" path; prior
+    // callers (scheduled cron, dedicated admin DB-backup page) hit
+    // the same failure but on installs that had never exercised them.
+
     // Add compression if not doing it separately
     if (options.compress && !options.separateCompression) {
       pgDumpOptions.push('--compress=6');
