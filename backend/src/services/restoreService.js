@@ -828,15 +828,35 @@ class RestoreService {
         // PostgreSQL restore
         const { host, port, user, password, database } = knexConfig.connection;
         const env = { ...process.env, PGPASSWORD: password };
-        
+
+        // `psql` with no `-d` defaults to a database whose name matches
+        // the connecting user, NOT a maintenance DB. So on installs
+        // where the user's home DB doesn't exist (e.g. user=`picpeak`,
+        // target DB=`picpeak_prod`, no `picpeak` DB), the next two
+        // statements failed with:
+        //   FATAL: database "picpeak" does not exist
+        // even though the actual target DB was alive and connectable.
+        //
+        // Fix: explicitly connect to `postgres` (the maintenance DB
+        // every PG cluster ships with) for the DROP/CREATE. We can't
+        // connect to the target DB itself anyway — DROP DATABASE
+        // refuses to run while a connection is open to it.
+        //
+        // Use `DB_CHECK_DB` env var as an override hook (matches the
+        // pattern wait-for-db.sh already exposes) for installs where
+        // the `postgres` DB is restricted to superusers.
+        const maintenanceDb = process.env.DB_CHECK_DB || 'postgres';
+
         // Drop and recreate database (extremely dangerous!)
-        this.log('warn', 'Dropping and recreating PostgreSQL database...');
-        
-        await spawnAsync('psql', ['-h', host, '-p', String(port), '-U', user, '-c', `DROP DATABASE IF EXISTS ${database}`], { env });
+        this.log('warn', 'Dropping and recreating PostgreSQL database...', {
+          target: database, via: maintenanceDb,
+        });
 
-        await spawnAsync('psql', ['-h', host, '-p', String(port), '-U', user, '-c', `CREATE DATABASE ${database}`], { env });
+        await spawnAsync('psql', ['-h', host, '-p', String(port), '-U', user, '-d', maintenanceDb, '-c', `DROP DATABASE IF EXISTS "${database}"`], { env });
 
-        // Restore from backup
+        await spawnAsync('psql', ['-h', host, '-p', String(port), '-U', user, '-d', maintenanceDb, '-c', `CREATE DATABASE "${database}"`], { env });
+
+        // Restore from backup — this one DOES connect to the target DB.
         await spawnFromFile('psql', ['-h', host, '-p', String(port), '-U', user, '-d', database], restoreFile, { env });
       }
 
