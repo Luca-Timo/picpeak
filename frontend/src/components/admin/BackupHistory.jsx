@@ -236,7 +236,7 @@ export const BackupHistory = () => {
                             </button>
                             {backup.manifest_path && (
                               <button
-                                onClick={() => window.open(`/admin/backup/download/${backup.id}`, '_blank')}
+                                onClick={() => window.open(`/api/admin/backup/download/${backup.id}`, '_blank')}
                                 className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300"
                                 title={t('backup.actions.download')}
                               >
