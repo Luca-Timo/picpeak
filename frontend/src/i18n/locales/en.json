@@ -2366,7 +2366,9 @@
         "completed": "Completed",
         "contentBackedUp": "Content Backed Up",
         "errorDetails": "Error Details",
-        "manifest": "Manifest"
+        "manifest": "Manifest",
+        "otherFiles": "Business documents & other",
+        "totalFiles": "Total files"
       },
       "pagination": {
         "showing": "Showing {{from}}-{{to}} of {{total}} backups",

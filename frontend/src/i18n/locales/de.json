@@ -475,7 +475,9 @@
         "completed": "Abgeschlossen",
         "contentBackedUp": "Gesicherter Inhalt",
         "errorDetails": "Fehlerdetails",
-        "manifest": "Manifest"
+        "manifest": "Manifest",
+        "otherFiles": "Geschäftsdokumente & sonstige",
+        "totalFiles": "Gesamtdateien"
       },
       "pagination": {
         "showing": "Zeige {{from}}-{{to}} von {{total}} Backups",

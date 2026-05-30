@@ -281,7 +281,16 @@ export const BackupHistory = () => {
                                 </div>
                               </div>
 
-                              {/* Content Backed Up */}
+                              {/* Content Backed Up
+                                  Stage B's config-driven walker covers 7 path categories
+                                  (events/active, events/archived, thumbnails, previews,
+                                  heroes, uploads, business-docs). This pane historically
+                                  only counted 2 of them (photos + archives), so the
+                                  per-row sums never matched the total — Ralf 2026-05-30
+                                  flagged a 3 files total with 0+0 visible breakdown.
+                                  Adds an explicit Total + an "Other" bucket so the
+                                  arithmetic adds up even when the backend doesn't yet
+                                  expose per-path counts. */}
                               <div className="space-y-2">
                                 <h4 className="font-medium text-neutral-900 dark:text-neutral-100">{t('backup.history.details.contentBackedUp')}</h4>
                                 <div className="space-y-2">
@@ -301,6 +310,28 @@ export const BackupHistory = () => {
                                       Archives ({stats.archives_backed_up || 0})
                                     </span>
                                   </div>
+                                  {(() => {
+                                    const total = Number(stats.files_processed) || 0;
+                                    const accounted =
+                                      (Number(stats.photos_backed_up) || 0)
+                                      + (Number(stats.archives_backed_up) || 0);
+                                    const other = Math.max(total - accounted, 0);
+                                    return (
+                                      <>
+                                        <div className="flex items-center space-x-2">
+                                          <FileArchive className={`h-4 w-4 ${other > 0 ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
+                                          <span className="text-sm text-neutral-700 dark:text-neutral-300">
+                                            {t('backup.history.details.otherFiles', 'Business documents & other')} ({other})
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center space-x-2 pt-1 border-t border-neutral-200 dark:border-neutral-700">
+                                          <span className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                                            {t('backup.history.details.totalFiles', 'Total files')}: {total}
+                                          </span>
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                               </div>
 
