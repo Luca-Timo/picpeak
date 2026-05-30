@@ -154,9 +154,37 @@ class RestoreService {
         this.log('warn', 'Pre-restore backup skipped at user request');
       }
 
-      // Step 5: Download backup if from S3
+      // Step 5: Download backup if from S3, or resolve the local root.
+      //
+      // The wizard passes `options.source = 'local'` (the SOURCE TYPE
+      // string) — not a path. The old code assigned that string to
+      // `localBackupPath` verbatim and every downstream `path.join(...)`
+      // ended up with junk like `local/database/<file>.sql.gz`. Caused
+      // the disaster-recovery restore flow to fail with
+      // `Database backup file not found: local/database/...` even when
+      // the manifest recorded the correct absolute path AND the file
+      // existed at exactly that path on disk.
+      //
+      // Resolve `'local'` to the configured backup destination root by
+      // reading `backup_destination_path` from app_settings. That's the
+      // same root the file-backup walker writes to, so every relative
+      // `file.path` in the manifest resolves correctly via
+      // `path.join(localBackupPath, file.path)` further down.
       let localBackupPath = options.source;
-      if (options.source.startsWith('s3://')) {
+      if (options.source === 'local') {
+        try {
+          const row = await db('app_settings')
+            .where('setting_key', 'backup_destination_path')
+            .first();
+          if (row?.setting_value) {
+            let parsed;
+            try { parsed = JSON.parse(row.setting_value); } catch (_) { parsed = row.setting_value; }
+            if (parsed) localBackupPath = parsed;
+          }
+        } catch (err) {
+          this.log('warn', `Could not resolve backup_destination_path: ${err.message}`);
+        }
+      } else if (options.source.startsWith('s3://')) {
         this.updateProgress('Downloading backup from S3...');
         localBackupPath = await this.downloadFromS3(options.source, manifest, options);
       }
@@ -661,13 +689,55 @@ class RestoreService {
       throw new Error('No database backup file found in manifest');
     }
 
-    const dbBackupPath = path.join(backupPath, 'database', path.basename(dbBackupFile));
-    
-    // Check if backup file exists
-    try {
-      await fs.access(dbBackupPath);
-    } catch (error) {
-      throw new Error(`Database backup file not found: ${dbBackupPath}`);
+    // Layered resolution for the database dump path:
+    //
+    //   1. Manifest stores the absolute path the dumper wrote to
+    //      (e.g. `/backup/database/picpeak-db-postgresql-<ts>.sql.gz`).
+    //      That's the truth — try it first.
+    //   2. Some older manifests store a path RELATIVE to the file-backup
+    //      destination root (`database/<file>.sql.gz`). Reconstruct that
+    //      way as a fallback.
+    //   3. Final fallback: `<backupPath>/database/<basename>`, the
+    //      historical reconstruction used before this fix. Preserved so
+    //      no existing valid path breaks.
+    //
+    // The original code used (3) exclusively, which meant the restore
+    // service ignored the absolute path the manifest recorded and
+    // looked under a synthetic `<backupPath>/database/<file>` root —
+    // which on Ralf's install became `local/database/<file>` because
+    // `backupPath` was the source type string, not a directory. Caused
+    // the canonical disaster-recovery flow to fail with
+    // `Database backup file not found: local/database/...sql.gz`
+    // even though the file existed at exactly the path the manifest
+    // recorded.
+    const candidates = [
+      // (1) Honour absolute paths recorded by the dumper.
+      path.isAbsolute(dbBackupFile) ? dbBackupFile : null,
+      // (2) Relative-to-backupPath as-stored (no basename munging).
+      path.join(backupPath, dbBackupFile),
+      // (3) Legacy reconstruct.
+      path.join(backupPath, 'database', path.basename(dbBackupFile)),
+    ].filter(Boolean);
+
+    let dbBackupPath = null;
+    for (const candidate of candidates) {
+      try {
+        await fs.access(candidate);
+        dbBackupPath = candidate;
+        break;
+      } catch (_) {
+        // try next candidate
+      }
+    }
+
+    if (!dbBackupPath) {
+      throw new Error(
+        `Database backup file not found. Tried: ${candidates.join(', ')}. ` +
+        `Manifest recorded path: ${dbBackupFile}. ` +
+        `Hint: this usually means the manifest's database.backup_file path no longer ` +
+        `exists on disk (deleted? moved? volume not mounted?). Check ` +
+        `~/<your-compose-dir>/backup/database/ on the host.`
+      );
     }
 
     // Decompress if needed
