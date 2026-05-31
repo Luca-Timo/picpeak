@@ -10,7 +10,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
-import { format } from 'date-fns';
+// Locale-aware formatters per [[feedback_respect_general_format_settings]].
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 import { Card, Button } from '../common';
 import { adminService, BackupIntegrityReport } from '../../services/admin.service';
@@ -33,6 +34,7 @@ import { adminService, BackupIntegrityReport } from '../../services/admin.servic
  */
 export const BackupIntegrityCard: React.FC = () => {
   const { t } = useTranslation();
+  const { formatDateTime } = useLocalizedDate();
   const [report, setReport] = useState<BackupIntegrityReport | null>(null);
   const [expanded, setExpanded] = useState<'missing' | 'hashMismatches' | null>(null);
 
@@ -147,7 +149,7 @@ export const BackupIntegrityCard: React.FC = () => {
 
           <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">
             {t('backup.integrity.scannedAt', 'Last checked: {{when}}', {
-              when: format(new Date(report.scannedAt), 'yyyy-MM-dd HH:mm:ss'),
+              when: formatDateTime(new Date(report.scannedAt)),
             })}
           </p>
 

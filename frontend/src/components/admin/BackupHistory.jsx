@@ -20,11 +20,17 @@ import {
   RefreshCw,
   Loader2
 } from 'lucide-react';
-import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'react-toastify';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, Input, Loading } from '../common';
 import { api } from '../../config/api';
+// Per [[feedback_respect_general_format_settings]]: route every displayed
+// date/time through useLocalizedDate so the admin's general_date_format +
+// general_time_format settings apply uniformly. Previously the backup
+// History pane used raw date-fns format() with hard-coded 'p' (12-hour
+// AM/PM) and 'PPP' (US-locale long date), which ignored the settings —
+// Ralf 2026-05-31 flagged "11:25 PM" on a 24h-configured install.
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 const statusIcons = {
   completed: { icon: CheckCircle, color: 'text-green-500' },
@@ -48,6 +54,12 @@ export const BackupHistory = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const queryClient = useQueryClient();
+  // Locale-aware formatters that respect admin's general_date_format +
+  // general_time_format settings. See useLocalizedDate.ts for the full
+  // contract; formatTime gives "HH:mm" (24h) or "h:mm a" (12h) based on
+  // the setting, format(date) honors general_date_format, and
+  // formatDistanceToNow returns "2 minutes ago" in the admin's i18n locale.
+  const { format, formatTime, formatDistanceToNow } = useLocalizedDate();
 
   // Fetch backup history
   const { data, isLoading, refetch } = useQuery({
@@ -90,7 +102,7 @@ export const BackupHistory = () => {
   };
 
   const handleDelete = (backup) => {
-    if (window.confirm(`Are you sure you want to delete this backup from ${format(new Date(backup.created_at), 'PPP')}?`)) {
+    if (window.confirm(`Are you sure you want to delete this backup from ${format(new Date(backup.created_at))}?`)) {
       deleteMutation.mutate(backup.id);
     }
   };
@@ -200,10 +212,10 @@ export const BackupHistory = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
                             <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                              {format(new Date(backup.created_at), 'PPP')}
+                              {format(new Date(backup.created_at))}
                             </p>
                             <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                              {format(new Date(backup.created_at), 'p')} • {formatDistanceToNow(new Date(backup.created_at), { addSuffix: true })}
+                              {formatTime(new Date(backup.created_at))} • {formatDistanceToNow(new Date(backup.created_at), { addSuffix: true })}
                             </p>
                           </div>
                         </td>
@@ -270,12 +282,12 @@ export const BackupHistory = () => {
                                   </div>
                                   <div className="flex justify-between">
                                     <span className="text-neutral-500 dark:text-neutral-400">{t('backup.history.details.started')}:</span>
-                                    <span className="text-neutral-900 dark:text-neutral-100">{format(new Date(backup.created_at), 'p')}</span>
+                                    <span className="text-neutral-900 dark:text-neutral-100">{formatTime(new Date(backup.created_at))}</span>
                                   </div>
                                   {backup.completed_at && (
                                     <div className="flex justify-between">
                                       <span className="text-neutral-500 dark:text-neutral-400">{t('backup.history.details.completed')}:</span>
-                                      <span className="text-neutral-900 dark:text-neutral-100">{format(new Date(backup.completed_at), 'p')}</span>
+                                      <span className="text-neutral-900 dark:text-neutral-100">{formatTime(new Date(backup.completed_at))}</span>
                                     </div>
                                   )}
                                 </div>
