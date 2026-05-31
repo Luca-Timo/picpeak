@@ -4,7 +4,7 @@
  * **Why this exists**
  *
  * Knex won't re-run an applied migration, so once migration
- * 108_add_backup_paths.js has run, any later default we want to add
+ * 109_add_backup_paths.js has run, any later default we want to add
  * (a new subdirectory shipped by a future feature) would never reach
  * already-deployed installs. The historical fix for this kind of
  * "schema is fine, seed drifted" problem is the boot-time self-heal
@@ -14,7 +14,7 @@
  *
  * **Authoritative list**
  *
- * The list of defaults lives on migration 108 itself
+ * The list of defaults lives on migration 109 itself
  * (`DEFAULT_PATHS` export) — one source of truth that both the
  * migration and this seeder read. Tests assert these two stay in
  * lockstep.
@@ -22,14 +22,14 @@
  * **Failure semantics**
  *
  * If the table doesn't exist yet (migrations haven't run, fresh
- * install before migration 108 lands, etc.) we no-op and log. The
+ * install before migration 109 lands, etc.) we no-op and log. The
  * walker has a hard-coded `LEGACY_DEFAULTS` fallback for the same
  * reason — defense in depth so "Run Backup Now" can never silently
  * ship a files-only manifest because of a seed issue. See
  * `backupService.js` getFilesToBackupInternal.
  */
 
-const { DEFAULT_PATHS } = require('../../migrations/core/108_add_backup_paths');
+const { DEFAULT_PATHS } = require('../../migrations/core/109_add_backup_paths');
 
 let booted = false;
 
@@ -45,7 +45,7 @@ async function seedBackupPathsAtBoot(db, logger) {
   if (booted) return { seeded: [] };
 
   if (!(await db.schema.hasTable('backup_paths'))) {
-    log.warn('backup_paths table missing at boot — self-heal skipped (migration 108 may not have run yet)');
+    log.warn('backup_paths table missing at boot — self-heal skipped (migration 109 may not have run yet)');
     return { seeded: [] };
   }
 

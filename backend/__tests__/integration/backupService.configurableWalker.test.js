@@ -1,7 +1,7 @@
 /**
  * Pins the Stage-B refactor that lifted the file-backup walker's
  * subdirectory list out of hard-coded JS into the `backup_paths`
- * table seeded by migration 108.
+ * table seeded by migration 109.
  *
  * Scenarios:
  *   1. Walker reads canonical seed → all 7 default subdirs walked
@@ -53,7 +53,7 @@ describe('backupService — configurable walker (backup_paths)', () => {
     await db('backup_paths').del();
     const {
       DEFAULT_PATHS,
-    } = require('../../migrations/core/108_add_backup_paths');
+    } = require('../../migrations/core/109_add_backup_paths');
     await db('backup_paths').insert(DEFAULT_PATHS.map((row) => ({
       ...row,
       created_at: new Date(),
@@ -61,7 +61,7 @@ describe('backupService — configurable walker (backup_paths)', () => {
     })));
   });
 
-  it('migration 108 seeds the canonical 7 paths', async () => {
+  it('migration 109 seeds the canonical 7 paths', async () => {
     const rows = await db('backup_paths').orderBy('display_order', 'asc').select();
     expect(rows.map((r) => r.path)).toEqual([
       'events/active',

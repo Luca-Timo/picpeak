@@ -419,7 +419,7 @@ async function scanDirectory(dirPath, fileList, basePath, excludePatterns = []) 
 
 /**
  * Hard-coded fallback when `backup_paths` is missing/empty. Mirrors
- * the canonical seed in migration 108 — kept here as defense in depth
+ * the canonical seed in migration 109 — kept here as defense in depth
  * so the walker can never silently degrade to "no directories scanned"
  * because of a seed problem.
  *

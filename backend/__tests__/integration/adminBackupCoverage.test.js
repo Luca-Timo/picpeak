@@ -72,7 +72,7 @@ describe('GET /api/admin/system-health/backup-coverage', () => {
 
   async function restoreDefaultPaths() {
     await db('backup_paths').del();
-    const { DEFAULT_PATHS } = require('../../migrations/core/108_add_backup_paths');
+    const { DEFAULT_PATHS } = require('../../migrations/core/109_add_backup_paths');
     await db('backup_paths').insert(DEFAULT_PATHS.map((row) => ({
       ...row,
       created_at: new Date(),

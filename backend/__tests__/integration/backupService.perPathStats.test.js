@@ -60,8 +60,8 @@ describe('backupService — per-Stage-B-path statistics', () => {
     ]).onConflict('setting_key').merge();
     fs.mkdirSync(path.join(storagePath, 'destination'), { recursive: true });
 
-    // Restore canonical backup_paths from migration 108
-    const { DEFAULT_PATHS } = require('../../migrations/core/108_add_backup_paths');
+    // Restore canonical backup_paths from migration 109
+    const { DEFAULT_PATHS } = require('../../migrations/core/109_add_backup_paths');
     await db('backup_paths').del();
     await db('backup_paths').insert(DEFAULT_PATHS.map((row) => ({
       ...row,
@@ -170,7 +170,7 @@ describe('backupService — per-Stage-B-path statistics', () => {
 // — once via each path. Per-path stats then attribute the file to the
 // longest-prefix-matching path BOTH times, producing inflated counts.
 //
-// The canonical seed in migration 108 contains no overlapping pairs,
+// The canonical seed in migration 109 contains no overlapping pairs,
 // so this isn't exercised in practice. But an admin who hand-adds a
 // broad row that overlaps an existing nested one will see double
 // counts in their next backup's statistics + the destination will

@@ -1,5 +1,13 @@
 /**
- * Migration 108 — config-driven backup walker.
+ * Migration 109 — config-driven backup walker.
+ *
+ * (Originally numbered 108 on bugfix/crm-backup. Renumbered to 109
+ * before merge because upstream/beta independently shipped
+ * 108_seed_sl_email_template_translations.js. The createTable is
+ * idempotent via `hasTable` guard and the seed uses
+ * `onConflict('path').ignore()`, so beta installs that ran the
+ * 108-named version of this file get a harmless no-op when 109
+ * runs against the already-seeded table.)
  *
  * Stage B of the three-stage backup-hardening plan. The file-backup
  * walker (`getFilesToBackupInternal` in backupService.js) historically
