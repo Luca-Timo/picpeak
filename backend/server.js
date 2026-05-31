@@ -824,6 +824,24 @@ async function startServer() {
       logger.warn('restore-settings self-heal failed at boot:', err.message);
     }
 
+    // Install-from-backup trigger. If `RESTORE_ON_INSTALL` (or
+    // `.txt`) exists in the /backup mount AND the DB is empty, run
+    // the restore HERE before any admin UI surfaces. Lets admins
+    // recover a picpeak install with: (a) place backup files in the
+    // bind mount, (b) drop the trigger file, (c) `docker compose up`.
+    // No onboarding wizard, no throwaway admin, no compose-file
+    // changes. See _installFromBackupBoot.js for the full rationale
+    // + the safety gates.
+    try {
+      const { tryInstallFromBackup } = require('./src/services/_installFromBackupBoot');
+      const result = await tryInstallFromBackup(db, logger);
+      if (result.ran) {
+        logger.info(`Install-from-backup: completed from ${result.manifestPath}. Server will start with restored state.`);
+      }
+    } catch (err) {
+      logger.warn('Install-from-backup hook threw:', err.message);
+    }
+
     // Start backup service
     await startBackupService();
 
