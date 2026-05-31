@@ -5,6 +5,21 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.59.1-beta.0](https://github.com/the-luap/picpeak/compare/v3.59.0-beta.0...v3.59.1-beta.0) (2026-05-31)
+
+
+### Bug Fixes
+
+* **admin-header:** hide wordmark on &lt;sm when logo also shows ([#523](https://github.com/the-luap/picpeak/issues/523)) ([c246fd3](https://github.com/the-luap/picpeak/commit/c246fd3cc89962d626218029ab3da1346a726246))
+* **admin-header:** truncate long company names on narrow widths ([#523](https://github.com/the-luap/picpeak/issues/523) regression) ([e7cf834](https://github.com/the-luap/picpeak/commit/e7cf834325e8686613fbbee78d52213cb3ba98b1))
+* **api/v1/events:** also honour require_password + branding defaults ([#592](https://github.com/the-luap/picpeak/issues/592) follow-up) ([2d44b1a](https://github.com/the-luap/picpeak/commit/2d44b1ab2d251a4fc752cfeb645cb2126c0da3b7))
+* **api/v1/events:** honour global devtools-detection default on create ([#592](https://github.com/the-luap/picpeak/issues/592)) ([2304b25](https://github.com/the-luap/picpeak/commit/2304b2562465f8c86c82f2155fbdce264e68fdb3))
+* **bug-batch:** [#523](https://github.com/the-luap/picpeak/issues/523) [#564](https://github.com/the-luap/picpeak/issues/564) [#590](https://github.com/the-luap/picpeak/issues/590) [#591](https://github.com/the-luap/picpeak/issues/591) [#592](https://github.com/the-luap/picpeak/issues/592) ([c68a03c](https://github.com/the-luap/picpeak/commit/c68a03c20e70b8049ed851d41e20143813935a3a))
+* **csp:** external bootstrap script to survive strict reverse-proxy CSP ([#564](https://github.com/the-luap/picpeak/issues/564)) ([dcc629c](https://github.com/the-luap/picpeak/commit/dcc629cad23ce0ca89aabb6f8b1eacfde599774e))
+* **gallery:** preserve per-viewer is_liked across hard refresh ([#590](https://github.com/the-luap/picpeak/issues/590) follow-up) ([791e997](https://github.com/the-luap/picpeak/commit/791e9974eb4c81cc4b095f9b604eccd708fb3a66))
+* **gallery:** toggle (not add) the local liked set on click ([#590](https://github.com/the-luap/picpeak/issues/590)) ([d292b9f](https://github.com/the-luap/picpeak/commit/d292b9fa10bffe5d751629b900c606763fa8e73a))
+* **nginx:** defensive large_client_header_buffers bump ([#591](https://github.com/the-luap/picpeak/issues/591)) ([c83e883](https://github.com/the-luap/picpeak/commit/c83e88348fbd473fb1de041cebabd3ace65d4d98))
+
 ## [3.59.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.58.0-beta.0...v3.59.0-beta.0) (2026-05-29)
 
 
