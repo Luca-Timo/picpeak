@@ -718,17 +718,23 @@ async function getRestoreSettings() {
   const settings = await db('app_settings')
     .where('setting_type', 'restore')
     .select('setting_key', 'setting_value');
-  
+
   const result = {};
   settings.forEach(setting => {
-    // Convert boolean strings to actual booleans
-    if (setting.setting_value === '1' || setting.setting_value === '0') {
-      result[setting.setting_key] = setting.setting_value === '1';
+    // Boolean-string normalization. Historically only handled '1'/'0',
+    // but other code paths (boot self-heal, admin UI, direct SQL) write
+    // 'true' / 'false' or JSON-encoded "true" / "false". Accept all four
+    // shapes so `!settings.<key>` evaluates correctly downstream.
+    const raw = setting.setting_value;
+    if (raw === '1' || raw === 'true' || raw === '"true"') {
+      result[setting.setting_key] = true;
+    } else if (raw === '0' || raw === 'false' || raw === '"false"') {
+      result[setting.setting_key] = false;
     } else {
-      result[setting.setting_key] = setting.setting_value;
+      result[setting.setting_key] = raw;
     }
   });
-  
+
   return result;
 }
 
