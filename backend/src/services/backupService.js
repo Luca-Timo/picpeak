@@ -486,6 +486,74 @@ async function resolveBackupPaths(config) {
   });
 }
 
+/**
+ * Bucket actually-backed-up files into their owning `backup_paths` row.
+ *
+ * Uses longest-prefix match — e.g. `events/active/E1/photo.jpg` matches
+ * `events/active` (length 13) rather than `events` (length 6, if that
+ * row existed). This handles the case where a future feature ships a
+ * nested backup_paths row that overlaps an existing one.
+ *
+ * @param {string[]} backedUpRelativePaths — paths that actually got
+ *        copied / uploaded (post-incremental-filter). The exact list
+ *        the destination implementation reports back.
+ * @param {Array<{relativePath, size}>} allFiles — the full file
+ *        catalogue from the walker, used as a size lookup table.
+ * @returns {Promise<Record<string, { count: number, size: number }>>}
+ *        keyed by `backup_paths.path` (e.g. 'events/active'). Paths
+ *        with zero matches are omitted to keep the manifest compact.
+ */
+async function computePerPathStats(backedUpRelativePaths, allFiles) {
+  if (!backedUpRelativePaths || backedUpRelativePaths.length === 0) {
+    return {};
+  }
+
+  // Reuse the same source of truth the walker uses, so a row toggled
+  // off by include_in_default doesn't appear in the breakdown either.
+  let configuredPaths;
+  try {
+    if (await db.schema.hasTable('backup_paths')) {
+      configuredPaths = await db('backup_paths')
+        .where('include_in_default', formatBoolean(true))
+        .orderBy('display_order', 'asc')
+        .select('path');
+    }
+  } catch (err) {
+    logger.warn(`Could not load backup_paths for per-path stats — falling back to legacy: ${err.message}`);
+  }
+  if (!configuredPaths || configuredPaths.length === 0) {
+    configuredPaths = LEGACY_BACKUP_PATHS.map((p) => ({ path: p.path }));
+  }
+
+  // Longest-prefix-first so nested paths win over their parents.
+  const sortedPaths = configuredPaths
+    .map((row) => row.path)
+    .sort((a, b) => b.length - a.length);
+
+  // Size lookup. relativePath uses OS path separators in `allFiles`
+  // (whatever scanDirectory built); the backup_paths rows always use
+  // forward slashes. Normalize the lookup key once.
+  const sizeByPath = new Map();
+  for (const f of allFiles || []) {
+    sizeByPath.set(f.relativePath.split(path.sep).join('/'), f.size || 0);
+  }
+
+  const stats = {};
+  for (const relativePath of backedUpRelativePaths) {
+    const norm = relativePath.split(path.sep).join('/');
+    // Find the longest configured path that this file's relativePath starts with.
+    const match = sortedPaths.find(
+      (p) => norm === p || norm.startsWith(`${p}/`)
+    );
+    if (!match) continue; // file outside any configured path (shouldn't happen)
+    if (!stats[match]) stats[match] = { count: 0, size: 0 };
+    stats[match].count += 1;
+    stats[match].size += sizeByPath.get(norm) || 0;
+  }
+
+  return stats;
+}
+
 async function getFilesToBackupInternal(configOrIncludeArchived = true) {
   const files = [];
   const storagePath = getStoragePath();
@@ -1035,6 +1103,18 @@ async function runBackupInternal(isManual = false) {
       logger.error('Failed to generate backup manifest:', error);
     }
 
+    // Per-Stage-B-path stats — bucket the actually-backed-up files
+    // into their owning backup_paths row by longest-prefix match. Lets
+    // the Backup History detail pane render a true breakdown
+    //   events/active: 142 files (3.2 GB)
+    //   business-docs: 17 files (4.5 MB)
+    //   thumbnails: 142 files (12.4 MB)
+    // instead of the legacy "Photos + Archives + Other" categorization
+    // that didn't reflect Stage B's data-driven walker. Falls back to
+    // an empty map if backup_paths is missing (defense in depth — the
+    // walker has the same fallback).
+    const perPath = await computePerPathStats(result.backedUpFiles, files);
+
     await db('backup_runs')
       .where('id', runId)
       .update({
@@ -1053,11 +1133,14 @@ async function runBackupInternal(isManual = false) {
           total_files_checked: files.length,
           average_file_size: result.backedUpCount ? Math.round(result.backedUpSize / result.backedUpCount) : 0,
           destination: destinationType,
+          // Per-Stage-B-path breakdown — { [pathKey]: { count, size } }
+          per_path: perPath,
           // Keep camelCase for backward compatibility
           totalFilesChecked: files.length,
           filesBackedUp: result.backedUpCount,
           totalSize: result.backedUpSize,
-          averageFileSize: result.backedUpCount ? Math.round(result.backedUpSize / result.backedUpCount) : 0
+          averageFileSize: result.backedUpCount ? Math.round(result.backedUpSize / result.backedUpCount) : 0,
+          perPath
         })
       });
 

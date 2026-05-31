@@ -282,15 +282,15 @@ export const BackupHistory = () => {
                               </div>
 
                               {/* Content Backed Up
-                                  Stage B's config-driven walker covers 7 path categories
-                                  (events/active, events/archived, thumbnails, previews,
-                                  heroes, uploads, business-docs). This pane historically
-                                  only counted 2 of them (photos + archives), so the
-                                  per-row sums never matched the total — Ralf 2026-05-30
-                                  flagged a 3 files total with 0+0 visible breakdown.
-                                  Adds an explicit Total + an "Other" bucket so the
-                                  arithmetic adds up even when the backend doesn't yet
-                                  expose per-path counts. */}
+                                  Two render paths depending on what the backend
+                                  provided:
+                                    - NEW: per_path map { "events/active": {count, size}, ... }
+                                      from Stage B's walker. One row per path,
+                                      ordered by display_order.
+                                    - LEGACY: fall back to Photos + Archives +
+                                      "Other" bucket so the arithmetic still adds
+                                      up when restoring a backup taken before this
+                                      change shipped. */}
                               <div className="space-y-2">
                                 <h4 className="font-medium text-neutral-900 dark:text-neutral-100">{t('backup.history.details.contentBackedUp')}</h4>
                                 <div className="space-y-2">
@@ -298,19 +298,45 @@ export const BackupHistory = () => {
                                     <Database className={`h-4 w-4 ${stats.database_backed_up ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
                                     <span className="text-sm text-neutral-700 dark:text-neutral-300">{t('backup.configuration.whatToBackup.database')}</span>
                                   </div>
-                                  <div className="flex items-center space-x-2">
-                                    <Image className={`h-4 w-4 ${stats.photos_backed_up > 0 ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
-                                    <span className="text-sm text-neutral-700 dark:text-neutral-300">
-                                      Photos ({stats.photos_backed_up || 0} of {stats.total_photos || 0})
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center space-x-2">
-                                    <FileArchive className={`h-4 w-4 ${stats.archives_backed_up > 0 ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
-                                    <span className="text-sm text-neutral-700 dark:text-neutral-300">
-                                      Archives ({stats.archives_backed_up || 0})
-                                    </span>
-                                  </div>
                                   {(() => {
+                                    // Per-path breakdown when present
+                                    const perPath = stats.per_path || stats.perPath;
+                                    if (perPath && Object.keys(perPath).length > 0) {
+                                      const formatSize = (bytes) => {
+                                        if (!bytes) return '0 B';
+                                        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+                                        const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+                                        return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+                                      };
+                                      // Sort by path string so the order is stable across renders;
+                                      // backend uses backup_paths.display_order to drive the walker
+                                      // but doesn't carry order into per_path map — alphabetic is
+                                      // fine for the display.
+                                      const entries = Object.entries(perPath).sort(([a], [b]) => a.localeCompare(b));
+                                      return (
+                                        <>
+                                          {entries.map(([pathKey, info]) => (
+                                            <div key={pathKey} className="flex items-center space-x-2">
+                                              <FileArchive className={`h-4 w-4 ${info.count > 0 ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
+                                              <span className="text-sm text-neutral-700 dark:text-neutral-300 font-mono">
+                                                {pathKey}
+                                              </span>
+                                              <span className="text-sm text-neutral-500 dark:text-neutral-400 ml-auto">
+                                                {info.count} {info.size ? `(${formatSize(info.size)})` : ''}
+                                              </span>
+                                            </div>
+                                          ))}
+                                          <div className="flex items-center space-x-2 pt-1 border-t border-neutral-200 dark:border-neutral-700">
+                                            <span className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                                              {t('backup.history.details.totalFiles', 'Total files')}: {stats.files_processed || 0}
+                                            </span>
+                                          </div>
+                                        </>
+                                      );
+                                    }
+
+                                    // LEGACY rendering for backups taken before
+                                    // per_path was emitted.
                                     const total = Number(stats.files_processed) || 0;
                                     const accounted =
                                       (Number(stats.photos_backed_up) || 0)
@@ -318,6 +344,18 @@ export const BackupHistory = () => {
                                     const other = Math.max(total - accounted, 0);
                                     return (
                                       <>
+                                        <div className="flex items-center space-x-2">
+                                          <Image className={`h-4 w-4 ${stats.photos_backed_up > 0 ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
+                                          <span className="text-sm text-neutral-700 dark:text-neutral-300">
+                                            Photos ({stats.photos_backed_up || 0} of {stats.total_photos || 0})
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                          <FileArchive className={`h-4 w-4 ${stats.archives_backed_up > 0 ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
+                                          <span className="text-sm text-neutral-700 dark:text-neutral-300">
+                                            Archives ({stats.archives_backed_up || 0})
+                                          </span>
+                                        </div>
                                         <div className="flex items-center space-x-2">
                                           <FileArchive className={`h-4 w-4 ${other > 0 ? 'text-green-500' : 'text-neutral-300 dark:text-neutral-600'}`} />
                                           <span className="text-sm text-neutral-700 dark:text-neutral-300">
