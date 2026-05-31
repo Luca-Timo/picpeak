@@ -1000,11 +1000,27 @@ END $$;`
       await reinitPool();
       this.log('info', 'Knex pool re-initialized');
 
-      // Run migrations to ensure schema is up to date. Use the
-      // module-level `db` export, which is the Proxy that now points
-      // at the freshly-initialized pool.
-      this.log('info', 'Running database migrations...');
-      await db.migrate.latest();
+      // NOTE: we deliberately do NOT call `db.migrate.latest()` here.
+      //
+      // The picpeak migrations directory contains `helpers.js` (a
+      // shared helper module, not a migration), plus `core/` and
+      // `legacy/` subdirectories. Knex's built-in migrator scans the
+      // top-level directory and rejects any file without `up`/`down`
+      // exports — so `db.migrate.latest()` throws
+      //   Invalid migration: helpers.js must have both an up and down function
+      // every time it runs in this codebase. The production code path
+      // uses `npm run migrate:safe` (run-migrations-safe.js) which
+      // knows to skip helpers.js + walks core/ explicitly.
+      //
+      // For restore: the dump we just loaded already contains the
+      // schema state of whatever migrations had been applied at
+      // backup time. If the running image has NEWER migrations that
+      // need to run on top of the restored DB, those will be applied
+      // on the NEXT container start by wait-for-db.sh + the safe
+      // runner. That's a one-restart penalty in the unusual case of
+      // restoring from a backup older than the current image, and
+      // matches what picpeak does on every other boot already.
+      this.log('info', 'Skipping in-process migrate (deferred to next boot via safe runner)');
 
       // Replay the snapshotted operator-meta settings on top of the
       // restored DB. UPSERT by setting_key — if the backup had the

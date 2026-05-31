@@ -14,7 +14,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { format } from 'date-fns';
+// Locale-aware formatters per [[feedback_respect_general_format_settings]].
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 import { Card, Button } from '../common';
 import {
@@ -41,6 +42,7 @@ import {
  */
 export const BackupCoverageCard: React.FC = () => {
   const { t } = useTranslation();
+  const { formatDateTime } = useLocalizedDate();
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['backup-coverage'],
     queryFn: () => adminService.getBackupCoverage(),
@@ -75,7 +77,7 @@ export const BackupCoverageCard: React.FC = () => {
 
           <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-4">
             {t('backup.coverage.generatedAt', 'Coverage generated: {{when}}', {
-              when: format(new Date(data.generatedAt), 'yyyy-MM-dd HH:mm:ss'),
+              when: formatDateTime(new Date(data.generatedAt)),
             })}
           </p>
         </>
@@ -164,6 +166,7 @@ const DatabaseStatusCard: React.FC<{
   database: BackupCoverageReport['database'];
 }> = ({ database }) => {
   const { t } = useTranslation();
+  const { formatDateTime } = useLocalizedDate();
   const isInline = database.mode === 'inline';
   const tone: Tone = database.ok ? 'green' : 'red';
   const dumpAge = database.lastDumpAgeMs !== null
@@ -194,7 +197,7 @@ const DatabaseStatusCard: React.FC<{
           <>
             <Row
               label={t('backup.coverage.database.lastDump', 'Last dump')}
-              value={`${format(new Date(database.lastDumpAt), 'yyyy-MM-dd HH:mm')}${
+              value={`${formatDateTime(new Date(database.lastDumpAt))}${
                 dumpAge ? ` (${dumpAge})` : ''
               }`}
             />

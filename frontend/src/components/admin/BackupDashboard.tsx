@@ -16,7 +16,10 @@ import {
   AlertTriangle,
   Info
 } from 'lucide-react';
-import { format, formatDistanceToNow } from 'date-fns';
+// Per [[feedback_respect_general_format_settings]] — route every
+// displayed date/time through useLocalizedDate so general_date_format
+// and general_time_format settings apply uniformly.
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { Card, Button } from '../common';
 
 export type HealthStatus = 'excellent' | 'good' | 'warning' | 'critical';
@@ -109,6 +112,7 @@ const healthColors: Record<HealthStatus, string> = {
 
 export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config, onRunBackup, isBackupRunning }) => {
   const { t } = useTranslation();
+  const { format, formatTime, formatDateTime, formatDistanceToNow } = useLocalizedDate();
   const lastBackup = status?.lastBackup;                       // any status
   const lastSuccessfulBackup = status?.lastSuccessfulBackup;   // status='completed' only
   const zombieRuns = status?.zombieRuns ?? [];
@@ -285,7 +289,7 @@ export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config
           label={t('backup.dashboard.stats.totalBackups')}
           value={status?.totalBackups || 0}
           color="blue"
-          subtext={lastBackup ? `${t('backup.dashboard.stats.last')}: ${format(new Date(lastBackup.created_at), 'PP')}` : t('backup.dashboard.stats.noBackupsYet')}
+          subtext={lastBackup ? `${t('backup.dashboard.stats.last')}: ${format(new Date(lastBackup.created_at))}` : t('backup.dashboard.stats.noBackupsYet')}
         />
 
         <StatCard
@@ -301,7 +305,7 @@ export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config
           label={t('backup.dashboard.stats.lastDuration')}
           value={lastBackup ? `${Math.round(lastBackup.duration_seconds / 60)}m` : 'N/A'}
           color="purple"
-          subtext={lastBackup ? format(new Date(lastBackup.created_at), 'p') : ''}
+          subtext={lastBackup ? formatTime(new Date(lastBackup.created_at)) : ''}
         />
 
         <StatCard
@@ -333,7 +337,7 @@ export const BackupDashboard: React.FC<BackupDashboardProps> = ({ status, config
                       {t('backup.dashboard.backupType', { type: backup.backup_type })}
                     </p>
                     <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                      {format(new Date(backup.created_at), 'PPp')}
+                      {formatDateTime(new Date(backup.created_at))}
                     </p>
                   </div>
                 </div>
