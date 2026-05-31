@@ -829,6 +829,36 @@ class RestoreService {
         const { host, port, user, password, database } = knexConfig.connection;
         const env = { ...process.env, PGPASSWORD: password };
 
+        // Snapshot operator-meta settings BEFORE the DROP so we can
+        // restore them after the psql load. These keys are about how
+        // the operator wants the install to behave (force-restore
+        // permission, auto-upgrade tracking), not user-facing state —
+        // they should NOT be overwritten by whatever values the backup
+        // happens to contain.
+        //
+        // Chicken-and-egg this closes: `restore_allow_force` defaults
+        // to true (post tonight's migration 032 edit), but every
+        // restore would overwrite it with whatever the backup carried.
+        // Admin sets it to true → restores → wakes up with the row
+        // back to whatever was in the backup. Two consecutive restores
+        // needed the SQL workaround again. With this snapshot/replay,
+        // the operator's policy persists across restores.
+        const PRESERVED_META_KEYS = [
+          'restore_allow_force',
+          'restore_allow_force_auto_upgraded',
+        ];
+        let preservedMeta = [];
+        try {
+          preservedMeta = await db('app_settings')
+            .whereIn('setting_key', PRESERVED_META_KEYS)
+            .select('setting_key', 'setting_value', 'setting_type');
+          this.log('info', `Snapshotted ${preservedMeta.length} restore-meta setting(s) for post-restore replay`, {
+            keys: preservedMeta.map(r => r.setting_key),
+          });
+        } catch (err) {
+          this.log('warn', `Could not snapshot restore-meta settings (continuing): ${err.message}`);
+        }
+
         // `psql` with no `-d` defaults to a database whose name matches
         // the connecting user, NOT a maintenance DB. So on installs
         // where the user's home DB doesn't exist (e.g. user=`picpeak`,
@@ -954,12 +984,54 @@ END $$;`
         this.log('info', 'Sequence resync completed');
       }
 
-      // Re-initialize database connection
-      const { db: newDb } = require('../database/db');
-      
-      // Run migrations to ensure schema is up to date
+      // Re-initialize the in-process knex pool. The DROP/CREATE
+      // DATABASE pair above destroyed our connections and the recreated
+      // database has a different pg_database OID — any pooled
+      // connection from before would either be dead or pointed at a
+      // ghost. Without explicit reinit, every query in the process
+      // after restore returns `Error: Unable to acquire a connection`
+      // until the container is manually restarted (and admin sees
+      // "An error occurred" on the login screen even after the restore
+      // technically succeeded). reinitPool destroys + rebuilds the
+      // pool and probes the new one with `SELECT 1` so failures here
+      // surface immediately instead of polluting the next request.
+      const { reinitPool } = require('../database/db');
+      this.log('info', 'Re-initializing knex pool against the restored database...');
+      await reinitPool();
+      this.log('info', 'Knex pool re-initialized');
+
+      // Run migrations to ensure schema is up to date. Use the
+      // module-level `db` export, which is the Proxy that now points
+      // at the freshly-initialized pool.
       this.log('info', 'Running database migrations...');
-      await newDb.migrate.latest();
+      await db.migrate.latest();
+
+      // Replay the snapshotted operator-meta settings on top of the
+      // restored DB. UPSERT by setting_key — if the backup had the
+      // same key with a different value, we overwrite it; if the row
+      // doesn't exist in the backup, we insert it. Either way the
+      // operator's pre-restore policy survives.
+      if (preservedMeta.length > 0) {
+        try {
+          for (const row of preservedMeta) {
+            await db('app_settings')
+              .insert({
+                setting_key: row.setting_key,
+                setting_value: row.setting_value,
+                setting_type: row.setting_type || 'restore',
+                updated_at: new Date(),
+              })
+              .onConflict('setting_key')
+              .merge({
+                setting_value: row.setting_value,
+                updated_at: new Date(),
+              });
+          }
+          this.log('info', `Replayed ${preservedMeta.length} restore-meta setting(s) post-restore`);
+        } catch (err) {
+          this.log('warn', `Could not replay restore-meta settings (admin may need to re-set them): ${err.message}`);
+        }
+      }
 
       return { success: true };
 
