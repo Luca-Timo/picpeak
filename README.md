@@ -146,7 +146,7 @@ Full documentation lives at **[docs.picpeak.app](https://docs.picpeak.app)** —
 - 🚀 [**Deployment**](https://docs.picpeak.app/deployment) - Docker, environment variables, reverse proxy, SSL
 - ⚙️ [**Admin Settings**](https://docs.picpeak.app/guides/admin-settings) - Every tab in the Settings panel
 - 🎯 [**Creating Events**](https://docs.picpeak.app/guides/creating-events) - Full event field reference
-- 💾 [**Backup & Restore**](https://docs.picpeak.app/guides/backup-restore) - Local, S3, rsync destinations
+- 💾 [**Backup & Restore**](https://docs.picpeak.app/guides/backup-restore) - Backup configuration, restore wizard, full disaster recovery
 - 🔌 [**API Reference**](https://docs.picpeak.app/api) - REST endpoints, OpenAPI spec, webhooks
 - 🪝 [**Webhooks**](https://docs.picpeak.app/features/webhooks) - Event payloads, signing, filters, templates
 
