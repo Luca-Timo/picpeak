@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Maximize2, Check, Calendar, Heart, MessageSquare } from 'lucide-react';
 import { format, parseISO, startOfDay, startOfWeek, startOfMonth } from 'date-fns';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -24,6 +24,14 @@ export const TimelineGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
 }) => {
   const { theme } = useTheme();
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
+  // Seed from server is_liked on first non-empty payload (#590 follow-up).
+  // Mount-only so refetches don't clobber in-session optimistic toggles.
+  const likedSeededRef = useRef(false);
+  useEffect(() => {
+    if (likedSeededRef.current || photos.length === 0) return;
+    setLikedIds(new Set(photos.filter(p => p.is_liked).map(p => p.id)));
+    likedSeededRef.current = true;
+  }, [photos]);
   const [showIdentityModal, setShowIdentityModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<null | { type: 'like'; photoId: number }>(null);
   const [savedIdentity, setSavedIdentity] = useState<{ name: string; email: string } | null>(null);

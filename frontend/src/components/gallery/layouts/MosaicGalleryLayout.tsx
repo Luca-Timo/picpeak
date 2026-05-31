@@ -55,7 +55,9 @@ const MosaicPhoto: React.FC<MosaicPhotoProps> = ({
   const [pendingAction, setPendingAction] = React.useState<null | { type: 'like'; photoId: number }>(null);
   const [savedIdentity, setSavedIdentity] = React.useState<{ name: string; email: string } | null>(null);
   const guestIdentity = useGuestIdentityOptional();
-  const [likedLocal, setLikedLocal] = React.useState(false);
+  // Seed from server is_liked (#590 follow-up). useState's initializer
+  // fires once on mount, so subsequent prop updates don't reseed.
+  const [likedLocal, setLikedLocal] = React.useState(photo.is_liked ?? false);
   const canComment = Boolean(feedbackEnabled && feedbackOptions?.allowComments && onQuickComment);
 
   // Calculate aspect ratio from photo dimensions (fallback to 1 if unknown)

@@ -403,6 +403,14 @@ export const GridGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
   const [showIdentityModal, setShowIdentityModal] = React.useState(false);
   const [pendingAction, setPendingAction] = React.useState<null | { type: 'like'; photoId: number }>(null);
   const [likedPhotoIds, setLikedPhotoIds] = React.useState<Set<number>>(new Set());
+  // Seed from server is_liked on first non-empty payload (#590 follow-up).
+  // Mount-only so refetches don't clobber in-session optimistic toggles.
+  const likedSeededRef = React.useRef(false);
+  React.useEffect(() => {
+    if (likedSeededRef.current || photos.length === 0) return;
+    setLikedPhotoIds(new Set(photos.filter(p => p.is_liked).map(p => p.id)));
+    likedSeededRef.current = true;
+  }, [photos]);
   const [savedIdentity, setSavedIdentity] = React.useState<{ name: string; email: string } | null>(null);
 
   const spacingClass = spacing === 'tight' ? 'gap-2' : spacing === 'relaxed' ? 'gap-6' : 'gap-4';

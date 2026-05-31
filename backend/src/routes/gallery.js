@@ -7,6 +7,8 @@ const router = express.Router();
 const watermarkService = require('../services/watermarkService');
 const watermarkGeneratorService = require('../services/watermarkGeneratorService');
 const { verifyGalleryAccess, isAdminPreview } = require('../middleware/gallery');
+const { resolveGuest } = require('../middleware/guestAuth');
+const { generateGuestIdentifier } = require('../middleware/feedbackRateLimit');
 const secureImageService = require('../services/secureImageService');
 const logger = require('../utils/logger');
 const { resolvePhotoFilePath } = require('../services/photoResolver');
@@ -211,7 +213,7 @@ router.get('/:slug/info', async (req, res) => {
 });
 
 // Get all photos
-router.get('/:slug/photos', verifyGalleryAccess, async (req, res) => {
+router.get('/:slug/photos', verifyGalleryAccess, resolveGuest, async (req, res) => {
   try {
     // Get filter and sort parameters from query
     const { filter, guest_id, sort = 'upload_date', order = 'desc' } = req.query;
@@ -357,6 +359,29 @@ router.get('/:slug/photos', verifyGalleryAccess, async (req, res) => {
     commentCounts.forEach(c => {
       commentMap[c.photo_id] = parseInt(c.comment_count);
     });
+
+    // Per-viewer "is_liked" set (#590 follow-up). Hard refresh on the
+    // gallery grid used to reset every heart to empty because the lifted
+    // likedPhotoIds state started as a fresh Set on mount — even photos
+    // the viewer had actually liked. Surface a per-viewer flag so the
+    // frontend can seed correctly. Prefers req.guest.id when a verified
+    // guest token is present (per-person identity), falls back to the
+    // IP+UA hash that the original like was recorded under — same model
+    // the /my-feedback endpoint uses. Skipped when feedback is hidden
+    // from guests.
+    const likedPhotoIds = new Set();
+    if (showFeedbackToGuests && photos.length > 0) {
+      const likeQuery = db('photo_feedback')
+        .where({ event_id: req.event.id, feedback_type: 'like' })
+        .whereIn('photo_id', photos.map(p => p.id));
+      if (req.guest?.id) {
+        likeQuery.where('guest_id', req.guest.id);
+      } else {
+        likeQuery.where('guest_identifier', generateGuestIdentifier(req));
+      }
+      const likedRows = await likeQuery.select('photo_id');
+      likedRows.forEach(row => likedPhotoIds.add(row.photo_id));
+    }
     
     // Get actual categories used by photos in this event
     // This includes both global categories and event-specific ones
@@ -524,6 +549,10 @@ router.get('/:slug/photos', verifyGalleryAccess, async (req, res) => {
           average_rating: showFeedbackToGuests ? (photo.average_rating || 0) : 0,
           comment_count: showFeedbackToGuests ? (commentMap[photo.id] || 0) : 0,
           like_count: showFeedbackToGuests ? (photo.like_count || 0) : 0,
+          // Per-viewer flag (#590 follow-up) — true when this viewer has
+          // an active like row for this photo, false otherwise. Lets the
+          // grid seed its lifted likedPhotoIds correctly on hard refresh.
+          is_liked: showFeedbackToGuests ? likedPhotoIds.has(photo.id) : false,
           favorite_count: showFeedbackToGuests ? (photo.favorite_count || 0) : 0,
           // Visibility (only included for clients)
           ...(isClient ? { visibility: photo.visibility || 'visible' } : {})

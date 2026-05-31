@@ -131,6 +131,12 @@ export interface Photo {
   total_ratings?: number;
   comment_count?: number;
   like_count?: number;
+  // Per-viewer flag (#590 follow-up). True when the requesting viewer has
+  // an active like row for this photo, false otherwise. Computed server-side
+  // by gallery.js using the same identity model as galleryFeedback.js
+  // (guest_id when a guest token is present, else IP+UA hash fallback).
+  // Used to seed the lifted likedPhotoIds Set in grid layouts on mount.
+  is_liked?: boolean;
   favorite_count?: number;
 }
 

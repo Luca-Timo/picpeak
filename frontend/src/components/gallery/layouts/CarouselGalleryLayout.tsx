@@ -69,6 +69,14 @@ export const CarouselGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
   const [savedIdentity, setSavedIdentity] = useState<{ name: string; email: string } | null>(null);
   const guestIdentity = useGuestIdentityOptional();
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
+  // Seed from server is_liked on first non-empty payload (#590 follow-up).
+  // Mount-only so refetches don't clobber in-session optimistic toggles.
+  const likedSeededRef = useRef(false);
+  useEffect(() => {
+    if (likedSeededRef.current || photos.length === 0) return;
+    setLikedIds(new Set(photos.filter(p => p.is_liked).map(p => p.id)));
+    likedSeededRef.current = true;
+  }, [photos]);
   const canQuickComment = Boolean(feedbackEnabled && feedbackOptions?.allowComments && onOpenPhotoWithFeedback);
 
   return (

@@ -281,6 +281,15 @@ export const MasonryGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
   // Optimistic "I liked this" state — lifted here so it survives re-renders
   // of individual MasonryPhoto components during layout reflow/resize.
   const [likedPhotoIds, setLikedPhotoIds] = useState<Set<number>>(new Set());
+  // Seed from server is_liked on first non-empty photos payload (#590
+  // follow-up). Mount-only: subsequent refetches don't clobber in-session
+  // optimistic toggles, only the first arrival of photos initializes.
+  const likedSeededRef = useRef(false);
+  useEffect(() => {
+    if (likedSeededRef.current || photos.length === 0) return;
+    setLikedPhotoIds(new Set(photos.filter(p => p.is_liked).map(p => p.id)));
+    likedSeededRef.current = true;
+  }, [photos]);
   const gallerySettings = theme.gallerySettings || {};
   const gutter = gallerySettings.masonryGutter || 16;
   const mode = gallerySettings.masonryMode || 'columns';
