@@ -60,9 +60,9 @@ jobs:
           #   integration/webhookDelivery         — supertest fixture
           #   services/backupService.enhanced     — knex mock chain
           #   routes/__tests__/adminAuth          — supertest fixture
-          #   routes/__tests__/adminNotifications — supertest fixture
+          # (adminNotifications was excluded; #597 fix re-enables it.)
           npx jest \
-            --testPathIgnorePatterns='/node_modules/|adminSettings\.logo\.test|integration/adminPhotos\.reference|integration/webhookDelivery|backupService\.enhanced|routes/__tests__/adminAuth|routes/__tests__/adminNotifications' \
+            --testPathIgnorePatterns='/node_modules/|adminSettings\.logo\.test|integration/adminPhotos\.reference|integration/webhookDelivery|backupService\.enhanced|routes/__tests__/adminAuth' \
             --ci
 
   frontend:
