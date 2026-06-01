@@ -18,7 +18,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Calculator, Download, FileDown, AlertCircle } from 'lucide-react';
-import { Button, Card, Loading, Input } from '../../../components/common';
+import { Button, Card, Loading, LocalizedDateInput } from '../../../components/common';
 
 // Lightweight native select styled to match Input — the common barrel
 // doesn't export a Select component, and the form pieces here are
@@ -89,7 +89,7 @@ function triggerBrowserDownload(url: string, filename: string) {
 
 export const TaxReportPage: React.FC = () => {
   const { t, i18n } = useTranslation();
-  const { format: fmtDate, dateInputLang } = useLocalizedDate();
+  const { format: fmtDate } = useLocalizedDate();
   const [preset, setPreset] = useState<PeriodPreset>('thisYear');
   const initialPeriod = useMemo(() => periodForPreset('thisYear'), []);
   const [from, setFrom] = useState(initialPeriod.from);
@@ -196,27 +196,21 @@ export const TaxReportPage: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="period-from" className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                   {t('taxReport.filters.from', 'From')}
                 </label>
-                <Input
-                  id="period-from"
-                  type="date"
-                  lang={dateInputLang}
+                <LocalizedDateInput
                   value={from}
-                  onChange={(e) => { setFrom(e.target.value); setPreset('custom'); }}
+                  onChange={(iso) => { setFrom(iso); setPreset('custom'); }}
                 />
               </div>
               <div>
-                <label htmlFor="period-to" className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                   {t('taxReport.filters.to', 'To')}
                 </label>
-                <Input
-                  id="period-to"
-                  type="date"
-                  lang={dateInputLang}
+                <LocalizedDateInput
                   value={to}
-                  onChange={(e) => { setTo(e.target.value); setPreset('custom'); }}
+                  onChange={(iso) => { setTo(iso); setPreset('custom'); }}
                 />
               </div>
             </div>

@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Save as SaveIcon } from 'lucide-react';
-import { Button, Card, Loading, Input } from '../../../components/common';
+import { Button, Card, Loading, Input, LocalizedDateInput } from '../../../components/common';
 import { billsService, type InvoiceCreatePayload, type InvoiceQrFormat } from '../../../services/bills.service';
 import { quotesService } from '../../../services/quotes.service';
 import { contractsService } from '../../../services/contracts.service';
@@ -488,8 +488,8 @@ export const BillEditorPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Input label={t('bills.field.eventName', 'Event') as string}
             value={eventName} onChange={(e) => setEventName(e.target.value)} />
-          <Input type="date" label={t('bills.field.eventDate', 'Event date') as string}
-            value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+          <LocalizedDateInput label={t('bills.field.eventDate', 'Event date') as string}
+            value={eventDate} onChange={setEventDate} />
           <Input type="time" lang={timeInputLang} label={t('bills.field.eventTimeStart', 'Start time') as string}
             value={eventTimeStart} onChange={(e) => setEventTimeStart(e.target.value)} />
           <Input type="time" lang={timeInputLang} label={t('bills.field.eventTimeEnd', 'End time') as string}
@@ -500,8 +500,8 @@ export const BillEditorPage: React.FC = () => {
       <Card>
         <h3 className="font-semibold mb-2">{t('bills.section.details', 'Details')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Input type="date" label={t('bills.field.issueDate', 'Issue date') as string} value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
-          <Input type="date" label={t('bills.field.dueDate', 'Due date') as string} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          <LocalizedDateInput label={t('bills.field.issueDate', 'Issue date') as string} value={issueDate} onChange={setIssueDate} />
+          <LocalizedDateInput label={t('bills.field.dueDate', 'Due date') as string} value={dueDate} onChange={setDueDate} />
           <Input type="datetime-local" label={t('bills.field.scheduledSendAt', 'Scheduled send (optional)') as string}
             value={scheduledSendAt} onChange={(e) => setScheduledSendAt(e.target.value)} />
           <div>

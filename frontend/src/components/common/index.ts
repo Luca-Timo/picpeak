@@ -1,6 +1,7 @@
 export { Button } from './Button';
 export { CMSContentBlock } from './CMSContentBlock';
 export { Input } from './Input';
+export { LocalizedDateInput } from './LocalizedDateInput';
 export { Card, CardHeader, CardContent, CardFooter } from './Card';
 export { Loading, LoadingSkeleton } from './Loading';
 export { ErrorBoundary, PageErrorBoundary } from './ErrorBoundary';

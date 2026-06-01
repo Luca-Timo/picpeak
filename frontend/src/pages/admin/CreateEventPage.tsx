@@ -15,7 +15,7 @@ import {
 import { addDays } from 'date-fns';
 import { toast } from 'react-toastify';
 
-import { Button, Input, Card, PasswordGenerator } from '../../components/common';
+import { Button, Input, Card, PasswordGenerator, LocalizedDateInput } from '../../components/common';
 import { ThemeCustomizerEnhanced, GalleryPreview, WelcomeMessageEditor, FeedbackSettings } from '../../components/admin';
 import { CustomerAccountPicker } from '../../components/admin/CustomerAccountPicker';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -587,13 +587,11 @@ export const CreateEventPage: React.FC = () => {
                 leftIcon={<Calendar className="w-5 h-5" />}
               />
 
-              <Input
-                type="date"
+              <LocalizedDateInput
                 label={requireEventDate ? t('events.eventDate') : `${t('events.eventDate')} (${t('common.optional')})`}
                 value={formData.event_date}
-                onChange={handleInputChange('event_date')}
+                onChange={(iso) => setFormData(prev => ({ ...prev, event_date: iso }))}
                 error={errors.event_date}
-                leftIcon={<Calendar className="w-5 h-5" />}
               />
             </div>
 
