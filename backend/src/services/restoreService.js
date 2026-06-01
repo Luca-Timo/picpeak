@@ -326,6 +326,15 @@ class RestoreService {
       await db('restore_runs').where('id', runId).update({
         completed_at: endTime,
         status: 'completed',
+        // Default for the column is `false`. Without this line, every
+        // SUCCESSFUL restore ends up with `status='completed',
+        // was_successful=false` — which the BackupDashboard "last
+        // successful restore" widget then filters out, and any future
+        // audit query that gates on was_successful misses the row
+        // entirely. Cosmetic but enough to mislead an operator
+        // scanning restore history. Catches Ralf 2026-06-01 + maintainer
+        // PR #596 review note about the cosmetic.
+        was_successful: true,
         duration_seconds: durationSeconds,
         pre_restore_backup_path: this.preRestoreBackupPath,
         statistics: JSON.stringify({

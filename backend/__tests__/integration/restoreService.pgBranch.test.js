@@ -148,6 +148,41 @@ describe('restoreService — PG branch scope contract (PR #596 review)', () => {
     expect(dangerousLines).toEqual([]);
   });
 
+  it('the completed-restore update sets was_successful=true', () => {
+    // Without this, every successful restore ends up with
+    // status='completed', was_successful=false — the dashboard's
+    // "last successful restore" widget then filters out the row +
+    // any future audit query gating on was_successful misses it.
+    // Caught locally + maintainer PR #596 review.
+    //
+    // Contract: the update payload that writes status='completed' on
+    // the SUCCESS branch ALSO includes was_successful: true. We pin
+    // it by source inspection so any future refactor of the success
+    // payload keeps both fields together.
+    // The success-branch update lives AFTER performPostRestoreVerification.
+    // There's also a `status: 'completed'` in the dry-run / early-return
+    // path (failure handling has its own block too) — we want the
+    // SUCCESS-branch one specifically.
+    const verifyLine = findFirst(/performPostRestoreVerification\s*\(/);
+    expect(verifyLine).toBeGreaterThan(0);
+
+    const completedStatusLineIdx = lines
+      .map((l, i) => ({ line: i + 1, text: l }))
+      .find(({ line, text }) =>
+        line > verifyLine && /status:\s*['"]completed['"]/.test(text)
+      );
+    expect(completedStatusLineIdx).toBeDefined();
+
+    // Look in the next ~10 lines for was_successful: true. The actual
+    // payload is small (no nested objects between status and the
+    // closing })), so a fixed-window search is reliable.
+    const window = lines.slice(
+      completedStatusLineIdx.line - 1,
+      completedStatusLineIdx.line + 10,
+    ).join('\n');
+    expect(window).toMatch(/was_successful:\s*true/);
+  });
+
   it('npm run migrate:safe is invoked after the replay in restore()', () => {
     // Contract from PR #596 round 4: backups taken on older picpeak
     // versions must restore COMPLETELY on a newer image — even if new
