@@ -792,6 +792,26 @@ class RestoreService {
       restoreFile = decompressedPath;
     }
 
+    // Hoisted above the SQLite/PG split so the post-restore replay
+    // block at the bottom (~L1030) can read them even when execution
+    // takes the SQLite path. Without this hoist, the PG branch
+    // populated `preservedMeta` in a block-scoped `let` and then the
+    // shared replay code below tried to read the same name, throwing
+    // `ReferenceError: preservedMeta is not defined` — which caused
+    // every PG restore to "succeed at the data layer" while emitting
+    // a loud FAILED line, skipping the trigger cleanup in
+    // _installFromBackupBoot.js, and silently dropping the
+    // operator-meta replay that was the whole reason this snapshot
+    // existed. The maintainer caught this on PR #596 review.
+    // SQLite branch leaves these as the empty defaults — the
+    // replay block at the bottom is a no-op when `preservedMeta` is
+    // empty, so behaviour is unchanged for SQLite.
+    const PRESERVED_META_KEYS = [
+      'restore_allow_force',
+      'restore_allow_force_auto_upgraded',
+    ];
+    let preservedMeta = [];
+
     try {
       if (this.dbType === 'sqlite') {
         // SQLite restore
@@ -843,11 +863,11 @@ class RestoreService {
         // back to whatever was in the backup. Two consecutive restores
         // needed the SQL workaround again. With this snapshot/replay,
         // the operator's policy persists across restores.
-        const PRESERVED_META_KEYS = [
-          'restore_allow_force',
-          'restore_allow_force_auto_upgraded',
-        ];
-        let preservedMeta = [];
+        //
+        // PRESERVED_META_KEYS + `preservedMeta` are declared above the
+        // SQLite/PG split (~L795) so the replay block at the bottom
+        // can read them on both branches. Only the snapshot READ
+        // needs to happen here in the PG branch (must run before DROP).
         try {
           preservedMeta = await db('app_settings')
             .whereIn('setting_key', PRESERVED_META_KEYS)

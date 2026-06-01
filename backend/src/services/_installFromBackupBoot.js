@@ -159,6 +159,17 @@ async function isDatabaseFresh(db, logger) {
 async function tryInstallFromBackup(db, logger) {
   const log = logger || { info: () => {}, warn: () => {}, error: () => {} };
 
+  // The container's winston logger writes to `/app/logs/combined.log`
+  // by default and may not always tee to stdout, so admins running
+  // `docker logs picpeak-beta-backend` after a `compose up` would
+  // see no signal that a restore happened — flagged on PR #596
+  // review. We mirror the key trigger / start / end lines to
+  // console.log as well so the docker-logs surface tells the story
+  // without needing to exec into the container.
+  const announce = (msg) => {
+    try { console.log(`[install-from-backup] ${msg}`); } catch (_) { /* defensive */ }
+  };
+
   const backupRoot = process.env.BACKUP_ROOT || '/backup';
   if (!fs.existsSync(backupRoot)) {
     return { ran: false };
@@ -170,15 +181,18 @@ async function tryInstallFromBackup(db, logger) {
   }
 
   log.info(`Install-from-backup: trigger file found at ${trigger.triggerPath}, target manifest ${trigger.manifestPath}`);
+  announce(`trigger file detected → ${trigger.manifestPath}`);
 
   const forceOverride = process.env.INSTALL_FROM_BACKUP_FORCE === 'true';
   const isFresh = await isDatabaseFresh(db, log);
   if (!isFresh && !forceOverride) {
     log.warn('Install-from-backup: skipping. Trigger file left in place so you can correct + retry.');
+    announce('skipping — install has existing data and INSTALL_FROM_BACKUP_FORCE is not set');
     return { ran: false, error: 'Database not empty' };
   }
 
   log.info(`Install-from-backup: restoring from ${trigger.manifestPath}...`);
+  announce(`starting restore from ${trigger.manifestPath}`);
 
   try {
     const { restoreService } = require('./restoreService');
@@ -206,6 +220,7 @@ async function tryInstallFromBackup(db, logger) {
     }
 
     log.info(`Install-from-backup: restore completed successfully from ${trigger.manifestPath}`);
+    announce('restore completed successfully');
 
     // Remove the trigger so the next boot doesn't redo it.
     try {
@@ -219,6 +234,7 @@ async function tryInstallFromBackup(db, logger) {
   } catch (err) {
     log.error(`Install-from-backup: FAILED — ${err.message}`);
     log.warn('Trigger file left in place so you can fix the input and retry by restarting the container.');
+    announce(`FAILED — ${err.message}. Trigger file left in place for retry.`);
     return { ran: false, error: err.message };
   }
 }

@@ -33,11 +33,34 @@ exports.up = async function(knex) {
       // Try to save credentials to file, but don't fail if we can't
       const dataDir = path.join(__dirname, '..', '..', 'data');
       const setupInfoPath = path.join(dataDir, 'ADMIN_CREDENTIALS.txt');
-      
+
+      // Detect a pending install-from-backup trigger. If one exists,
+      // these credentials are about to be obsoleted by the restore —
+      // the backup's admin row replaces this fresh-install one a few
+      // seconds from now. We still write the file (in case the
+      // restore fails and the fresh admin is the only way in) but
+      // annotate the top so admins reading the file after restore
+      // don't waste time trying credentials that no longer exist.
+      // Flagged on PR #596 review.
+      const fsSync = require('fs');
+      const backupRoot = process.env.BACKUP_ROOT || '/backup';
+      const triggerWillFire = fsSync.existsSync(path.join(backupRoot, 'RESTORE_ON_INSTALL'))
+        || fsSync.existsSync(path.join(backupRoot, 'RESTORE_ON_INSTALL.txt'));
+      const restoreNotice = triggerWillFire ? `
+
+⚠️  RESTORE_ON_INSTALL TRIGGER DETECTED ⚠️
+These credentials are temporary. An install-from-backup run is queued
+to fire on the next server start, which will REPLACE this admin row
+with the one from the backup. After the restore completes, log in
+with your ORIGINAL pre-disaster credentials — not the ones below.
+If the restore fails for some reason, the credentials below remain
+valid as a fallback recovery path.
+` : '';
+
       const setupInfo = `
 ========================================
 PicPeak Admin Credentials
-========================================
+========================================${restoreNotice}
 
 Your admin account has been created with these credentials:
 
