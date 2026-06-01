@@ -70,43 +70,40 @@ describe('restoreService — PG branch scope contract (PR #596 review)', () => {
     return last;
   }
 
-  it('declares preservedMeta above the SQLite/PG branch split in performDatabaseRestore', () => {
-    // The function spans from `async performDatabaseRestore(` to the
-    // matching `}`. We don't need the closing brace — just need to
-    // verify the order of three landmarks:
+  it('preservedMetaSnapshot lives on `this` and is initialised in the constructor', () => {
+    // PR #596 round 3 moved the snapshot from a block-scoped local to
+    // an instance variable so the replay can happen in `restore()`
+    // AFTER post-restore verification — preventing the replay row
+    // from inflating the row-count check.
     //
-    //   1. `async performDatabaseRestore(` opens the function
-    //   2. `let preservedMeta = []` (the declaration) must come
-    //      BEFORE...
-    //   3. `if (this.dbType === 'sqlite')` (the branch split)
-    const functionStart = findFirst(/async\s+performDatabaseRestore\s*\(/);
-    expect(functionStart).toBeGreaterThan(0);
-
-    const declarations = lines
-      .map((l, i) => ({ line: i + 1, text: l }))
-      .filter(({ text }) => /let\s+preservedMeta\s*=\s*\[\s*\]/.test(text));
-
-    // The fix removed the in-branch duplicate, so there should be
-    // EXACTLY ONE declaration of `let preservedMeta` in the file.
-    // If a reviewer accidentally re-introduces the block-scoped
-    // duplicate, this catches it.
-    expect(declarations).toHaveLength(1);
-
-    const declarationLine = declarations[0].line;
-    expect(declarationLine).toBeGreaterThan(functionStart);
-
-    // The SQLite/PG split is the first `if (this.dbType === 'sqlite')`
-    // after the function opener.
-    const splitLine = lines.findIndex((l, i) =>
-      i + 1 > functionStart && /if\s*\(\s*this\.dbType\s*===\s*['"]sqlite['"]\s*\)/.test(l)
+    // Contract:
+    //   1. The constructor initialises `this.preservedMetaSnapshot = []`
+    //   2. The `restore()` entry point resets it per call (no leak
+    //      across consecutive runs in the singleton service instance)
+    //   3. `performDatabaseRestore` assigns to `this.preservedMetaSnapshot`
+    //      inside the PG branch (must run before DROP)
+    //   4. The replay reads `this.preservedMetaSnapshot` — NOT a bare
+    //      `preservedMeta` local — so a future refactor can't
+    //      accidentally drop the snapshot half on the floor again.
+    const constructorInit = lines.some((l) =>
+      /this\.preservedMetaSnapshot\s*=\s*\[\s*\]/.test(l)
     );
-    expect(splitLine).toBeGreaterThan(-1);
-    const splitLineOneBased = splitLine + 1;
+    expect(constructorInit).toBe(true);
 
-    // The actual contract: declaration line MUST come before the
-    // split line. If a future edit puts the declaration inside the
-    // else block again, this assertion fails with a clear message.
-    expect(declarationLine).toBeLessThan(splitLineOneBased);
+    const assignmentSites = lines.filter((l) =>
+      /this\.preservedMetaSnapshot\s*=\s*(\[\s*\]|await\s+db)/.test(l)
+    );
+    // Constructor init + restore() per-run reset + the PG-branch
+    // assignment from db query. Three writes.
+    expect(assignmentSites.length).toBeGreaterThanOrEqual(3);
+
+    // No stray bare `preservedMeta` local-scoped declaration in
+    // performDatabaseRestore — would indicate someone re-introduced
+    // the round-1 footgun.
+    const dangerousLocalDecl = lines.filter((l) =>
+      /^\s*(let|const)\s+preservedMeta\s*=/.test(l)
+    );
+    expect(dangerousLocalDecl).toEqual([]);
   });
 
   it('every .count() result is coerced to Number before comparison', () => {
@@ -151,59 +148,77 @@ describe('restoreService — PG branch scope contract (PR #596 review)', () => {
     expect(dangerousLines).toEqual([]);
   });
 
-  it('the replay block reads preservedMeta outside the SQLite/PG branch', () => {
-    // The replay block lives near the end of performDatabaseRestore.
-    // It must NOT be guarded by `this.dbType === 'postgresql'` — the
-    // intent of hoisting the declaration is that SQLite ALSO runs
-    // through the replay block (it just no-ops because the snapshot
-    // wasn't taken on the SQLite branch). The test catches a regression
-    // where a refactor moves the replay back inside the PG branch.
-    const replayLine = findLast(/if\s*\(\s*preservedMeta\.length\s*>\s*0\s*\)/);
+  it('npm run migrate:safe is invoked after the replay in restore()', () => {
+    // Contract from PR #596 round 4: backups taken on older picpeak
+    // versions must restore COMPLETELY on a newer image — even if new
+    // migrations have been added since the backup was taken. The
+    // restore() flow shells out to `npm run migrate:safe` AFTER the
+    // operator-meta replay so the schema catches up to the running
+    // code WITHIN the restore boundary (not on the next container
+    // restart).
+    //
+    // Contract:
+    //   1. A `migrate:safe` shell-out exists somewhere in restoreService
+    //   2. It sits AFTER the replay drain — verification → replay →
+    //      migrations is the documented order
+    //   3. It does NOT sit inside performDatabaseRestore (must run
+    //      against the reinit'd pool from the parent restore())
+    const migrateLine = findFirst(/['"]migrate:safe['"]/);
+    expect(migrateLine).toBeGreaterThan(0);
+
+    const replayLine = findLast(/this\.preservedMetaSnapshot\.length\s*>\s*0/);
     expect(replayLine).toBeGreaterThan(0);
+    expect(migrateLine).toBeGreaterThan(replayLine);
 
-    // Walk backwards from the replay line and look for the nearest
-    // `} else {` opener. If the nearest is the PG `else`, it would
-    // mean we're inside that branch. If it's null OR points at a
-    // different else (one further out), we're at the right scope.
-    let nearestElseLine = -1;
-    for (let i = replayLine - 2; i >= 0; i--) {
-      if (/^\s*}\s*else\s*\{\s*$/.test(lines[i]) || /^\s*else\s*\{\s*$/.test(lines[i])) {
-        nearestElseLine = i + 1;
-        break;
-      }
-      if (/^\s*\}\s*$/.test(lines[i]) && i > 0) {
-        // Closing brace before an else opener — keep walking
-      }
-    }
-
-    // The nearest `else {` opener BACKWARDS from the replay site
-    // should be either nothing (replay sits at function scope) or
-    // an else from a *different* outer construct. Either way, the
-    // replay must NOT be lexically inside the dbType === 'sqlite'
-    // / else split. We assert this by checking that the SQLite/PG
-    // split line is BEFORE the replay, AND that there's a closing
-    // brace `}` between them at column-0 indentation depth that
-    // matches the split's depth.
-    const sqliteSplitLine = lines.findIndex((l) =>
-      /if\s*\(\s*this\.dbType\s*===\s*['"]sqlite['"]\s*\)/.test(l)
-    ) + 1;
-
-    expect(sqliteSplitLine).toBeGreaterThan(0);
-    expect(replayLine).toBeGreaterThan(sqliteSplitLine);
-
-    // Between the split and the replay, there should be a line that
-    // closes the else block. We look for `      }` (six-space indent
-    // matching the else opener's depth) before the replay site.
-    let foundElseClose = false;
-    for (let i = sqliteSplitLine; i < replayLine; i++) {
-      // The else block closes with `      }` at the same indent as
-      // the `} else {` opener. Look for any line that's exactly
-      // six-space indent + `}` to find the closing brace.
-      if (/^      \}\s*$/.test(lines[i])) {
-        foundElseClose = true;
+    // Must NOT live inside performDatabaseRestore (same scope as the
+    // replay check above).
+    const dbRestoreStart = findFirst(/async\s+performDatabaseRestore\s*\(/);
+    let dbRestoreEnd = -1;
+    for (let i = dbRestoreStart; i < lines.length; i++) {
+      if (/^  \}\s*$/.test(lines[i])) {
+        dbRestoreEnd = i + 1;
         break;
       }
     }
-    expect(foundElseClose).toBe(true);
+    expect(migrateLine < dbRestoreStart || migrateLine > dbRestoreEnd).toBe(true);
+  });
+
+  it('the replay site lives in restore() AFTER performPostRestoreVerification', () => {
+    // PR #596 round 3 moved the replay out of performDatabaseRestore
+    // and into the parent restore() method, sequenced AFTER the
+    // post-restore verification. Otherwise the replay's upserted row
+    // count was being flagged as a verification mismatch (e.g.
+    // "expected 190, got 191" because the fresh-install seeded
+    // `restore_allow_force_auto_upgraded` that wasn't in the backup).
+    //
+    // Contract: the line that drains `this.preservedMetaSnapshot`
+    // must come AFTER `performPostRestoreVerification` AND must NOT
+    // sit inside `performDatabaseRestore`.
+    const verificationLine = findFirst(/performPostRestoreVerification\s*\(/);
+    expect(verificationLine).toBeGreaterThan(0);
+
+    const replayLine = findLast(/this\.preservedMetaSnapshot\.length\s*>\s*0/);
+    expect(replayLine).toBeGreaterThan(0);
+    expect(replayLine).toBeGreaterThan(verificationLine);
+
+    // `performDatabaseRestore` must not contain the replay drain.
+    // Find the function bounds + assert no drain line falls inside.
+    const dbRestoreStart = findFirst(/async\s+performDatabaseRestore\s*\(/);
+    expect(dbRestoreStart).toBeGreaterThan(0);
+
+    // Find the closing brace of performDatabaseRestore. Lazy heuristic:
+    // the first `^  \}\s*$` (two-space indent + }) after the function
+    // start. Brittle to indent changes but unambiguous in this codebase.
+    let dbRestoreEnd = -1;
+    for (let i = dbRestoreStart; i < lines.length; i++) {
+      if (/^  \}\s*$/.test(lines[i])) {
+        dbRestoreEnd = i + 1;
+        break;
+      }
+    }
+    expect(dbRestoreEnd).toBeGreaterThan(dbRestoreStart);
+
+    // The replay drain line must be OUTSIDE [dbRestoreStart, dbRestoreEnd].
+    expect(replayLine < dbRestoreStart || replayLine > dbRestoreEnd).toBe(true);
   });
 });

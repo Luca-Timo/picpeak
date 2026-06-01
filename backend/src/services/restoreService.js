@@ -39,6 +39,12 @@ class RestoreService {
     this.currentProgress = null;
     this.restoreLog = [];
     this.preRestoreBackupPath = null;
+    // Snapshot of operator-meta settings (e.g. `restore_allow_force`)
+    // captured by performDatabaseRestore BEFORE the DROP DATABASE.
+    // Drained by restore() AFTER post-restore verification passes so
+    // the replay doesn't inflate the row-count check. Reset per run
+    // via beforeRestore() to keep state from leaking across calls.
+    this.preservedMetaSnapshot = [];
     this.dbType = knexConfig.client === 'pg' ? 'postgresql' : 'sqlite';
     this.tempDir = path.join(os.tmpdir(), 'picpeak-restore');
   }
@@ -64,6 +70,7 @@ class RestoreService {
 
     this.isRunning = true;
     this.restoreLog = [];
+    this.preservedMetaSnapshot = [];  // reset per run
     const startTime = new Date();
     let restoreRun = null;
 
@@ -219,6 +226,89 @@ class RestoreService {
           await this.attemptRollback(this.preRestoreBackupPath);
         }
         throw new Error(`Post-restore verification failed: ${verification.errors.join(', ')}`);
+      }
+
+      // Step 7b: Replay operator-meta settings AFTER verification.
+      //
+      // `performDatabaseRestore` stashed the pre-DROP snapshot of
+      // operator-meta keys on `this.preservedMetaSnapshot`. We drain
+      // it here, AFTER verification has already confirmed the
+      // restored DB matches the backup's row counts. Running this
+      // upsert sequence here instead of inside performDatabaseRestore
+      // (where it used to live) prevents the replay from inflating
+      // the post-restore row count and tripping the verification
+      // check — see the round-3 PR #596 notes for the full story.
+      //
+      // UPSERT by setting_key: if the backup had the same key with a
+      // different value, we overwrite; if the row doesn't exist in
+      // the backup, we insert. Either way the operator's pre-restore
+      // policy survives. SQLite branch leaves the snapshot empty so
+      // this block is a no-op there.
+      if (this.preservedMetaSnapshot && this.preservedMetaSnapshot.length > 0) {
+        try {
+          for (const row of this.preservedMetaSnapshot) {
+            await db('app_settings')
+              .insert({
+                setting_key: row.setting_key,
+                setting_value: row.setting_value,
+                setting_type: row.setting_type || 'restore',
+                updated_at: new Date(),
+              })
+              .onConflict('setting_key')
+              .merge({
+                setting_value: row.setting_value,
+                updated_at: new Date(),
+              });
+          }
+          this.log('info', `Replayed ${this.preservedMetaSnapshot.length} restore-meta setting(s) post-verification`);
+        } catch (err) {
+          this.log('warn', `Could not replay restore-meta settings (admin may need to re-set them): ${err.message}`);
+        }
+      }
+
+      // Step 7c: Apply any post-backup migrations to the restored DB.
+      //
+      // The backup carries the schema state of whatever migrations had
+      // been applied at backup time. If the running image is NEWER —
+      // because the admin upgraded picpeak between when the backup
+      // was taken and when they restored — the restored DB ends up
+      // mismatched against the running code: queries fail, new
+      // columns are missing, new tables don't exist.
+      //
+      // Previously the comment said "deferred to next container
+      // restart" — but that left the running process serving a
+      // mismatched schema until the operator manually restarted.
+      // Not acceptable per the "backup must restore completely even
+      // when new features have been added in the meantime" contract.
+      //
+      // Implementation: shell out to `npm run migrate:safe`, which is
+      // the EXACT script wait-for-db.sh runs on boot. Running it as a
+      // subprocess means no risk to our reinit'd pool (subprocess gets
+      // its own knex instance, destroys it on exit; our parent pool
+      // is untouched). Idempotent — migrations already applied are
+      // tracked in the restored `migrations` table and get skipped.
+      //
+      // Failure is non-fatal: the restore data itself is in place,
+      // and the next container restart's wait-for-db.sh will retry.
+      // Surfacing the error gives the operator a chance to investigate
+      // proactively rather than discovering it on the next 500 from
+      // a missing column.
+      try {
+        this.log('info', 'Applying post-restore migrations to restored database...');
+        this.updateProgress('Applying any post-backup migrations...');
+        const backendRoot = path.join(__dirname, '..', '..');
+        const { stderr } = await spawnAsync('npm', ['run', 'migrate:safe'], {
+          cwd: backendRoot,
+          env: { ...process.env },
+        });
+        if (stderr && stderr.trim()) {
+          this.log('info', `Post-restore migrate:safe stderr: ${stderr.slice(0, 500)}`);
+        }
+        this.log('info', 'Post-restore migrations applied');
+      } catch (migErr) {
+        this.log('warn',
+          `Post-restore migrate:safe failed — restore data is in place but the schema may lag the running image. ` +
+          `A container restart will retry via wait-for-db.sh. Error: ${migErr.message}`);
       }
 
       // Step 8: Clean up temporary files
@@ -803,25 +893,30 @@ class RestoreService {
       restoreFile = decompressedPath;
     }
 
-    // Hoisted above the SQLite/PG split so the post-restore replay
-    // block at the bottom (~L1030) can read them even when execution
-    // takes the SQLite path. Without this hoist, the PG branch
-    // populated `preservedMeta` in a block-scoped `let` and then the
-    // shared replay code below tried to read the same name, throwing
-    // `ReferenceError: preservedMeta is not defined` — which caused
-    // every PG restore to "succeed at the data layer" while emitting
-    // a loud FAILED line, skipping the trigger cleanup in
-    // _installFromBackupBoot.js, and silently dropping the
-    // operator-meta replay that was the whole reason this snapshot
-    // existed. The maintainer caught this on PR #596 review.
-    // SQLite branch leaves these as the empty defaults — the
-    // replay block at the bottom is a no-op when `preservedMeta` is
-    // empty, so behaviour is unchanged for SQLite.
+    // Snapshot of operator-meta keys captured BEFORE the DROP.
+    // Stashed onto `this.preservedMetaSnapshot` so the parent
+    // `restore()` method can drain + apply it AFTER post-restore
+    // verification passes. Order matters here:
+    //
+    //   - PR #596 round 1: lifted the declaration above the
+    //     SQLite/PG split to fix a ReferenceError when the replay
+    //     was inline at the bottom of this method.
+    //   - PR #596 round 3: moved the REPLAY itself out of here and
+    //     into restore(), because the round-1 in-method replay ran
+    //     BEFORE post-restore verification — which then counted the
+    //     replayed row and flagged
+    //       Table app_settings row count mismatch: expected 190, got 191
+    //     as a verification failure even though both Stage A and
+    //     the replay had succeeded. Verification now sees the
+    //     as-restored DB (matches the backup exactly), replay layers
+    //     on top after verification has signed off.
+    //
+    // SQLite branch leaves `preservedMetaSnapshot` empty — verification
+    // and replay both no-op for it, unchanged behaviour.
     const PRESERVED_META_KEYS = [
       'restore_allow_force',
       'restore_allow_force_auto_upgraded',
     ];
-    let preservedMeta = [];
 
     try {
       if (this.dbType === 'sqlite') {
@@ -875,16 +970,18 @@ class RestoreService {
         // needed the SQL workaround again. With this snapshot/replay,
         // the operator's policy persists across restores.
         //
-        // PRESERVED_META_KEYS + `preservedMeta` are declared above the
-        // SQLite/PG split (~L795) so the replay block at the bottom
-        // can read them on both branches. Only the snapshot READ
-        // needs to happen here in the PG branch (must run before DROP).
+        // PRESERVED_META_KEYS is declared above the SQLite/PG split
+        // (~L820). The snapshot READ happens here in the PG branch
+        // (must run before DROP), but is stashed on
+        // `this.preservedMetaSnapshot` for the parent `restore()`
+        // method to consume AFTER verification — see the round-3
+        // notes there.
         try {
-          preservedMeta = await db('app_settings')
+          this.preservedMetaSnapshot = await db('app_settings')
             .whereIn('setting_key', PRESERVED_META_KEYS)
             .select('setting_key', 'setting_value', 'setting_type');
-          this.log('info', `Snapshotted ${preservedMeta.length} restore-meta setting(s) for post-restore replay`, {
-            keys: preservedMeta.map(r => r.setting_key),
+          this.log('info', `Snapshotted ${this.preservedMetaSnapshot.length} restore-meta setting(s) for post-restore replay`, {
+            keys: this.preservedMetaSnapshot.map(r => r.setting_key),
           });
         } catch (err) {
           this.log('warn', `Could not snapshot restore-meta settings (continuing): ${err.message}`);
@@ -1043,42 +1140,24 @@ END $$;`
       // uses `npm run migrate:safe` (run-migrations-safe.js) which
       // knows to skip helpers.js + walks core/ explicitly.
       //
-      // For restore: the dump we just loaded already contains the
-      // schema state of whatever migrations had been applied at
-      // backup time. If the running image has NEWER migrations that
-      // need to run on top of the restored DB, those will be applied
-      // on the NEXT container start by wait-for-db.sh + the safe
-      // runner. That's a one-restart penalty in the unusual case of
-      // restoring from a backup older than the current image, and
-      // matches what picpeak does on every other boot already.
-      this.log('info', 'Skipping in-process migrate (deferred to next boot via safe runner)');
+      // The safe runner gets invoked AFTER verification in restore()
+      // (see step 7c) to apply any post-backup migrations to the
+      // restored DB. This closes the contract "backup must restore
+      // completely even when new features have been added in the
+      // meantime" — without this step, restoring an old backup on a
+      // newer image would leave the running process serving a
+      // mismatched schema until the next container restart.
+      this.log('info', 'Schema migrations deferred to restore() step 7c (npm run migrate:safe subprocess)');
 
-      // Replay the snapshotted operator-meta settings on top of the
-      // restored DB. UPSERT by setting_key — if the backup had the
-      // same key with a different value, we overwrite it; if the row
-      // doesn't exist in the backup, we insert it. Either way the
-      // operator's pre-restore policy survives.
-      if (preservedMeta.length > 0) {
-        try {
-          for (const row of preservedMeta) {
-            await db('app_settings')
-              .insert({
-                setting_key: row.setting_key,
-                setting_value: row.setting_value,
-                setting_type: row.setting_type || 'restore',
-                updated_at: new Date(),
-              })
-              .onConflict('setting_key')
-              .merge({
-                setting_value: row.setting_value,
-                updated_at: new Date(),
-              });
-          }
-          this.log('info', `Replayed ${preservedMeta.length} restore-meta setting(s) post-restore`);
-        } catch (err) {
-          this.log('warn', `Could not replay restore-meta settings (admin may need to re-set them): ${err.message}`);
-        }
-      }
+      // NOTE: operator-meta REPLAY does NOT happen here any more.
+      // PR #596 round 3: if the replay runs inside performDatabaseRestore,
+      // it lands BEFORE post-restore verification — and verification
+      // then counts the replayed row as a mismatch (e.g. "expected 190,
+      // got 191" because the fresh-install seeded
+      // `restore_allow_force_auto_upgraded` that wasn't in the backup).
+      // Replay is now drained by the parent `restore()` method AFTER
+      // verification passes. Snapshot lives on
+      // `this.preservedMetaSnapshot` for that drain.
 
       return { success: true };
 

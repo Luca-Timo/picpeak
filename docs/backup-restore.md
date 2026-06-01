@@ -120,6 +120,14 @@ Use this when picpeak is running and you want to roll back to a specific backup 
 
 Failures during restore trigger an automatic rollback from the pre-restore safety snapshot. The destination ends up either as the restored state OR as the original pre-restore state — never as a half-clobbered mix.
 
+### Restoring an older backup on a newer image
+
+picpeak's restore path is forward-compatible: a backup taken on an older version restores cleanly onto a newer image without any manual schema work. After loading the dump, the restore service runs the same `npm run migrate:safe` script that `wait-for-db.sh` uses on every container boot. Any migrations that have been added between the backup's snapshot and the current image are applied inline, against the freshly-restored DB, before the restore is reported as complete.
+
+Net effect: even if `bugfix/cool-new-feature` shipped a migration that adds a `widgets` table and your backup predates that branch, after restore your install has the `widgets` table (empty), the right indexes, and any seed rows the migration emits. No "you'll need to restart the container once" footnote.
+
+The same applies to the install-from-backup trigger — migrations land inside the restore boundary, so the moment the server prints `Server running on port 3000`, the schema matches the running image. Log in and use the install immediately.
+
 ## Disaster recovery (install from a backup)
 
 For full DR after `docker compose down -v`, host migration, drive replacement, or moving an install between hosts. picpeak detects a trigger file on first boot and runs the restore before the admin UI surfaces. You open the browser, log in with your original credentials, and the install is fully populated.
