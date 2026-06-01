@@ -442,21 +442,32 @@ class RestoreService {
         }
       }
 
-      // Check if restoring would overwrite existing data
+      // Check if restoring would overwrite existing data.
+      //
+      // NOTE: pg-driver returns `count('* as count')` as a STRING (it
+      // serialises `bigint` to string to avoid JS precision loss for
+      // huge counts) — see PR #596 review for the `bigint`-as-string
+      // discussion. Both blocks below coerce to `Number` before
+      // comparing AND before interpolating into the warning text, so
+      // the count renders as `5` not `"5"` regardless of DB driver.
+      // Don't drop the `Number()` calls without also re-auditing the
+      // strict-equality call sites flagged in the same review.
       if (options.restoreType === 'full' || options.restoreType === 'database') {
         const eventCount = await db('events').count('* as count').first();
-        if (eventCount && eventCount.count > 0) {
-          validation.warnings.push(`Database contains ${eventCount.count} existing events that will be overwritten`);
+        const eventCountN = Number(eventCount?.count || 0);
+        if (eventCountN > 0) {
+          validation.warnings.push(`Database contains ${eventCountN} existing events that will be overwritten`);
         }
       }
 
-      // Check for active users
+      // Check for active users (same coercion contract as above).
       const activeUsers = await db('admin_users')
         .where('is_active', formatBoolean(true))
         .count('* as count')
         .first();
-      if (activeUsers && activeUsers.count > 0) {
-        validation.warnings.push(`There are ${activeUsers.count} active admin users`);
+      const activeUsersN = Number(activeUsers?.count || 0);
+      if (activeUsersN > 0) {
+        validation.warnings.push(`There are ${activeUsersN} active admin users`);
       }
 
     } catch (error) {
@@ -1240,9 +1251,20 @@ END $$;`
           for (const [table, expected] of Object.entries(manifest.database.row_counts)) {
             try {
               const result = await db(table).count('* as count').first();
-              if (result.count !== expected.rowCount) {
+              // pg-driver serialises `bigint` as string to preserve
+              // precision for huge counts, so `result.count` on PG is
+              // e.g. `"16"` while the manifest's `expected.rowCount`
+              // is the JS number `16`. Strict `!==` flagged every
+              // match as a mismatch on PG. Caught on PR #596 review:
+              //   `Table activity_logs row count mismatch:
+              //    expected 16, got 16`
+              // every table, all "matching". Coerce both sides to
+              // Number to compare reliably across SQLite (number) and
+              // PG (string).
+              const actual = Number(result.count);
+              if (actual !== expected.rowCount) {
                 verification.errors.push(
-                  `Table ${table} row count mismatch: expected ${expected.rowCount}, got ${result.count}`
+                  `Table ${table} row count mismatch: expected ${expected.rowCount}, got ${actual}`
                 );
               }
             } catch (error) {

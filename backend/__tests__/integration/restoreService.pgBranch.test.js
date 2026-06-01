@@ -109,6 +109,48 @@ describe('restoreService — PG branch scope contract (PR #596 review)', () => {
     expect(declarationLine).toBeLessThan(splitLineOneBased);
   });
 
+  it('every .count() result is coerced to Number before comparison', () => {
+    // PR #596 review caught a second PG-only landmine: pg-driver
+    // returns COUNT(*) as a string ("16" not 16) to preserve bigint
+    // precision. The original code compared `result.count !==
+    // expected.rowCount` and every match flagged as a mismatch on PG.
+    //
+    // The fix coerces with `Number(...)` at every comparison +
+    // interpolation site. This test catches a future regression where
+    // a refactor uses `.count` directly in a `===` / `!==` / `>` /
+    // `<` comparison without coercing.
+    //
+    // Heuristic: find every `.count` access in the file and make sure
+    // the line either:
+    //   (a) wraps it in `Number(...)`, or
+    //   (b) is purely an interpolation that already coerced upstream
+    //       (e.g. `validation.warnings.push(`... ${eventCountN} ...`)`
+    //       where eventCountN is the coerced local), or
+    //   (c) is the docstring/comment line (filtered separately).
+    //
+    // We approximate this by listing every `.count` reference site
+    // and asserting that lines doing comparisons (`===`/`!==`/`>`/
+    // `<`/`>=`/`<=`) on a raw `.count` access without `Number(...)`
+    // around it are zero.
+    const dangerousLines = lines
+      .map((l, i) => ({ line: i + 1, text: l }))
+      // Filter to lines that compare a .count result
+      .filter(({ text }) => {
+        // Skip comments
+        if (/^\s*(\/\/|\*)/.test(text)) return false;
+        // Detect a `.count` (followed by `)` for `?.count` or by space/operator)
+        // being directly compared via ===/!==/>/<.
+        // Match the BAD pattern: `<something>.count <op> <something>`
+        // where <op> is === / !== / > / < / >= / <=
+        const bareCountInComparison = /\w+\??\.count\s*(?:!==|===|>=?|<=?)\s+/;
+        // ALLOW if the .count is preceded by `Number(` in the same line
+        const wrappedInNumber = /Number\(\s*\w+\??\.count/;
+        return bareCountInComparison.test(text) && !wrappedInNumber.test(text);
+      });
+
+    expect(dangerousLines).toEqual([]);
+  });
+
   it('the replay block reads preservedMeta outside the SQLite/PG branch', () => {
     // The replay block lives near the end of performDatabaseRestore.
     // It must NOT be guarded by `this.dbType === 'postgresql'` — the
