@@ -417,6 +417,8 @@ router.post(
 //   currency           3-letter ISO (optional, default profile/CHF)
 //   status             'sent' | 'paid' | 'overdue' (default 'sent')
 //   paidAmountMinor    int (optional, for status='paid')
+//   paidAt             ISO date (optional — the real historical payment
+//                      date; defaults to issueDate, never import time)
 //   language           string (optional, default 'de')
 router.post(
   '/import',
@@ -431,6 +433,7 @@ router.post(
     body('currency').optional({ values: 'falsy' }).isString().isLength({ min: 3, max: 3 }),
     body('status').optional({ values: 'falsy' }).isIn(['sent', 'paid', 'overdue']),
     body('paidAmountMinor').optional({ values: 'falsy' }).isInt({ min: 0 }),
+    body('paidAt').optional({ values: 'falsy' }).isISO8601(),
     body('language').optional({ values: 'falsy' }).isString().isLength({ max: 8 }),
   ],
   handleAsync(async (req, res) => {
@@ -470,6 +473,13 @@ router.post(
     const status     = req.body.status || 'sent';
     const issueDate  = req.body.issueDate;
     const dueDate    = req.body.dueDate || issueDate;
+    // Imported docs are historical: their real send/payment dates are
+    // the document's own dates, NOT the moment of import. Stamping
+    // import-time here put year-old paid invoices inside the dashboard's
+    // rolling "Revenue · last 30 days" window (which keys on paid_at).
+    // Anchor to the historical date; let the admin override paid_at when
+    // they know the exact payment date.
+    const paidAt     = req.body.paidAt || issueDate;
     const currency   = (req.body.currency || customer.preferred_currency || 'CHF').toUpperCase();
     const language   = req.body.language || customer.preferred_language || 'de';
 
@@ -488,14 +498,14 @@ router.post(
       installment_trigger: null,
       status,
       scheduled_send_at: null,
-      sent_at: status !== 'scheduled' ? new Date() : null,
+      sent_at: new Date(issueDate),
       net_amount_minor: totalMinor,         // imported docs lack a breakdown
       vat_rate: 0,                          // VAT info lives in the imported PDF
       vat_amount_minor: 0,
       shipping_amount_minor: 0,
       total_amount_minor: totalMinor,
       paid_amount_minor: paidMinor,
-      paid_at: status === 'paid' ? new Date() : null,
+      paid_at: status === 'paid' ? new Date(paidAt) : null,
       // Store the path RELATIVE to STORAGE_PATH so the value survives
       // a host migration (Docker volume remount on a new host with a
       // different absolute path).
