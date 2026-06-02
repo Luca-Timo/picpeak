@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { Clock, AlertTriangle } from 'lucide-react';
-import { Button, Card, LocalizedDateInput } from '../common';
+import { Button, Card, LocalizedDateInput, TimeField } from '../common';
 import { DecimalInput } from '../common/DecimalInput';
 import { parseLocaleDecimal, parseDuration } from '../../utils/parsers';
 import { customerAdminService } from '../../services/customerAdmin.service';
@@ -46,13 +46,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
 }) => {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const { format: fmtDate, formatTime: fmtTime, timeFormat } = useLocalizedDate();
-  // `lang` hint on <input type="time"> nudges Chrome/Edge to render the
-  // picker in the matching clock convention (de-DE → 24h, en-US → 12h).
-  // Safari/Firefox follow OS locale and ignore this — that's a browser
-  // limitation, not something we can fix in the page. The underlying
-  // value stays HH:mm (24h) regardless of how the picker presents it.
-  const timeInputLang = timeFormat === '12h' ? 'en-US' : 'de-DE';
+  const { format: fmtDate, formatTime: fmtTime } = useLocalizedDate();
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('10:00');
@@ -296,15 +290,13 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
             <label className="block text-xs text-muted-theme mb-1">
               {t('customers.hours.form.start', 'Start')}
             </label>
-            <input type="time" lang={timeInputLang} value={startTime}
-              onChange={(e) => setStartTime(e.target.value)} className="input w-full" />
+            <TimeField value={startTime} onChange={setStartTime} />
           </div>
           <div>
             <label className="block text-xs text-muted-theme mb-1">
               {t('customers.hours.form.end', 'End')}
             </label>
-            <input type="time" lang={timeInputLang} value={endTime}
-              onChange={(e) => setEndTime(e.target.value)} className="input w-full" />
+            <TimeField value={endTime} onChange={setEndTime} />
           </div>
           <div>
             <label className="block text-xs text-muted-theme mb-1">

@@ -3,6 +3,7 @@ export { CMSContentBlock } from './CMSContentBlock';
 export { Input } from './Input';
 export { CountrySelect } from './CountrySelect';
 export { LocalizedDateInput } from './LocalizedDateInput';
+export { TimeField, parseTimeToHHMM } from './TimeField';
 export { SortableHeader, useColumnSort } from './SortableHeader';
 export type { SortDir, SortPair, SortColumnMap } from './SortableHeader';
 export { Card, CardHeader, CardContent, CardFooter } from './Card';

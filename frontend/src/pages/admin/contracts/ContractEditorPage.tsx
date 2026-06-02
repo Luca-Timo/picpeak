@@ -17,14 +17,13 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { ArrowLeft, Eye, Save } from 'lucide-react';
-import { Button, Card, Input, Loading, LocalizedDateInput } from '../../../components/common';
+import { Button, Card, Input, Loading, LocalizedDateInput, TimeField } from '../../../components/common';
 import {
   contractsService,
   type ContractBlockSection,
   CONTRACT_SECTIONS,
 } from '../../../services/contracts.service';
 import { CustomerPicker } from '../../../components/admin/CustomerPicker';
-import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 
 interface BlockRow {
   blockId: number;
@@ -38,8 +37,6 @@ interface BlockRow {
 
 export const ContractEditorPage: React.FC = () => {
   const { t } = useTranslation();
-  const { timeFormat } = useLocalizedDate();
-  const timeInputLang = timeFormat === '12h' ? 'en-US' : 'de-DE';
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
@@ -426,13 +423,13 @@ export const ContractEditorPage: React.FC = () => {
                 <label className="block text-sm font-medium mb-1">
                   {t('contracts.editor.eventTimeStart', 'Start')}
                 </label>
-                <Input type="time" lang={timeInputLang} value={eventTimeStart} onChange={(e) => setEventTimeStart(e.target.value)} />
+                <TimeField value={eventTimeStart} onChange={setEventTimeStart} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">
                   {t('contracts.editor.eventTimeEnd', 'End')}
                 </label>
-                <Input type="time" lang={timeInputLang} value={eventTimeEnd} onChange={(e) => setEventTimeEnd(e.target.value)} />
+                <TimeField value={eventTimeEnd} onChange={setEventTimeEnd} />
               </div>
             </div>
           </div>

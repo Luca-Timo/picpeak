@@ -27,7 +27,7 @@ import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Lock, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { Button, Card, Input } from '../../../components/common';
+import { Button, Card, Input, TimeField } from '../../../components/common';
 import { customerAdminService } from '../../../services/customerAdmin.service';
 import type { CalendarHoursItem } from '../../../services/calendar.service';
 
@@ -176,23 +176,13 @@ export const HourEntryInlinePopover: React.FC<HourEntryInlinePopoverProps> = ({
                 <label className="block text-sm font-medium mb-1">
                   {t('calendar.hourEntry.startLabel', 'Start')}
                 </label>
-                <Input
-                  type="time"
-                  step={900}
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                />
+                <TimeField value={startTime} onChange={setStartTime} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">
                   {t('calendar.hourEntry.endLabel', 'End')}
                 </label>
-                <Input
-                  type="time"
-                  step={900}
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                />
+                <TimeField value={endTime} onChange={setEndTime} />
               </div>
             </div>
             <div>

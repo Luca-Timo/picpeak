@@ -471,8 +471,15 @@ router.post(
     }
 
     const totalMinor = parseInt(req.body.totalAmountMinor, 10);
-    const paidMinor  = parseInt(req.body.paidAmountMinor || '0', 10) || 0;
     const status     = req.body.status || 'sent';
+    // A paid import with no explicit paid amount means FULLY paid — default
+    // paid_amount_minor to the total. The dashboard revenue windows sum
+    // paid_amount_minor (not total), so a blank paid amount used to store 0
+    // and the paid invoice contributed nothing to revenue.
+    const explicitPaid = req.body.paidAmountMinor != null && String(req.body.paidAmountMinor) !== '';
+    const paidMinor  = explicitPaid
+      ? (parseInt(req.body.paidAmountMinor, 10) || 0)
+      : (status === 'paid' ? totalMinor : 0);
     const issueDate  = req.body.issueDate;
     const dueDate    = req.body.dueDate || issueDate;
     // Imported docs are historical: their real send/payment dates are

@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Save as SaveIcon } from 'lucide-react';
-import { Button, Card, Loading, Input, LocalizedDateInput } from '../../../components/common';
+import { Button, Card, Loading, Input, LocalizedDateInput, TimeField } from '../../../components/common';
 import { billsService, type InvoiceCreatePayload, type InvoiceQrFormat } from '../../../services/bills.service';
 import { quotesService } from '../../../services/quotes.service';
 import { contractsService } from '../../../services/contracts.service';
@@ -20,7 +20,6 @@ import { customerAdminService } from '../../../services/customerAdmin.service';
 import { userManagementService } from '../../../services/userManagement.service';
 import { settingsService } from '../../../services/settings.service';
 import { useAdminAuth } from '../../../contexts/AdminAuthContext';
-import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { toast } from 'react-toastify';
 
 function toMinor(amount: number) {
@@ -29,8 +28,6 @@ function toMinor(amount: number) {
 
 export const BillEditorPage: React.FC = () => {
   const { t } = useTranslation();
-  const { timeFormat } = useLocalizedDate();
-  const timeInputLang = timeFormat === '12h' ? 'en-US' : 'de-DE';
   const { id } = useParams<{ id?: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -519,10 +516,10 @@ export const BillEditorPage: React.FC = () => {
             value={eventName} onChange={(e) => setEventName(e.target.value)} />
           <LocalizedDateInput label={t('bills.field.eventDate', 'Event date') as string}
             value={eventDate} onChange={setEventDate} />
-          <Input type="time" lang={timeInputLang} label={t('bills.field.eventTimeStart', 'Start time') as string}
-            value={eventTimeStart} onChange={(e) => setEventTimeStart(e.target.value)} />
-          <Input type="time" lang={timeInputLang} label={t('bills.field.eventTimeEnd', 'End time') as string}
-            value={eventTimeEnd} onChange={(e) => setEventTimeEnd(e.target.value)} />
+          <TimeField label={t('bills.field.eventTimeStart', 'Start time') as string}
+            value={eventTimeStart} onChange={setEventTimeStart} />
+          <TimeField label={t('bills.field.eventTimeEnd', 'End time') as string}
+            value={eventTimeEnd} onChange={setEventTimeEnd} />
         </div>
       </Card>
 
