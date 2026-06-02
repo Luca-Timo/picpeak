@@ -85,7 +85,8 @@ async function queueExpirationWarning(event) {
     expiry_date: event.expires_at,
     gallery_link: shareUrl,
     gallery_password: '{{password_security_message}}'
-  });
+  // Relationship mail — hold to business hours (no-op unless configured).
+  }, { respectBusinessHours: true });
 
   logger.info(`Queued expiration warning for event ${event.slug}`);
 }

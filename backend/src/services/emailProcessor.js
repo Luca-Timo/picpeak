@@ -900,6 +900,14 @@ async function getScheduledEmailConfig() {
 //   options.scheduledAt — Date | ISO string; row only picks up once
 //                         this moment has passed (used by CRM split-
 //                         payment invoices). NULL = send immediately.
+//   options.respectBusinessHours — when true, snap the send time to the
+//                         next open business-hours block (from "now").
+//                         Use for automated/relationship mail (dunning
+//                         reminders, gallery-expiry warnings) so we don't
+//                         ping customers overnight. No-op when the floor
+//                         is off / business hours unconfigured / already
+//                         inside a block. Leave it off for transactional
+//                         + admin-initiated mail so those send instantly.
 // Attachments + cc travel inside `emailData` (keys: attachments, cc)
 // so callers don't need a new signature for every email shape.
 async function queueEmail(eventId, recipientEmail, emailType, emailData, options = {}) {
@@ -916,22 +924,33 @@ async function queueEmail(eventId, recipientEmail, emailType, emailData, options
       created_at: new Date(),
     };
     let snappedFrom = null;
-    if (options.scheduledAt) {
-      const requested = options.scheduledAt instanceof Date
-        ? options.scheduledAt
-        : new Date(options.scheduledAt);
-      // Floor to the configured business-hours window so a "send in N
-      // days" click at 02:11 doesn't deliver at 02:11. No-op when the
-      // floor is disabled or the instant already lands inside the window.
+    // Base time to schedule from:
+    //   - explicit options.scheduledAt (CRM split-payment invoices), OR
+    //   - "now" when the caller opts into the business-hours floor via
+    //     options.respectBusinessHours — automated / relationship mail
+    //     like dunning reminders + gallery-expiry warnings, so we don't
+    //     ping the customer at 02:00.
+    // Both snap to the next open business-hours block. No-op when the
+    // floor is disabled, business hours are unconfigured, or the instant
+    // already lands inside a block. Transactional / admin-initiated mail
+    // (invoice_sent, storno, invitations, password resets) passes neither
+    // option and sends immediately.
+    const baseTime = options.scheduledAt
+      ? (options.scheduledAt instanceof Date ? options.scheduledAt : new Date(options.scheduledAt))
+      : (options.respectBusinessHours ? new Date() : null);
+    if (baseTime) {
       const cfg = await getScheduledEmailConfig();
-      const snapped = snapToBusinessHours(requested, cfg);
-      if (snapped.getTime() !== requested.getTime()) snappedFrom = requested;
-      row.scheduled_at = snapped;
+      const snapped = snapToBusinessHours(baseTime, cfg);
+      if (snapped.getTime() !== baseTime.getTime()) snappedFrom = baseTime;
+      // Persist a future scheduled_at for an explicit scheduledAt always;
+      // for the respectBusinessHours floor only when it actually moved the
+      // time forward (inside hours → leave null → processor sends at once).
+      if (options.scheduledAt || snappedFrom) row.scheduled_at = snapped;
     }
     await db('email_queue').insert(row);
 
     logger.info(`Email queued: ${emailType} to ${recipientEmail}${
-      options.scheduledAt ? ` (scheduled ${row.scheduled_at.toISOString()}${
+      row.scheduled_at ? ` (scheduled ${row.scheduled_at.toISOString()}${
         snappedFrom ? `, floored from ${snappedFrom.toISOString()}` : ''
       })` : ''
     }`);

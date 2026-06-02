@@ -2650,7 +2650,9 @@ async function applyReminder(invoice, lineItems, level, adminId) {
       contentPath: pdfPath,
       contentType: 'application/pdf',
     }],
-  });
+  // Dunning reminders are relationship mail — hold to business hours so
+  // the customer isn't pinged overnight (no-op unless hours configured).
+  }, { respectBusinessHours: true });
 
   try {
     await logActivity('invoice_reminder_sent', { invoiceId: invoice.id, level, lateFeeMinor },
