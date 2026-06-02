@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { X, ChevronLeft, ChevronRight, Download, Trash2, Tag, Calendar, HardDrive, Eye, MousePointer, MessageSquare, Star, Heart, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
-import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -10,6 +9,7 @@ import { feedbackService, type PhotoFeedback, type FeedbackSummary } from '../..
 import { Button } from '../common';
 import { AdminAuthenticatedImage } from './AdminAuthenticatedImage';
 import { AdminAuthenticatedVideo } from './AdminAuthenticatedVideo';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 type AdminFeedbackResponse = {
   feedback: PhotoFeedback[];
@@ -38,6 +38,7 @@ export const AdminPhotoViewer: React.FC<AdminPhotoViewerProps> = ({
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
   const [expandedComments, setExpandedComments] = useState(false);
   const queryClient = useQueryClient();
+  const { formatDateTime: fmtDateTime } = useLocalizedDate();
   
   const currentPhoto = photos[currentIndex];
   const isVideo = currentPhoto
@@ -312,7 +313,7 @@ export const AdminPhotoViewer: React.FC<AdminPhotoViewerProps> = ({
                 Uploaded
               </span>
               <p className="text-white">
-                {format(new Date(currentPhoto.uploaded_at), 'MMM d, yyyy h:mm a')}
+                {fmtDateTime(currentPhoto.uploaded_at)}
               </p>
             </div>
 
@@ -408,7 +409,7 @@ export const AdminPhotoViewer: React.FC<AdminPhotoViewerProps> = ({
                                   {comment.guest_name || 'Anonymous'}
                                 </p>
                                 <p className="text-xs text-neutral-400">
-                                  {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
+                                  {fmtDateTime(comment.created_at)}
                                 </p>
                               </div>
                               

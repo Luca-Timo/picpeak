@@ -24,14 +24,15 @@ import {
   AlertCircle,
   ShieldCheck
 } from 'lucide-react';
-import { format } from 'date-fns';
 import { toast } from 'react-toastify';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Button, Card, Input, Loading } from '../common';
 import { api } from '../../config/api';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
   const { t } = useTranslation();
+  const { format: fmtDate, formatTime: fmtTime, formatDateTime: fmtDateTime } = useLocalizedDate();
   const [currentStep, setCurrentStep] = useState(0);
   
   const steps = [
@@ -331,7 +332,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
                   </div>
                   <div>
                     <p className="font-medium text-neutral-900 dark:text-neutral-100">
-                      {format(new Date(backup.created_at), 'PPP')} {t('backup.restore.backup.at')} {format(new Date(backup.created_at), 'p')}
+                      {fmtDate(backup.created_at)} {t('backup.restore.backup.at')} {fmtTime(backup.created_at)}
                     </p>
                     <p className="text-sm text-neutral-500 dark:text-neutral-400">
                       {t('backup.dashboard.backupType', { type: backup.backup_type })} • {formatBytes(backup.total_size || 0)}
@@ -586,7 +587,7 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
               <div className="flex justify-between">
                 <dt className="text-neutral-600 dark:text-neutral-400">{t('backup.restore.confirmation.summary.backupDate')}:</dt>
                 <dd className="font-medium text-neutral-900 dark:text-neutral-100">
-                  {format(new Date(restoreData.selectedBackup.created_at), 'PPp')}
+                  {fmtDateTime(restoreData.selectedBackup.created_at)}
                 </dd>
               </div>
               <div className="flex justify-between">

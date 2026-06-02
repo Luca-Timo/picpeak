@@ -244,7 +244,7 @@ export const EventDetailsPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { t } = useTranslation();
-  const { format } = useLocalizedDate();
+  const { format, formatDateTime: fmtDateTime } = useLocalizedDate();
   const { flags } = useFeatureFlags();
 
   // Validate ID parameter
@@ -2330,7 +2330,7 @@ export const EventDetailsPage: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">{t('events.archivedOn')}</p>
                   <p className="text-sm text-neutral-900 dark:text-neutral-100">
-                    {event.archived_at && format(safeParseDate(event.archived_at)!, 'PPp')}
+                    {event.archived_at && fmtDateTime(safeParseDate(event.archived_at)!)}
                   </p>
                 </div>
                 

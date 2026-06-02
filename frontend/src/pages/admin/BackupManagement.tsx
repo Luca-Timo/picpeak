@@ -15,10 +15,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 
 import { Button, Card, Loading } from '../../components/common';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { BackupDashboard } from '../../components/admin/BackupDashboard';
 import { BackupConfiguration } from '../../components/admin/BackupConfiguration';
 import { BackupHistory } from '../../components/admin/BackupHistory';
@@ -33,6 +33,7 @@ export const BackupManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const queryClient = useQueryClient();
   const { t } = useTranslation();
+  const { formatDateTime: fmtDateTime } = useLocalizedDate();
 
   const tabs = [
     { id: 'dashboard' as const, label: t('backup.tabs.dashboard'), icon: HardDrive },
@@ -122,7 +123,7 @@ export const BackupManagement: React.FC = () => {
                 <>
                   <CheckCircle className="h-5 w-5 text-green-500" />
                   <span className="text-neutral-700 dark:text-neutral-300">
-                    {t('backup.status.lastBackup')}: {format(new Date(backupStatus.lastBackup.created_at), 'PPp')}
+                    {t('backup.status.lastBackup')}: {fmtDateTime(backupStatus.lastBackup.created_at)}
                   </span>
                 </>
               ) : (

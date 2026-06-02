@@ -31,7 +31,7 @@ import { formatShortDate } from '../../utils/dateShort';
 
 export const QuoteResponsePage: React.FC = () => {
   const { t, i18n } = useTranslation();
-  const { formatDateTime: fmtDateTime } = useLocalizedDate();
+  const { formatDateTime: fmtDateTime, formatTime: fmtTime } = useLocalizedDate();
   const { token } = useParams<{ token: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -309,7 +309,7 @@ export const QuoteResponsePage: React.FC = () => {
                           ? Math.max(0, Math.ceil((lockAt.getTime() - Date.now()) / 60000))
                           : 0;
                         return {
-                          at: lockAt ? lockAt.toLocaleTimeString() : '',
+                          at: lockAt ? fmtTime(lockAt) : '',
                           minutes,
                         };
                       })())

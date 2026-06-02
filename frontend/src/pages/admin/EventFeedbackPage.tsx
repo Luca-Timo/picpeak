@@ -25,13 +25,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { eventsService } from '../../services/events.service';
 import { feedbackService } from '../../services/feedback.service';
 import type { PhotoFeedback, FeedbackAnalytics, FeedbackResponse } from '../../services/feedback.service';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 export const EventFeedbackPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { t } = useTranslation();
-  
+  const { formatDateTime: fmtDateTime } = useLocalizedDate();
+
   const [activeTab, setActiveTab] = useState<'settings' | 'feedback' | 'analytics' | 'moderation'>('settings');
   const [feedbackFilter, setFeedbackFilter] = useState({
     type: '',
@@ -297,7 +299,7 @@ export const EventFeedbackPage: React.FC = () => {
                               const d = typeof item.created_at === 'string' 
                                 ? parseISO(item.created_at) 
                                 : new Date(item.created_at);
-                              return isNaN(d.getTime()) ? t('common.unknownDate', 'Unknown date') : format(d, 'PPpp');
+                              return isNaN(d.getTime()) ? t('common.unknownDate', 'Unknown date') : fmtDateTime(d);
                             })()}
                           </p>
                         </div>

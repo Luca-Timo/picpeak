@@ -19,10 +19,12 @@ import { Button, Input, Card, Loading } from '../../components/common';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { archiveService } from '../../services/archive.service';
 import { useTranslation } from 'react-i18next';
+import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 // import { useNavigate } from 'react-router-dom';
 
 export const ArchivesPage: React.FC = () => {
   const { t } = useTranslation();
+  const { formatTime: fmtTime } = useLocalizedDate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'date' | 'size' | 'name'>('date');
@@ -286,7 +288,7 @@ export const ArchivesPage: React.FC = () => {
                       <div>
                         <p>{formatDate(archive.archivedAt, 'MMM d, yyyy') || t('archives.processing')}</p>
                         <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                          {formatDate(archive.archivedAt, 'h:mm a')}
+                          {archive.archivedAt ? fmtTime(archive.archivedAt) : ''}
                         </p>
                       </div>
                     </td>

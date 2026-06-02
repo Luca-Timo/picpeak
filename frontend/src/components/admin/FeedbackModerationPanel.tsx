@@ -8,7 +8,6 @@ import {
   CheckCircle,
   User
 } from 'lucide-react';
-import { parseISO } from 'date-fns';
 import { toast } from 'react-toastify';
 
 import { Card, Loading, Button } from '../common';
@@ -30,7 +29,7 @@ export const FeedbackModerationPanel: React.FC<FeedbackModerationPanelProps> = (
   maxItems = 5
 }) => {
   const { t } = useTranslation();
-  const { format } = useLocalizedDate();
+  const { formatDateTime } = useLocalizedDate();
   const queryClient = useQueryClient();
   const [showAll, setShowAll] = useState(false);
 
@@ -116,12 +115,7 @@ export const FeedbackModerationPanel: React.FC<FeedbackModerationPanelProps> = (
                           </span>
                           <span className="text-neutral-500 dark:text-neutral-400">•</span>
                           <span className="text-neutral-500 dark:text-neutral-400">
-                            {format(
-                              typeof item.created_at === 'string' 
-                                ? parseISO(item.created_at) 
-                                : new Date(item.created_at), 
-                              'MMM d, h:mm a'
-                            )}
+                            {formatDateTime(item.created_at)}
                           </span>
                         </div>
                         <p className="mt-1 text-sm text-neutral-700">{item.comment_text || item.comment}</p>

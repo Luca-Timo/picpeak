@@ -8,6 +8,7 @@ import type { Photo } from '../../../types';
 import { FeedbackIdentityModal } from '../../gallery/FeedbackIdentityModal';
 import { feedbackService } from '../../../services/feedback.service';
 import { useGuestIdentityOptional } from '../../../contexts/GuestIdentityContext';
+import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 
 export const TimelineGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
   photos,
@@ -23,6 +24,7 @@ export const TimelineGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
   feedbackOptions
 }) => {
   const { theme } = useTheme();
+  const { formatTime: fmtTime } = useLocalizedDate();
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
   // Seed from server is_liked on first non-empty payload (#590 follow-up).
   // Mount-only so refetches don't clobber in-session optimistic toggles.
@@ -124,7 +126,7 @@ export const TimelineGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
                     
                     {/* Time label */}
                     <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 text-white text-xs rounded">
-                      {format(parseISO(photo.uploaded_at), 'h:mm a')}
+                      {fmtTime(photo.uploaded_at)}
                     </div>
                     
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg flex items-center justify-center gap-2">

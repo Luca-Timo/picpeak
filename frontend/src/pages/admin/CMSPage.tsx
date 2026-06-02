@@ -16,7 +16,7 @@ import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 export const CMSPage: React.FC = () => {
   const { t } = useTranslation();
-  const { formatDateTime: fmtDateTime } = useLocalizedDate();
+  const { formatDateTime: fmtDateTime, formatTime: fmtTime } = useLocalizedDate();
   const queryClient = useQueryClient();
   const [selectedPage, setSelectedPage] = useState<string>('impressum');
   const [editingLang, setEditingLang] = useState<'en' | 'de'>('en');
@@ -592,7 +592,7 @@ export const CMSPage: React.FC = () => {
                 {!hasUnsavedChanges && lastSaved && (
                   <div className="flex items-center gap-2 text-green-600">
                     <Clock className="w-4 h-4" />
-                    Saved {new Date(lastSaved).toLocaleTimeString()}
+                    Saved {fmtTime(new Date(lastSaved))}
                   </div>
                 )}
               </div>
