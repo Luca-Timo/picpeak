@@ -5,6 +5,13 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.60.1-beta.0](https://github.com/the-luap/picpeak/compare/v3.60.0-beta.0...v3.60.1-beta.0) (2026-06-02)
+
+
+### Bug Fixes
+
+* **notifications:** restore /clear-all route the frontend already calls ([#597](https://github.com/the-luap/picpeak/issues/597)) ([940fc60](https://github.com/the-luap/picpeak/commit/940fc607400afa528f7f464c1d41541f46a4070d))
+
 ## [3.60.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.59.1-beta.0...v3.60.0-beta.0) (2026-06-02)
 
 
