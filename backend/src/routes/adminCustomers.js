@@ -395,7 +395,7 @@ router.put('/:id', [
   // generated invoice to billing_cycle_day of the next period.
   // Cycle day spans -15..-1 (days before month end) and 1..28
   // (day of month) per migration 128 + service-layer clamp.
-  body('billing_cadence').optional().isIn(['per_event', 'monthly', 'quarterly']),
+  body('billing_cadence').optional().isIn(['per_event', 'monthly', 'quarterly', 'manual']),
   body('billing_cycle_day').optional().isInt({ min: -15, max: 28 })
     .withMessage('billing_cycle_day must be -15..-1 (days before month end) or 1..28 (day of month)'),
   // Per-customer Skonto opt-out (migration 112).

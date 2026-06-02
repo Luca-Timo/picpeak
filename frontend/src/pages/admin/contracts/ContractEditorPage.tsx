@@ -17,7 +17,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { ArrowLeft, Eye, Save } from 'lucide-react';
-import { Button, Card, Input, Loading } from '../../../components/common';
+import { Button, Card, Input, Loading, LocalizedDateInput } from '../../../components/common';
 import {
   contractsService,
   type ContractBlockSection,
@@ -380,13 +380,13 @@ export const ContractEditorPage: React.FC = () => {
             <label className="block text-sm font-medium mb-1">
               {t('contracts.editor.issueDate', 'Issue date')}
             </label>
-            <Input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+            <LocalizedDateInput value={issueDate} onChange={setIssueDate} />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">
               {t('contracts.editor.validUntil', 'Sign by (optional)')}
             </label>
-            <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+            <LocalizedDateInput value={validUntil} onChange={setValidUntil} />
           </div>
         </div>
 
@@ -419,7 +419,7 @@ export const ContractEditorPage: React.FC = () => {
               <label className="block text-sm font-medium mb-1">
                 {t('contracts.editor.eventDate', 'Event date')}
               </label>
-              <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+              <LocalizedDateInput value={eventDate} onChange={setEventDate} />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>

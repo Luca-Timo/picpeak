@@ -293,6 +293,13 @@ async function getOrCreateMonthlyDraft(customer, adminId, trx) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  // Manual cadence has no billing cycle: the draft accumulates
+  // indefinitely and ships ONLY via the admin "Trigger invoice now"
+  // gesture, so it carries NO period_end. The scheduler's auto-flush
+  // filter is `monthly_period_end <= today`, which a NULL period_end
+  // can never satisfy — keeping manual drafts out of the cron path.
+  const isManual = customer.billing_cadence === 'manual';
+
   // Resolve period_end: prefer the cadence in the current month, but
   // if it has already passed, roll to next month so the new draft
   // gathers items toward the NEXT bill.
@@ -302,8 +309,11 @@ async function getOrCreateMonthlyDraft(customer, adminId, trx) {
     const nextMonth = today.getMonth() + 1;
     target = computeMonthlyCadenceDate(today.getFullYear(), nextMonth, cycleDay);
   }
-  const periodStart = new Date(target.getFullYear(), target.getMonth(), 1);
-  const periodEnd = target;
+  const periodStart = isManual ? null : new Date(target.getFullYear(), target.getMonth(), 1);
+  const periodEnd = isManual ? null : target;
+  // Placeholder issue/due date for the empty draft row — recomputed at
+  // issuance time. Manual drafts have no period_end, so fall back to today.
+  const placeholderDate = (periodEnd || today).toISOString().slice(0, 10);
 
   // Look up any existing open draft for this customer. We deliberately
   // do NOT filter by monthly_period_end here — only one draft can be
@@ -341,8 +351,8 @@ async function getOrCreateMonthlyDraft(customer, adminId, trx) {
     event_id: null,
     language,
     currency,
-    issue_date: periodEnd.toISOString().slice(0, 10),
-    due_date: periodEnd.toISOString().slice(0, 10), // recomputed at issuance time
+    issue_date: placeholderDate,
+    due_date: placeholderDate, // recomputed at issuance time
     installment_index: 0,
     installment_total: 1,
     status: 'scheduled',
@@ -355,8 +365,8 @@ async function getOrCreateMonthlyDraft(customer, adminId, trx) {
     business_bank_account_id: bank?.id || null,
     qr_format: null,
     is_monthly_draft: true,
-    monthly_period_start: periodStart.toISOString().slice(0, 10),
-    monthly_period_end: periodEnd.toISOString().slice(0, 10),
+    monthly_period_start: periodStart ? periodStart.toISOString().slice(0, 10) : null,
+    monthly_period_end: periodEnd ? periodEnd.toISOString().slice(0, 10) : null,
     // Migration 140 — each monthly-draft cycle is its own deal (no
     // quote/contract chain). Fresh UUID at creation; subsequent line
     // appends just mutate this same row, so the uuid sticks.
@@ -677,15 +687,19 @@ async function createInvoice(payload, adminId, trx = db) {
   const customer = await trx('customer_accounts').where({ id: payload.customerAccountId }).first();
   ensureCustomerCanBill(customer);
 
-  // Monthly-billing intercept (migration 128). For customers in
-  // billing_cadence='monthly' mode every createInvoice call APPENDS
-  // line items onto the running monthly-draft instead of minting a
+  // Accumulator intercept (migration 128). For customers in
+  // billing_cadence='monthly' OR 'manual' mode every createInvoice call
+  // APPENDS line items onto a single running draft instead of minting a
   // fresh invoice. Admin sees the editor flow exactly as before; the
   // returned id is the draft's id so the UI can redirect to the
-  // accumulator. `_skipMonthlyRouting` is the escape hatch used by
-  // internal helpers that need to mint a non-draft row (e.g. the
-  // accumulator itself, or future test fixtures).
-  if (customer.billing_cadence === 'monthly' && !payload._skipMonthlyRouting) {
+  // accumulator. The two modes differ only in WHEN the draft ships:
+  // 'monthly' auto-flushes on the cadence day (scheduler), 'manual'
+  // never auto-flushes (no period_end) and ships only via the admin
+  // "Trigger invoice now" gesture. `_skipMonthlyRouting` is the escape
+  // hatch used by internal helpers that need to mint a non-draft row
+  // (e.g. the accumulator itself, or future test fixtures).
+  if ((customer.billing_cadence === 'monthly' || customer.billing_cadence === 'manual')
+      && !payload._skipMonthlyRouting) {
     const draft = await appendToMonthlyDraft(payload, customer, adminId, trx);
     return { invoiceIds: draft?.id ? [draft.id] : [] };
   }

@@ -3127,22 +3127,26 @@
     },
     "billing": {
       "section": "Billing cadence",
-      "hint": "Per-event (default): every invoice is sent on its own schedule. Monthly: all invoices issued in the period accumulate into one bill that fires on the configured day.",
+      "hint": "Per-event (default): every invoice is sent on its own schedule. Monthly: all invoices issued in the period accumulate into one bill that fires on the configured day. Manual: items accumulate the same way, but the bill ships only when you trigger it.",
       "cadence": "Billing cadence",
       "perEvent": "Per event",
       "monthly": "Monthly",
       "quarterly": "Quarterly",
+      "manual": "Manual (trigger only)",
       "cycleDay": "Cycle day",
       "cycleDayHint": "1..28 = day of month. Use negative -1..-15 for \"N days before month end\" (so -3 fires on the 28th of a 31-day month).",
       "skontoDisabled": "No Skonto for this customer",
       "skontoDisabledHint": "Disables the early-payment discount on all of this customer’s invoices, regardless of template or global defaults.",
       "triggerNow": "Trigger invoice now",
       "triggerConfirm": "Issue this customer's monthly bill now? The customer receives the email immediately.",
+      "triggerConfirmManual": "Issue this customer's accumulated bill now? The customer receives the email immediately.",
       "triggerHint": "Bypasses the cadence day and issues the running draft immediately. Refuses when nothing has been queued for the current period.",
+      "triggerHintManual": "Issues the running draft immediately. Manual-cadence drafts never ship automatically — this is the only way to send them. Refuses when nothing has been queued.",
       "triggered": "Monthly bill issued: {{number}}",
       "triggerError": "Could not trigger the monthly bill.",
       "draftPreview": {
         "title": "Pending in this month's bill",
+        "titleManual": "Pending — ships on manual trigger",
         "periodRange": "{{number}} · {{from}} – {{to}}"
       }
     },

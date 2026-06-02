@@ -202,8 +202,10 @@ async function createEntry(customerId, payload, adminId) {
     const inserted = await trx('customer_hour_entries').insert(row).returning('id');
     const entryId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
-    // Monthly-mode customers get the auto-append treatment.
-    if (customer.billing_cadence === 'monthly') {
+    // Accumulator-mode customers (monthly + manual) get the auto-append
+    // treatment — the entry lands on the running draft instead of staying
+    // unbilled. Manual differs only in that its draft never auto-flushes.
+    if (customer.billing_cadence === 'monthly' || customer.billing_cadence === 'manual') {
       const fullEntry = { ...row, id: entryId };
       const rate = resolveEffectiveRate(fullEntry, customer);
       const lineItem = buildLineItemFromEntry(fullEntry, rate);
@@ -387,15 +389,16 @@ async function deleteEntry(entryId, adminId) {
 /**
  * Per-event flow: mint a standalone invoice from all unbilled entries
  * for this customer, one line per entry. Refuses when the customer is
- * monthly-mode (those entries auto-billed on save, so there should be
- * no unbilled rows). Returns the new invoice id.
+ * in an accumulator mode (monthly / manual) — those entries auto-billed
+ * onto the running draft on save, so there should be no unbilled rows.
+ * Returns the new invoice id.
  */
 async function billUnbilledEntries(customerId, adminId) {
   const customer = await db('customer_accounts').where({ id: customerId }).first();
   if (!customer) throw new AppError('Customer not found', 404);
-  if (customer.billing_cadence === 'monthly') {
+  if (customer.billing_cadence === 'monthly' || customer.billing_cadence === 'manual') {
     throw new AppError(
-      'Monthly-mode customers auto-append entries to the running draft; "Bill these hours" is for per-event customers.',
+      'Accumulator-mode customers (monthly / manual) auto-append entries to the running draft; "Bill these hours" is for per-event customers.',
       409,
       'CADENCE_MISMATCH',
     );

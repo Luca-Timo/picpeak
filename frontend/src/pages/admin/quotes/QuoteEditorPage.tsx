@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Send } from 'lucide-react';
-import { Button, Card, Loading, Input } from '../../../components/common';
+import { Button, Card, Loading, Input, LocalizedDateInput } from '../../../components/common';
 import {
   quotesService,
   type QuoteCreatePayload,
@@ -490,8 +490,8 @@ export const QuoteEditorPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Input label={t('quotes.field.eventName', 'Event name') as string} value={form.eventName}
             onChange={(e) => setForm((f) => ({ ...f, eventName: e.target.value }))} />
-          <Input type="date" label={t('quotes.field.eventDate', 'Event date') as string} value={form.eventDate}
-            onChange={(e) => setForm((f) => ({ ...f, eventDate: e.target.value }))} />
+          <LocalizedDateInput label={t('quotes.field.eventDate', 'Event date') as string} value={form.eventDate}
+            onChange={(iso) => setForm((f) => ({ ...f, eventDate: iso }))} />
           <Input type="time" lang={timeInputLang} label={t('quotes.field.eventTimeStart', 'Start time') as string} value={form.eventTimeStart}
             onChange={(e) => setForm((f) => ({ ...f, eventTimeStart: e.target.value }))} />
           <Input type="time" lang={timeInputLang} label={t('quotes.field.eventTimeEnd', 'End time') as string} value={form.eventTimeEnd}
@@ -499,8 +499,8 @@ export const QuoteEditorPage: React.FC = () => {
           <Input type="number" step="0.5" label={t('quotes.field.expectedDuration', 'Expected duration (h)') as string}
             value={form.expectedDurationHours}
             onChange={(e) => setForm((f) => ({ ...f, expectedDurationHours: e.target.value }))} />
-          <Input type="date" label={t('quotes.field.validUntil', 'Valid until') as string} value={form.validUntil}
-            onChange={(e) => setForm((f) => ({ ...f, validUntil: e.target.value }))} />
+          <LocalizedDateInput label={t('quotes.field.validUntil', 'Valid until') as string} value={form.validUntil}
+            onChange={(iso) => setForm((f) => ({ ...f, validUntil: iso }))} />
         </div>
       </Card>
 

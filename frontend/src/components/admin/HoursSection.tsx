@@ -17,7 +17,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import { Clock } from 'lucide-react';
-import { Button, Card } from '../common';
+import { Button, Card, LocalizedDateInput } from '../common';
 import { DecimalInput } from '../common/DecimalInput';
 import { parseLocaleDecimal, parseDuration } from '../../utils/parsers';
 import { customerAdminService } from '../../services/customerAdmin.service';
@@ -224,8 +224,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
             <label className="block text-xs text-muted-theme mb-1">
               {t('customers.hours.form.date', 'Date')}
             </label>
-            <input type="date" value={entryDate}
-              onChange={(e) => setEntryDate(e.target.value)} className="input w-full" />
+            <LocalizedDateInput value={entryDate} onChange={setEntryDate} />
           </div>
           <div>
             <label className="block text-xs text-muted-theme mb-1">

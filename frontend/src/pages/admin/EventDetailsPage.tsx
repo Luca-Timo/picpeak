@@ -57,7 +57,7 @@ const safeParseDate = (dateValue: unknown): Date | null => {
 import { toast } from 'react-toastify';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
-import { Button, Input, Card, Loading, MarkdownContent } from '../../components/common';
+import { Button, Input, Card, Loading, MarkdownContent, LocalizedDateInput } from '../../components/common';
 import { EventCategoryManager, AdminPhotoGrid, AdminPhotoViewer, PhotoFilters, PasswordResetModal, ThemeCustomizerEnhanced, ThemeDisplay, HeroPhotoSelector, FocalPointPicker, PhotoUploadModal, FeedbackSettings, FeedbackModerationPanel, EventRenameDialog, PhotoFilterPanel, PhotoExportMenu, AdminGuestsList } from '../../components/admin';
 import { CustomerAccountPicker } from '../../components/admin/CustomerAccountPicker';
 import { EventReminderOverrideCard } from '../../components/admin/EventReminderOverrideCard';
@@ -1194,10 +1194,9 @@ export const EventDetailsPage: React.FC = () => {
                   <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                     {t('events.expirationDate')}
                   </label>
-                  <Input
-                    type="date"
+                  <LocalizedDateInput
                     value={editForm.expires_at}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, expires_at: e.target.value }))}
+                    onChange={(iso) => setEditForm(prev => ({ ...prev, expires_at: iso }))}
                     min={format(new Date(), 'yyyy-MM-dd')}
                   />
                 </div>

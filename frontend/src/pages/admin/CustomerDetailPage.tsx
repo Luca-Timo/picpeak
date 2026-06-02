@@ -77,7 +77,7 @@ export const CustomerDetailPage: React.FC = () => {
     queryKey: ['admin-customer-monthly-draft', customerId],
     queryFn: () => customerAdminService.getMonthlyDraft(customerId),
     enabled: Number.isFinite(customerId) && customerId > 0
-      && (customer?.billingCadence === 'monthly'),
+      && (customer?.billingCadence === 'monthly' || customer?.billingCadence === 'manual'),
   });
   const monthlyDraft = monthlyDraftRes?.draft || null;
 
@@ -716,9 +716,10 @@ export const CustomerDetailPage: React.FC = () => {
               <option value="per_event">{t('customers.billing.perEvent', 'Per event')}</option>
               <option value="monthly">{t('customers.billing.monthly', 'Monthly')}</option>
               <option value="quarterly">{t('customers.billing.quarterly', 'Quarterly')}</option>
+              <option value="manual">{t('customers.billing.manual', 'Manual (trigger only)')}</option>
             </select>
           </div>
-          {form.billingCadence && form.billingCadence !== 'per_event' && (
+          {(form.billingCadence === 'monthly' || form.billingCadence === 'quarterly') && (
             <div>
               <label className="block text-sm font-medium text-theme mb-1">
                 {t('customers.billing.cycleDay', 'Cycle day')}
@@ -763,21 +764,26 @@ export const CustomerDetailPage: React.FC = () => {
             period so admin sees exactly what "Trigger invoice now"
             would ship. Hidden when no draft exists yet (admin hasn't
             saved anything onto the period). */}
-        {form.billingCadence === 'monthly' && monthlyDraft && monthlyDraft.lineItems.length > 0 && (
+        {(form.billingCadence === 'monthly' || form.billingCadence === 'manual') && monthlyDraft && monthlyDraft.lineItems.length > 0 && (
           <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold text-theme">
-                {t('customers.billing.draftPreview.title',
-                  'Pending in this month\'s bill')}
+                {form.billingCadence === 'manual'
+                  ? t('customers.billing.draftPreview.titleManual',
+                      'Pending — ships on manual trigger')
+                  : t('customers.billing.draftPreview.title',
+                      'Pending in this month\'s bill')}
               </h3>
               <span className="text-xs text-muted-theme">
-                {t('customers.billing.draftPreview.periodRange',
-                  '{{number}} · {{from}} – {{to}}',
-                  {
-                    number: monthlyDraft.invoiceNumber,
-                    from: fmtDate(monthlyDraft.periodStart),
-                    to: fmtDate(monthlyDraft.periodEnd),
-                  })}
+                {monthlyDraft.periodStart && monthlyDraft.periodEnd
+                  ? t('customers.billing.draftPreview.periodRange',
+                      '{{number}} · {{from}} – {{to}}',
+                      {
+                        number: monthlyDraft.invoiceNumber,
+                        from: fmtDate(monthlyDraft.periodStart),
+                        to: fmtDate(monthlyDraft.periodEnd),
+                      })
+                  : monthlyDraft.invoiceNumber}
               </span>
             </div>
             <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
@@ -834,20 +840,25 @@ export const CustomerDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* Manual trigger — issue the running monthly draft NOW
-            instead of waiting for the cadence-day scheduler tick.
-            Only shown for monthly-mode customers (per-event has no
-            draft to arm; the equivalent action there is "Bill these
-            hours" on the standalone Hours-logging page). */}
-        {form.billingCadence === 'monthly' && (
+        {/* Manual trigger — issue the running draft NOW. For monthly
+            customers this bypasses the cadence-day scheduler tick; for
+            manual-cadence customers it's the ONLY way the draft ships
+            (the scheduler never auto-flushes a manual draft). Per-event
+            has no draft to arm; the equivalent action there is "Bill
+            these hours" on the standalone Hours-logging page. */}
+        {(form.billingCadence === 'monthly' || form.billingCadence === 'manual') && (
           <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
             <Button
               variant="outline"
               disabled={triggerMonthlyBillMutation.isPending}
               isLoading={triggerMonthlyBillMutation.isPending}
               onClick={() => {
-                if (window.confirm(t('customers.billing.triggerConfirm',
-                  'Issue this customer\'s monthly bill now? The customer receives the email immediately.') as string)) {
+                const confirmMsg = form.billingCadence === 'manual'
+                  ? t('customers.billing.triggerConfirmManual',
+                      'Issue this customer\'s accumulated bill now? The customer receives the email immediately.')
+                  : t('customers.billing.triggerConfirm',
+                      'Issue this customer\'s monthly bill now? The customer receives the email immediately.');
+                if (window.confirm(confirmMsg as string)) {
                   triggerMonthlyBillMutation.mutate();
                 }
               }}
@@ -855,8 +866,11 @@ export const CustomerDetailPage: React.FC = () => {
               {t('customers.billing.triggerNow', 'Trigger invoice now')}
             </Button>
             <p className="text-xs text-muted-theme mt-2">
-              {t('customers.billing.triggerHint',
-                'Bypasses the cadence day and issues the running draft immediately. Refuses when nothing has been queued for the current period.')}
+              {form.billingCadence === 'manual'
+                ? t('customers.billing.triggerHintManual',
+                    'Issues the running draft immediately. Manual-cadence drafts never ship automatically — this is the only way to send them. Refuses when nothing has been queued.')
+                : t('customers.billing.triggerHint',
+                    'Bypasses the cadence day and issues the running draft immediately. Refuses when nothing has been queued for the current period.')}
             </p>
           </div>
         )}

@@ -58,7 +58,7 @@ export interface CustomerAccountDetail extends CustomerAccountSummary {
    * - 'monthly' / 'quarterly': snap every scheduled invoice to
    *   `billingCycleDay` of the next period.
    */
-  billingCadence?: 'per_event' | 'monthly' | 'quarterly';
+  billingCadence?: 'per_event' | 'monthly' | 'quarterly' | 'manual';
   billingCycleDay?: number;
   /** Per-customer Skonto opt-out (migration 112). When true, none of
    *  this customer's invoices qualify for an early-payment discount,
@@ -360,16 +360,18 @@ export const customerAdminService = {
   },
 };
 
-/** Open monthly bill accumulator preview (migration 128). One row in
+/** Open bill accumulator preview (migration 128). One row in
  *  the invoices table with is_monthly_draft=true that gathers every
  *  invoice line created for this customer during the current period;
- *  ships on the cadence day or via triggerMonthlyBill. */
+ *  ships on the cadence day or via triggerMonthlyBill. Manual-cadence
+ *  drafts carry no period (periodStart/End null) and ship only on the
+ *  admin trigger. */
 export interface MonthlyDraftPreview {
   id: number;
   invoiceNumber: string;
   currency: string;
-  periodStart: string;
-  periodEnd: string;
+  periodStart: string | null;
+  periodEnd: string | null;
   netAmountMinor: number;
   vatRate: number | null;
   vatAmountMinor: number;

@@ -3127,22 +3127,26 @@
     },
     "billing": {
       "section": "Abrechnungsrhythmus",
-      "hint": "Per-Event (Standard): jede Rechnung wird einzeln versendet. Monatlich: alle Rechnungen einer Periode werden zu einer Sammelrechnung gebündelt, die am konfigurierten Stichtag ausgelöst wird.",
+      "hint": "Per-Event (Standard): jede Rechnung wird einzeln versendet. Monatlich: alle Rechnungen einer Periode werden zu einer Sammelrechnung gebündelt, die am konfigurierten Stichtag ausgelöst wird. Manuell: Positionen sammeln sich genauso, aber die Rechnung wird erst versendet, wenn Sie sie auslösen.",
       "cadence": "Abrechnungsrhythmus",
       "perEvent": "Per Event",
       "monthly": "Monatlich",
       "quarterly": "Quartalsweise",
+      "manual": "Manuell (nur auf Auslösung)",
       "cycleDay": "Stichtag",
       "cycleDayHint": "1..28 = Tag im Monat. Negativ -1..-15 für „N Tage vor Monatsende“ (so löst -3 in einem 31-Tage-Monat am 28. aus).",
       "skontoDisabled": "Kein Skonto für diesen Kunden",
       "skontoDisabledHint": "Deaktiviert den Skonto-Abzug auf allen Rechnungen dieses Kunden – unabhängig von Vorlage oder globalen Standardwerten.",
       "triggerNow": "Rechnung jetzt ausstellen",
       "triggerConfirm": "Monatsrechnung für diesen Kunden jetzt ausstellen? Der Kunde erhält die E-Mail sofort.",
+      "triggerConfirmManual": "Gesammelte Rechnung für diesen Kunden jetzt ausstellen? Der Kunde erhält die E-Mail sofort.",
       "triggerHint": "Überspringt den Stichtag und stellt den aktuellen Entwurf sofort aus. Wird abgelehnt, wenn für die aktuelle Periode nichts erfasst wurde.",
+      "triggerHintManual": "Stellt den aktuellen Entwurf sofort aus. Entwürfe mit manuellem Rhythmus werden nie automatisch versendet – dies ist der einzige Weg, sie zu versenden. Wird abgelehnt, wenn nichts erfasst wurde.",
       "triggered": "Monatsrechnung ausgestellt: {{number}}",
       "triggerError": "Monatsrechnung konnte nicht ausgelöst werden.",
       "draftPreview": {
         "title": "Offen für die Rechnung dieses Monats",
+        "titleManual": "Offen – wird auf manuelle Auslösung versendet",
         "periodRange": "{{number}} · {{from}} – {{to}}"
       }
     },
