@@ -41,6 +41,10 @@ const ALLOWED_PROFILE_FIELDS = [
   'tax_id',
   'vat_label',
   'vat_rate_default',
+  // Install-wide fallback hourly rate (migration 113), minor units.
+  // Last link in the hour-entry rate chain after the per-entry
+  // override and the per-customer default.
+  'default_hourly_rate_minor',
   'default_currency',
   'default_locale',
   'default_qr_format',
@@ -160,6 +164,17 @@ function sanitiseProfilePayload(payload) {
     updates.pdf_logo_height = Number.isFinite(n)
       ? Math.max(24, Math.min(200, n))
       : 56;
+  }
+  // Install-wide default hourly rate (minor units). Empty / null clears
+  // it back to "no global default"; otherwise coerce to a non-negative
+  // integer so a stray decimal can't land sub-cent values in the column.
+  if (updates.default_hourly_rate_minor !== undefined) {
+    if (updates.default_hourly_rate_minor === null || updates.default_hourly_rate_minor === '') {
+      updates.default_hourly_rate_minor = null;
+    } else {
+      const n = parseInt(updates.default_hourly_rate_minor, 10);
+      updates.default_hourly_rate_minor = Number.isFinite(n) && n >= 0 ? n : null;
+    }
   }
 
   return updates;

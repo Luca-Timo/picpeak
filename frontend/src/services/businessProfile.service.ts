@@ -34,6 +34,11 @@ export interface BusinessProfile {
   taxId: string;
   vatLabel: string;
   vatRateDefault: number | null;
+  /** Install-wide fallback hourly rate in MINOR units (migration 113).
+   *  Last link in the hour-entry rate chain after the per-entry
+   *  override and the per-customer default. null = no global default;
+   *  the hours page then requires a per-customer or per-entry rate. */
+  defaultHourlyRateMinor: number | null;
   defaultCurrency: string;
   defaultLocale: string;
   defaultQrFormat: QrFormat;

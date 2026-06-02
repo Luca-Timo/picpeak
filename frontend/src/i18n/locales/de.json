@@ -2960,7 +2960,8 @@
         "rateOverride": "Satz-Override",
         "note": "Notiz / Beschreibung",
         "notePlaceholder": "Was wurde gearbeitet?",
-        "save": "Eintrag hinzufügen"
+        "save": "Eintrag hinzufügen",
+        "needRate": "Satz festlegen oder Override eingeben, um Zeit zu erfassen."
       },
       "col": {
         "date": "Datum",
@@ -2985,6 +2986,20 @@
         "created": "Eintrag erfasst",
         "deleted": "Eintrag gelöscht",
         "billed": "Stunden verrechnet"
+      },
+      "noRate": {
+        "title": "Kein Stundensatz hinterlegt",
+        "body": "Für die Erfassung wird ein Satz benötigt. Legen Sie einen für diesen Kunden fest, geben Sie unten einen Override pro Eintrag ein oder konfigurieren Sie einen installationsweiten Standardsatz.",
+        "setForCustomer": "Satz für diesen Kunden festlegen",
+        "setInstallDefault": "Installationsweiten Standard festlegen"
+      },
+      "rateSource": {
+        "customer": "von diesem Kunden",
+        "installDefault": "installationsweiter Standard"
+      },
+      "error": {
+        "noRate": "Für diesen Kunden ist kein Stundensatz hinterlegt. Geben Sie einen Satz-Override ein, hinterlegen Sie einen Satz beim Kunden oder konfigurieren Sie in den Einstellungen einen installationsweiten Standardsatz.",
+        "createFailed": "Eintrag konnte nicht erfasst werden"
       }
     },
     "create": {
@@ -3687,6 +3702,9 @@
       "timezone": "Zeitzone (IANA)",
       "vatLabel": "MwSt-Bezeichnung",
       "vatRateDefault": "Standard-MwSt-Satz %",
+      "defaultHourlyRate": "Standard-Stundensatz",
+      "defaultHourlyRatePlaceholder": "z. B. 120.00",
+      "defaultHourlyRateHint": "Fallback, wenn ein Kunde keinen eigenen Satz hat. In {{currency}}, in ganzen Einheiten. Leer lassen, um einen Satz pro Kunde oder pro Eintrag zu verlangen.",
       "defaultQrFormat": "Standard-QR-Format",
       "footerLine": "Fusszeile"
     },

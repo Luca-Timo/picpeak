@@ -58,11 +58,28 @@ describe('resolveEffectiveRate', () => {
     )).toBe(15000);
   });
 
-  it('throws when both override and customer rate are unset', () => {
+  it('throws when override, customer rate, AND install default are all unset', () => {
     expect(() => resolveEffectiveRate(
       { hourly_rate_minor_override: null },
       { hourly_rate_minor: null },
+      null,
     )).toThrow(/No hourly rate/);
+  });
+
+  it('falls back to the install-wide default when override + customer rate are unset', () => {
+    expect(resolveEffectiveRate(
+      { hourly_rate_minor_override: null },
+      { hourly_rate_minor: null },
+      12000,
+    )).toBe(12000);
+  });
+
+  it('customer rate wins over the install-wide default', () => {
+    expect(resolveEffectiveRate(
+      { hourly_rate_minor_override: null },
+      { hourly_rate_minor: 15000 },
+      12000,
+    )).toBe(15000);
   });
 
   it('treats override=0 as "explicitly zero" (not null)', () => {

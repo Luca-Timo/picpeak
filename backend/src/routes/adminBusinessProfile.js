@@ -142,6 +142,10 @@ function transformProfile(p) {
     taxId: p.tax_id || '',
     vatLabel: p.vat_label || 'MwSt.',
     vatRateDefault: p.vat_rate_default == null ? null : Number(p.vat_rate_default),
+    // Install-wide fallback hourly rate (migration 113), minor units.
+    // null = no global default; the hours page then requires a per-
+    // customer or per-entry rate.
+    defaultHourlyRateMinor: p.default_hourly_rate_minor == null ? null : Number(p.default_hourly_rate_minor),
     defaultCurrency: p.default_currency || 'CHF',
     defaultLocale: p.default_locale || 'de',
     defaultQrFormat: p.default_qr_format || 'none',
@@ -346,6 +350,11 @@ router.put(
     body('taxId').optional({ values: 'falsy' }).isString().isLength({ max: 64 }),
     body('vatLabel').optional({ values: 'falsy' }).isString().isLength({ max: 64 }),
     body('vatRateDefault').optional({ values: 'falsy' }).isFloat({ min: 0, max: 100 }),
+    // Migration 113 — install-wide default hourly rate, minor units.
+    // nullable so the admin can clear it; values: 'falsy' would drop a
+    // legitimate 0 (which we treat as "explicitly free"), so use the
+    // nullable form and let the service coerce.
+    body('defaultHourlyRateMinor').optional({ nullable: true }).isInt({ min: 0 }),
     body('defaultCurrency').optional({ values: 'falsy' }).isString().isLength({ min: 3, max: 3 }),
     body('defaultLocale').optional({ values: 'falsy' }).isString().isLength({ max: 8 }),
     body('defaultQrFormat').optional({ values: 'falsy' }).isIn(['swiss', 'epc', 'none']),
@@ -393,6 +402,7 @@ router.put(
       taxId: 'tax_id',
       vatLabel: 'vat_label',
       vatRateDefault: 'vat_rate_default',
+      defaultHourlyRateMinor: 'default_hourly_rate_minor',
       defaultCurrency: 'default_currency',
       defaultLocale: 'default_locale',
       defaultQrFormat: 'default_qr_format',

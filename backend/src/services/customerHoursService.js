@@ -25,6 +25,7 @@
 const { db, logActivity } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
 const { AppError } = require('../utils/errors');
+const { hasColumnCached } = require('../utils/schemaCache');
 const logger = require('../utils/logger');
 const invoiceService = require('./invoiceService');
 
@@ -50,22 +51,50 @@ function computeDurationMinutes(start, end) {
 }
 
 /**
- * Resolve the rate this entry should bill at. Override on the entry
- * wins; otherwise we fall back to the customer's default rate. If
- * neither is set we throw — saves can't go through without a rate.
+ * Resolve the rate this entry should bill at. Resolution chain:
+ *   1. per-entry override
+ *   2. per-customer default rate
+ *   3. install-wide default rate (business_profile, migration 113)
+ * Only when all three are unset do we throw — the hours UI surfaces a
+ * "set a rate" CTA off the back of HOURLY_RATE_REQUIRED rather than a
+ * raw error. `installDefaultMinor` is loaded once per request by the
+ * caller (see getInstallDefaultRateMinor) and passed in so this stays
+ * a pure function.
  */
-function resolveEffectiveRate(entry, customer) {
+function resolveEffectiveRate(entry, customer, installDefaultMinor = null) {
   if (entry.hourly_rate_minor_override != null) {
     return Number(entry.hourly_rate_minor_override);
   }
   if (customer.hourly_rate_minor != null) {
     return Number(customer.hourly_rate_minor);
   }
+  if (installDefaultMinor != null) {
+    return Number(installDefaultMinor);
+  }
   throw new AppError(
-    'No hourly rate: set a per-entry override or a customer default.',
+    'No hourly rate: set a per-entry override, a customer default, or an install-wide default rate.',
     400,
     'HOURLY_RATE_REQUIRED',
   );
+}
+
+/**
+ * Read the install-wide default hourly rate (minor units) off the
+ * singleton business_profile row. Returns null when unset OR when the
+ * column doesn't exist yet (pre-migration-113 install) — callers then
+ * fall through to the HOURLY_RATE_REQUIRED path. Accepts an optional
+ * transaction so it joins the caller's atomic unit.
+ */
+async function getInstallDefaultRateMinor(trx) {
+  const conn = trx || db;
+  if (!(await hasColumnCached('business_profile', 'default_hourly_rate_minor'))) {
+    return null;
+  }
+  const row = await conn('business_profile').where({ id: 1 })
+    .first('default_hourly_rate_minor');
+  return row && row.default_hourly_rate_minor != null
+    ? Number(row.default_hourly_rate_minor)
+    : null;
 }
 
 /**
@@ -181,9 +210,14 @@ async function createEntry(customerId, payload, adminId) {
   }
   const description = payload.description ? String(payload.description).slice(0, 1000) : null;
 
+  // Install-wide fallback rate (migration 113) — the last link in the
+  // resolution chain. Loaded once and reused for the pre-validate and
+  // the accumulator append below.
+  const installDefaultMinor = await getInstallDefaultRateMinor();
+
   // Pre-validate the rate resolves to something — fail before insert
-  // if neither override nor customer default is set.
-  resolveEffectiveRate({ hourly_rate_minor_override: override }, customer);
+  // if neither override, customer default, nor install default is set.
+  resolveEffectiveRate({ hourly_rate_minor_override: override }, customer, installDefaultMinor);
 
   return await db.transaction(async (trx) => {
     const row = {
@@ -207,7 +241,7 @@ async function createEntry(customerId, payload, adminId) {
     // unbilled. Manual differs only in that its draft never auto-flushes.
     if (customer.billing_cadence === 'monthly' || customer.billing_cadence === 'manual') {
       const fullEntry = { ...row, id: entryId };
-      const rate = resolveEffectiveRate(fullEntry, customer);
+      const rate = resolveEffectiveRate(fullEntry, customer, installDefaultMinor);
       const lineItem = buildLineItemFromEntry(fullEntry, rate);
       const { invoiceId, lineItemId } = await invoiceService.appendOneLineItemToMonthlyDraft(
         customer, lineItem, adminId, trx,
@@ -288,7 +322,8 @@ async function updateEntry(entryId, payload, adminId) {
     // Recompute the linked line item if the entry is billed (on a
     // draft — the lock check above already proved it's mutable).
     if (entry.invoice_id && entry.invoice_line_item_id) {
-      const rate = resolveEffectiveRate(next, customer);
+      const installDefaultMinor = await getInstallDefaultRateMinor(trx);
+      const rate = resolveEffectiveRate(next, customer, installDefaultMinor);
       const newLineItem = buildLineItemFromEntry(next, rate);
       await trx('invoice_line_items').where({ id: entry.invoice_line_item_id }).update({
         description: newLineItem.description,
@@ -412,8 +447,9 @@ async function billUnbilledEntries(customerId, adminId) {
       throw new AppError('No unbilled entries to bill', 409, 'NO_UNBILLED');
     }
 
+    const installDefaultMinor = await getInstallDefaultRateMinor(trx);
     const lineItems = unbilled.map((entry, idx) => {
-      const rate = resolveEffectiveRate(entry, customer);
+      const rate = resolveEffectiveRate(entry, customer, installDefaultMinor);
       const li = buildLineItemFromEntry(entry, rate);
       return { ...li, position: idx + 1 };
     });
@@ -465,6 +501,7 @@ module.exports = {
   updateEntry,
   deleteEntry,
   billUnbilledEntries,
+  getInstallDefaultRateMinor,
   _internal: {
     computeDurationMinutes,
     resolveEffectiveRate,

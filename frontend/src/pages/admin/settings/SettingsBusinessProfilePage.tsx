@@ -16,6 +16,7 @@ import {
   type QrFormat,
 } from '../../../services/businessProfile.service';
 import { Button, Card, Loading, Input, CountrySelect } from '../../../components/common';
+import { DecimalInput } from '../../../components/common/DecimalInput';
 import { toast } from 'react-toastify';
 
 export const SettingsBusinessProfilePage: React.FC = () => {
@@ -132,6 +133,30 @@ export const SettingsBusinessProfilePage: React.FC = () => {
           <Input type="number" step="0.01" label={t('businessProfile.field.vatRateDefault', 'Default VAT rate %') as string}
             value={profile.vatRateDefault ?? 0}
             onChange={(e) => setProfile({ ...profile, vatRateDefault: Number(e.target.value) })} />
+          {/* Install-wide fallback hourly rate (migration 113). Stored in
+              minor units; entered here in major units. Blank = no global
+              default, so hours-logging then needs a per-customer or
+              per-entry rate. Comma-tolerant via DecimalInput. */}
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              {t('businessProfile.field.defaultHourlyRate', 'Default hourly rate')}
+            </label>
+            <DecimalInput
+              value={profile.defaultHourlyRateMinor != null ? profile.defaultHourlyRateMinor / 100 : NaN}
+              fractionDigits={2}
+              onChange={(n) => setProfile({
+                ...profile,
+                defaultHourlyRateMinor: Number.isFinite(n) ? Math.max(0, Math.round(n * 100)) : null,
+              })}
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+              placeholder={t('businessProfile.field.defaultHourlyRatePlaceholder', 'e.g. 120.00') as string}
+            />
+            <p className="text-xs text-muted-theme mt-1">
+              {t('businessProfile.field.defaultHourlyRateHint',
+                'Fallback used when a customer has no own rate. In {{currency}}, major units. Leave blank to require a per-customer or per-entry rate.',
+                { currency: profile.defaultCurrency || 'CHF' })}
+            </p>
+          </div>
           <div>
             <label className="block text-sm font-medium mb-1">{t('businessProfile.field.defaultQrFormat', 'Default invoice QR')}</label>
             <select value={profile.defaultQrFormat} onChange={(e) => setProfile({ ...profile, defaultQrFormat: e.target.value as QrFormat })}
