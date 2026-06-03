@@ -430,16 +430,35 @@ router.get('/crm-stats', adminAuth, async (req, res) => {
         }
 
         // Revenue windows: sum of `paid_amount_minor` for invoices
-        // marked PAID where paid_at falls inside the window. Using
-        // paid_amount (not total) so partial payments are tracked
-        // accurately. Stornos excluded — they're never status='paid'
-        // in normal flow but the guard is defensive.
+        // marked PAID inside the window. Using paid_amount (not total)
+        // so partial payments are tracked accurately. Stornos excluded
+        // — they're never status='paid' in normal flow but the guard
+        // is defensive.
+        //
+        // Recognition date differs by origin:
+        //   • imported (historical) invoices → recognise on issue_date,
+        //     their true economic date. A year-old imported invoice must
+        //     never land in the rolling "last 30/90 days" window. This is
+        //     robust even for rows imported BEFORE the import route began
+        //     anchoring paid_at to issue_date (commit c6b8cc9) — those
+        //     legacy rows still carry an import-time paid_at, so keying on
+        //     issue_date is what actually fixes them.
+        //   • native invoices → recognise on paid_at (cash-basis).
         const winSum = async (cutoff) => {
+          const cutoffDateStr = cutoff.toISOString().slice(0, 10);
           const row = await db('invoices')
             .where('status', 'paid')
-            .where('paid_at', '>=', cutoff)
             .andWhere(function() {
               this.whereNot('kind', 'storno').orWhereNull('kind');
+            })
+            .andWhere(function() {
+              this.where(function() {
+                this.whereNotNull('imported_pdf_path')
+                  .andWhere('issue_date', '>=', cutoffDateStr);
+              }).orWhere(function() {
+                this.whereNull('imported_pdf_path')
+                  .andWhere('paid_at', '>=', cutoff);
+              });
             })
             .sum('paid_amount_minor as total')
             .first();
