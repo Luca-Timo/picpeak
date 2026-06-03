@@ -12,6 +12,7 @@ export interface PublicSettings {
   branding_watermark_size: number;
   branding_favicon_url: string;
   branding_logo_url: string;
+  branding_logo_url_dark?: string;
   branding_logo_size?: string;
   branding_logo_max_height?: number;
   /**

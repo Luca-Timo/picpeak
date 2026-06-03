@@ -221,13 +221,14 @@ export const settingsService = {
     });
   },
 
-  // Upload logo
-  async uploadLogo(file: File): Promise<string> {
+  // Upload logo. Pass variant='dark' to store the dark-mode logo
+  // (branding_logo_url_dark); default stores the light logo.
+  async uploadLogo(file: File, variant?: 'dark'): Promise<string> {
     const formData = new FormData();
     formData.append('logo', file);
-    
+
     const response = await api.post<{ logoUrl: string }>(
-      '/admin/settings/logo',
+      `/admin/settings/logo${variant === 'dark' ? '?variant=dark' : ''}`,
       formData,
       {
         headers: {
@@ -235,8 +236,13 @@ export const settingsService = {
         }
       }
     );
-    
+
     return response.data.logoUrl;
+  },
+
+  // Remove a logo (variant='dark' clears the dark-mode logo).
+  async removeLogo(variant?: 'dark'): Promise<void> {
+    await api.delete(`/admin/settings/logo${variant === 'dark' ? '?variant=dark' : ''}`);
   },
 
   // Upload favicon

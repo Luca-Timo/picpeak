@@ -1271,6 +1271,8 @@
     "logo": "Logo",
     "uploadLogo": "Upload Logo",
     "logoHelp": "Recommended size: 200x60px, PNG or JPEG",
+    "logoDark": "Dark-mode logo",
+    "logoDarkHelp": "Optional. Shown on dark themes / dark mode; falls back to the main logo when unset.",
     "favicon": "Favicon",
     "currentFavicon": "Current favicon",
     "uploadFavicon": "Upload Favicon",

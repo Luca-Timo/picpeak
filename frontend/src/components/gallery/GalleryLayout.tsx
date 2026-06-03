@@ -32,6 +32,7 @@ interface GalleryLayoutProps {
     footer_text?: string;
     favicon_url?: string;
     logo_url?: string;
+    logo_url_dark?: string;
     logo_size?: 'small' | 'medium' | 'large' | 'xlarge' | 'custom';
     logo_max_height?: number;
     logo_position?: 'left' | 'center' | 'right' | 'sidepanel';
@@ -122,6 +123,9 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   const { t } = useTranslation();
   const { format } = useLocalizedDate();
   const { theme } = useTheme();
+  // Dark-mode logo variant: prefer it on dark gallery themes, else light.
+  const brandLogoUrl = (theme.colorMode === 'dark' && brandingSettings?.logo_url_dark)
+    || brandingSettings?.logo_url;
   const guestIdentity = useGuestIdentityOptional();
 
   // Footer legal-link config. Cached aggressively because the toggle state
@@ -304,8 +308,8 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                 {shouldShowLogo('header') && (
                   <div className={`gallery-logo-wrapper flex-shrink-0 flex items-center gap-2 ${brandingSettings?.logo_position === 'center' ? 'flex-1' : ''} ${getLogoPositionClass()}`}>
                     <img
-                      src={brandingSettings?.logo_url ?
-                        buildResourceUrl(brandingSettings.logo_url) :
+                      src={brandLogoUrl ?
+                        buildResourceUrl(brandLogoUrl) :
                         '/picpeak-logo-transparent.png'
                       }
                       alt={brandingSettings?.company_name || 'PicPeak'}
@@ -587,17 +591,17 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
               {/* Logo - Show custom logo or fallback to PicPeak logo */}
               {shouldShowLogo('hero') && (
                 <div className="mb-6">
-                  <img 
-                    src={brandingSettings?.logo_url ? 
-                      buildResourceUrl(brandingSettings.logo_url) : 
+                  <img
+                    src={brandLogoUrl ?
+                      buildResourceUrl(brandLogoUrl) :
                       '/picpeak-logo-transparent.png'
-                    } 
+                    }
                     alt={brandingSettings?.company_name || 'PicPeak'}
                     className={`${heroLogoSize.className} w-auto object-contain mx-auto`}
                     style={{
                       ...(heroLogoSize.style || {}),
                       // Only apply brightness/invert filter to default logo; custom logos display as-is
-                      filter: brandingSettings?.logo_url
+                      filter: brandLogoUrl
                         ? 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))'
                         : 'brightness(0) invert(1) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))'
                     }}

@@ -59,6 +59,7 @@ router.get('/', async (req, res) => {
       branding_watermark_size: settingsObject.branding_watermark_size || 15,
       branding_favicon_url: settingsObject.branding_favicon_url || '',
       branding_logo_url: settingsObject.branding_logo_url || '',
+      branding_logo_url_dark: settingsObject.branding_logo_url_dark || '',
       branding_logo_size: settingsObject.branding_logo_size || 'medium',
       branding_logo_max_height: settingsObject.branding_logo_max_height || 48,
       branding_logo_position: settingsObject.branding_logo_position || 'left',

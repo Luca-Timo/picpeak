@@ -280,6 +280,7 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event }) => {
         footer_text: settingsData.branding_footer_text || '',
         watermark_enabled: settingsData.branding_watermark_enabled || false,
         logo_url: settingsData.branding_logo_url || null,
+        logo_url_dark: settingsData.branding_logo_url_dark || null,
         logo_size: settingsData.branding_logo_size || 'medium',
         logo_max_height: settingsData.branding_logo_max_height || 48,
         logo_position: settingsData.branding_logo_position || 'left',

@@ -12,6 +12,7 @@ import { buildResourceUrl } from '../../utils/url';
 import { useFeatureEnabled, useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { CustomerDashboardBrandingCard } from '../../components/admin/CustomerDashboardBrandingCard';
 import { PdfTypographyCard } from '../../components/admin/PdfTypographyCard';
+import { usePublicSettings } from '../../hooks/usePublicSettings';
 
 export const BrandingPage: React.FC = () => {
   const { t } = useTranslation();
@@ -258,6 +259,47 @@ export const BrandingPage: React.FC = () => {
       }
       return updated;
     });
+  };
+
+  // Dark-mode logo — self-contained (the upload endpoint persists
+  // branding_logo_url_dark directly; not part of the theme payload).
+  // Consumers (admin header, gallery) pick it when the theme is dark.
+  const { data: pubSettings } = usePublicSettings();
+  const [logoDarkUrl, setLogoDarkUrl] = useState('');
+  useEffect(() => {
+    if (pubSettings?.branding_logo_url_dark !== undefined) {
+      setLogoDarkUrl(pubSettings.branding_logo_url_dark || '');
+    }
+  }, [pubSettings?.branding_logo_url_dark]);
+
+  const refreshSettings = () => {
+    queryClient.invalidateQueries({ queryKey: ['public-settings'] });
+    queryClient.invalidateQueries({ queryKey: ['admin-settings'] });
+  };
+
+  const handleDarkLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const url = await settingsService.uploadLogo(file, 'dark');
+      setLogoDarkUrl(url);
+      refreshSettings();
+      toast.success(t('toast.uploadSuccess'));
+    } catch (error) {
+      console.error('Failed to upload dark logo:', error);
+      toast.error(t('toast.uploadError'));
+    }
+  };
+
+  const handleRemoveDarkLogo = async () => {
+    try {
+      await settingsService.removeLogo('dark');
+      setLogoDarkUrl('');
+      refreshSettings();
+    } catch (error) {
+      console.error('Failed to remove dark logo:', error);
+      toast.error(t('toast.saveError'));
+    }
   };
 
   const handleWatermarkLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -619,6 +661,50 @@ export const BrandingPage: React.FC = () => {
                 </div>
                 <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
                   {t('branding.logoHelp', 'PNG, JPG or SVG format, recommended width: 200px')}
+                </p>
+              </div>
+              {/* Dark-mode logo */}
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                  {t('branding.logoDark', 'Dark-mode logo')}
+                </label>
+                <div className="flex items-center gap-4">
+                  {logoDarkUrl && (
+                    <div className="relative">
+                      <img
+                        src={logoDarkUrl.startsWith('http') ? logoDarkUrl : buildResourceUrl(logoDarkUrl)}
+                        alt="Dark logo"
+                        className="h-16 object-contain bg-neutral-800 rounded p-2"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRemoveDarkLogo}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/svg+xml"
+                      onChange={handleDarkLogoUpload}
+                      className="hidden"
+                      id="logo-dark-upload"
+                    />
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => document.getElementById('logo-dark-upload')?.click()}
+                      leftIcon={<Upload className="w-4 h-4" />}
+                    >
+                      {logoDarkUrl ? t('branding.changeLogo', 'Change Logo') : t('branding.uploadLogo', 'Upload Logo')}
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
+                  {t('branding.logoDarkHelp', 'Optional. Shown on dark themes / dark mode; falls back to the main logo when unset.')}
                 </p>
               </div>
               {/* Logo Size */}

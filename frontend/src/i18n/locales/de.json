@@ -1682,6 +1682,8 @@
     "logo": "Logo",
     "uploadLogo": "Logo hochladen",
     "logoHelp": "Empfohlene Größe: 200x60px, PNG oder JPEG",
+    "logoDark": "Logo für Dunkelmodus",
+    "logoDarkHelp": "Optional. Wird bei dunklen Designs / im Dunkelmodus angezeigt; fällt auf das Hauptlogo zurück, wenn nicht gesetzt.",
     "favicon": "Favicon",
     "currentFavicon": "Aktuelles Favicon",
     "uploadFavicon": "Favicon hochladen",
