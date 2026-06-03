@@ -88,13 +88,11 @@ export const SettingsBusinessProfilePage: React.FC = () => {
           <CountrySelect label={t('businessProfile.field.countryCode', 'Country') as string}
             value={profile.countryCode || ''}
             onChange={(code) => setProfile({ ...profile, countryCode: code })} />
-          {/* Free-text country name override (migration 107). When
-              left empty the renderer falls back to the COUNTRY_NAMES
-              lookup on the abbreviation. */}
-          <Input label={t('businessProfile.field.countryName', 'Country (full name)') as string}
-            value={profile.countryName || ''}
-            placeholder="Liechtenstein"
-            onChange={(e) => setProfile({ ...profile, countryName: e.target.value })} />
+          {/* The free-text "Country (full name)" override (migration 107) was
+              removed as redundant — the picker stores the ISO code and the PDF
+              renderer derives the localized full name from it
+              (pdfService.countryName). The DB column + `country_name ||`
+              fallback remain, so any legacy override still renders. */}
         </div>
       </Card>
 

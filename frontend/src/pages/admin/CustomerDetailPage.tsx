@@ -545,19 +545,11 @@ export const CustomerDetailPage: React.FC = () => {
               onChange={(code) => setForm((prev) => ({ ...prev, countryCode: code }))}
             />
           </div>
-          <div>
-            {/* Free-text country name override (migration 107). When
-                left empty the PDF renderer falls back to the locale-
-                aware lookup on the ISO code. Kept for the rare case
-                where an operator wants a custom display name that
-                differs from the standard localized label. */}
-            <label className="block text-sm font-medium text-theme mb-1">{t('customers.detail.countryName', 'Country (full name)')}</label>
-            <Input
-              value={form.countryName || ''}
-              onChange={setField('countryName')}
-              placeholder="Liechtenstein"
-            />
-          </div>
+          {/* The free-text "Country (full name)" override (migration 107) was
+              removed as redundant — the country picker stores the ISO code and
+              the PDF renderer derives the localized full name from it
+              (pdfService.countryName). The DB column + the `country_name ||`
+              fallback stay, so any legacy override still renders. */}
         </div>
       </Card>
 
