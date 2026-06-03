@@ -8,6 +8,7 @@ import { Button, Input, Card, ReCaptcha } from '../../components/common';
 import { useAdminAuth } from '../../contexts';
 import { authService } from '../../services/auth.service';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
+import { useAdminDarkMode } from '../../contexts/AdminDarkModeContext';
 import { resolveLoginLogoClasses } from '../../utils/loginLogoSize';
 import { api } from '../../config/api';
 
@@ -27,12 +28,16 @@ export const AdminLoginPage: React.FC = () => {
   const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
 
   const { data: settingsData } = usePublicSettings();
+  const { isDark } = useAdminDarkMode();
 
   const companyName = settingsData?.branding_company_name?.trim() || 'PicPeak';
-  const logoUrl = settingsData?.branding_logo_url?.trim();
-  const resolvedLogoUrl = logoUrl
-    ? (logoUrl.startsWith('http') ? logoUrl : logoUrl)
-    : '/picpeak-logo-transparent.png';
+  // Theme-aware logo: the login page honours the admin dark-mode preference
+  // (and any branding_force_color_mode), so a dark-text logo isn't shown on
+  // the dark background. Falls back to whichever variant exists.
+  const lightLogo = settingsData?.branding_logo_url?.trim();
+  const darkLogo = settingsData?.branding_logo_url_dark?.trim();
+  const logoUrl = isDark ? (darkLogo || lightLogo) : (lightLogo || darkLogo);
+  const resolvedLogoUrl = logoUrl || '/picpeak-logo-transparent.png';
 
   // Check for session expired message
   useEffect(() => {
