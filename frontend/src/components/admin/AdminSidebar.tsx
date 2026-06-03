@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { settingsService } from '../../services/settings.service';
 import { VersionInfo } from './VersionInfo';
 import { usePermissions } from '../../contexts/PermissionsContext';
+import { useAdminDarkMode } from '../../contexts/AdminDarkModeContext';
 import { useFeatureFlags, type FeatureKey } from '../../contexts/FeatureFlagsContext';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
 import { buildResourceUrl } from '../../utils/url';
@@ -106,8 +107,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
   // chosen, the logo replaces the "PicPeak Admin" text in the brand
   // row, and the favicon takes over in the collapsed icon rail.
   const { data: publicSettings } = usePublicSettings();
+  const { isDark } = useAdminDarkMode();
   const logoInSidebar = publicSettings?.branding_logo_position === 'sidepanel';
-  const rawLogoUrl = publicSettings?.branding_logo_url?.trim();
+  // Theme-aware logo with symmetric fallback (one logo serves both modes).
+  const lightLogo = publicSettings?.branding_logo_url?.trim();
+  const darkLogo = publicSettings?.branding_logo_url_dark?.trim();
+  const rawLogoUrl = isDark ? (darkLogo || lightLogo) : (lightLogo || darkLogo);
   const rawFaviconUrl = publicSettings?.branding_favicon_url?.trim();
   const resolvedLogoUrl = rawLogoUrl
     ? (rawLogoUrl.startsWith('http') ? rawLogoUrl : buildResourceUrl(rawLogoUrl))
