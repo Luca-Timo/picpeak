@@ -32,11 +32,15 @@ export const AdminLoginPage: React.FC = () => {
 
   const companyName = settingsData?.branding_company_name?.trim() || 'PicPeak';
   // Theme-aware logo: the login page honours the admin dark-mode preference
-  // (and any branding_force_color_mode), so a dark-text logo isn't shown on
-  // the dark background. Falls back to whichever variant exists.
+  // (and any branding_force_color_mode). NOTE the frame nuance — a framed
+  // logo sits on a fixed cream plate (see render), so the light (dark-ink)
+  // logo always reads there; only the frameless logo sits on the themed
+  // (possibly dark) page background and needs the dark variant.
   const lightLogo = settingsData?.branding_logo_url?.trim();
   const darkLogo = settingsData?.branding_logo_url_dark?.trim();
-  const logoUrl = isDark ? (darkLogo || lightLogo) : (lightLogo || darkLogo);
+  const loginFrameEnabled = settingsData?.branding_login_logo_frame_enabled !== false;
+  const themedLogo = isDark ? (darkLogo || lightLogo) : (lightLogo || darkLogo);
+  const logoUrl = loginFrameEnabled ? (lightLogo || darkLogo) : themedLogo;
   const resolvedLogoUrl = logoUrl || '/picpeak-logo-transparent.png';
 
   // Check for session expired message

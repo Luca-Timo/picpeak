@@ -28,6 +28,7 @@ import {
   type CustomerProfilePrefill,
 } from '../../services/customer.service';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
+import { usePublicDarkMode } from '../../hooks/usePublicDarkMode';
 
 interface FormState {
   display_name: string;
@@ -76,8 +77,14 @@ export const CustomerAcceptInvitePage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data: settingsData } = usePublicSettings();
+  // Theme-aware logo: the page renders on the themed customer surface
+  // (dark when branding_force_color_mode is dark / OS dark), so pick the
+  // dark logo variant accordingly. No frame here — logo sits on the page bg.
+  const { isDark } = usePublicDarkMode();
   const companyName = settingsData?.branding_company_name?.trim() || 'PicPeak';
-  const logoUrl = settingsData?.branding_logo_url?.trim();
+  const lightLogo = settingsData?.branding_logo_url?.trim();
+  const darkLogo = settingsData?.branding_logo_url_dark?.trim();
+  const logoUrl = isDark ? (darkLogo || lightLogo) : (lightLogo || darkLogo);
   const resolvedLogoUrl = logoUrl || '/picpeak-logo-transparent.png';
 
   // Pre-flight invitation lookup. The response carries any prefill data
