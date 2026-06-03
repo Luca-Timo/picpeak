@@ -1124,7 +1124,7 @@ export const BrandingPage: React.FC = () => {
                 </h3>
                 <GalleryPreview
                   theme={currentTheme}
-                  branding={brandingSettings}
+                  branding={{ ...brandingSettings, logo_url_dark: logoDarkUrl }}
                   className="shadow-lg"
                 />
               </Card>
