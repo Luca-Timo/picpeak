@@ -73,7 +73,7 @@ const faviconStorage = multer.diskStorage({
 
 const faviconUpload = multer({
   storage: faviconStorage,
-  limits: { fileSize: 1 * 1024 * 1024 }, // 1MB
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB — roomy enough for a 512×512+ square PNG
   fileFilter: (req, file, cb) => {
     const allowedMimeTypes = ['image/png', 'image/x-icon', 'image/vnd.microsoft.icon'];
     

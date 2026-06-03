@@ -1297,7 +1297,7 @@
     "currentFavicon": "Current favicon",
     "uploadFavicon": "Upload Favicon",
     "removeFavicon": "Remove Favicon",
-    "faviconHelp": "PNG or ICO format, recommended size: 32x32px",
+    "faviconHelp": "PNG or ICO format. Use a square image — 512×512px is recommended for crisp display on high-resolution screens; smaller sizes work too.",
     "watermarkSettings": "Watermark Settings",
     "enableWatermarks": "Enable Watermarks",
     "watermarkHelp": "Add your company name as a watermark on downloaded photos",

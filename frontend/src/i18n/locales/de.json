@@ -1708,7 +1708,7 @@
     "currentFavicon": "Aktuelles Favicon",
     "uploadFavicon": "Favicon hochladen",
     "removeFavicon": "Favicon entfernen",
-    "faviconHelp": "PNG- oder ICO-Format, empfohlene Größe: 32x32px",
+    "faviconHelp": "PNG- oder ICO-Format. Bitte ein quadratisches Bild verwenden – empfohlen sind 512×512px für eine scharfe Darstellung auf hochauflösenden Bildschirmen; kleinere Größen funktionieren ebenfalls.",
     "watermarkSettings": "Wasserzeichen-Einstellungen",
     "enableWatermarks": "Wasserzeichen aktivieren",
     "watermarkHelp": "Fügen Sie Ihren Firmennamen als Wasserzeichen auf heruntergeladenen Fotos hinzu",
