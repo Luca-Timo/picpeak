@@ -94,6 +94,16 @@ router.post('/config', [
       await db('email_configs').insert(configData);
     }
 
+    // Refresh the cached transporter so the new SMTP settings take effect
+    // immediately. Without this, a previously-initialised transporter stays
+    // cached (the queue processor only re-inits when it's null), so changing
+    // the email account had no effect until a backend restart — emails kept
+    // failing against the old/empty config. initializeTransporter catches its
+    // own errors and returns null, so this never throws; an invalid config
+    // simply leaves the transporter null (surfaced via the Test-email button).
+    const { initializeTransporter } = require('../services/emailProcessor');
+    await initializeTransporter(true);
+
     // Log activity
     await logActivity('email_config_updated', 
       { smtp_host, from_email }, 

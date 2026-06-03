@@ -774,13 +774,18 @@ async function processEmailQueue({ ignoreSchedule = false, limit = 10 } = {}) {
       // queue split-payment emails relative to the event date.
       const now = new Date();
       const query = db('email_queue')
-        .where('status', 'pending')
-        .where('retry_count', '<', 3);
+        .where('status', 'pending');
       if (!ignoreSchedule) {
-        query.andWhere(function() {
+        // Automatic runs: respect the retry cap (don't hammer a failing
+        // address) AND the schedule (business-hours floor / future send).
+        query.where('retry_count', '<', 3).andWhere(function() {
           this.whereNull('scheduled_at').orWhere('scheduled_at', '<=', now);
         });
       }
+      // A manual "send now" (ignoreSchedule) deliberately bypasses BOTH the
+      // schedule and the retry cap: the admin is forcing a retry, typically
+      // right after fixing SMTP. Without this, emails that failed 3× during
+      // an SMTP outage are stuck "pending" forever with no way to resend.
       pendingEmails = await query
         .orderBy('scheduled_at', 'asc')
         .orderBy('created_at', 'asc')
