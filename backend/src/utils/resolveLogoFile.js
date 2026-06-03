@@ -41,6 +41,12 @@ const { getStoragePath } = require('../config/storage');
 const { getAppSetting } = require('./appSettings');
 const logger = require('./logger');
 
+// Bump this whenever the SVG→PNG rendering environment changes in a way that
+// changes output, to invalidate previously-cached rasterisations.
+//   v2 (2026-06): backend image now ships fonts (fontconfig + brand fonts),
+//       so SVG logos with live <text> render their text instead of tofu boxes.
+const RASTER_VERSION = 'v2-fonts';
+
 const SUPPORTED_EXT = /\.(png|jpe?g)$/i;
 // Formats PDFKit can't embed directly but `sharp` can rasterise into
 // PNG for us. We transparently convert + cache.
@@ -96,11 +102,14 @@ async function rasteriseToPng(sourcePath, storageRoot) {
     const stat = fs.statSync(sourcePath);
     const cacheDir = path.join(storageRoot, 'cache', 'logo-png');
     fs.mkdirSync(cacheDir, { recursive: true });
-    // Content-addressed cache: sha1(src path + mtime ns + size).
-    // Including mtime means re-uploading the source invalidates the
-    // cache entry naturally.
+    // Content-addressed cache: sha1(renderer version + src path + mtime ns
+    // + size). Including mtime means re-uploading the source invalidates the
+    // cache entry naturally. RASTER_VERSION is bumped whenever the rendering
+    // environment changes in a way that affects output (e.g. installing fonts
+    // so SVG <text> stops rendering as tofu) — bumping it invalidates every
+    // previously-cached PNG without having to clear the cache dir by hand.
     const key = crypto.createHash('sha1')
-      .update(`${sourcePath}|${stat.mtimeMs}|${stat.size}`)
+      .update(`${RASTER_VERSION}|${sourcePath}|${stat.mtimeMs}|${stat.size}`)
       .digest('hex');
     const cachedPath = path.join(cacheDir, `${key}.png`);
     if (fs.existsSync(cachedPath)) {
