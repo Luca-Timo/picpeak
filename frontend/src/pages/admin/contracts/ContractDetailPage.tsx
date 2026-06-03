@@ -197,6 +197,25 @@ export const ContractDetailPage: React.FC = () => {
     }
   }
 
+  // Pre-send preview: renders a fresh PDF from the current draft without
+  // writing/sending anything, so the admin can sanity-check layout +
+  // signature blocks before committing to send (no audit trail created).
+  async function handlePdfPreview() {
+    if (!numericId) return;
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+      toast.error(t('contracts.detail.popupBlocked', 'Allow pop-ups for this site to preview the PDF.') as string);
+      return;
+    }
+    try {
+      const url = await contractsService.previewPdfUrl(numericId);
+      previewWindow.location.href = url;
+    } catch (err: any) {
+      previewWindow.close();
+      toast.error(err?.response?.data?.error || 'Preview failed');
+    }
+  }
+
   async function handleSignedPdfDownload() {
     if (!numericId) return;
     const previewWindow = window.open('about:blank', '_blank');
@@ -240,6 +259,10 @@ export const ContractDetailPage: React.FC = () => {
             <Button variant="outline" onClick={() => navigate(`/admin/clients/contracts/${c.id}/edit`)}>
               <Edit2 className="w-4 h-4 mr-1" />
               {t('contracts.detail.edit', 'Edit')}
+            </Button>
+            <Button variant="outline" onClick={handlePdfPreview}>
+              <FileDown className="w-4 h-4 mr-1" />
+              {t('contracts.detail.previewPdf', 'Preview PDF')}
             </Button>
             <Button onClick={() => sendMutation.mutate()} disabled={sendMutation.isPending}>
               <Send className="w-4 h-4 mr-1" />

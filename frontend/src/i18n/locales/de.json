@@ -4153,6 +4153,7 @@
       "new": "Neuer Vertrag"
     },
     "detail": {
+      "previewPdf": "PDF-Vorschau",
       "integrity": {
         "title": "PDF-Integritätsprüfung",
         "help": "Berechnet die SHA-256-Hashes der unsignierten und signierten PDFs neu und vergleicht sie mit den beim Ausstellen gespeicherten Werten. Deckt Backup-Beschädigungen oder nachträgliche Änderungen an der Kundenkopie auf.",

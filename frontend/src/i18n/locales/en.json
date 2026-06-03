@@ -4151,6 +4151,7 @@
       "new": "New contract"
     },
     "detail": {
+      "previewPdf": "Preview PDF",
       "integrity": {
         "title": "PDF integrity check",
         "help": "Re-hashes the unsigned + signed PDFs on disk and compares them to the SHA-256 stored when the document was issued. Catches backup corruption or manual edits since the customer received their copy.",
