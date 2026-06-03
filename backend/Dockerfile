@@ -43,7 +43,16 @@ RUN npm install -g npm@10
 # `@ffmpeg-installer/ffmpeg` binary is glibc-built and (a) doesn't reliably
 # run on Alpine and (b) only includes ffmpeg, not ffprobe (which the video
 # pipeline calls via fluent-ffmpeg.ffprobe()).
-RUN apk add --no-cache dumb-init postgresql-client ffmpeg su-exec
+# fontconfig is required so `sharp` (librsvg) can rasterise SVG logos that
+# contain live <text> for the CRM PDFs. Without any font installed, librsvg
+# renders text as tofu boxes (□) while the vector artwork still draws — i.e.
+# a "corrupted" logo on invoices/quotes. DejaVu/Liberation provide a broad
+# Unicode fallback; picpeak's own brand fonts (assets/fonts/, the same files
+# PDFKit + the web UI use) are registered with fontconfig further down so the
+# logo's text renders in its actual typeface, not a fallback.
+RUN apk add --no-cache dumb-init postgresql-client ffmpeg su-exec \
+    fontconfig ttf-dejavu ttf-liberation && \
+    fc-cache -f
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
@@ -54,6 +63,14 @@ COPY --chown=nodejs:nodejs . .
 
 # Ensure all source files are readable and wait script is executable
 RUN chmod -R a+r /app && chmod +x wait-for-db.sh
+
+# Register picpeak's bundled brand fonts (assets/fonts/<Family>/*.ttf — the
+# same files PDFKit and the web UI use) with fontconfig, so when sharp/librsvg
+# rasterises an SVG logo its <text> renders in the actual brand typeface
+# rather than a DejaVu/Liberation fallback. fontconfig indexes by each font's
+# internal family name and recurses into the per-family subdirectories.
+RUN printf '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig>\n  <dir>/app/assets/fonts</dir>\n</fontconfig>\n' > /etc/fonts/conf.d/99-picpeak-fonts.conf && \
+    fc-cache -f /app/assets/fonts
 
 # Create necessary directories
 RUN mkdir -p storage/events/active storage/events/archived storage/thumbnails data logs && \
