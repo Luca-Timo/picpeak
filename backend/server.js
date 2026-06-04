@@ -585,6 +585,15 @@ app.get(
         const resolved = path.resolve(path.join(uploadsRoot, rel));
         // Path containment — never serve outside the uploads dir.
         if (resolved.startsWith(uploadsRoot + path.sep) && fs.existsSync(resolved)) {
+          // This route streams the file directly, bypassing the secureStatic
+          // middleware — so re-apply its SVG hardening here. An admin-uploaded
+          // SVG favicon could contain <script>; served at the top-level
+          // /favicon.ico origin without CSP that would be stored XSS. Keep in
+          // sync with secureStatic.js.
+          if (/\.svg$/i.test(resolved)) {
+            res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:");
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+          }
           res.setHeader('Cache-Control', 'public, max-age=86400');
           return res.sendFile(resolved);
         }
