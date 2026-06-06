@@ -357,11 +357,17 @@ export const ProjectCockpitPage: React.FC = () => {
           <ul className="space-y-2">
             {feed.map((item) => {
               const Icon = KIND_ICON[item.kind];
+              // Whole-row click: documents navigate to their detail page,
+              // emails open the preview (so the row behaves like its buttons,
+              // not a dead strip next to them). Hours have neither → static.
+              const onRowClick = item.href
+                ? () => navigate(item.href as string)
+                : (item.kind === 'email' && item.emailId != null ? () => openPreview(item.emailId as number) : undefined);
               return (
                 <li
                   key={item.key}
-                  onClick={item.href ? () => navigate(item.href as string) : undefined}
-                  className={`flex items-start gap-3 rounded-lg border border-neutral-100 dark:border-neutral-800 px-3 py-2 ${item.href ? 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/60' : ''}`}
+                  onClick={onRowClick}
+                  className={`flex items-start gap-3 rounded-lg border border-neutral-100 dark:border-neutral-800 px-3 py-2 ${onRowClick ? 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/60' : ''}`}
                 >
                   <Icon className="w-4 h-4 mt-0.5 text-neutral-500 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
@@ -378,7 +384,7 @@ export const ProjectCockpitPage: React.FC = () => {
                       )}
                       {item.amount && <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300">{item.amount}</span>}
                       {item.kind === 'email' && item.emailId != null && (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                           <button onClick={() => openPreview(item.emailId as number)} className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline">
                             <Eye className="w-3 h-3" />{t('projects.email.preview', 'Preview')}
                           </button>
