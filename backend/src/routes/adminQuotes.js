@@ -63,6 +63,8 @@ function transformQuote(q) {
     id: q.id,
     quoteNumber: q.quote_number,
     customerAccountId: q.customer_account_id,
+    // Migration 121 — Project Overview link (undefined on pre-121 DBs).
+    projectId: q.project_id ?? null,
     customer: {
       email: q.customer_email,
       displayName: q.customer_display_name,
@@ -223,6 +225,8 @@ function mapPayloadToService(body) {
     introText: 'introText', outroText: 'outroText',
     internalNotes: 'internalNotes', ccPdfEmail: 'ccPdfEmail',
     businessBankAccountId: 'businessBankAccountId',
+    // Migration 121 — optional Project Overview link.
+    projectId: 'projectId',
   };
   for (const [api, svc] of Object.entries(map)) {
     if (Object.prototype.hasOwnProperty.call(body, api)) out[svc] = body[api];

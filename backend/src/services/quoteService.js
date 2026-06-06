@@ -554,6 +554,10 @@ async function createQuote(payload, adminId) {
       created_at: new Date(),
       updated_at: new Date(),
     };
+    // Migration 121 — optional link to a Project Overview project.
+    if (payload.projectId !== undefined && await hasColumnCached('quotes', 'project_id')) {
+      row.project_id = payload.projectId || null;
+    }
     const inserted = await trx('quotes').insert(row).returning('id');
     const quoteId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
@@ -666,6 +670,10 @@ async function updateQuote(id, payload, adminId) {
         Array.isArray(payload.installments) && payload.installments.length > 0
           ? JSON.stringify(payload.installments)
           : null;
+    }
+    // Migration 121 — optional Project Overview link.
+    if (Object.prototype.hasOwnProperty.call(payload, 'projectId') && await hasColumnCached('quotes', 'project_id')) {
+      updates.project_id = payload.projectId || null;
     }
     await trx('quotes').where({ id }).update(updates);
 

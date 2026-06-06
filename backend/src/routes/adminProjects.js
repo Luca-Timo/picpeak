@@ -93,6 +93,28 @@ router.post('/:id/events',
   }),
 );
 
+// Attach a quote to the project (quotes carry no event_id — migration 121).
+router.post('/:id/quotes',
+  requirePermission('events.manage'),
+  [param('id').isInt({ min: 1 }), body('quoteId').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await projectService.assignQuote(parseInt(req.params.id, 10), parseInt(req.body.quoteId, 10));
+    return successResponse(res, result, 200, 'Quote attached to project');
+  }),
+);
+
+// Attach a contract to the project.
+router.post('/:id/contracts',
+  requirePermission('events.manage'),
+  [param('id').isInt({ min: 1 }), body('contractId').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await projectService.assignContract(parseInt(req.params.id, 10), parseInt(req.body.contractId, 10));
+    return successResponse(res, result, 200, 'Contract attached to project');
+  }),
+);
+
 // The cockpit aggregation — doc types gated on the admin's own permissions
 router.get('/:id/overview', requirePermission('events.view'), [param('id').isInt({ min: 1 })], handleAsync(async (req, res) => {
   validateRequest(req);

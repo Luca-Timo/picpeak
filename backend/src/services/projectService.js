@@ -15,6 +15,7 @@
 
 const { db } = require('../database/db');
 const { AppError } = require('../utils/errors');
+const { hasColumnCached } = require('../utils/schemaCache');
 
 function transformProject(p) {
   if (!p) return null;
@@ -94,6 +95,24 @@ async function assignEvent(projectId, eventId) {
   return { projectId, eventId };
 }
 
+/** Attach (or, with projectId=null, detach) a quote/contract to a project. */
+async function assignDocument(table, projectId, documentId) {
+  if (!(await hasColumnCached(table, 'project_id'))) {
+    throw new AppError('This instance has no project_id column yet — run migrations', 409);
+  }
+  if (projectId != null) {
+    const project = await db('projects').where({ id: projectId }).first();
+    if (!project) throw new AppError('Project not found', 404);
+  }
+  const doc = await db(table).where({ id: documentId }).first();
+  if (!doc) throw new AppError('Document not found', 404);
+  await db(table).where({ id: documentId }).update({ project_id: projectId || null });
+  return { projectId: projectId || null, documentId };
+}
+
+const assignQuote = (projectId, quoteId) => assignDocument('quotes', projectId, quoteId);
+const assignContract = (projectId, contractId) => assignDocument('contracts', projectId, contractId);
+
 /**
  * Full overview aggregation for the cockpit. Returns the project, its events,
  * and the rolled-up emails / quotes / contracts / invoices / hours + a
@@ -133,20 +152,28 @@ async function getProjectOverview(id, perms = {}) {
       .orderBy('issue_date', 'desc');
   }
 
-  // Quotes / contracts (by customer — no event_id on those tables).
-  if (project.customerAccountId) {
-    if (perms.quotes !== false) {
-      out.quotes = await db('quotes')
-        .where({ customer_account_id: project.customerAccountId })
-        .select('id', 'quote_number', 'status', 'issue_date', 'valid_until', 'total_amount_minor', 'currency', 'deal_uuid')
-        .orderBy('issue_date', 'desc');
-    }
-    if (perms.contracts !== false) {
-      out.contracts = await db('contracts')
-        .where({ customer_account_id: project.customerAccountId })
-        .select('id', 'contract_number', 'status', 'issue_date', 'signed_by_customer_at', 'deal_uuid')
-        .orderBy('issue_date', 'desc');
-    }
+  // Quotes / contracts. These tables carry no event_id (migration 107), so
+  // they're linked to the project explicitly via project_id (migration 121).
+  // Where that column doesn't exist yet (pre-121 DB) we fall back to the
+  // project's customer — the original, less precise scoping.
+  const quotesHaveProjectId = await hasColumnCached('quotes', 'project_id');
+  const contractsHaveProjectId = await hasColumnCached('contracts', 'project_id');
+
+  if (perms.quotes !== false && (quotesHaveProjectId || project.customerAccountId)) {
+    let q = db('quotes')
+      .select('id', 'quote_number', 'status', 'issue_date', 'valid_until', 'total_amount_minor', 'currency', 'deal_uuid')
+      .orderBy('issue_date', 'desc');
+    if (quotesHaveProjectId) q = q.where({ project_id: id });
+    else q = q.where({ customer_account_id: project.customerAccountId });
+    out.quotes = await q;
+  }
+  if (perms.contracts !== false && (contractsHaveProjectId || project.customerAccountId)) {
+    let q = db('contracts')
+      .select('id', 'contract_number', 'status', 'issue_date', 'signed_by_customer_at', 'deal_uuid')
+      .orderBy('issue_date', 'desc');
+    if (contractsHaveProjectId) q = q.where({ project_id: id });
+    else q = q.where({ customer_account_id: project.customerAccountId });
+    out.contracts = await q;
   }
 
   // Hours (by project_id) — individual entries + total.
@@ -244,6 +271,8 @@ module.exports = {
   createProject,
   updateProject,
   assignEvent,
+  assignQuote,
+  assignContract,
   getProjectOverview,
   getEmailPreview,
   resendEmail,

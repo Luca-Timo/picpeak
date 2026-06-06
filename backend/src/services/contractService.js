@@ -803,6 +803,10 @@ async function createContract(payload, adminId) {
       row.event_time_start = payload.eventTimeStart || null;
       row.event_time_end = payload.eventTimeEnd || null;
     }
+    // Migration 121 — optional link to a Project Overview project.
+    if (payload.projectId !== undefined && await hasColumnCached('contracts', 'project_id')) {
+      row.project_id = payload.projectId || null;
+    }
     const inserted = await trx('contracts').insert(row).returning('id');
     const contractId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
@@ -889,6 +893,10 @@ async function updateContract(id, payload, adminId) {
     }
     for (const [api, col] of Object.entries(map)) {
       if (api in payload) updates[col] = payload[api] || null;
+    }
+    // Migration 121 — optional Project Overview link.
+    if ('projectId' in payload && await hasColumnCached('contracts', 'project_id')) {
+      updates.project_id = payload.projectId || null;
     }
     await trx('contracts').where({ id }).update(updates);
 
