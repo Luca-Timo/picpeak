@@ -95,6 +95,7 @@ export interface ProjectHourEntry {
 
 export interface ProjectMilestone {
   kind: 'quote' | 'contract' | 'gallery' | 'invoice';
+  id?: number;
   label: string;
   date: string | null;
 }

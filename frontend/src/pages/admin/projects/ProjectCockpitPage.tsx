@@ -7,7 +7,7 @@
  * gallery and logged hour that rolls up to the project. Admin-only.
  */
 import React, { useMemo, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
@@ -20,6 +20,7 @@ import {
   projectsService,
   type ProjectOverview,
   type EmailPreview,
+  type ProjectMilestone,
 } from '../../../services/projects.service';
 import { eventsService } from '../../../services/events.service';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
@@ -35,8 +36,22 @@ interface FeedItem {
   subtitle?: string;
   amount?: string;
   status?: string;
+  href?: string | null;
   emailId?: number;
   emailStatus?: string;
+}
+
+/** Detail-page route for a clickable document, or null when there isn't one
+ *  (hours have no standalone page; emails open the preview instead). */
+function hrefFor(kind: FeedKind | ProjectMilestone['kind'], id?: number): string | null {
+  if (id == null) return null;
+  switch (kind) {
+    case 'quote': return `/admin/clients/quotes/${id}`;
+    case 'contract': return `/admin/clients/contracts/${id}`;
+    case 'invoice': return `/admin/clients/bills/${id}`;
+    case 'gallery': return `/admin/events/${id}`;
+    default: return null;
+  }
 }
 
 const KIND_ICON: Record<FeedKind, React.ComponentType<{ className?: string }>> = {
@@ -58,6 +73,7 @@ export const ProjectCockpitPage: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const projectId = id ? parseInt(id, 10) : null;
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { format, formatTime } = useLocalizedDate();
 
@@ -144,28 +160,30 @@ export const ProjectCockpitPage: React.FC = () => {
       items.push({
         key: `quote-${q.id}`, kind: 'quote', date: q.issue_date,
         title: t('projects.feed.quote', 'Quote') + ` ${q.quote_number}`,
-        status: q.status, amount: formatMoneyMinor(q.total_amount_minor, q.currency),
+        status: q.status, amount: formatMoneyMinor(Number(q.total_amount_minor), q.currency),
+        href: hrefFor('quote', q.id),
       });
     }
     for (const c of data.contracts) {
       items.push({
         key: `contract-${c.id}`, kind: 'contract', date: c.issue_date,
         title: t('projects.feed.contract', 'Contract') + ` ${c.contract_number}`,
-        status: c.status,
+        status: c.status, href: hrefFor('contract', c.id),
       });
     }
     for (const inv of data.invoices) {
       items.push({
         key: `invoice-${inv.id}`, kind: 'invoice', date: inv.issue_date,
         title: t('projects.feed.invoice', 'Invoice') + ` ${inv.invoice_number}`,
-        status: inv.status, amount: formatMoneyMinor(inv.total_amount_minor, inv.currency),
+        status: inv.status, amount: formatMoneyMinor(Number(inv.total_amount_minor), inv.currency),
+        href: hrefFor('invoice', inv.id),
       });
     }
     for (const ev of data.events) {
       items.push({
         key: `gallery-${ev.id}`, kind: 'gallery', date: ev.event_date,
         title: t('projects.feed.gallery', 'Gallery') + ` · ${ev.event_name}`,
-        subtitle: ev.slug,
+        subtitle: ev.slug, href: hrefFor('gallery', ev.id),
       });
     }
     for (const h of data.hours.entries) {
@@ -290,8 +308,13 @@ export const ProjectCockpitPage: React.FC = () => {
           <div className="flex flex-wrap gap-3">
             {milestones.map((m, i) => {
               const Icon = KIND_ICON[m.kind] || FileText;
+              const href = hrefFor(m.kind, m.id);
               return (
-                <div key={`${m.kind}-${i}`} className="flex items-center gap-2 rounded-lg border border-neutral-200 dark:border-neutral-700 px-3 py-2">
+                <div
+                  key={`${m.kind}-${i}`}
+                  onClick={href ? () => navigate(href) : undefined}
+                  className={`flex items-center gap-2 rounded-lg border border-neutral-200 dark:border-neutral-700 px-3 py-2 ${href ? 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/60' : ''}`}
+                >
                   <Icon className="w-4 h-4 text-neutral-500" />
                   <div>
                     <div className="text-xs font-medium text-neutral-900 dark:text-neutral-100">{m.label}</div>
@@ -314,7 +337,11 @@ export const ProjectCockpitPage: React.FC = () => {
             {feed.map((item) => {
               const Icon = KIND_ICON[item.kind];
               return (
-                <li key={item.key} className="flex items-start gap-3 rounded-lg border border-neutral-100 dark:border-neutral-800 px-3 py-2">
+                <li
+                  key={item.key}
+                  onClick={item.href ? () => navigate(item.href as string) : undefined}
+                  className={`flex items-start gap-3 rounded-lg border border-neutral-100 dark:border-neutral-800 px-3 py-2 ${item.href ? 'cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/60' : ''}`}
+                >
                   <Icon className="w-4 h-4 mt-0.5 text-neutral-500 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">

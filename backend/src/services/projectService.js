@@ -229,11 +229,17 @@ async function getProjectOverview(id, perms = {}) {
 
   const out = { project, events, emails: [], quotes: [], contracts: [], invoices: [], hours: { entries: [], totalMinutes: 0 } };
 
-  // Emails (by event) — newest first. rendered_html presence flagged, body
-  // itself fetched lazily by the preview endpoint.
-  if (eventIds.length) {
+  // Emails — newest first. rendered_html presence flagged, body fetched
+  // lazily by the preview endpoint. Gallery/event mails carry event_id;
+  // CRM document mails (quote_sent, invoice_*, contract_*) are queued with
+  // event_id=null, so we also match the project customer's email address.
+  const customerEmail = project.customerEmail || null;
+  if (eventIds.length || customerEmail) {
     const emails = await db('email_queue')
-      .whereIn('event_id', eventIds)
+      .where(function () {
+        if (eventIds.length) this.whereIn('event_id', eventIds);
+        if (customerEmail) this.orWhere('recipient_email', customerEmail);
+      })
       .select('id', 'recipient_email', 'email_type', 'status', 'created_at', 'sent_at', 'error_message', 'event_id')
       .orderBy('created_at', 'desc')
       .limit(200);
@@ -289,13 +295,13 @@ async function getProjectOverview(id, perms = {}) {
   // Timeline milestones (latest of each kind that exists), each dated.
   const milestones = [];
   const firstQuote = out.quotes[out.quotes.length - 1];
-  if (firstQuote) milestones.push({ kind: 'quote', label: firstQuote.quote_number, date: firstQuote.issue_date });
+  if (firstQuote) milestones.push({ kind: 'quote', id: firstQuote.id, label: firstQuote.quote_number, date: firstQuote.issue_date });
   const firstContract = out.contracts[out.contracts.length - 1];
-  if (firstContract) milestones.push({ kind: 'contract', label: firstContract.contract_number, date: firstContract.issue_date });
+  if (firstContract) milestones.push({ kind: 'contract', id: firstContract.id, label: firstContract.contract_number, date: firstContract.issue_date });
   const pubEvent = events.find((e) => e.is_active && !e.is_draft);
-  if (pubEvent) milestones.push({ kind: 'gallery', label: pubEvent.event_name, date: pubEvent.event_date });
+  if (pubEvent) milestones.push({ kind: 'gallery', id: pubEvent.id, label: pubEvent.event_name, date: pubEvent.event_date });
   const firstInvoice = out.invoices[out.invoices.length - 1];
-  if (firstInvoice) milestones.push({ kind: 'invoice', label: firstInvoice.invoice_number, date: firstInvoice.issue_date });
+  if (firstInvoice) milestones.push({ kind: 'invoice', id: firstInvoice.id, label: firstInvoice.invoice_number, date: firstInvoice.issue_date });
   out.milestones = milestones;
 
   // Rolled-up project value (newest stage wins per deal, cumulative).
