@@ -3403,12 +3403,17 @@
       "name": "Projekt",
       "customer": "Kunde",
       "events": "Events",
+      "value": "Wert",
       "status": "Status",
       "updated": "Aktualisiert"
     },
     "picker": {
       "label": "Projekt",
       "none": "Kein Projekt"
+    },
+    "value": {
+      "label": "Projektwert",
+      "paid": "bezahlt"
     },
     "events": {
       "title": "Events",

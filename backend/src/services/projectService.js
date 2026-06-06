@@ -31,8 +31,10 @@ function transformProject(p) {
   };
 }
 
-/** List projects with customer email + event count. */
-async function listProjects({ search = '', status = null } = {}) {
+/** List projects with customer email + event count + rolled-up value.
+ *  `perms` gates which document types feed the value (matches the cockpit):
+ *  invoices need bills.view, quotes need quotes.view. */
+async function listProjects({ search = '', status = null, perms = {} } = {}) {
   let q = db('projects')
     .leftJoin('customer_accounts', 'customer_accounts.id', 'projects.customer_account_id')
     .select(
@@ -49,7 +51,50 @@ async function listProjects({ search = '', status = null } = {}) {
     });
   }
   const rows = await q;
-  return rows.map(transformProject);
+  const projects = rows.map(transformProject);
+  await attachValuations(projects, perms);
+  return projects;
+}
+
+/**
+ * Compute + attach `valuation` to each listed project in two bulk queries
+ * (not per-project), then run the shared newest-wins-per-deal helper. Mutates
+ * the passed array. Documents the admin can't see (per perms) are excluded,
+ * so the value never leaks figures the admin lacks permission for.
+ */
+async function attachValuations(projects, perms = {}) {
+  if (!projects.length) return;
+  const projectIds = projects.map((p) => p.id);
+
+  // Invoices roll up by event → project_id; quotes by quotes.project_id.
+  let invoices = [];
+  if (perms.bills !== false) {
+    invoices = await db('invoices as inv')
+      .join('events as e', 'e.id', 'inv.event_id')
+      .whereIn('e.project_id', projectIds)
+      .select('e.project_id as project_id', 'inv.id', 'inv.deal_uuid',
+        'inv.total_amount_minor', 'inv.paid_amount_minor', 'inv.currency');
+  }
+  let quotes = [];
+  if (perms.quotes !== false && await hasColumnCached('quotes', 'project_id')) {
+    quotes = await db('quotes')
+      .whereIn('project_id', projectIds)
+      .select('project_id', 'id', 'deal_uuid', 'total_amount_minor', 'currency', 'issue_date');
+  }
+
+  const invByProject = new Map();
+  for (const inv of invoices) {
+    const list = invByProject.get(inv.project_id) || [];
+    list.push(inv); invByProject.set(inv.project_id, list);
+  }
+  const quoteByProject = new Map();
+  for (const qt of quotes) {
+    const list = quoteByProject.get(qt.project_id) || [];
+    list.push(qt); quoteByProject.set(qt.project_id, list);
+  }
+  for (const p of projects) {
+    p.valuation = computeValuation(invByProject.get(p.id) || [], quoteByProject.get(p.id) || []);
+  }
 }
 
 async function getProjectById(id) {
@@ -112,6 +157,61 @@ async function assignDocument(table, projectId, documentId) {
 
 const assignQuote = (projectId, quoteId) => assignDocument('quotes', projectId, quoteId);
 const assignContract = (projectId, contractId) => assignDocument('contracts', projectId, contractId);
+
+/**
+ * Project valuation — "newest stage wins per deal, cumulative across events".
+ *
+ * Each deal (deal_uuid lineage: quote → contract → invoice) contributes ONE
+ * figure: the invoice total when the deal has reached invoicing (installments
+ * summed; storno rows net out a cancelled invoice via their negative totals),
+ * otherwise the newest quote's total. Contracts carry no monetary total in
+ * picpeak, so they never contribute a number — the "newest" of the three is
+ * therefore always the invoice when present, else the quote. Documents with
+ * no deal_uuid each count as their own standalone deal. Totals are kept per
+ * currency so a mixed-currency project stays correct.
+ *
+ * @param {Array} invoices  rows with deal_uuid, total_amount_minor, paid_amount_minor, currency
+ * @param {Array} quotes    rows with deal_uuid, total_amount_minor, currency, issue_date
+ * @returns {{ byCurrency: Array<{currency:string,totalMinor:number,paidMinor:number}> }}
+ */
+function computeValuation(invoices = [], quotes = []) {
+  const deals = new Map();
+  const get = (key, currency) => {
+    let d = deals.get(key);
+    if (!d) { d = { currency, invoiceMinor: 0, paidMinor: 0, hasInvoice: false, quoteMinor: 0, quoteDate: null }; deals.set(key, d); }
+    return d;
+  };
+  for (const inv of invoices) {
+    const d = get(inv.deal_uuid || `i-${inv.id}`, inv.currency || 'CHF');
+    d.hasInvoice = true;
+    d.invoiceMinor += Number(inv.total_amount_minor || 0);
+    d.paidMinor += Number(inv.paid_amount_minor || 0);
+    d.currency = inv.currency || d.currency;
+  }
+  for (const q of quotes) {
+    const d = get(q.deal_uuid || `q-${q.id}`, q.currency || 'CHF');
+    const qd = q.issue_date ? new Date(q.issue_date).getTime() : 0;
+    if (d.quoteDate === null || qd >= d.quoteDate) {
+      d.quoteMinor = Number(q.total_amount_minor || 0);
+      d.quoteDate = qd;
+      if (!d.hasInvoice) d.currency = q.currency || d.currency;
+    }
+  }
+  const byCurrency = new Map();
+  for (const d of deals.values()) {
+    const value = d.hasInvoice ? d.invoiceMinor : d.quoteMinor;
+    const cur = d.currency || 'CHF';
+    const b = byCurrency.get(cur) || { totalMinor: 0, paidMinor: 0 };
+    b.totalMinor += value;
+    b.paidMinor += d.paidMinor;
+    byCurrency.set(cur, b);
+  }
+  return {
+    byCurrency: Array.from(byCurrency.entries()).map(([currency, v]) => ({
+      currency, totalMinor: v.totalMinor, paidMinor: v.paidMinor,
+    })),
+  };
+}
 
 /**
  * Full overview aggregation for the cockpit. Returns the project, its events,
@@ -198,6 +298,9 @@ async function getProjectOverview(id, perms = {}) {
   if (firstInvoice) milestones.push({ kind: 'invoice', label: firstInvoice.invoice_number, date: firstInvoice.issue_date });
   out.milestones = milestones;
 
+  // Rolled-up project value (newest stage wins per deal, cumulative).
+  out.valuation = computeValuation(out.invoices, out.quotes);
+
   return out;
 }
 
@@ -273,6 +376,7 @@ module.exports = {
   assignEvent,
   assignQuote,
   assignContract,
+  computeValuation,
   getProjectOverview,
   getEmailPreview,
   resendEmail,

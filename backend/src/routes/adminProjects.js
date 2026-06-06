@@ -33,9 +33,16 @@ router.use(requireProjectsFlag);
 
 // List
 router.get('/', requirePermission('events.view'), handleAsync(async (req, res) => {
+  // Value rollup mirrors the cockpit's per-doc gating so the list never
+  // shows figures the admin lacks permission to see.
+  const perms = {
+    bills: await userHasAnyPermission(req.admin.id, ['bills.view']),
+    quotes: await userHasAnyPermission(req.admin.id, ['quotes.view']),
+  };
   const projects = await projectService.listProjects({
     search: req.query.q || '',
     status: req.query.status || null,
+    perms,
   });
   return successResponse(res, { projects });
 }));

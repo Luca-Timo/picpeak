@@ -3403,12 +3403,17 @@
       "name": "Project",
       "customer": "Customer",
       "events": "Events",
+      "value": "Value",
       "status": "Status",
       "updated": "Updated"
     },
     "picker": {
       "label": "Project",
       "none": "No project"
+    },
+    "value": {
+      "label": "Project value",
+      "paid": "paid"
     },
     "events": {
       "title": "Events",

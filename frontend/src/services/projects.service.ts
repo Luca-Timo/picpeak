@@ -9,6 +9,12 @@ import { api } from '../config/api';
 
 export type ProjectStatus = 'active' | 'archived' | string;
 
+/** Rolled-up project value: newest stage wins per deal (invoice > quote;
+ *  contracts carry no total), cumulative across events, split by currency. */
+export interface ProjectValuation {
+  byCurrency: Array<{ currency: string; totalMinor: number; paidMinor: number }>;
+}
+
 export interface ProjectSummary {
   id: number;
   name: string;
@@ -16,6 +22,7 @@ export interface ProjectSummary {
   customerEmail: string | null;
   status: ProjectStatus;
   eventCount?: number;
+  valuation?: ProjectValuation;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -101,6 +108,7 @@ export interface ProjectOverview {
   invoices: ProjectInvoice[];
   hours: { entries: ProjectHourEntry[]; totalMinutes: number };
   milestones: ProjectMilestone[];
+  valuation: ProjectValuation;
 }
 
 export interface EmailPreview {

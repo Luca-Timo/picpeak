@@ -15,6 +15,15 @@ import { Plus, Search, FolderKanban } from 'lucide-react';
 import { Button, Card, Input, Loading } from '../../../components/common';
 import { projectsService, type ProjectSummary } from '../../../services/projects.service';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
+import { formatMoneyMinor } from '../../../utils/money';
+
+/** Render a project's rolled-up value (newest stage per deal, cumulative),
+ *  one entry per currency. Empty → em dash. */
+function formatValuation(p: ProjectSummary): string {
+  const buckets = p.valuation?.byCurrency?.filter((b) => b.totalMinor !== 0) || [];
+  if (buckets.length === 0) return '—';
+  return buckets.map((b) => formatMoneyMinor(b.totalMinor, b.currency)).join(' · ');
+}
 
 export const ProjectsListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -109,6 +118,7 @@ export const ProjectsListPage: React.FC = () => {
                   <th className="px-4 py-2 font-medium">{t('projects.col.name', 'Project')}</th>
                   <th className="px-4 py-2 font-medium">{t('projects.col.customer', 'Customer')}</th>
                   <th className="px-4 py-2 font-medium text-right">{t('projects.col.events', 'Events')}</th>
+                  <th className="px-4 py-2 font-medium text-right">{t('projects.col.value', 'Value')}</th>
                   <th className="px-4 py-2 font-medium">{t('projects.col.status', 'Status')}</th>
                   <th className="px-4 py-2 font-medium">{t('projects.col.updated', 'Updated')}</th>
                 </tr>
@@ -123,6 +133,7 @@ export const ProjectsListPage: React.FC = () => {
                     <td className="px-4 py-2 font-medium text-neutral-900 dark:text-neutral-100">{p.name}</td>
                     <td className="px-4 py-2 text-neutral-600 dark:text-neutral-400">{p.customerEmail || '—'}</td>
                     <td className="px-4 py-2 text-right tabular-nums">{p.eventCount ?? 0}</td>
+                    <td className="px-4 py-2 text-right tabular-nums font-medium text-neutral-900 dark:text-neutral-100">{formatValuation(p)}</td>
                     <td className="px-4 py-2">
                       <span className="inline-block rounded-full px-2 py-0.5 text-xs bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-200">
                         {p.status}

@@ -185,7 +185,8 @@ export const ProjectCockpitPage: React.FC = () => {
   if (isLoading) return <Loading />;
   if (!data) return <div className="p-6 text-neutral-500">{t('projects.notFound', 'Project not found')}</div>;
 
-  const { project, milestones, hours } = data;
+  const { project, milestones, hours, valuation } = data;
+  const valueBuckets = valuation?.byCurrency?.filter((b) => b.totalMinor !== 0 || b.paidMinor !== 0) || [];
 
   return (
     <div>
@@ -216,9 +217,26 @@ export const ProjectCockpitPage: React.FC = () => {
               {t('projects.totalHours', '{{hours}} logged', { hours: minutesToHours(hours.totalMinutes) })}
             </p>
           </div>
-          {editName === null && (
-            <Button variant="outline" onClick={() => setEditName(project.name)}>{t('projects.rename', 'Rename')}</Button>
-          )}
+          <div className="flex items-start gap-4">
+            {valueBuckets.length > 0 && (
+              <div className="text-right">
+                <div className="text-xs text-neutral-500 dark:text-neutral-400">{t('projects.value.label', 'Project value')}</div>
+                {valueBuckets.map((b) => (
+                  <div key={b.currency} className="text-lg font-bold text-neutral-900 dark:text-neutral-100 tabular-nums">
+                    {formatMoneyMinor(b.totalMinor, b.currency)}
+                  </div>
+                ))}
+                {valueBuckets.some((b) => b.paidMinor !== 0) && (
+                  <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                    {t('projects.value.paid', 'paid')}: {valueBuckets.map((b) => formatMoneyMinor(b.paidMinor, b.currency)).join(' · ')}
+                  </div>
+                )}
+              </div>
+            )}
+            {editName === null && (
+              <Button variant="outline" onClick={() => setEditName(project.name)}>{t('projects.rename', 'Rename')}</Button>
+            )}
+          </div>
         </div>
       </Card>
 
