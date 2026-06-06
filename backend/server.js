@@ -703,6 +703,7 @@ app.use('/api/admin/business-profile', require('./src/routes/adminBusinessProfil
 app.use('/api/admin/quotes',     require('./src/routes/adminQuotes'));
 app.use('/api/admin/invoices',   require('./src/routes/adminInvoices'));
 app.use('/api/admin/contracts',  require('./src/routes/adminContracts'));
+app.use('/api/admin/projects',   require('./src/routes/adminProjects'));
 app.use('/api/admin/calendar',   require('./src/routes/adminCalendar'));
 app.use('/api/admin/deals',      require('./src/routes/adminDeals'));
 app.use('/api/admin/tax-report', require('./src/routes/adminTaxReport'));
