@@ -25,6 +25,7 @@ import {
 import { eventsService } from '../../../services/events.service';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { formatMoneyMinor } from '../../../utils/money';
+import { useFeatureFlags, type FeatureKey } from '../../../contexts/FeatureFlagsContext';
 
 type FeedKind = 'email' | 'quote' | 'contract' | 'invoice' | 'gallery' | 'hours';
 
@@ -42,10 +43,28 @@ interface FeedItem {
   reRendered?: boolean;
 }
 
+/** The feature flag that gates each document's detail ROUTE (RequireFeature
+ *  in App.tsx). The cockpit surfaces docs by permission, but their detail
+ *  pages live behind these flags — so a link is only live when the flag is
+ *  on, else clicking would bounce to /admin/dashboard. Galleries/events have
+ *  no such gate. */
+const FLAG_FOR_KIND: Partial<Record<FeedKind, FeatureKey>> = {
+  quote: 'quotes',
+  contract: 'contracts',
+  invoice: 'bills',
+};
+
 /** Detail-page route for a clickable document, or null when there isn't one
- *  (hours have no standalone page; emails open the preview instead). */
-function hrefFor(kind: FeedKind | ProjectMilestone['kind'], id?: number): string | null {
+ *  (hours have no page; emails open the preview) OR the destination's feature
+ *  flag is off (so we don't render a link that just redirects away). */
+function hrefFor(
+  kind: FeedKind | ProjectMilestone['kind'],
+  id: number | undefined,
+  flags: Record<string, boolean>,
+): string | null {
   if (id == null) return null;
+  const flag = FLAG_FOR_KIND[kind as FeedKind];
+  if (flag && !flags[flag]) return null;
   switch (kind) {
     case 'quote': return `/admin/clients/quotes/${id}`;
     case 'contract': return `/admin/clients/contracts/${id}`;
@@ -76,6 +95,7 @@ export const ProjectCockpitPage: React.FC = () => {
   const projectId = id ? parseInt(id, 10) : null;
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { flags } = useFeatureFlags();
   const { format, formatTime } = useLocalizedDate();
 
   const [editName, setEditName] = useState<string | null>(null);
@@ -162,14 +182,14 @@ export const ProjectCockpitPage: React.FC = () => {
         key: `quote-${q.id}`, kind: 'quote', date: q.issue_date,
         title: t('projects.feed.quote', 'Quote') + ` ${q.quote_number}`,
         status: q.status, amount: formatMoneyMinor(Number(q.total_amount_minor), q.currency),
-        href: hrefFor('quote', q.id),
+        href: hrefFor('quote', q.id, flags),
       });
     }
     for (const c of data.contracts) {
       items.push({
         key: `contract-${c.id}`, kind: 'contract', date: c.issue_date,
         title: t('projects.feed.contract', 'Contract') + ` ${c.contract_number}`,
-        status: c.status, href: hrefFor('contract', c.id),
+        status: c.status, href: hrefFor('contract', c.id, flags),
       });
     }
     for (const inv of data.invoices) {
@@ -177,14 +197,14 @@ export const ProjectCockpitPage: React.FC = () => {
         key: `invoice-${inv.id}`, kind: 'invoice', date: inv.issue_date,
         title: t('projects.feed.invoice', 'Invoice') + ` ${inv.invoice_number}`,
         status: inv.status, amount: formatMoneyMinor(Number(inv.total_amount_minor), inv.currency),
-        href: hrefFor('invoice', inv.id),
+        href: hrefFor('invoice', inv.id, flags),
       });
     }
     for (const ev of data.events) {
       items.push({
         key: `gallery-${ev.id}`, kind: 'gallery', date: ev.event_date,
         title: t('projects.feed.gallery', 'Gallery') + ` · ${ev.event_name}`,
-        subtitle: ev.slug, href: hrefFor('gallery', ev.id),
+        subtitle: ev.slug, href: hrefFor('gallery', ev.id, flags),
       });
     }
     for (const h of data.hours.entries) {
@@ -199,7 +219,7 @@ export const ProjectCockpitPage: React.FC = () => {
       const db = b.date ? new Date(b.date).getTime() : 0;
       return db - da;
     });
-  }, [data, t]);
+  }, [data, t, flags]);
 
   if (isLoading) return <Loading />;
   if (!data) return <div className="p-6 text-neutral-500">{t('projects.notFound', 'Project not found')}</div>;
@@ -309,7 +329,7 @@ export const ProjectCockpitPage: React.FC = () => {
           <div className="flex flex-wrap gap-3">
             {milestones.map((m, i) => {
               const Icon = KIND_ICON[m.kind] || FileText;
-              const href = hrefFor(m.kind, m.id);
+              const href = hrefFor(m.kind, m.id, flags);
               return (
                 <div
                   key={`${m.kind}-${i}`}
