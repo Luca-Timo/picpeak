@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, User, LogOut, Settings, Bell, Lock, CheckCircle, Trash2, Sun, Moon, Globe, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -51,11 +51,31 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick }) => {
     ? (logoUrl.startsWith('http') ? logoUrl : buildResourceUrl(logoUrl))
     : '/picpeak-kamera-transparent.png';
 
+  // #523 follow-up 2: graceful fallback when the configured logo URL
+  // 404s or stalls. Without an error handler, the <img> failure draws
+  // the browser's default broken-image-icon + alt text rendering — see
+  // Rekoo-PS's 3.60.3-beta.0 screenshot where "Arkan Studio" appeared
+  // as the alt text of a broken icon, not the real wordmark span. The
+  // chain:
+  //   1. configured URL fails → try the bundled picpeak fallback
+  //   2. bundled fallback fails → hide the image entirely, let the
+  //      wordmark carry the brand
+  // Reset on URL change so a dark-mode toggle (which can flip lightLogo
+  // ↔ darkLogo) retries the new URL instead of being permanently sad.
+  const [logoLoadError, setLogoLoadError] = useState(false);
+  const [fallbackLoadError, setFallbackLoadError] = useState(false);
+  useEffect(() => {
+    setLogoLoadError(false);
+    setFallbackLoadError(false);
+  }, [resolvedLogoUrl]);
+  const logoImgSrc = logoLoadError ? '/picpeak-kamera-transparent.png' : resolvedLogoUrl;
+
   // Renders the logo + wordmark block per the current logo_display_mode.
   // Re-used in left / center / right slots below so all three positions
   // produce visually identical brand chrome.
   const showLogo = !logoInSidebar && (logoDisplayMode === 'logo_only' || logoDisplayMode === 'logo_and_text');
   const showText = logoDisplayMode === 'text_only' || logoDisplayMode === 'logo_and_text';
+  const logoEffectivelyVisible = showLogo && !fallbackLoadError;
   // On <sm the wordmark hides when the logo carries the brand identity
   // (logo_and_text). Same pattern LanguageSelector uses for its language
   // name (#527). Without this, even with truncate, a phone-width admin
@@ -64,7 +84,12 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick }) => {
   // cluster it overlaps the LanguageSelector button (#523 follow-up,
   // Rekoo-PS's "Arkan Studio" screenshot in v3.59.0-beta.0). text_only
   // mode keeps the wordmark on every width — nothing else would render.
-  const wordmarkVisibilityClass = showLogo ? 'hidden sm:inline' : 'inline';
+  //
+  // #523 follow-up 2: when both the configured URL AND the bundled
+  // fallback have failed (fallbackLoadError → logoEffectivelyVisible
+  // false), unhide the wordmark on <sm too — otherwise the phone header
+  // shows nothing at all for the brand block.
+  const wordmarkVisibilityClass = logoEffectivelyVisible ? 'hidden sm:inline' : 'inline';
   const renderBrandBlock = () => {
     // Skeleton placeholder while `usePublicSettings()` is in flight (#523
     // follow-up — Rekoo-PS's "logo took some time to load" screenshot in
@@ -88,8 +113,19 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick }) => {
     // action buttons on narrow mobile widths (#523 regression).
     return (
       <div className="flex items-center gap-2 min-w-0">
-        {showLogo && (
-          <img src={resolvedLogoUrl} alt={companyName} className="h-8 w-auto object-contain flex-shrink-0" />
+        {logoEffectivelyVisible && (
+          <img
+            src={logoImgSrc}
+            alt={companyName}
+            className="h-8 w-auto object-contain flex-shrink-0"
+            onError={() => {
+              // First failure: configured URL → try the bundled fallback.
+              // Second failure: bundled fallback → hide entirely, let
+              // the wordmark carry the brand (#523 follow-up 2).
+              if (!logoLoadError) setLogoLoadError(true);
+              else setFallbackLoadError(true);
+            }}
+          />
         )}
         {showText && (
           <span className={`${wordmarkVisibilityClass} text-xl sm:text-2xl truncate`} style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 600, color: '#145346' }}>{companyName}</span>

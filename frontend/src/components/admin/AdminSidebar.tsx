@@ -101,7 +101,7 @@ const navigation: NavItem[] = [
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, collapsed = false, onToggleCollapse }) => {
   const location = useLocation();
   const { t } = useTranslation();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const { flags } = useFeatureFlags();
   // Branding lookup for the "logo_position = sidepanel" mode — when
   // chosen, the logo replaces the "PicPeak Admin" text in the brand
@@ -283,8 +283,18 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
 
         {/* Bottom section - sticky to bottom (only for users with settings.view permission).
             Hidden on desktop when collapsed since these widgets don't fit in the icon rail;
-            mobile keeps them visible because mobile width is always w-64. */}
-        {hasPermission('settings.view') && (
+            mobile keeps them visible because mobile width is always w-64.
+
+            #523 follow-up 2: render OPTIMISTICALLY while permissions are
+            still hydrating from the auth context (Rekoo-PS's 3.60.3-beta.0
+            screenshot showed the whole bottom block missing on first paint
+            right after a deploy — `hasPermission` returns false during the
+            ~hundreds-of-ms hydration window, the widgets vanish entirely,
+            then re-appear). Only HIDE the block when we definitively know
+            the user lacks the permission. VersionInfo + StorageInfo each
+            have their own loading states so admins see "—" / a spinner
+            instead of nothing during the actual data fetch. */}
+        {(permissionsLoading || hasPermission('settings.view')) && (
           <div className={`flex-shrink-0 ${collapsed ? 'lg:hidden' : ''}`}>
             {/* Version Info */}
             <VersionInfo />
