@@ -5,6 +5,14 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.60.5-beta.0](https://github.com/the-luap/picpeak/compare/v3.60.4-beta.0...v3.60.5-beta.0) (2026-06-09)
+
+
+### Bug Fixes
+
+* **admin/events:** delete cascade orphaned photo folders because it read a non-existent column ([#608](https://github.com/the-luap/picpeak/issues/608)) ([284680e](https://github.com/the-luap/picpeak/commit/284680e0357db20177e45ab4ab01de0fbcac2a98))
+* **admin/events:** delete cascade orphaned photo folders because it read a non-existent column ([#608](https://github.com/the-luap/picpeak/issues/608)) ([457c956](https://github.com/the-luap/picpeak/commit/457c9563869156bc4773d873661a75d5115b25db))
+
 ## [3.60.4-beta.0](https://github.com/the-luap/picpeak/compare/v3.60.3-beta.0...v3.60.4-beta.0) (2026-06-08)
 
 
