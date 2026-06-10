@@ -1143,6 +1143,7 @@
         "communication": "Communication",
         "scheduling": "Scheduling",
         "sales": "Sales",
+        "accounting": "Accounting",
         "insights": "Insights & Access",
         "customers": "Customers",
         "clients": "CRM"
@@ -1189,15 +1190,22 @@
         "sidebar": "Invoices"
       },
       "taxReport": {
-        "title": "Tax report",
+        "title": "Tax export",
         "description": "Period-scoped revenue list with net + VAT breakdown grouped by VAT rate. Export as PDF (landscape, company letterhead) or CSV for your accountant. Cancelled invoices stay visible for a gap-free audit trail but are excluded from totals.",
         "sidebar": "Tax",
-        "requiresBills": "Enable Bills first — the tax report reads from your invoices."
+        "requiresBills": "Enable Bills first — the tax report reads from your invoices.",
+        "requiresAccounting": "Enable Accounting first — Tax export lives in the Accounting section."
       },
       "accounting": {
         "title": "Accounting",
-        "description": "Capture incoming supplier invoices (upload or phone/tablet camera), categorize expenses and re-bill costs to clients on the relevant event. When enabled, the Tax report moves out of CRM into a dedicated Accounting section. VAT / tax treatment is provided as guidance only — verify with your Treuhänder before relying on it.",
+        "description": "A dedicated Accounting area, separate from CRM. Turn this on, then enable the sub-features below (Tax export, Incoming invoices). VAT / tax treatment is guidance only — verify with your Treuhänder before relying on it.",
         "sidebar": "Accounting"
+      },
+      "incomingInvoices": {
+        "title": "Incoming invoices",
+        "description": "Capture received supplier invoices (upload or phone/tablet camera), categorize expenses, and re-bill costs to clients on the relevant event with a contract-driven markup.",
+        "sidebar": "Incoming",
+        "requiresAccounting": "Enable Accounting first — Incoming invoices live in the Accounting section."
       },
       "analytics": {
         "title": "Analytics",

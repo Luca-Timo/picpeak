@@ -45,10 +45,12 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   // Settings → Features once they've reviewed the seeded block
   // library with their lawyer.
   contracts: false,
-  // Accounting (migration 122). Top-level Accounting area (inbound
-  // supplier invoices, expenses + re-bill). When ON, the tax report
-  // moves out of the CRM sub-nav and under Accounting. Strictly opt-in.
+  // Accounting (migration 122). Top-level MASTER for the Accounting
+  // section (separate from CRM). Sub-features below require it.
   accounting: false,
+  // Incoming invoices (migration 124) — supplier-invoice capture +
+  // expenses + re-bill. Accounting sub-feature; requires `accounting`.
+  incomingInvoices: false,
 };
 
 export const FEATURE_FLAGS_QUERY_KEY = ['feature-flags'] as const;
@@ -80,7 +82,12 @@ function applyDependencyRules(flags: FeatureFlags): FeatureFlags {
   out.galleries = true;                            // foundation — always on
   if (out.quotes === false) out.bills = false;     // bills depend on quotes
   if (out.calendar === false) out.calendarBooking = false;  // booking depends on calendar
-  if (out.bills === false) out.taxReport = false;  // tax report depends on bills
+  // Accounting sub-features require the Accounting master. Tax export is
+  // independent of Bills now — it relocated permanently into Accounting.
+  if (out.accounting === false) {
+    out.taxReport = false;
+    out.incomingInvoices = false;
+  }
   // Clients parent flag is DERIVED from its children. Admins don't
   // toggle it directly — enabling any CRM-area sub-feature
   // (Accounts today; future Calendar / Quotes / Bills / Messaging)
@@ -91,11 +98,12 @@ function applyDependencyRules(flags: FeatureFlags): FeatureFlags {
     || out.crmDevelopment
     || out.quotes
     || out.bills
-    || out.taxReport
     || out.hoursLogging
     || out.contracts
     // Migration 137 — admin calendar lights up the Clients section.
     || out.calendar
+    // NOTE: taxReport is intentionally NOT here anymore — the Tax export
+    // moved permanently into the Accounting section (its own master).
     // future siblings: || out.messaging
   );
   return out;

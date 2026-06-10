@@ -244,10 +244,10 @@ function App() {
                             />
                           </Route>
 
-                          {/* Tax / Steuer report — gated by `taxReport`. */}
-                          <Route element={<RequireFeature flag="taxReport" />}>
-                            <Route path="tax-report" element={<TaxReportPage />} />
-                          </Route>
+                          {/* Tax export moved permanently to the Accounting
+                              section. Keep this path as a redirect so old
+                              bookmarks / links don't 404. */}
+                          <Route path="tax-report" element={<Navigate to="/admin/accounting/tax-report" replace />} />
                           {/* Developer tools — gated by `crmDevelopment`. */}
                           <Route element={<RequireFeature flag="crmDevelopment" />}>
                             <Route path="development" element={<CrmDevelopmentPage />} />

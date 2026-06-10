@@ -66,6 +66,10 @@ const KNOWN_FLAGS = [
   // supplier invoices, expenses + re-bill, and the tax report (which
   // relocates here from CRM when this is on). Strictly opt-in.
   'accounting',
+  // Incoming invoices (migration 124) — supplier-invoice capture +
+  // expenses + re-bill. Accounting sub-feature; forced off when the
+  // `accounting` master is off.
+  'incomingInvoices',
 ];
 
 // Spec defaults for any flag missing from the DB (e.g. a row added by a
@@ -89,6 +93,7 @@ const DEFAULT_FLAGS = {
   hoursLogging: false,
   contracts: false,
   accounting: false,
+  incomingInvoices: false,
 };
 
 async function readAllFlags() {
@@ -109,10 +114,13 @@ function applyDependencyRules(flags) {
   // Sub-features can't outlive their parents.
   if (out.quotes === false) out.bills = false;
   if (out.calendar === false) out.calendarBooking = false;
-  // Tax report only makes sense when bills are on — turning bills off
-  // implicitly turns the tax report off too. Admins enabling tax
-  // report must first enable bills.
-  if (out.bills === false) out.taxReport = false;
+  // Accounting is a top-level MASTER; its sub-features can't outlive it.
+  // Tax export is now independent of Bills — it relocated permanently
+  // into the Accounting section (its own master gate).
+  if (out.accounting === false) {
+    out.taxReport = false;
+    out.incomingInvoices = false;
+  }
   // Clients parent flag is DERIVED from its children. Admins don't
   // toggle it directly in the Features tab — they enable a specific
   // sub-feature (Accounts today; Calendar/Quotes/Bills/Messaging
@@ -125,9 +133,10 @@ function applyDependencyRules(flags) {
     || out.crmDevelopment
     || out.quotes
     || out.bills
-    || out.taxReport
     || out.hoursLogging
     || out.contracts
+    // NOTE: taxReport intentionally removed — Tax export moved to the
+    // Accounting section (its own master), no longer a CRM sub-feature.
     // Migration 137 — admin calendar lights up the Clients section.
     // (calendarBooking is gated behind `calendar` so adding the parent
     // is sufficient.)

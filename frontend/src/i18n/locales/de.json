@@ -1585,6 +1585,7 @@
         "communication": "Kommunikation",
         "scheduling": "Terminplanung",
         "sales": "Vertrieb",
+        "accounting": "Buchhaltung",
         "insights": "Auswertungen & Zugriff",
         "customers": "Kunden",
         "clients": "CRM"
@@ -1631,15 +1632,22 @@
         "sidebar": "Rechnungen"
       },
       "taxReport": {
-        "title": "Steuerliste",
+        "title": "Steuerexport",
         "description": "Periodenbezogene Umsatzliste mit Netto- und MwSt-Aufschlüsselung, gruppiert nach MwSt-Satz. Exportieren Sie als PDF (Querformat, Firmenbriefkopf) oder CSV für Ihre Buchhaltung. Stornierte Rechnungen bleiben für die lückenlose Nummernfolge sichtbar, sind aber nicht in den Summen enthalten.",
         "sidebar": "Steuer",
-        "requiresBills": "Bitte zuerst Rechnungen aktivieren — die Steuerliste liest aus Ihren Rechnungen."
+        "requiresBills": "Bitte zuerst Rechnungen aktivieren — die Steuerliste liest aus Ihren Rechnungen.",
+        "requiresAccounting": "Bitte zuerst Buchhaltung aktivieren — der Steuerexport liegt im Buchhaltungsbereich."
       },
       "accounting": {
         "title": "Buchhaltung",
-        "description": "Eingehende Lieferantenrechnungen erfassen (Upload oder Handy-/Tablet-Kamera), Aufwände kategorisieren und Kosten dem passenden Event des Kunden weiterverrechnen. Wenn aktiviert, wandert die Steuerliste aus dem CRM in einen eigenen Buchhaltungsbereich. MwSt-/Steuerbehandlung dient nur als Orientierung — vor dem Verlassen darauf mit Ihrem Treuhänder prüfen.",
+        "description": "Ein eigener Buchhaltungsbereich, getrennt vom CRM. Hier aktivieren und dann die Unterfunktionen unten einschalten (Steuerexport, Eingangsrechnungen). MwSt-/Steuerbehandlung dient nur als Orientierung — vor dem Verlassen darauf mit Ihrem Treuhänder prüfen.",
         "sidebar": "Buchhaltung"
+      },
+      "incomingInvoices": {
+        "title": "Eingangsrechnungen",
+        "description": "Eingehende Lieferantenrechnungen erfassen (Upload oder Handy-/Tablet-Kamera), Aufwände kategorisieren und Kosten dem passenden Event des Kunden mit vertraglich hinterlegtem Zuschlag weiterverrechnen.",
+        "sidebar": "Eingang",
+        "requiresAccounting": "Bitte zuerst Buchhaltung aktivieren — Eingangsrechnungen liegen im Buchhaltungsbereich."
       },
       "analytics": {
         "title": "Statistiken",

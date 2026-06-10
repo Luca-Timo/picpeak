@@ -43,17 +43,20 @@ const inboundUpload = multer({
   },
 });
 
-async function requireAccountingFlag(req, res, next) {
+// Gated on the `incomingInvoices` sub-feature, which the feature-flag
+// dependency rules force OFF whenever the `accounting` master is off — so
+// this single check covers both.
+async function requireIncomingInvoicesFlag(req, res, next) {
   try {
-    const row = await db('feature_flags').where({ key: 'accounting' }).first();
+    const row = await db('feature_flags').where({ key: 'incomingInvoices' }).first();
     const enabled = row && (row.value === true || row.value === 1 || row.value === '1');
-    if (!enabled) return res.status(403).json({ error: 'Accounting feature is disabled', code: 'ACCOUNTING_DISABLED' });
+    if (!enabled) return res.status(403).json({ error: 'Incoming invoices feature is disabled', code: 'INCOMING_INVOICES_DISABLED' });
     return next();
   } catch (err) { return next(err); }
 }
 
 router.use(adminAuth);
-router.use(requireAccountingFlag);
+router.use(requireIncomingInvoicesFlag);
 
 // ── Expense categories (literal path — register BEFORE '/:id') ──────────────
 router.get('/categories', requirePermission('accounting.view'), handleAsync(async (_req, res) => {

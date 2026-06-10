@@ -17,6 +17,7 @@ import {
   Wrench,
   Calculator,
   Landmark,
+  ScanLine,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card } from '../../../components/common';
@@ -261,39 +262,6 @@ export const FeaturesTab: React.FC = () => {
           />
 
           <FeatureCard
-            icon={Calculator}
-            title={t('settings.features.taxReport.title', 'Tax report')}
-            description={t(
-              'settings.features.taxReport.description',
-              'Period-scoped revenue list with net + VAT breakdown grouped by VAT rate. Export as PDF (landscape, company letterhead) or CSV for your accountant. Cancelled invoices stay visible for a gap-free audit trail but are excluded from totals.',
-            )}
-            status="new"
-            statusLabel={statusLabel('new')}
-            sidebarLabel={t('settings.features.taxReport.sidebar', 'Tax')}
-            enabled={staged.taxReport}
-            onToggle={(next) => setFlag('taxReport', next)}
-            disabled={!staged.bills}
-            lockedReason={!staged.bills ? t(
-              'settings.features.taxReport.requiresBills',
-              'Enable Bills first — the tax report reads from your invoices.',
-            ) : undefined}
-          />
-
-          <FeatureCard
-            icon={Landmark}
-            title={t('settings.features.accounting.title', 'Accounting')}
-            description={t(
-              'settings.features.accounting.description',
-              'Capture incoming supplier invoices (upload or phone/tablet camera), categorize expenses and re-bill costs to clients on the relevant event. When enabled, the Tax report moves out of CRM into a dedicated Accounting section. VAT / tax treatment is provided as guidance only — verify with your Treuhänder before relying on it.',
-            )}
-            status="new"
-            statusLabel={statusLabel('new')}
-            sidebarLabel={t('settings.features.accounting.sidebar', 'Accounting')}
-            enabled={staged.accounting}
-            onToggle={(next) => setFlag('accounting', next)}
-          />
-
-          <FeatureCard
             icon={Briefcase}
             title={t('settings.features.hoursLogging.title', 'Hours logging')}
             description={t(
@@ -305,6 +273,63 @@ export const FeaturesTab: React.FC = () => {
             sidebarLabel={t('settings.features.hoursLogging.sidebar', 'Hours')}
             enabled={staged.hoursLogging}
             onToggle={(next) => setFlag('hoursLogging', next)}
+          />
+        </Section>
+
+        {/* Accounting — top-level master + sub-toggles. The Tax export
+            relocated here permanently out of CRM. Sub-toggles are disabled
+            until the Accounting master is on. */}
+        <Section title={t('settings.features.sections.accounting', 'Accounting')}>
+          <FeatureCard
+            icon={Landmark}
+            title={t('settings.features.accounting.title', 'Accounting')}
+            description={t(
+              'settings.features.accounting.description',
+              'A dedicated Accounting area, separate from CRM. Turn this on, then enable the sub-features below (Tax export, Incoming invoices). VAT / tax treatment is guidance only — verify with your Treuhänder before relying on it.',
+            )}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarLabel={t('settings.features.accounting.sidebar', 'Accounting')}
+            enabled={staged.accounting}
+            onToggle={(next) => setFlag('accounting', next)}
+          />
+
+          <FeatureCard
+            icon={Calculator}
+            title={t('settings.features.taxReport.title', 'Tax export')}
+            description={t(
+              'settings.features.taxReport.description',
+              'Period-scoped revenue list with net + VAT breakdown grouped by VAT rate. Export as PDF (landscape, company letterhead) or CSV for your accountant. Cancelled invoices stay visible for a gap-free audit trail but are excluded from totals.',
+            )}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarLabel={t('settings.features.taxReport.sidebar', 'Tax')}
+            enabled={staged.taxReport}
+            onToggle={(next) => setFlag('taxReport', next)}
+            disabled={!staged.accounting}
+            lockedReason={!staged.accounting ? t(
+              'settings.features.taxReport.requiresAccounting',
+              'Enable Accounting first — Tax export lives in the Accounting section.',
+            ) : undefined}
+          />
+
+          <FeatureCard
+            icon={ScanLine}
+            title={t('settings.features.incomingInvoices.title', 'Incoming invoices')}
+            description={t(
+              'settings.features.incomingInvoices.description',
+              'Capture received supplier invoices (upload or phone/tablet camera), categorize expenses, and re-bill costs to clients on the relevant event with a contract-driven markup.',
+            )}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarLabel={t('settings.features.incomingInvoices.sidebar', 'Incoming')}
+            enabled={staged.incomingInvoices}
+            onToggle={(next) => setFlag('incomingInvoices', next)}
+            disabled={!staged.accounting}
+            lockedReason={!staged.accounting ? t(
+              'settings.features.incomingInvoices.requiresAccounting',
+              'Enable Accounting first — Incoming invoices live in the Accounting section.',
+            ) : undefined}
           />
         </Section>
 

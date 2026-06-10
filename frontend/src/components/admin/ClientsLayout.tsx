@@ -14,7 +14,7 @@
 import React from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Briefcase, UserCog, FileText, Receipt, Wrench, Calculator, Clock, ScrollText, Calendar } from 'lucide-react';
+import { Briefcase, UserCog, FileText, Receipt, Wrench, Clock, ScrollText, Calendar } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useFeatureFlags, type FeatureKey } from '../../contexts/FeatureFlagsContext';
 
@@ -81,13 +81,8 @@ export const ClientsLayout: React.FC = () => {
       icon: Receipt,
       featureFlag: 'bills',
     },
-    {
-      key: 'tax-report',
-      to: '/admin/clients/tax-report',
-      label: t('clients.subnav.taxReport', 'Tax'),
-      icon: Calculator,
-      featureFlag: 'taxReport',
-    },
+    // Tax export moved permanently to the Accounting section (it is no
+    // longer a CRM sub-feature). See AccountingLayout.
     // Future sub-features:
     //   { key: 'messaging', ... featureFlag: 'messaging' }
     {
@@ -99,13 +94,7 @@ export const ClientsLayout: React.FC = () => {
     },
   ];
 
-  const enabledItems = navItems.filter((item) => {
-    if (!flags[item.featureFlag]) return false;
-    // When the Accounting area is enabled, the tax report relocates out
-    // of CRM and under Accounting — hide it here so it isn't in both.
-    if (item.key === 'tax-report' && flags.accounting) return false;
-    return true;
-  });
+  const enabledItems = navItems.filter((item) => flags[item.featureFlag]);
 
   // When the parent `clients` flag is on but no sub-feature is enabled,
   // there's nothing to render. Settings → Features is one click away

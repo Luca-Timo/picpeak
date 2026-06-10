@@ -42,11 +42,13 @@ export type FeatureKey =
   // their own. Seeded block bodies are examples only; admins must
   // have their lawyer review before sending. See docs/crm-disclaimers.md.
   | 'contracts'
-  // Accounting (migration 122). Top-level Accounting area — inbound
-  // supplier invoices, expenses + re-bill, plus the tax report, which
-  // relocates here from the CRM sub-nav when this flag is on. Strictly
-  // opt-in; independent of the CRM flags.
-  | 'accounting';
+  // Accounting (migration 122). Top-level MASTER for the Accounting
+  // section (separate from CRM). Its sub-features (tax export, incoming
+  // invoices) require it. Strictly opt-in.
+  | 'accounting'
+  // Incoming invoices (migration 124) — supplier-invoice capture +
+  // expenses + re-bill. Accounting sub-feature; requires `accounting`.
+  | 'incomingInvoices';
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 
