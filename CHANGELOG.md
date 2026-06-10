@@ -5,6 +5,14 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.60.6-beta.0](https://github.com/the-luap/picpeak/compare/v3.60.5-beta.0...v3.60.6-beta.0) (2026-06-10)
+
+
+### Bug Fixes
+
+* **gallery:** guest upload honours general_max_files_per_upload + i18n placeholder interpolates ([#613](https://github.com/the-luap/picpeak/issues/613)) ([40a4aa2](https://github.com/the-luap/picpeak/commit/40a4aa2d85d93c9dc1faa69f0e6f8524ff917e29))
+* **gallery:** guest upload honours general_max_files_per_upload + i18n placeholder interpolates ([#613](https://github.com/the-luap/picpeak/issues/613)) ([69b5186](https://github.com/the-luap/picpeak/commit/69b5186582d56c42cec520abbe5454171f9f666b))
+
 ## [3.60.5-beta.0](https://github.com/the-luap/picpeak/compare/v3.60.4-beta.0...v3.60.5-beta.0) (2026-06-09)
 
 
