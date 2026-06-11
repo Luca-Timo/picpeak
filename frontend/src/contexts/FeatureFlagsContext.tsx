@@ -48,9 +48,12 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   // Accounting (migration 122). Top-level MASTER for the Accounting
   // section (separate from CRM). Sub-features below require it.
   accounting: false,
-  // Incoming invoices (migration 124) — supplier-invoice capture +
-  // expenses + re-bill. Accounting sub-feature; requires `accounting`.
+  // Incoming invoices (migration 124) — external supplier-invoice capture +
+  // re-bill. Accounting sub-feature; requires `accounting`.
   incomingInvoices: false,
+  // Expenses (migration 127) — internal expenses (mileage / per-diem / cash).
+  // Separate Accounting sub-feature; requires `accounting`.
+  expenses: false,
 };
 
 export const FEATURE_FLAGS_QUERY_KEY = ['feature-flags'] as const;
@@ -87,6 +90,7 @@ function applyDependencyRules(flags: FeatureFlags): FeatureFlags {
   if (out.accounting === false) {
     out.taxReport = false;
     out.incomingInvoices = false;
+    out.expenses = false;
   }
   // Clients parent flag is DERIVED from its children. Admins don't
   // toggle it directly — enabling any CRM-area sub-feature

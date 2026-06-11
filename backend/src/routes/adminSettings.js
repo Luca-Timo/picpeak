@@ -234,6 +234,44 @@ router.put('/customer-surface', adminAuth, requirePermission('settings.edit'), a
   }
 });
 
+// Accounting settings (km rate, per-diem rate, require-proof). Read via the
+// generic GET /:type ('accounting'); this is the typed write. Rates are
+// integer minor units; verify legal/tax guidance with a Treuhaender.
+router.put('/accounting', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+  try {
+    const updates = [];
+    const setInt = (key) => {
+      if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+        const n = Math.max(0, Math.round(Number(req.body[key]) || 0));
+        updates.push({ setting_key: key, setting_value: JSON.stringify(n), setting_type: 'accounting' });
+      }
+    };
+    setInt('accounting_km_rate_minor');
+    setInt('accounting_per_diem_rate_minor');
+    if (Object.prototype.hasOwnProperty.call(req.body, 'accounting_require_proof')) {
+      updates.push({
+        setting_key: 'accounting_require_proof',
+        setting_value: JSON.stringify(!!req.body.accounting_require_proof),
+        setting_type: 'accounting',
+      });
+    }
+    for (const u of updates) {
+      const existing = await db('app_settings').where('setting_key', u.setting_key).first();
+      if (existing) {
+        await db('app_settings').where('setting_key', u.setting_key).update({
+          setting_value: u.setting_value, setting_type: u.setting_type, updated_at: new Date(),
+        });
+      } else {
+        await db('app_settings').insert({ ...u, created_at: new Date(), updated_at: new Date() });
+      }
+    }
+    res.json({ message: 'Accounting settings updated', updated: updates.map((u) => u.setting_key) });
+  } catch (error) {
+    console.error('Accounting settings save error:', error);
+    res.status(500).json({ error: 'Failed to save accounting settings' });
+  }
+});
+
 // Get settings by type
 router.get('/:type', adminAuth, requirePermission('settings.view'), async (req, res) => {
   try {

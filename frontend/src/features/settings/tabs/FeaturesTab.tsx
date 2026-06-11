@@ -18,6 +18,7 @@ import {
   Calculator,
   Landmark,
   ScanLine,
+  Wallet,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card } from '../../../components/common';
@@ -329,6 +330,25 @@ export const FeaturesTab: React.FC = () => {
             lockedReason={!staged.accounting ? t(
               'settings.features.incomingInvoices.requiresAccounting',
               'Enable Accounting first — Incoming invoices live in the Accounting section.',
+            ) : undefined}
+          />
+
+          <FeatureCard
+            icon={Wallet}
+            title={t('settings.features.expenses.title', 'Expenses')}
+            description={t(
+              'settings.features.expenses.description',
+              'Internal expenses (mileage, per-diem, cash) booked to an event or the company, with optional proof. Separate from incoming supplier invoices. Configure km / per-diem rates and the proof requirement in the Accounting settings tab.',
+            )}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarLabel={t('settings.features.expenses.sidebar', 'Expenses')}
+            enabled={staged.expenses}
+            onToggle={(next) => setFlag('expenses', next)}
+            disabled={!staged.accounting}
+            lockedReason={!staged.accounting ? t(
+              'settings.features.expenses.requiresAccounting',
+              'Enable Accounting first — Expenses live in the Accounting section.',
             ) : undefined}
           />
         </Section>

@@ -46,9 +46,12 @@ export type FeatureKey =
   // section (separate from CRM). Its sub-features (tax export, incoming
   // invoices) require it. Strictly opt-in.
   | 'accounting'
-  // Incoming invoices (migration 124) — supplier-invoice capture +
-  // expenses + re-bill. Accounting sub-feature; requires `accounting`.
-  | 'incomingInvoices';
+  // Incoming invoices (migration 124) — external supplier-invoice capture +
+  // re-bill. Accounting sub-feature; requires `accounting`.
+  | 'incomingInvoices'
+  // Expenses (migration 127) — internal expenses (mileage / per-diem / cash).
+  // Separate Accounting sub-feature; requires `accounting`.
+  | 'expenses';
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 

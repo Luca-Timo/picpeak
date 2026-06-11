@@ -1208,6 +1208,12 @@
         "sidebar": "Incoming",
         "requiresAccounting": "Enable Accounting first — Incoming invoices live in the Accounting section."
       },
+      "expenses": {
+        "title": "Expenses",
+        "description": "Internal expenses (mileage, per-diem, cash) booked to an event or the company, with optional proof. Separate from incoming supplier invoices.",
+        "sidebar": "Expenses",
+        "requiresAccounting": "Enable Accounting first — Expenses live in the Accounting section."
+      },
       "analytics": {
         "title": "Analytics",
         "description": "Storage usage, gallery views, download counts, and per-event stats."

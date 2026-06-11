@@ -1650,6 +1650,12 @@
         "sidebar": "Eingang",
         "requiresAccounting": "Bitte zuerst Buchhaltung aktivieren — Eingangsrechnungen liegen im Buchhaltungsbereich."
       },
+      "expenses": {
+        "title": "Aufwände",
+        "description": "Interne Aufwände (Kilometer, Spesenpauschale, Barbelege), gebucht auf ein Event oder die Firma, mit optionalem Beleg. Getrennt von Eingangsrechnungen.",
+        "sidebar": "Aufwände",
+        "requiresAccounting": "Bitte zuerst Buchhaltung aktivieren — Aufwände liegen im Buchhaltungsbereich."
+      },
       "analytics": {
         "title": "Statistiken",
         "description": "Speichernutzung, Galerie-Aufrufe, Download-Zahlen und Statistiken pro Veranstaltung."

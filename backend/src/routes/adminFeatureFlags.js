@@ -66,10 +66,13 @@ const KNOWN_FLAGS = [
   // supplier invoices, expenses + re-bill, and the tax report (which
   // relocates here from CRM when this is on). Strictly opt-in.
   'accounting',
-  // Incoming invoices (migration 124) — supplier-invoice capture +
-  // expenses + re-bill. Accounting sub-feature; forced off when the
-  // `accounting` master is off.
+  // Incoming invoices (migration 124) — external supplier-invoice capture +
+  // re-bill. Accounting sub-feature; forced off when the `accounting` master
+  // is off.
   'incomingInvoices',
+  // Expenses (migration 127) — internal expenses (mileage / per-diem / cash).
+  // Separate Accounting sub-feature; forced off when `accounting` is off.
+  'expenses',
 ];
 
 // Spec defaults for any flag missing from the DB (e.g. a row added by a
@@ -94,6 +97,7 @@ const DEFAULT_FLAGS = {
   contracts: false,
   accounting: false,
   incomingInvoices: false,
+  expenses: false,
 };
 
 async function readAllFlags() {
@@ -120,6 +124,7 @@ function applyDependencyRules(flags) {
   if (out.accounting === false) {
     out.taxReport = false;
     out.incomingInvoices = false;
+    out.expenses = false;
   }
   // Clients parent flag is DERIVED from its children. Admins don't
   // toggle it directly in the Features tab — they enable a specific

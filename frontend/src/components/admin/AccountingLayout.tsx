@@ -41,7 +41,7 @@ export const AccountingLayout: React.FC = () => {
       to: '/admin/accounting/expenses',
       label: t('accounting.subnav.expenses', 'Expenses'),
       icon: Wallet,
-      featureFlag: 'incomingInvoices',
+      featureFlag: 'expenses',
     },
     {
       key: 'tax-report',
@@ -159,6 +159,7 @@ export const AccountingLayout: React.FC = () => {
 export const AccountingIndex: React.FC = () => {
   const { flags } = useFeatureFlags();
   if (flags.incomingInvoices) return <Navigate to="/admin/accounting/inbox" replace />;
+  if (flags.expenses) return <Navigate to="/admin/accounting/expenses" replace />;
   if (flags.taxReport) return <Navigate to="/admin/accounting/tax-report" replace />;
   return null;
 };

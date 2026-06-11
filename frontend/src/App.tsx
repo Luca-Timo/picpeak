@@ -272,6 +272,8 @@ function App() {
                         <Route path="accounting" element={<AccountingLayout />}>
                           <Route element={<RequireFeature flag="incomingInvoices" />}>
                             <Route path="inbox" element={<AccountingInboxPage />} />
+                          </Route>
+                          <Route element={<RequireFeature flag="expenses" />}>
                             <Route path="expenses" element={<ExpensesLedgerPage />} />
                           </Route>
                           <Route element={<RequireFeature flag="taxReport" />}>
