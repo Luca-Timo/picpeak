@@ -30,20 +30,6 @@ export const IncomingMailConfigCard: React.FC = () => {
 
   const set = (k: keyof IncomingMailConfig, v: any) => setCfg((c) => ({ ...c, [k]: v }));
 
-  // Changing Security auto-fills the conventional IMAP port (SSL/TLS → 993,
-  // STARTTLS/none → 143) so the port in the dropdown label isn't just
-  // decoration. A non-standard custom port is left untouched.
-  const onSecurityChange = (val: string) => {
-    const secure = val === 'ssl';
-    setCfg((c) => {
-      const next = { ...c, imap_secure: secure };
-      if (!c.imap_port || c.imap_port === 993 || c.imap_port === 143) {
-        next.imap_port = secure ? 993 : 143;
-      }
-      return next;
-    });
-  };
-
   const save = useMutation({
     mutationFn: () => {
       // Mirror the SMTP card's client-side required guard. Host + port +
@@ -105,9 +91,9 @@ export const IncomingMailConfigCard: React.FC = () => {
           </div>
           <div>
             <label className={labelCls}>{t('email.incoming.security', 'Security')}</label>
-            <select className={selectCls} value={cfg.imap_secure ? 'ssl' : 'plain'} onChange={(e) => onSecurityChange(e.target.value)}>
-              <option value="ssl">{t('email.incoming.ssl', 'SSL/TLS (993)')}</option>
-              <option value="plain">{t('email.incoming.plain', 'None / STARTTLS (143)')}</option>
+            <select className={selectCls} value={cfg.imap_secure ? 'ssl' : 'plain'} onChange={(e) => set('imap_secure', e.target.value === 'ssl')}>
+              <option value="ssl">{t('email.incoming.ssl', 'SSL/TLS')}</option>
+              <option value="plain">{t('email.incoming.plain', 'None / STARTTLS')}</option>
             </select>
           </div>
         </div>
