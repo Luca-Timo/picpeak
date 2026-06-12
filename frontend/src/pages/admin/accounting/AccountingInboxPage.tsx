@@ -29,7 +29,7 @@ const BOOKING_DISPOSITIONS: Disposition[] = ['rebill', 'durchlaufend'];
 
 const statusClasses: Record<string, string> = {
   unsorted: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  categorized: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+  categorized: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
   declined: 'bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300',
   duplicate: 'bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300',
 };
