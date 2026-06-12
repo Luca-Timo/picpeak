@@ -97,6 +97,8 @@ export interface TaxReport {
   /** Cost side (#4). Present when the accounting tables exist; empty
    *  otherwise. */
   costs: TaxReportCosts;
+  /** Non-fatal: set when the cost side failed to load (revenue still shown). */
+  costsError?: string | null;
   /** Income/cost/result summary (#4). */
   summary: TaxReportSummary;
   currency: string;

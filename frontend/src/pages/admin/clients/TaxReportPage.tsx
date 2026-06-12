@@ -358,6 +358,19 @@ export const TaxReportPage: React.FC = () => {
         )}
       </div>
 
+      {/* Non-fatal: the revenue report loaded but the cost side errored. */}
+      {report?.costsError && (
+        <Card padding="md">
+          <div className="flex items-start gap-3 text-amber-700 dark:text-amber-400">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">{t('taxReport.costsErrorTitle', 'Costs could not be loaded')}</p>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1 break-words">{report.costsError}</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Results */}
       {isLoading ? (
         <Card padding="lg"><Loading /></Card>

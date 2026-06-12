@@ -49,6 +49,7 @@ const REPORTABLE_STATUSES = ['sent', 'paid', 'overdue', 'pending_delivery', 'can
 
 // D.2 — `ensureInt` consolidated into utils/numericHelpers.
 const { ensureInt } = require('../utils/numericHelpers');
+const logger = require('../utils/logger');
 
 function ensureRate(v) {
   if (v === null || v === undefined || v === '') return 0;
@@ -449,10 +450,20 @@ async function getTaxReport({ from, to, currency, includeCosts = true } = {}) {
     const totalsByVatRate = Array.from(byRate.values()).sort((a, b) => a.vatRate - b.vatRate);
 
     // Cost side (Einnahmen-Ausgaben). Optional so legacy callers that
-    // only want the revenue listing can opt out.
-    const costs = includeCosts
-      ? await loadCosts({ from, to, cur })
-      : { rows: [], totalNet: 0, totalVat: 0, totalGross: 0 };
+    // only want the revenue listing can opt out. The cost side is
+    // SUPPLEMENTARY — if it fails (e.g. an accounting table/column missing
+    // on an older install) it must NOT take down the core revenue report.
+    // Degrade to empty costs + log the real error for diagnosis.
+    let costs = { rows: [], totalNet: 0, totalVat: 0, totalGross: 0 };
+    let costsError = null;
+    if (includeCosts) {
+      try {
+        costs = await loadCosts({ from, to, cur });
+      } catch (err) {
+        costsError = err.message;
+        logger.error?.(`taxReport: cost side failed (revenue still returned): ${err.message}`);
+      }
+    }
 
     // Summary: income vs cost vs result. Result = a simplified
     // Einnahmen-Ausgaben surplus (net basis); vatPayable = output VAT
@@ -478,6 +489,7 @@ async function getTaxReport({ from, to, currency, includeCosts = true } = {}) {
       grandTotal,
       cancelledCount,
       costs,
+      costsError,
       summary,
       currency: cur,
       period: { from, to },
