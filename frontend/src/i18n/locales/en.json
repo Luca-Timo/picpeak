@@ -2065,6 +2065,7 @@
       "foldersDetected": "{{count}} folders found.",
       "noFolders": "No folders returned by the server.",
       "detectFailed": "Could not detect folders.",
+      "requiredFields": "Host, port and username are required.",
       "savedToast": "Incoming mail settings saved."
     },
     "received": {

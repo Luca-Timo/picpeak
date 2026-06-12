@@ -31,7 +31,15 @@ export const IncomingMailConfigCard: React.FC = () => {
   const set = (k: keyof IncomingMailConfig, v: any) => setCfg((c) => ({ ...c, [k]: v }));
 
   const save = useMutation({
-    mutationFn: () => emailService.updateIncomingConfig(cfg),
+    mutationFn: () => {
+      // Mirror the SMTP card's client-side required guard. Host + port +
+      // username are needed for the poller to authenticate (getImapConfig
+      // returns null without host+user).
+      if (!cfg.imap_host || !cfg.imap_port || !cfg.imap_user) {
+        return Promise.reject(new Error(t('email.incoming.requiredFields', 'Host, port and username are required.')));
+      }
+      return emailService.updateIncomingConfig(cfg);
+    },
     onSuccess: () => { toast.success(t('email.incoming.savedToast', 'Incoming mail settings saved.')); qc.invalidateQueries({ queryKey: ['incoming-mail-config'] }); },
     onError: (e: any) => toast.error(e?.response?.data?.error || e?.response?.data?.errors?.[0]?.msg || e.message || 'Failed'),
   });
@@ -66,7 +74,7 @@ export const IncomingMailConfigCard: React.FC = () => {
 
       <div className="space-y-4">
         <div>
-          <label className={labelCls}>{t('email.incoming.host', 'IMAP Host')}</label>
+          <label className={labelCls}>{t('email.incoming.host', 'IMAP Host')} <span className="text-red-500">*</span></label>
           <Input
             type="text"
             value={cfg.imap_host}
@@ -78,7 +86,7 @@ export const IncomingMailConfigCard: React.FC = () => {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>{t('email.incoming.port', 'Port')}</label>
+            <label className={labelCls}>{t('email.incoming.port', 'Port')} <span className="text-red-500">*</span></label>
             <Input type="number" value={cfg.imap_port} onChange={(e) => set('imap_port', parseInt(e.target.value, 10) || 0)} placeholder="993" />
           </div>
           <div>
@@ -91,7 +99,7 @@ export const IncomingMailConfigCard: React.FC = () => {
         </div>
 
         <div>
-          <label className={labelCls}>{t('email.incoming.user', 'Username')}</label>
+          <label className={labelCls}>{t('email.incoming.user', 'Username')} <span className="text-red-500">*</span></label>
           <Input
             type="text"
             value={cfg.imap_user}

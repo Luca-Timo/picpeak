@@ -2492,6 +2492,7 @@
       "foldersDetected": "{{count}} Ordner gefunden.",
       "noFolders": "Der Server hat keine Ordner zurückgegeben.",
       "detectFailed": "Ordner konnten nicht erkannt werden.",
+      "requiredFields": "Host, Port und Benutzername sind erforderlich.",
       "savedToast": "Einstellungen für eingehende E-Mails gespeichert."
     },
     "received": {

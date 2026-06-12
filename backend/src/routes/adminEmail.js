@@ -141,6 +141,9 @@ router.post('/incoming-config', [
   requirePermission('email.edit'),
   body('imap_host').notEmpty().withMessage('IMAP host is required'),
   body('imap_port').isInt({ min: 1, max: 65535 }).withMessage('Invalid port number'),
+  // IMAP always needs a login (unlike SMTP relay) — the poller's
+  // getImapConfig() returns null without a username, so require it.
+  body('imap_user').notEmpty().withMessage('IMAP username is required'),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
