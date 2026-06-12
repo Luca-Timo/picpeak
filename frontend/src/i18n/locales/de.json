@@ -3563,6 +3563,7 @@
       "payTitle": "Lieferant als bezahlt markieren",
       "outstanding": "Offen",
       "markPaid": "Als bezahlt markieren",
+      "markUnpaid": "Als unbezahlt markieren",
       "confirmPaid": "Als bezahlt markieren",
       "paid": "Bezahlt",
       "paidToast": "Als bezahlt markiert.",

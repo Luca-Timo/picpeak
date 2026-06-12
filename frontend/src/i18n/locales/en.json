@@ -3563,6 +3563,7 @@
       "payTitle": "Mark supplier paid",
       "outstanding": "Outstanding",
       "markPaid": "Mark paid",
+      "markUnpaid": "Mark unpaid",
       "confirmPaid": "Mark paid",
       "paid": "Paid",
       "paidToast": "Marked as paid.",

@@ -9,7 +9,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
-import { Camera, Upload, Inbox, X, CheckCircle2, Circle, Eye } from 'lucide-react';
+import { Camera, Upload, Inbox, X, Circle, Eye, RotateCcw } from 'lucide-react';
 import { Button, Card, CardContent, Input, LocalizedDateInput, Loading } from '../../../components/common';
 import { DecimalInput } from '../../../components/common/DecimalInput';
 import { CustomerAccountPicker, type SelectedCustomer } from '../../../components/admin/CustomerAccountPicker';
@@ -68,7 +68,9 @@ const DocumentPreview: React.FC<{ doc: InboundDocument; maxHeight?: string; init
           : imgUrl ? <img src={imgUrl} alt="document page" className="w-full h-auto" />
             : <div className="flex items-center justify-center px-3 py-16 text-sm text-neutral-500">{t('accounting.inbox.previewLoading', 'Loading preview…')}</div>}
       </div>
-      {isPdf && pageCount > 1 && (
+      {/* Always show the pager for PDFs (disabled at the ends) so the control
+          is consistent even on single-page invoices. */}
+      {isPdf && (
         <div className="mt-2 flex items-center justify-center gap-3 text-sm">
           <Button size="sm" variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>{t('accounting.inbox.prevPage', 'Prev')}</Button>
           <span className="text-neutral-600 dark:text-neutral-400">{t('accounting.inbox.pageOf', 'Page {{n}} / {{total}}', { n: page, total: pageCount })}</span>
@@ -338,8 +340,17 @@ export const AccountingInboxPage: React.FC = () => {
         <div className="space-y-2">
           {items.map((doc) => (
             <div key={doc.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-4 py-3">
-              {/* Click a new invoice → categorize; an already-sorted one → view. */}
-              <button type="button" onClick={() => (doc.status === 'unsorted' ? setTriageDoc(doc) : setViewDoc(doc))} className="flex-1 min-w-[12rem] text-left">
+              {/* Click routes by state: new → categorize, categorized & unpaid
+                  → mark paid, everything else → view. */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (doc.status === 'unsorted') setTriageDoc(doc);
+                  else if (doc.status === 'categorized' && !doc.supplierPaid) setPayDoc(doc);
+                  else setViewDoc(doc);
+                }}
+                className="flex-1 min-w-[12rem] text-left"
+              >
                 <div className="flex items-center gap-2">
                   {/* #1: once paid, the front status reads "Paid" — not the
                       stale "categorized". */}
@@ -358,7 +369,9 @@ export const AccountingInboxPage: React.FC = () => {
               <Button size="sm" variant="ghost" onClick={() => setViewDoc(doc)}><Eye className="w-3.5 h-3.5 mr-1" /> {t('accounting.inbox.view', 'View')}</Button>
               {doc.status !== 'declined' && doc.status !== 'duplicate' && (
                 doc.supplierPaid
-                  ? <button onClick={() => unpay.mutate(doc.id)} disabled={unpay.isPending} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30"><CheckCircle2 className="w-4 h-4" /> {t('accounting.incoming.paid', 'Paid')}</button>
+                  // Paid is shown by the front badge — here we only offer the
+                  // revert action, so there aren't two "Paid" chips.
+                  ? <Button size="sm" variant="ghost" onClick={() => unpay.mutate(doc.id)} disabled={unpay.isPending}><RotateCcw className="w-3.5 h-3.5 mr-1" /> {t('accounting.incoming.markUnpaid', 'Mark unpaid')}</Button>
                   : <Button size="sm" variant="outline" onClick={() => setPayDoc(doc)}><Circle className="w-3.5 h-3.5 mr-1" /> {t('accounting.incoming.markPaid', 'Mark paid')}</Button>
               )}
               {doc.status === 'unsorted' && <Button size="sm" onClick={() => setTriageDoc(doc)}>{t('accounting.inbox.categorize', 'Categorize')}</Button>}
