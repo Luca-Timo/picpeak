@@ -195,6 +195,11 @@ async function loadCosts({ from, to, cur }) {
   let totalNet = 0;
   let totalVat = 0;
   let totalGross = 0;
+  // Inclusive upper bound covering the whole `to` day. Plain range comparison
+  // (no SQL date() function) so it's valid on both Postgres and SQLite — the
+  // mocked unit tests can't catch a PG-only function error. invoice_date is a
+  // DATE, created_at a TIMESTAMP; both compare correctly against ISO literals.
+  const toEnd = `${to} 23:59:59.999`;
 
   const push = (r) => {
     rows.push(r);
@@ -207,7 +212,7 @@ async function loadCosts({ from, to, cur }) {
   if (await db.schema.hasTable('inbound_documents')) {
     const inbound = await db('inbound_documents')
       .leftJoin('events', 'inbound_documents.event_id', 'events.id')
-      .whereRaw('date(COALESCE(inbound_documents.invoice_date, inbound_documents.created_at)) BETWEEN ? AND ?', [from, to])
+      .whereRaw('COALESCE(inbound_documents.invoice_date, inbound_documents.created_at) >= ? AND COALESCE(inbound_documents.invoice_date, inbound_documents.created_at) <= ?', [from, toEnd])
       .where('inbound_documents.currency', cur)
       .whereNotIn('inbound_documents.status', ['declined', 'duplicate'])
       .orderByRaw('COALESCE(inbound_documents.invoice_date, inbound_documents.created_at) asc')
@@ -254,7 +259,7 @@ async function loadCosts({ from, to, cur }) {
     const isChf = cur === 'CHF';
     const q = db('expenses')
       .leftJoin('events', 'expenses.event_id', 'events.id')
-      .whereRaw('date(expenses.created_at) BETWEEN ? AND ?', [from, to])
+      .whereRaw('expenses.created_at >= ? AND expenses.created_at <= ?', [from, toEnd])
       .whereNot('expenses.status', 'declined')
       .whereNotIn('expenses.disposition', ['duplikat', 'abgelehnt']);
     // CHF report includes every expense (all carry a CHF base). A

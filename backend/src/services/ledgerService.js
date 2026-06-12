@@ -244,6 +244,9 @@ async function buildPostings({ from, to, currency } = {}) {
   if (!from || !to) throw httpError(400, '`from` and `to` are required (YYYY-MM-DD)', 'VALIDATION');
   if (!currency) throw httpError(400, '`currency` is required', 'VALIDATION');
   const cur = String(currency).toUpperCase();
+  // Inclusive end-of-day bound; plain range comparison (no SQL date()) so it's
+  // valid on both Postgres and SQLite.
+  const toEnd = `${to} 23:59:59.999`;
 
   return withRetry(async () => {
     const cfg = await getConfig();
@@ -294,7 +297,7 @@ async function buildPostings({ from, to, currency } = {}) {
         .modify((q) => {
           if (hasCatCol) q.leftJoin('expense_categories', 'inbound_documents.category_id', 'expense_categories.id');
         })
-        .whereRaw('date(COALESCE(inbound_documents.invoice_date, inbound_documents.created_at)) BETWEEN ? AND ?', [from, to])
+        .whereRaw('COALESCE(inbound_documents.invoice_date, inbound_documents.created_at) >= ? AND COALESCE(inbound_documents.invoice_date, inbound_documents.created_at) <= ?', [from, toEnd])
         .where('inbound_documents.currency', cur)
         .whereNotIn('inbound_documents.status', ['declined', 'duplicate'])
         .orderByRaw('COALESCE(inbound_documents.invoice_date, inbound_documents.created_at) asc')
@@ -333,7 +336,7 @@ async function buildPostings({ from, to, currency } = {}) {
         .modify((q) => {
           if (hasCatCol) q.leftJoin('expense_categories', 'expenses.category_id', 'expense_categories.id');
         })
-        .whereRaw('date(expenses.created_at) BETWEEN ? AND ?', [from, to])
+        .whereRaw('expenses.created_at >= ? AND expenses.created_at <= ?', [from, toEnd])
         .whereNot('expenses.status', 'declined')
         .whereNotIn('expenses.disposition', ['duplikat', 'abgelehnt'])
         .modify((q) => { if (cur !== 'CHF') q.where('expenses.original_currency', cur); })
