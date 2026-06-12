@@ -20,6 +20,31 @@ const expenseService = require('./expenseService');
 const ALLOWED_MIME = ['application/pdf', 'image/jpeg', 'image/png'];
 let polling = false;
 
+// Fail fast instead of hanging on a wrong host/port (e.g. IMAP pointed at an
+// SMTP port). Without these, ImapFlow waits indefinitely and the HTTP request
+// dies at the proxy as a 502 with no useful message.
+const IMAP_TIMEOUTS = { connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 30000 };
+
+function makeImapClient(cfg) {
+  return new ImapFlow({ host: cfg.host, port: cfg.port, secure: cfg.secure, auth: cfg.auth, logger: false, ...IMAP_TIMEOUTS });
+}
+
+/** Connect with a hard ceiling, so a stuck TLS handshake can't hang forever. */
+async function connectWithTimeout(client, ms = 12000) {
+  let timer;
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('IMAP connection timed out')), ms); });
+  try {
+    await Promise.race([client.connect(), timeout]);
+  } catch (err) {
+    // Best-effort teardown if connect lost the race but is still pending.
+    try { await client.logout(); } catch (_) { /* noop */ }
+    try { client.close(); } catch (_) { /* noop */ }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function isEnabled() {
   const flag = await db('feature_flags').where({ key: 'incomingMail' }).first();
   return !!(flag && (flag.value === true || flag.value === 1 || flag.value === '1'));
@@ -73,8 +98,8 @@ async function listFolders(override) {
     cfg = await getImapConfig();
   }
   if (!cfg) return [];
-  const client = new ImapFlow({ host: cfg.host, port: cfg.port, secure: cfg.secure, auth: cfg.auth, logger: false });
-  await client.connect();
+  const client = makeImapClient(cfg);
+  await connectWithTimeout(client);
   try {
     const list = await client.list();
     return (list || []).map((m) => ({ path: m.path, name: m.name, specialUse: m.specialUse || null }));
@@ -110,8 +135,8 @@ async function testConnection(override) {
     cfg = { host: c.host, port: c.port, secure: c.secure, auth: c.auth };
     folder = c.folder;
   }
-  const client = new ImapFlow({ host: cfg.host, port: cfg.port, secure: cfg.secure, auth: cfg.auth, logger: false });
-  await client.connect();
+  const client = makeImapClient(cfg);
+  await connectWithTimeout(client);
   try {
     const status = await client.status(folder, { messages: true, unseen: true });
     return { ok: true, folder, messages: status.messages || 0, unseen: status.unseen || 0 };
@@ -169,8 +194,8 @@ async function roundTripTest({ timeoutMs = 30000, intervalMs = 3000 } = {}) {
   // 2) Poll IMAP for the tagged message until timeout.
   const cfg = await getImapConfig();
   const folder = cfg?.folder || 'INBOX';
-  const client = new ImapFlow({ host: cfg.host, port: cfg.port, secure: cfg.secure, auth: cfg.auth, logger: false });
-  await client.connect();
+  const client = makeImapClient(cfg);
+  await connectWithTimeout(client);
   const started = Date.now();
   try {
     // eslint-disable-next-line no-constant-condition
@@ -204,10 +229,10 @@ async function pollOnce() {
   if (!cfg) return { skipped: 'unconfigured' };
 
   polling = true;
-  const client = new ImapFlow({ host: cfg.host, port: cfg.port, secure: cfg.secure, auth: cfg.auth, logger: false });
+  const client = makeImapClient(cfg);
   let processed = 0;
   try {
-    await client.connect();
+    await connectWithTimeout(client);
     const lock = await client.getMailboxLock(cfg.folder);
     try {
       // eslint-disable-next-line no-restricted-syntax

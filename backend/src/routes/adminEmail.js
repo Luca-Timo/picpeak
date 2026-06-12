@@ -193,7 +193,7 @@ router.post('/incoming-config/folders', adminAuth, requirePermission('email.view
     res.json({ folders });
   } catch (error) {
     console.error('IMAP folder detection error:', error);
-    res.status(502).json({ error: 'Could not connect to the mailbox. Check host, port and credentials.' });
+    res.status(422).json({ error: `Could not connect to the mailbox (${error.message}). Check host, port (IMAP is usually 993) and credentials.` });
   }
 });
 
@@ -218,7 +218,7 @@ router.post('/incoming-config/test', adminAuth, requirePermission('email.view'),
     res.json(result);
   } catch (error) {
     console.error('IMAP connection test error:', error);
-    res.status(502).json({ error: 'Could not connect to the mailbox. Check host, port, credentials and folder.' });
+    res.status(422).json({ error: `Could not connect to the mailbox (${error.message}). Check host, port (IMAP is usually 993), credentials and folder.` });
   }
 });
 
@@ -240,7 +240,21 @@ router.post('/incoming-config/roundtrip', adminAuth, requirePermission('email.se
       .json({ error: map[result.reason] || 'Round-trip test failed.', sent: !!result.sent, recipient: result.recipient });
   } catch (error) {
     console.error('Round-trip test error:', error);
-    res.status(502).json({ error: 'Round-trip test failed — check both SMTP and IMAP settings.' });
+    res.status(422).json({ error: `Round-trip test failed (${error.message}) — check both SMTP and IMAP settings.` });
+  }
+});
+
+// Run the incoming-mail poller on demand (instead of waiting for the 60s loop)
+// so the admin can verify ingestion + see why nothing arrived. Respects the
+// incomingMail flag — a manual run still won't ingest when the feature is off.
+router.post('/incoming-config/poll', adminAuth, requirePermission('email.view'), async (req, res) => {
+  try {
+    const emailIntakeService = require('../services/emailIntakeService');
+    const result = await emailIntakeService.pollOnce();
+    res.json(result); // { processed } or { skipped: 'disabled'|'unconfigured'|'busy' }
+  } catch (error) {
+    console.error('Manual poll error:', error);
+    res.status(422).json({ error: `Mailbox poll failed (${error.message}).` });
   }
 });
 

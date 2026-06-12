@@ -11,7 +11,7 @@ import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
-import { Save, Server, User, Lock, Eye, EyeOff, FolderSearch, PlugZap, Mailbox } from 'lucide-react';
+import { Save, Server, User, Lock, Eye, EyeOff, FolderSearch, PlugZap, Mailbox, RefreshCw } from 'lucide-react';
 import { Button, Card, Input, Loading } from '../common';
 import { emailService, type IncomingMailConfig, type ImapFolder } from '../../services/email.service';
 
@@ -54,6 +54,23 @@ export const IncomingMailConfigCard: React.FC = () => {
     mutationFn: () => emailService.roundTripIncoming(),
     onSuccess: (r) => toast.success(t('email.incoming.roundTripOk', 'Round-trip OK — delivered to {{recipient}} in {{seconds}}s.', { recipient: r.recipient, seconds: r.seconds })),
     onError: (e: any) => toast.error(e?.response?.data?.error || e.message || t('email.incoming.roundTripFailed', 'Round-trip test failed.')),
+  });
+
+  const poll = useMutation({
+    mutationFn: () => emailService.pollIncoming(),
+    onSuccess: (r) => {
+      if (r.skipped === 'disabled') {
+        toast.info(t('email.incoming.pollDisabled', 'Incoming mail is turned off — enable it under Settings → Features.'));
+      } else if (r.skipped === 'unconfigured') {
+        toast.info(t('email.incoming.pollUnconfigured', 'Save the incoming mail settings first.'));
+      } else if (r.skipped === 'busy') {
+        toast.info(t('email.incoming.pollBusy', 'A poll is already running — try again in a moment.'));
+      } else {
+        toast.success(t('email.incoming.pollOk', 'Checked mailbox — {{count}} new email(s) ingested.', { count: r.processed || 0 }));
+        qc.invalidateQueries({ queryKey: ['received-emails'] });
+      }
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.error || e.message || t('email.incoming.pollFailed', 'Mailbox poll failed.')),
   });
 
   const detect = useMutation({
@@ -185,6 +202,17 @@ export const IncomingMailConfigCard: React.FC = () => {
             title={t('email.incoming.roundTripHint', 'Sends a test email via your SMTP settings to this mailbox and confirms it arrives. Save both first.') as string}
           >
             {t('email.incoming.roundTrip', 'Round-trip test')}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => poll.mutate()}
+            isLoading={poll.isPending}
+            disabled={!cfg.imap_host || !cfg.imap_user}
+            leftIcon={<RefreshCw className="w-5 h-5" />}
+            className="whitespace-nowrap"
+            title={t('email.incoming.pollHint', 'Check the mailbox now instead of waiting for the 60-second poll. Ingests unread attachments into Incoming invoices.') as string}
+          >
+            {t('email.incoming.poll', 'Check now')}
           </Button>
           <Button variant="primary" onClick={() => save.mutate()} isLoading={save.isPending} leftIcon={<Save className="w-5 h-5" />} className="flex-1 min-w-[12rem]">
             {t('email.incoming.save', 'Save Incoming Mail Settings')}
