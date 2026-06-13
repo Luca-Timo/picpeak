@@ -64,10 +64,15 @@ async function checkMaintenanceMode() {
 
 // Middleware to enforce maintenance mode
 async function maintenanceMiddleware(req, res, next) {
-  // Skip maintenance check for certain paths
+  // Skip maintenance check for certain paths. Admin auth MUST work during
+  // maintenance — otherwise enabling it locks every admin out, including
+  // already-logged-in ones (their /auth/session check would 503 and read as
+  // logged-out). These are the REAL endpoints: the admin login + session
+  // routes live under /api/auth, NOT /api/admin (the old /api/admin/login
+  // entries here matched nothing, which is exactly why the lockout happened).
   const skipPaths = [
-    '/api/admin/login',
-    '/api/admin/auth/login',
+    '/api/auth/admin/login',
+    '/api/auth/session',
     '/api/public/settings',
     '/health'
   ];
