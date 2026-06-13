@@ -5,6 +5,20 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.61.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.60.6-beta.0...v3.61.0-beta.0) (2026-06-13)
+
+
+### Features
+
+* **projects:** Project Overview cockpit — link (multiple) quotes/contracts/hours into projects ([58f93ae](https://github.com/the-luap/picpeak/commit/58f93ae71350cc4a100f15a1a11f478750dace91))
+
+
+### Bug Fixes
+
+* **projects:** "one customer matches" rule for deal-lineage attach ([f74d8d4](https://github.com/the-luap/picpeak/commit/f74d8d4e8cd9fa040e067ffd751b183a9673161b))
+* **projects:** address review — cross-customer guards + email/queue hardening ([9d13880](https://github.com/the-luap/picpeak/commit/9d13880f2b177a1a090c4685798e199a1f47b5ec))
+* **projects:** enforce single-customer projects (guard event attach + re-label) ([4b1e85c](https://github.com/the-luap/picpeak/commit/4b1e85c8555b03cbed4abbd80e9cb45b831df6bf))
+
 ## [3.60.6-beta.0](https://github.com/the-luap/picpeak/compare/v3.60.5-beta.0...v3.60.6-beta.0) (2026-06-10)
 
 
