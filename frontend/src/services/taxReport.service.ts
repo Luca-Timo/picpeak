@@ -87,6 +87,30 @@ export interface TaxReportSummary {
   vatPayableMinor: number;
 }
 
+/** A single row of the unified ledger (#5). Outgoing invoices carry
+ *  POSITIVE amounts; incoming invoices + expenses are NEGATIVE so the
+ *  amount columns net toward the Result and a value-sort runs
+ *  income → costs. `type` is the discriminator. */
+export interface TaxLedgerRow {
+  key: string;
+  type: 'outgoing' | 'incoming' | 'expense';
+  date: string;
+  reference: string;
+  party: string;
+  eventName: string;
+  vatRate: number | null;
+  taxTreatment: string | null;
+  status: string;
+  isCancelled: boolean;
+  isReissue: boolean;
+  kind: string | null;
+  skontoApplied: boolean;
+  skontoAmountMinor: number;
+  netMinor: number;
+  vatMinor: number;
+  totalMinor: number;
+}
+
 export interface TaxReport {
   rows: TaxReportRow[];
   totalsByVatRate: TaxReportBucket[];
@@ -101,6 +125,9 @@ export interface TaxReport {
   costsError?: string | null;
   /** Income/cost/result summary (#4). */
   summary: TaxReportSummary;
+  /** Unified, signed, typed ledger (#5) — the canonical surface for the
+   *  on-screen table + exports. Sorted by date ascending server-side. */
+  ledger: TaxLedgerRow[];
   currency: string;
   period: { from: string; to: string };
 }

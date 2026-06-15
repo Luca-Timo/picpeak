@@ -3966,6 +3966,11 @@
       "company": "Unternehmen",
       "total": "Summe Kosten"
     },
+    "type": {
+      "outgoing": "Ausgangsrechnung",
+      "incoming": "Eingangsrechnung",
+      "expense": "Aufwand"
+    },
     "col": {
       "date": "Datum",
       "invoice": "Rechnung",
@@ -3975,7 +3980,11 @@
       "net": "Netto",
       "vat": "MwSt.",
       "total": "Brutto",
-      "skonto": "Skonto"
+      "skonto": "Skonto",
+      "type": "Typ",
+      "reference": "Referenz",
+      "party": "Kunde / Lieferant",
+      "tax": "Steuer"
     }
   },
   "quotes": {

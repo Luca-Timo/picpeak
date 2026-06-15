@@ -96,6 +96,9 @@ export const TaxReportPage: React.FC = () => {
   const [to,   setTo]   = useState(initialPeriod.to);
   const [currency, setCurrency] = useState<string>('CHF');
   const [isExporting, setIsExporting] = useState<'pdf' | 'csv' | null>(null);
+  // Unified-ledger sort (#5). Defaults to date ascending — matches the
+  // server-side order so the first paint is stable.
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'date', dir: 'asc' });
 
   const onPresetChange = (next: PeriodPreset) => {
     setPreset(next);
@@ -146,6 +149,40 @@ export const TaxReportPage: React.FC = () => {
   const hasCosts = (report?.costs?.rows.length || 0) > 0;
   const hasAnyData = !!report && (report.rows.length > 0 || hasCosts);
   const exportsDisabled = isLoading || isExporting !== null || !hasAnyData;
+
+  // Whether the disclaimer + the "tax treatment" semantics apply: any
+  // cost row in the ledger (type !== 'outgoing').
+  const ledgerHasCosts = !!report && report.ledger.some((r) => r.type !== 'outgoing');
+
+  // Sorted COPY of the ledger. Numeric sort for the signed amount
+  // columns (so income sits above costs ascending), localeCompare for
+  // date / party / type. Toggling a header flips the direction.
+  const sortedLedger = useMemo(() => {
+    if (!report) return [];
+    const copy = [...report.ledger];
+    const { key, dir } = sort;
+    const factor = dir === 'asc' ? 1 : -1;
+    const numericKeys: Record<string, 'netMinor' | 'vatMinor' | 'totalMinor'> = {
+      net: 'netMinor', vat: 'vatMinor', gross: 'totalMinor',
+    };
+    copy.sort((a, b) => {
+      if (key in numericKeys) {
+        const f = numericKeys[key];
+        return (a[f] - b[f]) * factor;
+      }
+      const av = key === 'party' ? a.party : key === 'type' ? a.type : a.date;
+      const bv = key === 'party' ? b.party : key === 'type' ? b.type : b.date;
+      return String(av || '').localeCompare(String(bv || '')) * factor;
+    });
+    return copy;
+  }, [report, sort]);
+
+  const toggleSort = (key: string) => {
+    setSort((prev) => prev.key === key
+      ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      : { key, dir: 'asc' });
+  };
+  const sortIndicator = (key: string) => (sort.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '');
 
   return (
     <div className="space-y-6">
@@ -396,10 +433,10 @@ export const TaxReportPage: React.FC = () => {
         </Card>
       ) : (
         <>
-          {report && report.rows.length > 0 && (
-          /* Table — full width below the filter + totals row above.
-              The totals card now lives in the top-right of the page
-              header so this section is purely the invoice list. */
+          {report && report.ledger.length > 0 && (
+          /* Unified ledger (#5) — one typed, signed, sortable table.
+              Outgoing invoices are positive; incoming invoices + expenses
+              negative so the amount columns net toward the Result. */
           <Card padding="none">
             {/* Two nested wrappers: the OUTER clips the header row's
                 solid fill so the top corners stay rounded (matches
@@ -413,29 +450,65 @@ export const TaxReportPage: React.FC = () => {
                 <thead className="bg-neutral-50 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300">
                   <tr>
                     <th className="px-2 py-2 text-right font-medium w-10">#</th>
-                    <th className="px-2 py-2 text-left font-medium whitespace-nowrap">{t('taxReport.col.date', 'Date')}</th>
-                    <th className="px-2 py-2 text-left font-medium whitespace-nowrap">{t('taxReport.col.invoice', 'Invoice')}</th>
-                    <th className="px-2 py-2 text-left font-medium">{t('taxReport.col.customer', 'Customer')}</th>
+                    <th className="px-2 py-2 text-left font-medium whitespace-nowrap">
+                      <button type="button" onClick={() => toggleSort('type')} className="font-medium hover:text-primary-600 dark:hover:text-primary-400">
+                        {t('taxReport.col.type', 'Type')}{sortIndicator('type')}
+                      </button>
+                    </th>
+                    <th className="px-2 py-2 text-left font-medium whitespace-nowrap">
+                      <button type="button" onClick={() => toggleSort('date')} className="font-medium hover:text-primary-600 dark:hover:text-primary-400">
+                        {t('taxReport.col.date', 'Date')}{sortIndicator('date')}
+                      </button>
+                    </th>
+                    <th className="px-2 py-2 text-left font-medium whitespace-nowrap">{t('taxReport.col.reference', 'Reference')}</th>
+                    <th className="px-2 py-2 text-left font-medium">
+                      <button type="button" onClick={() => toggleSort('party')} className="font-medium hover:text-primary-600 dark:hover:text-primary-400">
+                        {t('taxReport.col.party', 'Customer / supplier')}{sortIndicator('party')}
+                      </button>
+                    </th>
                     <th className="px-2 py-2 text-left font-medium">{t('taxReport.col.event', 'Event')}</th>
-                    <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.vatRate', 'VAT %')}</th>
-                    <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.net', 'Net')}</th>
-                    <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.vat', 'VAT')}</th>
-                    <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.total', 'Gross')}</th>
+                    <th className="px-2 py-2 text-left font-medium whitespace-nowrap">{t('taxReport.col.tax', 'Tax')}</th>
+                    <th className="px-2 py-2 text-right font-medium whitespace-nowrap">
+                      <button type="button" onClick={() => toggleSort('net')} className="font-medium hover:text-primary-600 dark:hover:text-primary-400">
+                        {t('taxReport.col.net', 'Net')}{sortIndicator('net')}
+                      </button>
+                    </th>
+                    <th className="px-2 py-2 text-right font-medium whitespace-nowrap">
+                      <button type="button" onClick={() => toggleSort('vat')} className="font-medium hover:text-primary-600 dark:hover:text-primary-400">
+                        {t('taxReport.col.vat', 'VAT')}{sortIndicator('vat')}
+                      </button>
+                    </th>
+                    <th className="px-2 py-2 text-right font-medium whitespace-nowrap">
+                      <button type="button" onClick={() => toggleSort('gross')} className="font-medium hover:text-primary-600 dark:hover:text-primary-400">
+                        {t('taxReport.col.total', 'Gross')}{sortIndicator('gross')}
+                      </button>
+                    </th>
                     <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.skonto', 'Skonto')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
-                  {report.rows.map((row, i) => (
+                  {sortedLedger.map((row, i) => (
                     <tr
-                      key={row.id}
+                      key={row.key}
                       className={row.isCancelled
                         ? 'text-neutral-400 dark:text-neutral-500 italic'
                         : 'text-neutral-900 dark:text-neutral-100'}
                     >
                       <td className="px-2 py-1.5 text-right tabular-nums">{i + 1}</td>
-                      <td className="px-2 py-1.5 whitespace-nowrap tabular-nums">{fmtDate(row.issueDate.slice(0, 10))}</td>
                       <td className="px-2 py-1.5 whitespace-nowrap">
-                        <span className="font-medium">{row.invoiceNumber}</span>
+                        <span className={`inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded font-semibold not-italic ${
+                          row.type === 'outgoing'
+                            ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300'
+                            : row.type === 'incoming'
+                              ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300'
+                              : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                        }`}>
+                          {t(`taxReport.type.${row.type}`, row.type)}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5 whitespace-nowrap tabular-nums">{fmtDate(String(row.date).slice(0, 10))}</td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">
+                        <span className="font-medium">{row.reference}</span>
                         {row.isCancelled && (
                           <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 font-semibold not-italic">
                             {t('taxReport.statusCancelled', 'Cancelled')}
@@ -443,8 +516,8 @@ export const TaxReportPage: React.FC = () => {
                         )}
                         {/* Storno + Reissue lineage markers — parity
                             with the admin invoices list so the same
-                            colour scheme distinguishes the three row
-                            kinds at a glance across both surfaces. */}
+                            colour scheme distinguishes the row kinds at
+                            a glance across both surfaces. */}
                         {row.kind === 'storno' && (
                           <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-purple-100 text-purple-800 font-semibold not-italic">
                             {t('bills.kind.storno', 'Storno')}
@@ -455,23 +528,26 @@ export const TaxReportPage: React.FC = () => {
                             {t('bills.kind.reissue', 'Reissue')}
                           </span>
                         )}
-                        {row.replacedByInvoiceNumber && (
-                          <span className="ml-1 text-xs text-neutral-500 dark:text-neutral-400 not-italic">
-                            → {row.replacedByInvoiceNumber}
-                          </span>
-                        )}
                       </td>
-                      <td className="px-2 py-1.5 truncate max-w-[180px]" title={row.customerLabel}>{row.customerLabel}</td>
-                      <td className="px-2 py-1.5 truncate max-w-[180px]" title={row.eventName}>{row.eventName}</td>
-                      <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">{Number(row.vatRate).toFixed(1)}%</td>
-                      <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
-                        {formatMinor(row.netMinor, row.currency, intlLocale)}
+                      <td className="px-2 py-1.5 truncate max-w-[180px]" title={row.party}>{row.party}</td>
+                      <td className="px-2 py-1.5 truncate max-w-[180px]" title={row.eventName}>
+                        {row.eventName || (row.type !== 'outgoing'
+                          ? <span className="text-neutral-400 dark:text-neutral-500">{t('taxReport.cost.company', 'Company')}</span>
+                          : '')}
+                      </td>
+                      <td className="px-2 py-1.5 whitespace-nowrap">
+                        {row.type === 'outgoing'
+                          ? <span className="tabular-nums">{Number(row.vatRate).toFixed(1)}%</span>
+                          : <span className="text-xs text-neutral-500 dark:text-neutral-400">{row.taxTreatment}</span>}
                       </td>
                       <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
-                        {formatMinor(row.vatMinor, row.currency, intlLocale)}
+                        {formatMinor(row.netMinor, report.currency, intlLocale)}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
+                        {formatMinor(row.vatMinor, report.currency, intlLocale)}
                       </td>
                       <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap font-medium">
-                        {formatMinor(row.totalMinor, row.currency, intlLocale)}
+                        {formatMinor(row.totalMinor, report.currency, intlLocale)}
                       </td>
                       <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap"
                         title={row.skontoApplied
@@ -479,7 +555,7 @@ export const TaxReportPage: React.FC = () => {
                           : undefined}>
                         {row.skontoApplied ? (
                           <span className="text-teal-700 dark:text-teal-300">
-                            −{formatMinor(row.skontoAmountMinor, row.currency, intlLocale)}
+                            −{formatMinor(row.skontoAmountMinor, report.currency, intlLocale)}
                           </span>
                         ) : ''}
                       </td>
@@ -492,86 +568,11 @@ export const TaxReportPage: React.FC = () => {
           </Card>
           )}
 
-          {/* Cost side (#4) — incoming invoices + expenses, company or
-              event-booked. Shown as its own table beneath the revenue
-              list so the Einnahmen-Ausgaben picture is complete on one
-              page. */}
-          {hasCosts && report && (
-            <Card padding="none">
-              <div className="px-3 pt-3 pb-1">
-                <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                  {t('taxReport.costsTitle', 'Costs (incoming invoices + expenses)')}
-                </h2>
-              </div>
-              <div className="rounded-xl overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-neutral-50 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300">
-                      <tr>
-                        <th className="px-2 py-2 text-right font-medium w-10">#</th>
-                        <th className="px-2 py-2 text-left font-medium whitespace-nowrap">{t('taxReport.col.date', 'Date')}</th>
-                        <th className="px-2 py-2 text-left font-medium whitespace-nowrap">{t('taxReport.cost.source', 'Type')}</th>
-                        <th className="px-2 py-2 text-left font-medium">{t('taxReport.cost.supplier', 'Supplier / description')}</th>
-                        <th className="px-2 py-2 text-left font-medium">{t('taxReport.col.event', 'Event')}</th>
-                        <th className="px-2 py-2 text-left font-medium whitespace-nowrap">{t('taxReport.cost.taxTreatment', 'Tax treatment')}</th>
-                        <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.net', 'Net')}</th>
-                        <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.vat', 'VAT')}</th>
-                        <th className="px-2 py-2 text-right font-medium whitespace-nowrap">{t('taxReport.col.total', 'Gross')}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800 text-neutral-900 dark:text-neutral-100">
-                      {report.costs.rows.map((row, i) => (
-                        <tr key={`${row.source}-${row.id}`}>
-                          <td className="px-2 py-1.5 text-right tabular-nums">{i + 1}</td>
-                          <td className="px-2 py-1.5 whitespace-nowrap tabular-nums">{fmtDate(String(row.date).slice(0, 10))}</td>
-                          <td className="px-2 py-1.5 whitespace-nowrap">
-                            <span className={`inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded font-semibold ${
-                              row.source === 'incoming'
-                                ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300'
-                                : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
-                            }`}>
-                              {row.source === 'incoming'
-                                ? t('taxReport.cost.sourceIncoming', 'Incoming')
-                                : t('taxReport.cost.sourceExpense', 'Expense')}
-                            </span>
-                          </td>
-                          <td className="px-2 py-1.5 truncate max-w-[220px]" title={row.supplierLabel || row.description}>
-                            {row.supplierLabel || row.description || '—'}
-                          </td>
-                          <td className="px-2 py-1.5 truncate max-w-[160px]" title={row.eventName}>
-                            {row.eventName || <span className="text-neutral-400 dark:text-neutral-500">{t('taxReport.cost.company', 'Company')}</span>}
-                          </td>
-                          <td className="px-2 py-1.5 whitespace-nowrap text-xs text-neutral-500 dark:text-neutral-400">{row.taxTreatment}</td>
-                          <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
-                            {formatMinor(row.netMinor, report.currency, intlLocale)}
-                          </td>
-                          <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap">
-                            {formatMinor(row.vatMinor, report.currency, intlLocale)}
-                          </td>
-                          <td className="px-2 py-1.5 text-right tabular-nums whitespace-nowrap font-medium">
-                            {formatMinor(row.totalMinor, report.currency, intlLocale)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="border-t-2 border-neutral-300 dark:border-neutral-700 font-semibold text-neutral-900 dark:text-neutral-100">
-                      <tr>
-                        <td className="px-2 py-2" colSpan={6}>{t('taxReport.cost.total', 'Total costs')}</td>
-                        <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{formatMinor(report.costs.totalNet, report.currency, intlLocale)}</td>
-                        <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{formatMinor(report.costs.totalVat, report.currency, intlLocale)}</td>
-                        <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{formatMinor(report.costs.totalGross, report.currency, intlLocale)}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            </Card>
-          )}
-
           {/* Legal disclaimer — tax figures are a guideline. Per project
               rule: any surface touching tax/financial output must point
-              the user at a professional. */}
-          {hasCosts && (
+              the user at a professional. Shown whenever the ledger holds
+              any cost row. */}
+          {ledgerHasCosts && (
             <p className="flex items-start gap-2 text-xs text-neutral-500 dark:text-neutral-400">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>

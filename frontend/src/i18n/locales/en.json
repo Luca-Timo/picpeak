@@ -3966,6 +3966,11 @@
       "company": "Company",
       "total": "Total costs"
     },
+    "type": {
+      "outgoing": "Outgoing invoice",
+      "incoming": "Incoming invoice",
+      "expense": "Expense"
+    },
     "col": {
       "date": "Date",
       "invoice": "Invoice",
@@ -3975,7 +3980,11 @@
       "net": "Net",
       "vat": "VAT",
       "total": "Gross",
-      "skonto": "Skonto"
+      "skonto": "Skonto",
+      "type": "Type",
+      "reference": "Reference",
+      "party": "Customer / supplier",
+      "tax": "Tax"
     }
   },
   "quotes": {
