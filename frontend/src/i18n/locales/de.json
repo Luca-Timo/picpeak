@@ -3938,8 +3938,13 @@
     },
     "exportPdf": "PDF exportieren",
     "ledgerExport": "Treuhänder-Export",
-    "ledgerExportHint": "Doppelte Buchung für Ihren Treuhänder, abgebildet über Ihren Kontenplan.",
+    "ledgerExportHint": "Doppelte Buchungssätze für Ihren Treuhänder, abgebildet über Ihren Kontenplan.",
     "ledgerExportConfigure": "Einrichten →",
+    "export": {
+      "reportTitle": "Bericht",
+      "reportHint": "Lesbare Liste — für Ihre Unterlagen.",
+      "journalTitle": "Buchungsjournal"
+    },
     "exportCsv": "CSV exportieren",
     "exportFailed": "Export fehlgeschlagen. Bitte erneut versuchen.",
     "errorTitle": "Steuerliste konnte nicht geladen werden",

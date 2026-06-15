@@ -28,6 +28,7 @@ const selectClassName =
   'w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-primary-500';
 import { taxReportService, type TaxReportParams } from '../../../services/taxReport.service';
 import { ledgerService, type ExportFormat } from '../../../services/ledger.service';
+import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { toast } from 'react-toastify';
 
@@ -93,6 +94,7 @@ function triggerBrowserDownload(url: string, filename: string) {
 
 export const TaxReportPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const { flags } = useFeatureFlags();
   const { format: fmtDate } = useLocalizedDate();
   const [preset, setPreset] = useState<PeriodPreset>('thisYear');
   const initialPeriod = useMemo(() => periodForPreset('thisYear'), []);
@@ -294,58 +296,82 @@ export const TaxReportPage: React.FC = () => {
               </select>
             </div>
 
-            <div className="space-y-2 pt-1">
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => handleExport('csv')}
-                  disabled={exportsDisabled}
-                  isLoading={isExporting === 'csv'}
-                  leftIcon={<FileDown className="w-4 h-4" />}
-                >
-                  {t('taxReport.exportCsv', 'Export CSV')}
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => handleExport('pdf')}
-                  disabled={exportsDisabled}
-                  isLoading={isExporting === 'pdf'}
-                  leftIcon={<Download className="w-4 h-4" />}
-                >
-                  {t('taxReport.exportPdf', 'Export PDF')}
-                </Button>
+            {/* Export area — two clearly-separated groups so it's obvious
+                what each file is and who it's for: the human-readable Report
+                (PDF/CSV) and the accounting Journal (for the Treuhänder). The
+                Journal group only shows when the accounting layer is on, since
+                it needs the Chart-of-accounts mapping. */}
+            <div className="pt-3 mt-1 border-t border-neutral-200 dark:border-neutral-700 space-y-3">
+              {/* Group 1 — Report (for you) */}
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                    {t('taxReport.export.reportTitle', 'Report')}
+                  </div>
+                  <div className="text-[11px] text-neutral-400 dark:text-neutral-500">
+                    {t('taxReport.export.reportHint', 'Readable list — for your own records.')}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => handleExport('csv')}
+                    disabled={exportsDisabled}
+                    isLoading={isExporting === 'csv'}
+                    leftIcon={<FileDown className="w-4 h-4" />}
+                  >
+                    {t('taxReport.exportCsv', 'Export CSV')}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => handleExport('pdf')}
+                    disabled={exportsDisabled}
+                    isLoading={isExporting === 'pdf'}
+                    leftIcon={<Download className="w-4 h-4" />}
+                  >
+                    {t('taxReport.exportPdf', 'Export PDF')}
+                  </Button>
+                </div>
               </div>
 
-              {/* Treuhänder collective-journal export — moved here from its own
-                  tab; reuses the same period/currency. Format = target tool. */}
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <select
-                  value={ledgerFormat}
-                  onChange={(e) => setLedgerFormat(e.target.value as ExportFormat)}
-                  disabled={exportsDisabled}
-                  aria-label={t('ledger.export.format', 'Target tool') as string}
-                  className={`${selectClassName} w-auto`}
-                >
-                  {LEDGER_FORMATS.map((f) => (
-                    <option key={f} value={f}>{t(`ledger.export.format_${f}`, f)}</option>
-                  ))}
-                </select>
-                <Button
-                  variant="outline"
-                  onClick={handleLedgerExport}
-                  disabled={exportsDisabled}
-                  isLoading={isExporting === 'ledger'}
-                  leftIcon={<FileSpreadsheet className="w-4 h-4" />}
-                >
-                  {t('taxReport.ledgerExport', 'Treuhänder export')}
-                </Button>
-              </div>
-              <p className="text-[11px] text-neutral-400 dark:text-neutral-500 text-right">
-                {t('taxReport.ledgerExportHint', 'Double-entry journal for your accountant, mapped via your Chart of accounts.')}{' '}
-                <Link to="/admin/accounting/ledger" className="underline hover:text-neutral-600 dark:hover:text-neutral-300">
-                  {t('taxReport.ledgerExportConfigure', 'Configure →')}
-                </Link>
-              </p>
+              {/* Group 2 — Accounting journal (for your accountant) */}
+              {flags.accounting && (
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-3 border-t border-dashed border-neutral-200 dark:border-neutral-800">
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                      {t('taxReport.export.journalTitle', 'Accounting journal')}
+                    </div>
+                    <div className="text-[11px] text-neutral-400 dark:text-neutral-500">
+                      {t('taxReport.ledgerExportHint', 'Double-entry postings for your accountant, mapped via your Chart of accounts.')}{' '}
+                      <Link to="/admin/accounting/ledger" className="underline hover:text-neutral-600 dark:hover:text-neutral-300">
+                        {t('taxReport.ledgerExportConfigure', 'Configure →')}
+                      </Link>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={ledgerFormat}
+                      onChange={(e) => setLedgerFormat(e.target.value as ExportFormat)}
+                      disabled={exportsDisabled}
+                      aria-label={t('ledger.export.format', 'Target tool') as string}
+                      className={`${selectClassName} w-auto`}
+                    >
+                      {LEDGER_FORMATS.map((f) => (
+                        <option key={f} value={f}>{t(`ledger.export.format_${f}`, f)}</option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="outline"
+                      onClick={handleLedgerExport}
+                      disabled={exportsDisabled}
+                      isLoading={isExporting === 'ledger'}
+                      leftIcon={<FileSpreadsheet className="w-4 h-4" />}
+                    >
+                      {t('taxReport.ledgerExport', 'Accountant export')}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </Card>

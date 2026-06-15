@@ -6,9 +6,9 @@
  *   /mappings    GET/PATCH   category→account + default-account/VAT settings
  *   /export      GET    Treuhänder collective-journal CSV (generic|banana|bexio)
  *
- * Gated by the `accounting` master flag; export additionally requires the
- * `taxReport` sub-flag (it's the export umbrella). Uses the `accounting.*`
- * permissions. Output is a GUIDELINE — the UI carries the Treuhänder caveat.
+ * Gated by the `accounting` master flag (all routes, incl. /export). Uses the
+ * `accounting.*` permissions. Output is a GUIDELINE — the UI carries the
+ * Treuhänder caveat.
  */
 const express = require('express');
 const { body, param, query } = require('express-validator');
@@ -32,7 +32,6 @@ function requireFlag(key, code) {
   };
 }
 const requireAccounting = requireFlag('accounting', 'ACCOUNTING_DISABLED');
-const requireTaxReport = requireFlag('taxReport', 'TAX_REPORT_DISABLED');
 
 router.use(adminAuth);
 router.use(requireAccounting);
@@ -107,7 +106,10 @@ router.patch('/mappings/settings', requirePermission('accounting.manage'), handl
 }));
 
 // ── Treuhänder export ────────────────────────────────────────────────
-router.get('/export', requireTaxReport, requirePermission('bills.view'),
+// Gated by the router-level `accounting` flag only — the export lives on the
+// Tax page now but is an accounting-layer feature (needs the chart-of-accounts
+// mapping), so it no longer requires the `taxReport` sub-flag.
+router.get('/export', requirePermission('bills.view'),
   [query('from').matches(/^\d{4}-\d{2}-\d{2}$/), query('to').matches(/^\d{4}-\d{2}-\d{2}$/),
     query('currency').matches(/^[A-Za-z]{3}$/), query('format').optional().isIn(ledgerService.EXPORT_FORMATS)],
   handleAsync(async (req, res) => {

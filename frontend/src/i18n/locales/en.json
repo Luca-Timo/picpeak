@@ -3937,9 +3937,14 @@
       "currency": "Currency"
     },
     "exportPdf": "Export PDF",
-    "ledgerExport": "Treuhänder export",
-    "ledgerExportHint": "Double-entry journal for your accountant, mapped via your Chart of accounts.",
+    "ledgerExport": "Accountant export",
+    "ledgerExportHint": "Double-entry postings for your accountant, mapped via your Chart of accounts.",
     "ledgerExportConfigure": "Configure →",
+    "export": {
+      "reportTitle": "Report",
+      "reportHint": "Readable list — for your own records.",
+      "journalTitle": "Accounting journal"
+    },
     "exportCsv": "Export CSV",
     "exportFailed": "Export failed. Please try again.",
     "errorTitle": "Could not load tax report",
