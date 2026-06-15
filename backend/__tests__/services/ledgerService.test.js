@@ -210,13 +210,13 @@ describe('exportPostings', () => {
   it('banana_ie format is Income & Expense columns, tab-separated .txt', async () => {
     const { content, filename, contentType } = await ledgerService.exportPostings({ ...period, format: 'banana_ie' });
     const [header, row] = content.trim().split('\r\n');
-    expect(header).toBe('Date\tDoc\tDescription\tIncome\tExpenses\tContraAccount\tVatCode');
+    expect(header).toBe('Date\tDoc\tDescription\tIncome\tExpenses\tCategory\tVatCode');
     // The mock period holds one revenue posting (gross 108.10) → Income filled,
-    // Expenses empty, ContraAccount = the revenue account.
+    // Expenses empty, Category = the revenue account.
     const cells = row.split('\t');
     expect(cells[3]).toBe('108.10'); // Income
     expect(cells[4]).toBe('');       // Expenses
-    expect(cells[5]).not.toBe('');   // ContraAccount (revenue account)
+    expect(cells[5]).not.toBe('');   // Category (revenue account)
     expect(filename).toMatch(/_banana_ie\.txt$/);
     expect(contentType).toMatch(/text\/plain/);
   });

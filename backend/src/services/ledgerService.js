@@ -429,19 +429,21 @@ async function exportPostings({ from, to, currency, format = 'generic' } = {}) {
   } else if (fmt === 'banana_ie') {
     // Banana Income & Expense (cash-book / Einnahmen-Ausgaben) import — for a
     // file that is NOT double-entry. Columns: Date, Doc, Description, Income,
-    // Expenses, ContraAccount (the income/expense account — banana.ch doc 9946),
-    // VatCode. Revenue → gross in Income + the revenue account; cost → gross in
-    // Expenses + the expense account. Amount is gross; VatCode expands the VAT.
-    // Same TAB-separated .txt shape as double-entry.
-    headers = ['Date', 'Doc', 'Description', 'Income', 'Expenses', 'ContraAccount', 'VatCode'];
+    // Expenses, Category (the income/expense category account), VatCode. NOTE:
+    // the category column's NameXml in an I&E file is "Category" (verified
+    // against a real Banana file) — NOT the double-entry "ContraAccount".
+    // Revenue → gross in Income + the revenue account; cost → gross in Expenses
+    // + the expense account. VatCode warns harmlessly on a non-VAT file. Same
+    // TAB-separated .txt shape as double-entry.
+    headers = ['Date', 'Doc', 'Description', 'Income', 'Expenses', 'Category', 'VatCode'];
     rowOf = (p) => {
       const isRevenue = p.source === 'revenue';
       const amount = minorToDecimal(p.grossMinor);
-      // Contra = the P&L account: revenue account (credit side) for income,
+      // Category = the P&L account: revenue account (credit side) for income,
       // expense account (debit side) for costs.
-      const contra = isRevenue ? p.creditAccount : p.debitAccount;
+      const category = isRevenue ? p.creditAccount : p.debitAccount;
       return [dateOnly(p.date), p.docNumber, p.description,
-        isRevenue ? amount : '', isRevenue ? '' : amount, contra, p.vatCode];
+        isRevenue ? amount : '', isRevenue ? '' : amount, category, p.vatCode];
     };
   } else if (fmt === 'bexio') {
     // bexio manual-entry import.
