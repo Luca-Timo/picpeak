@@ -43,6 +43,8 @@ import { HoursLoggingPage } from './pages/admin/clients/HoursLoggingPage';
 const CalendarPage = lazy(() => import('./pages/admin/clients/CalendarPage').then((m) => ({ default: m.CalendarPage })));
 import { QuoteResponsePage } from './pages/public/QuoteResponsePage';
 import { ContractResponsePage } from './pages/public/ContractResponsePage';
+import { ProjectsListPage } from './pages/admin/projects/ProjectsListPage';
+import { ProjectCockpitPage } from './pages/admin/projects/ProjectCockpitPage';
 import { ContractsListPage } from './pages/admin/contracts/ContractsListPage';
 import { ContractEditorPage } from './pages/admin/contracts/ContractEditorPage';
 import { ContractDetailPage } from './pages/admin/contracts/ContractDetailPage';
@@ -206,6 +208,12 @@ function App() {
                             <Route path="quotes/new" element={<QuoteEditorPage />} />
                             <Route path="quotes/:id" element={<QuoteDetailPage />} />
                             <Route path="quotes/:id/edit" element={<QuoteEditorPage />} />
+                          </Route>
+                          {/* Project Overview (CRM) — admin-only grouping
+                              layer above events, gated by `projects`. */}
+                          <Route element={<RequireFeature flag="projects" />}>
+                            <Route path="projects" element={<ProjectsListPage />} />
+                            <Route path="projects/:id" element={<ProjectCockpitPage />} />
                           </Route>
                           {/* Bills / invoices (CRM) — gated by `bills`. */}
                           <Route element={<RequireFeature flag="bills" />}>

@@ -24,6 +24,7 @@ import {
   CONTRACT_SECTIONS,
 } from '../../../services/contracts.service';
 import { CustomerPicker } from '../../../components/admin/CustomerPicker';
+import { ProjectSelect } from '../../../components/admin/ProjectSelect';
 
 interface BlockRow {
   blockId: number;
@@ -63,6 +64,7 @@ export const ContractEditorPage: React.FC = () => {
   const [language, setLanguage] = useState('de');
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [validUntil, setValidUntil] = useState('');
+  const [projectId, setProjectId] = useState<number | null>(null);
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
 
   // Load existing contract on edit.
@@ -110,6 +112,7 @@ export const ContractEditorPage: React.FC = () => {
     setLanguage(c.language || 'de');
     setIssueDate(c.issueDate);
     setValidUntil(c.validUntil || '');
+    setProjectId(c.projectId ?? null);
     setBlocks((c.inclusions || []).map((inc) => ({
       blockId: inc.blockId,
       section: inc.section,
@@ -188,6 +191,7 @@ export const ContractEditorPage: React.FC = () => {
         outroText: outroText || null,
         issueDate,
         validUntil: validUntil || undefined,
+        projectId: projectId ?? null,
       });
       // Apply block toggles + ordering as an update right after create.
       await contractsService.update(created.contract.id, {
@@ -202,6 +206,10 @@ export const ContractEditorPage: React.FC = () => {
       navigate(`/admin/clients/contracts/${created.id}`);
     },
     onError: (err: any) => {
+      if (err?.response?.data?.code === 'PROJECT_CUSTOMER_MISMATCH') {
+        toast.error(t('projects.error.customerMismatch', 'That project belongs to a different customer than this entry.') as string);
+        return;
+      }
       toast.error(err?.response?.data?.error || err?.message || t('contracts.editor.saveError', 'Save failed') as string);
     },
   });
@@ -220,6 +228,7 @@ export const ContractEditorPage: React.FC = () => {
         language,
         issueDate,
         validUntil: validUntil || undefined,
+        projectId: projectId ?? null,
         blocks: blocks.map((b) => ({
           blockId: b.blockId, included: b.included, position: b.position,
         })),
@@ -230,6 +239,10 @@ export const ContractEditorPage: React.FC = () => {
       navigate(`/admin/clients/contracts/${numericId}`);
     },
     onError: (err: any) => {
+      if (err?.response?.data?.code === 'PROJECT_CUSTOMER_MISMATCH') {
+        toast.error(t('projects.error.customerMismatch', 'That project belongs to a different customer than this entry.') as string);
+        return;
+      }
       toast.error(err?.response?.data?.error || err?.message || t('contracts.editor.saveError', 'Save failed') as string);
     },
   });
@@ -347,6 +360,16 @@ export const ContractEditorPage: React.FC = () => {
             />
           </div>
         )}
+
+        {/* Project link (renders only when the projects feature is on). */}
+        <div className="mb-4">
+          <ProjectSelect
+            label={t('projects.picker.label', 'Project') as string}
+            value={projectId}
+            customerAccountId={customerAccountId}
+            onChange={setProjectId}
+          />
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>

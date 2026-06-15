@@ -38,6 +38,13 @@ async function initializeTransporter(forceReinit = false) {
     // Configuration has changed or first initialization
     logger.info('Initializing email transporter' + (lastConfigHash && currentConfigHash !== lastConfigHash ? ' (configuration changed)' : ''));
 
+    // PR #603 review follow-up #3 — release the previous transporter before
+    // swapping it. Harmless today (no connection pool), but prevents a
+    // socket/connection leak if `pool: true` is ever enabled on the transport.
+    if (transporter && typeof transporter.close === 'function') {
+      try { transporter.close(); } catch (_) { /* best-effort */ }
+    }
+
     transporter = nodemailer.createTransport({
       host: config.smtp_host,
       port: config.smtp_port,
@@ -252,6 +259,19 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en') {
   const logoFullUrl = `${frontendUrl}${logoPath.startsWith('/') ? '' : '/'}${logoPath}`;
   logger.debug('Email logo URL:', { frontendUrl, logoPath, logoFullUrl });
 
+  const year = new Date().getFullYear();
+  // PR review follow-up — Outlook (Word engine) and Apple Mail under some
+  // configs STRIP the <head><style>, so any element styled only by a class
+  // loses its design (the CTA rendered as a plain link, the header card +
+  // button vanished). Fix: inline the CTA button style (themed with the
+  // admin's primary colour) on every `class="button"` anchor, keeping the
+  // class so style-capable clients still get :hover. The wrapper chrome
+  // below is rebuilt as inline-styled tables with bgcolor attrs for the same
+  // reason. The <style> block stays as progressive enhancement.
+  const buttonInlineStyle = `background-color:${primaryColor};color:${buttonTextColor};display:inline-block;padding:12px 30px;text-decoration:none;border-radius:5px;font-weight:500;`;
+  const inlinedBody = (typeof htmlBody === 'string' ? htmlBody : '')
+    .replace(/class="button"/g, `class="button" style="${buttonInlineStyle}"`);
+
   return `
 <!DOCTYPE html>
 <html lang="${language}">
@@ -367,22 +387,32 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en') {
     }
   </style>
 </head>
-<body>
-  <div class="email-wrapper">
-    <div class="email-container">
-      <div class="email-header">
-        <img src="${logoFullUrl}" alt="${companyName}" class="logo">
-      </div>
-      <div class="email-content">
-        ${htmlBody}
-      </div>
-      <div class="email-footer">
-        <img src="${logoFullUrl}" alt="${companyName}">
-        <p>${companyName}</p>
-        <p style="font-size: 12px; color: #999;">© ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
-      </div>
-    </div>
-  </div>
+<body style="margin:0;padding:0;background-color:${bodyBgColor};color:${bodyTextColor};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${bodyBgColor}" style="background-color:${bodyBgColor};" class="email-wrapper">
+    <tr>
+      <td align="center" style="padding:40px 20px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="email-container" style="width:100%;max-width:600px;background-color:${containerBgColor};border-radius:8px;overflow:hidden;">
+          <tr>
+            <td align="center" bgcolor="${primaryColor}" class="email-header" style="background-color:${primaryColor};padding:30px;text-align:center;">
+              <img src="${logoFullUrl}" alt="${companyName}" width="180" class="logo" style="max-width:180px;height:auto;display:inline-block;border:0;">
+            </td>
+          </tr>
+          <tr>
+            <td class="email-content" style="padding:40px 30px;">
+              ${inlinedBody}
+            </td>
+          </tr>
+          <tr>
+            <td align="center" bgcolor="${secondaryColor}" class="email-footer" style="background-color:${secondaryColor};padding:30px;text-align:center;border-top:1px solid #eeeeee;">
+              <img src="${logoFullUrl}" alt="${companyName}" width="120" style="max-width:120px;height:auto;opacity:0.8;margin-bottom:15px;border:0;">
+              <p style="color:${mutedTextColor};font-size:14px;margin:5px 0;">${companyName}</p>
+              <p style="font-size:12px;color:#999999;margin:5px 0;">© ${year} ${companyName}. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`;
 }
@@ -733,11 +763,29 @@ async function sendTemplateEmail(to, templateKey, variables) {
     });
 
     logger.info(`Email sent successfully: ${info.messageId} (${language})`);
-    return { success: true, messageId: info.messageId, language };
+    // Return the rendered HTML so the queue processor can persist the ACTUAL
+    // sent body (email_queue.rendered_html) for the Project Overview preview.
+    return { success: true, messageId: info.messageId, language, html: htmlBody };
   } catch (error) {
     logger.error('Error sending template email:', error);
     throw error;
   }
+}
+
+/**
+ * Render a queued email's HTML WITHOUT sending it. Used by the Project
+ * Overview cockpit to preview emails that predate the rendered_html column
+ * (so nothing was stored at send time). The result is rendered from the
+ * CURRENT template + the row's stored variables, so it's a faithful
+ * approximation rather than the exact bytes that were sent — callers flag
+ * it as a re-render. Returns null when the template no longer exists.
+ */
+async function renderQueuedEmail(templateKey, variables = {}, to = '') {
+  const template = await db('email_templates').where('template_key', templateKey).first();
+  if (!template) return null;
+  const language = await getRecipientLanguage(to, variables.eventId || null);
+  const { subject, htmlBody } = await processTemplate(template, variables, language);
+  return { subject, html: htmlBody };
 }
 
 // Process email queue.
@@ -750,9 +798,13 @@ async function sendTemplateEmail(to, templateKey, variables) {
 //   limit           max emails per pass. The flush raises this to drain the
 //                   whole queue in a single pass (no re-query, so a failing
 //                   email isn't retried in a tight loop within one flush).
+//   onlyId          when set, process EXACTLY this one queue row. Used by the
+//                   cockpit "send now" so a forced send never sweeps up OTHER
+//                   dead-lettered emails (those past the retry cap) just
+//                   because ignoreSchedule also bypasses that cap.
 //
 // Returns { processed, sent, failed }.
-async function processEmailQueue({ ignoreSchedule = false, limit = 10 } = {}) {
+async function processEmailQueue({ ignoreSchedule = false, limit = 10, onlyId = null } = {}) {
   logger.info('Email queue processor: Checking for pending emails...');
   const result = { processed: 0, sent: 0, failed: 0 };
 
@@ -775,6 +827,9 @@ async function processEmailQueue({ ignoreSchedule = false, limit = 10 } = {}) {
       const now = new Date();
       const query = db('email_queue')
         .where('status', 'pending');
+      // Targeted single-email flush (cockpit "send now"): scope to that row
+      // only, so we never force-retry other dead-lettered emails.
+      if (onlyId != null) query.where('id', onlyId);
       if (!ignoreSchedule) {
         // Automatic runs: respect the retry cap (don't hammer a failing
         // address) AND the schedule (business-hours floor / future send).
@@ -809,19 +864,24 @@ async function processEmailQueue({ ignoreSchedule = false, limit = 10 } = {}) {
           ? JSON.parse(email.email_data || '{}')
           : email.email_data || {};
         
-        await sendTemplateEmail(
+        const sendResult = await sendTemplateEmail(
           email.recipient_email,
           email.email_type,
           emailData
         );
-        
-        // Mark as sent
+
+        // Mark as sent, persisting the actual rendered HTML for the Project
+        // Overview email preview (guarded — older installs without migration
+        // 119 just skip it).
+        const sentUpdate = { status: 'sent', sent_at: new Date() };
+        try {
+          if (sendResult && sendResult.html && await hasColumnCached('email_queue', 'rendered_html')) {
+            sentUpdate.rendered_html = sendResult.html;
+          }
+        } catch (_) { /* best-effort — never block the send on the preview */ }
         await db('email_queue')
           .where('id', email.id)
-          .update({
-            status: 'sent',
-            sent_at: new Date()
-          });
+          .update(sentUpdate);
 
         result.sent += 1;
         logger.info(`Email ${email.id} sent successfully`);
@@ -886,7 +946,18 @@ async function getScheduledEmailConfig() {
     const schedule = normaliseSchedule(profile.business_hours);
 
     let timezone = (profile.timezone || '').trim();
-    if (!timezone) timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    if (!timezone) {
+      // PR #603 review follow-up #4 — business hours are configured but the
+      // profile timezone is blank, so we fall back to the SERVER's tz (usually
+      // UTC on a Docker host). That silently shifts every business-hours
+      // calculation. Warn loudly so the admin sets business_profile.timezone.
+      timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      logger.warn(
+        'Scheduled-email business hours are set but business_profile.timezone is blank — '
+        + `falling back to the server timezone (${timezone}). Set the profile timezone `
+        + 'so business-hours snapping uses your local time, not the server\'s.',
+      );
+    }
     // Reject a bogus tz before it reaches Intl in the snap helper.
     try {
       new Intl.DateTimeFormat('en-US', { timeZone: timezone });
@@ -1025,6 +1096,7 @@ module.exports = {
   initializeTransporter,
   startEmailQueueProcessor,
   sendTemplateEmail,
+  renderQueuedEmail,
   processEmailQueue,
   queueEmail,
   stopEmailQueueProcessor,

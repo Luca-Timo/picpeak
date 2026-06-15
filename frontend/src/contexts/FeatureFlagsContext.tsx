@@ -56,6 +56,10 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   // Expenses (migration 127) — internal expenses (mileage / per-diem / cash).
   // Separate Accounting sub-feature; requires `accounting`.
   expenses: false,
+  // Projects (migration 120). Admin-only grouping layer above events +
+  // the Project Overview cockpit. Off by default — admin opts in under
+  // Settings → Features once they want the CRM → Overview area.
+  projects: false,
 };
 
 export const FEATURE_FLAGS_QUERY_KEY = ['feature-flags'] as const;

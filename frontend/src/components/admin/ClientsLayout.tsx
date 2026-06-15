@@ -14,7 +14,7 @@
 import React from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Briefcase, UserCog, FileText, Receipt, Wrench, Clock, ScrollText, Calendar } from 'lucide-react';
+import { Briefcase, UserCog, FileText, Receipt, Wrench, Calculator, Clock, ScrollText, Calendar, FolderKanban } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useFeatureFlags, type FeatureKey } from '../../contexts/FeatureFlagsContext';
 
@@ -39,6 +39,13 @@ export const ClientsLayout: React.FC = () => {
   const { flags } = useFeatureFlags();
 
   const navItems: NavItem[] = [
+    {
+      key: 'overview',
+      to: '/admin/clients/projects',
+      label: t('clients.subnav.overview', 'Overview'),
+      icon: FolderKanban,
+      featureFlag: 'projects',
+    },
     {
       key: 'accounts',
       to: '/admin/clients/accounts',

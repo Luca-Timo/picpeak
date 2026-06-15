@@ -21,6 +21,18 @@ import { Button, Card, Loading, Input, CountrySelect, TimeField } from '../../..
 import { DecimalInput } from '../../../components/common/DecimalInput';
 import { toast } from 'react-toastify';
 
+// Full IANA timezone list for the picker. `Intl.supportedValuesOf` is ES2022
+// (all current browsers); fall back to a small CH/LI-relevant set on the rare
+// engine that lacks it.
+const IANA_TIMEZONES: string[] = (() => {
+  try {
+    // @ts-expect-error supportedValuesOf is ES2022, not yet in all TS lib defs
+    return Intl.supportedValuesOf('timeZone') as string[];
+  } catch {
+    return ['UTC', 'Europe/Vaduz', 'Europe/Zurich', 'Europe/Berlin', 'Europe/Vienna', 'Europe/Paris', 'Europe/London'];
+  }
+})();
+
 export const SettingsBusinessProfilePage: React.FC = () => {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -117,17 +129,26 @@ export const SettingsBusinessProfilePage: React.FC = () => {
             maxLength={3} onChange={(e) => setProfile({ ...profile, defaultCurrency: e.target.value.toUpperCase() })} />
           <Input label={t('businessProfile.field.defaultLocale', 'Default locale') as string} value={profile.defaultLocale}
             maxLength={8} onChange={(e) => setProfile({ ...profile, defaultLocale: e.target.value })} />
-          {/* Migration 137 — IANA timezone string for the admin calendar.
-              Free-text; backend caps at 64 chars. When blank the calendar
-              UI falls back to the browser's `Intl.DateTimeFormat()
-              .resolvedOptions().timeZone`. */}
-          <Input
-            label={t('businessProfile.field.timezone', 'Timezone (IANA)') as string}
-            value={profile.timezone || ''}
-            maxLength={64}
-            placeholder={Intl.DateTimeFormat().resolvedOptions().timeZone}
-            onChange={(e) => setProfile({ ...profile, timezone: e.target.value || null })}
-          />
+          {/* Migration 137 — IANA timezone for the admin calendar + the
+              scheduled-email business-hours snapping. Dropdown of the full
+              IANA list; blank = fall back to the server/browser tz. */}
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              {t('businessProfile.field.timezone', 'Timezone (IANA)')}
+            </label>
+            <select
+              value={profile.timezone || ''}
+              onChange={(e) => setProfile({ ...profile, timezone: e.target.value || null })}
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="">
+                {t('businessProfile.field.timezoneSystemDefault', 'System default')} ({Intl.DateTimeFormat().resolvedOptions().timeZone})
+              </option>
+              {IANA_TIMEZONES.map((tz) => (
+                <option key={tz} value={tz}>{tz}</option>
+              ))}
+            </select>
+          </div>
           <Input label={t('businessProfile.field.vatLabel', 'VAT label (e.g. MwSt., VAT)') as string} value={profile.vatLabel}
             onChange={(e) => setProfile({ ...profile, vatLabel: e.target.value })} />
           <Input type="number" step="0.01" label={t('businessProfile.field.vatRateDefault', 'Default VAT rate %') as string}

@@ -1249,6 +1249,11 @@
         "title": "Hours logging",
         "description": "Per-customer time tracking. Admin logs date + start/end times + optional rate override + note. Monthly-mode customers auto-accumulate hours into the running monthly draft; per-event customers see a \"Create draft invoice\" button that mints a standalone draft invoice with one line per entry. Independent of Bills — log hours even before turning the full billing surface on.",
         "sidebar": "Hours"
+      },
+      "projects": {
+        "title": "Projects",
+        "description": "Admin-only grouping layer above events. Bundle several events under one project and open a 360° Project Overview cockpit — milestone timeline plus a dated feed of every email (with the actual sent preview + resend/cancel/retry actions), quote, contract, invoice, gallery and logged hour. Adds a \"book to project\" control when logging hours. Customers never see projects.",
+        "sidebar": "Overview"
       }
     },
     "customerSurface": {
@@ -3203,6 +3208,7 @@
         "rateOverride": "Rate override",
         "note": "Note / description",
         "notePlaceholder": "What was worked on?",
+        "bookToProject": "Book to project",
         "save": "Add entry",
         "needRate": "Set a rate or enter an override to log time."
       },
@@ -3450,6 +3456,7 @@
       "body": "Enable Accounts (or another CRM sub-feature) under Settings → Features to get started."
     },
     "subnav": {
+      "overview": "Overview",
       "accounts": "Accounts",
       "quotes": "Quotes",
       "contracts": "Contracts",
@@ -3632,6 +3639,80 @@
       "description": "Description",
       "descriptionHint": "e.g. mileage, per-diem, cash receipt",
       "createdToast": "Expense added."
+    }
+  },
+  "projects": {
+    "title": "Project Overview",
+    "subtitle": "Group events into projects and see every email, document, gallery and hour in one cockpit.",
+    "search": "Search by name or customer…",
+    "empty": "No projects yet. Create one above, or events you already have were grouped automatically.",
+    "notFound": "Project not found",
+    "backToList": "All projects",
+    "noCustomer": "No single customer",
+    "rename": "Rename",
+    "timeline": "Milestones",
+    "eventCount": "{{count}} events",
+    "totalHours": "{{hours}} logged",
+    "create": {
+      "label": "New project name",
+      "placeholder": "e.g. Müller wedding 2026",
+      "button": "Create project"
+    },
+    "col": {
+      "name": "Project",
+      "customer": "Customer",
+      "events": "Events",
+      "value": "Value",
+      "status": "Status",
+      "updated": "Updated"
+    },
+    "picker": {
+      "label": "Project",
+      "none": "No project"
+    },
+    "value": {
+      "label": "Project value",
+      "paid": "paid"
+    },
+    "events": {
+      "title": "Events",
+      "none": "No events grouped under this project yet.",
+      "searchPlaceholder": "Attach an event — search by name…",
+      "attached": "Event attached",
+      "attachFailed": "Could not attach event"
+    },
+    "feed": {
+      "title": "Activity",
+      "empty": "Nothing rolled up to this project yet.",
+      "email": "Email",
+      "quote": "Quote",
+      "contract": "Contract",
+      "invoice": "Invoice",
+      "gallery": "Gallery",
+      "hours": "Hours"
+    },
+    "email": {
+      "preview": "Preview",
+      "resend": "Resend",
+      "sendNow": "Send now",
+      "cancel": "Cancel",
+      "retry": "Retry",
+      "previewTitle": "Email preview",
+      "noPreview": "No stored preview for this email — it was sent before previews were captured.",
+      "reRendered": "Re-rendered from the current template — this email was sent before previews were captured, so it may differ slightly from what the recipient received.",
+      "reRenderedTag": "≈ re-rendered"
+    },
+    "toast": {
+      "created": "Project created",
+      "createFailed": "Could not create project",
+      "saved": "Project saved",
+      "saveFailed": "Save failed",
+      "emailAction": "Done",
+      "emailActionFailed": "Action failed",
+      "previewFailed": "Could not load preview"
+    },
+    "error": {
+      "customerMismatch": "That belongs to a different customer than this project."
     }
   },
   "calendar": {

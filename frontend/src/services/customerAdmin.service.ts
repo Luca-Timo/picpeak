@@ -451,6 +451,8 @@ export interface HourEntryCreatePayload {
   endTime: string;          // HH:MM
   hourlyRateMinorOverride?: number | null;
   description?: string | null;
+  /** Migration 118 — optional "book to project" link. */
+  projectId?: number | null;
 }
 
 export interface HourEntryUpdatePayload {

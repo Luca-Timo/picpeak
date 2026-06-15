@@ -32,6 +32,23 @@ const { db } = require('../database/db');
 
 const router = express.Router();
 
+// PR #603 review follow-up #2 — bound payment dates. `isISO8601()` alone
+// accepts year 1900/9999; cash-basis revenue keys on paid_at, so a typo
+// (2026→2226) would silently push a payment out of every dashboard window
+// forever. Reject anything before 2000-01-01 or more than 30 days in the
+// future (small future window covers value-date lag without allowing fat-
+// finger years). Use as `.custom(isReasonablePaidAt)` after `.isISO8601()`.
+function isReasonablePaidAt(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) throw new Error('Invalid payment date');
+  const min = new Date('2000-01-01T00:00:00Z');
+  const max = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  if (d < min || d > max) {
+    throw new Error('Payment date must be between 2000-01-01 and 30 days from now');
+  }
+  return true;
+}
+
 // Multer config for "import historical invoice" PDF uploads. Stored
 // under storage/business-docs/invoice-imports/<year>/<filename> so
 // imported files don't collide with the renderer's own output under
@@ -438,7 +455,7 @@ router.post(
     body('currency').optional({ values: 'falsy' }).isString().isLength({ min: 3, max: 3 }),
     body('status').optional({ values: 'falsy' }).isIn(['sent', 'paid', 'overdue']),
     body('paidAmountMinor').optional({ values: 'falsy' }).isInt({ min: 0 }),
-    body('paidAt').optional({ values: 'falsy' }).isISO8601(),
+    body('paidAt').optional({ values: 'falsy' }).isISO8601().custom(isReasonablePaidAt),
     body('language').optional({ values: 'falsy' }).isString().isLength({ max: 8 }),
   ],
   handleAsync(async (req, res) => {
@@ -745,7 +762,7 @@ router.post(
   [
     param('id').isInt({ min: 1 }),
     body('amountMinor').isInt({ min: 1 }),
-    body('paidAt').optional({ values: 'falsy' }).isISO8601(),
+    body('paidAt').optional({ values: 'falsy' }).isISO8601().custom(isReasonablePaidAt),
     body('paymentMethod').optional({ values: 'falsy' }).isString().isLength({ max: 64 }),
     body('reference').optional({ values: 'falsy' }).isString().isLength({ max: 128 }),
     body('notes').optional({ values: 'falsy' }).isString().isLength({ max: 5000 }),

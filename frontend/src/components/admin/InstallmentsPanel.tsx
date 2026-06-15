@@ -26,10 +26,9 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Trash2, Plus } from 'lucide-react';
-import { Button, Input } from '../common';
+import { Button, Input, LocalizedDateInput } from '../common';
 import type { PaymentTermInstallment } from '../../services/quotes.service';
 import { useInstallmentDefaults } from '../../hooks/useInstallmentDefaults';
-import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 export type InstallmentPlan = PaymentTermInstallment[];
 
@@ -69,7 +68,6 @@ export const InstallmentsPanel: React.FC<InstallmentsPanelProps> = ({
   value, onChange, onValidityChange, eventDate, disabled,
 }) => {
   const { t } = useTranslation();
-  const { dateInputLang } = useLocalizedDate();
   const defaults = useInstallmentDefaults();
   const [advanced, setAdvanced] = React.useState(false);
 
@@ -230,12 +228,9 @@ export const InstallmentsPanel: React.FC<InstallmentsPanelProps> = ({
                           'On delivery — admin releases manually. Switch to advanced to change.')}
                       </div>
                     ) : (
-                      <Input
-                        type="date"
-                        lang={dateInputLang}
+                      <LocalizedDateInput
                         value={previewDate(row) || ''}
-                        onChange={(e) => {
-                          const next = e.target.value;
+                        onChange={(next) => {
                           if (!next) return;
                           const offset = daysBetween(todayIso(), next);
                           update(idx, { trigger: 'fixed_date', offset_days: offset });

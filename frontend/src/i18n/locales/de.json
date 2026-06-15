@@ -1691,6 +1691,11 @@
         "title": "Stundenerfassung",
         "description": "Zeiterfassung pro Kunde. Admin erfasst Datum + Start-/Endzeit + optionalen Satz-Override + Notiz. Kunden im Monatsmodus akkumulieren Stunden automatisch in den laufenden Monatsentwurf; Kunden pro Anlass sehen eine Schaltfläche „Entwurfsrechnung erstellen“, die eine eigenständige Entwurfsrechnung mit einer Zeile pro Eintrag erzeugt. Unabhängig von Rechnungen — Stunden erfassen, noch bevor die volle Abrechnungsoberfläche aktiviert ist.",
         "sidebar": "Stunden"
+      },
+      "projects": {
+        "title": "Projekte",
+        "description": "Nur-Admin-Gruppierungsebene über Events. Bündle mehrere Events unter einem Projekt und öffne ein 360°-Projektübersichts-Cockpit — Meilenstein-Zeitleiste plus ein datierter Verlauf aller E-Mails (mit der tatsächlich gesendeten Vorschau + Erneut-senden/Abbrechen/Wiederholen-Aktionen), Angebote, Verträge, Rechnungen, Galerien und erfassten Stunden. Fügt beim Erfassen von Stunden eine „Auf Projekt buchen“-Option hinzu. Kunden sehen Projekte nie.",
+        "sidebar": "Übersicht"
       }
     },
     "customerSurface": {
@@ -3203,6 +3208,7 @@
         "rateOverride": "Satz-Override",
         "note": "Notiz / Beschreibung",
         "notePlaceholder": "Was wurde gearbeitet?",
+        "bookToProject": "Auf Projekt buchen",
         "save": "Eintrag hinzufügen",
         "needRate": "Satz festlegen oder Override eingeben, um Zeit zu erfassen."
       },
@@ -3450,6 +3456,7 @@
       "body": "Aktiviere „Konten\" (oder eine andere CRM-Unterfunktion) unter Einstellungen → Funktionen, um loszulegen."
     },
     "subnav": {
+      "overview": "Übersicht",
       "accounts": "Konten",
       "quotes": "Angebote",
       "contracts": "Verträge",
@@ -3632,6 +3639,80 @@
       "description": "Beschreibung",
       "descriptionHint": "z. B. Kilometer, Spesenpauschale, Barbeleg",
       "createdToast": "Aufwand hinzugefügt."
+    }
+  },
+  "projects": {
+    "title": "Projektübersicht",
+    "subtitle": "Fasse Events zu Projekten zusammen und sieh jede E-Mail, jedes Dokument, jede Galerie und jede Stunde in einem Cockpit.",
+    "search": "Nach Name oder Kunde suchen…",
+    "empty": "Noch keine Projekte. Erstelle oben eines, oder vorhandene Events wurden automatisch gruppiert.",
+    "notFound": "Projekt nicht gefunden",
+    "backToList": "Alle Projekte",
+    "noCustomer": "Kein einzelner Kunde",
+    "rename": "Umbenennen",
+    "timeline": "Meilensteine",
+    "eventCount": "{{count}} Events",
+    "totalHours": "{{hours}} erfasst",
+    "create": {
+      "label": "Name des neuen Projekts",
+      "placeholder": "z. B. Hochzeit Müller 2026",
+      "button": "Projekt erstellen"
+    },
+    "col": {
+      "name": "Projekt",
+      "customer": "Kunde",
+      "events": "Events",
+      "value": "Wert",
+      "status": "Status",
+      "updated": "Aktualisiert"
+    },
+    "picker": {
+      "label": "Projekt",
+      "none": "Kein Projekt"
+    },
+    "value": {
+      "label": "Projektwert",
+      "paid": "bezahlt"
+    },
+    "events": {
+      "title": "Events",
+      "none": "Diesem Projekt sind noch keine Events zugeordnet.",
+      "searchPlaceholder": "Event zuordnen — nach Name suchen…",
+      "attached": "Event zugeordnet",
+      "attachFailed": "Event konnte nicht zugeordnet werden"
+    },
+    "feed": {
+      "title": "Aktivität",
+      "empty": "Diesem Projekt ist noch nichts zugeordnet.",
+      "email": "E-Mail",
+      "quote": "Angebot",
+      "contract": "Vertrag",
+      "invoice": "Rechnung",
+      "gallery": "Galerie",
+      "hours": "Stunden"
+    },
+    "email": {
+      "preview": "Vorschau",
+      "resend": "Erneut senden",
+      "sendNow": "Jetzt senden",
+      "cancel": "Abbrechen",
+      "retry": "Wiederholen",
+      "previewTitle": "E-Mail-Vorschau",
+      "noPreview": "Keine gespeicherte Vorschau für diese E-Mail — sie wurde gesendet, bevor Vorschauen erfasst wurden.",
+      "reRendered": "Neu gerendert aus der aktuellen Vorlage — diese E-Mail wurde gesendet, bevor Vorschauen erfasst wurden, und kann daher leicht von der tatsächlich versendeten abweichen.",
+      "reRenderedTag": "≈ neu gerendert"
+    },
+    "toast": {
+      "created": "Projekt erstellt",
+      "createFailed": "Projekt konnte nicht erstellt werden",
+      "saved": "Projekt gespeichert",
+      "saveFailed": "Speichern fehlgeschlagen",
+      "emailAction": "Erledigt",
+      "emailActionFailed": "Aktion fehlgeschlagen",
+      "previewFailed": "Vorschau konnte nicht geladen werden"
+    },
+    "error": {
+      "customerMismatch": "Das gehört zu einem anderen Kunden als dieses Projekt."
     }
   },
   "calendar": {

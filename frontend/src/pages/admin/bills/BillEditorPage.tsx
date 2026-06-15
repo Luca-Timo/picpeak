@@ -566,8 +566,31 @@ export const BillEditorPage: React.FC = () => {
                 : t('bills.field.dueDateOverrideOff', 'Auto from send date + payment term — tick to set manually')}
             </label>
           </div>
-          <Input type="datetime-local" label={t('bills.field.scheduledSendAt', 'Scheduled send (optional)') as string}
-            value={scheduledSendAt} onChange={(e) => setScheduledSendAt(e.target.value)} />
+          <div>
+            <label className="block text-sm font-medium mb-1">{t('bills.field.scheduledSendAt', 'Scheduled send (optional)')}</label>
+            {/* Localized date + time (honours general_date_format +
+                general_time_format) instead of a native datetime-local, which
+                renders in the browser locale (US date + 12h). Recombined into
+                the "YYYY-MM-DDTHH:MM" the payload + scheduler expect. */}
+            <div className="grid grid-cols-2 gap-3">
+              <LocalizedDateInput
+                value={scheduledSendAt ? scheduledSendAt.slice(0, 10) : ''}
+                onChange={(iso) => {
+                  if (!iso) { setScheduledSendAt(''); return; }
+                  const time = scheduledSendAt.length >= 16 ? scheduledSendAt.slice(11, 16) : '09:00';
+                  setScheduledSendAt(`${iso}T${time}`);
+                }}
+              />
+              <TimeField
+                value={scheduledSendAt.length >= 16 ? scheduledSendAt.slice(11, 16) : ''}
+                onChange={(hhmm) => {
+                  const date = scheduledSendAt ? scheduledSendAt.slice(0, 10) : '';
+                  if (!date) return;
+                  setScheduledSendAt(`${date}T${hhmm || '09:00'}`);
+                }}
+              />
+            </div>
+          </div>
           <div>
             <label className="block text-sm font-medium mb-1">{t('bills.field.qrFormat', 'Payment QR format')}</label>
             <select

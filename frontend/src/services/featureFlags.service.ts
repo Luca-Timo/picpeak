@@ -54,7 +54,11 @@ export type FeatureKey =
   | 'incomingInvoices'
   // Expenses (migration 127) — internal expenses (mileage / per-diem / cash).
   // Separate Accounting sub-feature; requires `accounting`.
-  | 'expenses';
+  | 'expenses'
+  // Projects (migration 120). Admin-only grouping layer above events with the
+  // 360° Project Overview cockpit + the "book to project" hours control. Off
+  // by default; gates the CRM → Overview area entirely.
+  | 'projects';
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 

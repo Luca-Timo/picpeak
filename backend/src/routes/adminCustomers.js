@@ -165,7 +165,7 @@ router.post('/invite', [
   body('prefill.postal_code').optional({ nullable: true }).isString().isLength({ max: 20 }),
   body('prefill.city').optional({ nullable: true }).isString().isLength({ max: 120 }),
   body('prefill.state').optional({ nullable: true }).isString().isLength({ max: 120 }),
-  body('prefill.country_code').optional({ nullable: true }).isString().isLength({ max: 2 }),
+  body('prefill.country_code').optional({ values: 'falsy' }).isLength({ min: 2, max: 2 }).isAlpha().withMessage('country_code must be a 2-letter ISO code').customSanitizer((v) => (v || '').toUpperCase()),
   // Per-customer preferred language. Drives portal UI + quote/invoice
   // PDF locale. Defaults at insert time to the business profile's
   // default_locale when the admin doesn't supply one (see
@@ -246,7 +246,7 @@ router.post('/', [
   body('prefill.postal_code').optional({ nullable: true }).isString().isLength({ max: 20 }),
   body('prefill.city').optional({ nullable: true }).isString().isLength({ max: 120 }),
   body('prefill.state').optional({ nullable: true }).isString().isLength({ max: 120 }),
-  body('prefill.country_code').optional({ nullable: true }).isString().isLength({ max: 2 }),
+  body('prefill.country_code').optional({ values: 'falsy' }).isLength({ min: 2, max: 2 }).isAlpha().withMessage('country_code must be a 2-letter ISO code').customSanitizer((v) => (v || '').toUpperCase()),
   body('prefill.country_name').optional({ nullable: true }).isString().isLength({ max: 120 }),
   body('prefill.preferred_language').optional({ nullable: true }).isString().isLength({ min: 2, max: 8 }),
   // At least one human-readable identifier so the record isn't a
@@ -379,7 +379,7 @@ router.put('/:id', [
   body('postal_code').optional({ nullable: true }).isString().isLength({ max: 20 }),
   body('city').optional({ nullable: true }).isString().isLength({ max: 120 }),
   body('state').optional({ nullable: true }).isString().isLength({ max: 120 }),
-  body('country_code').optional({ nullable: true }).isString().isLength({ max: 2 }),
+  body('country_code').optional({ values: 'falsy' }).isLength({ min: 2, max: 2 }).isAlpha().withMessage('country_code must be a 2-letter ISO code').customSanitizer((v) => (v || '').toUpperCase()),
   body('country_name').optional({ nullable: true }).isString().isLength({ max: 120 }),
   body('preferred_language').optional({ nullable: true }).isString().isLength({ max: 8 }),
   body('notes').optional({ nullable: true }).isString(),
@@ -572,6 +572,7 @@ router.post('/:id/hour-entries', [
   body('endTime').matches(/^([01]\d|2[0-3]):[0-5]\d$/),
   body('hourlyRateMinorOverride').optional({ nullable: true }).isInt({ min: 0 }),
   body('description').optional({ nullable: true }).isString().isLength({ max: 1000 }),
+  body('projectId').optional({ nullable: true }).isInt({ min: 1 }),
 ], handleAsync(async (req, res) => {
   validateRequest(req);
   const result = await customerHoursService.createEntry(

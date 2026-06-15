@@ -20,6 +20,7 @@ import {
   Landmark,
   ScanLine,
   Wallet,
+  FolderKanban,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, Card } from '../../../components/common';
@@ -290,6 +291,20 @@ export const FeaturesTab: React.FC = () => {
             sidebarLabel={t('settings.features.hoursLogging.sidebar', 'Hours')}
             enabled={staged.hoursLogging}
             onToggle={(next) => setFlag('hoursLogging', next)}
+          />
+
+          <FeatureCard
+            icon={FolderKanban}
+            title={t('settings.features.projects.title', 'Projects')}
+            description={t(
+              'settings.features.projects.description',
+              'Admin-only grouping layer above events. Bundle several events under one project and open a 360° Project Overview cockpit — milestone timeline plus a dated feed of every email (with the actual sent preview + resend/cancel/retry actions), quote, contract, invoice, gallery and logged hour. Adds a "book to project" control when logging hours. Customers never see projects.',
+            )}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarLabel={t('settings.features.projects.sidebar', 'Overview')}
+            enabled={staged.projects}
+            onToggle={(next) => setFlag('projects', next)}
           />
         </Section>
 

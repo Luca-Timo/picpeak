@@ -109,6 +109,8 @@ export interface ContractSummary {
   /** Cross-document lineage UUID (migration 140). See QuoteSummary. */
   dealUuid: string | null;
   customerAccountId: number;
+  /** Migration 121 — Project Overview link (null when unlinked). */
+  projectId: number | null;
   customer: {
     email: string | null;
     displayName: string | null;
@@ -194,6 +196,8 @@ export interface ContractCreatePayload {
   outroText?: string | null;
   issueDate?: string;
   validUntil?: string;
+  /** Migration 121 — optional link to a Project Overview project. */
+  projectId?: number | null;
 }
 
 export interface ContractUpdatePayload {
@@ -211,6 +215,8 @@ export interface ContractUpdatePayload {
    *  rows from this payload — caller controls inclusion + per-section
    *  order via the position field. Omit to leave inclusions untouched. */
   blocks?: Array<{ blockId: number; included?: boolean; position?: number }>;
+  /** Migration 121 — optional Project Overview link. null clears it. */
+  projectId?: number | null;
 }
 
 export interface ContractBlockCreatePayload {

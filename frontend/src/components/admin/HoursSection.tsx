@@ -24,6 +24,7 @@ import { parseLocaleDecimal, parseDuration } from '../../utils/parsers';
 import { customerAdminService } from '../../services/customerAdmin.service';
 import { businessProfileService } from '../../services/businessProfile.service';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
+import { ProjectSelect } from './ProjectSelect';
 
 export interface HoursSectionProps {
   customerId: number;
@@ -54,6 +55,8 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
   const [duration, setDuration] = useState<string>('');
   const [rateOverride, setRateOverride] = useState<string>('');
   const [description, setDescription] = useState('');
+  // Migration 118 — optional "book to project" link (gated component).
+  const [projectId, setProjectId] = useState<number | null>(null);
 
   // Duration shortcut — admin types "1.5", "1,5", "1:30" or "1h" and
   // the end-time jumps to start + duration. Pure convenience; the End
@@ -114,6 +117,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
         return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null;
       })(),
       description: description || null,
+      projectId: projectId ?? null,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
@@ -123,6 +127,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
       setDuration('');
       setRateOverride('');
       setDescription('');
+      setProjectId(null);
       toast.success(t('customers.hours.toast.created', 'Entry logged'));
     },
     onError: (err: any) => {
@@ -133,6 +138,11 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
       if (err?.response?.data?.code === 'HOURLY_RATE_REQUIRED') {
         toast.error(t('customers.hours.error.noRate',
           'No hourly rate set for this customer. Enter a rate override, set a rate on the customer, or configure an install-wide default in Settings.'));
+        return;
+      }
+      if (err?.response?.data?.code === 'PROJECT_CUSTOMER_MISMATCH') {
+        toast.error(t('projects.error.customerMismatch',
+          "That project belongs to a different customer than this entry."));
         return;
       }
       const msg = err?.response?.data?.error || err?.message
@@ -348,6 +358,14 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
             placeholder={t('customers.hours.form.notePlaceholder',
               'What was worked on?') as string} />
         </div>
+        {/* Book to project — renders only when the projects feature is on. */}
+        <ProjectSelect
+          className="mt-3"
+          label={t('customers.hours.form.bookToProject', 'Book to project') as string}
+          value={projectId}
+          customerAccountId={customerId}
+          onChange={setProjectId}
+        />
         <div className="mt-3 flex items-center justify-end gap-3">
           {noRateConfigured && !overrideTyped && (
             <span className="text-xs text-amber-700 dark:text-amber-300">

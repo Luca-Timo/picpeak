@@ -276,6 +276,11 @@ export const AdminDashboard: React.FC = () => {
                 const getActivityMessage = (): string => {
                   const params: Record<string, any> = {
                     eventName: activity.eventName || t('common.unknown'),
+                    // Customer/account activity keys (customer_login,
+                    // customer_invitation_*, customer_updated, …) interpolate
+                    // {{email}}; without it the literal placeholder rendered.
+                    // Sourced the same way formatActivityMessage does.
+                    email: activity.metadata?.email || activity.actorName || '',
                     count: activity.metadata?.count || 0,
                     template: activity.metadata?.template_key || '',
                     categoryName: activity.metadata?.category_name || ''

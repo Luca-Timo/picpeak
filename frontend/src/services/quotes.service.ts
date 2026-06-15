@@ -43,6 +43,8 @@ export interface QuoteSummary {
    *  doc — contract, invoices, Storni — that shares this deal. */
   dealUuid: string | null;
   customerAccountId: number;
+  /** Migration 121 — Project Overview link (null when unlinked). */
+  projectId: number | null;
   customer: {
     email: string | null;
     displayName: string | null;
@@ -195,6 +197,9 @@ export interface QuoteCreatePayload {
   internalNotes?: string;
   ccPdfEmail?: string;
   businessBankAccountId?: number;
+  /** Migration 121 — optional link to a Project Overview project.
+   *  null clears the link; undefined leaves it unchanged. */
+  projectId?: number | null;
   lineItems: QuoteLineItem[];
 }
 

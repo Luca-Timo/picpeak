@@ -90,6 +90,8 @@ function transformContract(c, inclusions) {
     id: c.id,
     contractNumber: c.contract_number,
     customerAccountId: c.customer_account_id,
+    // Migration 121 — Project Overview link (undefined on pre-121 DBs).
+    projectId: c.project_id ?? null,
     customer: {
       email: c.customer_email,
       displayName: c.customer_display_name,

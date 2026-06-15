@@ -76,6 +76,10 @@ const KNOWN_FLAGS = [
   // Expenses (migration 127) — internal expenses (mileage / per-diem / cash).
   // Separate Accounting sub-feature; forced off when `accounting` is off.
   'expenses',
+  // Projects (migration 120). Admin-only grouping layer above events +
+  // the Project Overview cockpit ("book to project" hours control, 360°
+  // rollup feed). Lights up the Clients section. Customers never see it.
+  'projects',
 ];
 
 // Spec defaults for any flag missing from the DB (e.g. a row added by a
@@ -102,6 +106,7 @@ const DEFAULT_FLAGS = {
   accounting: false,
   incomingInvoices: false,
   expenses: false,
+  projects: false,
 };
 
 async function readAllFlags() {
@@ -146,6 +151,8 @@ function applyDependencyRules(flags) {
     || out.contracts
     // NOTE: taxReport intentionally removed — Tax export moved to the
     // Accounting section (its own master), no longer a CRM sub-feature.
+    // Migration 120 — admin-only Project Overview cockpit lives under Clients.
+    || out.projects
     // Migration 137 — admin calendar lights up the Clients section.
     // (calendarBooking is gated behind `calendar` so adding the parent
     // is sufficient.)

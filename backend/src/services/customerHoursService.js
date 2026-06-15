@@ -233,6 +233,21 @@ async function createEntry(customerId, payload, adminId) {
       created_at: new Date(),
       updated_at: new Date(),
     };
+    // Migration 118 — optional "book to project" link. A project belongs to
+    // at most one customer, so reject booking hours onto a project owned by a
+    // DIFFERENT customer (defence-in-depth behind the customer-scoped picker).
+    // Unassigned projects (customer_account_id null) are allowed for anyone.
+    if (payload.projectId !== undefined && await hasColumnCached('customer_hour_entries', 'project_id')) {
+      const projectId = payload.projectId || null;
+      if (projectId && await trx.schema.hasTable('projects')) {
+        const project = await trx('projects').where({ id: projectId }).select('customer_account_id').first();
+        if (!project) throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
+        if (project.customer_account_id != null && project.customer_account_id !== customer.id) {
+          throw new AppError('That project belongs to a different customer', 422, 'PROJECT_CUSTOMER_MISMATCH');
+        }
+      }
+      row.project_id = projectId;
+    }
     const inserted = await trx('customer_hour_entries').insert(row).returning('id');
     const entryId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
