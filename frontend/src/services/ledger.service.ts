@@ -92,7 +92,10 @@ export const ledgerService = {
     const usp = new URLSearchParams({ from: params.from, to: params.to, currency: params.currency, format: params.format });
     const res = await api.get(`/admin/ledger/export?${usp.toString()}`, { responseType: 'blob' });
     const url = URL.createObjectURL(res.data);
-    const filename = `journal_${params.from}_to_${params.to}_${params.currency}_${params.format}.csv`;
+    // Banana wants a tab-separated .txt (its "Text file with column headers"
+    // import); generic / bexio stay .csv. Matches the backend's extension.
+    const ext = params.format === 'banana' ? 'txt' : 'csv';
+    const filename = `journal_${params.from}_to_${params.to}_${params.currency}_${params.format}.${ext}`;
     return { url, filename };
   },
 };

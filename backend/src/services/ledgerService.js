@@ -407,8 +407,10 @@ async function exportPostings({ from, to, currency, format = 'generic' } = {}) {
   let headers; let rowOf;
 
   if (fmt === 'banana') {
-    // Banana "Conti doppia" import: Date, Doc, Description, AccountDebit,
+    // Banana "Conti doppia" import (Actions → Import into accounting → "Text
+    // file with column headers"): Date, Doc, Description, AccountDebit,
     // AccountCredit, Amount, VatCode. Amount = gross; VatCode expands VAT.
+    // Serialised TAB-separated + .txt below (Banana's required shape).
     headers = ['Date', 'Doc', 'Description', 'AccountDebit', 'AccountCredit', 'Amount', 'VatCode'];
     rowOf = (p) => [dateOnly(p.date), p.docNumber, p.description, p.debitAccount, p.creditAccount, minorToDecimal(p.grossMinor), p.vatCode];
   } else if (fmt === 'bexio') {
@@ -425,11 +427,23 @@ async function exportPostings({ from, to, currency, format = 'generic' } = {}) {
       p.vatCode, cur, minorToDecimal(p.grossMinor), minorToDecimal(p.netMinor), minorToDecimal(p.vatMinor)];
   }
 
-  const lines = [headers.map(csvEscape).join(',')];
-  for (const p of postings) lines.push(rowOf(p).map(csvEscape).join(','));
+  // Banana's "Text file with column headers" import (banana.ch doc node 9947)
+  // requires a TAB-separated .txt with UNQUOTED values — a comma .csv won't even
+  // appear in its *.txt file picker. generic / bexio stay comma-CSV (RFC 4180).
+  const isBanana = fmt === 'banana';
+  const sep = isBanana ? '\t' : ',';
+  // Tab layout: strip any tab/newline from a cell so it can't split the row;
+  // CSV cells go through the RFC-4180 quoter instead.
+  const fmtCell = isBanana
+    ? (v) => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ')
+    : csvEscape;
+  const lines = [headers.map(fmtCell).join(sep)];
+  for (const p of postings) lines.push(rowOf(p).map(fmtCell).join(sep));
   const content = lines.join(eol) + eol;
-  const filename = `journal_${period.from}_to_${period.to}_${cur}_${fmt}.csv`;
-  return { content, filename, contentType: 'text/csv; charset=utf-8', count: postings.length };
+  const ext = isBanana ? 'txt' : 'csv';
+  const filename = `journal_${period.from}_to_${period.to}_${cur}_${fmt}.${ext}`;
+  const contentType = isBanana ? 'text/plain; charset=utf-8' : 'text/csv; charset=utf-8';
+  return { content, filename, contentType, count: postings.length };
 }
 
 // ── small util ───────────────────────────────────────────────────────

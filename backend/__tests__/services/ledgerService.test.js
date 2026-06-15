@@ -195,11 +195,16 @@ describe('exportPostings', () => {
     expect(filename).toMatch(/_generic\.csv$/);
   });
 
-  it('banana format uses Banana column names', async () => {
-    const { content, filename } = await ledgerService.exportPostings({ ...period, format: 'banana' });
+  it('banana format is a TAB-separated .txt with Banana column names', async () => {
+    const { content, filename, contentType } = await ledgerService.exportPostings({ ...period, format: 'banana' });
     const header = content.split('\r\n')[0];
-    expect(header).toBe('"Date","Doc","Description","AccountDebit","AccountCredit","Amount","VatCode"');
-    expect(filename).toMatch(/_banana\.csv$/);
+    // Banana's "Text file with column headers" import wants TAB-separated,
+    // unquoted values in a .txt — not a comma CSV.
+    expect(header).toBe('Date\tDoc\tDescription\tAccountDebit\tAccountCredit\tAmount\tVatCode');
+    expect(content.split('\r\n')[1]).toContain('\t');
+    expect(content).not.toContain('"');
+    expect(filename).toMatch(/_banana\.txt$/);
+    expect(contentType).toMatch(/text\/plain/);
   });
 
   it('bexio format includes tax_code + currency', async () => {
