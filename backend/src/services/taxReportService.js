@@ -233,7 +233,10 @@ async function loadCosts({ from, to, cur }) {
         'inbound_documents.invoice_date',
         'inbound_documents.created_at',
         'inbound_documents.supplier_name',
-        'inbound_documents.description',
+        // inbound_documents has no free-text `description` column (that lives on
+        // `expenses`); use the supplier invoice number as the row descriptor so
+        // the cost side aligns with the expense rows without a phantom column.
+        'inbound_documents.invoice_number',
         'inbound_documents.disposition',
         'inbound_documents.tax_treatment',
         'inbound_documents.status',
@@ -254,7 +257,7 @@ async function loadCosts({ from, to, cur }) {
         source: 'incoming',
         date: r.invoice_date || r.created_at,
         supplierLabel: (r.supplier_name && String(r.supplier_name).trim()) || '',
-        description: r.description || '',
+        description: r.invoice_number || '',
         eventName: r.event_id ? (r.event_name || '') : '',
         disposition: r.disposition || '',
         taxTreatment: r.tax_treatment || 'domestic',
