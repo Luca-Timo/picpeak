@@ -390,7 +390,20 @@ function csvEscape(cell) {
   return `"${s.replace(/"/g, '""')}"`;
 }
 function minorToDecimal(m) { return ((Number(m) || 0) / 100).toFixed(2); }
-function dateOnly(d) { return String(d || '').slice(0, 10); }
+// yyyy-mm-dd, robust to Postgres returning DATE/TIMESTAMP columns as JS Date
+// objects (SQLite returns strings). String(dateObj).slice(0,10) yields
+// "Thu Jan 15", which Banana / accounting tools reject — so format the calendar
+// parts explicitly. Uses local parts (DATE columns come back at local midnight).
+function dateOnly(d) {
+  if (!d) return '';
+  if (d instanceof Date) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  return String(d).slice(0, 10);
+}
 
 const EXPORT_FORMATS = ['generic', 'banana', 'banana_ie', 'bexio'];
 

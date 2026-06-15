@@ -221,6 +221,20 @@ describe('exportPostings', () => {
     expect(contentType).toMatch(/text\/plain/);
   });
 
+  it('formats a Postgres Date object as yyyy-mm-dd (not "Thu Jan ...")', async () => {
+    // PG returns DATE columns as JS Date objects (SQLite returns strings); the
+    // export must still emit an ISO date, or Banana rejects it and the Date
+    // column imports empty.
+    invoiceRows = [{
+      id: 1, invoice_number: 'R-2026-0001', issue_date: new Date(2026, 0, 10),
+      vat_rate: 8.1, net_amount_minor: 10000, vat_amount_minor: 810, total_amount_minor: 10810,
+      customer_company_name: 'ACME',
+    }];
+    const { content } = await ledgerService.exportPostings({ ...period, format: 'banana' });
+    const dateCell = content.split('\r\n')[1].split('\t')[0];
+    expect(dateCell).toBe('2026-01-10');
+  });
+
   it('bexio format includes tax_code + currency', async () => {
     const { content } = await ledgerService.exportPostings({ ...period, format: 'bexio' });
     const header = content.split('\r\n')[0];

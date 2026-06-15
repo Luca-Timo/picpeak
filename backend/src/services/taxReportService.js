@@ -978,6 +978,16 @@ async function renderTaxReportCsv({ from, to, currency, locale } = {}) {
 
   const minorToDotDecimal = (m) => ((Number(m) || 0) / 100).toFixed(2);
 
+  // yyyy-mm-dd, robust to Postgres returning dates as JS Date objects (SQLite
+  // returns strings) — raw String(dateObj) is "Thu Jan 15", not an ISO date.
+  const isoDate = (d) => {
+    if (!d) return '';
+    if (d instanceof Date) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+    return String(d).slice(0, 10);
+  };
+
   const typeLabelKey = (type) => (
     type === 'outgoing' ? 'tax_type_outgoing'
       : type === 'incoming' ? 'tax_type_incoming'
@@ -1013,7 +1023,7 @@ async function renderTaxReportCsv({ from, to, currency, locale } = {}) {
     lines.push([
       i + 1,
       t(useLocale, typeLabelKey(row.type)),
-      row.date,
+      isoDate(row.date),
       reference,
       row.party,
       row.eventName,
