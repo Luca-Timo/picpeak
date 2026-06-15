@@ -3915,7 +3915,8 @@
       "intro": "Lade das Sammeljournal (Erträge + Kosten als periodengerechte Buchungssätze mit Konto- und MWST-Codes) zum Import in die Buchhaltungssoftware deines Treuhänders herunter.",
       "format": "Zielsoftware",
       "format_generic": "Generisch (alle Spalten)",
-      "format_banana": "Banana Buchhaltung",
+      "format_banana": "Banana — doppelte Buchhaltung",
+      "format_banana_ie": "Banana — Einnahmen/Ausgaben",
       "format_bexio": "bexio",
       "download": "CSV herunterladen",
       "failed": "Export fehlgeschlagen.",
@@ -3938,7 +3939,7 @@
     },
     "exportPdf": "PDF exportieren",
     "ledgerExport": "Treuhänder-Export",
-    "ledgerExportHint": "Doppelte Buchungssätze für Ihren Treuhänder, abgebildet über Ihren Kontenplan.",
+    "ledgerExportHint": "Buchungssätze für Ihren Treuhänder, abgebildet über Ihren Kontenplan.",
     "ledgerExportConfigure": "Einrichten →",
     "export": {
       "reportTitle": "Bericht",

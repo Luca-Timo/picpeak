@@ -32,7 +32,7 @@ import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { toast } from 'react-toastify';
 
-const LEDGER_FORMATS: ExportFormat[] = ['generic', 'banana', 'bexio'];
+const LEDGER_FORMATS: ExportFormat[] = ['generic', 'banana', 'banana_ie', 'bexio'];
 
 type PeriodPreset = 'thisYear' | 'lastYear' | 'thisQuarter' | 'lastQuarter' | 'custom';
 

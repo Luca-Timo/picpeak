@@ -8,7 +8,7 @@ import { api } from '../config/api';
 
 export type AccountType = 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
 export type VatDirection = 'output' | 'input';
-export type ExportFormat = 'generic' | 'banana' | 'bexio';
+export type ExportFormat = 'generic' | 'banana' | 'banana_ie' | 'bexio';
 
 export interface LedgerAccount {
   id: number;
@@ -92,9 +92,9 @@ export const ledgerService = {
     const usp = new URLSearchParams({ from: params.from, to: params.to, currency: params.currency, format: params.format });
     const res = await api.get(`/admin/ledger/export?${usp.toString()}`, { responseType: 'blob' });
     const url = URL.createObjectURL(res.data);
-    // Banana wants a tab-separated .txt (its "Text file with column headers"
-    // import); generic / bexio stay .csv. Matches the backend's extension.
-    const ext = params.format === 'banana' ? 'txt' : 'csv';
+    // Both Banana variants want a tab-separated .txt (its "Text file with column
+    // headers" import); generic / bexio stay .csv. Matches the backend extension.
+    const ext = (params.format === 'banana' || params.format === 'banana_ie') ? 'txt' : 'csv';
     const filename = `journal_${params.from}_to_${params.to}_${params.currency}_${params.format}.${ext}`;
     return { url, filename };
   },

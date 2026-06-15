@@ -392,7 +392,7 @@ function csvEscape(cell) {
 function minorToDecimal(m) { return ((Number(m) || 0) / 100).toFixed(2); }
 function dateOnly(d) { return String(d || '').slice(0, 10); }
 
-const EXPORT_FORMATS = ['generic', 'banana', 'bexio'];
+const EXPORT_FORMATS = ['generic', 'banana', 'banana_ie', 'bexio'];
 
 /**
  * Render the collective journal in the requested format. Returns
@@ -413,6 +413,23 @@ async function exportPostings({ from, to, currency, format = 'generic' } = {}) {
     // Serialised TAB-separated + .txt below (Banana's required shape).
     headers = ['Date', 'Doc', 'Description', 'AccountDebit', 'AccountCredit', 'Amount', 'VatCode'];
     rowOf = (p) => [dateOnly(p.date), p.docNumber, p.description, p.debitAccount, p.creditAccount, minorToDecimal(p.grossMinor), p.vatCode];
+  } else if (fmt === 'banana_ie') {
+    // Banana Income & Expense (cash-book / Einnahmen-Ausgaben) import — for a
+    // file that is NOT double-entry. Columns: Date, Doc, Description, Income,
+    // Expenses, ContraAccount (the income/expense account — banana.ch doc 9946),
+    // VatCode. Revenue → gross in Income + the revenue account; cost → gross in
+    // Expenses + the expense account. Amount is gross; VatCode expands the VAT.
+    // Same TAB-separated .txt shape as double-entry.
+    headers = ['Date', 'Doc', 'Description', 'Income', 'Expenses', 'ContraAccount', 'VatCode'];
+    rowOf = (p) => {
+      const isRevenue = p.source === 'revenue';
+      const amount = minorToDecimal(p.grossMinor);
+      // Contra = the P&L account: revenue account (credit side) for income,
+      // expense account (debit side) for costs.
+      const contra = isRevenue ? p.creditAccount : p.debitAccount;
+      return [dateOnly(p.date), p.docNumber, p.description,
+        isRevenue ? amount : '', isRevenue ? '' : amount, contra, p.vatCode];
+    };
   } else if (fmt === 'bexio') {
     // bexio manual-entry import.
     headers = ['date', 'reference_nr', 'description', 'debit_account', 'credit_account', 'amount', 'tax_code', 'currency'];
@@ -427,22 +444,23 @@ async function exportPostings({ from, to, currency, format = 'generic' } = {}) {
       p.vatCode, cur, minorToDecimal(p.grossMinor), minorToDecimal(p.netMinor), minorToDecimal(p.vatMinor)];
   }
 
-  // Banana's "Text file with column headers" import (banana.ch doc node 9947)
+  // Banana's "Text file with column headers" import (banana.ch doc 9946/9947)
   // requires a TAB-separated .txt with UNQUOTED values — a comma .csv won't even
-  // appear in its *.txt file picker. generic / bexio stay comma-CSV (RFC 4180).
-  const isBanana = fmt === 'banana';
-  const sep = isBanana ? '\t' : ',';
+  // appear in its *.txt file picker. Both Banana variants use it; generic /
+  // bexio stay comma-CSV (RFC 4180).
+  const isTab = fmt === 'banana' || fmt === 'banana_ie';
+  const sep = isTab ? '\t' : ',';
   // Tab layout: strip any tab/newline from a cell so it can't split the row;
   // CSV cells go through the RFC-4180 quoter instead.
-  const fmtCell = isBanana
+  const fmtCell = isTab
     ? (v) => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ')
     : csvEscape;
   const lines = [headers.map(fmtCell).join(sep)];
   for (const p of postings) lines.push(rowOf(p).map(fmtCell).join(sep));
   const content = lines.join(eol) + eol;
-  const ext = isBanana ? 'txt' : 'csv';
+  const ext = isTab ? 'txt' : 'csv';
   const filename = `journal_${period.from}_to_${period.to}_${cur}_${fmt}.${ext}`;
-  const contentType = isBanana ? 'text/plain; charset=utf-8' : 'text/csv; charset=utf-8';
+  const contentType = isTab ? 'text/plain; charset=utf-8' : 'text/csv; charset=utf-8';
   return { content, filename, contentType, count: postings.length };
 }
 

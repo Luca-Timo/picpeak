@@ -3915,7 +3915,8 @@
       "intro": "Download the collective journal (revenue + costs as accrual postings with account and VAT codes) for import into your Treuhänder’s accounting software.",
       "format": "Target tool",
       "format_generic": "Generic (all columns)",
-      "format_banana": "Banana Accounting",
+      "format_banana": "Banana — double-entry",
+      "format_banana_ie": "Banana — income & expense",
       "format_bexio": "bexio",
       "download": "Download CSV",
       "failed": "Export failed.",
@@ -3938,7 +3939,7 @@
     },
     "exportPdf": "Export PDF",
     "ledgerExport": "Accountant export",
-    "ledgerExportHint": "Double-entry postings for your accountant, mapped via your Chart of accounts.",
+    "ledgerExportHint": "Bookkeeping entries for your accountant, mapped via your Chart of accounts.",
     "ledgerExportConfigure": "Configure →",
     "export": {
       "reportTitle": "Report",
