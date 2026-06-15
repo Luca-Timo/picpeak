@@ -301,6 +301,9 @@ export const TaxReportPage: React.FC = () => {
             applicable. */}
         {hasAnyData && report && (
           <Card padding="md">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
+              {t('taxReport.summary.outgoingTitle', 'Outgoing invoices')}
+            </h2>
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between gap-3">
                 <span className="text-neutral-700 dark:text-neutral-300">{t('taxReport.grandTotalNet', 'Total net')}</span>

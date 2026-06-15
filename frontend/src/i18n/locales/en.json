@@ -3951,6 +3951,7 @@
     "costsTitle": "Costs (incoming invoices + expenses)",
     "costsDisclaimer": "This income/expense overview is a guideline for your records (Einnahmen-Ausgaben-Rechnung). VAT reclaimability and the result figure depend on each cost’s tax treatment — verify with your Treuhänder / tax authority before filing.",
     "summary": {
+      "outgoingTitle": "Outgoing invoices",
       "title": "Income / costs",
       "income": "Income",
       "costs": "Costs",

@@ -3951,6 +3951,7 @@
     "costsTitle": "Kosten (Eingangsrechnungen + Spesen)",
     "costsDisclaimer": "Diese Einnahmen-Ausgaben-Übersicht ist eine Orientierungshilfe für Ihre Aufzeichnungen (Milchbüchleinrechnung). Vorsteuerabzug und Ergebnis hängen von der steuerlichen Behandlung jeder Kostenposition ab — vor der Einreichung mit Ihrem Treuhänder / der Steuerverwaltung prüfen.",
     "summary": {
+      "outgoingTitle": "Ausgangsrechnungen",
       "title": "Einnahmen / Ausgaben",
       "income": "Einnahmen",
       "costs": "Ausgaben",
