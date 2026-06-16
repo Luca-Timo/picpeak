@@ -735,8 +735,29 @@ function rowCellValues(row, idx, locale, dateFormat, currency) {
  * Currency is required and used to scope the data (same contract as
  * getTaxReport). Locale defaults to the business profile's default.
  */
-async function renderTaxReportPdf({ from, to, currency, locale } = {}) {
+// Export scope (PR/Liechtenstein follow-up): the readable PDF/CSV exports can be
+// limited to the income or the cost side — handy when the Treuhänder only needs
+// one basis (e.g. income for the 20%-Gewinnungskosten flat deduction). The
+// on-screen report is unaffected; only the exports filter.
+const TAX_EXPORT_SCOPES = ['all', 'income', 'cost'];
+function normalizeScope(scope) {
+  return TAX_EXPORT_SCOPES.includes(scope) ? scope : 'all';
+}
+function scopeLedger(ledger, scope) {
+  if (scope === 'income') return (ledger || []).filter((r) => r.type === 'outgoing');
+  if (scope === 'cost') return (ledger || []).filter((r) => r.type === 'incoming' || r.type === 'expense');
+  return ledger || [];
+}
+
+async function renderTaxReportPdf({ from, to, currency, locale, scope } = {}) {
   const report = await getTaxReport({ from, to, currency });
+  const xScope = normalizeScope(scope);
+  report.ledger = scopeLedger(report.ledger, xScope);
+  // The per-rate breakdown is income-only — drop it from a cost-only export.
+  if (xScope === 'cost') report.totalsByVatRate = [];
+  const showIncome = xScope !== 'cost';
+  const showCosts = xScope !== 'income';
+  const showResult = xScope === 'all';
   const renderCtx = await loadRenderContext(locale);
   const useLocale = renderCtx.locale;
   const intlLocale = useLocale === 'de' ? 'de-CH' : 'en-GB';
@@ -946,9 +967,9 @@ async function renderTaxReportPdf({ from, to, currency, locale } = {}) {
         doc.text(formatMinor(grossMinor, report.currency, intlLocale), totalsX + 270, ty, { width: 90, align: 'right' });
         ty += 13;
       };
-      summaryLine('tax_summary_income', s.incomeNetMinor, s.incomeVatMinor, s.incomeGrossMinor, false);
-      summaryLine('tax_summary_costs', -Math.abs(s.costNetMinor), -Math.abs(s.costVatMinor), -Math.abs(s.costGrossMinor), false);
-      summaryLine('tax_summary_result', s.resultNetMinor, s.vatPayableMinor, s.resultGrossMinor, true);
+      if (showIncome) summaryLine('tax_summary_income', s.incomeNetMinor, s.incomeVatMinor, s.incomeGrossMinor, !showResult);
+      if (showCosts) summaryLine('tax_summary_costs', -Math.abs(s.costNetMinor), -Math.abs(s.costVatMinor), -Math.abs(s.costGrossMinor), !showResult);
+      if (showResult) summaryLine('tax_summary_result', s.resultNetMinor, s.vatPayableMinor, s.resultGrossMinor, true);
 
       // Cancelled footnote (bottom-left). Only when there are any.
       if (report.cancelledCount > 0) {
@@ -1002,8 +1023,10 @@ async function renderTaxReportPdf({ from, to, currency, locale } = {}) {
  *   renderTaxReportCsv({ from, to, currency, locale })
  *     → Promise<{ content, filename, contentType }>
  */
-async function renderTaxReportCsv({ from, to, currency, locale } = {}) {
+async function renderTaxReportCsv({ from, to, currency, locale, scope } = {}) {
   const report = await getTaxReport({ from, to, currency });
+  const xScope = normalizeScope(scope);
+  report.ledger = scopeLedger(report.ledger, xScope);
   const useLocale = locale || 'en';
 
   const escape = (cell) => {
@@ -1082,13 +1105,14 @@ async function renderTaxReportCsv({ from, to, currency, locale } = {}) {
       '', '', '', t(useLocale, labelKey), '', '',
       minorToDotDecimal(net), minorToDotDecimal(vat), minorToDotDecimal(gross),
     ].map(escape).join(','));
-    sline('tax_summary_income', summary.incomeNetMinor, summary.incomeVatMinor, summary.incomeGrossMinor);
-    sline('tax_summary_costs', summary.costNetMinor, summary.costVatMinor, summary.costGrossMinor);
-    sline('tax_summary_result', summary.resultNetMinor, summary.vatPayableMinor, summary.resultGrossMinor);
+    if (xScope !== 'cost') sline('tax_summary_income', summary.incomeNetMinor, summary.incomeVatMinor, summary.incomeGrossMinor);
+    if (xScope !== 'income') sline('tax_summary_costs', summary.costNetMinor, summary.costVatMinor, summary.costGrossMinor);
+    if (xScope === 'all') sline('tax_summary_result', summary.resultNetMinor, summary.vatPayableMinor, summary.resultGrossMinor);
   }
 
   const content = lines.join('\r\n') + '\r\n';
-  const filename = `tax_report_${report.period.from}_to_${report.period.to}_${report.currency}.csv`;
+  const scopeTag = xScope === 'all' ? '' : `${xScope}_`;
+  const filename = `tax_report_${scopeTag}${report.period.from}_to_${report.period.to}_${report.currency}.csv`;
   return { content, filename, contentType: 'text/csv; charset=utf-8' };
 }
 

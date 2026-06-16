@@ -3953,6 +3953,10 @@
     "export": {
       "reportTitle": "Bericht",
       "reportHint": "Lesbare Liste — für Ihre Unterlagen.",
+      "scopeLabel": "Export-Umfang",
+      "scopeAll": "Vollständig",
+      "scopeIncome": "Nur Einnahmen",
+      "scopeCost": "Nur Kosten",
       "journalTitle": "Buchungsjournal"
     },
     "exportCsv": "CSV exportieren",

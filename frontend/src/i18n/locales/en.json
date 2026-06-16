@@ -3953,6 +3953,10 @@
     "export": {
       "reportTitle": "Report",
       "reportHint": "Readable list — for your own records.",
+      "scopeLabel": "Export scope",
+      "scopeAll": "Complete",
+      "scopeIncome": "Income only",
+      "scopeCost": "Cost only",
       "journalTitle": "Accounting journal"
     },
     "exportCsv": "Export CSV",

@@ -102,6 +102,8 @@ export const TaxReportPage: React.FC = () => {
   const [to,   setTo]   = useState(initialPeriod.to);
   const [currency, setCurrency] = useState<string>('CHF');
   const [isExporting, setIsExporting] = useState<'pdf' | 'csv' | 'ledger' | null>(null);
+  // Export-only scope (income/cost split). The on-screen report stays complete.
+  const [exportScope, setExportScope] = useState<'all' | 'income' | 'cost'>('all');
   // Treuhänder (collective-journal) export — same period/currency as the
   // report; target tool picks the import format (generic / Banana / bexio).
   const [ledgerFormat, setLedgerFormat] = useState<ExportFormat>('generic');
@@ -132,9 +134,10 @@ export const TaxReportPage: React.FC = () => {
   const handleExport = async (format: 'pdf' | 'csv') => {
     setIsExporting(format);
     try {
+      const exportParams = { ...params, scope: exportScope };
       const { url, filename } = format === 'pdf'
-        ? await taxReportService.downloadPdfUrl(params)
-        : await taxReportService.downloadCsvUrl(params);
+        ? await taxReportService.downloadPdfUrl(exportParams)
+        : await taxReportService.downloadCsvUrl(exportParams);
       triggerBrowserDownload(url, filename);
     } catch (err) {
       toast.error(t('taxReport.exportFailed', 'Export failed. Please try again.'));
@@ -313,6 +316,17 @@ export const TaxReportPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={exportScope}
+                    onChange={(e) => setExportScope(e.target.value as 'all' | 'income' | 'cost')}
+                    disabled={exportsDisabled}
+                    aria-label={t('taxReport.export.scopeLabel', 'Export scope')}
+                    className={`${selectClassName} min-w-[150px]`}
+                  >
+                    <option value="all">{t('taxReport.export.scopeAll', 'Complete')}</option>
+                    <option value="income">{t('taxReport.export.scopeIncome', 'Income only')}</option>
+                    <option value="cost">{t('taxReport.export.scopeCost', 'Cost only')}</option>
+                  </select>
                   <Button
                     className="min-w-[150px]"
                     variant="outline"

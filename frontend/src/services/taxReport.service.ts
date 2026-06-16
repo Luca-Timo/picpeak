@@ -142,6 +142,9 @@ export interface TaxReportParams {
   to: string;
   currency: string;
   locale?: string;
+  /** Export-only scope: 'all' (default) | 'income' | 'cost'. Ignored by the
+   *  on-screen report; the PDF/CSV exports filter the ledger + summary. */
+  scope?: 'all' | 'income' | 'cost';
 }
 
 function buildQueryString(params: TaxReportParams): string {
@@ -151,6 +154,7 @@ function buildQueryString(params: TaxReportParams): string {
     currency: params.currency,
   });
   if (params.locale) usp.set('locale', params.locale);
+  if (params.scope && params.scope !== 'all') usp.set('scope', params.scope);
   return usp.toString();
 }
 
@@ -172,7 +176,8 @@ export const taxReportService = {
       responseType: 'blob',
     });
     const url = URL.createObjectURL(res.data);
-    const filename = `tax_report_${params.from}_to_${params.to}_${params.currency}.pdf`;
+    const scopeTag = params.scope && params.scope !== 'all' ? `${params.scope}_` : '';
+    const filename = `tax_report_${scopeTag}${params.from}_to_${params.to}_${params.currency}.pdf`;
     return { url, filename };
   },
 
@@ -181,7 +186,8 @@ export const taxReportService = {
       responseType: 'blob',
     });
     const url = URL.createObjectURL(res.data);
-    const filename = `tax_report_${params.from}_to_${params.to}_${params.currency}.csv`;
+    const scopeTag = params.scope && params.scope !== 'all' ? `${params.scope}_` : '';
+    const filename = `tax_report_${scopeTag}${params.from}_to_${params.to}_${params.currency}.csv`;
     return { url, filename };
   },
 };

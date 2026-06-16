@@ -65,11 +65,15 @@ const QUERY_VALIDATORS = [
 ];
 
 function parseParams(req) {
+  // scope (export only): all | income | cost. Anything else → 'all'.
+  const rawScope = String(req.query.scope || 'all');
+  const scope = ['all', 'income', 'cost'].includes(rawScope) ? rawScope : 'all';
   return {
     from: req.query.from,
     to: req.query.to,
     currency: String(req.query.currency || '').toUpperCase(),
     locale: req.query.locale || undefined,
+    scope,
   };
 }
 
@@ -94,7 +98,8 @@ router.get(
     validateRequest(req);
     const params = parseParams(req);
     const buffer = await taxReportService.renderTaxReportPdf(params);
-    const filename = `tax_report_${params.from}_to_${params.to}_${params.currency}.pdf`;
+    const scopeTag = params.scope && params.scope !== 'all' ? `${params.scope}_` : '';
+    const filename = `tax_report_${scopeTag}${params.from}_to_${params.to}_${params.currency}.pdf`;
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Disposition', `attachment; filename="${filename}"`);
     res.set('Content-Length', String(buffer.length));
