@@ -281,7 +281,7 @@ export const SettingsPage: React.FC = () => {
       setActiveTab(visibleKeys[0]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flags.quotes, flags.bills, flags.contracts, flags.reminderEmails, activeTab]);
+  }, [flags.quotes, flags.bills, flags.contracts, flags.reminderEmails, flags.accounting, activeTab]);
 
   // For tabs that mount existing top-level pages OR bring their own
   // header (FeaturesTab has its own icon+title+description block), skip

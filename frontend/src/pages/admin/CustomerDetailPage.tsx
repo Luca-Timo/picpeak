@@ -39,7 +39,7 @@ type EditableFields =
   | 'phone' | 'companyName' | 'billingEmail' | 'vatId'
   | 'addressLine1' | 'addressLine2' | 'postalCode' | 'city' | 'state'
   | 'countryCode' | 'countryName' | 'preferredLanguage' | 'notes'
-  | 'featureCalendar' | 'featureQuotes' | 'featureBills' | 'featureHoursLogging'
+  | 'featureCalendar' | 'featureQuotes' | 'featureBills' | 'featureHoursLogging' | 'featureContracts'
   | 'hourlyRateMinor' | 'billingCadence' | 'billingCycleDay' | 'skontoDisabled';
 
 // `fmtDate` (from useLocalizedDate, below) is the single canonical date
@@ -137,6 +137,9 @@ export const CustomerDetailPage: React.FC = () => {
         featureQuotes:   customer.featureQuotes   ?? false,
         featureBills:    customer.featureBills    ?? false,
         featureHoursLogging: customer.featureHoursLogging ?? false,
+        // Contracts is opt-OUT (default on) — preserve the tab for customers
+        // saved before the per-customer override existed.
+        featureContracts: customer.featureContracts ?? true,
         hourlyRateMinor: customer.hourlyRateMinor ?? null,
         billingCadence: customer.billingCadence ?? 'per_event',
         billingCycleDay: customer.billingCycleDay ?? 1,
@@ -145,7 +148,7 @@ export const CustomerDetailPage: React.FC = () => {
     }
   }, [customer, form]);
 
-  const toggleFeature = (key: 'featureCalendar' | 'featureQuotes' | 'featureBills' | 'featureHoursLogging') => {
+  const toggleFeature = (key: 'featureCalendar' | 'featureQuotes' | 'featureBills' | 'featureHoursLogging' | 'featureContracts') => {
     setForm((prev) => ({ ...prev, [key]: !prev[key] }) as any);
   };
 
@@ -570,7 +573,7 @@ export const CustomerDetailPage: React.FC = () => {
           toggle inside it is OFF — an empty "Customer features" card
           with just a title + hint reads as broken. The Card reappears
           the moment any master flag is re-enabled. */}
-      {(flags.calendar || flags.quotes || flags.bills || flags.hoursLogging) && (
+      {(flags.calendar || flags.quotes || flags.bills || flags.hoursLogging || flags.contracts) && (
       <Card padding="lg">
         <h2 className="text-lg font-semibold text-theme mb-1 flex items-center gap-2">
           <ToggleLeft className="w-5 h-5" />
@@ -608,6 +611,9 @@ export const CustomerDetailPage: React.FC = () => {
               : []),
             ...(flags.hoursLogging
               ? [{ key: 'featureHoursLogging' as const, labelKey: 'customers.field.featureHoursLogging', fallback: 'Hours logging', badge: 'new' as const }]
+              : []),
+            ...(flags.contracts
+              ? [{ key: 'featureContracts' as const, labelKey: 'customer.nav.contracts', fallback: 'Contracts', badge: 'new' as const }]
               : []),
           ] as const).map(({ key, labelKey, fallback, badge }) => {
             const enabled = !!form[key];

@@ -550,11 +550,15 @@ router.get('/invoices', customerAuth, async (req, res) => {
  */
 router.get('/quotes/:id/pdf', customerAuth, async (req, res) => {
   try {
-    // Feature-gate identically to /quotes (list endpoint).
-    if (req.customer.feature_quotes === false || req.customer.feature_quotes === 0 || req.customer.feature_quotes === '0') {
-      return res.status(403).json({ error: 'Quotes are disabled for this account' });
-    }
     const { db: dbi } = require('../database/db');
+    // Feature-gate identically to /quotes (list endpoint). req.customer does
+    // NOT carry feature_* columns (customerAuth only selects identity), so we
+    // read the row here — the previous req.customer.feature_quotes check was a
+    // silent no-op (always undefined).
+    const account = await dbi('customer_accounts').where({ id: req.customer.id }).first();
+    if (!account || account.feature_quotes === false || account.feature_quotes === 0) {
+      return res.status(403).json({ error: 'Quotes are disabled for this account', code: 'CUSTOMER_FEATURE_DISABLED' });
+    }
     const quote = await dbi('quotes')
       .where({ id: parseInt(req.params.id, 10), customer_account_id: req.customer.id })
       .first();
@@ -584,6 +588,12 @@ router.get('/quotes/:id/pdf', customerAuth, async (req, res) => {
 router.get('/invoices/:id/pdf', customerAuth, async (req, res) => {
   try {
     const { db: dbi } = require('../database/db');
+    // Feature-gate identically to /invoices (list endpoint) — a direct hit must
+    // not download an invoice PDF when Bills is disabled for the account.
+    const account = await dbi('customer_accounts').where({ id: req.customer.id }).first();
+    if (!account || account.feature_bills === false || account.feature_bills === 0) {
+      return res.status(403).json({ error: 'Invoices are disabled for this account', code: 'CUSTOMER_FEATURE_DISABLED' });
+    }
     const invoice = await dbi('invoices')
       .where({ id: parseInt(req.params.id, 10), customer_account_id: req.customer.id })
       .first();
@@ -622,6 +632,12 @@ router.get('/contracts', customerAuth, async (req, res) => {
     if (!(await dbi.schema.hasTable('contracts'))) {
       // Feature not migrated on this install yet.
       return res.json({ contracts: [] });
+    }
+    // Per-customer contracts gate (migration 131) — mirrors /quotes + /invoices
+    // so a direct hit is refused when Contracts is off for the account.
+    const account = await dbi('customer_accounts').where({ id: req.customer.id }).first();
+    if (!account || account.feature_contracts === false || account.feature_contracts === 0) {
+      return res.status(403).json({ error: 'Contracts are disabled for this account', code: 'CUSTOMER_FEATURE_DISABLED' });
     }
     const rows = await dbi('contracts')
       .where({ customer_account_id: req.customer.id })
@@ -679,6 +695,10 @@ router.get('/contracts/:id/pdf', customerAuth, async (req, res) => {
     const { db: dbi } = require('../database/db');
     if (!(await dbi.schema.hasTable('contracts'))) {
       return res.status(404).json({ error: 'Contract not found' });
+    }
+    const account = await dbi('customer_accounts').where({ id: req.customer.id }).first();
+    if (!account || account.feature_contracts === false || account.feature_contracts === 0) {
+      return res.status(403).json({ error: 'Contracts are disabled for this account', code: 'CUSTOMER_FEATURE_DISABLED' });
     }
     const contract = await dbi('contracts')
       .where({ id: parseInt(req.params.id, 10), customer_account_id: req.customer.id })

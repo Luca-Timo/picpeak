@@ -21,6 +21,7 @@ const express = require('express');
 const { param, body } = require('express-validator');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
+const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const dealsService = require('../services/dealsService');
 const invoiceService = require('../services/invoiceService');
@@ -56,6 +57,9 @@ router.get(
  */
 router.put(
   '/:uuid/installment-plan',
+  // Mutates invoices — gate on the bills flag like every other invoice
+  // write path, so installment plans can't be reshaped with Bills off.
+  requireFeatureFlag('bills', 'BILLS_DISABLED'),
   requirePermission('bills.manage'),
   [
     param('uuid').isString().isLength({ min: 32, max: 36 }),

@@ -480,6 +480,7 @@ async function listCustomers({ search } = {}) {
       'customer_accounts.feature_quotes',
       'customer_accounts.feature_bills',
       'customer_accounts.feature_hours_logging',
+      'customer_accounts.feature_contracts',
       'customer_accounts.hourly_rate_minor',
       'customer_accounts.last_login',
       'customer_accounts.created_at',
@@ -548,6 +549,9 @@ async function updateCustomer(id, updates, updatedByAdminId) {
     // Per-customer feature flags (#354 follow-up). Booleans below are
     // coerced via formatBoolean for SQLite compatibility.
     'feature_calendar', 'feature_quotes', 'feature_bills', 'feature_hours_logging',
+    // Per-customer contracts override (migration 131). Defaults TRUE so
+    // existing customers keep their Contracts tab.
+    'feature_contracts',
     // CRM billing cadence (migration 102). 'per_event' (default) keeps
     // each invoice firing on its own schedule; monthly/quarterly snap
     // every scheduled invoice to billing_cycle_day of the next period.
@@ -570,6 +574,7 @@ async function updateCustomer(id, updates, updatedByAdminId) {
       } else if (
         f === 'feature_calendar' || f === 'feature_quotes'
         || f === 'feature_bills' || f === 'feature_hours_logging'
+        || f === 'feature_contracts'
         || f === 'skonto_disabled'
       ) {
         allowed[f] = formatBoolean(updates[f]);
@@ -1267,9 +1272,9 @@ async function getEffectiveFeaturesForCustomer(customerOrId) {
   // for hours, so we skip the third gate the bills/quotes use.
   const hoursMaster = await db('feature_flags').where({ key: 'hoursLogging' }).first();
   const hoursLoggingMaster = hoursMaster ? Boolean(hoursMaster.value) : true;
-  // Contracts (migration 130): no per-customer flag, just the global
-  // feature_flags row. When on, every customer with an active account
-  // sees the Contracts tab on their portal.
+  // Contracts: global feature_flags row AND the per-customer override
+  // (migration 131). feature_contracts defaults TRUE, so existing customers
+  // keep their Contracts tab; an admin can hide it per customer.
   const contractsMaster = await db('feature_flags').where({ key: 'contracts' }).first();
   const contractsEnabled = contractsMaster ? Boolean(contractsMaster.value) : false;
   return {
@@ -1277,7 +1282,7 @@ async function getEffectiveFeaturesForCustomer(customerOrId) {
     quotes:   globals.quotesEnabled   && truthy(customer.feature_quotes),
     bills:    globals.billsEnabled    && truthy(customer.feature_bills),
     hoursLogging: hoursLoggingMaster && truthy(customer.feature_hours_logging),
-    contracts: contractsEnabled,
+    contracts: contractsEnabled && truthy(customer.feature_contracts),
   };
 }
 

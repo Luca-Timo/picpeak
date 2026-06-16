@@ -48,10 +48,9 @@ const KNOWN_FLAGS = [
   // payment-check email flow without waiting 30 days, etc.).
   // Strictly opt-in.
   'crmDevelopment',
-  // Tax / Steuer report sub-tab under Clients. Independent toggle so
-  // admins who use Bills but don't need the tax export (or aren't
-  // ready to enable it yet) can leave it off. Forced off when `bills`
-  // is off (no invoices → nothing to report).
+  // Tax / Steuer report — an Accounting sub-feature (moved out of CRM).
+  // Independent of `bills`; forced off when the `accounting` master is off
+  // (see applyDependencyRules below).
   'taxReport',
   // Hours logging (migration 129). Master switch for the per-customer
   // Hours card + the auto-append into monthly draft / "Bill these

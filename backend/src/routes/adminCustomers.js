@@ -10,6 +10,13 @@ const express = require('express');
 const { body, param, query } = require('express-validator');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
+const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
+
+// Hour-entry routes are gated by the hoursLogging master so a direct API hit
+// can't read/edit/delete/bill logged hours while the feature is off (the
+// frontend already hides the surface). Per-customer enforcement stays in
+// customerHoursService.createEntry.
+const requireHoursLogging = requireFeatureFlag('hoursLogging', 'HOURS_LOGGING_DISABLED');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const customerAccountsService = require('../services/customerAccountsService');
 const customerHoursService = require('../services/customerHoursService');
@@ -66,6 +73,9 @@ function transformCustomer(c) {
     // set one; the editor surfaces it as an empty input and forces a
     // per-entry override on every logged block.
     featureHoursLogging: c.feature_hours_logging === true || c.feature_hours_logging === 1,
+    // Contracts override (migration 131). Opt-out: absent column (older row /
+    // un-selected) reads as ON so existing customers keep the Contracts tab.
+    featureContracts: c.feature_contracts === undefined ? true : (c.feature_contracts === true || c.feature_contracts === 1),
     hourlyRateMinor: c.hourly_rate_minor != null ? Number(c.hourly_rate_minor) : null,
     // Per-customer Skonto opt-out (migration 112). When true, none of
     // this customer's invoices qualify for an early-payment discount,
@@ -387,6 +397,7 @@ router.put('/:id', [
   body('feature_calendar').optional().isBoolean(),
   body('feature_quotes').optional().isBoolean(),
   body('feature_bills').optional().isBoolean(),
+  body('feature_contracts').optional().isBoolean(),
   // Hours logging (migration 129).
   body('feature_hours_logging').optional().isBoolean(),
   body('hourly_rate_minor').optional({ nullable: true }).isInt({ min: 0 }),
@@ -541,6 +552,7 @@ router.put('/:id/events', [
 // can't collide with the int-validated :id pattern.
 router.get('/hour-entries/unbilled-summary', [
   adminAuth,
+  requireHoursLogging,
   requirePermission('customers.view'),
 ], handleAsync(async (req, res) => {
   const summary = await customerHoursService.getUnbilledSummaryByCustomer();
@@ -549,6 +561,7 @@ router.get('/hour-entries/unbilled-summary', [
 
 router.get('/:id/hour-entries', [
   adminAuth,
+  requireHoursLogging,
   requirePermission('customers.view'),
   param('id').isInt({ min: 1 }),
   query('status').optional().isIn(['unbilled', 'billed', 'cancelled']),
@@ -563,6 +576,7 @@ router.get('/:id/hour-entries', [
 
 router.post('/:id/hour-entries', [
   adminAuth,
+  requireHoursLogging,
   // Migration 134 — hour entries are customer-scoped writes; same scope
   // as customer record edits, narrower than invite/create.
   requirePermission('customers.edit'),
@@ -585,6 +599,7 @@ router.post('/:id/hour-entries', [
 
 router.put('/:id/hour-entries/:entryId', [
   adminAuth,
+  requireHoursLogging,
   requirePermission('customers.edit'),
   param('id').isInt({ min: 1 }),
   param('entryId').isInt({ min: 1 }),
@@ -605,6 +620,7 @@ router.put('/:id/hour-entries/:entryId', [
 
 router.delete('/:id/hour-entries/:entryId', [
   adminAuth,
+  requireHoursLogging,
   requirePermission('customers.edit'),
   param('id').isInt({ min: 1 }),
   param('entryId').isInt({ min: 1 }),
@@ -619,6 +635,7 @@ router.delete('/:id/hour-entries/:entryId', [
 
 router.post('/:id/hour-entries/bill', [
   adminAuth,
+  requireHoursLogging,
   requirePermission('customers.edit'),
   param('id').isInt({ min: 1 }),
 ], handleAsync(async (req, res) => {
