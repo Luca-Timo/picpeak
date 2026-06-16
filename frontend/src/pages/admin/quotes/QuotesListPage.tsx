@@ -53,7 +53,7 @@ export const QuotesListPage: React.FC = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-theme">{t('quotes.title', 'Quotes')}</h1>
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">{t('quotes.title', 'Quotes')}</h1>
             {/* Beta badge — feature is functional but the surface is
                 still evolving (matches Customers + Invoices). */}
             <span
@@ -63,7 +63,7 @@ export const QuotesListPage: React.FC = () => {
               {t('navigation.betaTag', 'Beta')}
             </span>
           </div>
-          <p className="text-sm text-muted-theme mt-1">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             {t('quotes.subtitle', 'Send, track and convert quotes into events.')}
           </p>
         </div>
@@ -104,7 +104,7 @@ export const QuotesListPage: React.FC = () => {
             single-card layout used by Customers/Invitations. */}
         <div className="mt-4">
           {isLoading ? <Loading /> : !data || data.quotes.length === 0 ? (
-            <p className="text-center text-muted-theme py-8">{t('quotes.empty', 'No quotes yet.')}</p>
+            <p className="text-center text-neutral-500 dark:text-neutral-400 py-8">{t('quotes.empty', 'No quotes yet.')}</p>
           ) : (
             <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
               <div className="overflow-x-auto">
@@ -147,7 +147,7 @@ export const QuotesListPage: React.FC = () => {
               </div>
               {data.pagination.totalPages > 1 && (
                 <div className="flex justify-between items-center px-3 py-2 border-t border-neutral-200 dark:border-neutral-700 text-sm">
-                  <span className="text-muted-theme">
+                  <span className="text-neutral-500 dark:text-neutral-400">
                     {t('quotes.pagination', 'Page {{page}} of {{total}} · {{count}} quotes', {
                       page: data.pagination.page, total: data.pagination.totalPages, count: data.pagination.total,
                     })}

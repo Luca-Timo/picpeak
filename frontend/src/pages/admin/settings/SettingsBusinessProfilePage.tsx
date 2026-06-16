@@ -349,8 +349,8 @@ const PdfToggleRow: React.FC<PdfToggleRowProps> = ({ label, description, enabled
       role="switch"
       aria-checked={enabled}
       onClick={() => onChange(!enabled)}
-      className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 shrink-0"
-      style={{ backgroundColor: enabled ? 'var(--color-accent)' : 'var(--color-surface-border)' }}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 shrink-0 ${enabled ? '' : 'bg-neutral-300 dark:bg-neutral-600'}`}
+      style={enabled ? { backgroundColor: 'var(--color-accent)' } : undefined}
     >
       <span
         className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`}

@@ -436,10 +436,10 @@ export const CalendarPage: React.FC = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-theme">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
             {t('calendar.pageTitle', 'Calendar')}
           </h1>
-          <p className="text-sm text-muted-theme">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">
             {t('calendar.subtitle',
               'Events, logged hours, and pending quotes/contracts in one view.')}
           </p>
@@ -466,7 +466,7 @@ export const CalendarPage: React.FC = () => {
 
       <Card padding="md">
         {itemsLoading && !itemsResp && (
-          <div className="mb-3 flex items-center gap-2 text-sm text-muted-theme">
+          <div className="mb-3 flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
             <Loading />
             <span>{t('calendar.loading', 'Loading items…')}</span>
           </div>
@@ -609,6 +609,11 @@ export const CalendarPage: React.FC = () => {
             and the active state (selected view) all read from these
             vars so the calendar respects custom branding palettes. */}
       <style>{`
+        /* Admin-toggle-aware chrome vars — gallery theme writes inline
+           --color-* on :root which would otherwise override .dark; scope
+           local vars so the calendar follows the admin light/dark toggle. */
+        .fc { --cal-border: #e5e5e5; --cal-muted: #737373; --cal-text: #171717; }
+        .dark .fc { --cal-border: #262626; --cal-muted: #a3a3a3; --cal-text: #f5f5f5; }
         .cal-dashed {
           border-style: dashed !important;
           background-color: transparent !important;
@@ -624,8 +629,8 @@ export const CalendarPage: React.FC = () => {
         /* FC button restyle — match picpeak admin .btn-outline shape. */
         .fc .fc-button-primary {
           background-color: transparent;
-          border: 1px solid var(--color-surface-border);
-          color: var(--color-muted-text);
+          border: 1px solid var(--cal-border);
+          color: var(--cal-muted);
           text-transform: none;
           font-weight: 500;
           box-shadow: none;
@@ -634,8 +639,8 @@ export const CalendarPage: React.FC = () => {
         .fc .fc-button-primary:hover:not(:disabled) {
           opacity: 0.8;
           background-color: transparent;
-          border-color: var(--color-surface-border);
-          color: var(--color-muted-text);
+          border-color: var(--cal-border);
+          color: var(--cal-muted);
         }
         .fc .fc-button-primary:focus,
         .fc .fc-button-primary:focus-visible {
@@ -652,14 +657,14 @@ export const CalendarPage: React.FC = () => {
         .fc .fc-button-primary:disabled {
           opacity: 0.5;
           background-color: transparent;
-          border-color: var(--color-surface-border);
-          color: var(--color-muted-text);
+          border-color: var(--cal-border);
+          color: var(--cal-muted);
         }
         /* Toolbar title (month / week range) reads the regular text
            colour rather than FC's hardcoded #333 so dark mode looks
            right. */
         .fc .fc-toolbar-title {
-          color: var(--color-text);
+          color: var(--cal-text);
           font-size: 1.125rem;
           font-weight: 600;
         }
@@ -677,12 +682,12 @@ export const CalendarPage: React.FC = () => {
            selector that maps to a day column so the rule works
            regardless of which DOM shape FC ends up rendering. */
         .fc {
-          --fc-border-color: var(--color-surface-border);
+          --fc-border-color: var(--cal-border);
         }
         .fc .fc-timegrid-col:not(:first-of-type),
         .fc .fc-day:not(:first-child),
         .fc .fc-timegrid-cols > table > tbody > tr > td:not(:first-child) {
-          box-shadow: inset 1px 0 0 var(--color-surface-border);
+          box-shadow: inset 1px 0 0 var(--cal-border);
         }
       `}</style>
     </div>
@@ -698,7 +703,7 @@ const Legend: React.FC = () => {
   const { t } = useTranslation();
   return (
     <Card padding="sm">
-      <div className="flex flex-wrap gap-4 text-xs text-muted-theme">
+      <div className="flex flex-wrap gap-4 text-xs text-neutral-500 dark:text-neutral-400">
         <LegendSwatch color={COLOR_EVENT} label={t('calendar.legend.events', 'Events')} />
         <LegendSwatch color={COLOR_HOURS} label={t('calendar.legend.hours', 'Hours')} />
         <LegendSwatch

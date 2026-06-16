@@ -67,7 +67,7 @@ export const ContractsListPage: React.FC = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-theme">{t('contracts.title', 'Contracts')}</h1>
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">{t('contracts.title', 'Contracts')}</h1>
             {/* Beta badge — matches Customers + Quotes + Invoices. */}
             <span
               className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
@@ -76,7 +76,7 @@ export const ContractsListPage: React.FC = () => {
               {t('navigation.betaTag', 'Beta')}
             </span>
           </div>
-          <p className="text-sm text-muted-theme mt-1">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             {t('contracts.subtitle', 'Compose contracts from reusable blocks and have customers sign in-browser or upload a wet-signed PDF.')}
           </p>
         </div>
@@ -129,7 +129,7 @@ export const ContractsListPage: React.FC = () => {
             single-card layout used by Customers / Quotes / Invoices. */}
         <div className="mt-4">
           {isLoading ? <Loading /> : !data || data.contracts.length === 0 ? (
-            <p className="text-center text-muted-theme py-8">{t('contracts.list.empty', 'No contracts yet.')}</p>
+            <p className="text-center text-neutral-500 dark:text-neutral-400 py-8">{t('contracts.list.empty', 'No contracts yet.')}</p>
           ) : (
             <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
               <div className="overflow-x-auto">
@@ -179,7 +179,7 @@ export const ContractsListPage: React.FC = () => {
               </div>
               {totalPages > 1 && (
                 <div className="flex justify-between items-center px-3 py-2 border-t border-neutral-200 dark:border-neutral-700 text-sm">
-                  <span className="text-muted-theme">
+                  <span className="text-neutral-500 dark:text-neutral-400">
                     {t('contracts.list.pagination', 'Page {{page}} of {{total}} · {{count}} contracts', {
                       page, total: totalPages, count: data.total,
                     })}

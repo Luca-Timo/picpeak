@@ -394,7 +394,7 @@ export const BillDetailPage: React.FC = () => {
             <div><div className="text-neutral-600 dark:text-neutral-300">{t('bills.field.eventName', 'Event')}</div>
               <div>
                 {inv.eventId ? (
-                  <Link to={`/admin/events/${inv.eventId}`} className="text-theme hover:underline">{inv.eventName}</Link>
+                  <Link to={`/admin/events/${inv.eventId}`} className="text-neutral-900 dark:text-neutral-100 hover:underline">{inv.eventName}</Link>
                 ) : inv.eventName}
                 {inv.eventDate ? ` · ${fmtDate(inv.eventDate)}` : ''}
               </div>

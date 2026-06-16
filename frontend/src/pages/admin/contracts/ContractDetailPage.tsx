@@ -590,7 +590,7 @@ export const ContractDetailPage: React.FC = () => {
       {c.convertedEventId && (
         <Card padding="md" className="mb-4">
           <p className="text-sm">
-            <span className="text-muted-theme mr-2">
+            <span className="text-neutral-500 dark:text-neutral-400 mr-2">
               {t('contracts.detail.convertedToEvent', 'Converted to event')}:
             </span>
             <Link to={`/admin/events/${c.convertedEventId}`} className="font-medium text-primary-600 dark:text-primary-400 hover:underline">

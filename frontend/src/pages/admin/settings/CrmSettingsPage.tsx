@@ -177,7 +177,7 @@ export const CrmSettingsPage: React.FC = () => {
 
       {!anySection && (
         <Card>
-          <p className="text-sm text-muted-theme">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">
             {t('crmSettings.emptyState',
               'No CRM features are currently enabled. Turn on Quotes, Invoices, or Contracts in Settings → Features to see the matching configuration here.')}
           </p>

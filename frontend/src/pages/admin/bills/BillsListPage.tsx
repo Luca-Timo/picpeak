@@ -61,7 +61,7 @@ export const BillsListPage: React.FC = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-theme">{t('bills.title', 'Invoices')}</h1>
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">{t('bills.title', 'Invoices')}</h1>
             {/* Beta badge — matches the Customers + Quotes pages. */}
             <span
               className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
@@ -70,7 +70,7 @@ export const BillsListPage: React.FC = () => {
               {t('navigation.betaTag', 'Beta')}
             </span>
           </div>
-          <p className="text-sm text-muted-theme mt-1">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             {t('bills.subtitle', 'Schedule, send, track payments and chase late invoices.')}
           </p>
         </div>
@@ -122,7 +122,7 @@ export const BillsListPage: React.FC = () => {
         {/* Body inside the same card (matches Customers + Quotes). */}
         <div className="mt-4">
           {isLoading ? <Loading /> : !data || data.invoices.length === 0 ? (
-            <p className="text-center text-muted-theme py-8">{t('bills.empty', 'No invoices yet.')}</p>
+            <p className="text-center text-neutral-500 dark:text-neutral-400 py-8">{t('bills.empty', 'No invoices yet.')}</p>
           ) : (
             <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
               <div className="overflow-x-auto">
@@ -173,11 +173,11 @@ export const BillsListPage: React.FC = () => {
                         <td className="px-3 py-2 truncate max-w-xs">
                           {inv.eventName
                             ? (inv.eventId
-                                ? <Link to={`/admin/events/${inv.eventId}`} className="text-theme hover:underline" onClick={(e) => e.stopPropagation()}>{inv.eventName}</Link>
+                                ? <Link to={`/admin/events/${inv.eventId}`} className="text-neutral-900 dark:text-neutral-100 hover:underline" onClick={(e) => e.stopPropagation()}>{inv.eventName}</Link>
                                 : inv.eventName)
                             : '—'}
                         </td>
-                        <td className="px-3 py-2 text-xs text-muted-theme">
+                        <td className="px-3 py-2 text-xs text-neutral-500 dark:text-neutral-400">
                           {inv.installmentTotal > 1 ? `${inv.installmentIndex + 1}/${inv.installmentTotal} · ${inv.installmentLabel || ''}` : '—'}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">{inv.issueDate ? fmtDate(inv.issueDate) : '—'}</td>

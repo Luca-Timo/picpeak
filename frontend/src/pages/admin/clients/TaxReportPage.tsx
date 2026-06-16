@@ -608,12 +608,12 @@ export const TaxReportPage: React.FC = () => {
                             colour scheme distinguishes the row kinds at
                             a glance across both surfaces. */}
                         {row.kind === 'storno' && (
-                          <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-purple-100 text-purple-800 font-semibold not-italic">
+                          <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 font-semibold not-italic">
                             {t('bills.kind.storno', 'Storno')}
                           </span>
                         )}
                         {row.isReissue && (
-                          <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-blue-100 text-blue-800 font-semibold not-italic">
+                          <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 font-semibold not-italic">
                             {t('bills.kind.reissue', 'Reissue')}
                           </span>
                         )}

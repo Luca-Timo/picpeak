@@ -243,10 +243,10 @@ export const BlockLibraryPage: React.FC = () => {
           <ArrowLeft className="w-4 h-4" />
           {t('contracts.blocks.back', 'Back to contracts')}
         </Link>
-        <h1 className="text-2xl font-bold flex-1 text-theme">
+        <h1 className="text-2xl font-bold flex-1 text-neutral-900 dark:text-neutral-100">
           {t('contracts.blocks.title', 'Contract block library')}
         </h1>
-        <label className="flex items-center gap-2 text-sm text-muted-theme">
+        <label className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
           <input type="checkbox" checked={hideInactive} onChange={(e) => setHideInactive(e.target.checked)} />
           {t('contracts.blocks.hideInactive', 'Hide inactive')}
         </label>
@@ -340,7 +340,7 @@ export const BlockLibraryPage: React.FC = () => {
                 );
               })}
               {blocks.length === 0 && (
-                <p className="text-center text-sm text-muted-theme py-6">
+                <p className="text-center text-sm text-neutral-500 dark:text-neutral-400 py-6">
                   {t('contracts.blocks.empty', 'No blocks yet.')}
                 </p>
               )}
@@ -352,7 +352,7 @@ export const BlockLibraryPage: React.FC = () => {
           <div className="lg:col-span-2">
             {selection === null ? (
               <Card padding="md">
-                <p className="text-center text-muted-theme py-8">
+                <p className="text-center text-neutral-500 dark:text-neutral-400 py-8">
                   {t('contracts.blocks.selectPrompt', 'Select a block on the left or create a new one to start editing.')}
                 </p>
               </Card>
@@ -366,7 +366,7 @@ export const BlockLibraryPage: React.FC = () => {
                   </h3>
                   <div className="flex gap-2 items-center flex-wrap">
                     {selection.mode === 'edit' && (
-                      <label className="flex items-center gap-2 text-sm text-muted-theme mr-2">
+                      <label className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400 mr-2">
                         <input
                           type="checkbox"
                           checked={selection.block.isActive}

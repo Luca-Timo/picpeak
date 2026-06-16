@@ -57,7 +57,7 @@ const QuotesPanel: React.FC<Props> = ({ customerAccountId }) => {
   return (
     <Card padding="lg">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold text-theme flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
           <FileText className="w-5 h-5" /> {t('customers.detail.quotesSection', 'Quotes')}
         </h2>
         <div className="flex gap-2">
@@ -78,18 +78,18 @@ const QuotesPanel: React.FC<Props> = ({ customerAccountId }) => {
       </div>
 
       {isLoading ? <Loading /> : !data || data.quotes.length === 0 ? (
-        <p className="text-sm text-muted-theme">
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">
           {t('customers.detail.noQuotes', 'No quotes for this customer yet.')}
         </p>
       ) : (
-        <ul className="divide-y" style={{ borderColor: 'var(--color-surface-border)' }}>
+        <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
           {data.quotes.map((q) => (
             <li key={q.id} className="py-2 flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <Link to={`/admin/clients/quotes/${q.id}`} className="text-theme hover:underline font-mono text-sm">
+                <Link to={`/admin/clients/quotes/${q.id}`} className="text-neutral-900 dark:text-neutral-100 hover:underline font-mono text-sm">
                   {q.quoteNumber}
                 </Link>
-                <span className="text-xs text-muted-theme ml-2">{q.eventName || fmtDate(q.issueDate)}</span>
+                <span className="text-xs text-neutral-500 dark:text-neutral-400 ml-2">{q.eventName || fmtDate(q.issueDate)}</span>
               </div>
               <span className="text-sm tabular-nums">{formatMoney(Number(q.totalAmountMinor) / 100, q.currency)}</span>
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${
@@ -118,7 +118,7 @@ const ContractsPanel: React.FC<Props> = ({ customerAccountId }) => {
   return (
     <Card padding="lg">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold text-theme flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
           <ScrollText className="w-5 h-5" /> {t('customers.detail.contractsSection', 'Contracts')}
         </h2>
         <div className="flex gap-2">
@@ -132,18 +132,18 @@ const ContractsPanel: React.FC<Props> = ({ customerAccountId }) => {
       </div>
 
       {isLoading ? <Loading /> : !data || data.contracts.length === 0 ? (
-        <p className="text-sm text-muted-theme">
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">
           {t('customers.detail.noContracts', 'No contracts for this customer yet.')}
         </p>
       ) : (
-        <ul className="divide-y" style={{ borderColor: 'var(--color-surface-border)' }}>
+        <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
           {data.contracts.map((c) => (
             <li key={c.id} className="py-2 flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <Link to={`/admin/clients/contracts/${c.id}`} className="text-theme hover:underline font-mono text-sm">
+                <Link to={`/admin/clients/contracts/${c.id}`} className="text-neutral-900 dark:text-neutral-100 hover:underline font-mono text-sm">
                   {c.contractNumber}
                 </Link>
-                <span className="text-xs text-muted-theme ml-2 truncate">{c.title || fmtDate(c.issueDate)}</span>
+                <span className="text-xs text-neutral-500 dark:text-neutral-400 ml-2 truncate">{c.title || fmtDate(c.issueDate)}</span>
               </div>
               <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                 c.status === 'fully_signed' ? 'bg-green-100 text-green-800'
@@ -172,7 +172,7 @@ const InvoicesPanel: React.FC<Props> = ({ customerAccountId }) => {
   return (
     <Card padding="lg">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold text-theme flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
           <Receipt className="w-5 h-5" /> {t('customers.detail.billsSection', 'Invoices')}
         </h2>
         <div className="flex gap-2">
@@ -187,18 +187,18 @@ const InvoicesPanel: React.FC<Props> = ({ customerAccountId }) => {
       </div>
 
       {isLoading ? <Loading /> : !data || data.invoices.length === 0 ? (
-        <p className="text-sm text-muted-theme">
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">
           {t('customers.detail.noBills', 'No invoices for this customer yet.')}
         </p>
       ) : (
-        <ul className="divide-y" style={{ borderColor: 'var(--color-surface-border)' }}>
+        <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
           {data.invoices.map((inv) => (
             <li key={inv.id} className="py-2 flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <Link to={`/admin/clients/bills/${inv.id}`} className="text-theme hover:underline font-mono text-sm">
+                <Link to={`/admin/clients/bills/${inv.id}`} className="text-neutral-900 dark:text-neutral-100 hover:underline font-mono text-sm">
                   {inv.invoiceNumber}
                 </Link>
-                <span className="text-xs text-muted-theme ml-2">
+                <span className="text-xs text-neutral-500 dark:text-neutral-400 ml-2">
                   {fmtDate(inv.dueDate)}
                   {inv.installmentTotal > 1 ? ` · ${inv.installmentIndex + 1}/${inv.installmentTotal}` : ''}
                 </span>

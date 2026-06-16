@@ -62,8 +62,8 @@ const Toggle: React.FC<ToggleProps> = ({ enabled, onChange, label, hint, icon: I
       role="switch"
       aria-checked={enabled}
       onClick={onChange}
-      className="relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-      style={{ backgroundColor: enabled ? 'var(--color-accent, #5C8762)' : '#cbd5e1' }}
+      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${enabled ? '' : 'bg-neutral-300 dark:bg-neutral-600'}`}
+      style={enabled ? { backgroundColor: 'var(--color-accent, #5C8762)' } : undefined}
     >
       <span
         className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`}

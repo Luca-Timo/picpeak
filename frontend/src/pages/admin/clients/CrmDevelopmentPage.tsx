@@ -239,14 +239,14 @@ export const CrmDevelopmentPage: React.FC = () => {
           <MailCheck className="w-4 h-4" />
           {t('crmDev.paymentCheck.title', 'Test payment-check email (real invoice)')}
         </h3>
-        <p className="text-sm text-muted-theme mb-4">
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
           {t('crmDev.paymentCheck.help',
             'Fires the admin payment-check email for a real sent/overdue invoice, bypassing the 24h throttle. The three buttons in the email are real signed tokens — clicking them will affect the invoice status.')}
         </p>
 
         {invoiceListLoading ? <Loading /> : (
           <>
-            <label className="block text-xs uppercase tracking-wider text-muted-theme mb-1">
+            <label className="block text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
               {t('crmDev.paymentCheck.selectInvoice', 'Sent or overdue invoice')}
             </label>
             <select
@@ -262,7 +262,7 @@ export const CrmDevelopmentPage: React.FC = () => {
               ))}
             </select>
             {invoiceList && invoiceList.invoices.length === 0 && (
-              <p className="text-sm text-muted-theme mb-3">
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3">
                 {t('crmDev.paymentCheck.noneAvailable',
                   'No sent or overdue invoices in the database.')}
               </p>
@@ -285,7 +285,7 @@ export const CrmDevelopmentPage: React.FC = () => {
           <Mail className="w-4 h-4" />
           {t('crmDev.templates.title', 'Send any CRM email to me (mock data)')}
         </h3>
-        <p className="text-sm text-muted-theme mb-4">
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
           {t('crmDev.templates.help',
             'Queues the chosen template to your own admin email with placeholder values. When the install has a real quote / invoice on file, the appropriate PDF is attached so you can verify the full output.')}
         </p>
@@ -294,12 +294,12 @@ export const CrmDevelopmentPage: React.FC = () => {
           // Env gate banner above already explains the situation —
           // keep this card empty rather than rendering a misleading
           // "0 templates" list.
-          <p className="text-sm text-muted-theme">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">
             {t('crmDev.envDisabled.cardHint',
               'Email templates can\'t be listed until the dev-tools env gate is opened.')}
           </p>
         ) : (templates && templates.length === 0) ? (
-          <p className="text-sm text-muted-theme">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">
             {t('crmDev.templates.empty',
               'No CRM email templates found — run migrations to seed them.')}
           </p>
@@ -323,7 +323,7 @@ export const CrmDevelopmentPage: React.FC = () => {
                     </div>
                     <div className="text-sm font-medium mt-0.5">{title}</div>
                     {description && (
-                      <div className="text-xs text-muted-theme mt-0.5">{description}</div>
+                      <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">{description}</div>
                     )}
                   </div>
                   <Button
