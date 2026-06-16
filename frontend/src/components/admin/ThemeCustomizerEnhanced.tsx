@@ -311,6 +311,7 @@ export const ThemeCustomizerEnhanced: React.FC<ThemeCustomizerEnhancedProps> = (
 
   return (
     <div className="space-y-6">
+      {!forcedColorActive && (<>
       {/* Preset Themes */}
       <Card className="p-6">
         <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
@@ -895,6 +896,7 @@ export const ThemeCustomizerEnhanced: React.FC<ThemeCustomizerEnhancedProps> = (
           )}
         </Card>
       )}
+      </>)}
 
       {/* Color Customization */}
       <Card className="p-6">
@@ -923,7 +925,7 @@ export const ThemeCustomizerEnhanced: React.FC<ThemeCustomizerEnhancedProps> = (
         <div className="mb-6">
           {forcedColorActive && (
             <div className="mb-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
-              {t('branding.forcedStandardLookNote', 'A forced color mode is active — the gallery uses the standard light/dark look. Color mode, surface & text colors, and Typography & Style are hidden here because they don’t apply while the lock is on. Accent colors still apply. Set Force below to “No force” to customize them.')}
+              {t('branding.forcedStandardLookNote', 'A forced color mode is active — the gallery uses the standard light/dark look, so the theme customization is hidden (it doesn’t apply while the lock is on). Your accent brand colors still apply. Set Force to “No force” to customize the gallery theme again.')}
             </div>
           )}
           {!forcedColorActive && (<>
@@ -1142,7 +1144,6 @@ export const ThemeCustomizerEnhanced: React.FC<ThemeCustomizerEnhancedProps> = (
               ))}
             </div>
           </div>
-          </>)}
 
           {/* Accent */}
           <div>
@@ -1193,6 +1194,7 @@ export const ThemeCustomizerEnhanced: React.FC<ThemeCustomizerEnhancedProps> = (
             {/* primaryColor is kept in sync with accentDarkColor inside
                 handleChange() — no dedicated picker. */}
           </div>
+          </>)}
         </div>
       </Card>
 
@@ -1330,6 +1332,7 @@ export const ThemeCustomizerEnhanced: React.FC<ThemeCustomizerEnhancedProps> = (
       </Card>
       )}
 
+      {!forcedColorActive && (<>
       {/* CSS Template Selector - only show if templates are provided */}
       {cssTemplates && cssTemplates.length > 0 && onCssTemplateChange && (
         <Card className="p-6">
@@ -1506,6 +1509,7 @@ export const ThemeCustomizerEnhanced: React.FC<ThemeCustomizerEnhancedProps> = (
           {t('branding.customCSSHelp')}
         </p>
       </Card>
+      </>)}
 
       {/* Actions */}
       {!hideActions && (

@@ -1956,7 +1956,7 @@
     "forceColorModeNone": "Kein Zwang (Benutzerauswahl)",
     "forceColorModeDark": "Dunkelmodus erzwingen",
     "forceColorModeLight": "Hellmodus erzwingen",
-    "forcedStandardLookNote": "Ein erzwungener Farbmodus ist aktiv — die Galerie verwendet das Standard-Hell-/Dunkel-Design. Farbmodus, Flächen- & Textfarben sowie Typografie & Stil werden hier ausgeblendet, da sie bei aktiver Sperre nicht greifen. Akzentfarben gelten weiterhin. Setze „Erzwingen“ unten auf „Keine Erzwingung“, um sie anzupassen.",
+    "forcedStandardLookNote": "Ein erzwungener Farbmodus ist aktiv — die Galerie verwendet das Standard-Hell-/Dunkel-Design, daher ist die Theme-Anpassung ausgeblendet (sie greift bei aktiver Sperre nicht). Deine Akzent-Markenfarben gelten weiterhin. Setze „Erzwingen“ auf „Keine Erzwingung“, um das Galerie-Theme wieder anzupassen.",
     "colorGroupSurfaces": "Oberflächen",
     "colorGroupSurfacesHelp": "Die neutralen Ebenen hinter Ihrem Inhalt. Hintergrund liegt am weitesten zurück; Oberfläche und Erhöht stapeln sich darüber.",
     "backgroundColorHelp": "Die Seite selbst — Hintergrundfarbe jeder Galerie, Admin-Seite und CMS-Seite.",

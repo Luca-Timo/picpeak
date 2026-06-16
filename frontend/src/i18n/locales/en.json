@@ -1545,7 +1545,7 @@
     "forceColorModeNone": "No force (user choice)",
     "forceColorModeDark": "Force dark",
     "forceColorModeLight": "Force light",
-    "forcedStandardLookNote": "A forced color mode is active — the gallery uses the standard light/dark look. Color mode, surface & text colors, and Typography & Style are hidden here because they don’t apply while the lock is on. Accent colors still apply. Set Force below to “No force” to customize them.",
+    "forcedStandardLookNote": "A forced color mode is active — the gallery uses the standard light/dark look, so the theme customization is hidden (it doesn’t apply while the lock is on). Your accent brand colors still apply. Set Force to “No force” to customize the gallery theme again.",
     "colorGroupSurfaces": "Surfaces",
     "colorGroupSurfacesHelp": "The neutral layers behind your content. Background sits furthest back; Surface and Elevated stack on top.",
     "backgroundColorHelp": "The page itself — body background of every gallery, admin page and CMS page.",
