@@ -502,10 +502,14 @@ async function getTaxReport({ from, to, currency, includeCosts = true } = {}) {
     // business doesn't file VAT (payable = 0); when registered it's output VAT
     // minus the RECLAIMABLE input VAT only (foreign non-reclaimable cost VAT is
     // not deducted). Guideline figure — verify with your Treuhänder.
-    let vatRegistered = await getVatRegisteredSetting();
-    // Unset → preserve prior behaviour: if the business charged output VAT this
-    // period it's effectively registered; otherwise treat as small-business.
-    if (vatRegistered === null) vatRegistered = grandTotalVat > 0;
+    // PR #622 concern 4: when VAT registration is UNSET we must NOT guess from
+    // `grandTotalVat > 0` — a quarter with all-exempt cross-border sales has zero
+    // output VAT and would silently flip to "not registered", hiding the reclaim.
+    // Treat null as "not configured": refuse to compute a payable, surface a
+    // warning in the UI instead.
+    const vatRegisteredSetting = await getVatRegisteredSetting();
+    const vatRegistrationConfigured = vatRegisteredSetting !== null;
+    const vatRegistered = vatRegisteredSetting === true;
     const reclaimableInputVat = costs.reclaimableVat != null ? costs.reclaimableVat : costs.totalVat;
 
     // Summary: income vs cost vs result. Result = a simplified
@@ -520,7 +524,12 @@ async function getTaxReport({ from, to, currency, includeCosts = true } = {}) {
       resultNetMinor: grandTotalNet - costs.totalNet,
       resultGrossMinor: grandTotal - costs.totalGross,
       vatRegistered,
-      vatPayableMinor: vatRegistered ? (grandTotalVat - reclaimableInputVat) : 0,
+      vatRegistrationConfigured,
+      // null (not 0) when registration is unconfigured — the UI renders "—" + a
+      // "configure VAT registration" warning rather than a misleading number.
+      vatPayableMinor: !vatRegistrationConfigured
+        ? null
+        : (vatRegistered ? (grandTotalVat - reclaimableInputVat) : 0),
     };
 
     // Unified ledger (#5 — one typed, signed, sortable list). Outgoing

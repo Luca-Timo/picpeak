@@ -35,4 +35,22 @@ async function getAppSetting(key, defaultValue = null) {
   }
 }
 
-module.exports = { getAppSetting };
+/**
+ * Schema-correct upsert into app_settings. The table has NO `created_at`
+ * column (only setting_key/setting_value/setting_type + updated_at — see
+ * src/database/db.js), so inserting created_at throws and silently breaks the
+ * FIRST save of any new key. Centralised here so route authors can't
+ * re-introduce that bug (PR #622 concern 5). `setting_value` is expected to be
+ * already JSON-stringified, matching getAppSetting's JSON.parse on read.
+ */
+async function upsertAppSetting(setting_key, setting_value, setting_type, conn = db) {
+  const existing = await conn('app_settings').where({ setting_key }).first();
+  if (existing) {
+    await conn('app_settings').where({ setting_key })
+      .update({ setting_value, setting_type, updated_at: new Date() });
+  } else {
+    await conn('app_settings').insert({ setting_key, setting_value, setting_type, updated_at: new Date() });
+  }
+}
+
+module.exports = { getAppSetting, upsertAppSetting };

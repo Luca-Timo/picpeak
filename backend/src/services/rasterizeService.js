@@ -22,6 +22,10 @@ const logger = require('../utils/logger');
 
 const RENDER_TIMEOUT_MS = 25000;
 const RENDER_DPI = 150;
+// Per-file resource bound (PR #622 concern 6): pages render one-per-request, so
+// a 1000-page hostile PDF could otherwise be walked page-by-page. Refuse to
+// render beyond this — the inbox pager is capped to match.
+const MAX_RENDERABLE_PAGES = 200;
 
 function renderedDir(docId) {
   return path.join(getStoragePath(), 'business-docs', 'inbound', 'rendered', String(docId));
@@ -41,6 +45,9 @@ function execFileAsync(cmd, args, opts) {
  * @throws AppError 503 when pdftoppm is unavailable, 500 on render failure.
  */
 async function getRenderedPagePath(docId, pdfPath, pageNum) {
+  if (!Number.isInteger(pageNum) || pageNum < 1 || pageNum > MAX_RENDERABLE_PAGES) {
+    throw new AppError(`Page out of range (1–${MAX_RENDERABLE_PAGES})`, 400, 'PAGE_OUT_OF_RANGE');
+  }
   const dir = renderedDir(docId);
   const outPng = path.join(dir, `page-${pageNum}.png`);
   if (fs.existsSync(outPng)) return outPng;

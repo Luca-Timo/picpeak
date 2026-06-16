@@ -3974,7 +3974,8 @@
       "income": "Einnahmen",
       "costs": "Ausgaben",
       "result": "Ergebnis",
-      "vatPayable": "MWST-Zahllast (Umsatz- − Vorsteuer)"
+      "vatPayable": "MWST-Zahllast (Umsatz- − Vorsteuer)",
+      "vatUnconfigured": "Die MWST-Registrierung ist nicht konfiguriert, daher kann die MWST-Zahllast nicht berechnet werden. Lege sie unter Einstellungen → Buchhaltung fest."
     },
     "cost": {
       "source": "Art",

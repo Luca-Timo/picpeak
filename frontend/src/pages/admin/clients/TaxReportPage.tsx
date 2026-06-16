@@ -442,9 +442,17 @@ export const TaxReportPage: React.FC = () => {
                   <div className="flex justify-between gap-3 text-xs text-neutral-500 dark:text-neutral-400">
                     <span>{t('taxReport.summary.vatPayable', 'VAT payable (output − input)')}</span>
                     <span className="tabular-nums">
-                      {formatMinor(report.summary.vatPayableMinor, report.currency, intlLocale)}
+                      {report.summary.vatRegistrationConfigured === false || report.summary.vatPayableMinor == null
+                        ? '—'
+                        : formatMinor(report.summary.vatPayableMinor, report.currency, intlLocale)}
                     </span>
                   </div>
+                  {report.summary.vatRegistrationConfigured === false && (
+                    <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400 pt-1">
+                      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                      <span>{t('taxReport.summary.vatUnconfigured', 'VAT registration isn’t configured, so VAT payable can’t be computed. Set it under Settings → Accounting.')}</span>
+                    </p>
+                  )}
                 </div>
               </div>
             )}

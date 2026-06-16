@@ -3974,7 +3974,8 @@
       "income": "Income",
       "costs": "Costs",
       "result": "Result",
-      "vatPayable": "VAT payable (output − input)"
+      "vatPayable": "VAT payable (output − input)",
+      "vatUnconfigured": "VAT registration isn’t configured, so VAT payable can’t be computed. Set it under Settings → Accounting."
     },
     "cost": {
       "source": "Type",

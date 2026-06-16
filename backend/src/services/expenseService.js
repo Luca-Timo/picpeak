@@ -153,7 +153,10 @@ async function recordInboundDocument({ source, filePath, originalFilename, mimeT
     status: duplicateOfId ? 'duplicate' : 'unsorted',
     parse_status: 'pending',
     parse_method: 'none',
-    page_count: pageCount,
+    // Cap stored page_count to the renderable max (rasterizeService
+    // MAX_RENDERABLE_PAGES) so a hostile high-page PDF can't drive an
+    // unbounded inbox pager (PR #622 concern 6).
+    page_count: pageCount != null ? Math.min(pageCount, 200) : null,
     duplicate_of_id: duplicateOfId,
     created_by_admin_id: adminId || null,
     created_at: now,

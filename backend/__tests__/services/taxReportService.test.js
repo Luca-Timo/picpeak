@@ -371,7 +371,9 @@ describe('getTaxReport', () => {
     expect(out.summary).toMatchObject({
       incomeNetMinor: 10000, incomeVatMinor: 770, incomeGrossMinor: 10770,
       costNetMinor: 0, costVatMinor: 0, costGrossMinor: 0,
-      resultNetMinor: 10000, resultGrossMinor: 10770, vatPayableMinor: 770,
+      resultNetMinor: 10000, resultGrossMinor: 10770,
+      // VAT registration unconfigured in the test DB → refuse to compute payable.
+      vatRegistrationConfigured: false, vatPayableMinor: null,
     });
   });
 
@@ -433,7 +435,8 @@ describe('getTaxReport', () => {
     expect(out.summary).toMatchObject({
       incomeNetMinor: 100000, incomeVatMinor: 7700, incomeGrossMinor: 107700,
       costNetMinor: 25000, costVatMinor: 1540, costGrossMinor: 26540,
-      resultNetMinor: 75000, resultGrossMinor: 81160, vatPayableMinor: 6160,
+      resultNetMinor: 75000, resultGrossMinor: 81160,
+      vatRegistrationConfigured: false, vatPayableMinor: null,
     });
   });
 

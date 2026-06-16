@@ -19,6 +19,7 @@ const {
   getRawPublicSiteSettings,
 } = require('../services/publicSiteService');
 const { sanitizeCss } = require('../utils/cssSanitizer');
+const { upsertAppSetting } = require('../utils/appSettings');
 const { clearShareLinkSettingsCache } = require('../services/shareLinkService');
 const { resetSecurityConfigCache } = require('../utils/authSecurity');
 const router = express.Router();
@@ -211,19 +212,7 @@ router.put('/customer-surface', adminAuth, requirePermission('settings.edit'), a
     }
 
     for (const u of updates) {
-      const existing = await db('app_settings').where('setting_key', u.setting_key).first();
-      if (existing) {
-        await db('app_settings').where('setting_key', u.setting_key).update({
-          setting_value: u.setting_value,
-          setting_type: u.setting_type,
-          updated_at: new Date(),
-        });
-      } else {
-        // app_settings has no created_at column (see src/database/db.js: only
-        // setting_key/value/type + updated_at). Inserting created_at errors —
-        // which broke first-time keys like the VAT-registration toggle.
-        await db('app_settings').insert({ ...u, updated_at: new Date() });
-      }
+      await upsertAppSetting(u.setting_key, u.setting_value, u.setting_type);
     }
 
     // Clear the public-site cache so any consumer relying on it
@@ -282,17 +271,7 @@ router.put('/accounting', adminAuth, requirePermission('settings.edit'), async (
       });
     }
     for (const u of updates) {
-      const existing = await db('app_settings').where('setting_key', u.setting_key).first();
-      if (existing) {
-        await db('app_settings').where('setting_key', u.setting_key).update({
-          setting_value: u.setting_value, setting_type: u.setting_type, updated_at: new Date(),
-        });
-      } else {
-        // app_settings has no created_at column (see src/database/db.js: only
-        // setting_key/value/type + updated_at). Inserting created_at errors —
-        // which broke first-time keys like the VAT-registration toggle.
-        await db('app_settings').insert({ ...u, updated_at: new Date() });
-      }
+      await upsertAppSetting(u.setting_key, u.setting_value, u.setting_type);
     }
     res.json({ message: 'Accounting settings updated', updated: updates.map((u) => u.setting_key) });
   } catch (error) {

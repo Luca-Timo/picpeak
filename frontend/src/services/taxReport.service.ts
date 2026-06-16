@@ -84,7 +84,12 @@ export interface TaxReportSummary {
   costGrossMinor: number;
   resultNetMinor: number;
   resultGrossMinor: number;
-  vatPayableMinor: number;
+  /** Whether `accounting_vat_registered` is configured. When false, the
+   *  report refuses to guess and `vatPayableMinor` is null. */
+  vatRegistrationConfigured?: boolean;
+  /** output VAT − reclaimable input VAT; `null` when VAT registration is
+   *  unconfigured (the UI shows "—" + a warning instead of a guess). */
+  vatPayableMinor: number | null;
 }
 
 /** A single row of the unified ledger (#5). Outgoing invoices carry

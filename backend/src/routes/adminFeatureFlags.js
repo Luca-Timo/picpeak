@@ -18,6 +18,7 @@ const router = express.Router();
 const { db, logActivity } = require('../database/db');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
+const { invalidateFeatureFlagCache } = require('../middleware/requireFeatureFlag');
 const logger = require('../utils/logger');
 
 // Canonical flag list. Keep in sync with frontend
@@ -225,6 +226,10 @@ router.put('/', adminAuth, requirePermission('settings.edit'), async (req, res) 
         }
       }
     });
+
+    // Drop the requireFeatureFlag middleware's short-TTL cache so a toggle takes
+    // effect immediately instead of after ≤10s.
+    invalidateFeatureFlagCache();
 
     await logActivity(
       'feature_flags_updated',
