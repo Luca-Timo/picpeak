@@ -3903,7 +3903,7 @@
       "ledger_account_rebilled_revenue": "Re-billed expenses (revenue)"
     },
     "vatMap": { "title": "VAT code by tax treatment (costs)" },
-    "outputVatMap": { "title": "VAT code by revenue rate" },
+    "outputVatMap": { "title": "VAT code by revenue rate", "empty": "Add output VAT codes above to configure a code per revenue rate." },
     "categoryMap": { "title": "Expense category → account" },
     "accounts": { "title": "Chart of accounts" },
     "vatCodes": { "title": "VAT codes" },

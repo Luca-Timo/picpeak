@@ -20,7 +20,16 @@ import {
 const labelCls = 'block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1';
 const selectCls = 'w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm';
 const TAX_TREATMENTS = ['domestic', 'reverse_charge_service', 'foreign_vat_non_reclaimable', 'import_goods'];
-const OUTPUT_RATES = ['8.1', '2.6', '3.8', '0'];
+
+// Mirror backend ledgerService.rateKey so the map keys we write match the
+// lookup at export time (`outputVatMap[rateKey(inv.vat_rate)]`). 8.10 → '8.1',
+// 0 → '0', 19 → '19'. Keeping these in sync is what lets a user retype their
+// codes to local rates and have the revenue-rate rows follow automatically.
+const rateKey = (rate: number | string): string => {
+  const n = Number(rate);
+  if (!Number.isFinite(n)) return '0';
+  return String(Number(n.toFixed(2)));
+};
 
 const VatModal: React.FC<{ vat?: VatCode; accounts: LedgerAccount[]; onClose: () => void; onDone: () => void }> = ({ vat, accounts, onClose, onDone }) => {
   const { t } = useTranslation();
@@ -96,6 +105,21 @@ export const VatCodesManager: React.FC = () => {
   const inputVat = useMemo(() => (vatCodes ?? []).filter((v) => v.direction === 'input'), [vatCodes]);
   const outputVat = useMemo(() => (vatCodes ?? []).filter((v) => v.direction === 'output'), [vatCodes]);
 
+  // Revenue-rate rows are DATA-DRIVEN: the distinct rates of the output codes
+  // (first-seen order), not a hardcoded Swiss list. Retype a code to a local
+  // rate (e.g. 19) and its row appears here automatically; remove the last code
+  // at a rate and that row drops. Seeds (8.1/2.6/3.8/0) just produce the same
+  // four rows they did before.
+  const outputRates = useMemo(() => {
+    const seen = new Set<string>();
+    const rates: string[] = [];
+    for (const v of outputVat) {
+      const k = rateKey(v.rate);
+      if (!seen.has(k)) { seen.add(k); rates.push(k); }
+    }
+    return rates;
+  }, [outputVat]);
+
   const refetch = () => { qc.invalidateQueries({ queryKey: ['ledger-vat-codes'] }); qc.invalidateQueries({ queryKey: ['ledger-mappings'] }); };
 
   const delVat = useMutation({
@@ -160,17 +184,21 @@ export const VatCodesManager: React.FC = () => {
       {/* Rate→code + treatment→code maps */}
       <Card><CardContent className="p-5">
         <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mb-2">{t('ledger.outputVatMap.title', 'VAT code by revenue rate')}</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {OUTPUT_RATES.map((rate) => (
-            <div key={rate}>
-              <label className={labelCls}>{rate}%</label>
-              <select value={maps.ledger_output_vat_map?.[rate] ?? ''} onChange={(e) => setOutputVatMap(rate, e.target.value)} className={selectCls}>
-                <option value="">{t('ledger.defaults.none', '— none —')}</option>
-                {outputVat.map((v) => <option key={v.id} value={v.code}>{v.code}</option>)}
-              </select>
-            </div>
-          ))}
-        </div>
+        {outputRates.length === 0 ? (
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">{t('ledger.outputVatMap.empty', 'Add output VAT codes above to configure a code per revenue rate.')}</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {outputRates.map((rate) => (
+              <div key={rate}>
+                <label className={labelCls}>{rate}%</label>
+                <select value={maps.ledger_output_vat_map?.[rate] ?? ''} onChange={(e) => setOutputVatMap(rate, e.target.value)} className={selectCls}>
+                  <option value="">{t('ledger.defaults.none', '— none —')}</option>
+                  {outputVat.filter((v) => rateKey(v.rate) === rate).map((v) => <option key={v.id} value={v.code}>{v.code}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
 
         <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mt-5 mb-2">{t('ledger.vatMap.title', 'VAT code by tax treatment (costs)')}</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

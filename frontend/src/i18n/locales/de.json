@@ -3903,7 +3903,7 @@
       "ledger_account_rebilled_revenue": "Weiterverrechnete Spesen (Ertrag)"
     },
     "vatMap": { "title": "MWST-Code nach steuerlicher Behandlung (Kosten)" },
-    "outputVatMap": { "title": "MWST-Code nach Umsatzsatz" },
+    "outputVatMap": { "title": "MWST-Code nach Umsatzsatz", "empty": "Fügen Sie oben Ausgangs-MWST-Codes hinzu, um pro Umsatzsatz einen Code festzulegen." },
     "categoryMap": { "title": "Aufwandkategorie → Konto" },
     "accounts": { "title": "Kontenplan" },
     "vatCodes": { "title": "MWST-Codes" },
