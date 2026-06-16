@@ -316,17 +316,19 @@ export const TaxReportPage: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={exportScope}
-                    onChange={(e) => setExportScope(e.target.value as 'all' | 'income' | 'cost')}
-                    disabled={exportsDisabled}
-                    aria-label={t('taxReport.export.scopeLabel', 'Export scope')}
-                    className={`${selectClassName} min-w-[150px]`}
-                  >
-                    <option value="all">{t('taxReport.export.scopeAll', 'Complete')}</option>
-                    <option value="income">{t('taxReport.export.scopeIncome', 'Income only')}</option>
-                    <option value="cost">{t('taxReport.export.scopeCost', 'Cost only')}</option>
-                  </select>
+                  <label className="flex items-center gap-1.5 text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                    {t('taxReport.export.scopeLabel', 'Scope')}
+                    <select
+                      value={exportScope}
+                      onChange={(e) => setExportScope(e.target.value as 'all' | 'income' | 'cost')}
+                      disabled={exportsDisabled}
+                      className={`${selectClassName} w-auto min-w-[140px]`}
+                    >
+                      <option value="all">{t('taxReport.export.scopeAll', 'Complete')}</option>
+                      <option value="income">{t('taxReport.export.scopeIncome', 'Income only')}</option>
+                      <option value="cost">{t('taxReport.export.scopeCost', 'Cost only')}</option>
+                    </select>
+                  </label>
                   <Button
                     className="min-w-[150px]"
                     variant="outline"

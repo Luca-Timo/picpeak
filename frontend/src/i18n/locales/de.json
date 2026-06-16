@@ -3953,7 +3953,7 @@
     "export": {
       "reportTitle": "Bericht",
       "reportHint": "Lesbare Liste — für Ihre Unterlagen.",
-      "scopeLabel": "Export-Umfang",
+      "scopeLabel": "Umfang",
       "scopeAll": "Vollständig",
       "scopeIncome": "Nur Einnahmen",
       "scopeCost": "Nur Kosten",
