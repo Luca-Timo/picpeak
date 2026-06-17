@@ -59,7 +59,7 @@ import { toast } from 'react-toastify';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 import { Button, Input, Card, Loading, MarkdownContent, LocalizedDateInput } from '../../components/common';
-import { EventCategoryManager, AdminPhotoGrid, AdminPhotoViewer, PhotoFilters, PasswordResetModal, PublishGalleryDialog, ThemeCustomizerEnhanced, ThemeDisplay, HeroPhotoSelector, FocalPointPicker, PhotoUploadModal, FeedbackSettings, FeedbackModerationPanel, EventRenameDialog, PhotoFilterPanel, PhotoExportMenu, AdminGuestsList } from '../../components/admin';
+import { EventCategoryManager, AdminPhotoGrid, AdminPhotoViewer, PhotoFilters, PasswordResetModal, PublishGalleryDialog, DuplicateEventDialog, ThemeCustomizerEnhanced, ThemeDisplay, HeroPhotoSelector, FocalPointPicker, PhotoUploadModal, FeedbackSettings, FeedbackModerationPanel, EventRenameDialog, PhotoFilterPanel, PhotoExportMenu, AdminGuestsList } from '../../components/admin';
 import { CustomerAccountPicker } from '../../components/admin/CustomerAccountPicker';
 import { EventReminderOverrideCard } from '../../components/admin/EventReminderOverrideCard';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
@@ -374,6 +374,7 @@ export const EventDetailsPage: React.FC = () => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showPublishDialog, setShowPublishDialog] = useState(false);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<ThemeConfig | null>(null);
   const [currentPresetName, setCurrentPresetName] = useState<string>('default');
@@ -547,6 +548,28 @@ export const EventDetailsPage: React.FC = () => {
     },
     onError: () => {
       toast.error(t('errors.somethingWentWrong'));
+    },
+  });
+
+  // Duplicate mutation (#626). Backend creates a draft inheriting branding +
+  // behaviour + categories from the source; we navigate to the new event so
+  // the admin can finish configuring + publish.
+  const duplicateMutation = useMutation({
+    mutationFn: (data: {
+      event_name: string;
+      event_date?: string;
+      customer_name?: string;
+      customer_email?: string;
+    }) => eventsService.duplicateEvent(parseInt(id!), data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-events'] });
+      toast.success(t('events.duplicateDialog.successToast', 'Gallery duplicated.'));
+      setShowDuplicateDialog(false);
+      navigate(`/admin/events/${result.id}`);
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.errors?.[0]?.msg || err?.response?.data?.error;
+      toast.error(msg || t('errors.somethingWentWrong'));
     },
   });
 
@@ -2191,6 +2214,17 @@ export const EventDetailsPage: React.FC = () => {
                     </p>
                   </>
                 )}
+                {/* Duplicate (#626) — visible in both draft and live mode.
+                    Creates a new draft inheriting this gallery's config. */}
+                <Button
+                  variant="outline"
+                  leftIcon={<Copy className="w-4 h-4" />}
+                  onClick={() => setShowDuplicateDialog(true)}
+                  isLoading={duplicateMutation.isPending}
+                  className="w-full justify-center"
+                >
+                  {t('events.duplicateEvent', 'Duplicate gallery')}
+                </Button>
               </div>
             </Card>
           )}
@@ -2611,6 +2645,20 @@ export const EventDetailsPage: React.FC = () => {
           onConfirm={(password) => publishMutation.mutate(password)}
           onClose={() => {
             if (!publishMutation.isPending) setShowPublishDialog(false);
+          }}
+        />
+      )}
+
+      {/* Duplicate Event Dialog (#626) — admin types a new event name/date
+          (+ optional customer); backend clones the source gallery's config
+          and we navigate to the new draft. */}
+      {showDuplicateDialog && (
+        <DuplicateEventDialog
+          sourceEventName={event.event_name}
+          isDuplicating={duplicateMutation.isPending}
+          onConfirm={(data) => duplicateMutation.mutate(data)}
+          onClose={() => {
+            if (!duplicateMutation.isPending) setShowDuplicateDialog(false);
           }}
         />
       )}

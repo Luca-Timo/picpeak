@@ -1176,6 +1176,193 @@ router.post('/:id/publish', adminAuth, requirePermission('events.edit'), require
   }
 });
 
+// Duplicate an event (#626). Creates a new DRAFT gallery that inherits the
+// source event's branding, behaviour, hero/header, feedback, and category
+// configuration — admin then fills in customer + publishes via the publish
+// dialog (#627), where the password is set. Photos, hero photo selection,
+// client-access secrets, customer assignments, archive/sent state are NOT
+// carried over.
+router.post('/:id/duplicate', adminAuth, requirePermission('events.create'), requireEventOwnership, [
+  body('event_name').trim().notEmpty().withMessage('Event name is required'),
+  body('event_date').optional({ values: 'falsy' }).isDate(),
+  body('customer_name').optional().trim(),
+  body('customer_email').optional({ values: 'falsy' }).isEmail().normalizeEmail(IDENTITY_PRESERVING_NORMALIZE_EMAIL),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { id } = req.params;
+    const source = await db('events').where('id', id).first();
+    if (!source) {
+      return res.status(404).json({ error: 'Source event not found' });
+    }
+
+    const { event_name, event_date, customer_name, customer_email } = req.body;
+
+    // Generate a fresh unique slug using the same shape as the create path.
+    const slugify = require('../utils/slug').slugify;
+    const processedEventName = slugify(event_name);
+    const slugSuffix = event_date || crypto.randomBytes(3).toString('hex');
+    const baseSlug = `${source.event_type}-${processedEventName}-${slugSuffix}`;
+    let slug = baseSlug;
+    let counter = 1;
+    // eslint-disable-next-line no-await-in-loop
+    while (await db('events').where({ slug }).first()) {
+      slug = `${baseSlug}-${counter}`;
+      counter += 1;
+    }
+
+    // Recompute expires_at: preserve the source's expiration window (delta
+    // between source.expires_at and source.event_date) so the duplicate keeps
+    // the same "active for N days" feel. Falls back to 30 days if source had
+    // no expiration set.
+    let newExpiresAt = null;
+    if (event_date) {
+      let expirationDays = 30;
+      if (source.expires_at && source.event_date) {
+        const days = Math.round(
+          (new Date(source.expires_at).getTime() - new Date(source.event_date).getTime())
+          / (24 * 60 * 60 * 1000),
+        );
+        if (days > 0) expirationDays = days;
+      }
+      const [year, month, day] = event_date.split('-').map((s) => parseInt(s, 10));
+      const baseDate = new Date(year, month - 1, day);
+      baseDate.setDate(baseDate.getDate() + expirationDays);
+      newExpiresAt = baseDate;
+    }
+
+    const shareToken = crypto.randomBytes(16).toString('hex');
+    const { shareLinkToStore } = await buildShareLinkVariants({ slug, shareToken });
+
+    // Random-placeholder password hash. When the admin publishes via the
+    // PublishGalleryDialog (#627), the dialog re-hashes whatever they type and
+    // overwrites this. Pattern matches the create path at line ~606.
+    const password_hash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), getBcryptRounds());
+
+    // Create the storage folder structure (same as create path).
+    const storagePath = process.env.STORAGE_PATH || path.join(__dirname, '../../../storage');
+    const eventPath = path.join(storagePath, 'events/active', slug);
+    await fs.mkdir(path.join(eventPath, 'collages'), { recursive: true });
+    await fs.mkdir(path.join(eventPath, 'individual'), { recursive: true });
+
+    const customerColumnsAvailable = await hasCustomerContactColumns();
+    const calendarColumnsExist = await hasColumnCached('events', 'is_full_day');
+
+    // Build the insert row. Copy behaviour + branding fields from source;
+    // leave per-gallery secrets / state / photos blank.
+    const insertResult = await db('events').insert({
+      slug,
+      event_type: source.event_type,
+      event_name,
+      event_date: event_date || null,
+      ...(calendarColumnsExist ? {
+        event_time_start: source.event_time_start,
+        event_time_end: source.event_time_end,
+        is_full_day: source.is_full_day,
+      } : {}),
+      ...(customerColumnsAvailable ? {
+        customer_name: customer_name || null,
+        customer_email: customer_email || null,
+      } : {}),
+      host_name: customer_name || null,
+      host_email: customer_email || null,
+      admin_email: source.admin_email || null,
+      password_hash,
+      welcome_message: source.welcome_message || '',
+      color_theme: source.color_theme,
+      share_link: shareLinkToStore,
+      share_token: shareToken,
+      expires_at: newExpiresAt ? newExpiresAt.toISOString() : null,
+      created_at: new Date().toISOString(),
+      created_by: req.admin.id,
+      allow_user_uploads: source.allow_user_uploads,
+      upload_category_id: source.upload_category_id,
+      allow_downloads: source.allow_downloads,
+      disable_right_click: source.disable_right_click,
+      enable_devtools_protection: source.enable_devtools_protection,
+      watermark_downloads: source.watermark_downloads,
+      watermark_text: source.watermark_text,
+      allow_presigned_download: source.allow_presigned_download,
+      require_password: source.require_password,
+      css_template_id: source.css_template_id || null,
+      hero_logo_visible: source.hero_logo_visible,
+      hero_logo_size: source.hero_logo_size,
+      hero_logo_position: source.hero_logo_position,
+      header_style: source.header_style || 'standard',
+      hero_divider_style: source.hero_divider_style || 'wave',
+      hero_image_anchor: source.hero_image_anchor || 'center',
+      photo_cap: source.photo_cap || null,
+      is_draft: formatBoolean(true),
+      default_photo_sort: source.default_photo_sort || 'upload_date_desc',
+      // Client-access secrets and the OG-share opt-in deliberately do NOT
+      // carry over — admin re-decides per gallery.
+      client_access_enabled: formatBoolean(false),
+      og_image_share_enabled: formatBoolean(false),
+    }).returning('id');
+
+    const newEventId = insertResult[0]?.id || insertResult[0];
+
+    // Copy event_feedback_settings if the source had a row (only present when
+    // feedback_enabled was true on the source event).
+    const sourceFeedback = await db('event_feedback_settings').where({ event_id: id }).first();
+    if (sourceFeedback) {
+      await db('event_feedback_settings').insert({
+        event_id: newEventId,
+        feedback_enabled: sourceFeedback.feedback_enabled,
+        allow_ratings: sourceFeedback.allow_ratings,
+        allow_likes: sourceFeedback.allow_likes,
+        allow_comments: sourceFeedback.allow_comments,
+        allow_favorites: sourceFeedback.allow_favorites,
+        require_name_email: sourceFeedback.require_name_email,
+        moderate_comments: sourceFeedback.moderate_comments,
+        show_feedback_to_guests: sourceFeedback.show_feedback_to_guests,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    // Copy per-event photo categories (global categories are not duplicated —
+    // they apply to every event already). Mapping by name; photo_categories
+    // has no foreign key into photos here so we just clone the rows.
+    if (await db.schema.hasTable('photo_categories')) {
+      const sourceCategories = await db('photo_categories')
+        .where({ event_id: id })
+        .where(function () { this.whereNull('is_global').orWhere('is_global', formatBoolean(false)); })
+        .select('name', 'slug', 'is_global');
+      if (sourceCategories.length > 0) {
+        await db('photo_categories').insert(
+          sourceCategories.map((c) => ({
+            event_id: newEventId,
+            name: c.name,
+            slug: c.slug,
+            is_global: formatBoolean(false),
+          })),
+        );
+      }
+    }
+
+    await logActivity('event_duplicated',
+      { source_event_id: parseInt(id, 10), source_event_name: source.event_name },
+      newEventId,
+      { type: 'admin', id: req.admin.id, name: req.admin.username },
+    );
+
+    res.json({
+      message: 'Event duplicated successfully',
+      id: newEventId,
+      slug,
+      is_draft: true,
+    });
+  } catch (error) {
+    logger.error('Error duplicating event:', { error: error.message });
+    res.status(500).json({ error: 'Failed to duplicate event' });
+  }
+});
+
 // Update event
 router.put('/:id', adminAuth, requirePermission('events.edit'), requireEventOwnership, [
   body('event_name').optional().trim().notEmpty(),

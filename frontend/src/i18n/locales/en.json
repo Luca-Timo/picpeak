@@ -574,6 +574,22 @@
       "passwordHelp": "Re-type the password set at creation (or pick a new one). The email includes this exact text; the backend re-hashes it so the gallery login still works.",
       "errorMinLength": "Password must be at least 6 characters long."
     },
+    "duplicateEvent": "Duplicate gallery",
+    "duplicateDialog": {
+      "title": "Duplicate gallery",
+      "description": "Creates a new draft gallery that inherits the branding, behaviour, feedback, and category configuration from \"{{sourceEventName}}\". Photos, password, and share tokens are NOT carried over.",
+      "eventNameLabel": "New event name *",
+      "eventNamePlaceholder": "e.g. Müller Wedding 2026",
+      "eventDateLabel": "Event date",
+      "eventDateHelp": "Leave blank to use a random suffix in the gallery URL. Expiration is recomputed from this date plus the source gallery's expiration window.",
+      "customerNameLabel": "Customer name",
+      "customerNamePlaceholder": "Optional — fill in later if unknown",
+      "customerEmailLabel": "Customer email",
+      "customerEmailPlaceholder": "Optional",
+      "confirm": "Create duplicate",
+      "errorNameRequired": "Event name is required.",
+      "successToast": "Gallery duplicated."
+    },
     "draftBanner": "This gallery is in draft mode. Upload your photos, then publish when ready.",
     "subtitle": "Manage your photo galleries and events",
     "failedToLoadEvents": "Failed to load events",

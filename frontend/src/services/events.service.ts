@@ -232,6 +232,22 @@ export const eventsService = {
     return response.data;
   },
 
+  // Duplicate an event (#626). Creates a new draft gallery that inherits the
+  // source event's branding + behaviour + feedback + categories. Photos are
+  // NOT carried over. The returned id/slug are the new draft event.
+  async duplicateEvent(
+    eventId: number,
+    data: {
+      event_name: string;
+      event_date?: string;
+      customer_name?: string;
+      customer_email?: string;
+    },
+  ): Promise<{ message: string; id: number; slug: string; is_draft: boolean }> {
+    const response = await api.post(`/admin/events/${eventId}/duplicate`, data);
+    return response.data;
+  },
+
   // Get admin preview token (uses existing admin session token)
   getPreviewToken(): string | null {
     const token = sessionStorage.getItem('admin_token') || localStorage.getItem('admin_token');

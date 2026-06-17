@@ -1027,6 +1027,22 @@
       "passwordHelp": "Gib das bei der Erstellung gesetzte Passwort erneut ein (oder wähle ein neues). Die E-Mail enthält genau diesen Text; das Backend hasht es erneut, sodass die Galerie-Anmeldung weiterhin funktioniert.",
       "errorMinLength": "Das Passwort muss mindestens 6 Zeichen lang sein."
     },
+    "duplicateEvent": "Galerie duplizieren",
+    "duplicateDialog": {
+      "title": "Galerie duplizieren",
+      "description": "Erstellt eine neue Entwurfsgalerie, die Branding, Verhalten, Feedback und Kategorien aus \"{{sourceEventName}}\" übernimmt. Fotos, Passwort und Share-Tokens werden NICHT übernommen.",
+      "eventNameLabel": "Neuer Veranstaltungsname *",
+      "eventNamePlaceholder": "z. B. Hochzeit Müller 2026",
+      "eventDateLabel": "Veranstaltungsdatum",
+      "eventDateHelp": "Leer lassen, um eine zufällige Endung in der Galerie-URL zu verwenden. Das Ablaufdatum wird aus diesem Datum zuzüglich des Ablauffensters der Quellgalerie berechnet.",
+      "customerNameLabel": "Kundenname",
+      "customerNamePlaceholder": "Optional – kann später ausgefüllt werden",
+      "customerEmailLabel": "Kunden-E-Mail",
+      "customerEmailPlaceholder": "Optional",
+      "confirm": "Duplikat erstellen",
+      "errorNameRequired": "Veranstaltungsname ist erforderlich.",
+      "successToast": "Galerie dupliziert."
+    },
     "draftBanner": "Diese Galerie befindet sich im Entwurfsmodus. Laden Sie Ihre Fotos hoch und veröffentlichen Sie, wenn Sie bereit sind.",
     "subtitle": "Verwalten Sie Ihre Fotogalerien und Veranstaltungen",
     "failedToLoadEvents": "Veranstaltungen konnten nicht geladen werden",

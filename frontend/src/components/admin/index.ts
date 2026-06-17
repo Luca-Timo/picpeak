@@ -18,6 +18,7 @@ export { AdminPhotoViewer } from './AdminPhotoViewer';
 export { PhotoFilters } from './PhotoFilters';
 export { PasswordResetModal } from './PasswordResetModal';
 export { PublishGalleryDialog } from './PublishGalleryDialog';
+export { DuplicateEventDialog } from './DuplicateEventDialog';
 export { AdminAuthenticatedImage } from './AdminAuthenticatedImage';
 export { AdminAuthenticatedVideo } from './AdminAuthenticatedVideo';
 export { ThemeCustomizerEnhanced } from './ThemeCustomizerEnhanced';
