@@ -69,6 +69,15 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    # Memory cap (optional, recommended on shared / multi-tenant hosts):
+    # uncomment to bound the backend's RSS. Sharp/libvips decodes the full
+    # uncompressed image before resize, so a multi-photo upload batch can
+    # spike memory. With a cap set, the kernel OOM-killer takes the
+    # container instead of the whole host; restart:unless-stopped brings
+    # it back. Match this to the RAM budget you've allocated for picpeak
+    # (`docker stats` shows the live usage).
+    # mem_limit: 3g
+    # memswap_limit: 3g
     healthcheck:
       # Backend exposes /health on internal port 3000.
       # The backend image only ships wget (Alpine base) — using curl
