@@ -130,6 +130,10 @@ function transformInvoice(i) {
     sentAt: i.sent_at,
     netAmountMinor: i.net_amount_minor,
     vatRate: i.vat_rate == null ? null : Number(i.vat_rate),
+    // Snapshotted VAT code (migration 130) — the editor needs it to repopulate
+    // VatRateSelect on edit; without it the dropdown falls back to rate-matching
+    // and a custom-rate code is silently lost.
+    vatCode: i.vat_code || null,
     vatAmountMinor: i.vat_amount_minor,
     shippingAmountMinor: i.shipping_amount_minor,
     totalAmountMinor: i.total_amount_minor,

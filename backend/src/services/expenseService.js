@@ -343,7 +343,9 @@ async function billInboundNow(trx, id, customerAccountId, eventId, disposition, 
     billed_invoice_line_item_id: line ? line.id : null,
     updated_at: new Date(),
   });
-  await logActivity('incoming_invoice_rebilled', { inboundDocumentId: id, invoiceId }, adminId);
+  // NOTE: no logActivity here — it writes via the GLOBAL db, which deadlocks
+  // when called inside this transaction on a SQLite-backed install (a second
+  // write connection blocks on the held write lock). Callers log AFTER commit.
   return invoiceId;
 }
 
@@ -367,6 +369,7 @@ async function categorizeInbound(id, payload, adminId) {
     throw new AppError('customerAccountId is required to re-bill', 400, 'CUSTOMER_REQUIRED');
   }
 
+  let billedInvoiceId = null;
   await db.transaction(async (trx) => {
     const row = await trx('inbound_documents').where({ id }).first();
     if (!row) throw new AppError('Incoming invoice not found', 404, 'INBOUND_NOT_FOUND');
@@ -409,12 +412,14 @@ async function categorizeInbound(id, payload, adminId) {
       // Monthly/manual = accumulator → bill now onto the running draft.
       // Per-event → leave PENDING for bundling via billPendingRebills.
       if (customer.billing_cadence === 'monthly' || customer.billing_cadence === 'manual') {
-        await billInboundNow(trx, id, customerAccountId, payload.eventId || null, disposition, markup, adminId);
+        billedInvoiceId = await billInboundNow(trx, id, customerAccountId, payload.eventId || null, disposition, markup, adminId);
       }
     }
-
-    await logActivity('incoming_invoice_categorized', { inboundDocumentId: id, disposition }, adminId);
   });
+  // Audit logging AFTER commit — logActivity writes via the global db and would
+  // deadlock if run inside the transaction above on a SQLite-backed install.
+  await logActivity('incoming_invoice_categorized', { inboundDocumentId: id, disposition }, adminId);
+  if (billedInvoiceId) await logActivity('incoming_invoice_rebilled', { inboundDocumentId: id, invoiceId: billedInvoiceId }, adminId);
   return getInbound(id);
 }
 
@@ -447,6 +452,9 @@ async function rebillInbound(id, payload, adminId, trx0) {
     return billInboundNow(trx, id, payload.customerAccountId, payload.eventId || doc.eventId || null, 'rebill', markup, adminId);
   };
   const invoiceId = trx0 ? await run(trx0) : await db.transaction(run);
+  // Log after commit (global-db write — see billInboundNow). When a caller
+  // supplied trx0, that outer transaction owns the audit log instead.
+  if (!trx0) await logActivity('incoming_invoice_rebilled', { inboundDocumentId: id, invoiceId }, adminId);
   return { document: await getInbound(id), invoiceId };
 }
 
@@ -518,7 +526,7 @@ async function billPendingRebills(customerId, adminId) {
     );
   }
 
-  return await db.transaction(async (trx) => {
+  const result = await db.transaction(async (trx) => {
     const pending = await trx('inbound_documents')
       .where({ customer_account_id: customer.id })
       .whereNull('billed_invoice_id')
@@ -556,9 +564,11 @@ async function billPendingRebills(customerId, adminId) {
       });
     }
 
-    await logActivity('incoming_invoices_rebilled_bundle', { customerId: customer.id, invoiceId, count: pending.length }, adminId);
     return { invoiceId, count: pending.length };
   });
+  // Audit log after commit (global-db write — see billInboundNow).
+  await logActivity('incoming_invoices_rebilled_bundle', { customerId: customer.id, invoiceId: result.invoiceId, count: result.count }, adminId);
+  return result;
 }
 
 /** Mark the supplier paid on the incoming invoice (the payable lives here). */
