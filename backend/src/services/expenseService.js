@@ -375,7 +375,10 @@ async function categorizeInbound(id, payload, adminId) {
     // #1: unwind any prior re-bill so the disposition can change.
     if (doc.billedInvoiceId) await unwindBilledLine(trx, doc);
 
-    const markup = billsToCustomer
+    // Markup is a re-bill concept only. A pass-through (durchlaufender Posten)
+    // is invoiced at cost / VAT-neutral, so it never carries a markup.
+    const appliesMarkup = disposition === 'rebill';
+    const markup = appliesMarkup
       ? await resolveMarkup(
         { markupType: payload.markupType, markupPercent: payload.markupPercent, markupFlatMinor: payload.markupFlatMinor },
         payload, payload.contractId, trx,
@@ -388,9 +391,9 @@ async function categorizeInbound(id, payload, adminId) {
       event_id: BOOKING_DISPOSITIONS.includes(disposition) ? (payload.eventId || null) : null,
       category_id: disposition === 'eigener_aufwand' ? (payload.categoryId || null) : null,
       customer_account_id: customerAccountId,
-      markup_type: billsToCustomer ? markup.type : 'none',
-      markup_percent: billsToCustomer && markup.type === 'percent' ? markup.percent : null,
-      markup_flat_minor: billsToCustomer && markup.type === 'flat' ? markup.flatMinor : null,
+      markup_type: appliesMarkup ? markup.type : 'none',
+      markup_percent: appliesMarkup && markup.type === 'percent' ? markup.percent : null,
+      markup_flat_minor: appliesMarkup && markup.type === 'flat' ? markup.flatMinor : null,
       // Cleared here; re-set by billInboundNow when we bill immediately.
       billed_invoice_id: null,
       billed_invoice_line_item_id: null,

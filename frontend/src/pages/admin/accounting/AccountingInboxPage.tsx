@@ -212,7 +212,8 @@ const TriageModal: React.FC<{ doc: InboundDocument; categories: ExpenseCategory[
         categoryId: disposition === 'eigener_aufwand' ? (categoryId ?? null) : null,
         // Both rebill and passthrough can attach to a customer (#3).
         customerAccountId: BOOKING_DISPOSITIONS.includes(disposition) && customer[0] ? customer[0].id : null,
-        ...markupPayload(),
+        // Markup is a re-bill concept only — a pass-through bills at cost.
+        ...(disposition === 'rebill' ? markupPayload() : { markupType: 'none', markupPercent: null, markupFlatMinor: null }),
       });
       if (pay) {
         await accountingService.markInboundPaid(doc.id, { paid: true, paymentReference: reference || undefined });
@@ -252,12 +253,18 @@ const TriageModal: React.FC<{ doc: InboundDocument; categories: ExpenseCategory[
               <select value={disposition} onChange={(e) => setDisposition(e.target.value as Disposition)} className={selectCls}>
                 {DISPOSITIONS.map((d) => <option key={d} value={d}>{t(`accounting.disposition.${d}`, d)}</option>)}
               </select>
+              {/* Explain the selected disposition — re-bill vs pass-through vs
+                  company expense aren't obvious from the labels alone. */}
+              <p className="mt-1 rounded-md bg-neutral-50 dark:bg-neutral-800/60 px-2.5 py-1.5 text-xs text-neutral-600 dark:text-neutral-400">
+                {t(`accounting.disposition.help.${disposition}`, '')}
+              </p>
             </div>
 
             {BOOKING_DISPOSITIONS.includes(disposition) && (
               <div>
                 <label className={labelCls}>{t('accounting.booking.label', 'Book to')}</label>
                 <EventBookingSelect value={eventId} onChange={setEventId} className={selectCls} />
+                <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{t('accounting.booking.inboundHint', 'Which event carries this cost in your reports & tax export (Company = general overhead). This is separate from who you re-bill it to.')}</p>
               </div>
             )}
 
@@ -276,14 +283,18 @@ const TriageModal: React.FC<{ doc: InboundDocument; categories: ExpenseCategory[
                   <CustomerAccountPicker value={customer.slice(0, 1)} onChange={(next) => setCustomer(next.slice(-1))} />
                   {disposition === 'durchlaufend' && <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{t('accounting.inbox.field.passthroughCustomerHint', 'Optional — attach a client to re-bill this passthrough; leave empty to only book it to the event.')}</p>}
                 </div>
-                <div><label className={labelCls}>{t('accounting.inbox.field.markup', 'Markup')}</label>
-                  <select value={markupType} onChange={(e) => setMarkupType(e.target.value as MarkupType)} className={selectCls}>
-                    <option value="none">{t('accounting.markup.none', 'None / from contract')}</option>
-                    <option value="percent">{t('accounting.markup.percent', 'Percent')}</option>
-                    <option value="flat">{t('accounting.markup.flat', 'Flat')}</option>
-                  </select>
-                </div>
-                {markupType !== 'none' && <DecimalInput value={markupValue} onChange={setMarkupValue} fractionDigits={2} className={selectCls} placeholder={markupType === 'percent' ? '%' : currency} />}
+                {/* Markup is a re-bill concept only. A pass-through is invoiced
+                    at cost (VAT-neutral), so no markup control here. */}
+                {disposition === 'rebill' && (<>
+                  <div><label className={labelCls}>{t('accounting.inbox.field.markup', 'Markup')}</label>
+                    <select value={markupType} onChange={(e) => setMarkupType(e.target.value as MarkupType)} className={selectCls}>
+                      <option value="none">{t('accounting.markup.none', 'None / from contract')}</option>
+                      <option value="percent">{t('accounting.markup.percent', 'Percent')}</option>
+                      <option value="flat">{t('accounting.markup.flat', 'Flat')}</option>
+                    </select>
+                  </div>
+                  {markupType !== 'none' && <DecimalInput value={markupValue} onChange={setMarkupValue} fractionDigits={2} className={selectCls} placeholder={markupType === 'percent' ? '%' : currency} />}
+                </>)}
               </div>
             )}
           </div>

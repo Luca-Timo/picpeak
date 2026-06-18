@@ -3502,7 +3502,14 @@
       "durchlaufend": "Durchlaufender Posten",
       "eigener_aufwand": "Eigener Aufwand",
       "duplikat": "Duplikat",
-      "abgelehnt": "Abgelehnt"
+      "abgelehnt": "Abgelehnt",
+      "help": {
+        "rebill": "Eigene Lieferantenkosten, die du an einen Kunden weiterverrechnest — meist mit Zuschlag. Wird als Kosten und als weiterverrechneter Ertrag gebucht.",
+        "durchlaufend": "Ein Betrag, den du nur im Namen des Kunden vorstreckst und exakt durchreichst — kein Zuschlag, MwSt-neutral (durchlaufender Posten). Kunde zuordnen, um ihn zum Selbstkostenpreis weiterzuverrechnen.",
+        "eigener_aufwand": "Eigene Kosten, die nicht weiterverrechnet werden. Kategorie wählen, damit der Posten richtig in der Erfolgsrechnung landet.",
+        "duplikat": "Duplikat einer bereits erfassten Rechnung — wird nicht verbucht.",
+        "abgelehnt": "Dokument ablehnen — wird nicht verbucht."
+      }
     },
     "markup": {
       "none": "Keiner / aus Vertrag",
@@ -3576,7 +3583,8 @@
       "label": "Buchen auf",
       "company": "Firma",
       "event": "Event",
-      "eventId": "Event-ID"
+      "eventId": "Event-ID",
+      "inboundHint": "Auf welches Event diese Kosten in Auswertungen & Steuerexport entfallen (Firma = allgemeiner Aufwand). Unabhängig davon, an wen du weiterverrechnest."
     },
     "incoming": {
       "triageTitle": "Eingangsrechnung kategorisieren",

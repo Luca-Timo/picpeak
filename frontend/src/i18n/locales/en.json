@@ -3502,7 +3502,14 @@
       "durchlaufend": "Pass-through",
       "eigener_aufwand": "Company expense",
       "duplikat": "Duplicate",
-      "abgelehnt": "Declined"
+      "abgelehnt": "Declined",
+      "help": {
+        "rebill": "Your own supplier cost that you invoice on to a client — usually with a markup. Booked as both a cost and re-billed revenue.",
+        "durchlaufend": "An amount you only front on behalf of a client and pass through at the exact figure — no markup, VAT-neutral (durchlaufender Posten). Attach the client to re-bill it at cost.",
+        "eigener_aufwand": "Your own cost, not re-billed to anyone. Pick a category so it lands in the right place in your P&L.",
+        "duplikat": "A duplicate of an invoice you already captured — excluded from the books.",
+        "abgelehnt": "Decline this document — excluded from the books."
+      }
     },
     "markup": {
       "none": "None / from contract",
@@ -3576,7 +3583,8 @@
       "label": "Book to",
       "company": "Company",
       "event": "Event",
-      "eventId": "Event ID"
+      "eventId": "Event ID",
+      "inboundHint": "Which event carries this cost in your reports & tax export (Company = general overhead). This is separate from who you re-bill it to."
     },
     "incoming": {
       "triageTitle": "Categorize incoming invoice",
