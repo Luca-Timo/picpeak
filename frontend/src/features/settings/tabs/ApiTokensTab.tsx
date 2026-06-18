@@ -183,7 +183,7 @@ export const ApiTokensTab: React.FC = () => {
                 <tr className="text-left text-neutral-500 dark:text-neutral-400 border-b border-neutral-200 dark:border-neutral-700">
                   <th className="py-2 pr-3">{t('settings.apiTokens.name', 'Name')}</th>
                   <th className="py-2 pr-3">{t('settings.apiTokens.scopes', 'Scopes')}</th>
-                  <th className="py-2 pr-3">Preview</th>
+                  <th className="py-2 pr-3">{t('settings.apiTokens.preview', 'Preview')}</th>
                   <th className="py-2 pr-3">{t('settings.apiTokens.lastUsed', 'Last used')}</th>
                   <th className="py-2 pr-3">{t('settings.apiTokens.created', 'Created')}</th>
                   <th className="py-2 pr-3">{t('settings.apiTokens.status', 'Status')}</th>
@@ -228,7 +228,7 @@ export const ApiTokensTab: React.FC = () => {
                             variant="ghost"
                             leftIcon={<Trash2 className="w-4 h-4" />}
                             onClick={() => {
-                              if (confirm(t('settings.apiTokens.confirmRevoke', `Revoke "${token.name}"? Existing integrations using this token will start getting 401.`))) {
+                              if (confirm(t('settings.apiTokens.confirmRevoke', { name: token.name, defaultValue: `Revoke "${token.name}"? Existing integrations using this token will start getting 401.` }))) {
                                 revokeMutation.mutate(token.id);
                               }
                             }}
