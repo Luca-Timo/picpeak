@@ -219,7 +219,14 @@ async function createEntry(customerId, payload, adminId) {
   // if neither override, customer default, nor install default is set.
   resolveEffectiveRate({ hourly_rate_minor_override: override }, customer, installDefaultMinor);
 
-  return await db.transaction(async (trx) => {
+  // logActivity writes via the GLOBAL db; calling it inside the transaction
+  // below deadlocks against the held write lock on a SQLite-backed install (a
+  // second write connection blocks). Stage it here, fire it AFTER commit.
+  // (The monthly/billing paths additionally route through createInvoice, whose
+  // OWN internal logActivity still runs in-trx — that shared root limitation is
+  // tracked in feedback_sqlite_global_write_in_transaction.)
+  let logInfo = null;
+  const result = await db.transaction(async (trx) => {
     const row = {
       customer_account_id: customer.id,
       entry_date: entryDate,
@@ -268,21 +275,15 @@ async function createEntry(customerId, payload, adminId) {
         billed_at: new Date(),
         updated_at: new Date(),
       });
-      try {
-        await logActivity('hour_entry_logged_to_monthly_draft',
-          { entryId, customerId: customer.id, invoiceId },
-          null, `admin:${adminId}`);
-      } catch (_) {}
+      logInfo = { type: 'hour_entry_logged_to_monthly_draft', meta: { entryId, customerId: customer.id, invoiceId } };
       return { id: entryId, status: 'billed', invoiceId };
     }
 
-    try {
-      await logActivity('hour_entry_logged',
-        { entryId, customerId: customer.id },
-        null, `admin:${adminId}`);
-    } catch (_) {}
+    logInfo = { type: 'hour_entry_logged', meta: { entryId, customerId: customer.id } };
     return { id: entryId, status: 'unbilled' };
   });
+  if (logInfo) { try { await logActivity(logInfo.type, logInfo.meta, null, `admin:${adminId}`); } catch (_) {} }
+  return result;
 }
 
 /**
@@ -293,7 +294,8 @@ async function createEntry(customerId, payload, adminId) {
  * stay accurate.
  */
 async function updateEntry(entryId, payload, adminId) {
-  return await db.transaction(async (trx) => {
+  let logInfo = null; // logged after commit — see createEntry note.
+  const result = await db.transaction(async (trx) => {
     const entry = await trx('customer_hour_entries').where({ id: entryId }).first();
     if (!entry) throw new AppError('Entry not found', 404);
     const invoice = entry.invoice_id
@@ -375,13 +377,11 @@ async function updateEntry(entryId, payload, adminId) {
       updated_at: next.updated_at,
     });
 
-    try {
-      await logActivity('hour_entry_updated',
-        { entryId, customerId: entry.customer_account_id },
-        null, `admin:${adminId}`);
-    } catch (_) {}
+    logInfo = { type: 'hour_entry_updated', meta: { entryId, customerId: entry.customer_account_id } };
     return { id: entryId };
   });
+  if (logInfo) { try { await logActivity(logInfo.type, logInfo.meta, null, `admin:${adminId}`); } catch (_) {} }
+  return result;
 }
 
 /**
@@ -390,7 +390,8 @@ async function updateEntry(entryId, payload, adminId) {
  * recomputes invoice totals before deleting the entry row itself.
  */
 async function deleteEntry(entryId, adminId) {
-  return await db.transaction(async (trx) => {
+  let logInfo = null; // logged after commit — see createEntry note.
+  const result = await db.transaction(async (trx) => {
     const entry = await trx('customer_hour_entries').where({ id: entryId }).first();
     if (!entry) throw new AppError('Entry not found', 404);
     const invoice = entry.invoice_id
@@ -427,13 +428,11 @@ async function deleteEntry(entryId, adminId) {
 
     await trx('customer_hour_entries').where({ id: entryId }).del();
 
-    try {
-      await logActivity('hour_entry_deleted',
-        { entryId, customerId: entry.customer_account_id, hadInvoice: !!entry.invoice_id },
-        null, `admin:${adminId}`);
-    } catch (_) {}
+    logInfo = { type: 'hour_entry_deleted', meta: { entryId, customerId: entry.customer_account_id, hadInvoice: !!entry.invoice_id } };
     return { deleted: true };
   });
+  if (logInfo) { try { await logActivity(logInfo.type, logInfo.meta, null, `admin:${adminId}`); } catch (_) {} }
+  return result;
 }
 
 /**
@@ -454,7 +453,8 @@ async function billUnbilledEntries(customerId, adminId) {
     );
   }
 
-  return await db.transaction(async (trx) => {
+  let logInfo = null; // logged after commit — see createEntry note.
+  const result = await db.transaction(async (trx) => {
     const unbilled = await trx('customer_hour_entries')
       .where({ customer_account_id: customer.id, status: 'unbilled' })
       .orderBy('entry_date', 'asc').orderBy('start_time', 'asc');
@@ -500,14 +500,11 @@ async function billUnbilledEntries(customerId, adminId) {
       });
     }
 
-    try {
-      await logActivity('hour_entries_billed',
-        { customerId: customer.id, invoiceId, entryCount: unbilled.length },
-        null, `admin:${adminId}`);
-    } catch (_) {}
-
+    logInfo = { type: 'hour_entries_billed', meta: { customerId: customer.id, invoiceId, entryCount: unbilled.length } };
     return { invoiceId, entriesBilled: unbilled.length };
   });
+  if (logInfo) { try { await logActivity(logInfo.type, logInfo.meta, null, `admin:${adminId}`); } catch (_) {} }
+  return result;
 }
 
 /**
