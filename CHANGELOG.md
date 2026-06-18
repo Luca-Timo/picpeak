@@ -5,6 +5,13 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.65.1-beta.0](https://github.com/the-luap/picpeak/compare/v3.65.0-beta.0...v3.65.1-beta.0) (2026-06-18)
+
+
+### Bug Fixes
+
+* **i18n:** sweep activity-type translations + Events / API Tokens / Webhooks settings tabs ([f17c654](https://github.com/the-luap/picpeak/commit/f17c654e146683683f347ae2cd46de9cf3e47989))
+
 ## [3.65.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.64.0-beta.0...v3.65.0-beta.0) (2026-06-18)
 
 
