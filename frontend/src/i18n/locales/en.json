@@ -151,7 +151,8 @@
     "preview": "Preview",
     "duplicate": "Duplicate",
     "showAll": "Show all",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "show": "Show"
   },
   "upload": {
     "photoCategory": "Photo Category",

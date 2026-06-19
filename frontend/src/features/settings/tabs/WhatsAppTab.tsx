@@ -144,7 +144,7 @@ export const WhatsAppTab: React.FC = () => {
                   type="button"
                   onClick={() => setShowToken((v) => !v)}
                   className="p-1"
-                  aria-label={showToken ? 'Hide' : 'Show'}
+                  aria-label={showToken ? t('common.hide', 'Hide') : t('common.show', 'Show')}
                 >
                   {showToken ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
