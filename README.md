@@ -49,6 +49,7 @@ Unlike expensive SaaS solutions, PicPeak gives you:
 - 🔐 **Password Protection** - Secure client galleries
 - 📧 **Automated Emails** - Creation confirmations and expiration warnings
 - 📊 **Analytics Dashboard** - Track views, downloads, and engagement
+- 📽️ **Live Slideshow** - A separate fullscreen "Diashow" link per event for projectors at live events — auto-picks-up new uploads while it runs, with transitions, a logo watermark, and image-fit/colour options ([guide](docs/live-slideshow.md))
 - 🎨 **Custom Themes** - Match your brand perfectly
 - 🌐 **Public Landing Page** - Publish a curated marketing page when guests visit your root URL
 
@@ -154,6 +155,7 @@ Full documentation lives at **[docs.picpeak.app](https://docs.picpeak.app)** —
 - 🚀 [**Deployment**](https://docs.picpeak.app/deployment) - Docker, environment variables, reverse proxy, SSL
 - ⚙️ [**Admin Settings**](https://docs.picpeak.app/guides/admin-settings) - Every tab in the Settings panel
 - 🎯 [**Creating Events**](https://docs.picpeak.app/guides/creating-events) - Full event field reference
+- 📽️ [**Live Slideshow**](https://docs.picpeak.app/features/live-slideshow) - Fullscreen projector view that auto-updates during live events
 - 💾 [**Backup & Restore**](https://docs.picpeak.app/guides/backup-restore) - Backup configuration, restore wizard, full disaster recovery
 - 🔌 [**API Reference**](https://docs.picpeak.app/api) - REST endpoints, OpenAPI spec, webhooks
 - 🪝 [**Webhooks**](https://docs.picpeak.app/features/webhooks) - Event payloads, signing, filters, templates
@@ -185,6 +187,7 @@ Perfect for:
 - 📸 **Portrait Studios** - Client galleries with download limits
 - 🏢 **Corporate Events** - Internal photo sharing with branding
 - 🎓 **School Photography** - Secure parent access with expiration
+- 📽️ **Live Events** - Put a [Live Slideshow](docs/live-slideshow.md) on the venue projector that updates as you shoot
 
 ## 🏗️ Tech Stack
 
