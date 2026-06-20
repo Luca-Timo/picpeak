@@ -302,6 +302,23 @@ router.put('/slideshow', adminAuth, requirePermission('settings.edit'), async (r
     if (has('slideshow_fit')) {
       push('slideshow_fit', req.body.slideshow_fit === 'contain' ? 'contain' : 'cover');
     }
+    // Picpeak-wide display preset (default style new events inherit).
+    if (has('slideshow_interval_ms')) {
+      const n = Math.min(120000, Math.max(1000, Math.round(Number(req.body.slideshow_interval_ms) || 5000)));
+      push('slideshow_interval_ms', n);
+    }
+    if (has('slideshow_transition')) {
+      const allowed = ['crossfade', 'cut', 'slide', 'kenburns', 'dipwhite', 'dipblack'];
+      push('slideshow_transition', allowed.includes(req.body.slideshow_transition) ? req.body.slideshow_transition : 'crossfade');
+    }
+    if (has('slideshow_transition_ms')) {
+      const n = Math.min(5000, Math.max(100, Math.round(Number(req.body.slideshow_transition_ms) || 800)));
+      push('slideshow_transition_ms', n);
+    }
+    if (has('slideshow_colorfilter')) {
+      const allowed = ['none', 'bw', 'sepia', 'warm', 'cool', 'vignette'];
+      push('slideshow_colorfilter', allowed.includes(req.body.slideshow_colorfilter) ? req.body.slideshow_colorfilter : 'none');
+    }
     if (has('slideshow_watermark_enabled')) push('slideshow_watermark_enabled', !!req.body.slideshow_watermark_enabled);
     if (has('slideshow_watermark_source')) {
       const v = ['logo', 'logo_dark', 'favicon', 'event'].includes(req.body.slideshow_watermark_source) ? req.body.slideshow_watermark_source : 'logo';

@@ -3238,6 +3238,8 @@
       "contain": "Black bars (no crop)"
     },
     "fitHint": "\"Fill\" crops to fill the screen; \"Black bars\" shows the whole photo — better for portrait images.",
+    "presetTitle": "Default style for new slideshows",
+    "presetHint": "Applied to events created from now on; each event can still override it.",
     "defaultsSaved": "Slideshow defaults saved",
     "liveHint": "Changes apply to a running slideshow within a few seconds — no need to regenerate the link.",
     "saveSettings": "Save slideshow settings",

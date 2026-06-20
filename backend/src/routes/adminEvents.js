@@ -26,6 +26,7 @@ const { hasColumnCached } = require('../utils/schemaCache');
 const { validateFileType } = require('../utils/fileSecurityUtils');
 const { requireEventOwnership } = require('../middleware/ownership');
 const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
+const { getAppSetting } = require('../utils/appSettings');
 const { getFrontendBaseUrl } = require('../utils/frontendUrl');
 const downloadZipService = require('../services/downloadZipService');
 
@@ -673,40 +674,26 @@ router.post('/', adminAuth, requirePermission('events.create'), [
     const calendarColumnsExist = await hasColumnCached('events', 'is_full_day');
 
     // Insert into database
-    // Seed the new event's Live Slideshow settings from the event TYPE's preset
-    // (migration 138). The admin configures "weddings fade slowly with our
-    // white logo, sepia" once on the type; every new wedding inherits it. The
-    // share token is NOT seeded — the link is still minted on demand. Guarded
+    // Seed the new event's Live Slideshow display style from the PICPEAK-WIDE
+    // preset (app_settings, Settings → Slideshow). New events inherit it and the
+    // admin can still override per event. Watermark is left NULL = inherit the
+    // global watermark; the share token is minted on demand, not seeded. Guarded
     // so un-migrated installs (mid-branch) don't reference missing columns.
     let slideshowSeed = {};
     if (await hasColumnCached('events', 'show_interval_ms')) {
       try {
-        const type = await eventTypeService.getEventTypeBySlugPrefix(event_type);
-        const preset = type?.slideshow_preset
-          ? (typeof type.slideshow_preset === 'string' ? JSON.parse(type.slideshow_preset) : type.slideshow_preset)
-          : null;
-        if (preset && typeof preset === 'object') {
-          const intP = (v, min, max) => (Number.isFinite(+v) ? Math.min(max, Math.max(min, parseInt(v, 10))) : undefined);
-          const oneOf = (v, allowed) => (allowed.includes(v) ? v : undefined);
-          // Tri-state watermark: 'on'/'off' seed an explicit override; 'inherit'
-          // (or unset) leaves the column NULL so the event follows the global.
-          let watermarkSeed;
-          if (preset.watermark === 'on' || preset.watermark === true) watermarkSeed = formatBoolean(true);
-          else if (preset.watermark === 'off' || preset.watermark === false) watermarkSeed = formatBoolean(false);
-          const seed = {
-            show_interval_ms: intP(preset.interval_ms, 1000, 120000),
-            show_transition: oneOf(preset.transition, SLIDESHOW_TRANSITIONS),
-            show_transition_ms: intP(preset.transition_ms, 100, 5000),
-            show_watermark: watermarkSeed,
-            show_colorfilter: oneOf(preset.colorfilter, SLIDESHOW_COLORFILTERS),
-          };
-          // Only carry through fields the preset actually set.
-          for (const [k, v] of Object.entries(seed)) {
-            if (v !== undefined) slideshowSeed[k] = v;
-          }
-        }
+        const intP = (v, min, max) => (Number.isFinite(+v) ? Math.min(max, Math.max(min, parseInt(v, 10))) : undefined);
+        const oneOf = (v, allowed) => (allowed.includes(v) ? v : undefined);
+        const i = intP(await getAppSetting('slideshow_interval_ms', undefined), 1000, 120000);
+        const tr = oneOf(await getAppSetting('slideshow_transition', undefined), SLIDESHOW_TRANSITIONS);
+        const tms = intP(await getAppSetting('slideshow_transition_ms', undefined), 100, 5000);
+        const cf = oneOf(await getAppSetting('slideshow_colorfilter', undefined), SLIDESHOW_COLORFILTERS);
+        if (i !== undefined) slideshowSeed.show_interval_ms = i;
+        if (tr) slideshowSeed.show_transition = tr;
+        if (tms !== undefined) slideshowSeed.show_transition_ms = tms;
+        if (cf) slideshowSeed.show_colorfilter = cf;
       } catch (e) {
-        logger.warn('Failed to seed slideshow settings from event type preset', { error: e.message });
+        logger.warn('Failed to seed slideshow settings from global preset', { error: e.message });
       }
     }
 

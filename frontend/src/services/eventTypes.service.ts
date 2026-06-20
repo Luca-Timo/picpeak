@@ -4,7 +4,6 @@
  */
 
 import { api } from '../config/api';
-import type { SlideshowStyle } from './slideshow.service';
 
 export interface EventType {
   id: number;
@@ -13,9 +12,6 @@ export interface EventType {
   emoji: string;
   theme_preset: string;
   theme_config: string | null;
-  // Live Slideshow preset new events of this type inherit (migration 138).
-  // Stored as a JSON string by the API; null = no preset.
-  slideshow_preset: string | null;
   display_order: number;
   is_system: boolean;
   is_active: boolean;
@@ -29,7 +25,6 @@ export interface CreateEventTypeData {
   emoji?: string;
   theme_preset?: string;
   theme_config?: Record<string, unknown>;
-  slideshow_preset?: SlideshowStyle | null;
   display_order?: number;
 }
 
@@ -39,7 +34,6 @@ export interface UpdateEventTypeData {
   emoji?: string;
   theme_preset?: string;
   theme_config?: Record<string, unknown>;
-  slideshow_preset?: SlideshowStyle | null;
   display_order?: number;
   is_active?: boolean;
 }

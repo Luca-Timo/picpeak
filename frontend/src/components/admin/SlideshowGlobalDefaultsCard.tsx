@@ -17,12 +17,18 @@ import {
   SLIDESHOW_WATERMARK_POSITIONS,
   SLIDESHOW_WATERMARK_STYLES,
   SLIDESHOW_FITS,
+  SLIDESHOW_TRANSITIONS,
+  SLIDESHOW_COLORFILTERS,
   type SlideshowGlobalDefaults,
 } from '../../services/slideshow.service';
 import { WatermarkSourcePicker } from './WatermarkSourcePicker';
 
 const DEFAULTS: SlideshowGlobalDefaults = {
   slideshow_fit: 'cover',
+  slideshow_interval_ms: 5000,
+  slideshow_transition: 'crossfade',
+  slideshow_transition_ms: 800,
+  slideshow_colorfilter: 'none',
   slideshow_watermark_enabled: false,
   slideshow_watermark_source: 'logo',
   slideshow_watermark_position: 'bottom-right',
@@ -46,6 +52,10 @@ export const SlideshowGlobalDefaultsCard: React.FC = () => {
       if (cancelled || !s) return;
       setVal({
         slideshow_fit: s.slideshow_fit ?? DEFAULTS.slideshow_fit,
+        slideshow_interval_ms: s.slideshow_interval_ms ?? DEFAULTS.slideshow_interval_ms,
+        slideshow_transition: s.slideshow_transition ?? DEFAULTS.slideshow_transition,
+        slideshow_transition_ms: s.slideshow_transition_ms ?? DEFAULTS.slideshow_transition_ms,
+        slideshow_colorfilter: s.slideshow_colorfilter ?? DEFAULTS.slideshow_colorfilter,
         slideshow_watermark_enabled: s.slideshow_watermark_enabled ?? DEFAULTS.slideshow_watermark_enabled,
         slideshow_watermark_source: s.slideshow_watermark_source ?? DEFAULTS.slideshow_watermark_source,
         slideshow_watermark_position: s.slideshow_watermark_position ?? DEFAULTS.slideshow_watermark_position,
@@ -97,6 +107,65 @@ export const SlideshowGlobalDefaultsCard: React.FC = () => {
           <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
             {t('slideshow.fitHint', '"Fill" crops to fill the screen; "Black bars" shows the whole photo — better for portrait images.')}
           </p>
+        </div>
+
+        {/* Default display style new slideshows inherit (override per event) */}
+        <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700">
+          <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            {t('slideshow.presetTitle', 'Default style for new slideshows')}
+          </p>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">
+            {t('slideshow.presetHint', 'Applied to events created from now on; each event can still override it.')}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className={labelClass}>{t('slideshow.transitionLabel', 'Transition')}</label>
+              <select
+                value={val.slideshow_transition}
+                onChange={(e) => setVal({ ...val, slideshow_transition: e.target.value as SlideshowGlobalDefaults['slideshow_transition'] })}
+                className={inputClass}
+              >
+                {SLIDESHOW_TRANSITIONS.map((tr) => (
+                  <option key={tr} value={tr}>{t(`slideshow.transition.${tr}`, tr)}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>{t('slideshow.intervalLabel', 'Display time (sec)')}</label>
+              <input
+                type="number"
+                min={1}
+                max={120}
+                value={Math.round(val.slideshow_interval_ms / 1000)}
+                onChange={(e) => setVal({ ...val, slideshow_interval_ms: Math.min(120, Math.max(1, parseInt(e.target.value, 10) || 5)) * 1000 })}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>{t('slideshow.transitionSpeedLabel', 'Transition speed (ms)')}</label>
+              <input
+                type="number"
+                min={100}
+                max={5000}
+                step={100}
+                value={val.slideshow_transition_ms}
+                onChange={(e) => setVal({ ...val, slideshow_transition_ms: Math.min(5000, Math.max(100, parseInt(e.target.value, 10) || 800)) })}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>{t('slideshow.colorfilterLabel', 'Color filter')}</label>
+              <select
+                value={val.slideshow_colorfilter}
+                onChange={(e) => setVal({ ...val, slideshow_colorfilter: e.target.value as SlideshowGlobalDefaults['slideshow_colorfilter'] })}
+                className={inputClass}
+              >
+                {SLIDESHOW_COLORFILTERS.map((cf) => (
+                  <option key={cf} value={cf}>{t(`slideshow.colorfilter.${cf}`, cf)}</option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
         <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700">

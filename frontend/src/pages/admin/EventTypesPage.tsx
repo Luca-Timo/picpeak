@@ -18,21 +18,6 @@ import {
 import { Button, Input, Card, Loading } from '../../components/common';
 import { eventTypesService, EventType, CreateEventTypeData, UpdateEventTypeData } from '../../services/eventTypes.service';
 import { GALLERY_THEME_PRESETS } from '../../types/theme.types';
-import { SlideshowStyleFields } from '../../components/admin/SlideshowStyleFields';
-import { DEFAULT_SLIDESHOW_STYLE, type SlideshowStyle } from '../../services/slideshow.service';
-import { useFeatureEnabled } from '../../contexts/FeatureFlagsContext';
-
-// Parse a type's stored slideshow_preset (JSON string | object | null) into a
-// full SlideshowStyle, falling back to defaults for any missing keys.
-function parseSlideshowPreset(raw: EventType['slideshow_preset']): SlideshowStyle {
-  if (!raw) return { ...DEFAULT_SLIDESHOW_STYLE };
-  try {
-    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    return { ...DEFAULT_SLIDESHOW_STYLE, ...obj };
-  } catch {
-    return { ...DEFAULT_SLIDESHOW_STYLE };
-  }
-}
 
 // Common emoji options for event types
 const EMOJI_OPTIONS = [
@@ -336,7 +321,6 @@ const EventTypeModal: React.FC<EventTypeModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const isEditing = !!eventType;
-  const slideshowEnabled = useFeatureEnabled('slideshow');
 
   const [form, setForm] = useState<CreateEventTypeData>({
     name: eventType?.name || '',
@@ -344,12 +328,6 @@ const EventTypeModal: React.FC<EventTypeModalProps> = ({
     emoji: eventType?.emoji || '📷',
     theme_preset: eventType?.theme_preset || 'default'
   });
-
-  // Slideshow preset new events of this type inherit. Edited via the shared
-  // <SlideshowStyleFields>; serialized into slideshow_preset on submit.
-  const [slideshowStyle, setSlideshowStyle] = useState<SlideshowStyle>(
-    () => parseSlideshowPreset(eventType?.slideshow_preset)
-  );
 
   const [errors, setErrors] = useState<Partial<Record<keyof CreateEventTypeData, string>>>({});
 
@@ -379,11 +357,9 @@ const EventTypeModal: React.FC<EventTypeModalProps> = ({
       if (form.slug_prefix !== eventType?.slug_prefix) updates.slug_prefix = form.slug_prefix;
       if (form.emoji !== eventType?.emoji) updates.emoji = form.emoji;
       if (form.theme_preset !== eventType?.theme_preset) updates.theme_preset = form.theme_preset;
-      const originalStyle = JSON.stringify(parseSlideshowPreset(eventType?.slideshow_preset));
-      if (slideshowEnabled && JSON.stringify(slideshowStyle) !== originalStyle) updates.slideshow_preset = slideshowStyle;
       onSubmit(updates);
     } else {
-      onSubmit({ ...form, ...(slideshowEnabled ? { slideshow_preset: slideshowStyle } : {}) });
+      onSubmit(form);
     }
   };
 
@@ -483,22 +459,6 @@ const EventTypeModal: React.FC<EventTypeModalProps> = ({
                   ))}
                 </select>
               </div>
-
-              {/* Live Slideshow preset (migration 138). New events of this type
-                  inherit these slideshow defaults; admins can still override
-                  per event on the event detail page. Gated behind the
-                  `slideshow` feature flag. */}
-              {slideshowEnabled && (
-              <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700">
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
-                  {t('eventTypes.form.slideshowPreset', 'Slideshow preset')}
-                </label>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">
-                  {t('eventTypes.form.slideshowPresetHint', 'Default slideshow style for new events of this type.')}
-                </p>
-                <SlideshowStyleFields value={slideshowStyle} onChange={setSlideshowStyle} />
-              </div>
-              )}
 
               {/* Active toggle for editing */}
               {isEditing && (

@@ -3214,6 +3214,8 @@
       "contain": "Schwarze Balken (kein Beschnitt)"
     },
     "fitHint": "„Füllen“ beschneidet das Bild zum Ausfüllen; „Schwarze Balken“ zeigt das ganze Foto – besser für Hochformat.",
+    "presetTitle": "Standard-Stil für neue Diashows",
+    "presetHint": "Gilt für ab jetzt erstellte Events; jedes Event kann ihn weiterhin überschreiben.",
     "defaultsSaved": "Diashow-Vorgaben gespeichert",
     "liveHint": "Änderungen werden in einer laufenden Diashow innerhalb weniger Sekunden übernommen – der Link muss nicht neu erstellt werden.",
     "saveSettings": "Diashow-Einstellungen speichern",

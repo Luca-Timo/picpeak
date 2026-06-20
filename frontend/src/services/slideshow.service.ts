@@ -24,13 +24,13 @@ export const SLIDESHOW_COLORFILTERS: SlideshowColorFilter[] = ['none', 'bw', 'se
 export const SLIDESHOW_WATERMARK_SOURCES: SlideshowWatermarkSource[] = ['logo', 'logo_dark', 'favicon', 'event'];
 export const SLIDESHOW_WATERMARK_POSITIONS: SlideshowWatermarkPosition[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
 
-// Canonical editable style shape, shared by the per-event card and the
-// per-event-type preset editor. The per-event-type `slideshow_preset` JSON
-// uses exactly these keys; the per-event API maps them to `show_*` columns.
+// Per-event editable style (the override). The picpeak-wide DEFAULT for these
+// lives in the global Settings → Slideshow tab; new events inherit it and the
+// per-event card maps these to `show_*` columns.
 //
 // NOTE: the watermark LOOK (logo/position/opacity/style/size) lives ONLY in the
-// global Settings → Slideshow tab — it is not duplicated here. Per-event/type
-// carry just the `watermark` MODE (inherit/on/off), i.e. the override structure.
+// global tab — not duplicated here. Per-event carries just the `watermark` MODE
+// (inherit/on/off), i.e. the override structure.
 export interface SlideshowStyle {
   interval_ms: number;
   transition: SlideshowTransition;
@@ -53,6 +53,11 @@ export const DEFAULT_SLIDESHOW_STYLE: SlideshowStyle = {
 export interface SlideshowGlobalDefaults {
   // How slides fill the screen (fill+crop vs letterbox/black bars).
   slideshow_fit: SlideshowFit;
+  // Picpeak-wide display preset (default style new events inherit).
+  slideshow_interval_ms: number;
+  slideshow_transition: SlideshowTransition;
+  slideshow_transition_ms: number;
+  slideshow_colorfilter: SlideshowColorFilter;
   slideshow_watermark_enabled: boolean;
   slideshow_watermark_source: SlideshowWatermarkSource;
   slideshow_watermark_position: SlideshowWatermarkPosition;

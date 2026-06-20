@@ -89,7 +89,6 @@ router.post('/', adminAuth, requirePermission('settings.edit'), [
   body('emoji').optional().trim(),
   body('theme_preset').optional().trim(),
   body('theme_config').optional(),
-  body('slideshow_preset').optional(),
   body('display_order').optional().isInt({ min: 0 })
 ], async (req, res) => {
   try {
@@ -104,7 +103,6 @@ router.post('/', adminAuth, requirePermission('settings.edit'), [
       emoji,
       theme_preset,
       theme_config,
-      slideshow_preset,
       display_order
     } = req.body;
 
@@ -114,7 +112,6 @@ router.post('/', adminAuth, requirePermission('settings.edit'), [
       emoji,
       theme_preset,
       theme_config,
-      slideshow_preset,
       display_order
     });
 
@@ -153,7 +150,6 @@ router.put('/:id', adminAuth, requirePermission('settings.edit'), [
   body('emoji').optional().trim(),
   body('theme_preset').optional().trim(),
   body('theme_config').optional(),
-  body('slideshow_preset').optional(),
   body('display_order').optional().isInt({ min: 0 }),
   body('is_active').optional().isBoolean()
 ], async (req, res) => {
