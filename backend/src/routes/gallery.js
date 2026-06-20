@@ -26,7 +26,9 @@ const {
 const { buildContentDisposition } = require('../utils/filenameSanitizer');
 const { getStorage } = require('../services/storage');
 const { setGalleryAuthCookies } = require('../utils/tokenUtils');
-const { getSetting } = require('../services/settingsService');
+// Read globals from app_settings (the real table) — settingsService.getSetting
+// queries a non-existent `settings` table and throws.
+const { getAppSetting } = require('../utils/appSettings');
 const fs = require('fs');
 
 // Get storage path from environment or default
@@ -268,21 +270,21 @@ async function slideshowSettings(event) {
   const wm = event.show_watermark;
   const inherit = (wm === null || wm === undefined);
   const enabled = inherit
-    ? (await getSetting('slideshow_watermark_enabled', false)) === true
+    ? (await getAppSetting('slideshow_watermark_enabled', false)) === true
     : (wm === true || wm === 1 || wm === '1');
   let watermark = null;
   if (enabled) {
     const source = inherit
-      ? (await getSetting('slideshow_watermark_source', 'logo'))
+      ? (await getAppSetting('slideshow_watermark_source', 'logo'))
       : (event.show_watermark_source || 'logo');
     const position = inherit
-      ? (await getSetting('slideshow_watermark_position', 'bottom-right'))
+      ? (await getAppSetting('slideshow_watermark_position', 'bottom-right'))
       : (event.show_watermark_position || 'bottom-right');
     const opacity = inherit
-      ? (await getSetting('slideshow_watermark_opacity', 60))
+      ? (await getAppSetting('slideshow_watermark_opacity', 60))
       : (event.show_watermark_opacity ?? 60);
     const style = inherit
-      ? (await getSetting('slideshow_watermark_style', 'white'))
+      ? (await getAppSetting('slideshow_watermark_style', 'white'))
       : (event.show_watermark_style || 'white');
     // Resolve the chosen logo to a URL. Branding assets come from settings;
     // the event source uses the event's own hero logo.
@@ -290,11 +292,11 @@ async function slideshowSettings(event) {
     if (source === 'event') {
       url = event.hero_logo_url || null;
     } else if (source === 'logo_dark') {
-      url = await getSetting('branding_logo_url_dark', null);
+      url = await getAppSetting('branding_logo_url_dark', null);
     } else if (source === 'favicon') {
-      url = await getSetting('branding_favicon_url', null);
+      url = await getAppSetting('branding_favicon_url', null);
     } else {
-      url = await getSetting('branding_logo_url', null);
+      url = await getAppSetting('branding_logo_url', null);
     }
     if (url) {
       watermark = { url, position: position || 'bottom-right', opacity: opacity ?? 60, style: style || 'white' };
