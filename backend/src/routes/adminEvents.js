@@ -25,6 +25,7 @@ const { normaliseEventTimeTriple } = require('../services/eventService');
 const { hasColumnCached } = require('../utils/schemaCache');
 const { validateFileType } = require('../utils/fileSecurityUtils');
 const { requireEventOwnership } = require('../middleware/ownership');
+const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
 const { getFrontendBaseUrl } = require('../utils/frontendUrl');
 const downloadZipService = require('../services/downloadZipService');
 
@@ -1929,7 +1930,7 @@ async function loadOwnedEvent(req) {
 // Generate (or rotate) the slideshow share token. Idempotent in intent: each
 // call mints a fresh token, which both "Generate" (first time) and "Regenerate"
 // (rotate, kills the old link) use.
-router.post('/:id/slideshow/generate', adminAuth, requirePermission('events.edit'), requireEventOwnership, async (req, res) => {
+router.post('/:id/slideshow/generate', adminAuth, requirePermission('events.edit'), requireFeatureFlag('slideshow'), requireEventOwnership, async (req, res) => {
   try {
     const event = await loadOwnedEvent(req);
     if (!event) {
@@ -1988,7 +1989,7 @@ router.post('/:id/slideshow/disable', adminAuth, requirePermission('events.edit'
 // Update the LIVE slideshow settings (display time / transition style / speed).
 // A running projector picks these up via the show-page settings poll within a
 // few seconds — no need to regenerate the link.
-router.patch('/:id/slideshow', adminAuth, requirePermission('events.edit'), requireEventOwnership, [
+router.patch('/:id/slideshow', adminAuth, requirePermission('events.edit'), requireFeatureFlag('slideshow'), requireEventOwnership, [
   body('show_interval_ms').optional().isInt({ min: 1000, max: 120000 }),
   body('show_transition').optional().isIn(SLIDESHOW_TRANSITIONS),
   body('show_transition_ms').optional().isInt({ min: 100, max: 5000 }),

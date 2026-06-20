@@ -29,6 +29,7 @@ const { setGalleryAuthCookies } = require('../utils/tokenUtils');
 // Read globals from app_settings (the real table) — settingsService.getSetting
 // queries a non-existent `settings` table and throws.
 const { getAppSetting } = require('../utils/appSettings');
+const { isFeatureEnabled } = require('../middleware/requireFeatureFlag');
 const fs = require('fs');
 
 // Get storage path from environment or default
@@ -245,6 +246,10 @@ function slideshowPhotosQuery(eventId) {
 // dead link reveals nothing and stops any projector on its next poll.
 async function resolveSlideshow(slug, token) {
   if (!token) return null;
+  // The `slideshow` feature flag is a master kill-switch: when an admin turns
+  // Live Slideshow off, every existing /show/ link dies on its next request
+  // (the running projector stops within one /state poll), not just the admin UI.
+  if (!(await isFeatureEnabled('slideshow'))) return null;
   const event = await db('events')
     .where({
       slug,
