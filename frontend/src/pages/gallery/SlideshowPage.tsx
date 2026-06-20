@@ -278,9 +278,13 @@ export function SlideshowPage() {
   const imgStyle = (buf: 0 | 1): React.CSSProperties => {
     const isActive = active === buf;
     const style: React.CSSProperties = {
-      maxWidth: '100%',
-      maxHeight: '100%',
-      objectFit: 'contain',
+      // Fill the whole viewport. `maxWidth/maxHeight` alone left the <img> at
+      // the photo's intrinsic size (e.g. the 1920px preview), so it never
+      // scaled up to the projector — leaving black bars all round. Pin to the
+      // full container and let object-fit do the scaling.
+      width: '100%',
+      height: '100%',
+      objectFit: 'cover',
       filter: imageFilter(settings.colorfilter),
     };
     if (settings.transition === 'kenburns' && isActive) {
