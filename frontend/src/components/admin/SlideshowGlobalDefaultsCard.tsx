@@ -23,6 +23,9 @@ import {
 } from '../../services/slideshow.service';
 import { WatermarkSourcePicker } from './WatermarkSourcePicker';
 
+// Optimistic form state shown until the GET resolves; mirrors the backend
+// defaults so the controls don't flicker on load (backend is the source of
+// truth — these are just the pre-fetch placeholder).
 const DEFAULTS: SlideshowGlobalDefaults = {
   slideshow_fit: 'cover',
   slideshow_interval_ms: 5000,

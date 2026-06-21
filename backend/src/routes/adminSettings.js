@@ -345,6 +345,9 @@ router.put('/slideshow', adminAuth, requirePermission('settings.edit'), async (r
     for (const u of updates) {
       await upsertAppSetting(u.setting_key, u.setting_value, u.setting_type);
     }
+    // Drop the slideshow-globals cache so a running projector picks up the
+    // change on its next poll rather than after the 5s TTL.
+    require('../utils/slideshowGlobals').invalidateSlideshowGlobals();
     res.json({ message: 'Slideshow settings updated', updated: updates.map((u) => u.setting_key) });
   } catch (error) {
     console.error('Slideshow settings save error:', error);

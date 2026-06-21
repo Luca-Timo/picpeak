@@ -25,6 +25,7 @@ const cookieParser = require('cookie-parser');
 const request = require('supertest');
 const { bootCrmDb, seedMinimal } = require('../integration/helpers/crmDb');
 const { invalidateFeatureFlagCache } = require('../../src/middleware/requireFeatureFlag');
+const { invalidateSlideshowGlobals } = require('../../src/utils/slideshowGlobals');
 
 const SLUG = 'wedding-test';
 const TOKEN = 'show-tok-abcdef';
@@ -89,6 +90,7 @@ describe('public Live Slideshow routes', () => {
     await db('app_settings').del();
     await db('feature_flags').del();
     invalidateFeatureFlagCache();
+    invalidateSlideshowGlobals();
     await setFlag(db, 'slideshow', true);
   });
 

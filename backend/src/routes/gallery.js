@@ -28,7 +28,7 @@ const { getStorage } = require('../services/storage');
 const { setGalleryAuthCookies } = require('../utils/tokenUtils');
 // Read globals from app_settings (the real table) — settingsService.getSetting
 // queries a non-existent `settings` table and throws.
-const { getAppSetting } = require('../utils/appSettings');
+const { getSlideshowGlobals } = require('../utils/slideshowGlobals');
 const { isFeatureEnabled } = require('../middleware/requireFeatureFlag');
 const fs = require('fs');
 
@@ -269,48 +269,48 @@ async function resolveSlideshow(slug, token) {
 // from the chosen source so the kiosk renders it without knowing about
 // branding/event internals; null url = nothing to overlay.
 async function slideshowSettings(event) {
+  // The global look/fit (Settings → Slideshow) + branding logo URLs come from a
+  // short-TTL cached bundle so a 3s projector poll doesn't re-fire ~10 settings
+  // reads each time (PR #646 review, concern 2).
+  const g = await getSlideshowGlobals();
+
   // Watermark: the LOOK (logo/position/opacity/style/size) is configured ONCE
-  // globally (Settings → Slideshow); it is NOT duplicated per event. The only
-  // per-event control is whether the watermark shows: `show_watermark` NULL
-  // inherits the global enabled flag, true/false force it on/off.
+  // globally; it is NOT duplicated per event. The only per-event control is
+  // whether the watermark shows: `show_watermark` NULL inherits the global
+  // enabled flag, true/false force it on/off.
   const wm = event.show_watermark;
   const inherit = (wm === null || wm === undefined);
-  const enabled = inherit
-    ? (await getAppSetting('slideshow_watermark_enabled', false)) === true
-    : (wm === true || wm === 1 || wm === '1');
+  const enabled = inherit ? g.watermark_enabled : (wm === true || wm === 1 || wm === '1');
   let watermark = null;
   if (enabled) {
-    const source = await getAppSetting('slideshow_watermark_source', 'logo');
-    const position = await getAppSetting('slideshow_watermark_position', 'bottom-right');
-    const opacity = await getAppSetting('slideshow_watermark_opacity', 60);
-    const style = await getAppSetting('slideshow_watermark_style', 'white');
-    const size = await getAppSetting('slideshow_watermark_size', 12);
     // Resolve the chosen logo to a URL. Branding assets come from settings;
     // the event source uses the event's own hero logo.
     let url;
-    if (source === 'event') {
+    if (g.watermark_source === 'event') {
       url = event.hero_logo_url || null;
-    } else if (source === 'logo_dark') {
-      url = await getAppSetting('branding_logo_url_dark', null);
-    } else if (source === 'favicon') {
-      url = await getAppSetting('branding_favicon_url', null);
+    } else if (g.watermark_source === 'logo_dark') {
+      url = g.branding_logo_url_dark;
+    } else if (g.watermark_source === 'favicon') {
+      url = g.branding_favicon_url;
     } else {
-      url = await getAppSetting('branding_logo_url', null);
+      url = g.branding_logo_url;
     }
     if (url) {
-      watermark = { url, position: position || 'bottom-right', opacity: opacity ?? 60, style: style || 'white', size: size ?? 12 };
+      watermark = {
+        url,
+        position: g.watermark_position,
+        opacity: g.watermark_opacity,
+        style: g.watermark_style,
+        size: g.watermark_size,
+      };
     }
   }
-  // Image fit is a global setting (Settings → Slideshow): 'cover' fills + crops,
-  // 'contain' shows the whole image with black bars (no crop).
-  const fitRaw = await getAppSetting('slideshow_fit', 'cover');
-  const fit = fitRaw === 'contain' ? 'contain' : 'cover';
   return {
     interval_ms: event.show_interval_ms || 5000,
     transition: event.show_transition || 'crossfade',
     transition_ms: event.show_transition_ms || 800,
     colorfilter: event.show_colorfilter || 'none',
-    fit,
+    fit: g.fit,
     watermark,
   };
 }
