@@ -67,7 +67,8 @@ While a slideshow is running it polls a lightweight endpoint every few seconds:
 
 ## Good to know
 
-- **The token is the secret.** Anyone with the link can view the slideshow (published photos only). Rotate it with **Regenerate** if it leaks; **Disable** removes it entirely.
+- **The token is the secret.** Anyone with the link can view the slideshow — **published photos only**: a slideshow link is display-only and cannot download, upload, or post feedback. Rotate it with **Regenerate** if it leaks; **Disable** removes it entirely.
+- **Regenerate / Disable is not instant revocation.** A running projector stops within one poll, but the browser session it already opened keeps working for **up to 12 hours** on the old token (there's no token-revocation list — same as gallery passwords). For a hard cut-off, also turn the **Live Slideshow** feature flag off, which denies every link immediately.
 - **Fullscreen needs the first click.** The ▶ splash exists because browsers require a user gesture to enter fullscreen — unavoidable, and harmless for a projector.
 - **Slideshow views don't pollute analytics.** The projector is excluded from your event's visitor view/download counts.
 - **Turning the feature off suspends, doesn't destroy.** Existing links stop working while the flag is off and resume when you turn it back on — the token isn't deleted.

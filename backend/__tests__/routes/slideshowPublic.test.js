@@ -20,8 +20,10 @@ process.env.TEST_DATABASE_PATH = path.join(
 );
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'slideshow-test-secret';
 
+const express = require('express');
+const cookieParser = require('cookie-parser');
 const request = require('supertest');
-const { bootCrmDb, seedMinimal, buildRouteApp } = require('../integration/helpers/crmDb');
+const { bootCrmDb, seedMinimal } = require('../integration/helpers/crmDb');
 const { invalidateFeatureFlagCache } = require('../../src/middleware/requireFeatureFlag');
 
 const SLUG = 'wedding-test';
@@ -67,7 +69,17 @@ describe('public Live Slideshow routes', () => {
   beforeAll(async () => {
     ({ db, cleanup } = await bootCrmDb());
     await seedMinimal(db);
-    app = buildRouteApp('/api/gallery', require('../../src/routes/gallery'));
+    app = express();
+    app.use(express.json());
+    app.use(cookieParser());
+    // Both routers mount under /api/gallery in production; the display-only
+    // guard lives on download routes (gallery) + the feedback POST (galleryFeedback).
+    app.use('/api/gallery', require('../../src/routes/gallery'));
+    app.use('/api/gallery', require('../../src/routes/galleryFeedback'));
+    // eslint-disable-next-line no-unused-vars
+    app.use((err, req, res, next) => {
+      res.status(err.statusCode || err.status || 500).json({ error: err.message, code: err.code });
+    });
   });
 
   afterAll(async () => { await cleanup(); });
@@ -206,6 +218,41 @@ describe('public Live Slideshow routes', () => {
       // no branding_logo_url set
       const res = await request(app).get(stateUrl());
       expect(res.body.watermark).toBeNull();
+    });
+  });
+
+  describe('display-only token guards (#646 review concern 1)', () => {
+    // Mint a real slideshow JWT, then prove it is denied on the
+    // download / upload / feedback routes (display-only contract).
+    async function slideshowJwt() {
+      await insertEvent(db);
+      const res = await request(app).get(`/api/gallery/${SLUG}/show/${TOKEN}/session`);
+      expect(res.status).toBe(200);
+      return res.body.token;
+    }
+
+    it('403 on whole-gallery download', async () => {
+      const jwt = await slideshowJwt();
+      const res = await request(app).get(`/api/gallery/${SLUG}/download-all`).set('Authorization', `Bearer ${jwt}`);
+      expect(res.status).toBe(403);
+    });
+
+    it('403 on single-photo download', async () => {
+      const jwt = await slideshowJwt();
+      const res = await request(app).get(`/api/gallery/${SLUG}/download/1`).set('Authorization', `Bearer ${jwt}`);
+      expect(res.status).toBe(403);
+    });
+
+    it('403 on bulk download-selected', async () => {
+      const jwt = await slideshowJwt();
+      const res = await request(app).post(`/api/gallery/${SLUG}/download-selected`).set('Authorization', `Bearer ${jwt}`).send({ photoIds: [1] });
+      expect(res.status).toBe(403);
+    });
+
+    it('403 on feedback POST', async () => {
+      const jwt = await slideshowJwt();
+      const res = await request(app).post(`/api/gallery/${SLUG}/photos/1/feedback`).set('Authorization', `Bearer ${jwt}`).send({ feedback_type: 'like' });
+      expect(res.status).toBe(403);
     });
   });
 

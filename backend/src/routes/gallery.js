@@ -7,7 +7,7 @@ const path = require('path');
 const router = express.Router();
 const watermarkService = require('../services/watermarkService');
 const watermarkGeneratorService = require('../services/watermarkGeneratorService');
-const { verifyGalleryAccess, isAdminPreview } = require('../middleware/gallery');
+const { verifyGalleryAccess, denySlideshowToken, isAdminPreview } = require('../middleware/gallery');
 const { resolveGuest } = require('../middleware/guestAuth');
 const { generateGuestIdentifier } = require('../middleware/feedbackRateLimit');
 const secureImageService = require('../services/secureImageService');
@@ -807,7 +807,7 @@ router.patch('/:slug/photos/visibility/bulk', verifyGalleryAccess, async (req, r
 });
 
 // Download single photo
-router.get('/:slug/download/:photoId', verifyGalleryAccess, async (req, res) => {
+router.get('/:slug/download/:photoId', verifyGalleryAccess, denySlideshowToken, async (req, res) => {
   try {
     const { photoId } = req.params;
 
@@ -927,7 +927,7 @@ router.get('/:slug/download/:photoId', verifyGalleryAccess, async (req, res) => 
 });
 
 // Download all photos as ZIP
-router.get('/:slug/download-all', verifyGalleryAccess, async (req, res) => {
+router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, async (req, res) => {
   try {
     // Check if downloads are allowed for this event
     if (req.event.allow_downloads === false) {
@@ -1103,7 +1103,7 @@ router.get('/:slug/download-all', verifyGalleryAccess, async (req, res) => {
 });
 
 // Download selected photos as ZIP
-router.post('/:slug/download-selected', verifyGalleryAccess, async (req, res) => {
+router.post('/:slug/download-selected', verifyGalleryAccess, denySlideshowToken, async (req, res) => {
   try {
     // Check if downloads are allowed for this event
     if (req.event.allow_downloads === false) {
@@ -1804,7 +1804,7 @@ router.get('/:slug/stats', verifyGalleryAccess, async (req, res) => {
 });
 
 // User photo upload endpoint
-router.post('/:eventId/upload', verifyGalleryAccess, async (req, res) => {
+router.post('/:eventId/upload', verifyGalleryAccess, denySlideshowToken, async (req, res) => {
   try {
     const eventId = parseInt(req.params.eventId);
 

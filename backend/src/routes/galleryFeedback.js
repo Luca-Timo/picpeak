@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { photoAuth } = require('../middleware/photoAuth');
-const { verifyGalleryAccess } = require('../middleware/gallery');
+const { verifyGalleryAccess, denySlideshowToken } = require('../middleware/gallery');
 const { feedbackRateLimit, generateGuestIdentifier } = require('../middleware/feedbackRateLimit');
 const { resolveGuest } = require('../middleware/guestAuth');
 const feedbackService = require('../services/feedbackService');
@@ -140,6 +140,7 @@ router.get('/:slug/photos/:photoId/feedback',
 // Submit feedback for a photo
 router.post('/:slug/photos/:photoId/feedback',
   verifyGalleryAccess,
+  denySlideshowToken,
   resolveGuest,
   validatePhotoId,
   validateFeedbackSubmission,

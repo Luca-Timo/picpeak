@@ -171,7 +171,25 @@ async function verifyGalleryAccess(req, res, next) {
   }
 }
 
+/**
+ * Deny a slideshow-scoped JWT. The Live Slideshow token (accessLevel
+ * 'slideshow') is reused as a `type:'gallery'` token so it can read photos for
+ * the kiosk, which means every verifyGalleryAccess-protected route would
+ * otherwise accept it. A projector URL is meant to be display-only and is
+ * comparatively easy to leak (browser history, venue laptop, USB), so this
+ * gate is placed AFTER verifyGalleryAccess on the write/bulk-download routes to
+ * keep a leaked slideshow link from downloading, uploading, or posting
+ * feedback. (#646 review)
+ */
+function denySlideshowToken(req, res, next) {
+  if (req.accessLevel === 'slideshow') {
+    return res.status(403).json({ error: 'Slideshow tokens are display-only' });
+  }
+  next();
+}
+
 module.exports = {
   verifyGalleryAccess,
+  denySlideshowToken,
   isAdminPreview
 };
