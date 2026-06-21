@@ -1,7 +1,7 @@
 /**
  * <SlideshowSettingsCard>
  *
- * Per-event "Live Slideshow" ("Diashow") admin surface (migrations 137/138).
+ * Per-event "Live Slideshow" ("Diashow") admin surface (migrations 138/139).
  * A token-only fullscreen kiosk link for live events that auto-picks-up new
  * uploads while it runs. Mounted once on the EventDetailsPage; admin can:
  *   - Generate the slideshow link on demand (mints show_share_token)

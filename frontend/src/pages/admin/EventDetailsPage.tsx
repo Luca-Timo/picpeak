@@ -2159,7 +2159,7 @@ export const EventDetailsPage: React.FC = () => {
             </div>
           </Card>
 
-          {/* Live Slideshow ("Diashow") link + live display settings (migrations 137/138).
+          {/* Live Slideshow ("Diashow") link + live display settings (migrations 138/139).
               Gated behind the `slideshow` feature flag. */}
           {flags.slideshow && (
           <SlideshowSettingsCard

@@ -220,7 +220,7 @@ router.get('/:slug/info', async (req, res) => {
 
 // ---------------------------------------------------------------------------
 // Live Slideshow ("Diashow") — token-only fullscreen kiosk surface
-// (migration 137). The token in the URL IS the secret (no gallery password),
+// (migration 138). The token in the URL IS the secret (no gallery password),
 // so these routes are unauthenticated except for the token match itself. The
 // slideshow shows ALL public/visible, finished photos — exactly the guest
 // set — so once /session mints a short-lived `accessLevel:'slideshow'` JWT,
@@ -586,7 +586,7 @@ router.get('/:slug/photos', verifyGalleryAccess, resolveGuest, async (req, res) 
     // Log view — but NOT for the Live Slideshow kiosk. A running projector
     // refetches this list on every new-upload poll, which would massively
     // inflate total_views / unique_visitors. The slideshow is explicitly
-    // excluded from real visitor analytics (migration 137 design).
+    // excluded from real visitor analytics (migration 138 design).
     if (req.accessLevel !== 'slideshow') {
       await db('access_logs').insert({
         event_id: req.event.id,

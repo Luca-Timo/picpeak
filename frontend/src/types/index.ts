@@ -67,7 +67,7 @@ export interface Event {
   // Client access (#172)
   client_access_enabled?: boolean;
   client_share_token?: string;
-  // Live Slideshow / "Diashow" (migration 137). Token-only fullscreen kiosk
+  // Live Slideshow / "Diashow" (migration 138). Token-only fullscreen kiosk
   // link minted on demand; null token = disabled. Settings drive the running
   // projector and can be changed live.
   show_share_token?: string | null;

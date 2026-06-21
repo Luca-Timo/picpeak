@@ -290,7 +290,7 @@ router.put('/accounting', adminAuth, requirePermission('settings.edit'), async (
   }
 });
 
-// Global Live Slideshow defaults (migration 138). The per-event watermark is
+// Global Live Slideshow defaults (migration 139). The per-event watermark is
 // tri-state (events.show_watermark NULL = inherit these). Read via the generic
 // GET /:type ('slideshow'); this is the typed write.
 router.put('/slideshow', adminAuth, requirePermission('settings.edit'), async (req, res) => {

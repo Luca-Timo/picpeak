@@ -1882,7 +1882,7 @@ router.post('/:id/toggle-status', adminAuth, requirePermission('events.edit'), r
 
 // ---------------------------------------------------------------------------
 // Live Slideshow ("Diashow") — a token-only fullscreen kiosk link for live
-// events that auto-picks-up new uploads (migration 137). Mirrors the
+// events that auto-picks-up new uploads (migration 138). Mirrors the
 // client-access second-token pattern: the link is minted on demand, rotatable
 // and disable-able, independent of the gallery password / share link.
 // ---------------------------------------------------------------------------

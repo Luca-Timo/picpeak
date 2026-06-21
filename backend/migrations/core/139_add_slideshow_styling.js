@@ -1,6 +1,6 @@
 const { addColumnIfNotExists } = require('../helpers');
 
-// Live Slideshow styling (migration 137 follow-up):
+// Live Slideshow styling (migration 138 follow-up):
 //   - a ZDF/ARD-ident-style watermark: a white, semi-transparent logo in a
 //     corner of the projected slideshow (sourced from the site branding logo
 //     or the event's own logo).
@@ -54,5 +54,5 @@ exports.up = async function up(knex) {
 };
 
 exports.down = async function down() {
-  // Safe rollback - intentionally no-op to avoid data loss (mirrors 074/137).
+  // Safe rollback - intentionally no-op to avoid data loss (mirrors 074/138).
 };
