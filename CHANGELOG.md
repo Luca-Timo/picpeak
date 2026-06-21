@@ -5,6 +5,13 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.68.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.67.1-beta.0...v3.68.0-beta.0) (2026-06-21)
+
+
+### Features
+
+* **whatsapp:** admin-selectable template parameters + reorder ([#647](https://github.com/the-luap/picpeak/issues/647) follow-up) ([80e8ec5](https://github.com/the-luap/picpeak/commit/80e8ec5bc71f0653d56f1087521f5207aee0ba8f))
+
 ## [3.67.1-beta.0](https://github.com/the-luap/picpeak/compare/v3.67.0-beta.0...v3.67.1-beta.0) (2026-06-21)
 
 
