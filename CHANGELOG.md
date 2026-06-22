@@ -5,6 +5,19 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.69.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.68.1-beta.0...v3.69.0-beta.0) (2026-06-22)
+
+
+### Features
+
+* **feedback:** per-guest favorite + like caps with mobile-friendly limit modal ([#655](https://github.com/the-luap/picpeak/issues/655)) ([3ac7017](https://github.com/the-luap/picpeak/commit/3ac70177efc237b8169278208983b0de3629bc72))
+* **feedback:** per-guest favorite + like caps with mobile-friendly limit modal ([#655](https://github.com/the-luap/picpeak/issues/655)) ([f2814e4](https://github.com/the-luap/picpeak/commit/f2814e4a4ce3aa9affc232243d615a15a1aae0c0))
+
+
+### Bug Fixes
+
+* **i18n:** replace ASCII quote with U+201D in DE perGuestLimitsDesc ([98e97e3](https://github.com/the-luap/picpeak/commit/98e97e3cf214c96cdefd99bfedd6724f0b85c41c))
+
 ## [3.68.1-beta.0](https://github.com/the-luap/picpeak/compare/v3.68.0-beta.0...v3.68.1-beta.0) (2026-06-22)
 
 
