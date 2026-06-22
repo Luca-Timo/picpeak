@@ -249,7 +249,14 @@
     "wrongPassword": "Incorrect password. Please check your password and try again.",
     "tooManyAttempts": "Too many failed login attempts. Please try again later.",
     "pleaseEnterPassword": "Please enter a password",
-    "passwordHint": "The password was provided by the event organizer. Contact them if you don't have it."
+    "passwordHint": "The password was provided by the event organizer. Contact them if you don't have it.",
+    "iab": {
+      "instagram": {
+        "title": "Open this link in your browser",
+        "ios": "Instagram's built-in browser sometimes blocks the password login. Tap the ⋯ menu in the top right, then \"Open in external browser\" (or copy the link and paste into Safari).",
+        "android": "Instagram's built-in browser sometimes blocks the password login. Tap the ⋮ menu in the top right, then \"Open in external browser\" (or copy the link and paste into Chrome)."
+      }
+    }
   },
   "gallery": {
     "expires": "Expires",

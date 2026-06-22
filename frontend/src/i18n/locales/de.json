@@ -693,7 +693,14 @@
     "wrongPassword": "Falsches Passwort. Bitte überprüfen Sie Ihr Passwort und versuchen Sie es erneut.",
     "tooManyAttempts": "Zu viele fehlgeschlagene Anmeldeversuche. Bitte versuchen Sie es später erneut.",
     "pleaseEnterPassword": "Bitte geben Sie ein Passwort ein",
-    "passwordHint": "Das Passwort wurde vom Veranstalter bereitgestellt. Kontaktieren Sie ihn, wenn Sie es nicht haben."
+    "passwordHint": "Das Passwort wurde vom Veranstalter bereitgestellt. Kontaktieren Sie ihn, wenn Sie es nicht haben.",
+    "iab": {
+      "instagram": {
+        "title": "Diesen Link im Browser öffnen",
+        "ios": "Der eingebaute Browser von Instagram blockiert das Passwort-Login manchmal. Oben rechts auf das ⋯-Menü tippen und „Im externen Browser öffnen“ wählen (oder den Link kopieren und in Safari einfügen).",
+        "android": "Der eingebaute Browser von Instagram blockiert das Passwort-Login manchmal. Oben rechts auf das ⋮-Menü tippen und „Im externen Browser öffnen“ wählen (oder den Link kopieren und in Chrome einfügen)."
+      }
+    }
   },
   "gallery": {
     "expires": "Läuft ab",
