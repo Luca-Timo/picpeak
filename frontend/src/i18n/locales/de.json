@@ -3038,7 +3038,7 @@
       "favorites": "Favoriten",
       "favoritesDesc": "Fotos als Favoriten markieren",
       "perGuestLimits": "Limits pro Gast",
-      "perGuestLimitsDesc": "Begrenzen, wie viele Fotos jeder Gast favorisieren oder liken kann — praktisch für „Wählen Sie Ihre Top-N fürs Album"-Abläufe. 0 = unbegrenzt. Eine Senkung unter den aktuellen Stand eines Gasts lässt vorhandene Einträge bestehen; nur neue Hinzufügungen werden blockiert, bis er welche entfernt.",
+      "perGuestLimitsDesc": "Begrenzen, wie viele Fotos jeder Gast favorisieren oder liken kann — praktisch für „Wählen Sie Ihre Top-N fürs Album“-Abläufe. 0 = unbegrenzt. Eine Senkung unter den aktuellen Stand eines Gasts lässt vorhandene Einträge bestehen; nur neue Hinzufügungen werden blockiert, bis er welche entfernt.",
       "maxFavoritesPerGuest": "Max. Favoriten pro Gast",
       "maxFavoritesPerGuestHint": "0 = unbegrenzt",
       "maxLikesPerGuest": "Max. Likes pro Gast",
