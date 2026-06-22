@@ -187,7 +187,18 @@ const validateFeedbackSettings = [
   body('moderate_comments').optional().isBoolean(),
   body('show_feedback_to_guests').optional().isBoolean(),
   body('identity_mode').optional().isIn(['simple', 'guest'])
-    .withMessage('identity_mode must be "simple" or "guest"')
+    .withMessage('identity_mode must be "simple" or "guest"'),
+  // Per-guest caps (#655). null / 0 = unlimited; positive integers enforced.
+  // Upper bound is intentionally generous — operators occasionally run
+  // "everyone, pick everything you like" galleries.
+  body('max_favorites_per_guest')
+    .optional({ nullable: true })
+    .custom((v) => v === null || (Number.isInteger(v) && v >= 0 && v <= 10000))
+    .withMessage('max_favorites_per_guest must be null or an integer between 0 and 10000'),
+  body('max_likes_per_guest')
+    .optional({ nullable: true })
+    .custom((v) => v === null || (Number.isInteger(v) && v >= 0 && v <= 10000))
+    .withMessage('max_likes_per_guest must be null or an integer between 0 and 10000'),
 ];
 
 /**

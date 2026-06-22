@@ -34,7 +34,12 @@ router.get('/:slug/feedback-settings',
         allow_favorites: Boolean(settings.allow_favorites),
         require_name_email: Boolean(settings.require_name_email),
         show_feedback_to_guests: Boolean(settings.show_feedback_to_guests),
-        identity_mode: settings.identity_mode || 'simple'
+        identity_mode: settings.identity_mode || 'simple',
+        // Per-guest caps (#655). The UI uses these to disable the heart /
+        // thumbs-up at the limit and render an "8 / 10" counter. null = no
+        // cap; positive integer = enforced.
+        max_favorites_per_guest: settings.max_favorites_per_guest || null,
+        max_likes_per_guest: settings.max_likes_per_guest || null,
       };
 
       res.json(guestSettings);
@@ -262,7 +267,24 @@ router.post('/:slug/photos/:photoId/feedback',
         feedbackData,
         guestIdentifier
       );
-      
+
+      // Per-guest cap reached (#655). Surface as a structured 403 so the
+      // frontend can show an explicit popup with the actual cap value and
+      // remaining-slots count, rather than a generic toast. Code is the
+      // stable contract the UI listens for.
+      if (result && result.limit_reached) {
+        const code = result.feedback_type === 'favorite'
+          ? 'FAVORITE_LIMIT_REACHED'
+          : 'LIKE_LIMIT_REACHED';
+        return res.status(403).json({
+          error: `${result.feedback_type === 'favorite' ? 'Favorite' : 'Like'} limit reached`,
+          code,
+          limit: result.limit,
+          current_count: result.current_count,
+          feedback_type: result.feedback_type,
+        });
+      }
+
       // Log activity
       await logActivity(`guest_feedback_${feedbackType}`, {
         photo_id: photoId,
@@ -272,11 +294,11 @@ router.post('/:slug/photos/:photoId/feedback',
         id: guestIdentifier.substring(0, 16),
         name: req.body.guest_name || 'Anonymous'
       });
-      
+
       res.json({
         success: true,
         ...result,
-        message: feedbackType === 'comment' && !feedbackData.is_approved ? 
+        message: feedbackType === 'comment' && !feedbackData.is_approved ?
           'Your comment has been submitted for moderation' : undefined
       });
     } catch (error) {
@@ -365,6 +387,10 @@ router.get('/:slug/my-feedback',
         )
         .orderBy('photo_feedback.created_at', 'desc');
 
+      // Array-shaped response preserved for back-compat with existing
+      // consumers (`GalleryView` iterates the array directly). The per-event
+      // caps for #655 are exposed via the `/feedback-settings` endpoint;
+      // the running counts can be derived client-side from this array.
       res.json(myFeedback);
     } catch (error) {
       logger.error('Error getting user feedback:', error);

@@ -15,6 +15,13 @@ export interface FeedbackSettings {
   rate_limit_window_minutes?: number;
   rate_limit_max_requests?: number;
   identity_mode?: IdentityMode;
+  // Per-guest caps (#655). null or 0 = unlimited (preserves current
+  // behaviour for installs that haven't enabled the cap). Positive
+  // integers are enforced server-side — adds beyond the cap return a
+  // structured 403 with `code: 'FAVORITE_LIMIT_REACHED'` /
+  // `'LIKE_LIMIT_REACHED'`, surfaced to the guest as a modal.
+  max_favorites_per_guest?: number | null;
+  max_likes_per_guest?: number | null;
 }
 
 export interface PhotoFeedback {

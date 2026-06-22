@@ -24,7 +24,9 @@ class FeedbackService {
           require_name_email: false,
           moderate_comments: true,
           show_feedback_to_guests: true,
-          identity_mode: 'simple'
+          identity_mode: 'simple',
+          max_favorites_per_guest: null,
+          max_likes_per_guest: null,
         };
       }
 
@@ -32,6 +34,10 @@ class FeedbackService {
       if (!settings.identity_mode) {
         settings.identity_mode = 'simple';
       }
+      // Per-guest caps (#655). NULL on existing rows = unlimited; the route
+      // layer treats null/0/missing identically.
+      settings.max_favorites_per_guest = settings.max_favorites_per_guest ?? null;
+      settings.max_likes_per_guest = settings.max_likes_per_guest ?? null;
       return settings;
     } catch (error) {
       logger.error('Error getting feedback settings:', error);
@@ -76,15 +82,33 @@ class FeedbackService {
   /**
    * Submit feedback for a photo
    */
+  /**
+   * Count how many existing feedback rows of `feedback_type` a single guest
+   * has on a given event, matching the same guest-key shape submitFeedback's
+   * duplicate-check uses (guest_id when present, fall back to
+   * guest_identifier). Used for the per-guest favorite/like caps (#655).
+   */
+  async countGuestFeedback(eventId, feedbackType, guestId, guestIdentifier) {
+    const query = db('photo_feedback')
+      .where({ event_id: eventId, feedback_type: feedbackType });
+    if (guestId) {
+      query.where('guest_id', guestId);
+    } else {
+      query.where('guest_identifier', guestIdentifier);
+    }
+    const result = await query.count('* as count').first();
+    return parseInt(result?.count, 10) || 0;
+  }
+
   async submitFeedback(photoId, eventId, feedbackData, guestIdentifier) {
     try {
       const { feedback_type, rating, comment_text, guest_name, guest_email, ip_address, user_agent, guest_id } = feedbackData;
-      
+
       // Validate feedback type
       if (!['rating', 'like', 'comment', 'favorite'].includes(feedback_type)) {
         throw new Error('Invalid feedback type');
       }
-      
+
       // Check if similar feedback already exists (prevent duplicates).
       // When a per-person guest_id is present, scope the check to that guest
       // so two guests on the same device can independently like a photo.
@@ -101,7 +125,7 @@ class FeedbackService {
           duplicateQuery.where('guest_identifier', guestIdentifier);
         }
         const existing = await duplicateQuery.first();
-        
+
         if (existing) {
           if (feedback_type === 'rating' && rating !== existing.rating) {
             // Update existing rating
@@ -111,25 +135,53 @@ class FeedbackService {
                 rating,
                 updated_at: new Date()
               });
-            
+
             await this.updatePhotoFeedbackStats(photoId);
             return { id: existing.id, updated: true };
           }
-          
-          // For likes and favorites, toggle off if already exists
+
+          // For likes and favorites, toggle off if already exists.
+          // Toggle-off always allowed — the cap below is on adds only, so a
+          // guest at the limit can still free a slot by un-favoriting (#655).
           if (feedback_type === 'like' || feedback_type === 'favorite') {
             await db('photo_feedback')
               .where('id', existing.id)
               .delete();
-            
+
             await this.updatePhotoFeedbackStats(photoId);
             return { removed: true };
           }
-          
+
           return { id: existing.id, exists: true };
         }
       }
-      
+
+      // Per-guest cap enforcement (#655). Only checked on ADD; toggle-off is
+      // always allowed. NULL or 0 stored in the column means "unlimited" —
+      // the photographer hasn't opted in to a cap for this event.
+      if (feedback_type === 'favorite' || feedback_type === 'like') {
+        const settings = await this.getEventFeedbackSettings(eventId);
+        const cap = feedback_type === 'favorite'
+          ? settings.max_favorites_per_guest
+          : settings.max_likes_per_guest;
+        if (cap && cap > 0) {
+          const currentCount = await this.countGuestFeedback(
+            eventId, feedback_type, guest_id, guestIdentifier,
+          );
+          if (currentCount >= cap) {
+            // Don't insert; surface a structured payload so the route layer
+            // can return a 403 with `code` + `limit` + `current_count` and
+            // the UI can render an explicit popup with the cap value.
+            return {
+              limit_reached: true,
+              feedback_type,
+              limit: cap,
+              current_count: currentCount,
+            };
+          }
+        }
+      }
+
       // Insert new feedback
       const result = await db('photo_feedback').insert({
         photo_id: photoId,

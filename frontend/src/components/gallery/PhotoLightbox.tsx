@@ -9,6 +9,7 @@ import { feedbackService } from '../../services/feedback.service';
 import { FeedbackIdentityModal } from './FeedbackIdentityModal';
 import { VideoPlayer } from './VideoPlayer';
 import { useGuestIdentityOptional } from '../../contexts/GuestIdentityContext';
+import { useFeedbackLimitModal } from '../../hooks/useFeedbackLimitModal';
 
 interface PhotoLightboxProps {
   photos: Photo[];
@@ -91,6 +92,9 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
   const [pendingAction, setPendingAction] = useState<null | { type: 'like' | 'rating'; rating?: number }>(null);
   const guestIdentity = useGuestIdentityOptional();
   const isGuestMode = guestIdentity?.identityMode === 'guest';
+  // Per-guest cap modal (#655) — shared across every submitFeedback call site
+  // in the lightbox (guest mode, simple mode, identity-modal-confirm path).
+  const { modal: limitModal, handleError: handleLimitError } = useFeedbackLimitModal();
 
   useEffect(() => {
     const onResize = () => setIsSmallScreen(window.innerWidth < 640);
@@ -257,6 +261,8 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
         });
         if (onFeedbackChange) onFeedbackChange();
       } catch (err) {
+        // Per-guest cap reached (#655) surfaces the shared modal.
+        if (handleLimitError(err)) return;
         // eslint-disable-next-line no-console
         console.warn('Like submit failed', err);
       }
@@ -270,16 +276,22 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
       setShowIdentityModal(true);
       return;
     }
-    await feedbackService.submitFeedback(slug, String(currentPhoto.id), {
-      feedback_type: 'like',
-      guest_name: savedIdentity?.name,
-      guest_email: savedIdentity?.email,
-    });
-    setMyLiked(prev => {
-      const next = !prev;
-      setLikeCount(c => Math.max(0, c + (next ? 1 : -1)));
-      return next;
-    });
+    try {
+      await feedbackService.submitFeedback(slug, String(currentPhoto.id), {
+        feedback_type: 'like',
+        guest_name: savedIdentity?.name,
+        guest_email: savedIdentity?.email,
+      });
+      setMyLiked(prev => {
+        const next = !prev;
+        setLikeCount(c => Math.max(0, c + (next ? 1 : -1)));
+        return next;
+      });
+    } catch (err) {
+      if (handleLimitError(err)) return;
+      // eslint-disable-next-line no-console
+      console.warn('Like submit failed', err);
+    }
   };
 
   const submitRating = async (value: number) => {
@@ -978,12 +990,17 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
           setSavedIdentity({ name, email });
           setShowIdentityModal(false);
           if (pendingAction?.type === 'like') {
-            await feedbackService.submitFeedback(slug, String(currentPhoto.id), {
-              feedback_type: 'like',
-              guest_name: name,
-              guest_email: email,
-            });
-            setMyLiked(true);
+            try {
+              await feedbackService.submitFeedback(slug, String(currentPhoto.id), {
+                feedback_type: 'like',
+                guest_name: name,
+                guest_email: email,
+              });
+              setMyLiked(true);
+            } catch (err) {
+              // Per-guest cap reached (#655) on the post-identity-modal submit.
+              if (!handleLimitError(err)) throw err;
+            }
           } else if (pendingAction?.type === 'rating' && pendingAction.rating) {
             await feedbackService.submitFeedback(slug, String(currentPhoto.id), {
               feedback_type: 'rating',
@@ -997,6 +1014,9 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
         }}
         feedbackType={pendingAction?.type === 'rating' ? 'rating' : 'like'}
       />
+      {/* Per-guest cap modal (#655). Single instance fires for any of the
+          lightbox's submitFeedback paths via the shared hook. */}
+      {limitModal}
     </div>
   );
 };
