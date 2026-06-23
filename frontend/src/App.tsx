@@ -46,6 +46,9 @@ import { QuoteResponsePage } from './pages/public/QuoteResponsePage';
 import { ContractResponsePage } from './pages/public/ContractResponsePage';
 import { ProjectsListPage } from './pages/admin/projects/ProjectsListPage';
 import { ProjectCockpitPage } from './pages/admin/projects/ProjectCockpitPage';
+import { WorkflowsListPage } from './pages/admin/workflows/WorkflowsListPage';
+import { WorkflowApprovalsPage } from './pages/admin/workflows/WorkflowApprovalsPage';
+import { WorkflowEditorPage } from './pages/admin/workflows/WorkflowEditorPage';
 import { ContractsListPage } from './pages/admin/contracts/ContractsListPage';
 import { ContractEditorPage } from './pages/admin/contracts/ContractEditorPage';
 import { ContractDetailPage } from './pages/admin/contracts/ContractDetailPage';
@@ -313,6 +316,14 @@ function App() {
                           don't 404. */}
                       <Route path="customers"     element={<Navigate to="/admin/clients/accounts" replace />} />
                       <Route path="customers/:id" element={<RedirectCustomerDetail />} />
+
+                      {/* Workflows (automation engine) — top-level area gated
+                          by the `workflows` flag. */}
+                      <Route element={<RequireFeature flag="workflows" />}>
+                        <Route path="workflows" element={<WorkflowsListPage />} />
+                        <Route path="workflows/approvals" element={<WorkflowApprovalsPage />} />
+                        <Route path="workflows/:id" element={<WorkflowEditorPage />} />
+                      </Route>
 
                       <Route path="settings" element={<SettingsPage />} />
                       <Route path="system-health" element={<SystemHealthPage />} />

@@ -199,6 +199,7 @@
     "calendar": "Kalender",
     "clients": "CRM",
     "accounting": "Buchhaltung",
+    "workflows": "Workflows",
     "betaTag": "Beta"
   },
   "eventTypes": {

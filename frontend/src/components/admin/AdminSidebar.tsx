@@ -11,6 +11,7 @@ import {
   Users,
   Briefcase,
   Landmark,
+  Workflow,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
@@ -109,6 +110,12 @@ const navigation: NavItem[] = [
     nameKey: 'navigation.accounting', href: '/admin/accounting', icon: Landmark,
     permission: 'accounting.view',
     featureFlag: 'accounting',
+  },
+  // Workflows (automation engine) — top-level, gated by the `workflows` flag.
+  {
+    nameKey: 'navigation.workflows', href: '/admin/workflows', icon: Workflow,
+    permission: 'workflows.view',
+    featureFlag: 'workflows',
   },
 ];
 
