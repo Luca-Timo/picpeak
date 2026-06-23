@@ -270,8 +270,49 @@ async function emitWorkflowEvent(triggerType, { entityType = null, entityId = nu
   }
 }
 
+/**
+ * Resume runs whose wait has elapsed. Called from the cron scheduler tick.
+ * Only advances `wait` nodes — gate timeouts are handled by the approvals
+ * layer. Fails CLOSED if the workflows flag is off (master kill-switch).
+ */
+async function runDueWaits(limit = 100) {
+  try {
+    const { isFeatureEnabled } = require('../../middleware/requireFeatureFlag');
+    let enabled = false;
+    try { enabled = await isFeatureEnabled('workflows'); } catch (e) { return 0; }
+    if (!enabled) return 0;
+
+    const nowIso = new Date().toISOString();
+    const due = await db('workflow_runs')
+      .where({ status: 'waiting' })
+      .whereNotNull('wake_at')
+      .where('wake_at', '<=', nowIso)
+      .limit(limit);
+
+    let resumed = 0;
+    for (const run of due) {
+      try {
+        const node = await db('workflow_nodes')
+          .where({ workflow_id: run.workflow_id, version: run.version, node_key: run.current_node })
+          .first();
+        if (node && node.type === 'wait') {
+          await resumeRun(run.id);
+          resumed += 1;
+        }
+      } catch (err) {
+        logger.error('[workflow] runDueWaits item failed', { runId: run.id, error: err.message });
+      }
+    }
+    return resumed;
+  } catch (e) {
+    logger.error('[workflow] runDueWaits failed', { error: e.message });
+    return 0;
+  }
+}
+
 module.exports = {
   emitWorkflowEvent,
+  runDueWaits,
   startRun,
   advanceRun,
   resumeRun,

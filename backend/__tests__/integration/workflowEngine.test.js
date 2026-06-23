@@ -134,4 +134,28 @@ describe('workflow engine', () => {
     run = await db('workflow_runs').where({ id: run0.id }).first();
     expect(run.status).toBe('done');
   });
+
+  test('runDueWaits resumes only elapsed wait nodes', async () => {
+    await makeWorkflow({
+      trigger: 'wait.event',
+      nodes: [
+        { key: 'w1', type: 'trigger' },
+        { key: 'w2', type: 'wait', config: { delayMinutes: 60 } },
+        { key: 'w3', type: 'action', config: { action: 'noop' } },
+      ],
+      edges: [{ from: 'w1', to: 'w2' }, { from: 'w2', to: 'w3' }],
+    });
+    const runIds = await engine.emitWorkflowEvent('wait.event', { entityType: 'e', entityId: 7 });
+    const runId = runIds[0];
+    let run = await db('workflow_runs').where({ id: runId }).first();
+    expect(run.status).toBe('waiting');
+
+    expect(await engine.runDueWaits()).toBe(0); // wake_at ~60min out → not due
+
+    await db('workflow_runs').where({ id: runId }).update({ wake_at: new Date(Date.now() - 1000).toISOString() });
+    const resumed = await engine.runDueWaits();
+    expect(resumed).toBeGreaterThanOrEqual(1);
+    run = await db('workflow_runs').where({ id: runId }).first();
+    expect(run.status).toBe('done');
+  });
 });

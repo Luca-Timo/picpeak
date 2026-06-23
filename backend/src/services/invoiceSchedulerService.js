@@ -42,6 +42,15 @@ async function runTick() {
   } catch (err) {
     logger.error('Event reminder pass failed', { err: err.message });
   }
+  try {
+    // Resume workflow runs whose wait has elapsed. No-op (fails closed) when
+    // the `workflows` feature flag is off. Independent try/catch so a workflow
+    // failure never suppresses the invoice/reminder jobs above.
+    const resumed = await require('./workflows').runDueWaits();
+    if (resumed) logger.info('Workflow scheduler: resumed waiting runs', { resumed });
+  } catch (err) {
+    logger.error('Workflow resume pass failed', { err: err.message });
+  }
 }
 
 function startInvoiceScheduler() {
