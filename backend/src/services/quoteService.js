@@ -305,6 +305,25 @@ async function nextQuoteNumber(trx) {
   return formatNumberInTemplate(format, year, seq);
 }
 
+/**
+ * Resolve the fallback event type for a quote→event conversion when the quote
+ * itself carries none. Never hardcodes a specific slug (any of them, incl.
+ * 'other', can be disabled by the admin): prefer the generic 'other' catch-all
+ * when it's active, else the first active type by display order, and only fall
+ * back to the literal 'other' if the catalog is somehow empty/unreadable.
+ */
+async function resolveDefaultEventType(conn) {
+  const q = conn || db;
+  try {
+    const other = await q('event_types').where({ slug_prefix: 'other', is_active: true }).first('slug_prefix');
+    if (other) return 'other';
+    const firstActive = await q('event_types').where({ is_active: true }).orderBy('display_order', 'asc').first('slug_prefix');
+    return firstActive?.slug_prefix || 'other';
+  } catch (_) {
+    return 'other';
+  }
+}
+
 function ensureCustomerFeatureEnabled(customer, feature) {
   // Global toggle (`customer_feature_quotes_enabled` / `..._bills_enabled`)
   // is checked at the route layer (feature flag); here we only enforce
@@ -1492,11 +1511,11 @@ async function convertToEvent(quoteId, adminId, options = {}) {
     const adminEmail = adminRow?.email || customer.email || 'admin@picpeak.local';
 
     // Event type for the new event: the type chosen on the quote (migration 146),
-    // else a configurable org default, else 'wedding' as the last-resort seeded
-    // type. Replaces the old unconditional hardcoded 'wedding'.
+    // else a configurable org default, else the resolved catch-all (an ACTIVE
+    // type — never a hardcoded slug the admin may have disabled).
     const eventType = (quote.event_type && String(quote.event_type).trim())
       || (await getAppSetting('crm_default_event_type'))
-      || 'wedding';
+      || (await resolveDefaultEventType(trx));
 
     // Each candidate column is paired with the value we'd write. We
     // ask the DB which columns exist and only keep the matching pairs
