@@ -4,8 +4,7 @@ const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const { sanitizeDays, addDateRangeCondition } = require('../utils/sqlSecurity');
 const { formatBoolean } = require('../utils/dbCompat');
-const { getAppSetting } = require('../utils/appSettings');
-const { fetchUmamiDeviceBreakdown } = require('../services/umamiClient');
+const { resolveAdapter } = require('../services/trackers');
 const logger = require('../utils/logger');
 const router = express.Router();
 
@@ -316,35 +315,29 @@ router.get('/analytics', adminAuth, requirePermission('analytics.view'), async (
       .orderBy('views', 'desc')
       .limit(5);
 
-    // Device breakdown — prefer Umami's metrics API when configured (#661
-    // Bug C). The local access_logs heuristic below produces 0% on installs
-    // where guest user agents don't reliably contain "Mobile" / "Tablet"
-    // tokens; Umami tracks devices natively. Falls back to access_logs when
-    // Umami is unconfigured, unreachable, or rate-limited.
+    // Device breakdown — prefer the operator's analytics tracker (Umami /
+    // Rybbit) when configured (#661 Bug C + #663 Phase 1). The local
+    // access_logs heuristic below produces 0% on installs where guest user
+    // agents don't reliably contain "Mobile" / "Tablet" tokens; the tracker
+    // adapters track devices natively. Falls back to access_logs when no
+    // tracker is configured (provider=none/custom), the upstream call fails,
+    // or the response shape doesn't match what we expect.
     let devices = { desktop: 0, mobile: 0, tablet: 0 };
     let devicesSource = 'access_logs';
 
-    const umamiConfig = {
-      enabled: (await getAppSetting('analytics_umami_enabled', false)) === true,
-      baseUrl: await getAppSetting('analytics_umami_url', null),
-      websiteId: await getAppSetting('analytics_umami_website_id', null),
-      apiKey: await getAppSetting('analytics_umami_api_key', null),
-    };
-    if (umamiConfig.enabled && umamiConfig.baseUrl && umamiConfig.websiteId && umamiConfig.apiKey) {
+    const adapter = await resolveAdapter();
+    if (adapter) {
       try {
-        const umamiDevices = await fetchUmamiDeviceBreakdown({
-          baseUrl: umamiConfig.baseUrl,
-          websiteId: umamiConfig.websiteId,
-          apiKey: umamiConfig.apiKey,
+        const trackerDevices = await adapter.fetchDeviceBreakdown({
           startMs: startDate.getTime(),
           endMs: Date.now(),
         });
-        if (umamiDevices) {
-          devices = umamiDevices;
-          devicesSource = 'umami';
+        if (trackerDevices) {
+          devices = trackerDevices;
+          devicesSource = adapter.provider;
         }
       } catch (err) {
-        logger.warn('Analytics: Umami device-breakdown fetch failed; falling back to access_logs', {
+        logger.warn(`Analytics: ${adapter.provider} device-breakdown fetch failed; falling back to access_logs`, {
           error: err.message,
         });
       }

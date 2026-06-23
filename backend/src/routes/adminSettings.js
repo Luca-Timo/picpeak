@@ -151,6 +151,10 @@ router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) 
     if (settingsObject.analytics_umami_api_key) {
       settingsObject.analytics_umami_api_key = '••••••••';
     }
+    // Rybbit API key (#663 Phase 1) — same pattern.
+    if (settingsObject.analytics_rybbit_api_key) {
+      settingsObject.analytics_rybbit_api_key = '••••••••';
+    }
 
     res.json(settingsObject);
   } catch (error) {
@@ -401,6 +405,10 @@ router.get('/:type', adminAuth, requirePermission('settings.view'), async (req, 
     // breakdown. Masked on GET, same pattern as the recaptcha secret.
     if (settingsObject.analytics_umami_api_key) {
       settingsObject.analytics_umami_api_key = '••••••••';
+    }
+    // Rybbit API key (#663 Phase 1) — same pattern.
+    if (settingsObject.analytics_rybbit_api_key) {
+      settingsObject.analytics_rybbit_api_key = '••••••••';
     }
 
     res.json(settingsObject);
@@ -1060,6 +1068,25 @@ router.put('/security', adminAuth, requirePermission('settings.edit'), async (re
 router.put('/analytics', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
     const settings = req.body;
+
+    // Validate the provider switch (#663 Phase 1). Reject unknown values
+    // so the dashboard route's factory doesn't have to defensively guard.
+    if (Object.prototype.hasOwnProperty.call(settings, 'analytics_tracker_provider')) {
+      const valid = ['none', 'umami', 'rybbit', 'custom'];
+      if (!valid.includes(settings.analytics_tracker_provider)) {
+        return res.status(400).json({
+          error: `analytics_tracker_provider must be one of: ${valid.join(', ')}`,
+        });
+      }
+    }
+
+    // Sanitise the custom-mode HTML snippet on save (#663 Phase 1). Stored
+    // pre-sanitised so the publicSettings endpoint surfaces it as-is on
+    // every gallery request — never re-running sanitize-html on the hot path.
+    if (Object.prototype.hasOwnProperty.call(settings, 'analytics_custom_head_html')) {
+      const { sanitizeTrackerSnippet } = require('../services/trackers/customScriptSanitiser');
+      settings.analytics_custom_head_html = sanitizeTrackerSnippet(settings.analytics_custom_head_html);
+    }
 
     // Update or insert each setting
     for (const [key, value] of Object.entries(settings)) {

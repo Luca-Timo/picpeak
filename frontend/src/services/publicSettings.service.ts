@@ -68,6 +68,14 @@ export interface PublicSettings {
   umami_url: string | null;
   umami_website_id: string | null;
   umami_share_url: string | null;
+  // Pluggable trackers (#663 Phase 1). The backend always surfaces these;
+  // missing fields fall back via the existing umami_* shape so older
+  // builds keep working.
+  analytics_tracker_provider?: 'none' | 'umami' | 'rybbit' | 'custom';
+  rybbit_url?: string | null;
+  rybbit_website_id?: string | null;
+  // Custom-mode HTML snippet, already sanitised server-side.
+  analytics_custom_head_html?: string;
   // Upload settings
   allowed_file_types?: string;
   // #613 — per-batch file count limit, surfaced so the guest UserPhotoUpload

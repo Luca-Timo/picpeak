@@ -87,8 +87,13 @@ const queryClient = new QueryClient({
   },
 });
 
-// Bootstraps Umami analytics from /public/settings. Lives inside QueryClientProvider
-// so it shares the public-settings cache with every other consumer of usePublicSettings.
+// Bootstraps the analytics tracker from /public/settings. Lives inside
+// QueryClientProvider so it shares the public-settings cache with every
+// other consumer of usePublicSettings. Dispatches based on the
+// `analytics_tracker_provider` switch (#663 Phase 1) — Umami / Rybbit /
+// Custom / None. Back-compat: when the provider field is missing or unset,
+// falls through to the legacy `umami_enabled`-based behaviour so installs
+// that haven't picked yet keep working.
 function AnalyticsBootstrap() {
   const { data: settings, isError } = usePublicSettings();
 
@@ -97,21 +102,49 @@ function AnalyticsBootstrap() {
 
     const envUmamiUrl = import.meta.env.VITE_UMAMI_URL;
     const envUmamiWebsiteId = import.meta.env.VITE_UMAMI_WEBSITE_ID;
+    const provider = settings?.analytics_tracker_provider;
 
-    if (settings?.umami_enabled && settings.umami_url && settings.umami_website_id) {
+    if (provider === 'rybbit' && settings?.rybbit_url && settings.rybbit_website_id) {
       analyticsService.initialize({
-        websiteId: settings.umami_website_id,
-        hostUrl: settings.umami_url,
+        provider: 'rybbit',
+        hostUrl: settings.rybbit_url,
+        websiteId: settings.rybbit_website_id,
         autoTrack: true,
         doNotTrack: true,
       });
       return;
     }
 
+    if (provider === 'custom') {
+      analyticsService.initialize({
+        provider: 'custom',
+        customHeadHtml: settings?.analytics_custom_head_html || '',
+      });
+      return;
+    }
+
+    // Umami: explicit provider OR legacy umami_enabled path.
+    if (
+      (provider === 'umami' || settings?.umami_enabled)
+      && settings?.umami_url && settings?.umami_website_id
+    ) {
+      analyticsService.initialize({
+        provider: 'umami',
+        hostUrl: settings.umami_url,
+        websiteId: settings.umami_website_id,
+        autoTrack: true,
+        doNotTrack: true,
+      });
+      return;
+    }
+
+    // Env-var fallback (legacy deploys). Only when no DB config and
+    // analytics aren't disabled at the public-site level.
     if (envUmamiUrl && envUmamiWebsiteId && (isError || settings?.enable_analytics !== false)) {
       analyticsService.initialize({
-        websiteId: envUmamiWebsiteId,
+        provider: 'umami',
         hostUrl: envUmamiUrl,
+        websiteId: envUmamiWebsiteId,
         autoTrack: true,
         doNotTrack: true,
       });
