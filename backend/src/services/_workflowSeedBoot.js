@@ -1,34 +1,33 @@
 /**
  * Boot-time seed for built-in workflows.
  *
- * Seeds the invoice-dunning ladder as an EDITABLE built-in flow (the corrected
- * gate-in-loop graph), so the canvas has real content and admins can see their
- * reminder process as blocks. Seeded from the current reminder settings.
+ * Seeds the reminder/booking ladders as EDITABLE built-in flows, so the canvas
+ * has real content and admins can see (and tweak) their processes as blocks.
  *
- * IMPORTANT — seeded DISABLED, and live behaviour is UNCHANGED: the existing
- * hardcoded reminder ladder in invoiceService.runScheduledTasks still runs. The
- * cutover (drive reminders through the engine + stop the hardcoded ladder) is a
- * deliberate follow-up so we never double-send. Enabling this flow before that
- * cutover would duplicate reminders — hence default off.
+ * IMPORTANT — every built-in is seeded DISABLED. Live behaviour is UNCHANGED
+ * until an admin enables a flow: the hardcoded reminder ladder still runs, and
+ * the booking document actions (prepare_quote/contract/event/invoice) are still
+ * stubs that record an observable `skipped` step rather than firing. The
+ * cutover (drive each process through the engine + stop the hardcoded path) is a
+ * deliberate follow-up so we never double-act. Enabling a flow before its
+ * cutover is safe — at worst it records skipped steps — but the dunning flow in
+ * particular auto-suppresses the hardcoded ladder while enabled so the two never
+ * double-send.
  *
- * Idempotent: keyed on builtin_key='invoice_dunning'. Once seeded, admin edits
- * are preserved (we never overwrite an existing built-in). Self-heal pattern
- * per [[feedback_self_heal_pattern]].
+ * Idempotent: keyed on builtin_key. Once seeded, admin edits are preserved (we
+ * never overwrite an enabled built-in, and re-seed a disabled one only when its
+ * SEED_VERSION moves on). Self-heal pattern per [[feedback_self_heal_pattern]].
  */
 const { getAppSetting } = require('../utils/appSettings');
 
 const DUNNING_KEY = 'invoice_dunning';
-// Bump when the built-in graph changes so a disabled, never-activated copy is
-// re-seeded on boot. v2 = delegation/cutover graph; v3 = 3 reminder loops;
-// v4 = collections handoff after the loop exhausts.
-const SEED_VERSION = 4;
 
 function buildDunningGraph({ firstDays, gapDays, maxReminders }) {
   // Delegation model: the payment-check email IS the admin gate (it drives the
   // existing confirm + reminder_level + Mahngebühr state machine), so the flow
   // just decides WHEN to fire it. After due date + grace, loop up to
   // maxReminders times: if still unpaid, queue a payment-check, wait the gap,
-  // repeat; stop early once paid.
+  // repeat; stop early once paid. After the loop exhausts → collections handoff.
   const nodes = [
     { node_key: 't', type: 'trigger', config: {}, pos_x: 240, pos_y: 0 },
     { node_key: 'waitDue', type: 'wait', config: { untilVar: 'dueDate' }, pos_x: 240, pos_y: 110 },
@@ -56,6 +55,146 @@ function buildDunningGraph({ firstDays, gapDays, maxReminders }) {
   return { nodes, edges };
 }
 
+// Booking — quote accepted → prepare + send contract → admin gate "signed?" →
+// create the event/gallery → wait to the event date → prepare + send invoice.
+// The signing step is an admin gate (no e-sign webhook yet); the document
+// actions are stubs until the booking cutover, so an enabled run records
+// observable skipped steps rather than acting.
+function buildBookingFullGraph() {
+  const nodes = [
+    { node_key: 't', type: 'trigger', config: {}, pos_x: 240, pos_y: 0 },
+    { node_key: 'prepContract', type: 'action', config: { action: 'prepare_contract' }, pos_x: 240, pos_y: 110 },
+    { node_key: 'sendContract', type: 'action', config: { action: 'send_document', document: 'contract', recipient: 'customer' }, pos_x: 240, pos_y: 220 },
+    { node_key: 'gateSigned', type: 'gate', config: { label: 'Contract signed?' }, pos_x: 240, pos_y: 330 },
+    { node_key: 'prepEvent', type: 'action', config: { action: 'prepare_event' }, pos_x: 240, pos_y: 440 },
+    { node_key: 'waitEvent', type: 'wait', config: { untilVar: 'eventDate' }, pos_x: 240, pos_y: 550 },
+    { node_key: 'prepInvoice', type: 'action', config: { action: 'prepare_invoice' }, pos_x: 240, pos_y: 660 },
+    { node_key: 'sendInvoice', type: 'action', config: { action: 'send_document', document: 'invoice', recipient: 'customer' }, pos_x: 240, pos_y: 770 },
+    { node_key: 'done', type: 'action', config: { action: 'noop' }, pos_x: 240, pos_y: 880 },
+    { node_key: 'declined', type: 'action', config: { action: 'noop' }, pos_x: 520, pos_y: 330 },
+  ];
+  const edges = [
+    { from_node: 't', to_node: 'prepContract' },
+    { from_node: 'prepContract', to_node: 'sendContract' },
+    { from_node: 'sendContract', to_node: 'gateSigned' },
+    { from_node: 'gateSigned', from_handle: 'confirm', to_node: 'prepEvent' },
+    { from_node: 'gateSigned', from_handle: 'deny', to_node: 'declined' },
+    { from_node: 'prepEvent', to_node: 'waitEvent' },
+    { from_node: 'waitEvent', to_node: 'prepInvoice' },
+    { from_node: 'prepInvoice', to_node: 'sendInvoice' },
+    { from_node: 'sendInvoice', to_node: 'done' },
+  ];
+  return { nodes, edges };
+}
+
+// Booking — quote accepted → create the event/gallery → wait to the event date
+// → prepare + send invoice. The no-contract path (e.g. small shoots). Same stub
+// caveat as the full booking flow.
+function buildBookingSimpleGraph() {
+  const nodes = [
+    { node_key: 't', type: 'trigger', config: {}, pos_x: 240, pos_y: 0 },
+    { node_key: 'prepEvent', type: 'action', config: { action: 'prepare_event' }, pos_x: 240, pos_y: 110 },
+    { node_key: 'waitEvent', type: 'wait', config: { untilVar: 'eventDate' }, pos_x: 240, pos_y: 220 },
+    { node_key: 'prepInvoice', type: 'action', config: { action: 'prepare_invoice' }, pos_x: 240, pos_y: 330 },
+    { node_key: 'sendInvoice', type: 'action', config: { action: 'send_document', document: 'invoice', recipient: 'customer' }, pos_x: 240, pos_y: 440 },
+    { node_key: 'done', type: 'action', config: { action: 'noop' }, pos_x: 240, pos_y: 550 },
+  ];
+  const edges = [
+    { from_node: 't', to_node: 'prepEvent' },
+    { from_node: 'prepEvent', to_node: 'waitEvent' },
+    { from_node: 'waitEvent', to_node: 'prepInvoice' },
+    { from_node: 'prepInvoice', to_node: 'sendInvoice' },
+    { from_node: 'sendInvoice', to_node: 'done' },
+  ];
+  return { nodes, edges };
+}
+
+// Pre-event email — fired by the scheduler `daysBefore` the event date (see
+// emitDueEventReminders in the engine). Sends a customer reminder, then a heads-
+// up to the admin. Unlike the booking flows this uses the already-wired
+// send_email action, so it is functional once enabled (the customer template
+// `pre_event_reminder` should exist / be authored).
+function buildPreEventEmailGraph() {
+  const nodes = [
+    { node_key: 't', type: 'trigger', config: {}, pos_x: 240, pos_y: 0 },
+    { node_key: 'emailCustomer', type: 'action', config: { action: 'send_email', recipientClass: 'customer', emailType: 'pre_event_reminder' }, pos_x: 240, pos_y: 110 },
+    { node_key: 'emailAdmin', type: 'action', config: { action: 'send_email', recipientClass: 'admin', emailType: 'pre_event_internal' }, pos_x: 240, pos_y: 220 },
+    { node_key: 'done', type: 'action', config: { action: 'noop' }, pos_x: 240, pos_y: 330 },
+  ];
+  const edges = [
+    { from_node: 't', to_node: 'emailCustomer' },
+    { from_node: 'emailCustomer', to_node: 'emailAdmin' },
+    { from_node: 'emailAdmin', to_node: 'done' },
+  ];
+  return { nodes, edges };
+}
+
+// Built-in registry. `version` is the SEED_VERSION — bump when a graph changes
+// so a disabled, never-activated copy is re-seeded on boot.
+//   invoice_dunning v4 = collections handoff after the loop exhausts.
+const BUILTINS = [
+  {
+    key: DUNNING_KEY,
+    version: 4,
+    name: 'Invoice dunning (built-in)',
+    trigger_type: 'invoice.sent',
+    trigger_config: {},
+    description:
+      'Drives overdue dunning through the engine: wait to the due date, then up to '
+      + 'three payment-check cycles. Each cycle fires the existing admin confirm-payment '
+      + 'email (the gate), which applies reminders + Mahngebühr via the proven payment-check '
+      + 'flow; after the cycles exhaust it hands the case to collections. Disabled by default; '
+      + 'while it is enabled the hardcoded reminder ladder is skipped automatically, so the two '
+      + 'never double-send.',
+    build: async () => {
+      const firstDays = Number(await getAppSetting('crm_invoices_reminder_first_days')) || 14;
+      const secondDays = Number(await getAppSetting('crm_invoices_reminder_second_days')) || 30;
+      const gapDays = Math.max(1, secondDays - firstDays);
+      return buildDunningGraph({ firstDays, gapDays, maxReminders: 3 });
+    },
+  },
+  {
+    key: 'booking_full',
+    version: 1,
+    name: 'Booking — quote → contract → event → invoice (built-in)',
+    trigger_type: 'quote.accepted',
+    trigger_config: {},
+    description:
+      'On quote acceptance: prepare and send the contract, wait for the admin to confirm it is '
+      + 'signed, then create the event/gallery, wait to the shoot date and prepare + send the '
+      + 'invoice. Disabled by default — the document actions are stubs until the booking cutover, '
+      + 'so an enabled run just records observable skipped steps. A starting point to edit.',
+    build: async () => buildBookingFullGraph(),
+  },
+  {
+    key: 'booking_simple',
+    version: 1,
+    name: 'Booking — quote → event → invoice (built-in)',
+    trigger_type: 'quote.accepted',
+    trigger_config: {},
+    description:
+      'The no-contract booking path: on quote acceptance create the event/gallery, wait to the '
+      + 'shoot date and prepare + send the invoice. Same stub caveat as the full booking flow; '
+      + 'disabled by default.',
+    build: async () => buildBookingSimpleGraph(),
+  },
+  {
+    key: 'pre_event_email',
+    version: 1,
+    name: 'Pre-event email (built-in)',
+    trigger_type: 'event.date_approaching',
+    // daysBefore drives the scheduler emitter — how many days before the event
+    // date the reminder fires.
+    trigger_config: { daysBefore: 3 },
+    description:
+      'A few days before the event date, send the customer a reminder and the admin a heads-up. '
+      + 'Fired by the scheduler from the event date (daysBefore in the trigger config). Uses the '
+      + 'wired send_email action, so it works once enabled and the pre_event_reminder template '
+      + 'exists. Disabled by default.',
+    build: async () => buildPreEventEmailGraph(),
+  },
+];
+
 let booted = false;
 
 function parseSeedConfig(raw) {
@@ -79,70 +218,70 @@ async function writeGraph(trx, workflowId, version, nodes, edges) {
   }
 }
 
+async function seedOneBuiltin(db, logger, def) {
+  const { nodes, edges } = await def.build();
+  const triggerConfig = { ...(def.trigger_config || {}), seedVersion: def.version };
+
+  const existing = await db('workflows').where({ builtin_key: def.key }).first();
+
+  if (existing) {
+    // Re-seed the graph only when (a) it has never been activated and (b) our
+    // seed version moved on. Once the admin enables it, it's their live flow —
+    // never overwrite it.
+    const storedVersion = Number(parseSeedConfig(existing.trigger_config).seedVersion) || 0;
+    const isEnabled = existing.enabled === true || existing.enabled === 1;
+    if (isEnabled || storedVersion >= def.version) return;
+
+    const newVersion = (existing.version || 1) + 1;
+    await db.transaction(async (trx) => {
+      await trx('workflows').where({ id: existing.id }).update({
+        name: def.name,
+        description: def.description,
+        trigger_type: def.trigger_type,
+        trigger_config: JSON.stringify(triggerConfig),
+        version: newVersion,
+        updated_at: trx.fn.now(),
+      });
+      await writeGraph(trx, existing.id, newVersion, nodes, edges);
+    });
+    logger?.info?.(`Re-seeded built-in workflow: ${def.key} (v${def.version})`);
+    return;
+  }
+
+  await db.transaction(async (trx) => {
+    const ins = await trx('workflows').insert({
+      name: def.name,
+      description: def.description,
+      enabled: false,
+      version: 1,
+      trigger_type: def.trigger_type,
+      trigger_config: JSON.stringify(triggerConfig),
+      is_builtin: true,
+      builtin_key: def.key,
+    }).returning('id');
+    // Postgres returns [] without `.returning`, so ins[0] would be undefined and
+    // the child node inserts would roll back on NOT NULL. Normalise the {id}
+    // (pg) vs bare-id (sqlite) shapes.
+    const workflowId = ins[0]?.id ?? ins[0];
+    await writeGraph(trx, workflowId, 1, nodes, edges);
+  });
+  logger?.info?.(`Seeded built-in workflow: ${def.key} (disabled)`);
+}
+
 async function seedBuiltinWorkflowsAtBoot(db, logger) {
   try {
     if (!(await db.schema.hasTable('workflows'))) return;
-
-    const firstDays = Number(await getAppSetting('crm_invoices_reminder_first_days')) || 14;
-    const secondDays = Number(await getAppSetting('crm_invoices_reminder_second_days')) || 30;
-    const gapDays = Math.max(1, secondDays - firstDays);
-    const { nodes, edges } = buildDunningGraph({ firstDays, gapDays, maxReminders: 3 });
-
-    const description = 'Drives overdue dunning through the engine: wait to the due date, then up '
-      + 'to two payment-check cycles. Each cycle fires the existing admin confirm-payment email '
-      + '(the gate), which applies reminders + Mahngebühr via the proven payment-check flow. '
-      + 'Disabled by default; while it is enabled the hardcoded reminder ladder is skipped '
-      + 'automatically, so the two never double-send.';
-
-    const existing = await db('workflows').where({ builtin_key: DUNNING_KEY }).first();
-
-    if (existing) {
-      // Re-seed the graph only when (a) it has never been activated and (b) our
-      // seed version moved on (the dunning cutover). Once the admin enables it,
-      // it's their live flow — never overwrite it.
-      const storedVersion = Number(parseSeedConfig(existing.trigger_config).seedVersion) || 0;
-      const isEnabled = existing.enabled === true || existing.enabled === 1;
-      if (isEnabled || storedVersion >= SEED_VERSION) { booted = true; return; }
-
-      const newVersion = (existing.version || 1) + 1;
-      await db.transaction(async (trx) => {
-        await trx('workflows').where({ id: existing.id }).update({
-          name: 'Invoice dunning (built-in)',
-          description,
-          trigger_config: JSON.stringify({ seedVersion: SEED_VERSION }),
-          version: newVersion,
-          updated_at: trx.fn.now(),
-        });
-        await writeGraph(trx, existing.id, newVersion, nodes, edges);
-      });
-      booted = true;
-      logger?.info?.('Re-seeded built-in workflow: invoice dunning (delegation graph v2)');
-      return;
+    for (const def of BUILTINS) {
+      try {
+        await seedOneBuiltin(db, logger, def);
+      } catch (err) {
+        logger?.warn?.(`Built-in workflow seed failed for ${def.key}:`, err.message);
+      }
     }
-
-    await db.transaction(async (trx) => {
-      const ins = await trx('workflows').insert({
-        name: 'Invoice dunning (built-in)',
-        description,
-        enabled: false,
-        version: 1,
-        trigger_type: 'invoice.sent',
-        trigger_config: JSON.stringify({ seedVersion: SEED_VERSION }),
-        is_builtin: true,
-        builtin_key: DUNNING_KEY,
-      }).returning('id');
-      // Postgres returns [] without `.returning`, so ins[0] would be undefined
-      // and the child node inserts would roll back on NOT NULL. Normalise the
-      // {id} (pg) vs bare-id (sqlite) shapes.
-      const workflowId = ins[0]?.id ?? ins[0];
-      await writeGraph(trx, workflowId, 1, nodes, edges);
-    });
-
     booted = true;
-    logger?.info?.('Seeded built-in workflow: invoice dunning (disabled)');
   } catch (err) {
     logger?.warn?.('Built-in workflow seed failed at boot:', err.message);
   }
 }
 
-module.exports = { seedBuiltinWorkflowsAtBoot, buildDunningGraph, DUNNING_KEY };
+module.exports = { seedBuiltinWorkflowsAtBoot, buildDunningGraph, DUNNING_KEY, BUILTINS };

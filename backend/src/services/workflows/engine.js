@@ -381,6 +381,79 @@ async function recoverStaleRuns({ staleMs = RECOVERY_STALE_MS, limit = 50 } = {}
 }
 
 /**
+ * Emit `event.date_approaching` for events whose date is within the configured
+ * lead window of an enabled pre-event flow. Iterates per flow so each respects
+ * its own trigger_config.daysBefore; emitWorkflowEvent's per-(flow,entity)
+ * dedup_key guarantees a single run per event, so polling hourly never
+ * duplicates. Fails CLOSED when the workflows flag is off. Called from the
+ * scheduler tick.
+ *
+ * Caveat (v1): emitWorkflowEvent fans out to ALL enabled flows of this trigger,
+ * so with multiple pre-event flows the widest window wins for surfacing an
+ * event; a narrower flow may then fire earlier than its own daysBefore. The
+ * single-built-in case (the norm) is exact.
+ */
+async function emitDueEventReminders(limit = 200) {
+  try {
+    const { isFeatureEnabled } = require('../../middleware/requireFeatureFlag');
+    let enabled = false;
+    try { enabled = await isFeatureEnabled('workflows'); } catch (e) { return 0; }
+    if (!enabled) return 0;
+    if (!(await db.schema.hasTable('events'))) return 0;
+
+    const flows = await db('workflows').where({ enabled: true, trigger_type: 'event.date_approaching' });
+    if (!flows.length) return 0;
+
+    // The admin heads-up resolves its recipient from ctx.vars.adminEmail; events
+    // don't carry one, so source it from the business profile (best-effort).
+    let adminEmail = null;
+    try {
+      if (await db.schema.hasTable('business_profile')) {
+        const profile = await db('business_profile').where({ id: 1 }).first();
+        adminEmail = profile?.email || null;
+      }
+    } catch (_) { /* best-effort */ }
+
+    let emitted = 0;
+    const todayIso = new Date().toISOString().slice(0, 10);
+    for (const wf of flows) {
+      const cfg = parseJson(wf.trigger_config, {});
+      const daysBefore = Number(cfg.daysBefore) > 0 ? Number(cfg.daysBefore) : 3;
+      const windowEndIso = new Date(Date.now() + daysBefore * 86400000).toISOString().slice(0, 10);
+
+      const events = await db('events')
+        .where('is_active', true)
+        .where('is_archived', false)
+        .whereNotNull('event_date')
+        .where('event_date', '>=', todayIso)
+        .where('event_date', '<=', windowEndIso)
+        .limit(limit);
+
+      for (const ev of events) {
+        const runIds = await emitWorkflowEvent('event.date_approaching', {
+          entityType: 'event',
+          entityId: ev.id,
+          payload: {
+            eventId: ev.id,
+            eventName: ev.event_name || null,
+            eventDate: ev.event_date,
+            hostName: ev.host_name || null,
+            customerEmail: ev.customer_email || ev.host_email || null,
+            adminEmail,
+            daysBefore,
+          },
+        });
+        emitted += runIds.length;
+      }
+    }
+    return emitted;
+  } catch (e) {
+    logger.error('[workflow] emitDueEventReminders failed', { error: e.message });
+    return 0;
+  }
+}
+
+/**
  * Test-fire a workflow on demand (admin testing). Creates a run for the given
  * entity/payload and starts it. Defaults to dryRun: side-effecting actions are
  * mocked, waits pass through, and gates auto-take 'confirm' — so the WHOLE flow
@@ -412,6 +485,7 @@ async function testRun(workflowId, { entityType = null, entityId = null, payload
 module.exports = {
   emitWorkflowEvent,
   runDueWaits,
+  emitDueEventReminders,
   recoverStaleRuns,
   testRun,
   startRun,

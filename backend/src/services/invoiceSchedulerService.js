@@ -49,6 +49,9 @@ async function runTick() {
     const wf = require('./workflows');
     const resumed = await wf.runDueWaits();
     if (resumed) logger.info('Workflow scheduler: resumed waiting runs', { resumed });
+    // Fire pre-event reminders for events entering an enabled flow's lead window.
+    const preEvent = await wf.emitDueEventReminders();
+    if (preEvent) logger.info('Workflow scheduler: emitted pre-event reminders', { preEvent });
     // Recover runs orphaned by a crash (stuck in running/pending). Runs on the
     // boot tick too, so a restart catches anything stranded during downtime.
     const recovered = await wf.recoverStaleRuns();

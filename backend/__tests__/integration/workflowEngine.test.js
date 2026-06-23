@@ -280,6 +280,59 @@ describe('workflow engine', () => {
     expect(after.version).toBe(before.version); // unchanged
   });
 
+  test('seeds the booking + pre-event built-ins (disabled, correct triggers)', async () => {
+    const { seedBuiltinWorkflowsAtBoot } = require('../../src/services/_workflowSeedBoot');
+    await seedBuiltinWorkflowsAtBoot(db, { info() {}, warn() {} });
+
+    const bookingFull = await db('workflows').where({ builtin_key: 'booking_full' }).first();
+    expect(bookingFull).toBeTruthy();
+    expect(!!bookingFull.enabled).toBe(false);
+    expect(bookingFull.trigger_type).toBe('quote.accepted');
+    const fullNodes = await db('workflow_nodes').where({ workflow_id: bookingFull.id, version: bookingFull.version });
+    expect(fullNodes.some((n) => n.type === 'gate')).toBe(true); // contract-signed gate
+    expect(fullNodes.some((n) => JSON.parse(n.config || '{}').action === 'prepare_contract')).toBe(true);
+
+    const bookingSimple = await db('workflows').where({ builtin_key: 'booking_simple' }).first();
+    expect(bookingSimple).toBeTruthy();
+    expect(bookingSimple.trigger_type).toBe('quote.accepted');
+
+    const preEvent = await db('workflows').where({ builtin_key: 'pre_event_email' }).first();
+    expect(preEvent).toBeTruthy();
+    expect(preEvent.trigger_type).toBe('event.date_approaching');
+    expect(JSON.parse(preEvent.trigger_config).daysBefore).toBe(3);
+    const preNodes = await db('workflow_nodes').where({ workflow_id: preEvent.id, version: preEvent.version });
+    expect(preNodes.some((n) => JSON.parse(n.config || '{}').action === 'send_email')).toBe(true);
+  });
+
+  test('emitDueEventReminders starts a run for an event inside the lead window', async () => {
+    const wfId = await makeWorkflow({
+      trigger: 'event.date_approaching',
+      enabled: true,
+      nodes: [{ key: 'pe1', type: 'trigger' }, { key: 'pe2', type: 'action', config: { action: 'noop' } }],
+      edges: [{ from: 'pe1', to: 'pe2' }],
+    });
+    // Park the workflow's trigger window at 5 days so our event (2 days out) is in range.
+    await db('workflows').where({ id: wfId }).update({ trigger_config: JSON.stringify({ daysBefore: 5 }) });
+
+    const inWindow = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+    const tooFar = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    const farFuture = new Date(Date.now() + 365 * 86400000).toISOString();
+    const evt = { event_type: 'wedding', password_hash: 'x', expires_at: farFuture, is_active: true, is_archived: false, customer_email: 'c@x.test' };
+    await db('events').insert({ ...evt, slug: 'pe-soon', share_link: 'pe-soon', event_name: 'Soon', event_date: inWindow });
+    await db('events').insert({ ...evt, slug: 'pe-far', share_link: 'pe-far', event_name: 'Far', event_date: tooFar });
+
+    const emitted = await engine.emitDueEventReminders();
+    expect(emitted).toBeGreaterThanOrEqual(1);
+
+    const runs = await db('workflow_runs').where({ workflow_id: wfId, entity_type: 'event' });
+    expect(runs.length).toBe(1); // only the in-window event, not the far one
+
+    // Idempotent: a second pass dedups (no duplicate run for the same event).
+    await engine.emitDueEventReminders();
+    const runs2 = await db('workflow_runs').where({ workflow_id: wfId, entity_type: 'event' });
+    expect(runs2.length).toBe(1);
+  });
+
   test('recoverStaleRuns resumes a run orphaned mid-flow (crash recovery)', async () => {
     const wfId = await makeWorkflow({
       trigger: 'recover.event',
