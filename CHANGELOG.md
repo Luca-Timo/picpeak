@@ -5,6 +5,14 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.69.1-beta.0](https://github.com/the-luap/picpeak/compare/v3.69.0-beta.0...v3.69.1-beta.0) (2026-06-23)
+
+
+### Bug Fixes
+
+* **analytics:** admin dashboard reads correct fields + Umami device API ([#661](https://github.com/the-luap/picpeak/issues/661)) ([349f566](https://github.com/the-luap/picpeak/commit/349f566e87b33c59f61eb28b8abc5f889e6285d6))
+* **analytics:** admin dashboard reads correct fields + Umami device API ([#661](https://github.com/the-luap/picpeak/issues/661)) ([7534447](https://github.com/the-luap/picpeak/commit/7534447b6c0df4290fd8dac12270673097096f1b))
+
 ## [3.69.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.68.1-beta.0...v3.69.0-beta.0) (2026-06-22)
 
 
