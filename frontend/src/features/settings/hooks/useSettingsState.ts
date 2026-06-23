@@ -45,7 +45,13 @@ export interface SecuritySettings {
   recaptcha_secret_key: string;
 }
 
+export type TrackerProvider = 'none' | 'umami' | 'rybbit' | 'custom';
+
 export interface AnalyticsSettings {
+  // Tracker-provider switch (#663 Phase 1). Drives which provider's
+  // settings panel renders + which tracker script gets injected into the
+  // public gallery. 'none' = no tracker; 'custom' = paste-your-own HTML.
+  tracker_provider: TrackerProvider;
   umami_enabled: boolean;
   umami_url: string;
   umami_website_id: string;
@@ -56,6 +62,14 @@ export interface AnalyticsSettings {
   // on GET when a value is stored — submit the masked sentinel unchanged
   // to keep the stored value, or a real key to replace it.
   umami_api_key: string;
+  // Rybbit native provider (#663 Phase 1). Same shape as Umami.
+  rybbit_url: string;
+  rybbit_website_id: string;
+  rybbit_api_key: string;
+  // Custom-mode HTML snippet (#663). Sanitised server-side on save via
+  // sanitize-html with a tracker-script allowlist. Rendered into the
+  // public gallery <head> as-is on every request.
+  custom_head_html: string;
 }
 
 export interface EventSettings {
@@ -132,11 +146,16 @@ export function useSettingsState() {
 
   // Analytics settings state
   const [analyticsSettings, setAnalyticsSettings] = useState<AnalyticsSettings>({
+    tracker_provider: 'none',
     umami_enabled: false,
     umami_url: '',
     umami_website_id: '',
     umami_share_url: '',
-    umami_api_key: ''
+    umami_api_key: '',
+    rybbit_url: '',
+    rybbit_website_id: '',
+    rybbit_api_key: '',
+    custom_head_html: ''
   });
 
   // Event creation settings state
@@ -222,12 +241,27 @@ export function useSettingsState() {
         recaptcha_secret_key: settings.security_recaptcha_secret_key ?? ''
       });
 
+      // Tracker provider: prefer explicit setting; fall back to legacy
+      // umami_enabled flag for installs that haven't picked yet (#663).
+      const explicitProvider = settings.analytics_tracker_provider;
+      const provider: TrackerProvider = (
+        explicitProvider === 'none' || explicitProvider === 'umami'
+        || explicitProvider === 'rybbit' || explicitProvider === 'custom'
+      )
+        ? explicitProvider
+        : (toBoolean(settings.analytics_umami_enabled, false) ? 'umami' : 'none');
+
       setAnalyticsSettings({
+        tracker_provider: provider,
         umami_enabled: toBoolean(settings.analytics_umami_enabled, false),
         umami_url: settings.analytics_umami_url || '',
         umami_website_id: settings.analytics_umami_website_id || '',
         umami_share_url: settings.analytics_umami_share_url || '',
-        umami_api_key: settings.analytics_umami_api_key || ''
+        umami_api_key: settings.analytics_umami_api_key || '',
+        rybbit_url: settings.analytics_rybbit_url || '',
+        rybbit_website_id: settings.analytics_rybbit_website_id || '',
+        rybbit_api_key: settings.analytics_rybbit_api_key || '',
+        custom_head_html: settings.analytics_custom_head_html || ''
       });
 
       setEventSettings({
@@ -323,12 +357,16 @@ export function useSettingsState() {
     mutationFn: async () => {
       const settingsData: Record<string, unknown> = {};
       Object.entries(analyticsSettings).forEach(([key, value]) => {
-        // The Umami API key (#661 Bug C) is returned masked as `••••••••`
-        // on GET so it doesn't leak in the response body. Don't re-save
-        // that sentinel — silently preserve whatever's already stored.
-        if (key === 'umami_api_key' && value === '••••••••') return;
+        // API keys (Umami / Rybbit) are returned masked as `••••••••` on
+        // GET so they don't leak in the response body. Don't re-save the
+        // sentinel — silently preserve whatever's already stored.
+        if ((key === 'umami_api_key' || key === 'rybbit_api_key') && value === '••••••••') return;
         settingsData[`analytics_${key}`] = value;
       });
+      // Keep the legacy `analytics_umami_enabled` flag in sync with the
+      // new `tracker_provider` switch so back-compat consumers (publicSettings
+      // surface, embedded Umami iframe) keep working when provider !== 'umami'.
+      settingsData.analytics_umami_enabled = analyticsSettings.tracker_provider === 'umami';
       return settingsService.updateSettings(settingsData);
     },
     onSuccess: () => {
