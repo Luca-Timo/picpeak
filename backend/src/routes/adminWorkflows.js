@@ -24,8 +24,20 @@ const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
 const workflows = require('../services/workflows');
+const { DOCUMENT_ACTIONS } = require('../services/workflows/actions');
+const { hasColumnCached } = require('../utils/schemaCache');
 
 router.use(adminAuth, requireFeatureFlag('workflows'));
+
+// Graph payload caps — a workflows.manage user shouldn't be able to DoS the DB
+// with an enormous graph. Generous vs any real flow.
+const MAX_NODES = 200;
+const MAX_EDGES = 500;
+const MAX_NODE_CONFIG_BYTES = 16 * 1024;
+const VALID_NODE_TYPES = new Set(['trigger', 'action', 'condition', 'branch', 'loop', 'wait', 'gate', 'webhook']);
+// Actions registered but not yet wired (return {skipped:true}); a flow that
+// uses any of these can't be meaningfully enabled.
+const UNIMPLEMENTED_ACTIONS = new Set(DOCUMENT_ACTIONS);
 
 function parseJson(v, fallback) {
   if (v == null) return fallback;
@@ -36,15 +48,32 @@ function parseJson(v, fallback) {
 function validateGraph(body) {
   const nodes = Array.isArray(body.nodes) ? body.nodes : [];
   const edges = Array.isArray(body.edges) ? body.edges : [];
+  if (nodes.length > MAX_NODES) return `Too many nodes (max ${MAX_NODES})`;
+  if (edges.length > MAX_EDGES) return `Too many edges (max ${MAX_EDGES})`;
   const triggers = nodes.filter((n) => n.type === 'trigger');
   if (triggers.length !== 1) return 'A workflow must have exactly one trigger node';
   if (nodes.some((n) => !n.node_key || !n.type)) return 'Every node needs a node_key and type';
+  const badType = nodes.find((n) => !VALID_NODE_TYPES.has(n.type));
+  if (badType) return `Unknown node type '${badType.type}'`;
+  const oversized = nodes.find((n) => JSON.stringify(n.config || {}).length > MAX_NODE_CONFIG_BYTES);
+  if (oversized) return `Node '${oversized.node_key}' config is too large (max ${MAX_NODE_CONFIG_BYTES} bytes)`;
   const keys = new Set(nodes.map((n) => n.node_key));
   if (keys.size !== nodes.length) return 'Duplicate node_key in graph';
   for (const e of edges) {
     if (!keys.has(e.from_node) || !keys.has(e.to_node)) return 'Edge references an unknown node';
   }
   return null;
+}
+
+// The unimplemented (stub) actions a graph references — used to refuse enabling
+// a flow that would silently no-op (e.g. the booking built-ins' prepare_*/send).
+function unimplementedActionsIn(nodes = []) {
+  const found = new Set();
+  for (const n of nodes) {
+    const action = n && n.config && n.config.action;
+    if (action && UNIMPLEMENTED_ACTIONS.has(action)) found.add(action);
+  }
+  return [...found];
 }
 
 async function writeGraph(trx, workflowId, version, nodes = [], edges = []) {
@@ -148,6 +177,10 @@ router.post('/', requirePermission('workflows.manage'), async (req, res, next) =
     if (!b.name || !b.trigger_type) return res.status(400).json({ error: 'name and trigger_type are required' });
     const err = validateGraph(b);
     if (err) return res.status(400).json({ error: err });
+    if (b.enabled) {
+      const stubs = unimplementedActionsIn(b.nodes);
+      if (stubs.length) return res.status(409).json({ error: `This flow can't be enabled yet — it uses actions that aren't implemented: ${stubs.join(', ')}.` });
+    }
     const id = await db.transaction(async (trx) => {
       const ins = await trx('workflows').insert({
         name: b.name, description: b.description || null, enabled: !!b.enabled, version: 1,
@@ -173,9 +206,15 @@ router.put('/:id', requirePermission('workflows.manage'), async (req, res, next)
     const b = req.body || {};
     const err = validateGraph(b);
     if (err) return res.status(400).json({ error: err });
+    const willEnable = b.enabled != null ? !!b.enabled : (wf.enabled === true || wf.enabled === 1);
+    if (willEnable) {
+      const stubs = unimplementedActionsIn(b.nodes);
+      if (stubs.length) return res.status(409).json({ error: `This flow can't be enabled yet — it uses actions that aren't implemented: ${stubs.join(', ')}.` });
+    }
     const newVersion = wf.version + 1;
+    const hasAdminToggled = await hasColumnCached('workflows', 'admin_toggled_at');
     await db.transaction(async (trx) => {
-      await trx('workflows').where({ id }).update({
+      const update = {
         name: b.name ?? wf.name,
         description: b.description ?? wf.description,
         enabled: b.enabled != null ? !!b.enabled : wf.enabled,
@@ -185,7 +224,11 @@ router.put('/:id', requirePermission('workflows.manage'), async (req, res, next)
           : wf.trigger_config,
         version: newVersion,
         updated_at: trx.fn.now(),
-      });
+      };
+      // An admin edit claims ownership of a built-in so the boot seeder stops
+      // re-seeding / re-enabling it (see _workflowSeedBoot).
+      if (hasAdminToggled) update.admin_toggled_at = trx.fn.now();
+      await trx('workflows').where({ id }).update(update);
       await writeGraph(trx, id, newVersion, b.nodes, b.edges);
     });
     res.json({ id, version: newVersion });
@@ -196,8 +239,23 @@ router.patch('/:id/enabled', requirePermission('workflows.manage'), async (req, 
   try {
     const id = Number(req.params.id);
     const enabled = !!(req.body && req.body.enabled);
-    const updated = await db('workflows').where({ id }).update({ enabled, updated_at: db.fn.now() });
-    if (!updated) return res.status(404).json({ error: 'Workflow not found' });
+    const wf = await db('workflows').where({ id }).first();
+    if (!wf) return res.status(404).json({ error: 'Workflow not found' });
+    // Refuse to enable a flow that would silently no-op — i.e. one whose graph
+    // references actions that aren't implemented yet (the booking built-ins'
+    // prepare_*/send_document stubs). Concern #5 from review.
+    if (enabled) {
+      const rows = await db('workflow_nodes').where({ workflow_id: id, version: wf.version });
+      const stubs = unimplementedActionsIn(rows.map((n) => ({ config: parseJson(n.config, {}) })));
+      if (stubs.length) {
+        return res.status(409).json({ error: `This flow can't be enabled yet — it uses actions that aren't implemented: ${stubs.join(', ')}.` });
+      }
+    }
+    const patch = { enabled, updated_at: db.fn.now() };
+    // Mark admin ownership so the boot seeder won't re-flip this built-in's
+    // enabled state on the next SEED_VERSION bump (review nit #1).
+    if (await hasColumnCached('workflows', 'admin_toggled_at')) patch.admin_toggled_at = db.fn.now();
+    await db('workflows').where({ id }).update(patch);
     res.json({ id, enabled });
   } catch (e) { next(e); }
 });
