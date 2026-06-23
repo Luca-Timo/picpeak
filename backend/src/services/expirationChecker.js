@@ -88,6 +88,30 @@ async function queueExpirationWarning(event) {
   // Relationship mail — hold to business hours (no-op unless configured).
   }, { respectBusinessHours: true });
 
+  // Fire gallery.expiring so admins can build flows on the warning window
+  // (e.g. a final download nudge). Best-effort; emit is fail-closed when the
+  // workflows flag is off, and deduped per (workflow, event) so the hourly
+  // sweep fires the trigger at most once per gallery.
+  try {
+    await require('./workflows').emitWorkflowEvent('gallery.expiring', {
+      entityType: 'event',
+      entityId: event.id,
+      payload: {
+        eventId: event.id,
+        slug: event.slug,
+        eventName: event.event_name,
+        eventDate: event.event_date,
+        expiresAt: event.expires_at,
+        daysRemaining,
+        customerEmail: recipientEmail,
+        adminEmail: event.admin_email || null,
+        galleryLink: shareUrl,
+      },
+    });
+  } catch (err) {
+    logger.warn('Failed to emit gallery.expiring workflow event', { eventId: event.id, error: err.message });
+  }
+
   logger.info(`Queued expiration warning for event ${event.slug}`);
 }
 
@@ -152,9 +176,30 @@ async function handleExpiredEvent(event) {
       });
     }
     
+    // Fire gallery.expired for the workflow engine (sibling to the
+    // event.expired webhook above). Best-effort / fail-closed; emitted BEFORE
+    // archiveEvent so flows see expired→archived in order.
+    try {
+      await require('./workflows').emitWorkflowEvent('gallery.expired', {
+        entityType: 'event',
+        entityId: event.id,
+        payload: {
+          eventId: event.id,
+          slug: event.slug,
+          eventName: event.event_name,
+          eventDate: event.event_date,
+          expiresAt: event.expires_at,
+          customerEmail: recipientEmail,
+          adminEmail: event.admin_email || null,
+        },
+      });
+    } catch (err) {
+      logger.warn('Failed to emit gallery.expired workflow event', { eventId: event.id, error: err.message });
+    }
+
     // Start archiving process
     await archiveEvent(event);
-    
+
     logger.info(`Handled expiration for event ${event.slug}`);
   } catch (error) {
     logger.error(`Error handling expired event ${event.slug}:`, error);

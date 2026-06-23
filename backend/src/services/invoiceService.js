@@ -2710,6 +2710,27 @@ async function applyReminder(invoice, lineItems, level, adminId) {
   if (await hasColumnCached('invoices', 'late_fee_vat_minor')) update.late_fee_vat_minor = lateFeeVat;
   await db('invoices').where({ id: invoice.id }).update(update);
 
+  // Fire invoice.overdue at the status→overdue flip. Deduped per (workflow,
+  // invoice), so across the reminder ladder it triggers a flow at most once.
+  // Best-effort / fail-closed.
+  try {
+    await require('./workflows').emitWorkflowEvent('invoice.overdue', {
+      entityType: 'invoice',
+      entityId: invoice.id,
+      payload: {
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoice_number,
+        eventId: invoice.event_id || null,
+        customerAccountId: invoice.customer_account_id,
+        customerEmail: customer?.email || null,
+        dueDate: invoice.due_date,
+        reminderLevel: level,
+        totalMinor: invoice.total_amount_minor,
+        currency: invoice.currency,
+      },
+    });
+  } catch (_) {}
+
   // Render the MAHNUNG (reminder letter). The original invoice PDF is left
   // UNTOUCHED (immutable). The Mahnung reuses the invoice layout via a
   // 'mahnung' kind: same line items + the Mahngebühr row + the new total, with

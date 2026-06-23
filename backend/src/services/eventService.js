@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs').promises;
 const { db } = require('../database/db');
+const logger = require('../utils/logger');
 const { formatBoolean } = require('../utils/dbCompat');
 const { hasColumnCached } = require('../utils/schemaCache');
 const { validatePasswordInContext, getBcryptRounds } = require('../utils/passwordValidation');
@@ -282,6 +283,28 @@ const createEvent = async (eventData) => {
   // Insert into database
   const insertResult = await db('events').insert(insertData).returning('id');
   const eventId = insertResult[0]?.id || insertResult[0];
+
+  // Fire gallery.published — a gallery goes live the moment it's created (active
+  // + share link). Best-effort; emit is fail-closed when the workflows flag is
+  // off and never throws into the create path.
+  try {
+    await require('./workflows').emitWorkflowEvent('gallery.published', {
+      entityType: 'event',
+      entityId: eventId,
+      payload: {
+        eventId,
+        slug,
+        eventName: event_name,
+        eventDate: event_date,
+        customerEmail: customer_email || null,
+        adminEmail: admin_email || null,
+        galleryLink: shareUrl,
+        expiresAt: expires_at,
+      },
+    });
+  } catch (err) {
+    logger.warn('Failed to emit gallery.published workflow event', { eventId, error: err.message });
+  }
 
   return {
     id: eventId,

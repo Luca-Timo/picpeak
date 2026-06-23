@@ -26,8 +26,12 @@ import { NodeConfigPanel } from './NodeConfigPanel';
 
 const PALETTE: WorkflowNodeType[] = ['trigger', 'condition', 'branch', 'loop', 'wait', 'action', 'gate', 'webhook'];
 const TRIGGERS = [
-  'invoice.sent', 'invoice.paid', 'invoice.overdue', 'quote.accepted', 'quote.declined',
-  'contract.signed', 'event.date_approaching', 'gallery.published', 'gallery.expiring', 'customer.created',
+  'invoice.sent', 'invoice.paid', 'invoice.overdue',
+  'quote.sent', 'quote.accepted', 'quote.declined',
+  'contract.sent', 'contract.signed',
+  'event.date_approaching',
+  'gallery.published', 'gallery.expiring', 'gallery.expired',
+  'customer.created',
 ];
 
 const COLORS: Record<string, string> = {

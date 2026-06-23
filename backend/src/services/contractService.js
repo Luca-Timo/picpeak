@@ -88,6 +88,36 @@ function customerPublicActor() {
 }
 
 /**
+ * Fire a contract lifecycle event for the workflow engine. Best-effort:
+ * resolves the customer email (so send_email actions have a recipient) and
+ * never throws into the caller. No-op when the workflows flag is off (emit
+ * fails closed). Mirrors quoteService.emitQuoteEvent.
+ */
+async function emitContractEvent(contract, status) {
+  try {
+    let customerEmail = null;
+    if (contract.customer_account_id) {
+      const c = await db('customer_accounts').where({ id: contract.customer_account_id }).first();
+      customerEmail = c?.email || null;
+    }
+    await require('./workflows').emitWorkflowEvent(`contract.${status}`, {
+      entityType: 'contract',
+      entityId: contract.id,
+      payload: {
+        contractId: contract.id,
+        contractNumber: contract.contract_number,
+        customerAccountId: contract.customer_account_id || null,
+        customerEmail,
+        eventName: contract.event_name || null,
+        title: contract.title || null,
+      },
+    });
+  } catch (err) {
+    logger.warn('Failed to emit contract workflow event', { contractId: contract.id, status, error: err.message });
+  }
+}
+
+/**
  * Privacy gate for the customer/admin IP captured at signing time.
  * The `crm_contracts_store_ip` setting (default true) controls
  * whether the IP is persisted into the DB. When off, this helper
@@ -1065,6 +1095,8 @@ async function sendContract(id, adminId) {
     await logActivity('contract_sent', { contractId: id, token }, null, await adminActor(adminId));
   } catch (_) { /* logging is best-effort */ }
 
+  await emitContractEvent(contract, 'sent');
+
   logger.info('Contract sent', { adminId, contractId: id });
   return { token, pdfPath };
 }
@@ -1460,6 +1492,10 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
     await logActivity(`contract_${newStatus}`, { contractId: contract.id }, null, await adminActor(adminId));
   } catch (_) { /* logging is best-effort */ }
 
+  // The binding moment — fire contract.signed once the contract is fully signed
+  // (matches the editor's trigger). Best-effort / fail-closed.
+  if (newStatus === 'fully_signed') await emitContractEvent(contract, 'signed');
+
   return { status: newStatus, signedAt: now };
 }
 
@@ -1564,6 +1600,8 @@ async function attachSignedPdfUpload(contractId, filePath, uploaderRole) {
     await logActivity('contract_signed_pdf_uploaded', { contractId, uploaderRole }, null,
       uploaderRole === 'admin' ? { type: 'admin', name: 'Admin (PDF upload)' } : customerPublicActor());
   } catch (_) { /* logging is best-effort */ }
+
+  await emitContractEvent(contract, 'signed');
 
   return { status: 'fully_signed', signedPdfPath: filePath };
 }

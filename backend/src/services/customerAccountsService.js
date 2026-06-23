@@ -23,6 +23,23 @@ const { ConflictError, NotFoundError, ValidationError } = require('../utils/erro
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days, matches admin invites
 
 /**
+ * Fire customer.created for the workflow engine, from every creation path
+ * (direct add + invitation accept). Best-effort / fail-closed; never throws
+ * into the caller.
+ */
+async function emitCustomerCreated(id, email) {
+  try {
+    await require('./workflows').emitWorkflowEvent('customer.created', {
+      entityType: 'customer',
+      entityId: id,
+      payload: { customerAccountId: id, customerEmail: email || null },
+    });
+  } catch (err) {
+    logger.warn('Failed to emit customer.created workflow event', { customerId: id, error: err.message });
+  }
+}
+
+/**
  * Whitelist of customer profile fields the admin is allowed to pre-fill on
  * an invitation (and that the customer can then edit on accept). Centralised
  * so both invite-create and accept paths agree on what survives the round
@@ -252,6 +269,7 @@ async function createDirect({ email, prefill, createdByAdminId }) {
   );
 
   logger.info('Passive customer created', { id, email: normalisedEmail, createdByAdminId });
+  await emitCustomerCreated(id, normalisedEmail);
   return { id };
 }
 
@@ -420,6 +438,7 @@ async function acceptInvitation({ token, name, password, profile }) {
   );
 
   logger.info('Customer invitation accepted', { customerId, email: invitation.email });
+  await emitCustomerCreated(customerId, invitation.email);
   return { customerId, email: invitation.email };
 }
 

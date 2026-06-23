@@ -981,6 +981,11 @@ async function sendQuote(id, adminId) {
     await logActivity('quote_sent', { quoteId: id, token }, null, `admin:${adminId}`);
   } catch (_) {}
 
+  // Fire the quote.sent workflow trigger (best-effort; emit is fail-closed when
+  // the workflows flag is off). The accepted/declined emits already exist; this
+  // closes the gap so flows can react to a quote going out.
+  await emitQuoteEvent(quote, 'sent');
+
   logger.info('Quote sent', { adminId, quoteId: id });
   return { token, pdfPath };
 }

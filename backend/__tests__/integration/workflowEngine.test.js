@@ -294,12 +294,20 @@ describe('workflow engine', () => {
     expect(!!bookingFull.enabled).toBe(false);
     expect(bookingFull.trigger_type).toBe('quote.accepted');
     const fullNodes = await db('workflow_nodes').where({ workflow_id: bookingFull.id, version: bookingFull.version });
-    expect(fullNodes.some((n) => n.type === 'gate')).toBe(true); // contract-signed gate
     expect(fullNodes.some((n) => JSON.parse(n.config || '{}').action === 'prepare_contract')).toBe(true);
+    // Admin review gate guards BOTH document sends (adjust line items, then OK).
+    const fullGateKeys = fullNodes.filter((n) => n.type === 'gate').map((n) => n.node_key);
+    expect(fullGateKeys).toEqual(expect.arrayContaining(['reviewContract', 'reviewInvoice']));
+    const fullEdges = await db('workflow_edges').where({ workflow_id: bookingFull.id, version: bookingFull.version });
+    // reviewContract --confirm--> sendContract ; reviewInvoice --confirm--> sendInvoice
+    expect(fullEdges.some((e) => e.from_node === 'reviewContract' && e.from_handle === 'confirm' && e.to_node === 'sendContract')).toBe(true);
+    expect(fullEdges.some((e) => e.from_node === 'reviewInvoice' && e.from_handle === 'confirm' && e.to_node === 'sendInvoice')).toBe(true);
 
     const bookingSimple = await db('workflows').where({ builtin_key: 'booking_simple' }).first();
     expect(bookingSimple).toBeTruthy();
     expect(bookingSimple.trigger_type).toBe('quote.accepted');
+    const simpleEdges = await db('workflow_edges').where({ workflow_id: bookingSimple.id, version: bookingSimple.version });
+    expect(simpleEdges.some((e) => e.from_node === 'reviewInvoice' && e.from_handle === 'confirm' && e.to_node === 'sendInvoice')).toBe(true);
 
     const preEvent = await db('workflows').where({ builtin_key: 'pre_event_email' }).first();
     expect(preEvent).toBeTruthy();
