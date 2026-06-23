@@ -127,33 +127,69 @@ function buildBookingSimpleGraph() {
   return { nodes, edges };
 }
 
-// Pre-event email — fired by the scheduler `daysBefore` the event date (see
-// emitDueEventReminders in the engine). Sends a customer reminder, then a heads-
-// up to the admin. Unlike the booking flows this uses the already-wired
-// send_email action, so it is functional once enabled (the customer template
-// `pre_event_reminder` should exist / be authored).
+// Pre-event reminder — fired by the scheduler at event_date − daysBefore (see
+// emitDueEventReminders). The notify_pre_event action DELEGATES to
+// eventReminderService.sendReminderForEvent, so the email is byte-identical to
+// the legacy pass (per-type template, per-event override, sent_at idempotency).
+// This is the live replacement for that pass (mutual-exclusion guard there).
 function buildPreEventEmailGraph() {
   const nodes = [
     { node_key: 't', type: 'trigger', config: {}, pos_x: 240, pos_y: 0 },
-    { node_key: 'emailCustomer', type: 'action', config: { action: 'send_email', recipientClass: 'customer', emailType: 'pre_event_reminder' }, pos_x: 240, pos_y: 110 },
-    { node_key: 'emailAdmin', type: 'action', config: { action: 'send_email', recipientClass: 'admin', emailType: 'pre_event_internal' }, pos_x: 240, pos_y: 220 },
-    { node_key: 'done', type: 'action', config: { action: 'noop' }, pos_x: 240, pos_y: 330 },
+    { node_key: 'notify', type: 'action', config: { action: 'notify_pre_event' }, pos_x: 240, pos_y: 110 },
+    { node_key: 'done', type: 'action', config: { action: 'noop' }, pos_x: 240, pos_y: 220 },
   ];
   const edges = [
-    { from_node: 't', to_node: 'emailCustomer' },
-    { from_node: 'emailCustomer', to_node: 'emailAdmin' },
-    { from_node: 'emailAdmin', to_node: 'done' },
+    { from_node: 't', to_node: 'notify' },
+    { from_node: 'notify', to_node: 'done' },
+  ];
+  return { nodes, edges };
+}
+
+// Gallery expiring — fired by the expiration checker `daysBefore` expiry. The
+// notify_gallery_expiring action delegates to the checker's queueExpirationWarning
+// so the warning email is identical. Live replacement for the legacy warning
+// email (mutual-exclusion guard in the checker).
+function buildGalleryExpiringGraph() {
+  const nodes = [
+    { node_key: 't', type: 'trigger', config: {}, pos_x: 240, pos_y: 0 },
+    { node_key: 'notify', type: 'action', config: { action: 'notify_gallery_expiring' }, pos_x: 240, pos_y: 110 },
+    { node_key: 'done', type: 'action', config: { action: 'noop' }, pos_x: 240, pos_y: 220 },
+  ];
+  const edges = [
+    { from_node: 't', to_node: 'notify' },
+    { from_node: 'notify', to_node: 'done' },
+  ];
+  return { nodes, edges };
+}
+
+// Gallery expired — fired when a gallery passes its expiry. The
+// notify_gallery_expired action delegates to the checker's sendGalleryExpiredEmails.
+// Live replacement for the legacy expired email (mutual-exclusion guard in the checker).
+function buildGalleryExpiredGraph() {
+  const nodes = [
+    { node_key: 't', type: 'trigger', config: {}, pos_x: 240, pos_y: 0 },
+    { node_key: 'notify', type: 'action', config: { action: 'notify_gallery_expired' }, pos_x: 240, pos_y: 110 },
+    { node_key: 'done', type: 'action', config: { action: 'noop' }, pos_x: 240, pos_y: 220 },
+  ];
+  const edges = [
+    { from_node: 't', to_node: 'notify' },
+    { from_node: 'notify', to_node: 'done' },
   ];
   return { nodes, edges };
 }
 
 // Built-in registry. `version` is the SEED_VERSION — bump when a graph changes
-// so a disabled, never-activated copy is re-seeded on boot.
-//   invoice_dunning v4 = collections handoff after the loop exhausts.
+// (or to re-assert the default `enabled` state) so a never-admin-touched copy is
+// re-seeded on boot. `enabled` is the cutover default: the live automations
+// (dunning, gallery expiry, pre-event) ship ENABLED and their legacy hardcoded
+// paths stand down (isBuiltinFlowActive guards), so behaviour is preserved with
+// zero double-send. Illustrative/stub flows (booking) ship disabled.
+//   invoice_dunning v5 = enabled-by-default cutover (was v4: collections handoff).
 const BUILTINS = [
   {
     key: DUNNING_KEY,
-    version: 4,
+    version: 5,
+    enabled: true,
     name: 'Invoice dunning (built-in)',
     trigger_type: 'invoice.sent',
     trigger_config: {},
@@ -161,9 +197,9 @@ const BUILTINS = [
       'Drives overdue dunning through the engine: wait to the due date, then up to '
       + 'three payment-check cycles. Each cycle fires the existing admin confirm-payment '
       + 'email (the gate), which applies reminders + Mahngebühr via the proven payment-check '
-      + 'flow; after the cycles exhaust it hands the case to collections. Disabled by default; '
+      + 'flow; after the cycles exhaust it hands the case to collections. ENABLED by default; '
       + 'while it is enabled the hardcoded reminder ladder is skipped automatically, so the two '
-      + 'never double-send.',
+      + 'never double-send. Reminder timing is now edited here (no longer in Settings → CRM).',
     build: async () => {
       const firstDays = Number(await getAppSetting('crm_invoices_reminder_first_days')) || 14;
       const secondDays = Number(await getAppSetting('crm_invoices_reminder_second_days')) || 30;
@@ -172,8 +208,58 @@ const BUILTINS = [
     },
   },
   {
+    key: 'gallery_expiring',
+    version: 1,
+    enabled: true,
+    name: 'Gallery expiring (built-in)',
+    trigger_type: 'gallery.expiring',
+    trigger_config: {},
+    description:
+      'When a gallery is approaching its expiry date, email the customer the expiration warning. '
+      + 'ENABLED by default; it delegates to the same email the hourly expiration checker used to '
+      + 'send, and that legacy email stands down while this flow is on (no double-send). Edit or '
+      + 'extend it here (e.g. add a final-download nudge).',
+    build: async () => buildGalleryExpiringGraph(),
+  },
+  {
+    key: 'gallery_expired',
+    version: 1,
+    enabled: true,
+    name: 'Gallery expired (built-in)',
+    trigger_type: 'gallery.expired',
+    trigger_config: {},
+    description:
+      'When a gallery passes its expiry, email the customer (and admin) that it has expired. '
+      + 'ENABLED by default; delegates to the same email the expiration checker used to send, '
+      + 'and that legacy email stands down while this flow is on. The gallery is still archived '
+      + 'automatically regardless of this flow.',
+    build: async () => buildGalleryExpiredGraph(),
+  },
+  {
+    key: 'pre_event_email',
+    version: 2,
+    enabled: true,
+    name: 'Pre-event reminder (built-in)',
+    trigger_type: 'event.date_approaching',
+    // daysBefore seeds the scheduler emitter from the current global setting so
+    // upgrades preserve timing; per-event offset overrides still win. This flow
+    // is now the source of truth for the lead time (was Settings → Reminder emails).
+    trigger_config: async () => {
+      const d = Number(await getAppSetting('crm_event_reminders_days_before'));
+      return { daysBefore: Number.isFinite(d) && d >= 0 ? d : 2 };
+    },
+    description:
+      'A few days before the event date, send the customer the pre-event reminder. ENABLED by '
+      + 'default; the notify_pre_event action delegates to the proven reminder logic (per-type '
+      + 'template, per-event override, send-once), and the legacy reminder pass stands down while '
+      + 'this flow is on. Lead time = daysBefore in the trigger config (seeded from your old '
+      + 'global setting); per-event overrides on the event page still apply.',
+    build: async () => buildPreEventEmailGraph(),
+  },
+  {
     key: 'booking_full',
     version: 2,
+    enabled: false,
     name: 'Booking — quote → contract → event → invoice (built-in)',
     trigger_type: 'quote.accepted',
     trigger_config: {},
@@ -189,6 +275,7 @@ const BUILTINS = [
   {
     key: 'booking_simple',
     version: 2,
+    enabled: false,
     name: 'Booking — quote → event → invoice (built-in)',
     trigger_type: 'quote.accepted',
     trigger_config: {},
@@ -197,21 +284,6 @@ const BUILTINS = [
       + 'shoot date, prepare the invoice and — after an admin review gate — send it. Same '
       + 'review-before-send rule and stub caveat as the full booking flow; disabled by default.',
     build: async () => buildBookingSimpleGraph(),
-  },
-  {
-    key: 'pre_event_email',
-    version: 1,
-    name: 'Pre-event email (built-in)',
-    trigger_type: 'event.date_approaching',
-    // daysBefore drives the scheduler emitter — how many days before the event
-    // date the reminder fires.
-    trigger_config: { daysBefore: 3 },
-    description:
-      'A few days before the event date, send the customer a reminder and the admin a heads-up. '
-      + 'Fired by the scheduler from the event date (daysBefore in the trigger config). Uses the '
-      + 'wired send_email action, so it works once enabled and the pre_event_reminder template '
-      + 'exists. Disabled by default.',
-    build: async () => buildPreEventEmailGraph(),
   },
 ];
 
@@ -240,14 +312,20 @@ async function writeGraph(trx, workflowId, version, nodes, edges) {
 
 async function seedOneBuiltin(db, logger, def) {
   const { nodes, edges } = await def.build();
-  const triggerConfig = { ...(def.trigger_config || {}), seedVersion: def.version };
+  const baseCfg = typeof def.trigger_config === 'function'
+    ? (await def.trigger_config()) || {}
+    : (def.trigger_config || {});
+  const triggerConfig = { ...baseCfg, seedVersion: def.version };
+  const defEnabled = def.enabled === true;
 
   const existing = await db('workflows').where({ builtin_key: def.key }).first();
 
   if (existing) {
-    // Re-seed the graph only when (a) it has never been activated and (b) our
-    // seed version moved on. Once the admin enables it, it's their live flow —
-    // never overwrite it.
+    // Re-seed only a never-admin-activated copy whose SEED_VERSION moved on. An
+    // already-ENABLED built-in is the admin's live (possibly customised) flow —
+    // never overwrite it. The version bump carries the cutover default (incl.
+    // flipping a still-disabled flow to enabled); the cutover targets flows that
+    // shipped disabled and were never touched, so this leaves admin choices alone.
     const storedVersion = Number(parseSeedConfig(existing.trigger_config).seedVersion) || 0;
     const isEnabled = existing.enabled === true || existing.enabled === 1;
     if (isEnabled || storedVersion >= def.version) return;
@@ -259,12 +337,13 @@ async function seedOneBuiltin(db, logger, def) {
         description: def.description,
         trigger_type: def.trigger_type,
         trigger_config: JSON.stringify(triggerConfig),
+        enabled: defEnabled,
         version: newVersion,
         updated_at: trx.fn.now(),
       });
       await writeGraph(trx, existing.id, newVersion, nodes, edges);
     });
-    logger?.info?.(`Re-seeded built-in workflow: ${def.key} (v${def.version})`);
+    logger?.info?.(`Re-seeded built-in workflow: ${def.key} (v${def.version}, enabled=${defEnabled})`);
     return;
   }
 
@@ -272,7 +351,7 @@ async function seedOneBuiltin(db, logger, def) {
     const ins = await trx('workflows').insert({
       name: def.name,
       description: def.description,
-      enabled: false,
+      enabled: defEnabled,
       version: 1,
       trigger_type: def.trigger_type,
       trigger_config: JSON.stringify(triggerConfig),
@@ -285,7 +364,7 @@ async function seedOneBuiltin(db, logger, def) {
     const workflowId = ins[0]?.id ?? ins[0];
     await writeGraph(trx, workflowId, 1, nodes, edges);
   });
-  logger?.info?.(`Seeded built-in workflow: ${def.key} (disabled)`);
+  logger?.info?.(`Seeded built-in workflow: ${def.key} (enabled=${defEnabled})`);
 }
 
 async function seedBuiltinWorkflowsAtBoot(db, logger) {

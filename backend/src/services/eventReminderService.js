@@ -128,6 +128,17 @@ async function runEventReminderPass() {
     return { scanned: 0, sent: 0, skipped: 0, disabled: true };
   }
 
+  // Mutual exclusion with the workflow engine: once the pre_event_email built-in
+  // is seeded (flag on), the engine OWNS the reminder — it sends via the
+  // notify_pre_event action when the flow is enabled, or nothing when the admin
+  // disabled it. Either way the legacy pass stands down so the two never
+  // double-send. Fails closed → legacy pass keeps running if the subsystem is down.
+  try {
+    if (await require('./workflows').isBuiltinFlowPresent('pre_event_email')) {
+      return { scanned: 0, sent: 0, skipped: 0, byWorkflow: true };
+    }
+  } catch (_) { /* workflow subsystem down → keep the legacy pass running */ }
+
   // Column-existence guards — pre-migration installs return early
   // instead of throwing.
   const hasCols = await hasColumnCached('events', 'event_reminder_sent_at');
@@ -254,8 +265,76 @@ async function runEventReminderPass() {
   return { scanned: rows.length, sent, skipped };
 }
 
+/**
+ * Send the pre-event reminder for ONE event — the per-event body of
+ * runEventReminderPass, reused by the workflow `notify_pre_event` action so the
+ * engine path is byte-identical to the legacy pass (same template resolution,
+ * per-event body override, recipient rule and `event_reminder_sent_at` idempotency).
+ *
+ * Returns { sent, skipped, reason? }. Never throws on a business skip (no email,
+ * disabled, already sent, no template-eligible recipient); only DB/queue errors
+ * propagate so the caller can surface them.
+ */
+async function sendReminderForEvent(eventId) {
+  const hasCols = await hasColumnCached('events', 'event_reminder_sent_at');
+  if (!hasCols) return { sent: 0, skipped: 1, reason: 'schema_not_migrated' };
+
+  // Self-heal templates (idempotent, process-cached) — same as the pass.
+  try { await ensureEventReminderTemplatesSeeded(db, logger); } catch (err) {
+    logger.error('Event reminder template self-heal failed', { message: err.message });
+  }
+
+  const row = await db('events')
+    .leftJoin('customer_accounts', 'customer_accounts.id', 'events.customer_account_id')
+    .where('events.id', eventId)
+    .select(
+      'events.id', 'events.event_name', 'events.event_type', 'events.event_date',
+      'events.is_active', 'events.is_archived',
+      'events.event_reminder_disabled', 'events.event_reminder_offset_days',
+      'events.event_reminder_body_override', 'events.event_reminder_sent_at',
+      'events.customer_account_id',
+      'customer_accounts.email as customer_email',
+      'customer_accounts.first_name as customer_first_name',
+      'customer_accounts.last_name as customer_last_name',
+      'customer_accounts.display_name as customer_display_name',
+      'customer_accounts.company_name as customer_company_name',
+    )
+    .first();
+
+  if (!row) return { sent: 0, skipped: 1, reason: 'not_found' };
+  if (row.event_reminder_disabled) return { sent: 0, skipped: 1, reason: 'disabled' };
+  if (row.event_reminder_sent_at) return { sent: 0, skipped: 1, reason: 'already_sent' };
+  if (!row.customer_email) return { sent: 0, skipped: 1, reason: 'no_recipient' };
+
+  const globalDaysBefore = Number(await getAppSetting('crm_event_reminders_days_before'));
+  const daysBeforeDefault = Number.isFinite(globalDaysBefore) && globalDaysBefore >= 0
+    ? globalDaysBefore : DEFAULT_DAYS_BEFORE;
+  const rawOffset = row.event_reminder_offset_days;
+  const offsetDays = (rawOffset != null && rawOffset !== '' && Number.isFinite(Number(rawOffset)))
+    ? Number(rawOffset) : daysBeforeDefault;
+
+  const profile = await db('business_profile').where({ id: 1 }).first('company_name');
+  const businessName = profile?.company_name || '';
+
+  const templateKey = await resolveTemplateKey(row.event_type);
+  const customer = {
+    email: row.customer_email,
+    first_name: row.customer_first_name,
+    last_name: row.customer_last_name,
+    display_name: row.customer_display_name,
+    company_name: row.customer_company_name,
+  };
+  const payload = composePayload({ event: row, customer, daysBefore: offsetDays, businessName });
+  if (row.event_reminder_body_override) payload.body_override = row.event_reminder_body_override;
+
+  await emailProcessor.queueEmail(row.id, customer.email, templateKey, payload);
+  await db('events').where({ id: row.id }).update({ event_reminder_sent_at: new Date() });
+  return { sent: 1, skipped: 0 };
+}
+
 module.exports = {
   runEventReminderPass,
+  sendReminderForEvent,
   // exported for tests
   _internal: {
     resolveTemplateKey,

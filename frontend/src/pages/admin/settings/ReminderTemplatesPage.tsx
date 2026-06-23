@@ -33,13 +33,14 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
-import { ArrowLeft, Save, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Save, AlertTriangle, Workflow as WorkflowIcon } from 'lucide-react';
 import { Button, Card, Loading, Input } from '../../../components/common';
 import { SUPPORTED_LANGUAGES } from '../../../components/common/LanguageSelector';
 import { EmailTemplateEditor } from '../../../components/admin/EmailTemplateEditor';
 import { eventTypesService } from '../../../services/eventTypes.service';
 import { emailService, type EmailTemplateTranslation } from '../../../services/email.service';
 import { settingsService } from '../../../services/settings.service';
+import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 
 const TEMPLATE_KEY_DEFAULT = 'event_reminder_default';
 const TEMPLATE_KEY_PREFIX = 'event_reminder_';
@@ -61,16 +62,20 @@ export const ReminderTemplatesPage: React.FC = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
-  // ---- Global toggles ---------------------------------------------------
-  // Only two keys are read on this page — fetch just those instead of
-  // the full ~100-row app_settings dict. Saves transferring + parsing
-  // every unrelated setting.
+  // Global on/off + lead time: owned by the "Pre-event reminder" workflow when
+  // the engine is live; otherwise the legacy crm_event_reminders_* settings drive
+  // the hourly pass, so we keep their controls. Per-event override (disable /
+  // offset / custom body) always lives on the event detail page.
+  const { flags } = useFeatureFlags();
+  const workflowsLive = !!flags.workflows;
+
   const { data: settings } = useQuery({
     queryKey: ['reminder-settings'],
     queryFn: () => settingsService.getSettings([
       'crm_event_reminders_enabled',
       'crm_event_reminders_days_before',
     ]),
+    enabled: !workflowsLive,
   });
   const [enabled, setEnabled] = useState<boolean>(false);
   const [daysBefore, setDaysBefore] = useState<number>(2);
@@ -259,49 +264,51 @@ export const ReminderTemplatesPage: React.FC = () => {
         </h1>
       </div>
 
-      {/* Global toggles strip */}
+      {/* Schedule (on/off + lead time): in Workflows when the engine is live,
+          else the legacy global controls. */}
       <Card className="mb-4">
-        <h3 className="font-semibold text-sm mb-2">
-          {t('reminderTemplates.globalSection', 'Global behaviour')}
-        </h3>
-        <p className="text-xs text-muted-theme mb-3">
-          {t('reminderTemplates.globalHelp',
-            'Off by default — turn on to start sending pre-event reminders. The offset below is the default; each event can override on its detail page.')}
-        </p>
-        <div className="flex items-center gap-6 flex-wrap">
-          <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-            />
-            {t('reminderTemplates.enableLabel', 'Send pre-event reminder emails')}
-          </label>
-          <div className="flex items-center gap-2">
-            <label htmlFor="reminder-days-before" className="text-sm">
-              {t('reminderTemplates.daysBeforeLabel', 'Days before the event')}
-            </label>
-            <Input
-              id="reminder-days-before"
-              type="number"
-              min={0}
-              max={365}
-              value={daysBefore}
-              onChange={(e) => setDaysBefore(Number(e.target.value))}
-              className="w-24"
-            />
+        {workflowsLive ? (
+          <div className="flex items-start gap-2 text-sm text-blue-800 dark:text-blue-200">
+            <WorkflowIcon className="w-4 h-4 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-medium">{t('reminderTemplates.scheduleMoved.title', 'The reminder schedule is now in Workflows')}</p>
+              <p className="mt-1 text-muted-theme">
+                {t('reminderTemplates.scheduleMoved.body', 'Whether pre-event reminders are sent, and how many days before the event, is configured in the “Pre-event reminder” workflow. This page edits the email templates; per-event overrides stay on each event’s detail page.')}{' '}
+                <Link to="/admin/workflows" className="underline font-medium">{t('reminderTemplates.scheduleMoved.link', 'Open Workflows')}</Link>
+              </p>
+            </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => saveSettingsMutation.mutate()}
-            isLoading={saveSettingsMutation.isPending}
-            disabled={saveSettingsMutation.isPending}
-            leftIcon={<Save className="w-4 h-4" />}
-          >
-            {t('reminderTemplates.saveSettings', 'Save global settings')}
-          </Button>
-        </div>
+        ) : (
+          <>
+            <h3 className="font-semibold text-sm mb-2">
+              {t('reminderTemplates.globalSection', 'Global behaviour')}
+            </h3>
+            <p className="text-xs text-muted-theme mb-3">
+              {t('reminderTemplates.globalHelp',
+                'Off by default — turn on to start sending pre-event reminders. The offset below is the default; each event can override on its detail page.')}
+            </p>
+            <div className="flex items-center gap-6 flex-wrap">
+              <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+                {t('reminderTemplates.enableLabel', 'Send pre-event reminder emails')}
+              </label>
+              <div className="flex items-center gap-2">
+                <label htmlFor="reminder-days-before" className="text-sm">
+                  {t('reminderTemplates.daysBeforeLabel', 'Days before the event')}
+                </label>
+                <Input id="reminder-days-before" type="number" min={0} max={365}
+                  value={daysBefore} onChange={(e) => setDaysBefore(Number(e.target.value))} className="w-24" />
+              </div>
+              <Button variant="outline" size="sm"
+                onClick={() => saveSettingsMutation.mutate()}
+                isLoading={saveSettingsMutation.isPending}
+                disabled={saveSettingsMutation.isPending}
+                leftIcon={<Save className="w-4 h-4" />}>
+                {t('reminderTemplates.saveSettings', 'Save global settings')}
+              </Button>
+            </div>
+          </>
+        )}
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

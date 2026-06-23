@@ -381,17 +381,54 @@ async function recoverStaleRuns({ staleMs = RECOVERY_STALE_MS, limit = 50 } = {}
 }
 
 /**
- * Emit `event.date_approaching` for events whose date is within the configured
- * lead window of an enabled pre-event flow. Iterates per flow so each respects
- * its own trigger_config.daysBefore; emitWorkflowEvent's per-(flow,entity)
- * dedup_key guarantees a single run per event, so polling hourly never
- * duplicates. Fails CLOSED when the workflows flag is off. Called from the
- * scheduler tick.
- *
- * Caveat (v1): emitWorkflowEvent fans out to ALL enabled flows of this trigger,
- * so with multiple pre-event flows the widest window wins for surfacing an
- * event; a narrower flow may then fire earlier than its own daysBefore. The
- * single-built-in case (the norm) is exact.
+ * True when the workflows flag is on AND a built-in flow with this key is
+ * enabled. The hardcoded automations (reminder ladder, expiry emails, pre-event
+ * reminders) call this to STAND DOWN when their engine flow is live — so the
+ * engine and the legacy path never double-fire. Fails CLOSED (returns false) on
+ * any error so the legacy path keeps running if the workflow subsystem is down.
+ */
+async function isBuiltinFlowActive(builtinKey) {
+  try {
+    const { isFeatureEnabled } = require('../../middleware/requireFeatureFlag');
+    if (!(await isFeatureEnabled('workflows'))) return false;
+    if (!(await db.schema.hasTable('workflows'))) return false;
+    const wf = await db('workflows').where({ builtin_key: builtinKey, enabled: true }).first();
+    return !!wf;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * True when the workflows flag is on AND a built-in flow with this key EXISTS
+ * (enabled or not). The legacy automations use this to decide whether the engine
+ * OWNS the automation — once the built-in is seeded, the engine is the single
+ * switch: the legacy path stands down whether the flow is enabled (the flow
+ * sends) or disabled (the admin turned it off → nothing sends). Distinct from
+ * isBuiltinFlowActive, which asks whether the flow is currently firing. Fails
+ * CLOSED (false) so the legacy path keeps running if the subsystem is down.
+ */
+async function isBuiltinFlowPresent(builtinKey) {
+  try {
+    const { isFeatureEnabled } = require('../../middleware/requireFeatureFlag');
+    if (!(await isFeatureEnabled('workflows'))) return false;
+    if (!(await db.schema.hasTable('workflows'))) return false;
+    const wf = await db('workflows').where({ builtin_key: builtinKey }).first();
+    return !!wf;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Emit `event.date_approaching` for events entering an enabled flow's lead
+ * window. This is the trigger source for the pre-event reminder built-in, so it
+ * faithfully honours the same per-event controls the legacy eventReminderService
+ * pass uses (migration 143): skips `event_reminder_disabled` events, skips ones
+ * already sent (`event_reminder_sent_at`), and fires at `event_date − offset`
+ * where offset = the event's `event_reminder_offset_days` override else the
+ * flow's `daysBefore`. emitWorkflowEvent's per-(flow,entity) dedup_key keeps the
+ * hourly sweep to a single run per event. Fails CLOSED when the flag is off.
  */
 async function emitDueEventReminders(limit = 200) {
   try {
@@ -404,6 +441,9 @@ async function emitDueEventReminders(limit = 200) {
     const flows = await db('workflows').where({ enabled: true, trigger_type: 'event.date_approaching' });
     if (!flows.length) return 0;
 
+    const { hasColumnCached } = require('../../utils/schemaCache');
+    const hasReminderCols = await hasColumnCached('events', 'event_reminder_sent_at');
+
     // The admin heads-up resolves its recipient from ctx.vars.adminEmail; events
     // don't carry one, so source it from the business profile (best-effort).
     let adminEmail = null;
@@ -414,22 +454,40 @@ async function emitDueEventReminders(limit = 200) {
       }
     } catch (_) { /* best-effort */ }
 
+    const now = Date.now();
+    const todayIso = new Date(now).toISOString().slice(0, 10);
     let emitted = 0;
-    const todayIso = new Date().toISOString().slice(0, 10);
     for (const wf of flows) {
       const cfg = parseJson(wf.trigger_config, {});
       const daysBefore = Number(cfg.daysBefore) > 0 ? Number(cfg.daysBefore) : 3;
-      const windowEndIso = new Date(Date.now() + daysBefore * 86400000).toISOString().slice(0, 10);
+      // Surface every still-upcoming event up to the widest the offset could be;
+      // the per-event triggerAt check below decides if it's actually due.
+      const maxOffset = Math.max(daysBefore, 60);
+      const windowEndIso = new Date(now + maxOffset * 86400000).toISOString().slice(0, 10);
 
-      const events = await db('events')
+      let q = db('events')
         .where('is_active', true)
         .where('is_archived', false)
         .whereNotNull('event_date')
         .where('event_date', '>=', todayIso)
-        .where('event_date', '<=', windowEndIso)
-        .limit(limit);
+        .where('event_date', '<=', windowEndIso);
+      // Faithful to the legacy pass: never remind a disabled or already-sent event.
+      if (hasReminderCols) {
+        q = q.where('event_reminder_disabled', false).whereNull('event_reminder_sent_at');
+      }
+      const events = await q.limit(limit);
 
       for (const ev of events) {
+        // A null/blank per-event offset means "use the flow's daysBefore" — guard
+        // against Number(null)===0 silently making the reminder fire on the event day.
+        const rawOffset = hasReminderCols ? ev.event_reminder_offset_days : null;
+        const offset = (rawOffset != null && rawOffset !== '' && Number.isFinite(Number(rawOffset)))
+          ? Number(rawOffset)
+          : daysBefore;
+        const ed = ev.event_date instanceof Date ? ev.event_date : new Date(ev.event_date);
+        const triggerAt = ed.getTime() - offset * 86400000;
+        if (now < triggerAt) continue; // not yet inside this event's lead window
+
         const runIds = await emitWorkflowEvent('event.date_approaching', {
           entityType: 'event',
           entityId: ev.id,
@@ -437,10 +495,11 @@ async function emitDueEventReminders(limit = 200) {
             eventId: ev.id,
             eventName: ev.event_name || null,
             eventDate: ev.event_date,
+            eventType: ev.event_type || null,
             hostName: ev.host_name || null,
             customerEmail: ev.customer_email || ev.host_email || null,
             adminEmail,
-            daysBefore,
+            daysBefore: offset,
           },
         });
         emitted += runIds.length;
@@ -484,6 +543,8 @@ async function testRun(workflowId, { entityType = null, entityId = null, payload
 
 module.exports = {
   emitWorkflowEvent,
+  isBuiltinFlowActive,
+  isBuiltinFlowPresent,
   runDueWaits,
   emitDueEventReminders,
   recoverStaleRuns,

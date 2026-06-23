@@ -135,6 +135,46 @@ registry.registerAction('escalate_to_collections', async (ctx) => {
   return { collections_handoff_to: adminEmail, outstanding };
 });
 
+// --- Gallery / pre-event notification actions (cutover) ---
+//
+// These DELEGATE to the existing service send functions, so the engine path is
+// byte-identical to the legacy hourly checker/pass it replaces (same templates,
+// recipients, variables, dedup). The legacy path stands down when the matching
+// built-in flow is enabled (isBuiltinFlowActive guard), so exactly one email
+// goes out.
+
+// Send the gallery expiration-warning email for the run's event entity.
+registry.registerAction('notify_gallery_expiring', async (ctx) => {
+  const id = ctx.run.entity_id;
+  if (!id) return { skipped: true, reason: 'no event entity' };
+  if (ctx.vars?.__dryRun) return { dryRun: true, would: 'notify_gallery_expiring', eventId: id };
+  const event = await ctx.db('events').where({ id }).first();
+  if (!event) return { skipped: true, reason: 'event not found' };
+  await require('../expirationChecker').queueExpirationWarning(event);
+  return { warning_queued: id };
+});
+
+// Send the gallery_expired email(s) for the run's event entity.
+registry.registerAction('notify_gallery_expired', async (ctx) => {
+  const id = ctx.run.entity_id;
+  if (!id) return { skipped: true, reason: 'no event entity' };
+  if (ctx.vars?.__dryRun) return { dryRun: true, would: 'notify_gallery_expired', eventId: id };
+  const event = await ctx.db('events').where({ id }).first();
+  if (!event) return { skipped: true, reason: 'event not found' };
+  await require('../expirationChecker').sendGalleryExpiredEmails(event);
+  return { expired_email_queued: id };
+});
+
+// Send the pre-event customer reminder for the run's event entity. Delegates to
+// eventReminderService so per-event overrides + sent_at idempotency are honoured.
+registry.registerAction('notify_pre_event', async (ctx) => {
+  const id = ctx.run.entity_id;
+  if (!id) return { skipped: true, reason: 'no event entity' };
+  if (ctx.vars?.__dryRun) return { dryRun: true, would: 'notify_pre_event', eventId: id };
+  const res = await require('../eventReminderService').sendReminderForEvent(id);
+  return res;
+});
+
 // Create/prepare-document actions — registered so flows referencing them are
 // valid; service wiring is a follow-up. Records a skipped step (observable).
 for (const key of DOCUMENT_ACTIONS) {

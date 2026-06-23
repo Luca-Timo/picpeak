@@ -4920,6 +4920,11 @@
       "title": "Mahngebühren müssen in den AGB stehen",
       "body": "Vertragliche Pflicht: Sätze wie „Es werden Mahnspesen erhoben“ reichen nicht aus. In den AGB muss die konkrete Gebühr klar beziffert sein (z.B. „CHF 20 ab der 2. Mahnung“). Mit dem Treuhänder prüfen."
     },
+    "dunningMoved": {
+      "title": "Der Mahnrhythmus liegt jetzt in den Workflows",
+      "body": "Wann und wie oft Zahlungserinnerungen für überfällige Rechnungen verschickt werden, wird im Workflow „Rechnungsmahnung“ festgelegt. Die Mahngebühren unten gelten weiterhin.",
+      "link": "Workflows öffnen"
+    },
     "crm_invoices_late_fee_label": {
       "label": "Bezeichnung Mahngebühr"
     },
@@ -5023,6 +5028,11 @@
   },
   "reminderTemplates": {
     "title": "Erinnerungs-E-Mails vor dem Anlass",
+    "scheduleMoved": {
+      "title": "Der Versandzeitpunkt liegt jetzt in den Workflows",
+      "body": "Ob Erinnerungen vor dem Anlass verschickt werden und wie viele Tage vorher, wird im Workflow „Erinnerung vor dem Anlass“ festgelegt. Auf dieser Seite werden die E-Mail-Vorlagen bearbeitet; anlassspezifische Überschreibungen bleiben auf der jeweiligen Anlass-Detailseite.",
+      "link": "Workflows öffnen"
+    },
     "globalSection": "Globales Verhalten",
     "globalHelp": "Standardmässig aus — aktiviere, um Erinnerungen zu senden. Der unten gesetzte Offset ist der Standard; jeder Anlass kann ihn auf der Detailseite überschreiben.",
     "enableLabel": "Erinnerungs-E-Mails vor dem Anlass senden",

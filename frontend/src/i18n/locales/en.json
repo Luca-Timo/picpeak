@@ -4918,6 +4918,11 @@
       "title": "Late fees must be itemised in your terms (AGB)",
       "body": "A contractual duty: phrases like “late fees apply” aren't enough. Your terms must state the concrete fee (e.g. “CHF 20 from the 2nd reminder”). Verify with your Treuhänder."
     },
+    "dunningMoved": {
+      "title": "Reminder schedule is now in Workflows",
+      "body": "When and how often overdue reminders go out is configured in the “Invoice dunning” workflow. The late-fee amounts below still apply.",
+      "link": "Open Workflows"
+    },
     "crm_invoices_late_fee_label": {
       "label": "Late fee label"
     },
@@ -5021,6 +5026,11 @@
   },
   "reminderTemplates": {
     "title": "Pre-event reminder emails",
+    "scheduleMoved": {
+      "title": "The reminder schedule is now in Workflows",
+      "body": "Whether pre-event reminders are sent, and how many days before the event, is configured in the “Pre-event reminder” workflow. This page edits the email templates; per-event overrides stay on each event’s detail page.",
+      "link": "Open Workflows"
+    },
     "globalSection": "Global behaviour",
     "globalHelp": "Off by default — turn on to start sending pre-event reminders. The offset below is the default; each event can override on its detail page.",
     "enableLabel": "Send pre-event reminder emails",

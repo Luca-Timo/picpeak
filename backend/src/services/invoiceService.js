@@ -3447,16 +3447,14 @@ async function runScheduledTasks() {
   // Throttled to one email per 24h per invoice via
   // invoices.last_payment_check_at.
   const remindersEnabled = await getAppSetting('crm_invoices_reminders_enabled');
-  // Mutual exclusion with the workflow engine: when the `workflows` flag is on
-  // AND the invoice_dunning built-in is enabled, the engine fires the same
-  // payment-check emails — running this hardcoded ladder too would double-send.
+  // Mutual exclusion with the workflow engine: once the invoice_dunning built-in
+  // is seeded (flag on), the engine OWNS dunning and is the single switch — it
+  // fires the payment-check emails when the flow is enabled, or nothing when the
+  // admin disabled it. Either way the hardcoded ladder stands down so the two
+  // never double-send. Fails closed → ladder stays on if the subsystem is down.
   let engineDrivesDunning = false;
   try {
-    const { isFeatureEnabled } = require('../middleware/requireFeatureFlag');
-    if (await isFeatureEnabled('workflows')) {
-      const dunning = await db('workflows').where({ builtin_key: 'invoice_dunning', enabled: true }).first();
-      engineDrivesDunning = !!dunning;
-    }
+    engineDrivesDunning = await require('./workflows').isBuiltinFlowPresent('invoice_dunning');
   } catch (_) { /* workflows tables absent / flag system down → ladder stays on */ }
   if (remindersEnabled !== false && !engineDrivesDunning) {
     const firstDays  = ensureInt(await getAppSetting('crm_invoices_reminder_first_days')) || 14;

@@ -239,7 +239,7 @@ describe('workflow engine', () => {
     expect(again.already).toBe(true);
   });
 
-  test('seeds the invoice-dunning built-in as the delegation graph (v2, disabled)', async () => {
+  test('seeds the invoice-dunning built-in as the delegation graph (v5, enabled cutover)', async () => {
     const { seedBuiltinWorkflowsAtBoot, DUNNING_KEY } = require('../../src/services/_workflowSeedBoot');
     const noopLogger = { info() {}, warn() {} };
     await seedBuiltinWorkflowsAtBoot(db, noopLogger);
@@ -247,8 +247,8 @@ describe('workflow engine', () => {
     const wf = await db('workflows').where({ builtin_key: DUNNING_KEY }).first();
     expect(wf).toBeTruthy();
     expect(!!wf.is_builtin).toBe(true);
-    expect(!!wf.enabled).toBe(false);
-    expect(JSON.parse(wf.trigger_config).seedVersion).toBe(4);
+    expect(!!wf.enabled).toBe(true); // cutover: dunning ships live
+    expect(JSON.parse(wf.trigger_config).seedVersion).toBe(5);
 
     const nodes = await db('workflow_nodes').where({ workflow_id: wf.id, version: wf.version });
     expect(nodes.filter((n) => n.type === 'trigger')).toHaveLength(1);
@@ -273,7 +273,8 @@ describe('workflow engine', () => {
     await seedBuiltinWorkflowsAtBoot(db, noopLogger);
     const reseeded = await db('workflows').where({ id: wf.id }).first();
     expect(reseeded.version).toBe(wf.version + 1); // bumped
-    expect(JSON.parse(reseeded.trigger_config).seedVersion).toBe(4);
+    expect(JSON.parse(reseeded.trigger_config).seedVersion).toBe(5);
+    expect(!!reseeded.enabled).toBe(true); // cutover default applied on re-seed
     const newNodes = await db('workflow_nodes').where({ workflow_id: wf.id, version: reseeded.version });
     expect(newNodes.some((n) => n.type === 'gate')).toBe(false); // legacy graph replaced
 
@@ -285,13 +286,28 @@ describe('workflow engine', () => {
     expect(after.version).toBe(before.version); // unchanged
   });
 
-  test('seeds the booking + pre-event built-ins (disabled, correct triggers)', async () => {
+  test('seeds the gallery, pre-event (enabled cutover) + booking (disabled) built-ins', async () => {
     const { seedBuiltinWorkflowsAtBoot } = require('../../src/services/_workflowSeedBoot');
     await seedBuiltinWorkflowsAtBoot(db, { info() {}, warn() {} });
 
+    // Cutover flows ship ENABLED, delegating to the proven send functions.
+    const expiring = await db('workflows').where({ builtin_key: 'gallery_expiring' }).first();
+    expect(expiring).toBeTruthy();
+    expect(!!expiring.enabled).toBe(true);
+    expect(expiring.trigger_type).toBe('gallery.expiring');
+    const expiringNodes = await db('workflow_nodes').where({ workflow_id: expiring.id, version: expiring.version });
+    expect(expiringNodes.some((n) => JSON.parse(n.config || '{}').action === 'notify_gallery_expiring')).toBe(true);
+
+    const expired = await db('workflows').where({ builtin_key: 'gallery_expired' }).first();
+    expect(expired).toBeTruthy();
+    expect(!!expired.enabled).toBe(true);
+    expect(expired.trigger_type).toBe('gallery.expired');
+    const expiredNodes = await db('workflow_nodes').where({ workflow_id: expired.id, version: expired.version });
+    expect(expiredNodes.some((n) => JSON.parse(n.config || '{}').action === 'notify_gallery_expired')).toBe(true);
+
     const bookingFull = await db('workflows').where({ builtin_key: 'booking_full' }).first();
     expect(bookingFull).toBeTruthy();
-    expect(!!bookingFull.enabled).toBe(false);
+    expect(!!bookingFull.enabled).toBe(false); // illustrative/stub — stays disabled
     expect(bookingFull.trigger_type).toBe('quote.accepted');
     const fullNodes = await db('workflow_nodes').where({ workflow_id: bookingFull.id, version: bookingFull.version });
     expect(fullNodes.some((n) => JSON.parse(n.config || '{}').action === 'prepare_contract')).toBe(true);
@@ -311,10 +327,11 @@ describe('workflow engine', () => {
 
     const preEvent = await db('workflows').where({ builtin_key: 'pre_event_email' }).first();
     expect(preEvent).toBeTruthy();
+    expect(!!preEvent.enabled).toBe(true); // cutover: pre-event reminder ships live
     expect(preEvent.trigger_type).toBe('event.date_approaching');
-    expect(JSON.parse(preEvent.trigger_config).daysBefore).toBe(3);
+    expect(JSON.parse(preEvent.trigger_config).daysBefore).toBe(2); // default when global setting unset
     const preNodes = await db('workflow_nodes').where({ workflow_id: preEvent.id, version: preEvent.version });
-    expect(preNodes.some((n) => JSON.parse(n.config || '{}').action === 'send_email')).toBe(true);
+    expect(preNodes.some((n) => JSON.parse(n.config || '{}').action === 'notify_pre_event')).toBe(true);
   });
 
   test('emitDueEventReminders starts a run for an event inside the lead window', async () => {
@@ -344,6 +361,29 @@ describe('workflow engine', () => {
     await engine.emitDueEventReminders();
     const runs2 = await db('workflow_runs').where({ workflow_id: wfId, entity_type: 'event' });
     expect(runs2.length).toBe(1);
+  });
+
+  test('isBuiltinFlowActive reflects the built-in enabled state (cutover guard)', async () => {
+    const { seedBuiltinWorkflowsAtBoot } = require('../../src/services/_workflowSeedBoot');
+    await seedBuiltinWorkflowsAtBoot(db, { info() {}, warn() {} });
+    // Cutover built-ins ship enabled; booking stays disabled; unknown key → false.
+    expect(await engine.isBuiltinFlowActive('gallery_expiring')).toBe(true);
+    expect(await engine.isBuiltinFlowActive('pre_event_email')).toBe(true);
+    expect(await engine.isBuiltinFlowActive('booking_full')).toBe(false);
+    expect(await engine.isBuiltinFlowActive('does_not_exist')).toBe(false);
+  });
+
+  test('legacy event-reminder pass stands down when the pre_event_email flow is active', async () => {
+    const { seedBuiltinWorkflowsAtBoot } = require('../../src/services/_workflowSeedBoot');
+    await seedBuiltinWorkflowsAtBoot(db, { info() {}, warn() {} }); // pre_event_email enabled
+    // Reach the mutual-exclusion guard: the pass returns early on the global
+    // enable check unless the setting is on.
+    await db('app_settings')
+      .insert({ setting_key: 'crm_event_reminders_enabled', setting_value: JSON.stringify(true), setting_type: 'boolean' })
+      .onConflict('setting_key').merge();
+    const res = await require('../../src/services/eventReminderService').runEventReminderPass();
+    expect(res.byWorkflow).toBe(true);
+    expect(res.sent).toBe(0);
   });
 
   test('recoverStaleRuns resumes a run orphaned mid-flow (crash recovery)', async () => {
