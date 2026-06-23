@@ -7,7 +7,7 @@
  * version; in-flight runs keep theirs). The graph maps 1:1 onto
  * workflow_nodes/workflow_edges. Honours the admin light/dark theme.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -17,7 +17,8 @@ import {
   Handle, Position, type Connection, type Node, type Edge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Save, Trash2 } from 'lucide-react';
+import dagre from '@dagrejs/dagre';
+import { ArrowLeft, Save, Trash2, Wand2 } from 'lucide-react';
 import { Button, Loading } from '../../../components/common';
 import { useAdminDarkMode } from '../../../contexts/AdminDarkModeContext';
 import { workflowsService, type WorkflowNodeType } from '../../../services/workflows.service';
@@ -90,6 +91,23 @@ function WfNode({ data }: { data: any }) {
 
 const nodeTypes = { wf: WfNode };
 
+// Tidy the graph into a top-to-bottom tree with dagre (handles the loop-back
+// cycle by breaking it internally).
+function layoutGraph(nodes: Node[], edges: Edge[]): Node[] {
+  const g = new dagre.graphlib.Graph();
+  g.setDefaultEdgeLabel(() => ({}));
+  g.setGraph({ rankdir: 'TB', nodesep: 70, ranksep: 80 });
+  const W = 170;
+  const H = 70;
+  nodes.forEach((n) => g.setNode(n.id, { width: W, height: H }));
+  edges.forEach((e) => g.setEdge(e.source, e.target));
+  dagre.layout(g);
+  return nodes.map((n) => {
+    const p = g.node(n.id);
+    return p ? { ...n, position: { x: p.x - W / 2, y: p.y - H / 2 } } : n;
+  });
+}
+
 export const WorkflowEditorPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -111,6 +129,12 @@ export const WorkflowEditorPage: React.FC = () => {
   const [enabled, setEnabled] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [counter, setCounter] = useState(1);
+  const rfRef = useRef<any>(null);
+
+  const cleanUp = useCallback(() => {
+    setNodes((nds) => layoutGraph(nds, edges));
+    setTimeout(() => rfRef.current?.fitView?.({ padding: 0.2, duration: 300 }), 60);
+  }, [edges, setNodes]);
 
   useEffect(() => {
     if (!workflow) return;
@@ -213,7 +237,7 @@ export const WorkflowEditorPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {PALETTE.map((type) => (
           <button
             key={type} type="button" onClick={() => addNode(type)}
@@ -222,6 +246,12 @@ export const WorkflowEditorPage: React.FC = () => {
             + {type}
           </button>
         ))}
+        <button
+          type="button" onClick={cleanUp}
+          className="ml-auto inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800"
+        >
+          <Wand2 className="w-3.5 h-3.5" /> {t('workflows.editor.cleanUp', 'Clean up layout')}
+        </button>
       </div>
 
       <div className="flex gap-3" style={{ height: '70vh' }}>
@@ -230,7 +260,7 @@ export const WorkflowEditorPage: React.FC = () => {
             colorMode={isDark ? 'dark' : 'light'}
             nodes={nodes} edges={edges} nodeTypes={nodeTypes}
             onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
-            onNodeClick={(_, n) => setSelectedId(n.id)} fitView
+            onNodeClick={(_, n) => setSelectedId(n.id)} onInit={(inst) => { rfRef.current = inst; }} fitView
           >
             <Background />
             <Controls />

@@ -229,6 +229,7 @@
     "editor": {
       "namePlaceholder": "Workflow-Name",
       "when": "Wenn",
+      "cleanUp": "Layout aufräumen",
       "saved": "Workflow gespeichert",
       "saveFailed": "Speichern fehlgeschlagen",
       "badJson": "Konfiguration ist kein gültiges JSON",
