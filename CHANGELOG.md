@@ -5,6 +5,28 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.71.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.70.0-beta.0...v3.71.0-beta.0) (2026-06-25)
+
+
+### Features
+
+* admin-configurable workflow engine + dunning/Mahngebühr rework (RFC — feedback welcome) ([15be3b8](https://github.com/the-luap/picpeak/commit/15be3b8d32965eedc08d46ccc525c65a3bf34de6))
+* **workflows:** per-quote booking-workflow picker + quote→invoice (no gallery) built-in ([d14f1d8](https://github.com/the-luap/picpeak/commit/d14f1d850cc995b2cb1119ba0424f123feba50ec))
+* **workflows:** pre-event reminder picks the template GROUP on the block, type stays automatic ([10d091b](https://github.com/the-luap/picpeak/commit/10d091b55e0c44738b4001a71def6416a8f0aeb0))
+* **workflows:** route webhook node through the delivery pipeline (full Option 1) ([675e41a](https://github.com/the-luap/picpeak/commit/675e41a2f72c8c23fa5c36b13bc6b95abcb9d570))
+* **workflows:** warn when disabling a built-in (reverts to legacy, not off) ([c5f131c](https://github.com/the-luap/picpeak/commit/c5f131cec32826331722ef3705c5f5422e31726d))
+
+
+### Bug Fixes
+
+* **crm:** pre-event reminder resolves recipient from the event row, not a non-existent column ([5fbe514](https://github.com/the-luap/picpeak/commit/5fbe514db6e386eee2eeade548bccbb5bbc5b422))
+* **event-types:** renaming a type's slug cascades to events, quotes + reminder template ([415c93a](https://github.com/the-luap/picpeak/commit/415c93a512f74898d0225ce2e9298f24cc12f60d))
+* **workflows:** close review blockers — prefetch-safe approvals + loud gate-edge failure ([98ab717](https://github.com/the-luap/picpeak/commit/98ab717043e3fdefac0934bf8f4621d523b15e9a))
+* **workflows:** harden graph validation + refuse enabling unimplemented flows ([d927464](https://github.com/the-luap/picpeak/commit/d927464778272bd862aa01903179672f4d47368a))
+* **workflows:** matchFilter strict equality + accurate comment ([dee8d40](https://github.com/the-luap/picpeak/commit/dee8d40bb3235a908bba514a97a62d3a91a6e131))
+* **workflows:** ship built-ins disabled for first beta + enabled-based mutex + admin sentinel ([5893ecb](https://github.com/the-luap/picpeak/commit/5893ecb27a0365a79ec04336c5a122b31d31db0e))
+* **workflows:** wire a real, SSRF-guarded webhook action (was a silent no-op) ([af7eea8](https://github.com/the-luap/picpeak/commit/af7eea8b43e37905a79138bcde4b1026dea13050))
+
 ## [3.70.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.69.1-beta.0...v3.70.0-beta.0) (2026-06-23)
 
 
