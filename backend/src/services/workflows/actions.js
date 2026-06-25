@@ -179,6 +179,47 @@ registry.registerAction('notify_pre_event', async (ctx) => {
   return res;
 });
 
+// Call an external webhook (the `webhook` node type + the "Call a webhook"
+// action both resolve here). POSTs the run context to config.url. SSRF-guarded
+// via validateExternalUrl — the same NAT64/private-range protection the webhook
+// delivery worker uses — unless WEBHOOK_ALLOW_PRIVATE_URLS=true (local-dev
+// opt-out). No redirects. Best-effort: a rejected URL / network error records an
+// observable skipped step rather than throwing the run.
+registry.registerAction('webhook', async (ctx) => {
+  const url = ctx.node.config?.url;
+  if (!url) return { skipped: true, reason: 'no webhook url configured' };
+  if (ctx.vars?.__dryRun) return { dryRun: true, would: 'webhook', url };
+
+  if (process.env.WEBHOOK_ALLOW_PRIVATE_URLS !== 'true') {
+    const { validateExternalUrl } = require('../../utils/networkValidation');
+    const check = validateExternalUrl(url);
+    if (!check.valid) return { skipped: true, reason: `url rejected: ${check.error}` };
+  }
+
+  const axios = require('axios');
+  const body = {
+    workflow: { id: ctx.run.workflow_id, version: ctx.run.version },
+    run: {
+      id: ctx.run.id,
+      trigger_event: ctx.run.trigger_event,
+      entity_type: ctx.run.entity_type,
+      entity_id: ctx.run.entity_id,
+    },
+    vars: ctx.vars || {},
+  };
+  try {
+    const res = await axios.post(url, body, {
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'PicPeak-Workflows/1.0', 'X-PicPeak-Event': ctx.run.trigger_event || '' },
+      timeout: parseInt(process.env.WEBHOOK_HTTP_TIMEOUT_MS || '10000', 10),
+      maxRedirects: 0, // no redirects — SSRF + receivers should give a final URL
+      validateStatus: () => true,
+    });
+    return { webhook_posted: url, status: res.status };
+  } catch (err) {
+    return { skipped: true, reason: `webhook request failed: ${err.message}` };
+  }
+});
+
 // Create/prepare-document actions — registered so flows referencing them are
 // valid; service wiring is a follow-up. Records a skipped step (observable).
 for (const key of DOCUMENT_ACTIONS) {

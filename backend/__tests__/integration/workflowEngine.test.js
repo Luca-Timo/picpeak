@@ -415,6 +415,24 @@ describe('workflow engine', () => {
     expect(await _internal.resolveTemplateKey('zzznotype', 'promo_')).toBe('promo_default');
   });
 
+  test('webhook action: dry-run, missing url, and SSRF-guarded private/metadata url', async () => {
+    const webhook = engine.registry.getAction('webhook');
+    expect(typeof webhook).toBe('function'); // registered — no longer a silent no-op
+    const ctx = (config, vars = {}) => ({
+      run: { id: 1, workflow_id: 1, version: 1, trigger_event: 't', entity_type: 'x', entity_id: 1 },
+      node: { config }, vars, db, logger: { warn() {} },
+    });
+    // Dry run never calls out.
+    expect(await webhook(ctx({ url: 'https://example.com/hook' }, { __dryRun: true })))
+      .toMatchObject({ dryRun: true, would: 'webhook' });
+    // No URL → observable skip, not a crash.
+    expect(await webhook(ctx({}))).toMatchObject({ skipped: true });
+    // SSRF: cloud-metadata / private target rejected before any request.
+    const r = await webhook(ctx({ url: 'http://169.254.169.254/latest/meta-data' }));
+    expect(r.skipped).toBe(true);
+    expect(r.reason).toMatch(/rejected/i);
+  });
+
   test('isBuiltinFlowActive reflects the built-in ENABLED state (enabled-based mutex)', async () => {
     const { seedBuiltinWorkflowsAtBoot } = require('../../src/services/_workflowSeedBoot');
     await seedBuiltinWorkflowsAtBoot(db, { info() {}, warn() {} });
