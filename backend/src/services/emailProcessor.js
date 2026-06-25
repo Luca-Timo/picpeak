@@ -860,10 +860,19 @@ async function processEmailQueue({ ignoreSchedule = false, limit = 10, onlyId = 
 
     for (const email of pendingEmails) {
       try {
-        const emailData = typeof email.email_data === 'string' 
+        const emailData = typeof email.email_data === 'string'
           ? JSON.parse(email.email_data || '{}')
           : email.email_data || {};
-        
+
+        // Language is resolved from emailData.eventId (event.language is the top
+        // priority). queueEmail injects it, but direct email_queue inserts (e.g.
+        // the gallery-publish notification) only set the event_id COLUMN — so
+        // backfill from the authoritative column so every send path resolves the
+        // recipient language from the event consistently.
+        if (emailData.eventId == null && email.event_id != null) {
+          emailData.eventId = email.event_id;
+        }
+
         const sendResult = await sendTemplateEmail(
           email.recipient_email,
           email.email_type,
