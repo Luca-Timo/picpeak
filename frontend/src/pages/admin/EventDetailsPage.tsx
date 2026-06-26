@@ -2661,6 +2661,7 @@ export const EventDetailsPage: React.FC = () => {
           eventName={event.event_name}
           requirePassword={isGalleryPublic(event) ? false : true}
           customerEmail={event.customer_email}
+          assignedCustomerCount={((event as { customer_accounts?: Array<{ id: number }> }).customer_accounts || []).length}
           isPublishing={publishMutation.isPending}
           onConfirm={(password) => publishMutation.mutate(password)}
           onClose={() => {

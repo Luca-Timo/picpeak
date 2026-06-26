@@ -670,6 +670,8 @@
       "title": "Publish gallery",
       "descriptionWithEmail": "Publishing \"{{eventName}}\" makes the gallery accessible and sends the notification email to {{customerEmail}}.",
       "descriptionNoEmail": "Publishing \"{{eventName}}\" makes the gallery accessible. No customer email is set, so no notification will be sent.",
+      "descriptionAssignedAccount": "Publishing \"{{eventName}}\" makes the gallery accessible. The assigned customer account(s) will be notified by email (in their language) that it is available.",
+      "justPublish": "Publish",
       "passwordLabel": "Gallery password",
       "passwordPlaceholder": "Enter the gallery password",
       "passwordHelp": "Re-type the password set at creation (or pick a new one). The email includes this exact text; the backend re-hashes it so the gallery login still works.",

@@ -103,18 +103,14 @@ function composePayload({ event, recipientEmail, daysBefore, businessName }) {
     || event.host_name
     || recipientEmail
     || '';
-  // Event date formatted DD.MM.YYYY here for simplicity; the rendered
-  // email may further re-locale via the template engine when locale-
-  // aware formatters are introduced.
-  const ed = event.event_date instanceof Date ? event.event_date : new Date(event.event_date);
-  const day = String(ed.getUTCDate()).padStart(2, '0');
-  const month = String(ed.getUTCMonth() + 1).padStart(2, '0');
-  const year = ed.getUTCFullYear();
-  const eventDateFormatted = `${day}.${month}.${year}`;
+  // Pass the RAW event_date — emailProcessor.processTemplate runs it through
+  // formatDate(value, recipientLanguage). Pre-formatting it (e.g. DD.MM.YYYY)
+  // makes the processor's new Date(...) reparse fail → "Invalid Date". Same
+  // contract the expiry mailer uses.
   return {
     customer_name: customerName,
     event_name: event.event_name || `Event #${event.id}`,
-    event_date: eventDateFormatted,
+    event_date: event.event_date || '',
     event_type: event.event_type || '',
     days_before: daysBefore,
     business_name: businessName || '',
@@ -191,8 +187,9 @@ async function runEventReminderPass() {
   let skipped = 0;
   for (const row of rows) {
     try {
-      const recipientEmail = row.customer_email || row.host_email;
-      if (!recipientEmail) { skipped += 1; continue; }
+      // Inline event email, else the assigned customer account(s).
+      const recipients = await resolveReminderRecipients(row);
+      if (!recipients.length) { skipped += 1; continue; }
       const rawOffset = row.event_reminder_offset_days;
       const offsetDays = (rawOffset != null && rawOffset !== '' && Number.isFinite(Number(rawOffset)))
         ? Number(rawOffset)
@@ -203,20 +200,17 @@ async function runEventReminderPass() {
       if (now < triggerAt) { skipped += 1; continue; }
 
       const templateKey = await resolveTemplateKey(row.event_type);
-      const payload = composePayload({
-        event: row, recipientEmail, daysBefore: offsetDays, businessName,
-      });
-      // Per-event body override: when present, append as a synthetic
-      // `body_override` field. The template engine should branch on it
-      // (e.g. Handlebars `{{#if body_override}}{{body_override}}{{else}}…default body…{{/if}}`).
-      // For installs where the templates don't yet handle the branch,
-      // the override still rides through as a variable the admin can
-      // reference manually.
-      if (row.event_reminder_body_override) {
-        payload.body_override = row.event_reminder_body_override;
+      for (const r of recipients) {
+        const payload = composePayload({
+          event: row, recipientEmail: r.email, daysBefore: offsetDays, businessName,
+        });
+        // Per-event body override rides through as a variable the template can branch on.
+        if (row.event_reminder_body_override) {
+          payload.body_override = row.event_reminder_body_override;
+        }
+        // Inline → event language; assigned account → customer's preferred language (no eventId).
+        await emailProcessor.queueEmail(r.fromEvent ? row.id : null, r.email, templateKey, payload);
       }
-
-      await emailProcessor.queueEmail(row.id, recipientEmail, templateKey, payload);
 
       // Stamp sent_at immediately so a same-pass-re-entrancy (or a
       // crash between queueEmail and the update) doesn't double-send
@@ -283,8 +277,17 @@ async function sendReminderForEvent(eventId, { templateGroup = null } = {}) {
   if (row.is_active === false || row.is_active === 0 || row.is_archived === true || row.is_archived === 1) {
     return { sent: 0, skipped: 1, reason: 'inactive' };
   }
-  const recipientEmail = row.customer_email || row.host_email;
-  if (!recipientEmail) return { sent: 0, skipped: 1, reason: 'no_recipient' };
+
+  // Recipient resolution:
+  //  - inline event email (customer_email / host_email) → send there, language
+  //    follows the event (eventId passed);
+  //  - else fall back to the assigned customer account(s) (event_customer_assignments)
+  //    → send to each registered customer, honouring THEIR preferred_language
+  //    (queued without eventId so the resolver uses the customer, not the event).
+  // The gallery-ready mail deliberately doesn't fall back to accounts, but a
+  // pre-event reminder should still reach an assigned customer.
+  const recipients = await resolveReminderRecipients(row);
+  if (!recipients.length) return { sent: 0, skipped: 1, reason: 'no_recipient' };
 
   const globalDaysBefore = Number(await getAppSetting('crm_event_reminders_days_before'));
   const daysBeforeDefault = Number.isFinite(globalDaysBefore) && globalDaysBefore >= 0
@@ -299,12 +302,43 @@ async function sendReminderForEvent(eventId, { templateGroup = null } = {}) {
   // The flow block chooses the template GROUP (blank → the default group); the
   // exact template is still auto-picked by event type within that group.
   const templateKey = await resolveTemplateKey(row.event_type, templateGroup || DEFAULT_TEMPLATE_GROUP);
-  const payload = composePayload({ event: row, recipientEmail, daysBefore: offsetDays, businessName });
-  if (row.event_reminder_body_override) payload.body_override = row.event_reminder_body_override;
 
-  await emailProcessor.queueEmail(row.id, recipientEmail, templateKey, payload);
+  let sent = 0;
+  for (const r of recipients) {
+    const payload = composePayload({ event: row, recipientEmail: r.email, daysBefore: offsetDays, businessName });
+    if (row.event_reminder_body_override) payload.body_override = row.event_reminder_body_override;
+    // Inline → pass eventId (event language). Assigned account → no eventId so
+    // the resolver picks the customer's preferred_language.
+    await emailProcessor.queueEmail(r.fromEvent ? row.id : null, r.email, templateKey, payload);
+    sent += 1;
+  }
   await db('events').where({ id: row.id }).update({ event_reminder_sent_at: new Date() });
-  return { sent: 1, skipped: 0, offsetDays };
+  return { sent, skipped: 0, offsetDays };
+}
+
+/**
+ * Who receives the pre-event reminder for an event: the inline event email if
+ * present, otherwise the active assigned customer account(s). `fromEvent` flags
+ * which language path to use (event vs customer).
+ */
+async function resolveReminderRecipients(eventRow) {
+  const inline = eventRow.customer_email || eventRow.host_email;
+  if (inline) return [{ email: inline, fromEvent: true }];
+
+  const assigned = await db('event_customer_assignments as a')
+    .join('customer_accounts as c', 'c.id', 'a.customer_account_id')
+    .where('a.event_id', eventRow.id)
+    .where('c.is_active', true)
+    .whereNotNull('c.email')
+    .select('c.email');
+  // De-dup emails defensively (a customer assigned twice, etc.).
+  const seen = new Set();
+  const out = [];
+  for (const a of assigned) {
+    const e = String(a.email).toLowerCase();
+    if (!seen.has(e)) { seen.add(e); out.push({ email: a.email, fromEvent: false }); }
+  }
+  return out;
 }
 
 module.exports = {

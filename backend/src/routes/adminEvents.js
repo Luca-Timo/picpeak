@@ -1189,6 +1189,22 @@ router.post('/:id/publish', adminAuth, requirePermission('events.edit'), require
         status: 'pending',
         created_at: new Date()
       });
+    } else {
+      // No inline email, but the gallery may be assigned to registered customer
+      // account(s). Notify them via the account "your galleries" email
+      // (customer_gallery_assigned, in the customer's own language) instead of
+      // the gallery_created mail, which needs an inline recipient. Best-effort.
+      try {
+        const customerAccountsService = require('../services/customerAccountsService');
+        const assigned = await customerAccountsService.getAssignmentsForEvent(parseInt(id, 10));
+        for (const c of assigned.filter((a) => a.is_active !== false && a.is_active !== 0 && a.email)) {
+          await customerAccountsService
+            .notifyCustomerOfNewAssignments(c.id, [parseInt(id, 10)])
+            .catch((err) => logger.warn('Publish: customer gallery notice failed', { customerId: c.id, error: err.message }));
+        }
+      } catch (err) {
+        logger.warn('Publish: assigned-customer notification skipped', { eventId: id, error: err.message });
+      }
     }
 
     // WhatsApp gallery_ready on publish-from-draft (#640D). The PublishGallery
