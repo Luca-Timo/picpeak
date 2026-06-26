@@ -1497,7 +1497,16 @@ async function convertToEvent(quoteId, adminId, options = {}) {
     throw new AppError(`Cannot convert a quote with status '${quote.status}'`, 409);
   }
   if (quote.converted_event_id) {
-    return { eventId: quote.converted_event_id, alreadyConverted: true };
+    // Idempotent re-entry (e.g. workflow crash-recovery): hand back the
+    // already-created event and its scheduled invoices so the caller can
+    // adopt them instead of double-creating.
+    const existingInvoices = await db('invoices')
+      .where({ event_id: quote.converted_event_id }).select('id');
+    return {
+      eventId: quote.converted_event_id,
+      alreadyConverted: true,
+      invoiceIds: existingInvoices.map((r) => r.id),
+    };
   }
   // Same guard as convertToInvoiceOnly — refuse if a contract is in
   // flight unless the contract→event button re-entered this path.
@@ -1520,7 +1529,7 @@ async function convertToEvent(quoteId, adminId, options = {}) {
   // Lazy import to avoid the circular dep.
   const invoiceService = require('./invoiceService');
 
-  return await db.transaction(async (trx) => {
+  const result = await db.transaction(async (trx) => {
     // The events table schema has drifted across migrations:
     // installs that ran the original 060 series have
     // host_name/host_email; later ones renamed to customer_*; some
@@ -1541,7 +1550,7 @@ async function convertToEvent(quoteId, adminId, options = {}) {
     // else a configurable org default, else the resolved catch-all (an ACTIVE
     // type — never a hardcoded slug the admin may have disabled).
     const eventType = (quote.event_type && String(quote.event_type).trim())
-      || (await getAppSetting('crm_default_event_type'))
+      || (await getAppSetting('crm_default_event_type', null, trx))
       || (await resolveDefaultEventType(trx));
 
     // Each candidate column is paired with the value we'd write. We
@@ -1601,7 +1610,7 @@ async function convertToEvent(quoteId, adminId, options = {}) {
       ? paymentTermSnapshot.installments
       : [{ percent: 100, trigger: 'after_delivery', offset_days: 0, label: 'Total' }];
 
-    await invoiceService.scheduleInvoicesForEvent({
+    const spawnResult = await invoiceService.scheduleInvoicesForEvent({
       trx,
       eventId,
       quoteId: quote.id,
@@ -1631,6 +1640,10 @@ async function convertToEvent(quoteId, adminId, options = {}) {
       // Migration 140 — propagate the quote's deal_uuid down through
       // every spawned invoice (same as convertToInvoiceOnly above).
       dealUuid: quote.deal_uuid,
+      // Workflow draft-seam: the booking flow's prepare_event creates the
+      // event's invoices on HOLD (no scheduled_send_at) so they wait for the
+      // review gate + explicit send_document after the event date.
+      hold: options.hold === true,
     });
 
     await trx('quotes').where({ id: quote.id }).update({
@@ -1639,13 +1652,18 @@ async function convertToEvent(quoteId, adminId, options = {}) {
       updated_at: new Date(),
     });
 
-    try {
-      await logActivity('quote_converted', { quoteId: quote.id, eventId }, eventId, `admin:${adminId}`);
-    } catch (_) {}
-
-    logger.info('Quote converted to event', { adminId, quoteId: quote.id, eventId });
-    return { eventId, alreadyConverted: false };
+    return { eventId, alreadyConverted: false, invoiceIds: spawnResult?.invoiceIds || [] };
   });
+
+  // Audit log AFTER commit — logActivity writes via the global `db`, which
+  // deadlocks the single-connection SQLite pool if issued inside the trx
+  // (prepare_event runs this unattended from the booking flow).
+  try {
+    await logActivity('quote_converted', { quoteId: quote.id, eventId: result.eventId }, result.eventId, `admin:${adminId}`);
+  } catch (_) {}
+
+  logger.info('Quote converted to event', { adminId, quoteId: quote.id, eventId: result.eventId });
+  return result;
 }
 
 async function duplicateQuote(id, adminId) {

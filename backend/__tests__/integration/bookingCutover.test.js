@@ -56,6 +56,26 @@ describe('booking cutover — draft invoices on hold', () => {
     expect(inv.scheduled_send_at == null).toBe(false); // normal convert → auto-send date set
   });
 
+  it('prepare_event path (convertToEvent hold) creates a DRAFT event with held invoices', async () => {
+    const quoteId = await acceptedQuote();
+    const res = await quoteService.convertToEvent(quoteId, adminId, { hold: true });
+    expect(res.eventId).toBeGreaterThanOrEqual(1);
+    expect(Array.isArray(res.invoiceIds)).toBe(true);
+    expect(res.invoiceIds.length).toBeGreaterThanOrEqual(1);
+
+    const ev = await db('events').where({ id: res.eventId }).first();
+    expect(ev.is_draft == true || ev.is_draft === 1).toBe(true); // created as a draft gallery
+
+    // Every invoice the event scheduled is held (no auto-send before the gate).
+    const invs = await db('invoices').whereIn('id', res.invoiceIds);
+    for (const inv of invs) expect(inv.scheduled_send_at == null).toBe(true);
+
+    // Quote is now linked to the event — convertToInvoiceOnly must NOT be called
+    // again for it (the flow's prepare_invoice adopts these ids instead).
+    const q = await db('quotes').where({ id: quoteId }).first();
+    expect(q.converted_event_id).toBe(res.eventId);
+  });
+
   it('prepare_contract path (createFromQuote) completes under SQLite — no in-trx deadlock', async () => {
     const contractService = require('../../src/services/contractService');
     const quoteId = await acceptedQuote();

@@ -17,11 +17,11 @@
 const registry = require('./registry');
 
 // Document actions still awaiting wiring (the enable-guard refuses flows that use
-// any of these). prepare_contract / prepare_invoice / send_document are now
-// implemented below (draft-seam booking cutover), so they're off this list.
+// any of these). prepare_contract / prepare_event / prepare_invoice /
+// send_document are now implemented below (draft-seam booking cutover), so
+// they're off this list — which makes booking_full / booking_simple enableable.
 const DOCUMENT_ACTIONS = [
   'prepare_quote',
-  'prepare_event',
   'prepare_gallery',
   'reserve_date',
 ];
@@ -241,8 +241,32 @@ registry.registerAction('prepare_contract', async (ctx) => {
   return { contract_prepared: res.contractId, alreadyConverted: !!res.alreadyConverted };
 });
 
+// Prepare a DRAFT event/gallery from the accepted quote. convertToEvent creates
+// the event as is_draft=true AND schedules its invoices — on HOLD here so they
+// wait for the review gate + send_document. The created invoice ids are stashed
+// so the flow's downstream prepare_invoice ADOPTS them (instead of double-
+// creating, which would also throw ALREADY_CONVERTED_TO_EVENT). Idempotent: a
+// re-entry returns the existing event + invoices.
+registry.registerAction('prepare_event', async (ctx) => {
+  const quoteId = ctx.run.entity_id;
+  if (ctx.run.entity_type !== 'quote' || !quoteId) return { skipped: true, reason: 'prepare_event needs a quote entity' };
+  if (ctx.vars?.__dryRun) return { dryRun: true, would: 'prepare_event', quoteId };
+  if (ctx.vars.preparedEventId) {
+    return { already: true, eventId: ctx.vars.preparedEventId, invoiceIds: ctx.vars.preparedInvoiceIds || [] };
+  }
+  const adminId = await resolveActor(ctx);
+  const res = await require('../quoteService').convertToEvent(quoteId, adminId, { hold: true });
+  ctx.vars.preparedEventId = res.eventId;
+  // The flow's prepare_invoice short-circuits on a populated preparedInvoiceIds,
+  // so the event's held invoices flow straight through to send_document.
+  ctx.vars.preparedInvoiceIds = res.invoiceIds || [];
+  return { event_prepared: res.eventId, invoiceIds: ctx.vars.preparedInvoiceIds, alreadyConverted: !!res.alreadyConverted };
+});
+
 // Prepare DRAFT invoice(s) from the accepted quote — created on HOLD (no
 // scheduled_send_at) so the scheduler won't auto-send before the review gate.
+// When prepare_event already ran in this flow, the event's held invoices are
+// already in ctx.vars.preparedInvoiceIds and this adopts them (no double-create).
 registry.registerAction('prepare_invoice', async (ctx) => {
   const quoteId = ctx.run.entity_id;
   if (ctx.run.entity_type !== 'quote' || !quoteId) return { skipped: true, reason: 'prepare_invoice needs a quote entity' };
