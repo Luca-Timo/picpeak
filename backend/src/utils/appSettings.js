@@ -25,8 +25,11 @@ const { db } = require('../database/db');
  * JSON.parse on the way out. Falls back to the raw string on
  * malformed JSON so legacy text values still work.
  */
-async function getAppSetting(key, defaultValue = null) {
-  const row = await db('app_settings').where({ setting_key: key }).first();
+async function getAppSetting(key, defaultValue = null, conn = db) {
+  // Callers reading from inside a knex transaction must pass that trx as
+  // `conn`, otherwise the global-`db` read grabs a second connection from
+  // the single-connection SQLite pool while the trx holds it → deadlock.
+  const row = await conn('app_settings').where({ setting_key: key }).first();
   if (!row || row.setting_value == null) return defaultValue;
   try {
     return JSON.parse(row.setting_value);

@@ -1415,12 +1415,12 @@ async function convertToInvoiceOnly(quoteId, adminId, options = {}) {
 
   const invoiceService = require('./invoiceService');
 
-  return await db.transaction(async (trx) => {
+  const result = await db.transaction(async (trx) => {
     const installments = Array.isArray(paymentTermSnapshot?.installments)
       ? paymentTermSnapshot.installments
       : [{ percent: 100, trigger: 'after_delivery', offset_days: 0, label: 'Total' }];
 
-    await invoiceService.scheduleInvoicesForEvent({
+    const spawnResult = await invoiceService.scheduleInvoicesForEvent({
       trx,
       // eventId omitted → invoices have source_quote_id but no event_id.
       eventId: null,
@@ -1459,6 +1459,10 @@ async function convertToInvoiceOnly(quoteId, adminId, options = {}) {
       // Migration 140 — every spawned invoice inherits the source
       // quote's deal_uuid so quote + N invoices group under one deal.
       dealUuid: quote.deal_uuid,
+      // Workflow draft-seam: when called by the booking flow's prepare_invoice
+      // action, create the invoices on HOLD (no scheduled_send_at) so they wait
+      // for the explicit send_document after the review gate.
+      hold: options.draft === true,
     });
 
     // Mark quote `converted` without a converted_event_id so the
@@ -1470,14 +1474,20 @@ async function convertToInvoiceOnly(quoteId, adminId, options = {}) {
       updated_at: new Date(),
     });
 
-    try {
-      await logActivity('quote_converted_invoices_only', { quoteId: quote.id, installments: installments.length },
-        null, `admin:${adminId}`);
-    } catch (_) {}
-
-    logger.info('Quote converted to invoices only (no event)', { adminId, quoteId: quote.id, installments: installments.length });
-    return { installmentsCreated: installments.length };
+    return { installmentsCreated: installments.length, invoiceIds: spawnResult?.invoiceIds || [] };
   });
+
+  // Audit log AFTER commit — logActivity writes via the global `db`, which
+  // deadlocks the single-connection SQLite pool if issued inside the trx
+  // (the booking flow's prepare_invoice action runs this unattended, so a
+  // hang here would wedge the workflow executor, not just a request).
+  try {
+    await logActivity('quote_converted_invoices_only', { quoteId: quote.id, installments: result.installmentsCreated },
+      null, `admin:${adminId}`);
+  } catch (_) {}
+
+  logger.info('Quote converted to invoices only (no event)', { adminId, quoteId: quote.id, installments: result.installmentsCreated });
+  return result;
 }
 
 async function convertToEvent(quoteId, adminId, options = {}) {

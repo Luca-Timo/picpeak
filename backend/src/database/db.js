@@ -645,8 +645,14 @@ async function ensureGlobalCategories() {
 }
 
 // Helper function to log activities
-async function logActivity(activityType, metadata = {}, eventId = null, actor = null) {
+async function logActivity(activityType, metadata = {}, eventId = null, actor = null, executor = null) {
   try {
+    // Callers issuing the log from inside a knex transaction must pass that
+    // trx as `executor`, otherwise the global-`db` insert tries to grab a
+    // second connection from the single-connection SQLite pool while the
+    // trx still holds it → deadlock. Defaults to the global db for the
+    // common after-commit / outside-trx callers.
+    const conn = executor || db;
     // actor_id is integer-typed; some legacy callers pass a hex-string
     // identifier (e.g. a 16-char guest fingerprint) which makes Postgres
     // throw "invalid input syntax for type integer" and drop the entire
@@ -659,7 +665,7 @@ async function logActivity(activityType, metadata = {}, eventId = null, actor = 
     const actorName = actor?.name
       || (actorIdInt === null && rawId !== undefined && rawId !== null ? String(rawId) : null);
 
-    await db('activity_logs').insert({
+    await conn('activity_logs').insert({
       activity_type: activityType,
       actor_type: actor?.type || 'system',
       actor_id: actorIdInt,

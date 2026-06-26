@@ -74,13 +74,34 @@ describe('admin workflows API', () => {
   test('refuses to enable a flow that uses an unimplemented action', async () => {
     const create = await request(app).post('/api/admin/workflows').set(auth(token)).send({
       name: 'Stub flow', trigger_type: 'quote.accepted', enabled: false,
-      nodes: [{ node_key: 't', type: 'trigger' }, { node_key: 'a', type: 'action', config: { action: 'prepare_invoice' } }],
+      nodes: [{ node_key: 't', type: 'trigger' }, { node_key: 'a', type: 'action', config: { action: 'prepare_event' } }],
       edges: [{ from_node: 't', to_node: 'a' }],
     });
     expect(create.status).toBe(201);
     const res = await request(app).patch(`/api/admin/workflows/${create.body.id}/enabled`).set(auth(token)).send({ enabled: true });
     expect(res.status).toBe(409);
-    expect(res.body.error).toMatch(/not.*implemented|prepare_invoice/i);
+    expect(res.body.error).toMatch(/not.*implemented|prepare_event/i);
+  });
+
+  test('allows enabling a flow using the now-implemented booking invoice actions', async () => {
+    const create = await request(app).post('/api/admin/workflows').set(auth(token)).send({
+      name: 'Invoice-only booking', trigger_type: 'quote.accepted', enabled: false,
+      nodes: [
+        { node_key: 't', type: 'trigger' },
+        { node_key: 'p', type: 'action', config: { action: 'prepare_invoice' } },
+        { node_key: 'g', type: 'gate', config: {} },
+        { node_key: 's', type: 'action', config: { action: 'send_document', document: 'invoice' } },
+      ],
+      edges: [
+        { from_node: 't', to_node: 'p' },
+        { from_node: 'p', to_node: 'g' },
+        { from_node: 'g', from_handle: 'confirm', to_node: 's' },
+      ],
+    });
+    expect(create.status).toBe(201);
+    const res = await request(app).patch(`/api/admin/workflows/${create.body.id}/enabled`).set(auth(token)).send({ enabled: true });
+    expect(res.status).toBe(200);
+    expect(res.body.enabled).toBe(true);
   });
 
   test('get one returns the graph', async () => {

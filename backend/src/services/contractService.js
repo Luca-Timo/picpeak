@@ -167,7 +167,10 @@ function formatNumberInTemplate(format, year, seq) {
  * emit `C-2026-AB12C3` after 5 retries.
  */
 async function nextContractNumber(trx) {
-  const format = (await getAppSetting('crm_contracts_number_format')) || 'C-{YEAR}-{SEQ:04d}';
+  // Read through `trx` when present — getAppSetting on the global db inside an
+  // open transaction deadlocks the single-connection SQLite pool (the booking
+  // flow's prepare_contract action runs createFromQuote unattended).
+  const format = (await getAppSetting('crm_contracts_number_format', null, trx || db)) || 'C-{YEAR}-{SEQ:04d}';
   const year = new Date().getFullYear();
   const seq = await claimNextSequence('contract', year, trx);
   return formatNumberInTemplate(format, year, seq);
@@ -1661,6 +1664,11 @@ async function createFromQuote(quoteId, adminId) {
   const hasQuoteContractBackPointer = await hasColumnCached('quotes', 'converted_contract_id');
   const hasContractEventCols = await hasColumnCached('contracts', 'event_name');
 
+  // Resolve the actor BEFORE opening the transaction — adminActor reads
+  // admin_users via the global db, which deadlocks the single-connection
+  // SQLite pool if evaluated inside the trx (prepare_contract runs unattended).
+  const actor = await adminActor(adminId);
+
   return await db.transaction(async (trx) => {
     // Pass trx so the sequence claim joins our outer transaction —
     // SQLite deadlocks otherwise (1-connection default).
@@ -1735,9 +1743,11 @@ async function createFromQuote(quoteId, adminId) {
     }
 
     try {
+      // Pass `trx` so the audit insert rides the transaction's connection;
+      // the global db here deadlocks the single-connection SQLite pool.
       await logActivity('contract_created_from_quote',
         { contractId, contractNumber, quoteId: quote.id, quoteNumber: quote.quote_number },
-        null, await adminActor(adminId));
+        null, actor, trx);
     } catch (_) { /* logging is best-effort */ }
     logger.info('Contract created from quote', { adminId, contractId, contractNumber, quoteId: quote.id });
     return { contractId, alreadyConverted: false };

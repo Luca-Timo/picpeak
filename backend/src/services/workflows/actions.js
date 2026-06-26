@@ -16,13 +16,13 @@
  */
 const registry = require('./registry');
 
+// Document actions still awaiting wiring (the enable-guard refuses flows that use
+// any of these). prepare_contract / prepare_invoice / send_document are now
+// implemented below (draft-seam booking cutover), so they're off this list.
 const DOCUMENT_ACTIONS = [
   'prepare_quote',
-  'prepare_contract',
   'prepare_event',
   'prepare_gallery',
-  'prepare_invoice',
-  'send_document',
   'reserve_date',
 ];
 
@@ -206,6 +206,89 @@ registry.registerAction('webhook', async (ctx) => {
   return res.enqueued
     ? { webhook_enqueued: res.webhookId, deliveryId: res.deliveryId }
     : { skipped: true, reason: res.reason };
+});
+
+// --- Booking document actions (draft-seam cutover) ---
+//
+// The booking flows trigger on quote.accepted, so the run entity is the QUOTE.
+// prepare_* create DRAFT documents (idempotent, reusing the proven converters)
+// and stash the created ids in the run context; send_document then dispatches
+// the matching draft. Flows run system-side, so the actor is resolved from the
+// quote's creator (else the workflow's creator, else the first admin).
+
+async function resolveActor(ctx) {
+  try {
+    if (ctx.run.entity_type === 'quote' && ctx.run.entity_id) {
+      const q = await ctx.db('quotes').where({ id: ctx.run.entity_id }).first('created_by_admin_id');
+      if (q?.created_by_admin_id) return q.created_by_admin_id;
+    }
+    const wf = await ctx.db('workflows').where({ id: ctx.run.workflow_id }).first('created_by');
+    if (wf?.created_by) return wf.created_by;
+    const admin = await ctx.db('admin_users').orderBy('id', 'asc').first('id');
+    return admin?.id || null;
+  } catch (_) { return null; }
+}
+
+// Prepare a DRAFT contract from the accepted quote (idempotent via the quote's
+// converted_contract_id back-pointer).
+registry.registerAction('prepare_contract', async (ctx) => {
+  const quoteId = ctx.run.entity_id;
+  if (ctx.run.entity_type !== 'quote' || !quoteId) return { skipped: true, reason: 'prepare_contract needs a quote entity' };
+  if (ctx.vars?.__dryRun) return { dryRun: true, would: 'prepare_contract', quoteId };
+  const adminId = await resolveActor(ctx);
+  const res = await require('../contractService').createFromQuote(quoteId, adminId);
+  ctx.vars.preparedContractId = res.contractId;
+  return { contract_prepared: res.contractId, alreadyConverted: !!res.alreadyConverted };
+});
+
+// Prepare DRAFT invoice(s) from the accepted quote — created on HOLD (no
+// scheduled_send_at) so the scheduler won't auto-send before the review gate.
+registry.registerAction('prepare_invoice', async (ctx) => {
+  const quoteId = ctx.run.entity_id;
+  if (ctx.run.entity_type !== 'quote' || !quoteId) return { skipped: true, reason: 'prepare_invoice needs a quote entity' };
+  if (ctx.vars?.__dryRun) return { dryRun: true, would: 'prepare_invoice', quoteId };
+  if (Array.isArray(ctx.vars.preparedInvoiceIds) && ctx.vars.preparedInvoiceIds.length) {
+    return { already: true, invoiceIds: ctx.vars.preparedInvoiceIds };
+  }
+  const adminId = await resolveActor(ctx);
+  let invoiceIds;
+  try {
+    const res = await require('../quoteService').convertToInvoiceOnly(quoteId, adminId, { draft: true });
+    invoiceIds = res.invoiceIds || [];
+  } catch (err) {
+    // Crash-recovery re-run: the quote may already be 'converted' (convert
+    // throws). Recover the drafts by the quote's deal_uuid so we don't lose them.
+    const quote = await ctx.db('quotes').where({ id: quoteId }).first('deal_uuid');
+    invoiceIds = quote?.deal_uuid
+      ? (await ctx.db('invoices').where({ deal_uuid: quote.deal_uuid }).select('id')).map((r) => r.id)
+      : [];
+    if (!invoiceIds.length) throw err;
+  }
+  ctx.vars.preparedInvoiceIds = invoiceIds;
+  return { invoice_prepared: invoiceIds };
+});
+
+// Send a prepared draft document (config.document = 'invoice' | 'contract').
+registry.registerAction('send_document', async (ctx) => {
+  const doc = ctx.node.config?.document || 'invoice';
+  if (ctx.vars?.__dryRun) return { dryRun: true, would: 'send_document', document: doc };
+  const adminId = await resolveActor(ctx);
+
+  if (doc === 'invoice') {
+    const ids = ctx.vars.preparedInvoiceIds || [];
+    if (!ids.length) return { skipped: true, reason: 'no prepared invoice to send' };
+    const invoiceService = require('../invoiceService');
+    let sent = 0;
+    for (const id of ids) { await invoiceService.sendInvoice(id, adminId); sent += 1; }
+    return { invoices_sent: sent };
+  }
+  if (doc === 'contract') {
+    const cid = ctx.vars.preparedContractId;
+    if (!cid) return { skipped: true, reason: 'no prepared contract to send' };
+    await require('../contractService').sendContract(cid, adminId);
+    return { contract_sent: cid };
+  }
+  return { skipped: true, reason: `send_document for '${doc}' not implemented yet` };
 });
 
 // Create/prepare-document actions — registered so flows referencing them are
