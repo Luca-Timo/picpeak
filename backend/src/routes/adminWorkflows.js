@@ -24,7 +24,6 @@ const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
 const workflows = require('../services/workflows');
-const { DOCUMENT_ACTIONS } = require('../services/workflows/actions');
 const { hasColumnCached } = require('../utils/schemaCache');
 
 router.use(adminAuth, requireFeatureFlag('workflows'));
@@ -35,9 +34,6 @@ const MAX_NODES = 200;
 const MAX_EDGES = 500;
 const MAX_NODE_CONFIG_BYTES = 16 * 1024;
 const VALID_NODE_TYPES = new Set(['trigger', 'action', 'condition', 'branch', 'loop', 'wait', 'gate', 'webhook']);
-// Actions registered but not yet wired (return {skipped:true}); a flow that
-// uses any of these can't be meaningfully enabled.
-const UNIMPLEMENTED_ACTIONS = new Set(DOCUMENT_ACTIONS);
 
 function parseJson(v, fallback) {
   if (v == null) return fallback;
@@ -65,13 +61,15 @@ function validateGraph(body) {
   return null;
 }
 
-// The unimplemented (stub) actions a graph references — used to refuse enabling
-// a flow that would silently no-op (e.g. the booking built-ins' prepare_*/send).
+// The unimplemented actions a graph references — any action node whose
+// `config.action` has no registered handler. Used to refuse enabling a flow
+// that would silently no-op at runtime (typo'd or future-but-unwired actions).
+// Registry-driven so it can't drift from what the engine can actually run.
 function unimplementedActionsIn(nodes = []) {
   const found = new Set();
   for (const n of nodes) {
-    const action = n && n.config && n.config.action;
-    if (action && UNIMPLEMENTED_ACTIONS.has(action)) found.add(action);
+    const action = n && n.type === 'action' && n.config && n.config.action;
+    if (action && !workflows.registry.getAction(action)) found.add(action);
   }
   return [...found];
 }
@@ -246,7 +244,7 @@ router.patch('/:id/enabled', requirePermission('workflows.manage'), async (req, 
     // prepare_*/send_document stubs). Concern #5 from review.
     if (enabled) {
       const rows = await db('workflow_nodes').where({ workflow_id: id, version: wf.version });
-      const stubs = unimplementedActionsIn(rows.map((n) => ({ config: parseJson(n.config, {}) })));
+      const stubs = unimplementedActionsIn(rows.map((n) => ({ type: n.type, config: parseJson(n.config, {}) })));
       if (stubs.length) {
         return res.status(409).json({ error: `This flow can't be enabled yet — it uses actions that aren't implemented: ${stubs.join(', ')}.` });
       }
