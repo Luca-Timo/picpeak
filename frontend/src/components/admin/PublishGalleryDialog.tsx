@@ -110,12 +110,21 @@ export const PublishGalleryDialog: React.FC<PublishGalleryDialogProps> = ({
           </div>
         )}
 
-        <div className="flex gap-3">
+        {/* Stack both buttons vertically (always). The German primary label
+            "Veröffentlichen & Kunden benachrichtigen" is ~40 chars including
+            the icon — at max-w-md, no side-by-side row layout fits it on one
+            line, and the base .btn class has @apply whitespace-nowrap (see
+            index.css:149) which overrides a whitespace-normal className via
+            CSS cascade order, so the text won't wrap either. Side-by-side
+            would silently push the button past the modal frame (#670).
+            col-reverse keeps the DOM order semantically secondary-then-primary
+            while putting the primary action visually on top — standard
+            confirmation-dialog pattern. */}
+        <div className="flex flex-col-reverse gap-3">
           <Button
             variant="outline"
             onClick={onClose}
             disabled={isPublishing}
-            className="flex-1"
           >
             {t('common.cancel', 'Cancel')}
           </Button>
@@ -125,7 +134,6 @@ export const PublishGalleryDialog: React.FC<PublishGalleryDialogProps> = ({
             disabled={isPublishing}
             isLoading={isPublishing}
             leftIcon={<Send className="w-4 h-4" />}
-            className="flex-1"
           >
             {t('events.publishAndNotify')}
           </Button>
