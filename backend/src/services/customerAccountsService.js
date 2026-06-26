@@ -1456,6 +1456,7 @@ module.exports = {
   setAssignmentsForEvent,
   setAssignmentsForCustomer,
   getAssignmentsForEvent,
+  notifyCustomerOfNewAssignments,
   listEventsForCustomer,
   customerHasAccessToEvent,
   getPendingInvitations,
