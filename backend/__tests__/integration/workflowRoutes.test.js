@@ -71,16 +71,16 @@ describe('admin workflows API', () => {
     expect(res.body.error).toMatch(/unknown node type/i);
   });
 
-  test('refuses to enable a flow that uses an unimplemented action', async () => {
+  test('refuses to enable a flow that uses an unregistered action', async () => {
     const create = await request(app).post('/api/admin/workflows').set(auth(token)).send({
       name: 'Stub flow', trigger_type: 'quote.accepted', enabled: false,
-      nodes: [{ node_key: 't', type: 'trigger' }, { node_key: 'a', type: 'action', config: { action: 'prepare_gallery' } }],
+      nodes: [{ node_key: 't', type: 'trigger' }, { node_key: 'a', type: 'action', config: { action: 'totally_not_a_real_action' } }],
       edges: [{ from_node: 't', to_node: 'a' }],
     });
     expect(create.status).toBe(201);
     const res = await request(app).patch(`/api/admin/workflows/${create.body.id}/enabled`).set(auth(token)).send({ enabled: true });
     expect(res.status).toBe(409);
-    expect(res.body.error).toMatch(/not.*implemented|prepare_gallery/i);
+    expect(res.body.error).toMatch(/not.*implemented|totally_not_a_real_action/i);
   });
 
   test('allows enabling a flow using the now-implemented booking invoice actions', async () => {

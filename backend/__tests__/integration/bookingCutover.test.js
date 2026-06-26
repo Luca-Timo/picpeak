@@ -76,6 +76,31 @@ describe('booking cutover — draft invoices on hold', () => {
     expect(q.converted_event_id).toBe(res.eventId);
   });
 
+  it('reserve_date path (convertToEvent skipInvoices) creates a draft event with NO invoices', async () => {
+    const quoteId = await acceptedQuote();
+    const res = await quoteService.convertToEvent(quoteId, adminId, { hold: true, skipInvoices: true });
+    expect(res.eventId).toBeGreaterThanOrEqual(1);
+    expect(res.invoiceIds).toEqual([]);
+    const invCount = await db('invoices').where({ event_id: res.eventId }).count({ c: '*' }).first();
+    expect(Number(invCount.c)).toBe(0); // pure date hold — no money documents
+  });
+
+  it('prepare_quote path (duplicateQuote) creates a new DRAFT quote — no in-trx deadlock', async () => {
+    const quoteId = await acceptedQuote();
+    const newId = await quoteService.duplicateQuote(quoteId, adminId);
+    expect(newId).toBeGreaterThanOrEqual(1);
+    expect(newId).not.toBe(quoteId);
+    const q = await db('quotes').where({ id: newId }).first();
+    expect(q.status).toBe('draft');
+  });
+
+  it('registers prepare_gallery / reserve_date / prepare_quote as real actions', () => {
+    const { registry } = require('../../src/services/workflows'); // loads actions.js (side-effect registration)
+    for (const a of ['prepare_gallery', 'reserve_date', 'prepare_quote', 'prepare_event', 'prepare_invoice', 'send_document']) {
+      expect(typeof registry.getAction(a)).toBe('function');
+    }
+  });
+
   it('prepare_contract path (createFromQuote) completes under SQLite — no in-trx deadlock', async () => {
     const contractService = require('../../src/services/contractService');
     const quoteId = await acceptedQuote();
