@@ -238,6 +238,7 @@
       "defaultPrompt": "Ein Workflow benötigt deine Bestätigung.",
       "pendingTitle": "Offene Freigaben",
       "viewAll": "Alle Freigaben ansehen",
+      "openEntity": "{{type}} #{{id}} öffnen",
       "acted": "Erledigt"
     },
     "editor": {
