@@ -5,6 +5,13 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.71.2-beta.0](https://github.com/the-luap/picpeak/compare/v3.71.1-beta.0...v3.71.2-beta.0) (2026-06-27)
+
+
+### Bug Fixes
+
+* event-reminder, email-language & gallery-publish bugs surfaced during workflow testing ([c8714ca](https://github.com/the-luap/picpeak/commit/c8714ca42f4d82d50fe611b2a630260ebecbe740))
+
 ## [3.71.1-beta.0](https://github.com/the-luap/picpeak/compare/v3.71.0-beta.0...v3.71.1-beta.0) (2026-06-26)
 
 
