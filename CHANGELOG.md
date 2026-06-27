@@ -5,6 +5,13 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.71.3-beta.0](https://github.com/the-luap/picpeak/compare/v3.71.2-beta.0...v3.71.3-beta.0) (2026-06-27)
+
+
+### Bug Fixes
+
+* **events:** wire customer notifications into both public API entry points ([#647](https://github.com/the-luap/picpeak/issues/647)) ([f017542](https://github.com/the-luap/picpeak/commit/f01754247cdb94c5935ad5abbda116841f6c7fba))
+
 ## [3.71.2-beta.0](https://github.com/the-luap/picpeak/compare/v3.71.1-beta.0...v3.71.2-beta.0) (2026-06-27)
 
 
