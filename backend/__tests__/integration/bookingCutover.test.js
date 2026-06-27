@@ -76,6 +76,29 @@ describe('booking cutover — draft invoices on hold', () => {
     expect(q.converted_event_id).toBe(res.eventId);
   });
 
+  it('draft mode with the DEFAULT (after_delivery) payment term yields a SENDABLE scheduled invoice, not pending_delivery', async () => {
+    // Reproduces the booking_invoice_only flow on a quote with no explicit
+    // payment timing: the default installment is after_delivery, which would
+    // otherwise be pending_delivery — a status sendInvoice (send_document) rejects.
+    const dealUuid = crypto.randomUUID();
+    const [quoteId] = await db('quotes').insert({
+      quote_number: `Q-${dealUuid.slice(0, 8)}`,
+      customer_account_id: customerId,
+      status: 'accepted',
+      currency: 'CHF',
+      issue_date: '2026-01-01',
+      net_amount_minor: 50000, vat_amount_minor: 0, shipping_amount_minor: 0, total_amount_minor: 50000,
+      // No payment_term_snapshot → spawnInstallmentInvoices falls back to a single
+      // 100% after_delivery installment.
+      deal_uuid: dealUuid,
+      created_by_admin_id: adminId,
+    });
+    const res = await quoteService.convertToInvoiceOnly(quoteId, adminId, { draft: true });
+    const inv = await db('invoices').where({ id: res.invoiceIds[0] }).first();
+    expect(inv.status).toBe('scheduled');            // sendInvoice accepts this
+    expect(inv.scheduled_send_at == null).toBe(true); // still held — no auto-send
+  });
+
   it('reserve_date path (convertToEvent skipInvoices) creates a draft event with NO invoices', async () => {
     const quoteId = await acceptedQuote();
     const res = await quoteService.convertToEvent(quoteId, adminId, { hold: true, skipInvoices: true });

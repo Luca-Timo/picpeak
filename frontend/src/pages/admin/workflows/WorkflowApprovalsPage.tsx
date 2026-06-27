@@ -36,6 +36,17 @@ export const WorkflowApprovalsPage: React.FC = () => {
 
   const promptOf = (a: WorkflowApproval) => (a.payload && (a.payload.prompt as string)) || t('workflows.approvals.defaultPrompt', 'A workflow needs your confirmation.');
 
+  // The admin detail route for the run's entity, so a row click opens the
+  // document they're being asked to approve. `invoice` lives under /bills.
+  const entityHref = (a: WorkflowApproval): string | null => {
+    if (!a.entity_type || a.entity_id == null) return null;
+    const base: Record<string, string> = {
+      quote: 'quotes', invoice: 'bills', event: 'events', contract: 'contracts', customer: 'customers',
+    };
+    const seg = base[a.entity_type];
+    return seg ? `/admin/${seg}/${a.entity_id}` : null;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -55,24 +66,41 @@ export const WorkflowApprovalsPage: React.FC = () => {
           <div className="p-10 text-center text-neutral-500 dark:text-neutral-400">{t('workflows.approvals.empty', 'Nothing waiting for you right now.')}</div>
         ) : (
           <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
-            {approvals.map((a) => (
-              <li key={a.id} className="flex items-center gap-3 px-4 py-3">
-                <div className="min-w-0 flex-1">
+            {approvals.map((a) => {
+              const href = entityHref(a);
+              const meta = (
+                <>
                   <div className="text-sm text-neutral-900 dark:text-neutral-100">{promptOf(a)}</div>
                   <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
                     {a.workflow_name}
                     {a.entity_type ? ` · ${a.entity_type} #${a.entity_id}` : ''}
                     {a.created_at ? ` · ${formatDateTime(a.created_at)}` : ''}
                   </div>
-                </div>
-                <Button variant="outline" size="sm" isLoading={actMutation.isPending} onClick={() => actMutation.mutate({ id: a.id, action: 'confirm' })} leftIcon={<Check className="w-4 h-4" />}>
-                  {t('workflows.approvals.confirm', 'Confirm')}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => actMutation.mutate({ id: a.id, action: 'deny' })} leftIcon={<X className="w-4 h-4" />}>
-                  {t('workflows.approvals.deny', 'Deny')}
-                </Button>
-              </li>
-            ))}
+                </>
+              );
+              return (
+                <li key={a.id} className="flex items-center gap-3 px-4 py-3">
+                  {href ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate(href)}
+                      className="min-w-0 flex-1 text-left rounded -mx-1 px-1 py-0.5 hover:bg-neutral-50 dark:hover:bg-neutral-800/60 transition-colors cursor-pointer"
+                      title={t('workflows.approvals.openEntity', 'Open {{type}} #{{id}}', { type: a.entity_type, id: a.entity_id }) as string}
+                    >
+                      {meta}
+                    </button>
+                  ) : (
+                    <div className="min-w-0 flex-1">{meta}</div>
+                  )}
+                  <Button variant="outline" size="sm" isLoading={actMutation.isPending} onClick={() => actMutation.mutate({ id: a.id, action: 'confirm' })} leftIcon={<Check className="w-4 h-4" />}>
+                    {t('workflows.approvals.confirm', 'Confirm')}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => actMutation.mutate({ id: a.id, action: 'deny' })} leftIcon={<X className="w-4 h-4" />}>
+                    {t('workflows.approvals.deny', 'Deny')}
+                  </Button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>

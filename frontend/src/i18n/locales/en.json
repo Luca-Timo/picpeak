@@ -238,6 +238,7 @@
       "defaultPrompt": "A workflow needs your confirmation.",
       "pendingTitle": "Pending approvals",
       "viewAll": "View all approvals",
+      "openEntity": "Open {{type}} #{{id}}",
       "acted": "Done"
     },
     "editor": {

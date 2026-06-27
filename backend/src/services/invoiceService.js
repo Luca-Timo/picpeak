@@ -1077,11 +1077,15 @@ async function spawnInstallmentInvoices({ trx, eventId, quoteId, customer, curre
     // status `scheduled`, so they sit idle until the admin clicks
     // "Release for delivery" on the invoice detail page.
     const isDeliveryTrigger = inst.trigger === 'after_delivery';
-    const rowStatus = isDeliveryTrigger ? 'pending_delivery' : 'scheduled';
-    // `hold` (workflow draft-seam): create the invoice but leave scheduled_send_at
-    // NULL so the scheduler never auto-sends it — a draft awaiting an explicit
-    // send_document after the admin's review gate. Status stays 'scheduled' so
-    // it's editable and sendInvoice can later issue it.
+    // `hold` (workflow draft-seam): the booking flow's review gate + explicit
+    // send_document IS the release, so a held invoice is always `scheduled`
+    // (editable + sendable via sendInvoice) regardless of trigger — never
+    // `pending_delivery`, which sendInvoice refuses. Without hold, an
+    // after_delivery invoice stays `pending_delivery` as before.
+    const rowStatus = (isDeliveryTrigger && !hold) ? 'pending_delivery' : 'scheduled';
+    // Held invoices carry no scheduled_send_at so the scheduler never auto-sends
+    // them — they wait for send_document. after_delivery rows are likewise null
+    // (the scheduler can't infer a delivery date).
     const rowScheduledSendAt = (isDeliveryTrigger || hold) ? null : scheduledSendAt;
 
     const invoiceNumber = await nextInvoiceNumber(trx);
