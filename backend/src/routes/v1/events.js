@@ -308,6 +308,48 @@ router.post(
         type: 'admin', id: req.admin.id, name: req.admin.username
       });
 
+      // Customer notifications (#647 follow-up). v1 events go live in the
+      // same call (not draft-aware), so the gallery_created email + WhatsApp
+      // fire here — mirroring the adminEvents.js create-and-publish path.
+      // Both are best-effort: a queue failure must not block the API response.
+      const expiryIso = expires_at ? new Date(expires_at).toISOString() : null;
+      if (customer_email) {
+        try {
+          const { queueEmail } = require('../../services/emailProcessor');
+          await queueEmail(id, customer_email, 'gallery_created', {
+            customer_name: customer_name || '',
+            customer_email,
+            host_name: customer_name || '',
+            event_name,
+            event_date: event_date || null,
+            gallery_link: shareUrl,
+            gallery_password: require_password ? password : 'No password required',
+            expiry_date: expiryIso,
+            welcome_message: ''
+          });
+        } catch (emailError) {
+          logger.warn('v1 POST /events: failed to queue gallery_created email', { error: emailError.message });
+        }
+      }
+      if (persistPhone) {
+        try {
+          const { queueWhatsapp, getWhatsAppConfig } = require('../../services/whatsappProcessor');
+          const waConfig = await getWhatsAppConfig();
+          if (waConfig && waConfig.enabled) {
+            await queueWhatsapp(id, persistPhone, 'gallery_created', {
+              customer_name: customer_name || '',
+              event_name,
+              gallery_link: shareUrl,
+              gallery_password: require_password ? password : '',
+              expiry_date: expiryIso,
+              language: null,
+            });
+          }
+        } catch (waError) {
+          logger.warn('v1 POST /events: failed to queue WhatsApp notification', { error: waError.message });
+        }
+      }
+
       // Webhook lifecycle (#327). v1 events are not draft-aware, so they're
       // both created AND published in the same call. Canonical event
       // subject (#341) — customer contact + share_token always included.
