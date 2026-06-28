@@ -4989,6 +4989,9 @@
     "crm_invoices_qr_enabled": {
       "label": "Render payment QR on invoice PDFs"
     },
+    "crm_invoice_round_total": {
+      "label": "Reconcile sub-cent rounding to a clean total (adds a \"Rundung\" row when per-line rounding drifts from qty × rate)"
+    },
     "crm_invoices_reminders_enabled": {
       "label": "Send automatic reminders for overdue invoices"
     },

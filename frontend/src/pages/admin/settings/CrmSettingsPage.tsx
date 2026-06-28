@@ -28,6 +28,7 @@ const SETTING_KEYS = [
   'crm_quotes_tos_text',
   'crm_quotes_tos_url',
   'crm_invoices_qr_enabled',
+  'crm_invoice_round_total',
   'crm_invoices_reminders_enabled',
   'crm_invoices_reminder_first_days',
   'crm_invoices_reminder_second_days',
@@ -249,6 +250,7 @@ export const CrmSettingsPage: React.FC = () => {
       <Card>
         <h3 className="font-semibold mb-3">{t('crmSettings.section.invoices', 'Invoices')}</h3>
         {checkbox('crm_invoices_qr_enabled', 'Render payment QR on invoice PDFs')}
+        {checkbox('crm_invoice_round_total', 'Reconcile sub-cent rounding to a clean total (adds a "Rundung" row when per-line rounding drifts from qty × rate)')}
 
         {/* Reminder TIMING: owned by the Invoice dunning workflow when the
             engine is live (callout); otherwise the legacy schedule controls. The

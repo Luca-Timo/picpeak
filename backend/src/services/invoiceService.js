@@ -23,6 +23,7 @@ const crypto = require('crypto');
 const { db, withRetry, logActivity } = require('../database/db');
 const logger = require('../utils/logger');
 const { getAppSetting } = require('../utils/appSettings');
+const { cleanNetMinor } = require('../utils/invoiceRounding');
 const { AppError } = require('../utils/errors');
 const { formatBoolean } = require('../utils/dbCompat');
 const { claimNextSequence } = require('../utils/documentSequences');
@@ -785,6 +786,15 @@ async function createInvoice(payload, adminId, trx = db) {
   let netMinor = 0;
   for (const li of items) {
     if (li.parent_position == null) netMinor += ensureInt(li.line_total_minor);
+  }
+  // Optional sub-cent reconciliation (crm_invoice_round_total). When on,
+  // store the full-precision net rounded ONCE so the total matches
+  // qty × unit arithmetic; the per-line rounding drift is surfaced as a
+  // "Rundung" row at render time (storedNet − Σ line totals). Off by
+  // default ⇒ net stays the sum of rounded lines, unchanged behaviour.
+  const roundTotal = (await getAppSetting('crm_invoice_round_total', false)) === true;
+  if (roundTotal) {
+    netMinor = cleanNetMinor(items, { parentKey: 'parent_position', positionKey: 'position' });
   }
   const vatRate = ensureNumber(payload.vatRate, 0);
   const vatMinor = Math.round(netMinor * vatRate / 100);
@@ -1764,6 +1774,25 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
     else if (typeof raw === 'string' && raw.trim()) dateFormat = { format: raw.trim() };
   } catch (_) { /* fall back to default */ }
 
+  // Sub-cent reconciliation (crm_invoice_round_total). "Betrag Netto"
+  // shows the sum of the visible line totals so it foots with the items;
+  // the stored net may be the clean (rounded-once) value, and the gap is
+  // shown as a "Rundung" row. Legacy/unrounded invoices have equal
+  // values ⇒ adjustment 0, no row. Suppressed on Storno/Mahnung: those
+  // negate the stored net and flip line-total signs at render, so the
+  // forward "storedNet − Σ lines" derivation doesn't apply.
+  const isReversalDoc = invoice.kind === 'storno' || invoice.kind === 'mahnung';
+  const displayedNetMinor = isReversalDoc
+    ? ensureInt(invoice.net_amount_minor)
+    : lineItems.reduce(
+      (s, li) => (li.parent_line_item_id == null && (li.parent_position == null || li.parent_position === '')
+        ? s + ensureInt(li.line_total_minor) : s),
+      0,
+    );
+  const roundingAdjustmentMinor = isReversalDoc
+    ? 0
+    : ensureInt(invoice.net_amount_minor) - displayedNetMinor;
+
   return {
     locale: invoice.language || profile?.default_locale || 'de',
     currency: invoice.currency,
@@ -1791,7 +1820,8 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       detailsText: li.details_text || null,
     })),
     totals: {
-      netAmountMinor: invoice.net_amount_minor,
+      netAmountMinor: displayedNetMinor,
+      roundingAdjustmentMinor,
       vatRate: invoice.vat_rate,
       // Migration 130 — VAT-code snapshot (so re-editing preserves it).
       vatCode: invoice.vat_code ?? null,
@@ -1907,6 +1937,12 @@ async function renderInvoicePdfFromPayload(payload) {
     if (it.parent_position == null || it.parent_position === '') {
       netMinor += ensureInt(it.line_total_minor);
     }
+  }
+  // Match the saved-invoice math: clean-net reconciliation when the
+  // crm_invoice_round_total setting is on (see createInvoice).
+  const roundTotal = (await getAppSetting('crm_invoice_round_total', false)) === true;
+  if (roundTotal) {
+    netMinor = cleanNetMinor(items, { parentKey: 'parent_position', positionKey: 'position' });
   }
   const vatRate = ensureNumber(payload.vatRate, 0);
   const vatMinor = Math.round(netMinor * vatRate / 100);

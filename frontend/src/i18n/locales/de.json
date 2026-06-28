@@ -4991,6 +4991,9 @@
     "crm_invoices_qr_enabled": {
       "label": "Zahlungs-QR auf Rechnungen aktivieren"
     },
+    "crm_invoice_round_total": {
+      "label": "Rappenrundung auf einen sauberen Gesamtbetrag ausgleichen (fügt eine \"Rundung\"-Zeile hinzu, wenn die zeilenweise Rundung von Menge × Preis abweicht)"
+    },
     "crm_invoices_reminders_enabled": {
       "label": "Automatische Mahnungen aktivieren"
     },

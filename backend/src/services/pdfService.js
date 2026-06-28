@@ -861,6 +861,18 @@ function drawTotals(doc, ctx, x, y, width) {
     doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).text(formatMinor(lateFeeMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
     y = doc.y + 4;
   }
+
+  // Rundung — sub-cent reconciliation row (crm_invoice_round_total). Only
+  // rendered when the stored (clean) net differs from the sum of the
+  // visible line totals; bridges "Betrag Netto" (= Σ lines, foots with
+  // the items) down/up to the clean Gesamtbetrag below. Zero ⇒ omitted,
+  // so unrounded documents are byte-identical to before.
+  const roundingMinor = Number(totals.roundingAdjustmentMinor || 0);
+  if (roundingMinor !== 0) {
+    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).text(t(locale, 'totals_rounding'), labelX, y, { width: labelCol });
+    doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).text(formatMinor(roundingMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
+    y = doc.y + 4;
+  }
   y += 6;
 
   // Divider line above grand total — spans the right half of the
@@ -916,7 +928,14 @@ function drawPaymentBlock(doc, ctx, x, y, width) {
   const showSkontoHere = isQuote
     ? (issuer?.quoteShowSkonto !== false)
     : reminderLevel === 0;
-  const showIbanHere    = !isQuote;
+  // Invoices show the IBAN block in the right column EXCEPT when a
+  // Swiss QR-bill slip is appended: that slip already prints the
+  // account/IBAN ("Konto / Zahlbar an") in human-readable form, so
+  // repeating "Der Betrag ist auf die folgende Bankverbindung zu
+  // überweisen: …" under the totals is pure duplication. The EPC QR
+  // path keeps the block — its QR lives on a trailing page, so having
+  // the bank details on the invoice page itself still helps.
+  const showIbanHere    = !isQuote && ctx.qrFormat !== 'swiss';
 
   // If the quote has nothing to print in either column, bail out
   // early — don't render a bare "Payment conditions:" header with
@@ -1610,29 +1629,25 @@ function renderDocument(type, context) {
       doc.y = y;
       doc.x = leftX;
 
-      // Force the items table to auto-paginate BEFORE it can collide
-      // with the totals + payment block at the page bottom. We
-      // compute the same anchor as below, then temporarily inflate
-      // the page's bottom margin so swissqrbill's Table sees a
-      // shorter usable area and breaks to a new page when items
-      // would otherwise spill into the totals zone. The header row
-      // is already marked `header: true` so it auto-repeats on the
-      // continuation page.
-      const _origBottomMargin = doc.page.margins.bottom;
-      const _itemsBottomReserve = PAGE.marginBottom
-        + 30                                  // FOOTER_RESERVE
-        + (ctx.paymentTerm ? 80 : 50)         // PAYMENT_BLOCK_HEIGHT
-        + 12                                  // gap between totals + payment
-        + 90                                  // TOTALS_BLOCK_HEIGHT
-        + 20;                                 // small breathing room
-      doc.page.margins.bottom = _itemsBottomReserve;
-      try {
-        drawLineItems(doc, ctx);
-      } finally {
-        // Restore even if drawLineItems threw — keeps subsequent
-        // pages on the document's normal margin geometry.
-        doc.page.margins.bottom = _origBottomMargin;
-      }
+      // Let the items table paginate with the document's NORMAL
+      // margins so each page fills to the bottom. The header row is
+      // marked `header: true` so it auto-repeats on every
+      // continuation page. Totals/payment placement is handled below:
+      // they're pinned to a fixed anchor near the page bottom, and if
+      // the last item row spilled past that anchor we advance to a
+      // fresh page before drawing them (see the desiredTotalsY check).
+      //
+      // We deliberately do NOT inflate the bottom margin here to
+      // "reserve" the totals zone on every page. That older approach
+      // shortened the usable area on EVERY page (not just the last),
+      // so a long invoice broke far too early — only a handful of
+      // line items rendered on page 1 with a large blank gap beneath.
+      // Worse, the inflated margin was set on the page active when the
+      // table started but restored on whichever page the table ended,
+      // leaving page 1 permanently short: the page-number stamp later
+      // landed below that page's phantom bottom margin and spawned a
+      // stray blank trailing page (which then desynced "Seite X von Y").
+      drawLineItems(doc, ctx);
       // y after the table — used only to detect whether the items
       // overflowed past the totals anchor below. We don't use it as
       // the totals position directly because the totals block is

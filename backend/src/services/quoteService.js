@@ -30,6 +30,7 @@ const crypto = require('crypto');
 const { db, withRetry, logActivity } = require('../database/db');
 const logger = require('../utils/logger');
 const { getAppSetting } = require('../utils/appSettings');
+const { cleanNetMinor } = require('../utils/invoiceRounding');
 const { AppError } = require('../utils/errors');
 const { formatBoolean } = require('../utils/dbCompat');
 const { claimNextSequence } = require('../utils/documentSequences');
@@ -88,7 +89,7 @@ const { ensureInt, ensureNumber } = require('../utils/numericHelpers');
  * array; we treat anything truthy on `parent_position` (number or
  * string that parses to int) as "I'm a sub-item".
  */
-function computeTotals(lineItems, vatRate, shippingAmountMinor = 0) {
+function computeTotals(lineItems, vatRate, shippingAmountMinor = 0, options = {}) {
   // Phase 1: compute raw line_total_minor for every row from its own
   // qty × unit × discount. Sub-item lines are computed here too so
   // the renderer can display their individual amounts.
@@ -135,6 +136,20 @@ function computeTotals(lineItems, vatRate, shippingAmountMinor = 0) {
     if (li.parent_position == null) netMinor += ensureInt(li.line_total_minor);
   }
 
+  // Optional sub-cent reconciliation (crm_invoice_round_total). When on,
+  // the stored net becomes the full-precision sum rounded ONCE so the
+  // total matches qty × unit arithmetic; the few-Rappen drift from the
+  // per-line rounding is surfaced as a "Rundung" row at render time
+  // (derived as storedNet − Σ line totals). Off by default ⇒ net stays
+  // the sum of rounded lines and roundingAdjustmentMinor is 0.
+  const roundedNet = netMinor;
+  let roundingAdjustmentMinor = 0;
+  if (options.roundTotal) {
+    const clean = cleanNetMinor(computed, { parentKey: 'parent_position', positionKey: 'position' });
+    roundingAdjustmentMinor = clean - roundedNet;
+    netMinor = clean;
+  }
+
   const vatPercent = ensureNumber(vatRate, 0);
   const vatMinor = Math.round(netMinor * vatPercent / 100);
   const shipping = ensureInt(shippingAmountMinor);
@@ -144,6 +159,7 @@ function computeTotals(lineItems, vatRate, shippingAmountMinor = 0) {
     vatAmountMinor: vatMinor,
     shippingAmountMinor: shipping,
     totalAmountMinor: totalMinor,
+    roundingAdjustmentMinor,
     lineItems: computed,
   };
 }
@@ -504,10 +520,12 @@ async function createQuote(payload, adminId) {
     .toISOString().slice(0, 10);
 
   // Authoritative totals.
+  const roundTotal = (await getAppSetting('crm_invoice_round_total', false)) === true;
   const totals = computeTotals(
     Array.isArray(payload.lineItems) ? payload.lineItems : [],
     payload.vatRate,
-    payload.shippingAmountMinor
+    payload.shippingAmountMinor,
+    { roundTotal }
   );
 
   // Negative line items (Rabatt) are allowed, but the resulting
@@ -665,10 +683,12 @@ async function updateQuote(id, payload, adminId) {
     );
   }
 
+  const roundTotal = (await getAppSetting('crm_invoice_round_total', false)) === true;
   const totals = computeTotals(
     Array.isArray(payload.lineItems) ? payload.lineItems : [],
     payload.vatRate ?? existing.vat_rate,
-    payload.shippingAmountMinor ?? existing.shipping_amount_minor
+    payload.shippingAmountMinor ?? existing.shipping_amount_minor,
+    { roundTotal }
   );
 
   // Negative line items (Rabatt) are allowed, but the resulting
@@ -835,6 +855,18 @@ async function buildRenderContext(quote, lineItems) {
     else if (typeof raw === 'string' && raw.trim()) dateFormat = { format: raw.trim() };
   } catch (_) { /* fall back to default */ }
 
+  // Sub-cent reconciliation (crm_invoice_round_total). The displayed
+  // "Betrag Netto" is always the sum of the visible line totals so it
+  // foots with the items; the stored net may be the clean (rounded-once)
+  // value, in which case the gap is shown as a "Rundung" row. For
+  // legacy/unrounded quotes the two are equal ⇒ adjustment 0, no row.
+  const displayedNetMinor = lineItems.reduce(
+    (s, li) => (li.parent_line_item_id == null && (li.parent_position == null || li.parent_position === '')
+      ? s + ensureInt(li.line_total_minor) : s),
+    0,
+  );
+  const roundingAdjustmentMinor = ensureInt(quote.net_amount_minor) - displayedNetMinor;
+
   return {
     locale: quote.language || profile?.default_locale || 'de',
     currency: quote.currency,
@@ -876,7 +908,8 @@ async function buildRenderContext(quote, lineItems) {
       detailsText: li.details_text || null,
     })),
     totals: {
-      netAmountMinor: quote.net_amount_minor,
+      netAmountMinor: displayedNetMinor,
+      roundingAdjustmentMinor,
       vatRate: quote.vat_rate,
       vatAmountMinor: quote.vat_amount_minor,
       shippingAmountMinor: quote.shipping_amount_minor,
@@ -907,10 +940,12 @@ async function renderQuotePdfBuffer(quoteId) {
  */
 async function renderQuotePdfFromPayload(payload) {
   const customer = await db('customer_accounts').where({ id: payload.customerAccountId }).first();
+  const roundTotal = (await getAppSetting('crm_invoice_round_total', false)) === true;
   const totals = computeTotals(
     Array.isArray(payload.lineItems) ? payload.lineItems : [],
     payload.vatRate,
-    payload.shippingAmountMinor
+    payload.shippingAmountMinor,
+    { roundTotal }
   );
   const fakeQuote = {
     quote_number: 'PREVIEW',
