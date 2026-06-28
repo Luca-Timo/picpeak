@@ -4645,6 +4645,7 @@
       "total": "Total",
       "subtotal": "Subtotal",
       "vat": "VAT",
+      "rounding": "Rounding",
       "position": "Pos.",
       "discount": "Rabatt %",
       "descriptionPlaceholder": "Description (multi-line OK)",

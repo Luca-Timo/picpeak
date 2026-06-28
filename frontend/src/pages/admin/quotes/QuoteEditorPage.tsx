@@ -621,6 +621,7 @@ export const QuoteEditorPage: React.FC = () => {
           showDiscount={true}
           vatRate={form.vatRate / 100}
           shippingAmount={form.shippingAmount}
+          roundTotal={appSettings?.crm_invoice_round_total === true}
           presets={liPresets?.presets || []}
           onChange={(items) => setForm((f) => ({ ...f, lineItems: items }))}
         />

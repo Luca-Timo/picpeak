@@ -4645,6 +4645,7 @@
       "total": "Summe",
       "subtotal": "Zwischensumme",
       "vat": "MwSt.",
+      "rounding": "Rundung",
       "position": "Pos.",
       "discount": "Rabatt %",
       "descriptionPlaceholder": "Beschreibung (mehrere Zeilen möglich)",
