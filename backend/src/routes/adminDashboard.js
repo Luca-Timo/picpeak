@@ -439,6 +439,10 @@ router.get('/crm-stats', adminAuth, async (req, res) => {
     const monthCutoff   = new Date(now -  30 * DAY);
     const quarterCutoff = new Date(now -  90 * DAY);
     const yearCutoff    = new Date(now - 365 * DAY);
+    // Calendar year-to-date (Jan 1 of the current year, local time) —
+    // the dashboard's revenue "year" tile can toggle between this and
+    // the trailing-365-day window.
+    const calendarYearCutoff = new Date(new Date(now).getFullYear(), 0, 1);
 
     // ---- quotes: counts by status ---------------------------------
     let quoteCounts = { draft: 0, sent: 0, accepted: 0, declined: 0, expired: 0, converted: 0 };
@@ -459,6 +463,7 @@ router.get('/crm-stats', adminAuth, async (req, res) => {
     let revenueMonthMinor = 0;
     let revenueQuarterMinor = 0;
     let revenueYearMinor = 0;
+    let revenueCalendarYearMinor = 0;
     let outstandingTotalMinor = 0;
     let outstandingCount = 0;
 
@@ -504,9 +509,10 @@ router.get('/crm-stats', adminAuth, async (req, res) => {
             .first();
           return Number(row?.total || 0);
         };
-        revenueMonthMinor   = await winSum(monthCutoff);
-        revenueQuarterMinor = await winSum(quarterCutoff);
-        revenueYearMinor    = await winSum(yearCutoff);
+        revenueMonthMinor        = await winSum(monthCutoff);
+        revenueQuarterMinor      = await winSum(quarterCutoff);
+        revenueYearMinor         = await winSum(yearCutoff);
+        revenueCalendarYearMinor = await winSum(calendarYearCutoff);
 
         // Outstanding: every invoice that's been sent but not fully
         // paid (sent + overdue). Outstanding = total - paid. We sum
@@ -568,9 +574,10 @@ router.get('/crm-stats', adminAuth, async (req, res) => {
       quotes: quoteCounts,
       invoices: invoiceCounts,
       revenue: {
-        monthMinor:   revenueMonthMinor,
-        quarterMinor: revenueQuarterMinor,
-        yearMinor:    revenueYearMinor,
+        monthMinor:        revenueMonthMinor,
+        quarterMinor:      revenueQuarterMinor,
+        yearMinor:         revenueYearMinor,
+        calendarYearMinor: revenueCalendarYearMinor,
       },
       outstanding: {
         totalMinor: outstandingTotalMinor,
