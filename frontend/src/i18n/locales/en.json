@@ -4809,6 +4809,7 @@
     },
     "status": {
       "scheduled": "Scheduled",
+      "draft": "Draft",
       "pending_delivery": "Awaiting delivery",
       "sent": "Sent",
       "paid": "Paid",

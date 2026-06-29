@@ -92,6 +92,10 @@ export interface InvoiceSummary {
    *  (migration 111). Hide line-item editing on these rows; the
    *  uploaded PDF is the source of truth. */
   isImported?: boolean;
+  /** True for the running monthly/manual accumulator draft
+   *  (migration 128). Carries status 'scheduled' but never auto-sends
+   *  (manual) — shown with a "Draft" badge in the list. */
+  isMonthlyDraft?: boolean;
 }
 
 export interface InvoiceDetail extends InvoiceSummary {
@@ -225,6 +229,10 @@ export const billsService = {
     sort?: InvoiceSort;
     page?: number;
     pageSize?: number;
+    /** Include the running monthly/manual accumulator drafts that the
+     *  main list hides by default (migration 128). Only the Bills list
+     *  opts in; pickers/sub-lists leave it off. */
+    includeDrafts?: boolean;
   } = {}): Promise<InvoiceListResponse> {
     const { data } = await api.get('/admin/invoices', {
       params: {
