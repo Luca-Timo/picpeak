@@ -386,6 +386,9 @@ export interface CrmOverviewStats {
     monthMinor: number;
     quarterMinor: number;
     yearMinor: number;
+    /** Revenue since Jan 1 of the current year (calendar YTD). The
+     *  dashboard's "year" tile toggles between this and yearMinor. */
+    calendarYearMinor: number;
   };
   outstanding: {
     totalMinor: number;

@@ -50,6 +50,10 @@ export const CrmOverviewSection: React.FC = () => {
   // publicSettings finishes loading — shows everything, then settles.
   const showRevenue     = publicSettings?.crm_overview_show_revenue !== false;
   const showOutstanding = publicSettings?.crm_overview_show_outstanding !== false;
+  // Revenue "year" tile toggles in place between the trailing-365-day
+  // window and calendar year-to-date — keeps the dashboard to four
+  // tiles instead of adding a fifth.
+  const [revYearMode, setRevYearMode] = React.useState<'rolling' | 'calendar'>('rolling');
   const showQuotes      = publicSettings?.crm_overview_show_quotes !== false;
   const showInvoices    = publicSettings?.crm_overview_show_invoices !== false;
   // Compute which sub-sections actually render so we can skip the
@@ -121,8 +125,15 @@ export const CrmOverviewSection: React.FC = () => {
               />
               <StatCard
                 icon={<TrendingUp className="w-5 h-5" />}
-                label={t('crmOverview.revenue.year', 'Revenue · last 365 days')}
-                value={formatMoney(d.revenue.yearMinor, cur)}
+                label={revYearMode === 'calendar'
+                  ? t('crmOverview.revenue.yearCalendar', 'Revenue · this year')
+                  : t('crmOverview.revenue.year', 'Revenue · last 365 days')}
+                value={formatMoney(
+                  revYearMode === 'calendar' ? d.revenue.calendarYearMinor : d.revenue.yearMinor,
+                  cur,
+                )}
+                sub={t('crmOverview.revenue.toggleHint', 'Tap to switch window')}
+                onClick={() => setRevYearMode((m) => (m === 'rolling' ? 'calendar' : 'rolling'))}
               />
             </>
           )}
@@ -249,8 +260,11 @@ interface StatCardProps {
   value: string | number;
   sub?: string;
   to?: string;
+  /** Makes the whole tile a button (mutually exclusive with `to`).
+   *  Used by the revenue tile to toggle its window in place. */
+  onClick?: () => void;
 }
-const StatCard: React.FC<StatCardProps> = ({ icon, label, value, sub, to }) => {
+const StatCard: React.FC<StatCardProps> = ({ icon, label, value, sub, to, onClick }) => {
   const inner = (
     <Card padding="md" className="h-full">
       <div className="flex items-start gap-3">
@@ -265,6 +279,13 @@ const StatCard: React.FC<StatCardProps> = ({ icon, label, value, sub, to }) => {
   );
   if (to) {
     return <Link to={to} className="block hover:opacity-90 transition-opacity">{inner}</Link>;
+  }
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className="block w-full text-left hover:opacity-90 transition-opacity">
+        {inner}
+      </button>
+    );
   }
   return inner;
 };
