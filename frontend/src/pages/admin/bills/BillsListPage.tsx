@@ -47,6 +47,9 @@ export const BillsListPage: React.FC = () => {
       q: search || undefined,
       status: statusFilter.length ? statusFilter : undefined,
       unpaidOnly,
+      // Surface the running monthly/manual accumulator drafts here (they're
+      // badged "Draft"); they're hidden from pickers/sub-lists by default.
+      includeDrafts: true,
       sort, page, pageSize: 25,
     }),
   });
@@ -186,14 +189,23 @@ export const BillsListPage: React.FC = () => {
                           {formatMoney(Number(inv.totalAmountMinor) / 100, inv.currency)}
                         </td>
                         <td className="px-3 py-2">
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            inv.status === 'paid' ? 'bg-green-100 text-green-800'
-                              : inv.status === 'overdue' ? 'bg-red-100 text-red-800'
-                              : inv.status === 'sent' ? 'bg-blue-100 text-blue-800'
-                              : inv.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
-                              : inv.status === 'skipped' ? 'bg-neutral-100 text-neutral-500 italic'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}>{t(`bills.status.${inv.status}`, inv.status)}</span>
+                          {inv.isMonthlyDraft ? (
+                            // Running accumulator draft (manual/monthly). It carries
+                            // status 'scheduled' but never auto-sends on manual cadence,
+                            // so badge it honestly as "Draft" rather than "Scheduled".
+                            <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200">
+                              {t('bills.status.draft', 'Draft')}
+                            </span>
+                          ) : (
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                              inv.status === 'paid' ? 'bg-green-100 text-green-800'
+                                : inv.status === 'overdue' ? 'bg-red-100 text-red-800'
+                                : inv.status === 'sent' ? 'bg-blue-100 text-blue-800'
+                                : inv.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
+                                : inv.status === 'skipped' ? 'bg-neutral-100 text-neutral-500 italic'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}>{t(`bills.status.${inv.status}`, inv.status)}</span>
+                          )}
                         </td>
                       </tr>
                     ))}

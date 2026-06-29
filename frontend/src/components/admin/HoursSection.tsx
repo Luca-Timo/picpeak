@@ -448,12 +448,24 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
                     </td>
                     <td className="py-1.5 pr-3">
                       {e.status === 'billed' ? (
-                        <span className="text-xs text-green-700 dark:text-green-300">
-                          {e.invoiceNumber
-                            ? t('customers.hours.status.billedOn',
-                              'Billed: {{number}}', { number: e.invoiceNumber })
-                            : t('customers.hours.status.billed', 'Billed')}
-                        </span>
+                        e.invoiceId ? (
+                          // Link straight to the invoice so a "Billed: R-…" entry
+                          // is one click from its (possibly draft) invoice.
+                          <Link
+                            to={`/admin/clients/bills/${e.invoiceId}`}
+                            className="text-xs text-green-700 dark:text-green-300 underline hover:no-underline"
+                          >
+                            {e.invoiceNumber
+                              ? t('customers.hours.status.billedOn', 'Billed: {{number}}', { number: e.invoiceNumber })
+                              : t('customers.hours.status.billed', 'Billed')}
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-green-700 dark:text-green-300">
+                            {e.invoiceNumber
+                              ? t('customers.hours.status.billedOn', 'Billed: {{number}}', { number: e.invoiceNumber })
+                              : t('customers.hours.status.billed', 'Billed')}
+                          </span>
+                        )
                       ) : (
                         <span className="text-xs text-amber-700 dark:text-amber-300">
                           {t('customers.hours.status.unbilled', 'Unbilled')}

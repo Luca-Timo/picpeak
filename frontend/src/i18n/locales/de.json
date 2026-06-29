@@ -4666,6 +4666,7 @@
   "bills": {
     "status": {
       "scheduled": "Geplant",
+      "draft": "Entwurf",
       "pending_delivery": "Wartet auf Lieferung",
       "sent": "Gesendet",
       "paid": "Bezahlt",

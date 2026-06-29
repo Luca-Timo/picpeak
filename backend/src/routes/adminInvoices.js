@@ -342,6 +342,7 @@ router.get(
     query('customerAccountId').optional({ values: 'falsy' }).isInt({ min: 1 }),
     query('sourceQuoteId').optional({ values: 'falsy' }).isInt({ min: 1 }),
     query('unpaidOnly').optional({ values: 'falsy' }).isBoolean(),
+    query('includeDrafts').optional({ values: 'falsy' }).isBoolean(),
     query('q').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
     query('sort').optional({ values: 'falsy' }).isIn(['newest', 'oldest', 'issue_asc', 'issue_desc', 'due_asc', 'due_desc', 'value_asc', 'value_desc', 'customer_asc', 'customer_desc']),
     query('page').optional({ values: 'falsy' }).isInt({ min: 1 }),
@@ -358,6 +359,9 @@ router.get(
         customerAccountId: req.query.customerAccountId ? parseInt(req.query.customerAccountId, 10) : null,
         sourceQuoteId: req.query.sourceQuoteId ? parseInt(req.query.sourceQuoteId, 10) : null,
         unpaidOnly: req.query.unpaidOnly === 'true' || req.query.unpaidOnly === true,
+        // Surface running monthly/manual accumulator drafts (hidden by
+        // default per migration 128) when the Bills list explicitly asks.
+        includeMonthlyDrafts: req.query.includeDrafts === 'true' || req.query.includeDrafts === true,
         q: req.query.q,
       },
       sort: req.query.sort || 'issue_desc',
