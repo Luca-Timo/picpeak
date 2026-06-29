@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Upload, X } from 'lucide-react';
-import { billsService, type InvoiceStatus, type InvoiceSort } from '../../../services/bills.service';
+import { billsService, isDraftInvoice, type InvoiceStatus, type InvoiceSort } from '../../../services/bills.service';
 import { Button, Card, Input, Loading, LocalizedDateInput, SortableHeader, useColumnSort, type SortColumnMap } from '../../../components/common';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
 import { customerAdminService } from '../../../services/customerAdmin.service';
@@ -189,10 +189,10 @@ export const BillsListPage: React.FC = () => {
                           {formatMoney(Number(inv.totalAmountMinor) / 100, inv.currency)}
                         </td>
                         <td className="px-3 py-2">
-                          {inv.isMonthlyDraft ? (
-                            // Running accumulator draft (manual/monthly). It carries
-                            // status 'scheduled' but never auto-sends on manual cadence,
-                            // so badge it honestly as "Draft" rather than "Scheduled".
+                          {isDraftInvoice(inv) ? (
+                            // Held invoice: 'scheduled' with no send date (incl. the
+                            // monthly/manual accumulator) never auto-ships, so badge it
+                            // honestly as "Draft" rather than "Scheduled".
                             <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200">
                               {t('bills.status.draft', 'Draft')}
                             </span>
