@@ -526,6 +526,7 @@ export const BillDetailPage: React.FC = () => {
                   className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
                 >
                   <option value="">{t('bills.payment.methodPlaceholder', 'Select method…')}</option>
+                  <option value="bank_transfer">{t('bills.payment.methods.bankTransfer', 'Bank transfer')}</option>
                   <option value="cash">{t('bills.payment.methods.cash', 'Cash')}</option>
                   <option value="card">{t('bills.payment.methods.card', 'Card')}</option>
                   <option value="paypal">{t('bills.payment.methods.paypal', 'PayPal')}</option>

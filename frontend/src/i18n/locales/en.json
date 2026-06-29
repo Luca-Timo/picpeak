@@ -4789,6 +4789,7 @@
       "notes": "Notes",
       "methodPlaceholder": "Select method…",
       "methods": {
+        "bankTransfer": "Bank transfer",
         "card": "Card",
         "cash": "Cash",
         "paypal": "PayPal",
