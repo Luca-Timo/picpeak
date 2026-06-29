@@ -5,6 +5,22 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.73.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.72.0-beta.0...v3.73.0-beta.0) (2026-06-29)
+
+
+### Features
+
+* **dashboard:** revenue "year" tile toggles 365 days ↔ calendar YTD ([d1c9e02](https://github.com/the-luap/picpeak/commit/d1c9e02bcf50b6c08eebc85acdbfba29bfee84ac))
+* **invoices:** surface monthly/manual accumulator drafts in the Bills list ([e457656](https://github.com/the-luap/picpeak/commit/e457656b9d06bb420c9d0985fe15c30d6c88aed9))
+
+
+### Bug Fixes
+
+* **invoices:** add bank transfer to the mark-paid method list ([e96ef4c](https://github.com/the-luap/picpeak/commit/e96ef4c5a35bc9e575bc3419fb318a3ee9df1bd6))
+* **invoices:** badge held (unsent, no send date) invoices as "Draft" ([e4367e0](https://github.com/the-luap/picpeak/commit/e4367e028a5228ef50c4bbd522d0777bc7340b52))
+* **invoices:** show "Draft" on the invoice detail page for accumulator drafts ([ca09442](https://github.com/the-luap/picpeak/commit/ca0944293f66b6465a577340e63d592598915092))
+* **reminders:** wrap is_active/is_archived wheres in formatBoolean ([b9d9138](https://github.com/the-luap/picpeak/commit/b9d91385b43de7ede508884f7cf78b5cf785f853))
+
 ## [3.72.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.71.3-beta.0...v3.72.0-beta.0) (2026-06-28)
 
 
