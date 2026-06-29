@@ -99,6 +99,40 @@ describe('booking cutover — draft invoices on hold', () => {
     expect(inv.scheduled_send_at == null).toBe(true); // still held — no auto-send
   });
 
+  it('finalizeQuoteResponses only fires once the 15-min response window has locked', async () => {
+    const mk = async (lockOffsetMs) => {
+      const dealUuid = crypto.randomUUID();
+      const [id] = await db('quotes').insert({
+        quote_number: `Q-${dealUuid.slice(0, 8)}`,
+        customer_account_id: customerId,
+        status: 'accepted',
+        currency: 'CHF', issue_date: '2026-01-01',
+        net_amount_minor: 1000, vat_amount_minor: 0, shipping_amount_minor: 0, total_amount_minor: 1000,
+        responded_at: new Date().toISOString(),
+        response_locked_at: new Date(Date.now() + lockOffsetMs).toISOString(),
+        accepted_at: new Date().toISOString(),
+        deal_uuid: dealUuid,
+        created_by_admin_id: adminId,
+      });
+      return id;
+    };
+    const openId = await mk(15 * 60 * 1000);   // still inside the window
+    const lockedId = await mk(-60 * 1000);      // window already closed
+
+    const emitted = await quoteService.finalizeQuoteResponses();
+    expect(emitted).toBeGreaterThanOrEqual(1);
+
+    const open = await db('quotes').where({ id: openId }).first();
+    const locked = await db('quotes').where({ id: lockedId }).first();
+    expect(open.workflow_response_emitted_at == null).toBe(true);   // deferred — not yet fired
+    expect(locked.workflow_response_emitted_at == null).toBe(false); // fired + stamped
+
+    // Idempotent: a second sweep doesn't re-fire the already-stamped one.
+    const again = await db('quotes').where({ id: lockedId })
+      .whereNull('workflow_response_emitted_at').update({ workflow_response_emitted_at: new Date() });
+    expect(again).toBe(0);
+  });
+
   it('reserve_date path (convertToEvent skipInvoices) creates a draft event with NO invoices', async () => {
     const quoteId = await acceptedQuote();
     const res = await quoteService.convertToEvent(quoteId, adminId, { hold: true, skipInvoices: true });

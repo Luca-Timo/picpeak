@@ -1149,6 +1149,65 @@ async function emitQuoteEvent(quote, status) {
   } catch (_) { /* best-effort */ }
 }
 
+/**
+ * Emit a quote accept/decline to the workflow engine — but only once the
+ * customer's response window has LOCKED. While the window is open (the public
+ * page lets them flip accept↔decline for crm_quotes_accept_window_minutes), an
+ * immediate emit would let the booking flow convert the quote right away,
+ * defeating the grace period (the quote went straight to 'converted' and could
+ * no longer be declined). So:
+ *   - window already closed (0-minute window, or admin decline) → emit now and
+ *     stamp `workflow_response_emitted_at` (idempotent claim).
+ *   - window still open → defer; `finalizeQuoteResponses` (scheduler) fires the
+ *     FINAL status once it locks, so toggling inside the window never converts.
+ * Returns true if it emitted, false if deferred / already emitted.
+ */
+async function maybeEmitQuoteResponse(quote, status, responseLockedAt) {
+  const locked = !responseLockedAt || new Date(responseLockedAt).getTime() <= Date.now();
+  if (!locked) return false; // deferred to the finalize sweep
+  const hasCol = await hasColumnCached('quotes', 'workflow_response_emitted_at');
+  if (hasCol) {
+    // Atomically claim the emit so a concurrent finalize sweep can't double-fire.
+    const claimed = await db('quotes').where({ id: quote.id })
+      .whereNull('workflow_response_emitted_at')
+      .update({ workflow_response_emitted_at: new Date() });
+    if (!claimed) return false; // already emitted elsewhere
+  }
+  await emitQuoteEvent(quote, status);
+  return true;
+}
+
+/**
+ * Scheduler sweep: fire the workflow event for quote responses whose toggle
+ * window has now locked but which were deferred at response time. Idempotent via
+ * `workflow_response_emitted_at` (atomic claim). Called from the CRM scheduler
+ * tick. Returns the number emitted.
+ */
+async function finalizeQuoteResponses(limit = 200) {
+  const hasCol = await hasColumnCached('quotes', 'workflow_response_emitted_at');
+  if (!hasCol) return 0; // pre-migration install — nothing to finalise
+  // The unemitted accept/decline set is naturally small (a row leaves it the
+  // moment it's emitted), so fetch the candidates and compare the lock time in
+  // JS — avoids SQLite/Postgres date-string comparison pitfalls.
+  const now = Date.now();
+  const candidates = await db('quotes')
+    .whereIn('status', ['accepted', 'declined'])
+    .whereNull('workflow_response_emitted_at')
+    .whereNotNull('response_locked_at')
+    .limit(limit);
+  const rows = candidates.filter((q) => new Date(q.response_locked_at).getTime() <= now);
+  let emitted = 0;
+  for (const q of rows) {
+    const claimed = await db('quotes').where({ id: q.id })
+      .whereNull('workflow_response_emitted_at')
+      .update({ workflow_response_emitted_at: new Date() });
+    if (!claimed) continue; // raced with another tick / the inline emit
+    await emitQuoteEvent(q, q.status);
+    emitted += 1;
+  }
+  return emitted;
+}
+
 async function recordResponse({ token, action, ip, tosAccepted }) {
   if (!['accept', 'decline'].includes(action)) {
     throw new AppError('Invalid action', 400);
@@ -1232,7 +1291,10 @@ async function recordResponse({ token, action, ip, tosAccepted }) {
     await logActivity(`quote_${newStatus}`, { quoteId: quote.id, token: tokenRow.token }, null, 'customer:public');
   } catch (_) {}
 
-  await emitQuoteEvent(quote, newStatus);
+  // Defer the workflow emit until the 15-min toggle window locks — so accepting
+  // (then converting) can't strip the customer's ability to decline. The
+  // scheduler's finalize sweep fires the final status once it locks.
+  await maybeEmitQuoteResponse(quote, newStatus, responseLockedAt);
 
   return { status: newStatus, lockedAt: responseLockedAt };
 }
@@ -1331,7 +1393,9 @@ async function adminAcceptQuote(id, adminId) {
     logger.warn('quote_accepted_customer email queue failed', { quoteId: id, err: err.message });
   }
 
-  await emitQuoteEvent(quote, 'accepted');
+  // Same deferral as the public path — an admin "accept on behalf" also opens
+  // the toggle window, so don't convert until it locks.
+  await maybeEmitQuoteResponse(quote, 'accepted', responseLockedAt);
 
   return { status: 'accepted', lockedAt: responseLockedAt };
 }
@@ -1396,7 +1460,9 @@ async function adminDeclineQuote(id, adminId, reason = null) {
     await logActivity('quote_declined_by_admin', { quoteId: id, reason: cleanReason }, null, `admin:${adminId}`);
   } catch (_) {}
 
-  await emitQuoteEvent(quote, 'declined');
+  // Admin decline locks the window immediately (response_locked_at = now), so
+  // this emits straight away (and stamps emitted) rather than deferring.
+  await maybeEmitQuoteResponse(quote, 'declined', now);
 
   return { status: 'declined', declinedAt: now };
 }
@@ -2057,6 +2123,7 @@ module.exports = {
   recordResponse,
   adminAcceptQuote,
   adminDeclineQuote,
+  finalizeQuoteResponses,
   convertToEvent,
   convertToInvoiceOnly,
 

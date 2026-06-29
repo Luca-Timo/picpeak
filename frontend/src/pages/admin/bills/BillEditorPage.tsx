@@ -675,7 +675,8 @@ export const BillEditorPage: React.FC = () => {
       <Card>
         <h3 className="font-semibold mb-2">{t('bills.section.lineItems', 'Line items')}</h3>
         <LineItemsTable items={lineItems} currency={currency} showDiscount={false}
-          vatRate={vatRate / 100} shippingAmount={shipping} onChange={setLineItems} />
+          vatRate={vatRate / 100} shippingAmount={shipping}
+          roundTotal={appSettings?.crm_invoice_round_total === true} onChange={setLineItems} />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
           <VatRateSelect
             label={t('bills.field.vatRate', 'VAT rate %') as string}

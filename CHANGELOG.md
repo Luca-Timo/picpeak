@@ -5,6 +5,19 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.72.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.71.3-beta.0...v3.72.0-beta.0) (2026-06-28)
+
+
+### Features
+
+* **workflows:** booking cutover — wire booking actions + hold documents behind approval gates ([ec33ec7](https://github.com/the-luap/picpeak/commit/ec33ec7670a4feb1108d1bcbfe34727f63cc8cf9))
+
+
+### Bug Fixes
+
+* **workflows:** defer quote.accepted/declined emit until the 15-min response window locks ([539a837](https://github.com/the-luap/picpeak/commit/539a83711d1996dc9c262365f2c511e7bc445add))
+* **workflows:** make the dashboard pending-approvals card items clickable too ([6e20d58](https://github.com/the-luap/picpeak/commit/6e20d58487c5e20b08e1d1b4ddd4e76f9e922a79))
+
 ## [3.71.3-beta.0](https://github.com/the-luap/picpeak/compare/v3.71.2-beta.0...v3.71.3-beta.0) (2026-06-27)
 
 

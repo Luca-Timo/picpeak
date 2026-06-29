@@ -56,6 +56,14 @@ interface Props {
   showDiscount?: boolean;
   vatRate?: number;
   shippingAmount?: number;
+  /**
+   * Sub-cent rounding reconciliation (crm_invoice_round_total). When true,
+   * the net is the full-precision sum rounded once and the per-line
+   * rounding drift is shown as a "Rundung" row — mirrors the backend
+   * computeTotals + the PDF so the editor preview matches the saved
+   * document. Off ⇒ net is the plain sum of rounded lines (unchanged).
+   */
+  roundTotal?: boolean;
   onChange: (items: EditableLineItem[]) => void;
   presets?: LineItemPresetMinimal[];
   onSaveAsPreset?: (item: EditableLineItem) => void;
@@ -70,7 +78,7 @@ function isSub(li: EditableLineItem) {
 }
 
 export const LineItemsTable: React.FC<Props> = ({
-  items, currency, showDiscount = true, vatRate = 0, shippingAmount = 0,
+  items, currency, showDiscount = true, vatRate = 0, shippingAmount = 0, roundTotal = false,
   onChange, presets = [], onSaveAsPreset,
 }) => {
   const { t } = useTranslation();
@@ -220,13 +228,15 @@ export const LineItemsTable: React.FC<Props> = ({
   // quote each keystroke ran ~O(n²) array scans. Build a Map once per
   // render and read O(1) afterwards.
   const childPricingByParent = useMemo(() => {
-    const map = new Map<number, { hasPriced: boolean; pricedSum: number }>();
+    const map = new Map<number, { hasPriced: boolean; pricedSum: number; pricedSumExact: number }>();
     for (const c of items) {
       if (c.parentPosition == null) continue;
       if (!(c.unitPrice > 0)) continue;
-      const cur = map.get(c.parentPosition) || { hasPriced: false, pricedSum: 0 };
+      const cur = map.get(c.parentPosition) || { hasPriced: false, pricedSum: 0, pricedSumExact: 0 };
       cur.hasPriced = true;
       cur.pricedSum += rawLineTotal(c);
+      // Un-rounded contribution for the clean-net reconciliation below.
+      cur.pricedSumExact += c.quantity * c.unitPrice * (1 - c.discountPercent / 100);
       map.set(c.parentPosition, cur);
     }
     return map;
@@ -251,13 +261,31 @@ export const LineItemsTable: React.FC<Props> = ({
   // never roll directly into net — they only feed their parent's
   // auto-resolved line total.
   const subtotal = items.filter((li) => !isSub(li)).reduce((s, li) => s + lineTotal(li), 0);
-  // subtotal is in MAJOR units, vatRate is a FRACTION (0.081). Round to cents:
-  // round(subtotal * vatRate * 100) / 100 — the *100 inside round was missing,
-  // which divided the VAT by 100 (CHF 0.63 instead of 63.18). Backend
-  // computeTotals + the PDF were always correct; only this live editor preview
-  // was wrong, and it only surfaced once invoices stopped defaulting to 0% VAT.
-  const vatAmount = Math.round(subtotal * vatRate * 100) / 100;
-  const total = subtotal + vatAmount + (Number(shippingAmount) || 0);
+
+  // Sub-cent reconciliation (crm_invoice_round_total) — mirrors backend
+  // utils/invoiceRounding.cleanNetMinor: sum each contributing row's
+  // FULL-PRECISION product (parent with priced sub-items uses the
+  // children) and round ONCE. The drift vs the sum-of-rounded-lines
+  // `subtotal` is shown as a "Rundung" row and folded into the total, so
+  // the editor preview matches the saved invoice + PDF.
+  const cleanExact = items
+    .filter((li) => !isSub(li))
+    .reduce((s, li) => (
+      hasPricedChildren(li.position)
+        ? s + (childPricingByParent.get(li.position)?.pricedSumExact || 0)
+        : s + li.quantity * li.unitPrice * (1 - li.discountPercent / 100)
+    ), 0);
+  const cleanSubtotal = Math.round(cleanExact * 100) / 100;
+  const roundingAdjustment = roundTotal ? Math.round((cleanSubtotal - subtotal) * 100) / 100 : 0;
+  // Net the VAT + total work off: clean when reconciling, raw subtotal otherwise.
+  const netForTotals = subtotal + roundingAdjustment;
+  // vatRate is a FRACTION (0.081). Round to cents: round(net * vatRate * 100)
+  // / 100 — the *100 inside round was missing, which divided the VAT by 100
+  // (CHF 0.63 instead of 63.18). Backend computeTotals + the PDF were always
+  // correct; only this live editor preview was wrong, and it only surfaced
+  // once invoices stopped defaulting to 0% VAT.
+  const vatAmount = Math.round(netForTotals * vatRate * 100) / 100;
+  const total = netForTotals + vatAmount + (Number(shippingAmount) || 0);
 
   // Display numbering: top-level items get 1, 2, 3...; sub-items
   // render as N.1, N.2 under the parent for clarity.
@@ -473,6 +501,9 @@ export const LineItemsTable: React.FC<Props> = ({
         <div className="flex gap-6"><span className="text-neutral-600 dark:text-neutral-400">{t('crm.lineItems.vat', 'VAT')} ({(vatRate * 100).toFixed(1)}%):</span><span className="tabular-nums w-28 text-right">{formatMoney(vatAmount, currency)}</span></div>
         {!!shippingAmount && (
           <div className="flex gap-6"><span className="text-neutral-600 dark:text-neutral-400">{t('crm.lineItems.shipping', 'Shipping')}:</span><span className="tabular-nums w-28 text-right">{formatMoney(shippingAmount, currency)}</span></div>
+        )}
+        {roundingAdjustment !== 0 && (
+          <div className="flex gap-6"><span className="text-neutral-600 dark:text-neutral-400">{t('crm.lineItems.rounding', 'Rounding')}:</span><span className="tabular-nums w-28 text-right">{formatMoney(roundingAdjustment, currency)}</span></div>
         )}
         <div className="flex gap-6 font-semibold text-base"><span>{t('crm.lineItems.total', 'Total')}:</span><span className="tabular-nums w-28 text-right">{formatMoney(total, currency)}</span></div>
       </div>

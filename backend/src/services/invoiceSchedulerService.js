@@ -27,6 +27,7 @@
 const cron = require('node-cron');
 const invoiceService = require('./invoiceService');
 const eventReminderService = require('./eventReminderService');
+const quoteService = require('./quoteService');
 const logger = require('../utils/logger');
 
 let task = null;
@@ -41,6 +42,15 @@ async function runTick() {
     await eventReminderService.runEventReminderPass();
   } catch (err) {
     logger.error('Event reminder pass failed', { err: err.message });
+  }
+  try {
+    // Fire workflow events for quote responses whose 15-min toggle window has
+    // now locked (deferred at response time so accepting can't convert the quote
+    // before the customer's grace period to change their mind expires).
+    const finalized = await quoteService.finalizeQuoteResponses();
+    if (finalized) logger.info('CRM scheduler: finalized locked quote responses', { finalized });
+  } catch (err) {
+    logger.error('Quote response finalize pass failed', { err: err.message });
   }
   try {
     // Resume workflow runs whose wait has elapsed. No-op (fails closed) when

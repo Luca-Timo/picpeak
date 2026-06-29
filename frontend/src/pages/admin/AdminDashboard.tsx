@@ -96,6 +96,17 @@ export const AdminDashboard: React.FC = () => {
     onError: (err: any) => toast.error(err?.response?.data?.error || (t('common.error', 'Something went wrong') as string)),
   });
 
+  // Admin detail route for an approval's run entity, so clicking opens the
+  // document under review. Mirrors WorkflowApprovalsPage (`invoice` → /bills).
+  const approvalEntityHref = (a: { entity_type?: string | null; entity_id?: number | null }): string | null => {
+    if (!a.entity_type || a.entity_id == null) return null;
+    const base: Record<string, string> = {
+      quote: 'quotes', invoice: 'bills', event: 'events', contract: 'contracts', customer: 'customers',
+    };
+    const seg = base[a.entity_type];
+    return seg ? `/admin/${seg}/${a.entity_id}` : null;
+  };
+
   const isLoading = statsLoading || eventsLoading;
 
   if (isLoading) {
@@ -277,14 +288,29 @@ export const AdminDashboard: React.FC = () => {
               <div className="space-y-3">
                 {pendingApprovals.slice(0, 5).map((a) => {
                   const prompt = (a.payload as any)?.prompt as string | undefined;
+                  const href = approvalEntityHref(a);
+                  const info = (
+                    <>
+                      <h3 className="font-medium text-neutral-900 dark:text-neutral-100 truncate">{a.workflow_name}</h3>
+                      <p className="text-sm text-neutral-600 dark:text-neutral-400 truncate">
+                        {prompt || a.type}{a.entity_type ? ` · ${a.entity_type} #${a.entity_id}` : ''}
+                      </p>
+                    </>
+                  );
                   return (
                     <div key={a.id} className="flex items-center justify-between gap-3 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                      <div className="min-w-0">
-                        <h3 className="font-medium text-neutral-900 dark:text-neutral-100 truncate">{a.workflow_name}</h3>
-                        <p className="text-sm text-neutral-600 dark:text-neutral-400 truncate">
-                          {prompt || a.type}{a.entity_type ? ` · ${a.entity_type} #${a.entity_id}` : ''}
-                        </p>
-                      </div>
+                      {href ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate(href)}
+                          className="min-w-0 text-left rounded -m-1 p-1 hover:bg-purple-100/60 dark:hover:bg-purple-900/40 transition-colors cursor-pointer"
+                          title={t('workflows.approvals.openEntity', 'Open {{type}} #{{id}}', { type: a.entity_type, id: a.entity_id }) as string}
+                        >
+                          {info}
+                        </button>
+                      ) : (
+                        <div className="min-w-0">{info}</div>
+                      )}
                       <div className="flex items-center gap-2 shrink-0">
                         <Button variant="primary" size="sm" isLoading={approvalMutation.isPending}
                           onClick={() => approvalMutation.mutate({ id: a.id, action: 'confirm' })}
