@@ -5,6 +5,22 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.74.0-beta.0](https://github.com/PicPeak/picpeak/compare/v3.73.0-beta.0...v3.74.0-beta.0) (2026-06-29)
+
+
+### Features
+
+* **admin:** in-app migration banner for the org rename ([0213347](https://github.com/PicPeak/picpeak/commit/02133478bd2684c562d11cc122cf5059832ff76a))
+* **admin:** in-app migration banner for the org rename ([#669](https://github.com/PicPeak/picpeak/issues/669)) ([2a4bf3b](https://github.com/PicPeak/picpeak/commit/2a4bf3b868c6733d0b865c8c0e977ba84d6e6453))
+
+
+### Documentation
+
+* branch model + migration-to-org guide + PR template ([166ef47](https://github.com/PicPeak/picpeak/commit/166ef47611a248c4d517e26d390d87d21f077ca1))
+* branch model + migration-to-org guide + PR-template target hint ([d606fcd](https://github.com/PicPeak/picpeak/commit/d606fcd5a425fed3c968ec06b071a386bf558c28))
+* prominent migration banner at the top of README ([14bd3e1](https://github.com/PicPeak/picpeak/commit/14bd3e1a6c6cf74378d6f316024584d8941cbcd5))
+* prominent migration banner at the top of README ([#669](https://github.com/PicPeak/picpeak/issues/669)) ([5839bba](https://github.com/PicPeak/picpeak/commit/5839bba72a56cc29077f63f7daa038995fb09dfb))
+
 ## [3.73.0-beta.0](https://github.com/the-luap/picpeak/compare/v3.72.0-beta.0...v3.73.0-beta.0) (2026-06-29)
 
 
