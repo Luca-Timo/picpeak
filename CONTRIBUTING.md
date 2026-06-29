@@ -38,7 +38,7 @@ Unsure where to begin? You can start by looking through these issues:
 
 ### Pull Requests
 
-1. **Fork the repo** and create your branch from `beta`
+1. **Fork the repo** and create your branch from `main` (active development)
 2. **Install dependencies**:
    ```bash
    cd backend && npm install
@@ -153,11 +153,32 @@ picpeak/
 │   └── public/          # Static assets
 ```
 
+## 🌿 Branch model
+
+PicPeak runs on two long-lived branches:
+
+| Branch | Role | What targets it |
+|---|---|---|
+| **`main`** | Active development. The next release is being assembled here. | Feature PRs. Most bugfix PRs. |
+| **`stable`** | Curated release channel. Production-recommended. | Urgent bugfix backports only — small, surgical PRs that land cleanly without dragging in unrelated changes. |
+
+### Which branch should my PR target?
+
+- **New feature** → target `main`.
+- **Bugfix that ONLY affects active dev** → target `main`.
+- **Bugfix that current stable users need** → open a small PR against `main`, AND a separate small PR against `stable` with the same change. Keep both surgical so each lands cleanly.
+
+**Hard rule on PR scope**: bugfix PRs against `stable` must be small enough to backport without conflict. Omnibus PRs (e.g. five unrelated sub-features) are fine for `main`, but never for `stable` — they make the next `main → stable` merge painful and break the "stable is always shippable" invariant.
+
+If you're not sure which branch to target, default to `main` and a maintainer will retarget during review.
+
 ## 🔄 Release Process
 
-Releases are cut from the `beta` branch (rolling beta) and promoted to `main` (stable) on a 4–6 week cadence. `release-please` handles version bumps, changelog generation, and Docker image publication automatically — contributors don't update `package.json` or `CHANGELOG.md` by hand.
+Releases are cut independently from `main` (pre-release versions for the active channel) and `stable` (semver releases for the curated channel). `release-please` handles version bumps, changelog generation, and Docker image publication automatically — contributors don't update `package.json` or `CHANGELOG.md` by hand.
 
-See [RELEASING.md](RELEASING.md) for the full operational doc (promotion criteria, conflict-resolution checklist for the beta→main merge, hotfix backport path, versioning rules).
+Periodic `main → stable` merges promote a batch of `main` work to the stable channel. The maintainer chooses when (typically every ~4 weeks, sooner if a hot bug demands it).
+
+See [RELEASING.md](RELEASING.md) for the full operational doc (promotion criteria, conflict-resolution checklist for the `main → stable` merge, hotfix backport path, versioning rules).
 
 ## 📮 Contact
 
