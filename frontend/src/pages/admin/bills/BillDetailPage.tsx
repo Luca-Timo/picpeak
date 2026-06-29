@@ -10,7 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Send, CheckCircle, BellRing, XCircle, Truck, Edit2, RefreshCw } from 'lucide-react';
 import { Button, Card, Loading, Input, LocalizedDateInput } from '../../../components/common';
 import { DocumentLineageCard } from '../../../components/admin/DocumentLineageCard';
-import { billsService } from '../../../services/bills.service';
+import { billsService, isDraftInvoice } from '../../../services/bills.service';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { toast } from 'react-toastify';
@@ -264,10 +264,10 @@ export const BillDetailPage: React.FC = () => {
               </span>
             )}
             <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded bg-neutral-100 text-neutral-700">
-              {/* A running monthly/manual accumulator carries status
-                  'scheduled' but never auto-sends on manual cadence —
-                  read it as "Draft", matching the Bills list. */}
-              {inv.isMonthlyDraft ? t('bills.status.draft', 'Draft') : t(`bills.status.${inv.status}`, inv.status)}
+              {/* Held invoice ('scheduled' with no send date, incl. the
+                  monthly/manual accumulator) never auto-ships — read it as
+                  "Draft", matching the Bills list. */}
+              {isDraftInvoice(inv) ? t('bills.status.draft', 'Draft') : t(`bills.status.${inv.status}`, inv.status)}
             </span>
           </h2>
           <p className="text-sm text-neutral-600 dark:text-neutral-400">

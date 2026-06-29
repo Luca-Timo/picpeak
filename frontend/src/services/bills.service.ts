@@ -98,6 +98,20 @@ export interface InvoiceSummary {
   isMonthlyDraft?: boolean;
 }
 
+/**
+ * A "scheduled" invoice with no send date is HELD — the scheduler only
+ * picks up rows whose `scheduled_send_at <= now`, so a null send date
+ * means it never auto-ships and is waiting on the admin (Send now /
+ * Trigger invoice now). Those, plus monthly/manual accumulators, read as
+ * "Draft" everywhere instead of the misleading "Scheduled". A scheduled
+ * invoice WITH a future send date is genuinely scheduled and keeps that
+ * label.
+ */
+export function isDraftInvoice(inv: Pick<InvoiceSummary, 'status' | 'scheduledSendAt' | 'isMonthlyDraft'>): boolean {
+  if (inv.isMonthlyDraft) return true;
+  return inv.status === 'scheduled' && !inv.scheduledSendAt;
+}
+
 export interface InvoiceDetail extends InvoiceSummary {
   netAmountMinor: number;
   vatRate: number | null;

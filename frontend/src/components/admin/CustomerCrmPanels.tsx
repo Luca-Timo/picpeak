@@ -19,7 +19,7 @@ import { FileText, Plus, Receipt, ScrollText } from 'lucide-react';
 import { Card, Button, Loading } from '../common';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { quotesService } from '../../services/quotes.service';
-import { billsService } from '../../services/bills.service';
+import { billsService, isDraftInvoice } from '../../services/bills.service';
 import { contractsService } from '../../services/contracts.service';
 import { formatMoney } from './LineItemsTable';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
@@ -204,14 +204,20 @@ const InvoicesPanel: React.FC<Props> = ({ customerAccountId }) => {
                 </span>
               </div>
               <span className="text-sm tabular-nums">{formatMoney(Number(inv.totalAmountMinor) / 100, inv.currency)}</span>
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                inv.status === 'paid' ? 'bg-green-100 text-green-800'
-                  : inv.status === 'overdue' ? 'bg-red-100 text-red-800'
-                  : inv.status === 'sent' ? 'bg-blue-100 text-blue-800'
-                  : inv.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
-                  : inv.status === 'skipped' ? 'bg-neutral-100 text-neutral-500 italic'
-                  : 'bg-amber-100 text-amber-800'
-              }`}>{t(`bills.status.${inv.status}`, inv.status)}</span>
+              {isDraftInvoice(inv) ? (
+                <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200">
+                  {t('bills.status.draft', 'Draft')}
+                </span>
+              ) : (
+                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                  inv.status === 'paid' ? 'bg-green-100 text-green-800'
+                    : inv.status === 'overdue' ? 'bg-red-100 text-red-800'
+                    : inv.status === 'sent' ? 'bg-blue-100 text-blue-800'
+                    : inv.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
+                    : inv.status === 'skipped' ? 'bg-neutral-100 text-neutral-500 italic'
+                    : 'bg-amber-100 text-amber-800'
+                }`}>{t(`bills.status.${inv.status}`, inv.status)}</span>
+              )}
             </li>
           ))}
         </ul>
