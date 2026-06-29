@@ -1,5 +1,7 @@
-# Build stage
-FROM node:20-alpine AS builder
+# Build stage — node:22-alpine drops npm-bundled CVEs in older Node 20
+# (picomatch, ip-address, brace-expansion, @sigstore/core, tar) since the
+# bundled npm version is newer in 22. Matches the backend Dockerfile base.
+FROM node:22-alpine AS builder
 
 # Add build arguments
 ARG CACHEBUST=1
