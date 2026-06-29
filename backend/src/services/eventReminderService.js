@@ -55,6 +55,7 @@
 
 const { db } = require('../database/db');
 const emailProcessor = require('./emailProcessor');
+const { formatBoolean } = require('../utils/dbCompat');
 const { getAppSetting } = require('../utils/appSettings');
 const { hasColumnCached } = require('../utils/schemaCache');
 const logger = require('../utils/logger');
@@ -176,9 +177,9 @@ async function runEventReminderPass() {
   const now = new Date();
   const rows = await db('events')
     .whereNotNull('events.event_date')
-    .where('events.is_active', true)
-    .where('events.is_archived', false)
-    .where('events.event_reminder_disabled', false)
+    .where('events.is_active', formatBoolean(true))
+    .where('events.is_archived', formatBoolean(false))
+    .where('events.event_reminder_disabled', formatBoolean(false))
     .whereNull('events.event_reminder_sent_at')
     .where('events.event_date', '>=', now.toISOString().slice(0, 10))
     .select('events.*');
@@ -328,7 +329,7 @@ async function resolveReminderRecipients(eventRow) {
   const assigned = await db('event_customer_assignments as a')
     .join('customer_accounts as c', 'c.id', 'a.customer_account_id')
     .where('a.event_id', eventRow.id)
-    .where('c.is_active', true)
+    .where('c.is_active', formatBoolean(true))
     .whereNotNull('c.email')
     .select('c.email');
   // De-dup emails defensively (a customer assigned twice, etc.).
