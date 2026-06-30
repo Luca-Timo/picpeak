@@ -38,9 +38,22 @@ jobs:
     permissions:
       contents: write   # to edit the release body
       models: read      # GitHub Models (free tier)
+    # GH_REPO at job scope so every `gh` call targets the right repo without
+    # needing an actions/checkout step. Without this, `gh` falls back to
+    # parsing `.git/config` in the runner's empty workspace and dies with
+    # "fatal: not a git repository" — which hard-fails the whole job before
+    # any continue-on-error can save it.
+    env:
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Extract Features from the published release
         id: feat
+        # Belt-and-braces: the job-level comment says "never let highlights
+        # break a release", but the original wiring only marked the AI +
+        # inject steps as continue-on-error. A hiccup here (rate limit,
+        # transient API error) would still hard-fail the job. Match the
+        # design intent and fail soft.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
