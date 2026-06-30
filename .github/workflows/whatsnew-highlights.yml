@@ -1,41 +1,48 @@
-# What's New highlights — GitHub Models release step
+# What's New highlights — GitHub Models release step (reusable)
 #
-# DRAFT — move this into `.github/workflows/` on the repo that publishes the
-# canonical releases the app reads (PicPeak/picpeak). It is kept under docs/
-# here so it does NOT auto-run on the fork.
+# Called by the release-please workflows AFTER a release is created
+# (release-please.yml for `stable`, release-please-beta.yml for `main`). It runs
+# as a job in the SAME workflow run rather than on its own `release: published`
+# trigger, because release-please creates the release with the default
+# GITHUB_TOKEN and GitHub does not start new workflow runs from token-generated
+# events — a standalone `release:` workflow would simply never fire.
 #
-# What it does: when a release is published (release-please), it condenses that
-# release's "### Features" into <=8 short bullets via GitHub Models (free tier,
-# `models: read`) and injects a `<!-- whatsnew -->` block at the top of the
-# release notes. The picpeak app reads that block (utils/whatsNew.parseWhatsNew),
-# and falls back to the raw Features list for releases without it — so this is
-# purely a quality upgrade, never a hard dependency.
+# What it does: condenses the new release's "### Features" into <=8 short
+# bullets via GitHub Models (free tier, `models: read`) and injects a
+# `<!-- whatsnew -->` block at the top of the release notes. The app reads that
+# block (backend utils/whatsNew.parseWhatsNew) and falls back to the raw
+# Features list for releases without it — so this is purely a quality upgrade,
+# never a hard dependency. Failure is isolated by `continue-on-error` + the
+# deterministic fallback below, so it can never break a release.
+#
+# Requires GitHub Models to be enabled for the PicPeak org (owner setting).
+# Until then the AI step returns nothing and the deterministic fallback is used.
 #
 # Validated end-to-end on a fork (extract -> openai/gpt-4o-mini -> inject into
-# real release notes; app parseWhatsNew() reads the block back). The one thing
-# that can't be checked from a fork: GitHub Models must be enabled for the
-# PicPeak ORG (owner setting). Failure is isolated anyway by `continue-on-error`
-# + the deterministic fallback below, so it can never break a release.
+# real release notes; app parseWhatsNew() reads the block back).
 
 name: What's New highlights
 
 on:
-  release:
-    types: [published]
-
-permissions:
-  contents: write   # to edit the release body
-  models: read      # GitHub Models (free tier)
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to annotate (e.g. v2.3.0)
+        required: true
+        type: string
 
 jobs:
   highlights:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # to edit the release body
+      models: read      # GitHub Models (free tier)
     steps:
       - name: Extract Features from the published release
         id: feat
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ inputs.tag }}
         run: |
           BODY=$(gh release view "$TAG" --json body -q .body)
           FEATURES=$(printf '%s\n' "$BODY" | awk '/^#{2,4} +Features/{f=1;next} /^#{1,4} +\S/{f=0} f')
@@ -60,12 +67,12 @@ jobs:
         continue-on-error: true   # never let highlights break a release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ inputs.tag }}
           AI: ${{ steps.ai.outputs.response }}
           FEATURES: ${{ steps.feat.outputs.features }}
         run: |
           BULLETS="$AI"
-          # Deterministic fallback if the model returned nothing.
+          # Deterministic fallback if the model returned nothing (e.g. Models not yet enabled).
           if [ -z "$BULLETS" ]; then
             BULLETS=$(printf '%s\n' "$FEATURES" | head -8 \
               | sed -E 's/^\* \*\*[^:]+:\*\* */- /; s/ \(\[[^]]*\]\([^)]*\)\)//g')

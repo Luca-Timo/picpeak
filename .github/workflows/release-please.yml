@@ -34,3 +34,16 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Docker images will be built and tagged with this version." >> $GITHUB_STEP_SUMMARY
 
+  # Best-effort "What's New" highlights on the freshly-created release. Runs in
+  # this same workflow run (not a `release:` trigger) because release-please
+  # creates the release with GITHUB_TOKEN, which never starts new workflow runs.
+  whatsnew:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    permissions:
+      contents: write   # edit the release body
+      models: read       # GitHub Models (free tier)
+    uses: ./.github/workflows/whatsnew-highlights.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+
