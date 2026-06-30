@@ -341,6 +341,22 @@ export interface AnalyticsData {
   devicesSource?: 'umami' | 'access_logs';
 }
 
+export interface WhatsNewVersion {
+  version: string;
+  name: string;
+  htmlUrl: string;
+  publishedAt: string;
+  bullets: string[];
+}
+
+export interface WhatsNewResponse {
+  enabled: boolean;
+  hasNews: boolean;
+  fromVersion?: string;
+  toVersion?: string;
+  versions?: WhatsNewVersion[];
+}
+
 export const adminService = {
   // Dashboard statistics
   async getDashboardStats(): Promise<DashboardStats> {
@@ -368,6 +384,16 @@ export const adminService = {
   async getSystemHealth(): Promise<SystemHealth> {
     const response = await api.get<SystemHealth>('/admin/dashboard/health');
     return response.data;
+  },
+
+  // After-update "What's New" highlights (per-instance acknowledgement).
+  async getWhatsNew(): Promise<WhatsNewResponse> {
+    const response = await api.get<WhatsNewResponse>('/admin/system/updates/whatsnew');
+    return response.data;
+  },
+
+  async markWhatsNewSeen(): Promise<void> {
+    await api.post('/admin/system/updates/whatsnew/seen');
   },
 
   // Backup-integrity verifier (read-only diagnostic). `scope` filters

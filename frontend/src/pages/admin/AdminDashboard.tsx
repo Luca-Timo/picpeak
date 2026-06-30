@@ -22,6 +22,7 @@ import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 import { Button, Card, Loading } from '../../components/common';
 import { UpdateNotification } from '../../components/admin/UpdateNotification';
+import { WhatsNewBanner } from '../../components/admin/WhatsNewBanner';
 import { CrmOverviewSection } from '../../components/admin/CrmOverviewSection';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { eventsService } from '../../services/events.service';
@@ -184,6 +185,8 @@ export const AdminDashboard: React.FC = () => {
 
   return (
     <div>
+      {/* After-update "What's New" highlights (above the update banner) */}
+      <WhatsNewBanner />
       {/* Update Notification */}
       <UpdateNotification />
 

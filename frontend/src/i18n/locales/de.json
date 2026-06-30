@@ -2295,10 +2295,18 @@
       "warning": "Warnung",
       "error": "Fehler"
     },
+    "whatsnew": {
+      "title": "Neu in {{version}}",
+      "viewAll": "Was ist neu",
+      "modalTitle": "Was ist neu",
+      "fullChangelog": "Vollständiges Änderungsprotokoll",
+      "gotIt": "Verstanden"
+    },
     "updates": {
       "available": "Update verfügbar",
       "newVersion": "Version {{version}} ist verfügbar",
       "currentVersion": "Aktuell: {{version}}",
+      "newFeatures": "Neue Funktionen:",
       "channel": "Kanal: {{channel}}",
       "channelStable": "Stabil",
       "channelBeta": "Beta",

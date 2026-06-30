@@ -1880,10 +1880,18 @@
       "error": "Error",
       "checking": "Checking..."
     },
+    "whatsnew": {
+      "title": "What's new in {{version}}",
+      "viewAll": "What's new",
+      "modalTitle": "What's new",
+      "fullChangelog": "Full changelog",
+      "gotIt": "Got it"
+    },
     "updates": {
       "available": "Update Available",
       "newVersion": "Version {{version}} is available",
       "currentVersion": "Current: {{version}}",
+      "newFeatures": "New features include:",
       "channel": "Channel: {{channel}}",
       "channelStable": "Stable",
       "channelBeta": "Beta",

@@ -1,0 +1,76 @@
+# What's New highlights — GitHub Models release step
+#
+# DRAFT — move this into `.github/workflows/` on the repo that publishes the
+# canonical releases the app reads (PicPeak/picpeak). It is kept under docs/
+# here so it does NOT auto-run on the fork.
+#
+# What it does: when a release is published (release-please), it condenses that
+# release's "### Features" into <=8 short bullets via GitHub Models (free tier,
+# `models: read`) and injects a `<!-- whatsnew -->` block at the top of the
+# release notes. The picpeak app reads that block (utils/whatsNew.parseWhatsNew),
+# and falls back to the raw Features list for releases without it — so this is
+# purely a quality upgrade, never a hard dependency.
+#
+# Confirm on the first real run (can't be tested locally):
+#   - the exact actions/ai-inference input/output names for your version
+#   - that GitHub Models is enabled for the PicPeak org (owner setting); the
+#     model id openai/gpt-4o-mini is present in the catalog
+# Both are isolated by `continue-on-error` + the deterministic fallback below.
+
+name: What's New highlights
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write   # to edit the release body
+  models: read      # GitHub Models (free tier)
+
+jobs:
+  highlights:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract Features from the published release
+        id: feat
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          BODY=$(gh release view "$TAG" --json body -q .body)
+          FEATURES=$(printf '%s\n' "$BODY" | awk '/^#{2,4} +Features/{f=1;next} /^#{1,4} +\S/{f=0} f')
+          { echo "features<<EOF"; printf '%s\n' "$FEATURES"; echo EOF; } >> "$GITHUB_OUTPUT"
+
+      - name: Summarize with GitHub Models
+        if: ${{ steps.feat.outputs.features != '' }}
+        id: ai
+        uses: actions/ai-inference@v1
+        with:
+          model: openai/gpt-4o-mini   # catalog id (verified present); openai/gpt-4.1-mini or openai/gpt-5-nano also work
+          system-prompt: >
+            You write release highlights for the admins of a self-hosted
+            photo-gallery + CRM app. Given raw changelog "Features" lines, output
+            AT MOST 8 markdown bullets, each 3-4 words, user-facing, no scopes,
+            no jargon, no issue numbers. One bullet per distinct user-visible
+            feature. Output ONLY "- " bullets, nothing else.
+          prompt: ${{ steps.feat.outputs.features }}
+
+      - name: Inject the What's New block
+        if: ${{ steps.feat.outputs.features != '' }}
+        continue-on-error: true   # never let highlights break a release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+          AI: ${{ steps.ai.outputs.response }}
+          FEATURES: ${{ steps.feat.outputs.features }}
+        run: |
+          BULLETS="$AI"
+          # Deterministic fallback if the model returned nothing.
+          if [ -z "$BULLETS" ]; then
+            BULLETS=$(printf '%s\n' "$FEATURES" | head -8 \
+              | sed -E 's/^\* \*\*[^:]+:\*\* */- /; s/ \(\[[^]]*\]\([^)]*\)\)//g')
+          fi
+          BODY=$(gh release view "$TAG" --json body -q .body)
+          # Idempotent: strip any prior block before re-injecting.
+          BODY=$(printf '%s' "$BODY" | perl -0pe 's/<!--\s*whatsnew\s*-->.*?<!--\s*\/whatsnew\s*-->\n*//is')
+          gh release edit "$TAG" --notes "$(printf '<!-- whatsnew -->\n%s\n<!-- /whatsnew -->\n\n%s' "$BULLETS" "$BODY")"
