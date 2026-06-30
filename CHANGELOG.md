@@ -5,6 +5,13 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.76.0-beta.0](https://github.com/PicPeak/picpeak/compare/v3.75.1-beta.0...v3.76.0-beta.0) (2026-06-30)
+
+
+### Features
+
+* **gallery:** branded URL shortener — /s/&lt;slug&gt; with OG injection ([#699](https://github.com/PicPeak/picpeak/issues/699)) ([a0f7033](https://github.com/PicPeak/picpeak/commit/a0f7033ffc812f92d56e2eac7bd2f498b95ef83b))
+
 ## [3.75.1-beta.0](https://github.com/PicPeak/picpeak/compare/v3.75.0-beta.0...v3.75.1-beta.0) (2026-06-30)
 
 
