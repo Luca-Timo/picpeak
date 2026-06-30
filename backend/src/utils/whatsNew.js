@@ -14,14 +14,35 @@
 
 const MAX_BULLETS = 8;
 
+/**
+ * Decode the handful of HTML entities release-please escapes into changelog
+ * text (a raw "/s/<slug>" in a commit subject lands as "/s/&lt;slug&gt;").
+ * Without this the banner shows the literal entity, since React renders text
+ * nodes verbatim. `&amp;` is decoded last so "&amp;lt;" stays "&lt;".
+ */
+function decodeEntities(s) {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0*39;|&#x0*27;|&apos;/gi, "'")
+    .replace(/&amp;/g, '&');
+}
+
 /** Strip list markers, conventional-commit scope, and trailing PR/sha links. */
 function cleanBullet(line) {
-  return line
+  return decodeEntities(line
     .replace(/^\s*[-*]\s+/, '')                  // "- " / "* " marker
     .replace(/^\*\*([^:*]+):\*\*\s*/, '')         // "**scope:** " prefix
     .replace(/\s*\(\[[^\]]*\]\([^)]*\)\)/g, '')   // " ([#41](url))" / " ([sha](url))"
     .replace(/\s*\(#\d+\)/g, '')                  // bare " (#41)"
-    .replace(/`/g, '')
+    .replace(/`/g, ''))
+    // Drop a trailing "— implementation detail" clause so a release highlight
+    // reads as the headline ("branded URL shortener"), not the commit subject
+    // ("branded URL shortener — /s/<slug> with OG injection"). Em dash only, so
+    // hyphenated words ("mark-paid") are untouched. Skipped if it would empty
+    // the bullet (i.e. nothing before the dash).
+    .replace(/^(.+?\S)\s+—\s+.*$/, '$1')
     .replace(/\s+/g, ' ')
     .trim();
 }

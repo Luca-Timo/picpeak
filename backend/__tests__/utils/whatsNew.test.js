@@ -33,6 +33,21 @@ describe('parseWhatsNew', () => {
     ]);
   });
 
+  it('decodes HTML entities release-please escapes into changelog text', () => {
+    const body = '### Features\n* **gallery:** supports A &amp; B &lt;tags&gt; &quot;quoted&quot; ([#1](http://x))';
+    expect(parseWhatsNew(body)).toEqual(['supports A & B <tags> "quoted"']);
+  });
+
+  it('trims a trailing "— implementation detail" clause to the headline', () => {
+    const body = '### Features\n* **gallery:** branded URL shortener — /s/&lt;slug&gt; with OG injection ([#699](http://x))';
+    expect(parseWhatsNew(body)).toEqual(['branded URL shortener']);
+  });
+
+  it('leaves hyphenated words and dash-free bullets intact', () => {
+    const body = '### Features\n* **invoices:** mark-paid now supports bank transfer ([#2](http://x))';
+    expect(parseWhatsNew(body)).toEqual(['mark-paid now supports bank transfer']);
+  });
+
   it('excludes Bug Fixes from the fallback', () => {
     const body = '### Features\n* **a:** feature one\n### Bug Fixes\n* **b:** fix one';
     expect(parseWhatsNew(body)).toEqual(['feature one']);
