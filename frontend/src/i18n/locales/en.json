@@ -2101,7 +2101,22 @@
       "visibleSuccess": "Photos now visible to guests",
       "processingStatus": "Processing…",
       "processingFailed": "Failed",
-      "retryQueued": "Retry queued"
+      "retryQueued": "Retry queued",
+      "viewMode": "View mode",
+      "gridView": "Grid view",
+      "listView": "List view",
+      "columns": {
+        "photo": "Photo",
+        "category": "Category",
+        "uploaded": "Uploaded",
+        "engagement": "Engagement",
+        "feedback": "Feedback",
+        "size": "Size",
+        "actions": "Actions",
+        "views": "Views",
+        "downloads": "Downloads",
+        "likes": "Likes"
+      }
     },
     "events": {
       "tabs": {
