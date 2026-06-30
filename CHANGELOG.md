@@ -5,6 +5,14 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.75.1-beta.0](https://github.com/PicPeak/picpeak/compare/v3.75.0-beta.0...v3.75.1-beta.0) (2026-06-30)
+
+
+### Bug Fixes
+
+* **og:** rich social previews for share-token + slideshow URLs ([#699](https://github.com/PicPeak/picpeak/issues/699)) ([25bf7bb](https://github.com/PicPeak/picpeak/commit/25bf7bb5239420da078749bac270196df6968581))
+* **og:** rich social previews for share-token + slideshow URLs ([#699](https://github.com/PicPeak/picpeak/issues/699)) ([1b8747d](https://github.com/PicPeak/picpeak/commit/1b8747dc82763ba6b4da3a55045cab8740da2a13))
+
 ## [3.75.0-beta.0](https://github.com/PicPeak/picpeak/compare/v3.74.0-beta.0...v3.75.0-beta.0) (2026-06-30)
 
 
