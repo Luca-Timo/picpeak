@@ -63,6 +63,7 @@ import { EventCategoryManager, AdminPhotoGrid, AdminPhotoViewer, PhotoFilters, P
 import { CustomerAccountPicker } from '../../components/admin/CustomerAccountPicker';
 import { EventReminderOverrideCard } from '../../components/admin/EventReminderOverrideCard';
 import { SlideshowSettingsCard } from '../../components/admin/SlideshowSettingsCard';
+import { ShortUrlsCard } from '../../components/admin/ShortUrlsCard';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { eventsService } from '../../services/events.service';
@@ -2028,6 +2029,11 @@ export const EventDetailsPage: React.FC = () => {
               </div>
             )}
           </Card>
+
+          {/* Branded short URLs (#699). Sits between the canonical share-link
+              card and the Client Access card — same "things you share with
+              the customer" cluster. */}
+          <ShortUrlsCard eventId={event.id} />
 
           {/* Client Access (#172) */}
           <Card padding="md">

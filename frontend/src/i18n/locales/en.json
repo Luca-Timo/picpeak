@@ -552,6 +552,25 @@
     "expires": "Expires",
     "shareWithGuests": "Share this link with guests. They'll need the password to access the gallery.",
     "shareWithGuestsPublic": "Share this link with guests. No password is required for this gallery.",
+    "shortUrls": {
+      "title": "Branded short URLs",
+      "description": "Create memorable links like /s/sofia-graduation that resolve to this gallery. The short URL itself shows the rich social preview when shared — so iMessage, Facebook, WhatsApp etc. see the gallery photo + name even when pasting the short link.",
+      "slugPlaceholder": "sofia-graduation (optional)",
+      "slugHelp": "Leave empty to auto-generate from the gallery name. Allowed characters: lowercase letters, digits, hyphens.",
+      "create": "Create",
+      "created": "Short URL created",
+      "deleted": "Short URL deleted",
+      "empty": "No short URLs yet. Create one above to share this gallery with a memorable link.",
+      "hits": "{{count}} hits",
+      "lastHit": "last {{when}}",
+      "createdAt": "created {{when}}",
+      "useSuggested": "Use \"{{suggested}}\" instead",
+      "confirmDelete": "Delete short URL /s/{{slug}}? The link will stop working immediately.",
+      "errors": {
+        "slugTaken": "That short URL is already taken — try {{suggested}} instead.",
+        "invalidSlug": "Short URLs must be lowercase letters, digits, and hyphens (1–64 chars)."
+      }
+    },
     "resetGalleryPassword": "Reset Gallery Password",
     "resendCreationEmail": "Resend Creation Email",
     "creationEmailResent": "Creation email has been queued for sending",

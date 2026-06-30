@@ -998,6 +998,25 @@
     "expires": "Läuft ab",
     "shareWithGuests": "Teilen Sie diesen Link mit Gästen. Sie benötigen das Passwort, um auf die Galerie zuzugreifen.",
     "shareWithGuestsPublic": "Teilen Sie diesen Link mit Gästen. Für diese Galerie ist kein Passwort erforderlich.",
+    "shortUrls": {
+      "title": "Gebrandete Kurz-URLs",
+      "description": "Erstelle einprägsame Links wie /s/sofia-abschluss, die zu dieser Galerie führen. Die Kurz-URL zeigt selbst die reiche Social-Vorschau — iMessage, Facebook, WhatsApp etc. sehen das Galerie-Foto + den Namen auch beim Einfügen des kurzen Links.",
+      "slugPlaceholder": "sofia-abschluss (optional)",
+      "slugHelp": "Leer lassen für automatische Generierung aus dem Galerienamen. Erlaubte Zeichen: Kleinbuchstaben, Ziffern, Bindestriche.",
+      "create": "Erstellen",
+      "created": "Kurz-URL erstellt",
+      "deleted": "Kurz-URL gelöscht",
+      "empty": "Noch keine Kurz-URLs. Erstelle oben eine, um diese Galerie mit einem einprägsamen Link zu teilen.",
+      "hits": "{{count}} Aufrufe",
+      "lastHit": "zuletzt {{when}}",
+      "createdAt": "erstellt {{when}}",
+      "useSuggested": "Stattdessen „{{suggested}}\" verwenden",
+      "confirmDelete": "Kurz-URL /s/{{slug}} löschen? Der Link funktioniert sofort nicht mehr.",
+      "errors": {
+        "slugTaken": "Diese Kurz-URL ist bereits vergeben — versuche stattdessen {{suggested}}.",
+        "invalidSlug": "Kurz-URLs müssen aus Kleinbuchstaben, Ziffern und Bindestrichen bestehen (1–64 Zeichen)."
+      }
+    },
     "resetGalleryPassword": "Galerie-Passwort zurücksetzen",
     "resendCreationEmail": "Erstellungs-E-Mail erneut senden",
     "creationEmailResent": "Die Erstellungs-E-Mail wurde zur Warteschlange hinzugefügt",
