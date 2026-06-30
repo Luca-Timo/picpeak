@@ -5,6 +5,14 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.76.2-beta.0](https://github.com/PicPeak/picpeak/compare/v3.76.1-beta.0...v3.76.2-beta.0) (2026-06-30)
+
+
+### Bug Fixes
+
+* **ci:** whatsnew highlights — set GH_REPO so gh runs without a checkout ([3feed0f](https://github.com/PicPeak/picpeak/commit/3feed0fae6a5792a7192a529942e08d9872b7e6e))
+* **ci:** whatsnew highlights — set GH_REPO so gh runs without a checkout ([2a5f0a8](https://github.com/PicPeak/picpeak/commit/2a5f0a8601ba5cb28243b39278ecdc0892388a96))
+
 ## [3.76.1-beta.0](https://github.com/PicPeak/picpeak/compare/v3.76.0-beta.0...v3.76.1-beta.0) (2026-06-30)
 
 
