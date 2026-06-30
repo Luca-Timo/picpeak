@@ -15,8 +15,9 @@
 # never a hard dependency. Failure is isolated by `continue-on-error` + the
 # deterministic fallback below, so it can never break a release.
 #
-# Requires GitHub Models to be enabled for the PicPeak org (owner setting).
-# Until then the AI step returns nothing and the deterministic fallback is used.
+# GitHub Models is OPTIONAL. If it is disabled/unavailable for the org the AI
+# step fails soft (continue-on-error) and the deterministic fallback produces
+# the bullets instead — the feature works either way, Models just polishes them.
 #
 # Validated end-to-end on a fork (extract -> openai/gpt-4o-mini -> inject into
 # real release notes; app parseWhatsNew() reads the block back).
@@ -51,6 +52,7 @@ jobs:
       - name: Summarize with GitHub Models
         if: ${{ steps.feat.outputs.features != '' }}
         id: ai
+        continue-on-error: true   # Models may be disabled/unavailable for the org; fall back deterministically below
         uses: actions/ai-inference@v1
         with:
           model: openai/gpt-4o-mini   # catalog id (verified present); openai/gpt-4.1-mini or openai/gpt-5-nano also work
