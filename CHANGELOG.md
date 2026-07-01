@@ -5,6 +5,14 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.77.0-beta.0](https://github.com/PicPeak/picpeak/compare/v3.76.2-beta.0...v3.77.0-beta.0) (2026-07-01)
+
+
+### Features
+
+* admin photos list/grid toggle + upload failure report ([#707](https://github.com/PicPeak/picpeak/issues/707), [#708](https://github.com/PicPeak/picpeak/issues/708)) ([e873f7c](https://github.com/PicPeak/picpeak/commit/e873f7c98ce108b090d70a3b7df2d2929699e997))
+* admin photos list/grid toggle + upload failure report ([#707](https://github.com/PicPeak/picpeak/issues/707), [#708](https://github.com/PicPeak/picpeak/issues/708)) ([6f95796](https://github.com/PicPeak/picpeak/commit/6f95796b7c19829197eaff0d4934ad9b84d0e2f3))
+
 ## [3.76.2-beta.0](https://github.com/PicPeak/picpeak/compare/v3.76.1-beta.0...v3.76.2-beta.0) (2026-06-30)
 
 
