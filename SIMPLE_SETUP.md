@@ -163,6 +163,19 @@ sudo ./picpeak-setup.sh --native --unattended \
 - `picpeak-workers` - Background workers
 - `caddy` - Web server (optional)
 
+## 🔑 First Login — Create Your Admin
+
+If you installed with `picpeak-setup.sh` and gave an `--admin-password`, your admin account already exists — log in at `/admin` with that email and password.
+
+If you started PicPeak **without** setting `ADMIN_PASSWORD` (e.g. a plain `docker compose up`), there's **no admin yet** and you create it in the browser:
+
+1. Open `http://your-server:3000/admin` — you'll land on a setup screen.
+2. Get the **one-time setup token** from the backend logs (also saved to `data/SETUP_TOKEN`):
+   ```bash
+   docker compose logs backend | grep -i "setup token"
+   ```
+3. Paste it, set your admin email + password. The token is single-use and the screen closes once an admin exists.
+
 ## 🌐 Access Methods
 
 ### Direct Access (Simplest)
