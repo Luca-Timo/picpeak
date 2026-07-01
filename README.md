@@ -106,6 +106,19 @@ docker compose up -d
 # Access at http://localhost:3000
 ```
 
+### First run — create your admin account
+
+On first start with no `ADMIN_PASSWORD` set, PicPeak has **no admin account yet** and greets you with an in-browser setup screen — no credentials in `.env`:
+
+1. Open **http://localhost:3000/admin** — you'll be redirected to `/setup`.
+2. Grab the **one-time setup token** from the backend logs (it's also saved to `data/SETUP_TOKEN`):
+   ```bash
+   docker compose logs backend | grep -i "setup token"
+   ```
+3. Paste the token, set your admin **email + password**, and you're in. The token is single-use, and the setup screen closes permanently once an admin exists.
+
+> Prefer the old behaviour? Set `ADMIN_PASSWORD` in `.env` and PicPeak auto-creates the admin on first boot instead (credentials written to `data/ADMIN_CREDENTIALS.txt`).
+
 Note on Docker file permissions
 - The backend container starts as root, chowns bind-mounted host directories (`./storage`, `./data`, `./logs`) to UID 1001 (`nodejs`), then drops privileges via `su-exec` before running the app. No host-side setup needed for fresh installs.
 - If you pin `user:` in a compose override (e.g. to map a specific host UID), the self-chown is skipped and you must pre-chown the host directories to that UID — see [docs.picpeak.app/deployment/docker#permissions](https://docs.picpeak.app/deployment/docker#permissions).

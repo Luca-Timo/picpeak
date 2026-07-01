@@ -4,13 +4,15 @@
 // so setupService shares this test's db instance (see crmDb.js note).
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-at-least-32-characters-long!!';
 
-const { bootCrmDb } = require('./helpers/crmDb');
+const request = require('supertest');
+const { bootCrmDb, buildRouteApp } = require('./helpers/crmDb');
 
 let db;
 let cleanup;
 let setupService;
 let getAppSetting;
 let upsertAppSetting;
+let app;
 
 const VALID_PW = 'Str0ng-Passw0rd!';
 
@@ -20,6 +22,7 @@ beforeAll(async () => {
   ({ db, cleanup } = await bootCrmDb());
   setupService = require('../../src/services/setupService');
   ({ getAppSetting, upsertAppSetting } = require('../../src/utils/appSettings'));
+  app = buildRouteApp('/api/setup', require('../../src/routes/setup'));
 }, 60000);
 
 afterAll(async () => {
@@ -43,6 +46,16 @@ describe('setupService (first-run bootstrap)', () => {
     expect(await getAppSetting('setup_token')).toBe(token);
     // Idempotent — a second call returns the same token, not a fresh one.
     expect(await setupService.ensureSetupToken()).toBe(token);
+  });
+
+  it('stores the token as valid JSON so the Postgres jsonb column accepts it', async () => {
+    // Regression guard for the SQLite-only miss: a bare token string is rejected
+    // by Postgres jsonb ("invalid input syntax for type json"). The raw column
+    // value must be JSON-parseable and round-trip back to the token.
+    const token = await setupService.ensureSetupToken();
+    const row = await db('app_settings').where({ setting_key: 'setup_token' }).first();
+    expect(() => JSON.parse(row.setting_value)).not.toThrow();
+    expect(JSON.parse(row.setting_value)).toBe(token);
   });
 
   it('rejects a wrong token', async () => {
@@ -92,8 +105,45 @@ describe('setupService (first-run bootstrap)', () => {
     const token = await setupService.ensureSetupToken();
     await setupService.createInitialAdmin({ token, email: 'first@example.com', password: VALID_PW });
     // Simulate a stale token left in settings, then re-run the boot hook.
-    await upsertAppSetting('setup_token', 'stale', 'string');
+    await upsertAppSetting('setup_token', JSON.stringify('stale'), 'string');
     expect(await setupService.ensureSetupToken()).toBeNull();
     expect(await getAppSetting('setup_token')).toBeFalsy();
+  });
+});
+
+describe('setup routes', () => {
+  it('GET /api/setup/status reports needsAdmin', async () => {
+    const res = await request(app).get('/api/setup/status');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ needsAdmin: true, complete: false });
+  });
+
+  it('POST /api/setup/admin rejects a wrong token (400)', async () => {
+    await setupService.ensureSetupToken();
+    const res = await request(app)
+      .post('/api/setup/admin')
+      .send({ token: 'nope', email: 'a@b.co', password: VALID_PW });
+    expect(res.status).toBe(400);
+    expect(await setupService.getSetupStatus()).toMatchObject({ needsAdmin: true });
+  });
+
+  it('POST /api/setup/admin creates the first admin + sets the auth cookie (201)', async () => {
+    const token = await setupService.ensureSetupToken();
+    const res = await request(app)
+      .post('/api/setup/admin')
+      .send({ token, email: 'owner@example.com', password: VALID_PW });
+    expect(res.status).toBe(201);
+    expect(res.body.user.role.name).toBe('super_admin');
+    expect((res.headers['set-cookie'] || []).join(';')).toMatch(/admin_token/);
+    expect(await setupService.getSetupStatus()).toEqual({ needsAdmin: false, complete: true });
+  });
+
+  it('POST /api/setup/admin is closed once an admin exists (409)', async () => {
+    const token = await setupService.ensureSetupToken();
+    await setupService.createInitialAdmin({ token, email: 'first@example.com', password: VALID_PW });
+    const res = await request(app)
+      .post('/api/setup/admin')
+      .send({ token, email: 'second@example.com', password: VALID_PW });
+    expect(res.status).toBe(409);
   });
 });
