@@ -79,6 +79,8 @@ import { MaintenanceWrapper } from './components/MaintenanceWrapper';
 import { GlobalThemeProvider } from './components/GlobalThemeProvider';
 import { ConfirmDialogProvider } from './components/common';
 import { usePublicSettings } from './hooks/usePublicSettings';
+import { SetupPage } from './pages/SetupPage';
+import { AdminAuthProvider } from './contexts';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -212,6 +214,13 @@ function App() {
                     <GalleryAuthProvider>
                       <GalleryPage />
                     </GalleryAuthProvider>
+                  } />
+
+                  {/* First-run setup — public, self-closes once an admin exists */}
+                  <Route path="/setup" element={
+                    <AdminAuthProvider>
+                      <SetupPage />
+                    </AdminAuthProvider>
                   } />
 
                   {/* Admin routes - wrap with AdminAuthProvider */}

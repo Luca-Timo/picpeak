@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Lock, Mail, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Input, Card, ReCaptcha } from '../../components/common';
 import { useAdminAuth } from '../../contexts';
 import { authService } from '../../services/auth.service';
+import { setupService } from '../../services/setup.service';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
 import { useAdminDarkMode } from '../../contexts/AdminDarkModeContext';
 import { resolveLoginLogoClasses } from '../../utils/loginLogoSize';
@@ -49,6 +51,17 @@ export const AdminLoginPage: React.FC = () => {
       toast.info(t('adminLogin.sessionExpired'));
     }
   }, [searchParams, t]);
+
+  // Fresh instance with no admin yet → send to first-run setup.
+  const { data: setupStatus } = useQuery({
+    queryKey: ['setup-status'],
+    queryFn: setupService.getSetupStatus,
+    retry: false,
+    staleTime: Infinity,
+  });
+  if (setupStatus?.needsAdmin) {
+    return <Navigate to="/setup" replace />;
+  }
 
   // Redirect if already authenticated or login successful
   if (isAuthenticated || loginSuccess) {
