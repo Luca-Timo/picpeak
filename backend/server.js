@@ -1005,8 +1005,9 @@ async function startServer() {
     // First-run: surface a one-time setup token while no admin account exists.
     // Runs AFTER install-from-backup so a restored instance (which repopulates
     // admin_users) never prints a throwaway token. Best-effort — never blocks boot.
+    let setupToken = null;
     try {
-      await require('./src/services/setupService').ensureSetupToken();
+      setupToken = await require('./src/services/setupService').ensureSetupToken();
     } catch (err) {
       logger.warn(`[setup] ensureSetupToken skipped: ${err.message}`);
     }
@@ -1026,6 +1027,13 @@ async function startServer() {
       logger.info(`Server running on port ${PORT}`);
       logger.info(`Admin interface: ${process.env.ADMIN_URL || 'http://localhost:3000'}`);
       logger.info(`Frontend: ${process.env.FRONTEND_URL || 'http://localhost:3001'}`);
+      // First-run: print the one-time setup token to STDOUT (the file logger
+      // doesn't reach `docker logs`), as the last + most visible thing at boot.
+      if (setupToken) {
+        const url = `${process.env.ADMIN_URL || 'http://localhost:3000'}/admin`;
+        const line = '='.repeat(64);
+        console.log(`\n${line}\n  PicPeak first-run setup — no admin account yet.\n  Open:                  ${url}\n  One-time setup token:  ${setupToken}\n  (also saved to data/SETUP_TOKEN)\n${line}\n`);
+      }
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
