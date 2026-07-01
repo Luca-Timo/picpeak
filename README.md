@@ -94,11 +94,11 @@ Get PicPeak running in under 5 minutes:
 git clone https://github.com/PicPeak/picpeak.git
 cd picpeak
 
-# Copy environment template
+# Copy the environment template — the defaults work out of the box.
+# Machine secrets (JWT, DB, Redis) are auto-generated on first run, and the
+# admin account is created in the browser (see below). Edit .env only to
+# customise (domain, SMTP, storage paths, …) — nothing is required.
 cp .env.example .env
-
-# Edit configuration (required: JWT_SECRET)
-nano .env
 
 # Start with Docker Compose
 docker compose up -d
