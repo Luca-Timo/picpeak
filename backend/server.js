@@ -43,6 +43,7 @@ const galleryRoutes = require('./src/routes/gallery');
 const adminRoutes = require('./src/routes/admin');
 const adminAuthRoutes = require('./src/routes/adminAuth');
 const secureImagesRoutes = require('./src/routes/secureImages');
+const setupRoutes = require('./src/routes/setup');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -397,6 +398,7 @@ async function initializeRateLimiters() {
   app.use('/api/auth', authRateLimiter);
   app.use('/api/gallery/:slug/verify', authRateLimiter);
   app.use('/api/admin/auth/login', authRateLimiter);
+  app.use('/api/setup/admin', authRateLimiter);
 }
 
 // Note: Rate limiters will be initialized after database connection
@@ -690,6 +692,7 @@ app.get('/health', async (req, res) => {
 });
 
 // Routes
+app.use('/api/setup', setupRoutes); // public first-run bootstrap (self-closes after setup)
 app.use('/api/auth', authRoutes);
   app.use('/api/events', eventRoutes);
   app.use('/api/admin/external-media', require('./src/routes/adminExternalMedia'));
@@ -875,6 +878,14 @@ async function startServer() {
   try {
     // Initialize database
     await initializeDatabase();
+
+    // First-run: surface a one-time setup token while no admin account exists.
+    // Best-effort — must never block boot.
+    try {
+      await require('./src/services/setupService').ensureSetupToken();
+    } catch (err) {
+      logger.warn(`[setup] ensureSetupToken skipped: ${err.message}`);
+    }
 
     // Initialize storage backend (local fs or S3) — fail fast on misconfig
     const { initStorage } = require('./src/services/storage');

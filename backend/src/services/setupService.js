@@ -1,0 +1,133 @@
+'use strict';
+
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const { db } = require('../database/db');
+const logger = require('../utils/logger');
+const { getAppSetting, upsertAppSetting } = require('../utils/appSettings');
+const { ValidationError, ConflictError } = require('../utils/errors');
+const { validatePassword, getBcryptRounds } = require('../utils/passwordValidation');
+const { formatBoolean } = require('../utils/dbCompat');
+
+// First-run bootstrap. The app boots with NO admin account and no
+// ADMIN_PASSWORD in the environment; the first browser visit creates the admin.
+// That create call is guarded by a one-time setup token, generated at boot
+// while no admin exists and printed to the logs (+ a best-effort data/SETUP_TOKEN
+// file). The token is ALWAYS required and burned on first use, so the endpoint
+// is permanently closed once setup is done — safe even on a public IP.
+const SETUP_TOKEN_KEY = 'setup_token';
+
+async function noAdminExists() {
+  const row = await db('admin_users').count({ c: '*' }).first();
+  return Number(row?.c || 0) === 0;
+}
+
+// Public status the /setup gate reads. Deliberately leaks nothing beyond
+// "is the instance still waiting for its first admin".
+async function getSetupStatus() {
+  const needsAdmin = await noAdminExists();
+  return { needsAdmin, complete: !needsAdmin };
+}
+
+// Logs are the source of truth; the file is a convenience for operators who
+// reach a shell more easily than the container log view (e.g. `cat data/SETUP_TOKEN`).
+function setupTokenFilePath() {
+  const dir = process.env.DATA_DIR || path.join(__dirname, '..', '..', 'data');
+  return path.join(dir, 'SETUP_TOKEN');
+}
+
+// Called once at startup. Idempotent: generates + surfaces a token only while
+// the instance still needs an admin, and clears any stale token afterwards.
+async function ensureSetupToken() {
+  if (!(await noAdminExists())) {
+    await upsertAppSetting(SETUP_TOKEN_KEY, null, 'string');
+    return null;
+  }
+  let token = await getAppSetting(SETUP_TOKEN_KEY);
+  if (!token) {
+    token = crypto.randomBytes(24).toString('base64url');
+    await upsertAppSetting(SETUP_TOKEN_KEY, token, 'string');
+  }
+  logger.warn(`[setup] No admin account yet — open /admin to finish setup. One-time setup token: ${token}`);
+  try {
+    const file = setupTokenFilePath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, `${token}\n`, { mode: 0o600 });
+  } catch (err) {
+    logger.warn(`[setup] Could not write setup token file (logs still have it): ${err.message}`);
+  }
+  return token;
+}
+
+// Constant-time compare so the token can't be recovered by timing the response.
+function tokensMatch(provided, expected) {
+  if (!provided || !expected) return false;
+  const a = Buffer.from(String(provided));
+  const b = Buffer.from(String(expected));
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+// Creates the first admin as super_admin (the highest role) and returns a
+// ready-to-set admin JWT so the browser flows straight into the wizard.
+async function createInitialAdmin({ token, email, password, ip }) {
+  if (!(await noAdminExists())) {
+    throw new ConflictError('Setup already completed — an admin account exists');
+  }
+  const expected = await getAppSetting(SETUP_TOKEN_KEY);
+  if (!tokensMatch(token, expected)) {
+    throw new ValidationError('Invalid setup token', 'token');
+  }
+
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cleanEmail)) {
+    throw new ValidationError('A valid email address is required', 'email');
+  }
+  const strength = validatePassword(password);
+  if (!strength.valid) {
+    throw new ValidationError(strength.errors[0] || 'Password does not meet requirements', 'password');
+  }
+
+  const role = await db('roles').where('name', 'super_admin').first();
+  if (!role) {
+    throw new ConflictError('super_admin role missing — database not initialised');
+  }
+
+  const passwordHash = await bcrypt.hash(password, getBcryptRounds());
+  const inserted = await db('admin_users').insert({
+    username: cleanEmail,
+    email: cleanEmail,
+    password_hash: passwordHash,
+    role_id: role.id,
+    is_active: formatBoolean(true),
+    must_change_password: formatBoolean(false),
+    created_at: new Date(),
+    updated_at: new Date(),
+  }).returning('id');
+  const id = inserted[0]?.id || inserted[0];
+
+  // Burn the one-time token — the endpoint is now permanently closed.
+  await upsertAppSetting(SETUP_TOKEN_KEY, null, 'string');
+  logger.info(`[setup] Initial super_admin created (id=${id}, email=${cleanEmail})`);
+
+  const authToken = jwt.sign(
+    { id, username: cleanEmail, type: 'admin', role: role.name, ip: ip || null, loginTime: Date.now() },
+    process.env.JWT_SECRET,
+    { expiresIn: '24h', issuer: 'picpeak-auth' }
+  );
+
+  return {
+    token: authToken,
+    user: {
+      id,
+      username: cleanEmail,
+      email: cleanEmail,
+      role: { name: role.name, displayName: role.display_name },
+    },
+  };
+}
+
+module.exports = { getSetupStatus, ensureSetupToken, createInitialAdmin };
