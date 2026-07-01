@@ -4,11 +4,14 @@
 // so setupService shares this test's db instance (see crmDb.js note).
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret-at-least-32-characters-long!!';
 
+const fs = require('fs');
+const path = require('path');
 const request = require('supertest');
 const { bootCrmDb, buildRouteApp } = require('./helpers/crmDb');
 
 let db;
 let cleanup;
+let tmpDir;
 let setupService;
 let getAppSetting;
 let upsertAppSetting;
@@ -19,7 +22,8 @@ const VALID_PW = 'Str0ng-Passw0rd!';
 // bootCrmDb MUST run before any require of db.js (directly or transitively via a
 // service/util), or db.js binds to the default path instead of the temp one.
 beforeAll(async () => {
-  ({ db, cleanup } = await bootCrmDb());
+  ({ db, cleanup, tmpDir } = await bootCrmDb());
+  process.env.DATA_DIR = tmpDir; // isolate the SETUP_TOKEN file to the temp dir
   setupService = require('../../src/services/setupService');
   ({ getAppSetting, upsertAppSetting } = require('../../src/utils/appSettings'));
   app = buildRouteApp('/api/setup', require('../../src/routes/setup'));
@@ -91,6 +95,14 @@ describe('setupService (first-run bootstrap)', () => {
     // One-time: token burned, status now complete.
     expect(await getAppSetting('setup_token')).toBeFalsy();
     expect(await setupService.getSetupStatus()).toEqual({ needsAdmin: false, complete: true });
+  });
+
+  it('writes the SETUP_TOKEN file while pending and removes it once setup completes', async () => {
+    const tokenFile = path.join(tmpDir, 'SETUP_TOKEN');
+    const token = await setupService.ensureSetupToken();
+    expect(fs.readFileSync(tokenFile, 'utf8').trim()).toBe(token);
+    await setupService.createInitialAdmin({ token, email: 'owner@example.com', password: VALID_PW });
+    expect(fs.existsSync(tokenFile)).toBe(false); // burned in DB + file removed
   });
 
   it('refuses to create a second admin (setup already complete)', async () => {

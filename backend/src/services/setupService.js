@@ -41,9 +41,16 @@ function setupTokenFilePath() {
 
 // Called once at startup. Idempotent: generates + surfaces a token only while
 // the instance still needs an admin, and clears any stale token afterwards.
+// Clear the token everywhere — the app_settings row AND the on-disk file — so a
+// completed (or restored) install leaves no stale token behind.
+async function clearSetupToken() {
+  await upsertAppSetting(SETUP_TOKEN_KEY, null, 'string');
+  try { fs.unlinkSync(setupTokenFilePath()); } catch (_) { /* file may be absent — best-effort */ }
+}
+
 async function ensureSetupToken() {
   if (!(await noAdminExists())) {
-    await upsertAppSetting(SETUP_TOKEN_KEY, null, 'string');
+    await clearSetupToken();
     return null;
   }
   let token = await getAppSetting(SETUP_TOKEN_KEY);
@@ -111,8 +118,8 @@ async function createInitialAdmin({ token, email, password, ip }) {
   }).returning('id');
   const id = inserted[0]?.id || inserted[0];
 
-  // Burn the one-time token — the endpoint is now permanently closed.
-  await upsertAppSetting(SETUP_TOKEN_KEY, null, 'string');
+  // Burn the one-time token (DB + file) — the endpoint is now permanently closed.
+  await clearSetupToken();
   logger.info(`[setup] Initial super_admin created (id=${id}, email=${cleanEmail})`);
 
   const authToken = jwt.sign(
