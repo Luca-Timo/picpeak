@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Input, Card, Loading } from '../components/common';
 import { useAdminAuth } from '../contexts';
 import { setupService } from '../services/setup.service';
+import type { AdminUser } from '../types';
 
 // First-run screen. Reached on a fresh instance where no admin account exists
 // yet — creates the first (super_admin) account from the browser using the
@@ -69,7 +70,14 @@ export const SetupPage: React.FC = () => {
         password: form.password,
       });
       // Cookie is set by the backend; register the session and enter the app.
-      login('', { ...user, mustChangePassword: false } as any);
+      const adminUser: AdminUser = {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        mustChangePassword: false,
+        role: { name: user.role.name, displayName: user.role.displayName ?? user.role.name },
+      };
+      login('', adminUser);
       toast.success(t('setup.success'));
       navigate('/admin/dashboard', { replace: true });
     } catch (error: any) {

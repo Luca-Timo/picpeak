@@ -879,14 +879,6 @@ async function startServer() {
     // Initialize database
     await initializeDatabase();
 
-    // First-run: surface a one-time setup token while no admin account exists.
-    // Best-effort — must never block boot.
-    try {
-      await require('./src/services/setupService').ensureSetupToken();
-    } catch (err) {
-      logger.warn(`[setup] ensureSetupToken skipped: ${err.message}`);
-    }
-
     // Initialize storage backend (local fs or S3) — fail fast on misconfig
     const { initStorage } = require('./src/services/storage');
     await initStorage();
@@ -1008,6 +1000,15 @@ async function startServer() {
       }
     } catch (err) {
       logger.warn('Install-from-backup hook threw:', err.message);
+    }
+
+    // First-run: surface a one-time setup token while no admin account exists.
+    // Runs AFTER install-from-backup so a restored instance (which repopulates
+    // admin_users) never prints a throwaway token. Best-effort — never blocks boot.
+    try {
+      await require('./src/services/setupService').ensureSetupToken();
+    } catch (err) {
+      logger.warn(`[setup] ensureSetupToken skipped: ${err.message}`);
     }
 
     // Start backup service
