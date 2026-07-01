@@ -49,7 +49,9 @@ async function ensureSetupToken() {
   let token = await getAppSetting(SETUP_TOKEN_KEY);
   if (!token) {
     token = crypto.randomBytes(24).toString('base64url');
-    await upsertAppSetting(SETUP_TOKEN_KEY, token, 'string');
+    // app_settings.setting_value is JSON on Postgres — store JSON-stringified
+    // (getAppSetting JSON.parses on read). A raw string is rejected by jsonb.
+    await upsertAppSetting(SETUP_TOKEN_KEY, JSON.stringify(token), 'string');
   }
   logger.warn(`[setup] No admin account yet — open /admin to finish setup. One-time setup token: ${token}`);
   try {
