@@ -9,26 +9,26 @@ services:
   secrets-init:
     image: alpine:3.20
     container_name: picpeak-secrets-init
-    environment:
-      JWT_SECRET: ${JWT_SECRET:-}
-      DB_PASSWORD: ${DB_PASSWORD:-}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    env_file: .env
     entrypoint:
       - sh
       - -c
       - |
         set -e
         mkdir -p /run/secrets
-        seed() {
-          f="/run/secrets/$1"
-          [ -s "$f" ] && return 0
-          if [ -n "$2" ]; then printf '%s' "$2" > "$f"
-          else tr -dc 'A-Za-z0-9' </dev/urandom | head -c 48 > "$f"; fi
-          chmod 644 "$f"
-        }
-        seed jwt_secret "$JWT_SECRET"
-        seed db_password "$DB_PASSWORD"
-        seed redis_password "$REDIS_PASSWORD"
+        if [ ! -s /run/secrets/jwt_secret ]; then
+          if [ -n "$$JWT_SECRET" ]; then printf '%s' "$$JWT_SECRET" > /run/secrets/jwt_secret;
+          else tr -dc A-Za-z0-9 < /dev/urandom | head -c 48 > /run/secrets/jwt_secret; fi
+        fi
+        if [ ! -s /run/secrets/db_password ]; then
+          if [ -n "$$DB_PASSWORD" ]; then printf '%s' "$$DB_PASSWORD" > /run/secrets/db_password;
+          else tr -dc A-Za-z0-9 < /dev/urandom | head -c 48 > /run/secrets/db_password; fi
+        fi
+        if [ ! -s /run/secrets/redis_password ]; then
+          if [ -n "$$REDIS_PASSWORD" ]; then printf '%s' "$$REDIS_PASSWORD" > /run/secrets/redis_password;
+          else tr -dc A-Za-z0-9 < /dev/urandom | head -c 48 > /run/secrets/redis_password; fi
+        fi
+        chmod 644 /run/secrets/jwt_secret /run/secrets/db_password /run/secrets/redis_password
     volumes:
       - picpeak-secrets:/run/secrets
     restart: "no"
