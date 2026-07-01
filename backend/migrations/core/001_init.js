@@ -11,9 +11,16 @@ exports.up = async function(knex) {
     // Initialize tables
     await initializeDatabase();
     
-    // Create default admin user if none exists
+    // Create default admin user if none exists.
+    //
+    // Legacy path — only when ADMIN_PASSWORD is explicitly provided (keeps
+    // existing docker-compose installs working unchanged). When it is NOT set,
+    // we deliberately leave admin_users empty so the first-run setup wizard
+    // (setupService / /setup) creates the admin in-browser — no ADMIN_PASSWORD
+    // in .env. Existing deployments already ran this migration, so this only
+    // affects fresh installs.
     const adminExists = await knex('admin_users').first();
-    if (!adminExists) {
+    if (!adminExists && process.env.ADMIN_PASSWORD) {
       // Use ADMIN_PASSWORD from environment if set, otherwise generate a random one
       const generatedPassword = process.env.ADMIN_PASSWORD || generateReadablePassword();
       const passwordHash = await bcrypt.hash(generatedPassword, 12); // Increased rounds for better security
