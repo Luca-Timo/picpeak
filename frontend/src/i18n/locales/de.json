@@ -2514,7 +2514,22 @@
       "visibleSuccess": "Fotos jetzt für Gäste sichtbar",
       "processingStatus": "Wird verarbeitet…",
       "processingFailed": "Fehlgeschlagen",
-      "retryQueued": "Wiederholung in Warteschlange"
+      "retryQueued": "Wiederholung in Warteschlange",
+      "viewMode": "Ansicht",
+      "gridView": "Rasteransicht",
+      "listView": "Listenansicht",
+      "columns": {
+        "photo": "Foto",
+        "category": "Kategorie",
+        "uploaded": "Hochgeladen",
+        "engagement": "Aktivität",
+        "feedback": "Feedback",
+        "size": "Größe",
+        "actions": "Aktionen",
+        "views": "Aufrufe",
+        "downloads": "Downloads",
+        "likes": "Likes"
+      }
     },
     "events": {
       "tabs": {
