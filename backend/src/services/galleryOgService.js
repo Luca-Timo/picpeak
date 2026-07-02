@@ -91,7 +91,19 @@ async function resolveSlug(slug) {
       event = await db('events').where('slug', redirect.new_slug).first();
     }
   }
-  return event || null;
+  if (event) return event;
+  // Fall back to share-token lookup (#699). Operators share both
+  // forms — the slug-based URL (`/gallery/<slug>` after #525's
+  // short-URLs option strips the slug into the token-only form) AND
+  // the historical token URL (`/gallery/<32-hex>`). The token URL
+  // would otherwise route here with `slug=<token>`, fail the slug
+  // lookup, and serve the fallback site-wide OG — which is what
+  // alex hit when he ran the Cloudflare Worker as a workaround.
+  if (/^[a-f0-9]{32}$/i.test(slug)) {
+    event = await db('events').where('share_token', slug).first();
+    if (event) return event;
+  }
+  return null;
 }
 
 function escapeHtml(value) {

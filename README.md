@@ -94,17 +94,30 @@ Get PicPeak running in under 5 minutes:
 git clone https://github.com/PicPeak/picpeak.git
 cd picpeak
 
-# Copy environment template
+# Copy the environment template — the defaults work out of the box.
+# Machine secrets (JWT, DB, Redis) are auto-generated on first run, and the
+# admin account is created in the browser (see below). Edit .env only to
+# customise (domain, SMTP, storage paths, …) — nothing is required.
 cp .env.example .env
-
-# Edit configuration (required: JWT_SECRET)
-nano .env
 
 # Start with Docker Compose
 docker compose up -d
 
 # Access at http://localhost:3000
 ```
+
+### First run — create your admin account
+
+On first start with no `ADMIN_PASSWORD` set, PicPeak has **no admin account yet** and greets you with an in-browser setup screen — no credentials in `.env`:
+
+1. Open **http://localhost:3000/admin** — you'll be redirected to `/setup`.
+2. Grab the **one-time setup token** from the backend logs (it's also saved to `data/SETUP_TOKEN`):
+   ```bash
+   docker compose logs backend | grep -i "setup token"
+   ```
+3. Paste the token, set your admin **email + password**, and you're in. The token is single-use, and the setup screen closes permanently once an admin exists.
+
+> Prefer the old behaviour? Set `ADMIN_PASSWORD` in `.env` and PicPeak auto-creates the admin on first boot instead (credentials written to `data/ADMIN_CREDENTIALS.txt`).
 
 Note on Docker file permissions
 - The backend container starts as root, chowns bind-mounted host directories (`./storage`, `./data`, `./logs`) to UID 1001 (`nodejs`), then drops privileges via `su-exec` before running the app. No host-side setup needed for fresh installs.
@@ -378,17 +391,23 @@ See our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## 📊 Comparison with Alternatives
 
-| Feature | PicPeak | PicDrop | Scrapbook.de |
-|---------|---------|---------|--------------|
-| Self-Hosted | ✅ | ❌ | ❌ |
-| Custom Branding | ✅ Full | Limited | Limited |
-| Monthly Cost | $0 | $29-199 | €19-99 |
-| Storage Limit | Unlimited* | 50-500GB | 100-1000GB |
-| Client Uploads | ✅ | ✅ | ✅ |
-| API Access | ✅ | Paid | ❌ |
-| Open Source | ✅ | ❌ | ❌ |
+| Feature | PicPeak | PicDrop | Scrapbook.de | Pixieset |
+|---------|---------|---------|--------------|----------|
+| Self-Hosted | ✅ | ❌ | ❌ | ❌ |
+| Custom Branding | ✅ Full | Limited | Limited | ✅ (paid) |
+| Monthly Cost | $0* | $29-199 | €19-99 | ~$60 |
+| Storage Limit | Unlimited** | 50-500GB | 100-1000GB | 3GB–Unlimited*** |
+| Client Uploads | ✅ | ✅ | ✅ | Limited |
+| API Access | ✅ | Paid | ❌ | ❌ |
+| Open Source | ✅ | ❌ | ❌ | ❌ |
+| Customer Accounts | ✅ | ❌ | ❌ | ✅ |
+| Quotes / Contracts / Invoices | 🧪 Beta | ❌ | ❌ | ✅ |
+| Incoming Invoices & Accounting | 🧪 Beta | ❌ | ❌ | ❌ |
 
-*Limited only by your server storage
+*You still bring your own server (own hardware or a VPS) and, if you want one, a domain.
+**Limited only by your server storage.
+***Pixieset's "unlimited" is photos only; video is capped by plan (roughly 0–10 h depending on tier).
+🧪 Beta = built but feature-flagged off by default (see [Beta Features](#-beta-features-use-at-your-own-risk)).
 
 ## 🛡️ Security
 
@@ -484,6 +503,7 @@ PicPeak is inspired by the best features of commercial platforms while remaining
 
 A huge thank you to the people whose code, reports, and feedback have shaped PicPeak:
 
+- [**@the-luap**](https://github.com/the-luap) — creator and lead maintainer. Started the project and built PicPeak's foundation and the entire gallery experience (events, galleries, uploads, sharing, download protection, templates), plus backup & restore, analytics, system health, branding/theming, and WhatsApp notifications — and the architecture every later feature builds on.
 - [**@Luca-Timo**](https://github.com/Luca-Timo) — native Apple Silicon multi-arch images, external-URL toggle for legal CMS pages, the lazy-loaded folder tree picker, the admin-email picker on event creation, the data-driven self-hosted webfont system, the gallery header/banner decoupling, several typed-API refactors, and the CRM + accounting suite (quotes/contracts/invoices, hours logging, calendar, tax report, inbound supplier-invoice capture, expenses, and the Treuhänder/Banana export). Consistently raises the bar with thoughtful PRs.
 - [**@Rekoo-PS**](https://github.com/Rekoo-PS) — sharp-eyed bug reporter and product feedback. Filed the issues that drove the login-loop fix, the gallery-loading skeleton work, the redirection cleanup, the mobile-lightbox overhaul, the admin-events search-counter fix, the photo-count column, and the bulk-delete workflow. Also a [BuyMeACoffee](https://buymeacoffee.com/theluap) supporter — the kind of feedback loop that keeps the project useful for real deployments.
 

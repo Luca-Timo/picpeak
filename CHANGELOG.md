@@ -5,6 +5,50 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.76.2-beta.0](https://github.com/PicPeak/picpeak/compare/v3.76.1-beta.0...v3.76.2-beta.0) (2026-06-30)
+
+
+### Bug Fixes
+
+* **ci:** whatsnew highlights — set GH_REPO so gh runs without a checkout ([3feed0f](https://github.com/PicPeak/picpeak/commit/3feed0fae6a5792a7192a529942e08d9872b7e6e))
+* **ci:** whatsnew highlights — set GH_REPO so gh runs without a checkout ([2a5f0a8](https://github.com/PicPeak/picpeak/commit/2a5f0a8601ba5cb28243b39278ecdc0892388a96))
+
+## [3.76.1-beta.0](https://github.com/PicPeak/picpeak/compare/v3.76.0-beta.0...v3.76.1-beta.0) (2026-06-30)
+
+
+### Bug Fixes
+
+* **whatsnew:** decode HTML entities and trim em-dash detail in fallback bullets ([5582644](https://github.com/PicPeak/picpeak/commit/5582644dc49330549be2a3a4cdd5b1ba0f21a294))
+
+## [3.76.0-beta.0](https://github.com/PicPeak/picpeak/compare/v3.75.1-beta.0...v3.76.0-beta.0) (2026-06-30)
+
+
+### Features
+
+* **gallery:** branded URL shortener — /s/&lt;slug&gt; with OG injection ([#699](https://github.com/PicPeak/picpeak/issues/699)) ([a0f7033](https://github.com/PicPeak/picpeak/commit/a0f7033ffc812f92d56e2eac7bd2f498b95ef83b))
+
+## [3.75.1-beta.0](https://github.com/PicPeak/picpeak/compare/v3.75.0-beta.0...v3.75.1-beta.0) (2026-06-30)
+
+
+### Bug Fixes
+
+* **og:** rich social previews for share-token + slideshow URLs ([#699](https://github.com/PicPeak/picpeak/issues/699)) ([25bf7bb](https://github.com/PicPeak/picpeak/commit/25bf7bb5239420da078749bac270196df6968581))
+* **og:** rich social previews for share-token + slideshow URLs ([#699](https://github.com/PicPeak/picpeak/issues/699)) ([1b8747d](https://github.com/PicPeak/picpeak/commit/1b8747dc82763ba6b4da3a55045cab8740da2a13))
+
+## [3.75.0-beta.0](https://github.com/PicPeak/picpeak/compare/v3.74.0-beta.0...v3.75.0-beta.0) (2026-06-30)
+
+
+### Features
+
+* **updates:** "What's New" highlights after update + pre-update teaser ([a1a73bf](https://github.com/PicPeak/picpeak/commit/a1a73bf75ff3fcd0833fdf7922a35ad09f19439b))
+* **updates:** "What's New" highlights after update + pre-update teaser ([500cf85](https://github.com/PicPeak/picpeak/commit/500cf8522e556575bd74d4c71d38a83fb2596b5e))
+
+
+### Documentation
+
+* **readme:** credit [@the-luap](https://github.com/the-luap) as creator/lead maintainer ([3528f6b](https://github.com/PicPeak/picpeak/commit/3528f6b8b7e2b537b111f7787d48459a976ef744))
+* **readme:** credit [@the-luap](https://github.com/the-luap) as creator/lead maintainer ([748238e](https://github.com/PicPeak/picpeak/commit/748238e8caf198e3899954804e61a2e179058957))
+
 ## [3.74.0-beta.0](https://github.com/PicPeak/picpeak/compare/v3.73.0-beta.0...v3.74.0-beta.0) (2026-06-29)
 
 

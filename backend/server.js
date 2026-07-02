@@ -43,6 +43,7 @@ const galleryRoutes = require('./src/routes/gallery');
 const adminRoutes = require('./src/routes/admin');
 const adminAuthRoutes = require('./src/routes/adminAuth');
 const secureImagesRoutes = require('./src/routes/secureImages');
+const setupRoutes = require('./src/routes/setup');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -397,6 +398,7 @@ async function initializeRateLimiters() {
   app.use('/api/auth', authRateLimiter);
   app.use('/api/gallery/:slug/verify', authRateLimiter);
   app.use('/api/admin/auth/login', authRateLimiter);
+  app.use('/api/setup/admin', authRateLimiter);
 }
 
 // Note: Rate limiters will be initialized after database connection
@@ -543,6 +545,68 @@ app.get('/og/gallery/:slug', handleGalleryOgRequest);
 // returns 404 unless the opt-in is on AND a hero_photo_id is set.
 app.get('/og/gallery/:slug/cover', handleGalleryOgCover);
 
+// Branded URL shortener (#699). /s/<short_slug> is bot-UA aware:
+//   - Social crawler → server-render OG for the target event so the
+//     SHORT URL itself is what scrapes cache against. The og:url canonical
+//     in the rendered HTML points back at /s/<slug>, not the underlying
+//     gallery URL — so a re-share of the same short URL keeps the cache
+//     warm even if the underlying gallery slug rotates.
+//   - Browser → 302 to the stored target_path. The target_path was
+//     captured at create time from the event's slug + share_token + the
+//     global "Use short gallery URLs" setting, so it doesn't silently
+//     change later.
+//   - Soft-deleted → 410 Gone so the admin can tell their delete worked
+//     vs. a typo'd unknown slug (which returns 404).
+const galleryShortUrlService = require('./src/services/galleryShortUrlService');
+const { buildOgMetadata, renderOgHtml } = require('./src/services/galleryOgService');
+app.get('/s/:shortSlug', async (req, res) => {
+  try {
+    const row = await galleryShortUrlService.findByShortSlug(req.params.shortSlug);
+    if (!row) {
+      return res.status(404).type('text/plain').send('Short URL not found');
+    }
+    if (row.deleted_at) {
+      return res.status(410).type('text/plain').send('Short URL has been removed');
+    }
+
+    // Bot UA → render OG metadata for the target event. We look up the
+    // event via the short URL's event_id rather than re-parsing the
+    // target_path so a future migration that adds new target shapes
+    // (slideshow, client-access) doesn't need to rewrite the URL parser.
+    if (isSocialCrawler(req.get('user-agent'))) {
+      const event = await require('./src/database/db').db('events')
+        .where({ id: row.event_id })
+        .first('slug');
+      if (event?.slug) {
+        const meta = await buildOgMetadata(event.slug, req.originalUrl);
+        // Override the canonical to point at the SHORT URL itself —
+        // social platforms cache OG by URL, and the short URL is the
+        // one operators actually share, so that's the cache key we
+        // want them to stick with.
+        const base = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+        meta.url = `${base}/s/${row.short_slug}`;
+        res.set('Cache-Control', 'public, max-age=300');
+        res.set('Content-Type', 'text/html; charset=utf-8');
+        res.send(renderOgHtml(meta));
+        // Hit accounting is fire-and-forget — don't block the bot.
+        galleryShortUrlService.recordHit(row.id).catch(() => {});
+        return;
+      }
+      // Event disappeared (FK CASCADE in flight, or admin hard-deleted
+      // outside the normal soft-delete path) — fall through to 410 so
+      // the scraper sees a clean signal.
+      return res.status(410).type('text/plain').send('Short URL points at a deleted event');
+    }
+
+    // Browser path: redirect. Hit accounting is fire-and-forget.
+    galleryShortUrlService.recordHit(row.id).catch(() => {});
+    return res.redirect(302, row.target_path);
+  } catch (err) {
+    logger.error('Short URL resolver failed', { slug: req.params.shortSlug, error: err.message });
+    return res.status(500).type('text/plain').send('Internal server error');
+  }
+});
+
 // robots.txt endpoint (dynamic, served from DB settings)
 const { generateRobotsTxt } = require('./src/services/robotsTxtService');
 app.get('/robots.txt', async (req, res) => {
@@ -628,6 +692,7 @@ app.get('/health', async (req, res) => {
 });
 
 // Routes
+app.use('/api/setup', setupRoutes); // public first-run bootstrap (self-closes after setup)
 app.use('/api/auth', authRoutes);
   app.use('/api/events', eventRoutes);
   app.use('/api/admin/external-media', require('./src/routes/adminExternalMedia'));
@@ -638,6 +703,10 @@ app.use('/api/gallery', require('./src/routes/galleryGuests'));
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin/auth', adminAuthRoutes);
 app.use('/api/admin/system', require('./src/routes/adminSystem'));
+// Branded URL shortener admin CRUD (#699) — list/create/delete short URLs
+// per event. Mounted at /api/admin so the routes appear at
+// /api/admin/events/:eventId/short-urls and /api/admin/short-urls/:id.
+app.use('/api/admin', require('./src/routes/adminShortUrls'));
 app.use('/api/admin/feature-flags', require('./src/routes/adminFeatureFlags'));
 app.use('/api/admin/whatsapp', require('./src/routes/adminWhatsapp'));
 app.use('/api/admin/backup', require('./src/routes/adminBackup'));
@@ -769,12 +838,21 @@ try {
     // SPA fallback for admin + gallery routes. For gallery URLs we intercept
     // social-crawler User-Agents and serve OG/Twitter-card metadata so link
     // previews show the event name + branding instead of the SPA stub.
-    app.get('/gallery/:slug/:token?', (req, res, next) => {
+    //
+    // Two route shapes — 1-2 segments (`/gallery/:slug/:token?`) and the
+    // 3-segment slideshow form (`/gallery/:slug/show/:token`). The slideshow
+    // shape was previously falling through to the SPA-catchall below and
+    // skipping OG injection entirely (#699). Both patterns route to the
+    // same handler — buildOgMetadata only looks at `slug`, so the extra
+    // /show/ segment is harmless.
+    const ogIntercept = (req, res, next) => {
       if (isSocialCrawler(req.get('user-agent'))) {
         return handleGalleryOgRequest(req, res);
       }
       return next();
-    }, (req, res) => res.sendFile(indexPath));
+    };
+    app.get('/gallery/:slug/:token?', ogIntercept, (req, res) => res.sendFile(indexPath));
+    app.get('/gallery/:slug/show/:token', ogIntercept, (req, res) => res.sendFile(indexPath));
 
     app.get(['/admin', '/admin/*', '/gallery/*'], (req, res) => {
       res.sendFile(indexPath);
@@ -924,6 +1002,16 @@ async function startServer() {
       logger.warn('Install-from-backup hook threw:', err.message);
     }
 
+    // First-run: surface a one-time setup token while no admin account exists.
+    // Runs AFTER install-from-backup so a restored instance (which repopulates
+    // admin_users) never prints a throwaway token. Best-effort — never blocks boot.
+    let setupToken = null;
+    try {
+      setupToken = await require('./src/services/setupService').ensureSetupToken();
+    } catch (err) {
+      logger.warn(`[setup] ensureSetupToken skipped: ${err.message}`);
+    }
+
     // Start backup service
     await startBackupService();
 
@@ -939,6 +1027,13 @@ async function startServer() {
       logger.info(`Server running on port ${PORT}`);
       logger.info(`Admin interface: ${process.env.ADMIN_URL || 'http://localhost:3000'}`);
       logger.info(`Frontend: ${process.env.FRONTEND_URL || 'http://localhost:3001'}`);
+      // First-run: print the one-time setup token to STDOUT (the file logger
+      // doesn't reach `docker logs`), as the last + most visible thing at boot.
+      if (setupToken) {
+        const url = `${process.env.ADMIN_URL || 'http://localhost:3000'}/admin`;
+        const line = '='.repeat(64);
+        console.log(`\n${line}\n  PicPeak first-run setup — no admin account yet.\n  Open:                  ${url}\n  One-time setup token:  ${setupToken}\n  (also saved to data/SETUP_TOKEN)\n${line}\n`);
+      }
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
