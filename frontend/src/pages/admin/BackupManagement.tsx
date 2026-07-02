@@ -23,7 +23,7 @@ import { BackupDashboard } from '../../components/admin/BackupDashboard';
 import { BackupConfiguration } from '../../components/admin/BackupConfiguration';
 import { BackupHistory } from '../../components/admin/BackupHistory';
 import { RestoreWizard } from '../../components/admin/RestoreWizard';
-import { PicpeakBackupCard } from '../../components/admin/PicpeakBackupCard';
+import { PicpeakExportCard, PicpeakRestoreCard } from '../../components/admin/PicpeakBackupCard';
 import { BackupIntegrityCard } from '../../components/admin/BackupIntegrityCard';
 import { BackupCoverageCard } from '../../components/admin/BackupCoverageCard';
 import { api } from '../../config/api';
@@ -205,12 +205,15 @@ export const BackupManagement: React.FC = () => {
       {/* Tab Content */}
       <div className="mt-6">
         {activeTab === 'dashboard' && (
-          <BackupDashboard
-            status={backupStatus}
-            config={backupConfig}
-            onRunBackup={() => manualBackupMutation.mutate()}
-            isBackupRunning={backupStatus?.isRunning || manualBackupMutation.isPending}
-          />
+          <div className="space-y-6">
+            <BackupDashboard
+              status={backupStatus}
+              config={backupConfig}
+              onRunBackup={() => manualBackupMutation.mutate()}
+              isBackupRunning={backupStatus?.isRunning || manualBackupMutation.isPending}
+            />
+            <PicpeakExportCard />
+          </div>
         )}
 
         {activeTab === 'configuration' && (
@@ -227,7 +230,7 @@ export const BackupManagement: React.FC = () => {
 
         {activeTab === 'restore' && (
           <div className="space-y-6">
-            <PicpeakBackupCard />
+            <PicpeakRestoreCard />
             <RestoreWizard onVerifyIntegrity={() => setActiveTab('integrity')} />
           </div>
         )}
