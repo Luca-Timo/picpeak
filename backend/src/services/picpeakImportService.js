@@ -99,6 +99,30 @@ async function reinjectCurrentAdmin(trx, currentAdmin) {
   }
 }
 
+// The json/jsonb columns of a table (Postgres only). The pg driver returns
+// jsonb as parsed JS values, so on re-insert they must be serialised back to
+// valid JSON text — otherwise a scalar like the string "PicPeak" is sent
+// unquoted and pg rejects it ("invalid input syntax for type json").
+async function jsonColumnsFor(trx, table) {
+  if (!isPostgres()) return new Set();
+  const res = await trx.raw(
+    "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ? AND data_type IN ('json', 'jsonb')",
+    [table]
+  );
+  return new Set(res.rows.map((r) => r.column_name));
+}
+
+function serialiseJsonColumns(rows, jsonCols) {
+  if (!jsonCols.size) return rows;
+  return rows.map((row) => {
+    const out = { ...row };
+    for (const col of jsonCols) {
+      if (out[col] !== undefined && out[col] !== null) out[col] = JSON.stringify(out[col]);
+    }
+    return out;
+  });
+}
+
 // Whole-DB replace in one transaction with FK enforcement suspended (pg:
 // session_replication_role=replica on the trx connection, reset before commit;
 // sqlite: defer_foreign_keys so checks run at commit). knex_migrations is never
@@ -113,7 +137,9 @@ async function replaceAllTables(tables, dataDir, currentAdmin) {
     }
     for (const table of tables) {
       const rows = parseNdjson(path.join(dataDir, `${table}.ndjson`));
-      if (rows.length) await trx.batchInsert(table, rows, 100);
+      if (!rows.length) continue;
+      const jsonCols = await jsonColumnsFor(trx, table);
+      await trx.batchInsert(table, serialiseJsonColumns(rows, jsonCols), 100);
     }
 
     await reinjectCurrentAdmin(trx, currentAdmin);

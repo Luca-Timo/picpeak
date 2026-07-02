@@ -76,32 +76,26 @@ async function getLatestMigration() {
   }
 }
 
-// Stream one table to <dataDir>/<table>.ndjson (one JSON object per line).
+// Write one table to <dataDir>/<table>.ndjson (one JSON object per line).
 // Returns { rowCount, checksum } for the manifest. JSON.stringify serialises
 // Dates to ISO strings, which re-import cleanly on both engines.
+//
+// Uses a plain select rather than knex `.stream()`: streaming on Postgres pulls
+// in the optional `pg-query-stream` dependency (not bundled), so it throws on
+// pg. A select works on both engines with no extra dependency. Rows are DB
+// metadata (blobs live on disk under files/), so holding a table in memory is
+// fine for the instance sizes PicPeak targets.
 async function writeTableNdjson(table, dataDir) {
   const outPath = path.join(dataDir, `${table}.ndjson`);
-  const out = fs.createWriteStream(outPath, { encoding: 'utf8' });
   const hash = crypto.createHash('sha256');
-  let rowCount = 0;
-
-  await new Promise((resolve, reject) => {
-    out.on('error', reject);
-    const stream = db(table).stream();
-    stream.on('error', reject);
-    stream.on('data', (row) => {
-      const line = `${JSON.stringify(row)}\n`;
-      hash.update(line);
-      rowCount += 1;
-      if (!out.write(line)) {
-        stream.pause();
-        out.once('drain', () => stream.resume());
-      }
-    });
-    stream.on('end', () => out.end(resolve));
+  const rows = await db(table).select('*');
+  const lines = rows.map((row) => {
+    const line = JSON.stringify(row);
+    hash.update(`${line}\n`);
+    return line;
   });
-
-  return { rowCount, checksum: hash.digest('hex') };
+  await fsp.writeFile(outPath, lines.length ? `${lines.join('\n')}\n` : '', 'utf8');
+  return { rowCount: rows.length, checksum: hash.digest('hex') };
 }
 
 // Recursively collect files under a storage subdir as { abs, rel } where rel is
