@@ -232,7 +232,7 @@ export const SetupPage: React.FC = () => {
   const stepNumber = step === 'token' ? 1 : step === 'account' ? 2 : 3;
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--color-background, #fafafa)' }}>
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#fafafa' }}>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           {/* On a fresh instance there are no branding settings yet, so use the
@@ -247,15 +247,15 @@ export const SetupPage: React.FC = () => {
               </div>
             );
           })()}
-          <h1 className="text-3xl font-bold" style={{ color: 'var(--color-text, #171717)' }}>{t('setup.title')}</h1>
-          <p className="mt-2" style={{ color: 'var(--color-text, #171717)', opacity: 0.7 }}>
+          <h1 className="text-3xl font-bold" style={{ color: '#171717' }}>{t('setup.title')}</h1>
+          <p className="mt-2" style={{ color: '#171717', opacity: 0.7 }}>
             {step === 'token'
               ? t('setup.tokenStepSubtitle')
               : step === 'account'
                 ? t('setup.accountStepSubtitle')
                 : t('setup.usageSubtitle')}
           </p>
-          <p className="mt-3 text-xs font-medium tracking-wide uppercase" style={{ color: 'var(--color-text, #171717)', opacity: 0.5 }}>
+          <p className="mt-3 text-xs font-medium tracking-wide uppercase" style={{ color: '#171717', opacity: 0.5 }}>
             {t('setup.stepOf', { current: stepNumber, total: 3 })}
           </p>
         </div>
