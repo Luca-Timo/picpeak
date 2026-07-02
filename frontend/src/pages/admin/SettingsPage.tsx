@@ -55,7 +55,7 @@ import { CrmSettingsPage } from './settings/CrmSettingsPage';
 import { ReminderTemplatesPage } from './settings/ReminderTemplatesPage';
 import { BlockLibraryPage } from './contracts/BlockLibraryPage';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
-import { Briefcase, Receipt, ScrollText, Mail, Landmark, Smartphone, MonitorPlay } from 'lucide-react';
+import { Briefcase, Receipt, ScrollText, Landmark, Smartphone, MonitorPlay } from 'lucide-react';
 
 // Tab keys driving the inner-nav. Must include every key used in
 // `navGroups` below and in the switch at the bottom of the component.
