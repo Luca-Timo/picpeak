@@ -50,7 +50,10 @@ Unsure where to begin? You can start by looking through these issues:
    - Linting passes: `npm run lint`
 4. **Write tests** if you've added code
 5. **Update documentation** if needed
-6. **Create a Pull Request**
+6. **Attach a screenshot for any UI change** (see below)
+7. **Create a Pull Request**
+
+> **📸 Screenshots are required for UI changes.** Any PR that changes a user-facing surface — a component, page, layout, style, or in-app copy — must include at least one screenshot of the result in the PR description, showing before/after where it helps reviewers see the difference. PRs that touch the UI without a screenshot will be asked to add one before review. Backend-only or otherwise non-visual changes don't need one.
 
 ## 💻 Development Setup
 
