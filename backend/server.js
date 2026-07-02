@@ -399,6 +399,7 @@ async function initializeRateLimiters() {
   app.use('/api/gallery/:slug/verify', authRateLimiter);
   app.use('/api/admin/auth/login', authRateLimiter);
   app.use('/api/setup/admin', authRateLimiter);
+  app.use('/api/setup/verify-token', authRateLimiter);
 }
 
 // Note: Rate limiters will be initialized after database connection

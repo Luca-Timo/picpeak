@@ -23,6 +23,31 @@ router.get('/status', async (req, res) => {
   }
 });
 
+// Step-1 pre-flight: validate the setup token without consuming it, so the
+// two-step wizard can block "Continue" on a wrong token. Rate-limited at the
+// mount point in server.js (authRateLimiter), same as POST /admin.
+router.post('/verify-token', [
+  body('token').notEmpty().withMessage('Setup token is required'),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+  try {
+    const valid = await setupService.verifySetupToken(req.body.token);
+    if (!valid) {
+      return res.status(400).json({ error: 'Invalid setup token', field: 'token' });
+    }
+    return res.json({ valid: true });
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({ error: err.message, field: err.details || undefined });
+    }
+    logger.error('[setup] verifyToken failed', { error: err.message });
+    return res.status(500).json({ error: 'Setup failed' });
+  }
+});
+
 router.post('/admin', [
   body('token').notEmpty().withMessage('Setup token is required'),
   body('email').isEmail().withMessage('A valid email is required'),

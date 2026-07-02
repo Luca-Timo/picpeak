@@ -80,6 +80,23 @@ function tokensMatch(provided, expected) {
   return crypto.timingSafeEqual(a, b);
 }
 
+// Pre-flight check for the two-step wizard: lets step 1 confirm the token is
+// valid before advancing to the account step, so a wrong token is caught at
+// "Continue" rather than after the user has filled in email + password. Does
+// NOT burn the token — createInitialAdmin still claims it atomically on submit.
+// Rate-limited at the mount point (same as /admin) so it can't be used to
+// brute-force the token; the token is also 24 random bytes, so guessing is
+// infeasible regardless.
+async function verifySetupToken(token) {
+  if (!(await noAdminExists())) {
+    // Setup already finished — treat the endpoint as closed (the client
+    // redirects to login on a 409).
+    throw new ConflictError('Setup already completed — an admin account exists');
+  }
+  const expected = await getAppSetting(SETUP_TOKEN_KEY);
+  return tokensMatch(token, expected);
+}
+
 // Creates the first admin as super_admin (the highest role) and returns a
 // ready-to-set admin JWT so the browser flows straight into the wizard.
 async function createInitialAdmin({ token, email, password, ip }) {
@@ -156,4 +173,4 @@ async function createInitialAdmin({ token, email, password, ip }) {
   };
 }
 
-module.exports = { getSetupStatus, ensureSetupToken, createInitialAdmin };
+module.exports = { getSetupStatus, ensureSetupToken, verifySetupToken, createInitialAdmin };

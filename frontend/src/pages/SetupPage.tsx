@@ -41,6 +41,7 @@ export const SetupPage: React.FC = () => {
   const [form, setForm] = useState({ token: '', email: '', password: '', confirm: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isVerifyingToken, setIsVerifyingToken] = useState(false);
   const [copied, setCopied] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -92,12 +93,32 @@ export const SetupPage: React.FC = () => {
     return Object.keys(next).length === 0;
   };
 
-  const handleTokenContinue = (e: React.FormEvent) => {
+  const handleTokenContinue = async (e: React.FormEvent) => {
     e.preventDefault();
     toast.dismiss();
     if (!validateToken()) return;
+    // Verify the token server-side before advancing — a wrong token is caught
+    // here at "Continue" rather than after the user has filled in the account
+    // step. The token is checked, not consumed; createInitialAdmin still burns
+    // it atomically on final submit.
+    setIsVerifyingToken(true);
     setErrors({});
-    setStep('account');
+    try {
+      await setupService.verifyToken(form.token.trim());
+      setStep('account');
+    } catch (error: any) {
+      const httpStatus = error.response?.status;
+      if (httpStatus === 429) {
+        toast.error(t('setup.tooManyAttempts'));
+      } else if (httpStatus === 409) {
+        // Someone else finished setup first — send to login.
+        navigate('/admin/login', { replace: true });
+      } else {
+        setErrors({ token: t('setup.invalidToken') });
+      }
+    } finally {
+      setIsVerifyingToken(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -246,7 +267,7 @@ export const SetupPage: React.FC = () => {
                 </div>
               </div>
 
-              <Button type="submit" variant="primary" size="lg" className="w-full" rightIcon={<ArrowRight className="w-4 h-4" />}>
+              <Button type="submit" variant="primary" size="lg" isLoading={isVerifyingToken} className="w-full" rightIcon={<ArrowRight className="w-4 h-4" />}>
                 {t('setup.continue')}
               </Button>
             </form>

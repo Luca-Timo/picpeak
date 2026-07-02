@@ -142,6 +142,29 @@ describe('setup routes', () => {
     expect(res.body).toEqual({ needsAdmin: true, complete: false });
   });
 
+  it('POST /api/setup/verify-token accepts the right token without burning it (200)', async () => {
+    const token = await setupService.ensureSetupToken();
+    const res = await request(app).post('/api/setup/verify-token').send({ token });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ valid: true });
+    // Token is NOT consumed — it still works for the actual create.
+    expect(await getAppSetting('setup_token')).toBe(token);
+  });
+
+  it('POST /api/setup/verify-token rejects a wrong token (400, field token)', async () => {
+    await setupService.ensureSetupToken();
+    const res = await request(app).post('/api/setup/verify-token').send({ token: 'nope' });
+    expect(res.status).toBe(400);
+    expect(res.body.field).toBe('token');
+  });
+
+  it('POST /api/setup/verify-token is closed once an admin exists (409)', async () => {
+    const token = await setupService.ensureSetupToken();
+    await setupService.createInitialAdmin({ token, email: 'first@example.com', password: VALID_PW });
+    const res = await request(app).post('/api/setup/verify-token').send({ token });
+    expect(res.status).toBe(409);
+  });
+
   it('POST /api/setup/admin rejects a wrong token (400)', async () => {
     await setupService.ensureSetupToken();
     const res = await request(app)
