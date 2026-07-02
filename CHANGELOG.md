@@ -5,6 +5,14 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.77.1-beta.0](https://github.com/PicPeak/picpeak/compare/v3.77.0-beta.0...v3.77.1-beta.0) (2026-07-02)
+
+
+### Documentation
+
+* require screenshots for UI changes in PRs ([f5b4aa7](https://github.com/PicPeak/picpeak/commit/f5b4aa7a5bc321ffbd33f1c1b92003435a7ee842))
+* require screenshots for UI changes in PRs ([8ca7477](https://github.com/PicPeak/picpeak/commit/8ca74776f4d3f7be930a713afe4ac4de594adedd))
+
 ## [3.77.0-beta.0](https://github.com/PicPeak/picpeak/compare/v3.76.2-beta.0...v3.77.0-beta.0) (2026-07-01)
 
 
