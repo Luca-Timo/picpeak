@@ -3341,6 +3341,8 @@
     "tokenHint": "Printed to the server logs on first start (also saved to data/SETUP_TOKEN).",
     "tokenRequired": "The setup token is required",
     "tokenLocationHint": "Can't find it? Run: docker compose logs backend | grep -i \"setup token\"",
+    "invalidToken": "That setup token is not valid.",
+    "passwordRequirements": "Use at least 8 characters with an upper-case letter, a lower-case letter and a number.",
     "emailLabel": "Email address",
     "emailPlaceholder": "you@example.com",
     "emailRequired": "Email is required",

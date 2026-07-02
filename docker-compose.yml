@@ -24,6 +24,9 @@ services:
           if [ -n "$$REDIS_PASSWORD" ]; then printf '%s' "$$REDIS_PASSWORD" > /run/secrets/redis_password;
           else tr -dc A-Za-z0-9 < /dev/urandom | head -c 48 > /run/secrets/redis_password; fi
         fi
+        # 644: the readers run as three different users (postgres, redis, nodejs),
+        # so a non-root reader must be able to read them. The volume is private to
+        # these containers and never host-exposed.
         chmod 644 /run/secrets/jwt_secret /run/secrets/db_password /run/secrets/redis_password
     volumes:
       - picpeak-secrets:/run/secrets
@@ -43,7 +46,6 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       - DATABASE_CLIENT=pg
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD:-}@postgres:5432/${DB_NAME}
       - DB_TYPE=postgresql
       - DB_HOST=postgres
       - DB_PORT=5432

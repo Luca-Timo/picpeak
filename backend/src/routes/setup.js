@@ -45,7 +45,9 @@ router.post('/admin', [
     res.status(201).json({ user: result.user });
   } catch (err) {
     if (err.statusCode) {
-      return res.status(err.statusCode).json({ error: err.message });
+      // `field` (token/email/password) lets the client show a translated
+      // message instead of rendering the raw English error verbatim.
+      return res.status(err.statusCode).json({ error: err.message, field: err.details || undefined });
     }
     logger.error('[setup] createInitialAdmin failed', { error: err.message });
     return res.status(500).json({ error: 'Setup failed' });

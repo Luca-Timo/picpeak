@@ -19,7 +19,7 @@ export const SetupPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAdminAuth();
 
-  const { data: status, isLoading: statusLoading } = useQuery({
+  const { data: status, isLoading: statusLoading, isError: statusError } = useQuery({
     queryKey: ['setup-status'],
     queryFn: setupService.getSetupStatus,
     retry: false,
@@ -34,8 +34,10 @@ export const SetupPage: React.FC = () => {
   if (statusLoading) {
     return <Loading fullScreen />;
   }
-  // Setup already done → nothing to bootstrap here.
-  if (status && !status.needsAdmin) {
+  // Setup already done, OR the status couldn't be read (e.g. a transient 500) →
+  // go to login rather than flashing the create-admin form on a configured
+  // instance. Only render the wizard when we know an admin is genuinely missing.
+  if (statusError || !status?.needsAdmin) {
     return <Navigate to="/admin/login" replace />;
   }
 
@@ -50,7 +52,9 @@ export const SetupPage: React.FC = () => {
     if (!form.email) next.email = t('setup.emailRequired');
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) next.email = t('setup.invalidEmail');
     if (!form.password) next.password = t('setup.passwordRequired');
-    else if (form.password.length < 8) next.password = t('setup.passwordMinLength');
+    // Mirror the server's rule (validatePassword): >=8 chars with upper, lower
+    // and a digit — so the user isn't bounced by the server after a green client.
+    else if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(form.password)) next.password = t('setup.passwordRequirements');
     if (form.confirm !== form.password) next.confirm = t('setup.passwordMismatch');
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -81,18 +85,27 @@ export const SetupPage: React.FC = () => {
       toast.success(t('setup.success'));
       navigate('/admin/dashboard', { replace: true });
     } catch (error: any) {
-      const apiErrors = error.response?.data?.errors;
-      if (error.response?.status === 429) {
+      const httpStatus = error.response?.status;
+      const data = error.response?.data;
+      // Map the server's field back to a translated message instead of
+      // rendering its raw English error verbatim.
+      const fieldKey: Record<string, string> = {
+        token: 'setup.invalidToken',
+        email: 'setup.invalidEmail',
+        password: 'setup.passwordRequirements',
+      };
+      if (httpStatus === 429) {
         toast.error(t('setup.tooManyAttempts'));
-      } else if (Array.isArray(apiErrors) && apiErrors.length) {
-        setErrors({ form: apiErrors[0]?.msg || t('setup.genericError') });
-      } else if (error.response?.status === 409) {
+      } else if (httpStatus === 409) {
         // Someone else finished setup first — send to login.
         navigate('/admin/login', { replace: true });
-      } else if (error.response?.data?.error) {
-        setErrors({ form: error.response.data.error });
+      } else if (data?.field && fieldKey[data.field]) {
+        setErrors({ [data.field]: t(fieldKey[data.field]) });
+      } else if (Array.isArray(data?.errors) && data.errors.length) {
+        const p = data.errors[0]?.path || data.errors[0]?.param;
+        setErrors(p && fieldKey[p] ? { [p]: t(fieldKey[p]) } : { form: t('setup.genericError') });
       } else {
-        toast.error(t('setup.genericError'));
+        setErrors({ form: t('setup.genericError') });
       }
     } finally {
       setIsSubmitting(false);

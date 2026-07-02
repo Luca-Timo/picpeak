@@ -563,24 +563,43 @@ EOF
         fi
     fi
 
-    # Always surface the admin credentials file (#427: iSchumi reported
-    # admins couldn't find the generated password — the migration writes it
-    # to the in-container path and we never copied it to the host unless
-    # --reset-admin-password was used). Best-effort: a missing file just
-    # means the migration ran on a pre-existing DB and didn't generate one.
+    # Surface how to finish setup. Two paths:
+    #  - Legacy: if ADMIN_PASSWORD was set, migration seeded an admin and wrote
+    #    data/ADMIN_CREDENTIALS.txt (#427) — print those credentials.
+    #  - Default (no ADMIN_PASSWORD): no admin is seeded; the app shows a
+    #    first-run wizard at /setup guarded by a one-time token
+    #    (data/SETUP_TOKEN). Print the token and point the operator there.
+    local login_base="${DOMAIN_NAME:+https://$DOMAIN_NAME}${DOMAIN_NAME:-http://YOUR_HOST_IP:3000}"
     if docker compose cp backend:/app/data/ADMIN_CREDENTIALS.txt "$app_dir/data/ADMIN_CREDENTIALS.txt" 2>/dev/null; then
         chown "$host_uid":"$host_gid" "$app_dir/data/ADMIN_CREDENTIALS.txt" 2>/dev/null || true
         chmod 600 "$app_dir/data/ADMIN_CREDENTIALS.txt" 2>/dev/null || true
         log_step "Admin credentials saved to: $app_dir/data/ADMIN_CREDENTIALS.txt"
-        # Show the password in the install output so the operator can log
-        # in immediately. The file remains as a backup record.
         echo
         echo "--------------------------------------------------"
         grep -E '^Email:|^Password:' "$app_dir/data/ADMIN_CREDENTIALS.txt" 2>/dev/null || true
         echo "--------------------------------------------------"
-        echo "  Login URL: ${DOMAIN_NAME:+https://$DOMAIN_NAME}${DOMAIN_NAME:-http://YOUR_HOST_IP:3000}/admin"
-        echo "  Full credentials file: $app_dir/data/ADMIN_CREDENTIALS.txt"
-        echo "  Delete the file after recording the password."
+        echo "  Login URL: $login_base/admin"
+        echo "  Delete the credentials file after recording the password."
+        echo
+    else
+        # First-run wizard path — surface the one-time setup token.
+        docker compose cp backend:/app/data/SETUP_TOKEN "$app_dir/data/SETUP_TOKEN" 2>/dev/null || true
+        chown "$host_uid":"$host_gid" "$app_dir/data/SETUP_TOKEN" 2>/dev/null || true
+        local setup_token
+        setup_token="$(cat "$app_dir/data/SETUP_TOKEN" 2>/dev/null)"
+        [ -z "$setup_token" ] && setup_token="$(docker compose logs backend 2>/dev/null | grep -i 'setup token:' | tail -1 | sed -E 's/.*setup token: *([A-Za-z0-9_-]+).*/\1/')"
+        echo
+        echo "--------------------------------------------------"
+        echo "  Finish setup in your browser — create the admin account:"
+        echo "    1. Open  $login_base/admin"
+        echo "    2. Enter this one-time setup token:"
+        if [ -n "$setup_token" ]; then
+            echo "         $setup_token"
+        else
+            echo "         (run: cd $app_dir && docker compose logs backend | grep -i \"setup token\")"
+        fi
+        echo "    3. Set your admin email and password."
+        echo "--------------------------------------------------"
         echo
     fi
 

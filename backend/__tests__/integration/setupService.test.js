@@ -113,6 +113,18 @@ describe('setupService (first-run bootstrap)', () => {
     ).rejects.toMatchObject({ statusCode: 409 });
   });
 
+  it('serialises a double-submit — two concurrent valid-token calls create only one admin', async () => {
+    const token = await setupService.ensureSetupToken();
+    const results = await Promise.allSettled([
+      setupService.createInitialAdmin({ token, email: 'a@example.com', password: VALID_PW }),
+      setupService.createInitialAdmin({ token, email: 'b@example.com', password: VALID_PW }),
+    ]);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    expect(fulfilled).toHaveLength(1); // the atomic token claim lets exactly one win
+    const count = await db('admin_users').count({ c: '*' }).first();
+    expect(Number(count.c)).toBe(1);
+  });
+
   it('ensureSetupToken clears any stale token once an admin exists', async () => {
     const token = await setupService.ensureSetupToken();
     await setupService.createInitialAdmin({ token, email: 'first@example.com', password: VALID_PW });

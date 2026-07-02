@@ -104,22 +104,39 @@ async function createInitialAdmin({ token, email, password, ip }) {
   if (!role) {
     throw new ConflictError('super_admin role missing — database not initialised');
   }
-
   const passwordHash = await bcrypt.hash(password, getBcryptRounds());
-  const inserted = await db('admin_users').insert({
-    username: cleanEmail,
-    email: cleanEmail,
-    password_hash: passwordHash,
-    role_id: role.id,
-    is_active: formatBoolean(true),
-    must_change_password: formatBoolean(false),
-    created_at: new Date(),
-    updated_at: new Date(),
-  }).returning('id');
-  const id = inserted[0]?.id || inserted[0];
 
-  // Burn the one-time token (DB + file) — the endpoint is now permanently closed.
-  await clearSetupToken();
+  // Create the admin and burn the token ATOMICALLY. The claim (null the token
+  // row expecting exactly one match) serialises concurrent valid-token submits,
+  // so a double-submit can't create two super_admins. All writes use `trx`
+  // (never the global db) to avoid the SQLite in-transaction deadlock.
+  const id = await db.transaction(async (trx) => {
+    const claimed = await trx('app_settings')
+      .where({ setting_key: SETUP_TOKEN_KEY })
+      .whereNotNull('setting_value')
+      .update({ setting_value: null, updated_at: new Date() });
+    if (claimed !== 1) {
+      throw new ConflictError('Setup already completed — an admin account exists');
+    }
+    const cnt = await trx('admin_users').count({ c: '*' }).first();
+    if (Number(cnt?.c || 0) !== 0) {
+      throw new ConflictError('Setup already completed — an admin account exists');
+    }
+    const inserted = await trx('admin_users').insert({
+      username: cleanEmail,
+      email: cleanEmail,
+      password_hash: passwordHash,
+      role_id: role.id,
+      is_active: formatBoolean(true),
+      must_change_password: formatBoolean(false),
+      created_at: new Date(),
+      updated_at: new Date(),
+    }).returning('id');
+    return inserted[0]?.id || inserted[0];
+  });
+
+  // DB token cleared inside the tx; remove the on-disk file too (best-effort).
+  try { fs.unlinkSync(setupTokenFilePath()); } catch (_) { /* best-effort */ }
   logger.info(`[setup] Initial super_admin created (id=${id}, email=${cleanEmail})`);
 
   const authToken = jwt.sign(
