@@ -131,6 +131,33 @@ router.post('/run', adminAuth, requirePermission('backup.create'), async (req, r
   }
 });
 
+// Generate + download a portable ".picpeak" export — an engine-neutral logical
+// snapshot (DB rows as NDJSON + PDFs/business-docs) that can be re-uploaded to
+// another instance via the web UI. `?includePhotos=true` also bundles original
+// gallery photos (larger); otherwise the admin re-uploads them per gallery.
+//
+// SECURITY: the file contains plaintext secrets (SMTP password, admin password
+// hashes, API keys). The download UI must warn before offering it. We surface
+// the flag as a response header too so the client can double-confirm.
+router.get('/picpeak/export', adminAuth, requirePermission('backup.create'), async (req, res) => {
+  const fsSync = require('fs');
+  try {
+    const includePhotos = req.query.includePhotos === 'true' || req.query.includePhotos === '1';
+    const { createPicpeak } = require('../services/picpeakExportService');
+    const { filePath } = await createPicpeak({ includePhotos });
+    const filename = path.basename(filePath);
+    res.setHeader('X-Picpeak-Contains-Secrets', 'true');
+    res.download(filePath, filename, (err) => {
+      // Best-effort cleanup of the temp .picpeak (and its temp dir) after send.
+      fsSync.rm(path.dirname(filePath), { recursive: true, force: true }, () => {});
+      if (err) logger.error('[picpeak-export] download failed', { error: err.message });
+    });
+  } catch (error) {
+    logger.error('[picpeak-export] failed to create export', { error: error.message });
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to create .picpeak export' });
+  }
+});
+
 // Get backup run details
 router.get('/runs/:id', adminAuth, requirePermission('backup.view'), async (req, res) => {
   try {
