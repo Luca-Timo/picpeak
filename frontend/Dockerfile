@@ -32,8 +32,11 @@ RUN npm run build
 # Production stage (Alpine 3.23 with OpenSSL 3.5.5, patched libexpat)
 FROM nginx:1.28-alpine
 
-# Upgrade all packages to fix security vulnerabilities (OpenSSL, libexpat, BusyBox CVEs)
-RUN apk upgrade --no-cache
+# Upgrade all Alpine packages for security fixes. The explicit nginx upgrade
+# closes the HTTP/2 + rewrite/charset CVEs (CVE-2026-42055 / -49975 / -9256 /
+# -48142, fixed in nginx 1.28.3-r4) and busts any cached layer still carrying
+# the vulnerable r1 build.
+RUN apk upgrade --no-cache && apk add --no-cache --upgrade nginx
 
 # Install runtime dependencies. `gettext` provides envsubst, used by
 # docker-entrypoint.sh for the BRAND_TITLE / BRAND_DESCRIPTION runtime
