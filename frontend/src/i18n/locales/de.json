@@ -1779,7 +1779,27 @@
       "title": "E-Mail-Einstellungen"
     },
     "backup": {
-      "title": "Backup"
+      "title": "Backup",
+      "picpeak": {
+        "title": "Portables Backup (.picpeak)",
+        "intro": "Laden Sie eine einzelne, in sich geschlossene Datei herunter und laden Sie sie auf einer anderen Instanz hoch, um diese zu klonen — komplett im Browser.",
+        "includePhotos": "Original-Galeriefotos einschließen (größere Datei)",
+        "secretsWarning": "Diese Datei enthält Geheimnisse im Klartext (E-Mail-Passwort, Admin-Zugangsdaten, API-Schlüssel). Bewahren Sie sie sicher auf und übertragen Sie sie nur über vertrauenswürdige Kanäle.",
+        "download": ".picpeak herunterladen",
+        "downloadFailed": "Die Backup-Datei konnte nicht erstellt werden.",
+        "restoreTitle": "Aus einer .picpeak wiederherstellen",
+        "restoreIntro": "Laden Sie eine .picpeak von dieser oder einer anderen Instanz hoch. Nur dieselbe Datenbank-Engine.",
+        "chooseFile": ".picpeak-Datei auswählen…",
+        "restoreDone": "Backup wiederhergestellt.",
+        "restoreFailed": "Wiederherstellung fehlgeschlagen.",
+        "restoreSummary": "{{tables}} Tabellen und {{files}} Dateien wiederhergestellt.",
+        "externalMediaNote": "Dieses Backup verweist auf eine externe Medienbibliothek. Stellen Sie sicher, dass das externe Medien-Routing auf dieser Instanz konfiguriert ist.",
+        "externalMediaLink": "Einrichtungsanleitung",
+        "reload": "App neu laden",
+        "confirmTitle": "Die Wiederherstellung löscht alle aktuellen Daten",
+        "confirmBody": "Dies ersetzt ALLE Daten auf dieser Instanz dauerhaft durch das hochgeladene Backup, mit Ausnahme Ihres aktuellen Kontos. Dies kann nicht rückgängig gemacht werden.",
+        "confirmRestore": "Löschen & wiederherstellen"
+      }
     },
     "branding": {
       "title": "Branding"
@@ -3467,6 +3487,15 @@
     "subtitle": "Erstellen Sie Ihr Administrator-Konto, um loszulegen",
     "tokenStepSubtitle": "Geben Sie zunächst Ihren einmaligen Setup-Token ein",
     "accountStepSubtitle": "Erstellen Sie nun Ihr Administrator-Konto",
+    "usageSubtitle": "Wie möchten Sie PicPeak nutzen?",
+    "usageAlwaysOn": "Galerien, Analysen und Benutzerverwaltung sind immer enthalten. Wählen Sie unten optionale Funktionen — Sie können dies jederzeit in den Einstellungen ändern.",
+    "usageGroupCrm": "Kundenverwaltung",
+    "usageGroupAccounting": "Buchhaltung",
+    "usageGroupAutomation": "Automatisierung & Versand",
+    "usageDepsNote": "Rechnungen aktivieren automatisch den Buchhaltungsbereich.",
+    "usageSkip": "Nur mit Galerien fortfahren",
+    "finish": "Einrichtung abschließen",
+    "featuresSaveFailed": "Ihre Funktionsauswahl konnte nicht gespeichert werden — Sie können sie später unter Einstellungen → Funktionen festlegen.",
     "stepOf": "Schritt {{current}} von {{total}}",
     "continue": "Weiter",
     "back": "Zurück",

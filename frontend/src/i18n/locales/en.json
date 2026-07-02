@@ -1335,7 +1335,27 @@
       "title": "Email Settings"
     },
     "backup": {
-      "title": "Backup"
+      "title": "Backup",
+      "picpeak": {
+        "title": "Portable backup (.picpeak)",
+        "intro": "Download a single self-contained file, then upload it on another instance to clone this one — all through the browser.",
+        "includePhotos": "Include original gallery photos (larger file)",
+        "secretsWarning": "This file contains secrets in plain text (email password, admin credentials, API keys). Store it securely and only transfer it over trusted channels.",
+        "download": "Download .picpeak",
+        "downloadFailed": "Could not create the backup file.",
+        "restoreTitle": "Restore from a .picpeak",
+        "restoreIntro": "Upload a .picpeak taken from this or another instance. Same database engine only.",
+        "chooseFile": "Choose .picpeak file…",
+        "restoreDone": "Backup restored.",
+        "restoreFailed": "Restore failed.",
+        "restoreSummary": "{{tables}} tables and {{files}} files restored.",
+        "externalMediaNote": "This backup references an external-media library. Make sure external-media routing is configured on this instance.",
+        "externalMediaLink": "Setup guide",
+        "reload": "Reload app",
+        "confirmTitle": "Restore will delete all current data",
+        "confirmBody": "This permanently replaces ALL data on this instance with the uploaded backup, except your current account. This cannot be undone.",
+        "confirmRestore": "Delete & restore"
+      }
     },
     "branding": {
       "title": "Branding"
@@ -3363,6 +3383,15 @@
     "subtitle": "Create your administrator account to get started",
     "tokenStepSubtitle": "First, enter your one-time setup token",
     "accountStepSubtitle": "Now create your administrator account",
+    "usageSubtitle": "How will you use PicPeak?",
+    "usageAlwaysOn": "Galleries, analytics and user management are always included. Pick any extras below — you can change these anytime in Settings.",
+    "usageGroupCrm": "Client management",
+    "usageGroupAccounting": "Accounting",
+    "usageGroupAutomation": "Automation & delivery",
+    "usageDepsNote": "Invoices automatically enable the Accounting area.",
+    "usageSkip": "Continue with galleries only",
+    "finish": "Finish setup",
+    "featuresSaveFailed": "Could not save your feature choices — you can set them later in Settings → Features.",
     "stepOf": "Step {{current}} of {{total}}",
     "continue": "Continue",
     "back": "Back",
