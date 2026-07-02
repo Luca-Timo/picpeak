@@ -9,6 +9,7 @@ import { Button, Input, Card, Loading } from '../components/common';
 import { useAdminAuth } from '../contexts';
 import { setupService } from '../services/setup.service';
 import { featureFlagsService, type FeatureFlags, type FeatureKey } from '../services/featureFlags.service';
+import { PicpeakRestoreCard } from '../components/admin/PicpeakBackupCard';
 import { resolveLoginLogoClasses } from '../utils/loginLogoSize';
 import type { AdminUser } from '../types';
 
@@ -51,7 +52,7 @@ export const SetupPage: React.FC = () => {
     staleTime: Infinity,
   });
 
-  const [step, setStep] = useState<'token' | 'account' | 'usage'>('token');
+  const [step, setStep] = useState<'token' | 'account' | 'usage' | 'restore'>('token');
   const [form, setForm] = useState({ token: '', email: '', password: '', confirm: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -253,11 +254,15 @@ export const SetupPage: React.FC = () => {
               ? t('setup.tokenStepSubtitle')
               : step === 'account'
                 ? t('setup.accountStepSubtitle')
-                : t('setup.usageSubtitle')}
+                : step === 'restore'
+                  ? t('setup.restoreStepSubtitle')
+                  : t('setup.usageSubtitle')}
           </p>
-          <p className="mt-3 text-xs font-medium tracking-wide uppercase" style={{ color: '#171717', opacity: 0.5 }}>
-            {t('setup.stepOf', { current: stepNumber, total: 3 })}
-          </p>
+          {step !== 'restore' && (
+            <p className="mt-3 text-xs font-medium tracking-wide uppercase" style={{ color: '#171717', opacity: 0.5 }}>
+              {t('setup.stepOf', { current: stepNumber, total: 3 })}
+            </p>
+          )}
         </div>
 
         <Card padding="lg">
@@ -397,11 +402,20 @@ export const SetupPage: React.FC = () => {
                 </Button>
               </div>
             </form>
-          ) : (
+          ) : step === 'usage' ? (
             <div className="space-y-6">
               <p className="rounded-lg bg-neutral-50 border border-neutral-200 px-3 py-2 text-xs text-neutral-600">
                 {t('setup.usageAlwaysOn')}
               </p>
+
+              <button
+                type="button"
+                onClick={() => setStep('restore')}
+                className="w-full rounded-lg border border-dashed border-neutral-300 p-3 text-left hover:bg-neutral-50 transition-colors"
+              >
+                <span className="block text-sm font-medium text-neutral-800">{t('setup.restoreEntry')}</span>
+                <span className="block text-xs text-neutral-500">{t('setup.restoreEntryHint')}</span>
+              </button>
 
               {USAGE_GROUPS.map((group) => (
                 <div key={group.id}>
@@ -445,6 +459,20 @@ export const SetupPage: React.FC = () => {
                 onClick={finishSetup}
               >
                 {selectedFeatures.size > 0 ? t('setup.finish') : t('setup.usageSkip')}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <p className="text-sm text-neutral-600">{t('setup.restoreIntro')}</p>
+              <PicpeakRestoreCard />
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={() => setStep('usage')}
+                leftIcon={<ArrowLeft className="w-4 h-4" />}
+              >
+                {t('setup.back')}
               </Button>
             </div>
           )}
