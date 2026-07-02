@@ -634,7 +634,16 @@
         "upload": {
           "name": "Backup hochladen",
           "description": "Eine Backup-Datei hochladen",
-          "comingSoon": "Upload-Funktion kommt bald"
+          "comingSoon": "Upload-Funktion kommt bald",
+          "manifestComingSoon": "Manifest-Upload-Funktion kommt bald",
+          "picpeak": {
+            "name": ".picpeak-Backup",
+            "description": "Portables Voll-Backup — stellt alles wieder her (vollständige Überschreibung, Ihr aktuelles Konto bleibt erhalten)."
+          },
+          "manifest": {
+            "name": "Manifest + Dateien",
+            "description": "Ein Manifest und die zugehörigen Backup-Dateien hochladen (Legacy-Format)."
+          }
         },
         "configuration": {
           "s3": "S3-Konfiguration",

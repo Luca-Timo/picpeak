@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PicpeakRestoreCard } from './PicpeakBackupCard';
 import {
   RefreshCw,
   AlertTriangle,
@@ -283,12 +284,47 @@ export const RestoreWizard = ({ onVerifyIntegrity } = {}) => {
       )}
 
       {restoreData.source === 'upload' && (
-        <Card className="p-4">
-          <div className="text-center py-8">
-            <Upload className="h-12 w-12 mx-auto mb-3 text-neutral-400" />
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">{t('backup.restore.source.upload.comingSoon')}</p>
+        <div className="space-y-4">
+          {/* Two upload kinds: the working portable .picpeak restore, and the
+              legacy manifest+files upload (still a stub). */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button
+              onClick={() => setRestoreData(prev => ({ ...prev, uploadType: 'picpeak' }))}
+              className={`p-6 rounded-lg border-2 transition-all ${
+                restoreData.uploadType === 'picpeak'
+                  ? 'border-primary bg-accent-dark/15'
+                  : 'border-neutral-200 dark:border-neutral-600 hover:border-neutral-300 dark:hover:border-neutral-500'
+              }`}
+            >
+              <FileArchive className={`h-10 w-10 mb-2 mx-auto ${restoreData.uploadType === 'picpeak' ? 'text-primary' : 'text-neutral-400'}`} />
+              <h4 className="font-medium text-neutral-900 dark:text-neutral-100">{t('backup.restore.source.upload.picpeak.name', '.picpeak backup')}</h4>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">{t('backup.restore.source.upload.picpeak.description', 'Portable full backup — restores everything (full override, keeps your current account).')}</p>
+            </button>
+            <button
+              onClick={() => setRestoreData(prev => ({ ...prev, uploadType: 'manifest' }))}
+              className={`p-6 rounded-lg border-2 transition-all ${
+                restoreData.uploadType === 'manifest'
+                  ? 'border-primary bg-accent-dark/15'
+                  : 'border-neutral-200 dark:border-neutral-600 hover:border-neutral-300 dark:hover:border-neutral-500'
+              }`}
+            >
+              <Upload className={`h-10 w-10 mb-2 mx-auto ${restoreData.uploadType === 'manifest' ? 'text-primary' : 'text-neutral-400'}`} />
+              <h4 className="font-medium text-neutral-900 dark:text-neutral-100">{t('backup.restore.source.upload.manifest.name', 'Manifest + files')}</h4>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">{t('backup.restore.source.upload.manifest.description', 'Upload a manifest and its backup files (legacy format).')}</p>
+            </button>
           </div>
-        </Card>
+
+          {restoreData.uploadType === 'picpeak' && <PicpeakRestoreCard />}
+
+          {restoreData.uploadType === 'manifest' && (
+            <Card className="p-4">
+              <div className="text-center py-8">
+                <Upload className="h-12 w-12 mx-auto mb-3 text-neutral-400" />
+                <p className="text-sm text-neutral-600 dark:text-neutral-400">{t('backup.restore.source.upload.manifestComingSoon', 'Manifest Upload functionality coming soon')}</p>
+              </div>
+            </Card>
+          )}
+        </div>
       )}
     </div>
   );

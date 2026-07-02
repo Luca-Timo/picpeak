@@ -23,7 +23,7 @@ import { BackupDashboard } from '../../components/admin/BackupDashboard';
 import { BackupConfiguration } from '../../components/admin/BackupConfiguration';
 import { BackupHistory } from '../../components/admin/BackupHistory';
 import { RestoreWizard } from '../../components/admin/RestoreWizard';
-import { PicpeakExportCard, PicpeakRestoreCard } from '../../components/admin/PicpeakBackupCard';
+import { PicpeakExportCard } from '../../components/admin/PicpeakBackupCard';
 import { BackupIntegrityCard } from '../../components/admin/BackupIntegrityCard';
 import { BackupCoverageCard } from '../../components/admin/BackupCoverageCard';
 import { api } from '../../config/api';
@@ -229,10 +229,7 @@ export const BackupManagement: React.FC = () => {
         )}
 
         {activeTab === 'restore' && (
-          <div className="space-y-6">
-            <PicpeakRestoreCard />
-            <RestoreWizard onVerifyIntegrity={() => setActiveTab('integrity')} />
-          </div>
+          <RestoreWizard onVerifyIntegrity={() => setActiveTab('integrity')} />
         )}
 
         {activeTab === 'integrity' && (

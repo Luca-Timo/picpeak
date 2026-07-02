@@ -3022,7 +3022,16 @@
         "upload": {
           "name": "Upload Backup",
           "description": "Upload a backup file",
-          "comingSoon": "Upload functionality coming soon"
+          "comingSoon": "Upload functionality coming soon",
+          "manifestComingSoon": "Manifest Upload functionality coming soon",
+          "picpeak": {
+            "name": ".picpeak backup",
+            "description": "Portable full backup — restores everything (full override, keeps your current account)."
+          },
+          "manifest": {
+            "name": "Manifest + files",
+            "description": "Upload a manifest and its backup files (legacy format)."
+          }
         },
         "configuration": {
           "s3": "S3 Configuration",
