@@ -46,9 +46,11 @@
     "node-cron": "^3.0.2",
     "node-stream-zip": "^1.15.0",
     "nodemailer": "^9.0.1",
+    "otplib": "^12.0.1",
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.17.2",
     "pg": "^8.16.3",
+    "postcss": "8.5.10",
     "qrcode": "^1.5.4",
     "react-i18next": "^15.6.0",
     "sanitize-html": "^2.17.0",
@@ -57,11 +59,10 @@
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "swissqrbill": "^4.3.0",
+    "tar": ">=7.5.16",
     "uuid": "^11.1.1",
     "winston": "^3.8.2",
-    "zxcvbn": "^4.4.2",
-    "postcss": "8.5.10",
-    "tar": ">=7.5.16"
+    "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
     "eslint": "^8.40.0",

@@ -2,9 +2,10 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
-const { db } = require('../database/db');
+const { db, logActivity } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
 const { verifyRecaptcha } = require('../services/recaptcha');
+const mfaService = require('../services/mfaService');
 const { 
   trackFailedAttempt,
   trackSuccessfulLogin,
@@ -31,6 +32,49 @@ const {
   logPasswordValidationFailure
 } = require('../utils/passwordValidation');
 const router = express.Router();
+
+/**
+ * Finish a successful admin login: reset the lockout counter, stamp
+ * last_login, mint the 24h admin JWT, set the HttpOnly cookie, and return the
+ * user payload. Shared by the direct (no-MFA) path and the MFA-verify path so
+ * both produce an identical session. `lockoutKey` is the identifier the user
+ * typed (username or email) so success/failure tracking stays in one bucket.
+ */
+async function completeAdminLogin(req, res, admin, ipAddress, userAgent, lockoutKey) {
+  await trackSuccessfulLogin(lockoutKey, ipAddress, userAgent);
+
+  await db('admin_users').where('id', admin.id).update({
+    last_login: new Date(),
+    last_login_ip: ipAddress
+  });
+
+  const token = jwt.sign({
+    id: admin.id,
+    username: admin.username,
+    type: 'admin',
+    role: admin.role_name,
+    ip: ipAddress,
+    loginTime: Date.now()
+  }, process.env.JWT_SECRET, {
+    expiresIn: '24h',
+    issuer: 'picpeak-auth'
+  });
+
+  setAdminAuthCookie(res, token);
+
+  return res.json({
+    user: {
+      id: admin.id,
+      username: admin.username,
+      email: admin.email,
+      mustChangePassword: admin.must_change_password || false,
+      role: admin.role_name ? {
+        name: admin.role_name,
+        displayName: admin.role_display_name
+      } : null
+    }
+  });
+}
 
 // Admin login with enhanced security
 router.post('/admin/login', [
@@ -94,46 +138,129 @@ router.post('/admin/login', [
       return res.status(401).json({ error: getGenericAuthError() });
     }
 
-    // Successful login
-    await trackSuccessfulLogin(username, ipAddress, userAgent);
-
-    // Update last login and login metadata
-    await db('admin_users').where('id', admin.id).update({
-      last_login: new Date(),
-      last_login_ip: ipAddress
-    });
-
-    // Generate token with additional claims including role
-    const token = jwt.sign({
-      id: admin.id,
-      username: admin.username,
-      type: 'admin',
-      role: admin.role_name, // Add role to JWT
-      ip: ipAddress,
-      loginTime: Date.now()
-    }, process.env.JWT_SECRET, {
-      expiresIn: '24h',
-      issuer: 'picpeak-auth'
-    });
-
-    setAdminAuthCookie(res, token);
-
-    // Token is delivered via HttpOnly cookie only (not in response body)
-    res.json({
-      user: {
+    // Second factor: if this admin has TOTP enabled, do NOT complete the login
+    // yet. Issue a short-lived, single-purpose mfa_pending token and require the
+    // code via /admin/login/mfa. We deliberately don't reset the lockout counter
+    // (trackSuccessfulLogin) or stamp last_login until the second factor passes,
+    // so MFA brute-force is still gated by the account lockout. `loginId` carries
+    // the typed identifier so the verify step tracks the same lockout bucket.
+    if (mfaService.isEnrolled(admin)) {
+      const mfaToken = jwt.sign({
         id: admin.id,
         username: admin.username,
-        email: admin.email,
-        mustChangePassword: admin.must_change_password || false,
-        role: admin.role_name ? {
-          name: admin.role_name,
-          displayName: admin.role_display_name
-        } : null
-      }
-    });
+        type: 'mfa_pending',
+        loginId: username
+      }, process.env.JWT_SECRET, {
+        expiresIn: '5m',
+        issuer: 'picpeak-auth'
+      });
+      return res.json({ mfaRequired: true, mfaToken });
+    }
+
+    return await completeAdminLogin(req, res, admin, ipAddress, userAgent, username);
   } catch (error) {
     logger.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Second-factor verification. Exchanges the short-lived mfa_pending token
+// (from /admin/login) plus a TOTP or recovery code for a full admin session.
+router.post('/admin/login/mfa', [
+  body('mfaToken').notEmpty(),
+  body('code').notEmpty().trim()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { mfaToken, code } = req.body;
+    const ipAddress = getClientIp(req);
+    const userAgent = req.headers['user-agent'] || '';
+
+    let decoded;
+    try {
+      decoded = jwt.verify(mfaToken, process.env.JWT_SECRET, {
+        algorithms: ['HS256'],
+        issuer: 'picpeak-auth'
+      });
+    } catch (err) {
+      return res.status(401).json({
+        error: 'Your verification session expired. Please sign in again.',
+        code: 'MFA_SESSION_EXPIRED'
+      });
+    }
+
+    if (decoded.type !== 'mfa_pending') {
+      return res.status(401).json({ error: getGenericAuthError() });
+    }
+
+    const lockoutKey = decoded.loginId || decoded.username;
+    const lockoutStatus = await checkAccountLockout(lockoutKey);
+    if (lockoutStatus.isLocked) {
+      return res.status(423).json({
+        error: 'Account temporarily locked due to too many failed attempts',
+        retryAfter: lockoutStatus.remainingTime
+      });
+    }
+
+    const admin = await db('admin_users')
+      .leftJoin('roles', 'roles.id', 'admin_users.role_id')
+      .where('admin_users.id', decoded.id)
+      .select(
+        'admin_users.*',
+        'roles.name as role_name',
+        'roles.display_name as role_display_name'
+      )
+      .first();
+
+    if (!admin || !admin.is_active || !mfaService.isEnrolled(admin)) {
+      return res.status(401).json({ error: getGenericAuthError() });
+    }
+
+    // TOTP first, then a one-time recovery code.
+    let ok = mfaService.verifyTotpEncrypted(code, admin.two_factor_secret);
+    let usedRecovery = false;
+    let remainingHashes = null;
+    if (!ok) {
+      const stored = mfaService.parseRecoveryCodes(admin.two_factor_recovery_codes);
+      const result = await mfaService.consumeRecoveryCode(code, stored);
+      if (result.matched) {
+        ok = true;
+        usedRecovery = true;
+        remainingHashes = result.remainingHashes;
+      }
+    }
+
+    if (!ok) {
+      await trackFailedAttempt(lockoutKey, ipAddress, userAgent);
+      return res.status(401).json({ error: 'Invalid verification code', code: 'MFA_INVALID' });
+    }
+
+    if (usedRecovery) {
+      await db('admin_users').where('id', admin.id).update({
+        two_factor_recovery_codes: JSON.stringify(remainingHashes),
+        updated_at: new Date()
+      });
+      await logActivity('admin_mfa_recovery_used',
+        { admin_id: admin.id, remaining: remainingHashes.length },
+        null,
+        { type: 'admin', id: admin.id, name: admin.username }
+      );
+    }
+
+    await logActivity('admin_mfa_login',
+      { admin_id: admin.id, method: usedRecovery ? 'recovery_code' : 'totp' },
+      null,
+      { type: 'admin', id: admin.id, name: admin.username }
+    );
+
+    return await completeAdminLogin(req, res, admin, ipAddress, userAgent, lockoutKey);
+  } catch (error) {
+    logger.error('MFA verification error:', error);
+    res.status(500).json({ error: 'Verification failed' });
   }
 });
 
