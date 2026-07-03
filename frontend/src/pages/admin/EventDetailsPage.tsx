@@ -1053,7 +1053,8 @@ export const EventDetailsPage: React.FC = () => {
       </div>
 
       {/* Draft Banner */}
-      {event.is_draft && !event.is_archived && (
+      {/* !! — SQLite returns integer booleans; a bare 0 would render as literal "0" */}
+      {!!event.is_draft && !event.is_archived && (
         <Card className="p-4 mb-6 border-2 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20">
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 flex-shrink-0 text-yellow-600 dark:text-yellow-400" />
@@ -1910,13 +1911,14 @@ export const EventDetailsPage: React.FC = () => {
                       }`}>
                         {event.protection_level || 'standard'}
                       </span>
-                      {event.disable_right_click && (
+                      {/* !! on the next three — SQLite integer booleans render literal "0" when falsy */}
+                      {!!event.disable_right_click && (
                         <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded">
                           <MousePointer className="w-3 h-3 mr-1" />
                           {t('events.rightClickBlocked', 'Right-click blocked')}
                         </span>
                       )}
-                      {event.enable_devtools_protection && (
+                      {!!event.enable_devtools_protection && (
                         <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded">
                           <Monitor className="w-3 h-3 mr-1" />
                           {t('events.devtoolsDetection', 'DevTools detection')}
@@ -1928,7 +1930,7 @@ export const EventDetailsPage: React.FC = () => {
                           {t('events.downloadsDisabled', 'Downloads disabled')}
                         </span>
                       )}
-                      {event.watermark_downloads && (
+                      {!!event.watermark_downloads && (
                         <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded">
                           <Droplets className="w-3 h-3 mr-1" />
                           {t('events.watermarked', 'Watermarked')}
@@ -2068,7 +2070,8 @@ export const EventDetailsPage: React.FC = () => {
                 </div>
               </label>
 
-              {event?.client_access_enabled && (
+              {/* !! — SQLite integer boolean; bare 0 renders as literal "0" */}
+              {!!event?.client_access_enabled && (
                 <>
                   {/* Set/Change PIN */}
                   <div className="flex items-end gap-2">
