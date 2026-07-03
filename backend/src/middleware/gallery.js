@@ -66,18 +66,29 @@ async function verifyGalleryAccess(req, res, next) {
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET, {
+        algorithms: ['HS256'],
         issuer: 'picpeak-auth'
       });
     } catch (error) {
       // If verification fails with issuer, try without issuer (backward compatibility)
       if (error.name === 'JsonWebTokenError' && error.message.includes('jwt issuer invalid')) {
-        decoded = jwt.verify(token, process.env.JWT_SECRET);
+        decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
       } else {
         throw error;
       }
     }
     logger.debug('[verifyGalleryAccess] Token decoded successfully', { eventId: decoded.eventId, slug: requestedSlug });
-    
+
+    // Only gallery-scoped tokens grant gallery access. Every legitimate
+    // path (password login, share link, client access, customer-minted,
+    // slideshow) mints type:'gallery'. Reject anything else — e.g. a guest
+    // identity token (type:'guest', for feedback attribution) that carries a
+    // matching eventId — instead of relying on other token types incidentally
+    // lacking an eventId to fail the id match below.
+    if (decoded.type !== 'gallery') {
+      return res.status(403).json({ error: 'Invalid token type for gallery access' });
+    }
+
     // If we have a slug in the URL params or from pre-middleware, verify it matches
     if (requestedSlug) {
       // Verify by slug and ensure it matches the token's event

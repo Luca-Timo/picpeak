@@ -14,6 +14,7 @@ const {
 } = require('../utils/authSecurity');
 const { endSession } = require('../middleware/sessionTimeout');
 const { revokeToken } = require('../utils/tokenRevocation');
+const { timingSafeEqualStr } = require('../utils/timingSafe');
 const logger = require('../utils/logger');
 const {
   setAdminAuthCookie,
@@ -413,7 +414,7 @@ router.post('/gallery/share-login', [
 
     const expectedToken = getEventShareToken(event);
 
-    if (!expectedToken || token !== expectedToken) {
+    if (!expectedToken || !timingSafeEqualStr(token, expectedToken)) {
       await trackFailedAttempt(shareIdentifier, ipAddress, userAgent);
       return res.status(401).json({ error: 'Invalid or expired share link' });
     }

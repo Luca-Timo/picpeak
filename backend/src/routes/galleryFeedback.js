@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const { photoAuth } = require('../middleware/photoAuth');
 const { verifyGalleryAccess, denySlideshowToken } = require('../middleware/gallery');
 const { feedbackRateLimit, generateGuestIdentifier } = require('../middleware/feedbackRateLimit');
 const { resolveGuest } = require('../middleware/guestAuth');

@@ -601,12 +601,18 @@ router.post(
       const photo = await db('photos').where({ id: req.params.photoId }).first();
       if (!photo) return res.status(404).json({ error: 'Photo not found' });
 
-      // Editor role: only allow retry on photos in events they own.
-      if (req.admin.roleName === 'editor') {
+      // Ownership scope: any non-super_admin may only retry photos in events
+      // they own — matching requireEventOwnership (which scopes both the
+      // admin and editor roles; only super_admin bypasses). Previously this
+      // checked the editor role alone, leaving admin-role users able to
+      // reprocess another admin's photos.
+      if (req.admin.roleName !== 'super_admin') {
         const event = await db('events')
-          .where({ id: photo.event_id, created_by: req.admin.id })
+          .where({ id: photo.event_id })
           .first();
-        if (!event) return res.status(404).json({ error: 'Photo not found' });
+        if (event && event.created_by && event.created_by !== req.admin.id) {
+          return res.status(404).json({ error: 'Photo not found' });
+        }
       }
 
       if (photo.processing_status !== 'failed') {

@@ -7,6 +7,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
+const { requireEventOwnership } = require('../middleware/ownership');
 const eventRenameService = require('../services/eventRenameService');
 const router = express.Router();
 
@@ -14,7 +15,7 @@ const router = express.Router();
  * POST /api/admin/events/:eventId/rename
  * Rename an event
  */
-router.post('/:eventId/rename', adminAuth, requirePermission('events.edit'), [
+router.post('/:eventId/rename', adminAuth, requirePermission('events.edit'), requireEventOwnership, [
   body('newEventName')
     .trim()
     .isLength({ min: 3, max: 100 })
@@ -59,7 +60,7 @@ router.post('/:eventId/rename', adminAuth, requirePermission('events.edit'), [
  * POST /api/admin/events/:eventId/validate-rename
  * Validate a potential rename without executing it
  */
-router.post('/:eventId/validate-rename', adminAuth, requirePermission('events.edit'), [
+router.post('/:eventId/validate-rename', adminAuth, requirePermission('events.edit'), requireEventOwnership, [
   body('newEventName')
     .trim()
     .isLength({ min: 3, max: 100 })

@@ -1,6 +1,6 @@
 const express = require('express');
 const { db } = require('../database/db');
-const { verifyGalleryAccess } = require('../middleware/gallery');
+const { verifyGalleryAccess, denySlideshowToken } = require('../middleware/gallery');
 const secureImageService = require('../services/secureImageService');
 const secureImageMiddleware = require('../middleware/secureImageMiddleware');
 const logger = require('../utils/logger');
@@ -23,7 +23,7 @@ router.post('/:slug/generate-token', async (req, res, next) => {
   // Add slug to request for verifyGalleryAccess
   req.requestedSlug = req.params.slug;
   next();
-}, verifyGalleryAccess, async (req, res) => {
+}, verifyGalleryAccess, denySlideshowToken, async (req, res) => {
   try {
     const { photoId, accessType = 'view' } = req.body;
     
@@ -273,6 +273,7 @@ router.get('/:slug/secure-download/:photoId/:token',
     next();
   },
   verifyGalleryAccess,
+  denySlideshowToken,
   async (req, res) => {
     try {
       const { photoId, token } = req.params;

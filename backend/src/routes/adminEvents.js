@@ -24,7 +24,7 @@ const eventTypeService = require('../services/eventTypeService');
 const { normaliseEventTimeTriple } = require('../services/eventService');
 const { hasColumnCached } = require('../utils/schemaCache');
 const { validateFileType } = require('../utils/fileSecurityUtils');
-const { requireEventOwnership } = require('../middleware/ownership');
+const { requireEventOwnership, filterOwnedEventIds } = require('../middleware/ownership');
 const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
 const { getAppSetting } = require('../utils/appSettings');
 const { getFrontendBaseUrl } = require('../utils/frontendUrl');
@@ -2260,24 +2260,38 @@ router.post('/bulk-archive', adminAuth, requirePermission('events.archive'), [
     }
 
     const { eventIds } = req.body;
-    
+
     if (eventIds.length === 0) {
       return res.status(400).json({ error: 'No events selected for archiving' });
     }
 
-    // Get all events to archive
-    const events = await db('events')
-      .whereIn('id', eventIds)
-      .where('is_archived', formatBoolean(false));
-
-    if (events.length === 0) {
-      return res.status(400).json({ error: 'No valid events found to archive' });
-    }
+    // Ownership scope: a non-super_admin may only archive events they own.
+    // Foreign/non-existent ids are dropped and reported as failures so this
+    // route can't archive another admin's events (the single-event
+    // /:id/archive route enforces the same via requireEventOwnership).
+    const { allowed: allowedIds, denied: deniedIds } = await filterOwnedEventIds(req.admin, eventIds);
 
     const results = {
       successful: [],
-      failed: []
+      failed: deniedIds.map((id) => ({ id, name: null, error: 'Access denied or event not found' }))
     };
+
+    // Get all events to archive
+    const events = allowedIds.length
+      ? await db('events')
+        .whereIn('id', allowedIds)
+        .where('is_archived', formatBoolean(false))
+      : [];
+
+    if (events.length === 0) {
+      if (results.failed.length > 0) {
+        return res.json({
+          message: `Bulk archive completed: 0 succeeded, ${results.failed.length} failed`,
+          results
+        });
+      }
+      return res.status(400).json({ error: 'No valid events found to archive' });
+    }
 
     // Process each event
     for (const event of events) {
@@ -2353,16 +2367,21 @@ router.post('/bulk-delete', adminAuth, requirePermission('events.delete'), [
 
     const { eventIds } = req.body;
 
-    // Editor-role events.delete permission is already gated by the route
-    // middleware. We do NOT additionally filter to created_by here because
-    // the per-event delete-cascade is global (matches DELETE /:id which
-    // also has no role-based filter — that's why events.delete is a
-    // sensitive permission).
+    // Ownership scope: a non-super_admin may only delete events they own.
+    // The single-event DELETE /:id route enforces this via
+    // requireEventOwnership; this bulk route must match it, otherwise an
+    // admin/editor scoped to their own events could cascade-delete any
+    // event by id. Foreign/non-existent ids are dropped and reported as
+    // failures (indistinguishable, to avoid an existence oracle).
+    const { allowed: allowedIds, denied: deniedIds } = await filterOwnedEventIds(req.admin, eventIds);
 
-    const results = { successful: [], failed: [] };
+    const results = {
+      successful: [],
+      failed: deniedIds.map((id) => ({ id, name: null, error: 'Access denied or event not found' }))
+    };
     const adminContext = { id: req.admin.id, username: req.admin.username };
 
-    for (const eventId of eventIds) {
+    for (const eventId of allowedIds) {
       try {
         const deleted = await deleteEventCascade(eventId, adminContext);
         results.successful.push(deleted);

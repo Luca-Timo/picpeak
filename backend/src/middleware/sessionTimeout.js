@@ -86,7 +86,7 @@ async function sessionTimeoutMiddleware(req, res, next) {
   
   try {
     // Verify token is valid
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     
     // Check if this is an admin token
     if (!decoded.id) {
@@ -127,7 +127,7 @@ async function sessionTimeoutMiddleware(req, res, next) {
     for (const [oldToken, _] of sessions.entries()) {
       if (oldToken !== token) {
         try {
-          const oldDecoded = jwt.verify(oldToken, process.env.JWT_SECRET);
+          const oldDecoded = jwt.verify(oldToken, process.env.JWT_SECRET, { algorithms: ['HS256'] });
           if (oldDecoded.id === userId) {
             sessions.delete(oldToken);
           }
