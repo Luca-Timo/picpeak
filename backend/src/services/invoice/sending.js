@@ -358,7 +358,7 @@ async function sendStorno(stornoId, adminId) {
   // email body — customers' bookkeepers expect to see the pair.
   const originalRow = storno.cancels_invoice_id
     ? await db('invoices').where({ id: storno.cancels_invoice_id })
-        .select('invoice_number', 'issue_date').first()
+      .select('invoice_number', 'issue_date').first()
     : null;
 
   const { to: stornoTo, cc: stornoCc } = resolveBillingRecipients(customer, storno.cc_pdf_email);

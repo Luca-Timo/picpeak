@@ -67,35 +67,35 @@ async function listInvoices({ filters = {}, sort = 'issue_desc', page = 1, pageS
     const total = ensureInt(countRow?.total || 0);
 
     switch (sort) {
-      // "Newest" / "Oldest" means newest/oldest by CREATION time, not
-      // by issue_date. Issue_date is admin-controlled (used for tax
-      // accruals, retro-dating, future-dating) so it can drift from
-      // actual chronology — sorting by it makes a just-created invoice
-      // disappear into the middle of the list whenever its issue_date
-      // is set to something other than today. created_at always
-      // reflects when the row landed in the DB. id is the tiebreaker
-      // for rows that share a created_at second.
-      case 'oldest':       query = query.orderBy('invoices.created_at', 'asc').orderBy('invoices.id', 'asc'); break;
-      case 'issue_asc':    query = query.orderBy('invoices.issue_date', 'asc').orderBy('invoices.id', 'asc'); break;
-      case 'issue_desc':   query = query.orderBy('invoices.issue_date', 'desc').orderBy('invoices.id', 'desc'); break;
-      case 'due_asc':      query = query.orderBy('invoices.due_date', 'asc'); break;
-      case 'due_desc':     query = query.orderBy('invoices.due_date', 'desc'); break;
-      case 'value_asc':    query = query.orderBy('invoices.total_amount_minor', 'asc'); break;
-      case 'value_desc':   query = query.orderBy('invoices.total_amount_minor', 'desc'); break;
-      case 'customer_asc':
-        query = query
-          .orderByRaw('COALESCE(customer_accounts.company_name, customer_accounts.last_name, customer_accounts.email) asc')
-          .orderBy('invoices.id', 'desc');
-        break;
-      case 'customer_desc':
-        query = query
-          .orderByRaw('COALESCE(customer_accounts.company_name, customer_accounts.last_name, customer_accounts.email) desc')
-          .orderBy('invoices.id', 'desc');
-        break;
-      case 'newest':
-      default:
-        query = query.orderBy('invoices.created_at', 'desc').orderBy('invoices.id', 'desc');
-        break;
+    // "Newest" / "Oldest" means newest/oldest by CREATION time, not
+    // by issue_date. Issue_date is admin-controlled (used for tax
+    // accruals, retro-dating, future-dating) so it can drift from
+    // actual chronology — sorting by it makes a just-created invoice
+    // disappear into the middle of the list whenever its issue_date
+    // is set to something other than today. created_at always
+    // reflects when the row landed in the DB. id is the tiebreaker
+    // for rows that share a created_at second.
+    case 'oldest':       query = query.orderBy('invoices.created_at', 'asc').orderBy('invoices.id', 'asc'); break;
+    case 'issue_asc':    query = query.orderBy('invoices.issue_date', 'asc').orderBy('invoices.id', 'asc'); break;
+    case 'issue_desc':   query = query.orderBy('invoices.issue_date', 'desc').orderBy('invoices.id', 'desc'); break;
+    case 'due_asc':      query = query.orderBy('invoices.due_date', 'asc'); break;
+    case 'due_desc':     query = query.orderBy('invoices.due_date', 'desc'); break;
+    case 'value_asc':    query = query.orderBy('invoices.total_amount_minor', 'asc'); break;
+    case 'value_desc':   query = query.orderBy('invoices.total_amount_minor', 'desc'); break;
+    case 'customer_asc':
+      query = query
+        .orderByRaw('COALESCE(customer_accounts.company_name, customer_accounts.last_name, customer_accounts.email) asc')
+        .orderBy('invoices.id', 'desc');
+      break;
+    case 'customer_desc':
+      query = query
+        .orderByRaw('COALESCE(customer_accounts.company_name, customer_accounts.last_name, customer_accounts.email) desc')
+        .orderBy('invoices.id', 'desc');
+      break;
+    case 'newest':
+    default:
+      query = query.orderBy('invoices.created_at', 'desc').orderBy('invoices.id', 'desc');
+      break;
     }
 
     const offset = Math.max(0, (page - 1) * pageSize);

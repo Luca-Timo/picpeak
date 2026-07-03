@@ -1299,23 +1299,23 @@ router.get('/storage/info', adminAuth, requirePermission('settings.view'), async
         }
 
         switch (setting.setting_key) {
-          case 'general_storage_soft_limit_bytes':
-            if (typeof parsedValue === 'number' && !Number.isNaN(parsedValue)) {
-              configuredSoftLimit = parsedValue;
-            }
-            break;
-          case 'general_storage_capacity_override_bytes':
-            if (typeof parsedValue === 'number' && !Number.isNaN(parsedValue)) {
-              capacityOverrideDb = parsedValue;
-            }
-            break;
-          case 'general_storage_available_override_bytes':
-            if (typeof parsedValue === 'number' && !Number.isNaN(parsedValue)) {
-              availableOverrideDb = parsedValue;
-            }
-            break;
-          default:
-            break;
+        case 'general_storage_soft_limit_bytes':
+          if (typeof parsedValue === 'number' && !Number.isNaN(parsedValue)) {
+            configuredSoftLimit = parsedValue;
+          }
+          break;
+        case 'general_storage_capacity_override_bytes':
+          if (typeof parsedValue === 'number' && !Number.isNaN(parsedValue)) {
+            capacityOverrideDb = parsedValue;
+          }
+          break;
+        case 'general_storage_available_override_bytes':
+          if (typeof parsedValue === 'number' && !Number.isNaN(parsedValue)) {
+            availableOverrideDb = parsedValue;
+          }
+          break;
+        default:
+          break;
         }
       });
     } catch (error) {

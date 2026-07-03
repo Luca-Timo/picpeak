@@ -1251,7 +1251,7 @@ router.post('/:eventId/chunked-upload/init', adminAuth, requirePermission('photo
     // Validate file size (max 10GB)
     const maxSize = 10 * 1024 * 1024 * 1024;
     if (fileSize > maxSize) {
-      return res.status(400).json({ error: `File too large. Maximum size is 10GB.` });
+      return res.status(400).json({ error: 'File too large. Maximum size is 10GB.' });
     }
 
     const result = await chunkedUpload.initializeUpload({

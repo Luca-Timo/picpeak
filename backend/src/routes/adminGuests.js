@@ -74,10 +74,10 @@ router.get(
           'gallery_guests.created_at',
           'gallery_guests.last_seen_at',
           'gallery_guests.email_verified_at',
-          db.raw("COUNT(CASE WHEN photo_feedback.feedback_type = 'like' THEN 1 END) AS likes"),
-          db.raw("COUNT(CASE WHEN photo_feedback.feedback_type = 'favorite' THEN 1 END) AS favorites"),
-          db.raw("COUNT(CASE WHEN photo_feedback.feedback_type = 'comment' THEN 1 END) AS comments"),
-          db.raw("COUNT(CASE WHEN photo_feedback.feedback_type = 'rating' THEN 1 END) AS ratings"),
+          db.raw('COUNT(CASE WHEN photo_feedback.feedback_type = \'like\' THEN 1 END) AS likes'),
+          db.raw('COUNT(CASE WHEN photo_feedback.feedback_type = \'favorite\' THEN 1 END) AS favorites'),
+          db.raw('COUNT(CASE WHEN photo_feedback.feedback_type = \'comment\' THEN 1 END) AS comments'),
+          db.raw('COUNT(CASE WHEN photo_feedback.feedback_type = \'rating\' THEN 1 END) AS ratings'),
           db.raw('COUNT(DISTINCT photo_feedback.photo_id) AS distinct_photos')
         )
         .orderBy('gallery_guests.created_at', 'desc');
@@ -117,7 +117,7 @@ router.get(
       const photos = await db('photos')
         .leftJoin('photo_feedback', function () {
           this.on('photo_feedback.photo_id', '=', 'photos.id')
-            .andOn(db.raw("photo_feedback.feedback_type IN ('like','favorite')"))
+            .andOn(db.raw('photo_feedback.feedback_type IN (\'like\',\'favorite\')'))
             .andOnNotNull('photo_feedback.guest_id');
         })
         .where('photos.event_id', eventId)

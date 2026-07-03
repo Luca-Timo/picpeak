@@ -200,20 +200,20 @@ class RestoreService {
       // Step 6: Perform the actual restore based on type
       let restoreResult;
       switch (options.restoreType) {
-        case 'full':
-          restoreResult = await this.performFullRestore(localBackupPath, manifest, options);
-          break;
-        case 'database':
-          restoreResult = await this.performDatabaseRestore(localBackupPath, manifest, options);
-          break;
-        case 'files':
-          restoreResult = await this.performFilesRestore(localBackupPath, manifest, options);
-          break;
-        case 'selective':
-          restoreResult = await this.performSelectiveRestore(localBackupPath, manifest, options);
-          break;
-        default:
-          throw new Error(`Unknown restore type: ${options.restoreType}`);
+      case 'full':
+        restoreResult = await this.performFullRestore(localBackupPath, manifest, options);
+        break;
+      case 'database':
+        restoreResult = await this.performDatabaseRestore(localBackupPath, manifest, options);
+        break;
+      case 'files':
+        restoreResult = await this.performFilesRestore(localBackupPath, manifest, options);
+        break;
+      case 'selective':
+        restoreResult = await this.performSelectiveRestore(localBackupPath, manifest, options);
+        break;
+      default:
+        throw new Error(`Unknown restore type: ${options.restoreType}`);
       }
 
       // Step 7: Post-restore verification
@@ -308,7 +308,7 @@ class RestoreService {
         this.log('info', 'Post-restore migrations applied');
       } catch (migErr) {
         this.log('warn',
-          `Post-restore migrate:safe failed — restore data is in place but the schema may lag the running image. ` +
+          'Post-restore migrate:safe failed — restore data is in place but the schema may lag the running image. ' +
           `A container restart will retry via wait-for-db.sh. Error: ${migErr.message}`);
       }
 
@@ -409,8 +409,8 @@ class RestoreService {
       if (restoreRun) {
         const failureMessage = rollbackAttempted
           ? (rollbackSucceeded
-              ? `${error.message} (rolled back successfully to pre-restore state)`
-              : `${error.message} | ROLLBACK ALSO FAILED: ${rollbackError} — destination is in a partial state, inspect before retrying`)
+            ? `${error.message} (rolled back successfully to pre-restore state)`
+            : `${error.message} | ROLLBACK ALSO FAILED: ${rollbackError} — destination is in a partial state, inspect before retrying`)
           : `${error.message} (no pre-restore backup available — destination may be partial)`;
         await db('restore_runs').where('id', restoreRun.id).update({
           completed_at: new Date(),
@@ -888,9 +888,9 @@ class RestoreService {
       throw new Error(
         `Database backup file not found. Tried: ${candidates.join(', ')}. ` +
         `Manifest recorded path: ${dbBackupFile}. ` +
-        `Hint: this usually means the manifest's database.backup_file path no longer ` +
-        `exists on disk (deleted? moved? volume not mounted?). Check ` +
-        `~/<your-compose-dir>/backup/database/ on the host.`
+        'Hint: this usually means the manifest\'s database.backup_file path no longer ' +
+        'exists on disk (deleted? moved? volume not mounted?). Check ' +
+        '~/<your-compose-dir>/backup/database/ on the host.'
       );
     }
 
@@ -1043,8 +1043,8 @@ class RestoreService {
         await spawnAsync('psql', [
           '-h', host, '-p', String(port), '-U', user, '-d', maintenanceDb,
           '-c',
-          `SELECT pg_terminate_backend(pid) FROM pg_stat_activity ` +
-          `WHERE datname = '${database.replace(/'/g, "''")}' AND pid <> pg_backend_pid()`,
+          'SELECT pg_terminate_backend(pid) FROM pg_stat_activity ' +
+          `WHERE datname = '${database.replace(/'/g, '\'\'')}' AND pid <> pg_backend_pid()`,
         ], { env });
 
         // Drop and recreate database (extremely dangerous!)

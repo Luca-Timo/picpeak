@@ -494,14 +494,14 @@ class S3StorageAdapter extends stream.EventEmitter {
     
     let command;
     switch (operation.toLowerCase()) {
-      case 'getobject':
-        command = new GetObjectCommand(params);
-        break;
-      case 'putobject':
-        command = new PutObjectCommand(params);
-        break;
-      default:
-        throw new Error(`Unsupported operation: ${operation}`);
+    case 'getobject':
+      command = new GetObjectCommand(params);
+      break;
+    case 'putobject':
+      command = new PutObjectCommand(params);
+      break;
+    default:
+      throw new Error(`Unsupported operation: ${operation}`);
     }
     
     return await getSignedUrl(this.s3Client, command, {
@@ -638,7 +638,7 @@ class S3StorageAdapter extends stream.EventEmitter {
           UploadId: uploadId
         }));
       } catch (abortError) {
-        logger.error(`Failed to abort multipart upload:`, abortError);
+        logger.error('Failed to abort multipart upload:', abortError);
       }
       
       throw error;

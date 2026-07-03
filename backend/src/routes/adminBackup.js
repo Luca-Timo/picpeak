@@ -44,22 +44,22 @@ router.put('/config', adminAuth, requirePermission('backup.create'), async (req,
     // Validate required fields based on destination type
     if (updates.backup_destination_type) {
       switch (updates.backup_destination_type) {
-        case 'local':
-          if (!updates.backup_destination_path) {
-            return res.status(400).json({ error: 'Local backup requires destination path' });
-          }
-          break;
-        case 'rsync':
-          if (!updates.backup_rsync_host || !updates.backup_rsync_path) {
-            return res.status(400).json({ error: 'Rsync backup requires host and path' });
-          }
-          break;
-        case 's3':
-          if (!updates.backup_s3_endpoint || !updates.backup_s3_bucket || 
+      case 'local':
+        if (!updates.backup_destination_path) {
+          return res.status(400).json({ error: 'Local backup requires destination path' });
+        }
+        break;
+      case 'rsync':
+        if (!updates.backup_rsync_host || !updates.backup_rsync_path) {
+          return res.status(400).json({ error: 'Rsync backup requires host and path' });
+        }
+        break;
+      case 's3':
+        if (!updates.backup_s3_endpoint || !updates.backup_s3_bucket || 
               !updates.backup_s3_access_key || !updates.backup_s3_secret_key) {
-            return res.status(400).json({ error: 'S3 backup requires endpoint, bucket, and credentials' });
-          }
-          break;
+          return res.status(400).json({ error: 'S3 backup requires endpoint, bucket, and credentials' });
+        }
+        break;
       }
     }
     
@@ -210,125 +210,125 @@ router.post('/test-connection', adminAuth, requirePermission('backup.create'), a
     const { destination_type, ...config } = req.body;
     
     switch (destination_type) {
-      case 'local':
-        // Test local path access
-        const fs = require('fs').promises;
-        try {
-          await fs.access(config.path, fs.constants.W_OK);
-          res.json({ success: true, message: 'Local path is writable' });
-        } catch (error) {
-          logger.warn('Local backup path not writable', {
-            path: config.path,
-            error: error.message
-          });
-          res.json({ success: false, message: 'Cannot write to local path. Check server logs for details.' });
-        }
-        break;
+    case 'local':
+      // Test local path access
+      const fs = require('fs').promises;
+      try {
+        await fs.access(config.path, fs.constants.W_OK);
+        res.json({ success: true, message: 'Local path is writable' });
+      } catch (error) {
+        logger.warn('Local backup path not writable', {
+          path: config.path,
+          error: error.message
+        });
+        res.json({ success: false, message: 'Cannot write to local path. Check server logs for details.' });
+      }
+      break;
         
-      case 'rsync':
-        // Test rsync connection using spawn with argument arrays to prevent command injection
-        const { spawn } = require('child_process');
+    case 'rsync':
+      // Test rsync connection using spawn with argument arrays to prevent command injection
+      const { spawn } = require('child_process');
 
-        // Validate and sanitize inputs to prevent command injection
-        const sanitizeInput = (input) => {
-          if (!input || typeof input !== 'string') return null;
-          // Remove any shell metacharacters and limit length
-          return input.replace(/[;&|`$(){}[\]<>\\!#*?"'\n\r]/g, '').substring(0, 255);
-        };
+      // Validate and sanitize inputs to prevent command injection
+      const sanitizeInput = (input) => {
+        if (!input || typeof input !== 'string') return null;
+        // Remove any shell metacharacters and limit length
+        return input.replace(/[;&|`$(){}[\]<>\\!#*?"'\n\r]/g, '').substring(0, 255);
+      };
 
-        const host = sanitizeInput(config.host);
-        const user = sanitizeInput(config.user);
-        const sshKeyPath = sanitizeInput(config.ssh_key);
+      const host = sanitizeInput(config.host);
+      const user = sanitizeInput(config.user);
+      const sshKeyPath = sanitizeInput(config.ssh_key);
 
-        if (!host) {
-          res.json({ success: false, message: 'Invalid host specified' });
+      if (!host) {
+        res.json({ success: false, message: 'Invalid host specified' });
+        break;
+      }
+
+      // Validate host format (hostname or IP only)
+      const hostRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$/;
+      const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+      if (!hostRegex.test(host) && !ipRegex.test(host)) {
+        res.json({ success: false, message: 'Invalid host format' });
+        break;
+      }
+
+      // SSRF protection: block connections to private/internal addresses
+      const { isPrivateIP } = require('../utils/networkValidation');
+      if (isPrivateIP(host)) {
+        res.json({ success: false, message: 'Host cannot be a private or internal network address' });
+        break;
+      }
+
+      // Validate username format if provided
+      if (user && !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(user)) {
+        res.json({ success: false, message: 'Invalid username format' });
+        break;
+      }
+
+      // Build SSH arguments as array (safe from injection)
+      const sshArgs = [];
+      if (sshKeyPath) {
+        // Validate SSH key path exists and is a file
+        const fsSync = require('fs');
+        if (!fsSync.existsSync(sshKeyPath) || !fsSync.statSync(sshKeyPath).isFile()) {
+          res.json({ success: false, message: 'SSH key file not found' });
           break;
         }
+        sshArgs.push('-i', sshKeyPath);
+      }
+      sshArgs.push('-o', 'StrictHostKeyChecking=no');
+      sshArgs.push('-o', 'ConnectTimeout=10');
+      sshArgs.push('-o', 'BatchMode=yes');
 
-        // Validate host format (hostname or IP only)
-        const hostRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$/;
-        const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
-        if (!hostRegex.test(host) && !ipRegex.test(host)) {
-          res.json({ success: false, message: 'Invalid host format' });
-          break;
-        }
+      // Add target (user@host or just host)
+      const target = user ? `${user}@${host}` : host;
+      sshArgs.push(target);
+      sshArgs.push('echo', 'Connection successful');
 
-        // SSRF protection: block connections to private/internal addresses
-        const { isPrivateIP } = require('../utils/networkValidation');
-        if (isPrivateIP(host)) {
-          res.json({ success: false, message: 'Host cannot be a private or internal network address' });
-          break;
-        }
-
-        // Validate username format if provided
-        if (user && !/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(user)) {
-          res.json({ success: false, message: 'Invalid username format' });
-          break;
-        }
-
-        // Build SSH arguments as array (safe from injection)
-        const sshArgs = [];
-        if (sshKeyPath) {
-          // Validate SSH key path exists and is a file
-          const fsSync = require('fs');
-          if (!fsSync.existsSync(sshKeyPath) || !fsSync.statSync(sshKeyPath).isFile()) {
-            res.json({ success: false, message: 'SSH key file not found' });
-            break;
-          }
-          sshArgs.push('-i', sshKeyPath);
-        }
-        sshArgs.push('-o', 'StrictHostKeyChecking=no');
-        sshArgs.push('-o', 'ConnectTimeout=10');
-        sshArgs.push('-o', 'BatchMode=yes');
-
-        // Add target (user@host or just host)
-        const target = user ? `${user}@${host}` : host;
-        sshArgs.push(target);
-        sshArgs.push('echo', 'Connection successful');
-
-        try {
-          const result = await new Promise((resolve, reject) => {
-            const sshProcess = spawn('ssh', sshArgs, {
-              timeout: 15000,
-              stdio: ['ignore', 'pipe', 'pipe']
-            });
-
-            let stdout = '';
-            let stderr = '';
-
-            sshProcess.stdout.on('data', (data) => { stdout += data; });
-            sshProcess.stderr.on('data', (data) => { stderr += data; });
-
-            sshProcess.on('close', (code) => {
-              if (code === 0) {
-                resolve({ success: true, stdout });
-              } else {
-                reject(new Error(stderr || `SSH exited with code ${code}`));
-              }
-            });
-
-            sshProcess.on('error', (err) => {
-              reject(err);
-            });
+      try {
+        const result = await new Promise((resolve, reject) => {
+          const sshProcess = spawn('ssh', sshArgs, {
+            timeout: 15000,
+            stdio: ['ignore', 'pipe', 'pipe']
           });
 
-          res.json({ success: true, message: 'Rsync connection successful' });
-        } catch (error) {
-          logger.warn('Rsync connection test failed', {
-            destination: host,
-            error: error.message
+          let stdout = '';
+          let stderr = '';
+
+          sshProcess.stdout.on('data', (data) => { stdout += data; });
+          sshProcess.stderr.on('data', (data) => { stderr += data; });
+
+          sshProcess.on('close', (code) => {
+            if (code === 0) {
+              resolve({ success: true, stdout });
+            } else {
+              reject(new Error(stderr || `SSH exited with code ${code}`));
+            }
           });
-          res.json({ success: false, message: 'Rsync connection failed. Check server logs for details.' });
-        }
-        break;
+
+          sshProcess.on('error', (err) => {
+            reject(err);
+          });
+        });
+
+        res.json({ success: true, message: 'Rsync connection successful' });
+      } catch (error) {
+        logger.warn('Rsync connection test failed', {
+          destination: host,
+          error: error.message
+        });
+        res.json({ success: false, message: 'Rsync connection failed. Check server logs for details.' });
+      }
+      break;
         
-      case 's3':
-        // Test S3 connection (would need AWS SDK)
-        res.json({ success: false, message: 'S3 testing not implemented yet' });
-        break;
+    case 's3':
+      // Test S3 connection (would need AWS SDK)
+      res.json({ success: false, message: 'S3 testing not implemented yet' });
+      break;
         
-      default:
-        res.status(400).json({ error: 'Invalid destination type' });
+    default:
+      res.status(400).json({ error: 'Invalid destination type' });
     }
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to test connection');
@@ -691,65 +691,65 @@ router.get('/download/:backupId', adminAuth, requirePermission('backup.view'), a
     
     // Handle different backup types
     switch (config.backup_destination_type) {
-      case 'local':
-        // Stream local backup as zip
-        const backupPath = path.join(config.backup_destination_path, `backup-${backupRun.id}`);
-        const archive = archiver('zip', { zlib: { level: 9 } });
+    case 'local':
+      // Stream local backup as zip
+      const backupPath = path.join(config.backup_destination_path, `backup-${backupRun.id}`);
+      const archive = archiver('zip', { zlib: { level: 9 } });
         
-        res.attachment(`picpeak-backup-${backupRun.id}.zip`);
-        archive.pipe(res);
+      res.attachment(`picpeak-backup-${backupRun.id}.zip`);
+      archive.pipe(res);
         
-        // Add backup directory contents
-        archive.directory(backupPath, false);
+      // Add backup directory contents
+      archive.directory(backupPath, false);
         
-        // Add manifest if exists
-        if (backupRun.manifest_path && await fs.access(backupRun.manifest_path).then(() => true).catch(() => false)) {
-          archive.file(backupRun.manifest_path, { name: 'manifest.json' });
-        }
+      // Add manifest if exists
+      if (backupRun.manifest_path && await fs.access(backupRun.manifest_path).then(() => true).catch(() => false)) {
+        archive.file(backupRun.manifest_path, { name: 'manifest.json' });
+      }
         
-        await archive.finalize();
-        break;
+      await archive.finalize();
+      break;
         
-      case 's3':
-        // For S3, provide pre-signed URLs or stream files
-        const s3Adapter = new S3StorageAdapter({
-          endpoint: config.backup_s3_endpoint,
-          bucket: config.backup_s3_bucket,
-          accessKeyId: config.backup_s3_access_key,
-          secretAccessKey: config.backup_s3_secret_key,
-          region: config.backup_s3_region || 'us-east-1',
-          forcePathStyle: config.backup_s3_force_path_style || false
+    case 's3':
+      // For S3, provide pre-signed URLs or stream files
+      const s3Adapter = new S3StorageAdapter({
+        endpoint: config.backup_s3_endpoint,
+        bucket: config.backup_s3_bucket,
+        accessKeyId: config.backup_s3_access_key,
+        secretAccessKey: config.backup_s3_secret_key,
+        region: config.backup_s3_region || 'us-east-1',
+        forcePathStyle: config.backup_s3_force_path_style || false
+      });
+        
+      // List all files for this backup
+      const prefix = `backups/${backupRun.id}/`;
+      const files = await s3Adapter.list(prefix, { maxKeys: 1000 });
+        
+      // Generate pre-signed URLs
+      const urls = [];
+      for (const file of files.objects || []) {
+        const url = await s3Adapter.getSignedUrl('getObject', file.key, { expiresIn: 3600 }); // 1 hour
+        urls.push({
+          key: file.key,
+          size: file.size,
+          url: url
         });
+      }
         
-        // List all files for this backup
-        const prefix = `backups/${backupRun.id}/`;
-        const files = await s3Adapter.list(prefix, { maxKeys: 1000 });
+      res.json({
+        backupId: backupRun.id,
+        type: 's3',
+        files: urls,
+        expiresIn: 3600,
+        message: 'Use the provided URLs to download individual files'
+      });
+      break;
         
-        // Generate pre-signed URLs
-        const urls = [];
-        for (const file of files.objects || []) {
-          const url = await s3Adapter.getSignedUrl('getObject', file.key, { expiresIn: 3600 }); // 1 hour
-          urls.push({
-            key: file.key,
-            size: file.size,
-            url: url
-          });
-        }
+    case 'rsync':
+      return res.status(400).json({ error: 'Direct download not available for rsync backups' });
         
-        res.json({
-          backupId: backupRun.id,
-          type: 's3',
-          files: urls,
-          expiresIn: 3600,
-          message: 'Use the provided URLs to download individual files'
-        });
-        break;
-        
-      case 'rsync':
-        return res.status(400).json({ error: 'Direct download not available for rsync backups' });
-        
-      default:
-        return res.status(400).json({ error: 'Unknown backup type' });
+    default:
+      return res.status(400).json({ error: 'Unknown backup type' });
     }
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to download backup');

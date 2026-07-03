@@ -329,11 +329,11 @@ async function createInvoice(payload, adminId, trx = db) {
  * code should reach for the clearer `spawnInstallmentInvoices`.
  */
 async function spawnInstallmentInvoices({ trx, eventId, quoteId, customer, currency, language,
-                                          lineItems, totals, installments, eventDate, adminId,
-                                          ccPdfEmail, netDays,
-                                          eventName, eventTimeStart, eventTimeEnd,
-                                          paymentNetDaysTemplateId, paymentTimingTemplateId,
-                                          paymentTermSnapshot, dealUuid, hold = false }) {
+  lineItems, totals, installments, eventDate, adminId,
+  ccPdfEmail, netDays,
+  eventName, eventTimeStart, eventTimeEnd,
+  paymentNetDaysTemplateId, paymentTimingTemplateId,
+  paymentTermSnapshot, dealUuid, hold = false }) {
   // Monthly-billing intercept (migration 128). Quote → invoice
   // conversion for a monthly-mode customer doesn't fan out N
   // installment invoices — the customer pays one consolidated bill

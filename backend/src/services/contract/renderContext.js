@@ -78,8 +78,8 @@ async function buildPlaceholderContext(contract, customer) {
     : '';
   const customerAddress = customer
     ? [customer.address_line1, customer.address_line2, customer.postal_code, customer.city]
-        .filter(Boolean)
-        .join(', ')
+      .filter(Boolean)
+      .join(', ')
     : '';
 
   return {

@@ -47,7 +47,7 @@ export function useMutationWithToast<
 
   return useMutation<TData, TError, TVariables, TContext>({
     ...mutationOptions,
-    onSuccess: (data, variables, context) => {
+    onSuccess: (data, variables, onMutateResult, context) => {
       invalidateKeys?.forEach((queryKey) => {
         queryClient.invalidateQueries({ queryKey });
       });
@@ -56,9 +56,9 @@ export function useMutationWithToast<
           typeof successMessage === 'function' ? successMessage(data, variables) : successMessage
         );
       }
-      onSuccess?.(data, variables, context);
+      onSuccess?.(data, variables, onMutateResult, context);
     },
-    onError: (error, variables, context) => {
+    onError: (error, variables, onMutateResult, context) => {
       const message =
         typeof errorMessage === 'function'
           ? errorMessage(error)
@@ -67,7 +67,7 @@ export function useMutationWithToast<
             (error instanceof Error ? error.message : undefined) ||
             'An unexpected error occurred';
       toast.error(message);
-      onError?.(error, variables, context);
+      onError?.(error, variables, onMutateResult, context);
     },
   });
 }

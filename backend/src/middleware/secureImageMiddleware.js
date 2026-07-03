@@ -265,7 +265,7 @@ class SecureImageMiddleware {
       'X-Frame-Options': 'DENY',
       'X-XSS-Protection': '1; mode=block',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
-      'Content-Security-Policy': "default-src 'none'; img-src 'self'",
+      'Content-Security-Policy': 'default-src \'none\'; img-src \'self\'',
       
       // Custom security headers
       'X-Protected-Content': 'true',

@@ -400,40 +400,40 @@ async function listQuotes({ filters = {}, sort = 'issue_desc', page = 1, pageSiz
     const total = ensureInt(totalRow?.total || 0);
 
     switch (sort) {
-      // "Newest" / "Oldest" sort by CREATION time, not issue_date —
-      // the latter is admin-controlled (retro-dated quotes, future-
-      // dated quotes for accruals) and drifts from actual chronology.
-      // Sorting by created_at always puts a just-saved quote at the
-      // top of the "Newest first" list.
-      case 'oldest':
-        query = query.orderBy('quotes.created_at', 'asc').orderBy('quotes.id', 'asc');
-        break;
-      case 'issue_asc':
-        query = query.orderBy('quotes.issue_date', 'asc').orderBy('quotes.id', 'asc');
-        break;
-      case 'issue_desc':
-        query = query.orderBy('quotes.issue_date', 'desc').orderBy('quotes.id', 'desc');
-        break;
-      case 'customer_asc':
-        query = query
-          .orderByRaw('COALESCE(customer_accounts.company_name, customer_accounts.last_name, customer_accounts.email) asc')
-          .orderBy('quotes.id', 'desc');
-        break;
-      case 'customer_desc':
-        query = query
-          .orderByRaw('COALESCE(customer_accounts.company_name, customer_accounts.last_name, customer_accounts.email) desc')
-          .orderBy('quotes.id', 'desc');
-        break;
-      case 'value_asc':
-        query = query.orderBy('quotes.total_amount_minor', 'asc');
-        break;
-      case 'value_desc':
-        query = query.orderBy('quotes.total_amount_minor', 'desc');
-        break;
-      case 'newest':
-      default:
-        query = query.orderBy('quotes.created_at', 'desc').orderBy('quotes.id', 'desc');
-        break;
+    // "Newest" / "Oldest" sort by CREATION time, not issue_date —
+    // the latter is admin-controlled (retro-dated quotes, future-
+    // dated quotes for accruals) and drifts from actual chronology.
+    // Sorting by created_at always puts a just-saved quote at the
+    // top of the "Newest first" list.
+    case 'oldest':
+      query = query.orderBy('quotes.created_at', 'asc').orderBy('quotes.id', 'asc');
+      break;
+    case 'issue_asc':
+      query = query.orderBy('quotes.issue_date', 'asc').orderBy('quotes.id', 'asc');
+      break;
+    case 'issue_desc':
+      query = query.orderBy('quotes.issue_date', 'desc').orderBy('quotes.id', 'desc');
+      break;
+    case 'customer_asc':
+      query = query
+        .orderByRaw('COALESCE(customer_accounts.company_name, customer_accounts.last_name, customer_accounts.email) asc')
+        .orderBy('quotes.id', 'desc');
+      break;
+    case 'customer_desc':
+      query = query
+        .orderByRaw('COALESCE(customer_accounts.company_name, customer_accounts.last_name, customer_accounts.email) desc')
+        .orderBy('quotes.id', 'desc');
+      break;
+    case 'value_asc':
+      query = query.orderBy('quotes.total_amount_minor', 'asc');
+      break;
+    case 'value_desc':
+      query = query.orderBy('quotes.total_amount_minor', 'desc');
+      break;
+    case 'newest':
+    default:
+      query = query.orderBy('quotes.created_at', 'desc').orderBy('quotes.id', 'desc');
+      break;
     }
 
     const offset = Math.max(0, (page - 1) * pageSize);
@@ -1508,8 +1508,8 @@ async function convertToInvoiceOnly(quoteId, adminId, options = {}) {
 
   const paymentTermSnapshot = quote.payment_term_snapshot
     ? (typeof quote.payment_term_snapshot === 'string'
-        ? JSON.parse(quote.payment_term_snapshot)
-        : quote.payment_term_snapshot)
+      ? JSON.parse(quote.payment_term_snapshot)
+      : quote.payment_term_snapshot)
     : null;
 
   const invoiceService = require('./invoiceService');
@@ -1621,8 +1621,8 @@ async function convertToEvent(quoteId, adminId, options = {}) {
 
   const paymentTermSnapshot = quote.payment_term_snapshot
     ? (typeof quote.payment_term_snapshot === 'string'
-        ? JSON.parse(quote.payment_term_snapshot)
-        : quote.payment_term_snapshot)
+      ? JSON.parse(quote.payment_term_snapshot)
+      : quote.payment_term_snapshot)
     : null;
 
   // Lazy import to avoid the circular dep.

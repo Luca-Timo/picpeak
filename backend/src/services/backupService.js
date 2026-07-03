@@ -1177,7 +1177,7 @@ async function runBackupInternal(isManual = false) {
 
 async function startBackupService() {
   try {
-  const config = await resolveConfigWithFallback();
+    const config = await resolveConfigWithFallback();
     if (!config || !normalizeBoolean(config.backup_enabled)) {
       if (backupJob) {
         backupJob.stop();

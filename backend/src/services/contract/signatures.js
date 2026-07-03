@@ -73,21 +73,21 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
   // consistent and saves a redundant read.
   const persistedIp = await maybeStoreIp(ip);
   try {
-  await db.transaction(async (trx) => {
-    await trx('contracts').where({ id: contract.id }).update({
-      status: 'signed_by_customer',
-      signed_by_customer_at: now,
-      signed_customer_name: String(name).trim(),
-      signed_customer_ip: persistedIp,
-      signed_customer_signature_path: signaturePath,
-      updated_at: now,
+    await db.transaction(async (trx) => {
+      await trx('contracts').where({ id: contract.id }).update({
+        status: 'signed_by_customer',
+        signed_by_customer_at: now,
+        signed_customer_name: String(name).trim(),
+        signed_customer_ip: persistedIp,
+        signed_customer_signature_path: signaturePath,
+        updated_at: now,
+      });
+      await trx('contract_action_tokens').where({ id: tokenRow.id }).update({
+        used_at: now,
+        used_action: 'signed_by_customer',
+        used_ip: persistedIp,
+      });
     });
-    await trx('contract_action_tokens').where({ id: tokenRow.id }).update({
-      used_at: now,
-      used_action: 'signed_by_customer',
-      used_ip: persistedIp,
-    });
-  });
   } catch (txErr) {
     // C.7 — clean up the orphan signature PNG we wrote before the
     // transaction. The DB rollback already undid the contract +
@@ -230,14 +230,14 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
   const newStatus = contract.status === 'signed_by_customer' ? 'fully_signed' : 'signed_by_admin';
   const persistedAdminIp = await maybeStoreIp(ip);
   try {
-  await db('contracts').where({ id: contract.id }).update({
-    status: newStatus,
-    signed_by_admin_at: now,
-    signed_admin_name: String(name).trim(),
-    signed_admin_ip: persistedAdminIp,
-    signed_admin_signature_path: signaturePath,
-    updated_at: now,
-  });
+    await db('contracts').where({ id: contract.id }).update({
+      status: newStatus,
+      signed_by_admin_at: now,
+      signed_admin_name: String(name).trim(),
+      signed_admin_ip: persistedAdminIp,
+      signed_admin_signature_path: signaturePath,
+      updated_at: now,
+    });
   } catch (updateErr) {
     // C.7 — clean up the orphan signature PNG if the contract row
     // update threw. Best-effort; log on cleanup failure and re-throw

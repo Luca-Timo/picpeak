@@ -64,8 +64,8 @@ class WatermarkGeneratorService {
       const storageKey = resolvePhotoStorageKey(event, photo);
       const result = storageKey
         ? await withLocalCopy(storageKey, (lp) =>
-            watermarkService.generateAndSaveWatermark(photo, lp, settings)
-          )
+          watermarkService.generateAndSaveWatermark(photo, lp, settings)
+        )
         : await watermarkService.generateAndSaveWatermark(photo, resolvePhotoFilePath(event, photo), settings);
 
       if (result.success) {
@@ -170,8 +170,8 @@ class WatermarkGeneratorService {
       const storageKey = resolvePhotoStorageKey(event, photo);
       const result = storageKey
         ? await withLocalCopy(storageKey, (lp) =>
-            watermarkService.generateAndSaveWatermark(photo, lp, settings)
-          )
+          watermarkService.generateAndSaveWatermark(photo, lp, settings)
+        )
         : await watermarkService.generateAndSaveWatermark(photo, resolvePhotoFilePath(event, photo), settings);
 
       if (result.success) {

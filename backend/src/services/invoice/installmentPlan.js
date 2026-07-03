@@ -116,7 +116,7 @@ async function replaceReconciliationLine(
   const subtotal = topLineSubtotal != null
     ? topLineSubtotal
     : nonRecon.filter((x) => x.parent_position == null)
-        .reduce((s, x) => s + ensureInt(x.line_total_minor), 0);
+      .reduce((s, x) => s + ensureInt(x.line_total_minor), 0);
   const adjustment = netSlice - subtotal;
   if (adjustment === 0) return;
 

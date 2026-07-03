@@ -44,7 +44,7 @@ function secureStatic(basePath, options = {}) {
           // `default-src 'none'` already implies script-src 'none';
           // style-src + img-src(data:) keep normal SVG rendering working.
           if (/\.svg$/i.test(filePath)) {
-            resp.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:");
+            resp.setHeader('Content-Security-Policy', 'default-src \'none\'; style-src \'unsafe-inline\'; img-src \'self\' data:');
             resp.setHeader('X-Content-Type-Options', 'nosniff');
           }
         }

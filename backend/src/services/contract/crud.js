@@ -51,29 +51,29 @@ async function listContracts({ filters = {}, sort = 'issue_desc', page = 1, page
     const total = ensureInt(totalRow?.total || 0);
 
     switch (sort) {
-      case 'oldest':
-        query = query.orderBy('contracts.created_at', 'asc').orderBy('contracts.id', 'asc');
-        break;
-      case 'issue_asc':
-        query = query.orderBy('contracts.issue_date', 'asc').orderBy('contracts.id', 'asc');
-        break;
-      case 'issue_desc':
-        query = query.orderBy('contracts.issue_date', 'desc').orderBy('contracts.id', 'desc');
-        break;
-      case 'customer_asc':
-        query = query
-          .orderByRaw('COALESCE(customer_accounts.company_name, customer_accounts.last_name, customer_accounts.email) asc')
-          .orderBy('contracts.id', 'desc');
-        break;
-      case 'customer_desc':
-        query = query
-          .orderByRaw('COALESCE(customer_accounts.company_name, customer_accounts.last_name, customer_accounts.email) desc')
-          .orderBy('contracts.id', 'desc');
-        break;
-      case 'newest':
-      default:
-        query = query.orderBy('contracts.created_at', 'desc').orderBy('contracts.id', 'desc');
-        break;
+    case 'oldest':
+      query = query.orderBy('contracts.created_at', 'asc').orderBy('contracts.id', 'asc');
+      break;
+    case 'issue_asc':
+      query = query.orderBy('contracts.issue_date', 'asc').orderBy('contracts.id', 'asc');
+      break;
+    case 'issue_desc':
+      query = query.orderBy('contracts.issue_date', 'desc').orderBy('contracts.id', 'desc');
+      break;
+    case 'customer_asc':
+      query = query
+        .orderByRaw('COALESCE(customer_accounts.company_name, customer_accounts.last_name, customer_accounts.email) asc')
+        .orderBy('contracts.id', 'desc');
+      break;
+    case 'customer_desc':
+      query = query
+        .orderByRaw('COALESCE(customer_accounts.company_name, customer_accounts.last_name, customer_accounts.email) desc')
+        .orderBy('contracts.id', 'desc');
+      break;
+    case 'newest':
+    default:
+      query = query.orderBy('contracts.created_at', 'desc').orderBy('contracts.id', 'desc');
+      break;
     }
 
     const offset = Math.max(0, (page - 1) * pageSize);

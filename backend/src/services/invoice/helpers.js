@@ -45,20 +45,20 @@ function computeScheduledSendAt(trigger, offsetDays, eventDate, baseDate = new D
   const offset = ensureInt(offsetDays) * ms;
   const eventTs = eventDate ? new Date(eventDate).getTime() : null;
   switch (trigger) {
-    case 'quote_accepted':
-      return new Date(baseDate.getTime() + offset);
-    case 'before_event':
-    case 'after_event':
-      if (!eventTs) return new Date(baseDate.getTime() + offset);
-      return new Date(eventTs + offset);
-    case 'after_delivery':
-      // Treat as event_date + 14 days as a sensible default; admin can
-      // edit the scheduled_send_at on the invoice later.
-      if (!eventTs) return new Date(baseDate.getTime() + 14 * ms + offset);
-      return new Date(eventTs + 14 * ms + offset);
-    case 'fixed_date':
-    default:
-      return new Date(baseDate.getTime() + offset);
+  case 'quote_accepted':
+    return new Date(baseDate.getTime() + offset);
+  case 'before_event':
+  case 'after_event':
+    if (!eventTs) return new Date(baseDate.getTime() + offset);
+    return new Date(eventTs + offset);
+  case 'after_delivery':
+    // Treat as event_date + 14 days as a sensible default; admin can
+    // edit the scheduled_send_at on the invoice later.
+    if (!eventTs) return new Date(baseDate.getTime() + 14 * ms + offset);
+    return new Date(eventTs + 14 * ms + offset);
+  case 'fixed_date':
+  default:
+    return new Date(baseDate.getTime() + offset);
   }
 }
 
