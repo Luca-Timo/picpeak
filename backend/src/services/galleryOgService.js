@@ -34,7 +34,11 @@ const SOCIAL_CRAWLER_PATTERNS = [
   // messaging stacks (Twilio, LinkPreview.net, etc.). Match the
   // canonical lowercase substring; the /i flag handles case.
   /LinkPreview/i,
-  /Slack-ImgProxy/i
+  /Slack-ImgProxy/i,
+  // Viber's link-preview fetcher — was never detected, so shared links
+  // showed no rich preview in Viber (#699 follow-up). Keep in sync with the
+  // UA list in frontend/nginx.conf.
+  /Viber/i
 ];
 
 function isSocialCrawler(userAgent) {

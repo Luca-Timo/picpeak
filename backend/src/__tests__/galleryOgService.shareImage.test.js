@@ -343,6 +343,8 @@ describe('isSocialCrawler — extended bot coverage (#521)', () => {
       // 3rd-party preview services used by business-messaging stacks
       'LinkPreview/1.0',
       'Slack-ImgProxy/1.0',
+      // Viber link-preview fetcher (#699 follow-up)
+      'Mozilla/5.0 (compatible; Viber)',
     ];
     for (const ua of knownBots) {
       expect(isSocialCrawler(ua)).toBe(true);
