@@ -309,7 +309,8 @@ export const EventDetailsPage: React.FC = () => {
       // Load hero logo settings from event. Preserve null = "inherit global"
       // (#756) — don't collapse it to true, or saving would snapshot an override.
       hero_logo_visible: event.hero_logo_visible ?? null,
-      hero_logo_size: event.hero_logo_size || 'medium',
+      // Preserve null = "inherit global size" (#756) — don't collapse to medium.
+      hero_logo_size: event.hero_logo_size ?? null,
       hero_logo_position: event.hero_logo_position || 'top',
       // Hero image anchor position (#162)
       hero_image_anchor: event.hero_image_anchor || 'center',

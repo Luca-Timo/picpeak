@@ -195,6 +195,7 @@ router.get('/:slug/info', async (req, res) => {
     
     const requiresPassword = !(event.require_password === false || event.require_password === 0 || event.require_password === '0');
     const globalHeroLogoVisible = await getAppSetting('branding_logo_display_hero', true);
+    const globalLogoSize = await getAppSetting('branding_logo_size', 'medium');
 
     res.json({
       event_name: event.event_name,
@@ -213,7 +214,8 @@ router.get('/:slug/info', async (req, res) => {
       enable_devtools_protection: event.enable_devtools_protection === true || event.enable_devtools_protection === 1 || event.enable_devtools_protection === '1',
       use_canvas_rendering: event.use_canvas_rendering === true || event.use_canvas_rendering === 1 || event.use_canvas_rendering === '1',
       hero_logo_visible: resolveHeroLogoVisible(event.hero_logo_visible, globalHeroLogoVisible),
-      hero_logo_size: event.hero_logo_size || 'medium',
+      // #756: NULL per-event size inherits the global branding_logo_size.
+      hero_logo_size: event.hero_logo_size || globalLogoSize || 'medium',
       hero_logo_position: event.hero_logo_position || 'top',
       hero_logo_url: event.hero_logo_url || null,
       header_style: event.header_style || 'standard',
@@ -649,6 +651,7 @@ router.get('/:slug/photos', verifyGalleryAccess, resolveGuest, async (req, res) 
     // one switch controls both surfaces.
     const useOriginalFilenames = await getUseOriginalFilenames();
     const globalHeroLogoVisible = await getAppSetting('branding_logo_display_hero', true);
+    const globalLogoSize = await getAppSetting('branding_logo_size', 'medium');
 
     res.json({
       event: {
@@ -668,7 +671,7 @@ router.get('/:slug/photos', verifyGalleryAccess, resolveGuest, async (req, res) 
         enable_devtools_protection: req.event.enable_devtools_protection === true,
         use_canvas_rendering: req.event.use_canvas_rendering === true,
         hero_logo_visible: resolveHeroLogoVisible(req.event.hero_logo_visible, globalHeroLogoVisible),
-        hero_logo_size: req.event.hero_logo_size || 'medium',
+        hero_logo_size: req.event.hero_logo_size || globalLogoSize || 'medium',
         hero_logo_position: req.event.hero_logo_position || 'top',
         hero_logo_url: req.event.hero_logo_url || null,
         header_style: req.event.header_style || 'standard',

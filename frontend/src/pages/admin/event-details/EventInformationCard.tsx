@@ -620,10 +620,12 @@ export const EventInformationCard: React.FC<EventInformationCardProps> = ({
                       {t('events.heroLogoSize', 'Logo Size')}
                     </label>
                     <select
-                      value={editForm.hero_logo_size}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, hero_logo_size: e.target.value as 'small' | 'medium' | 'large' | 'xlarge' }))}
+                      // '' = inherit the global branding logo size (#756).
+                      value={editForm.hero_logo_size ?? ''}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, hero_logo_size: e.target.value === '' ? null : e.target.value as 'small' | 'medium' | 'large' | 'xlarge' }))}
                       className="w-full sm:w-48 px-3 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 rounded-md shadow-sm focus:ring-primary-500 focus:border-accent-dark text-sm"
                     >
+                      <option value="">{t('events.heroLogoInherit', 'Use branding default')}</option>
                       <option value="small">{t('events.heroLogoSizeSmall', 'Small')}</option>
                       <option value="medium">{t('events.heroLogoSizeMedium', 'Medium')}</option>
                       <option value="large">{t('events.heroLogoSizeLarge', 'Large')}</option>

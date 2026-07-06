@@ -29,6 +29,11 @@ interface GalleryLayoutProps {
   // backend (per-event override, else the global branding toggle) (#756).
   // When provided it wins over brandingSettings.logo_display_hero.
   heroLogoVisible?: boolean;
+  // Effective hero-logo SIZE, resolved the same way (per-event override, else
+  // the global branding_logo_size) (#756). When provided it wins over
+  // brandingSettings.logo_size for the hero logo — so both render paths
+  // (this layout and the hero-header) size the logo identically.
+  heroLogoSize?: 'small' | 'medium' | 'large' | 'xlarge' | 'custom';
   brandingSettings?: {
     company_name?: string;
     company_tagline?: string;
@@ -113,6 +118,7 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   event,
   brandingSettings,
   heroLogoVisible,
+  heroLogoSize,
   showLogout = false,
   onLogout,
   showDownloadAll = false,
@@ -162,7 +168,10 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   
   // Calculate logo size classes based on settings
   const getLogoDimensions = (context: 'header' | 'hero'): { className: string; style?: React.CSSProperties } => {
-    const size = brandingSettings?.logo_size || 'medium';
+    // #756: the hero logo uses the backend-resolved per-event size (override,
+    // else global) so it matches the hero-header layout; the header logo keeps
+    // the global size.
+    const size = (context === 'hero' && heroLogoSize) ? heroLogoSize : (brandingSettings?.logo_size || 'medium');
     const maxHeight = brandingSettings?.logo_max_height || 48;
 
     if (size === 'custom') {
@@ -221,7 +230,7 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   };
 
   const headerLogoSize = getLogoDimensions('header');
-  const heroLogoSize = getLogoDimensions('hero');
+  const heroLogoDimensions = getLogoDimensions('hero');
 
   // Footer overhaul (#441 + #440). All five socials are independent;
   // empty string = hide just that icon. Per-event promo override:
@@ -607,9 +616,9 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                       '/picpeak-logo-transparent.png'
                     }
                     alt={brandingSettings?.company_name || 'PicPeak'}
-                    className={`${heroLogoSize.className} w-auto object-contain mx-auto`}
+                    className={`${heroLogoDimensions.className} w-auto object-contain mx-auto`}
                     style={{
-                      ...(heroLogoSize.style || {}),
+                      ...(heroLogoDimensions.style || {}),
                       // Only apply brightness/invert filter to default logo; custom logos display as-is
                       filter: brandLogoUrl
                         ? 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))'

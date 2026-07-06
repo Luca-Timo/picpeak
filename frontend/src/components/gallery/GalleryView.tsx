@@ -821,6 +821,7 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event }) => {
         }}
         brandingSettings={brandingSettings}
         heroLogoVisible={data?.event?.hero_logo_visible !== false}
+        heroLogoSize={data?.event?.hero_logo_size || undefined}
         headerStyle={data?.event?.header_style || theme.headerStyle}
         showLogout={true}
         onLogout={logout}

@@ -95,7 +95,7 @@ module.exports = (router) => {
     body('css_template_id').optional({ nullable: true, checkFalsy: true }).isInt(),
     // Hero logo settings
     body('hero_logo_visible').optional().isBoolean(),
-    body('hero_logo_size').optional().isIn(['small', 'medium', 'large', 'xlarge']),
+    body('hero_logo_size').optional({ nullable: true }).isIn(['small', 'medium', 'large', 'xlarge']),
     body('hero_logo_position').optional().isIn(['top', 'center', 'bottom']),
     // Header style settings (decoupled from layout)
     body('header_style').optional().isIn(['hero', 'standard', 'banner', 'minimal', 'none']),
@@ -346,7 +346,9 @@ module.exports = (router) => {
       const effectiveHeroLogoVisible = req.body.hero_logo_visible !== undefined
         ? formatBoolean(hero_logo_visible)
         : null;
-      const effectiveHeroLogoSize = req.body.hero_logo_size || brandingDefaults.hero_logo_size;
+      // NULL = inherit the global branding_logo_size (#756), resolved at read
+      // time. Only an explicit per-event size overrides it.
+      const effectiveHeroLogoSize = req.body.hero_logo_size || null;
       const effectiveHeroLogoPosition = req.body.hero_logo_position || brandingDefaults.hero_logo_position;
 
       // Inherit "Detect dev tools" from the global Image Security setting unless
@@ -1223,7 +1225,7 @@ module.exports = (router) => {
     body('css_template_id').optional({ nullable: true, checkFalsy: true }).isInt(),
     // Hero logo settings
     body('hero_logo_visible').optional().isBoolean(),
-    body('hero_logo_size').optional().isIn(['small', 'medium', 'large', 'xlarge']),
+    body('hero_logo_size').optional({ nullable: true }).isIn(['small', 'medium', 'large', 'xlarge']),
     body('hero_logo_position').optional().isIn(['top', 'center', 'bottom']),
     // Header style settings (decoupled from layout)
     body('header_style').optional().isIn(['hero', 'standard', 'banner', 'minimal', 'none']),
