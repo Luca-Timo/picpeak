@@ -113,3 +113,73 @@ describe('applyReminder — dunning-document model', () => {
     await expect(invoiceService.sendReminder(invoiceId, 4, ids.adminId)).rejects.toThrow();
   });
 });
+
+describe('position-based reminder ladder', () => {
+  let invoiceId;
+  let queued;
+
+  beforeAll(async () => {
+    await setSetting('crm_invoices_late_fee_enabled', true);
+    await setSetting('crm_invoices_late_fee_type', 'flat');
+    await setSetting('crm_invoices_late_fee_minor', 2000);
+    await setSetting('crm_invoices_late_fee_vat_enabled', false);
+    const res = await invoiceService.createInvoice({
+      customerAccountId: ids.customerId,
+      currency: 'CHF',
+      vatRate: 0,
+      lineItems: [{ description: 'Service', quantity: 1, unit_price_minor: 100000 }],
+    }, ids.adminId);
+    invoiceId = res.invoiceIds[0];
+    // Capture what the reminder queues instead of hitting the real email queue.
+    const emailProcessor = require('../../src/services/emailProcessor');
+    queued = [];
+    jest.spyOn(emailProcessor, 'queueEmail').mockImplementation(async (eventId, to, type, data) => {
+      queued.push({ to, type, data });
+      return { id: 1 };
+    });
+  });
+
+  afterAll(() => { jest.restoreAllMocks(); });
+
+  const hasMahnung = (data) => (data.attachments || []).some((a) => /_Mahnung\.pdf$/.test(a.filename));
+
+  test('default 3 cycles: level 1 is a fee-free Zahlungserinnerung with no Mahnung attached', async () => {
+    await setSetting('crm_invoices_dunning_max_cycles', 3);
+    const data = await invoiceService.getInvoiceById(invoiceId);
+    await invoiceService.applyReminder(data.invoice, data.lineItems, 1, ids.adminId);
+    const call = queued[queued.length - 1];
+    expect(call.type).toBe('invoice_reminder_first');
+    expect(hasMahnung(call.data)).toBe(false);
+  });
+
+  test('a middle step uses the second template and attaches a Mahnung', async () => {
+    const data = await invoiceService.getInvoiceById(invoiceId);
+    await invoiceService.applyReminder(data.invoice, data.lineItems, 2, ids.adminId);
+    const call = queued[queued.length - 1];
+    expect(call.type).toBe('invoice_reminder_second');
+    expect(hasMahnung(call.data)).toBe(true);
+  });
+
+  test('the last step (level == maxCycles) uses the final template', async () => {
+    const data = await invoiceService.getInvoiceById(invoiceId);
+    await invoiceService.applyReminder(data.invoice, data.lineItems, 3, ids.adminId);
+    expect(queued[queued.length - 1].type).toBe('invoice_reminder_final');
+  });
+
+  test('raising the cycle count reclassifies the ladder at runtime', async () => {
+    await setSetting('crm_invoices_dunning_max_cycles', 5);
+    // level 3 is now a middle step, not the final one
+    let data = await invoiceService.getInvoiceById(invoiceId);
+    await invoiceService.applyReminder(data.invoice, data.lineItems, 3, ids.adminId);
+    expect(queued[queued.length - 1].type).toBe('invoice_reminder_second');
+    // level 5 becomes the new final step
+    data = await invoiceService.getInvoiceById(invoiceId);
+    await invoiceService.applyReminder(data.invoice, data.lineItems, 5, ids.adminId);
+    expect(queued[queued.length - 1].type).toBe('invoice_reminder_final');
+  });
+
+  test('the cap follows the setting: exceeding max cycles throws', async () => {
+    await setSetting('crm_invoices_dunning_max_cycles', 5);
+    await expect(invoiceService.sendReminder(invoiceId, 6, ids.adminId)).rejects.toThrow();
+  });
+});

@@ -32,6 +32,7 @@ const SETTING_KEYS = [
   'crm_invoices_reminders_enabled',
   'crm_invoices_reminder_first_days',
   'crm_invoices_reminder_second_days',
+  'crm_invoices_dunning_max_cycles',
   'crm_invoices_late_fee_enabled',
   'crm_invoices_late_fee_type',
   'crm_invoices_late_fee_minor',
@@ -287,6 +288,15 @@ export const CrmSettingsPage: React.FC = () => {
                 onChange={(e) => setVal('crm_invoices_reminder_second_days', Number(e.target.value))} />
             </>
           )}
+          <div>
+            <Input type="number" min={1} max={10}
+              label={t('crmSettings.crm_invoices_dunning_max_cycles.label', 'Number of dunning cycles') as string}
+              value={values.crm_invoices_dunning_max_cycles ?? 3}
+              onChange={(e) => setVal('crm_invoices_dunning_max_cycles', Number(e.target.value))} />
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+              {t('crmSettings.crm_invoices_dunning_max_cycles.hint', 'Step 1 is a fee-free payment reminder (invoice only); the last step is the final reminder. Steps in between are Mahnungen with the accruing late fee. After the last step the invoice is handed to collections.')}
+            </p>
+          </div>
           <div>
             <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               {t('crmSettings.crm_invoices_late_fee_type.label', 'Late fee type')}

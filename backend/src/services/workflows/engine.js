@@ -142,7 +142,14 @@ async function advanceRun(runId) {
           const counterKey = `__loop_${node.node_key}`;
           const count = (Number(context.vars[counterKey]) || 0) + 1;
           context.vars[counterKey] = count;
-          const max = Number(node.config?.maxIterations ?? node.config?.max ?? 3);
+          let max = Number(node.config?.maxIterations ?? node.config?.max ?? 3);
+          // Optional runtime override from an app setting (e.g. the dunning
+          // cycle count), so the bound tracks the setting without a re-seed.
+          if (node.config?.maxIterationsSetting) {
+            const { getAppSetting } = require('../../utils/appSettings');
+            const s = Number(await getAppSetting(node.config.maxIterationsSetting));
+            if (Number.isFinite(s) && s >= 1) max = Math.floor(s);
+          }
           const handle = count > max ? (node.config?.exitHandle || 'exit') : (node.config?.loopHandle || 'loop');
           const e = outEdge(edges, currentKey, handle);
           nextKey = e ? e.to_node : null;

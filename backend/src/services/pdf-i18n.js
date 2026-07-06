@@ -26,6 +26,8 @@ const LABELS = {
     // §14c-defensible reversal.
     storno_title: 'Cancellation invoice',
     mahnung_title: 'Payment reminder',
+    mahnung_title_numbered: 'Reminder {n}',
+    mahnung_final_title: 'Final reminder',
     reference_cancels: 'Cancels',
     date: 'Date',
     quote_number: 'Quote',
@@ -157,6 +159,8 @@ const LABELS = {
     invoice_number_label: 'Rechnungsnummer',
     storno_title: 'Stornorechnung',
     mahnung_title: 'Mahnung',
+    mahnung_title_numbered: '{n}. Mahnung',
+    mahnung_final_title: 'Letzte Mahnung',
     reference_cancels: 'Storno zu',
     date: 'Datum',
     quote_number: 'Angebot',

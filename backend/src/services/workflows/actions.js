@@ -102,8 +102,19 @@ registry.registerAction('escalate_to_collections', async (ctx) => {
   const attachments = [];
   try {
     const fs = require('fs');
+    const path = require('path');
     if (invoice.pdf_path && fs.existsSync(invoice.pdf_path)) {
       attachments.push({ filename: `${invoice.invoice_number}.pdf`, contentPath: invoice.pdf_path, contentType: 'application/pdf' });
+    }
+    // Also attach the last Mahnung / late-fee document rendered by the ladder
+    // (levels >= 2 only). Reconstructs the path the reminder step wrote to.
+    const lastLevel = Number(invoice.reminder_level || 0);
+    if (lastLevel >= 2 && invoice.issue_date) {
+      const year = new Date(invoice.issue_date).getFullYear();
+      const mahnungPath = path.join(process.cwd(), 'storage', 'business-docs', 'mahnung', String(year), `${invoice.invoice_number}_mahnung_L${lastLevel}.pdf`);
+      if (fs.existsSync(mahnungPath)) {
+        attachments.push({ filename: `${invoice.invoice_number}_Mahnung.pdf`, contentPath: mahnungPath, contentType: 'application/pdf' });
+      }
     }
   } catch (_) { /* attachment is best-effort */ }
 

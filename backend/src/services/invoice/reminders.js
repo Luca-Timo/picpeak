@@ -28,7 +28,8 @@ async function sendReminder(id, levelOverride, adminId) {
     throw new AppError(`Cannot remind on status '${invoice.status}'`, 409);
   }
   const newLevel = levelOverride || (invoice.reminder_level + 1);
-  if (newLevel > 3) {
+  const maxCycles = await resolveMaxDunningCycles();
+  if (newLevel > maxCycles) {
     throw new AppError('Reminder level exhausted', 409);
   }
   return await applyReminder(invoice, lineItems, newLevel, adminId);
@@ -67,6 +68,14 @@ async function resolvePerReminderFeeMinor(invoice) {
   if (net <= 0) return 0;
   const rate = await resolveLateFeeVatRate();
   return rate > 0 ? net + Math.round(net * rate / 100) : net;
+}
+
+// How many dunning steps the ladder runs before the collections handoff.
+// Admin-configurable (Settings → CRM → Invoices); defaults to 3. Read at
+// runtime so changing it takes effect immediately — no workflow re-seed.
+async function resolveMaxDunningCycles() {
+  const n = Number(await getAppSetting('crm_invoices_dunning_max_cycles'));
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 3;
 }
 
 async function applyReminder(invoice, lineItems, level, adminId) {
@@ -118,38 +127,57 @@ async function applyReminder(invoice, lineItems, level, adminId) {
     });
   } catch (_) {}
 
-  // Render the MAHNUNG (reminder letter). The original invoice PDF is left
-  // UNTOUCHED (immutable). The Mahnung reuses the invoice layout via a
-  // 'mahnung' kind: same line items + the Mahngebühr row + the new total, with
-  // a "Mahnung" title and no QR (it would encode the old amount).
-  const fresh = await db('invoices').where({ id: invoice.id }).first();
-  const ctx = await buildInvoiceRenderContext(fresh, lineItems);
-  ctx.doc.kind = 'mahnung';
-  ctx.doc.reminderLevel = level;
-  ctx.doc.lateFeeMinor = lateFeeGross;
-  ctx.totals.lateFeeAmountMinor = lateFeeGross;
-  const buffer = await pdfService.renderInvoiceToBuffer(ctx);
   const fs = require('fs');
   const path = require('path');
-  const year = new Date(fresh.issue_date).getFullYear();
-  const root = path.join(process.cwd(), 'storage', 'business-docs', 'mahnung', String(year));
-  fs.mkdirSync(root, { recursive: true });
-  const mahnungPath = path.join(root, `${fresh.invoice_number}_mahnung_L${level}.pdf`);
-  fs.writeFileSync(mahnungPath, buffer);
+  const maxCycles = await resolveMaxDunningCycles();
+  const isFirst = level === 1;
+  const isFinal = level >= maxCycles;
 
   // days_overdue floors at 1 (a "0 days overdue" reminder reads as broken).
   const rawDaysOverdue = Math.floor((Date.now() - new Date(invoice.due_date).getTime()) / 86400000);
   const daysOverdue = Math.max(1, rawDaysOverdue);
-  const templateKey = level === 1 ? 'invoice_reminder_first' : 'invoice_reminder_second';
-  const locale = ctx.locale || invoice.language || 'de';
   const outstandingMinor = Math.max(0, newTotal - Number(invoice.paid_amount_minor || 0));
 
-  // Attach the (unchanged) original invoice PDF + the new Mahnung.
+  // Position-based template: the 1st step is a plain Zahlungserinnerung (invoice
+  // only, no fee, no Mahnung document); the LAST step (level == maxCycles) is
+  // the final reminder / letzte Mahnung; everything in between reuses the middle
+  // Mahnung. Only fee-bearing steps (>= 2) render + attach a Mahnung letter.
+  const templateKey = isFirst
+    ? 'invoice_reminder_first'
+    : isFinal
+      ? 'invoice_reminder_final'
+      : 'invoice_reminder_second';
+
+  // Always attach the (unchanged, immutable) original invoice PDF.
   const attachments = [];
   if (invoice.pdf_path && fs.existsSync(invoice.pdf_path)) {
     attachments.push({ filename: `${invoice.invoice_number}.pdf`, contentPath: invoice.pdf_path, contentType: 'application/pdf' });
   }
-  attachments.push({ filename: `${fresh.invoice_number}_Mahnung.pdf`, contentPath: mahnungPath, contentType: 'application/pdf' });
+
+  // From level 2 onwards, render the MAHNUNG (reminder letter). The invoice PDF
+  // is left UNTOUCHED; the Mahnung reuses the invoice layout via a 'mahnung' kind
+  // (same line items + Mahngebühr row + new total, no QR). Display number is
+  // level-1 ("1. Mahnung" on the 2nd email); the final level is titled
+  // "letzte Mahnung". Level 1 ships invoice-only, so no letter is rendered.
+  let locale = invoice.language || 'de';
+  let mahnungPath = null;
+  if (!isFirst) {
+    const fresh = await db('invoices').where({ id: invoice.id }).first();
+    const ctx = await buildInvoiceRenderContext(fresh, lineItems);
+    ctx.doc.kind = 'mahnung';
+    ctx.doc.reminderLevel = level - 1;
+    ctx.doc.isFinalReminder = isFinal;
+    ctx.doc.lateFeeMinor = lateFeeGross;
+    ctx.totals.lateFeeAmountMinor = lateFeeGross;
+    locale = ctx.locale || locale;
+    const buffer = await pdfService.renderInvoiceToBuffer(ctx);
+    const year = new Date(fresh.issue_date).getFullYear();
+    const root = path.join(process.cwd(), 'storage', 'business-docs', 'mahnung', String(year));
+    fs.mkdirSync(root, { recursive: true });
+    mahnungPath = path.join(root, `${fresh.invoice_number}_mahnung_L${level}.pdf`);
+    fs.writeFileSync(mahnungPath, buffer);
+    attachments.push({ filename: `${fresh.invoice_number}_Mahnung.pdf`, contentPath: mahnungPath, contentType: 'application/pdf' });
+  }
 
   const { to: reminderTo, cc: reminderCc } = resolveBillingRecipients(customer, invoice.cc_pdf_email);
   try {
@@ -170,7 +198,7 @@ async function applyReminder(invoice, lineItems, level, adminId) {
   } catch (err) {
     // Don't leave the just-rendered Mahnung PDF orphaned on disk if queueing the
     // email failed — it would only be reachable via the next reminder anyway.
-    try { fs.unlinkSync(mahnungPath); } catch (_) { /* best-effort cleanup */ }
+    if (mahnungPath) { try { fs.unlinkSync(mahnungPath); } catch (_) { /* best-effort cleanup */ } }
     throw err;
   }
 

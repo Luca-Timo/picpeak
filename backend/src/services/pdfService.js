@@ -1535,12 +1535,21 @@ function renderDocument(type, context) {
       y += 18; // line height + cushion before the title
 
       // ---- title ----------------------------------------------------
+      // Mahnung title: numbered ("1. Mahnung" / "Reminder 1") from the reminder
+      // ordinal, "letzte Mahnung" / "Final reminder" on the last step, or the
+      // plain fallback when no ordinal was passed (legacy callers).
+      const mahnungOrdinal = Number(ctx.doc?.reminderLevel || 0);
+      const mahnungTitle = ctx.doc?.isFinalReminder
+        ? t(ctx.locale, 'mahnung_final_title')
+        : mahnungOrdinal > 0
+          ? t(ctx.locale, 'mahnung_title_numbered', { n: mahnungOrdinal })
+          : t(ctx.locale, 'mahnung_title');
       const title = type === 'quote'
         ? t(ctx.locale, 'quote_title')
         : isStorno
           ? t(ctx.locale, 'storno_title')
           : isMahnung
-            ? t(ctx.locale, 'mahnung_title')
+            ? mahnungTitle
             : t(ctx.locale, 'invoice_title');
       y = drawTitle(doc, title, leftX, y + 2);
 

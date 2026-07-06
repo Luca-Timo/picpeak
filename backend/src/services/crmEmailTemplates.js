@@ -130,23 +130,47 @@ quote_sent: {
       body_text: `Rechnung {{invoice_number}} ist seit {{days_overdue}} Tagen überfällig. Offen: {{total_amount}}.`,
     },
   },
+  // Middle-of-ladder Mahnung — reused for every reminder between the first
+  // (Zahlungserinnerung) and the last (invoice_reminder_final), so the wording
+  // is deliberately step-neutral (no "second"). A dunning fee has accrued.
   invoice_reminder_second: {
     category: 'billing', feature_flag: 'bills',
     variables: ['invoice_number', 'customer_name', 'total_amount', 'due_date', 'days_overdue',
                 'late_fee_amount', 'new_total_amount'],
     en: {
-      subject: 'Second reminder: invoice {{invoice_number}}',
-      body_html: `<h2>Second payment reminder</h2><p>Dear {{customer_name}},</p>
+      subject: 'Payment reminder: invoice {{invoice_number}}',
+      body_html: `<h2>Payment reminder</h2><p>Dear {{customer_name}},</p>
 <p>Invoice <strong>{{invoice_number}}</strong> is now {{days_overdue}} days overdue. As advised in our payment terms, a late fee of <strong>{{late_fee_amount}}</strong> has been added. The new total is <strong>{{new_total_amount}}</strong>.</p>
-<p>Please settle the outstanding amount as soon as possible. A revised invoice is attached.</p>`,
-      body_text: `Second reminder for {{invoice_number}}. Late fee {{late_fee_amount}} added. New total: {{new_total_amount}}.`,
+<p>Please settle the outstanding amount as soon as possible. A revised invoice and the reminder notice are attached.</p>`,
+      body_text: `Reminder for {{invoice_number}}. Late fee {{late_fee_amount}} added. New total: {{new_total_amount}}.`,
     },
     de: {
-      subject: 'Zweite Mahnung: Rechnung {{invoice_number}}',
-      body_html: `<h2>Zweite Zahlungserinnerung</h2><p>Sehr geehrte/r {{customer_name}},</p>
+      subject: 'Mahnung: Rechnung {{invoice_number}}',
+      body_html: `<h2>Mahnung</h2><p>Sehr geehrte/r {{customer_name}},</p>
 <p>die Rechnung <strong>{{invoice_number}}</strong> ist nun seit {{days_overdue}} Tagen überfällig. Gemäss unseren Zahlungsbedingungen wurde eine Mahngebühr von <strong>{{late_fee_amount}}</strong> hinzugefügt. Der neue Gesamtbetrag beträgt <strong>{{new_total_amount}}</strong>.</p>
-<p>Wir bitten Sie, den offenen Betrag umgehend zu begleichen. Eine aktualisierte Rechnung finden Sie im Anhang.</p>`,
-      body_text: `Zweite Mahnung für {{invoice_number}}. Mahngebühr {{late_fee_amount}} hinzugefügt. Neuer Gesamtbetrag: {{new_total_amount}}.`,
+<p>Wir bitten Sie, den offenen Betrag umgehend zu begleichen. Eine aktualisierte Rechnung sowie die Mahnung finden Sie im Anhang.</p>`,
+      body_text: `Mahnung für {{invoice_number}}. Mahngebühr {{late_fee_amount}} hinzugefügt. Neuer Gesamtbetrag: {{new_total_amount}}.`,
+    },
+  },
+  // Last reminder before the invoice is handed off to collections. Firm tone,
+  // final deadline, late fee accrued. Attaches the invoice + the last Mahnung.
+  invoice_reminder_final: {
+    category: 'billing', feature_flag: 'bills',
+    variables: ['invoice_number', 'customer_name', 'total_amount', 'due_date', 'days_overdue',
+                'late_fee_amount', 'new_total_amount'],
+    en: {
+      subject: 'Final reminder: invoice {{invoice_number}}',
+      body_html: `<h2>Final reminder</h2><p>Dear {{customer_name}},</p>
+<p>Despite our previous reminders, invoice <strong>{{invoice_number}}</strong> remains unpaid and is now {{days_overdue}} days overdue. A late fee of <strong>{{late_fee_amount}}</strong> has accrued, bringing the total due to <strong>{{new_total_amount}}</strong>.</p>
+<p>This is our final reminder. If we do not receive payment shortly, the matter may be passed to debt collection and further costs may arise. Please settle the outstanding amount without delay. A revised invoice and the reminder notice are attached.</p>`,
+      body_text: `Final reminder for {{invoice_number}}. Late fee {{late_fee_amount}} added. Total due: {{new_total_amount}}. Next step is debt collection.`,
+    },
+    de: {
+      subject: 'Letzte Mahnung: Rechnung {{invoice_number}}',
+      body_html: `<h2>Letzte Mahnung</h2><p>Sehr geehrte/r {{customer_name}},</p>
+<p>trotz unserer bisherigen Mahnungen ist die Rechnung <strong>{{invoice_number}}</strong> weiterhin offen und inzwischen seit {{days_overdue}} Tagen überfällig. Es ist eine Mahngebühr von <strong>{{late_fee_amount}}</strong> angefallen; der offene Gesamtbetrag beträgt <strong>{{new_total_amount}}</strong>.</p>
+<p>Dies ist unsere letzte Mahnung. Sollte die Zahlung nicht in Kürze bei uns eingehen, kann der Vorgang an ein Inkasso übergeben werden, wodurch weitere Kosten entstehen können. Bitte begleichen Sie den offenen Betrag unverzüglich. Eine aktualisierte Rechnung sowie die Mahnung finden Sie im Anhang.</p>`,
+      body_text: `Letzte Mahnung für {{invoice_number}}. Mahngebühr {{late_fee_amount}} hinzugefügt. Offener Gesamtbetrag: {{new_total_amount}}. Nächster Schritt ist das Inkasso.`,
     },
   },
   invoice_paid_receipt: {

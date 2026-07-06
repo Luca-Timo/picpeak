@@ -35,7 +35,10 @@ function buildDunningGraph({ firstDays, gapDays, maxReminders }) {
     // not "now + firstDays" — so an already-overdue invoice enrolled via backfill
     // duns on its real timeline instead of restarting a fresh grace clock (#750).
     { node_key: 'waitGrace', type: 'wait', config: { untilVar: 'dueDate', delayDays: firstDays }, pos_x: 240, pos_y: 220 },
-    { node_key: 'loop', type: 'loop', config: { maxIterations: maxReminders }, pos_x: 240, pos_y: 330 },
+    // maxIterations is the seed default; the loop resolves the live cap from
+    // crm_invoices_dunning_max_cycles at runtime so the admin's "number of
+    // dunning cycles" setting takes effect without re-seeding the graph.
+    { node_key: 'loop', type: 'loop', config: { maxIterations: maxReminders, maxIterationsSetting: 'crm_invoices_dunning_max_cycles' }, pos_x: 240, pos_y: 330 },
     { node_key: 'checkPaid', type: 'condition', config: { condition: 'invoice_paid' }, pos_x: 240, pos_y: 440 },
     { node_key: 'paymentCheck', type: 'action', config: { action: 'queue_payment_check' }, pos_x: 240, pos_y: 550 },
     { node_key: 'waitGap', type: 'wait', config: { delayDays: gapDays }, pos_x: 240, pos_y: 660 },
@@ -221,7 +224,7 @@ function buildGalleryExpiredGraph() {
 const BUILTINS = [
   {
     key: DUNNING_KEY,
-    version: 7,
+    version: 8,
     enabled: false,
     name: 'Invoice dunning (built-in)',
     trigger_type: 'invoice.sent',
