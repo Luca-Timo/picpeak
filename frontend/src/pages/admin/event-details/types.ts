@@ -24,8 +24,8 @@ export type EditFormState = {
   allow_presigned_download: boolean;
   enable_devtools_protection: boolean;
   use_canvas_rendering: boolean;
-  // Hero logo settings
-  hero_logo_visible: boolean;
+  // Hero logo settings. null = inherit the global branding toggle (#756).
+  hero_logo_visible: boolean | null;
   hero_logo_size: 'small' | 'medium' | 'large' | 'xlarge';
   hero_logo_position: 'top' | 'center' | 'bottom';
   // Hero image anchor position (#162) – keyword or "X% Y%" focal point
@@ -72,8 +72,8 @@ export const INITIAL_EDIT_FORM: EditFormState = {
   allow_presigned_download: false,
   enable_devtools_protection: true,
   use_canvas_rendering: false,
-  // Hero logo settings
-  hero_logo_visible: true,
+  // Hero logo settings — null = inherit global branding toggle (#756)
+  hero_logo_visible: null,
   hero_logo_size: 'medium',
   hero_logo_position: 'top',
   // Hero image anchor position (#162)

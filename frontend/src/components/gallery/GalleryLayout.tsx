@@ -25,6 +25,10 @@ interface GalleryLayoutProps {
     promo_mode?: 'inherit' | 'custom' | 'off';
     promo_markdown?: string | null;
   };
+  // Effective hero-logo visibility for THIS gallery, already resolved by the
+  // backend (per-event override, else the global branding toggle) (#756).
+  // When provided it wins over brandingSettings.logo_display_hero.
+  heroLogoVisible?: boolean;
   brandingSettings?: {
     company_name?: string;
     company_tagline?: string;
@@ -108,6 +112,7 @@ const HeaderDownloadButton: React.FC<{
 export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
   event,
   brandingSettings,
+  heroLogoVisible,
   showLogout = false,
   onLogout,
   showDownloadAll = false,
@@ -202,6 +207,9 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
     if (context === 'header') {
       return brandingSettings?.logo_display_header !== false;
     } else {
+      // #756: prefer the backend-resolved per-event value (override, else
+      // global); fall back to the global branding toggle if not provided.
+      if (heroLogoVisible !== undefined) return heroLogoVisible;
       return brandingSettings?.logo_display_hero !== false;
     }
   };

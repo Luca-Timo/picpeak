@@ -589,18 +589,31 @@ export const EventInformationCard: React.FC<EventInformationCardProps> = ({
             </h3>
 
             <div className="space-y-3">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={editForm.hero_logo_visible}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, hero_logo_visible: e.target.checked }))}
-                  className="w-4 h-4 text-accent border-neutral-300 dark:border-neutral-600 rounded focus:ring-primary-500"
-                />
-                <Image className="w-4 h-4 ml-2 mr-1 text-neutral-500 dark:text-neutral-400" />
-                <span className="text-sm text-neutral-700 dark:text-neutral-300">{t('events.heroLogoVisible', 'Display logo in hero section')}</span>
-              </label>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1 flex items-center gap-1">
+                  <Image className="w-4 h-4 text-neutral-500 dark:text-neutral-400" />
+                  {t('events.heroLogoVisible', 'Display logo in hero section')}
+                </label>
+                <select
+                  // Tri-state (#756): "inherit" = null = follow the global
+                  // Branding → "Show logo in hero" toggle; show/hide override it
+                  // for just this gallery.
+                  value={editForm.hero_logo_visible === null || editForm.hero_logo_visible === undefined
+                    ? 'inherit'
+                    : editForm.hero_logo_visible ? 'show' : 'hide'}
+                  onChange={(e) => setEditForm(prev => ({
+                    ...prev,
+                    hero_logo_visible: e.target.value === 'inherit' ? null : e.target.value === 'show'
+                  }))}
+                  className="w-full sm:w-64 px-3 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 rounded-md shadow-sm focus:ring-primary-500 focus:border-accent-dark text-sm"
+                >
+                  <option value="inherit">{t('events.heroLogoInherit', 'Use branding default')}</option>
+                  <option value="show">{t('events.heroLogoShow', 'Always show')}</option>
+                  <option value="hide">{t('events.heroLogoHide', 'Always hide')}</option>
+                </select>
+              </div>
 
-              {editForm.hero_logo_visible && (
+              {editForm.hero_logo_visible !== false && (
                 <>
                   <div className="ml-6">
                     <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">

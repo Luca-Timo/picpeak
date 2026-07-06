@@ -820,6 +820,7 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event }) => {
           promo_markdown: (data?.event as { promo_markdown?: string | null })?.promo_markdown,
         }}
         brandingSettings={brandingSettings}
+        heroLogoVisible={data?.event?.hero_logo_visible !== false}
         headerStyle={data?.event?.header_style || theme.headerStyle}
         showLogout={true}
         onLogout={logout}

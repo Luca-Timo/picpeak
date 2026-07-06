@@ -2,9 +2,21 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { db } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
+const { getAppSetting } = require('../utils/appSettings');
 const archiver = require('archiver');
 const path = require('path');
 const router = express.Router();
+
+// #756: a NULL per-event hero_logo_visible means "inherit the global
+// branding_logo_display_hero toggle". Only an explicit true/false is a
+// per-gallery override. `globalDefault` is branding_logo_display_hero
+// (defaults true when unset).
+function resolveHeroLogoVisible(perEvent, globalDefault) {
+  if (perEvent === null || perEvent === undefined) {
+    return globalDefault !== false;
+  }
+  return perEvent !== false && perEvent !== 0 && perEvent !== '0';
+}
 const watermarkService = require('../services/watermarkService');
 const watermarkGeneratorService = require('../services/watermarkGeneratorService');
 const { verifyGalleryAccess, denySlideshowToken, isAdminPreview } = require('../middleware/gallery');
@@ -182,6 +194,7 @@ router.get('/:slug/info', async (req, res) => {
     }
     
     const requiresPassword = !(event.require_password === false || event.require_password === 0 || event.require_password === '0');
+    const globalHeroLogoVisible = await getAppSetting('branding_logo_display_hero', true);
 
     res.json({
       event_name: event.event_name,
@@ -199,7 +212,7 @@ router.get('/:slug/info', async (req, res) => {
       watermark_text: event.watermark_text,
       enable_devtools_protection: event.enable_devtools_protection === true || event.enable_devtools_protection === 1 || event.enable_devtools_protection === '1',
       use_canvas_rendering: event.use_canvas_rendering === true || event.use_canvas_rendering === 1 || event.use_canvas_rendering === '1',
-      hero_logo_visible: event.hero_logo_visible !== false && event.hero_logo_visible !== 0 && event.hero_logo_visible !== '0',
+      hero_logo_visible: resolveHeroLogoVisible(event.hero_logo_visible, globalHeroLogoVisible),
       hero_logo_size: event.hero_logo_size || 'medium',
       hero_logo_position: event.hero_logo_position || 'top',
       hero_logo_url: event.hero_logo_url || null,
@@ -635,7 +648,7 @@ router.get('/:slug/photos', verifyGalleryAccess, resolveGuest, async (req, res) 
     // selection back to source files. Tied to the same toggle as downloads —
     // one switch controls both surfaces.
     const useOriginalFilenames = await getUseOriginalFilenames();
-    
+    const globalHeroLogoVisible = await getAppSetting('branding_logo_display_hero', true);
 
     res.json({
       event: {
@@ -654,7 +667,7 @@ router.get('/:slug/photos', verifyGalleryAccess, resolveGuest, async (req, res) 
         watermark_text: req.event.watermark_text,
         enable_devtools_protection: req.event.enable_devtools_protection === true,
         use_canvas_rendering: req.event.use_canvas_rendering === true,
-        hero_logo_visible: req.event.hero_logo_visible !== false && req.event.hero_logo_visible !== 0 && req.event.hero_logo_visible !== '0',
+        hero_logo_visible: resolveHeroLogoVisible(req.event.hero_logo_visible, globalHeroLogoVisible),
         hero_logo_size: req.event.hero_logo_size || 'medium',
         hero_logo_position: req.event.hero_logo_position || 'top',
         hero_logo_url: req.event.hero_logo_url || null,

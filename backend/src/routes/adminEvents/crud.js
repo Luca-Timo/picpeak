@@ -339,7 +339,13 @@ module.exports = (router) => {
 
       // Get branding defaults for hero logo settings (Feature 7: Branding Inheritance)
       const brandingDefaults = await getBrandingDefaults();
-      const effectiveHeroLogoVisible = req.body.hero_logo_visible !== undefined ? hero_logo_visible : brandingDefaults.hero_logo_visible;
+      // hero_logo_visible: store NULL ("inherit") unless the admin explicitly
+      // set it, so the global branding_logo_display_hero toggle keeps
+      // controlling this gallery afterwards (#756). Only an explicit per-event
+      // choice overrides the global.
+      const effectiveHeroLogoVisible = req.body.hero_logo_visible !== undefined
+        ? formatBoolean(hero_logo_visible)
+        : null;
       const effectiveHeroLogoSize = req.body.hero_logo_size || brandingDefaults.hero_logo_size;
       const effectiveHeroLogoPosition = req.body.hero_logo_position || brandingDefaults.hero_logo_position;
 
@@ -425,7 +431,8 @@ module.exports = (router) => {
         allow_presigned_download: formatBoolean(allow_presigned_download === true || allow_presigned_download === 'true'),
         require_password: formatBoolean(requirePassword),
         css_template_id: css_template_id || null,
-        hero_logo_visible: formatBoolean(effectiveHeroLogoVisible),
+        // Already formatBoolean-coerced above, or null = inherit global (#756).
+        hero_logo_visible: effectiveHeroLogoVisible,
         hero_logo_size: effectiveHeroLogoSize,
         hero_logo_position: effectiveHeroLogoPosition,
         header_style: effectiveHeaderStyle || 'standard',
@@ -1424,9 +1431,13 @@ module.exports = (router) => {
         updates.expires_at = null;
       }
 
-      // Format hero logo settings if provided
+      // Format hero logo settings if provided. null = inherit the global
+      // branding_logo_display_hero toggle (#756); only an explicit true/false
+      // is a per-event override.
       if (Object.prototype.hasOwnProperty.call(updates, 'hero_logo_visible')) {
-        updates.hero_logo_visible = formatBoolean(updates.hero_logo_visible);
+        updates.hero_logo_visible = updates.hero_logo_visible === null
+          ? null
+          : formatBoolean(updates.hero_logo_visible);
       }
 
       // Per-event opt-in for hero-photo OG share image (#474). Coerce so
