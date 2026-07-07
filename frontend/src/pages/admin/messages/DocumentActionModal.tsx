@@ -104,9 +104,10 @@ export const DocumentActionModal: React.FC<{
 
         <div className="p-4 flex flex-col gap-4 overflow-y-auto">
           <div>
+            <div className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">{t('messages.customer', 'Customer')}</div>
             <CustomerPicker
               value={customer?.id ?? null}
-              label={t('messages.customer', 'Customer')}
+              label={customer?.label || ''}
               onSelect={pick}
               onCreate={pick}
               onClear={() => setCustomer(null)}
