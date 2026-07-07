@@ -220,9 +220,17 @@ export const emailService = {
     const response = await api.post<ImapPollResult>('/admin/email/incoming-config/poll', {});
     return response.data;
   },
-  async listReceived(params: { page?: number; pageSize?: number; account?: string } = {}): Promise<ReceivedEmailsResponse> {
+  async listReceived(params: { page?: number; pageSize?: number; account?: string; state?: 'active' | 'archived' | 'deleted' } = {}): Promise<ReceivedEmailsResponse> {
     const response = await api.get<ReceivedEmailsResponse>('/admin/email/received', { params });
     return response.data;
+  },
+  /** Archive / Delete (soft) / Restore an email. kind = 'queue' | 'received'. */
+  async setItemState(kind: 'queue' | 'received', id: number, state: 'active' | 'archived' | 'deleted'): Promise<void> {
+    await api.post(`/admin/email/item/${kind}/${id}/state`, { state });
+  },
+  /** Permanently delete an email (only from the Deleted folder). */
+  async deleteItem(kind: 'queue' | 'received', id: number): Promise<void> {
+    await api.delete(`/admin/email/item/${kind}/${id}`);
   },
   async getReceivedItem(id: number): Promise<ReceivedEmailDetail> {
     const response = await api.get<ReceivedEmailDetail>(`/admin/email/received/${id}`);
@@ -262,6 +270,7 @@ export const emailService = {
     status?: EmailQueueStatus;
     emailType?: string;
     origin?: 'system' | 'manual';
+    state?: 'active' | 'archived' | 'deleted';
     q?: string;
     from?: string;
     to?: string;

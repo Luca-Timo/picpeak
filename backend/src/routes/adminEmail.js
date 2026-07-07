@@ -261,10 +261,14 @@ router.get('/received', adminAuth, requirePermission('email.view'), async (req, 
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 25));
     const account = req.query.account ? String(req.query.account) : null;
+    // mailbox_state filter: no param → active (+ legacy NULL); else exact.
+    const state = ['archived', 'deleted'].includes(String(req.query.state)) ? String(req.query.state) : 'active';
     // 'accounting' matches legacy rows too (account_key was NULL before mig 154).
     const applyAccount = (qb) => {
       if (account === 'accounting') qb.where((b) => b.where('account_key', 'accounting').orWhereNull('account_key'));
       else if (account) qb.where('account_key', account);
+      if (state === 'active') qb.where((b) => b.where('mailbox_state', 'active').orWhereNull('mailbox_state'));
+      else qb.where('mailbox_state', state);
       return qb;
     };
     const countRow = await applyAccount(db('received_emails')).count({ c: '*' }).first();
@@ -292,6 +296,39 @@ router.get('/received/:id', adminAuth, requirePermission('email.view'), async (r
     res.json(row);
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to fetch email');
+  }
+});
+
+// Move an email between mailbox states: Archive / Delete (soft) or Restore
+// (back to active). kind = 'queue' | 'received'. Delete is a soft move to the
+// trash; the row is only removed for good by the DELETE handler below.
+router.post('/item/:kind/:id/state', adminAuth, requirePermission('email.view'), async (req, res) => {
+  try {
+    const table = req.params.kind === 'received' ? 'received_emails' : req.params.kind === 'queue' ? 'email_queue' : null;
+    if (!table) return res.status(400).json({ error: 'Invalid kind' });
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id' });
+    const state = String(req.body?.state || '');
+    if (!['active', 'archived', 'deleted'].includes(state)) return res.status(400).json({ error: 'Invalid state' });
+    const n = await db(table).where({ id }).update({ mailbox_state: state });
+    if (!n) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to update email');
+  }
+});
+
+// Permanently delete an email row — only offered from the Deleted folder.
+router.delete('/item/:kind/:id', adminAuth, requirePermission('email.edit'), async (req, res) => {
+  try {
+    const table = req.params.kind === 'received' ? 'received_emails' : req.params.kind === 'queue' ? 'email_queue' : null;
+    if (!table) return res.status(400).json({ error: 'Invalid kind' });
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id' });
+    await db(table).where({ id }).del();
+    res.json({ ok: true });
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to delete email');
   }
 });
 
@@ -578,6 +615,7 @@ router.get('/queue', adminAuth, requirePermission('email.view'), [
   query('status').optional({ values: 'falsy' }).isIn(['pending', 'sent', 'failed']),
   query('emailType').optional({ values: 'falsy' }).isString().isLength({ max: 64 }),
   query('origin').optional({ values: 'falsy' }).isIn(['system', 'manual']),
+  query('state').optional({ values: 'falsy' }).isIn(['active', 'archived', 'deleted']),
   query('q').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
   query('from').optional({ values: 'falsy' }).isISO8601(),
   query('to').optional({ values: 'falsy' }).isISO8601(),
@@ -599,6 +637,10 @@ router.get('/queue', adminAuth, requirePermission('email.view'), [
       // 'system' includes legacy rows (origin was NULL before migration 155).
       if (req.query.origin === 'manual') qb.where('email_queue.origin', 'manual');
       else if (req.query.origin === 'system') qb.where((b) => b.where('email_queue.origin', 'system').orWhereNull('email_queue.origin'));
+      // mailbox_state: default active (+ legacy NULL); Archived/Deleted folders pass it explicitly.
+      const st = ['archived', 'deleted'].includes(String(req.query.state)) ? String(req.query.state) : 'active';
+      if (st === 'active') qb.where((b) => b.where('email_queue.mailbox_state', 'active').orWhereNull('email_queue.mailbox_state'));
+      else qb.where('email_queue.mailbox_state', st);
       if (req.query.from) qb.where('email_queue.created_at', '>=', new Date(req.query.from));
       if (req.query.to) qb.where('email_queue.created_at', '<=', new Date(req.query.to));
       if (req.query.q) {

@@ -6,7 +6,7 @@ import { toast } from 'react-toastify';
 import {
   Inbox, Send, Reply, ReplyAll, Forward, Archive, Trash2, Paperclip,
   FileText, Quote, FileSignature, Image as ImageIcon, ReceiptText,
-  Link2, X, ChevronLeft, ChevronRight, Mail, RefreshCw, PenSquare, type LucideIcon,
+  Link2, X, ChevronLeft, ChevronRight, Mail, RefreshCw, PenSquare, Search, RotateCcw, type LucideIcon,
 } from 'lucide-react';
 import { emailService, type ReceivedEmail, type MailIdentities } from '../../../services/email.service';
 import { accountingService } from '../../../services/accounting.service';
@@ -23,8 +23,8 @@ import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
  * folders render an explanatory empty state so the full IA is visible now.
  */
 
-type FolderSrc = 'queue' | 'received' | 'empty';
-interface Folder { id: string; name: string; icon: LucideIcon; src: FolderSrc; account?: string; origin?: 'system' | 'manual'; note?: string; }
+type FolderSrc = 'queue' | 'received' | 'empty' | 'state';
+interface Folder { id: string; name: string; icon: LucideIcon; src: FolderSrc; account?: string; origin?: 'system' | 'manual'; state?: 'archived' | 'deleted'; note?: string; }
 interface Account { id: string; name: string; addr?: string; color: string; folders: Folder[]; }
 
 type Selection =
@@ -73,6 +73,7 @@ export const MessagesPage: React.FC = () => {
   const [composer, setComposer] = useState<{ init: ComposerInit; title?: string; accountKey?: string } | null>(null);
   const [docAction, setDocAction] = useState<{ docType: DocType; senderEmail: string } | null>(null);
   const { flags } = useFeatureFlags();
+  const [search, setSearch] = useState('');
 
   // "Sync" = poll the inbound mailboxes now instead of waiting for the 60s loop.
   const sync = useMutation({
@@ -115,6 +116,48 @@ export const MessagesPage: React.FC = () => {
   });
   const identities = identitiesQuery.data;
 
+  // Archived / Deleted system folders — fetch queue + received for that state,
+  // on demand (only when the folder is open).
+  const folderState: 'archived' | 'deleted' | undefined =
+    activeFolder === 'archived' ? 'archived' : activeFolder === 'deleted' ? 'deleted' : undefined;
+  const stateQueueQuery = useQuery({
+    queryKey: ['messages', 'state-queue', folderState],
+    enabled: !!folderState,
+    queryFn: () => emailService.listQueue({ state: folderState as 'archived' | 'deleted', pageSize: 100 }),
+  });
+  const stateRecvQuery = useQuery({
+    queryKey: ['messages', 'state-received', folderState],
+    enabled: !!folderState,
+    queryFn: () => emailService.listReceived({ state: folderState as 'archived' | 'deleted', pageSize: 100 }),
+  });
+
+  const refetchAll = () => {
+    queueQuery.refetch(); acctQuery.refetch(); custQuery.refetch();
+    stateQueueQuery.refetch(); stateRecvQuery.refetch();
+  };
+  const stateMut = useMutation({
+    mutationFn: (v: { kind: 'queue' | 'received'; id: number; state: 'active' | 'archived' | 'deleted' }) =>
+      emailService.setItemState(v.kind, v.id, v.state),
+    onSuccess: () => { setSelection(null); refetchAll(); },
+    onError: (e: any) => toast.error(e?.response?.data?.error || e.message || t('messages.actionFailed', 'Action failed.')),
+  });
+  const purgeMut = useMutation({
+    mutationFn: (v: { kind: 'queue' | 'received'; id: number }) => emailService.deleteItem(v.kind, v.id),
+    onSuccess: () => { setSelection(null); refetchAll(); },
+    onError: (e: any) => toast.error(e?.response?.data?.error || e.message || t('messages.actionFailed', 'Action failed.')),
+  });
+  // Archive / Delete (soft) / Restore, acting on the current selection. Delete
+  // from the Deleted folder is permanent.
+  const doItemAction = (action: 'archive' | 'delete' | 'restore') => {
+    if (!selection) return;
+    const kind = selection.kind;
+    const id = selection.kind === 'queue' ? selection.id : selection.item.id;
+    if (action === 'restore') stateMut.mutate({ kind, id, state: 'active' });
+    else if (action === 'archive') stateMut.mutate({ kind, id, state: 'archived' });
+    else if (folderState === 'deleted') purgeMut.mutate({ kind, id });
+    else stateMut.mutate({ kind, id, state: 'deleted' });
+  };
+
   const queueTotal = queueQuery.data?.pagination.total;
   const acctTotal = acctQuery.data?.pagination.total;
   const custTotal = custQuery.data?.pagination.total;
@@ -136,6 +179,12 @@ export const MessagesPage: React.FC = () => {
     ] },
   ], [t, identities]);
 
+  // Cross-account system folders — Archived + Deleted (trash).
+  const systemFolders: Folder[] = useMemo(() => [
+    { id: 'archived', name: t('messages.folder.archived', 'Archived'), icon: Archive, src: 'state', state: 'archived' },
+    { id: 'deleted', name: t('messages.folder.deleted', 'Deleted'), icon: Trash2, src: 'state', state: 'deleted' },
+  ], [t]);
+
   // Sent stream is split client-side by origin: system (Automated) vs manual
   // (human composed → Customers ▸ Sent). Legacy rows (origin undefined) = system.
   const queueItemsAll = queueQuery.data?.items || [];
@@ -146,8 +195,10 @@ export const MessagesPage: React.FC = () => {
 
   const folder = useMemo(() => {
     for (const a of accounts) for (const f of a.folders) if (f.id === activeFolder) return { a, f };
+    const sf = systemFolders.find((f) => f.id === activeFolder);
+    if (sf) return { a: { id: 'system', name: sf.name, color: '#94a3b8', folders: [] } as Account, f: sf };
     return { a: accounts[0], f: accounts[0].folders[0] };
-  }, [accounts, activeFolder]);
+  }, [accounts, systemFolders, activeFolder]);
 
   const countFor = (f: Folder): number | undefined => {
     if (f.src === 'queue') return f.origin ? queueFor(f.origin).length : queueTotal;
@@ -177,8 +228,8 @@ export const MessagesPage: React.FC = () => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-8.5rem)] min-h-[540px]">
-      <div className="flex items-center justify-between mb-3">
-        <div>
+      <div className="flex items-center gap-3 mb-3">
+        <div className="flex-none">
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
             <Mail className="w-6 h-6 text-neutral-500 dark:text-neutral-400" />
             {t('messages.title', 'Messages')}
@@ -187,7 +238,16 @@ export const MessagesPage: React.FC = () => {
             {t('messages.subtitle', 'Sent, automated and incoming mail — one place.')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="relative flex-1 max-w-md ml-auto">
+          <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('messages.searchPlaceholder', 'Search this folder…')}
+            className="w-full h-9 pl-9 pr-3 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+        </div>
+        <div className="flex items-center gap-2 flex-none">
           <button
             onClick={() => sync.mutate()}
             disabled={sync.isPending}
@@ -241,6 +301,26 @@ export const MessagesPage: React.FC = () => {
               </div>
             </div>
           ))}
+          {/* System folders — Archived + Deleted, across all accounts. */}
+          <div className="mt-2 pt-2 border-t border-neutral-200 dark:border-neutral-800 flex flex-col gap-0.5">
+            {systemFolders.map((f) => {
+              const active = f.id === activeFolder;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => { setActiveFolder(f.id); setSelection(null); }}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13.5px] text-left transition-colors ${
+                    active
+                      ? 'bg-accent-soft text-on-accent-soft font-semibold'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800/60'
+                  }`}
+                >
+                  <f.icon className="w-4 h-4 opacity-80" />
+                  <span>{f.name}</span>
+                </button>
+              );
+            })}
+          </div>
         </nav>
 
         {/* ── message list ── */}
@@ -248,15 +328,20 @@ export const MessagesPage: React.FC = () => {
           <div className="px-4 py-3 border-b border-neutral-200 dark:border-neutral-800 flex-none">
             <div className="text-base font-semibold text-neutral-900 dark:text-neutral-100">{folder.f.name}</div>
             <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-              {folder.a.addr || (folder.a.id === 'all' ? t('messages.unified', 'Unified across accounts') : t('messages.systemGenerated', 'System-generated'))}
+              {folder.f.src === 'state'
+                ? t('messages.acrossAccounts', 'Across all accounts')
+                : folder.a.addr || (folder.a.id === 'all' ? t('messages.unified', 'Unified across accounts') : t('messages.systemGenerated', 'System-generated'))}
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">
             <MessageList
               folder={folder.f}
-              queue={queueFor(folder.f.origin)}
-              received={receivedItems}
-              loading={folder.f.src === 'queue' ? queueQuery.isLoading : folder.f.src === 'received' ? receivedLoading : false}
+              queue={folder.f.src === 'state' ? stateQueueQuery.data?.items : queueFor(folder.f.origin)}
+              received={folder.f.src === 'state' ? stateRecvQuery.data?.items : receivedItems}
+              loading={folder.f.src === 'state'
+                ? (stateQueueQuery.isLoading || stateRecvQuery.isLoading)
+                : folder.f.src === 'queue' ? queueQuery.isLoading : folder.f.src === 'received' ? receivedLoading : false}
+              search={search}
               selection={selection}
               onSelect={setSelection}
               t={t}
@@ -271,10 +356,12 @@ export const MessagesPage: React.FC = () => {
             account={folder.a}
             identities={identities}
             flags={flags}
+            folderState={folderState}
             onViewDoc={setPdfDocId}
             onOpenAccounting={() => navigate('/admin/accounting/inbox')}
             onCompose={(init, title) => setComposer({ init, title, accountKey: 'customers' })}
             onOpenDoc={(docType, senderEmail) => setDocAction({ docType, senderEmail })}
+            onItemAction={doItemAction}
             t={t}
           />
         </section>
@@ -310,10 +397,11 @@ const MessageList: React.FC<{
   queue?: import('../../../services/email.service').EmailQueueItem[];
   received?: ReceivedEmail[];
   loading: boolean;
+  search: string;
   selection: Selection;
   onSelect: (s: Selection) => void;
   t: (k: string, d?: string) => string;
-}> = ({ folder, queue, received, loading, selection, onSelect, t }) => {
+}> = ({ folder, queue, received, loading, search, selection, onSelect, t }) => {
   if (folder.src === 'empty') {
     return (
       <div className="p-8 text-center text-sm text-neutral-500 dark:text-neutral-400">
@@ -324,31 +412,39 @@ const MessageList: React.FC<{
   }
   if (loading) return <div className="p-6"><Loading /></div>;
 
-  const rows =
-    folder.src === 'queue'
-      ? (queue || []).map((m) => ({
-          key: `q${m.id}`,
-          onClick: () => onSelect({ kind: 'queue', id: m.id }),
-          active: selection?.kind === 'queue' && selection.id === m.id,
-          who: m.recipientEmail,
-          subject: friendlyType(m.emailType),
-          when: fmt(m.sentAt || m.createdAt),
-          status: m.status,
-          attach: 0,
-        }))
-      : (received || []).map((m) => ({
-          key: `r${m.id}`,
-          onClick: () => onSelect({ kind: 'received', item: m }),
-          active: selection?.kind === 'received' && selection.item.id === m.id,
-          who: m.from_address || '—',
-          subject: m.subject || t('messages.noSubject', '(no subject)'),
-          when: fmt(m.received_at),
-          status: m.status,
-          attach: m.attachment_count,
-        }));
+  const qRows = (queue || []).map((m) => ({
+    key: `q${m.id}`,
+    sortKey: m.sentAt || m.createdAt || '',
+    onClick: () => onSelect({ kind: 'queue', id: m.id }),
+    active: selection?.kind === 'queue' && selection.id === m.id,
+    who: m.recipientEmail,
+    subject: friendlyType(m.emailType),
+    when: fmt(m.sentAt || m.createdAt),
+    status: m.status,
+    attach: 0,
+  }));
+  const rRows = (received || []).map((m) => ({
+    key: `r${m.id}`,
+    sortKey: m.received_at || '',
+    onClick: () => onSelect({ kind: 'received', item: m }),
+    active: selection?.kind === 'received' && selection.item.id === m.id,
+    who: m.from_address || '—',
+    subject: m.subject || t('messages.noSubject', '(no subject)'),
+    when: fmt(m.received_at),
+    status: m.status,
+    attach: m.attachment_count,
+  }));
+
+  // Archived/Deleted folders (src 'state') merge both streams by date.
+  let rows = folder.src === 'queue' ? qRows
+    : folder.src === 'received' ? rRows
+    : [...qRows, ...rRows].sort((a, b) => (b.sortKey || '').localeCompare(a.sortKey || ''));
+
+  const q = search.trim().toLowerCase();
+  if (q) rows = rows.filter((r) => r.who.toLowerCase().includes(q) || r.subject.toLowerCase().includes(q));
 
   if (rows.length === 0) {
-    return <div className="p-8 text-center text-sm text-neutral-500 dark:text-neutral-400">{t('messages.noMessages', 'No messages')}</div>;
+    return <div className="p-8 text-center text-sm text-neutral-500 dark:text-neutral-400">{q ? t('messages.noSearchResults', 'No matches') : t('messages.noMessages', 'No messages')}</div>;
   }
 
   return (
@@ -391,12 +487,14 @@ const ReadingPane: React.FC<{
   account: Account;
   identities?: MailIdentities | null;
   flags: Record<string, boolean>;
+  folderState?: 'archived' | 'deleted';
   onViewDoc: (id: number) => void;
   onOpenAccounting: () => void;
   onCompose: (init: ComposerInit, title?: string) => void;
   onOpenDoc: (docType: DocType, senderEmail: string) => void;
+  onItemAction: (action: 'archive' | 'delete' | 'restore') => void;
   t: (k: string, d?: string) => string;
-}> = ({ selection, account, identities, flags, onViewDoc, onOpenAccounting, onCompose, onOpenDoc, t }) => {
+}> = ({ selection, account, identities, flags, folderState, onViewDoc, onOpenAccounting, onCompose, onOpenDoc, onItemAction, t }) => {
   const detailQuery = useQuery({
     queryKey: ['messages', 'queue', selection?.kind === 'queue' ? selection.id : null],
     queryFn: () => emailService.getQueueItem((selection as { kind: 'queue'; id: number }).id),
@@ -442,7 +540,7 @@ const ReadingPane: React.FC<{
 
   return (
     <div className="flex flex-col min-h-0 flex-1">
-      <Toolbar isAcct={isAcct} flags={flags} onReply={onReply} onDoc={onDoc} t={t} />
+      <Toolbar isAcct={isAcct} flags={flags} folderState={folderState} onReply={onReply} onDoc={onDoc} onItemAction={onItemAction} t={t} />
       <div className="flex-1 overflow-y-auto p-6">
         {selection.kind === 'queue' ? (
           detailQuery.isLoading ? <Loading /> : detailQuery.data ? (
@@ -579,10 +677,12 @@ const ReceivedDetail: React.FC<{
 const Toolbar: React.FC<{
   isAcct: boolean;
   flags: Record<string, boolean>;
+  folderState?: 'archived' | 'deleted';
   onReply?: () => void;
   onDoc?: (docType: DocType) => void;
+  onItemAction: (action: 'archive' | 'delete' | 'restore') => void;
   t: (k: string, d?: string) => string;
-}> = ({ isAcct, flags, onReply, onDoc, t }) => {
+}> = ({ isAcct, flags, folderState, onReply, onDoc, onItemAction, t }) => {
   const Tb: React.FC<{ icon: LucideIcon; label: string; accent?: boolean; onClick?: () => void }> = ({ icon: Icon, label, accent, onClick }) => {
     const enabled = !!onClick;
     return (
@@ -619,8 +719,13 @@ const Toolbar: React.FC<{
         </>
       )}
       <span className="flex-1" />
-      <Tb icon={Archive} label={t('messages.archive', 'Archive')} />
-      <Tb icon={Trash2} label={t('messages.delete', 'Delete')} />
+      {folderState && <Tb icon={RotateCcw} label={t('messages.restore', 'Restore')} onClick={() => onItemAction('restore')} />}
+      {folderState !== 'archived' && <Tb icon={Archive} label={t('messages.archive', 'Archive')} onClick={() => onItemAction('archive')} />}
+      <Tb
+        icon={Trash2}
+        label={folderState === 'deleted' ? t('messages.deleteForever', 'Delete permanently') : t('messages.delete', 'Delete')}
+        onClick={() => onItemAction('delete')}
+      />
     </div>
   );
 };
