@@ -31,7 +31,10 @@ function buildDunningGraph({ firstDays, gapDays, maxReminders }) {
   const nodes = [
     { node_key: 't', type: 'trigger', config: {}, pos_x: 240, pos_y: 0 },
     { node_key: 'waitDue', type: 'wait', config: { untilVar: 'dueDate' }, pos_x: 240, pos_y: 110 },
-    { node_key: 'waitGrace', type: 'wait', config: { delayDays: firstDays }, pos_x: 240, pos_y: 220 },
+    // Anchor the grace period to the invoice's due date (dueDate + firstDays),
+    // not "now + firstDays" — so an already-overdue invoice enrolled via backfill
+    // duns on its real timeline instead of restarting a fresh grace clock (#750).
+    { node_key: 'waitGrace', type: 'wait', config: { untilVar: 'dueDate', delayDays: firstDays }, pos_x: 240, pos_y: 220 },
     { node_key: 'loop', type: 'loop', config: { maxIterations: maxReminders }, pos_x: 240, pos_y: 330 },
     { node_key: 'checkPaid', type: 'condition', config: { condition: 'invoice_paid' }, pos_x: 240, pos_y: 440 },
     { node_key: 'paymentCheck', type: 'action', config: { action: 'queue_payment_check' }, pos_x: 240, pos_y: 550 },
@@ -218,7 +221,7 @@ function buildGalleryExpiredGraph() {
 const BUILTINS = [
   {
     key: DUNNING_KEY,
-    version: 6,
+    version: 7,
     enabled: false,
     name: 'Invoice dunning (built-in)',
     trigger_type: 'invoice.sent',

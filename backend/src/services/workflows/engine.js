@@ -46,11 +46,18 @@ function outEdge(edges, fromNode, handle) {
 
 function computeWakeAt(config = {}, vars = {}) {
   const cfg = config || {};
-  if (cfg.untilVar && vars[cfg.untilVar]) return new Date(vars[cfg.untilVar]).toISOString();
   const ms = (Number(cfg.delayDays || 0) * 86400000)
     + (Number(cfg.delayHours || 0) * 3600000)
     + (Number(cfg.delayMinutes || 0) * 60000);
-  return new Date(Date.now() + ms).toISOString();
+  // Anchor to a context var when given (e.g. dueDate), plus any delay offset —
+  // so `{ untilVar: 'dueDate', delayDays: 7 }` means "due date + 7 days"
+  // (absolute), and an already-past anchor resumes immediately. Backward
+  // compatible: untilVar-only → the var; delay-only → now + delay. Behaviour
+  // change for the both-fields case (untilVar + delay): previously the delay was
+  // ignored and only the var returned; now they add (this is the intended
+  // waitGrace semantics — no seeded node relied on the old both-fields path).
+  const base = (cfg.untilVar && vars[cfg.untilVar]) ? new Date(vars[cfg.untilVar]) : new Date();
+  return new Date(base.getTime() + ms).toISOString();
 }
 
 function gateTimeout(config = {}) {
@@ -422,6 +429,51 @@ async function isBuiltinFlowActive(builtinKey) {
 }
 
 /**
+ * Enroll every open, unpaid invoice into the dunning flow by emitting
+ * `invoice.sent` for it — called when the dunning built-in is turned ON so it
+ * starts chasing invoices that were already sent, not only new ones (#750).
+ * Idempotent: emitWorkflowEvent's per-(flow, entity) dedup means at most one
+ * run per invoice, so re-enabling is safe. Paired with the due-date-anchored
+ * grace wait, already-overdue invoices dun on their real timeline immediately.
+ *
+ * Scoped to `targetWorkflowId` (the dunning flow being enabled) so the backfill
+ * only enrolls invoices into dunning — never into unrelated custom `invoice.sent`
+ * flows an admin may have built, which would fire their actions for every
+ * historical invoice.
+ */
+async function backfillDunningRuns(targetWorkflowId) {
+  let enrolled = 0;
+  try {
+    if (!(await db.schema.hasTable('invoices'))) return 0;
+    const invoices = await db('invoices')
+      .whereIn('status', ['sent', 'overdue'])
+      .whereNotNull('due_date')
+      .whereRaw('COALESCE(paid_amount_minor, 0) < total_amount_minor');
+    for (const inv of invoices) {
+      const ids = await emitWorkflowEvent('invoice.sent', {
+        entityType: 'invoice',
+        entityId: inv.id,
+        targetWorkflowId,
+        payload: {
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoice_number,
+          eventId: inv.event_id || null,
+          customerAccountId: inv.customer_account_id,
+          dueDate: inv.due_date,
+          issueDate: inv.issue_date,
+          totalMinor: inv.total_amount_minor,
+          currency: inv.currency,
+        },
+      });
+      if (ids && ids.length) enrolled += 1;
+    }
+  } catch (e) {
+    logger.error('[workflow] dunning backfill failed', { error: e.message });
+  }
+  return enrolled;
+}
+
+/**
  * Emit `event.date_approaching` for events entering an enabled flow's lead
  * window. This is the trigger source for the pre-event reminder built-in, so it
  * faithfully honours the same per-event controls the legacy eventReminderService
@@ -545,6 +597,7 @@ async function testRun(workflowId, { entityType = null, entityId = null, payload
 module.exports = {
   emitWorkflowEvent,
   isBuiltinFlowActive,
+  backfillDunningRuns,
   runDueWaits,
   emitDueEventReminders,
   recoverStaleRuns,

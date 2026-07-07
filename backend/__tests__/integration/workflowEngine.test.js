@@ -239,7 +239,7 @@ describe('workflow engine', () => {
     expect(again.already).toBe(true);
   });
 
-  test('seeds the invoice-dunning built-in as the delegation graph (v6, disabled for first beta)', async () => {
+  test('seeds the invoice-dunning built-in as the delegation graph (disabled for first beta)', async () => {
     const { seedBuiltinWorkflowsAtBoot, DUNNING_KEY } = require('../../src/services/_workflowSeedBoot');
     const noopLogger = { info() {}, warn() {} };
     await seedBuiltinWorkflowsAtBoot(db, noopLogger);
@@ -248,7 +248,7 @@ describe('workflow engine', () => {
     expect(wf).toBeTruthy();
     expect(!!wf.is_builtin).toBe(true);
     expect(!!wf.enabled).toBe(false); // first beta: ships disabled; legacy ladder runs until enabled
-    expect(JSON.parse(wf.trigger_config).seedVersion).toBe(6);
+    expect(JSON.parse(wf.trigger_config).seedVersion).toBe(7);
 
     const nodes = await db('workflow_nodes').where({ workflow_id: wf.id, version: wf.version });
     expect(nodes.filter((n) => n.type === 'trigger')).toHaveLength(1);
@@ -273,7 +273,7 @@ describe('workflow engine', () => {
     await seedBuiltinWorkflowsAtBoot(db, noopLogger);
     const reseeded = await db('workflows').where({ id: wf.id }).first();
     expect(reseeded.version).toBe(wf.version + 1); // bumped
-    expect(JSON.parse(reseeded.trigger_config).seedVersion).toBe(6);
+    expect(JSON.parse(reseeded.trigger_config).seedVersion).toBe(7);
     expect(!!reseeded.enabled).toBe(false); // seed default re-applied (not admin-owned → flips enabled→disabled)
     const newNodes = await db('workflow_nodes').where({ workflow_id: wf.id, version: reseeded.version });
     expect(newNodes.some((n) => n.type === 'gate')).toBe(false); // legacy graph replaced
