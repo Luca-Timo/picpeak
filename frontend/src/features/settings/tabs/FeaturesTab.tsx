@@ -235,15 +235,13 @@ export const FeaturesTab: React.FC = () => {
             title={t('settings.features.messaging.title', 'Messaging')}
             description={t(
               'settings.features.messaging.description',
-              'In-app threads with guests, attached to a gallery. Email is genuinely fine for most teams — this is for studios that want everything in one place. Coming soon.',
+              'A unified Messages area: your sent + automated mail, the accounting inbox, and a customer mailbox (hello@) in one place — with reply and create-from-template composing. Configure the customer mailbox under Settings → Email; incoming mailboxes need the Incoming mail toggle too.',
             )}
-            status="roadmap"
-            statusLabel={statusLabel('roadmap')}
+            status="new"
+            statusLabel={statusLabel('new')}
             sidebarLabel={t('settings.features.messaging.sidebar', 'Messages')}
             enabled={staged.messaging}
-            onToggle={() => { /* locked */ }}
-            disabled
-            lockedReason={NOT_YET_AVAILABLE}
+            onToggle={(next) => setFlag('messaging', next)}
           />
         </Section>
 
