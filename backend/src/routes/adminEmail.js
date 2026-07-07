@@ -518,6 +518,57 @@ router.get('/queue', adminAuth, requirePermission('email.view'), [
   }
 });
 
+// Single queued/sent email WITH its rendered body — powers the Messages
+// reading pane. `rendered_html` is the exact HTML that was sent (migration
+// 119); rows sent before that migration have none. Attachment disk paths in
+// `email_data` are never exposed — only the filenames, so the pane can list
+// attachments without leaking storage paths (same PII posture as the list).
+router.get('/queue/:id', adminAuth, requirePermission('email.view'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id' });
+    const row = await db('email_queue')
+      .leftJoin('events', 'events.id', 'email_queue.event_id')
+      .select('email_queue.*', 'events.event_name as event_name', 'events.slug as event_slug')
+      .where('email_queue.id', id)
+      .first();
+    if (!row) return res.status(404).json({ error: 'Email not found' });
+
+    let cc = null;
+    let attachments = [];
+    try {
+      const data = row.email_data ? JSON.parse(row.email_data) : {};
+      if (data.cc) cc = Array.isArray(data.cc) ? data.cc.join(', ') : String(data.cc);
+      if (Array.isArray(data.attachments)) {
+        attachments = data.attachments
+          .filter((a) => a && a.filename)
+          .map((a) => ({ filename: a.filename, contentType: a.contentType || null }));
+      }
+    } catch (_) { /* malformed email_data → no cc/attachments, still return the body */ }
+
+    res.json({
+      id: row.id,
+      recipientEmail: row.recipient_email,
+      emailType: row.email_type,
+      status: row.status,
+      createdAt: row.created_at,
+      scheduledAt: row.scheduled_at,
+      sentAt: row.sent_at,
+      errorMessage: row.error_message,
+      retryCount: row.retry_count,
+      eventId: row.event_id,
+      eventName: row.event_name || null,
+      eventSlug: row.event_slug || null,
+      renderedHtml: row.rendered_html || null,
+      cc,
+      attachments,
+    });
+  } catch (error) {
+    logger.error('Get email queue item error:', error);
+    res.status(500).json({ error: 'Failed to load email', details: error.message });
+  }
+});
+
 // Helper: parse variables JSON safely
 function parseVariables(template) {
   try {

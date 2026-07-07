@@ -22,6 +22,15 @@ export interface EmailQueueListResponse {
   pagination: { total: number; page: number; pageSize: number; totalPages: number };
 }
 
+/** Single sent/queued email including its rendered body — Messages reading pane. */
+export interface EmailQueueDetail extends EmailQueueItem {
+  /** Exact HTML that was sent (migration 119); null for pre-migration rows. */
+  renderedHtml: string | null;
+  cc: string | null;
+  /** Attachment filenames only — disk paths are never exposed. */
+  attachments: { filename: string; contentType: string | null }[];
+}
+
 export interface EmailConfig {
   smtp_host: string;
   smtp_port: number;
@@ -204,6 +213,12 @@ export const emailService = {
     pageSize?: number;
   } = {}): Promise<EmailQueueListResponse> {
     const response = await api.get<EmailQueueListResponse>('/admin/email/queue', { params });
+    return response.data;
+  },
+
+  /** Single sent email with its rendered body + attachment filenames. */
+  async getQueueItem(id: number): Promise<EmailQueueDetail> {
+    const response = await api.get<EmailQueueDetail>(`/admin/email/queue/${id}`);
     return response.data;
   },
 

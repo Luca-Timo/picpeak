@@ -197,6 +197,7 @@
   "navigation": {
     "dashboard": "Dashboard",
     "events": "Veranstaltungen",
+    "messages": "Nachrichten",
     "settings": "Einstellungen",
     "systemHealth": "Systemzustand",
     "archives": "Archive",

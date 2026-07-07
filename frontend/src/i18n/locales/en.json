@@ -198,6 +198,7 @@
     "dashboard": "Dashboard",
     "events": "Events",
     "archives": "Archives",
+    "messages": "Messages",
     "settings": "Settings",
     "systemHealth": "System health",
     "eventTypes": "Event Types",
