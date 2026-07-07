@@ -61,6 +61,14 @@ const localPart = (addr?: string | null) => (addr ? `${addr.split('@')[0]}@` : '
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (c) => (({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>)[c]));
 
+// A From/To header can be "Display Name <addr@x>" — pull the bare address for
+// use as a recipient / customer-lookup key.
+const extractEmail = (addr?: string | null) => {
+  if (!addr) return '';
+  const m = addr.match(/<([^>]+)>/);
+  return (m ? m[1] : addr).trim();
+};
+
 const STATUS_STYLES: Record<string, string> = {
   sent: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
   ingested: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
@@ -80,6 +88,14 @@ export const MessagesPage: React.FC = () => {
   const [docAction, setDocAction] = useState<{ docType: DocType; senderEmail: string } | null>(null);
   const { flags } = useFeatureFlags();
   const [search, setSearch] = useState('');
+  // Debounced copy drives the server-side search (so results aren't truncated to
+  // the first page); the raw `search` still filters the loaded rows instantly.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+  const sq = debouncedSearch || undefined;
 
   // "Sync" = poll the inbound mailboxes now instead of waiting for the 60s loop.
   const sync = useMutation({
@@ -101,18 +117,18 @@ export const MessagesPage: React.FC = () => {
   });
 
   const queueQuery = useQuery({
-    queryKey: ['messages', 'queue'],
-    queryFn: () => emailService.listQueue({ pageSize: 100 }),
+    queryKey: ['messages', 'queue', sq],
+    queryFn: () => emailService.listQueue({ pageSize: 100, q: sq }),
     refetchInterval: 60000,
   });
   const acctQuery = useQuery({
-    queryKey: ['messages', 'received', 'accounting'],
-    queryFn: () => emailService.listReceived({ account: 'accounting', pageSize: 100 }),
+    queryKey: ['messages', 'received', 'accounting', sq],
+    queryFn: () => emailService.listReceived({ account: 'accounting', pageSize: 100, q: sq }),
     refetchInterval: 60000,
   });
   const custQuery = useQuery({
-    queryKey: ['messages', 'received', 'customers'],
-    queryFn: () => emailService.listReceived({ account: 'customers', pageSize: 100 }),
+    queryKey: ['messages', 'received', 'customers', sq],
+    queryFn: () => emailService.listReceived({ account: 'customers', pageSize: 100, q: sq }),
     refetchInterval: 60000,
   });
 
@@ -127,14 +143,14 @@ export const MessagesPage: React.FC = () => {
   const folderState: 'archived' | 'deleted' | undefined =
     activeFolder === 'archived' ? 'archived' : activeFolder === 'deleted' ? 'deleted' : undefined;
   const stateQueueQuery = useQuery({
-    queryKey: ['messages', 'state-queue', folderState],
+    queryKey: ['messages', 'state-queue', folderState, sq],
     enabled: !!folderState,
-    queryFn: () => emailService.listQueue({ state: folderState as 'archived' | 'deleted', pageSize: 100 }),
+    queryFn: () => emailService.listQueue({ state: folderState as 'archived' | 'deleted', pageSize: 100, q: sq }),
   });
   const stateRecvQuery = useQuery({
-    queryKey: ['messages', 'state-received', folderState],
+    queryKey: ['messages', 'state-received', folderState, sq],
     enabled: !!folderState,
-    queryFn: () => emailService.listReceived({ state: folderState as 'archived' | 'deleted', pageSize: 100 }),
+    queryFn: () => emailService.listReceived({ state: folderState as 'archived' | 'deleted', pageSize: 100, q: sq }),
   });
 
   const refetchAll = () => {
@@ -524,9 +540,9 @@ const ReadingPane: React.FC<{
     ? selection.item.account_key !== 'customers'
     : account.id === 'acct';
 
-  const recipient = selection.kind === 'received'
-    ? (selection.item.from_address || '')
-    : (detailQuery.data?.recipientEmail || '');
+  const recipient = extractEmail(selection.kind === 'received'
+    ? selection.item.from_address
+    : detailQuery.data?.recipientEmail);
 
   // Reply only makes sense for an inbound message with a sender.
   const onReply = selection.kind === 'received' && selection.item.from_address
@@ -534,7 +550,7 @@ const ReadingPane: React.FC<{
         const it = selection.item;
         const subj = /^re:/i.test(it.subject || '') ? (it.subject || '') : `Re: ${it.subject || ''}`;
         const quoted = `<p><br></p><p style="color:#888;font-size:12px">${t('messages.onWrote', 'On')} ${fmt(it.received_at)}, ${escapeHtml(it.from_address || '')}:</p>`;
-        onCompose({ to: it.from_address || '', subject: subj, html: quoted, replyToReceivedId: it.id }, t('messages.reply', 'Reply'));
+        onCompose({ to: extractEmail(it.from_address), subject: subj, html: quoted, replyToReceivedId: it.id }, t('messages.reply', 'Reply'));
       }
     : undefined;
 

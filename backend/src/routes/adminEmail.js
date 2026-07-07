@@ -267,12 +267,16 @@ router.get('/received', adminAuth, requirePermission('email.view'), async (req, 
     const account = req.query.account ? String(req.query.account) : null;
     // mailbox_state filter: no param → active (+ legacy NULL); else exact.
     const state = ['archived', 'deleted'].includes(String(req.query.state)) ? String(req.query.state) : 'active';
+    // Optional full-table search (sender / subject) so results aren't truncated
+    // to the first page before matching.
+    const q = req.query.q ? String(req.query.q).trim().slice(0, 255) : '';
     // 'accounting' matches legacy rows too (account_key was NULL before mig 154).
     const applyAccount = (qb) => {
       if (account === 'accounting') qb.where((b) => b.where('account_key', 'accounting').orWhereNull('account_key'));
       else if (account) qb.where('account_key', account);
       if (state === 'active') qb.where((b) => b.where('mailbox_state', 'active').orWhereNull('mailbox_state'));
       else qb.where('mailbox_state', state);
+      if (q) qb.where((b) => b.where('from_address', 'like', `%${q}%`).orWhere('subject', 'like', `%${q}%`));
       return qb;
     };
     const countRow = await applyAccount(db('received_emails')).count({ c: '*' }).first();

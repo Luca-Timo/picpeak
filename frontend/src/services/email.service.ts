@@ -220,7 +220,7 @@ export const emailService = {
     const response = await api.post<ImapPollResult>('/admin/email/incoming-config/poll', {});
     return response.data;
   },
-  async listReceived(params: { page?: number; pageSize?: number; account?: string; state?: 'active' | 'archived' | 'deleted' } = {}): Promise<ReceivedEmailsResponse> {
+  async listReceived(params: { page?: number; pageSize?: number; account?: string; state?: 'active' | 'archived' | 'deleted'; q?: string } = {}): Promise<ReceivedEmailsResponse> {
     const response = await api.get<ReceivedEmailsResponse>('/admin/email/received', { params });
     return response.data;
   },
