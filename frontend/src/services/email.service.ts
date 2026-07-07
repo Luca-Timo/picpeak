@@ -15,6 +15,8 @@ export interface EmailQueueItem {
   eventId: number | null;
   eventName: string | null;
   eventSlug: string | null;
+  /** 'system' = app-generated (Automated), 'manual' = admin-composed (Customers Sent). */
+  origin?: 'system' | 'manual';
 }
 
 export interface EmailQueueListResponse {
@@ -244,6 +246,7 @@ export const emailService = {
   async listQueue(params: {
     status?: EmailQueueStatus;
     emailType?: string;
+    origin?: 'system' | 'manual';
     q?: string;
     from?: string;
     to?: string;
@@ -258,6 +261,11 @@ export const emailService = {
   async getQueueItem(id: number): Promise<EmailQueueDetail> {
     const response = await api.get<EmailQueueDetail>(`/admin/email/queue/${id}`);
     return response.data;
+  },
+
+  /** Send a human-composed (edited) email — reply or document message. */
+  async sendMessage(payload: { to: string; cc?: string; subject: string; html: string; replyToReceivedId?: number }): Promise<void> {
+    await api.post('/admin/email/send', payload);
   },
 
   // Get all email templates

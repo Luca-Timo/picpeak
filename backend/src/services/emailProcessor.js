@@ -773,6 +773,35 @@ async function sendTemplateEmail(to, templateKey, variables) {
 }
 
 /**
+ * Send a fully-composed email (subject + HTML the admin already edited in the
+ * Messages composer) WITHOUT a template. Used for replies + human-sent document
+ * messages. Uses the configured SMTP identity + from address. Returns
+ * { messageId, html } so the caller can persist rendered_html for the record.
+ */
+async function sendRawEmail({ to, cc, subject, html, text, attachments } = {}) {
+  transporter = await initializeTransporter();
+  if (!transporter) throw new Error('Email service not configured');
+  const config = await db('email_configs').first();
+  if (!config || !config.from_email) throw new Error('Email service not configured');
+  const ccList = Array.isArray(cc) ? cc.filter(Boolean) : (cc ? [cc] : undefined);
+  const atts = Array.isArray(attachments)
+    ? attachments.filter((a) => a && (a.contentPath || a.path || a.content))
+        .map((a) => ({ filename: a.filename, path: a.contentPath || a.path, content: a.content, contentType: a.contentType }))
+    : undefined;
+  const info = await transporter.sendMail({
+    from: `${config.from_name} <${config.from_email}>`,
+    to,
+    cc: ccList,
+    subject,
+    html,
+    text: text || htmlToText(html),
+    attachments: atts,
+  });
+  logger.info(`Manual email sent: ${info.messageId}`);
+  return { messageId: info.messageId, html };
+}
+
+/**
  * Render a queued email's HTML WITHOUT sending it. Used by the Project
  * Overview cockpit to preview emails that predate the rendered_html column
  * (so nothing was stored at send time). The result is rendered from the
@@ -1105,6 +1134,7 @@ module.exports = {
   initializeTransporter,
   startEmailQueueProcessor,
   sendTemplateEmail,
+  sendRawEmail,
   renderQueuedEmail,
   processEmailQueue,
   queueEmail,

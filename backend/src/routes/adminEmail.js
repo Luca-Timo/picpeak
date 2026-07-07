@@ -529,6 +529,7 @@ router.post('/flush-queue', adminAuth, requirePermission('email.send'), async (r
 router.get('/queue', adminAuth, requirePermission('email.view'), [
   query('status').optional({ values: 'falsy' }).isIn(['pending', 'sent', 'failed']),
   query('emailType').optional({ values: 'falsy' }).isString().isLength({ max: 64 }),
+  query('origin').optional({ values: 'falsy' }).isIn(['system', 'manual']),
   query('q').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
   query('from').optional({ values: 'falsy' }).isISO8601(),
   query('to').optional({ values: 'falsy' }).isISO8601(),
@@ -547,6 +548,9 @@ router.get('/queue', adminAuth, requirePermission('email.view'), [
     const applyFilters = (qb) => {
       if (req.query.status) qb.where('email_queue.status', req.query.status);
       if (req.query.emailType) qb.where('email_queue.email_type', req.query.emailType);
+      // 'system' includes legacy rows (origin was NULL before migration 155).
+      if (req.query.origin === 'manual') qb.where('email_queue.origin', 'manual');
+      else if (req.query.origin === 'system') qb.where((b) => b.where('email_queue.origin', 'system').orWhereNull('email_queue.origin'));
       if (req.query.from) qb.where('email_queue.created_at', '>=', new Date(req.query.from));
       if (req.query.to) qb.where('email_queue.created_at', '<=', new Date(req.query.to));
       if (req.query.q) {
@@ -575,6 +579,7 @@ router.get('/queue', adminAuth, requirePermission('email.view'), [
           'email_queue.sent_at',
           'email_queue.error_message',
           'email_queue.retry_count',
+          'email_queue.origin',
           'email_queue.event_id',
           'events.event_name as event_name',
           'events.slug as event_slug'
@@ -594,6 +599,7 @@ router.get('/queue', adminAuth, requirePermission('email.view'), [
       sentAt: r.sent_at,
       errorMessage: r.error_message,
       retryCount: r.retry_count,
+      origin: r.origin || 'system',
       eventId: r.event_id,
       eventName: r.event_name || null,
       eventSlug: r.event_slug || null,
@@ -657,6 +663,57 @@ router.get('/queue/:id', adminAuth, requirePermission('email.view'), async (req,
   } catch (error) {
     logger.error('Get email queue item error:', error);
     res.status(500).json({ error: 'Failed to load email', details: error.message });
+  }
+});
+
+// Send a human-composed email from the Messages composer. The admin already
+// edited the body (reply or document message), so it is sent as-is — no
+// template render — after a sanitize pass. Recorded in email_queue as a
+// 'manual' send so it surfaces under Customers > Sent.
+router.post('/send', adminAuth, requirePermission('email.send'), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const to = String(b.to || '').trim();
+    const subject = String(b.subject || '').trim();
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      return res.status(400).json({ error: 'A valid recipient email is required.' });
+    }
+    if (!subject) return res.status(400).json({ error: 'A subject is required.' });
+
+    const sanitizeHtml = require('sanitize-html');
+    const html = sanitizeHtml(String(b.html || ''), {
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img', 'style']),
+      allowedAttributes: {
+        ...sanitizeHtml.defaults.allowedAttributes,
+        img: ['src', 'alt', 'width', 'height'],
+        '*': ['style', 'class'],
+      },
+      allowedSchemes: ['http', 'https', 'mailto', 'cid', 'data'],
+    });
+    const cc = b.cc ? String(b.cc).trim() : null;
+
+    const emailProcessor = require('../services/emailProcessor');
+    const result = await emailProcessor.sendRawEmail({ to, cc, subject, html });
+
+    await db('email_queue').insert({
+      recipient_email: to,
+      email_type: 'manual_message',
+      email_data: JSON.stringify({
+        subject,
+        cc: cc || undefined,
+        replyToReceivedId: b.replyToReceivedId || undefined,
+        messageId: result.messageId,
+      }),
+      status: 'sent',
+      origin: 'manual',
+      rendered_html: html,
+      created_at: new Date(),
+      sent_at: new Date(),
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error('Manual send error:', error);
+    res.status(500).json({ error: 'Failed to send message', details: error.message });
   }
 });
 
