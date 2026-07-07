@@ -160,7 +160,22 @@ export interface MailAccount {
   imap_user?: string | null;
   imap_pass?: string;
   imap_folder?: string;
+  // Outgoing (SMTP) identity — replies from this mailbox send from here.
+  smtp_host?: string | null;
+  smtp_port?: number;
+  smtp_secure?: boolean;
+  smtp_user?: string | null;
+  smtp_pass?: string;
+  from_email?: string | null;
+  from_name?: string | null;
   enabled?: boolean;
+}
+
+/** Resolved sender/mailbox addresses for the Messages sidebar. */
+export interface MailIdentities {
+  automated: string | null;
+  accounting: string | null;
+  customers: string | null;
 }
 
 export const emailService = {
@@ -264,8 +279,14 @@ export const emailService = {
   },
 
   /** Send a human-composed (edited) email — reply or document message. */
-  async sendMessage(payload: { to: string; cc?: string; subject: string; html: string; replyToReceivedId?: number }): Promise<void> {
+  async sendMessage(payload: { to: string; cc?: string; subject: string; html: string; replyToReceivedId?: number; accountKey?: string }): Promise<void> {
     await api.post('/admin/email/send', payload);
+  },
+
+  /** Resolved sender/mailbox addresses for the Messages sidebar. */
+  async getIdentities(): Promise<MailIdentities> {
+    const response = await api.get<MailIdentities>('/admin/email/identities');
+    return response.data;
   },
 
   // Get all email templates

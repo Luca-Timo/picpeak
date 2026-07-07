@@ -781,18 +781,44 @@ async function sendTemplateEmail(to, templateKey, variables) {
  * messages. Uses the configured SMTP identity + from address. Returns
  * { messageId, html } so the caller can persist rendered_html for the record.
  */
-async function sendRawEmail({ to, cc, subject, html, text, attachments } = {}) {
-  transporter = await initializeTransporter();
-  if (!transporter) throw new Error('Email service not configured');
-  const config = await db('email_configs').first();
-  if (!config || !config.from_email) throw new Error('Email service not configured');
+async function sendRawEmail({ to, cc, subject, html, text, attachments, accountKey } = {}) {
+  let tx = null;
+  let fromEmail = null;
+  let fromName = null;
+
+  // Prefer a per-account outgoing identity (e.g. hello@) when the mail account
+  // has its own SMTP config, so customer replies send from that address instead
+  // of the global no-reply@. Falls back to the global SMTP transport.
+  if (accountKey) {
+    const acct = await db('mail_accounts').where({ account_key: accountKey }).first();
+    if (acct && acct.smtp_host && (acct.smtp_user || acct.from_email)) {
+      const nodemailer = require('nodemailer');
+      tx = nodemailer.createTransport({
+        host: acct.smtp_host,
+        port: parseInt(acct.smtp_port, 10) || 587,
+        secure: acct.smtp_secure === true || acct.smtp_secure === 1,
+        auth: acct.smtp_user && acct.smtp_pass ? { user: acct.smtp_user, pass: acct.smtp_pass } : undefined,
+      });
+      fromEmail = acct.from_email || acct.smtp_user;
+      fromName = acct.from_name || '';
+    }
+  }
+  if (!tx) {
+    tx = await initializeTransporter();
+    if (!tx) throw new Error('Email service not configured');
+    const config = await db('email_configs').first();
+    if (!config || !config.from_email) throw new Error('Email service not configured');
+    fromEmail = config.from_email;
+    fromName = config.from_name;
+  }
+
   const ccList = Array.isArray(cc) ? cc.filter(Boolean) : (cc ? [cc] : undefined);
   const atts = Array.isArray(attachments)
     ? attachments.filter((a) => a && (a.contentPath || a.path || a.content))
         .map((a) => ({ filename: a.filename, path: a.contentPath || a.path, content: a.content, contentType: a.contentType }))
     : undefined;
-  const info = await transporter.sendMail({
-    from: `${config.from_name} <${config.from_email}>`,
+  const info = await tx.sendMail({
+    from: `${fromName || 'picpeak'} <${fromEmail}>`,
     to,
     cc: ccList,
     subject,

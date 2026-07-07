@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import {
   Inbox, Send, Reply, ReplyAll, Forward, Archive, Trash2, Paperclip,
   FileText, Quote, FileSignature, Image as ImageIcon, ReceiptText,
-  Link2, X, ChevronLeft, ChevronRight, Mail, type LucideIcon,
+  Link2, X, ChevronLeft, ChevronRight, Mail, RefreshCw, PenSquare, type LucideIcon,
 } from 'lucide-react';
-import { emailService, type ReceivedEmail } from '../../../services/email.service';
+import { emailService, type ReceivedEmail, type MailIdentities } from '../../../services/email.service';
 import { accountingService } from '../../../services/accounting.service';
 import { Loading } from '../../../components/common';
 import { MessageComposer, type ComposerInit } from './MessageComposer';
@@ -63,7 +64,26 @@ export const MessagesPage: React.FC = () => {
   const [activeFolder, setActiveFolder] = useState('auto-sent');
   const [selection, setSelection] = useState<Selection>(null);
   const [pdfDocId, setPdfDocId] = useState<number | null>(null);
-  const [composer, setComposer] = useState<{ init: ComposerInit; title?: string } | null>(null);
+  const [composer, setComposer] = useState<{ init: ComposerInit; title?: string; accountKey?: string } | null>(null);
+
+  // "Sync" = poll the inbound mailboxes now instead of waiting for the 60s loop.
+  const sync = useMutation({
+    mutationFn: () => emailService.pollIncoming(),
+    onSuccess: (r) => {
+      if (r.skipped === 'disabled') toast.info(t('messages.syncDisabled', 'Incoming mail is off — enable it under Settings → Features.'));
+      else if (r.skipped === 'unconfigured') toast.info(t('messages.syncUnconfigured', 'Configure a mailbox under Settings → Email first.'));
+      else if (r.skipped === 'busy') toast.info(t('messages.syncBusy', 'A sync is already running.'));
+      else toast.success(t('messages.syncOk', 'Checked mailboxes — {{count}} new.', { count: r.processed || 0 }));
+      acctQuery.refetch(); custQuery.refetch(); queueQuery.refetch();
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.error || e.message || t('messages.syncFailed', 'Sync failed.')),
+  });
+
+  const openNewMessage = () => setComposer({
+    init: { to: '', subject: '', html: '' },
+    title: t('messages.newMessage', 'New message'),
+    accountKey: 'customers',
+  });
 
   const queueQuery = useQuery({
     queryKey: ['messages', 'queue'],
@@ -81,6 +101,12 @@ export const MessagesPage: React.FC = () => {
     refetchInterval: 60000,
   });
 
+  const identitiesQuery = useQuery({
+    queryKey: ['messages', 'identities'],
+    queryFn: () => emailService.getIdentities(),
+  });
+  const identities = identitiesQuery.data;
+
   const queueTotal = queueQuery.data?.pagination.total;
   const acctTotal = acctQuery.data?.pagination.total;
   const custTotal = custQuery.data?.pagination.total;
@@ -90,17 +116,17 @@ export const MessagesPage: React.FC = () => {
       { id: 'all-in', name: t('messages.folder.inbox', 'Inbox'), icon: Inbox, src: 'received' },
       { id: 'all-sent', name: t('messages.folder.sent', 'Sent'), icon: Send, src: 'queue' },
     ] },
-    { id: 'cust', name: t('messages.account.customers', 'Customers'), addr: 'hello@', color: '#2563c9', folders: [
+    { id: 'cust', name: t('messages.account.customers', 'Customers'), addr: identities?.customers || undefined, color: '#2563c9', folders: [
       { id: 'cust-in', name: t('messages.folder.inbox', 'Inbox'), icon: Inbox, src: 'received', account: 'customers' },
       { id: 'cust-sent', name: t('messages.folder.sent', 'Sent'), icon: Send, src: 'queue', origin: 'manual' },
     ] },
-    { id: 'acct', name: t('messages.account.accounting', 'Accounting'), addr: 'rechnungen@', color: '#12876a', folders: [
+    { id: 'acct', name: t('messages.account.accounting', 'Accounting'), addr: identities?.accounting || undefined, color: '#12876a', folders: [
       { id: 'acct-in', name: t('messages.folder.inbox', 'Inbox'), icon: Inbox, src: 'received', account: 'accounting' },
     ] },
-    { id: 'auto', name: t('messages.account.automated', 'Automated'), addr: 'no-reply@', color: '#7a52d6', folders: [
+    { id: 'auto', name: t('messages.account.automated', 'Automated'), addr: identities?.automated || undefined, color: '#7a52d6', folders: [
       { id: 'auto-sent', name: t('messages.folder.sent', 'Sent'), icon: Send, src: 'queue', origin: 'system' },
     ] },
-  ], [t]);
+  ], [t, identities]);
 
   // Sent stream is split client-side by origin: system (Automated) vs manual
   // (human composed → Customers ▸ Sent). Legacy rows (origin undefined) = system.
@@ -153,6 +179,23 @@ export const MessagesPage: React.FC = () => {
             {t('messages.subtitle', 'Sent, automated and incoming mail — one place.')}
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => sync.mutate()}
+            disabled={sync.isPending}
+            className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border border-neutral-300 dark:border-neutral-700 text-sm font-medium text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800 disabled:opacity-60"
+          >
+            <RefreshCw className={`w-4 h-4 ${sync.isPending ? 'animate-spin' : ''}`} />
+            {t('messages.sync', 'Sync')}
+          </button>
+          <button
+            onClick={openNewMessage}
+            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-accent-dark text-white text-sm font-medium hover:opacity-90"
+          >
+            <PenSquare className="w-4 h-4" />
+            {t('messages.newMessage', 'New message')}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-1 min-h-0 rounded-xl border border-neutral-200 dark:border-neutral-800 overflow-hidden bg-white dark:bg-neutral-900">
@@ -175,14 +218,14 @@ export const MessagesPage: React.FC = () => {
                       onClick={() => { setActiveFolder(f.id); setSelection(null); }}
                       className={`flex items-center gap-2 pl-7 pr-2 py-1.5 rounded-lg text-[13.5px] text-left transition-colors ${
                         active
-                          ? 'bg-blue-50 dark:bg-blue-900/25 text-blue-800 dark:text-blue-200 font-semibold ring-1 ring-inset ring-blue-200 dark:ring-blue-800'
+                          ? 'bg-accent-soft text-on-accent-soft font-semibold'
                           : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800/60'
                       }`}
                     >
                       <f.icon className="w-4 h-4 opacity-80" />
                       <span>{f.name}</span>
                       {typeof c === 'number' && c > 0 && (
-                        <span className={`ml-auto tabular-nums text-xs ${active ? 'text-blue-600 dark:text-blue-300' : 'text-neutral-400'}`}>{c}</span>
+                        <span className={`ml-auto tabular-nums text-xs ${active ? 'text-on-accent-soft' : 'text-neutral-400'}`}>{c}</span>
                       )}
                     </button>
                   );
@@ -219,9 +262,10 @@ export const MessagesPage: React.FC = () => {
             selection={selection}
             account={folder.a}
             lang={i18n.language}
+            identities={identities}
             onViewDoc={setPdfDocId}
             onOpenAccounting={() => navigate('/admin/accounting/inbox')}
-            onCompose={(init, title) => setComposer({ init, title })}
+            onCompose={(init, title) => setComposer({ init, title, accountKey: 'customers' })}
             t={t}
           />
         </section>
@@ -232,6 +276,7 @@ export const MessagesPage: React.FC = () => {
         <MessageComposer
           init={composer.init}
           title={composer.title}
+          accountKey={composer.accountKey}
           onClose={() => setComposer(null)}
           onSent={() => { queueQuery.refetch(); setActiveFolder('cust-sent'); }}
           t={t}
@@ -296,7 +341,7 @@ const MessageList: React.FC<{
             onClick={r.onClick}
             className={`w-full text-left px-4 py-3 border-b border-neutral-100 dark:border-neutral-800/70 border-l-[3px] transition-colors ${
               r.active
-                ? 'border-l-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                ? 'border-l-accent-dark bg-accent-soft'
                 : 'border-l-transparent hover:bg-neutral-50 dark:hover:bg-neutral-800/40'
             }`}
           >
@@ -327,11 +372,12 @@ const ReadingPane: React.FC<{
   selection: Selection;
   account: Account;
   lang: string;
+  identities?: MailIdentities | null;
   onViewDoc: (id: number) => void;
   onOpenAccounting: () => void;
   onCompose: (init: ComposerInit, title?: string) => void;
   t: (k: string, d?: string) => string;
-}> = ({ selection, account, lang, onViewDoc, onOpenAccounting, onCompose, t }) => {
+}> = ({ selection, account, lang, identities, onViewDoc, onOpenAccounting, onCompose, t }) => {
   const detailQuery = useQuery({
     queryKey: ['messages', 'queue', selection?.kind === 'queue' ? selection.id : null],
     queryFn: () => emailService.getQueueItem((selection as { kind: 'queue'; id: number }).id),
@@ -389,26 +435,32 @@ const ReadingPane: React.FC<{
       <div className="flex-1 overflow-y-auto p-6">
         {selection.kind === 'queue' ? (
           detailQuery.isLoading ? <Loading /> : detailQuery.data ? (
-            <QueueDetail d={detailQuery.data} t={t} />
+            <QueueDetail d={detailQuery.data} fromAddr={identities?.automated} t={t} />
           ) : (
             <div className="text-sm text-neutral-500">{t('messages.loadError', 'Could not load this message.')}</div>
           )
         ) : (
-          <ReceivedDetail item={selection.item} onViewDoc={onViewDoc} onOpenAccounting={onOpenAccounting} t={t} />
+          <ReceivedDetail
+            item={selection.item}
+            mailboxAddr={selection.item.account_key === 'customers' ? identities?.customers : identities?.accounting}
+            onViewDoc={onViewDoc}
+            onOpenAccounting={onOpenAccounting}
+            t={t}
+          />
         )}
       </div>
     </div>
   );
 };
 
-const QueueDetail: React.FC<{ d: import('../../../services/email.service').EmailQueueDetail; t: (k: string, d?: string) => string }> = ({ d, t }) => (
+const QueueDetail: React.FC<{ d: import('../../../services/email.service').EmailQueueDetail; fromAddr?: string | null; t: (k: string, d?: string) => string }> = ({ d, fromAddr, t }) => (
   <>
     <h2 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100" style={{ textWrap: 'balance' } as React.CSSProperties}>
       {friendlyType(d.emailType)}
     </h2>
     <div className="mt-3 pb-4 border-b border-neutral-200 dark:border-neutral-800 text-sm">
       <div className="text-neutral-600 dark:text-neutral-300">
-        {t('messages.from', 'from')} <span className="font-mono text-xs">no-reply@</span> · {t('messages.to', 'to')}{' '}
+        {t('messages.from', 'from')} <span className="font-mono text-xs">{fromAddr || '—'}</span> · {t('messages.to', 'to')}{' '}
         <span className="font-semibold text-neutral-800 dark:text-neutral-100">{d.recipientEmail}</span>
       </div>
       {d.cc && <div className="text-neutral-500 dark:text-neutral-400 text-xs mt-0.5">cc {d.cc}</div>}
@@ -449,16 +501,16 @@ const QueueDetail: React.FC<{ d: import('../../../services/email.service').Email
 
 const ReceivedDetail: React.FC<{
   item: ReceivedEmail;
+  mailboxAddr?: string | null;
   onViewDoc: (id: number) => void;
   onOpenAccounting: () => void;
   t: (k: string, d?: string) => string;
-}> = ({ item, onViewDoc, onOpenAccounting, t }) => {
+}> = ({ item, mailboxAddr, onViewDoc, onOpenAccounting, t }) => {
   const detail = useQuery({
     queryKey: ['messages', 'received', 'item', item.id],
     queryFn: () => emailService.getReceivedItem(item.id),
   });
-  const toAddr = detail.data?.to_address || item.to_address
-    || (item.account_key === 'customers' ? 'hello@' : 'rechnungen@');
+  const toAddr = detail.data?.to_address || item.to_address || mailboxAddr || '—';
   return (
     <>
       <h2 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100" style={{ textWrap: 'balance' } as React.CSSProperties}>
@@ -492,7 +544,7 @@ const ReceivedDetail: React.FC<{
         <div className="mt-5 flex flex-wrap gap-2">
           <button
             onClick={() => onViewDoc(item.inbound_document_id as number)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-accent-dark hover:opacity-90 text-white text-sm font-medium"
           >
             <FileText className="w-4 h-4" />{t('messages.viewDocument', 'View document')}
           </button>
@@ -527,7 +579,7 @@ const Toolbar: React.FC<{
         title={enabled ? undefined : t('messages.soon', 'Available in a later phase')}
         className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-[13px] font-medium ${
           enabled ? 'hover:bg-neutral-100 dark:hover:bg-neutral-800 ' : 'cursor-not-allowed opacity-50 '
-        }${accent ? 'text-blue-700 dark:text-blue-300 ring-1 ring-inset ring-blue-200 dark:ring-blue-800' : 'text-neutral-600 dark:text-neutral-300'}`}
+        }${accent ? 'text-accent-dark font-semibold' : 'text-neutral-600 dark:text-neutral-300'}`}
       >
         <Icon className="w-[15px] h-[15px]" />{label}
       </button>

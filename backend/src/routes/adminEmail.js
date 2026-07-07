@@ -300,9 +300,35 @@ router.get('/received/:id', adminAuth, requirePermission('email.view'), async (r
 router.get('/accounts', adminAuth, requirePermission('email.view'), async (req, res) => {
   try {
     const rows = await db('mail_accounts').orderBy('id');
-    res.json({ items: rows.map((a) => ({ ...a, imap_pass: a.imap_pass ? '********' : '' })) });
+    res.json({ items: rows.map((a) => ({
+      ...a,
+      imap_pass: a.imap_pass ? '********' : '',
+      smtp_pass: a.smtp_pass ? '********' : '',
+    })) });
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to load mail accounts');
+  }
+});
+
+// Resolved sender/mailbox addresses for the Messages UI — so the sidebar shows
+// the REAL configured addresses instead of hardcoded placeholders. Accounting =
+// the primary IMAP login (rechnungen@); customers = the hello@ mailbox; the
+// automated stream sends from the global SMTP from-address.
+router.get('/identities', adminAuth, requirePermission('email.view'), async (req, res) => {
+  try {
+    const cfg = await db('email_configs').first();
+    let customers = null;
+    try {
+      const cust = await db('mail_accounts').where({ account_key: 'customers' }).first();
+      customers = cust?.imap_user || cust?.from_email || null;
+    } catch (_) { customers = null; }
+    res.json({
+      automated: cfg?.from_email || null,
+      accounting: cfg?.imap_user || null,
+      customers,
+    });
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to load mail identities');
   }
 });
 
@@ -319,10 +345,18 @@ router.post('/accounts', adminAuth, requirePermission('email.edit'), async (req,
       imap_secure: b.imap_secure !== false,
       imap_user: b.imap_user || null,
       imap_folder: b.imap_folder || 'INBOX',
+      // Outgoing (SMTP) identity — replies from this mailbox send from here.
+      smtp_host: b.smtp_host || null,
+      smtp_port: b.smtp_port ? parseInt(b.smtp_port, 10) : 587,
+      smtp_secure: b.smtp_secure === true,
+      smtp_user: b.smtp_user || null,
+      from_email: b.from_email || null,
+      from_name: b.from_name || null,
       enabled: !!b.enabled,
       updated_at: new Date(),
     };
     if (b.imap_pass && b.imap_pass !== '********') patch.imap_pass = b.imap_pass;
+    if (b.smtp_pass && b.smtp_pass !== '********') patch.smtp_pass = b.smtp_pass;
     const existing = await db('mail_accounts').where({ account_key: b.account_key }).first();
     if (existing) {
       await db('mail_accounts').where({ account_key: b.account_key }).update(patch);
@@ -330,6 +364,7 @@ router.post('/accounts', adminAuth, requirePermission('email.edit'), async (req,
       await db('mail_accounts').insert({
         account_key: b.account_key,
         imap_pass: (b.imap_pass && b.imap_pass !== '********') ? b.imap_pass : '',
+        smtp_pass: (b.smtp_pass && b.smtp_pass !== '********') ? b.smtp_pass : '',
         created_at: new Date(),
         ...patch,
       });
@@ -691,9 +726,10 @@ router.post('/send', adminAuth, requirePermission('email.send'), async (req, res
       allowedSchemes: ['http', 'https', 'mailto', 'cid', 'data'],
     });
     const cc = b.cc ? String(b.cc).trim() : null;
+    const accountKey = b.accountKey ? String(b.accountKey) : undefined;
 
     const emailProcessor = require('../services/emailProcessor');
-    const result = await emailProcessor.sendRawEmail({ to, cc, subject, html });
+    const result = await emailProcessor.sendRawEmail({ to, cc, subject, html, accountKey });
 
     await db('email_queue').insert({
       recipient_email: to,

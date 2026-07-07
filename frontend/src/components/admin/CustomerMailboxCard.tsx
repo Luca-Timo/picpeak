@@ -107,6 +107,46 @@ export const CustomerMailboxCard: React.FC = () => {
           <Input type="text" value={cfg.imap_folder || 'INBOX'} onChange={(e) => set('imap_folder', e.target.value)} placeholder="INBOX" />
         </div>
 
+        <div className="pt-4 mt-1 border-t border-neutral-200 dark:border-neutral-700">
+          <div className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
+            {t('email.customerMailbox.outgoing', 'Outgoing (SMTP)')}
+          </div>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 mb-3">
+            {t('email.customerMailbox.outgoingHint', 'Replies from this mailbox send from here. Leave blank to fall back to the global outgoing address.')}
+          </p>
+          <div className="space-y-4">
+            <div>
+              <label className={labelCls}>{t('email.customerMailbox.fromEmail', 'From address')}</label>
+              <Input type="text" value={cfg.from_email || ''} onChange={(e) => set('from_email', e.target.value)} placeholder="hello@yourdomain.com" leftIcon={<User className="w-5 h-5 text-neutral-400" />} />
+            </div>
+            <div>
+              <label className={labelCls}>{t('email.customerMailbox.smtpHost', 'SMTP Host')}</label>
+              <Input type="text" value={cfg.smtp_host || ''} onChange={(e) => set('smtp_host', e.target.value)} placeholder="smtp.example.com" leftIcon={<Server className="w-5 h-5 text-neutral-400" />} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>{t('email.incoming.port', 'Port')}</label>
+                <Input type="number" value={cfg.smtp_port ?? 587} onChange={(e) => set('smtp_port', parseInt(e.target.value, 10) || 0)} placeholder="587" />
+              </div>
+              <div>
+                <label className={labelCls}>{t('email.incoming.security', 'Security')}</label>
+                <select className={selectCls} value={cfg.smtp_secure ? 'ssl' : 'starttls'} onChange={(e) => set('smtp_secure', e.target.value === 'ssl')}>
+                  <option value="ssl">{t('email.customerMailbox.smtpSsl', 'SSL (465)')}</option>
+                  <option value="starttls">{t('email.customerMailbox.smtpStarttls', 'STARTTLS (587)')}</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>{t('email.customerMailbox.smtpUser', 'SMTP Username')}</label>
+              <Input type="text" value={cfg.smtp_user || ''} onChange={(e) => set('smtp_user', e.target.value)} autoComplete="off" placeholder="hello@yourdomain.com" leftIcon={<User className="w-5 h-5 text-neutral-400" />} />
+            </div>
+            <div>
+              <label className={labelCls}>{t('email.customerMailbox.smtpPass', 'SMTP Password')}</label>
+              <Input type={passwordVisibility.isOpen ? 'text' : 'password'} value={cfg.smtp_pass || ''} onChange={(e) => set('smtp_pass', e.target.value)} autoComplete="new-password" placeholder={t('email.enterPassword', 'Enter password')} leftIcon={<Lock className="w-5 h-5 text-neutral-400" />} />
+            </div>
+          </div>
+        </div>
+
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => test.mutate()} isLoading={test.isPending} disabled={!cfg.imap_host || !cfg.imap_user} leftIcon={<PlugZap className="w-5 h-5" />} className="whitespace-nowrap">
             {t('email.incoming.test', 'Test connection')}
