@@ -16,6 +16,7 @@ const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { getStoragePath } = require('../config/storage');
 const expenseService = require('./expenseService');
+const sanitizeHtml = require('sanitize-html');
 const { isUniqueViolation } = require('../utils/dbErrors');
 
 const ALLOWED_MIME = ['application/pdf', 'image/jpeg', 'image/png'];
@@ -230,14 +231,36 @@ async function roundTripTest({ timeoutMs = 30000, intervalMs = 3000 } = {}) {
   }
 }
 
-/** Poll the mailbox once. Safe to call repeatedly; self-skips when busy/off. */
-async function pollOnce() {
-  if (polling) return { skipped: 'busy' };
-  if (!(await isEnabled())) return { skipped: 'disabled' };
-  const cfg = await getImapConfig();
-  if (!cfg) return { skipped: 'unconfigured' };
+// Sanitize an inbound HTML body before storing it. Inbound mail is untrusted,
+// so this strips scripts/handlers/unknown schemes (the viewer ALSO renders it
+// in a script-less sandboxed iframe — defense in depth). Remote images are kept
+// (many legit emails embed them) but that is the only tracking-vector allowed.
+function sanitizeBody(html) {
+  if (!html) return null;
+  try {
+    return sanitizeHtml(html, {
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img']),
+      allowedAttributes: {
+        ...sanitizeHtml.defaults.allowedAttributes,
+        img: ['src', 'alt', 'width', 'height'],
+        '*': ['style'],
+      },
+      allowedSchemes: ['http', 'https', 'mailto', 'cid'],
+    });
+  } catch (_) {
+    return null;
+  }
+}
 
-  polling = true;
+/**
+ * Poll ONE mailbox once and return the count of newly-processed messages.
+ * `opts.accountKey` tags each received_emails row; `opts.routeToExpenses`
+ * controls whether PDF/image attachments are dropped into the accounting inbox
+ * (true for the primary rechnungen@ mailbox) or only logged with the body
+ * (customer mail, e.g. hello@). The claim/dedup/stale-recovery logic is
+ * identical for every mailbox.
+ */
+async function pollAccountOnce(cfg, { accountKey = 'accounting', routeToExpenses = true } = {}) {
   const client = makeImapClient(cfg);
   let processed = 0;
   try {
@@ -304,6 +327,7 @@ async function pollOnce() {
           try {
             await db('received_emails').insert({
               message_id: claimKey,
+              account_key: accountKey,
               status: 'processing',
               attachment_count: 0,
               received_at: new Date(),
@@ -315,37 +339,47 @@ async function pollOnce() {
             throw ce;
           }
 
-          // Ingest attachments. Isolate each so one bad file can't prevent the
-          // audit row (the symptom: doc lands in Incoming invoices but the
-          // email never shows under Received).
-          const atts = (parsed.attachments || []).filter((a) => ALLOWED_MIME.includes(a.contentType));
+          // Attachment handling. The accounting mailbox drops PDF/image
+          // attachments into the incoming-invoices inbox (isolated so one bad
+          // file can't prevent the audit row). Customer mailboxes only COUNT
+          // attachments — they aren't supplier invoices.
           let inboundId = null;
           let count = 0;
           const attErrors = [];
-          for (const att of atts) {
-            try {
-              const filePath = await saveAttachment(att);
-              const doc = await expenseService.recordInboundDocument({ source: 'email', filePath, originalFilename: att.filename || 'attachment', mimeType: att.contentType }, null);
-              inboundId = doc.id; count += 1;
-            } catch (ae) {
-              attErrors.push(ae.message);
-              logger.error?.(`emailIntake: attachment "${att.filename}" failed: ${ae.message}`);
+          if (routeToExpenses) {
+            const atts = (parsed.attachments || []).filter((a) => ALLOWED_MIME.includes(a.contentType));
+            for (const att of atts) {
+              try {
+                const filePath = await saveAttachment(att);
+                const doc = await expenseService.recordInboundDocument({ source: 'email', filePath, originalFilename: att.filename || 'attachment', mimeType: att.contentType }, null);
+                inboundId = doc.id; count += 1;
+              } catch (ae) {
+                attErrors.push(ae.message);
+                logger.error?.(`emailIntake: attachment "${att.filename}" failed: ${ae.message}`);
+              }
             }
+          } else {
+            count = (parsed.attachments || []).length;
           }
 
           // A malformed Date: header yields an Invalid Date, which throws on a
           // Postgres timestamp insert — coerce to now.
           const receivedAt = (parsed.date instanceof Date && !Number.isNaN(parsed.date.getTime())) ? parsed.date : new Date();
-          const status = count > 0 ? 'ingested' : (attErrors.length ? 'error' : 'no_attachment');
+          const status = routeToExpenses
+            ? (count > 0 ? 'ingested' : (attErrors.length ? 'error' : 'no_attachment'))
+            : 'received';
           // Finalise the claimed row — every processed message ends up in the
-          // Received tab, even attachment-less ones.
+          // Received log with its (sanitized) body, even attachment-less ones.
           await db('received_emails').where({ message_id: claimKey }).update({
             from_address: ((parsed.from && parsed.from.text) || '').slice(0, 512) || null,
+            to_address: ((parsed.to && parsed.to.text) || '').slice(0, 512) || null,
             subject: parsed.subject || null,
             received_at: receivedAt,
             attachment_count: count,
             status,
             inbound_document_id: inboundId,
+            body_html: sanitizeBody(parsed.html || null),
+            body_text: parsed.text || null,
             error: attErrors.length ? attErrors.join('; ').slice(0, 2000) : null,
           });
           await client.messageFlagsAdd(cand.uid, ['\\Seen'], { uid: true });
@@ -360,7 +394,7 @@ async function pollOnce() {
               await db('received_emails').where({ message_id: claimKey })
                 .update({ status: 'error', error: String(e.message).slice(0, 2000) });
             } else {
-              await db('received_emails').insert({ message_id: `err-${cand.uid}-${Date.now()}`, status: 'error', error: e.message, attachment_count: 0, received_at: new Date(), created_at: new Date() });
+              await db('received_emails').insert({ message_id: `err-${cand.uid}-${Date.now()}`, account_key: accountKey, status: 'error', error: e.message, attachment_count: 0, received_at: new Date(), created_at: new Date() });
             }
           } catch (ie) {
             logger.error?.(`emailIntake: could not even write the error row (received_emails insert failing): ${ie.message}`);
@@ -373,11 +407,55 @@ async function pollOnce() {
     /* eslint-enable no-await-in-loop */
     await client.logout();
   } catch (e) {
-    logger.error?.(`emailIntake: poll failed: ${e.message}`);
+    logger.error?.(`emailIntake: poll failed (${accountKey}): ${e.message}`);
     try { await client.close(); } catch (_e) { /* ignore */ }
+  }
+  return processed;
+}
+
+/**
+ * Poll ALL configured inbound mailboxes once: the primary accounting IMAP
+ * (email_configs) plus every enabled row in mail_accounts (e.g. hello@).
+ * Safe to call repeatedly; self-skips when busy/off.
+ */
+async function pollOnce() {
+  if (polling) return { skipped: 'busy' };
+  if (!(await isEnabled())) return { skipped: 'disabled' };
+  polling = true;
+  let processed = 0;
+  let anyConfigured = false;
+  try {
+    // 1) Primary accounting mailbox — routes attachments to the invoices inbox.
+    const acctCfg = await getImapConfig();
+    if (acctCfg) {
+      anyConfigured = true;
+      processed += await pollAccountOnce(acctCfg, { accountKey: 'accounting', routeToExpenses: true });
+    }
+    // 2) Additional mailboxes (customers/hello@) — body captured, no expense
+    //    routing. Guarded so a pre-migration DB simply polls the accounting box.
+    let extras = [];
+    try {
+      if (await db.schema.hasTable('mail_accounts')) {
+        extras = await db('mail_accounts').where({ enabled: true });
+      }
+    } catch (_) { extras = []; }
+    for (const a of extras) {
+      if (!a.imap_host || !a.imap_user) continue;
+      anyConfigured = true;
+      const cfg = {
+        host: a.imap_host,
+        port: a.imap_port || 993,
+        secure: a.imap_secure !== false && a.imap_secure !== 0,
+        auth: { user: a.imap_user, pass: a.imap_pass || '' },
+        folder: a.imap_folder || 'INBOX',
+      };
+      // eslint-disable-next-line no-await-in-loop
+      processed += await pollAccountOnce(cfg, { accountKey: a.account_key, routeToExpenses: false });
+    }
   } finally {
     polling = false;
   }
+  if (!anyConfigured) return { skipped: 'unconfigured' };
   return { processed };
 }
 

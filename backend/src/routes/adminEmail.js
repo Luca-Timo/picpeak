@@ -4,6 +4,10 @@ const { body, query, validationResult } = require('express-validator');
 const { db, logActivity } = require('../database/db');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
+// Gate the NEW Messages routes on the `messaging` flag (per-route, NOT the whole
+// /email mount — the pre-existing config/queue/received endpoints stay ungated).
+const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
+const messagingGate = requireFeatureFlag('messaging');
 const { wrapEmailHtml, processEmailQueue } = require('../services/emailProcessor');
 const { errorResponse } = require('../utils/routeHelpers');
 const logger = require('../utils/logger');
@@ -260,13 +264,193 @@ router.get('/received', adminAuth, requirePermission('email.view'), async (req, 
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize, 10) || 25));
-    const base = db('received_emails');
-    const countRow = await base.clone().count({ c: '*' }).first();
+    const account = req.query.account ? String(req.query.account) : null;
+    // mailbox_state filter: no param → active (+ legacy NULL); else exact.
+    const state = ['archived', 'deleted'].includes(String(req.query.state)) ? String(req.query.state) : 'active';
+    // Optional full-table search (sender / subject) so results aren't truncated
+    // to the first page before matching.
+    const q = req.query.q ? String(req.query.q).trim().slice(0, 255) : '';
+    // 'accounting' matches legacy rows too (account_key was NULL before mig 154).
+    const applyAccount = (qb) => {
+      if (account === 'accounting') qb.where((b) => b.where('account_key', 'accounting').orWhereNull('account_key'));
+      else if (account) qb.where('account_key', account);
+      if (state === 'active') qb.where((b) => b.where('mailbox_state', 'active').orWhereNull('mailbox_state'));
+      else qb.where('mailbox_state', state);
+      if (q) qb.where((b) => b.where('from_address', 'like', `%${q}%`).orWhere('subject', 'like', `%${q}%`));
+      return qb;
+    };
+    const countRow = await applyAccount(db('received_emails')).count({ c: '*' }).first();
     const total = parseInt(countRow?.c || 0, 10);
-    const items = await base.clone().orderBy('received_at', 'desc').limit(pageSize).offset((page - 1) * pageSize);
+    // Bodies are excluded from the list (can be large); fetched per-message.
+    const items = await applyAccount(db('received_emails'))
+      .select('id', 'message_id', 'account_key', 'from_address', 'to_address', 'subject',
+        'received_at', 'attachment_count', 'status', 'inbound_document_id', 'error')
+      .orderBy('received_at', 'desc').limit(pageSize).offset((page - 1) * pageSize);
     res.json({ items, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } });
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to fetch received emails');
+  }
+});
+
+// Single received email WITH its captured (server-sanitized) body — Messages
+// reading pane. body_html was already sanitized on ingest; the viewer renders
+// it in a script-less sandboxed iframe as well.
+router.get('/received/:id', adminAuth, messagingGate, requirePermission('email.view'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id' });
+    const row = await db('received_emails').where({ id }).first();
+    if (!row) return res.status(404).json({ error: 'Email not found' });
+    res.json(row);
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to fetch email');
+  }
+});
+
+// Move an email between mailbox states: Archive / Delete (soft) or Restore
+// (back to active). kind = 'queue' | 'received'. Delete is a soft move to the
+// trash; the row is only removed for good by the DELETE handler below.
+router.post('/item/:kind/:id/state', adminAuth, messagingGate, requirePermission('email.view'), async (req, res) => {
+  try {
+    const table = req.params.kind === 'received' ? 'received_emails' : req.params.kind === 'queue' ? 'email_queue' : null;
+    if (!table) return res.status(400).json({ error: 'Invalid kind' });
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id' });
+    const state = String(req.body?.state || '');
+    if (!['active', 'archived', 'deleted'].includes(state)) return res.status(400).json({ error: 'Invalid state' });
+    const n = await db(table).where({ id }).update({ mailbox_state: state });
+    if (!n) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to update email');
+  }
+});
+
+// Permanently delete an email row — only offered from the Deleted folder.
+router.delete('/item/:kind/:id', adminAuth, messagingGate, requirePermission('email.edit'), async (req, res) => {
+  try {
+    const table = req.params.kind === 'received' ? 'received_emails' : req.params.kind === 'queue' ? 'email_queue' : null;
+    if (!table) return res.status(400).json({ error: 'Invalid kind' });
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id' });
+    await db(table).where({ id }).del();
+    res.json({ ok: true });
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to delete email');
+  }
+});
+
+// Additional inbound mailboxes (beyond the primary accounting IMAP in
+// email_configs) — e.g. the customer hello@ box. Passwords are masked out.
+router.get('/accounts', adminAuth, messagingGate, requirePermission('email.view'), async (req, res) => {
+  try {
+    const rows = await db('mail_accounts').orderBy('id');
+    res.json({ items: rows.map((a) => ({
+      ...a,
+      imap_pass: a.imap_pass ? '********' : '',
+      smtp_pass: a.smtp_pass ? '********' : '',
+    })) });
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to load mail accounts');
+  }
+});
+
+// Resolved sender/mailbox addresses for the Messages UI — so the sidebar shows
+// the REAL configured addresses instead of hardcoded placeholders. Accounting =
+// the primary IMAP login (rechnungen@); customers = the hello@ mailbox; the
+// automated stream sends from the global SMTP from-address.
+router.get('/identities', adminAuth, messagingGate, requirePermission('email.view'), async (req, res) => {
+  try {
+    const cfg = await db('email_configs').first();
+    let customers = null;
+    try {
+      const cust = await db('mail_accounts').where({ account_key: 'customers' }).first();
+      customers = cust?.imap_user || cust?.from_email || null;
+    } catch (_) { customers = null; }
+    res.json({
+      automated: cfg?.from_email || null,
+      accounting: cfg?.imap_user || null,
+      customers,
+    });
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to load mail identities');
+  }
+});
+
+// Upsert a mailbox by account_key. A masked password ('********') keeps the
+// stored value so the admin never has to re-type it.
+router.post('/accounts', adminAuth, messagingGate, requirePermission('email.edit'), async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!b.account_key) return res.status(400).json({ error: 'account_key is required' });
+    // SSRF guard — mirror /config + /incoming-config: neither the IMAP nor the
+    // SMTP host may point at a private/internal address.
+    const { isPrivateIP } = require('../utils/networkValidation');
+    if (b.imap_host && isPrivateIP(b.imap_host)) {
+      return res.status(400).json({ error: 'IMAP host cannot point to a private or internal network address' });
+    }
+    if (b.smtp_host && isPrivateIP(b.smtp_host)) {
+      return res.status(400).json({ error: 'SMTP host cannot point to a private or internal network address' });
+    }
+    const patch = {
+      label: b.label || null,
+      imap_host: b.imap_host || null,
+      imap_port: b.imap_port ? parseInt(b.imap_port, 10) : 993,
+      imap_secure: b.imap_secure !== false,
+      imap_user: b.imap_user || null,
+      imap_folder: b.imap_folder || 'INBOX',
+      // Outgoing (SMTP) identity — replies from this mailbox send from here.
+      smtp_host: b.smtp_host || null,
+      smtp_port: b.smtp_port ? parseInt(b.smtp_port, 10) : 587,
+      smtp_secure: b.smtp_secure === true,
+      smtp_user: b.smtp_user || null,
+      from_email: b.from_email || null,
+      from_name: b.from_name || null,
+      enabled: !!b.enabled,
+      updated_at: new Date(),
+    };
+    if (b.imap_pass && b.imap_pass !== '********') patch.imap_pass = b.imap_pass;
+    if (b.smtp_pass && b.smtp_pass !== '********') patch.smtp_pass = b.smtp_pass;
+    const existing = await db('mail_accounts').where({ account_key: b.account_key }).first();
+    if (existing) {
+      await db('mail_accounts').where({ account_key: b.account_key }).update(patch);
+    } else {
+      await db('mail_accounts').insert({
+        account_key: b.account_key,
+        imap_pass: (b.imap_pass && b.imap_pass !== '********') ? b.imap_pass : '',
+        smtp_pass: (b.smtp_pass && b.smtp_pass !== '********') ? b.smtp_pass : '',
+        created_at: new Date(),
+        ...patch,
+      });
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to save mail account');
+  }
+});
+
+// Test an inbound mailbox's IMAP connection (before or after saving). Resolves
+// a masked/blank password from the stored row for the given account_key.
+router.post('/accounts/test', adminAuth, messagingGate, requirePermission('email.view'), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const { isPrivateIP } = require('../utils/networkValidation');
+    if (b.imap_host && isPrivateIP(b.imap_host)) {
+      return res.status(400).json({ error: 'IMAP host cannot point to a private or internal network address' });
+    }
+    let pass = b.imap_pass;
+    if ((!pass || pass === '********') && b.account_key) {
+      const stored = await db('mail_accounts').where({ account_key: b.account_key }).first();
+      pass = stored?.imap_pass || '';
+    }
+    const emailIntakeService = require('../services/emailIntakeService');
+    const result = await emailIntakeService.testConnection({
+      host: b.imap_host, port: b.imap_port, secure: b.imap_secure,
+      user: b.imap_user, pass, folder: b.imap_folder || 'INBOX',
+    });
+    res.json(result);
+  } catch (error) {
+    res.status(422).json({ ok: false, error: `Mailbox test failed (${error.message}).` });
   }
 });
 
@@ -438,6 +622,8 @@ router.post('/flush-queue', adminAuth, requirePermission('email.send'), async (r
 router.get('/queue', adminAuth, requirePermission('email.view'), [
   query('status').optional({ values: 'falsy' }).isIn(['pending', 'sent', 'failed']),
   query('emailType').optional({ values: 'falsy' }).isString().isLength({ max: 64 }),
+  query('origin').optional({ values: 'falsy' }).isIn(['system', 'manual']),
+  query('state').optional({ values: 'falsy' }).isIn(['active', 'archived', 'deleted']),
   query('q').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
   query('from').optional({ values: 'falsy' }).isISO8601(),
   query('to').optional({ values: 'falsy' }).isISO8601(),
@@ -456,6 +642,13 @@ router.get('/queue', adminAuth, requirePermission('email.view'), [
     const applyFilters = (qb) => {
       if (req.query.status) qb.where('email_queue.status', req.query.status);
       if (req.query.emailType) qb.where('email_queue.email_type', req.query.emailType);
+      // 'system' includes legacy rows (origin was NULL before migration 155).
+      if (req.query.origin === 'manual') qb.where('email_queue.origin', 'manual');
+      else if (req.query.origin === 'system') qb.where((b) => b.where('email_queue.origin', 'system').orWhereNull('email_queue.origin'));
+      // mailbox_state: default active (+ legacy NULL); Archived/Deleted folders pass it explicitly.
+      const st = ['archived', 'deleted'].includes(String(req.query.state)) ? String(req.query.state) : 'active';
+      if (st === 'active') qb.where((b) => b.where('email_queue.mailbox_state', 'active').orWhereNull('email_queue.mailbox_state'));
+      else qb.where('email_queue.mailbox_state', st);
       if (req.query.from) qb.where('email_queue.created_at', '>=', new Date(req.query.from));
       if (req.query.to) qb.where('email_queue.created_at', '<=', new Date(req.query.to));
       if (req.query.q) {
@@ -484,6 +677,7 @@ router.get('/queue', adminAuth, requirePermission('email.view'), [
           'email_queue.sent_at',
           'email_queue.error_message',
           'email_queue.retry_count',
+          'email_queue.origin',
           'email_queue.event_id',
           'events.event_name as event_name',
           'events.slug as event_slug'
@@ -503,6 +697,7 @@ router.get('/queue', adminAuth, requirePermission('email.view'), [
       sentAt: r.sent_at,
       errorMessage: r.error_message,
       retryCount: r.retry_count,
+      origin: r.origin || 'system',
       eventId: r.event_id,
       eventName: r.event_name || null,
       eventSlug: r.event_slug || null,
@@ -515,6 +710,111 @@ router.get('/queue', adminAuth, requirePermission('email.view'), [
   } catch (error) {
     logger.error('List email queue error:', error);
     res.status(500).json({ error: 'Failed to load email queue', details: error.message });
+  }
+});
+
+// Single queued/sent email WITH its rendered body — powers the Messages
+// reading pane. `rendered_html` is the exact HTML that was sent (migration
+// 119); rows sent before that migration have none. Attachment disk paths in
+// `email_data` are never exposed — only the filenames, so the pane can list
+// attachments without leaking storage paths (same PII posture as the list).
+router.get('/queue/:id', adminAuth, messagingGate, requirePermission('email.view'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id' });
+    const row = await db('email_queue')
+      .leftJoin('events', 'events.id', 'email_queue.event_id')
+      .select('email_queue.*', 'events.event_name as event_name', 'events.slug as event_slug')
+      .where('email_queue.id', id)
+      .first();
+    if (!row) return res.status(404).json({ error: 'Email not found' });
+
+    let cc = null;
+    let attachments = [];
+    try {
+      const data = row.email_data ? JSON.parse(row.email_data) : {};
+      if (data.cc) cc = Array.isArray(data.cc) ? data.cc.join(', ') : String(data.cc);
+      if (Array.isArray(data.attachments)) {
+        attachments = data.attachments
+          .filter((a) => a && a.filename)
+          .map((a) => ({ filename: a.filename, contentType: a.contentType || null }));
+      }
+    } catch (_) { /* malformed email_data → no cc/attachments, still return the body */ }
+
+    res.json({
+      id: row.id,
+      recipientEmail: row.recipient_email,
+      emailType: row.email_type,
+      status: row.status,
+      createdAt: row.created_at,
+      scheduledAt: row.scheduled_at,
+      sentAt: row.sent_at,
+      errorMessage: row.error_message,
+      retryCount: row.retry_count,
+      eventId: row.event_id,
+      eventName: row.event_name || null,
+      eventSlug: row.event_slug || null,
+      renderedHtml: row.rendered_html || null,
+      cc,
+      attachments,
+    });
+  } catch (error) {
+    logger.error('Get email queue item error:', error);
+    res.status(500).json({ error: 'Failed to load email', details: error.message });
+  }
+});
+
+// Send a human-composed email from the Messages composer. The admin already
+// edited the body (reply or document message), so it is sent as-is — no
+// template render — after a sanitize pass. Recorded in email_queue as a
+// 'manual' send so it surfaces under Customers > Sent.
+router.post('/send', adminAuth, messagingGate, requirePermission('email.send'), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const to = String(b.to || '').trim();
+    const subject = String(b.subject || '').trim();
+    if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      return res.status(400).json({ error: 'A valid recipient email is required.' });
+    }
+    if (!subject) return res.status(400).json({ error: 'A subject is required.' });
+
+    const sanitizeHtml = require('sanitize-html');
+    // Match the stricter inbound sanitizeBody allowlist: no <style> tag, no
+    // data: scheme — inline style/class attributes are enough for composed mail.
+    const html = sanitizeHtml(String(b.html || ''), {
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat(['img']),
+      allowedAttributes: {
+        ...sanitizeHtml.defaults.allowedAttributes,
+        img: ['src', 'alt', 'width', 'height'],
+        '*': ['style', 'class'],
+      },
+      allowedSchemes: ['http', 'https', 'mailto', 'cid'],
+    });
+    const cc = b.cc ? String(b.cc).trim() : null;
+    const accountKey = b.accountKey ? String(b.accountKey) : undefined;
+
+    const emailProcessor = require('../services/emailProcessor');
+    const result = await emailProcessor.sendRawEmail({ to, cc, subject, html, accountKey });
+
+    await db('email_queue').insert({
+      recipient_email: to,
+      email_type: 'manual_message',
+      email_data: JSON.stringify({
+        subject,
+        cc: cc || undefined,
+        replyToReceivedId: b.replyToReceivedId || undefined,
+        messageId: result.messageId,
+      }),
+      status: 'sent',
+      origin: 'manual',
+      rendered_html: html,
+      created_at: new Date(),
+      sent_at: new Date(),
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error('Manual send error:', error);
+    res.status(500).json({ error: 'Failed to send message', details: error.message });
   }
 });
 

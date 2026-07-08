@@ -42,6 +42,7 @@ import { HoursLoggingPage } from './pages/admin/clients/HoursLoggingPage';
 // (carved into its own chunk in vite.config.ts) doesn't ship with the
 // main app. Only pages that visit /admin/clients/calendar fetch it.
 const CalendarPage = lazy(() => import('./pages/admin/clients/CalendarPage').then((m) => ({ default: m.CalendarPage })));
+const MessagesPage = lazy(() => import('./pages/admin/messages/MessagesPage').then((m) => ({ default: m.MessagesPage })));
 import { QuoteResponsePage } from './pages/public/QuoteResponsePage';
 import { ContractResponsePage } from './pages/public/ContractResponsePage';
 import { ProjectsListPage } from './pages/admin/projects/ProjectsListPage';
@@ -240,6 +241,13 @@ function App() {
                       </Route>
                       <Route element={<RequireFeature flag="userManagement" />}>
                         <Route path="users" element={<UserManagementPage />} />
+                      </Route>
+                      <Route element={<RequireFeature flag="messaging" />}>
+                        <Route path="messages" element={
+                          <Suspense fallback={<Loading />}>
+                            <MessagesPage />
+                          </Suspense>
+                        } />
                       </Route>
                       {/* Clients section (#354 follow-up). Parent route
                           gated by the top-level `clients` flag — when off

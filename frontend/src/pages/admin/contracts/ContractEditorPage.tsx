@@ -13,7 +13,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
 import { ArrowLeft, Eye, Save } from 'lucide-react';
@@ -25,6 +25,7 @@ import {
 } from '../../../services/contracts.service';
 import { CustomerPicker } from '../../../components/admin/CustomerPicker';
 import { ProjectSelect } from '../../../components/admin/ProjectSelect';
+import { customerAdminService } from '../../../services/customerAdmin.service';
 
 interface BlockRow {
   blockId: number;
@@ -39,6 +40,7 @@ interface BlockRow {
 export const ContractEditorPage: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useParams<{ id?: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
   const numericId = id ? parseInt(id, 10) : null;
@@ -66,6 +68,28 @@ export const ContractEditorPage: React.FC = () => {
   const [validUntil, setValidUntil] = useState('');
   const [projectId, setProjectId] = useState<number | null>(null);
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
+
+  // Prefill the customer when opened as "new contract for this customer"
+  // (?customerAccountId=42), e.g. from the Messages view. New contracts only;
+  // mirrors QuoteEditorPage / BillEditorPage.
+  useEffect(() => {
+    if (isEdit || customerAccountId) return;
+    const raw = searchParams.get('customerAccountId');
+    const cid = raw ? parseInt(raw, 10) : NaN;
+    if (!Number.isFinite(cid) || cid <= 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const c = await customerAdminService.get(cid);
+        if (cancelled) return;
+        setCustomerAccountId(c.id);
+        setCustomerLabel(c.companyName || c.displayName || [c.firstName, c.lastName].filter(Boolean).join(' ') || c.email);
+        setCustomerIsPassive(Boolean(c.isPassive));
+        if (c.preferredLanguage) setLanguage(c.preferredLanguage);
+      } catch { /* ignore — admin can still pick manually */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isEdit, searchParams, customerAccountId]);
 
   // Load existing contract on edit.
   const { data: existing, isLoading: existingLoading } = useQuery({
