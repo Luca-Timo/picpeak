@@ -95,6 +95,15 @@ jobs:
         repo_lc="${GITHUB_REPOSITORY,,}"
         echo "BACKEND_IMAGE_NAME=${repo_lc}/backend" >> "$GITHUB_ENV"
         echo "FRONTEND_IMAGE_NAME=${repo_lc}/frontend" >> "$GITHUB_ENV"
+        # Mirror manifests to Docker Hub (picpeak/{backend,frontend}) only on the
+        # canonical org repo, where the DOCKERHUB_* secrets live. Forks (and any
+        # other owner) fall back to GHCR-only — the Docker Hub image line and login
+        # are gated on this flag so their builds keep working unchanged.
+        if [[ "$GITHUB_REPOSITORY" == "PicPeak/picpeak" ]]; then
+          echo "DOCKERHUB_ENABLED=true" >> "$GITHUB_ENV"
+        else
+          echo "DOCKERHUB_ENABLED=false" >> "$GITHUB_ENV"
+        fi
 
     - name: Prepare platform pair
       run: |
@@ -233,6 +242,15 @@ jobs:
         repo_lc="${GITHUB_REPOSITORY,,}"
         echo "BACKEND_IMAGE_NAME=${repo_lc}/backend" >> "$GITHUB_ENV"
         echo "FRONTEND_IMAGE_NAME=${repo_lc}/frontend" >> "$GITHUB_ENV"
+        # Mirror manifests to Docker Hub (picpeak/{backend,frontend}) only on the
+        # canonical org repo, where the DOCKERHUB_* secrets live. Forks (and any
+        # other owner) fall back to GHCR-only — the Docker Hub image line and login
+        # are gated on this flag so their builds keep working unchanged.
+        if [[ "$GITHUB_REPOSITORY" == "PicPeak/picpeak" ]]; then
+          echo "DOCKERHUB_ENABLED=true" >> "$GITHUB_ENV"
+        else
+          echo "DOCKERHUB_ENABLED=false" >> "$GITHUB_ENV"
+        fi
 
     - name: Download digest artifacts
       uses: actions/download-artifact@v4
@@ -266,11 +284,24 @@ jobs:
           echo "is_prerelease=false" >> $GITHUB_OUTPUT
         fi
 
+    - name: Log in to Docker Hub
+      if: env.DOCKERHUB_ENABLED == 'true'
+      uses: docker/login-action@v3
+      with:
+        registry: docker.io
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
     - name: Extract metadata for Backend
       id: meta-backend
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}
+        # GHCR always; Docker Hub (picpeak/backend) added on the canonical repo so
+        # the same tag scheme is mirrored to both registries. metadata-action drops
+        # the blank second line on forks → GHCR-only there.
+        images: |
+          ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}
+          ${{ env.DOCKERHUB_ENABLED == 'true' && 'docker.io/picpeak/backend' || '' }}
         labels: |
           org.opencontainers.image.title=PicPeak Backend
           org.opencontainers.image.description=PicPeak photo sharing platform backend service
@@ -302,9 +333,14 @@ jobs:
         docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
           $(printf "${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}@sha256:%s " *)
 
-    - name: Inspect manifest
+    - name: Inspect manifest (GHCR)
       run: |
         docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ steps.meta-backend.outputs.version }}
+
+    - name: Inspect manifest (Docker Hub)
+      if: env.DOCKERHUB_ENABLED == 'true'
+      run: |
+        docker buildx imagetools inspect docker.io/picpeak/backend:${{ steps.meta-backend.outputs.version }}
 
   # -----------------------------------------------------------------------------
   # Frontend: per-arch build, then merge into a multi-arch manifest
@@ -335,6 +371,15 @@ jobs:
         repo_lc="${GITHUB_REPOSITORY,,}"
         echo "BACKEND_IMAGE_NAME=${repo_lc}/backend" >> "$GITHUB_ENV"
         echo "FRONTEND_IMAGE_NAME=${repo_lc}/frontend" >> "$GITHUB_ENV"
+        # Mirror manifests to Docker Hub (picpeak/{backend,frontend}) only on the
+        # canonical org repo, where the DOCKERHUB_* secrets live. Forks (and any
+        # other owner) fall back to GHCR-only — the Docker Hub image line and login
+        # are gated on this flag so their builds keep working unchanged.
+        if [[ "$GITHUB_REPOSITORY" == "PicPeak/picpeak" ]]; then
+          echo "DOCKERHUB_ENABLED=true" >> "$GITHUB_ENV"
+        else
+          echo "DOCKERHUB_ENABLED=false" >> "$GITHUB_ENV"
+        fi
 
     - name: Prepare platform pair
       run: |
@@ -454,6 +499,15 @@ jobs:
         repo_lc="${GITHUB_REPOSITORY,,}"
         echo "BACKEND_IMAGE_NAME=${repo_lc}/backend" >> "$GITHUB_ENV"
         echo "FRONTEND_IMAGE_NAME=${repo_lc}/frontend" >> "$GITHUB_ENV"
+        # Mirror manifests to Docker Hub (picpeak/{backend,frontend}) only on the
+        # canonical org repo, where the DOCKERHUB_* secrets live. Forks (and any
+        # other owner) fall back to GHCR-only — the Docker Hub image line and login
+        # are gated on this flag so their builds keep working unchanged.
+        if [[ "$GITHUB_REPOSITORY" == "PicPeak/picpeak" ]]; then
+          echo "DOCKERHUB_ENABLED=true" >> "$GITHUB_ENV"
+        else
+          echo "DOCKERHUB_ENABLED=false" >> "$GITHUB_ENV"
+        fi
 
     - name: Download digest artifacts
       uses: actions/download-artifact@v4
@@ -487,11 +541,24 @@ jobs:
           echo "is_prerelease=false" >> $GITHUB_OUTPUT
         fi
 
+    - name: Log in to Docker Hub
+      if: env.DOCKERHUB_ENABLED == 'true'
+      uses: docker/login-action@v3
+      with:
+        registry: docker.io
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
     - name: Extract metadata for Frontend
       id: meta-frontend
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}
+        # GHCR always; Docker Hub (picpeak/frontend) added on the canonical repo so
+        # the same tag scheme is mirrored to both registries. metadata-action drops
+        # the blank second line on forks → GHCR-only there.
+        images: |
+          ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}
+          ${{ env.DOCKERHUB_ENABLED == 'true' && 'docker.io/picpeak/frontend' || '' }}
         labels: |
           org.opencontainers.image.title=PicPeak Frontend
           org.opencontainers.image.description=PicPeak photo sharing platform frontend application
@@ -523,9 +590,14 @@ jobs:
         docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
           $(printf "${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}@sha256:%s " *)
 
-    - name: Inspect manifest
+    - name: Inspect manifest (GHCR)
       run: |
         docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ steps.meta-frontend.outputs.version }}
+
+    - name: Inspect manifest (Docker Hub)
+      if: env.DOCKERHUB_ENABLED == 'true'
+      run: |
+        docker buildx imagetools inspect docker.io/picpeak/frontend:${{ steps.meta-frontend.outputs.version }}
 
   summary:
     needs: [build-backend, merge-backend, build-frontend, merge-frontend]
@@ -540,6 +612,15 @@ jobs:
         repo_lc="${GITHUB_REPOSITORY,,}"
         echo "BACKEND_IMAGE_NAME=${repo_lc}/backend" >> "$GITHUB_ENV"
         echo "FRONTEND_IMAGE_NAME=${repo_lc}/frontend" >> "$GITHUB_ENV"
+        # Mirror manifests to Docker Hub (picpeak/{backend,frontend}) only on the
+        # canonical org repo, where the DOCKERHUB_* secrets live. Forks (and any
+        # other owner) fall back to GHCR-only — the Docker Hub image line and login
+        # are gated on this flag so their builds keep working unchanged.
+        if [[ "$GITHUB_REPOSITORY" == "PicPeak/picpeak" ]]; then
+          echo "DOCKERHUB_ENABLED=true" >> "$GITHUB_ENV"
+        else
+          echo "DOCKERHUB_ENABLED=false" >> "$GITHUB_ENV"
+        fi
 
     - name: Build Summary
       run: |
@@ -578,6 +659,10 @@ jobs:
         echo "### 📦 Images" >> $GITHUB_STEP_SUMMARY
         echo "- Backend: \`${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
         echo "- Frontend: \`${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+        if [[ "$DOCKERHUB_ENABLED" == "true" ]]; then
+          echo "- Backend (Docker Hub): \`docker.io/picpeak/backend\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend (Docker Hub): \`docker.io/picpeak/frontend\`" >> $GITHUB_STEP_SUMMARY
+        fi
 
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 🏗️ Architectures" >> $GITHUB_STEP_SUMMARY
