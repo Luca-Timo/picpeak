@@ -5,6 +5,26 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.84.0-beta.0](https://github.com/PicPeak/picpeak/compare/v3.83.1-beta.0...v3.84.0-beta.0) (2026-07-10)
+
+
+### Features
+
+* **admin:** GitHub repo button in the sidebar footer ([#778](https://github.com/PicPeak/picpeak/issues/778)) ([279e047](https://github.com/PicPeak/picpeak/commit/279e0472c71c6a37ba091a9c7a31f5571c0a8df6))
+* **admin:** GitHub repo button in the sidebar footer ([#778](https://github.com/PicPeak/picpeak/issues/778)) ([d3d7df4](https://github.com/PicPeak/picpeak/commit/d3d7df46f214028ba89063079d356bc0430083f5))
+
+
+### Bug Fixes
+
+* **ci:** publish v-prefixed image tags so :vX.Y.Z resolves ([#668](https://github.com/PicPeak/picpeak/issues/668)) ([2ee4146](https://github.com/PicPeak/picpeak/commit/2ee4146d9a6fd026e7b7be3ba774de9a0cf6e96a))
+* **ci:** publish v-prefixed image tags so :vX.Y.Z resolves ([#668](https://github.com/PicPeak/picpeak/issues/668)) ([784d059](https://github.com/PicPeak/picpeak/commit/784d059c3da5b36e2b6794ebf2e34bc15c8a9824))
+
+
+### Documentation
+
+* **releasing:** align stable version to main on promote (Option A) ([df5aeab](https://github.com/PicPeak/picpeak/commit/df5aeaba416726cc0123f32ddf88e4a30dc28908))
+* **releasing:** align stable version to main on promote (Option A) ([5dea0c9](https://github.com/PicPeak/picpeak/commit/5dea0c969558f50833973ff742257780f5842612))
+
 ## [3.83.1-beta.0](https://github.com/PicPeak/picpeak/compare/v3.83.0-beta.0...v3.83.1-beta.0) (2026-07-09)
 
 
