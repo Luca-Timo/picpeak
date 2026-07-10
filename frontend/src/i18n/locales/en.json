@@ -1987,6 +1987,7 @@
       "channelBeta": "Beta",
       "beta": "BETA",
       "viewReleaseNotes": "View Release Notes",
+      "viewOnGithub": "View PicPeak on GitHub",
       "updateAvailableShort": "v{{version}} available",
       "upToDate": "You're up to date",
       "updateNow": "Update Now",

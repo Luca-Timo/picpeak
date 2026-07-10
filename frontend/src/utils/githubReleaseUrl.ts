@@ -10,5 +10,10 @@
  * notes for the running version (#566) and by the update-available
  * indicator to link to the upgrade target's notes.
  */
+/** Repository home on GitHub. Single source of truth for the org URL so
+ *  links (release notes, the admin "view on GitHub" button, #778) don't
+ *  each hardcode it. */
+export const repoUrl = 'https://github.com/PicPeak/picpeak';
+
 export const githubReleaseUrl = (version: string): string =>
-  `https://github.com/PicPeak/picpeak/releases/tag/v${version}`;
+  `${repoUrl}/releases/tag/v${version}`;

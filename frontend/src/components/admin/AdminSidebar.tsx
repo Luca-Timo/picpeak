@@ -15,11 +15,13 @@ import {
   Workflow,
   PanelLeftClose,
   PanelLeftOpen,
+  Github,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { settingsService } from '../../services/settings.service';
 import { VersionInfo } from './VersionInfo';
+import { repoUrl } from '../../utils/githubReleaseUrl';
 import { usePermissions } from '../../contexts/PermissionsContext';
 import { useAdminDarkMode } from '../../contexts/AdminDarkModeContext';
 import { useFeatureFlags, type FeatureKey } from '../../contexts/FeatureFlagsContext';
@@ -324,6 +326,20 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
 
             {/* Storage Info */}
             <StorageInfo />
+
+            {/* Link to the project on GitHub (#778). Subtle footer row so
+                admins can reach the repo — star, source, report an issue —
+                from anywhere in the dashboard, not just the setup screen. */}
+            <a
+              href={repoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mx-4 mb-3 flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors"
+              title={t('admin.viewOnGithub', 'View PicPeak on GitHub')}
+            >
+              <Github className="w-3.5 h-3.5" />
+              <span>{t('admin.viewOnGithub', 'View PicPeak on GitHub')}</span>
+            </a>
           </div>
         )}
       </div>

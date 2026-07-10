@@ -2411,6 +2411,7 @@
       "channelBeta": "Beta",
       "beta": "BETA",
       "viewReleaseNotes": "Versionshinweise anzeigen",
+      "viewOnGithub": "PicPeak auf GitHub ansehen",
       "updateAvailableShort": "v{{version}} verfügbar",
       "upToDate": "Alles aktuell",
       "updateNow": "Jetzt aktualisieren",
