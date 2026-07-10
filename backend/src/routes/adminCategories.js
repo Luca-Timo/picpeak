@@ -12,8 +12,9 @@ router.get('/global', adminAuth, requirePermission('settings.view'), async (req,
   try {
     const categories = await db('photo_categories')
       .where('is_global', formatBoolean(true))
+      .orderBy('display_order', 'asc')
       .orderBy('name', 'asc');
-    
+
     res.json(categories);
   } catch (error) {
     logger.error('Error fetching categories:', error);
@@ -32,8 +33,9 @@ router.get('/event/:eventId', adminAuth, requirePermission('settings.view'), asy
           .orWhere('event_id', eventId);
       })
       .orderBy('is_global', 'desc')
+      .orderBy('display_order', 'asc')
       .orderBy('name', 'asc');
-    
+
     res.json(categories);
   } catch (error) {
     logger.error('Error fetching event categories:', error);
@@ -81,12 +83,27 @@ router.post('/', adminAuth, requirePermission('settings.edit'), [
       return res.status(400).json({ error: 'Category with this slug already exists' });
     }
     
+    // Append to the end of its scope so a new category doesn't jump to the
+    // top of an admin-defined order (#782).
+    const maxRow = await db('photo_categories')
+      .where(function() {
+        if (is_global) {
+          this.where('is_global', formatBoolean(true));
+        } else {
+          this.where('event_id', event_id);
+        }
+      })
+      .max('display_order as maxOrder')
+      .first();
+    const nextOrder = (maxRow?.maxOrder || 0) + 1;
+
     // Create category
     const insertResult = await db('photo_categories').insert({
       name,
       slug: categorySlug,
       is_global,
-      event_id: is_global ? null : event_id
+      event_id: is_global ? null : event_id,
+      display_order: nextOrder
     }).returning('id');
     
     const categoryId = insertResult[0]?.id || insertResult[0];
@@ -251,6 +268,67 @@ router.delete('/:id', adminAuth, requirePermission('settings.edit'), async (req,
   } catch (error) {
     logger.error('Error deleting category:', error);
     res.status(500).json({ error: 'Failed to delete category' });
+  }
+});
+
+// Reorder an event's categories (#782). Mirrors the event_types reorder
+// pattern: the client sends the full ordered list of category ids and we
+// rewrite display_order in one transaction. Scoped to a single event's own
+// (non-global) categories — global categories keep their global order.
+router.post('/reorder', adminAuth, requirePermission('settings.edit'), [
+  body('event_id').isInt().withMessage('event_id must be an integer'),
+  body('orderedIds').isArray({ min: 1 }).withMessage('orderedIds must be a non-empty array'),
+  body('orderedIds.*').isInt().withMessage('Each id must be an integer')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const eventId = parseInt(req.body.event_id, 10);
+    const orderedIds = req.body.orderedIds.map((id) => parseInt(id, 10));
+
+    // Only this event's own categories may be reordered. Reject the request
+    // if any id doesn't belong to the event (or is a shared global category).
+    const owned = await db('photo_categories')
+      .where('event_id', eventId)
+      .where('is_global', formatBoolean(false))
+      .pluck('id');
+    const ownedSet = new Set(owned);
+    const invalid = orderedIds.filter((id) => !ownedSet.has(id));
+    if (invalid.length > 0) {
+      return res.status(400).json({ error: 'One or more categories do not belong to this event' });
+    }
+
+    await db.transaction(async (trx) => {
+      for (let i = 0; i < orderedIds.length; i += 1) {
+        await trx('photo_categories')
+          .where('id', orderedIds[i])
+          .update({ display_order: i + 1 });
+      }
+    });
+
+    // Log activity after commit (avoids a SQLite in-transaction global write).
+    await logActivity('categories_reordered',
+      { eventId, count: orderedIds.length },
+      eventId,
+      { type: 'admin', id: req.admin.id, name: req.admin.username }
+    );
+
+    const categories = await db('photo_categories')
+      .where(function() {
+        this.where('is_global', formatBoolean(true))
+          .orWhere('event_id', eventId);
+      })
+      .orderBy('is_global', 'desc')
+      .orderBy('display_order', 'asc')
+      .orderBy('name', 'asc');
+
+    res.json(categories);
+  } catch (error) {
+    logger.error('Error reordering categories:', error);
+    res.status(500).json({ error: 'Failed to reorder categories' });
   }
 });
 

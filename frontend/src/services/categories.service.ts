@@ -10,6 +10,9 @@ export interface PhotoCategory {
   // Per-category download permission (#640). Defaults true (server-side) so
   // categories created before migration 135 keep working.
   allow_downloads?: boolean;
+  // Admin-defined per-event sort order (#782). Backfilled from the previous
+  // alphabetical order on migration, so existing galleries don't reshuffle.
+  display_order?: number;
   created_at: string;
 }
 
@@ -61,5 +64,16 @@ export const categoriesService = {
   // Delete a category
   async deleteCategory(id: number): Promise<void> {
     await api.delete(`/admin/categories/${id}`);
+  },
+
+  // Reorder an event's own (non-global) categories (#782). Sends the full
+  // ordered list of ids; the backend rewrites display_order and returns the
+  // event's categories in the new order.
+  async reorderCategories(eventId: number, orderedIds: number[]): Promise<PhotoCategory[]> {
+    const response = await api.post<PhotoCategory[]>('/admin/categories/reorder', {
+      event_id: eventId,
+      orderedIds
+    });
+    return response.data;
   }
 };
