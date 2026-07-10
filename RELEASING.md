@@ -52,13 +52,19 @@ The actual mechanics, in order:
    - **`.release-please-manifest.json`** — keep `stable`'s; release-please owns this file.
    - Any other auto-merged file — spot-check that the auto-merge produced something sensible, especially for security-sensitive files (`backend/src/middleware/`, `backend/src/utils/tokenUtils.js`).
 
-5. **Wait for CI on the PR.** All ten checks (the original eight plus `merge-backend` and `merge-frontend`) must be green. If anything fails, fix on the release branch (NOT on `main` — `main` has already moved on).
+5. **Pin the stable version to match `main` (number alignment — see Versioning).** Determine `X.Y.Z` = the `main` tip's **base** version (its `vX.Y.Z-beta.N`, dropping the `-beta.N` suffix), and add an empty commit on the release branch:
+   ```bash
+   git commit --allow-empty -m "chore: release X.Y.Z" -m "Release-As: X.Y.Z"
+   ```
+   The `Release-As:` footer forces release-please to cut exactly `X.Y.Z`. Without it, release-please computes the next MINOR from the *previous stable* tag (e.g. `3.45.0` → `3.46.0`) while `main` is already at `3.84.x`, so the stable number drifts ever further behind for the same code.
 
-6. **Merge.** Standard merge commit, not squash — the PR's history (the individual feature commits) carries forward into `stable`'s log.
+6. **Wait for CI on the PR.** All ten checks (the original eight plus `merge-backend` and `merge-frontend`) must be green. If anything fails, fix on the release branch (NOT on `main` — `main` has already moved on).
 
-7. **release-please picks it up.** Within minutes, release-please will open a new `chore(stable): release X.Y.Z` PR proposing the stable release. Review the auto-generated CHANGELOG.md entries for accuracy, edit if needed, and merge. That merge creates the `vX.Y.Z` git tag, publishes Docker images on the `:stable` and `:latest` tags, and creates the GitHub Release page.
+7. **Merge.** Standard merge commit, not squash — the PR's history (the individual feature commits) carries forward into `stable`'s log.
 
-8. **Close the loop.** Bulk-close any `bug` issues that were fixed-but-not-closed and now appear in the released changelog. Reference the merge commit so reporters know which version contains the fix.
+8. **release-please picks it up.** Within minutes, release-please will open a new `chore(stable): release X.Y.Z` PR proposing the stable release. Review the auto-generated CHANGELOG.md entries for accuracy, edit if needed, and merge. That merge creates the `vX.Y.Z` git tag, publishes Docker images on the `:stable` and `:latest` tags, and creates the GitHub Release page.
+
+9. **Close the loop.** Bulk-close any `bug` issues that were fixed-but-not-closed and now appear in the released changelog. Reference the merge commit so reporters know which version contains the fix.
 
 ## Hotfix path (backport to current stable)
 
@@ -82,6 +88,14 @@ PicPeak follows [Semantic Versioning](https://semver.org/) with one project-spec
 - **Pre-release suffix** (`-beta.N`) for every `main`-channel cut; the `N` counter resets on each new MINOR or MAJOR target. The suffix kept the historical `-beta` literal even after the branch rename — operators were already pinning to `v3.x.y-beta.N` and changing the literal would have broken those pins.
 
 release-please derives all of this from conventional commit prefixes (`feat:`, `fix:`, `BREAKING CHANGE:`, etc.) automatically.
+
+### Stable ↔ pre-release number alignment
+
+The two channels run **independent** release-please counters: `main` bumps on every merge (racing ahead), while `stable` only bumps on a promotion. Left to itself, `stable` computes each promotion as the next MINOR from the *previous stable tag*, so the two drift far apart — e.g. `main` at `v3.83.x-beta.0` while `stable` sat at `v3.45.0` for the **same code**, which reads as "stable is 38 versions behind" when it isn't.
+
+To keep the numbers legible, **a promotion sets the stable version to the current `main` base version** (the `X.Y.Z` of the `main` tip's `vX.Y.Z-beta.N`, minus the suffix). Promoting a `main` at `v3.84.2-beta.0` therefore cuts stable `v3.84.2`, and the stable number tracks `main` instead of lagging. This is forced with the `Release-As:` commit in step 5 of the cut procedure — the one-time catch-up jump (e.g. `3.45.0 → 3.84.x`) is expected and happens only on the first aligned promotion.
+
+> **Release-engineering note (2026-07):** `release-please.yml` (the stable workflow) *must* keep `target-branch: stable`. Without it, release-please defaults to the repo's default branch (`main`), reads `main`'s stale `.release-please-manifest.json`, and cuts a wrong/regressed version — this is what produced a bogus `v2.7.0` once. If a promotion ever yields an unexpected version, check that first.
 
 ## Things that don't go through this process
 
