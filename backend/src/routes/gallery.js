@@ -25,6 +25,7 @@ const { generateGuestIdentifier } = require('../middleware/feedbackRateLimit');
 const secureImageService = require('../services/secureImageService');
 const logger = require('../utils/logger');
 const { resolvePhotoFilePath } = require('../services/photoResolver');
+const { getEventCategoriesOrdered } = require('../utils/categoryOrder');
 const { getEventShareToken, resolveShareIdentifier, buildShareLinkVariants } = require('../services/shareLinkService');
 const { handleAsync, errorResponse } = require('../utils/routeHelpers');
 const { NotFoundError } = require('../utils/errors');
@@ -587,10 +588,12 @@ router.get('/:slug/photos', verifyGalleryAccess, resolveGuest, async (req, res) 
     // Fetch category details from photo_categories table
     let categories = [];
     if (usedCategoryIds.length > 0) {
-      const categoryDetails = await db('photo_categories')
-        .whereIn('id', usedCategoryIds)
-        .select('id', 'name', 'slug', 'is_global', 'hero_photo_id', 'allow_downloads')
-        .orderBy('name', 'asc');
+      // Resolved category order (#782): per-event override, else global
+      // default, else name — restricted to categories that have photos.
+      const categoryDetails = await getEventCategoriesOrdered(req.event.id, {
+        onlyIds: usedCategoryIds,
+        select: ['c.id', 'c.name', 'c.slug', 'c.is_global', 'c.hero_photo_id', 'c.allow_downloads'],
+      });
 
       categories = categoryDetails.map(cat => ({
         id: cat.id,

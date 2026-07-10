@@ -10,6 +10,12 @@ export interface PhotoCategory {
   // Per-category download permission (#640). Defaults true (server-side) so
   // categories created before migration 135 keep working.
   allow_downloads?: boolean;
+  // Global default sort order (#782). Backfilled from the previous alphabetical
+  // order on migration, so existing galleries don't reshuffle.
+  display_order?: number;
+  // Per-event override position (#782). Non-null on the /event/:id response when
+  // this gallery has customised its order; null means it follows the default.
+  override_position?: number | null;
   created_at: string;
 }
 
@@ -61,5 +67,31 @@ export const categoriesService = {
   // Delete a category
   async deleteCategory(id: number): Promise<void> {
     await api.delete(`/admin/categories/${id}`);
+  },
+
+  // Set a per-event order override (#782). Sends the full ordered id list for
+  // this event — globals + event-specific — and returns the resolved order.
+  // Overrides the global default for this gallery only.
+  async reorderCategories(eventId: number, orderedIds: number[]): Promise<PhotoCategory[]> {
+    const response = await api.post<PhotoCategory[]>('/admin/categories/reorder', {
+      event_id: eventId,
+      orderedIds
+    });
+    return response.data;
+  },
+
+  // Clear an event's override — revert this gallery to the global default order.
+  async resetEventOrder(eventId: number): Promise<PhotoCategory[]> {
+    const response = await api.delete<PhotoCategory[]>(`/admin/categories/reorder/${eventId}`);
+    return response.data;
+  },
+
+  // Set the GLOBAL default order for shared categories (#782). Applies to every
+  // gallery that hasn't set its own override.
+  async reorderGlobalCategories(orderedIds: number[]): Promise<PhotoCategory[]> {
+    const response = await api.post<PhotoCategory[]>('/admin/categories/reorder-global', {
+      orderedIds
+    });
+    return response.data;
   }
 };
