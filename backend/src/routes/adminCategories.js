@@ -4,6 +4,7 @@ const { db, logActivity } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
+const { getEventCategoriesOrdered } = require('../utils/categoryOrder');
 const logger = require('../utils/logger');
 const router = express.Router();
 
@@ -22,20 +23,12 @@ router.get('/global', adminAuth, requirePermission('settings.view'), async (req,
   }
 });
 
-// Get categories for a specific event (global + event-specific)
+// Get categories for a specific event (global + event-specific), resolved to
+// the event's effective order: per-event override, else global default, else
+// name (#782). Each row carries `override_position` (null when not customised).
 router.get('/event/:eventId', adminAuth, requirePermission('settings.view'), async (req, res) => {
   try {
-    const { eventId } = req.params;
-    
-    const categories = await db('photo_categories')
-      .where(function() {
-        this.where('is_global', formatBoolean(true))
-          .orWhere('event_id', eventId);
-      })
-      .orderBy('is_global', 'desc')
-      .orderBy('display_order', 'asc')
-      .orderBy('name', 'asc');
-
+    const categories = await getEventCategoriesOrdered(req.params.eventId);
     res.json(categories);
   } catch (error) {
     logger.error('Error fetching event categories:', error);
@@ -271,10 +264,10 @@ router.delete('/:id', adminAuth, requirePermission('settings.edit'), async (req,
   }
 });
 
-// Reorder an event's categories (#782). Mirrors the event_types reorder
-// pattern: the client sends the full ordered list of category ids and we
-// rewrite display_order in one transaction. Scoped to a single event's own
-// (non-global) categories — global categories keep their global order.
+// Set a per-event category order override (#782). The client sends the full
+// ordered id list for THIS event — globals + event-specific, interleaved — and
+// we replace the event's override rows in one transaction. This overrides the
+// global default order for this gallery only.
 router.post('/reorder', adminAuth, requirePermission('settings.edit'), [
   body('event_id').isInt().withMessage('event_id must be an integer'),
   body('orderedIds').isArray({ min: 1 }).withMessage('orderedIds must be a non-empty array'),
@@ -289,46 +282,100 @@ router.post('/reorder', adminAuth, requirePermission('settings.edit'), [
     const eventId = parseInt(req.body.event_id, 10);
     const orderedIds = req.body.orderedIds.map((id) => parseInt(id, 10));
 
-    // Only this event's own categories may be reordered. Reject the request
-    // if any id doesn't belong to the event (or is a shared global category).
-    const owned = await db('photo_categories')
-      .where('event_id', eventId)
-      .where('is_global', formatBoolean(false))
+    // Every id must be a category available to this event: a shared global OR
+    // one of the event's own categories. Anything else is out of scope.
+    const available = await db('photo_categories')
+      .where(function() {
+        this.where('is_global', formatBoolean(true)).orWhere('event_id', eventId);
+      })
       .pluck('id');
-    const ownedSet = new Set(owned);
-    const invalid = orderedIds.filter((id) => !ownedSet.has(id));
+    const availableSet = new Set(available);
+    const invalid = orderedIds.filter((id) => !availableSet.has(id));
     if (invalid.length > 0) {
-      return res.status(400).json({ error: 'One or more categories do not belong to this event' });
+      return res.status(400).json({ error: 'One or more categories are not available for this event' });
     }
 
     await db.transaction(async (trx) => {
-      for (let i = 0; i < orderedIds.length; i += 1) {
-        await trx('photo_categories')
-          .where('id', orderedIds[i])
-          .update({ display_order: i + 1 });
-      }
+      await trx('event_category_order').where('event_id', eventId).del();
+      await trx('event_category_order').insert(
+        orderedIds.map((id, i) => ({ event_id: eventId, category_id: id, position: i + 1 }))
+      );
     });
 
     // Log activity after commit (avoids a SQLite in-transaction global write).
-    await logActivity('categories_reordered',
+    await logActivity('event_category_order_set',
       { eventId, count: orderedIds.length },
       eventId,
       { type: 'admin', id: req.admin.id, name: req.admin.username }
     );
 
-    const categories = await db('photo_categories')
-      .where(function() {
-        this.where('is_global', formatBoolean(true))
-          .orWhere('event_id', eventId);
-      })
-      .orderBy('is_global', 'desc')
-      .orderBy('display_order', 'asc')
-      .orderBy('name', 'asc');
-
-    res.json(categories);
+    res.json(await getEventCategoriesOrdered(eventId));
   } catch (error) {
     logger.error('Error reordering categories:', error);
     res.status(500).json({ error: 'Failed to reorder categories' });
+  }
+});
+
+// Clear an event's override — revert this gallery to the global default order.
+router.delete('/reorder/:eventId', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+  try {
+    const eventId = parseInt(req.params.eventId, 10);
+    await db('event_category_order').where('event_id', eventId).del();
+
+    await logActivity('event_category_order_reset',
+      { eventId },
+      eventId,
+      { type: 'admin', id: req.admin.id, name: req.admin.username }
+    );
+
+    res.json(await getEventCategoriesOrdered(eventId));
+  } catch (error) {
+    logger.error('Error resetting category order:', error);
+    res.status(500).json({ error: 'Failed to reset category order' });
+  }
+});
+
+// Set the GLOBAL default order for shared (global) categories (#782). Applies
+// to every gallery that hasn't set its own override. Rewrites display_order.
+router.post('/reorder-global', adminAuth, requirePermission('settings.edit'), [
+  body('orderedIds').isArray({ min: 1 }).withMessage('orderedIds must be a non-empty array'),
+  body('orderedIds.*').isInt().withMessage('Each id must be an integer')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const orderedIds = req.body.orderedIds.map((id) => parseInt(id, 10));
+
+    const globals = await db('photo_categories').where('is_global', formatBoolean(true)).pluck('id');
+    const globalsSet = new Set(globals);
+    const invalid = orderedIds.filter((id) => !globalsSet.has(id));
+    if (invalid.length > 0) {
+      return res.status(400).json({ error: 'One or more categories are not global' });
+    }
+
+    await db.transaction(async (trx) => {
+      for (let i = 0; i < orderedIds.length; i += 1) {
+        await trx('photo_categories').where('id', orderedIds[i]).update({ display_order: i + 1 });
+      }
+    });
+
+    await logActivity('global_category_order_set',
+      { count: orderedIds.length },
+      null,
+      { type: 'admin', id: req.admin.id, name: req.admin.username }
+    );
+
+    const categories = await db('photo_categories')
+      .where('is_global', formatBoolean(true))
+      .orderBy('display_order', 'asc')
+      .orderBy('name', 'asc');
+    res.json(categories);
+  } catch (error) {
+    logger.error('Error reordering global categories:', error);
+    res.status(500).json({ error: 'Failed to reorder global categories' });
   }
 });
 
