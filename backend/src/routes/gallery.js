@@ -576,6 +576,10 @@ router.get('/:slug/photos', verifyGalleryAccess, resolveGuest, async (req, res) 
       const categoryDetails = await db('photo_categories')
         .whereIn('id', usedCategoryIds)
         .select('id', 'name', 'slug', 'is_global', 'hero_photo_id', 'allow_downloads')
+        // Admin-defined per-event order (#782); globals grouped first, then
+        // event-specific by display_order. Falls back to name for equal order.
+        .orderBy('is_global', 'desc')
+        .orderBy('display_order', 'asc')
         .orderBy('name', 'asc');
 
       categories = categoryDetails.map(cat => ({

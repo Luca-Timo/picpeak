@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, X, Loader2, Image as ImageIcon, Check, Download, DownloadCloud } from 'lucide-react';
+import { Plus, X, Loader2, Image as ImageIcon, Check, Download, DownloadCloud, ArrowUp, ArrowDown } from 'lucide-react';
 import { categoriesService, type PhotoCategory } from '../../services/categories.service';
 import { photosService } from '../../services/photos.service';
 import { Button, Card, AuthenticatedImage } from '../common';
@@ -30,8 +30,14 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
     enabled: heroPickerCategoryId !== null,
   });
 
-  // Filter to show only event-specific categories
-  const eventCategories = categories.filter(cat => !cat.is_global);
+  // Event-specific categories, already sorted by display_order server-side.
+  // Kept in local state so the up/down reorder buttons feel instant; resynced
+  // whenever the query data changes (e.g. after a reorder persists).
+  const serverEventCategories = categories.filter(cat => !cat.is_global);
+  const [eventCategories, setEventCategories] = useState<PhotoCategory[]>(serverEventCategories);
+  useEffect(() => {
+    setEventCategories(categories.filter(cat => !cat.is_global));
+  }, [categories]);
 
   // Create category mutation
   const createMutation = useMutationWithToast({
@@ -84,6 +90,24 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
         : t('categories.downloadsDisabled', 'Downloads disabled for this category'),
     errorMessage: t('categories.failedToToggleDownloads', 'Failed to update download permission'),
   });
+
+  // Reorder event-specific categories (#782). Sends the full ordered id list;
+  // the backend rewrites display_order. See LineItemsTable / WhatsAppTab for
+  // the same up/down-button reorder convention (no drag-and-drop dependency).
+  const reorderMutation = useMutationWithToast({
+    mutationFn: (orderedIds: number[]) => categoriesService.reorderCategories(eventId, orderedIds),
+    invalidateKeys: [['event-categories', eventId]],
+    errorMessage: t('categories.failedToReorder', 'Failed to update category order'),
+  });
+
+  const handleMove = (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= eventCategories.length) return;
+    const next = [...eventCategories];
+    [next[index], next[target]] = [next[target], next[index]];
+    setEventCategories(next); // optimistic — instant feedback
+    reorderMutation.mutate(next.map(c => c.id));
+  };
 
   const handleCreate = () => {
     if (newCategoryName.trim()) {
@@ -178,7 +202,7 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
         </p>
       ) : (
         <div className="space-y-2">
-          {eventCategories.map((category) => {
+          {eventCategories.map((category, index) => {
             const heroPhoto = category.hero_photo_id
               ? photos.find(p => p.id === category.hero_photo_id)
               : null;
@@ -209,6 +233,27 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
                   <span className="text-sm text-neutral-700 dark:text-neutral-300 truncate">{category.name}</span>
                 </div>
                 <div className="flex items-center gap-1">
+                  {/* Reorder controls (#782). Up/down buttons match the invoice
+                      line-item convention; the gallery renders categories in
+                      this order. */}
+                  <button
+                    onClick={() => handleMove(index, -1)}
+                    disabled={index === 0 || reorderMutation.isPending}
+                    className="p-1 text-neutral-400 dark:text-neutral-500 hover:text-accent-dark disabled:opacity-30 disabled:hover:text-neutral-400 transition-colors"
+                    title={t('categories.moveUp', 'Move up')}
+                    aria-label={t('categories.moveUp', 'Move up')}
+                  >
+                    <ArrowUp className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={() => handleMove(index, 1)}
+                    disabled={index === eventCategories.length - 1 || reorderMutation.isPending}
+                    className="p-1 text-neutral-400 dark:text-neutral-500 hover:text-accent-dark disabled:opacity-30 disabled:hover:text-neutral-400 transition-colors"
+                    title={t('categories.moveDown', 'Move down')}
+                    aria-label={t('categories.moveDown', 'Move down')}
+                  >
+                    <ArrowDown className="w-3 h-3" />
+                  </button>
                   {/* Per-category downloads toggle (#640). Green DownloadCloud
                       icon when on, struck-through outline when off. The
                       event-level `allow_downloads` AND's with this — if the
