@@ -75,6 +75,11 @@ describe('event type deletion during the setup window (#800)', () => {
 
     expect(await db('event_types').where({ slug_prefix: 'wedding' }).first()).toBeFalsy();
     expect(await db('email_templates').where({ template_key: 'event_reminder_wedding' }).first()).toBeFalsy();
+
+    // The deleted slug must NOT stay creatable through the legacy fallback —
+    // the live catalog is authoritative while it has rows.
+    expect(await eventTypeService.isValidEventType('wedding')).toBe(false);
+    expect(await eventTypeService.isValidEventType('birthday')).toBe(true);
   });
 
   it('does not resurrect reminder templates for deleted types on the next self-heal pass', async () => {
@@ -117,5 +122,29 @@ describe('event type deletion during the setup window (#800)', () => {
     expect(resolvedRow).toBeTruthy();
 
     await db('event_types').where({ id: other.id }).update({ is_active: 1 });
+  });
+
+  it('fails closed when the completion marker row is missing', async () => {
+    // A portable-backup restore can replace app_settings with a set that
+    // predates migration 161 (which will not rerun) — absence must mean
+    // "configured instance", never an open deletion window.
+    await db('app_settings').where({ setting_key: 'setup_wizard_completed' }).del();
+    expect(await setupService.isSetupWizardCompleted()).toBe(true);
+    await setupService.markSetupWizardCompleted();
+  });
+
+  it('refuses to delete the last remaining event type', async () => {
+    // Reduce the catalog to a single custom type via direct db writes (the
+    // service paths are already covered above), then hit the guard.
+    const solo = await eventTypeService.createEventType({ name: 'Solo', slug_prefix: 'solo' });
+    await db('events').del();
+    await db('event_types').whereNot('id', solo.id).del();
+
+    await expect(eventTypeService.deleteEventType(solo.id))
+      .rejects.toMatchObject({ code: 'LAST_TYPE' });
+
+    // Deactivating it would empty the ACTIVE catalog just the same.
+    await expect(eventTypeService.updateEventType(solo.id, { is_active: false }))
+      .rejects.toMatchObject({ code: 'LAST_ACTIVE' });
   });
 });

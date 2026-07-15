@@ -28,7 +28,12 @@ const SETUP_TOKEN_KEY = 'setup_token';
 const SETUP_WIZARD_COMPLETED_KEY = 'setup_wizard_completed';
 
 async function isSetupWizardCompleted() {
-  return (await getAppSetting(SETUP_WIZARD_COMPLETED_KEY)) === true;
+  // Fail closed: only an explicit stored `false` (seeded by migration 161 on
+  // a fresh, admin-less install) opens the deletion window. A missing row —
+  // e.g. app_settings replaced by a portable-backup restore that predates the
+  // migration, which will not rerun — means a configured instance, not a
+  // first run.
+  return (await getAppSetting(SETUP_WIZARD_COMPLETED_KEY)) !== false;
 }
 
 async function markSetupWizardCompleted() {

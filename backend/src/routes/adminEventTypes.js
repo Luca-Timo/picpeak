@@ -178,7 +178,7 @@ router.put('/:id', adminAuth, requirePermission('settings.edit'), [
     if (error.code === 'NOT_FOUND') {
       return res.status(404).json({ error: error.message });
     }
-    if (error.code === 'DUPLICATE_SLUG_PREFIX') {
+    if (error.code === 'DUPLICATE_SLUG_PREFIX' || error.code === 'LAST_ACTIVE') {
       return res.status(400).json({ error: error.message });
     }
 
@@ -216,7 +216,7 @@ router.delete('/:id', adminAuth, requirePermission('settings.edit'), [
     if (error.code === 'NOT_FOUND') {
       return res.status(404).json({ error: error.message });
     }
-    if (error.code === 'SYSTEM_TYPE' || error.code === 'IN_USE') {
+    if (error.code === 'SYSTEM_TYPE' || error.code === 'IN_USE' || error.code === 'LAST_TYPE') {
       return res.status(400).json({ error: error.message });
     }
 

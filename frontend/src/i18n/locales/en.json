@@ -3511,7 +3511,8 @@
       "hint": "The URL prefix appears in gallery links (e.g. family-smith-2025-06-01). Icons, themes and order can be tuned later in Settings → Event Types.",
       "atLeastOne": "Keep at least one event type — every gallery needs one.",
       "loadFailed": "Could not load the event types — you can adjust them later in Settings → Event Types.",
-      "saveFailed": "Some event type changes could not be saved — you can finish them in Settings → Event Types."
+      "saveFailed": "Some event type changes could not be saved — you can finish them in Settings → Event Types.",
+      "deleteFailed": "A deletion failed — the list has been reloaded. Built-in types can only be deleted here, so retry or continue with them kept."
     },
     "community": {
       "subtitle": "You're all set",

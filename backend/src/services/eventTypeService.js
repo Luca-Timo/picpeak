@@ -67,13 +67,20 @@ const getEventTypeBySlugPrefix = async (slugPrefix) => {
 const isValidEventType = async (slugPrefix) => {
   const normalized = slugPrefix.toLowerCase();
 
-  // Check in database
+  // The live catalog is authoritative: a row decides by its active flag, and
+  // a slug the admin deleted (setup wizard, #800) or deactivated must NOT
+  // sneak back in through the legacy list below.
   const eventType = await getEventTypeBySlugPrefix(normalized);
-  if (eventType && eventType.is_active) {
-    return true;
+  if (eventType) {
+    return Boolean(eventType.is_active);
+  }
+  const anyType = await db('event_types').first('id');
+  if (anyType) {
+    return false;
   }
 
-  // Legacy fallback: Accept old hardcoded values for backward compatibility
+  // Legacy fallback: only for a degenerate install with an EMPTY catalog
+  // (pre-catalog schema drift) — accept the old hardcoded values.
   const legacyTypes = ['wedding', 'birthday', 'corporate', 'other'];
   return legacyTypes.includes(normalized);
 };
@@ -198,6 +205,19 @@ const updateEventType = async (id, updates) => {
   }
 
   if (updates.is_active !== undefined) {
+    // Deactivating the last active type would empty the ACTIVE catalog and
+    // brick event creation (unknown slugs are rejected since #800).
+    if (updates.is_active === false && eventType.is_active) {
+      const otherActive = await db('event_types')
+        .whereNot('id', id)
+        .where('is_active', formatBoolean(true))
+        .first('id');
+      if (!otherActive) {
+        const error = new Error('Cannot deactivate the last active event type — activate another one first.');
+        error.code = 'LAST_ACTIVE';
+        throw error;
+      }
+    }
     updateData.is_active = formatBoolean(updates.is_active);
   }
 
@@ -290,6 +310,28 @@ const deleteEventType = async (id) => {
     const error = new Error(`Cannot delete: ${eventsUsingType.count} events are using this type. Deactivate it instead or reassign those events.`);
     error.code = 'IN_USE';
     throw error;
+  }
+
+  // Never delete the last remaining type — and never delete the last ACTIVE
+  // one either: event creation and the quote/contract default-type resolution
+  // both need at least one active catalog entry.
+  const remaining = await db('event_types').whereNot('id', id).count('id as count').first();
+  if (!remaining || parseInt(remaining.count) === 0) {
+    const error = new Error('Cannot delete the last event type — at least one must remain.');
+    error.code = 'LAST_TYPE';
+    throw error;
+  }
+  if (eventType.is_active) {
+    const remainingActive = await db('event_types')
+      .whereNot('id', id)
+      .where('is_active', formatBoolean(true))
+      .count('id as count')
+      .first();
+    if (!remainingActive || parseInt(remainingActive.count) === 0) {
+      const error = new Error('Cannot delete the last active event type — activate another one first.');
+      error.code = 'LAST_TYPE';
+      throw error;
+    }
   }
 
   // Quotes carry event_type too (migration 146) — a dangling slug there would

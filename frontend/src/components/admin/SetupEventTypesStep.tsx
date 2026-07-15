@@ -66,9 +66,16 @@ export const SetupEventTypesStep: React.FC<Props> = ({ onDone }) => {
     setRows((prev) => (prev ? [...prev, { name: '', slug_prefix: '', emoji: '📷' }] : prev));
   };
 
-  // Apply the diff (delete → update → create), then advance. Best-effort like
-  // the other wizard steps — a partial failure warns but never traps the user;
-  // everything here is editable later in Settings → Event Types.
+  // Apply the diff, then advance. Ordering matters twice over: deletes first
+  // frees a default's slug for a rename/re-create ("replace Wedding with my
+  // own 'wedding'"), but deleting everything BEFORE a replacement exists could
+  // empty the catalog if the creation then fails. So: when at least one
+  // existing row is kept the catalog can never go empty → delete first; when
+  // the user replaces ALL types → create first and only delete once at least
+  // one replacement actually persisted. (The backend additionally refuses
+  // deleting the last remaining type.) Best-effort like the other wizard
+  // steps — a partial failure warns but never traps the user; everything here
+  // is editable later in Settings → Event Types.
   const handleContinue = async () => {
     if (!rows) return;
     const kept = rows.filter((r) => r.name.trim() && r.slug_prefix.trim());
@@ -78,34 +85,74 @@ export const SetupEventTypesStep: React.FC<Props> = ({ onDone }) => {
     }
     setSaving(true);
     let failures = 0;
-    for (const id of deletedIds) {
-      try {
-        await eventTypesService.deleteEventType(id);
-      } catch {
-        failures += 1;
-      }
-    }
-    for (const row of kept) {
-      try {
-        if (row.id !== undefined) {
-          const before = original.get(row.id);
-          const updates: { name?: string; slug_prefix?: string } = {};
-          if (before && row.name.trim() !== before.name) updates.name = row.name.trim();
-          if (before && row.slug_prefix !== before.slug_prefix) updates.slug_prefix = row.slug_prefix;
-          if (Object.keys(updates).length > 0) {
-            await eventTypesService.updateEventType(row.id, updates);
-          }
-        } else {
-          await eventTypesService.createEventType({
-            name: row.name.trim(),
-            slug_prefix: row.slug_prefix,
-            emoji: row.emoji,
-          });
+    let deleteFailures = 0;
+    let createdOk = 0;
+
+    const applyDeletes = async () => {
+      for (const id of deletedIds) {
+        try {
+          await eventTypesService.deleteEventType(id);
+        } catch {
+          deleteFailures += 1;
         }
-      } catch {
-        failures += 1;
       }
+    };
+    const applyCreatesAndUpdates = async () => {
+      for (const row of kept) {
+        try {
+          if (row.id !== undefined) {
+            const before = original.get(row.id);
+            const updates: { name?: string; slug_prefix?: string } = {};
+            if (before && row.name.trim() !== before.name) updates.name = row.name.trim();
+            if (before && row.slug_prefix !== before.slug_prefix) updates.slug_prefix = row.slug_prefix;
+            if (Object.keys(updates).length > 0) {
+              await eventTypesService.updateEventType(row.id, updates);
+            }
+          } else {
+            await eventTypesService.createEventType({
+              name: row.name.trim(),
+              slug_prefix: row.slug_prefix,
+              emoji: row.emoji,
+            });
+            createdOk += 1;
+          }
+        } catch {
+          failures += 1;
+        }
+      }
+    };
+
+    const keptExisting = kept.filter((r) => r.id !== undefined).length;
+    if (keptExisting > 0) {
+      await applyDeletes();
+      await applyCreatesAndUpdates();
+    } else {
+      await applyCreatesAndUpdates();
+      if (deletedIds.length > 0 && createdOk === 0) {
+        // Every replacement failed — deleting now would empty the catalog.
+        // Keep the seeded types and stay on the step.
+        setSaving(false);
+        toast.error(t('setup.eventTypes.atLeastOne'));
+        return;
+      }
+      await applyDeletes();
     }
+
+    // A failed DELETE must not slip past this step: system types are only
+    // deletable inside this window, so once the wizard finishes the request
+    // can never be retried. Reload the live catalog and stay for a retry.
+    if (deleteFailures > 0) {
+      try {
+        const types = await eventTypesService.getEventTypes();
+        setOriginal(new Map(types.map((et) => [et.id, et])));
+        setRows(types.map((et) => ({ id: et.id, name: et.name, slug_prefix: et.slug_prefix, emoji: et.emoji })));
+      } catch { /* keep the local rows if the reload fails */ }
+      setDeletedIds([]);
+      setSaving(false);
+      toast.error(t('setup.eventTypes.deleteFailed'));
+      return;
+    }
+
     setSaving(false);
     if (failures > 0) toast.warn(t('setup.eventTypes.saveFailed'));
     onDone();
