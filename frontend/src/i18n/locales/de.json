@@ -3611,6 +3611,20 @@
       "finish": "Einrichtung abschließen",
       "saveFailed": "Einige Einstellungen konnten nicht gespeichert werden — Sie können sie in den Einstellungen abschließen."
     },
+    "eventTypes": {
+      "subtitle": "Welche Veranstaltungen fotografieren Sie?",
+      "intro": "Veranstaltungsarten ordnen Ihre Galerien — jede Art erhält ein eigenes URL-Präfix und Standard-Theme. Die Vorschläge unten sind nur ein Startpunkt: Benennen Sie sie um, entfernen Sie Unnötiges oder fügen Sie eigene hinzu. Nur jetzt können die mitgelieferten Arten gelöscht werden; später lassen sie sich nur umbenennen oder deaktivieren.",
+      "nameLabel": "Anzeigename",
+      "namePlaceholder": "z.B. Familienshooting",
+      "slugLabel": "URL-Präfix",
+      "slugPlaceholder": "z.B. familie",
+      "add": "Veranstaltungsart hinzufügen",
+      "hint": "Das URL-Präfix erscheint in Galerie-Links (z.B. familie-mueller-2025-06-01). Symbole, Themes und Reihenfolge können Sie später unter Einstellungen → Veranstaltungsarten anpassen.",
+      "atLeastOne": "Behalten Sie mindestens eine Veranstaltungsart — jede Galerie braucht eine.",
+      "loadFailed": "Veranstaltungsarten konnten nicht geladen werden — Sie können sie später unter Einstellungen → Veranstaltungsarten anpassen.",
+      "saveFailed": "Einige Änderungen konnten nicht gespeichert werden — Sie können sie unter Einstellungen → Veranstaltungsarten abschließen.",
+      "deleteFailed": "Eine Löschung ist fehlgeschlagen — die Liste wurde neu geladen. Mitgelieferte Arten können nur hier gelöscht werden; versuchen Sie es erneut oder fahren Sie mit ihnen fort."
+    },
     "community": {
       "subtitle": "Alles bereit",
       "mission": "PicPeak gibt es, damit Fotografinnen und Fotografen ihre Galerien und Kundendaten selbst besitzen — auf dem eigenen Server, ohne monatliche SaaS-Gebühren. Danke, dass du es ausprobierst.",

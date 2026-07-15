@@ -182,6 +182,18 @@ export const CreateEventPage: React.FC = () => {
     [eventTypes]
   );
 
+  // The hardcoded initial form value ('wedding') may not exist in the live
+  // catalog — the setup wizard can rename or delete the defaults (#800), and
+  // the backend now rejects unknown slugs. Snap to the first active type; a
+  // user-picked value is always in the list, so this never fights the user.
+  useEffect(() => {
+    if (!availableEventTypes.length) return;
+    if (!availableEventTypes.some(t => t.value === formData.event_type)) {
+      setFormData(prev => ({ ...prev, event_type: availableEventTypes[0].value }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableEventTypes, formData.event_type]);
+
   // Fetch default settings
   const { data: settings } = useQuery({
     queryKey: ['admin-settings'],

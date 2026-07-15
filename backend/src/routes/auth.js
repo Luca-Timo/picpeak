@@ -45,6 +45,17 @@ const router = express.Router();
 async function completeAdminLogin(req, res, admin, ipAddress, userAgent, lockoutKey) {
   await trackSuccessfulLogin(lockoutKey, ipAddress, userAgent);
 
+  // A normal login means the first-run wizard is over — the wizard never hits
+  // this route (setup sets its cookie directly). Close the system-event-type
+  // deletion window durably even when the wizard was abandoned mid-way (#800).
+  // Best-effort: a failure here must never block a login.
+  try {
+    const setupService = require('../services/setupService');
+    if (!(await setupService.isSetupWizardCompleted())) {
+      await setupService.markSetupWizardCompleted();
+    }
+  } catch (_) { /* best-effort */ }
+
   await db('admin_users').where('id', admin.id).update({
     last_login: new Date(),
     last_login_ip: ipAddress

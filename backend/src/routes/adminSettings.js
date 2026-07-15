@@ -31,6 +31,19 @@ const watermarkGeneratorService = require('../services/watermarkGeneratorService
 
 const getStoragePath = () => process.env.STORAGE_PATH || path.join(__dirname, '../../../storage');
 
+// Reserved first-run bootstrap keys — never writable through the generic
+// settings upserts in this file: setup_wizard_completed is a one-way marker
+// (#800; writing false would reopen system-event-type deletion) and
+// setup_token is the first-run bootstrap secret. Every handler that loops
+// arbitrary request keys into app_settings must strip these first.
+const RESERVED_SETTING_KEYS = ['setup_wizard_completed', 'setup_token'];
+const stripReservedSettingKeys = (settings) => {
+  for (const key of RESERVED_SETTING_KEYS) {
+    delete settings[key];
+  }
+  return settings;
+};
+
 // Configure multer for logo uploads
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
@@ -906,7 +919,7 @@ router.put('/theme', adminAuth, requirePermission('settings.edit'), async (req, 
 // Update general settings
 router.put('/general', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
-    const settings = { ...req.body };
+    const settings = stripReservedSettingKeys({ ...req.body });
     let uploadLimitTouched = false;
 
     const publicSiteKeysTouched = Object.keys(settings).some((key) => key.startsWith('general_public_site_'));
@@ -1017,7 +1030,7 @@ router.put('/general', adminAuth, requirePermission('settings.edit'), async (req
 // Update security settings
 router.put('/security', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
-    const settings = req.body;
+    const settings = stripReservedSettingKeys({ ...req.body });
 
     // Update or insert each setting
     for (const [key, value] of Object.entries(settings)) {
@@ -1055,7 +1068,7 @@ router.put('/security', adminAuth, requirePermission('settings.edit'), async (re
 // Update analytics settings
 router.put('/analytics', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
-    const settings = req.body;
+    const settings = stripReservedSettingKeys({ ...req.body });
 
     // Validate the provider switch (#663 Phase 1). Reject unknown values
     // so the dashboard route's factory doesn't have to defensively guard.
@@ -1110,7 +1123,7 @@ router.put('/analytics', adminAuth, requirePermission('settings.edit'), async (r
 // Update SEO settings
 router.put('/seo', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
-    const settings = req.body;
+    const settings = stripReservedSettingKeys({ ...req.body });
 
     // Validate seo_blocked_ai_agents is an array of strings
     if (settings.seo_blocked_ai_agents !== undefined) {

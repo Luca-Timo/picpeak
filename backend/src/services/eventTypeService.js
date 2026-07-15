@@ -67,13 +67,20 @@ const getEventTypeBySlugPrefix = async (slugPrefix) => {
 const isValidEventType = async (slugPrefix) => {
   const normalized = slugPrefix.toLowerCase();
 
-  // Check in database
+  // The live catalog is authoritative: a row decides by its active flag, and
+  // a slug the admin deleted (setup wizard, #800) or deactivated must NOT
+  // sneak back in through the legacy list below.
   const eventType = await getEventTypeBySlugPrefix(normalized);
-  if (eventType && eventType.is_active) {
-    return true;
+  if (eventType) {
+    return Boolean(eventType.is_active);
+  }
+  const anyType = await db('event_types').first('id');
+  if (anyType) {
+    return false;
   }
 
-  // Legacy fallback: Accept old hardcoded values for backward compatibility
+  // Legacy fallback: only for a degenerate install with an EMPTY catalog
+  // (pre-catalog schema drift) — accept the old hardcoded values.
   const legacyTypes = ['wedding', 'birthday', 'corporate', 'other'];
   return legacyTypes.includes(normalized);
 };
@@ -198,6 +205,19 @@ const updateEventType = async (id, updates) => {
   }
 
   if (updates.is_active !== undefined) {
+    // Deactivating the last active type would empty the ACTIVE catalog and
+    // brick event creation (unknown slugs are rejected since #800).
+    if (updates.is_active === false && eventType.is_active) {
+      const otherActive = await db('event_types')
+        .whereNot('id', id)
+        .where('is_active', formatBoolean(true))
+        .first('id');
+      if (!otherActive) {
+        const error = new Error('Cannot deactivate the last active event type — activate another one first.');
+        error.code = 'LAST_ACTIVE';
+        throw error;
+      }
+    }
     updateData.is_active = formatBoolean(updates.is_active);
   }
 
@@ -250,6 +270,12 @@ const updateEventType = async (id, updates) => {
 
 /**
  * Delete an event type
+ *
+ * System types are protected — EXCEPT during the first-run setup wizard
+ * (setup_wizard_completed flag unset, see setupService), where the admin may
+ * replace the seeded defaults before anything references them (#800). The
+ * in-use checks below still apply in that window as defense in depth.
+ *
  * @param {number} id - Event type ID
  * @returns {Promise<Object>}
  */
@@ -261,11 +287,17 @@ const deleteEventType = async (id) => {
     throw error;
   }
 
-  // Prevent deletion of system types
+  // Prevent deletion of system types once the setup wizard has completed.
   if (eventType.is_system) {
-    const error = new Error('Cannot delete system event types. You can deactivate them instead.');
-    error.code = 'SYSTEM_TYPE';
-    throw error;
+    // Lazy require: keeps the module graph flat (setupService has no
+    // dependency back on this service, but the require is only needed on
+    // this rare path).
+    const { isSetupWizardCompleted } = require('./setupService');
+    if (await isSetupWizardCompleted()) {
+      const error = new Error('Cannot delete system event types. You can deactivate them instead.');
+      error.code = 'SYSTEM_TYPE';
+      throw error;
+    }
   }
 
   // Check if any events use this type
@@ -280,7 +312,62 @@ const deleteEventType = async (id) => {
     throw error;
   }
 
-  await db('event_types').where('id', id).del();
+  // Never delete the last remaining type — and never delete the last ACTIVE
+  // one either: event creation and the quote/contract default-type resolution
+  // both need at least one active catalog entry.
+  const remaining = await db('event_types').whereNot('id', id).count('id as count').first();
+  if (!remaining || parseInt(remaining.count) === 0) {
+    const error = new Error('Cannot delete the last event type — at least one must remain.');
+    error.code = 'LAST_TYPE';
+    throw error;
+  }
+  if (eventType.is_active) {
+    const remainingActive = await db('event_types')
+      .whereNot('id', id)
+      .where('is_active', formatBoolean(true))
+      .count('id as count')
+      .first();
+    if (!remainingActive || parseInt(remainingActive.count) === 0) {
+      const error = new Error('Cannot delete the last active event type — activate another one first.');
+      error.code = 'LAST_TYPE';
+      throw error;
+    }
+  }
+
+  // Quotes carry event_type too (migration 146) — a dangling slug there would
+  // corrupt the quote→event conversion default chain.
+  if (await hasColumnCached('quotes', 'event_type')) {
+    const quotesUsingType = await db('quotes')
+      .where('event_type', eventType.slug_prefix)
+      .count('id as count')
+      .first();
+    if (quotesUsingType && parseInt(quotesUsingType.count) > 0) {
+      const error = new Error(`Cannot delete: ${quotesUsingType.count} quotes are using this type. Deactivate it instead.`);
+      error.code = 'IN_USE';
+      throw error;
+    }
+  }
+
+  // Resolve schema lookups BEFORE opening the transaction — a global-db read
+  // inside a SQLite transaction (single connection) deadlocks. Same pattern
+  // as the rename cascade in updateEventType above.
+  const hasTranslations = await db.schema.hasTable('email_template_translations');
+
+  await db.transaction(async (trx) => {
+    await trx('event_types').where('id', id).del();
+    // Drop the per-type reminder template with the type, or it lingers as an
+    // orphan (invisible in the Reminder Emails tab, which derives its rows
+    // from the live catalog).
+    const tpl = await trx('email_templates')
+      .where({ template_key: `event_reminder_${eventType.slug_prefix}` })
+      .first('id');
+    if (tpl) {
+      if (hasTranslations) {
+        await trx('email_template_translations').where({ template_id: tpl.id }).del();
+      }
+      await trx('email_templates').where({ id: tpl.id }).del();
+    }
+  });
 
   return { success: true, deleted: eventType };
 };
