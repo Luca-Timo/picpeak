@@ -154,39 +154,45 @@ export const PhotoFilterBar: React.FC<PhotoFilterBarProps> = ({
 
       {/* Category and Feedback Filters */}
       <div className="space-y-3">
-        {/* Categories Row */}
-        {categories && categories.length > 0 && (
+        {/* Categories + desktop feedback row. Rendered whenever EITHER part
+            has content: the desktop feedback chips must not depend on the
+            (optional) categories existing, or category-less galleries show
+            no feedback filter at all on desktop (#802 — the lg:hidden
+            fallback block below only covers mobile/tablet). */}
+        {((categories && categories.length > 0) || (feedbackEnabled && !!onFilterChange)) && (
           <div className="flex items-start lg:items-center justify-between flex-col lg:flex-row gap-3">
             {/* Categories: keep in a horizontal scroll container */}
-            <div className="w-full overflow-x-auto pb-2 lg:pb-0">
-              <div className="flex items-center gap-2 min-w-max">
-                <Button
-                  variant={selectedCategoryId === null ? 'primary' : 'outline'}
-                  size="sm"
-                  onClick={() => onCategoryChange(null)}
-                  leftIcon={<Grid className="w-3 h-3 md:w-4 md:h-4" />}
-                  className="text-xs md:text-sm whitespace-nowrap flex-shrink-0"
-                >
-                  {showMediaFilter ? t('gallery.allMedia', 'All media') : t('gallery.allPhotos')} ({photos.length})
-                </Button>
-                {categories.map((category) => {
-                  const categoryPhotoCount = photos.filter(p => p.category_id === category.id).length;
-                  if (categoryPhotoCount === 0) return null;
-                  
-                  return (
-                    <Button
-                      key={category.id}
-                      variant={selectedCategoryId === category.id ? 'primary' : 'outline'}
-                      size="sm"
-                      onClick={() => onCategoryChange(category.id)}
-                      className="text-xs md:text-sm whitespace-nowrap flex-shrink-0"
-                    >
-                      {category.name} ({categoryPhotoCount})
-                    </Button>
-                  );
-                })}
+            {categories && categories.length > 0 && (
+              <div className="w-full overflow-x-auto pb-2 lg:pb-0">
+                <div className="flex items-center gap-2 min-w-max">
+                  <Button
+                    variant={selectedCategoryId === null ? 'primary' : 'outline'}
+                    size="sm"
+                    onClick={() => onCategoryChange(null)}
+                    leftIcon={<Grid className="w-3 h-3 md:w-4 md:h-4" />}
+                    className="text-xs md:text-sm whitespace-nowrap flex-shrink-0"
+                  >
+                    {showMediaFilter ? t('gallery.allMedia', 'All media') : t('gallery.allPhotos')} ({photos.length})
+                  </Button>
+                  {categories.map((category) => {
+                    const categoryPhotoCount = photos.filter(p => p.category_id === category.id).length;
+                    if (categoryPhotoCount === 0) return null;
+
+                    return (
+                      <Button
+                        key={category.id}
+                        variant={selectedCategoryId === category.id ? 'primary' : 'outline'}
+                        size="sm"
+                        onClick={() => onCategoryChange(category.id)}
+                        className="text-xs md:text-sm whitespace-nowrap flex-shrink-0"
+                      >
+                        {category.name} ({categoryPhotoCount})
+                      </Button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Desktop: compact horizontal feedback filter with headline (icons only) */}
             {feedbackEnabled && onFilterChange && (
@@ -244,7 +250,10 @@ export const PhotoFilterBar: React.FC<PhotoFilterBarProps> = ({
               </div>
             )}
 
-            <p className="text-xs md:text-sm text-muted-theme flex-shrink-0 ml-auto">
+            {/* Without categories this row only carries desktop content (the
+                chips are lg-only; mobile has its own block below), so hide
+                the count below lg to keep the mobile layout unchanged. */}
+            <p className={`text-xs md:text-sm text-muted-theme flex-shrink-0 ml-auto ${categories && categories.length > 0 ? '' : 'hidden lg:block'}`}>
               {photoCount} {t('common.media', 'media')}
             </p>
           </div>
