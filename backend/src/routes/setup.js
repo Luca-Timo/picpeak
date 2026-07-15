@@ -10,6 +10,7 @@ const { body, validationResult } = require('express-validator');
 const setupService = require('../services/setupService');
 const { getClientIp } = require('../utils/requestIp');
 const { setAdminAuthCookie } = require('../utils/tokenUtils');
+const { adminAuth } = require('../middleware/auth');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -76,6 +77,21 @@ router.post('/admin', [
     }
     logger.error('[setup] createInitialAdmin failed', { error: err.message });
     return res.status(500).json({ error: 'Setup failed' });
+  }
+});
+
+// Wizard finish marker — unlike the endpoints above this one runs AFTER the
+// admin exists (the wizard is authenticated from the account step onward), so
+// it takes the normal admin auth. One-way: while the flag is unset the seeded
+// SYSTEM event types may be deleted from the wizard's event-types step; once
+// set they are permanently protected (#800).
+router.post('/complete', adminAuth, async (req, res) => {
+  try {
+    await setupService.markSetupWizardCompleted();
+    res.json({ completed: true });
+  } catch (err) {
+    logger.error('[setup] markSetupWizardCompleted failed', { error: err.message });
+    res.status(500).json({ error: 'Failed to mark setup complete' });
   }
 });
 

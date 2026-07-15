@@ -26,6 +26,7 @@ const logger = require('../../utils/logger');
 const { slugify } = require('../../utils/slug');
 const { formatBoolean } = require('../../utils/dbCompat');
 const { parseBooleanInput } = require('../../utils/parsers');
+const { isValidEventType } = require('../../services/eventTypeService');
 
 const router = express.Router();
 
@@ -117,7 +118,14 @@ router.post(
   requireApiScope('admin'),
   [
     body('event_name').isString().trim().notEmpty(),
-    body('event_type').isIn(['wedding', 'birthday', 'corporate', 'other', 'family']),
+    // Validate against the live event_types catalog (admins can rename/delete
+    // the defaults and add custom types), not a hardcoded whitelist (#800).
+    body('event_type').isString().trim().notEmpty().bail().custom(async (value) => {
+      if (!(await isValidEventType(value))) {
+        throw new Error('Unknown event type — must match an active event type slug');
+      }
+      return true;
+    }),
     body('event_date').optional({ nullable: true, checkFalsy: true }).isISO8601(),
     body('customer_name').optional({ nullable: true }).isString(),
     body('customer_email').optional({ nullable: true, checkFalsy: true }).isEmail(),

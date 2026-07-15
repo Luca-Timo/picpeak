@@ -20,6 +20,21 @@ const { formatBoolean } = require('../utils/dbCompat');
 // is permanently closed once setup is done — safe even on a public IP.
 const SETUP_TOKEN_KEY = 'setup_token';
 
+// One-way flag flipped when the setup wizard finishes (migration 161 marks it
+// completed on installs that predate the wizard's event-types step). While it
+// is unset — i.e. only during the first-run wizard — the seeded SYSTEM event
+// types may be deleted (eventTypeService.deleteEventType), because nothing
+// can reference them yet. Once true, system types are permanently protected.
+const SETUP_WIZARD_COMPLETED_KEY = 'setup_wizard_completed';
+
+async function isSetupWizardCompleted() {
+  return (await getAppSetting(SETUP_WIZARD_COMPLETED_KEY)) === true;
+}
+
+async function markSetupWizardCompleted() {
+  await upsertAppSetting(SETUP_WIZARD_COMPLETED_KEY, JSON.stringify(true), 'boolean');
+}
+
 async function noAdminExists() {
   const row = await db('admin_users').count({ c: '*' }).first();
   return Number(row?.c || 0) === 0;
@@ -173,4 +188,11 @@ async function createInitialAdmin({ token, email, password, ip }) {
   };
 }
 
-module.exports = { getSetupStatus, ensureSetupToken, verifySetupToken, createInitialAdmin };
+module.exports = {
+  getSetupStatus,
+  ensureSetupToken,
+  verifySetupToken,
+  createInitialAdmin,
+  isSetupWizardCompleted,
+  markSetupWizardCompleted,
+};

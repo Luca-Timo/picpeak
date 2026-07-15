@@ -3500,6 +3500,19 @@
       "finish": "Finish setup",
       "saveFailed": "Some settings could not be saved — you can finish them in Settings."
     },
+    "eventTypes": {
+      "subtitle": "Which events do you photograph?",
+      "intro": "Event types organize your galleries — each one gets its own URL prefix and default theme. The suggestions below are just a starting point: rename them, remove what you don't need, or add your own. This is the only time the built-in types can be deleted; later they can only be renamed or deactivated.",
+      "nameLabel": "Display name",
+      "namePlaceholder": "e.g. Family Shoot",
+      "slugLabel": "URL prefix",
+      "slugPlaceholder": "e.g. family",
+      "add": "Add event type",
+      "hint": "The URL prefix appears in gallery links (e.g. family-smith-2025-06-01). Icons, themes and order can be tuned later in Settings → Event Types.",
+      "atLeastOne": "Keep at least one event type — every gallery needs one.",
+      "loadFailed": "Could not load the event types — you can adjust them later in Settings → Event Types.",
+      "saveFailed": "Some event type changes could not be saved — you can finish them in Settings → Event Types."
+    },
     "community": {
       "subtitle": "You're all set",
       "mission": "PicPeak exists so photographers can own their galleries and client data — on their own server, without monthly SaaS fees. Thanks for giving it a try.",

@@ -38,4 +38,11 @@ export const setupService = {
     const response = await api.post<{ user: SetupAdminUser }>('/setup/admin', input);
     return response.data;
   },
+
+  // One-way wizard-finish marker (authenticated — runs after the admin
+  // exists). While unset, the wizard's event-types step may delete the
+  // seeded system types; afterwards they are permanently protected.
+  async completeSetup(): Promise<void> {
+    await api.post('/setup/complete');
+  },
 };

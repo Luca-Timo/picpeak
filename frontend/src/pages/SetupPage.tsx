@@ -11,6 +11,7 @@ import { setupService } from '../services/setup.service';
 import { featureFlagsService, type FeatureFlags, type FeatureKey } from '../services/featureFlags.service';
 import { PicpeakRestoreCard } from '../components/admin/PicpeakBackupCard';
 import { SetupConfigStep } from '../components/admin/SetupConfigStep';
+import { SetupEventTypesStep } from '../components/admin/SetupEventTypesStep';
 import { resolveLoginLogoClasses } from '../utils/loginLogoSize';
 import type { AdminUser } from '../types';
 
@@ -67,7 +68,7 @@ export const SetupPage: React.FC = () => {
     staleTime: Infinity,
   });
 
-  const [step, setStep] = useState<'token' | 'account' | 'usage' | 'restore' | 'config' | 'community'>('token');
+  const [step, setStep] = useState<'token' | 'account' | 'usage' | 'eventTypes' | 'restore' | 'config' | 'community'>('token');
   const [form, setForm] = useState({ token: '', email: '', password: '', confirm: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -241,17 +242,23 @@ export const SetupPage: React.FC = () => {
       toast.warn(t('setup.featuresSaveFailed'));
     } finally {
       setIsSavingFeatures(false);
-      // If the chosen features need config the wizard can collect (invoicing,
-      // email), go to the config step; otherwise enter the app.
-      const needsConfig =
-        selectedFeatures.has('bills') ||
-        selectedFeatures.has('reminderEmails') ||
-        selectedFeatures.has('incomingMail') ||
-        selectedFeatures.has('whatsapp');
-      // Both the config branch and the no-config path end on the final
-      // community/thank-you step (#732), whose Finish button enters the app.
-      setStep(needsConfig ? 'config' : 'community');
+      // Event types come next (#800) — the wizard is the one window in which
+      // the seeded defaults can be freely renamed or deleted, because nothing
+      // (events, quotes, reminder mails) references them yet.
+      setStep('eventTypes');
     }
+  };
+
+  // After the event-types step: if the chosen features need config the wizard
+  // can collect (invoicing, email), go to the config step; otherwise skip to
+  // the final community/thank-you step (#732), whose Finish enters the app.
+  const continueAfterEventTypes = () => {
+    const needsConfig =
+      selectedFeatures.has('bills') ||
+      selectedFeatures.has('reminderEmails') ||
+      selectedFeatures.has('incomingMail') ||
+      selectedFeatures.has('whatsapp');
+    setStep(needsConfig ? 'config' : 'community');
   };
 
   const stepNumber = step === 'token' ? 1 : step === 'account' ? 2 : 3;
@@ -278,13 +285,15 @@ export const SetupPage: React.FC = () => {
               ? t('setup.tokenStepSubtitle')
               : step === 'account'
                 ? t('setup.accountStepSubtitle')
-                : step === 'restore'
-                  ? t('setup.restoreStepSubtitle')
-                  : step === 'config'
-                    ? t('setup.config.subtitle')
-                    : step === 'community'
-                      ? t('setup.community.subtitle')
-                      : t('setup.usageSubtitle')}
+                : step === 'eventTypes'
+                  ? t('setup.eventTypes.subtitle')
+                  : step === 'restore'
+                    ? t('setup.restoreStepSubtitle')
+                    : step === 'config'
+                      ? t('setup.config.subtitle')
+                      : step === 'community'
+                        ? t('setup.community.subtitle')
+                        : t('setup.usageSubtitle')}
           </p>
           {(step === 'token' || step === 'account' || step === 'usage') && (
             <p className="mt-3 text-xs font-medium tracking-wide uppercase" style={{ color: '#171717', opacity: 0.5 }}>
@@ -509,6 +518,8 @@ export const SetupPage: React.FC = () => {
                 {t('setup.back')}
               </Button>
             </div>
+          ) : step === 'eventTypes' ? (
+            <SetupEventTypesStep onDone={continueAfterEventTypes} />
           ) : step === 'config' ? (
             <SetupConfigStep
               selectedFeatures={selectedFeatures}
@@ -546,7 +557,14 @@ export const SetupPage: React.FC = () => {
                 variant="primary"
                 size="lg"
                 className="w-full"
-                onClick={() => navigate('/admin/dashboard', { replace: true })}
+                onClick={async () => {
+                  // One-way marker: re-locks the seeded system event types
+                  // (#800). Best-effort — a failure must not trap the user on
+                  // the thank-you screen, and the flag re-arms nothing risky
+                  // (the delete window also requires zero usage server-side).
+                  try { await setupService.completeSetup(); } catch { /* best-effort */ }
+                  navigate('/admin/dashboard', { replace: true });
+                }}
                 rightIcon={<ArrowRight className="w-4 h-4" />}
               >
                 {t('setup.community.finish')}

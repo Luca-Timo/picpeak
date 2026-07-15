@@ -250,6 +250,12 @@ const updateEventType = async (id, updates) => {
 
 /**
  * Delete an event type
+ *
+ * System types are protected — EXCEPT during the first-run setup wizard
+ * (setup_wizard_completed flag unset, see setupService), where the admin may
+ * replace the seeded defaults before anything references them (#800). The
+ * in-use checks below still apply in that window as defense in depth.
+ *
  * @param {number} id - Event type ID
  * @returns {Promise<Object>}
  */
@@ -261,11 +267,17 @@ const deleteEventType = async (id) => {
     throw error;
   }
 
-  // Prevent deletion of system types
+  // Prevent deletion of system types once the setup wizard has completed.
   if (eventType.is_system) {
-    const error = new Error('Cannot delete system event types. You can deactivate them instead.');
-    error.code = 'SYSTEM_TYPE';
-    throw error;
+    // Lazy require: keeps the module graph flat (setupService has no
+    // dependency back on this service, but the require is only needed on
+    // this rare path).
+    const { isSetupWizardCompleted } = require('./setupService');
+    if (await isSetupWizardCompleted()) {
+      const error = new Error('Cannot delete system event types. You can deactivate them instead.');
+      error.code = 'SYSTEM_TYPE';
+      throw error;
+    }
   }
 
   // Check if any events use this type
@@ -280,7 +292,40 @@ const deleteEventType = async (id) => {
     throw error;
   }
 
-  await db('event_types').where('id', id).del();
+  // Quotes carry event_type too (migration 146) — a dangling slug there would
+  // corrupt the quote→event conversion default chain.
+  if (await hasColumnCached('quotes', 'event_type')) {
+    const quotesUsingType = await db('quotes')
+      .where('event_type', eventType.slug_prefix)
+      .count('id as count')
+      .first();
+    if (quotesUsingType && parseInt(quotesUsingType.count) > 0) {
+      const error = new Error(`Cannot delete: ${quotesUsingType.count} quotes are using this type. Deactivate it instead.`);
+      error.code = 'IN_USE';
+      throw error;
+    }
+  }
+
+  // Resolve schema lookups BEFORE opening the transaction — a global-db read
+  // inside a SQLite transaction (single connection) deadlocks. Same pattern
+  // as the rename cascade in updateEventType above.
+  const hasTranslations = await db.schema.hasTable('email_template_translations');
+
+  await db.transaction(async (trx) => {
+    await trx('event_types').where('id', id).del();
+    // Drop the per-type reminder template with the type, or it lingers as an
+    // orphan (invisible in the Reminder Emails tab, which derives its rows
+    // from the live catalog).
+    const tpl = await trx('email_templates')
+      .where({ template_key: `event_reminder_${eventType.slug_prefix}` })
+      .first('id');
+    if (tpl) {
+      if (hasTranslations) {
+        await trx('email_template_translations').where({ template_id: tpl.id }).del();
+      }
+      await trx('email_templates').where({ id: tpl.id }).del();
+    }
+  });
 
   return { success: true, deleted: eventType };
 };
@@ -341,6 +386,28 @@ const getEventTypeForSlug = async (eventTypeIdentifier) => {
   return { slug_prefix: 'event', theme_preset: 'default', emoji: '📷' };
 };
 
+/**
+ * Resolve the fallback event type for document→event conversions (quotes,
+ * contracts) when the source carries none. Never hardcodes a specific slug
+ * (any of them, incl. 'other', can be disabled or deleted by the admin):
+ * prefer the generic 'other' catch-all when it's active, else the first
+ * active type by display order, and only fall back to the literal 'other'
+ * if the catalog is somehow empty/unreadable.
+ * @param {Object} [conn] - Optional knex connection/transaction
+ * @returns {Promise<string>} - slug_prefix to use
+ */
+const resolveDefaultEventType = async (conn) => {
+  const q = conn || db;
+  try {
+    const other = await q('event_types').where({ slug_prefix: 'other', is_active: formatBoolean(true) }).first('slug_prefix');
+    if (other) return 'other';
+    const firstActive = await q('event_types').where({ is_active: formatBoolean(true) }).orderBy('display_order', 'asc').first('slug_prefix');
+    return firstActive?.slug_prefix || 'other';
+  } catch (_) {
+    return 'other';
+  }
+};
+
 module.exports = {
   getAllEventTypes,
   getActiveEventTypes,
@@ -352,5 +419,6 @@ module.exports = {
   updateEventType,
   deleteEventType,
   reorderEventTypes,
-  getEventTypeForSlug
+  getEventTypeForSlug,
+  resolveDefaultEventType
 };

@@ -266,7 +266,22 @@ async function ensureEventReminderTemplatesSeeded(db, logger) {
     }
   };
 
+  // Per-type templates are only seeded for slugs that still exist in the
+  // event_types catalog — the setup wizard (and admins) can delete the
+  // seeded defaults, and re-inserting event_reminder_<slug> for a removed
+  // type would resurrect an orphan on every boot (#800). The catch-all
+  // event_reminder_default is always seeded.
+  let existingSlugs = null;
+  if (await db.schema.hasTable('event_types')) {
+    const rows = await db('event_types').select('slug_prefix');
+    existingSlugs = new Set(rows.map((r) => r.slug_prefix));
+  }
+
   for (const [templateKey, def] of Object.entries(EVENT_REMINDER_TEMPLATES)) {
+    const typeSlug = templateKey.replace(/^event_reminder_/, '');
+    if (typeSlug !== 'default' && existingSlugs && !existingSlugs.has(typeSlug)) {
+      continue;
+    }
     try {
       let existing = await db('email_templates').where({ template_key: templateKey }).first();
 

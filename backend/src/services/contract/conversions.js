@@ -11,6 +11,7 @@ const businessProfileService = require('../businessProfileService');
 const { ensureSystemBlocksSeeded } = require('../contractBlocksService');
 const { ensureInt } = require('../../utils/numericHelpers');
 const { adminActor, ensureCustomerActive, nextContractNumber } = require('./helpers');
+const { resolveDefaultEventType } = require('../eventTypeService');
 
 
 /**
@@ -221,6 +222,12 @@ async function convertToEvent(contractId, adminId) {
   const placeholderHash = crypto.randomBytes(32).toString('hex');
   const shareToken = crypto.randomBytes(32).toString('hex');
 
+  // Event type: the configurable org default, else the resolved catch-all —
+  // same chain as quoteService.convertToEvent. Never a hardcoded slug: the
+  // admin may have renamed or deleted 'wedding' (#800).
+  const eventType = (await getAppSetting('crm_default_event_type'))
+    || (await resolveDefaultEventType());
+
   const eventCols = await db('events').columnInfo();
   const candidate = {
     slug: `contract-${contract.contract_number.toLowerCase()}-${crypto.randomBytes(3).toString('hex')}`,
@@ -236,7 +243,7 @@ async function convertToEvent(contractId, adminId) {
     customer_email: customerEmail,
     customer_phone: customer.phone,
     admin_email: adminEmail,
-    event_type: 'wedding',
+    event_type: eventType,
     password_hash: placeholderHash,
     share_link: shareToken,
     share_token: shareToken,
