@@ -428,28 +428,6 @@ const getEventTypeForSlug = async (eventTypeIdentifier) => {
   return { slug_prefix: 'event', theme_preset: 'default', emoji: '📷' };
 };
 
-/**
- * Resolve the fallback event type for document→event conversions (quotes,
- * contracts) when the source carries none. Never hardcodes a specific slug
- * (any of them, incl. 'other', can be disabled or deleted by the admin):
- * prefer the generic 'other' catch-all when it's active, else the first
- * active type by display order, and only fall back to the literal 'other'
- * if the catalog is somehow empty/unreadable.
- * @param {Object} [conn] - Optional knex connection/transaction
- * @returns {Promise<string>} - slug_prefix to use
- */
-const resolveDefaultEventType = async (conn) => {
-  const q = conn || db;
-  try {
-    const other = await q('event_types').where({ slug_prefix: 'other', is_active: formatBoolean(true) }).first('slug_prefix');
-    if (other) return 'other';
-    const firstActive = await q('event_types').where({ is_active: formatBoolean(true) }).orderBy('display_order', 'asc').first('slug_prefix');
-    return firstActive?.slug_prefix || 'other';
-  } catch (_) {
-    return 'other';
-  }
-};
-
 module.exports = {
   getAllEventTypes,
   getActiveEventTypes,
@@ -461,6 +439,5 @@ module.exports = {
   updateEventType,
   deleteEventType,
   reorderEventTypes,
-  getEventTypeForSlug,
-  resolveDefaultEventType
+  getEventTypeForSlug
 };

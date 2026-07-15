@@ -80,16 +80,7 @@ jest.mock('../../../services/webhookService', () => ({
   buildEventSubject: jest.fn().mockReturnValue({}),
 }));
 
-// event_type is validated against the live event_types catalog (#800) —
-// that lookup would consume the first queued db() chain and shift the
-// call sequence these tests pin. Stub it valid; the invalid path has its
-// own test below.
-jest.mock('../../../services/eventTypeService', () => ({
-  isValidEventType: jest.fn().mockResolvedValue(true),
-}));
-
 const { db } = require('../../../database/db');
-const { isValidEventType } = require('../../../services/eventTypeService');
 const eventsRouter = require('../events');
 
 const buildApp = () => {
@@ -239,17 +230,5 @@ describe('v1 POST /events — issue #550 (color_theme + feedback row)', () => {
       .post('/events')
       .send({ ...BASE_BODY, feedback_enabled: 'maybe' })
       .expect(400);
-  });
-
-  it('rejects an event_type unknown to the catalog with 400 (#800)', async () => {
-    isValidEventType.mockResolvedValueOnce(false);
-    const res = await request(buildApp())
-      .post('/events')
-      .send({ ...BASE_BODY, event_type: 'nope' })
-      .expect(400);
-
-    expect(isValidEventType).toHaveBeenCalledWith('nope');
-    expect(JSON.stringify(res.body.errors)).toContain('event_type');
-    expect(db).not.toHaveBeenCalled();
   });
 });

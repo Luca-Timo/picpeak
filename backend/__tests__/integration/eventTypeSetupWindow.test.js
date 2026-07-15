@@ -11,8 +11,6 @@
  *   - reminder-template self-heal does NOT resurrect templates for slugs
  *     that no longer exist in the catalog
  *   - after markSetupWizardCompleted() → system deletion is refused again
- *   - resolveDefaultEventType never returns a hardcoded slug that the
- *     admin removed (contract→event conversion default, #800)
  */
 
 const { bootCrmDb } = require('./helpers/crmDb');
@@ -107,21 +105,6 @@ describe('event type deletion during the setup window (#800)', () => {
     const custom = await eventTypeService.createEventType({ name: 'Family', slug_prefix: 'family' });
     const result = await eventTypeService.deleteEventType(custom.id);
     expect(result.success).toBe(true);
-  });
-
-  it('resolveDefaultEventType follows the catalog instead of hardcoding a slug', async () => {
-    // 'other' is active → preferred catch-all.
-    expect(await eventTypeService.resolveDefaultEventType()).toBe('other');
-
-    // Deactivate 'other' → falls over to the first active type by display order.
-    const other = await db('event_types').where({ slug_prefix: 'other' }).first();
-    await db('event_types').where({ id: other.id }).update({ is_active: 0 });
-    const resolved = await eventTypeService.resolveDefaultEventType();
-    expect(resolved).not.toBe('other');
-    const resolvedRow = await db('event_types').where({ slug_prefix: resolved }).first();
-    expect(resolvedRow).toBeTruthy();
-
-    await db('event_types').where({ id: other.id }).update({ is_active: 1 });
   });
 
   it('fails closed when the completion marker row is missing', async () => {

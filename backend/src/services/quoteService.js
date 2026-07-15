@@ -34,7 +34,6 @@ const { cleanNetMinor } = require('../utils/invoiceRounding');
 const { AppError } = require('../utils/errors');
 const { formatBoolean } = require('../utils/dbCompat');
 const { nextDocumentNumber } = require('../utils/documentSequences');
-const { resolveDefaultEventType } = require('./eventTypeService');
 const { formatShortDate } = require('../utils/dateFormatter');
 const businessProfileService = require('./businessProfileService');
 const { buildIssuerBlock, buildRecipientBlock } = require('./_renderContext');
@@ -307,6 +306,25 @@ async function insertLineItemsHierarchical(trx, tableName, ownerColumn, ownerId,
 // admin creates and could emit `Q-2026-AB12C3` after 5 retries.
 async function nextQuoteNumber(trx) {
   return nextDocumentNumber('quote', 'crm_quotes_number_format', 'Q-{YEAR}-{SEQ:04d}', trx);
+}
+
+/**
+ * Resolve the fallback event type for a quote→event conversion when the quote
+ * itself carries none. Never hardcodes a specific slug (any of them, incl.
+ * 'other', can be disabled by the admin): prefer the generic 'other' catch-all
+ * when it's active, else the first active type by display order, and only fall
+ * back to the literal 'other' if the catalog is somehow empty/unreadable.
+ */
+async function resolveDefaultEventType(conn) {
+  const q = conn || db;
+  try {
+    const other = await q('event_types').where({ slug_prefix: 'other', is_active: true }).first('slug_prefix');
+    if (other) return 'other';
+    const firstActive = await q('event_types').where({ is_active: true }).orderBy('display_order', 'asc').first('slug_prefix');
+    return firstActive?.slug_prefix || 'other';
+  } catch (_) {
+    return 'other';
+  }
 }
 
 function ensureCustomerFeatureEnabled(customer, feature) {
