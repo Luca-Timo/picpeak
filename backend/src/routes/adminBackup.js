@@ -29,7 +29,13 @@ router.get('/config', adminAuth, requirePermission('backup.view'), async (req, r
         config[setting.setting_key] = setting.setting_value;
       }
     });
-    
+
+    // Never return the stored credentials — mask like the email/WhatsApp
+    // config endpoints do. The PUT below skips the mask sentinel, so the
+    // form round-trips without clobbering the real values.
+    if (config.backup_s3_secret_key) config.backup_s3_secret_key = '••••••••';
+    if (config.backup_rsync_ssh_key) config.backup_rsync_ssh_key = '••••••••';
+
     res.json(config);
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to get backup configuration');
@@ -65,6 +71,11 @@ router.put('/config', adminAuth, requirePermission('backup.create'), async (req,
     
     // Update settings
     for (const [key, value] of Object.entries(updates)) {
+      // An unchanged secret round-trips as the GET mask sentinel — keep the
+      // stored value instead of overwriting it with bullets.
+      if (value === '••••••••') {
+        continue;
+      }
       if (key.startsWith('backup_')) {
         await db('app_settings')
           .insert({
