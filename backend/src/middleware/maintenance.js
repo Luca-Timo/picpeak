@@ -73,6 +73,10 @@ async function maintenanceMiddleware(req, res, next) {
   // entries here matched nothing, which is exactly why the lockout happened).
   const skipPaths = [
     '/api/auth/admin/login',
+    // The second factor is part of the same login — without this, any
+    // MFA-enrolled admin gets a 503 on the verify step and cannot sign in
+    // at all while maintenance mode is on.
+    '/api/auth/admin/login/mfa',
     // SSO variants of the admin login (#798) — same reasoning: an SSO-only
     // (JIT-provisioned) admin has no password, so blocking these would make
     // maintenance mode admin-proof for them.

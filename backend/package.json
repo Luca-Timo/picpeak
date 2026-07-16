@@ -1,6 +1,6 @@
 {
   "name": "picpeak-backend",
-  "version": "3.88.0-beta.0",
+  "version": "3.89.0-beta.0",
   "description": "Backend for PicPeak event photo sharing platform",
   "main": "server.js",
   "scripts": {
@@ -11,6 +11,7 @@
     "generate:watermarks": "node scripts/generate-watermarks.js",
     "test": "jest",
     "test:s3": "SKIP_S3_TESTS=false jest __tests__/integration/backup-s3",
+    "test:pg": "jest __tests__/integration/picpeakRestorePg",
     "lint": "eslint src/"
   },
   "dependencies": {

@@ -2,6 +2,8 @@ const express = require('express');
 const { db } = require('../database/db');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
+const { clearAdminAuthCookie } = require('../utils/tokenUtils');
+const { revokeToken } = require('../utils/tokenRevocation');
 const { triggerManualBackup, getBackupStatus, cleanupOldBackupRuns, getBackupManifest, validateBackupManifest } = require('../services/backupService');
 const logger = require('../utils/logger');
 const { errorResponse, getPagination } = require('../utils/routeHelpers');
@@ -29,7 +31,13 @@ router.get('/config', adminAuth, requirePermission('backup.view'), async (req, r
         config[setting.setting_key] = setting.setting_value;
       }
     });
-    
+
+    // Never return the stored credentials — mask like the email/WhatsApp
+    // config endpoints do. The PUT below skips the mask sentinel, so the
+    // form round-trips without clobbering the real values.
+    if (config.backup_s3_secret_key) config.backup_s3_secret_key = '••••••••';
+    if (config.backup_rsync_ssh_key) config.backup_rsync_ssh_key = '••••••••';
+
     res.json(config);
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to get backup configuration');
@@ -65,6 +73,11 @@ router.put('/config', adminAuth, requirePermission('backup.create'), async (req,
     
     // Update settings
     for (const [key, value] of Object.entries(updates)) {
+      // An unchanged secret round-trips as the GET mask sentinel — keep the
+      // stored value instead of overwriting it with bullets.
+      if (value === '••••••••') {
+        continue;
+      }
       if (key.startsWith('backup_')) {
         await db('app_settings')
           .insert({
@@ -178,12 +191,40 @@ router.post('/picpeak/import', adminAuth, requirePermission('backup.restore'), p
   const picpeakPath = req.file.path;
   try {
     const { importFromPicpeak } = require('../services/picpeakImportService');
-    const result = await importFromPicpeak({ picpeakPath, currentAdminId: req.user && req.user.id });
+    // adminAuth populates req.admin, not req.user. Passing req.user.id here
+    // left currentAdminId undefined, so reinjectCurrentAdmin() had no account
+    // to preserve and the admin_users table was fully replaced by the backup —
+    // letting a crafted .picpeak take over every admin account (GHSA-qxfx-4493-4v8f).
+    const result = await importFromPicpeak({ picpeakPath, currentAdminId: req.admin && req.admin.id });
+
+    // The restore rewrote admin_users, so ids may have shifted. importFromPicpeak
+    // already stamped a GLOBAL session cutoff (see setSessionsValidAfter), so
+    // every JWT issued before the restore — admin, customer, gallery — now fails
+    // auth. Here we additionally give the importing admin an immediate, clean
+    // logout: revoke this token and clear the cookie so their browser drops the
+    // session at once rather than on the next 401. Cookie clear is the
+    // unconditional guarantee; revokeToken() swallows DB errors and returns
+    // false, so check the result and log loudly if the denylist write didn't
+    // land (the operator still re-logs-in, which the cookie clear forces).
+    let tokenRevoked = false;
+    try {
+      if (req.token) {
+        tokenRevoked = await revokeToken(req.token, 'picpeak-import', { adminId: req.admin && req.admin.id });
+      }
+    } catch (revokeErr) {
+      logger.warn('[picpeak-import] failed to revoke session token after restore', { error: revokeErr.message });
+    }
+    if (req.token && !tokenRevoked) {
+      logger.warn('[picpeak-import] session token was NOT added to the revocation denylist after restore; relying on cookie clear to force re-login');
+    }
+    clearAdminAuthCookie(res);
+
     res.json({
       success: true,
       tables: result.tables,
       filesRestored: result.filesRestored,
       usesExternalMedia: result.usesExternalMedia,
+      sessionInvalidated: true,
     });
   } catch (error) {
     const status = error.statusCode || 500;

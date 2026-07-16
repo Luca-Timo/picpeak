@@ -18,10 +18,12 @@ const fsp = require('fs').promises;
 const path = require('path');
 const os = require('os');
 const StreamZip = require('node-stream-zip');
+const { assertZipEntriesWithin } = require('../utils/safePath');
 const { db } = require('../database/db');
 const knexConfig = require('../../knexfile');
 const { getStoragePath } = require('../config/storage');
 const { hasColumnCached } = require('../utils/schemaCache');
+const { setSessionsValidAfter } = require('../utils/sessionCutoff');
 const logger = require('../utils/logger');
 const { PICPEAK_FORMAT_VERSION, EXCLUDED_TABLES, listDataTables } = require('./picpeakExportService');
 
@@ -80,24 +82,163 @@ function parseNdjson(filePath) {
 }
 
 // Re-insert the operator's account inside the restore transaction so they keep
-// working credentials. If the backup already loaded an admin with the same
-// email, overwrite that row's credentials with the current account's (current
-// creds win); otherwise insert the snapshot with a fresh id.
+// working credentials after the wipe.
+//
+// The operator's login + credentials + MFA must be restored, not just the
+// password. A crafted backup can carry a row with the operator's email whose
+// two_factor_* fields are attacker-chosen — leaving those in place would let
+// the backup strip or hijack the operator's MFA, or (cross-instance) pin a TOTP
+// secret encrypted with the source instance's key the operator can never
+// satisfy. These columns are scalar/text (recovery codes are a JSON string in a
+// TEXT column), so writing them needs no special json handling. Relationship/
+// audit FKs (role_id, created_by) are deliberately NOT forced from the snapshot
+// — see the update branch below.
+//
+// admin_users has UNIQUE constraints on BOTH email and username, and a restored
+// backup can collide with the operator on either — possibly on two DIFFERENT
+// rows (one shares the email, another shares the default `admin` username). We
+// reconcile WITHOUT deleting any restored row: deleting would fire ON DELETE
+// actions (SQLite) or dangle references such as events.created_by (Postgres,
+// where replica mode suppresses cascades). Instead:
+//   - if a row already has the operator's email, overwrite it in place (its id
+//     is preserved, so every FK pointing at the operator stays valid);
+//   - if a DIFFERENT row holds the operator's username, rename that row (id
+//     preserved, its own FKs stay valid) to free the username;
+//   - only when no row has the operator's email do we insert a fresh row.
 async function reinjectCurrentAdmin(trx, currentAdmin) {
-  if (!currentAdmin) return;
-  const existing = await trx('admin_users').whereRaw('lower(email) = lower(?)', [currentAdmin.email]).first();
-  if (existing) {
-    await trx('admin_users').where({ id: existing.id }).update({
-      password_hash: currentAdmin.password_hash,
-      is_active: currentAdmin.is_active,
-      must_change_password: currentAdmin.must_change_password,
-    });
+  if (!currentAdmin) return null;
+
+  const emailMatch = await trx('admin_users')
+    .whereRaw('lower(email) = lower(?)', [currentAdmin.email])
+    .first();
+
+  // Free the operator's username if a different row holds it (rename, not delete).
+  const usernameHolder = await trx('admin_users')
+    .whereRaw('lower(username) = lower(?)', [currentAdmin.username])
+    .first();
+  if (usernameHolder && (!emailMatch || usernameHolder.id !== emailMatch.id)) {
+    await trx('admin_users')
+      .where({ id: usernameHolder.id })
+      .update({ username: `${usernameHolder.username}__restored_${usernameHolder.id}` });
+  }
+
+  if (emailMatch) {
+    // Update in place — keeps emailMatch.id so restored FKs to the operator
+    // hold. Write only the AUTH-critical columns (login identity + credentials
+    // + MFA), never the relationship/audit FKs (role_id → roles, created_by →
+    // admin_users). Forcing the operator's pre-restore role_id/created_by here
+    // could reference rows absent from a cross-instance backup and dangle the
+    // FK (SQLite rolls back at commit); the row already carries the backup's
+    // own valid values for those. This still closes the MFA-hijack gap — a
+    // crafted backup can't strip or replace the operator's second factor.
+    const authUpdate = {};
+    for (const field of PRESERVED_AUTH_FIELDS) {
+      if (field in currentAdmin) authUpdate[field] = currentAdmin[field];
+    }
+    await trx('admin_users').where({ id: emailMatch.id }).update(authUpdate);
+    return emailMatch.id;
   } else {
-    const row = { ...currentAdmin };
-    delete row.id; // let the engine assign a fresh id to avoid collision
-    await trx('admin_users').insert(row);
+    // The operator's email isn't in the backup, so nothing restored references
+    // their id — a fresh row can't dangle a reference TO the operator. Null the
+    // self-referential created_by (its target admin may be absent from this
+    // backup; ON DELETE SET NULL makes null the correct "unknown inviter"
+    // value) so the insert itself can't dangle. Use an explicit max(id)+1
+    // rather than the identity sequence, which batchInsert left unadvanced on
+    // Postgres (a sequence-based insert could collide with a restored id).
+    const snapshot = { ...currentAdmin };
+    delete snapshot.id;
+    if ('created_by' in snapshot) snapshot.created_by = null;
+    const maxRow = await trx('admin_users').max({ m: 'id' }).first();
+    snapshot.id = (Number(maxRow && maxRow.m) || 0) + 1;
+    await trx('admin_users').insert(snapshot);
+    return snapshot.id;
   }
 }
+
+// Capture the operator's role and its granted permission NAMES before the wipe,
+// so preserveOperatorRole() can re-establish the operator's authorization after
+// the RBAC tables are replaced. Permission NAMES (not ids) are captured because
+// the restored permissions table reassigns ids. Returns null if the operator
+// has no role.
+async function captureOperatorRole(roleId) {
+  if (!roleId) return null;
+  const role = await db('roles').where({ id: roleId }).first();
+  if (!role) return null;
+  const permissions = await db('role_permissions')
+    .join('permissions', 'permissions.id', 'role_permissions.permission_id')
+    .where('role_permissions.role_id', roleId)
+    .pluck('permissions.name');
+  return { role, permissions };
+}
+
+// Restore the operator's authorization after roles/role_permissions are
+// replaced. A restore rewrites the RBAC tables, so the operator's pre-restore
+// role_id may now name a different (or missing) role — a crafted backup could
+// silently downgrade them, and reinjectCurrentAdmin deliberately does NOT copy
+// role_id (it could dangle). Here we resolve the role by NAME against the
+// restored data: if a role with the operator's role name exists we trust it
+// (it's the backup the operator chose to restore); otherwise we re-create the
+// role from the captured snapshot and re-grant the captured permissions that
+// still exist, so the operator can never be locked out of their own instance.
+async function preserveOperatorRole(trx, operatorId, snapshot) {
+  if (!operatorId || !snapshot || !snapshot.role) return;
+  const { role, permissions } = snapshot;
+
+  let target = await trx('roles').whereRaw('lower(name) = lower(?)', [role.name]).first();
+  if (!target) {
+    const roleRow = { ...role };
+    delete roleRow.id;
+    const maxRole = await trx('roles').max({ m: 'id' }).first();
+    const newRoleId = (Number(maxRole && maxRole.m) || 0) + 1; // sequence resynced post-commit
+    roleRow.id = newRoleId;
+    await trx('roles').insert(roleRow);
+    if (permissions && permissions.length) {
+      const perms = await trx('permissions').whereIn('name', permissions).select('id');
+      if (perms.length) {
+        await trx('role_permissions').insert(
+          perms.map((p) => ({ role_id: newRoleId, permission_id: p.id }))
+        );
+      }
+    }
+    target = { id: newRoleId };
+  }
+  await trx('admin_users').where({ id: operatorId }).update({ role_id: target.id });
+}
+
+// Fast-forward each restored table's Postgres identity sequence to its current
+// max(id). batchInsert writes explicit ids without advancing the sequence, so
+// the next natural insert into any restored table (a new event, an accepted
+// invitation, etc.) would otherwise collide on the primary key. Runs AFTER the
+// restore transaction commits (setval is non-transactional and would survive a
+// rollback) and guards every table with a column-existence check —
+// pg_get_serial_sequence RAISES on a table lacking an `id` column (e.g. the
+// composite-key role_permissions), so an unguarded call would abort here.
+// No-op on SQLite, whose AUTOINCREMENT tracks the high-water mark itself.
+async function resyncSequences(tables) {
+  if (!isPostgres()) return;
+  for (const table of tables) {
+    try {
+      if (!(await db.schema.hasColumn(table, 'id'))) continue;
+      const res = await db.raw('SELECT pg_get_serial_sequence(?, ?) AS seq', [table, 'id']);
+      const seq = res && res.rows && res.rows[0] && res.rows[0].seq;
+      if (!seq) continue; // `id` isn't a serial/identity column
+      await db.raw(
+        'SELECT setval(?, (SELECT COALESCE(MAX(id), 1) FROM ??), (SELECT MAX(id) IS NOT NULL FROM ??))',
+        [seq, table, table]
+      );
+    } catch (err) {
+      logger.warn(`[picpeak-import] could not resync sequence for ${table}: ${err.message}`);
+    }
+  }
+}
+
+// AUTH-critical admin_users columns preserved when overwriting a restored row
+// that shares the operator's email. Deliberately excludes relationship/audit
+// FKs (role_id, created_by) — see reinjectCurrentAdmin for why.
+const PRESERVED_AUTH_FIELDS = [
+  'username', 'email', 'password_hash', 'is_active', 'must_change_password',
+  'two_factor_enabled', 'two_factor_secret', 'two_factor_recovery_codes', 'two_factor_enrolled_at',
+];
 
 // The json/jsonb columns of a table (Postgres only). The pg driver returns
 // jsonb as parsed JS values, so on re-insert they must be serialised back to
@@ -127,7 +268,7 @@ function serialiseJsonColumns(rows, jsonCols) {
 // session_replication_role=replica on the trx connection, reset before commit;
 // sqlite: defer_foreign_keys so checks run at commit). knex_migrations is never
 // in the data set, so the target's schema/migration state is left intact.
-async function replaceAllTables(tables, dataDir, currentAdmin) {
+async function replaceAllTables(tables, dataDir, currentAdmin, roleSnapshot) {
   await db.transaction(async (trx) => {
     if (isPostgres()) {
       try {
@@ -157,7 +298,10 @@ async function replaceAllTables(tables, dataDir, currentAdmin) {
       await trx.batchInsert(table, serialiseJsonColumns(rows, jsonCols), 100);
     }
 
-    await reinjectCurrentAdmin(trx, currentAdmin);
+    const operatorId = await reinjectCurrentAdmin(trx, currentAdmin);
+    if (operatorId && roleSnapshot) {
+      await preserveOperatorRole(trx, operatorId, roleSnapshot);
+    }
 
     // Reset the pg session flag BEFORE the connection returns to the pool.
     if (isPostgres()) await trx.raw("SET session_replication_role = 'origin'");
@@ -227,11 +371,18 @@ async function importFromPicpeak({ picpeakPath, currentAdminId }) {
   const currentAdmin = currentAdminId
     ? await db('admin_users').where({ id: currentAdminId }).first()
     : null;
+  // Capture the operator's role + granted permission names BEFORE the wipe so
+  // their authorization can be re-established after the RBAC tables are replaced.
+  const roleSnapshot = currentAdmin ? await captureOperatorRole(currentAdmin.role_id) : null;
 
   const staging = await fsp.mkdtemp(path.join(os.tmpdir(), 'picpeak-import-'));
   try {
     const zip = new StreamZip.async({ file: picpeakPath });
     try {
+      // Reject ZIP-slip entries before extracting — a crafted .picpeak could
+      // otherwise write outside the staging dir via `../` entry names
+      // (same class as GHSA-jfhw-fj23-fx6x).
+      assertZipEntriesWithin(Object.values(await zip.entries()), staging);
       await zip.extract(null, staging);
     } finally {
       await zip.close();
@@ -251,7 +402,16 @@ async function importFromPicpeak({ picpeakPath, currentAdminId }) {
       logger.warn(`[picpeak-import] ignoring ${skipped.length} backup table(s) not present in this DB (or protected): ${skipped.join(', ')}`);
     }
 
-    await replaceAllTables(tables, dataDir, currentAdmin);
+    await replaceAllTables(tables, dataDir, currentAdmin, roleSnapshot);
+
+    // Post-commit fixups (must NOT run inside the restore transaction):
+    //  - resync Postgres identity sequences left behind by the explicit-id
+    //    batchInsert, so the next natural insert doesn't collide;
+    //  - stamp a global session cutoff so every JWT issued before this restore
+    //    (admin, customer, gallery) stops authenticating — ids may have shifted.
+    await resyncSequences(tables);
+    await setSessionsValidAfter(Math.floor(Date.now() / 1000));
+
     const filesRestored = await restoreFiles(staging);
     const usesExternalMedia = await detectExternalMedia();
 
@@ -268,4 +428,8 @@ module.exports = {
   importFromPicpeak,
   readManifestFromZip,
   validateManifest,
+  reinjectCurrentAdmin,
+  captureOperatorRole,
+  preserveOperatorRole,
+  resyncSequences,
 };
