@@ -159,6 +159,14 @@ router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) 
       }
     });
 
+    // Reserved bootstrap/credential keys are NEVER readable through the
+    // generic settings reads — oidc_client_secret (#798) is stored encrypted
+    // with setting_type 'string' and would otherwise leak its ciphertext to
+    // any settings.view holder; setup_token is the first-run bootstrap secret.
+    for (const key of RESERVED_SETTING_KEYS) {
+      delete settingsObject[key];
+    }
+
     // Mask sensitive secrets before sending to client
     if (settingsObject.security_recaptcha_secret_key) {
       settingsObject.security_recaptcha_secret_key = '••••••••';
@@ -428,16 +436,26 @@ router.put('/sso', adminAuth, requirePermission('settings.edit'), [
     }
     const oidcService = require('../services/oidcService');
 
-    // Enabling requires a complete config, or the login button would lead
-    // straight to an error page.
-    if (req.body.oidc_enabled === true) {
-      const current = await oidcService.getOidcConfig();
+    // Validate the MERGED resulting state, not just the request: enabling
+    // requires a complete config, and a partial PUT must not be able to
+    // blank the issuer/client while a stored enabled=true keeps a login
+    // button alive that can only fail.
+    const current = await oidcService.getOidcConfig();
+    const effectiveEnabled = req.body.oidc_enabled ?? current.enabled;
+    if (effectiveEnabled === true) {
       const issuer = req.body.oidc_issuer_url ?? current.issuerUrl;
       const clientId = req.body.oidc_client_id ?? current.clientId;
       const secretPresent = (typeof req.body.oidc_client_secret === 'string' && req.body.oidc_client_secret.length > 0)
         || Boolean(current.clientSecret);
       if (!issuer || !clientId || !secretPresent) {
-        return res.status(400).json({ error: 'Issuer URL, client ID and client secret must be configured before enabling SSO' });
+        return res.status(400).json({ error: 'Issuer URL, client ID and client secret must be configured while SSO is enabled — disable SSO first to clear them' });
+      }
+      // The redirect URI must be derivable too, or the login button leads
+      // straight to an error (needs API_URL / FRONTEND_URL / general_site_url).
+      try {
+        await oidcService.getRedirectUri();
+      } catch (err) {
+        return res.status(400).json({ error: err.message });
       }
     }
 
@@ -516,6 +534,14 @@ router.get('/:type', adminAuth, requirePermission('settings.view'), async (req, 
         settingsObject[setting.setting_key] = null;
       }
     });
+
+    // Reserved bootstrap/credential keys are NEVER readable through the
+    // generic settings reads — oidc_client_secret (#798) is stored encrypted
+    // with setting_type 'string' and would otherwise leak its ciphertext to
+    // any settings.view holder; setup_token is the first-run bootstrap secret.
+    for (const key of RESERVED_SETTING_KEYS) {
+      delete settingsObject[key];
+    }
 
     // Mask sensitive secrets before sending to client
     if (settingsObject.security_recaptcha_secret_key) {

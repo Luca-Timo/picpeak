@@ -13,6 +13,7 @@ import { setupService } from '../../services/setup.service';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
 import { useAdminDarkMode } from '../../contexts/AdminDarkModeContext';
 import { resolveLoginLogoClasses } from '../../utils/loginLogoSize';
+import { buildResourceUrl } from '../../utils/url';
 import { api } from '../../config/api';
 
 export const AdminLoginPage: React.FC = () => {
@@ -366,7 +367,11 @@ export const AdminLoginPage: React.FC = () => {
                   size="lg"
                   className="w-full"
                   leftIcon={<KeyRound className="w-4 h-4" />}
-                  onClick={() => { window.location.href = '/api/auth/admin/sso/login'; }}
+                  // buildResourceUrl respects an absolute VITE_API_URL, so
+                  // split-origin deployments start the flow on the API host
+                  // (where the state cookie must live) instead of 404ing on
+                  // the frontend origin.
+                  onClick={() => { window.location.href = buildResourceUrl('/api/auth/admin/sso/login'); }}
                 >
                   {settingsData.oidc_button_label?.trim() || t('adminLogin.ssoSignIn', 'Sign in with SSO')}
                 </Button>

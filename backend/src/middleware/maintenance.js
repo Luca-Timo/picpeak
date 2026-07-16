@@ -73,6 +73,11 @@ async function maintenanceMiddleware(req, res, next) {
   // entries here matched nothing, which is exactly why the lockout happened).
   const skipPaths = [
     '/api/auth/admin/login',
+    // SSO variants of the admin login (#798) — same reasoning: an SSO-only
+    // (JIT-provisioned) admin has no password, so blocking these would make
+    // maintenance mode admin-proof for them.
+    '/api/auth/admin/sso/login',
+    '/api/auth/admin/sso/callback',
     '/api/auth/session',
     '/api/public/settings',
     '/health'

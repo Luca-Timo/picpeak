@@ -131,7 +131,12 @@ function invalidateDiscoveryCache() {
  * callers surface that as a config error.
  */
 async function getClient(cfg) {
-  const key = `${cfg.issuerUrl}|${cfg.clientId}`;
+  // The secret is part of the key (as a fingerprint, never plaintext): in
+  // multi-worker deployments a secret rotation only invalidates the cache in
+  // the worker that handled the settings request — the others must detect
+  // the change through the key, or they keep signing with the old secret.
+  const secretFp = crypto.createHash('sha256').update(cfg.clientSecret || '').digest('hex').slice(0, 16);
+  const key = `${cfg.issuerUrl}|${cfg.clientId}|${secretFp}`;
   if (_clientCache && _clientCache.key === key) {
     return _clientCache;
   }
@@ -151,13 +156,23 @@ async function getClient(cfg) {
  * base URL — nginx proxies /api to the backend, so this resolves publicly.
  */
 async function getRedirectUri() {
+  // The callback must land on the API's public origin — that is where the
+  // oidc_state cookie was set when the browser hit /sso/login. In the
+  // standard deployment the frontend proxies /api on the same origin, so
+  // FRONTEND_URL works; split-origin deployments set API_URL (canonically
+  // ending in /api, see .env.example) and MUST be honored first or the
+  // callback goes to a host that has neither the route nor the cookie.
+  const apiBase = (process.env.API_URL || '').trim().replace(/\/$/, '');
+  if (apiBase) {
+    return `${apiBase}/auth/admin/sso/callback`;
+  }
   const { getFrontendBaseUrl } = require('../utils/frontendUrl');
   const base = (await getFrontendBaseUrl()).replace(/\/$/, '');
   if (!base) {
     // Without a public base URL the redirect_uri would be relative — the IdP
     // would reject it with an opaque error on ITS side. Fail here with a
     // clear config message instead.
-    const err = new Error('FRONTEND_URL (or the general_site_url setting) must be set for SSO');
+    const err = new Error('API_URL or FRONTEND_URL (or the general_site_url setting) must be set for SSO');
     err.code = 'OIDC_BAD_CONFIG';
     throw err;
   }
@@ -207,7 +222,7 @@ async function handleCallback(currentUrl, { state, nonce, codeVerifier }) {
     err.code = 'OIDC_NOT_CONFIGURED';
     throw err;
   }
-  const { client } = await getClient(cfg);
+  const { client, issuerMetadata } = await getClient(cfg);
 
   // Extract code/state from the callback URL, then exchange + validate the
   // ID token (issuer, audience, signature, exp, nonce, state — all enforced
@@ -220,16 +235,42 @@ async function handleCallback(currentUrl, { state, nonce, codeVerifier }) {
     code_verifier: codeVerifier,
   });
 
-  return tokenSet.claims();
+  let claims = tokenSet.claims();
+
+  // Spec-compliant providers may deliver `profile`/`email` scope claims only
+  // from the UserInfo endpoint, not inside the ID token. When the email is
+  // missing there, fetch UserInfo and merge — ID-token claims win on
+  // conflict (they are signature-bound to this very authorization). The sub
+  // must match, or the response is discarded (spec requirement).
+  if (!claims.email && issuerMetadata.userinfo_endpoint && tokenSet.access_token) {
+    try {
+      const userinfo = await client.userinfo(tokenSet);
+      if (userinfo && userinfo.sub === claims.sub) {
+        claims = { ...userinfo, ...claims };
+      }
+    } catch (err) {
+      // Non-fatal: providers that put everything in the ID token don't need
+      // this; resolveAdminFromClaims handles a still-missing email.
+      logger.warn('OIDC userinfo fetch failed — proceeding with ID token claims only', {
+        error: err.message,
+      });
+    }
+  }
+
+  return claims;
 }
 
 /**
  * Map validated ID token claims to an admin_users row.
  *
  * Resolution order:
- *   1. external_subject === sub → that admin (must be active).
+ *   1. (external_issuer, external_subject) === (iss, sub) → that admin
+ *      (must be active). Matching includes the issuer because OIDC only
+ *      guarantees sub uniqueness WITHIN an issuer — a lookup on sub alone
+ *      would let a user of a newly-configured IdP inherit an old IdP's
+ *      admin account on a subject collision.
  *   2. email match against an UNLINKED admin, only if email_verified === true
- *      → one-time link (stamps external_subject; auth_provider unchanged so
+ *      → one-time link (stamps issuer+subject; auth_provider unchanged so
  *      a local password keeps working).
  *   3. JIT provisioning when oidc_autoprovision is on (requires an email
  *      claim; role = oidc_default_role; unusable random password).
@@ -238,17 +279,21 @@ async function handleCallback(currentUrl, { state, nonce, codeVerifier }) {
  */
 async function resolveAdminFromClaims(claims) {
   const sub = claims.sub;
+  const iss = claims.iss;
   const email = typeof claims.email === 'string' ? claims.email.trim().toLowerCase() : null;
   const emailVerified = claims.email_verified === true;
 
-  if (!sub) {
-    const err = new Error('ID token has no sub claim');
+  if (!sub || !iss) {
+    const err = new Error('ID token has no sub/iss claim');
     err.code = 'OIDC_BAD_CLAIMS';
     throw err;
   }
 
-  // 1. Established binding.
-  const bySub = await db('admin_users').where('external_subject', sub).first();
+  // 1. Established binding — issuer AND subject.
+  const bySub = await db('admin_users')
+    .where('external_issuer', iss)
+    .where('external_subject', sub)
+    .first();
   if (bySub) {
     if (!bySub.is_active) {
       const err = new Error('Admin account is deactivated');
@@ -259,8 +304,8 @@ async function resolveAdminFromClaims(claims) {
   }
 
   // 2. One-time email link — verified emails only, and only onto rows that
-  //    have no binding yet (a different sub on the row means a different
-  //    IdP identity already owns it).
+  //    have no binding yet (a different identity on the row means a
+  //    different IdP identity already owns it).
   if (email && emailVerified) {
     const byEmail = await db('admin_users')
       .where('email', email)
@@ -272,15 +317,35 @@ async function resolveAdminFromClaims(claims) {
         err.code = 'OIDC_INACTIVE';
         throw err;
       }
-      await db('admin_users').where('id', byEmail.id).update({
-        external_subject: sub,
-        updated_at: new Date(),
-      });
+      // Claim atomically: two concurrent first-time callbacks with the same
+      // email but DIFFERENT subjects must not both authenticate as this
+      // admin — the conditional update lets exactly one win.
+      const claimed = await db('admin_users')
+        .where('id', byEmail.id)
+        .whereNull('external_subject')
+        .update({
+          external_issuer: iss,
+          external_subject: sub,
+          updated_at: new Date(),
+        });
+      if (claimed !== 1) {
+        // Lost the race. If the winner was this very identity (double-click,
+        // parallel tabs), the binding lookup now succeeds; anything else is
+        // an unbound identity again and must not proceed as this admin.
+        const rebound = await db('admin_users')
+          .where('external_issuer', iss)
+          .where('external_subject', sub)
+          .first();
+        if (rebound && rebound.is_active) return rebound;
+        const err = new Error('Account link raced with another sign-in — try again');
+        err.code = 'OIDC_BAD_CLAIMS';
+        throw err;
+      }
       logger.info('OIDC: linked existing admin to IdP subject', {
         adminId: byEmail.id,
         sub,
       });
-      return { ...byEmail, external_subject: sub };
+      return { ...byEmail, external_issuer: iss, external_subject: sub };
     }
   }
 
@@ -317,6 +382,7 @@ async function resolveAdminFromClaims(claims) {
       is_active: formatBoolean(true),
       must_change_password: formatBoolean(false),
       auth_provider: 'oidc',
+      external_issuer: iss,
       external_subject: sub,
       created_at: new Date(),
       updated_at: new Date(),
@@ -343,7 +409,14 @@ async function saveOidcSettings(input) {
   if (input.oidc_autoprovision !== undefined) put('oidc_autoprovision', input.oidc_autoprovision === true, 'boolean');
   if (input.oidc_default_role !== undefined) put('oidc_default_role', String(input.oidc_default_role).trim(), 'string');
   if (input.oidc_button_label !== undefined) put('oidc_button_label', String(input.oidc_button_label).trim(), 'string');
-  if (input.oidc_scopes !== undefined) put('oidc_scopes', String(input.oidc_scopes).trim() || 'openid profile email', 'string');
+  if (input.oidc_scopes !== undefined) {
+    // The `openid` scope is what makes this OIDC rather than plain OAuth —
+    // without it there is no ID token and the callback cannot authenticate
+    // anyone. Force it in rather than trusting the admin's edit.
+    const scopes = String(input.oidc_scopes).trim().split(/\s+/).filter(Boolean);
+    if (!scopes.includes('openid')) scopes.unshift('openid');
+    put('oidc_scopes', scopes.join(' ') || 'openid profile email', 'string');
+  }
   if (typeof input.oidc_client_secret === 'string' && input.oidc_client_secret.length > 0) {
     put('oidc_client_secret', encryptSecret(input.oidc_client_secret), 'string');
   }

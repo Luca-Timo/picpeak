@@ -33,6 +33,8 @@ class MockOidcProvider {
     this.nextUser = { sub: 'user-1', email: 'sso@example.com', email_verified: true };
     // Test hooks:
     this.tamperNonce = false; // sign the ID token with a WRONG nonce
+    this.emailViaUserinfoOnly = false; // omit email from the ID token; serve it on /userinfo
+    this.accessTokens = new Map(); // access_token -> user (for /userinfo)
     this.server = null;
     this.issuer = null;
   }
@@ -81,6 +83,7 @@ class MockOidcProvider {
         issuer: this.issuer,
         authorization_endpoint: `${this.issuer}/authorize`,
         token_endpoint: `${this.issuer}/token`,
+        userinfo_endpoint: `${this.issuer}/userinfo`,
         jwks_uri: `${this.issuer}/jwks`,
         response_types_supported: ['code'],
         subject_types_supported: ['public'],
@@ -128,19 +131,31 @@ class MockOidcProvider {
         }
 
         const { sub, ...extraClaims } = stored.user;
+        // Spec-compliant providers may keep profile/email claims OFF the ID
+        // token and serve them from /userinfo only — this hook simulates that.
+        const idTokenClaims = this.emailViaUserinfoOnly ? {} : extraClaims;
         const idToken = this.signIdToken({
           sub,
           nonce: this.tamperNonce ? 'tampered-nonce' : stored.nonce,
-          extraClaims,
+          extraClaims: idTokenClaims,
         });
+        const accessToken = crypto.randomBytes(16).toString('base64url');
+        this.accessTokens.set(accessToken, stored.user);
         return json(200, {
-          access_token: crypto.randomBytes(16).toString('base64url'),
+          access_token: accessToken,
           token_type: 'Bearer',
           expires_in: 300,
           id_token: idToken,
         });
       });
       return undefined;
+    }
+
+    if (url.pathname === '/userinfo') {
+      const auth = req.headers.authorization || '';
+      const user = this.accessTokens.get(auth.replace(/^Bearer\s+/i, ''));
+      if (!user) return json(401, { error: 'invalid_token' });
+      return json(200, { ...user });
     }
 
     return json(404, { error: 'not_found' });

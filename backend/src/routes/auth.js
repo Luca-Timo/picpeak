@@ -900,9 +900,14 @@ router.get('/admin/sso/login', async (req, res) => {
 
 // IdP redirect target. Every failure lands back on the login page with a
 // translatable error key — never a raw error, never a broken JSON screen.
+// Final redirects are ABSOLUTE to the frontend base: in split-origin
+// deployments (absolute VITE_API_URL / API_URL) this callback runs on the
+// API origin, where a relative /admin/login would 404.
 router.get('/admin/sso/callback', async (req, res) => {
   const oidcService = require('../services/oidcService');
-  const fail = (key) => res.redirect(`/admin/login?sso_error=${key}`);
+  const { getFrontendBaseUrl } = require('../utils/frontendUrl');
+  const frontendBase = (await getFrontendBaseUrl().catch(() => '')) || '';
+  const fail = (key) => res.redirect(`${frontendBase}/admin/login?sso_error=${key}`);
 
   const stashCookie = req.cookies?.[OIDC_STATE_COOKIE];
   res.clearCookie(OIDC_STATE_COOKIE, { ...oidcStateCookieOptions(req), maxAge: undefined });
@@ -944,7 +949,7 @@ router.get('/admin/sso/callback', async (req, res) => {
       type: 'admin', id: admin.id, name: admin.username,
     });
 
-    return res.redirect('/admin/dashboard');
+    return res.redirect(`${frontendBase}/admin/dashboard`);
   } catch (error) {
     const codeMap = {
       OIDC_NOT_CONFIGURED: 'config',
