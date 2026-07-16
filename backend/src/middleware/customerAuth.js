@@ -13,6 +13,7 @@ const jwt = require('jsonwebtoken');
 const { db } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
 const { isTokenRevoked } = require('../utils/tokenRevocation');
+const { isTokenBeforeCutoff } = require('../utils/sessionCutoff');
 const logger = require('../utils/logger');
 const { getCustomerTokenFromRequest } = require('../utils/tokenUtils');
 
@@ -59,6 +60,11 @@ async function customerAuth(req, res, next) {
         iat: decoded.iat,
       });
       return res.status(401).json({ error: 'Token has been revoked', code: 'TOKEN_REVOKED' });
+    }
+
+    // Reject sessions issued before the global restore cutoff.
+    if (await isTokenBeforeCutoff(decoded)) {
+      return res.status(401).json({ error: 'Session invalidated', code: 'SESSION_INVALIDATED' });
     }
 
     if (decoded.type !== 'customer') {

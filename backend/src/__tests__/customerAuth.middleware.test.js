@@ -33,6 +33,13 @@ jest.mock('../utils/tokenRevocation', () => ({
   isTokenRevoked: jest.fn(),
 }));
 
+// The global session cutoff (added for .picpeak restore invalidation) queries
+// app_settings; stub it to "no cutoff" so it doesn't consume this suite's
+// one-shot db() mock. Its own behaviour is covered by utils/sessionCutoff.test.js.
+jest.mock('../utils/sessionCutoff', () => ({
+  isTokenBeforeCutoff: jest.fn().mockResolvedValue(false),
+}));
+
 jest.mock('../utils/tokenUtils', () => ({
   getCustomerTokenFromRequest: jest.fn(),
 }));
