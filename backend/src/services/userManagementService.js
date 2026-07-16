@@ -459,6 +459,13 @@ async function resetAdminPassword(id, resetById) {
     throw new NotFoundError('Admin user', id);
   }
 
+  // OIDC-owned accounts (#798) have no usable local password by design —
+  // minting one here would hand out a login that bypasses the IdP's MFA
+  // and access policies.
+  if (user.auth_provider === 'oidc') {
+    throw new ValidationError('This account is managed by your identity provider (SSO) — reset the password there.');
+  }
+
   const newPassword = generateReadablePassword();
   const passwordHash = await bcrypt.hash(newPassword, getBcryptRounds());
 

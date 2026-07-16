@@ -2090,6 +2090,32 @@
       "enableFailed": "Zwei-Faktor-Authentifizierung konnte nicht aktiviert werden. Prüfe den Code und versuche es erneut.",
       "disableFailed": "Zwei-Faktor-Authentifizierung konnte nicht deaktiviert werden. Prüfe den Code und versuche es erneut.",
       "regenerateFailed": "Wiederherstellungscodes konnten nicht neu erzeugt werden. Prüfe den Code und versuche es erneut."
+    },
+    "sso": {
+      "title": "Single Sign-On (OIDC)",
+      "intro": "Admins melden sich über Ihren Identity Provider an (Keycloak, Authentik, Pocket ID oder jeder OIDC-konforme IdP). Die lokale Anmeldung mit E-Mail/Passwort bleibt als Fallback verfügbar.",
+      "redirectUri": "Redirect-URI (beim IdP-Client registrieren)",
+      "issuerUrl": "Issuer-URL",
+      "issuerHint": "Die Basis-URL, die /.well-known/openid-configuration ausliefert.",
+      "clientId": "Client-ID",
+      "clientSecret": "Client-Secret",
+      "secretSetPlaceholder": "•••••• (gespeichert — zum Ersetzen tippen)",
+      "secretUnsetPlaceholder": "Client-Secret einfügen",
+      "secretHint": "Verschlüsselt gespeichert; wird nie wieder angezeigt. Leer lassen, um das aktuelle zu behalten.",
+      "scopes": "Scopes",
+      "autoprovision": "Unbekannte Benutzer automatisch anlegen",
+      "autoprovisionHint": "Erstellt beim ersten SSO-Login ein Admin-Konto. Aus: Nur bestehende/verknüpfte Admins können sich anmelden.",
+      "defaultRole": "Rolle für neue Benutzer",
+      "buttonLabel": "Beschriftung des Login-Buttons (optional)",
+      "buttonLabelPlaceholder": "Mit SSO anmelden",
+      "enabled": "SSO-Login aktivieren",
+      "enabledHint": "Zeigt den SSO-Button auf der Admin-Anmeldeseite. Erfordert Issuer, Client-ID und Secret.",
+      "test": "Verbindung testen",
+      "testHint": "Der Test führt OIDC-Discovery gegen die gespeicherte Konfiguration aus — zuerst speichern.",
+      "testOk": "Discovery erfolgreich — Issuer ist erreichbar: {{issuer}}",
+      "testFailed": "Discovery fehlgeschlagen",
+      "saved": "SSO-Einstellungen gespeichert",
+      "saveError": "SSO-Einstellungen konnten nicht gespeichert werden"
     }
   },
   "branding": {
@@ -3706,6 +3732,16 @@
       "sessionExpired": "Deine Bestätigungssitzung ist abgelaufen. Bitte melde dich erneut an.",
       "locked": "Konto wegen zu vieler Versuche vorübergehend gesperrt. Versuche es später erneut.",
       "lockedRetry": "Konto vorübergehend gesperrt. Versuche es in {{seconds}} Sekunden erneut."
+    },
+    "ssoDivider": "oder",
+    "ssoSignIn": "Mit SSO anmelden",
+    "ssoErrors": {
+      "config": "SSO ist falsch konfiguriert — prüfen Sie die SSO-Einstellungen oder melden Sie sich mit E-Mail und Passwort an.",
+      "state": "Die SSO-Anmeldung ist abgelaufen oder wurde manipuliert. Bitte erneut versuchen.",
+      "idp": "Der Identity Provider hat die Anmeldung abgelehnt. Bitte erneut versuchen oder E-Mail und Passwort verwenden.",
+      "inactive": "Ihr Admin-Konto ist deaktiviert.",
+      "not_provisioned": "Kein Admin-Konto passt zu Ihrer SSO-Identität. Bitten Sie einen Administrator um eine Einladung.",
+      "no_email": "Ihr Identity Provider hat keine E-Mail-Adresse geliefert — es kann kein Konto erstellt werden."
     }
   },
   "cssTemplates": {

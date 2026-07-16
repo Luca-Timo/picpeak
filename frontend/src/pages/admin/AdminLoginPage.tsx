@@ -13,6 +13,7 @@ import { setupService } from '../../services/setup.service';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
 import { useAdminDarkMode } from '../../contexts/AdminDarkModeContext';
 import { resolveLoginLogoClasses } from '../../utils/loginLogoSize';
+import { buildResourceUrl } from '../../utils/url';
 import { api } from '../../config/api';
 
 export const AdminLoginPage: React.FC = () => {
@@ -59,6 +60,16 @@ export const AdminLoginPage: React.FC = () => {
     if (searchParams.get('session') === 'expired') {
       toast.info(t('adminLogin.sessionExpired'));
     }
+  }, [searchParams, t]);
+
+  // SSO callback failures land here as ?sso_error=<key> (#798) — surface a
+  // translated message instead of a silent bounce back to the form.
+  useEffect(() => {
+    const ssoError = searchParams.get('sso_error');
+    if (!ssoError) return;
+    const known = ['config', 'state', 'idp', 'inactive', 'not_provisioned', 'no_email'];
+    const key = known.includes(ssoError) ? ssoError : 'idp';
+    toast.error(t(`adminLogin.ssoErrors.${key}`));
   }, [searchParams, t]);
 
   // Fresh instance with no admin yet → send to first-run setup.
@@ -337,6 +348,35 @@ export const AdminLoginPage: React.FC = () => {
             >
               {t('adminLogin.signIn')}
             </Button>
+
+            {/* SSO (#798): plain navigation — the backend route redirects to
+                the IdP; the callback sets the same admin cookie as the local
+                login and lands on the dashboard. */}
+            {settingsData?.oidc_enabled === true && (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 border-t border-neutral-200" />
+                  <span className="text-xs uppercase tracking-wide text-neutral-400">
+                    {t('adminLogin.ssoDivider', 'or')}
+                  </span>
+                  <div className="flex-1 border-t border-neutral-200" />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full"
+                  leftIcon={<KeyRound className="w-4 h-4" />}
+                  // buildResourceUrl respects an absolute VITE_API_URL, so
+                  // split-origin deployments start the flow on the API host
+                  // (where the state cookie must live) instead of 404ing on
+                  // the frontend origin.
+                  onClick={() => { window.location.href = buildResourceUrl('/api/auth/admin/sso/login'); }}
+                >
+                  {settingsData.oidc_button_label?.trim() || t('adminLogin.ssoSignIn', 'Sign in with SSO')}
+                </Button>
+              </>
+            )}
           </form>
           ) : (
           <form onSubmit={handleMfaSubmit} className="space-y-6">
