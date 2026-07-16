@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const { db } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
 const { isTokenRevoked } = require('../utils/tokenRevocation');
+const { isTokenBeforeCutoff } = require('../utils/sessionCutoff');
 const logger = require('../utils/logger');
 const { getAdminTokenFromRequest, getGalleryTokenFromRequest } = require('../utils/tokenUtils');
 
@@ -37,6 +38,13 @@ async function adminAuth(req, res, next) {
         tokenType: decoded.type
       });
       return res.status(401).json({ error: 'Token has been revoked', code: 'TOKEN_REVOKED' });
+    }
+
+    // Reject any session issued before the global cutoff (set by a .picpeak
+    // restore, which can reassign admin ids). Forces every pre-restore admin
+    // session to re-authenticate against the restored data.
+    if (await isTokenBeforeCutoff(decoded)) {
+      return res.status(401).json({ error: 'Session invalidated', code: 'SESSION_INVALIDATED' });
     }
     
     // Verify token type
@@ -157,7 +165,12 @@ async function galleryAuth(req, res, next) {
     if (await isTokenRevoked(decoded)) {
       return res.status(401).json({ error: 'Session has been invalidated', code: 'TOKEN_REVOKED' });
     }
-    
+
+    // Reject sessions issued before the global restore cutoff.
+    if (await isTokenBeforeCutoff(decoded)) {
+      return res.status(401).json({ error: 'Session invalidated', code: 'SESSION_INVALIDATED' });
+    }
+
     // Verify token type
     if (decoded.type !== 'gallery') {
       return res.status(403).json({ error: 'Invalid access token' });
@@ -219,6 +232,11 @@ async function photoAuth(req, res, next) {
     // Check if token is revoked
     if (await isTokenRevoked(decoded)) {
       return res.status(401).json({ error: 'Token has been revoked', code: 'TOKEN_REVOKED' });
+    }
+
+    // Reject sessions issued before the global restore cutoff.
+    if (await isTokenBeforeCutoff(decoded)) {
+      return res.status(401).json({ error: 'Session invalidated', code: 'SESSION_INVALIDATED' });
     }
 
     // Allow both admin and gallery tokens

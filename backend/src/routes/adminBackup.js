@@ -186,18 +186,15 @@ router.post('/picpeak/import', adminAuth, requirePermission('backup.restore'), p
     // letting a crafted .picpeak take over every admin account (GHSA-qxfx-4493-4v8f).
     const result = await importFromPicpeak({ picpeakPath, currentAdminId: req.admin && req.admin.id });
 
-    // The restore rewrote admin_users, so ids may have shifted. The operator's
-    // current JWT is bound only to the pre-restore admin id (adminAuth trusts
-    // `decoded.id` — IP is logged, not enforced, and the backup controls
-    // password_changed_at), which could now resolve to a DIFFERENT restored
-    // account and silently grant its permissions. Force a fresh login instead
-    // of trusting the old session: revoke the token and clear the cookie.
-    // Clearing the cookie is the guarantee — it drops the operator's browser
-    // session unconditionally. Revocation is the extra layer that also kills a
-    // Bearer-header copy of the JWT; revokeToken() swallows DB errors and
-    // returns false, so check the result and log loudly if the denylist write
-    // didn't land (the operator should still re-login, which the cookie clear
-    // forces).
+    // The restore rewrote admin_users, so ids may have shifted. importFromPicpeak
+    // already stamped a GLOBAL session cutoff (see setSessionsValidAfter), so
+    // every JWT issued before the restore — admin, customer, gallery — now fails
+    // auth. Here we additionally give the importing admin an immediate, clean
+    // logout: revoke this token and clear the cookie so their browser drops the
+    // session at once rather than on the next 401. Cookie clear is the
+    // unconditional guarantee; revokeToken() swallows DB errors and returns
+    // false, so check the result and log loudly if the denylist write didn't
+    // land (the operator still re-logs-in, which the cookie clear forces).
     let tokenRevoked = false;
     try {
       if (req.token) {
