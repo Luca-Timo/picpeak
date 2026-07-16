@@ -160,6 +160,16 @@ router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) 
     if (settingsObject.security_recaptcha_secret_key) {
       settingsObject.security_recaptcha_secret_key = '••••••••';
     }
+    // Backup credentials — the S3 secret key and the rsync SSH PRIVATE KEY
+    // were returned in plaintext to any settings.view holder. Same masking
+    // pattern as the recaptcha/umami/rybbit keys; the dedicated
+    // /admin/backup/config endpoints handle the edit round-trip.
+    if (settingsObject.backup_s3_secret_key) {
+      settingsObject.backup_s3_secret_key = '••••••••';
+    }
+    if (settingsObject.backup_rsync_ssh_key) {
+      settingsObject.backup_rsync_ssh_key = '••••••••';
+    }
     // Umami v2 API key (#661 Bug C) — read-write secret that authenticates
     // outbound calls to the operator's Umami instance for the device
     // breakdown. Masked on GET, same pattern as the recaptcha secret.
@@ -409,6 +419,16 @@ router.get('/:type', adminAuth, requirePermission('settings.view'), async (req, 
     // Mask sensitive secrets before sending to client
     if (settingsObject.security_recaptcha_secret_key) {
       settingsObject.security_recaptcha_secret_key = '••••••••';
+    }
+    // Backup credentials — the S3 secret key and the rsync SSH PRIVATE KEY
+    // were returned in plaintext to any settings.view holder. Same masking
+    // pattern as the recaptcha/umami/rybbit keys; the dedicated
+    // /admin/backup/config endpoints handle the edit round-trip.
+    if (settingsObject.backup_s3_secret_key) {
+      settingsObject.backup_s3_secret_key = '••••••••';
+    }
+    if (settingsObject.backup_rsync_ssh_key) {
+      settingsObject.backup_rsync_ssh_key = '••••••••';
     }
     // Umami v2 API key (#661 Bug C) — read-write secret that authenticates
     // outbound calls to the operator's Umami instance for the device
