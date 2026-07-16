@@ -153,6 +153,14 @@ async function getClient(cfg) {
 async function getRedirectUri() {
   const { getFrontendBaseUrl } = require('../utils/frontendUrl');
   const base = (await getFrontendBaseUrl()).replace(/\/$/, '');
+  if (!base) {
+    // Without a public base URL the redirect_uri would be relative — the IdP
+    // would reject it with an opaque error on ITS side. Fail here with a
+    // clear config message instead.
+    const err = new Error('FRONTEND_URL (or the general_site_url setting) must be set for SSO');
+    err.code = 'OIDC_BAD_CONFIG';
+    throw err;
+  }
   return `${base}/api/auth/admin/sso/callback`;
 }
 

@@ -38,6 +38,10 @@ describe('OIDC SSO (#798)', () => {
 
   beforeAll(async () => {
     process.env.JWT_SECRET = process.env.JWT_SECRET || 'oidc-test-secret';
+    // The redirect_uri derives from the public base URL — pin it explicitly:
+    // CI has no backend/.env, and getFrontendBaseUrl() returning '' makes
+    // buildAuthorizationRequest fail (by design) with OIDC_BAD_CONFIG.
+    process.env.FRONTEND_URL = 'http://localhost:5199';
     ({ db, cleanup } = await bootCrmDb());
 
     idp = new MockOidcProvider();

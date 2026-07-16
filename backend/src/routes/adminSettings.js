@@ -390,6 +390,10 @@ router.get('/sso', adminAuth, requirePermission('settings.view'), async (req, re
   try {
     const oidcService = require('../services/oidcService');
     const cfg = await oidcService.getOidcConfig();
+    // No public base URL configured → surface an empty redirect_uri rather
+    // than failing the whole settings read; the login route refuses to start
+    // the flow in that state anyway (OIDC_BAD_CONFIG).
+    const redirectUri = await oidcService.getRedirectUri().catch(() => '');
     res.json({
       oidc_enabled: cfg.enabled,
       oidc_issuer_url: cfg.issuerUrl || '',
@@ -399,7 +403,7 @@ router.get('/sso', adminAuth, requirePermission('settings.view'), async (req, re
       oidc_default_role: cfg.defaultRole,
       oidc_button_label: cfg.buttonLabel || '',
       oidc_scopes: cfg.scopes,
-      redirect_uri: await oidcService.getRedirectUri(),
+      redirect_uri: redirectUri,
     });
   } catch (error) {
     logger.error('Failed to read SSO settings', { error: error.message });
