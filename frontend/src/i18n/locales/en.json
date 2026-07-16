@@ -1637,6 +1637,32 @@
       "enableFailed": "Could not enable two-factor authentication. Check the code and try again.",
       "disableFailed": "Could not disable two-factor authentication. Check the code and try again.",
       "regenerateFailed": "Could not regenerate recovery codes. Check the code and try again."
+    },
+    "sso": {
+      "title": "Single Sign-On (OIDC)",
+      "intro": "Let admins sign in through your identity provider (Keycloak, Authentik, Pocket ID, or any OIDC-compliant IdP). Local email/password login stays available as a fallback.",
+      "redirectUri": "Redirect URI (register this on your IdP client)",
+      "issuerUrl": "Issuer URL",
+      "issuerHint": "The base URL that serves /.well-known/openid-configuration.",
+      "clientId": "Client ID",
+      "clientSecret": "Client Secret",
+      "secretSetPlaceholder": "•••••• (saved — type to replace)",
+      "secretUnsetPlaceholder": "Paste the client secret",
+      "secretHint": "Stored encrypted; never shown again. Leave blank to keep the current one.",
+      "scopes": "Scopes",
+      "autoprovision": "Auto-provision unknown users",
+      "autoprovisionHint": "Create an admin account on first SSO login. Off: only existing/linked admins can sign in.",
+      "defaultRole": "Role for new users",
+      "buttonLabel": "Login button label (optional)",
+      "buttonLabelPlaceholder": "Sign in with SSO",
+      "enabled": "Enable SSO login",
+      "enabledHint": "Shows the SSO button on the admin login page. Requires issuer, client ID and secret.",
+      "test": "Test connection",
+      "testHint": "Test runs OIDC discovery against the saved configuration — save first.",
+      "testOk": "Discovery succeeded — issuer is reachable: {{issuer}}",
+      "testFailed": "Discovery failed",
+      "saved": "SSO settings saved",
+      "saveError": "Failed to save SSO settings"
     }
   },
   "analytics": {
@@ -3595,6 +3621,16 @@
       "sessionExpired": "Your verification session expired. Please sign in again.",
       "locked": "Account temporarily locked due to too many attempts. Try again later.",
       "lockedRetry": "Account temporarily locked. Try again in {{seconds}} seconds."
+    },
+    "ssoDivider": "or",
+    "ssoSignIn": "Sign in with SSO",
+    "ssoErrors": {
+      "config": "SSO is misconfigured — check the SSO settings or sign in with email and password.",
+      "state": "The SSO sign-in expired or was tampered with. Please try again.",
+      "idp": "The identity provider rejected the sign-in. Please try again or use email and password.",
+      "inactive": "Your admin account is deactivated.",
+      "not_provisioned": "No admin account matches your SSO identity. Ask an administrator to invite you.",
+      "no_email": "Your identity provider supplied no email address — an account cannot be created."
     }
   },
   "slideshow": {

@@ -96,6 +96,9 @@ export interface PublicSettings {
   seo_meta_noindex?: boolean;
   seo_meta_nofollow?: boolean;
   seo_meta_noai?: boolean;
+  // OIDC SSO (#798) — drives the "Sign in with SSO" button on /admin/login.
+  oidc_enabled?: boolean;
+  oidc_button_label?: string;
 }
 
 export const publicSettingsService = {

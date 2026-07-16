@@ -61,6 +61,16 @@ export const AdminLoginPage: React.FC = () => {
     }
   }, [searchParams, t]);
 
+  // SSO callback failures land here as ?sso_error=<key> (#798) — surface a
+  // translated message instead of a silent bounce back to the form.
+  useEffect(() => {
+    const ssoError = searchParams.get('sso_error');
+    if (!ssoError) return;
+    const known = ['config', 'state', 'idp', 'inactive', 'not_provisioned', 'no_email'];
+    const key = known.includes(ssoError) ? ssoError : 'idp';
+    toast.error(t(`adminLogin.ssoErrors.${key}`));
+  }, [searchParams, t]);
+
   // Fresh instance with no admin yet → send to first-run setup.
   const { data: setupStatus } = useQuery({
     queryKey: ['setup-status'],
@@ -337,6 +347,31 @@ export const AdminLoginPage: React.FC = () => {
             >
               {t('adminLogin.signIn')}
             </Button>
+
+            {/* SSO (#798): plain navigation — the backend route redirects to
+                the IdP; the callback sets the same admin cookie as the local
+                login and lands on the dashboard. */}
+            {settingsData?.oidc_enabled === true && (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 border-t border-neutral-200" />
+                  <span className="text-xs uppercase tracking-wide text-neutral-400">
+                    {t('adminLogin.ssoDivider', 'or')}
+                  </span>
+                  <div className="flex-1 border-t border-neutral-200" />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full"
+                  leftIcon={<KeyRound className="w-4 h-4" />}
+                  onClick={() => { window.location.href = '/api/auth/admin/sso/login'; }}
+                >
+                  {settingsData.oidc_button_label?.trim() || t('adminLogin.ssoSignIn', 'Sign in with SSO')}
+                </Button>
+              </>
+            )}
           </form>
           ) : (
           <form onSubmit={handleMfaSubmit} className="space-y-6">

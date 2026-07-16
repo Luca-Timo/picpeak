@@ -42,6 +42,7 @@ import {
   WebhooksTab,
   AccountingTab,
   WhatsAppTab,
+  SsoTab,
 } from '../../features/settings';
 import { EmailConfigPage } from './EmailConfigPage';
 import { BrandingPage } from './BrandingPage';
@@ -72,6 +73,7 @@ type TabType =
   | 'email'
   | 'moderation'
   | 'security'
+  | 'sso'
   | 'imageSecurity'
   | 'seo'
   | 'apiTokens'
@@ -104,7 +106,7 @@ const ALL_TAB_KEYS: TabType[] = [
   'features', 'general', 'events', 'eventTypes',
   'branding', 'categories', 'thumbnails', 'styling', 'cms',
   'email', 'moderation',
-  'security', 'imageSecurity', 'seo',
+  'security', 'sso', 'imageSecurity', 'seo',
   'apiTokens', 'webhooks',
   'status', 'analytics', 'backup',
   'businessProfile', 'crm', 'contracts', 'reminderTemplates', 'accounting', 'whatsapp',
@@ -260,6 +262,7 @@ export const SettingsPage: React.FC = () => {
       label: t('settings.groups.privacySecurity', 'Privacy & Security'),
       items: [
         { key: 'security',      label: t('settings.security.title'),                   icon: Lock },
+        { key: 'sso',           label: t('settings.sso.title',           'Single Sign-On'), icon: KeyRound },
         { key: 'imageSecurity', label: t('settings.imageSecurity.title', 'Image Protection'), icon: Shield },
         { key: 'seo',           label: t('settings.seo.title',           'SEO & Robots'), icon: Search },
       ],
@@ -471,6 +474,8 @@ export const SettingsPage: React.FC = () => {
               setOverrideDirty={setOverrideDirty}
             />
           )}
+
+          {activeTab === 'sso' && <SsoTab />}
 
           {activeTab === 'security' && (
             <SecurityTab

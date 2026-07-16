@@ -36,7 +36,10 @@ const getStoragePath = () => process.env.STORAGE_PATH || path.join(__dirname, '.
 // (#800; writing false would reopen system-event-type deletion) and
 // setup_token is the first-run bootstrap secret. Every handler that loops
 // arbitrary request keys into app_settings must strip these first.
-const RESERVED_SETTING_KEYS = ['setup_wizard_completed', 'setup_token'];
+// oidc_client_secret is reserved too: it is AES-encrypted at rest and only
+// writable through PUT /sso below — a generic upsert would store plaintext
+// and break decryption (#798).
+const RESERVED_SETTING_KEYS = ['setup_wizard_completed', 'setup_token', 'oidc_client_secret'];
 const stripReservedSettingKeys = (settings) => {
   for (const key of RESERVED_SETTING_KEYS) {
     delete settings[key];
@@ -376,6 +379,110 @@ router.put('/slideshow', adminAuth, requirePermission('settings.edit'), async (r
 });
 
 // Get settings by type
+// ──────────────────────────────────────────────────────────────────────────
+// OIDC SSO settings (#798). Dedicated endpoints — NOT the generic upsert —
+// because the client secret must be encrypted at rest and never echoed back.
+// ──────────────────────────────────────────────────────────────────────────
+
+// Read the SSO config. The secret is redacted to a set/unset flag; the
+// computed redirect URI is included for copy-paste into the IdP client.
+router.get('/sso', adminAuth, requirePermission('settings.view'), async (req, res) => {
+  try {
+    const oidcService = require('../services/oidcService');
+    const cfg = await oidcService.getOidcConfig();
+    res.json({
+      oidc_enabled: cfg.enabled,
+      oidc_issuer_url: cfg.issuerUrl || '',
+      oidc_client_id: cfg.clientId || '',
+      oidc_client_secret_set: Boolean(cfg.clientSecret),
+      oidc_autoprovision: cfg.autoprovision,
+      oidc_default_role: cfg.defaultRole,
+      oidc_button_label: cfg.buttonLabel || '',
+      oidc_scopes: cfg.scopes,
+      redirect_uri: await oidcService.getRedirectUri(),
+    });
+  } catch (error) {
+    logger.error('Failed to read SSO settings', { error: error.message });
+    res.status(500).json({ error: 'Failed to read SSO settings' });
+  }
+});
+
+router.put('/sso', adminAuth, requirePermission('settings.edit'), [
+  body('oidc_enabled').optional().isBoolean(),
+  body('oidc_issuer_url').optional({ checkFalsy: true }).isURL({ protocols: ['http', 'https'], require_tld: false }),
+  body('oidc_client_id').optional().isString().trim(),
+  body('oidc_client_secret').optional().isString(),
+  body('oidc_autoprovision').optional().isBoolean(),
+  body('oidc_default_role').optional().isString().trim(),
+  body('oidc_button_label').optional().isString().trim().isLength({ max: 60 }),
+  body('oidc_scopes').optional().isString().trim(),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    const oidcService = require('../services/oidcService');
+
+    // Enabling requires a complete config, or the login button would lead
+    // straight to an error page.
+    if (req.body.oidc_enabled === true) {
+      const current = await oidcService.getOidcConfig();
+      const issuer = req.body.oidc_issuer_url ?? current.issuerUrl;
+      const clientId = req.body.oidc_client_id ?? current.clientId;
+      const secretPresent = (typeof req.body.oidc_client_secret === 'string' && req.body.oidc_client_secret.length > 0)
+        || Boolean(current.clientSecret);
+      if (!issuer || !clientId || !secretPresent) {
+        return res.status(400).json({ error: 'Issuer URL, client ID and client secret must be configured before enabling SSO' });
+      }
+    }
+
+    // Default role must exist — a typo here would brick JIT provisioning.
+    if (req.body.oidc_default_role !== undefined) {
+      const role = await db('roles').where('name', req.body.oidc_default_role).first();
+      if (!role) {
+        return res.status(400).json({ error: `Unknown role: ${req.body.oidc_default_role}` });
+      }
+    }
+
+    await oidcService.saveOidcSettings(req.body);
+
+    await logActivity('sso_settings_updated',
+      { changes: Object.keys(req.body).filter((k) => k !== 'oidc_client_secret') },
+      null,
+      { type: 'admin', id: req.admin.id, name: req.admin.username }
+    );
+
+    res.json({ message: 'SSO settings saved' });
+  } catch (error) {
+    logger.error('Failed to save SSO settings', { error: error.message });
+    res.status(500).json({ error: 'Failed to save SSO settings' });
+  }
+});
+
+// Server-side discovery probe: confirms the issuer is reachable and speaks
+// OIDC before the admin flips the enable toggle. Uses the SAVED config.
+router.post('/sso/test', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+  try {
+    const oidcService = require('../services/oidcService');
+    const cfg = await oidcService.getOidcConfig();
+    if (!oidcService.isConfigured(cfg)) {
+      return res.status(400).json({ ok: false, error: 'Issuer URL, client ID and client secret must be saved first' });
+    }
+    oidcService.invalidateDiscoveryCache();
+    const { issuerMetadata } = await oidcService.getClient(cfg);
+    res.json({
+      ok: true,
+      issuer: issuerMetadata.issuer,
+      authorization_endpoint: issuerMetadata.authorization_endpoint,
+      token_endpoint: issuerMetadata.token_endpoint,
+    });
+  } catch (error) {
+    logger.warn('SSO discovery test failed', { error: error.message });
+    res.status(400).json({ ok: false, error: `Discovery failed: ${error.message}` });
+  }
+});
+
 router.get('/:type', adminAuth, requirePermission('settings.view'), async (req, res) => {
   try {
     const { type } = req.params;

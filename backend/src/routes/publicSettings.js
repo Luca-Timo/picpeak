@@ -27,7 +27,12 @@ router.get('/', async (req, res) => {
               // backend route also enforces it via getMaxFilesPerUpload,
               // but a client-side guard saves a 4MB+ round-trip when the
               // limit is small.
-              'general_max_files_per_upload'
+              'general_max_files_per_upload',
+              // #798 — the admin login page needs to know whether to show
+              // the "Sign in with SSO" button (and its label). Only these
+              // two oidc_* keys are public; issuer/client stay admin-only.
+              'oidc_enabled',
+              'oidc_button_label'
             ]);
         })
         .select('setting_key', 'setting_value');
@@ -128,6 +133,10 @@ router.get('/', async (req, res) => {
       crm_overview_show_outstanding: settingsObject.crm_overview_show_outstanding !== false,
       crm_overview_show_quotes: settingsObject.crm_overview_show_quotes !== false,
       crm_overview_show_invoices: settingsObject.crm_overview_show_invoices !== false,
+      // OIDC SSO (#798): the admin login page renders the "Sign in with
+      // SSO" button from these. Issuer/client/secret are never public.
+      oidc_enabled: settingsObject.oidc_enabled === true,
+      oidc_button_label: settingsObject.oidc_button_label || '',
       enable_recaptcha: settingsObject.security_enable_recaptcha === true || settingsObject.security_enable_recaptcha === 'true',
       recaptcha_site_key: settingsObject.security_recaptcha_site_key || null,
       maintenance_mode: settingsObject.general_maintenance_mode === true || settingsObject.general_maintenance_mode === 'true',

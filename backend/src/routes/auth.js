@@ -42,7 +42,7 @@ const router = express.Router();
  * both produce an identical session. `lockoutKey` is the identifier the user
  * typed (username or email) so success/failure tracking stays in one bucket.
  */
-async function completeAdminLogin(req, res, admin, ipAddress, userAgent, lockoutKey) {
+async function establishAdminSession(res, admin, ipAddress, userAgent, lockoutKey) {
   await trackSuccessfulLogin(lockoutKey, ipAddress, userAgent);
 
   // A normal login means the first-run wizard is over — the wizard never hits
@@ -75,18 +75,21 @@ async function completeAdminLogin(req, res, admin, ipAddress, userAgent, lockout
 
   setAdminAuthCookie(res, token);
 
-  return res.json({
-    user: {
-      id: admin.id,
-      username: admin.username,
-      email: admin.email,
-      mustChangePassword: admin.must_change_password || false,
-      role: admin.role_name ? {
-        name: admin.role_name,
-        displayName: admin.role_display_name
-      } : null
-    }
-  });
+  return {
+    id: admin.id,
+    username: admin.username,
+    email: admin.email,
+    mustChangePassword: admin.must_change_password || false,
+    role: admin.role_name ? {
+      name: admin.role_name,
+      displayName: admin.role_display_name
+    } : null
+  };
+}
+
+async function completeAdminLogin(req, res, admin, ipAddress, userAgent, lockoutKey) {
+  const user = await establishAdminSession(res, admin, ipAddress, userAgent, lockoutKey);
+  return res.json({ user });
 }
 
 // Admin login with enhanced security
@@ -845,6 +848,117 @@ router.post('/password-strength', [
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to check password strength' });
+  }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// OIDC SSO for admins (#798, phase 1)
+//
+// Authorization-code + PKCE. The per-request secrets (state, nonce, PKCE
+// verifier) cross the IdP redirect in a short-lived signed cookie —
+// httpOnly, SameSite=Lax (the IdP returns via a top-level GET, which Lax
+// permits), scoped to this route prefix. Token/claim validation happens in
+// oidcService via openid-client; a successful callback reuses the exact
+// session establishment of the local login, so an SSO session is
+// indistinguishable from a password one downstream. MFA is the IdP's job on
+// this path — local TOTP guards the password flow SSO users don't take.
+// ──────────────────────────────────────────────────────────────────────────
+
+const OIDC_STATE_COOKIE = 'oidc_state';
+
+function oidcStateCookieOptions(req) {
+  return {
+    httpOnly: true,
+    secure: Boolean(req.secure),
+    sameSite: 'Lax',
+    path: '/api/auth/admin/sso',
+    maxAge: 10 * 60 * 1000,
+  };
+}
+
+// Kick off the IdP round-trip. 404 when SSO is off so the endpoint is
+// invisible on non-SSO installs.
+router.get('/admin/sso/login', async (req, res) => {
+  const oidcService = require('../services/oidcService');
+  try {
+    const { url, state, nonce, codeVerifier } = await oidcService.buildAuthorizationRequest();
+    const stash = jwt.sign(
+      { type: 'oidc_state', s: state, n: nonce, cv: codeVerifier },
+      process.env.JWT_SECRET,
+      { expiresIn: '10m', issuer: 'picpeak-auth' }
+    );
+    res.cookie(OIDC_STATE_COOKIE, stash, oidcStateCookieOptions(req));
+    return res.redirect(url);
+  } catch (error) {
+    if (error.code === 'OIDC_NOT_CONFIGURED') {
+      return res.status(404).json({ error: 'SSO is not enabled' });
+    }
+    logger.error('OIDC login initiation failed', { error: error.message });
+    return res.redirect('/admin/login?sso_error=config');
+  }
+});
+
+// IdP redirect target. Every failure lands back on the login page with a
+// translatable error key — never a raw error, never a broken JSON screen.
+router.get('/admin/sso/callback', async (req, res) => {
+  const oidcService = require('../services/oidcService');
+  const fail = (key) => res.redirect(`/admin/login?sso_error=${key}`);
+
+  const stashCookie = req.cookies?.[OIDC_STATE_COOKIE];
+  res.clearCookie(OIDC_STATE_COOKIE, { ...oidcStateCookieOptions(req), maxAge: undefined });
+  if (!stashCookie) return fail('state');
+
+  let stash;
+  try {
+    stash = jwt.verify(stashCookie, process.env.JWT_SECRET, { issuer: 'picpeak-auth' });
+    if (stash.type !== 'oidc_state') throw new Error('wrong token type');
+  } catch (_) {
+    return fail('state');
+  }
+
+  try {
+    // Reconstruct the exact redirect URI + the IdP's query for validation.
+    const callbackUrl = new URL(await oidcService.getRedirectUri());
+    callbackUrl.search = req.originalUrl.split('?')[1] || '';
+
+    const claims = await oidcService.handleCallback(callbackUrl.href, {
+      state: stash.s,
+      nonce: stash.n,
+      codeVerifier: stash.cv,
+    });
+
+    const resolved = await oidcService.resolveAdminFromClaims(claims);
+
+    // Reload with role info so the session payload matches a local login.
+    const admin = await db('admin_users')
+      .leftJoin('roles', 'roles.id', 'admin_users.role_id')
+      .where('admin_users.id', resolved.id)
+      .select('admin_users.*', 'roles.name as role_name', 'roles.display_name as role_display_name')
+      .first();
+
+    const ipAddress = getClientIp(req);
+    const userAgent = req.headers['user-agent'] || '';
+    await establishAdminSession(res, admin, ipAddress, userAgent, admin.username);
+
+    await logActivity('admin_sso_login', { provider: 'oidc' }, null, {
+      type: 'admin', id: admin.id, name: admin.username,
+    });
+
+    return res.redirect('/admin/dashboard');
+  } catch (error) {
+    const codeMap = {
+      OIDC_NOT_CONFIGURED: 'config',
+      OIDC_BAD_CONFIG: 'config',
+      OIDC_INACTIVE: 'inactive',
+      OIDC_NOT_PROVISIONED: 'not_provisioned',
+      OIDC_NO_EMAIL: 'no_email',
+      OIDC_BAD_CLAIMS: 'idp',
+    };
+    const key = codeMap[error.code] || 'idp';
+    // 'idp' covers token-exchange/validation failures from openid-client
+    // (bad state/nonce, signature, issuer mismatch, IdP-side errors).
+    logger.warn('OIDC callback failed', { error: error.message, key });
+    return fail(key);
   }
 });
 
