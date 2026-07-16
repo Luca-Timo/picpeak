@@ -60,6 +60,9 @@ services:
       - SMTP_PASS=${SMTP_PASS}
       - EMAIL_FROM=${EMAIL_FROM:-noreply@picpeak.local}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      # Public API origin for split-origin deployments (#798 SSO redirect_uri).
+      # Empty = same origin as FRONTEND_URL (the standard proxied setup).
+      - API_URL=${API_URL:-}
       - ADMIN_URL=${ADMIN_URL:-http://localhost:3001}
       - TZ=${TZ:-UTC}
       - STORAGE_PATH=/app/storage

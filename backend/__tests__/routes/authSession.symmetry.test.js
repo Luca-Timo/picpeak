@@ -32,9 +32,17 @@ jest.mock('../../src/database/db', () => {
     if (table === 'admin_users') {
       let rowFilter = () => true;
       return {
+        // The session route joins roles for the adminUser payload (#798);
+        // fake rows carry no role fields, so the join is a pass-through.
+        leftJoin() {
+          return this;
+        },
         where(criteria) {
           rowFilter = (row) => {
-            return Object.entries(criteria).every(([k, v]) => {
+            return Object.entries(criteria).every(([rawKey, v]) => {
+              // Joined queries prefix columns ('admin_users.id') — the fake
+              // rows use bare names.
+              const k = rawKey.replace(/^admin_users\./, '');
               if (k === 'is_active') return Boolean(row.is_active) === Boolean(v);
               return row[k] === v;
             });
@@ -50,7 +58,12 @@ jest.mock('../../src/database/db', () => {
           if (!row) return undefined;
           if (!this._cols) return row;
           const out = {};
-          for (const c of this._cols) out[c] = row[c];
+          for (const c of this._cols) {
+            // Support 'table.col' and 'table.col as alias' shapes.
+            const [source, alias] = c.split(/\s+as\s+/i);
+            const bare = source.includes('.') ? source.split('.').pop() : source;
+            out[alias || bare] = row[bare];
+          }
           return out;
         },
       };

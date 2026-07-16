@@ -222,6 +222,21 @@ describe('OIDC SSO (#798)', () => {
     expect(cfg.clientSecret).toBe(idp.clientSecret);
   });
 
+  it('refuses local password login for OIDC-owned accounts', async () => {
+    // Give the JIT admin a KNOWN password hash directly in the DB — the
+    // auth_provider check must reject the login even with valid credentials
+    // (otherwise a password reset would mint an IdP-bypassing local login).
+    await db('admin_users').where({ id: agentCookies.jitAdminId }).update({
+      password_hash: await bcrypt.hash('KnownPass123', 4),
+    });
+    const row = await db('admin_users').where({ id: agentCookies.jitAdminId }).first();
+
+    const res = await request(app)
+      .post('/api/auth/admin/login')
+      .send({ username: row.email, password: 'KnownPass123' });
+    expect(res.status).toBe(401);
+  });
+
   it('returns 404 from /sso/login when SSO is disabled', async () => {
     await oidcService.saveOidcSettings({ oidc_enabled: false });
     await request(app).get('/api/auth/admin/sso/login').expect(404);

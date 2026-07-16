@@ -50,12 +50,19 @@ export const AdminAuthProvider: React.FC<AdminAuthProviderProps> = ({ children }
           }
         }
 
-        const response = await api.get<{ valid: boolean; type: string; adminUsername?: string; user?: string }>(
+        const response = await api.get<{ valid: boolean; type: string; adminUsername?: string; user?: string; adminUser?: AdminUser | null }>(
           '/auth/session'
         );
 
         if (response.data?.valid && response.data.type === 'admin') {
           setIsAuthenticated(true);
+          // Redirect-established sessions (SSO, #798) never went through
+          // login(), so sessionStorage has no user — hydrate from the
+          // session payload. Server truth also refreshes stale local copies.
+          if (response.data.adminUser) {
+            setUser(response.data.adminUser);
+            sessionStorage.setItem('admin_user', JSON.stringify(response.data.adminUser));
+          }
         } else {
           sessionStorage.removeItem('admin_user');
           setIsAuthenticated(false);
