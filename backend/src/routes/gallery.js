@@ -1833,7 +1833,7 @@ router.post('/:eventId/upload', verifyGalleryAccess, denySlideshowToken, async (
 
     // Import multer and photo processing
     const multer = require('multer');
-    const { getAllowedMimeTypes, getMaxFilesPerUpload } = require('../services/uploadSettings');
+    const { getAllowedMimeTypes, getMaxFilesPerUpload, getMaxFileSizeBytes, DEFAULT_MAX_FILE_SIZE_MB } = require('../services/uploadSettings');
     const { validateFileType } = require('../utils/fileSecurityUtils');
 
     // Resolve allowed MIME types from settings
@@ -1859,10 +1859,22 @@ router.post('/:eventId/upload', verifyGalleryAccess, denySlideshowToken, async (
       maxFilesPerUpload = 500;
     }
 
+    // Per-file size cap was hardcoded to 50MB here, so the admin's Settings →
+    // General → "Max File Size (MB)" value (general_max_file_size_mb) never
+    // applied to guest uploads — a guest could not upload a large video even
+    // when the admin allowed it (reported on #613 by mat1990dj). Resolve it from
+    // settings like the count above; fall back to the 50MB default on read error.
+    let maxFileSizeBytes;
+    try {
+      maxFileSizeBytes = await getMaxFileSizeBytes();
+    } catch {
+      maxFileSizeBytes = DEFAULT_MAX_FILE_SIZE_MB * 1024 * 1024;
+    }
+
     const upload = multer({
       dest: tempUploadDir,
       limits: {
-        fileSize: 50 * 1024 * 1024, // 50MB per file (separate concern from #613)
+        fileSize: maxFileSizeBytes,
         files: maxFilesPerUpload
       },
       fileFilter: (req, file, cb) => {
@@ -1878,6 +1890,12 @@ router.post('/:eventId/upload', verifyGalleryAccess, denySlideshowToken, async (
     upload(req, res, async (err) => {
       if (err) {
         logger.error('Upload error:', err);
+        // Turn multer's generic "File too large" into an actionable message
+        // that names the configured limit.
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          const limitMb = Math.floor(maxFileSizeBytes / (1024 * 1024));
+          return res.status(400).json({ error: `File too large. Maximum size is ${limitMb} MB per file.` });
+        }
         return res.status(400).json({ error: err.message });
       }
       

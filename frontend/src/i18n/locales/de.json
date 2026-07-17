@@ -159,7 +159,7 @@
     "noCategory": "Keine Kategorie",
     "eventSpecific": "(Veranstaltungsspezifisch)",
     "clickToUpload": "Klicken zum Hochladen oder per Drag & Drop",
-    "fileRequirements": "JPEG, PNG oder WebP (max. 50MB pro Datei, {{limit}} Dateien pro Upload)",
+    "fileRequirements": "JPEG, PNG oder WebP (max. {{sizeLimit}}MB pro Datei, {{limit}} Dateien pro Upload)",
     "selectedFiles": "Ausgewählte Dateien",
     "uploading": "Wird hochgeladen...",
     "transferring": "Übertragung",
@@ -192,7 +192,8 @@
     "processingFailed_one": "{{count}} Foto konnte nicht verarbeitet werden",
     "processingFailed_other": "{{count}} Fotos konnten nicht verarbeitet werden",
     "uploadingChunks_one": "{{count}} Teil wird hochgeladen",
-    "uploadingChunks_other": "{{count}} Teile werden hochgeladen"
+    "uploadingChunks_other": "{{count}} Teile werden hochgeladen",
+    "fileTooLarge": "Datei zu groß: {{name}} (max. {{limit}}MB)"
   },
   "navigation": {
     "dashboard": "Dashboard",

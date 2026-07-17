@@ -43,6 +43,14 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
     ? Number(publicSettings?.general_max_files_per_upload)
     : 500;
 
+  // Per-file size limit (MB). Was hardcoded to 50MB below, so the admin's
+  // "Max File Size" setting never applied to guests (#613 follow-up). Surfaced
+  // via publicSettings (default 50); the backend enforces the same value.
+  const maxFileSizeMb = Number.isFinite(Number(publicSettings?.general_max_file_size_mb))
+    ? Number(publicSettings?.general_max_file_size_mb)
+    : 50;
+  const maxFileSizeBytes = maxFileSizeMb * 1024 * 1024;
+
   const allowedMimeTypes = useMemo(
     () => extensionsToMimeTypes(publicSettings?.allowed_file_types),
     [publicSettings?.allowed_file_types]
@@ -60,9 +68,9 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
         toast.error(`Invalid file type: ${file.name}`);
         return false;
       }
-      // Check file size (50MB max)
-      if (file.size > 50 * 1024 * 1024) {
-        toast.error(`File too large: ${file.name}`);
+      // Check file size against the configured per-file limit.
+      if (file.size > maxFileSizeBytes) {
+        toast.error(t('upload.fileTooLarge', { name: file.name, limit: maxFileSizeMb }));
         return false;
       }
       return true;
@@ -228,7 +236,7 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
                     {/* #613 — pass { limit } so `{{limit}}` interpolates
                         with the real number from settings instead of
                         rendering literally. */}
-                    {t('upload.fileRequirements', { limit: maxFilesPerUpload })}
+                    {t('upload.fileRequirements', { limit: maxFilesPerUpload, sizeLimit: maxFileSizeMb })}
                   </p>
                   <input
                     type="file"

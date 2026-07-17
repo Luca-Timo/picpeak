@@ -131,7 +131,7 @@
     "noCategory": "Geen categorie",
     "eventSpecific": "(Evenement-specifiek)",
     "clickToUpload": "Klik om te uploaden of sleep bestanden hierheen",
-    "fileRequirements": "JPEG, PNG of WebP (max. 50 MB per bestand, {{limit}} bestanden per upload)",
+    "fileRequirements": "JPEG, PNG of WebP (max. {{sizeLimit}} MB per bestand, {{limit}} bestanden per upload)",
     "selectedFiles": "Geselecteerde bestanden",
     "uploading": "Uploaden...",
     "uploadComplete": "Upload voltooid!",
