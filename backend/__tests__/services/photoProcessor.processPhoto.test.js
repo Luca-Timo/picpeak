@@ -75,6 +75,13 @@ jest.mock('../../src/services/imageProcessor', () => {
     withLocalCopy: jest.fn(async (key, fn) =>
       fn(`/tmp/local-copy-${require('path').basename(key)}`)
     ),
+    // Pass-through for ordinary (non-RAW) images: returns the path unchanged
+    // with a no-op cleanup, matching the real helper's behaviour for jpg/png.
+    withProcessableImage: jest.fn(async (localPath) => ({
+      path: localPath,
+      outputBasename: undefined,
+      cleanup: () => {},
+    })),
   };
 });
 

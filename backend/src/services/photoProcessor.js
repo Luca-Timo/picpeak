@@ -465,21 +465,31 @@ async function processPhoto(photoId) {
         if (result.metadata.height) updateData.height = result.metadata.height;
       }
     } else {
+      // RAW/DNG can't be sharp-decoded directly — extract the embedded JPEG
+      // preview and thumbnail/measure that. Pass-through for ordinary images.
+      // This is the ASYNC worker path (backgroundProcessor → processPhoto), the
+      // one real uploads actually take; the synchronous processUploadedPhotos()
+      // has the same handling.
+      const proc = await withProcessableImage(localPath, photo.filename);
       try {
-        const thumbnailPath = await generateThumbnail(localPath);
-        if (thumbnailPath) updateData.thumbnail_path = thumbnailPath;
-      } catch (e) {
-        logger.warn(`processPhoto: thumbnail generation failed for ${photoId}`, { error: e.message });
-      }
-      try {
-        const sharp = require('sharp');
-        const metadata = await sharp(localPath).metadata();
-        if (metadata.width && metadata.height) {
-          updateData.width = metadata.width;
-          updateData.height = metadata.height;
+        try {
+          const thumbnailPath = await generateThumbnail(proc.path, { outputBasename: proc.outputBasename });
+          if (thumbnailPath) updateData.thumbnail_path = thumbnailPath;
+        } catch (e) {
+          logger.warn(`processPhoto: thumbnail generation failed for ${photoId}`, { error: e.message });
         }
-      } catch (e) {
-        logger.warn(`processPhoto: dimensions extraction failed for ${photoId}`, { error: e.message });
+        try {
+          const sharp = require('sharp');
+          const metadata = await sharp(proc.path).metadata();
+          if (metadata.width && metadata.height) {
+            updateData.width = metadata.width;
+            updateData.height = metadata.height;
+          }
+        } catch (e) {
+          logger.warn(`processPhoto: dimensions extraction failed for ${photoId}`, { error: e.message });
+        }
+      } finally {
+        await proc.cleanup();
       }
     }
   });

@@ -10,7 +10,7 @@ const path = require('path');
 const fsp = require('fs/promises');
 const sharp = require('sharp');
 const { db } = require('../database/db');
-const { generateThumbnail, extractCaptureDate } = require('./imageProcessor');
+const { generateThumbnail, extractCaptureDate, withProcessableImage } = require('./imageProcessor');
 const { generatePhotoFilename } = require('../utils/filenameSanitizer');
 const watermarkGeneratorService = require('./watermarkGeneratorService');
 const { getStorage } = require('./storage');
@@ -61,24 +61,30 @@ async function replacePhoto(existingPhoto, newFileTempPath, { originalFilename, 
       // No EXIF — keep null
     }
 
-    let width = null;
-    let height = null;
-    try {
-      const metadata = await sharp(newFileTempPath).metadata();
-      width = metadata.width || null;
-      height = metadata.height || null;
-    } catch {
-      // Non-image or corrupt
-    }
-
     const stats = await fsp.stat(newFileTempPath);
 
-    // Generate new thumbnail FROM the local temp before uploading the original.
+    // RAW/DNG isn't sharp-decodable — extract the embedded JPEG preview first
+    // (pass-through for ordinary images), then measure + thumbnail that. Mirrors
+    // the ingest paths (processPhoto / processUploadedPhotos).
+    let width = null;
+    let height = null;
     let thumbnailPath = null;
+    const proc = await withProcessableImage(newFileTempPath, originalFilename);
     try {
-      thumbnailPath = await generateThumbnail(newFileTempPath);
-    } catch {
-      logger.warn('Failed to generate thumbnail for replaced photo', { photoId: existingPhoto.id });
+      try {
+        const metadata = await sharp(proc.path).metadata();
+        width = metadata.width || null;
+        height = metadata.height || null;
+      } catch {
+        // Non-image or corrupt
+      }
+      try {
+        thumbnailPath = await generateThumbnail(proc.path, { outputBasename: proc.outputBasename });
+      } catch {
+        logger.warn('Failed to generate thumbnail for replaced photo', { photoId: existingPhoto.id });
+      }
+    } finally {
+      await proc.cleanup();
     }
 
     // Delete old assets BEFORE uploading the new key — if they share the path
