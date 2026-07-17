@@ -28,6 +28,11 @@ router.get('/', async (req, res) => {
               // but a client-side guard saves a 4MB+ round-trip when the
               // limit is small.
               'general_max_files_per_upload',
+              // Same rationale for the per-file size limit — the gallery upload
+              // component renders it in the requirements hint and guards
+              // client-side before posting an oversized file. Backend enforces
+              // via getMaxFileSizeBytes regardless.
+              'general_max_file_size_mb',
               // #798 — the admin login page needs to know whether to show
               // the "Sign in with SSO" button (and its label). Only these
               // two oidc_* keys are public; issuer/client stay admin-only.
@@ -207,6 +212,12 @@ router.get('/', async (req, res) => {
       general_max_files_per_upload: Number.isFinite(Number(settingsObject.general_max_files_per_upload))
         ? Number(settingsObject.general_max_files_per_upload)
         : 500,
+      // Per-file size limit (MB). Default mirrors uploadSettings.js
+      // DEFAULT_MAX_FILE_SIZE_MB so the gallery UI shows a sensible number on
+      // installs that never set it explicitly.
+      general_max_file_size_mb: Number.isFinite(Number(settingsObject.general_max_file_size_mb))
+        ? Number(settingsObject.general_max_file_size_mb)
+        : 50,
       // SEO meta tag flags (safe to expose - these are intended for crawlers)
       seo_meta_noindex: settingsObject.seo_meta_noindex === true,
       seo_meta_nofollow: settingsObject.seo_meta_nofollow === true,

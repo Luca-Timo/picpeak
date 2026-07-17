@@ -159,7 +159,7 @@
     "noCategory": "No category",
     "eventSpecific": "(Event specific)",
     "clickToUpload": "Click to upload or drag and drop",
-    "fileRequirements": "JPEG, PNG or WebP (max 50MB per file, {{limit}} files per upload)",
+    "fileRequirements": "JPEG, PNG or WebP (max {{sizeLimit}}MB per file, {{limit}} files per upload)",
     "selectedFiles": "Selected files",
     "uploading": "Uploading...",
     "transferring": "Transferring",
@@ -192,7 +192,8 @@
     "processingFailed_one": "{{count}} photo failed to process",
     "processingFailed_other": "{{count}} photos failed to process",
     "uploadingChunks_one": "{{count}} chunk uploading",
-    "uploadingChunks_other": "{{count}} chunks uploading"
+    "uploadingChunks_other": "{{count}} chunks uploading",
+    "fileTooLarge": "File too large: {{name}} (max {{limit}}MB)"
   },
   "navigation": {
     "dashboard": "Dashboard",
