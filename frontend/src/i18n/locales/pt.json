@@ -131,7 +131,7 @@
     "noCategory": "Sem categoria",
     "eventSpecific": "(Específico do evento)",
     "clickToUpload": "Clique para enviar ou arraste e solte",
-    "fileRequirements": "JPEG, PNG ou WebP (máx. {{sizeLimit}}MB por arquivo, {{limit}} arquivos por envio)",
+    "fileRequirements": "{{types}} (máx. {{sizeLimit}}MB por arquivo, {{limit}} arquivos por envio)",
     "selectedFiles": "Arquivos selecionados",
     "uploading": "Enviando...",
     "uploadComplete": "Envio concluído!",

@@ -131,7 +131,7 @@
     "noCategory": "Aucune catégorie",
     "eventSpecific": "(Spécifique à l'événement)",
     "clickToUpload": "Cliquez pour téléverser ou glissez-déposez",
-    "fileRequirements": "JPEG, PNG ou WebP (max {{sizeLimit}} Mo par fichier, {{limit}} fichiers par téléversement)",
+    "fileRequirements": "{{types}} (max {{sizeLimit}} Mo par fichier, {{limit}} fichiers par téléversement)",
     "selectedFiles": "Fichiers sélectionnés",
     "uploading": "Téléversement en cours...",
     "transferring": "Transfert en cours",

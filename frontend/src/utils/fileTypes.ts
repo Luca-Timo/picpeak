@@ -17,26 +17,29 @@ const EXTENSION_TO_MIME: Record<string, string> = {
 const DEFAULT_ALLOWED = 'jpg,jpeg,png,webp';
 
 /**
+ * Return the configured supported extensions, excluding values the upload
+ * pipeline cannot validate. Falls back to the default list when none match.
+ */
+export function getSupportedExtensions(extString?: string | null): string[] {
+  const input = extString?.trim() || DEFAULT_ALLOWED;
+  const extensions = input
+    .split(',')
+    .map(ext => ext.trim().toLowerCase().replace(/^\./, ''))
+    .filter(ext => Boolean(EXTENSION_TO_MIME[ext]));
+
+  return extensions.length > 0
+    ? Array.from(new Set(extensions))
+    : getSupportedExtensions(DEFAULT_ALLOWED);
+}
+
+/**
  * Convert a comma-separated extension string (e.g. "jpg,png,mp4") to an
  * array of unique MIME types.
  */
 export function extensionsToMimeTypes(extString?: string | null): string[] {
-  const input = extString?.trim() || DEFAULT_ALLOWED;
-  const mimeSet = new Set<string>();
-
-  input.split(',').forEach(ext => {
-    const cleaned = ext.trim().toLowerCase().replace(/^\./, '');
-    const mime = EXTENSION_TO_MIME[cleaned];
-    if (mime) {
-      mimeSet.add(mime);
-    }
-  });
-
-  if (mimeSet.size === 0) {
-    return extensionsToMimeTypes(DEFAULT_ALLOWED);
-  }
-
-  return Array.from(mimeSet);
+  return Array.from(new Set(
+    getSupportedExtensions(extString).map(extension => EXTENSION_TO_MIME[extension])
+  ));
 }
 
 /**

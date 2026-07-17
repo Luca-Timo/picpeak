@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { Button } from '../common';
 import { api } from '../../config/api';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
-import { extensionsToMimeTypes, extensionsToAcceptString } from '../../utils/fileTypes';
+import { extensionsToMimeTypes, extensionsToAcceptString, getSupportedExtensions } from '../../utils/fileTypes';
 
 interface UserPhotoUploadProps {
   eventId: number;
@@ -58,6 +58,11 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
 
   const acceptString = useMemo(
     () => extensionsToAcceptString(publicSettings?.allowed_file_types),
+    [publicSettings?.allowed_file_types]
+  );
+
+  const allowedExtensions = useMemo(
+    () => getSupportedExtensions(publicSettings?.allowed_file_types),
     [publicSettings?.allowed_file_types]
   );
 
@@ -233,10 +238,11 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
                     {t('upload.clickToUpload')}
                   </p>
                   <p className="text-xs text-muted-theme">
-                    {/* #613 — pass { limit } so `{{limit}}` interpolates
-                        with the real number from settings instead of
-                        rendering literally. */}
-                    {t('upload.fileRequirements', { limit: maxFilesPerUpload, sizeLimit: maxFileSizeMb })}
+                    {t('upload.fileRequirements', {
+                      types: allowedExtensions.map(extension => extension.toUpperCase()).join(', '),
+                      limit: maxFilesPerUpload,
+                      sizeLimit: maxFileSizeMb,
+                    })}
                   </p>
                   <input
                     type="file"

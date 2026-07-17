@@ -159,7 +159,7 @@
     "noCategory": "No category",
     "eventSpecific": "(Event specific)",
     "clickToUpload": "Click to upload or drag and drop",
-    "fileRequirements": "JPEG, PNG or WebP (max {{sizeLimit}}MB per file, {{limit}} files per upload)",
+    "fileRequirements": "{{types}} (max {{sizeLimit}}MB per file, {{limit}} files per upload)",
     "selectedFiles": "Selected files",
     "uploading": "Uploading...",
     "transferring": "Transferring",
