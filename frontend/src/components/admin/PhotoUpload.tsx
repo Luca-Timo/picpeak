@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { categoriesService } from '../../services/categories.service';
 import { settingsService } from '../../services/settings.service';
 import { useTranslation } from 'react-i18next';
-import { extensionsToMimeTypes, extensionsToAcceptString } from '../../utils/fileTypes';
+import { extensionsToMimeTypes, extensionsToAcceptString, extensionsToLabel } from '../../utils/fileTypes';
 import { useUploadProgress } from '../../hooks/useUploadProgress';
 
 interface PhotoUploadProps {
@@ -117,6 +117,15 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({ eventId, onUploadCompl
     () => extensionsToAcceptString(settings?.general_allowed_file_types),
     [settings?.general_allowed_file_types]
   );
+
+  const formatsLabel = useMemo(
+    () => extensionsToLabel(settings?.general_allowed_file_types),
+    [settings?.general_allowed_file_types]
+  );
+
+  const maxFileSizeMb = Number.isFinite(Number(settings?.general_max_file_size_mb))
+    ? Number(settings?.general_max_file_size_mb)
+    : 50;
 
   const remainingSlots = Math.max(maxFilesPerUpload - selectedFiles.length, 0);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -511,7 +520,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({ eventId, onUploadCompl
           {t('upload.clickToUpload')}
         </p>
         <p className="text-sm text-neutral-500 dark:text-neutral-400">
-          {t('upload.fileRequirements', { limit: maxFilesPerUpload })}
+          {t('upload.fileRequirements', { formats: formatsLabel, limit: maxFilesPerUpload, sizeLimit: maxFileSizeMb })}
         </p>
         <p
           className={clsx(
