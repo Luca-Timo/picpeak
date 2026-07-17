@@ -7,10 +7,79 @@ const crypto = require('crypto');
 const logger = require('../utils/logger');
 const { db } = require('../database/db');
 const { getStorage } = require('./storage');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
 
 // Configure sharp for better memory management with large batches
 sharp.cache(false); // Disable cache to prevent memory buildup
 sharp.concurrency(2); // Limit concurrent operations
+
+// Camera RAW / DNG formats. Sharp's bundled libvips has no raw loader, so these
+// can't be fed to sharp() directly — instead we extract the full-resolution JPEG
+// preview that every RAW file embeds (via exiftool) and process THAT. Gated
+// strictly by extension, so nothing here runs for ordinary jpg/png/webp photos.
+const RAW_EXTENSIONS = new Set([
+  'dng', 'cr2', 'cr3', 'nef', 'nrw', 'arw', 'sr2', 'srf',
+  'raf', 'rw2', 'orf', 'pef', 'srw', 'raw', '3fr', 'dcr', 'kdc'
+]);
+
+function isRawFilename(name) {
+  if (!name || typeof name !== 'string') return false;
+  const ext = path.extname(name).toLowerCase().replace(/^\./, '');
+  return RAW_EXTENSIONS.has(ext);
+}
+
+/**
+ * Extract the embedded full-resolution JPEG preview from a RAW/DNG file to a
+ * temp .jpg and return its path. Tries the largest previews first
+ * (JpgFromRaw → PreviewImage → ThumbnailImage). Throws if none can be extracted
+ * or the result isn't a valid image — the caller treats that as a processing
+ * failure (photo → 'failed'), same as any unreadable upload.
+ */
+async function extractRawPreview(rawPath) {
+  const outDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'picpeak-raw-'));
+  const outPath = path.join(outDir, `${crypto.randomBytes(4).toString('hex')}.jpg`);
+  const tags = ['-JpgFromRaw', '-PreviewImage', '-ThumbnailImage'];
+  let lastErr;
+  for (const tag of tags) {
+    try {
+      // `-b` writes the raw tag bytes to stdout; -w isn't reliable across tags,
+      // so capture stdout as a buffer and write it ourselves.
+      const { stdout } = await execFileAsync('exiftool', ['-b', tag, rawPath], {
+        encoding: 'buffer',
+        maxBuffer: 256 * 1024 * 1024,
+      });
+      if (stdout && stdout.length > 0) {
+        await fsp.writeFile(outPath, stdout);
+        // Validate it's a real, decodable image before handing it to the pipeline.
+        const meta = await sharp(outPath).metadata();
+        if (meta.width && meta.height) {
+          return { path: outPath, cleanup: () => fsp.rm(outDir, { recursive: true, force: true }).catch(() => {}) };
+        }
+      }
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  await fsp.rm(outDir, { recursive: true, force: true }).catch(() => {});
+  throw new Error(`No usable embedded preview in RAW file ${path.basename(rawPath)}: ${lastErr ? lastErr.message : 'no preview tag returned data'}`);
+}
+
+/**
+ * Give a Sharp-processable local image path for `localPath`. For ordinary
+ * images it's a pass-through (no cost). For RAW/DNG (by `sourceName` extension)
+ * it extracts the embedded JPEG preview and returns that, plus the basename to
+ * use for generated outputs so thumbnails/previews stay named after the source
+ * rather than the random temp file. Always call `cleanup()` when done.
+ */
+async function withProcessableImage(localPath, sourceName) {
+  if (!isRawFilename(sourceName)) {
+    return { path: localPath, outputBasename: undefined, cleanup: () => {} };
+  }
+  const { path: previewPath, cleanup } = await extractRawPreview(localPath);
+  return { path: previewPath, outputBasename: path.basename(sourceName), cleanup };
+}
 
 // Default thumbnail settings
 const DEFAULT_THUMBNAIL_WIDTH = 300;
@@ -297,9 +366,14 @@ async function ensureThumbnail(photo) {
       return null;
     }
     logger.info(`Ensuring thumbnail for photo ${photo.id} from key: ${sourceKey}`);
-    newThumbnailPath = await withLocalCopy(sourceKey, (localPath) =>
-      generateThumbnail(localPath, { regenerate: true })
-    );
+    newThumbnailPath = await withLocalCopy(sourceKey, async (localPath) => {
+      const proc = await withProcessableImage(localPath, sourceKey);
+      try {
+        return await generateThumbnail(proc.path, { regenerate: true, outputBasename: proc.outputBasename });
+      } finally {
+        await proc.cleanup();
+      }
+    });
   }
 
   if (newThumbnailPath) {
@@ -366,7 +440,7 @@ async function generateVideoPlaceholder(originalFilename, options = {}) {
  * Outputs a 1920x1080 image suitable for full-width hero sections
  */
 async function generateHeroImage(imagePath, options = {}) {
-  const filename = path.basename(imagePath);
+  const filename = options.outputBasename || path.basename(imagePath);
   const heroFilename = `hero_${filename}`;
   const heroRelKey = path.posix.join('heroes', heroFilename);
   const storage = getStorage();
@@ -469,9 +543,14 @@ async function ensureHeroImage(photo) {
     logger.warn(`Invalid hero image detected for photo ${photo.id}, regenerating...`);
   }
 
-  const newHeroPath = await withLocalCopy(sourceKey, (localPath) =>
-    generateHeroImage(localPath, { regenerate: true })
-  );
+  const newHeroPath = await withLocalCopy(sourceKey, async (localPath) => {
+    const proc = await withProcessableImage(localPath, sourceKey);
+    try {
+      return await generateHeroImage(proc.path, { regenerate: true, outputBasename: proc.outputBasename });
+    } finally {
+      await proc.cleanup();
+    }
+  });
 
   if (newHeroPath) {
     await db('photos')
@@ -498,7 +577,7 @@ async function ensureHeroImage(photo) {
  * thumbnails or heroes.
  */
 async function generatePreviewImage(imagePath, options = {}) {
-  const filename = path.basename(imagePath);
+  const filename = options.outputBasename || path.basename(imagePath);
   const previewFilename = `preview_${filename}`;
   const previewRelKey = path.posix.join('previews', previewFilename);
   const storage = getStorage();
@@ -599,9 +678,14 @@ async function ensurePreviewImage(photo) {
     logger.warn(`Invalid preview detected for photo ${photo.id}, regenerating…`);
   }
 
-  const newPreviewPath = await withLocalCopy(sourceKey, (localPath) =>
-    generatePreviewImage(localPath, { regenerate: true })
-  );
+  const newPreviewPath = await withLocalCopy(sourceKey, async (localPath) => {
+    const proc = await withProcessableImage(localPath, sourceKey);
+    try {
+      return await generatePreviewImage(proc.path, { regenerate: true, outputBasename: proc.outputBasename });
+    } finally {
+      await proc.cleanup();
+    }
+  });
 
   if (newPreviewPath) {
     await db('photos').where({ id: photo.id }).update({ preview_path: newPreviewPath });
@@ -665,4 +749,8 @@ module.exports = {
   ensurePreviewImage,
   extractCaptureDate,
   withLocalCopy,
+  isRawFilename,
+  extractRawPreview,
+  withProcessableImage,
+  RAW_EXTENSIONS,
 };

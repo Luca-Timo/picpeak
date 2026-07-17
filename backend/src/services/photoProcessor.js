@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs').promises;
 const { db } = require('../database/db');
-const { generateThumbnail, extractCaptureDate, withLocalCopy } = require('./imageProcessor');
+const { generateThumbnail, extractCaptureDate, withLocalCopy, withProcessableImage } = require('./imageProcessor');
 const { generatePhotoFilename } = require('../utils/filenameSanitizer');
 const { processUploadedVideo, isVideoMimeType } = require('./videoProcessor');
 const { getStorage } = require('./storage');
@@ -145,18 +145,26 @@ async function processUploadedPhotos(files, eventId, uploadedBy = 'admin', categ
         videoMetadata = result.metadata;
         thumbnailPath = result.thumbnailKey;
       } else {
-        thumbnailPath = await generateThumbnail(tempPath);
+        // RAW/DNG can't be fed to sharp directly (no raw loader), so extract the
+        // embedded JPEG preview first and thumbnail/measure THAT. Pass-through
+        // for ordinary images. The stored original stays the RAW (download).
+        const proc = await withProcessableImage(tempPath, file.originalname);
         try {
-          const sharp = require('sharp');
-          const metadata = await sharp(tempPath).metadata();
-          if (metadata.width && metadata.height) {
-            imageMetadata = {
-              width: metadata.width,
-              height: metadata.height
-            };
+          thumbnailPath = await generateThumbnail(proc.path, { outputBasename: proc.outputBasename });
+          try {
+            const sharp = require('sharp');
+            const metadata = await sharp(proc.path).metadata();
+            if (metadata.width && metadata.height) {
+              imageMetadata = {
+                width: metadata.width,
+                height: metadata.height
+              };
+            }
+          } catch (metadataError) {
+            logger.warn(`Could not extract image dimensions for ${file.originalname}:`, metadataError.message);
           }
-        } catch (metadataError) {
-          logger.warn(`Could not extract image dimensions for ${file.originalname}:`, metadataError.message);
+        } finally {
+          await proc.cleanup();
         }
       }
 

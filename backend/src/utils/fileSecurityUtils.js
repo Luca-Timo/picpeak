@@ -79,6 +79,19 @@ const ALLOWED_IMAGE_TYPES = {
     extensions: ['.svg'],
     // SVG files are XML-based text files, so we skip magic number validation
     magicNumbers: null
+  },
+  // Camera RAW / Apple ProRAW (#821). DNG is a TIFF container, so it carries the
+  // TIFF magic (little-endian "II*\0" or big-endian "MM\0*"). The pipeline can't
+  // sharp-decode it directly — it extracts the embedded JPEG preview (exiftool)
+  // for thumbnails/display while storing the original for download. Only reached
+  // when an admin adds `dng` to the allowed types AND the browser reports the
+  // DNG MIME (Chrome does; browsers that send an empty type won't get this far).
+  'image/x-adobe-dng': {
+    extensions: ['.dng'],
+    magicNumbers: [
+      { offset: 0, bytes: [0x49, 0x49, 0x2A, 0x00] }, // little-endian TIFF (II*\0)
+      { offset: 0, bytes: [0x4D, 0x4D, 0x00, 0x2A] }  // big-endian TIFF (MM\0*)
+    ]
   }
 };
 

@@ -29,6 +29,11 @@ const EXTENSION_TO_MIME = {
   'webm': 'video/webm',
   'mov': 'video/quicktime',
   'avi': 'video/x-msvideo',
+  // Camera RAW / Apple ProRAW. Not sharp-decodable directly — the processing
+  // pipeline extracts the embedded JPEG preview (exiftool) for thumbnails/
+  // display, keeping the original for download. Browsers send DNG as
+  // image/x-adobe-dng, image/tiff, or an empty type, so accept the common set.
+  'dng': 'image/x-adobe-dng',
 };
 
 const DEFAULT_ALLOWED_FILE_TYPES = 'jpg,jpeg,png,webp';

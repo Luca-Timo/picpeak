@@ -12,6 +12,8 @@ const EXTENSION_TO_MIME: Record<string, string> = {
   webm: 'video/webm',
   mov: 'video/quicktime',
   avi: 'video/x-msvideo',
+  // Camera RAW / Apple ProRAW — backend extracts the embedded JPEG preview.
+  dng: 'image/x-adobe-dng',
 };
 
 const DEFAULT_ALLOWED = 'jpg,jpeg,png,webp';
