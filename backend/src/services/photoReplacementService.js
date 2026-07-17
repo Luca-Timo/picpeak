@@ -69,7 +69,9 @@ async function replacePhoto(existingPhoto, newFileTempPath, { originalFilename, 
     let width = null;
     let height = null;
     let thumbnailPath = null;
-    const proc = await withProcessableImage(newFileTempPath, originalFilename);
+    // Detect/name by the unique stored filename (newFilename), not the
+    // client-supplied original, so RAW derivative keys can't collide.
+    const proc = await withProcessableImage(newFileTempPath, newFilename);
     try {
       try {
         const metadata = await sharp(proc.path).metadata();

@@ -148,7 +148,9 @@ async function processUploadedPhotos(files, eventId, uploadedBy = 'admin', categ
         // RAW/DNG can't be fed to sharp directly (no raw loader), so extract the
         // embedded JPEG preview first and thumbnail/measure THAT. Pass-through
         // for ordinary images. The stored original stays the RAW (download).
-        const proc = await withProcessableImage(tempPath, file.originalname);
+        // Use the unique stored filename (not the client-supplied original) so
+        // the RAW-derived thumbnail's global key can't collide across galleries.
+        const proc = await withProcessableImage(tempPath, newFilename);
         try {
           thumbnailPath = await generateThumbnail(proc.path, { outputBasename: proc.outputBasename });
           try {
