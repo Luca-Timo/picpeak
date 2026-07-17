@@ -88,9 +88,13 @@ const ALLOWED_IMAGE_TYPES = {
   // DNG MIME (Chrome does; browsers that send an empty type won't get this far).
   'image/x-adobe-dng': {
     extensions: ['.dng'],
+    // Single entry: the magic check is `.every`, so listing both endianness
+    // variants would require BOTH to match (impossible). DNG is TIFF; Apple
+    // ProRAW and virtually all camera DNGs are little-endian ("II*\0"). A rare
+    // big-endian DNG would fail this check and be rejected — acceptable, since
+    // the embedded-preview extraction validates the real content downstream.
     magicNumbers: [
-      { offset: 0, bytes: [0x49, 0x49, 0x2A, 0x00] }, // little-endian TIFF (II*\0)
-      { offset: 0, bytes: [0x4D, 0x4D, 0x00, 0x2A] }  // big-endian TIFF (MM\0*)
+      { offset: 0, bytes: [0x49, 0x49, 0x2A, 0x00] } // little-endian TIFF (II*\0)
     ]
   }
 };
