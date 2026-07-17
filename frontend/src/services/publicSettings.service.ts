@@ -82,6 +82,9 @@ export interface PublicSettings {
   // modal can render the real number in `upload.fileRequirements` and refuse
   // oversized batches client-side. Backend enforces the same value too.
   general_max_files_per_upload?: number;
+  // #613 follow-up — per-file size limit (MB), surfaced so the guest upload
+  // modal shows the real limit and guards client-side. Backend enforces it too.
+  general_max_file_size_mb?: number;
   // Event field requirements
   event_require_customer_name?: boolean;
   event_require_customer_email?: boolean;
