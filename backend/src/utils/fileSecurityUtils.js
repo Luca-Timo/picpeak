@@ -75,6 +75,20 @@ const ALLOWED_IMAGE_TYPES = {
       { offset: 0, bytes: [0x47, 0x49, 0x46, 0x38, 0x39, 0x61] }  // GIF89a
     ]
   },
+  // DNG and HEIF-family files use TIFF/ISO Base Media File Format containers,
+  // so their extension and declared MIME type are validated together here.
+  'image/x-adobe-dng': {
+    extensions: ['.dng'],
+    magicNumbers: null
+  },
+  'image/heic': {
+    extensions: ['.heic'],
+    magicNumbers: null
+  },
+  'image/heif': {
+    extensions: ['.heif'],
+    magicNumbers: null
+  },
   'image/svg+xml': {
     extensions: ['.svg'],
     // SVG files are XML-based text files, so we skip magic number validation
@@ -191,7 +205,7 @@ function getSafeFilename(originalFilename) {
   const ext = path.extname(originalFilename).toLowerCase();
 
   // Validate extension - including both image and video extensions
-  const validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.ico', '.mp4', '.m4v', '.webm', '.mov', '.avi'];
+  const validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.dng', '.heic', '.heif', '.svg', '.ico', '.mp4', '.m4v', '.webm', '.mov', '.avi'];
   if (!validExtensions.includes(ext)) {
     throw new Error('Invalid file extension');
   }

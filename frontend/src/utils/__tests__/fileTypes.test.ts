@@ -7,8 +7,11 @@ import {
 
 describe('file type settings', () => {
   it('keeps configured supported extensions for the upload hint', () => {
-    expect(getSupportedExtensions('jpg, mov, mp4, .webp')).toEqual([
+    expect(getSupportedExtensions('jpg, dng, heic, heif, mov, mp4, .webp')).toEqual([
       'jpg',
+      'dng',
+      'heic',
+      'heif',
       'mov',
       'mp4',
       'webp',
@@ -16,18 +19,21 @@ describe('file type settings', () => {
   });
 
   it('uses the same configured types for validation and file selection', () => {
-    expect(extensionsToMimeTypes('jpg,jpeg,mov,mp4')).toEqual([
+    expect(extensionsToMimeTypes('jpg,jpeg,dng,heic,heif,mov,mp4')).toEqual([
       'image/jpeg',
+      'image/x-adobe-dng',
+      'image/heic',
+      'image/heif',
       'video/quicktime',
       'video/mp4',
     ]);
-    expect(extensionsToAcceptString('jpg,jpeg,mov,mp4')).toBe(
-      'image/jpeg,video/quicktime,video/mp4'
+    expect(extensionsToAcceptString('dng,heic,heif')).toBe(
+      'image/x-adobe-dng,image/heic,image/heif'
     );
   });
 
   it('falls back to the default formats when no configured types are supported', () => {
-    expect(getSupportedExtensions('dng,unknown')).toEqual([
+    expect(getSupportedExtensions('unknown')).toEqual([
       'jpg',
       'jpeg',
       'png',
