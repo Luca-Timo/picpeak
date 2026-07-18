@@ -224,7 +224,7 @@ function getSafeFilename(originalFilename) {
   const ext = path.extname(originalFilename).toLowerCase();
 
   // Validate extension - including both image and video extensions
-  const validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.dng', '.heic', '.heif', '.svg', '.ico', '.mp4', '.m4v', '.webm', '.mov', '.avi'];
+  const validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.ico', '.mp4', '.m4v', '.webm', '.mov', '.avi'];
   if (!validExtensions.includes(ext)) {
     throw new Error('Invalid file extension');
   }

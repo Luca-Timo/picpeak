@@ -21,9 +21,19 @@ function getFrontendExtensionMap() {
   const match = source.match(/const EXTENSION_TO_MIME[^=]*= \{([\s\S]*?)\n\};/);
   if (!match) throw new Error('Could not find frontend EXTENSION_TO_MIME');
 
-  return Object.fromEntries(
-    Array.from(match[1].matchAll(/^(\s*)(\w+): '([^']+)',?$/gm), ([, , extension, mime]) => [extension, mime])
-  );
+  // Parse `key: 'mime',` entries — quoted keys and trailing `//` comments are
+  // tolerated; any other non-blank, non-comment line inside the map is a parse
+  // failure, so a syntax the parser can't read fails loudly instead of silently
+  // dropping the entry from the comparison.
+  const entries = [];
+  for (const line of match[1].split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed === '' || trimmed.startsWith('//')) continue;
+    const entry = trimmed.match(/^'?(\w+)'?\s*:\s*'([^']+)'\s*,?\s*(?:\/\/.*)?$/);
+    if (!entry) throw new Error(`Unparsable EXTENSION_TO_MIME line in frontend fileTypes.ts: "${trimmed}"`);
+    entries.push([entry[1], entry[2]]);
+  }
+  return Object.fromEntries(entries);
 }
 
 describe('configured upload file types', () => {
