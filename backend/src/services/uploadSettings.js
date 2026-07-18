@@ -34,6 +34,11 @@ const EXTENSION_TO_MIME = {
   // selection, but a genuine .heic upload is handled when it does arrive.)
   'heic': 'image/heic',
   'heif': 'image/heif',
+  // Camera RAW / Apple ProRAW. Not sharp-decodable directly — the processing
+  // pipeline extracts the embedded JPEG preview (exiftool) for thumbnails/
+  // display, keeping the original for download. Browsers send DNG as
+  // image/x-adobe-dng, image/tiff, or an empty type, so accept the common set.
+  'dng': 'image/x-adobe-dng',
 };
 
 const DEFAULT_ALLOWED_FILE_TYPES = 'jpg,jpeg,png,webp';

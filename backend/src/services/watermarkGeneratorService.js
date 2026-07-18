@@ -11,7 +11,7 @@
 const { db } = require('../database/db');
 const watermarkService = require('./watermarkService');
 const { resolvePhotoStorageKey, resolvePhotoFilePath } = require('./photoResolver');
-const { withLocalCopy } = require('./imageProcessor');
+const { withLocalCopy, isRawFilename } = require('./imageProcessor');
 const logger = require('../utils/logger');
 
 class WatermarkGeneratorService {
@@ -50,6 +50,14 @@ class WatermarkGeneratorService {
       // Skip video files
       if (photo.media_type === 'video' || (photo.mime_type && photo.mime_type.startsWith('video/'))) {
         return { success: false, error: 'Videos do not support watermarks' };
+      }
+
+      // Skip RAW/DNG (experimental, #821). The watermark path opens the original
+      // with sharp, which can't decode RAW — proceeding would fall back to the
+      // original bytes and falsely record the copy as watermarked. Skipping keeps
+      // the watermark state honest until RAW watermarking is properly supported.
+      if (isRawFilename(photo.filename)) {
+        return { success: false, error: 'RAW/DNG files are not watermarked yet' };
       }
 
       // Get watermark settings

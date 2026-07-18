@@ -15,6 +15,8 @@ const EXTENSION_TO_MIME: Record<string, string> = {
   // HEIC/HEIF (iPhone) — kept in sync with the backend EXTENSION_TO_MIME.
   heic: 'image/heic',
   heif: 'image/heif',
+  // Camera RAW / Apple ProRAW — backend extracts the embedded JPEG preview.
+  dng: 'image/x-adobe-dng',
 };
 
 const DEFAULT_ALLOWED = 'jpg,jpeg,png,webp';

@@ -9,8 +9,11 @@ describe('fileTypes', () => {
     it('supports HEIC/HEIF (#821)', () => {
       expect(extensionsToMimeTypes('heic,heif')).toEqual(['image/heic', 'image/heif']);
     });
+    it('supports DNG (#821)', () => {
+      expect(extensionsToMimeTypes('dng')).toEqual(['image/x-adobe-dng']);
+    });
     it('drops unknown extensions and falls back to default when nothing maps', () => {
-      expect(extensionsToMimeTypes('dng,xyz')).toEqual(['image/jpeg', 'image/png', 'image/webp']);
+      expect(extensionsToMimeTypes('abc,xyz')).toEqual(['image/jpeg', 'image/png', 'image/webp']);
     });
   });
 
@@ -18,8 +21,8 @@ describe('fileTypes', () => {
     it('renders a de-duplicated, upper-cased list of the configured formats', () => {
       expect(extensionsToLabel('jpg,jpeg,png,webp,mov')).toBe('JPG, JPEG, PNG, WEBP, MOV');
     });
-    it('only lists supported extensions (drops unknowns like dng)', () => {
-      expect(extensionsToLabel('jpg,png,dng')).toBe('JPG, PNG');
+    it('only lists supported extensions (drops unknowns like xyz)', () => {
+      expect(extensionsToLabel('jpg,png,xyz')).toBe('JPG, PNG');
     });
     it('falls back to the default set when empty', () => {
       expect(extensionsToLabel('')).toBe('JPG, JPEG, PNG, WEBP');

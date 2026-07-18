@@ -95,6 +95,23 @@ const ALLOWED_IMAGE_TYPES = {
     magicNumbers: [
       { offset: 4, bytes: [0x66, 0x74, 0x79, 0x70] } // "ftyp"
     ]
+  },
+  // Camera RAW / Apple ProRAW (#821). DNG is a TIFF container, so it carries the
+  // TIFF magic (little-endian "II*\0" or big-endian "MM\0*"). The pipeline can't
+  // sharp-decode it directly — it extracts the embedded JPEG preview (exiftool)
+  // for thumbnails/display while storing the original for download. Only reached
+  // when an admin adds `dng` to the allowed types AND the browser reports the
+  // DNG MIME (Chrome does; browsers that send an empty type won't get this far).
+  'image/x-adobe-dng': {
+    extensions: ['.dng'],
+    // Single entry: the magic check is `.every`, so listing both endianness
+    // variants would require BOTH to match (impossible). DNG is TIFF; Apple
+    // ProRAW and virtually all camera DNGs are little-endian ("II*\0"). A rare
+    // big-endian DNG would fail this check and be rejected — acceptable, since
+    // the embedded-preview extraction validates the real content downstream.
+    magicNumbers: [
+      { offset: 0, bytes: [0x49, 0x49, 0x2A, 0x00] } // little-endian TIFF (II*\0)
+    ]
   }
 };
 
