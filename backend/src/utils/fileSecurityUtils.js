@@ -75,24 +75,43 @@ const ALLOWED_IMAGE_TYPES = {
       { offset: 0, bytes: [0x47, 0x49, 0x46, 0x38, 0x39, 0x61] }  // GIF89a
     ]
   },
-  // DNG and HEIF-family files use TIFF/ISO Base Media File Format containers,
-  // so their extension and declared MIME type are validated together here.
-  'image/x-adobe-dng': {
-    extensions: ['.dng'],
-    magicNumbers: null
-  },
-  'image/heic': {
-    extensions: ['.heic'],
-    magicNumbers: null
-  },
-  'image/heif': {
-    extensions: ['.heif'],
-    magicNumbers: null
-  },
   'image/svg+xml': {
     extensions: ['.svg'],
     // SVG files are XML-based text files, so we skip magic number validation
     magicNumbers: null
+  },
+  // HEIC/HEIF (iPhone). ISO-BMFF container: bytes 4-7 are the "ftyp" box marker,
+  // present in every HEIF/HEIC file (single entry — the magic check is `.every`,
+  // so alternatives can't be listed as separate entries). Sharp's libvips
+  // decodes these; extension + MIME are already gated by validateFileType.
+  'image/heic': {
+    extensions: ['.heic'],
+    magicNumbers: [
+      { offset: 4, bytes: [0x66, 0x74, 0x79, 0x70] } // "ftyp"
+    ]
+  },
+  'image/heif': {
+    extensions: ['.heif'],
+    magicNumbers: [
+      { offset: 4, bytes: [0x66, 0x74, 0x79, 0x70] } // "ftyp"
+    ]
+  },
+  // Camera RAW / Apple ProRAW (#821). DNG is a TIFF container, so it carries the
+  // TIFF magic (little-endian "II*\0" or big-endian "MM\0*"). The pipeline can't
+  // sharp-decode it directly — it extracts the embedded JPEG preview (exiftool)
+  // for thumbnails/display while storing the original for download. Only reached
+  // when an admin adds `dng` to the allowed types AND the browser reports the
+  // DNG MIME (Chrome does; browsers that send an empty type won't get this far).
+  'image/x-adobe-dng': {
+    extensions: ['.dng'],
+    // Single entry: the magic check is `.every`, so listing both endianness
+    // variants would require BOTH to match (impossible). DNG is TIFF; Apple
+    // ProRAW and virtually all camera DNGs are little-endian ("II*\0"). A rare
+    // big-endian DNG would fail this check and be rejected — acceptable, since
+    // the embedded-preview extraction validates the real content downstream.
+    magicNumbers: [
+      { offset: 0, bytes: [0x49, 0x49, 0x2A, 0x00] } // little-endian TIFF (II*\0)
+    ]
   }
 };
 

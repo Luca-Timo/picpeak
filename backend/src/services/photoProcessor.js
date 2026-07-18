@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs').promises;
 const { db } = require('../database/db');
-const { generateThumbnail, extractCaptureDate, withLocalCopy } = require('./imageProcessor');
+const { generateThumbnail, extractCaptureDate, withLocalCopy, withProcessableImage } = require('./imageProcessor');
 const { generatePhotoFilename } = require('../utils/filenameSanitizer');
 const { processUploadedVideo, isVideoMimeType } = require('./videoProcessor');
 const { getStorage } = require('./storage');
@@ -145,18 +145,28 @@ async function processUploadedPhotos(files, eventId, uploadedBy = 'admin', categ
         videoMetadata = result.metadata;
         thumbnailPath = result.thumbnailKey;
       } else {
-        thumbnailPath = await generateThumbnail(tempPath);
+        // RAW/DNG can't be fed to sharp directly (no raw loader), so extract the
+        // embedded JPEG preview first and thumbnail/measure THAT. Pass-through
+        // for ordinary images. The stored original stays the RAW (download).
+        // Use the unique stored filename (not the client-supplied original) so
+        // the RAW-derived thumbnail's global key can't collide across galleries.
+        const proc = await withProcessableImage(tempPath, newFilename);
         try {
-          const sharp = require('sharp');
-          const metadata = await sharp(tempPath).metadata();
-          if (metadata.width && metadata.height) {
-            imageMetadata = {
-              width: metadata.width,
-              height: metadata.height
-            };
+          thumbnailPath = await generateThumbnail(proc.path, { outputBasename: proc.outputBasename });
+          try {
+            const sharp = require('sharp');
+            const metadata = await sharp(proc.path).metadata();
+            if (metadata.width && metadata.height) {
+              imageMetadata = {
+                width: metadata.width,
+                height: metadata.height
+              };
+            }
+          } catch (metadataError) {
+            logger.warn(`Could not extract image dimensions for ${file.originalname}:`, metadataError.message);
           }
-        } catch (metadataError) {
-          logger.warn(`Could not extract image dimensions for ${file.originalname}:`, metadataError.message);
+        } finally {
+          await proc.cleanup();
         }
       }
 
@@ -457,21 +467,31 @@ async function processPhoto(photoId) {
         if (result.metadata.height) updateData.height = result.metadata.height;
       }
     } else {
+      // RAW/DNG can't be sharp-decoded directly — extract the embedded JPEG
+      // preview and thumbnail/measure that. Pass-through for ordinary images.
+      // This is the ASYNC worker path (backgroundProcessor → processPhoto), the
+      // one real uploads actually take; the synchronous processUploadedPhotos()
+      // has the same handling.
+      const proc = await withProcessableImage(localPath, photo.filename);
       try {
-        const thumbnailPath = await generateThumbnail(localPath);
-        if (thumbnailPath) updateData.thumbnail_path = thumbnailPath;
-      } catch (e) {
-        logger.warn(`processPhoto: thumbnail generation failed for ${photoId}`, { error: e.message });
-      }
-      try {
-        const sharp = require('sharp');
-        const metadata = await sharp(localPath).metadata();
-        if (metadata.width && metadata.height) {
-          updateData.width = metadata.width;
-          updateData.height = metadata.height;
+        try {
+          const thumbnailPath = await generateThumbnail(proc.path, { outputBasename: proc.outputBasename });
+          if (thumbnailPath) updateData.thumbnail_path = thumbnailPath;
+        } catch (e) {
+          logger.warn(`processPhoto: thumbnail generation failed for ${photoId}`, { error: e.message });
         }
-      } catch (e) {
-        logger.warn(`processPhoto: dimensions extraction failed for ${photoId}`, { error: e.message });
+        try {
+          const sharp = require('sharp');
+          const metadata = await sharp(proc.path).metadata();
+          if (metadata.width && metadata.height) {
+            updateData.width = metadata.width;
+            updateData.height = metadata.height;
+          }
+        } catch (e) {
+          logger.warn(`processPhoto: dimensions extraction failed for ${photoId}`, { error: e.message });
+        }
+      } finally {
+        await proc.cleanup();
       }
     }
   });

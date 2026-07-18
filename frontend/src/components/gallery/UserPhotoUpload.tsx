@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { Button } from '../common';
 import { api } from '../../config/api';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
-import { extensionsToMimeTypes, extensionsToAcceptString, getSupportedExtensions } from '../../utils/fileTypes';
+import { extensionsToMimeTypes, extensionsToAcceptString, extensionsToLabel } from '../../utils/fileTypes';
 
 interface UserPhotoUploadProps {
   eventId: number;
@@ -61,8 +61,10 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
     [publicSettings?.allowed_file_types]
   );
 
-  const allowedExtensions = useMemo(
-    () => getSupportedExtensions(publicSettings?.allowed_file_types),
+  // #821 — the requirements hint used to hardcode "JPEG, PNG or WebP"; render
+  // the actually-configured formats so it never contradicts what's accepted.
+  const formatsLabel = useMemo(
+    () => extensionsToLabel(publicSettings?.allowed_file_types),
     [publicSettings?.allowed_file_types]
   );
 
@@ -238,11 +240,10 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
                     {t('upload.clickToUpload')}
                   </p>
                   <p className="text-xs text-muted-theme">
-                    {t('upload.fileRequirements', {
-                      types: allowedExtensions.map(extension => extension.toUpperCase()).join(', '),
-                      limit: maxFilesPerUpload,
-                      sizeLimit: maxFileSizeMb,
-                    })}
+                    {/* #613 — pass { limit } so `{{limit}}` interpolates
+                        with the real number from settings instead of
+                        rendering literally. */}
+                    {t('upload.fileRequirements', { formats: formatsLabel, limit: maxFilesPerUpload, sizeLimit: maxFileSizeMb })}
                   </p>
                   <input
                     type="file"

@@ -131,7 +131,7 @@
     "noCategory": "Без категории",
     "eventSpecific": "(Для конкретного события)",
     "clickToUpload": "Нажмите для загрузки или перетащите файлы",
-    "fileRequirements": "{{types}} (макс. {{sizeLimit}} МБ на файл, {{limit}} файлов за загрузку)",
+    "fileRequirements": "{{formats}} (макс. {{sizeLimit}} МБ на файл, {{limit}} файлов за загрузку)",
     "selectedFiles": "Выбранные файлы",
     "uploading": "Загрузка...",
     "uploadComplete": "Загрузка завершена!",

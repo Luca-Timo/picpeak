@@ -131,7 +131,7 @@
     "noCategory": "Brez kategorije",
     "eventSpecific": "(specifično za dogodek)",
     "clickToUpload": "Kliknite za nalaganje ali povlecite in spustite",
-    "fileRequirements": "{{types}} (največ {{sizeLimit}} MB na datoteko, {{limit}} datotek na nalaganje)",
+    "fileRequirements": "{{formats}} (največ {{sizeLimit}} MB na datoteko, {{limit}} datotek na nalaganje)",
     "selectedFiles": "Izbrane datoteke",
     "uploading": "Nalaganje...",
     "transferring": "Prenašanje",

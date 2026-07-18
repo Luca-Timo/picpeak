@@ -5,6 +5,33 @@ All notable changes to PicPeak will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.91.0-beta.0](https://github.com/PicPeak/picpeak/compare/v3.90.2-beta.0...v3.91.0-beta.0) (2026-07-18)
+
+
+### Features
+
+* **uploads:** HEIC/HEIF support + dynamic format hint on guest upload ([#821](https://github.com/PicPeak/picpeak/issues/821)) ([ee9d2f7](https://github.com/PicPeak/picpeak/commit/ee9d2f70d3342d65edb795a688f0f5f611429964))
+
+
+### Bug Fixes
+
+* **gallery:** serve JPEG preview for non-displayable originals in lightbox (codex review of [#832](https://github.com/PicPeak/picpeak/issues/832)) ([808d305](https://github.com/PicPeak/picpeak/commit/808d3055497bb4e4a372acafa49ef9baf257f008))
+* **uploads:** register HEIC/HEIF with the file validator + fix admin format hint (codex review of [#832](https://github.com/PicPeak/picpeak/issues/832)) ([c9b64d9](https://github.com/PicPeak/picpeak/commit/c9b64d9c1a8744c9ee5e068366a500ae0dab36bc))
+
+## [3.90.2-beta.0](https://github.com/PicPeak/picpeak/compare/v3.90.1-beta.0...v3.90.2-beta.0) (2026-07-17)
+
+
+### Bug Fixes
+
+* **events:** accept hero_logo_visible: null on create/update ([#822](https://github.com/PicPeak/picpeak/issues/822)) ([0245e44](https://github.com/PicPeak/picpeak/commit/0245e445cafd165ada3c5a15abb258ae2c1c857e))
+* **events:** accept hero_logo_visible: null on create/update ([#822](https://github.com/PicPeak/picpeak/issues/822)) ([b97b130](https://github.com/PicPeak/picpeak/commit/b97b130cadebaef38e59cc227fa6578ac886110f))
+* **update:** target docker-compose.production.yml in dashboard update steps ([51a505e](https://github.com/PicPeak/picpeak/commit/51a505e3798895e544f943673e81a365265f319c))
+* **update:** target docker-compose.production.yml in dashboard update steps + gate mailhog ([2a0361a](https://github.com/PicPeak/picpeak/commit/2a0361a83b4ca0a600bb4fd447e338533ce63420))
+* **uploads:** apply configured max file size to guest uploads ([#613](https://github.com/PicPeak/picpeak/issues/613) follow-up) ([29f1d23](https://github.com/PicPeak/picpeak/commit/29f1d23a0a645208f22453e62d99fe79b55c7db4))
+* **uploads:** apply configured max file size to guest uploads ([#613](https://github.com/PicPeak/picpeak/issues/613) follow-up) ([1e38d84](https://github.com/PicPeak/picpeak/commit/1e38d84808ee2a2b176c75d5ec4975fba710e63c))
+* **uploads:** tighten guest max-file-size setting (codex review of [#823](https://github.com/PicPeak/picpeak/issues/823)) ([43c6d22](https://github.com/PicPeak/picpeak/commit/43c6d22bdd93179865703da6350094c9b95388d8))
+* **uploads:** tighten guest max-file-size setting (codex review of [#823](https://github.com/PicPeak/picpeak/issues/823)) ([e03d13e](https://github.com/PicPeak/picpeak/commit/e03d13efde843c7a7275cd41c855b402538756e7))
+
 ## [3.90.1-beta.0](https://github.com/PicPeak/picpeak/compare/v3.90.0-beta.0...v3.90.1-beta.0) (2026-07-17)
 
 
