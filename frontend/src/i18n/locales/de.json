@@ -159,7 +159,7 @@
     "noCategory": "Keine Kategorie",
     "eventSpecific": "(Veranstaltungsspezifisch)",
     "clickToUpload": "Klicken zum Hochladen oder per Drag & Drop",
-    "fileRequirements": "JPEG, PNG oder WebP (max. {{sizeLimit}}MB pro Datei, {{limit}} Dateien pro Upload)",
+    "fileRequirements": "{{formats}} (max. {{sizeLimit}}MB pro Datei, {{limit}} Dateien pro Upload)",
     "selectedFiles": "Ausgewählte Dateien",
     "uploading": "Wird hochgeladen...",
     "transferring": "Übertragung",

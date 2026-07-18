@@ -38,6 +38,24 @@ const {
 } = require('../services/downloadFilenameService');
 const { buildContentDisposition } = require('../utils/filenameSanitizer');
 const { getStorage } = require('../services/storage');
+
+// Formats whose ORIGINAL bytes a browser can't render in an <img> (HEIC/HEIF,
+// camera RAW/DNG). For these the lightbox must be served the generated JPEG
+// preview instead of `url` (the original) — otherwise it shows a broken image.
+// So we force `preview_url` for them regardless of the lightbox_preview_enabled
+// toggle. Detection is by MIME first, extension as a fallback (browsers report
+// these MIMEs inconsistently). EXPERIMENTAL: whether a preview actually renders
+// still depends on the backend being able to decode the source (HEVC-in-HEIC on
+// the prod image; exiftool for DNG) — see #821.
+const NON_DISPLAYABLE_ORIGINAL_EXT = new Set(['heic', 'heif', 'dng']);
+const NON_DISPLAYABLE_ORIGINAL_MIME = new Set(['image/heic', 'image/heif', 'image/x-adobe-dng']);
+function originalNeedsPreview(photo) {
+  const mime = (photo.mime_type || '').toLowerCase();
+  if (NON_DISPLAYABLE_ORIGINAL_MIME.has(mime)) return true;
+  const name = photo.original_filename || photo.filename || '';
+  const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+  return NON_DISPLAYABLE_ORIGINAL_EXT.has(ext);
+}
 const { setGalleryAuthCookies } = require('../utils/tokenUtils');
 // Read globals from app_settings (the real table) — settingsService.getSetting
 // queries a non-existent `settings` table and throws.
@@ -726,7 +744,7 @@ router.get('/:slug/photos', verifyGalleryAccess, resolveGuest, async (req, res) 
           // installs that haven't opted in keep loading the original
           // (current behaviour). Skipped for videos since they don't
           // get a preview tier; lightbox will use the original .url.
-          preview_url: lightboxPreviewEnabled
+          preview_url: (lightboxPreviewEnabled || originalNeedsPreview(photo))
             && photo.media_type !== 'video'
             && (!photo.mime_type || !photo.mime_type.startsWith('video/'))
             ? `/api/gallery/${req.params.slug}/preview/${photo.id}${wmQuery}`

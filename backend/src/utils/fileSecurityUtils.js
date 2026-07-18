@@ -79,6 +79,22 @@ const ALLOWED_IMAGE_TYPES = {
     extensions: ['.svg'],
     // SVG files are XML-based text files, so we skip magic number validation
     magicNumbers: null
+  },
+  // HEIC/HEIF (iPhone). ISO-BMFF container: bytes 4-7 are the "ftyp" box marker,
+  // present in every HEIF/HEIC file (single entry — the magic check is `.every`,
+  // so alternatives can't be listed as separate entries). Sharp's libvips
+  // decodes these; extension + MIME are already gated by validateFileType.
+  'image/heic': {
+    extensions: ['.heic'],
+    magicNumbers: [
+      { offset: 4, bytes: [0x66, 0x74, 0x79, 0x70] } // "ftyp"
+    ]
+  },
+  'image/heif': {
+    extensions: ['.heif'],
+    magicNumbers: [
+      { offset: 4, bytes: [0x66, 0x74, 0x79, 0x70] } // "ftyp"
+    ]
   }
 };
 
