@@ -80,6 +80,22 @@ const ALLOWED_IMAGE_TYPES = {
     // SVG files are XML-based text files, so we skip magic number validation
     magicNumbers: null
   },
+  // HEIC/HEIF (iPhone). ISO-BMFF container: bytes 4-7 are the "ftyp" box marker,
+  // present in every HEIF/HEIC file (single entry — the magic check is `.every`,
+  // so alternatives can't be listed as separate entries). Sharp's libvips
+  // decodes these; extension + MIME are already gated by validateFileType.
+  'image/heic': {
+    extensions: ['.heic'],
+    magicNumbers: [
+      { offset: 4, bytes: [0x66, 0x74, 0x79, 0x70] } // "ftyp"
+    ]
+  },
+  'image/heif': {
+    extensions: ['.heif'],
+    magicNumbers: [
+      { offset: 4, bytes: [0x66, 0x74, 0x79, 0x70] } // "ftyp"
+    ]
+  },
   // Camera RAW / Apple ProRAW (#821). DNG is a TIFF container, so it carries the
   // TIFF magic (little-endian "II*\0" or big-endian "MM\0*"). The pipeline can't
   // sharp-decode it directly — it extracts the embedded JPEG preview (exiftool)

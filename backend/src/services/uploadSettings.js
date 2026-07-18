@@ -29,6 +29,11 @@ const EXTENSION_TO_MIME = {
   'webm': 'video/webm',
   'mov': 'video/quicktime',
   'avi': 'video/x-msvideo',
+  // HEIC/HEIF (iPhone). Sharp's bundled libvips decodes `heif` input, so
+  // thumbnails generate fine. (iOS Safari usually transcodes to JPEG at file
+  // selection, but a genuine .heic upload is handled when it does arrive.)
+  'heic': 'image/heic',
+  'heif': 'image/heif',
   // Camera RAW / Apple ProRAW. Not sharp-decodable directly — the processing
   // pipeline extracts the embedded JPEG preview (exiftool) for thumbnails/
   // display, keeping the original for download. Browsers send DNG as
