@@ -1,9 +1,7 @@
 node_modules
 npm-debug.log
 .env
-storage/events/active/*
-storage/events/archived/*
-storage/thumbnails/*
+storage
 data/*.db
 logs/*
 coverage
