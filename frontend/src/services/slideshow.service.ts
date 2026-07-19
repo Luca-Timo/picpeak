@@ -39,6 +39,8 @@ export interface SlideshowStyle {
   transition: SlideshowTransition;
   transition_ms: number;
   watermark: SlideshowWatermarkMode;
+  // QR overlay mode (#837) — same tri-state semantics as the watermark.
+  qr: SlideshowWatermarkMode;
   colorfilter: SlideshowColorFilter;
   // Play order + optional category filter (#202). category_id null = all photos.
   order: SlideshowOrder;
@@ -50,6 +52,7 @@ export const DEFAULT_SLIDESHOW_STYLE: SlideshowStyle = {
   transition: 'crossfade',
   transition_ms: 800,
   watermark: 'inherit',
+  qr: 'inherit',
   colorfilter: 'none',
   order: 'chronological',
   category_id: null,
@@ -73,6 +76,11 @@ export interface SlideshowGlobalDefaults {
   slideshow_watermark_style: SlideshowWatermarkStyle;
   // Logo size as a % of the viewport's shorter side.
   slideshow_watermark_size: number;
+  // QR overlay defaults (#837) — same option shape as the watermark.
+  slideshow_qr_enabled: boolean;
+  slideshow_qr_position: SlideshowWatermarkPosition;
+  slideshow_qr_opacity: number;
+  slideshow_qr_size: number;
 }
 
 // Resolved watermark the kiosk renders (logo URL already resolved server-side).
@@ -81,6 +89,15 @@ export interface SlideshowWatermark {
   position: SlideshowWatermarkPosition;
   opacity: number;
   style: SlideshowWatermarkStyle;
+  size: number;
+}
+
+// Resolved QR overlay (#837) — the share-link QR ships as a data URI, so the
+// kiosk needs no QR library and no extra authenticated request.
+export interface SlideshowQr {
+  data_url: string;
+  position: SlideshowWatermarkPosition;
+  opacity: number;
   size: number;
 }
 
@@ -95,6 +112,7 @@ export interface SlideshowSettings {
   order: SlideshowOrder;
   fit: SlideshowFit;
   watermark: SlideshowWatermark | null;
+  qr: SlideshowQr | null;
 }
 
 export interface SlideshowSession {
@@ -122,12 +140,20 @@ export const slideshowService = {
   // session token + current settings/count. Throws 404 if the link is
   // disabled, rotated, or the gallery isn't live.
   async getSession(slug: string, token: string): Promise<SlideshowSession> {
-    const response = await api.get<SlideshowSession>(`/gallery/${slug}/show/${token}/session`);
+    // origin: the kiosk's own reachable URL — the backend prefers it for the
+    // QR overlay when the configured base is missing/loopback (#848 review;
+    // the proxy strips the port from the Host header, so it can't be
+    // derived server-side).
+    const response = await api.get<SlideshowSession>(`/gallery/${slug}/show/${token}/session`, {
+      params: { origin: window.location.origin },
+    });
     return response.data;
   },
 
   async getState(slug: string, token: string): Promise<SlideshowState> {
-    const response = await api.get<SlideshowState>(`/gallery/${slug}/show/${token}/state`);
+    const response = await api.get<SlideshowState>(`/gallery/${slug}/show/${token}/state`, {
+      params: { origin: window.location.origin },
+    });
     return response.data;
   },
 };

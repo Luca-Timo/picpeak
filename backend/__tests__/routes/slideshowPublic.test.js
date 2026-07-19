@@ -99,7 +99,12 @@ describe('public Live Slideshow routes', () => {
     await setFlag(db, 'slideshow', true);
   });
 
-  const stateUrl = (token = TOKEN) => `/api/gallery/${SLUG}/show/${token}/state`;
+  // QR overlay: supertest's Host is loopback, and a loopback base is now
+  // suppressed rather than encoded — the kiosk passes its reachable
+  // window.location.origin, so the QR tests do the same.
+  const KIOSK_ORIGIN = 'https://gallery.example.com';
+  const stateUrl = (token = TOKEN) => `/api/gallery/${SLUG}/show/${token}/state?origin=${encodeURIComponent(KIOSK_ORIGIN)}`;
+  const stateUrlNoOrigin = (token = TOKEN) => `/api/gallery/${SLUG}/show/${token}/state`;
 
   describe('resolveSlideshow guards', () => {
     it('200 + per-event display settings on a live link', async () => {
@@ -225,6 +230,58 @@ describe('public Live Slideshow routes', () => {
       // no branding_logo_url set
       const res = await request(app).get(stateUrl());
       expect(res.body.watermark).toBeNull();
+    });
+  });
+
+  describe('slideshowSettings — QR overlay cascade (#837)', () => {
+    async function enableGlobalQr() {
+      await setSetting(db, 'slideshow_qr_enabled', true);
+      await setSetting(db, 'slideshow_qr_position', 'top-right');
+      await setSetting(db, 'slideshow_qr_opacity', 80);
+      await setSetting(db, 'slideshow_qr_size', 18);
+    }
+
+    it('inherits the global QR overlay when show_qr is NULL', async () => {
+      await insertEvent(db, { show_qr: null });
+      await enableGlobalQr();
+      const res = await request(app).get(stateUrl());
+      expect(res.body.qr).toMatchObject({
+        position: 'top-right',
+        opacity: 80,
+        size: 18,
+      });
+      // Share-link QR ships as a PNG data URI — no client QR lib needed.
+      expect(res.body.qr.data_url).toMatch(/^data:image\/png;base64,/);
+    });
+
+    it('is null by default (global off, no override)', async () => {
+      await insertEvent(db, { show_qr: null });
+      const res = await request(app).get(stateUrl());
+      expect(res.body.qr).toBeNull();
+    });
+
+    it('per-event OFF override hides the QR even when the global is on', async () => {
+      await insertEvent(db, { show_qr: 0 });
+      await enableGlobalQr();
+      const res = await request(app).get(stateUrl());
+      expect(res.body.qr).toBeNull();
+    });
+
+    it('per-event ON override shows the QR even when the global is off', async () => {
+      await insertEvent(db, { show_qr: 1 });
+      const res = await request(app).get(stateUrl());
+      expect(res.body.qr).not.toBeNull();
+      expect(res.body.qr.data_url).toMatch(/^data:image\/png;base64,/);
+      // Look falls back to the global defaults.
+      expect(res.body.qr.position).toBe('bottom-left');
+    });
+
+    it('suppresses the QR when no guest-reachable origin exists (loopback base, no kiosk origin)', async () => {
+      await insertEvent(db, { show_qr: 1 });
+      const res = await request(app).get(stateUrlNoOrigin());
+      // Encoding localhost would send scanning phones to THEIR localhost —
+      // no QR beats a broken QR (codex review of #848, confirmation round).
+      expect(res.body.qr).toBeNull();
     });
   });
 
