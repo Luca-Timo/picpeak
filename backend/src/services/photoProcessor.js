@@ -1,9 +1,9 @@
 const path = require('path');
 const fs = require('fs').promises;
 const { db } = require('../database/db');
-const { generateThumbnail, extractCaptureDate, withLocalCopy, withProcessableImage } = require('./imageProcessor');
+const { generateThumbnail, generateVideoPlaceholder, extractCaptureDate, withLocalCopy, withProcessableImage } = require('./imageProcessor');
 const { generatePhotoFilename } = require('../utils/filenameSanitizer');
-const { processUploadedVideo, isVideoMimeType } = require('./videoProcessor');
+const { processUploadedVideo, extractVideoMetadata, isVideoMimeType } = require('./videoProcessor');
 const { getStorage } = require('./storage');
 const { resolvePhotoStorageKey } = require('./photoResolver');
 const logger = require('../utils/logger');
@@ -141,9 +141,27 @@ async function processUploadedPhotos(files, eventId, uploadedBy = 'admin', categ
           'thumbnails',
           `thumb_${newFilename.replace(/\.[^.]+$/, '.jpg')}`
         );
-        const result = await processUploadedVideo(tempPath, videoThumbnailKey);
-        videoMetadata = result.metadata;
-        thumbnailPath = result.thumbnailKey;
+        // A thumbnail/probe failure must not lose the video: without this
+        // guard the whole upload errors here, while the image branch below
+        // already survives its thumbnail failures. Fall back to metadata-only
+        // plus the static play-button placeholder — a completed video with a
+        // NULL thumbnail would make the grid fetch the ORIGINAL video file
+        // as an <img> blob (thumbnail_url || url), i.e. a multi-GB download
+        // for a broken tile (codex review of #845).
+        try {
+          const result = await processUploadedVideo(tempPath, videoThumbnailKey);
+          videoMetadata = result.metadata;
+          thumbnailPath = result.thumbnailKey;
+        } catch (videoErr) {
+          logger.warn(`Video processing failed for ${file.originalname}, using placeholder thumbnail:`, videoErr.message);
+          try {
+            videoMetadata = await extractVideoMetadata(tempPath);
+          } catch (metaErr) {
+            logger.warn(`Video metadata extraction also failed for ${file.originalname}:`, metaErr.message);
+          }
+          // ffmpeg-free (sharp-rendered SVG); returns null on failure.
+          thumbnailPath = await generateVideoPlaceholder(newFilename);
+        }
       } else {
         // RAW/DNG can't be fed to sharp directly (no raw loader), so extract the
         // embedded JPEG preview first and thumbnail/measure THAT. Pass-through
@@ -457,14 +475,36 @@ async function processPhoto(photoId) {
         'thumbnails',
         `thumb_${photo.filename.replace(/\.[^.]+$/, '.jpg')}`
       );
-      const result = await processUploadedVideo(localPath, videoThumbnailKey);
-      updateData.thumbnail_path = result.thumbnailKey;
-      if (result.metadata) {
-        if (result.metadata.duration != null) updateData.duration = result.metadata.duration;
-        if (result.metadata.videoCodec) updateData.video_codec = result.metadata.videoCodec;
-        if (result.metadata.audioCodec) updateData.audio_codec = result.metadata.audioCodec;
-        if (result.metadata.width) updateData.width = result.metadata.width;
-        if (result.metadata.height) updateData.height = result.metadata.height;
+      // A thumbnail/probe failure must not fail the row: processPhoto's caller
+      // marks failed rows 'failed' and the guest gallery only lists 'complete',
+      // so the video would become permanently invisible. The image branch below
+      // already survives its thumbnail failures — mirror that: fall back to
+      // metadata-only plus the static play-button placeholder. A completed
+      // video with a NULL thumbnail would make the grid fetch the ORIGINAL
+      // video file as an <img> blob (thumbnail_url || url) — a multi-GB
+      // download for a broken tile (codex review of #845).
+      let videoResult = null;
+      try {
+        videoResult = await processUploadedVideo(localPath, videoThumbnailKey);
+      } catch (videoErr) {
+        logger.warn(`processPhoto: video processing failed for ${photoId}, using placeholder thumbnail`, { error: videoErr.message });
+        try {
+          videoResult = { metadata: await extractVideoMetadata(localPath) };
+        } catch (metaErr) {
+          logger.warn(`processPhoto: video metadata extraction also failed for ${photoId}`, { error: metaErr.message });
+        }
+        // ffmpeg-free (sharp-rendered SVG); returns null on failure.
+        const placeholderKey = await generateVideoPlaceholder(photo.filename);
+        if (placeholderKey) videoResult = { ...(videoResult || {}), thumbnailKey: placeholderKey };
+      }
+      if (videoResult?.thumbnailKey) updateData.thumbnail_path = videoResult.thumbnailKey;
+      if (videoResult?.metadata) {
+        const m = videoResult.metadata;
+        if (m.duration != null) updateData.duration = m.duration;
+        if (m.videoCodec) updateData.video_codec = m.videoCodec;
+        if (m.audioCodec) updateData.audio_codec = m.audioCodec;
+        if (m.width) updateData.width = m.width;
+        if (m.height) updateData.height = m.height;
       }
     } else {
       // RAW/DNG can't be sharp-decoded directly — extract the embedded JPEG
