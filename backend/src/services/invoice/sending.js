@@ -307,9 +307,11 @@ async function createStorno(originalId, adminId, trx = db) {
   });
 
   try {
+    // Pass `trx` so the audit insert rides the transaction's connection;
+    // the global db here deadlocks the single-connection SQLite pool.
     await logActivity('invoice_cancelled_via_storno',
       { invoiceId: originalId, stornoId, stornoNumber },
-      original.event_id || null, `admin:${adminId}`);
+      original.event_id || null, `admin:${adminId}`, trx);
   } catch (_) {}
 
   return stornoId;
@@ -439,6 +441,13 @@ async function reissueInvoice(id, adminId) {
   // createInvoice so totals are recomputed authoritatively from
   // line items (any rounding drift gets normalised). Self-join
   // carries parent_position so migration-119 sub-items survive.
+  //
+  // The wrapping transaction is REQUIRED (codex review of #851 round 2):
+  // without it, createInvoice's early insert + sequence claim survive a
+  // later validation failure, leaving orphan drafts after the Storno
+  // already committed. createInvoice's internal reads (getProfile,
+  // getAppSetting, bank resolution, audit) all accept the trx now, so
+  // the round-1 SQLite deadlock is gone the right way.
   return await db.transaction(async (trx) => {
     const lineItems = await trx('invoice_line_items as li')
       .leftJoin('invoice_line_items as parent', 'parent.id', 'li.parent_line_item_id')
@@ -502,9 +511,10 @@ async function reissueInvoice(id, adminId) {
     });
 
     try {
+      // Pass `trx` so the audit insert rides the transaction's connection.
       await logActivity('invoice_reissued',
         { originalInvoiceId: id, newInvoiceId: newId, stornoId },
-        original.event_id || null, `admin:${adminId}`);
+        original.event_id || null, `admin:${adminId}`, trx);
     } catch (_) {}
 
     return { id: newId, replaces: id, stornoId };
