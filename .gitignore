@@ -130,5 +130,6 @@ docker-compose.dev.yml
 # New layout development files
 new-layouts/
 
-# Generated CRM/accounting documents (runtime) — never commit
-backend/storage/business-docs/
+# Backend runtime storage (generated media, previews, thumbnails,
+# CRM/accounting documents) — never commit
+backend/storage/

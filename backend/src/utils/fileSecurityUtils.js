@@ -214,25 +214,6 @@ async function validateFileContent(filePath, expectedMimeType) {
 }
 
 /**
- * Get safe filename for storage
- * @param {string} originalFilename - Original filename
- * @returns {string} - Safe filename
- */
-function getSafeFilename(originalFilename) {
-  const timestamp = Date.now();
-  const randomString = Math.random().toString(36).substring(2, 15);
-  const ext = path.extname(originalFilename).toLowerCase();
-
-  // Validate extension - including both image and video extensions
-  const validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.ico', '.mp4', '.m4v', '.webm', '.mov', '.avi'];
-  if (!validExtensions.includes(ext)) {
-    throw new Error('Invalid file extension');
-  }
-
-  return `upload_${timestamp}_${randomString}${ext}`;
-}
-
-/**
  * Create a file upload validator middleware
  * @param {Object} options - Validation options
  * @returns {Function} - Express middleware function
@@ -295,7 +276,6 @@ module.exports = {
   isPathSafe,
   validateFileType,
   validateFileContent,
-  getSafeFilename,
   createFileUploadValidator,
   ALLOWED_IMAGE_TYPES,
   ALLOWED_VIDEO_TYPES,
