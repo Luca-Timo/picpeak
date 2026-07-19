@@ -1,6 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const { db } = require('../database/db');
+const { db, logActivity } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
 const { getAppSetting } = require('../utils/appSettings');
 const archiver = require('archiver');
@@ -65,6 +65,54 @@ const fs = require('fs');
 
 // Get storage path from environment or default
 const getStoragePath = () => process.env.STORAGE_PATH || path.join(__dirname, '../../../storage');
+
+// "Gallery opened" for the admin notification bell (#746). The photo-list
+// endpoint fires on every gallery page load, so notifying per hit would spam
+// the bell — debounce to at most one notification per event per window. The
+// map is in-memory on purpose: losing it on restart merely allows one extra
+// notification, and it costs the hot view path zero DB reads.
+const GALLERY_OPENED_DEBOUNCE_MS = 6 * 60 * 60 * 1000; // 6h
+const galleryOpenedNotifiedAt = new Map();
+// #746 covers CLIENT activity too — attribute the actor from the session
+// instead of hard-coding 'guest', so a customer opening from the portal
+// isn't mislabeled (codex review of #849 round 3).
+function galleryActor(req) {
+  // Portal tokens run as accessLevel 'guest' but carry via:'customer'
+  // (req.viaCustomer); PIN-client logins carry accessLevel 'client'.
+  // Both are customers, not guests (codex review of #849, final round).
+  const isCustomer = !!(req && (req.viaCustomer || req.accessLevel === 'client'));
+  return { type: isCustomer ? 'customer' : 'guest' };
+}
+function notifyGalleryOpened(event, req) {
+  // Customer-PORTAL opens already log `customer_event_access` on the
+  // access-token mint — a second `gallery_opened` per portal click would
+  // double-notify. Keyed on the portal provenance (req.viaCustomer), NOT
+  // on accessLevel: PIN-client logins are 'client' without any other
+  // open signal and must keep notifying (codex review of #849, final
+  // round — the previous check had this inverted).
+  if (req && req.viaCustomer) return;
+  const now = Date.now();
+  const last = galleryOpenedNotifiedAt.get(event.id) || 0;
+  if (now - last < GALLERY_OPENED_DEBOUNCE_MS) return;
+  galleryOpenedNotifiedAt.set(event.id, now);
+  // Fire-and-forget — logActivity swallows its own errors.
+  logActivity('gallery_opened', {}, event.id, galleryActor(req));
+}
+
+// Single-photo saves are frequent (a guest saving 30 photos = 30 route
+// hits) — debounce like gallery_opened so the bell gets one "guest is
+// downloading photos" signal per event per window instead of a flood
+// (codex review of #849). ZIP downloads stay un-debounced: rare, high
+// signal. Exact per-photo counts remain in access_logs/analytics.
+const SINGLE_DOWNLOAD_DEBOUNCE_MS = 60 * 60 * 1000; // 1h
+const singleDownloadNotifiedAt = new Map();
+function notifySinglePhotoDownload(event, req) {
+  const now = Date.now();
+  const last = singleDownloadNotifiedAt.get(event.id) || 0;
+  if (now - last < SINGLE_DOWNLOAD_DEBOUNCE_MS) return;
+  singleDownloadNotifiedAt.set(event.id, now);
+  logActivity('gallery_downloaded', { scope: 'single' }, event.id, galleryActor(req));
+}
 
 // Check for slug redirect (for renamed events)
 async function checkSlugRedirect(slug) {
@@ -747,6 +795,7 @@ router.get('/:slug/photos', verifyGalleryAccess, resolveGuest, async (req, res) 
         user_agent: req.headers['user-agent'],
         action: 'view'
       });
+      notifyGalleryOpened(req.event, req);
     }
     
     // Include protection settings in response
@@ -1003,6 +1052,13 @@ router.get('/:slug/download/:photoId', verifyGalleryAccess, denySlideshowToken, 
       action: 'download',
       photo_id: photoId
     });
+    // Surface in the admin notification bell (#746) — debounced, and only
+    // once the response actually finished: notifying up-front would log a
+    // download that then 404s/fails and the debounce would suppress the
+    // next real one for an hour (codex review of #849).
+    res.on('finish', () => {
+      if (res.statusCode < 400) notifySinglePhotoDownload(req.event, req);
+    });
     
     let filePath;
     try {
@@ -1101,6 +1157,8 @@ router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, async
             user_agent: req.headers['user-agent'],
             action: 'download_all_presigned'
           }).catch(() => {});
+          // Surface in the admin notification bell (#746).
+          logActivity('gallery_downloaded', { scope: 'all' }, req.event.id, galleryActor(req));
           res.redirect(302, url);
           return;
         } catch (err) {
@@ -1124,6 +1182,12 @@ router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, async
         user_agent: req.headers['user-agent'],
         action: 'download_all'
       }).catch(() => {});
+      // Surface in the admin notification bell (#746) — only once the
+      // stream actually finished; logging at pipe-time would report
+      // downloads that then broke mid-transfer (codex review of #849).
+      res.on('finish', () => {
+        if (res.statusCode < 400) logActivity('gallery_downloaded', { scope: 'all' }, req.event.id, galleryActor(req));
+      });
       return;
     }
 
@@ -1228,6 +1292,12 @@ router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, async
       }
     }
 
+    // Notification only after the response actually finished — finalize()
+    // ends Archiver's input, not the HTTP transfer (codex review of #849,
+    // confirmation round). Registered before finalize so it can't be missed.
+    res.on('finish', () => {
+      if (res.statusCode < 400) logActivity('gallery_downloaded', { scope: 'all' }, req.event.id, galleryActor(req));
+    });
     await archive.finalize();
 
     // Log bulk download
@@ -1346,6 +1416,10 @@ router.post('/:slug/download-selected', verifyGalleryAccess, denySlideshowToken,
       }
     }
 
+    // See download-all: notify only on response 'finish'.
+    res.on('finish', () => {
+      if (res.statusCode < 400) logActivity('gallery_downloaded', { scope: 'selected', photo_count: photoIds.length }, req.event.id, galleryActor(req));
+    });
     await archive.finalize();
 
     await db('access_logs').insert({

@@ -161,6 +161,13 @@ export const notificationsService = {
       case 'feature_flags_updated':
         return formatFeatureFlagsChanged(notification.metadata?.changed);
 
+      // Client activity (#746): downloads carry the real actor — customer
+      // sessions must not read as "A guest…" (codex review of #849).
+      case 'gallery_downloaded':
+        return notification.actorType === 'customer'
+          ? t('admin.notificationMessages.galleryDownloadedCustomer', { eventName: notification.eventName })
+          : t('admin.notificationMessages.galleryDownloaded', { eventName: notification.eventName });
+
       // ---- Customer portal (#354) -----------------------------------------
       case 'customer_login':
         return t('admin.notificationMessages.customerLogin', {
@@ -425,6 +432,13 @@ export const notificationsService = {
       case 'cms_page_logo_uploaded':
         return { icon: 'FileText', color: 'text-green-600' };
 
+      // Client activity (#746) — guest actions surfaced to the photographer.
+      case 'gallery_opened':
+        return { icon: 'Eye', color: 'text-blue-600' };
+      case 'gallery_downloaded':
+        return { icon: 'Download', color: 'text-green-600' };
+      case 'photo_favorite':
+        return { icon: 'Heart', color: 'text-pink-600' };
       default:
         return { icon: 'Bell', color: 'text-gray-600' };
     }
