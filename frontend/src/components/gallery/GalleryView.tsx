@@ -140,6 +140,24 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event }) => {
     }
   }, [data?.event?.default_photo_sort, defaultSortApplied]);
 
+  // Reveal mode (#838): an already-open view must follow reveal-state
+  // changes in BOTH directions — hidden→visible at reveal_at (or manual
+  // "Reveal now"), and visible→hidden on a re-hide. Refetch right at
+  // reveal_at plus a 60s poll while the mode is armed; there is no push
+  // channel.
+  const hiddenUntilReveal = data?.hidden_until_reveal === true;
+  const revealArmed = (data?.event as { reveal_armed?: boolean } | undefined)?.reveal_armed === true;
+  const revealAtMs = data?.reveal_at ? new Date(data.reveal_at).getTime() : null;
+  useEffect(() => {
+    if (!hiddenUntilReveal && !revealArmed) return undefined;
+    const timers: Array<ReturnType<typeof setTimeout>> = [];
+    if (revealAtMs && revealAtMs > Date.now()) {
+      timers.push(setTimeout(() => { refetch(); }, Math.min(revealAtMs - Date.now() + 1000, 2 ** 31 - 1)));
+    }
+    const interval = setInterval(() => { refetch(); }, 60_000);
+    return () => { timers.forEach(clearTimeout); clearInterval(interval); };
+  }, [hiddenUntilReveal, revealArmed, revealAtMs, refetch]);
+
   // Get individual protection settings from event
   const disableRightClick = data?.event?.disable_right_click === true;
   const enableDevtoolsProtection = data?.event?.enable_devtools_protection === true;
@@ -700,6 +718,58 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event }) => {
   const filterBarShown = !showSidebar
     && settingsData?.gallery_show_filter_bar !== false
     && (data?.photos?.length ?? 0) > 0;
+
+  // Reveal mode (#838): the server returned the event shell with no photos —
+  // render the upload-only view for EVERY layout. Enforcement is server-side
+  // (the photo endpoints refuse plain guests); this is the friendly face.
+  if (hiddenUntilReveal) {
+    const uploadsOn = Boolean(data?.event?.allow_user_uploads || event?.allow_user_uploads);
+    return (
+      <GalleryLayout event={event} brandingSettings={brandingSettings}>
+        <div className="max-w-xl mx-auto text-center py-16 px-4">
+          <div className="mx-auto mb-5 w-16 h-16 rounded-full bg-surface flex items-center justify-center">
+            <EyeOff className="w-8 h-8 text-muted-theme" />
+          </div>
+          <h2 className="text-2xl font-semibold mb-3" style={{ color: 'var(--color-text, #171717)' }}>
+            {t('gallery.revealPendingTitle', 'The photos are still a surprise')}
+          </h2>
+          <p className="text-muted-theme mb-2">
+            {t('gallery.revealPendingMessage', 'The host will reveal the gallery later — check back soon!')}
+          </p>
+          {data.reveal_at && (
+            <p className="text-sm text-muted-theme mb-6">
+              {t('gallery.revealScheduledFor', 'Reveal scheduled for {{date}}', {
+                date: new Date(data.reveal_at).toLocaleString(),
+              })}
+            </p>
+          )}
+          {uploadsOn && (
+            <div className="mt-6">
+              <p className="text-sm text-muted-theme mb-3">
+                {t('gallery.revealUploadHint', 'You can already add your own photos to the collection:')}
+              </p>
+              <Button
+                variant="primary"
+                size="lg"
+                leftIcon={<Upload className="w-5 h-5" />}
+                onClick={() => setShowUploadModal(true)}
+              >
+                {t('upload.uploadPhotos', 'Upload Photos')}
+              </Button>
+            </div>
+          )}
+        </div>
+        {showUploadModal && uploadsOn && (
+          <UserPhotoUpload
+            eventId={data?.event?.id || event?.id}
+            categoryId={data?.event?.upload_category_id || event?.upload_category_id}
+            onUploadComplete={() => setShowUploadModal(false)}
+            onClose={() => setShowUploadModal(false)}
+          />
+        )}
+      </GalleryLayout>
+    );
+  }
 
   // Full-page layouts (gallery-premium, gallery-story) have their own integrated UI
   // Skip all wrapper elements (header, footer, sidebar, filters) for these layouts

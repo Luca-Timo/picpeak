@@ -1177,6 +1177,9 @@ module.exports = (router) => {
     body('welcome_message').optional({ nullable: true, checkFalsy: true }).trim(),
     body('color_theme').optional({ nullable: true }),
     body('allow_user_uploads').optional().isBoolean(),
+    // Reveal mode (#838): hide the gallery from guests until reveal.
+    body('reveal_mode').optional().isBoolean(),
+    body('reveal_at').optional({ nullable: true, checkFalsy: true }).isISO8601(),
     // Migration 143 — per-event reminder overrides. All three are
     // optional; nullable values are accepted so admins can clear an
     // override (e.g. drop a custom offset back to the global default).
@@ -1489,6 +1492,39 @@ module.exports = (router) => {
         }
       }
 
+      // Reveal mode (#838). Turning the toggle ON from off clears
+      // revealed_at, so a gallery can be re-hidden after a reveal;
+      // reveal_at accepts null/'' to drop a schedule.
+      if (Object.prototype.hasOwnProperty.call(updates, 'reveal_mode')) {
+        const nextRevealMode = parseBooleanInput(updates.reveal_mode, false);
+        updates.reveal_mode = formatBoolean(nextRevealMode);
+        const wasOn = event.reveal_mode === true || event.reveal_mode === 1 || event.reveal_mode === '1';
+        if (nextRevealMode && !wasOn) {
+          updates.revealed_at = null;
+          // A stale PAST schedule from a previous cycle would instantly
+          // re-open the gate on re-arm. Only bites partial API updates —
+          // isGalleryHidden() with the stamp cleared tells us whether the
+          // stored schedule still hides anything.
+          const { isGalleryHidden } = require('../../utils/revealMode');
+          if (!Object.prototype.hasOwnProperty.call(updates, 'reveal_at')
+              && event.reveal_at
+              && !isGalleryHidden({ reveal_mode: true, revealed_at: null, reveal_at: event.reveal_at })) {
+            updates.reveal_at = null;
+          }
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(updates, 'reveal_at')) {
+        // ISO string, not a Date object — the SQLite driver stringifies raw
+        // Dates uselessly; ISO round-trips on both engines.
+        updates.reveal_at = updates.reveal_at ? new Date(updates.reveal_at).toISOString() : null;
+        // Scheduling a FUTURE reveal on an already-revealed gallery re-arms
+        // hiding — that's the only way this state can be reached, since
+        // "Reveal now" and the scheduler both clear/consume the schedule.
+        if (updates.reveal_at && new Date(updates.reveal_at) > new Date() && event.revealed_at) {
+          updates.revealed_at = null;
+        }
+      }
+
       // Handle client access fields (#172)
       if (Object.prototype.hasOwnProperty.call(updates, 'client_access_enabled')) {
         updates.client_access_enabled = formatBoolean(updates.client_access_enabled);
@@ -1543,6 +1579,58 @@ module.exports = (router) => {
   });
 
   // Delete event
+  // Reveal now (#838): stamp revealed_at so the gallery opens for guests
+  // immediately. Idempotent — revealing an already-revealed event no-ops.
+  router.post('/:id/reveal', adminAuth, requirePermission('events.edit'), requireEventOwnership, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const event = await db('events').where('id', id).first();
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+      const isOn = event.reveal_mode === true || event.reveal_mode === 1 || event.reveal_mode === '1';
+      if (!isOn) {
+        return res.status(400).json({ error: 'Reveal mode is not enabled for this event' });
+      }
+
+      const now = new Date().toISOString();
+      // Also clear a pending schedule — "reveal now" makes it obsolete, and
+      // a stale future reveal_at would re-arm hiding on the next form save.
+      const stamped = await db('events')
+        .where('id', id)
+        .whereNull('revealed_at')
+        .update({ revealed_at: now, reveal_at: null });
+
+      if (stamped === 1) {
+        await logActivity('gallery_revealed', { scheduled: false }, id, {
+          type: 'admin', id: req.admin.id, name: req.admin.username,
+        });
+        try {
+          await require('../../services/workflows').emitWorkflowEvent('gallery.revealed', {
+            entityType: 'event',
+            entityId: parseInt(id, 10),
+            dedupSuffix: String(new Date(now).getTime()),
+            payload: {
+              eventId: parseInt(id, 10),
+              slug: event.slug,
+              eventName: event.event_name,
+              revealedAt: now,
+              scheduled: false,
+            },
+          });
+        } catch (e) {
+          logger.warn('Failed to emit gallery.revealed workflow event', { eventId: id, error: e.message });
+        }
+      }
+
+      const fresh = await db('events').where('id', id).first();
+      res.json({ message: 'Gallery revealed', revealed_at: fresh.revealed_at });
+    } catch (error) {
+      logger.error('Failed to reveal gallery:', error);
+      res.status(500).json({ error: 'Failed to reveal gallery' });
+    }
+  });
+
   router.delete('/:id', adminAuth, requirePermission('events.delete'), requireEventOwnership, async (req, res) => {
     try {
       const { id } = req.params;
