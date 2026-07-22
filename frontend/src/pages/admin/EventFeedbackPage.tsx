@@ -6,6 +6,7 @@ import {
   MessageSquare, 
   Star, 
   Heart, 
+  Smile,
   TrendingUp,
   Filter,
   Download,
@@ -249,6 +250,7 @@ export const EventFeedbackPage: React.FC = () => {
                 <option value="like">{t('feedback.types.like', 'Likes')}</option>
                 <option value="comment">{t('feedback.types.comment', 'Comments')}</option>
                 <option value="favorite">{t('feedback.types.favorite', 'Favorites')}</option>
+                <option value="reaction">{t('feedback.types.reaction', 'Reactions')}</option>
               </select>
               <select
                 value={feedbackFilter.status}
@@ -293,6 +295,9 @@ export const EventFeedbackPage: React.FC = () => {
                             {item.feedback_type === 'rating' && <Star className="w-4 h-4 text-yellow-500" />}
                             {item.feedback_type === 'like' && <Heart className="w-4 h-4 text-red-500" />}
                             {item.feedback_type === 'comment' && <MessageSquare className="w-4 h-4 text-blue-500" />}
+                            {item.feedback_type === 'reaction' && item.reaction && (
+                              <span className="text-base leading-none">{item.reaction}</span>
+                            )}
                             <span className="font-medium text-sm">
                               {item.guest_name || t('feedback.anonymous', 'Anonymous')}
                             </span>
@@ -422,7 +427,7 @@ export const EventFeedbackPage: React.FC = () => {
           ) : analytics ? (
             <>
               {/* Summary Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <Card>
                   <div className="p-6">
                     <div className="flex items-center gap-3 mb-2">
@@ -444,6 +449,17 @@ export const EventFeedbackPage: React.FC = () => {
                       <div>
                         <p className="text-2xl font-bold">{analytics.summary.total_likes}</p>
                         <p className="text-sm text-neutral-600">{t('feedback.totalLikes', 'Total Likes')}</p>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+                <Card>
+                  <div className="p-6">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Smile className="w-8 h-8 text-amber-500" />
+                      <div>
+                        <p className="text-2xl font-bold">{analytics.summary.total_reactions || 0}</p>
+                        <p className="text-sm text-neutral-600">{t('feedback.totalReactions', 'Total Reactions')}</p>
                       </div>
                     </div>
                   </div>

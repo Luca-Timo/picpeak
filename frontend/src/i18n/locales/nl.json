@@ -1688,6 +1688,7 @@
         "favorites": "Favorieten",
         "comments": "Opmerkingen",
         "ratings": "Beoordelingen",
+        "reactions": "Reacties",
         "lastSeen": "Laatste bezoek"
       },
       "view": "Details bekijken",
@@ -1701,6 +1702,7 @@
         "liked": "Geliked",
         "favorited": "Favoriet",
         "rated": "Beoordeeld",
+        "reacted": "Gereageerd",
         "commented": "Becommentarieerd"
       },
       "inviteStatus": {
@@ -1756,7 +1758,9 @@
       "event_renamed": "Evenement hernoemd: {{eventName}}",
       "photo_rating": "Foto beoordeeld in {{eventName}}",
       "photo_comment": "Foto becommentarieerd in {{eventName}}",
+      "photo_reaction": "Fotoreactie in {{eventName}}",
       "guest_feedback_like": "Gast heeft een foto geliked in {{eventName}}",
+      "guest_feedback_reaction": "Gast reageerde op een foto in {{eventName}}",
       "guest_feedback_favorite": "Gast heeft een foto als favoriet gemarkeerd in {{eventName}}",
       "guest_feedback_rating": "Gast heeft een foto beoordeeld in {{eventName}}",
       "guest_feedback_comment": "Gast heeft een opmerking geplaatst op een foto in {{eventName}}",
@@ -2485,6 +2489,12 @@
     "patternDescription": "Wachtwoorden worden gegenereerd met uw evenementnaam en datum. Voorbeeld: \"Locatie2024$Augustus\" voor betere beveiliging en herkenbaarheid."
   },
   "feedback": {
+    "reaction": "reactie",
+    "reactions": "Reacties",
+    "reactWith": "Reageer met {{emoji}}",
+    "removeReaction": "{{emoji}}-reactie verwijderen",
+    "reactionError": "Reactie kon niet worden bijgewerkt",
+    "totalReactions": "Totaal reacties",
     "comments": "Opmerkingen",
     "addComment": "Opmerking toevoegen",
     "yourName": "Uw naam",
@@ -2513,6 +2523,8 @@
       "comments": "Opmerkingen",
       "commentsDesc": "Tekstopmerkingen bij foto's",
       "favorites": "Favorieten",
+      "reactions": "Emoji-reacties",
+      "reactionsDesc": "Eén emoji per gast per foto (❤️ 😂 😍 👏 🎉)",
       "favoritesDesc": "Foto's als favoriet markeren",
       "identityMode": "Identiteitsmodus",
       "identityModeSimple": "Eenvoudige feedback",
@@ -2551,7 +2563,8 @@
       "rating": "Beoordelingen",
       "like": "Likes",
       "comment": "Opmerkingen",
-      "favorite": "Favorieten"
+      "favorite": "Favorieten",
+      "reaction": "Reacties"
     },
     "allStatuses": "Alle statussen",
     "status": {

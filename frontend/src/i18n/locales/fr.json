@@ -1699,6 +1699,7 @@
         "favorites": "Favoris",
         "comments": "Commentaires",
         "ratings": "Notes",
+        "reactions": "Réactions",
         "lastSeen": "Dernière visite"
       },
       "view": "Voir les détails",
@@ -1712,6 +1713,7 @@
         "liked": "Aimés",
         "favorited": "Favoris",
         "rated": "Notés",
+        "reacted": "A réagi",
         "commented": "Commentés"
       },
       "inviteStatus": {
@@ -1744,7 +1746,9 @@
       "photo_favorite": "Photo marquée comme favori dans {{eventName}}",
       "photo_rating": "Photo notée dans {{eventName}}",
       "photo_comment": "Commentaire ajouté sur une photo dans {{eventName}}",
+      "photo_reaction": "Réaction à une photo dans {{eventName}}",
       "guest_feedback_like": "Un invité a aimé une photo dans {{eventName}}",
+      "guest_feedback_reaction": "Un invité a réagi à une photo dans {{eventName}}",
       "guest_feedback_favorite": "Un invité a marqué une photo comme favori dans {{eventName}}",
       "guest_feedback_rating": "Un invité a noté une photo dans {{eventName}}",
       "guest_feedback_comment": "Un invité a commenté une photo dans {{eventName}}",
@@ -2496,6 +2500,12 @@
     "patternDescription": "Les mots de passe sont générés à partir du nom de votre événement et de la date. Exemple : \"Lieu2024$Août\" pour une meilleure sécurité et mémorisation."
   },
   "feedback": {
+    "reaction": "réaction",
+    "reactions": "Réactions",
+    "reactWith": "Réagir avec {{emoji}}",
+    "removeReaction": "Retirer la réaction {{emoji}}",
+    "reactionError": "Impossible de mettre à jour la réaction",
+    "totalReactions": "Total des réactions",
     "comments": "Commentaires",
     "addComment": "Ajouter un commentaire",
     "yourName": "Votre nom",
@@ -2524,6 +2534,8 @@
       "comments": "Commentaires",
       "commentsDesc": "Commentaires textuels sur les photos",
       "favorites": "Favoris",
+      "reactions": "Réactions emoji",
+      "reactionsDesc": "Un emoji par invité et par photo (❤️ 😂 😍 👏 🎉)",
       "favoritesDesc": "Marquer les photos comme favoris",
       "identityMode": "Mode d'identité",
       "identityModeSimple": "Commentaires simples",
@@ -2562,7 +2574,8 @@
       "rating": "Notes",
       "like": "J'aimes",
       "comment": "Commentaires",
-      "favorite": "Favoris"
+      "favorite": "Favoris",
+      "reaction": "Réactions"
     },
     "allStatuses": "Tous statuts",
     "status": {

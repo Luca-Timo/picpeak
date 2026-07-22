@@ -1713,6 +1713,7 @@
         "favorites": "Favoritos",
         "comments": "Comentários",
         "ratings": "Avaliações",
+        "reactions": "Reações",
         "lastSeen": "Última visita"
       },
       "view": "Ver detalhes",
@@ -1726,6 +1727,7 @@
         "liked": "Gostou",
         "favorited": "Favorito",
         "rated": "Avaliado",
+        "reacted": "Reagiu",
         "commented": "Comentado"
       },
       "inviteStatus": {
@@ -1781,7 +1783,9 @@
       "event_renamed": "Evento renomeado: {{eventName}}",
       "photo_rating": "Foto avaliada em {{eventName}}",
       "photo_comment": "Foto comentada em {{eventName}}",
+      "photo_reaction": "Reação a uma foto em {{eventName}}",
       "guest_feedback_like": "Convidado curtiu uma foto em {{eventName}}",
+      "guest_feedback_reaction": "Convidado reagiu a uma foto em {{eventName}}",
       "guest_feedback_favorite": "Convidado adicionou uma foto aos favoritos em {{eventName}}",
       "guest_feedback_rating": "Convidado avaliou uma foto em {{eventName}}",
       "guest_feedback_comment": "Convidado comentou uma foto em {{eventName}}",
@@ -2510,6 +2514,12 @@
     "patternDescription": "As senhas são geradas usando o nome e data do evento. Ex: \"Evento2024$Agosto\" para melhor memorização."
   },
   "feedback": {
+    "reaction": "reação",
+    "reactions": "Reações",
+    "reactWith": "Reagir com {{emoji}}",
+    "removeReaction": "Remover a reação {{emoji}}",
+    "reactionError": "Não foi possível atualizar a reação",
+    "totalReactions": "Total de reações",
     "comments": "Comentários",
     "addComment": "Adicionar Comentário",
     "yourName": "Seu nome",
@@ -2538,6 +2548,8 @@
       "comments": "Comentários",
       "commentsDesc": "Comentários em texto nas fotos",
       "favorites": "Favoritos",
+      "reactions": "Reações com emojis",
+      "reactionsDesc": "Um emoji por convidado por foto (❤️ 😂 😍 👏 🎉)",
       "favoritesDesc": "Marcar fotos como favoritas",
       "identityMode": "Modo de identidade",
       "identityModeSimple": "Feedback simples",
@@ -2576,7 +2588,8 @@
       "rating": "Avaliações",
       "like": "Gostos",
       "comment": "Comentários",
-      "favorite": "Favoritos"
+      "favorite": "Favoritos",
+      "reaction": "Reações"
     },
     "allStatuses": "Todos os estados",
     "status": {

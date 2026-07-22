@@ -2306,6 +2306,7 @@
         "favorites": "Favorites",
         "comments": "Comments",
         "ratings": "Ratings",
+        "reactions": "Reactions",
         "lastSeen": "Last seen"
       },
       "view": "View details",
@@ -2319,6 +2320,7 @@
         "liked": "Liked",
         "favorited": "Favorited",
         "rated": "Rated",
+        "reacted": "Reacted",
         "commented": "Commented"
       },
       "inviteStatus": {
@@ -2351,7 +2353,9 @@
       "photo_favorite": "Photo favorited in {{eventName}}",
       "photo_rating": "Photo rated in {{eventName}}",
       "photo_comment": "Photo commented in {{eventName}}",
+      "photo_reaction": "Photo reaction in {{eventName}}",
       "guest_feedback_like": "Guest liked a photo in {{eventName}}",
+      "guest_feedback_reaction": "Guest reacted to a photo in {{eventName}}",
       "guest_feedback_favorite": "Guest favorited a photo in {{eventName}}",
       "guest_feedback_rating": "Guest rated a photo in {{eventName}}",
       "guest_feedback_comment": "Guest commented on a photo in {{eventName}}",
@@ -3358,6 +3362,12 @@
     "patternDescription": "Passwords are generated using your event name and date. Example: \"Venue2024$August\" for better security and memorability."
   },
   "feedback": {
+    "reaction": "reaction",
+    "reactions": "Reactions",
+    "reactWith": "React with {{emoji}}",
+    "removeReaction": "Remove {{emoji}} reaction",
+    "reactionError": "Failed to update reaction",
+    "totalReactions": "Total Reactions",
     "comments": "Comments",
     "addComment": "Add Comment",
     "yourName": "Your name",
@@ -3386,6 +3396,8 @@
       "comments": "Comments",
       "commentsDesc": "Text comments on photos",
       "favorites": "Favorites",
+      "reactions": "Emoji Reactions",
+      "reactionsDesc": "One emoji per guest per photo (❤️ 😂 😍 👏 🎉)",
       "favoritesDesc": "Mark photos as favorites",
       "perGuestLimits": "Per-guest limits",
       "perGuestLimitsDesc": "Cap how many photos each guest can favorite or like — useful for \"pick your top N for the album\" workflows. Leave at 0 for no limit. Lowering a cap below an existing guest's count keeps their existing rows; only new adds are blocked until they remove some.",
@@ -3430,7 +3442,8 @@
       "rating": "Ratings",
       "like": "Likes",
       "comment": "Comments",
-      "favorite": "Favorites"
+      "favorite": "Favorites",
+      "reaction": "Reactions"
     },
     "allStatuses": "All Statuses",
     "status": {

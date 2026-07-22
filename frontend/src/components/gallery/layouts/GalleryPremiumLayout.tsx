@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { MasonryPhotoAlbum } from 'react-photo-album';
 import 'react-photo-album/masonry.css';
 import Lightbox from 'yet-another-react-lightbox';
@@ -19,6 +20,7 @@ import type { BaseGalleryLayoutProps } from './BaseGalleryLayout';
 import type { Photo } from '../../../types';
 import { AuthenticatedImage } from '../../common';
 import { feedbackService } from '../../../services/feedback.service';
+import { PhotoReactions } from '../PhotoReactions';
 import { useGuestIdentityOptional } from '../../../contexts/GuestIdentityContext';
 import { FeedbackIdentityModal } from '../FeedbackIdentityModal';
 import { galleryService } from '../../../services/gallery.service';
@@ -208,6 +210,14 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
     likedSeededRef.current = true;
   }, [photos]);
   const [savedIdentity, setSavedIdentity] = useState<{ name: string; email: string } | null>(null);
+  // Emoji reactions (#839) inside the premium lightbox. This layout uses
+  // yet-another-react-lightbox instead of the shared PhotoLightbox, so the
+  // reaction bar is a fixed overlay fed by its own per-photo fetch.
+  const [reactionState, setReactionState] = useState<{
+    photoId: number;
+    mine: string | null;
+    counts: Record<string, number>;
+  } | null>(null);
   const guestIdentity = useGuestIdentityOptional();
   const [showIdentityModal, setShowIdentityModal] = useState(false);
   const [pendingLikePhotoId, setPendingLikePhotoId] = useState<number | null>(null);
@@ -228,6 +238,41 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
     if (!activeCategory) return photos;
     return photos.filter(photo => photo.category_name === activeCategory);
   }, [photos, activeCategory]);
+
+  const currentLightboxPhoto = lightboxIndex >= 0 ? filteredPhotos[lightboxIndex] : null;
+  const reactionsActive = feedbackEnabled && !!feedbackOptions?.allowReactions;
+
+  // Fetch the current photo's reaction tallies + my selection when the
+  // lightbox lands on it. Optimistic updates below keep it fresh in place.
+  useEffect(() => {
+    if (!currentLightboxPhoto || !reactionsActive) {
+      setReactionState(null);
+      return undefined;
+    }
+    let alive = true;
+    feedbackService.getPhotoFeedback(slug, String(currentLightboxPhoto.id))
+      .then((d) => {
+        if (!alive) return;
+        setReactionState({
+          photoId: currentLightboxPhoto.id,
+          mine: d.my_feedback.reaction || null,
+          counts: d.reactions || {},
+        });
+      })
+      .catch(() => { /* bar simply stays hidden for this photo */ });
+    return () => { alive = false; };
+  }, [currentLightboxPhoto?.id, reactionsActive, slug]);
+
+  const handleReactionChange = useCallback((next: string | null) => {
+    setReactionState((prev) => {
+      if (!prev) return prev;
+      const counts = { ...prev.counts };
+      if (prev.mine) counts[prev.mine] = Math.max(0, (counts[prev.mine] || 0) - 1);
+      if (next) counts[next] = (counts[next] || 0) + 1;
+      return { ...prev, mine: next, counts };
+    });
+    onFeedbackChange?.();
+  }, [onFeedbackChange]);
 
   // Get hero photo
   const heroPhoto = heroPhotoOverride || photos[0];
@@ -586,6 +631,26 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
           }
         }}
       />
+
+      {/* Emoji reaction bar over the lightbox (#839). Portaled to
+          document.body: inside the layout tree an ancestor stacking context
+          (framer-motion transforms) would paint it UNDER yarl's body-level
+          portal and its backdrop would swallow every click. As a body child
+          the z-index 10000 genuinely beats yarl's 9999. */}
+      {currentLightboxPhoto && reactionsActive && reactionState?.photoId === currentLightboxPhoto.id && createPortal(
+        <div className="gallery-premium-lightbox-reactions">
+          <PhotoReactions
+            photoId={String(currentLightboxPhoto.id)}
+            gallerySlug={slug}
+            myReaction={reactionState.mine}
+            reactionCounts={reactionState.counts}
+            isEnabled={true}
+            requireNameEmail={!!feedbackOptions?.requireNameEmail}
+            onReactionChange={handleReactionChange}
+          />
+        </div>,
+        document.body
+      )}
 
       {/* Identity Modal */}
       <FeedbackIdentityModal
