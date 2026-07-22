@@ -39,10 +39,15 @@ const getStoragePath = () => process.env.STORAGE_PATH || path.join(__dirname, '.
 // oidc_client_secret is reserved too: it is AES-encrypted at rest and only
 // writable through PUT /sso below — a generic upsert would store plaintext
 // and break decryption (#798).
-const RESERVED_SETTING_KEYS = ['setup_wizard_completed', 'setup_token', 'oidc_client_secret'];
+const RESERVED_SETTING_KEYS = ['setup_wizard_completed', 'setup_token'];
+// EVERY oidc_* key is reserved (#798 phase 2): the client secret would be
+// clobbered with plaintext, and the policy/mapping keys carry invariants
+// (role targets exist, break-glass account present) that only the dedicated
+// PUT /sso validates — a generic upsert would bypass all of them.
+const isReservedSettingKey = (key) => RESERVED_SETTING_KEYS.includes(key) || key.startsWith('oidc_');
 const stripReservedSettingKeys = (settings) => {
-  for (const key of RESERVED_SETTING_KEYS) {
-    delete settings[key];
+  for (const key of Object.keys(settings)) {
+    if (isReservedSettingKey(key)) delete settings[key];
   }
   return settings;
 };
@@ -163,9 +168,7 @@ router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) 
     // generic settings reads — oidc_client_secret (#798) is stored encrypted
     // with setting_type 'string' and would otherwise leak its ciphertext to
     // any settings.view holder; setup_token is the first-run bootstrap secret.
-    for (const key of RESERVED_SETTING_KEYS) {
-      delete settingsObject[key];
-    }
+    stripReservedSettingKeys(settingsObject);
 
     // Mask sensitive secrets before sending to client
     if (settingsObject.security_recaptcha_secret_key) {
@@ -436,6 +439,11 @@ router.get('/sso', adminAuth, requirePermission('settings.view'), async (req, re
       oidc_default_role: cfg.defaultRole,
       oidc_button_label: cfg.buttonLabel || '',
       oidc_scopes: cfg.scopes,
+      oidc_role_mapping_enabled: cfg.roleMappingEnabled,
+      oidc_roles_claim: cfg.rolesClaim,
+      oidc_role_mappings: cfg.roleMappings,
+      oidc_require_mapped_role: cfg.requireMappedRole,
+      oidc_disable_local_login: cfg.disableLocalLogin,
       redirect_uri: redirectUri,
     });
   } catch (error) {
@@ -453,6 +461,11 @@ router.put('/sso', adminAuth, requirePermission('settings.edit'), [
   body('oidc_default_role').optional().isString().trim(),
   body('oidc_button_label').optional().isString().trim().isLength({ max: 60 }),
   body('oidc_scopes').optional().isString().trim(),
+  body('oidc_role_mapping_enabled').optional().isBoolean(),
+  body('oidc_roles_claim').optional().isString().trim().isLength({ max: 200 }),
+  body('oidc_role_mappings').optional().isObject(),
+  body('oidc_require_mapped_role').optional().isBoolean(),
+  body('oidc_disable_local_login').optional().isBoolean(),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -489,6 +502,42 @@ router.put('/sso', adminAuth, requirePermission('settings.edit'), [
       const role = await db('roles').where('name', req.body.oidc_default_role).first();
       if (!role) {
         return res.status(400).json({ error: `Unknown role: ${req.body.oidc_default_role}` });
+      }
+    }
+
+    // Every role-mapping target must exist too (#798 phase 2) — a typo'd
+    // role name would silently map users to nothing.
+    if (req.body.oidc_role_mappings !== undefined) {
+      const targets = [...new Set(Object.values(req.body.oidc_role_mappings).map((r) => String(r).trim()).filter(Boolean))];
+      if (targets.length > 0) {
+        const known = (await db('roles').whereIn('name', targets)).map((r) => r.name);
+        const unknown = targets.filter((t) => !known.includes(t));
+        if (unknown.length > 0) {
+          return res.status(400).json({ error: `Unknown role(s) in mapping: ${unknown.join(', ')}` });
+        }
+      }
+    }
+
+    // Turning OFF local login requires SSO to be (staying) enabled. Only the
+    // explicit request is checked — a stored true must never block disabling
+    // SSO itself (runtime enforcement ignores the flag while SSO is off or
+    // unconfigured, and OIDC_BREAK_GLASS=true always re-opens local login).
+    if (req.body.oidc_disable_local_login === true && effectiveEnabled !== true) {
+      return res.status(400).json({ error: 'Local login can only be disabled while SSO is enabled' });
+    }
+
+    // …and an active LOCAL-password super_admin must exist as the break-glass
+    // account: OIDC_BREAK_GLASS only re-opens the password route, but
+    // OIDC-owned accounts are refused there and carry unusable random hashes.
+    // settings.edit is super_admin-only, so a lesser local account couldn't
+    // fix the SSO config either — without this check an all-OIDC instance
+    // would be unrecoverable during an IdP outage. Checked on the MERGED
+    // state, not just the request: re-enabling SSO while a stored true flag
+    // re-arms SSO-only mode just as much as setting the flag itself.
+    const effectiveDisableLocal = req.body.oidc_disable_local_login ?? current.disableLocalLogin;
+    if (effectiveDisableLocal === true && effectiveEnabled === true) {
+      if (!(await oidcService.hasActiveLocalSuperAdmin())) {
+        return res.status(400).json({ error: 'Disabling local login requires at least one active Super Admin with a local password (the break-glass account)' });
       }
     }
 
@@ -564,9 +613,7 @@ router.get('/:type', adminAuth, requirePermission('settings.view'), async (req, 
     // generic settings reads — oidc_client_secret (#798) is stored encrypted
     // with setting_type 'string' and would otherwise leak its ciphertext to
     // any settings.view holder; setup_token is the first-run bootstrap secret.
-    for (const key of RESERVED_SETTING_KEYS) {
-      delete settingsObject[key];
-    }
+    stripReservedSettingKeys(settingsObject);
 
     // Mask sensitive secrets before sending to client
     if (settingsObject.security_recaptcha_secret_key) {
