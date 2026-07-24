@@ -89,7 +89,7 @@ function decryptSecret(stored) {
  */
 async function getOidcConfig() {
   const [enabled, issuerUrl, clientId, encSecret, autoprovision, defaultRole, buttonLabel, scopes,
-    roleMappingEnabled, rolesClaim, roleMappings, requireMappedRole, disableLocalLogin] =
+    roleMappingEnabled, rolesClaim, roleMappings, requireMappedRole, disableLocalLogin, logoutFromIdp] =
     await Promise.all([
       getAppSetting('oidc_enabled'),
       getAppSetting('oidc_issuer_url'),
@@ -104,6 +104,7 @@ async function getOidcConfig() {
       getAppSetting('oidc_role_mappings'),
       getAppSetting('oidc_require_mapped_role'),
       getAppSetting('oidc_disable_local_login'),
+      getAppSetting('oidc_logout_from_idp'),
     ]);
 
   let clientSecret = null;
@@ -134,6 +135,7 @@ async function getOidcConfig() {
       ? roleMappings : {},
     requireMappedRole: requireMappedRole === true,
     disableLocalLogin: disableLocalLogin === true,
+    logoutFromIdp: logoutFromIdp === true,
   };
 }
 
@@ -179,7 +181,7 @@ async function isLocalLoginDisabled() {
 
 // Short-TTL cache of the flag for the UNAUTHENTICATED public-settings
 // endpoint, which every new client hits — without it each request pays the
-// full 13-key config read. The login route keeps using the uncached check
+// full 14-key config read. The login route keeps using the uncached check
 // (enforcement must be exact); a UI that lags a settings flip by ≤10s only
 // shows a form whose submit the API answers authoritatively. Invalidated on
 // every settings save in this worker.
@@ -295,7 +297,8 @@ async function buildAuthorizationRequest() {
 /**
  * Exchange the authorization code and validate the ID token (issuer,
  * audience, signature, nonce, state — all enforced by openid-client).
- * Returns the ID token claims.
+ * Returns the ID token claims plus the raw ID token — the callback route
+ * keeps the latter for RP-initiated logout (`id_token_hint`, #798 phase 3).
  */
 async function handleCallback(currentUrl, { state, nonce, codeVerifier }) {
   const cfg = await getOidcConfig();
@@ -339,7 +342,77 @@ async function handleCallback(currentUrl, { state, nonce, codeVerifier }) {
     }
   }
 
-  return claims;
+  return { claims, idToken: tokenSet.id_token || null };
+}
+
+/**
+ * The URL guests land on after the IdP finishes its logout. Exposed in the
+ * SSO settings so the admin can register it at the IdP (Keycloak: "Valid
+ * post logout redirect URIs") — unregistered URIs make the IdP show an
+ * error instead of returning. Empty when no public base URL is configured.
+ */
+async function getPostLogoutRedirectUri() {
+  const { getFrontendBaseUrl } = require('../utils/frontendUrl');
+  const base = ((await getFrontendBaseUrl().catch(() => '')) || '').replace(/\/$/, '');
+  return base ? `${base}/admin/login` : '';
+}
+
+/**
+ * RP-initiated logout URL (#798 phase 3). Returns null whenever the IdP
+ * round-trip should not happen — feature off, SSO unconfigured, discovery
+ * failing, or the IdP advertising no end_session_endpoint — so the caller
+ * treats null as "finish the local logout normally". A logout must never
+ * fail because the IdP is unreachable.
+ */
+/** Decode a JWT payload WITHOUT verification — only for routing decisions
+ * on claims we minted no trust in (which IdP/client issued this token). */
+function decodeJwtPayload(token) {
+  try {
+    return JSON.parse(Buffer.from(String(token).split('.')[1], 'base64url').toString('utf8'));
+  } catch (_) {
+    return null;
+  }
+}
+
+async function buildEndSessionUrl(idTokenHint) {
+  try {
+    const cfg = await getOidcConfig();
+    if (!cfg.enabled || !cfg.logoutFromIdp || !isConfigured(cfg)) return null;
+    const { client, issuerMetadata } = await getClient(cfg);
+    if (!issuerMetadata.end_session_endpoint) return null;
+
+    // The hint comes from a cookie minted at login — the OIDC config may
+    // have changed since. A token from a DIFFERENT issuer means the session
+    // belongs to another IdP entirely: skip the round-trip (ending the new
+    // IdP's session would be wrong, and providers that validate the hint
+    // would strand the user on an error page). Same issuer but a different
+    // client (aud): the hint is unusable, but the browser's IdP session is
+    // real — round-trip without the hint.
+    let hint = idTokenHint;
+    if (hint) {
+      const payload = decodeJwtPayload(hint);
+      if (!payload || payload.iss !== issuerMetadata.issuer) return null;
+      const audMatches = Array.isArray(payload.aud)
+        ? payload.aud.includes(cfg.clientId)
+        : payload.aud === cfg.clientId;
+      if (!audMatches) hint = undefined;
+    }
+
+    const postLogoutRedirectUri = await getPostLogoutRedirectUri();
+    return client.endSessionUrl({
+      // Without the hint most IdPs (Keycloak included) fall back to a
+      // "do you really want to log out?" confirmation page — still correct,
+      // just one extra click. client_id keeps the request valid either way.
+      ...(hint ? { id_token_hint: hint } : {}),
+      ...(postLogoutRedirectUri ? { post_logout_redirect_uri: postLogoutRedirectUri } : {}),
+      client_id: cfg.clientId,
+    });
+  } catch (err) {
+    logger.warn('OIDC end-session URL could not be built — finishing local logout only', {
+      error: err.message,
+    });
+    return null;
+  }
 }
 
 /**
@@ -636,6 +709,7 @@ async function saveOidcSettings(input) {
   }
   if (input.oidc_require_mapped_role !== undefined) put('oidc_require_mapped_role', input.oidc_require_mapped_role === true, 'boolean');
   if (input.oidc_disable_local_login !== undefined) put('oidc_disable_local_login', input.oidc_disable_local_login === true, 'boolean');
+  if (input.oidc_logout_from_idp !== undefined) put('oidc_logout_from_idp', input.oidc_logout_from_idp === true, 'boolean');
   if (typeof input.oidc_client_secret === 'string' && input.oidc_client_secret.length > 0) {
     put('oidc_client_secret', encryptSecret(input.oidc_client_secret), 'string');
   }
@@ -654,8 +728,10 @@ module.exports = {
   extractRolesFromClaims,
   resolveMappedRole,
   getRedirectUri,
+  getPostLogoutRedirectUri,
   buildAuthorizationRequest,
   handleCallback,
+  buildEndSessionUrl,
   resolveAdminFromClaims,
   saveOidcSettings,
   invalidateDiscoveryCache,
