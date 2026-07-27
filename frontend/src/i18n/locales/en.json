@@ -2956,6 +2956,7 @@
         "willScan": "Will scan",
         "skippedByToggle": "Skipped (toggle off)",
         "skippedByFlag": "Skipped (feature flag)",
+        "skippedBySetting": "Skipped (backup settings)",
         "missingOnDisk": "Missing on disk",
         "drift": "Unconfigured on disk (drift)"
       },
@@ -2970,6 +2971,7 @@
         "willScan": "Will scan",
         "skippedByToggle": "Off",
         "skippedByFlag": "Gated off",
+        "skippedBySetting": "Off (backup settings)",
         "missingOnDisk": "Missing on disk"
       },
       "drift": {
