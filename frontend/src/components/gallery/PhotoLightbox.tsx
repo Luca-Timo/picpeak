@@ -118,6 +118,16 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
     return () => observer.disconnect();
   }, []);
 
+  // Keep the index valid when the photo list shrinks while open (see
+  // currentPhoto fallback below).
+  useEffect(() => {
+    if (photos.length === 0) {
+      onClose();
+    } else if (currentIndex > photos.length - 1) {
+      setCurrentIndex(photos.length - 1);
+    }
+  }, [photos.length, currentIndex]);
+
 
   // Save-aware download. On mobile (where Web Share + files is supported)
   // this opens the OS share sheet so "Save to Photos" actually lands in
@@ -125,7 +135,12 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
   // otherwise have to chain Files → unzip → save (#531). Desktop and
   // unsupported browsers fall through to a regular <a download>.
   const downloadPhotoMutation = useSavePhotoToDevice();
-  const currentPhoto = photos[currentIndex];
+  // Fall back to the last photo when the list shrinks under us: clearing
+  // your rating under the "Rated" feedback filter (#884) — like unliking
+  // under "Likes" — refetches the gallery and can drop the current photo,
+  // leaving currentIndex past the end. The effect below re-syncs the
+  // index (or closes the lightbox when nothing is left).
+  const currentPhoto = photos[currentIndex] ?? photos[photos.length - 1];
   // Per-category download permission (#640). AND'd with the event-level
   // allowDownloads — disabling at either level hides the download button.
   // Defaults true for uncategorised photos and pre-migration-135 categories.
@@ -241,7 +256,7 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
     let mounted = true;
     (async () => {
       try {
-        if (!feedbackSettings?.feedback_enabled) return;
+        if (!feedbackSettings?.feedback_enabled || !currentPhoto) return;
         const data = await feedbackService.getPhotoFeedback(slug, String(currentPhoto.id));
         if (!mounted) return;
         setMyLiked(!!data.my_feedback.liked);
@@ -254,7 +269,7 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
       }
     })();
     return () => { mounted = false; };
-  }, [slug, currentPhoto.id, feedbackSettings?.feedback_enabled]);
+  }, [slug, currentPhoto?.id, feedbackSettings?.feedback_enabled]);
 
   const submitLike = async () => {
     // Guest identity mode: ensure we have a per-person guest token. The
@@ -629,6 +644,12 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
     `fixed inset-0 bg-black z-50 flex items-center justify-center protected-image protection-${protectionLevel}` :
     'fixed inset-0 bg-black z-50 flex items-center justify-center';
 
+  // Empty list (last photo dropped out of the current filter): the effect
+  // above is about to close the lightbox — render nothing meanwhile.
+  if (!currentPhoto) {
+    return null;
+  }
+
   const desktopFeedbackWidth = 416; // 26rem; keep in sync with panel width
   const isDesktopFeedback = showFeedback && !isSmallScreen;
 
@@ -777,10 +798,12 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
                 {[1,2,3,4,5].map((i) => (
                   <button
                     key={i}
-                    onClick={() => submitRating(i)}
+                    // Clicking the current rating again clears it (#884) —
+                    // 0 tells the backend to delete the guest's rating.
+                    onClick={() => submitRating(i === myRating ? 0 : i)}
                     className="p-1"
-                    aria-label={`Rate ${i} star${i>1?'s':''}`}
-                    title={`Rate ${i}`}
+                    aria-label={i === myRating ? 'Remove rating' : `Rate ${i} star${i>1?'s':''}`}
+                    title={i === myRating ? 'Remove rating' : `Rate ${i}`}
                   >
                     <Star className={`w-5 h-5 ${myRating >= i ? 'text-yellow-400 fill-yellow-400' : 'text-white/70'}`} />
                   </button>
@@ -1041,7 +1064,9 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
               // Per-guest cap reached (#655) on the post-identity-modal submit.
               if (!handleLimitError(err)) throw err;
             }
-          } else if (pendingAction?.type === 'rating' && pendingAction.rating) {
+          } else if (pendingAction?.type === 'rating' && typeof pendingAction.rating === 'number') {
+            // Explicit number check above: a pending rating of 0 (= clear
+            // my rating, #884) must still be submitted.
             await feedbackService.submitFeedback(slug, String(currentPhoto.id), {
               feedback_type: 'rating',
               rating: pendingAction.rating,
@@ -1049,6 +1074,14 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
               guest_email: email,
             });
             setMyRating(pendingAction.rating);
+            // Refresh the visible average/count — parity with the direct
+            // submit paths, and required for a clear (#884) so the old
+            // average doesn't linger until the photo is reopened.
+            try {
+              const fresh = await feedbackService.getPhotoFeedback(slug, String(currentPhoto.id));
+              setAvgRating(Number(fresh.summary?.average_rating) || 0);
+              setTotalRatings(Number(fresh.summary?.total_ratings) || 0);
+            } catch {}
           }
           // Sync gallery photo list (feedback filter chips) — parity with
           // the direct submit paths.

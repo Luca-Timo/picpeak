@@ -117,6 +117,12 @@ class FeedbackService {
         throw new Error('Invalid reaction');
       }
 
+      // Rating 0 clears the guest's rating (#884). Only the explicit zero
+      // sentinel (0, or "0" from callers that skip the route validator's
+      // toInt) triggers the destructive path — malformed input (undefined,
+      // NaN, null) must never delete an existing rating.
+      const isRatingClear = feedback_type === 'rating' && (rating === 0 || rating === '0');
+
       // Check if similar feedback already exists (prevent duplicates).
       // When a per-person guest_id is present, scope the check to that guest
       // so two guests on the same device can independently like a photo.
@@ -135,6 +141,26 @@ class FeedbackService {
         const existing = await duplicateQuery.first();
 
         if (existing) {
+          // Rating 0 clears the guest's rating (#884) — delete rather
+          // than store 0, which would drag the photo's average down and
+          // still count in total_ratings. Delete the full guest-scoped
+          // set, not existing.id: the check-then-insert above can race
+          // into duplicate rows (same defense as the reaction path), and
+          // clearing must not leave a stray duplicate in the average.
+          if (isRatingClear) {
+            const clearScope = db('photo_feedback').where({
+              photo_id: photoId,
+              event_id: eventId,
+              feedback_type: 'rating',
+            });
+            if (guest_id) clearScope.where('guest_id', guest_id);
+            else clearScope.where('guest_identifier', guestIdentifier);
+            await clearScope.delete();
+
+            await this.updatePhotoFeedbackStats(photoId);
+            return { removed: true };
+          }
+
           if (feedback_type === 'rating' && rating !== existing.rating) {
             // Update existing rating
             await db('photo_feedback')
@@ -197,6 +223,12 @@ class FeedbackService {
 
           return { id: existing.id, exists: true };
         }
+      }
+
+      // Rating 0 with no existing rating: nothing to clear — never insert a
+      // 0-rating row (#884).
+      if (isRatingClear) {
+        return { removed: true };
       }
 
       // Per-guest cap enforcement (#655). Only checked on ADD; toggle-off is
