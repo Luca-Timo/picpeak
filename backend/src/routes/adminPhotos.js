@@ -1126,7 +1126,43 @@ router.get('/:eventId/photo/:photoId', adminAuth, requirePermission('photos.view
     const event = await db('events').where('id', eventId).first();
     const storageKey = resolvePhotoStorageKey(event, photo);
 
-    res.setHeader('Content-Type', `image/${path.extname(photo.filename).slice(1)}`);
+    // Content-Type resolution (#908 + external review). Invariant: the
+    // header is ALWAYS image/* or video/*.
+    //  - photos.mime_type is never echoed verbatim unless it is a video/
+    //    type: the chunked-upload path stores the client-sent MIME
+    //    unvalidated, so a stored text/html served inline under the app
+    //    origin would be a same-origin XSS gift.
+    //  - Images ignore the stored value entirely — migration 039
+    //    backfilled image/jpeg onto every legacy row (PNGs included), so
+    //    the extension is the more trustworthy signal; normalized via the
+    //    shared map (image/jpg → image/jpeg), jpeg fallback when unknown.
+    //  - Videos prefer a stored video/ type, then the extension map
+    //    (.mov → video/quicktime, .webm → video/webm, …), then video/mp4.
+    //    The old ext-derived image/<ext> (image/mp4) is what made the
+    //    admin player's blob unplayable (#908).
+    const { EXTENSION_TO_MIME } = require('../services/uploadSettings');
+    const ext = path.extname(photo.filename).slice(1).toLowerCase();
+    const extMime = EXTENSION_TO_MIME[ext] || null;
+    // Full-token validation, not just a prefix check: the stored value is
+    // client-controlled, and header-invalid characters (video/mp4\r\nX: y)
+    // would make setHeader throw — a permanent 500 for that photo. Bare
+    // 'video/' is equally invalid; both fall back to the extension map.
+    const storedVideoMime = photo.mime_type && /^video\/[\w.+-]+$/.test(photo.mime_type)
+      ? photo.mime_type
+      : null;
+    const isVideo = photo.media_type === 'video' ||
+      Boolean(storedVideoMime) ||
+      Boolean(extMime && extMime.startsWith('video/'));
+    // Map-only on the image side too: interpolating the raw extension
+    // would synthesize image/svg+xml (scriptable inline) or header-invalid
+    // values from client-controlled chunked-upload filenames. Anything the
+    // shared map doesn't know is served as image/jpeg — browsers sniff
+    // image bytes in <img>/blob contexts, so a mislabel is harmless where
+    // an injected type is not.
+    const contentType = isVideo
+      ? storedVideoMime || (extMime && extMime.startsWith('video/') ? extMime : null) || 'video/mp4'
+      : (extMime && extMime.startsWith('image/') ? extMime : null) || 'image/jpeg';
+    res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'private, max-age=3600');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
