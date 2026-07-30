@@ -147,6 +147,30 @@ describe('admin photo view Content-Type (#908)', () => {
     expect(res2.headers['content-type']).toBe('video/webm');
   });
 
+  it('preserves an auto-imported avif via the safe stored-MIME allowlist', async () => {
+    // .avif isn't in EXTENSION_TO_MIME; s3AutoImporter stores image/avif.
+    // Map-only would mislabel it image/jpeg — the allowlist keeps it.
+    const id = await addPhoto('imported.avif', { mime_type: 'image/avif' });
+    const res = await getPhotoRes(id);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('image/avif');
+  });
+
+  it('preserves other importer raster types too (apng, x-icon)', async () => {
+    const apng = await addPhoto('anim.apng', { mime_type: 'image/apng' });
+    expect((await getPhotoRes(apng)).headers['content-type']).toBe('image/apng');
+    const ico = await addPhoto('fav.ico', { mime_type: 'image/x-icon' });
+    expect((await getPhotoRes(ico)).headers['content-type']).toBe('image/x-icon');
+  });
+
+  it('does NOT honor a stored scriptable image type (image/svg+xml)', async () => {
+    // svg is inline-scriptable and must never be echoed — allowlist excludes it.
+    const id = await addPhoto('vector.svg', { mime_type: 'image/svg+xml' });
+    const res = await getPhotoRes(id);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('image/jpeg');
+  });
+
   it('never echoes a stored non-media MIME type (inline XSS guard)', async () => {
     const id = await addPhoto('evil.png', { mime_type: 'text/html' });
     const res = await getPhotoRes(id);
@@ -173,6 +197,21 @@ describe('admin photo view Content-Type (#908)', () => {
     const res = await getPhotoRes(id);
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toBe('image/png');
+  });
+
+  it('handles Object.prototype key extensions without a 500 (.constructor)', async () => {
+    // The extension-to-MIME lookup must be own-property only — a raw
+    // index access returns an inherited function for these keys and the
+    // downstream startsWith throws. Serve image/jpeg instead of 500.
+    const id = await addPhoto('payload.constructor');
+    const res = await getPhotoRes(id);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('image/jpeg');
+
+    const id2 = await addPhoto('payload.__proto__', { media_type: 'video' });
+    const res2 = await getPhotoRes(id2);
+    expect(res2.status).toBe(200);
+    expect(res2.headers['content-type']).toBe('video/mp4');
   });
 
   it('does not synthesize types from unmapped image extensions', async () => {

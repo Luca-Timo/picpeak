@@ -1148,7 +1148,13 @@ router.get('/:eventId/photo/:photoId', adminAuth, requirePermission('photos.view
     //    admin player's blob unplayable (#908).
     const { EXTENSION_TO_MIME } = require('../services/uploadSettings');
     const ext = path.extname(photo.filename).slice(1).toLowerCase();
-    const extMime = EXTENSION_TO_MIME[ext] || null;
+    // Own-property lookup (review): a client-controlled filename ending in
+    // .constructor / .__proto__ / .toString would otherwise return an
+    // inherited Object.prototype member, and the extMime.startsWith below
+    // would throw — a permanent 500 for that photo instead of the fallback.
+    const extMime = Object.prototype.hasOwnProperty.call(EXTENSION_TO_MIME, ext)
+      ? EXTENSION_TO_MIME[ext]
+      : null;
     // Full-token validation, not just a prefix check: the stored value is
     // client-controlled, and header-invalid characters (video/mp4\r\nX: y)
     // would make setHeader throw — a permanent 500 for that photo. Bare
@@ -1156,18 +1162,34 @@ router.get('/:eventId/photo/:photoId', adminAuth, requirePermission('photos.view
     const storedVideoMime = photo.mime_type && /^video\/[\w.+-]+$/.test(photo.mime_type)
       ? photo.mime_type
       : null;
+    // Honor a stored image MIME for any header-safe RASTER type (#908
+    // review): the S3 auto-importer accepts arbitrary image/* from
+    // mime-types and stores it (avif/bmp/tiff/heic/apng/ico/jxl/…), and a
+    // hand-listed allowlist kept missing formats. Allow image/<token> but
+    // NEVER the scriptable svg / *+xml family (image/svg+xml executes
+    // inline). The strict token + anchors also block header injection
+    // (image/x\r\nY:). Migration 039's blanket image/jpeg backfill on
+    // legacy rows is why the mapped extension still wins ahead of this.
+    const storedImageMime =
+      photo.mime_type &&
+      /^image\/[\w.+-]+$/.test(photo.mime_type) &&
+      !/^image\/svg|xml/i.test(photo.mime_type)
+        ? photo.mime_type
+        : null;
     const isVideo = photo.media_type === 'video' ||
       Boolean(storedVideoMime) ||
       Boolean(extMime && extMime.startsWith('video/'));
-    // Map-only on the image side too: interpolating the raw extension
-    // would synthesize image/svg+xml (scriptable inline) or header-invalid
-    // values from client-controlled chunked-upload filenames. Anything the
-    // shared map doesn't know is served as image/jpeg — browsers sniff
-    // image bytes in <img>/blob contexts, so a mislabel is harmless where
-    // an injected type is not.
+    // Never interpolate the raw extension on the image side: it would
+    // synthesize image/svg+xml (scriptable inline) or header-invalid values
+    // from client-controlled chunked-upload filenames. Precedence is
+    // mapped-extension (also corrects the 039 legacy-jpeg backfill on PNGs)
+    // -> safe stored raster MIME (auto-imported avif/bmp/tiff) -> image/jpeg.
+    // A stored type outside the allowlist degrades to image/jpeg; browsers
+    // sniff image bytes in <img>/blob contexts, so a mislabel is harmless
+    // where an injected type is not.
     const contentType = isVideo
       ? storedVideoMime || (extMime && extMime.startsWith('video/') ? extMime : null) || 'video/mp4'
-      : (extMime && extMime.startsWith('image/') ? extMime : null) || 'image/jpeg';
+      : (extMime && extMime.startsWith('image/') ? extMime : null) || storedImageMime || 'image/jpeg';
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'private, max-age=3600');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
