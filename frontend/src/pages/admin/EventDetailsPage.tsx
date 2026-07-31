@@ -342,6 +342,10 @@ export const EventDetailsPage: React.FC = () => {
       // Preserve null = "inherit global size" (#756) — don't collapse to medium.
       hero_logo_size: event.hero_logo_size ?? null,
       hero_logo_position: event.hero_logo_position || 'top',
+      // #894: null = default (show); only false hides the password-page logo.
+      // Boolean() folds SQLite's 0/1 into real booleans so the edit form's
+      // strict `=== false` check reads a persisted hide correctly.
+      login_logo_visible: event.login_logo_visible == null ? null : Boolean(event.login_logo_visible),
       // Hero image anchor position (#162)
       hero_image_anchor: event.hero_image_anchor || 'center',
       // Photo cap
@@ -475,6 +479,7 @@ export const EventDetailsPage: React.FC = () => {
       hero_logo_visible: editForm.hero_logo_visible,
       hero_logo_size: editForm.hero_logo_size,
       hero_logo_position: editForm.hero_logo_position,
+      login_logo_visible: editForm.login_logo_visible,
       // Hero image anchor position (#162)
       hero_image_anchor: editForm.hero_image_anchor,
       // Photo cap
