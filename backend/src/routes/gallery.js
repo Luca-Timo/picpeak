@@ -33,6 +33,7 @@ const { toIso } = require('../utils/dateNormalize');
 const { NotFoundError } = require('../utils/errors');
 const { ensureThumbnail, ensureHeroImage, ensurePreviewImage, withLocalCopy } = require('../services/imageProcessor');
 const downloadZipService = require('../services/downloadZipService');
+const { applyPhotoVisibilityFilter, canSeeHiddenPhotos } = require('../utils/photoVisibility');
 const {
   getUseOriginalFilenames,
   pickRawDownloadName,
@@ -1002,6 +1003,10 @@ router.patch('/:slug/photos/:photoId/visibility', verifyGalleryAccess, async (re
       .where({ id: photoId, event_id: req.event.id })
       .update({ visibility });
 
+    // A client hiding/showing a photo changes the guest download bundle —
+    // drop the cached ZIP so it rebuilds fresh (codex review).
+    downloadZipService.invalidate(req.event.id);
+
     res.json({ message: 'Photo visibility updated', visibility });
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to update photo visibility');
@@ -1029,6 +1034,10 @@ router.patch('/:slug/photos/visibility/bulk', verifyGalleryAccess, async (req, r
       .whereIn('id', photoIds)
       .where('event_id', req.event.id)
       .update({ visibility });
+
+    // Client bulk hide/show alters the guest download bundle — invalidate
+    // the cached ZIP (codex review).
+    downloadZipService.invalidate(req.event.id);
 
     res.json({ message: `${count} photos updated`, visibility });
   } catch (error) {
@@ -1182,8 +1191,21 @@ router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, block
       return res.status(403).json({ error: 'Downloads are disabled for this gallery' });
     }
 
-    // Try to serve pre-generated zip (instant download with Content-Length)
-    const zipInfo = await downloadZipService.getZipInfo(req.event.id);
+    // Try to serve pre-generated zip (instant download with Content-Length).
+    // Guests may use the prebuilt cache ONLY when the event has no hidden
+    // photos: a cache built before a photo was hidden — or before this
+    // visibility-aware builder shipped — could otherwise still leak it, and
+    // getZipInfo only checks the DB pointer + file stat, not freshness. When
+    // hidden photos exist, guests fall through to the visibility-filtered
+    // stream below. PIN-clients always stream a full archive.
+    const isClient = canSeeHiddenPhotos(req.accessLevel);
+    const eventHasHidden = await db('photos')
+      .where({ event_id: req.event.id, visibility: 'hidden' })
+      .first()
+      .then(Boolean);
+    const zipInfo = (isClient || eventHasHidden)
+      ? null
+      : await downloadZipService.getZipInfo(req.event.id);
     if (zipInfo) {
       const storage = getStorage();
 
@@ -1240,23 +1262,31 @@ router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, block
       return;
     }
 
-    // Fallback: on-the-fly streaming (existing behavior)
-    // Also trigger background zip generation for next time
-    downloadZipService.generateZip(req.event.id).catch(err =>
-      logger.warn('Background zip generation failed', { eventId: req.event.id, error: err.message })
-    );
+    // Fallback: on-the-fly streaming (existing behavior). Only pre-build the
+    // guest cache when it will actually be served next time — a guest
+    // download of an event with no hidden photos. Client bypasses and
+    // hidden-photo events always stream, so rebuilding the guest archive on
+    // those requests is wasted I/O (codex review).
+    if (!isClient && !eventHasHidden) {
+      downloadZipService.generateZip(req.event.id).catch(err =>
+        logger.warn('Background zip generation failed', { eventId: req.event.id, error: err.message })
+      );
+    }
 
     // Fetch photos — exclude photos in categories that disabled downloads (#640).
     // Uncategorised photos are always included; categories without the column
     // (pre-migration-135) fall through the LEFT JOIN's null and are included.
-    const photos = await db('photos')
-      .leftJoin('photo_categories', 'photos.category_id', 'photo_categories.id')
-      .where('photos.event_id', req.event.id)
-      .where(function () {
-        this.whereNull('photos.category_id')
-          .orWhere('photo_categories.allow_downloads', true)
-          .orWhereNull('photo_categories.allow_downloads');
-      })
+    const photos = await applyPhotoVisibilityFilter(
+      db('photos')
+        .leftJoin('photo_categories', 'photos.category_id', 'photo_categories.id')
+        .where('photos.event_id', req.event.id)
+        .where(function () {
+          this.whereNull('photos.category_id')
+            .orWhere('photo_categories.allow_downloads', true)
+            .orWhereNull('photo_categories.allow_downloads');
+        }),
+      req.accessLevel
+    )
       .select('photos.*')
       .orderBy('photos.type', 'asc')
       .orderBy('photos.uploaded_at', 'desc');
@@ -1412,15 +1442,18 @@ router.post('/:slug/download-selected', verifyGalleryAccess, denySlideshowToken,
 
     // Fetch photos — exclude photos in categories that disabled downloads (#640).
     // Same LEFT JOIN pattern as the download-all endpoint.
-    const photos = await db('photos')
-      .leftJoin('photo_categories', 'photos.category_id', 'photo_categories.id')
-      .where('photos.event_id', req.event.id)
-      .whereIn('photos.id', photoIds)
-      .where(function () {
-        this.whereNull('photos.category_id')
-          .orWhere('photo_categories.allow_downloads', true)
-          .orWhereNull('photo_categories.allow_downloads');
-      })
+    const photos = await applyPhotoVisibilityFilter(
+      db('photos')
+        .leftJoin('photo_categories', 'photos.category_id', 'photo_categories.id')
+        .where('photos.event_id', req.event.id)
+        .whereIn('photos.id', photoIds)
+        .where(function () {
+          this.whereNull('photos.category_id')
+            .orWhere('photo_categories.allow_downloads', true)
+            .orWhereNull('photo_categories.allow_downloads');
+        }),
+      req.accessLevel
+    )
       .select('photos.*')
       .orderBy('photos.uploaded_at', 'desc');
 
