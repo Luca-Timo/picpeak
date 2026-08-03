@@ -1,15 +1,30 @@
 const jwt = require('jsonwebtoken');
 const { db, withRetry } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
-const { getGalleryTokenFromRequest } = require('../utils/tokenUtils');
+const { getGalleryTokenFromRequest, getAdminTokenFromRequest } = require('../utils/tokenUtils');
 const logger = require('../utils/logger');
 
-// Check if the request carries a valid admin preview token (Feature 3)
+/**
+ * True when a logged-in admin is explicitly previewing this gallery (#868).
+ *
+ * Two conditions, both required:
+ *   1. The explicit intent flag `?admin_preview=1` is present. The plain share
+ *      link stays byte-identical to a guest's, so the password gate is still
+ *      testable as a guest while logged in as admin — and the bypass is visible
+ *      in the URL without being reusable (it carries no secret).
+ *   2. A VERIFIED admin session — read from the httpOnly `admin_token` cookie
+ *      (rides along on same-origin API calls) or an Authorization: Bearer header,
+ *      never from the URL. Must decode as `type: 'admin'`, issuer `picpeak-auth`.
+ *
+ * Fails closed on any verification error. Replaces the old `?preview=<raw-JWT>`
+ * scheme, which leaked a 24h admin token into the address bar.
+ */
 function isAdminPreview(req) {
-  const previewToken = req.query?.preview;
-  if (!previewToken) return false;
+  if (req.query?.admin_preview !== '1') return false;
+  const token = getAdminTokenFromRequest(req);
+  if (!token) return false;
   try {
-    const decoded = jwt.verify(previewToken, process.env.JWT_SECRET, { issuer: 'picpeak-auth' });
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { issuer: 'picpeak-auth' });
     return decoded.type === 'admin';
   } catch {
     return false;
@@ -47,9 +62,16 @@ async function verifyGalleryAccess(req, res, next) {
       }
 
       const requiresPassword = !(event.require_password === false || event.require_password === 0 || event.require_password === '0');
-      if (!requiresPassword) {
+      // Admin preview (#868) is let past the password gate too — per-request, no
+      // gallery JWT is minted (a lingering guest cookie would muddy the
+      // coexisting-cookies case). req.isAdminPreview flags downstream logging to
+      // keep the preview out of guest analytics.
+      if (adminPreview || !requiresPassword) {
         req.event = event;
-        req.sessionID = `gallery_public_${event.id}_${Date.now()}`;
+        req.isAdminPreview = adminPreview;
+        req.sessionID = adminPreview
+          ? `gallery_admin_preview_${event.id}`
+          : `gallery_public_${event.id}_${Date.now()}`;
         req.clientInfo = {
           ip: req.ip || req.connection.remoteAddress || 'unknown',
           userAgent: req.get('User-Agent') || 'unknown',

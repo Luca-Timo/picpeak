@@ -296,12 +296,6 @@ export const eventsService = {
     return response.data;
   },
 
-  // Get admin preview token (uses existing admin session token)
-  getPreviewToken(): string | null {
-    const token = sessionStorage.getItem('admin_token') || localStorage.getItem('admin_token');
-    return token;
-  },
-
   // Rename event
   async renameEvent(eventId: number, newEventName: string, resendEmail: boolean = false): Promise<{
     success: boolean;
