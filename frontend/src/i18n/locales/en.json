@@ -1589,7 +1589,9 @@
         "hourlyRateHint": "Billing fallback used when a customer has no own rate (hours logging). In {{currency}}, major units. Leave blank to require a per-customer or per-entry rate."
       },
       "rebillAttachProof": "Attach the supplier proof to re-billed invoices by default",
-      "rebillAttachProofHint": "When a captured supplier invoice is re-billed or passed through, attach its stored PDF to the client-invoice email as a separate proof. This is the default — a per-customer override and a per-file choice in the Send dialog can change it each time."
+      "rebillAttachProofHint": "When a captured supplier invoice is re-billed or passed through, attach its stored PDF to the client-invoice email as a separate proof. This is the default — a per-customer override and a per-file choice in the Send dialog can change it each time.",
+      "rebillProofNameFormat": "Proof filename format",
+      "rebillProofNameFormatHint": "Filename for the attached proof PDF. Tokens: {INVOICE}, {SUPPLIER}, {YEAR}, {MONTH}, {SEQ} (or {SEQ:03d}). Leave blank for the default “Beleg-{INVOICE}”. When several proofs ride one invoice, an index is appended automatically."
     },
     "slideshow": {
       "title": "Slideshow",
@@ -4493,7 +4495,8 @@
       "pendingCount_other": "{{count}} items",
       "billPending": "Bill these",
       "bundledToast": "Bundled {{count}} re-bill into one invoice.",
-      "bundledToast_other": "Bundled {{count}} re-bills into one invoice."
+      "bundledToast_other": "Bundled {{count}} re-bills into one invoice.",
+      "amountRequired": "Enter the invoice amount before re-billing (0 is allowed)."
     },
     "expense": {
       "kind": "Type",

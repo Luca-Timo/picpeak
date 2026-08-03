@@ -120,6 +120,9 @@ export interface AccountingSettings {
    *  email when a re-bill/passthrough is issued (#866). Off by default; a
    *  per-customer override and the Send dialog's per-file selection build on it. */
   accounting_rebill_attach_proof: boolean;
+  /** Filename template for the attached proof. Tokens: {INVOICE} {SUPPLIER}
+   *  {YEAR} {MONTH} {SEQ}/{SEQ:0Nd}. '' → default 'Beleg-{INVOICE}'. */
+  crm_rebill_proof_filename_format: string;
 }
 
 /** Re-bill / passthrough item for one customer (CRM panel, #866). Status is
@@ -256,6 +259,8 @@ export const accountingService = {
       accounting_default_output_vat_code: typeof data.accounting_default_output_vat_code === 'string'
         ? data.accounting_default_output_vat_code : '',
       accounting_rebill_attach_proof: data.accounting_rebill_attach_proof === true,
+      crm_rebill_proof_filename_format: typeof data.crm_rebill_proof_filename_format === 'string'
+        ? data.crm_rebill_proof_filename_format : '',
     };
   },
   async updateSettings(payload: Partial<AccountingSettings>): Promise<{ updated: string[] }> {
