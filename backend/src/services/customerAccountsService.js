@@ -581,6 +581,11 @@ async function updateCustomer(id, updates, updatedByAdminId) {
     // Per-customer Skonto opt-out (migration 112). Boolean, coerced
     // via formatBoolean below for SQLite compatibility.
     'skonto_disabled',
+    // Per-customer re-bill proof-attachment override (migration 169, #866).
+    // Tri-state: null = inherit global default, true/false = force. Handled
+    // in its own branch below so null survives (formatBoolean would coerce
+    // it to false and silently lose the "inherit" state).
+    'rebill_attach_proof',
   ];
   for (const f of fields) {
     if (updates[f] !== undefined) {
@@ -597,6 +602,10 @@ async function updateCustomer(id, updates, updatedByAdminId) {
         || f === 'skonto_disabled'
       ) {
         allowed[f] = formatBoolean(updates[f]);
+      } else if (f === 'rebill_attach_proof') {
+        // Tri-state override. null/'' → NULL (inherit global default);
+        // otherwise a real boolean (coerced for SQLite).
+        allowed[f] = (updates[f] === null || updates[f] === '') ? null : formatBoolean(updates[f]);
       } else if (f === 'hourly_rate_minor') {
         // Default hourly rate. Null clears it (forces per-entry
         // overrides); otherwise coerce to a non-negative bigint-safe

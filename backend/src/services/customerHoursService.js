@@ -447,6 +447,38 @@ async function deleteEntry(entryId, adminId) {
  * onto the running draft on save, so there should be no unbilled rows.
  * Returns the new invoice id.
  */
+// Load this customer's unbilled hour entries and build their invoice line items
+// (no `position` yet — the caller assigns it, so hours can be combined
+// contiguously with re-bills in one invoice; #866). Shared by the hours-only
+// path and the combined orchestrator.
+async function buildUnbilledHourLineItems(trx, customer) {
+  const entries = await trx('customer_hour_entries')
+    .where({ customer_account_id: customer.id, status: 'unbilled' })
+    .orderBy('entry_date', 'asc').orderBy('start_time', 'asc');
+  const installDefaultMinor = await getInstallDefaultRateMinor(trx);
+  const lineItems = entries.map((entry) => {
+    const rate = resolveEffectiveRate(entry, customer, installDefaultMinor);
+    return buildLineItemFromEntry(entry, rate);
+  });
+  return { entries, lineItems };
+}
+
+// Stamp each hour entry with the invoice + its specific line-item id. `lineIds`
+// is aligned to `entries` order.
+async function stampBilledEntries(trx, entries, invoiceId, lineIds) {
+  const now = new Date();
+  for (let i = 0; i < entries.length; i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await trx('customer_hour_entries').where({ id: entries[i].id }).update({
+      status: 'billed',
+      invoice_id: invoiceId,
+      invoice_line_item_id: lineIds[i] || null,
+      billed_at: now,
+      updated_at: now,
+    });
+  }
+}
+
 async function billUnbilledEntries(customerId, adminId) {
   const customer = await db('customer_accounts').where({ id: customerId }).first();
   if (!customer) throw new AppError('Customer not found', 404);
@@ -460,19 +492,11 @@ async function billUnbilledEntries(customerId, adminId) {
 
   let logInfo = null; // logged after commit — see createEntry note.
   const result = await db.transaction(async (trx) => {
-    const unbilled = await trx('customer_hour_entries')
-      .where({ customer_account_id: customer.id, status: 'unbilled' })
-      .orderBy('entry_date', 'asc').orderBy('start_time', 'asc');
+    const { entries: unbilled, lineItems: rawLines } = await buildUnbilledHourLineItems(trx, customer);
     if (unbilled.length === 0) {
       throw new AppError('No unbilled entries to bill', 409, 'NO_UNBILLED');
     }
-
-    const installDefaultMinor = await getInstallDefaultRateMinor(trx);
-    const lineItems = unbilled.map((entry, idx) => {
-      const rate = resolveEffectiveRate(entry, customer, installDefaultMinor);
-      const li = buildLineItemFromEntry(entry, rate);
-      return { ...li, position: idx + 1 };
-    });
+    const lineItems = rawLines.map((li, idx) => ({ ...li, position: idx + 1 }));
 
     // No installment metadata — hour-billing always mints a single
     // standalone invoice. createInvoice returns `{ invoiceIds: [N] }`
@@ -491,19 +515,8 @@ async function billUnbilledEntries(customerId, adminId) {
       .where({ invoice_id: invoiceId })
       .orderBy('position', 'asc');
     const lineByPos = new Map(insertedLines.map((li) => [li.position, li.id]));
-
-    const now = new Date();
-    for (let i = 0; i < unbilled.length; i += 1) {
-      const entry = unbilled[i];
-      const lineItemId = lineByPos.get(i + 1) || null;
-      await trx('customer_hour_entries').where({ id: entry.id }).update({
-        status: 'billed',
-        invoice_id: invoiceId,
-        invoice_line_item_id: lineItemId,
-        billed_at: now,
-        updated_at: now,
-      });
-    }
+    const lineIds = unbilled.map((_, i) => lineByPos.get(i + 1) || null);
+    await stampBilledEntries(trx, unbilled, invoiceId, lineIds);
 
     logInfo = { type: 'hour_entries_billed', meta: { customerId: customer.id, invoiceId, entryCount: unbilled.length } };
     return { invoiceId, entriesBilled: unbilled.length };
@@ -590,6 +603,9 @@ module.exports = {
   updateEntry,
   deleteEntry,
   billUnbilledEntries,
+  // Shared with the combined hours+re-bills orchestrator (#866).
+  buildUnbilledHourLineItems,
+  stampBilledEntries,
   getInstallDefaultRateMinor,
   _internal: {
     computeDurationMinutes,

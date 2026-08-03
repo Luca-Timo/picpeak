@@ -14,12 +14,19 @@ const { computeDueDate, ensureCustomerCanBill, formatMajor, getHierarchyHelpers,
 const { getInvoiceById } = require('./queries');
 const { createInvoice } = require('./create');
 const { buildInvoiceRenderContext } = require('./render');
+const { collectRebillProofAttachments } = require('./rebillProofs');
 
 
 /**
  * Send an invoice email + PDF. Flips status scheduled → sent.
+ *
+ * @param options.proofInboundIds  optional explicit re-bill proof selection
+ *        (issue #866). Set by the manual Send dialog so the admin picks which
+ *        supplier proofs ride the email — all, some, or none. When omitted
+ *        (auto-send / scheduler) the resolved per-customer/global default
+ *        decides all-or-none.
  */
-async function sendInvoice(id, adminId) {
+async function sendInvoice(id, adminId, options = {}) {
   const data = await getInvoiceById(id);
   if (!data) throw new AppError('Invoice not found', 404);
   const { invoice, lineItems } = data;
@@ -118,6 +125,23 @@ async function sendInvoice(id, adminId) {
   });
 
   const { to: invoiceTo, cc: invoiceCc } = resolveBillingRecipients(customer, invoice.cc_pdf_email);
+
+  // Re-bill/passthrough proof attachments (#866). Separate attachments — the
+  // invoice PDF above is never touched. Selection comes from the Send dialog on
+  // a manual send; auto-sends fall back to the resolved default. Best-effort:
+  // a missing proof marks the re-bill row but never blocks the send.
+  const invoiceAttachments = [{
+    filename: `${invoice.invoice_number}.pdf`,
+    contentPath: pdfPath,
+    contentType: 'application/pdf',
+  }];
+  try {
+    const proofs = await collectRebillProofAttachments(invoice, customer, options.proofInboundIds);
+    if (proofs.length) invoiceAttachments.push(...proofs);
+  } catch (e) {
+    logger.warn?.(`sendInvoice: proof attachment collection failed for ${invoice.invoice_number}: ${e.message}`);
+  }
+
   await emailProcessor.queueEmail(invoice.event_id || null, invoiceTo, 'invoice_sent', {
     invoice_number: invoice.invoice_number,
     customer_name: customer.display_name || customer.first_name || customer.email.split('@')[0],
@@ -131,11 +155,7 @@ async function sendInvoice(id, adminId) {
     // above) rather than the event-first default resolution.
     __language: ctx.locale,
     cc: invoiceCc,
-    attachments: [{
-      filename: `${invoice.invoice_number}.pdf`,
-      contentPath: pdfPath,
-      contentType: 'application/pdf',
-    }],
+    attachments: invoiceAttachments,
   });
 
   try { await logActivity('invoice_sent', { invoiceId: id }, invoice.event_id || null, `admin:${adminId}`); } catch (_) {}

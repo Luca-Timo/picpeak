@@ -11,6 +11,8 @@ import { ArrowLeft, Eye, Send, CheckCircle, BellRing, XCircle, Truck, Edit2, Ref
 import { Button, Card, Loading, Input, LocalizedDateInput } from '../../../components/common';
 import { DocumentLineageCard } from '../../../components/admin/DocumentLineageCard';
 import { billsService, isDraftInvoice } from '../../../services/bills.service';
+import { accountingService, type InvoiceRebillProof } from '../../../services/accounting.service';
+import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { toast } from 'react-toastify';
@@ -20,6 +22,7 @@ export const BillDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { format: fmtDate } = useLocalizedDate();
+  const { flags } = useFeatureFlags();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['invoice', id],
@@ -40,6 +43,12 @@ export const BillDetailPage: React.FC = () => {
   // the amount with total × (1 - skonto%) when ticked, but admin can
   // still override it (e.g. partial Skonto + partial waive).
   const [payWithSkonto, setPayWithSkonto] = useState(false);
+
+  // Send dialog with per-file re-bill proof selection (#866).
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [sendProofs, setSendProofs] = useState<InvoiceRebillProof[]>([]);
+  const [selectedProofIds, setSelectedProofIds] = useState<Set<number>>(new Set());
+  const [sending, setSending] = useState(false);
 
   // Pre-build the line-item rows once per data change. Previously this
   // was an inline IIFE inside the JSX, rebuilding the array (and N
@@ -124,10 +133,38 @@ export const BillDetailPage: React.FC = () => {
       toast.error(err?.response?.data?.error || err.message || 'Preview failed');
     }
   };
+  // Actually dispatch the send. `proofInboundIds` = the admin's explicit
+  // re-bill proof picks (empty array = attach none); undefined = no selection,
+  // let the resolved default decide.
+  const doSend = async (proofInboundIds?: number[]) => {
+    setSending(true);
+    try {
+      await billsService.send(inv.id, proofInboundIds);
+      toast.success(t('bills.sentToast', 'Invoice sent.'));
+      qc.invalidateQueries({ queryKey: ['invoice', id] });
+      setSendDialogOpen(false);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || 'Send failed');
+    } finally {
+      setSending(false);
+    }
+  };
   const handleSend = async () => {
+    // If this invoice re-bills captured supplier invoices, open the Send dialog
+    // so the admin can pick which proofs ride the email. Otherwise, plain send.
+    if (flags.incomingInvoices) {
+      try {
+        const { proofs, attachDefault } = await accountingService.getInvoiceRebillProofs(inv.id);
+        if (proofs.length > 0) {
+          setSendProofs(proofs);
+          setSelectedProofIds(new Set(attachDefault ? proofs.filter((p) => p.hasProof).map((p) => p.id) : []));
+          setSendDialogOpen(true);
+          return;
+        }
+      } catch { /* fall through to the plain confirm+send */ }
+    }
     if (!window.confirm(t('bills.confirmSend', 'Send invoice to customer now?'))) return;
-    try { await billsService.send(inv.id); toast.success(t('bills.sentToast', 'Invoice sent.')); qc.invalidateQueries({ queryKey: ['invoice', id] }); }
-    catch (e: any) { toast.error(e?.response?.data?.error || 'Send failed'); }
+    await doSend(undefined);
   };
   const handleReminder = async () => {
     if (!window.confirm(t('bills.confirmReminder', 'Send a reminder now?'))) return;
@@ -465,6 +502,73 @@ export const BillDetailPage: React.FC = () => {
           </table>
         )}
       </Card>
+
+      {sendDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => !sending && setSendDialogOpen(false)}>
+          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-xl w-full max-w-lg mx-4 p-5"
+            onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold mb-1 text-lg text-neutral-900 dark:text-neutral-100">{t('bills.send.title', 'Send invoice')}</h3>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
+              {t('bills.send.proofIntro', 'This invoice re-bills captured supplier invoices. Choose which supplier proofs to attach to the email — the invoice PDF is always attached.')}
+            </p>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                {t('bills.send.proofsLabel', 'Supplier proofs')}
+              </span>
+              <div className="flex gap-3 text-xs">
+                <button type="button" className="text-primary-600 hover:underline"
+                  onClick={() => setSelectedProofIds(new Set(sendProofs.filter((p) => p.hasProof).map((p) => p.id)))}>
+                  {t('bills.send.selectAll', 'Select all')}
+                </button>
+                <button type="button" className="text-neutral-500 hover:underline"
+                  onClick={() => setSelectedProofIds(new Set())}>
+                  {t('bills.send.selectNone', 'None')}
+                </button>
+              </div>
+            </div>
+            <ul className="max-h-64 overflow-y-auto divide-y divide-neutral-200 dark:divide-neutral-700 border border-neutral-200 dark:border-neutral-700 rounded-md">
+              {sendProofs.map((p) => (
+                <li key={p.id} className="flex items-center gap-3 px-3 py-2">
+                  <input
+                    type="checkbox"
+                    className="rounded border-neutral-300 dark:border-neutral-600"
+                    disabled={!p.hasProof}
+                    checked={selectedProofIds.has(p.id)}
+                    onChange={(e) => setSelectedProofIds((prev) => {
+                      const next = new Set(prev);
+                      if (e.target.checked) next.add(p.id); else next.delete(p.id);
+                      return next;
+                    })}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-neutral-900 dark:text-neutral-100 truncate">
+                      {p.supplierName || t('bills.send.unknownSupplier', 'Supplier')}
+                      <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">
+                        {p.mode === 'passthrough' ? t('bills.send.modePassthrough', 'passthrough') : t('bills.send.modeRebill', 're-bill')}
+                      </span>
+                    </div>
+                    {p.hasProof ? (
+                      <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate">{p.filename || 'proof.pdf'}</div>
+                    ) : (
+                      <div className="text-xs text-amber-600 dark:text-amber-400">{t('bills.send.noProofFile', 'No stored proof file')}</div>
+                    )}
+                  </div>
+                  <span className="text-sm tabular-nums text-neutral-700 dark:text-neutral-300">{formatMoney(p.amountMinor / 100, p.currency || inv.currency)}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" disabled={sending} onClick={() => setSendDialogOpen(false)}>{t('common.cancel', 'Cancel')}</Button>
+              <Button
+                disabled={sending}
+                onClick={() => doSend(sendProofs.filter((p) => p.hasProof && selectedProofIds.has(p.id)).map((p) => p.id))}
+              >
+                {t('bills.send.sendWithCount', 'Send with {{count}} proof(s)', { count: sendProofs.filter((p) => p.hasProof && selectedProofIds.has(p.id)).length })}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {payDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setPayDialogOpen(false)}>
