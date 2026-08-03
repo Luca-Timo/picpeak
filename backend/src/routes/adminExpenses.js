@@ -112,6 +112,13 @@ router.post('/inbound/bill-pending', requireIncoming, requirePermission('account
   [body('customerAccountId').isInt({ min: 1 })],
   handleAsync(async (req, res) => { validateRequest(req); return successResponse(res, await expenseService.billPendingRebills(toInt(req.body.customerAccountId), req.admin.id), 201, 'Re-billed'); }));
 
+// Re-bill / passthrough items for one customer, with derived status (open /
+// sent / paid) — feeds the CRM → Customer panel (#866, Feature 2). Registered
+// BEFORE /inbound/:id so the literal path wins.
+router.get('/inbound/by-customer/:customerAccountId', requireIncoming, requirePermission('accounting.view'),
+  [param('customerAccountId').isInt({ min: 1 })],
+  handleAsync(async (req, res) => { validateRequest(req); return successResponse(res, { items: await expenseService.listCustomerRebills(toInt(req.params.customerAccountId)) }); }));
+
 router.get('/inbound/:id/file', requireIncoming, requirePermission('accounting.view'),
   [param('id').isInt({ min: 1 })],
   handleAsync(async (req, res) => {

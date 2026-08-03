@@ -2042,7 +2042,11 @@
         "hourlyRate": "Standard-Stundensatz",
         "hourlyRatePlaceholder": "z. B. 120.00",
         "hourlyRateHint": "Verrechnungs-Fallback, wenn ein Kunde keinen eigenen Satz hat (Stundenerfassung). In {{currency}}, in Hauptwährungseinheiten. Leer lassen, um einen Satz pro Kunde oder pro Eintrag zu verlangen."
-      }
+      },
+      "rebillAttachProof": "Lieferantenbeleg bei Weiterverrechnungen standardmäßig anhängen",
+      "rebillAttachProofHint": "Wenn eine erfasste Lieferantenrechnung weiterverrechnet oder durchlaufend berechnet wird, wird ihr gespeichertes PDF der Rechnungs-E-Mail als separater Beleg beigefügt. Dies ist die Voreinstellung — eine kundenspezifische Einstellung und eine Auswahl pro Datei im Senden-Dialog können sie jederzeit ändern.",
+      "rebillProofNameFormat": "Dateiname-Format für Belege",
+      "rebillProofNameFormatHint": "Dateiname des angehängten Beleg-PDFs. Platzhalter: {INVOICE}, {SUPPLIER}, {YEAR}, {MONTH}, {SEQ} (oder {SEQ:03d}). Leer lassen für den Standard „Beleg-{INVOICE}“. Bei mehreren Belegen pro Rechnung wird automatisch ein Index angehängt. Behalten Sie ein Präfix wie „Beleg-“, damit der Beleg nicht genauso heißt wie das Rechnungs-PDF."
     },
     "slideshow": {
       "title": "Diashow",
@@ -4119,7 +4123,8 @@
       "toast": {
         "created": "Eintrag erfasst",
         "deleted": "Eintrag gelöscht",
-        "billed": "Stunden verrechnet"
+        "billed": "Stunden verrechnet",
+        "billedCombined": "Rechnung aus Stunden und Weiterverrechnungen erstellt."
       },
       "noRate": {
         "title": "Kein Stundensatz hinterlegt",
@@ -4272,7 +4277,9 @@
       "contractsSection": "Verträge",
       "noContracts": "Noch keine Verträge für diesen Kunden.",
       "billsSection": "Rechnungen",
-      "noBills": "Noch keine Rechnungen für diesen Kunden."
+      "noBills": "Noch keine Rechnungen für diesen Kunden.",
+      "rebillsSection": "Weiterverrechnungen & Durchlaufposten",
+      "noRebills": "Noch keine weiterverrechneten oder durchlaufenden Lieferantenrechnungen für diesen Kunden."
     },
     "billing": {
       "section": "Abrechnungsrhythmus",
@@ -4297,7 +4304,12 @@
         "title": "Offen für die Rechnung dieses Monats",
         "titleManual": "Offen – wird auf manuelle Auslösung versendet",
         "periodRange": "{{number}} · {{from}} – {{to}}"
-      }
+      },
+      "rebillAttachProof": "Lieferantenbeleg bei Weiterverrechnungen anhängen",
+      "rebillAttachProofInherit": "Mandanten-Standard verwenden",
+      "rebillAttachProofOn": "Immer anhängen",
+      "rebillAttachProofOff": "Nie anhängen",
+      "rebillAttachProofHint": "Überschreibt die globale Voreinstellung für diesen Kunden. Der Senden-Dialog erlaubt weiterhin die Auswahl einzelner Belege bei jedem Versand."
     },
     "reactivate": {
       "button": "Reaktivieren",
@@ -4483,7 +4495,8 @@
       "pendingCount_other": "{{count}} Posten",
       "billPending": "Verrechnen",
       "bundledToast": "{{count}} Weiterverrechnung zu einer Rechnung gebündelt.",
-      "bundledToast_other": "{{count}} Weiterverrechnungen zu einer Rechnung gebündelt."
+      "bundledToast_other": "{{count}} Weiterverrechnungen zu einer Rechnung gebündelt.",
+      "amountRequired": "Rechnungsbetrag vor der Weiterverrechnung eingeben (0 ist erlaubt)."
     },
     "expense": {
       "kind": "Art",
@@ -5213,6 +5226,18 @@
       "swiss": "Swiss QR-Bill",
       "epc": "EPC QR (SEPA)",
       "profileDefault": "Standard aus Geschäftsprofil verwenden"
+    },
+    "send": {
+      "title": "Rechnung senden",
+      "proofIntro": "Diese Rechnung verrechnet erfasste Lieferantenrechnungen weiter. Wählen Sie, welche Lieferantenbelege der E-Mail beigefügt werden — die Rechnung als PDF wird immer angehängt.",
+      "proofsLabel": "Lieferantenbelege",
+      "selectAll": "Alle auswählen",
+      "selectNone": "Keine",
+      "unknownSupplier": "Lieferant",
+      "modePassthrough": "durchlaufend",
+      "modeRebill": "Weiterverrechnung",
+      "noProofFile": "Keine gespeicherte Belegdatei",
+      "sendWithCount": "Mit {{count}} Beleg(en) senden"
     }
   },
   "businessProfile": {
@@ -5784,5 +5809,34 @@
     "syncBusy": "Es läuft bereits eine Synchronisierung.",
     "syncFailed": "Synchronisierung fehlgeschlagen.",
     "actionFailed": "Aktion fehlgeschlagen."
+  },
+  "rebills": {
+    "createInvoice": "Rechnung aus Weiterverrechnungen erstellen",
+    "unknownSupplier": "Lieferant",
+    "costLabel": "Kosten {{amount}}",
+    "proofError": "Beleg nicht angehängt: {{err}}",
+    "status": {
+      "open": "Offen",
+      "sent": "Versendet",
+      "paid": "Bezahlt"
+    },
+    "mode": {
+      "passthrough": "Durchlaufend",
+      "rebill": "Weiterverrechnung"
+    },
+    "toast": {
+      "billed": "Rechnung aus Weiterverrechnungen erstellt.",
+      "billedCombined": "Rechnung aus Weiterverrechnungen und Stunden erstellt.",
+      "billFailed": "Rechnung konnte nicht erstellt werden"
+    }
+  },
+  "crossAdd": {
+    "title": "Weitere offene Posten hinzufügen?",
+    "body": "Dieser Kunde hat außerdem {{count}} {{label}}. Zur selben Rechnung hinzufügen? Sie bleiben eine separate Gruppe — Stunden und Weiterverrechnungen werden nie in einer Position vermischt.",
+    "addBoth": "Beide hinzufügen",
+    "hours": "offene Stunden",
+    "rebills": "offene Weiterverrechnungen",
+    "hoursOnly": "Nur die Stunden",
+    "rebillsOnly": "Nur die Weiterverrechnungen"
   }
 }

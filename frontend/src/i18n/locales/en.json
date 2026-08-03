@@ -1587,7 +1587,11 @@
         "hourlyRate": "Default hourly rate",
         "hourlyRatePlaceholder": "e.g. 120.00",
         "hourlyRateHint": "Billing fallback used when a customer has no own rate (hours logging). In {{currency}}, major units. Leave blank to require a per-customer or per-entry rate."
-      }
+      },
+      "rebillAttachProof": "Attach the supplier proof to re-billed invoices by default",
+      "rebillAttachProofHint": "When a captured supplier invoice is re-billed or passed through, attach its stored PDF to the client-invoice email as a separate proof. This is the default — a per-customer override and a per-file choice in the Send dialog can change it each time.",
+      "rebillProofNameFormat": "Proof filename format",
+      "rebillProofNameFormatHint": "Filename for the attached proof PDF. Tokens: {INVOICE}, {SUPPLIER}, {YEAR}, {MONTH}, {SEQ} (or {SEQ:03d}). Leave blank for the default “Beleg-{INVOICE}”. When several proofs ride one invoice, an index is appended automatically. Keep a prefix like “Beleg-” so the proof isn’t named identically to the invoice PDF."
     },
     "slideshow": {
       "title": "Slideshow",
@@ -4119,7 +4123,8 @@
       "toast": {
         "created": "Entry logged",
         "deleted": "Entry deleted",
-        "billed": "Hours billed"
+        "billed": "Hours billed",
+        "billedCombined": "Invoice created from hours and re-bills."
       },
       "noRate": {
         "title": "No hourly rate configured",
@@ -4272,7 +4277,9 @@
       "noContracts": "No contracts for this customer yet.",
       "billsSection": "Invoices",
       "noBills": "No invoices for this customer yet.",
-      "manageEvents": "Manage galleries"
+      "manageEvents": "Manage galleries",
+      "rebillsSection": "Re-bills & passthrough",
+      "noRebills": "No re-billed or passed-through supplier invoices for this customer yet."
     },
     "billing": {
       "section": "Billing cadence",
@@ -4297,7 +4304,12 @@
         "title": "Pending in this month's bill",
         "titleManual": "Pending — ships on manual trigger",
         "periodRange": "{{number}} · {{from}} – {{to}}"
-      }
+      },
+      "rebillAttachProof": "Attach supplier proof to re-billed invoices",
+      "rebillAttachProofInherit": "Use tenant default",
+      "rebillAttachProofOn": "Always attach",
+      "rebillAttachProofOff": "Never attach",
+      "rebillAttachProofHint": "Overrides the global default for this customer. The Send dialog still lets you pick individual proofs each time an invoice goes out."
     },
     "reactivate": {
       "button": "Reactivate",
@@ -4483,7 +4495,8 @@
       "pendingCount_other": "{{count}} items",
       "billPending": "Bill these",
       "bundledToast": "Bundled {{count}} re-bill into one invoice.",
-      "bundledToast_other": "Bundled {{count}} re-bills into one invoice."
+      "bundledToast_other": "Bundled {{count}} re-bills into one invoice.",
+      "amountRequired": "Enter the invoice amount before re-billing (0 is allowed)."
     },
     "expense": {
       "kind": "Type",
@@ -5211,6 +5224,18 @@
       "overdue": "Overdue",
       "cancelled": "Cancelled",
       "skipped": "Skipped (empty month)"
+    },
+    "send": {
+      "title": "Send invoice",
+      "proofIntro": "This invoice re-bills captured supplier invoices. Choose which supplier proofs to attach to the email — the invoice PDF is always attached.",
+      "proofsLabel": "Supplier proofs",
+      "selectAll": "Select all",
+      "selectNone": "None",
+      "unknownSupplier": "Supplier",
+      "modePassthrough": "passthrough",
+      "modeRebill": "re-bill",
+      "noProofFile": "No stored proof file",
+      "sendWithCount": "Send with {{count}} proof(s)"
     }
   },
   "businessProfile": {
@@ -5782,5 +5807,34 @@
     "syncBusy": "A sync is already running.",
     "syncFailed": "Sync failed.",
     "actionFailed": "Action failed."
+  },
+  "rebills": {
+    "createInvoice": "Create invoice from re-bills",
+    "unknownSupplier": "Supplier",
+    "costLabel": "cost {{amount}}",
+    "proofError": "Proof not attached: {{err}}",
+    "status": {
+      "open": "Open",
+      "sent": "Sent",
+      "paid": "Paid"
+    },
+    "mode": {
+      "passthrough": "Passthrough",
+      "rebill": "Re-bill"
+    },
+    "toast": {
+      "billed": "Invoice created from re-bills.",
+      "billedCombined": "Invoice created from re-bills and hours.",
+      "billFailed": "Failed to create invoice"
+    }
+  },
+  "crossAdd": {
+    "title": "Add other open items?",
+    "body": "This customer also has {{count}} {{label}}. Add them to the same invoice? They stay as a separate group — hours and re-bills are never mixed into one line.",
+    "addBoth": "Add both",
+    "hours": "open hours",
+    "rebills": "open re-bills",
+    "hoursOnly": "Just the hours",
+    "rebillsOnly": "Just the re-bills"
   }
 }

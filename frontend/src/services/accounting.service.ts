@@ -116,6 +116,44 @@ export interface AccountingSettings {
   accounting_vat_reclaim_countries: string[];
   /** Output VAT code stamped onto NEW invoices/quotes ('' = none). */
   accounting_default_output_vat_code: string;
+  /** Global default: attach the stored supplier proof PDF to the client-invoice
+   *  email when a re-bill/passthrough is issued (#866). Off by default; a
+   *  per-customer override and the Send dialog's per-file selection build on it. */
+  accounting_rebill_attach_proof: boolean;
+  /** Filename template for the attached proof. Tokens: {INVOICE} {SUPPLIER}
+   *  {YEAR} {MONTH} {SEQ}/{SEQ:0Nd}. '' → default 'Beleg-{INVOICE}'. */
+  crm_rebill_proof_filename_format: string;
+}
+
+/** Re-bill / passthrough item for one customer (CRM panel, #866). Status is
+ *  derived from the linked client-invoice lifecycle. */
+export interface CustomerRebillItem {
+  id: number;
+  supplierName: string | null;
+  date: string | null;
+  currency: string | null;
+  costMinor: number;
+  rebilledMinor: number;
+  mode: 'passthrough' | 'rebill';
+  eventId: number | null;
+  eventName: string | null;
+  hasProof: boolean;
+  proofAttachError: string | null;
+  status: 'open' | 'sent' | 'paid';
+  invoiceId: number | null;
+  invoiceNumber: string | null;
+}
+
+/** Re-bill proof attached to a not-yet-sent invoice (Send dialog, #866). */
+export interface InvoiceRebillProof {
+  id: number;
+  supplierName: string | null;
+  filename: string | null;
+  hasProof: boolean;
+  currency: string | null;
+  amountMinor: number;
+  mode: 'passthrough' | 'rebill';
+  proofAttachError: string | null;
 }
 
 export interface CategorizePayload {
@@ -176,6 +214,10 @@ export const accountingService = {
   async listPendingRebills(): Promise<PendingRebillSummary[]> { const { data } = await api.get('/admin/expenses/inbound/pending-summary'); return data.items; },
   /** Bundle one customer's pending re-bills into a single invoice. */
   async billPendingRebills(customerAccountId: number): Promise<{ invoiceId: number; count: number }> { const { data } = await api.post('/admin/expenses/inbound/bill-pending', { customerAccountId }); return data; },
+  /** Re-bill / passthrough items for a customer, with derived status (#866). */
+  async listCustomerRebills(customerAccountId: number): Promise<CustomerRebillItem[]> { const { data } = await api.get(`/admin/expenses/inbound/by-customer/${customerAccountId}`); return data.items; },
+  /** Re-bill proofs on a not-yet-sent invoice + the resolved attach default (#866). */
+  async getInvoiceRebillProofs(invoiceId: number): Promise<{ proofs: InvoiceRebillProof[]; attachDefault: boolean }> { const { data } = await api.get(`/admin/invoices/${invoiceId}/rebill-proofs`); return data; },
   async markInboundPaid(id: number, payload: { paid: boolean; paidAt?: string; paymentMethod?: PaymentMethod; paymentReference?: string }): Promise<InboundDocument> { const { data } = await api.post(`/admin/expenses/inbound/${id}/supplier-payment`, payload); return data.document; },
   async getInboundFileBlob(id: number): Promise<Blob> { const { data } = await api.get(`/admin/expenses/inbound/${id}/file`, { responseType: 'blob' }); return data; },
   async getInboundPageBlob(id: number, page: number): Promise<Blob> { const { data } = await api.get(`/admin/expenses/inbound/${id}/page/${page}`, { responseType: 'blob' }); return data; },
@@ -216,6 +258,9 @@ export const accountingService = {
         ? data.accounting_vat_reclaim_countries : [],
       accounting_default_output_vat_code: typeof data.accounting_default_output_vat_code === 'string'
         ? data.accounting_default_output_vat_code : '',
+      accounting_rebill_attach_proof: data.accounting_rebill_attach_proof === true,
+      crm_rebill_proof_filename_format: typeof data.crm_rebill_proof_filename_format === 'string'
+        ? data.crm_rebill_proof_filename_format : '',
     };
   },
   async updateSettings(payload: Partial<AccountingSettings>): Promise<{ updated: string[] }> {

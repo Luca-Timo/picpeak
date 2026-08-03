@@ -11,6 +11,7 @@ import { Save } from 'lucide-react';
 import { Button, Card, CardContent, Input, Loading } from '../../../components/common';
 import { DecimalInput } from '../../../components/common/DecimalInput';
 import { accountingService } from '../../../services/accounting.service';
+import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import { businessProfileService } from '../../../services/businessProfile.service';
 import { vatCodesService } from '../../../services/vatCodes.service';
 import { sortedCountryOptions } from '../../../constants/countries';
@@ -23,6 +24,7 @@ const inputCls = 'w-full max-w-xs rounded-md border border-neutral-300 dark:bord
 export const AccountingTab: React.FC = () => {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
+  const { flags } = useFeatureFlags();
   const { data, isLoading } = useQuery({ queryKey: ['accounting-settings'], queryFn: () => accountingService.getSettings() });
   const { data: outputVatCodes = [] } = useQuery({ queryKey: ['vat-codes', 'output'], queryFn: () => vatCodesService.listOutput() });
   // VAT label + default hourly rate live on business_profile, surfaced here so
@@ -33,6 +35,8 @@ export const AccountingTab: React.FC = () => {
   const [perDiemMajor, setPerDiemMajor] = useState<number>(NaN);
   const [hourlyMajor, setHourlyMajor] = useState<number>(NaN);
   const [requireProof, setRequireProof] = useState(false);
+  const [rebillAttachProof, setRebillAttachProof] = useState(false);
+  const [rebillProofNameFormat, setRebillProofNameFormat] = useState('');
   const [vatRegistered, setVatRegistered] = useState(false);
   const [reclaimCountries, setReclaimCountries] = useState<string[]>([]);
   const [defaultOutputVatCode, setDefaultOutputVatCode] = useState('');
@@ -43,6 +47,8 @@ export const AccountingTab: React.FC = () => {
       setKmMajor(data.accounting_km_rate_minor / 100);
       setPerDiemMajor(data.accounting_per_diem_rate_minor / 100);
       setRequireProof(data.accounting_require_proof);
+      setRebillAttachProof(data.accounting_rebill_attach_proof);
+      setRebillProofNameFormat(data.crm_rebill_proof_filename_format || '');
       setVatRegistered(data.accounting_vat_registered);
       setReclaimCountries(data.accounting_vat_reclaim_countries || []);
       setDefaultOutputVatCode(data.accounting_default_output_vat_code || '');
@@ -66,6 +72,8 @@ export const AccountingTab: React.FC = () => {
         accounting_km_rate_minor: Number.isFinite(kmMajor) ? Math.round(kmMajor * 100) : 0,
         accounting_per_diem_rate_minor: Number.isFinite(perDiemMajor) ? Math.round(perDiemMajor * 100) : 0,
         accounting_require_proof: requireProof,
+        accounting_rebill_attach_proof: rebillAttachProof,
+        crm_rebill_proof_filename_format: rebillProofNameFormat.trim(),
         accounting_vat_registered: vatRegistered,
         accounting_vat_reclaim_countries: reclaimCountries,
         accounting_default_output_vat_code: defaultOutputVatCode,
@@ -112,6 +120,20 @@ export const AccountingTab: React.FC = () => {
           <input type="checkbox" checked={requireProof} onChange={(e) => setRequireProof(e.target.checked)} className="rounded border-neutral-300" />
           {t('settings.accounting.requireProof', 'Require a proof file on every expense')}
         </label>
+        {flags.incomingInvoices && (
+          <div>
+            <label className="flex items-start gap-2 text-sm text-neutral-800 dark:text-neutral-200">
+              <input type="checkbox" checked={rebillAttachProof} onChange={(e) => setRebillAttachProof(e.target.checked)} className="mt-0.5 rounded border-neutral-300" />
+              <span>{t('settings.accounting.rebillAttachProof', 'Attach the supplier proof to re-billed invoices by default')}</span>
+            </label>
+            <p className="mt-1 ml-6 text-xs text-neutral-500 dark:text-neutral-400">{t('settings.accounting.rebillAttachProofHint', 'When a captured supplier invoice is re-billed or passed through, attach its stored PDF to the client-invoice email as a separate proof. This is the default — a per-customer override and a per-file choice in the Send dialog can change it each time.')}</p>
+            <div className="mt-3 ml-6">
+              <label className={labelCls}>{t('settings.accounting.rebillProofNameFormat', 'Proof filename format')}</label>
+              <Input value={rebillProofNameFormat} onChange={(e) => setRebillProofNameFormat(e.target.value)} placeholder="Beleg-{INVOICE}" className="max-w-xs" />
+              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{t('settings.accounting.rebillProofNameFormatHint', 'Filename for the attached proof PDF. Tokens: {INVOICE}, {SUPPLIER}, {YEAR}, {MONTH}, {SEQ} (or {SEQ:03d}). Leave blank for the default “Beleg-{INVOICE}”. When several proofs ride one invoice, an index is appended automatically. Keep a prefix like “Beleg-” so the proof isn’t named identically to the invoice PDF.')}</p>
+            </div>
+          </div>
+        )}
         <p className="text-xs text-amber-600 dark:text-amber-400">{t('settings.accounting.disclaimer', 'Rates and VAT/tax treatment are guidance only — verify with your Treuhaender.')}</p>
       </CardContent></Card>
 

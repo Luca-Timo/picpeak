@@ -14,12 +14,19 @@ const { computeDueDate, ensureCustomerCanBill, formatMajor, getHierarchyHelpers,
 const { getInvoiceById } = require('./queries');
 const { createInvoice } = require('./create');
 const { buildInvoiceRenderContext } = require('./render');
+const { collectRebillProofAttachments } = require('./rebillProofs');
 
 
 /**
  * Send an invoice email + PDF. Flips status scheduled → sent.
+ *
+ * @param options.proofInboundIds  optional explicit re-bill proof selection
+ *        (issue #866). Set by the manual Send dialog so the admin picks which
+ *        supplier proofs ride the email — all, some, or none. When omitted
+ *        (auto-send / scheduler) the resolved per-customer/global default
+ *        decides all-or-none.
  */
-async function sendInvoice(id, adminId) {
+async function sendInvoice(id, adminId, options = {}) {
   const data = await getInvoiceById(id);
   if (!data) throw new AppError('Invoice not found', 404);
   const { invoice, lineItems } = data;
@@ -118,6 +125,23 @@ async function sendInvoice(id, adminId) {
   });
 
   const { to: invoiceTo, cc: invoiceCc } = resolveBillingRecipients(customer, invoice.cc_pdf_email);
+
+  // Re-bill/passthrough proof attachments (#866). Separate attachments — the
+  // invoice PDF above is never touched. Selection comes from the Send dialog on
+  // a manual send; auto-sends fall back to the resolved default. Best-effort:
+  // a missing proof marks the re-bill row but never blocks the send.
+  const invoiceAttachments = [{
+    filename: `${invoice.invoice_number}.pdf`,
+    contentPath: pdfPath,
+    contentType: 'application/pdf',
+  }];
+  try {
+    const proofs = await collectRebillProofAttachments(invoice, customer, options.proofInboundIds);
+    if (proofs.length) invoiceAttachments.push(...proofs);
+  } catch (e) {
+    logger.warn?.(`sendInvoice: proof attachment collection failed for ${invoice.invoice_number}: ${e.message}`);
+  }
+
   await emailProcessor.queueEmail(invoice.event_id || null, invoiceTo, 'invoice_sent', {
     invoice_number: invoice.invoice_number,
     customer_name: customer.display_name || customer.first_name || customer.email.split('@')[0],
@@ -131,11 +155,7 @@ async function sendInvoice(id, adminId) {
     // above) rather than the event-first default resolution.
     __language: ctx.locale,
     cc: invoiceCc,
-    attachments: [{
-      filename: `${invoice.invoice_number}.pdf`,
-      contentPath: pdfPath,
-      contentType: 'application/pdf',
-    }],
+    attachments: invoiceAttachments,
   });
 
   try { await logActivity('invoice_sent', { invoiceId: id }, invoice.event_id || null, `admin:${adminId}`); } catch (_) {}
@@ -185,6 +205,26 @@ async function sendInvoice(id, adminId) {
  * cancellation itself; the storno sits in `status='scheduled'`
  * and the cron picks it up.
  */
+/**
+ * When an invoice is cancelled, detach any re-billed/passed-through supplier
+ * invoices linked to it (#866 review). Nothing else clears
+ * inbound_documents.billed_invoice_id, so without this a Storno'd cover would
+ * strand the supplier cost: the CRM panel shows it as Open but every billing
+ * path filters on billed_invoice_id IS NULL, so it could never be re-billed.
+ * Mirrors the categorise-time reset; returns the item to the billable pool.
+ * Best-effort + schema-guarded (no-op on non-accounting installs).
+ */
+async function releaseRebillsForCancelledInvoice(conn, invoiceId) {
+  try {
+    if (!(await conn.schema.hasTable('inbound_documents'))) return;
+    await conn('inbound_documents')
+      .where({ billed_invoice_id: invoiceId })
+      .update({ billed_invoice_id: null, billed_invoice_line_item_id: null, updated_at: new Date() });
+  } catch (e) {
+    logger.warn?.(`releaseRebillsForCancelledInvoice failed for invoice ${invoiceId}: ${e.message}`);
+  }
+}
+
 async function createStorno(originalId, adminId, trx = db) {
   const original = await trx('invoices').where({ id: originalId }).first();
   if (!original) throw new AppError('Invoice not found', 404);
@@ -305,6 +345,8 @@ async function createStorno(originalId, adminId, trx = db) {
     cancellation_storno_id: stornoId,
     updated_at: now,
   });
+  // Free any re-billed supplier invoices so the cost isn't stranded (#866 review).
+  await releaseRebillsForCancelledInvoice(trx, originalId);
 
   try {
     // Pass `trx` so the audit insert rides the transaction's connection;
@@ -597,6 +639,8 @@ async function cancelInvoice(id, adminId) {
     await db('invoices').where({ id }).update({
       status: 'cancelled', updated_at: new Date(),
     });
+    // Free any re-billed supplier invoices so the cost isn't stranded (#866 review).
+    await releaseRebillsForCancelledInvoice(db, id);
     try {
       await logActivity('invoice_cancelled',
         { invoiceId: id, viaStorno: false },

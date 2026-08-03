@@ -22,10 +22,14 @@ import { Button, Card, LocalizedDateInput, TimeField } from '../common';
 import { DecimalInput } from '../common/DecimalInput';
 import { parseLocaleDecimal, parseDuration } from '../../utils/parsers';
 import { customerAdminService } from '../../services/customerAdmin.service';
+import { accountingService } from '../../services/accounting.service';
 import { businessProfileService } from '../../services/businessProfile.service';
+import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
+import { usePermission } from '../../hooks/usePermission';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { useMutationWithToast } from '../../hooks';
 import { ProjectSelect } from './ProjectSelect';
+import { CrossAddInvoiceDialog } from './CrossAddInvoiceDialog';
 
 export interface HoursSectionProps {
   customerId: number;
@@ -49,6 +53,9 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
   const { t } = useTranslation();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { flags } = useFeatureFlags();
+  // Billing hours (and the combined path) go through customers.edit (#866 review).
+  const canBill = usePermission('customers.edit');
   const { format: fmtDate, formatTime: fmtTime } = useLocalizedDate();
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [startTime, setStartTime] = useState('09:00');
@@ -159,20 +166,51 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
     errorMessage: 'Failed to delete entry',
   });
 
-  const billMutation = useMutation({
-    mutationFn: () => customerAdminService.billUnbilledHourEntries(customerId),
-    onSuccess: ({ invoiceId }) => {
-      qc.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
-      qc.invalidateQueries({ queryKey: ['admin-customer', customerId] });
-      toast.success(t('customers.hours.toast.billed', 'Hours billed'));
-      // Open the new scheduled invoice so the admin can add other line
-      // items in addition to the hours before it ships.
-      if (invoiceId) navigate(`/admin/clients/bills/${invoiceId}/edit`);
-    },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.error || 'Failed to bill hours');
-    },
+  // Open re-bills count for the cross-add offer (#866) — only when the
+  // incoming-invoices feature is on and the admin can create the invoice.
+  const { data: openRebills = 0 } = useQuery({
+    queryKey: ['customer-open-rebills-count', customerId],
+    queryFn: async () => (await accountingService.listCustomerRebills(customerId)).filter((r) => r.status === 'open').length,
+    enabled: !!flags.incomingInvoices && canBill,
+    staleTime: 30_000,
   });
+  const [crossAddOpen, setCrossAddOpen] = useState(false);
+  const [billBusy, setBillBusy] = useState(false);
+
+  const onBilled = (invoiceId: number, msg: string) => {
+    qc.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
+    qc.invalidateQueries({ queryKey: ['admin-customer', customerId] });
+    qc.invalidateQueries({ queryKey: ['customer-rebills', customerId] });
+    qc.invalidateQueries({ queryKey: ['customer-open-rebills-count', customerId] });
+    toast.success(msg);
+    // Open the new scheduled invoice so the admin can add other line
+    // items in addition to the hours before it ships.
+    if (invoiceId) navigate(`/admin/clients/bills/${invoiceId}/edit`);
+  };
+
+  const runBill = async (includeRebills: boolean) => {
+    setBillBusy(true);
+    try {
+      if (includeRebills) {
+        const { invoiceId } = await customerAdminService.billCombined(customerId, { includeHours: true, includeRebills: true });
+        onBilled(invoiceId, t('customers.hours.toast.billedCombined', 'Invoice created from hours and re-bills.'));
+      } else {
+        const { invoiceId } = await customerAdminService.billUnbilledHourEntries(customerId);
+        onBilled(invoiceId, t('customers.hours.toast.billed', 'Hours billed'));
+      }
+      setCrossAddOpen(false);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Failed to bill hours');
+    } finally {
+      setBillBusy(false);
+    }
+  };
+
+  const handleBillHours = () => {
+    // Offer to fold in open re-bills when the customer has both (Feature 3).
+    if (openRebills > 0) setCrossAddOpen(true);
+    else runBill(false);
+  };
 
   // Single pass — both the count and the money total live behind the
   // same filter. Memoised so a parent re-render (e.g. the
@@ -383,7 +421,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
       {/* Bill-these-hours button for per-event customers only. Stays
           visible in compact mode so the customer-detail page can
           still trigger the on-demand billing action. */}
-      {!isMonthly && unbilledCount > 0 && (
+      {!isMonthly && unbilledCount > 0 && canBill && (
         <div className="mb-4 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 rounded p-3">
           <span className="text-sm">
             {t('customers.hours.unbilledCount',
@@ -395,14 +433,23 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
           </span>
           <Button
             variant="primary"
-            disabled={billMutation.isPending}
-            isLoading={billMutation.isPending}
-            onClick={() => billMutation.mutate()}
+            disabled={billBusy}
+            isLoading={billBusy}
+            onClick={handleBillHours}
           >
             {t('customers.hours.billButton', 'Create draft invoice')}
           </Button>
         </div>
       )}
+
+      <CrossAddInvoiceDialog
+        open={crossAddOpen}
+        primary="hours"
+        otherCount={openRebills}
+        busy={billBusy}
+        onConfirm={runBill}
+        onClose={() => setCrossAddOpen(false)}
+      />
 
       {/* Entry list table. */}
       {isLoading ? (

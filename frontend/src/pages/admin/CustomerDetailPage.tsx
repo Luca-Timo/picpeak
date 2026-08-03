@@ -41,7 +41,7 @@ type EditableFields =
   | 'addressLine1' | 'addressLine2' | 'postalCode' | 'city' | 'state'
   | 'countryCode' | 'countryName' | 'preferredLanguage' | 'notes'
   | 'featureCalendar' | 'featureQuotes' | 'featureBills' | 'featureHoursLogging' | 'featureContracts'
-  | 'hourlyRateMinor' | 'billingCadence' | 'billingCycleDay' | 'skontoDisabled';
+  | 'hourlyRateMinor' | 'billingCadence' | 'billingCycleDay' | 'skontoDisabled' | 'rebillAttachProof';
 
 // `fmtDate` (from useLocalizedDate, below) is the single canonical date
 // formatter. It honors the admin's `general_date_format` setting AND
@@ -145,6 +145,9 @@ export const CustomerDetailPage: React.FC = () => {
         billingCadence: customer.billingCadence ?? 'per_event',
         billingCycleDay: customer.billingCycleDay ?? 1,
         skontoDisabled: customer.skontoDisabled ?? false,
+        // Tri-state (null = inherit global). Kept as-is so the select can show
+        // "Inherit" distinctly from an explicit on/off (#866).
+        rebillAttachProof: customer.rebillAttachProof ?? null,
       } as any);
     }
   }, [customer, form]);
@@ -750,6 +753,32 @@ export const CustomerDetailPage: React.FC = () => {
             </span>
           </span>
         </label>
+
+        {/* Per-customer re-bill proof-attachment override (#866). Tri-state:
+            inherit the tenant default, or force on/off for this client. */}
+        {flags.incomingInvoices && (
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              {t('customers.billing.rebillAttachProof', 'Attach supplier proof to re-billed invoices')}
+            </label>
+            <select
+              value={form.rebillAttachProof == null ? 'inherit' : (form.rebillAttachProof ? 'on' : 'off')}
+              onChange={(e) => {
+                const v = e.target.value;
+                setForm((prev) => ({ ...prev, rebillAttachProof: v === 'inherit' ? null : v === 'on' } as any));
+              }}
+              className="w-full max-w-xs rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100"
+            >
+              <option value="inherit">{t('customers.billing.rebillAttachProofInherit', 'Use tenant default')}</option>
+              <option value="on">{t('customers.billing.rebillAttachProofOn', 'Always attach')}</option>
+              <option value="off">{t('customers.billing.rebillAttachProofOff', 'Never attach')}</option>
+            </select>
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+              {t('customers.billing.rebillAttachProofHint',
+                'Overrides the global default for this customer. The Send dialog still lets you pick individual proofs each time an invoice goes out.')}
+            </p>
+          </div>
+        )}
 
         {/* Preview of the open monthly draft (migration 128). Shows
             every line item queued for the customer's current billing
