@@ -36,6 +36,7 @@ export const AccountingTab: React.FC = () => {
   const [hourlyMajor, setHourlyMajor] = useState<number>(NaN);
   const [requireProof, setRequireProof] = useState(false);
   const [rebillAttachProof, setRebillAttachProof] = useState(false);
+  const [rebillProofNameFormat, setRebillProofNameFormat] = useState('');
   const [vatRegistered, setVatRegistered] = useState(false);
   const [reclaimCountries, setReclaimCountries] = useState<string[]>([]);
   const [defaultOutputVatCode, setDefaultOutputVatCode] = useState('');
@@ -47,6 +48,7 @@ export const AccountingTab: React.FC = () => {
       setPerDiemMajor(data.accounting_per_diem_rate_minor / 100);
       setRequireProof(data.accounting_require_proof);
       setRebillAttachProof(data.accounting_rebill_attach_proof);
+      setRebillProofNameFormat(data.crm_rebill_proof_filename_format || '');
       setVatRegistered(data.accounting_vat_registered);
       setReclaimCountries(data.accounting_vat_reclaim_countries || []);
       setDefaultOutputVatCode(data.accounting_default_output_vat_code || '');
@@ -71,6 +73,7 @@ export const AccountingTab: React.FC = () => {
         accounting_per_diem_rate_minor: Number.isFinite(perDiemMajor) ? Math.round(perDiemMajor * 100) : 0,
         accounting_require_proof: requireProof,
         accounting_rebill_attach_proof: rebillAttachProof,
+        crm_rebill_proof_filename_format: rebillProofNameFormat.trim(),
         accounting_vat_registered: vatRegistered,
         accounting_vat_reclaim_countries: reclaimCountries,
         accounting_default_output_vat_code: defaultOutputVatCode,
@@ -124,6 +127,11 @@ export const AccountingTab: React.FC = () => {
               <span>{t('settings.accounting.rebillAttachProof', 'Attach the supplier proof to re-billed invoices by default')}</span>
             </label>
             <p className="mt-1 ml-6 text-xs text-neutral-500 dark:text-neutral-400">{t('settings.accounting.rebillAttachProofHint', 'When a captured supplier invoice is re-billed or passed through, attach its stored PDF to the client-invoice email as a separate proof. This is the default — a per-customer override and a per-file choice in the Send dialog can change it each time.')}</p>
+            <div className="mt-3 ml-6">
+              <label className={labelCls}>{t('settings.accounting.rebillProofNameFormat', 'Proof filename format')}</label>
+              <Input value={rebillProofNameFormat} onChange={(e) => setRebillProofNameFormat(e.target.value)} placeholder="Beleg-{INVOICE}" className="max-w-xs" />
+              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{t('settings.accounting.rebillProofNameFormatHint', 'Filename for the attached proof PDF. Tokens: {INVOICE}, {SUPPLIER}, {YEAR}, {MONTH}, {SEQ} (or {SEQ:03d}). Leave blank for the default “Beleg-{INVOICE}”. When several proofs ride one invoice, an index is appended automatically.')}</p>
+            </div>
           </div>
         )}
         <p className="text-xs text-amber-600 dark:text-amber-400">{t('settings.accounting.disclaimer', 'Rates and VAT/tax treatment are guidance only — verify with your Treuhaender.')}</p>

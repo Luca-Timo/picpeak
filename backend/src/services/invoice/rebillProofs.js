@@ -33,10 +33,47 @@ const { getStoragePath } = require('../../config/storage');
 // than imported, to keep this module free of the require cycle).
 const CUSTOMER_DISPOSITIONS = ['rebill', 'durchlaufend'];
 
-// Filesystem-safe invoice-number token for the attachment filename. Some German
-// numbering schemes use '/', which would break a filename.
-function safeNumberToken(invoiceNumber) {
-  return String(invoiceNumber || 'invoice').replace(/[^A-Za-z0-9._-]+/g, '-');
+const DEFAULT_PROOF_FILENAME_FORMAT = 'Beleg-{INVOICE}';
+
+// Render a proof attachment filename from the admin-configurable template.
+// Tokens: {INVOICE} (client invoice number), {SUPPLIER}, {YEAR}, {MONTH},
+// {SEQ} / {SEQ:0Nd} (per-invoice proof index). Always yields a filesystem-safe
+// name ending in .pdf. When one invoice carries several proofs but the template
+// has no {SEQ}, an index is appended so the filenames stay unique.
+function renderProofName(format, { invoiceNumber, supplierName, seq, hasMulti, issueDate }) {
+  const d = issueDate ? new Date(issueDate) : new Date();
+  const year = Number.isNaN(d.getTime()) ? '' : String(d.getFullYear());
+  const month = Number.isNaN(d.getTime()) ? '' : String(d.getMonth() + 1).padStart(2, '0');
+  let hadSeq = false;
+  let name = String(format || DEFAULT_PROOF_FILENAME_FORMAT)
+    .replace(/\{INVOICE\}/g, invoiceNumber || 'invoice')
+    .replace(/\{SUPPLIER\}/g, supplierName || '')
+    .replace(/\{YEAR\}/g, year)
+    .replace(/\{MONTH\}/g, month)
+    .replace(/\{SEQ:(\d+)d\}/g, (_, p) => { hadSeq = true; return String(seq).padStart(parseInt(p, 10), '0'); })
+    .replace(/\{SEQ\}/g, () => { hadSeq = true; return String(seq); });
+  if (hasMulti && !hadSeq) name += `-${seq}`;
+  // Filesystem-safe: drop any author-supplied extension, collapse whitespace +
+  // unsafe chars to '-', trim stray separators. Some German schemes use '/'.
+  name = name.replace(/\.pdf$/i, '')
+    .replace(/\s+/g, '-')
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-.]+|[-.]+$/g, '');
+  if (!name) name = 'Beleg';
+  return `${name}.pdf`;
+}
+
+async function readFilenameFormat() {
+  try {
+    const row = await db('app_settings').where({ setting_key: 'crm_rebill_proof_filename_format' }).first('setting_value');
+    if (!row) return DEFAULT_PROOF_FILENAME_FORMAT;
+    let v = row.setting_value;
+    if (typeof v === 'string') { try { v = JSON.parse(v); } catch (_e) { /* keep raw */ } }
+    return (typeof v === 'string' && v.trim()) ? v.trim() : DEFAULT_PROOF_FILENAME_FORMAT;
+  } catch (_e) {
+    return DEFAULT_PROOF_FILENAME_FORMAT;
+  }
 }
 
 async function readGlobalDefault() {
@@ -100,7 +137,7 @@ async function collectRebillProofAttachments(invoice, customer, proofInboundIds)
   if (selected.length === 0) return [];
 
   const businessDocs = path.join(getStoragePath(), 'business-docs');
-  const token = safeNumberToken(invoice.invoice_number);
+  const format = await readFilenameFormat();
   const multi = selected.length > 1;
   const attachments = [];
 
@@ -116,7 +153,13 @@ async function collectRebillProofAttachments(invoice, customer, proofInboundIds)
           markerErr = 'proof file not found on disk at issue time';
         } else {
           attachments.push({
-            filename: multi ? `Beleg-${token}-${i + 1}.pdf` : `Beleg-${token}.pdf`,
+            filename: renderProofName(format, {
+              invoiceNumber: invoice.invoice_number,
+              supplierName: row.supplier_name,
+              seq: i + 1,
+              hasMulti: multi,
+              issueDate: invoice.issue_date,
+            }),
             contentPath: safe,
             contentType: 'application/pdf',
           });
@@ -137,4 +180,4 @@ async function collectRebillProofAttachments(invoice, customer, proofInboundIds)
   return attachments;
 }
 
-module.exports = { collectRebillProofAttachments, resolveDefaultAttach };
+module.exports = { collectRebillProofAttachments, resolveDefaultAttach, renderProofName };
