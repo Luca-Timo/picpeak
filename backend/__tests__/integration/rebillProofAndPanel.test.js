@@ -126,6 +126,47 @@ describe('#866 re-bill proof attachment + CRM panel', () => {
     });
   });
 
+  describe('storno releases the re-bill linkage (#866 review)', () => {
+    it("clears billed_invoice_id so a Storno'd cover returns to the billable pool", async () => {
+      const invoiceService = require('../../src/services/invoiceService');
+      const customerId = await makeCustomer();
+      const invId = await makeInvoice(customerId, 'sent', 'R-2026-9000');
+      const lineIns = await db('invoice_line_items').insert({
+        invoice_id: invId, position: 1, quantity: 1, description: 'Rebill',
+        unit_price_minor: 8000, discount_percent: 0, line_total_minor: 8000,
+      }).returning('id');
+      const lineId = unwrapId(lineIns);
+      const docId = await makeDoc(customerId, {
+        total_amount_minor: 8000, markup_type: 'none', billed_invoice_id: invId, billed_invoice_line_item_id: lineId,
+      });
+
+      // Storno claims a fresh number from document_sequences; the other tests
+      // seed explicit R-2026-000x numbers without advancing it, so push the
+      // counter past them to avoid a number collision (a test artifact — real
+      // invoices always claim through the sequence).
+      await db('document_sequences').insert({ kind: 'invoice', year: 2026, current_value: 9000, created_at: new Date(), updated_at: new Date() })
+        .onConflict(['kind', 'year']).ignore();
+      await db('document_sequences').where({ kind: 'invoice', year: 2026 }).update({ current_value: 9000 });
+
+      // Storno the covering invoice (the issued-cancel path).
+      await db.transaction(async (trx) => invoiceService.createStorno(invId, adminId, trx));
+
+      const doc = await db('inbound_documents').where({ id: docId }).first();
+      expect(doc.billed_invoice_id).toBeNull();
+      expect(doc.billed_invoice_line_item_id).toBeNull();
+
+      // It now surfaces as a genuinely-open item AND the pending pool picks it up.
+      const items = await expenseService.listCustomerRebills(customerId);
+      const row = items.find((r) => r.id === docId);
+      expect(row.status).toBe('open');
+      expect(row.invoiceId).toBeNull();
+      const pending = await db('inbound_documents')
+        .where({ customer_account_id: customerId }).whereNull('billed_invoice_id')
+        .whereIn('disposition', ['rebill', 'durchlaufend']).where('status', 'categorized');
+      expect(pending.map((p) => p.id)).toContain(docId);
+    });
+  });
+
   describe('collectRebillProofAttachments', () => {
     const businessDocs = () => path.join(process.env.STORAGE_PATH, 'business-docs', 'inbound', '2026');
 

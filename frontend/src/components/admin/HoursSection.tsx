@@ -25,6 +25,7 @@ import { customerAdminService } from '../../services/customerAdmin.service';
 import { accountingService } from '../../services/accounting.service';
 import { businessProfileService } from '../../services/businessProfile.service';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
+import { usePermission } from '../../hooks/usePermission';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { useMutationWithToast } from '../../hooks';
 import { ProjectSelect } from './ProjectSelect';
@@ -53,6 +54,8 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { flags } = useFeatureFlags();
+  // Billing hours (and the combined path) go through customers.edit (#866 review).
+  const canBill = usePermission('customers.edit');
   const { format: fmtDate, formatTime: fmtTime } = useLocalizedDate();
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [startTime, setStartTime] = useState('09:00');
@@ -164,11 +167,11 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
   });
 
   // Open re-bills count for the cross-add offer (#866) — only when the
-  // incoming-invoices feature is on.
+  // incoming-invoices feature is on and the admin can create the invoice.
   const { data: openRebills = 0 } = useQuery({
     queryKey: ['customer-open-rebills-count', customerId],
     queryFn: async () => (await accountingService.listCustomerRebills(customerId)).filter((r) => r.status === 'open').length,
-    enabled: !!flags.incomingInvoices,
+    enabled: !!flags.incomingInvoices && canBill,
     staleTime: 30_000,
   });
   const [crossAddOpen, setCrossAddOpen] = useState(false);
@@ -418,7 +421,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
       {/* Bill-these-hours button for per-event customers only. Stays
           visible in compact mode so the customer-detail page can
           still trigger the on-demand billing action. */}
-      {!isMonthly && unbilledCount > 0 && (
+      {!isMonthly && unbilledCount > 0 && canBill && (
         <div className="mb-4 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 rounded p-3">
           <span className="text-sm">
             {t('customers.hours.unbilledCount',

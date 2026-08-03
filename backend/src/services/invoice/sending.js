@@ -205,6 +205,26 @@ async function sendInvoice(id, adminId, options = {}) {
  * cancellation itself; the storno sits in `status='scheduled'`
  * and the cron picks it up.
  */
+/**
+ * When an invoice is cancelled, detach any re-billed/passed-through supplier
+ * invoices linked to it (#866 review). Nothing else clears
+ * inbound_documents.billed_invoice_id, so without this a Storno'd cover would
+ * strand the supplier cost: the CRM panel shows it as Open but every billing
+ * path filters on billed_invoice_id IS NULL, so it could never be re-billed.
+ * Mirrors the categorise-time reset; returns the item to the billable pool.
+ * Best-effort + schema-guarded (no-op on non-accounting installs).
+ */
+async function releaseRebillsForCancelledInvoice(conn, invoiceId) {
+  try {
+    if (!(await conn.schema.hasTable('inbound_documents'))) return;
+    await conn('inbound_documents')
+      .where({ billed_invoice_id: invoiceId })
+      .update({ billed_invoice_id: null, billed_invoice_line_item_id: null, updated_at: new Date() });
+  } catch (e) {
+    logger.warn?.(`releaseRebillsForCancelledInvoice failed for invoice ${invoiceId}: ${e.message}`);
+  }
+}
+
 async function createStorno(originalId, adminId, trx = db) {
   const original = await trx('invoices').where({ id: originalId }).first();
   if (!original) throw new AppError('Invoice not found', 404);
@@ -325,6 +345,8 @@ async function createStorno(originalId, adminId, trx = db) {
     cancellation_storno_id: stornoId,
     updated_at: now,
   });
+  // Free any re-billed supplier invoices so the cost isn't stranded (#866 review).
+  await releaseRebillsForCancelledInvoice(trx, originalId);
 
   try {
     // Pass `trx` so the audit insert rides the transaction's connection;
@@ -617,6 +639,8 @@ async function cancelInvoice(id, adminId) {
     await db('invoices').where({ id }).update({
       status: 'cancelled', updated_at: new Date(),
     });
+    // Free any re-billed supplier invoices so the cost isn't stranded (#866 review).
+    await releaseRebillsForCancelledInvoice(db, id);
     try {
       await logActivity('invoice_cancelled',
         { invoiceId: id, viaStorno: false },
