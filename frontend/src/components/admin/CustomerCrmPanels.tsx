@@ -19,6 +19,7 @@ import { toast } from 'react-toastify';
 import { FileText, Plus, Receipt, ScrollText, Repeat2, AlertTriangle } from 'lucide-react';
 import { Card, Button, Loading } from '../common';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
+import { usePermission } from '../../hooks/usePermission';
 import { quotesService } from '../../services/quotes.service';
 import { billsService, isDraftInvoice } from '../../services/bills.service';
 import { contractsService } from '../../services/contracts.service';
@@ -244,20 +245,29 @@ const RebillsPanel: React.FC<Props> = ({ customerAccountId }) => {
   const { format: fmtDate } = useLocalizedDate();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  // Permission gating (#866 review). The endpoints require, respectively:
+  //   view the panel            → accounting.view
+  //   "Create invoice from re-bills" (billPendingRebills) → accounting.manage
+  //   cross-add "Add both" (billCombined)                 → customers.edit
+  const canView = usePermission('accounting.view');
+  const canManage = usePermission('accounting.manage');
+  const canCombine = usePermission('customers.edit');
   const [crossAddOpen, setCrossAddOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['customer-rebills', customerAccountId],
     queryFn: () => accountingService.listCustomerRebills(customerAccountId),
+    enabled: canView,
     staleTime: 30_000,
   });
 
-  // Open hours count for the cross-add offer — only when hours logging is on.
+  // Open hours count for the cross-add offer — only when hours logging is on
+  // AND the admin can actually create the combined invoice.
   const { data: openHours = 0 } = useQuery({
     queryKey: ['customer-open-hours-count', customerAccountId],
     queryFn: async () => (await customerAdminService.listHourEntries(customerAccountId, 'unbilled')).length,
-    enabled: !!flags.hoursLogging,
+    enabled: !!flags.hoursLogging && canCombine,
     staleTime: 30_000,
   });
 
@@ -291,11 +301,15 @@ const RebillsPanel: React.FC<Props> = ({ customerAccountId }) => {
   };
 
   const handleCreateInvoice = () => {
-    // Offer to fold in open hours when the customer has both (Feature 3);
-    // otherwise bill the re-bills directly.
-    if (openHours > 0) setCrossAddOpen(true);
+    // Offer to fold in open hours only when the customer has both AND the admin
+    // can create the combined invoice (customers.edit); otherwise bill the
+    // re-bills directly.
+    if (openHours > 0 && canCombine) setCrossAddOpen(true);
     else runBill(false);
   };
+
+  // No accounting.view → don't render an empty card (query is disabled too).
+  if (!canView) return null;
 
   return (
     <Card padding="lg">
@@ -303,7 +317,7 @@ const RebillsPanel: React.FC<Props> = ({ customerAccountId }) => {
         <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
           <Repeat2 className="w-5 h-5" /> {t('customers.detail.rebillsSection', 'Re-bills & passthrough')}
         </h2>
-        {openItems.length > 0 && (
+        {openItems.length > 0 && canManage && (
           <Button size="sm" disabled={busy} onClick={handleCreateInvoice}>
             <Plus className="w-4 h-4 mr-1" />{t('rebills.createInvoice', 'Create invoice from re-bills')}
           </Button>

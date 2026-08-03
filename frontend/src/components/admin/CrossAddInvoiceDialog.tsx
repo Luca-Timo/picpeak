@@ -6,7 +6,7 @@
  * same invoice. Hours and re-bills are never merged into shared line items —
  * they stay as distinct, contiguous groups on the invoice.
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../common';
 
@@ -24,6 +24,13 @@ interface Props {
 
 export const CrossAddInvoiceDialog: React.FC<Props> = ({ open, primary, otherCount, busy, onConfirm, onClose }) => {
   const { t } = useTranslation();
+  // Escape closes without billing (mirrors the explicit Cancel below).
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, busy, onClose]);
   if (!open) return null;
 
   const other = primary === 'hours' ? 'rebills' : 'hours';
@@ -45,9 +52,12 @@ export const CrossAddInvoiceDialog: React.FC<Props> = ({ open, primary, otherCou
             'This customer also has {{count}} {{label}}. Add them to the same invoice? They stay as a separate group — hours and re-bills are never mixed into one line.',
             { count: otherCount, label: otherLabel })}
         </p>
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-          <Button variant="outline" disabled={busy} onClick={() => onConfirm(false)}>{primaryOnlyLabel}</Button>
-          <Button disabled={busy} onClick={() => onConfirm(true)}>{t('crossAdd.addBoth', 'Add both')}</Button>
+        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2">
+          <Button variant="ghost" disabled={busy} onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
+          <div className="flex flex-col-reverse sm:flex-row gap-2">
+            <Button variant="outline" disabled={busy} onClick={() => onConfirm(false)}>{primaryOnlyLabel}</Button>
+            <Button disabled={busy} onClick={() => onConfirm(true)}>{t('crossAdd.addBoth', 'Add both')}</Button>
+          </div>
         </div>
       </div>
     </div>

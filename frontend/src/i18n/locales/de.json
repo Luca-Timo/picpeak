@@ -2046,7 +2046,7 @@
       "rebillAttachProof": "Lieferantenbeleg bei Weiterverrechnungen standardmäßig anhängen",
       "rebillAttachProofHint": "Wenn eine erfasste Lieferantenrechnung weiterverrechnet oder durchlaufend berechnet wird, wird ihr gespeichertes PDF der Rechnungs-E-Mail als separater Beleg beigefügt. Dies ist die Voreinstellung — eine kundenspezifische Einstellung und eine Auswahl pro Datei im Senden-Dialog können sie jederzeit ändern.",
       "rebillProofNameFormat": "Dateiname-Format für Belege",
-      "rebillProofNameFormatHint": "Dateiname des angehängten Beleg-PDFs. Platzhalter: {INVOICE}, {SUPPLIER}, {YEAR}, {MONTH}, {SEQ} (oder {SEQ:03d}). Leer lassen für den Standard „Beleg-{INVOICE}“. Bei mehreren Belegen pro Rechnung wird automatisch ein Index angehängt."
+      "rebillProofNameFormatHint": "Dateiname des angehängten Beleg-PDFs. Platzhalter: {INVOICE}, {SUPPLIER}, {YEAR}, {MONTH}, {SEQ} (oder {SEQ:03d}). Leer lassen für den Standard „Beleg-{INVOICE}“. Bei mehreren Belegen pro Rechnung wird automatisch ein Index angehängt. Behalten Sie ein Präfix wie „Beleg-“, damit der Beleg nicht genauso heißt wie das Rechnungs-PDF."
     },
     "slideshow": {
       "title": "Diashow",

@@ -14,6 +14,7 @@ import { billsService, isDraftInvoice } from '../../../services/bills.service';
 import { accountingService, type InvoiceRebillProof } from '../../../services/accounting.service';
 import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
+import { formatMoneyMinor } from '../../../utils/money';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { toast } from 'react-toastify';
 
@@ -553,7 +554,7 @@ export const BillDetailPage: React.FC = () => {
                       <div className="text-xs text-amber-600 dark:text-amber-400">{t('bills.send.noProofFile', 'No stored proof file')}</div>
                     )}
                   </div>
-                  <span className="text-sm tabular-nums text-neutral-700 dark:text-neutral-300">{formatMoney(p.amountMinor / 100, p.currency || inv.currency)}</span>
+                  <span className="text-sm tabular-nums text-neutral-700 dark:text-neutral-300">{formatMoneyMinor(p.amountMinor, p.currency || inv.currency)}</span>
                 </li>
               ))}
             </ul>

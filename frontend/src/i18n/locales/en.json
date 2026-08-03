@@ -1591,7 +1591,7 @@
       "rebillAttachProof": "Attach the supplier proof to re-billed invoices by default",
       "rebillAttachProofHint": "When a captured supplier invoice is re-billed or passed through, attach its stored PDF to the client-invoice email as a separate proof. This is the default — a per-customer override and a per-file choice in the Send dialog can change it each time.",
       "rebillProofNameFormat": "Proof filename format",
-      "rebillProofNameFormatHint": "Filename for the attached proof PDF. Tokens: {INVOICE}, {SUPPLIER}, {YEAR}, {MONTH}, {SEQ} (or {SEQ:03d}). Leave blank for the default “Beleg-{INVOICE}”. When several proofs ride one invoice, an index is appended automatically."
+      "rebillProofNameFormatHint": "Filename for the attached proof PDF. Tokens: {INVOICE}, {SUPPLIER}, {YEAR}, {MONTH}, {SEQ} (or {SEQ:03d}). Leave blank for the default “Beleg-{INVOICE}”. When several proofs ride one invoice, an index is appended automatically. Keep a prefix like “Beleg-” so the proof isn’t named identically to the invoice PDF."
     },
     "slideshow": {
       "title": "Slideshow",
