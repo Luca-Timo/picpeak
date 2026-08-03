@@ -2044,7 +2044,9 @@
         "hourlyRateHint": "Verrechnungs-Fallback, wenn ein Kunde keinen eigenen Satz hat (Stundenerfassung). In {{currency}}, in Hauptwährungseinheiten. Leer lassen, um einen Satz pro Kunde oder pro Eintrag zu verlangen."
       },
       "rebillAttachProof": "Lieferantenbeleg bei Weiterverrechnungen standardmäßig anhängen",
-      "rebillAttachProofHint": "Wenn eine erfasste Lieferantenrechnung weiterverrechnet oder durchlaufend berechnet wird, wird ihr gespeichertes PDF der Rechnungs-E-Mail als separater Beleg beigefügt. Dies ist die Voreinstellung — eine kundenspezifische Einstellung und eine Auswahl pro Datei im Senden-Dialog können sie jederzeit ändern."
+      "rebillAttachProofHint": "Wenn eine erfasste Lieferantenrechnung weiterverrechnet oder durchlaufend berechnet wird, wird ihr gespeichertes PDF der Rechnungs-E-Mail als separater Beleg beigefügt. Dies ist die Voreinstellung — eine kundenspezifische Einstellung und eine Auswahl pro Datei im Senden-Dialog können sie jederzeit ändern.",
+      "rebillProofNameFormat": "Dateiname-Format für Belege",
+      "rebillProofNameFormatHint": "Dateiname des angehängten Beleg-PDFs. Platzhalter: {INVOICE}, {SUPPLIER}, {YEAR}, {MONTH}, {SEQ} (oder {SEQ:03d}). Leer lassen für den Standard „Beleg-{INVOICE}“. Bei mehreren Belegen pro Rechnung wird automatisch ein Index angehängt."
     },
     "slideshow": {
       "title": "Diashow",
@@ -4493,7 +4495,8 @@
       "pendingCount_other": "{{count}} Posten",
       "billPending": "Verrechnen",
       "bundledToast": "{{count}} Weiterverrechnung zu einer Rechnung gebündelt.",
-      "bundledToast_other": "{{count}} Weiterverrechnungen zu einer Rechnung gebündelt."
+      "bundledToast_other": "{{count}} Weiterverrechnungen zu einer Rechnung gebündelt.",
+      "amountRequired": "Rechnungsbetrag vor der Weiterverrechnung eingeben (0 ist erlaubt)."
     },
     "expense": {
       "kind": "Art",

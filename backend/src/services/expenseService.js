@@ -428,6 +428,14 @@ async function categorizeInbound(id, payload, adminId) {
     if (!row) throw new AppError('Incoming invoice not found', 404, 'INBOUND_NOT_FOUND');
     const doc = transformInbound(row);
 
+    // A doc attached to a customer will become a client invoice line, which
+    // needs an amount. Require one NOW (0 is fine — a legitimately zero-value
+    // pass-through — but null is not) rather than letting a value-less item sit
+    // PENDING and blow up the whole bundle later at bill time.
+    if (customerAccountId && doc.totalAmountMinor == null && doc.netAmountMinor == null) {
+      throw new AppError('Set the invoice amount before re-billing (0 is allowed).', 400, 'AMOUNT_REQUIRED');
+    }
+
     // #1: unwind any prior re-bill so the disposition can change.
     if (doc.billedInvoiceId) await unwindBilledLine(trx, doc);
 
@@ -488,6 +496,11 @@ async function rebillInbound(id, payload, adminId, trx0) {
     const row = await trx('inbound_documents').where({ id }).first();
     if (!row) throw new AppError('Incoming invoice not found', 404, 'INBOUND_NOT_FOUND');
     const doc = transformInbound(row);
+    // A client invoice line needs an amount (0 allowed, null not) — fail here
+    // rather than deep inside buildInboundLineItem.
+    if (doc.totalAmountMinor == null && doc.netAmountMinor == null) {
+      throw new AppError('Set the invoice amount before re-billing (0 is allowed).', 400, 'AMOUNT_REQUIRED');
+    }
     if (doc.billedInvoiceId) await unwindBilledLine(trx, doc);
     const markup = await resolveMarkup(
       { markupType: doc.markupType, markupPercent: doc.markupPercent, markupFlatMinor: doc.markupFlatMinor },

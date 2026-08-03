@@ -311,6 +311,17 @@ router.put('/accounting', adminAuth, requirePermission('settings.edit'), async (
         setting_type: 'accounting',
       });
     }
+    // Filename template for the attached supplier proof (like the invoice/quote
+    // number formats). Tokens: {INVOICE} {SUPPLIER} {YEAR} {MONTH} {SEQ}/{SEQ:0Nd}.
+    // Empty falls back to the default at render time.
+    if (Object.prototype.hasOwnProperty.call(req.body, 'crm_rebill_proof_filename_format')) {
+      const fmt = String(req.body.crm_rebill_proof_filename_format || '').trim().slice(0, 120);
+      updates.push({
+        setting_key: 'crm_rebill_proof_filename_format',
+        setting_value: JSON.stringify(fmt),
+        setting_type: 'accounting',
+      });
+    }
     // VAT registration + reclaim. `registered` drives whether output VAT applies
     // + whether input VAT is deductible; `reclaim_countries` = the ISO-2 list of
     // countries whose input VAT can be reclaimed (drives cost tax-treatment +
