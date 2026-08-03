@@ -300,6 +300,17 @@ router.put('/accounting', adminAuth, requirePermission('settings.edit'), async (
         setting_type: 'accounting',
       });
     }
+    // Global default for "attach the supplier proof PDF to the client-invoice
+    // email when a re-bill/passthrough is issued" (issue #866). Off by default;
+    // a per-customer override (customer_accounts.rebill_attach_proof) and the
+    // per-file selection in the Send dialog both build on top of this default.
+    if (Object.prototype.hasOwnProperty.call(req.body, 'accounting_rebill_attach_proof')) {
+      updates.push({
+        setting_key: 'accounting_rebill_attach_proof',
+        setting_value: JSON.stringify(!!req.body.accounting_rebill_attach_proof),
+        setting_type: 'accounting',
+      });
+    }
     // VAT registration + reclaim. `registered` drives whether output VAT applies
     // + whether input VAT is deductible; `reclaim_countries` = the ISO-2 list of
     // countries whose input VAT can be reclaimed (drives cost tax-treatment +

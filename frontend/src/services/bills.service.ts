@@ -272,8 +272,14 @@ export const billsService = {
     return data.data || data;
   },
 
-  async send(id: number): Promise<{ sent: true }> {
-    const { data } = await api.post(`/admin/invoices/${id}/send`);
+  /**
+   * Send the invoice now. `proofInboundIds` (issue #866) is the admin's per-file
+   * re-bill proof selection from the Send dialog; omit to let the resolved
+   * per-customer/global default decide all-or-none.
+   */
+  async send(id: number, proofInboundIds?: number[]): Promise<{ sent: true }> {
+    const { data } = await api.post(`/admin/invoices/${id}/send`,
+      proofInboundIds !== undefined ? { proofInboundIds } : undefined);
     return data.data || data;
   },
 
