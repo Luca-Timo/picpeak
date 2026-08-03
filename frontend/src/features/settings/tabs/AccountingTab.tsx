@@ -130,7 +130,7 @@ export const AccountingTab: React.FC = () => {
             <div className="mt-3 ml-6">
               <label className={labelCls}>{t('settings.accounting.rebillProofNameFormat', 'Proof filename format')}</label>
               <Input value={rebillProofNameFormat} onChange={(e) => setRebillProofNameFormat(e.target.value)} placeholder="Beleg-{INVOICE}" className="max-w-xs" />
-              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{t('settings.accounting.rebillProofNameFormatHint', 'Filename for the attached proof PDF. Tokens: {INVOICE}, {SUPPLIER}, {YEAR}, {MONTH}, {SEQ} (or {SEQ:03d}). Leave blank for the default “Beleg-{INVOICE}”. When several proofs ride one invoice, an index is appended automatically.')}</p>
+              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{t('settings.accounting.rebillProofNameFormatHint', 'Filename for the attached proof PDF. Tokens: {INVOICE}, {SUPPLIER}, {YEAR}, {MONTH}, {SEQ} (or {SEQ:03d}). Leave blank for the default “Beleg-{INVOICE}”. When several proofs ride one invoice, an index is appended automatically. Keep a prefix like “Beleg-” so the proof isn’t named identically to the invoice PDF.')}</p>
             </div>
           </div>
         )}
