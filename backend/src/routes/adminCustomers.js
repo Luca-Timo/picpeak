@@ -19,9 +19,13 @@ const { db } = require('../database/db');
 // frontend already hides the surface). Per-customer enforcement stays in
 // customerHoursService.createEntry.
 const requireHoursLogging = requireFeatureFlag('hoursLogging', 'HOURS_LOGGING_DISABLED');
+// Combined hours+re-bills billing (#866) is introduced by the re-bill feature;
+// gate it behind incoming-invoices (no re-bills to combine when it's off).
+const requireIncoming = requireFeatureFlag('incomingInvoices', 'INCOMING_INVOICES_DISABLED');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const customerAccountsService = require('../services/customerAccountsService');
 const customerHoursService = require('../services/customerHoursService');
+const combinedBillingService = require('../services/combinedBillingService');
 const invoiceService = require('../services/invoiceService');
 const { IDENTITY_PRESERVING_NORMALIZE_EMAIL } = require('../utils/emailNormalization');
 
@@ -83,6 +87,10 @@ function transformCustomer(c) {
     // this customer's invoices qualify for an early-payment discount,
     // regardless of template / global defaults.
     skontoDisabled: c.skonto_disabled === true || c.skonto_disabled === 1,
+    // Per-customer re-bill proof-attachment override (migration 169, #866).
+    // Tri-state: null = inherit the global default, true = always attach,
+    // false = never attach the supplier proof to the client-invoice email.
+    rebillAttachProof: c.rebill_attach_proof == null ? null : (c.rebill_attach_proof === true || c.rebill_attach_proof === 1),
     lastLogin: c.last_login,
     createdAt: c.created_at,
     updatedAt: c.updated_at,
@@ -413,6 +421,9 @@ router.put('/:id', [
     .withMessage('billing_cycle_day must be -15..-1 (days before month end) or 1..28 (day of month)'),
   // Per-customer Skonto opt-out (migration 112).
   body('skonto_disabled').optional().isBoolean(),
+  // Per-customer re-bill proof-attachment override (migration 169, #866).
+  // Nullable tri-state: null clears the override (inherit global default).
+  body('rebill_attach_proof').optional({ nullable: true }).isBoolean(),
 ], handleAsync(async (req, res) => {
   validateRequest(req);
   const customer = await customerAccountsService.updateCustomer(
@@ -680,6 +691,25 @@ router.post('/:id/hour-entries/bill', [
   validateRequest(req);
   const result = await customerHoursService.billUnbilledEntries(
     parseInt(req.params.id, 10),
+    req.admin.id,
+  );
+  successResponse(res, result, 201);
+}));
+
+// Combined hours + re-bills → one invoice (#866, Feature 3). Used by the
+// cross-add dialog when a per-event customer has open items in both categories.
+router.post('/:id/bill-combined', [
+  adminAuth,
+  requireIncoming,
+  requirePermission('customers.edit'),
+  param('id').isInt({ min: 1 }),
+  body('includeHours').optional().isBoolean(),
+  body('includeRebills').optional().isBoolean(),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const result = await combinedBillingService.billCombinedForCustomer(
+    parseInt(req.params.id, 10),
+    { includeHours: req.body.includeHours !== false, includeRebills: req.body.includeRebills !== false },
     req.admin.id,
   );
   successResponse(res, result, 201);

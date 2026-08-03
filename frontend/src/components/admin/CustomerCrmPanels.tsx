@@ -11,16 +11,20 @@
  * Lives as a separate component so CustomerDetailPage doesn't need to
  * know about CRM types; the panels handle their own data fetching.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { FileText, Plus, Receipt, ScrollText } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-toastify';
+import { FileText, Plus, Receipt, ScrollText, Repeat2, AlertTriangle } from 'lucide-react';
 import { Card, Button, Loading } from '../common';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { quotesService } from '../../services/quotes.service';
 import { billsService, isDraftInvoice } from '../../services/bills.service';
 import { contractsService } from '../../services/contracts.service';
+import { accountingService, type CustomerRebillItem } from '../../services/accounting.service';
+import { customerAdminService } from '../../services/customerAdmin.service';
+import { CrossAddInvoiceDialog } from './CrossAddInvoiceDialog';
 import { formatMoney } from './LineItemsTable';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
@@ -36,6 +40,7 @@ export const CustomerCrmPanels: React.FC<Props> = ({ customerAccountId }) => {
       {flags.quotes && <QuotesPanel customerAccountId={customerAccountId} />}
       {flags.contracts && <ContractsPanel customerAccountId={customerAccountId} />}
       {flags.bills && <InvoicesPanel customerAccountId={customerAccountId} />}
+      {flags.incomingInvoices && <RebillsPanel customerAccountId={customerAccountId} />}
     </>
   );
 };
@@ -222,6 +227,157 @@ const InvoicesPanel: React.FC<Props> = ({ customerAccountId }) => {
           ))}
         </ul>
       )}
+    </Card>
+  );
+};
+
+// ── Re-bills / passthrough panel (issue #866, Feature 2) ─────────────────────
+// History-only, mirrors the Hours section pattern: grouped by derived status
+// (Open / Sent / Paid) with a "Create invoice from re-bills" button up top for
+// the open pool. When the customer also has open hours, the button opens the
+// cross-add dialog first (Feature 3).
+const REBILL_STATUS_ORDER: Array<CustomerRebillItem['status']> = ['open', 'sent', 'paid'];
+
+const RebillsPanel: React.FC<Props> = ({ customerAccountId }) => {
+  const { t } = useTranslation();
+  const { flags } = useFeatureFlags();
+  const { format: fmtDate } = useLocalizedDate();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [crossAddOpen, setCrossAddOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: ['customer-rebills', customerAccountId],
+    queryFn: () => accountingService.listCustomerRebills(customerAccountId),
+    staleTime: 30_000,
+  });
+
+  // Open hours count for the cross-add offer — only when hours logging is on.
+  const { data: openHours = 0 } = useQuery({
+    queryKey: ['customer-open-hours-count', customerAccountId],
+    queryFn: async () => (await customerAdminService.listHourEntries(customerAccountId, 'unbilled')).length,
+    enabled: !!flags.hoursLogging,
+    staleTime: 30_000,
+  });
+
+  const openItems = items.filter((r) => r.status === 'open');
+
+  const onSuccess = (invoiceId: number, msg: string) => {
+    toast.success(msg);
+    qc.invalidateQueries({ queryKey: ['customer-rebills', customerAccountId] });
+    qc.invalidateQueries({ queryKey: ['customer-invoices', customerAccountId] });
+    qc.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerAccountId] });
+    qc.invalidateQueries({ queryKey: ['customer-open-hours-count', customerAccountId] });
+    if (invoiceId) navigate(`/admin/clients/bills/${invoiceId}/edit`);
+  };
+
+  const runBill = async (includeHours: boolean) => {
+    setBusy(true);
+    try {
+      if (includeHours) {
+        const { invoiceId } = await customerAdminService.billCombined(customerAccountId, { includeHours: true, includeRebills: true });
+        onSuccess(invoiceId, t('rebills.toast.billedCombined', 'Invoice created from re-bills and hours.'));
+      } else {
+        const { invoiceId } = await accountingService.billPendingRebills(customerAccountId);
+        onSuccess(invoiceId, t('rebills.toast.billed', 'Invoice created from re-bills.'));
+      }
+      setCrossAddOpen(false);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error || t('rebills.toast.billFailed', 'Failed to create invoice'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCreateInvoice = () => {
+    // Offer to fold in open hours when the customer has both (Feature 3);
+    // otherwise bill the re-bills directly.
+    if (openHours > 0) setCrossAddOpen(true);
+    else runBill(false);
+  };
+
+  return (
+    <Card padding="lg">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
+          <Repeat2 className="w-5 h-5" /> {t('customers.detail.rebillsSection', 'Re-bills & passthrough')}
+        </h2>
+        {openItems.length > 0 && (
+          <Button size="sm" disabled={busy} onClick={handleCreateInvoice}>
+            <Plus className="w-4 h-4 mr-1" />{t('rebills.createInvoice', 'Create invoice from re-bills')}
+          </Button>
+        )}
+      </div>
+
+      {isLoading ? <Loading /> : items.length === 0 ? (
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">
+          {t('customers.detail.noRebills', 'No re-billed or passed-through supplier invoices for this customer yet.')}
+        </p>
+      ) : (
+        <div className="space-y-4">
+          {REBILL_STATUS_ORDER.map((status) => {
+            const group = items.filter((r) => r.status === status);
+            if (group.length === 0) return null;
+            return (
+              <div key={status}>
+                <h3 className="text-xs font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
+                  {t(`rebills.status.${status}`, status)} · {group.length}
+                </h3>
+                <ul className="divide-y divide-neutral-200 dark:divide-neutral-700">
+                  {group.map((r) => (
+                    <li key={r.id} className="py-2 flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm text-neutral-900 dark:text-neutral-100 truncate">
+                          {r.supplierName || t('rebills.unknownSupplier', 'Supplier')}
+                          <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+                            {r.mode === 'passthrough' ? t('rebills.mode.passthrough', 'Passthrough') : t('rebills.mode.rebill', 'Re-bill')}
+                          </span>
+                        </div>
+                        <div className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
+                          {r.date ? fmtDate(r.date) : ''}
+                          {r.eventName ? ` · ${r.eventName}` : ''}
+                          {r.invoiceNumber ? (
+                            <>
+                              {' · '}
+                              <Link to={`/admin/clients/bills/${r.invoiceId}`} className="hover:underline font-mono">{r.invoiceNumber}</Link>
+                            </>
+                          ) : ''}
+                        </div>
+                        {r.proofAttachError && (
+                          <div className="mt-0.5 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                            <AlertTriangle className="w-3 h-3 shrink-0" />
+                            {t('rebills.proofError', 'Proof not attached: {{err}}', { err: r.proofAttachError })}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-sm tabular-nums text-neutral-900 dark:text-neutral-100">
+                          {formatMoney(r.rebilledMinor / 100, r.currency)}
+                        </div>
+                        {r.rebilledMinor !== r.costMinor && (
+                          <div className="text-xs text-neutral-400 dark:text-neutral-500 tabular-nums">
+                            {t('rebills.costLabel', 'cost {{amount}}', { amount: formatMoney(r.costMinor / 100, r.currency) })}
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <CrossAddInvoiceDialog
+        open={crossAddOpen}
+        primary="rebills"
+        otherCount={openHours}
+        busy={busy}
+        onConfirm={runBill}
+        onClose={() => setCrossAddOpen(false)}
+      />
     </Card>
   );
 };

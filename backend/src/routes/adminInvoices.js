@@ -28,9 +28,13 @@ const { requirePermission } = require('../middleware/permissions');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const { getStoragePath } = require('../config/storage');
 const invoiceService = require('../services/invoiceService');
+const expenseService = require('../services/expenseService');
+const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
 const { db } = require('../database/db');
 
 const router = express.Router();
+// Re-bill proof endpoints (#866) are behind the incoming-invoices flag.
+const requireIncoming = requireFeatureFlag('incomingInvoices', 'INCOMING_INVOICES_DISABLED');
 
 // PR #603 review follow-up #2 — bound payment dates. `isISO8601()` alone
 // accepts year 1900/9999; cash-basis revenue keys on paid_at, so a typo
@@ -753,13 +757,36 @@ router.put(
 
 // ---- send / pay / remind / cancel ------------------------------------
 
-router.post(
-  '/:id/send',
-  requirePermission('bills.manage'),
+// Re-bill proofs attached to this (not-yet-sent) invoice + the resolved attach
+// default — powers the Send dialog's per-file proof selection (#866). Behind the
+// incoming-invoices flag; bills.view since it's part of the invoice send flow.
+router.get(
+  '/:id/rebill-proofs',
+  requireIncoming,
+  requirePermission('bills.view'),
   [param('id').isInt({ min: 1 })],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    await invoiceService.sendInvoice(parseInt(req.params.id, 10), req.admin.id);
+    return successResponse(res, await expenseService.listInvoiceRebillProofs(parseInt(req.params.id, 10)));
+  })
+);
+
+router.post(
+  '/:id/send',
+  requirePermission('bills.manage'),
+  [
+    param('id').isInt({ min: 1 }),
+    // Optional per-file re-bill proof selection (#866). Array of inbound
+    // document ids the admin chose to attach; omitted → resolved default.
+    body('proofInboundIds').optional({ nullable: true }).isArray(),
+    body('proofInboundIds.*').isInt({ min: 1 }),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const proofInboundIds = Array.isArray(req.body.proofInboundIds)
+      ? req.body.proofInboundIds.map((n) => parseInt(n, 10)).filter(Number.isInteger)
+      : undefined;
+    await invoiceService.sendInvoice(parseInt(req.params.id, 10), req.admin.id, { proofInboundIds });
     return successResponse(res, { sent: true });
   })
 );

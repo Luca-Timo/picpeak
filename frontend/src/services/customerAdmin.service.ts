@@ -67,6 +67,10 @@ export interface CustomerAccountDetail extends CustomerAccountSummary {
    *  this customer's invoices qualify for an early-payment discount,
    *  regardless of template / global defaults. */
   skontoDisabled?: boolean;
+  /** Per-customer re-bill proof-attachment override (#866). Tri-state:
+   *  null = inherit the global default, true = always attach the supplier
+   *  proof to re-billed invoices, false = never. */
+  rebillAttachProof?: boolean | null;
   notes: string | null;
   events: Array<{
     id: number;
@@ -168,6 +172,8 @@ export const customerAdminService = {
       billingCycleDay: 'billing_cycle_day',
       // Per-customer Skonto opt-out (migration 112).
       skontoDisabled: 'skonto_disabled',
+      // Per-customer re-bill proof-attachment override (#866). null clears it.
+      rebillAttachProof: 'rebill_attach_proof',
     };
     for (const [k, v] of Object.entries(payload)) {
       if (k in map) snake[map[k]] = v;
@@ -340,6 +346,19 @@ export const customerAdminService = {
   async billUnbilledHourEntries(customerId: number): Promise<{ invoiceId: number; entriesBilled: number }> {
     const response = await api.post(
       `/admin/customers/${customerId}/hour-entries/bill`,
+    );
+    return (response.data as any).data ?? response.data;
+  },
+
+  /** Combine open hours and/or open re-bills into ONE invoice (#866, Feature 3).
+   *  Hours and re-bills stay as distinct, contiguous line groups. */
+  async billCombined(
+    customerId: number,
+    opts: { includeHours: boolean; includeRebills: boolean },
+  ): Promise<{ invoiceId: number; entriesBilled: number; rebillsBilled: number }> {
+    const response = await api.post(
+      `/admin/customers/${customerId}/bill-combined`,
+      opts,
     );
     return (response.data as any).data ?? response.data;
   },
