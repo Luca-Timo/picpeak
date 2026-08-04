@@ -152,9 +152,13 @@ describe('Reveal mode (#838)', () => {
       expect(res.body.photos).toHaveLength(2);
     });
 
-    it('/photos serves the admin preview everything', async () => {
+    it('/photos serves the admin preview everything (new transport: ?admin_preview=1 + admin cookie, even with a coexisting gallery session)', async () => {
+      // #868/#981: reveal-mode hiding is bypassed for an admin preview via the
+      // new transport (explicit flag + httpOnly admin_token cookie), NOT the
+      // retired ?preview=<jwt>. The coexisting gallery Bearer must not shadow it.
       const res = await request(app)
-        .get(`/api/gallery/${SLUG}/photos?preview=${encodeURIComponent(adminToken)}`)
+        .get(`/api/gallery/${SLUG}/photos?admin_preview=1`)
+        .set('Cookie', [`admin_token=${adminToken}`])
         .set('Authorization', `Bearer ${galleryToken()}`);
       expect(res.status).toBe(200);
       expect(res.body.hidden_until_reveal).toBe(false);
