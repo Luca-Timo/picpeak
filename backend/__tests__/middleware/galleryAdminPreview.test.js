@@ -43,6 +43,14 @@ describe('isAdminPreview (#868) fails closed', () => {
     expect(isAdminPreview(req({ flag: '1', cookie: galleryToken() }))).toBe(false);
   });
 
+  it('true from the admin cookie even when a gallery Bearer is also present (#981 coexisting session)', () => {
+    expect(isAdminPreview(req({ flag: '1', cookie: adminToken(), bearer: galleryToken() }))).toBe(true);
+  });
+
+  it('false when only a gallery Bearer is present — a gallery header can never satisfy it (#981)', () => {
+    expect(isAdminPreview(req({ flag: '1', bearer: galleryToken() }))).toBe(false);
+  });
+
   it('false on a tampered token', () => {
     expect(isAdminPreview(req({ flag: '1', cookie: `${adminToken()}x` }))).toBe(false);
   });

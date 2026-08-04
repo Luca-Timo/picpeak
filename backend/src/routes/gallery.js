@@ -20,6 +20,10 @@ function resolveHeroLogoVisible(perEvent, globalDefault) {
 const watermarkService = require('../services/watermarkService');
 const watermarkGeneratorService = require('../services/watermarkGeneratorService');
 const { verifyGalleryAccess, denySlideshowToken, isAdminPreview } = require('../middleware/gallery');
+// Preserve the admin-preview flag across internal photo redirects (#981 review).
+// The redirected request carries no gallery JWT, so without the flag it would
+// fall back to the draft/password gate and 404 the derivative.
+const withPreview = (req, url) => (req.isAdminPreview ? `${url}${url.includes('?') ? '&' : '?'}admin_preview=1` : url);
 const { resolveGuest } = require('../middleware/guestAuth');
 const { generateGuestIdentifier } = require('../middleware/feedbackRateLimit');
 const secureImageService = require('../services/secureImageService');
@@ -1633,7 +1637,10 @@ router.post('/:slug/photo/:photoId/view',
       if (photo.visibility === 'hidden' && req.accessLevel !== 'client') {
         return res.status(403).json({ error: 'Photo not available' });
       }
-      await db('photos').where('id', photo.id).increment('view_count', 1);
+      // Admin preview (#981 review) is excluded from per-photo view analytics.
+      if (!req.isAdminPreview) {
+        await db('photos').where('id', photo.id).increment('view_count', 1);
+      }
       res.status(204).end();
     } catch (error) {
       errorResponse(res, error, 500, 'Failed to record view');
@@ -1992,7 +1999,7 @@ router.get('/:slug/hero/:photoId',
       const isVideo = photo.media_type === 'video' || (photo.mime_type && photo.mime_type.startsWith('video/'));
       if (isVideo) {
         // For videos, redirect to the regular photo endpoint
-        return res.redirect(`/api/gallery/${req.params.slug}/photo/${photoId}`);
+        return res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${photoId}`));
       }
 
       // Ensure hero image exists and is valid, regenerate if needed
@@ -2001,7 +2008,7 @@ router.get('/:slug/hero/:photoId',
       if (!heroPath) {
         // If hero generation fails, fall back to original photo
         logger.warn(`Failed to generate hero image for photo ${photoId}, falling back to original`);
-        return res.redirect(`/api/gallery/${req.params.slug}/photo/${photoId}`);
+        return res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${photoId}`));
       }
 
       // Hero images are always written via the storage abstraction (see
@@ -2016,7 +2023,7 @@ router.get('/:slug/hero/:photoId',
           eventId: req.event.id,
           heroPath
         });
-        return res.redirect(`/api/gallery/${req.params.slug}/photo/${photoId}`);
+        return res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${photoId}`));
       }
 
       const mtimeMs = stat.mtime ? stat.mtime.getTime() : 0;
@@ -2055,7 +2062,7 @@ router.get('/:slug/hero/:photoId',
         eventId: req.event?.id
       });
       // Fall back to original photo on any error
-      res.redirect(`/api/gallery/${req.params.slug}/photo/${req.params.photoId}`);
+      res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${req.params.photoId}`));
     }
   }
 );
@@ -2092,7 +2099,7 @@ router.get('/:slug/preview/:photoId',
       // belt-and-braces in case a stale tab does.
       const isVideo = photo.media_type === 'video' || (photo.mime_type && photo.mime_type.startsWith('video/'));
       if (isVideo) {
-        return res.redirect(`/api/gallery/${req.params.slug}/photo/${photoId}`);
+        return res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${photoId}`));
       }
 
       // Lazy generation: ensurePreviewImage returns null on any
@@ -2101,7 +2108,7 @@ router.get('/:slug/preview/:photoId',
       const previewPath = await ensurePreviewImage(photo);
       if (!previewPath) {
         logger.warn(`Failed to generate preview for photo ${photoId}, falling back to original`);
-        return res.redirect(`/api/gallery/${req.params.slug}/photo/${photoId}`);
+        return res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${photoId}`));
       }
 
       const storage = getStorage();
@@ -2110,7 +2117,7 @@ router.get('/:slug/preview/:photoId',
         logger.error('Preview file does not exist in storage backend', {
           slug: req.params.slug, photoId, eventId: req.event.id, previewPath,
         });
-        return res.redirect(`/api/gallery/${req.params.slug}/photo/${photoId}`);
+        return res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${photoId}`));
       }
 
       const mtimeMs = stat.mtime ? stat.mtime.getTime() : 0;
@@ -2151,7 +2158,7 @@ router.get('/:slug/preview/:photoId',
         photoId: req.params.photoId,
         eventId: req.event?.id,
       });
-      res.redirect(`/api/gallery/${req.params.slug}/photo/${req.params.photoId}`);
+      res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${req.params.photoId}`));
     }
   }
 );
