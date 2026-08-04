@@ -4,22 +4,75 @@ const { formatBoolean } = require('../utils/dbCompat');
 const { getGalleryTokenFromRequest } = require('../utils/tokenUtils');
 const logger = require('../utils/logger');
 
-// Check if the request carries a valid admin preview token (Feature 3)
+/**
+ * True when a logged-in admin is explicitly previewing this gallery (#868).
+ *
+ * Two conditions, both required:
+ *   1. The explicit intent flag `?admin_preview=1` is present. The plain share
+ *      link stays byte-identical to a guest's, so the password gate is still
+ *      testable as a guest while logged in as admin — and the bypass is visible
+ *      in the URL without being reusable (it carries no secret).
+ *   2. A VERIFIED admin session — the httpOnly `admin_token` cookie (rides along
+ *      on same-origin API calls) or an Authorization: Bearer header, never the
+ *      URL. Must decode as `type: 'admin'`, issuer `picpeak-auth`.
+ *
+ * The cookie is tried FIRST and the Bearer is accepted only when it is itself an
+ * admin token (#981 review): the frontend attaches a gallery Bearer to gallery
+ * endpoints, and a header-first, type-blind read would let a coexisting gallery
+ * session shadow the admin cookie and wrongly disable the preview.
+ *
+ * Fails closed on any verification error. Replaces the old `?preview=<raw-JWT>`
+ * scheme, which leaked a 24h admin token into the address bar.
+ */
 function isAdminPreview(req) {
-  const previewToken = req.query?.preview;
-  if (!previewToken) return false;
-  try {
-    const decoded = jwt.verify(previewToken, process.env.JWT_SECRET, { issuer: 'picpeak-auth' });
-    return decoded.type === 'admin';
-  } catch {
-    return false;
+  if (req.query?.admin_preview !== '1') return false;
+  // Cookie first, then a Bearer — but only an admin-typed token satisfies it.
+  const candidates = [];
+  if (req.cookies?.admin_token) candidates.push(req.cookies.admin_token);
+  const header = req.headers?.authorization;
+  if (header && header.startsWith('Bearer ')) candidates.push(header.slice(7));
+  for (const token of candidates) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET, { issuer: 'picpeak-auth' });
+      if (decoded.type === 'admin') return true;
+    } catch { /* try the next candidate */ }
   }
+  return false;
 }
 
 // Middleware to verify gallery access
 async function verifyGalleryAccess(req, res, next) {
   try {
     const requestedSlug = req.params.slug || req.requestedSlug;
+
+    // Admin preview (#868) is resolved BEFORE any gallery credential (#981
+    // review): a coexisting gallery token/Bearer must not shadow it, and the
+    // admin session must never fall into the `type !== 'gallery'` reject path
+    // below. Per-request bypass — draft + password relaxed, NO gallery JWT
+    // minted (a lingering guest cookie would muddy the coexisting-cookies case).
+    // req.isAdminPreview flags downstream logging to keep it out of guest stats.
+    if (isAdminPreview(req)) {
+      if (!requestedSlug) {
+        return res.status(401).json({ error: 'No token provided' });
+      }
+      const previewEvent = await withRetry(async () => db('events')
+        .where({ slug: requestedSlug, is_active: formatBoolean(true), is_archived: formatBoolean(false) })
+        .select('*').first());
+      if (!previewEvent) {
+        return res.status(404).json({ error: 'Gallery not found or expired' });
+      }
+      req.event = previewEvent;
+      req.isAdminPreview = true;
+      req.sessionID = `gallery_admin_preview_${previewEvent.id}`;
+      req.clientInfo = {
+        ip: req.ip || req.connection.remoteAddress || 'unknown',
+        userAgent: req.get('User-Agent') || 'unknown',
+        fingerprint: `${req.ip}-${req.get('User-Agent')}`.substring(0, 32),
+        timestamp: Date.now()
+      };
+      return next();
+    }
+
     const token = getGalleryTokenFromRequest(req, requestedSlug);
     let event;
 
@@ -28,19 +81,14 @@ async function verifyGalleryAccess(req, res, next) {
         return res.status(401).json({ error: 'No token provided' });
       }
 
-      const adminPreview = isAdminPreview(req);
-      event = await withRetry(async () => {
-        const q = db('events')
-          .where({
-            slug: requestedSlug,
-            is_active: formatBoolean(true),
-            is_archived: formatBoolean(false)
-          });
-        if (!adminPreview) {
-          q.where({ is_draft: formatBoolean(false) });
-        }
-        return await q.select('*').first();
-      });
+      event = await withRetry(async () => db('events')
+        .where({
+          slug: requestedSlug,
+          is_active: formatBoolean(true),
+          is_archived: formatBoolean(false),
+          is_draft: formatBoolean(false)
+        })
+        .select('*').first());
 
       if (!event) {
         return res.status(404).json({ error: 'Gallery not found or expired' });
@@ -61,7 +109,7 @@ async function verifyGalleryAccess(req, res, next) {
 
       return res.status(401).json({ error: 'No token provided' });
     }
-    
+
     // Try to verify with issuer first, fallback to no issuer for backward compatibility
     let decoded;
     try {
@@ -89,42 +137,34 @@ async function verifyGalleryAccess(req, res, next) {
       return res.status(403).json({ error: 'Invalid token type for gallery access' });
     }
 
-    // If we have a slug in the URL params or from pre-middleware, verify it matches
+    // If we have a slug in the URL params or from pre-middleware, verify it matches.
+    // (Admin preview never reaches here — it returns above — so drafts stay
+    // filtered for every real gallery-token request.)
     if (requestedSlug) {
       // Verify by slug and ensure it matches the token's event
-      const adminPreviewToken = isAdminPreview(req);
-      event = await withRetry(async () => {
-        const q = db('events')
-          .where({
-            slug: requestedSlug,
-            is_active: formatBoolean(true),
-            is_archived: formatBoolean(false)
-          });
-        if (!adminPreviewToken) {
-          q.where({ is_draft: formatBoolean(false) });
-        }
-        return await q.select('*').first();
-      });
-      
+      event = await withRetry(async () => db('events')
+        .where({
+          slug: requestedSlug,
+          is_active: formatBoolean(true),
+          is_archived: formatBoolean(false),
+          is_draft: formatBoolean(false)
+        })
+        .select('*').first());
+
       // Verify the token's eventId matches
       if (event && event.id !== decoded.eventId) {
         return res.status(403).json({ error: 'Token does not match requested gallery' });
       }
     } else {
       // Fallback to using eventId from token
-      const adminPreviewFallback = isAdminPreview(req);
-      event = await withRetry(async () => {
-        const q = db('events')
-          .where({
-            id: decoded.eventId,
-            is_active: formatBoolean(true),
-            is_archived: formatBoolean(false)
-          });
-        if (!adminPreviewFallback) {
-          q.where({ is_draft: formatBoolean(false) });
-        }
-        return await q.select('*').first();
-      });
+      event = await withRetry(async () => db('events')
+        .where({
+          id: decoded.eventId,
+          is_active: formatBoolean(true),
+          is_archived: formatBoolean(false),
+          is_draft: formatBoolean(false)
+        })
+        .select('*').first());
     }
     
     if (!event) {

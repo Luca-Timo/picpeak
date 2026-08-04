@@ -3,6 +3,16 @@ import type { GalleryInfo, GalleryData, GalleryStats, ResolvedGalleryIdentifier 
 import { normalizeRequirePassword } from '../utils/accessControl';
 import { parseContentDispositionFilename } from '../utils/contentDisposition';
 
+// Admin preview (#868): the preview tab carries `?admin_preview=1`. Browser-native
+// download navigations (a real `<a href>` / `api.getUri`) bypass the axios request
+// interceptor that forwards the flag on API calls, so append it to those URLs
+// directly. The httpOnly admin_token cookie authenticates server-side.
+function withAdminPreview(url: string): string {
+  if (typeof window === 'undefined') return url;
+  if (new URLSearchParams(window.location.search).get('admin_preview') !== '1') return url;
+  return `${url}${url.includes('?') ? '&' : '?'}admin_preview=1`;
+}
+
 // iOS is the only platform whose system share sheet exposes a
 // first-party "Save Image" / "Save to Photos" action for files
 // shared via navigator.share(). On Android the share sheet only
@@ -88,7 +98,7 @@ export const galleryService = {
   async savePhotoToDevice(slug: string, photoId: number, filename: string): Promise<void> {
     if (!isIOS()) {
       this.triggerDirectDownload(
-        api.getUri({ url: `/gallery/${slug}/download/${photoId}` }),
+        withAdminPreview(api.getUri({ url: `/gallery/${slug}/download/${photoId}` })),
         filename,
       );
       return;
@@ -215,7 +225,7 @@ export const galleryService = {
       // Native browser download — the server sends Content-Length so
       // the browser shows a real progress bar and mobile doesn't crash.
       const link = document.createElement('a');
-      link.href = `/api/gallery/${slug}/download-all`;
+      link.href = withAdminPreview(`/api/gallery/${slug}/download-all`);
       link.setAttribute('download', `${slug}.zip`);
       document.body.appendChild(link);
       link.click();

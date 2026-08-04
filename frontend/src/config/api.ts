@@ -72,6 +72,16 @@ api.interceptors.request.use(
         && (!!paramSlug || window.location.pathname.startsWith('/gallery/'));
 
       if (isGalleryEndpoint || isGallerySessionCheck) {
+        // Admin preview (#868): the gallery tab was opened with ?admin_preview=1.
+        // Forward that intent flag on every gallery API call so the backend
+        // applies the admin draft/password bypass. The httpOnly admin_token
+        // cookie authenticates server-side (withCredentials) — no secret in the
+        // URL. Harmless for guests: without a valid admin cookie the backend
+        // fails the check closed.
+        if (new URLSearchParams(window.location.search).get('admin_preview') === '1') {
+          config.params = { ...(config.params as Record<string, unknown> | undefined), admin_preview: 1 };
+        }
+
         const fallbackSlug = getActiveGallerySlug()
           || inferGallerySlugFromLocation();
         const slug = pathSlug || paramSlug || fallbackSlug;

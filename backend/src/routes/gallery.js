@@ -20,6 +20,10 @@ function resolveHeroLogoVisible(perEvent, globalDefault) {
 const watermarkService = require('../services/watermarkService');
 const watermarkGeneratorService = require('../services/watermarkGeneratorService');
 const { verifyGalleryAccess, denySlideshowToken, isAdminPreview } = require('../middleware/gallery');
+// Preserve the admin-preview flag across internal photo redirects (#981 review).
+// The redirected request carries no gallery JWT, so without the flag it would
+// fall back to the draft/password gate and 404 the derivative.
+const withPreview = (req, url) => (req.isAdminPreview ? `${url}${url.includes('?') ? '&' : '?'}admin_preview=1` : url);
 const { resolveGuest } = require('../middleware/guestAuth');
 const { generateGuestIdentifier } = require('../middleware/feedbackRateLimit');
 const secureImageService = require('../services/secureImageService');
@@ -265,8 +269,11 @@ router.get('/:slug/info', async (req, res) => {
       return res.status(404).json({ error: 'Gallery has been archived and is no longer available' });
     }
 
+    // Admin preview (#868) bypasses both the draft gate and — below — the
+    // password gate. Computed once and reused.
+    const adminPreview = isAdminPreview(req);
     // Check if event is a draft (allow admin preview)
-    if (event.is_draft && !isAdminPreview(req)) {
+    if (event.is_draft && !adminPreview) {
       return res.status(404).json({ error: 'Gallery is not yet published' });
     }
     
@@ -278,7 +285,11 @@ router.get('/:slug/info', async (req, res) => {
       }
     }
     
-    const requiresPassword = !(event.require_password === false || event.require_password === 0 || event.require_password === '0');
+    // Admin preview skips the guest password on published, protected galleries
+    // (#868) — the admin already sees every photo through the admin routes.
+    const requiresPassword = adminPreview
+      ? false
+      : !(event.require_password === false || event.require_password === 0 || event.require_password === '0');
     const globalHeroLogoVisible = await getAppSetting('branding_logo_display_hero', true);
     const globalLogoSize = await getAppSetting('branding_logo_size', 'medium');
 
@@ -820,7 +831,9 @@ router.get('/:slug/photos', verifyGalleryAccess, resolveGuest, async (req, res) 
     // refetches this list on every new-upload poll, which would massively
     // inflate total_views / unique_visitors. The slideshow is explicitly
     // excluded from real visitor analytics (migration 138 design).
-    if (req.accessLevel !== 'slideshow') {
+    // Admin preview (#868) is excluded from guest analytics + the "gallery
+    // opened" bell — it's the photographer looking at their own gallery.
+    if (req.accessLevel !== 'slideshow' && !req.isAdminPreview) {
       await db('access_logs').insert({
         event_id: req.event.id,
         ip_address: req.ip,
@@ -914,8 +927,13 @@ router.get('/:slug/photos', verifyGalleryAccess, resolveGuest, async (req, res) 
       categories: categories,
       photos: photos.map(photo => {
         const useJwtUrl = (protectionSettings.protection_level === 'basic' || protectionSettings.protection_level === 'standard');
-        // Add watermark version to URLs for cache busting when settings change
-        const wmQuery = wmVersion ? `?${wmVersion}` : '';
+        // Watermark version (cache-busting) + admin-preview flag (#868). In
+        // preview mode no gallery cookie is minted, so each <img> request must
+        // re-assert the admin session — thread the flag onto every /api/gallery
+        // image URL so the browser sends it (the admin_token cookie rides along
+        // same-origin).
+        const imgQuery = [wmVersion, req.isAdminPreview ? 'admin_preview=1' : ''].filter(Boolean).join('&');
+        const wmQuery = imgQuery ? `?${imgQuery}` : '';
         const photoUrl = useJwtUrl ?
           `/api/gallery/${req.params.slug}/photo/${photo.id}${wmQuery}` :
           `/api/secure-images/${req.params.slug}/secure/${photo.id}/{{token}}`;
@@ -1092,23 +1110,27 @@ router.get('/:slug/download/:photoId', verifyGalleryAccess, denySlideshowToken, 
       }
     }
 
-    // Update download count
-    await db('photos').where('id', photoId).increment('download_count', 1);
-    
-    // Log download
-    await db('access_logs').insert({
-      event_id: req.event.id,
-      ip_address: req.ip,
-      user_agent: req.headers['user-agent'],
-      action: 'download',
-      photo_id: photoId
-    });
+    // Admin preview (#868) downloads are excluded from the download count +
+    // guest analytics — kept out of client-facing stats.
+    if (!req.isAdminPreview) {
+      // Update download count
+      await db('photos').where('id', photoId).increment('download_count', 1);
+
+      // Log download
+      await db('access_logs').insert({
+        event_id: req.event.id,
+        ip_address: req.ip,
+        user_agent: req.headers['user-agent'],
+        action: 'download',
+        photo_id: photoId
+      });
+    }
     // Surface in the admin notification bell (#746) — debounced, and only
     // once the response actually finished: notifying up-front would log a
     // download that then 404s/fails and the debounce would suppress the
     // next real one for an hour (codex review of #849).
     res.on('finish', () => {
-      if (res.statusCode < 400) notifySinglePhotoDownload(req.event, req);
+      if (res.statusCode < 400 && !req.isAdminPreview) notifySinglePhotoDownload(req.event, req);
     });
     
     let filePath;
@@ -1231,15 +1253,18 @@ router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, block
       if (wantsPresigned && storage.kind() === 's3' && !watermarkOnEvent) {
         try {
           const url = await storage.signedUrl(zipInfo.key, 300); // 5 min
-          db('access_logs').insert({
-            event_id: req.event.id,
-            ip_address: req.ip,
-            user_agent: req.headers['user-agent'],
-            action: 'download_all_presigned'
-          }).catch(() => {});
-          bumpEventDownloadCounts(req.event.id).catch(() => {});
-          // Surface in the admin notification bell (#746).
-          logActivity('gallery_downloaded', { scope: 'all' }, req.event.id, galleryActor(req));
+          // Admin preview (#868): stream the ZIP but keep it out of stats.
+          if (!req.isAdminPreview) {
+            db('access_logs').insert({
+              event_id: req.event.id,
+              ip_address: req.ip,
+              user_agent: req.headers['user-agent'],
+              action: 'download_all_presigned'
+            }).catch(() => {});
+            bumpEventDownloadCounts(req.event.id).catch(() => {});
+            // Surface in the admin notification bell (#746).
+            logActivity('gallery_downloaded', { scope: 'all' }, req.event.id, galleryActor(req));
+          }
           res.redirect(302, url);
           return;
         } catch (err) {
@@ -1256,20 +1281,22 @@ router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, block
       const stream = await storage.get(zipInfo.key);
       stream.pipe(res);
 
-      // Log bulk download
-      db('access_logs').insert({
-        event_id: req.event.id,
-        ip_address: req.ip,
-        user_agent: req.headers['user-agent'],
-        action: 'download_all'
-      }).catch(() => {});
-      bumpEventDownloadCounts(req.event.id).catch(() => {});
-      // Surface in the admin notification bell (#746) — only once the
-      // stream actually finished; logging at pipe-time would report
-      // downloads that then broke mid-transfer (codex review of #849).
-      res.on('finish', () => {
-        if (res.statusCode < 400) logActivity('gallery_downloaded', { scope: 'all' }, req.event.id, galleryActor(req));
-      });
+      // Log bulk download (admin preview #868 excluded — stats stay client-only).
+      if (!req.isAdminPreview) {
+        db('access_logs').insert({
+          event_id: req.event.id,
+          ip_address: req.ip,
+          user_agent: req.headers['user-agent'],
+          action: 'download_all'
+        }).catch(() => {});
+        bumpEventDownloadCounts(req.event.id).catch(() => {});
+        // Surface in the admin notification bell (#746) — only once the
+        // stream actually finished; logging at pipe-time would report
+        // downloads that then broke mid-transfer (codex review of #849).
+        res.on('finish', () => {
+          if (res.statusCode < 400) logActivity('gallery_downloaded', { scope: 'all' }, req.event.id, galleryActor(req));
+        });
+      }
       return;
     }
 
@@ -1405,23 +1432,28 @@ router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, block
     // Notification only after the response actually finished — finalize()
     // ends Archiver's input, not the HTTP transfer (codex review of #849,
     // confirmation round). Registered before finalize so it can't be missed.
-    res.on('finish', () => {
-      if (res.statusCode < 400) logActivity('gallery_downloaded', { scope: 'all' }, req.event.id, galleryActor(req));
-    });
+    // Admin preview (#868) streams the archive but is excluded from stats.
+    if (!req.isAdminPreview) {
+      res.on('finish', () => {
+        if (res.statusCode < 400) logActivity('gallery_downloaded', { scope: 'all' }, req.event.id, galleryActor(req));
+      });
+    }
     await archive.finalize();
 
-    // Log bulk download
-    await db('access_logs').insert({
-      event_id: req.event.id,
-      ip_address: req.ip,
-      user_agent: req.headers['user-agent'],
-      action: 'download_all'
-    });
-    // Exactly the photos that made it into this archive (#895) — skipped
-    // (missing/corrupt) sources don't count.
-    if (appendedIds.length > 0) {
-      db('photos').whereIn('id', appendedIds)
-        .increment('download_count', 1).catch(() => {});
+    if (!req.isAdminPreview) {
+      // Log bulk download
+      await db('access_logs').insert({
+        event_id: req.event.id,
+        ip_address: req.ip,
+        user_agent: req.headers['user-agent'],
+        action: 'download_all'
+      });
+      // Exactly the photos that made it into this archive (#895) — skipped
+      // (missing/corrupt) sources don't count.
+      if (appendedIds.length > 0) {
+        db('photos').whereIn('id', appendedIds)
+          .increment('download_count', 1).catch(() => {});
+      }
     }
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to create download archive');
@@ -1552,22 +1584,27 @@ router.post('/:slug/download-selected', verifyGalleryAccess, denySlideshowToken,
     }
 
     // See download-all: notify only on response 'finish'.
-    res.on('finish', () => {
-      if (res.statusCode < 400) logActivity('gallery_downloaded', { scope: 'selected', photo_count: photoIds.length }, req.event.id, galleryActor(req));
-    });
+    // Admin preview (#868) streams the archive but is excluded from stats.
+    if (!req.isAdminPreview) {
+      res.on('finish', () => {
+        if (res.statusCode < 400) logActivity('gallery_downloaded', { scope: 'selected', photo_count: photoIds.length }, req.event.id, galleryActor(req));
+      });
+    }
     await archive.finalize();
 
-    await db('access_logs').insert({
-      event_id: req.event.id,
-      ip_address: req.ip,
-      user_agent: req.headers['user-agent'],
-      action: 'download_selected'
-    });
-    // Exactly the photos that made it into this archive (#895) — skipped
-    // (missing/corrupt) sources don't count.
-    if (appendedIds.length > 0) {
-      db('photos').whereIn('id', appendedIds)
-        .increment('download_count', 1).catch(() => {});
+    if (!req.isAdminPreview) {
+      await db('access_logs').insert({
+        event_id: req.event.id,
+        ip_address: req.ip,
+        user_agent: req.headers['user-agent'],
+        action: 'download_selected'
+      });
+      // Exactly the photos that made it into this archive (#895) — skipped
+      // (missing/corrupt) sources don't count.
+      if (appendedIds.length > 0) {
+        db('photos').whereIn('id', appendedIds)
+          .increment('download_count', 1).catch(() => {});
+      }
     }
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to download selected photos');
@@ -1600,7 +1637,10 @@ router.post('/:slug/photo/:photoId/view',
       if (photo.visibility === 'hidden' && req.accessLevel !== 'client') {
         return res.status(403).json({ error: 'Photo not available' });
       }
-      await db('photos').where('id', photo.id).increment('view_count', 1);
+      // Admin preview (#981 review) is excluded from per-photo view analytics.
+      if (!req.isAdminPreview) {
+        await db('photos').where('id', photo.id).increment('view_count', 1);
+      }
       res.status(204).end();
     } catch (error) {
       errorResponse(res, error, 500, 'Failed to record view');
@@ -1959,7 +1999,7 @@ router.get('/:slug/hero/:photoId',
       const isVideo = photo.media_type === 'video' || (photo.mime_type && photo.mime_type.startsWith('video/'));
       if (isVideo) {
         // For videos, redirect to the regular photo endpoint
-        return res.redirect(`/api/gallery/${req.params.slug}/photo/${photoId}`);
+        return res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${photoId}`));
       }
 
       // Ensure hero image exists and is valid, regenerate if needed
@@ -1968,7 +2008,7 @@ router.get('/:slug/hero/:photoId',
       if (!heroPath) {
         // If hero generation fails, fall back to original photo
         logger.warn(`Failed to generate hero image for photo ${photoId}, falling back to original`);
-        return res.redirect(`/api/gallery/${req.params.slug}/photo/${photoId}`);
+        return res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${photoId}`));
       }
 
       // Hero images are always written via the storage abstraction (see
@@ -1983,7 +2023,7 @@ router.get('/:slug/hero/:photoId',
           eventId: req.event.id,
           heroPath
         });
-        return res.redirect(`/api/gallery/${req.params.slug}/photo/${photoId}`);
+        return res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${photoId}`));
       }
 
       const mtimeMs = stat.mtime ? stat.mtime.getTime() : 0;
@@ -2022,7 +2062,7 @@ router.get('/:slug/hero/:photoId',
         eventId: req.event?.id
       });
       // Fall back to original photo on any error
-      res.redirect(`/api/gallery/${req.params.slug}/photo/${req.params.photoId}`);
+      res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${req.params.photoId}`));
     }
   }
 );
@@ -2059,7 +2099,7 @@ router.get('/:slug/preview/:photoId',
       // belt-and-braces in case a stale tab does.
       const isVideo = photo.media_type === 'video' || (photo.mime_type && photo.mime_type.startsWith('video/'));
       if (isVideo) {
-        return res.redirect(`/api/gallery/${req.params.slug}/photo/${photoId}`);
+        return res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${photoId}`));
       }
 
       // Lazy generation: ensurePreviewImage returns null on any
@@ -2068,7 +2108,7 @@ router.get('/:slug/preview/:photoId',
       const previewPath = await ensurePreviewImage(photo);
       if (!previewPath) {
         logger.warn(`Failed to generate preview for photo ${photoId}, falling back to original`);
-        return res.redirect(`/api/gallery/${req.params.slug}/photo/${photoId}`);
+        return res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${photoId}`));
       }
 
       const storage = getStorage();
@@ -2077,7 +2117,7 @@ router.get('/:slug/preview/:photoId',
         logger.error('Preview file does not exist in storage backend', {
           slug: req.params.slug, photoId, eventId: req.event.id, previewPath,
         });
-        return res.redirect(`/api/gallery/${req.params.slug}/photo/${photoId}`);
+        return res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${photoId}`));
       }
 
       const mtimeMs = stat.mtime ? stat.mtime.getTime() : 0;
@@ -2118,7 +2158,7 @@ router.get('/:slug/preview/:photoId',
         photoId: req.params.photoId,
         eventId: req.event?.id,
       });
-      res.redirect(`/api/gallery/${req.params.slug}/photo/${req.params.photoId}`);
+      res.redirect(withPreview(req, `/api/gallery/${req.params.slug}/photo/${req.params.photoId}`));
     }
   }
 );

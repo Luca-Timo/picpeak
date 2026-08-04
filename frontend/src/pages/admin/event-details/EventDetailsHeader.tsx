@@ -19,7 +19,6 @@ import type { Event } from '../../../types';
 import { Button, Card } from '../../../components/common';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
-import { eventsService } from '../../../services/events.service';
 import { buildShareLinkUrl } from '../../../utils/url';
 import { isGalleryPublic } from '../../../utils/accessControl';
 import type { FeedbackSettings as FeedbackSettingsType } from '../../../services/feedback.service';
@@ -190,10 +189,13 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
             )}
             {event.share_link && !isEditing && (
               <a
-                href={event.is_draft
-                  ? `${buildShareLinkUrl(event.share_link)}${buildShareLinkUrl(event.share_link).includes('?') ? '&' : '?'}preview=${eventsService.getPreviewToken() || ''}`
-                  : buildShareLinkUrl(event.share_link)
-                }
+                // Admin preview (#868): an explicit intent flag, no token in the
+                // URL. The httpOnly admin_token cookie authenticates server-side
+                // on the same-origin API calls. Works for BOTH draft (bypasses
+                // published-visibility) and published+password galleries
+                // (bypasses the guest password) — retires the old
+                // ?preview=<raw-admin-JWT> scheme that leaked the token.
+                href={`${buildShareLinkUrl(event.share_link)}${buildShareLinkUrl(event.share_link).includes('?') ? '&' : '?'}admin_preview=1`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-accent hover:opacity-80 border border-accent-dark rounded-lg hover:bg-accent-dark/15 transition-colors"
