@@ -29,6 +29,15 @@ export const GalleryPage: React.FC = () => {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
   const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
+  // #868 admin preview: signalled by ?admin_preview=1 in the (dedicated) gallery
+  // tab URL. It renders the gallery directly with NO gallery session — the
+  // backend grants each request per the flag + admin cookie. We must skip the
+  // public empty-password auto-login below, which would otherwise POST an empty
+  // password against a genuinely protected gallery and 401 (#981 review).
+  const isAdminPreview = React.useMemo(
+    () => new URLSearchParams(window.location.search).get('admin_preview') === '1',
+    [],
+  );
   // Evaluate once per mount — UA doesn't change at runtime, and using useMemo
   // avoids re-running detection on every render of the form.
   const iabDetection = React.useMemo(() => detectInAppBrowser(), []);
@@ -182,7 +191,7 @@ export const GalleryPage: React.FC = () => {
       return;
     }
 
-    if (galleryInfo && isGalleryPublic(galleryInfo.requires_password) && !isAuthenticated && !autoLoginAttempted && !isLoadingSettings) {
+    if (galleryInfo && !isAdminPreview && isGalleryPublic(galleryInfo.requires_password) && !isAuthenticated && !autoLoginAttempted && !isLoadingSettings) {
       setAutoLoginAttempted(true);
       setIsLoggingIn(true);
       login(resolvedSlug, '')
@@ -199,7 +208,7 @@ export const GalleryPage: React.FC = () => {
           setIsLoggingIn(false);
         });
     }
-  }, [galleryInfo, isAuthenticated, autoLoginAttempted, login, resolvedSlug, isResolvingIdentifier, isLoadingSettings]);
+  }, [galleryInfo, isAdminPreview, isAuthenticated, autoLoginAttempted, login, resolvedSlug, isResolvingIdentifier, isLoadingSettings]);
 
   // Calculate days until expiration (null if no expiration set)
   const daysUntilExpiration = galleryInfo?.expires_at
@@ -387,6 +396,28 @@ export const GalleryPage: React.FC = () => {
   }
 
   const gallerySlugForView = resolvedSlug ?? rawSlug ?? '';
+
+  // Admin preview (#868): render the gallery directly, no gallery session.
+  // GalleryView fetches photos by slug (the axios interceptor forwards
+  // admin_preview=1 + the admin cookie), and reads its live event from that
+  // response; this prop only seeds the initial header from /info.
+  if (isAdminPreview && galleryInfo) {
+    return (
+      <GalleryView
+        slug={gallerySlugForView}
+        event={{
+          id: 0,
+          event_name: galleryInfo.event_name,
+          event_type: galleryInfo.event_type,
+          event_date: galleryInfo.event_date,
+          color_theme: galleryInfo.color_theme,
+          expires_at: galleryInfo.expires_at,
+          allow_user_uploads: galleryInfo.allow_user_uploads,
+          allow_downloads: galleryInfo.allow_downloads,
+        }}
+      />
+    );
+  }
 
   // Show gallery view if authenticated
   if (isAuthenticated && event) {
