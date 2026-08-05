@@ -88,7 +88,7 @@ const KNOWN_FLAGS = [
   // per-event-type presets and global watermark defaults tab. Strictly opt-in;
   // gates all slideshow admin UI (per-event card, type preset, settings tab).
   'slideshow',
-  // PicTransfer (migration 170) — WeTransfer-style cross-event file transfers
+  // PicTransfer (migration 170) — cross-event file transfers
   // (recipient download link + optional client-upload channel). Strictly
   // opt-in; gates the sidebar entry, the /admin/transfers area AND every
   // transfer route (admin + public token routes).
