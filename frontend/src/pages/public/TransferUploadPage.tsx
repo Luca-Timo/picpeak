@@ -3,6 +3,11 @@
  *
  * Token-only (6-char code, no auth). Lets a client send files back to the
  * photographer (logos etc.). Reached via /transfer-upload/:token.
+ *
+ * Like the recipient download page, styling reads the branding theme CSS
+ * variables (`--color-*`) rather than Tailwind `dark:` utilities — a public
+ * page never gets the admin `.dark` class, so the branding theme (applied by
+ * GlobalThemeProvider) is what must drive colours and light/dark here.
  */
 import React, { useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -11,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import { UploadCloud, CheckCircle, AlertCircle, X, File as FileIcon } from 'lucide-react';
 
-import { Button, Card, CardContent, Loading } from '../../components/common';
+import { Button, Loading } from '../../components/common';
 import { transfersService } from '../../services/transfers.service';
 
 function formatBytes(bytes: number): string {
@@ -37,23 +42,31 @@ export const TransferUploadPage: React.FC = () => {
     retry: false,
   });
 
+  const muted = { color: 'var(--color-muted-text)' } as const;
+
   const wrap = (children: React.ReactNode) => (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-50 p-4 dark:bg-neutral-950">
-      <div className="w-full max-w-lg">{children}</div>
+    <div
+      className="flex min-h-screen items-center justify-center p-4"
+      style={{ backgroundColor: 'var(--color-background)', color: 'var(--color-text)' }}
+    >
+      <div
+        className="w-full max-w-lg rounded-lg border shadow-sm"
+        style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-surface-border)' }}
+      >
+        {children}
+      </div>
     </div>
   );
 
-  if (isLoading) return wrap(<Loading />);
+  if (isLoading) return wrap(<div className="p-6"><Loading /></div>);
 
   if (isError || !data) {
     return wrap(
-      <Card>
-        <CardContent className="py-12 text-center">
-          <AlertCircle className="mx-auto mb-3 h-12 w-12 text-neutral-300" />
-          <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">{t('transfers.upload.unavailableTitle', 'Upload link unavailable')}</h1>
-          <p className="mt-2 text-neutral-500">{t('transfers.upload.unavailableBody', 'This upload link is invalid or has expired.')}</p>
-        </CardContent>
-      </Card>,
+      <div className="p-8 text-center">
+        <AlertCircle className="mx-auto mb-3 h-12 w-12" style={muted} />
+        <h1 className="text-xl font-semibold">{t('transfers.upload.unavailableTitle', 'Upload link unavailable')}</h1>
+        <p className="mt-2" style={muted}>{t('transfers.upload.unavailableBody', 'This upload link is invalid or has expired.')}</p>
+      </div>,
     );
   }
 
@@ -89,87 +102,88 @@ export const TransferUploadPage: React.FC = () => {
 
   if (done) {
     return wrap(
-      <Card>
-        <CardContent className="py-12 text-center">
-          <CheckCircle className="mx-auto mb-3 h-12 w-12 text-green-500" />
-          <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">{t('transfers.upload.doneTitle', 'Thank you!')}</h1>
-          <p className="mt-2 text-neutral-500">{t('transfers.upload.doneBody', 'Your files were uploaded successfully.')}</p>
-          <Button className="mt-5" variant="outline" onClick={() => { setDone(false); setFiles([]); setProgress(0); }}>
-            {t('transfers.upload.uploadMore', 'Upload more')}
-          </Button>
-        </CardContent>
-      </Card>,
+      <div className="p-8 text-center">
+        <CheckCircle className="mx-auto mb-3 h-12 w-12 text-green-500" />
+        <h1 className="text-xl font-semibold">{t('transfers.upload.doneTitle', 'Thank you!')}</h1>
+        <p className="mt-2" style={muted}>{t('transfers.upload.doneBody', 'Your files were uploaded successfully.')}</p>
+        <Button className="mt-5" variant="outline" onClick={() => { setDone(false); setFiles([]); setProgress(0); }}>
+          {t('transfers.upload.uploadMore', 'Upload more')}
+        </Button>
+      </div>,
     );
   }
 
   return wrap(
-    <Card>
-      <CardContent className="p-6">
-        <div className="mb-5 text-center">
-          <UploadCloud className="mx-auto mb-2 h-10 w-10 text-primary-500" />
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">{data.title}</h1>
-          {data.message && <p className="mt-2 whitespace-pre-line text-neutral-600 dark:text-neutral-400">{data.message}</p>}
-          <p className="mt-2 text-sm text-neutral-500">
-            {t('transfers.upload.limits', 'Up to {{files}} files, {{mb}} MB each', { files: data.max_files, mb: data.max_size_mb })}
-          </p>
+    <div className="p-6">
+      <div className="mb-5 text-center">
+        <UploadCloud className="mx-auto mb-2 h-10 w-10" style={{ color: 'var(--color-accent)' }} />
+        <h1 className="text-2xl font-bold">{data.title}</h1>
+        {data.message && <p className="mt-2 whitespace-pre-line" style={muted}>{data.message}</p>}
+        <p className="mt-2 text-sm" style={muted}>
+          {t('transfers.upload.limits', 'Up to {{files}} files, {{mb}} MB each', { files: data.max_files, mb: data.max_size_mb })}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className="flex w-full flex-col items-center justify-center rounded-lg border-2 border-dashed py-10 transition hover:opacity-80"
+        style={{ borderColor: 'var(--color-surface-border)', color: 'var(--color-muted-text)' }}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}
+      >
+        <UploadCloud className="mb-2 h-8 w-8" />
+        <span className="text-sm">{t('transfers.upload.dropzone', 'Click to choose files or drag them here')}</span>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => { addFiles(e.target.files); if (inputRef.current) inputRef.current.value = ''; }}
+      />
+
+      {files.length > 0 && (
+        <ul className="mt-4 border-t" style={{ borderColor: 'var(--color-surface-border)' }}>
+          {files.map((f, idx) => (
+            <li
+              key={`${f.name}-${idx}`}
+              className="flex items-center justify-between border-b py-2 text-sm"
+              style={{ borderColor: 'var(--color-surface-border)' }}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <FileIcon className="h-4 w-4 shrink-0" style={muted} />
+                <span className="truncate">{f.name}</span>
+              </span>
+              <span className="flex shrink-0 items-center gap-3" style={muted}>
+                <span>{formatBytes(f.size)}</span>
+                {!uploading && (
+                  <button onClick={() => setFiles((prev) => prev.filter((_, i) => i !== idx))} className="rounded p-1 hover:opacity-70">
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {uploading && (
+        <div className="mt-4 h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'var(--color-surface-border)' }}>
+          <div className="h-full transition-all" style={{ width: `${progress}%`, backgroundColor: 'var(--color-accent-dark)' }} />
         </div>
+      )}
 
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="flex w-full flex-col items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 py-10 text-neutral-500 transition hover:border-primary-400 hover:text-primary-600 dark:border-neutral-600"
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}
-        >
-          <UploadCloud className="mb-2 h-8 w-8" />
-          <span className="text-sm">{t('transfers.upload.dropzone', 'Click to choose files or drag them here')}</span>
-        </button>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => { addFiles(e.target.files); if (inputRef.current) inputRef.current.value = ''; }}
-        />
-
-        {files.length > 0 && (
-          <ul className="mt-4 divide-y divide-neutral-100 dark:divide-neutral-800">
-            {files.map((f, idx) => (
-              <li key={`${f.name}-${idx}`} className="flex items-center justify-between py-2 text-sm">
-                <span className="flex min-w-0 items-center gap-2">
-                  <FileIcon className="h-4 w-4 shrink-0 text-neutral-400" />
-                  <span className="truncate text-neutral-700 dark:text-neutral-300">{f.name}</span>
-                </span>
-                <span className="flex shrink-0 items-center gap-3 text-neutral-500">
-                  <span>{formatBytes(f.size)}</span>
-                  {!uploading && (
-                    <button onClick={() => setFiles((prev) => prev.filter((_, i) => i !== idx))} className="rounded p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800">
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {uploading && (
-          <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
-            <div className="h-full bg-primary-500 transition-all" style={{ width: `${progress}%` }} />
-          </div>
-        )}
-
-        <Button
-          className="mt-5 w-full"
-          size="lg"
-          leftIcon={<UploadCloud className="h-5 w-5" />}
-          onClick={handleUpload}
-          disabled={files.length === 0}
-          isLoading={uploading}
-        >
-          {t('transfers.upload.send', 'Upload {{count}} files', { count: files.length })}
-        </Button>
-      </CardContent>
-    </Card>,
+      <Button
+        className="mt-5 w-full"
+        size="lg"
+        leftIcon={<UploadCloud className="h-5 w-5" />}
+        onClick={handleUpload}
+        disabled={files.length === 0}
+        isLoading={uploading}
+      >
+        {t('transfers.upload.send', 'Upload {{count}} files', { count: files.length })}
+      </Button>
+    </div>,
   );
 };

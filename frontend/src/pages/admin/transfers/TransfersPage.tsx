@@ -320,28 +320,24 @@ const CreateTransferModal: React.FC<{ onClose: () => void; onCreated: () => void
               {t('transfers.field.delivery', 'Delivery')}
             </span>
             <div className="flex gap-2">
-              <button
+              <Button
                 type="button"
+                variant={deliveryMethod === 'link' ? 'primary' : 'outline'}
+                className="flex-1"
+                leftIcon={<Link2 className="h-4 w-4" />}
                 onClick={() => setDeliveryMethod('link')}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm ${
-                  deliveryMethod === 'link'
-                    ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
-                    : 'border-neutral-300 text-neutral-600 dark:border-neutral-600 dark:text-neutral-300'
-                }`}
               >
-                <Link2 className="h-4 w-4" /> {t('transfers.delivery.link', 'Share a link')}
-              </button>
-              <button
+                {t('transfers.delivery.link', 'Share a link')}
+              </Button>
+              <Button
                 type="button"
+                variant={deliveryMethod === 'email' ? 'primary' : 'outline'}
+                className="flex-1"
+                leftIcon={<Mail className="h-4 w-4" />}
                 onClick={() => setDeliveryMethod('email')}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm ${
-                  deliveryMethod === 'email'
-                    ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
-                    : 'border-neutral-300 text-neutral-600 dark:border-neutral-600 dark:text-neutral-300'
-                }`}
               >
-                <Mail className="h-4 w-4" /> {t('transfers.delivery.email', 'Send by email')}
-              </button>
+                {t('transfers.delivery.email', 'Send by email')}
+              </Button>
             </div>
             {deliveryMethod === 'email' && (
               <div className="mt-3">
