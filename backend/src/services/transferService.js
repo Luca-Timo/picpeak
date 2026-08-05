@@ -72,6 +72,15 @@ function uploadDirKey(transferId) {
 }
 
 /**
+ * Storage-relative directory for the admin's own deliverable files — the files
+ * dropped straight into a transfer at creation (transfer_extra_files), as
+ * opposed to the gallery photos it references or the client's return uploads.
+ */
+function extraFilesDirKey(transferId) {
+  return path.posix.join('transfers', String(transferId), 'files');
+}
+
+/**
  * Derive the recipient-facing/admin status of a transfer row.
  * Never mutates — the cron sweep is what actually flips is_active/deleted_at.
  */
@@ -104,6 +113,7 @@ async function createTransfer(input, adminId) {
     allowUploads = false,
     uploadExpiresInDays,
     photoIds = [],
+    deliveryMethod = 'link',
   } = input || {};
 
   const defaultExpiry = await getAppSetting('transfer_default_expiry_days', 14);
@@ -131,6 +141,7 @@ async function createTransfer(input, adminId) {
     is_active: formatBoolean(true),
     grace_days: grace,
     allow_uploads: formatBoolean(!!allowUploads),
+    delivery_method: deliveryMethod === 'email' ? 'email' : 'link',
     created_at: now,
     updated_at: now,
   };
@@ -173,12 +184,18 @@ async function listTransfers({ search = '' } = {}) {
     ? await db('transfer_uploads').whereIn('transfer_id', ids)
       .select('transfer_id').count('* as count').groupBy('transfer_id')
     : [];
+  // Admin-uploaded deliverable files count toward file_count alongside photos.
+  const extraCounts = ids.length
+    ? await db('transfer_extra_files').whereIn('transfer_id', ids)
+      .select('transfer_id').count('* as count').groupBy('transfer_id')
+    : [];
   const fileCountMap = new Map(fileCounts.map((r) => [r.transfer_id, Number(r.count)]));
   const uploadCountMap = new Map(uploadCounts.map((r) => [r.transfer_id, Number(r.count)]));
+  const extraCountMap = new Map(extraCounts.map((r) => [r.transfer_id, Number(r.count)]));
 
   return rows.map((r) => ({
     ...serializeTransfer(r),
-    file_count: fileCountMap.get(r.id) || 0,
+    file_count: (fileCountMap.get(r.id) || 0) + (extraCountMap.get(r.id) || 0),
     upload_count: uploadCountMap.get(r.id) || 0,
   }));
 }
@@ -199,6 +216,7 @@ function serializeTransfer(row) {
     grace_days: row.grace_days,
     deleted_at: row.deleted_at || null,
     allow_uploads: row.allow_uploads === true || row.allow_uploads === 1,
+    delivery_method: row.delivery_method === 'email' ? 'email' : 'link',
     upload_token: row.upload_token || null,
     upload_expires_at: row.upload_expires_at || null,
     created_at: row.created_at,
@@ -238,10 +256,29 @@ async function getTransfer(id) {
     .orderBy('uploaded_at', 'desc')
     .select('id', 'original_filename', 'size_bytes', 'mime_type', 'uploader_ip', 'uploaded_at');
 
+  // Admin-uploaded deliverable files (no photo/event — the operator's own bytes).
+  const extraFiles = await db('transfer_extra_files')
+    .where('transfer_id', id)
+    .orderBy('sort_order', 'asc')
+    .orderBy('id', 'asc')
+    .select('id', 'original_filename', 'size_bytes', 'mime_type', 'created_at');
+
+  const recipients = await db('transfer_recipients')
+    .where('transfer_id', id)
+    .orderBy('id', 'asc')
+    .select('id', 'email', 'last_sent_at');
+
   return {
     ...serializeTransfer(row),
-    file_count: files.length,
+    file_count: files.length + extraFiles.length,
     upload_count: uploads.length,
+    extra_files: extraFiles.map((f) => ({
+      id: f.id,
+      filename: f.original_filename,
+      size_bytes: f.size_bytes,
+      mime_type: f.mime_type,
+    })),
+    recipients: recipients.map((r) => ({ id: r.id, email: r.email, last_sent_at: r.last_sent_at || null })),
     files: files.map((f) => ({
       file_id: f.file_id,
       photo_id: f.photo_id,
@@ -300,12 +337,15 @@ async function deleteTransfer(id) {
   const row = await db('transfers').where({ id }).first();
   if (!row) return false;
   await removeUploadedFiles(id);
-  // transfer_files / transfer_uploads / transfer_downloads cascade on the FK,
-  // but we delete explicitly too so the feature works even where SQLite FK
-  // enforcement is off.
+  await removeExtraFiles(id);
+  // transfer_files / transfer_uploads / transfer_downloads / transfer_extra_files
+  // / transfer_recipients cascade on the FK, but we delete explicitly too so the
+  // feature works even where SQLite FK enforcement is off.
   await db('transfer_files').where({ transfer_id: id }).del();
   await db('transfer_uploads').where({ transfer_id: id }).del();
   await db('transfer_downloads').where({ transfer_id: id }).del();
+  await db('transfer_extra_files').where({ transfer_id: id }).del();
+  await db('transfer_recipients').where({ transfer_id: id }).del();
   await db('transfers').where({ id }).del();
   return true;
 }
@@ -407,21 +447,37 @@ async function getPublicView(transfer) {
       'photos.size_bytes',
     );
 
+  const extraFiles = await db('transfer_extra_files')
+    .where('transfer_id', transfer.id)
+    .orderBy('sort_order', 'asc')
+    .orderBy('id', 'asc')
+    .select('id', 'original_filename', 'size_bytes');
+
   const useOriginal = await getUseOriginalFilenames();
-  const totalBytes = files.reduce((sum, f) => sum + (Number(f.size_bytes) || 0), 0);
+  const totalBytes = files.reduce((sum, f) => sum + (Number(f.size_bytes) || 0), 0)
+    + extraFiles.reduce((sum, f) => sum + (Number(f.size_bytes) || 0), 0);
+
+  // Public file ids are prefixed so the single-file route knows which table to
+  // read: `p<id>` = a referenced gallery photo, `x<id>` = an admin-uploaded file.
+  const photoEntries = files.map((f) => ({
+    file_id: `p${f.file_id}`,
+    filename: (useOriginal && f.original_filename) ? f.original_filename : f.filename,
+    size_bytes: f.size_bytes || null,
+  }));
+  const extraEntries = extraFiles.map((f) => ({
+    file_id: `x${f.id}`,
+    filename: f.original_filename,
+    size_bytes: f.size_bytes || null,
+  }));
 
   return {
     title: transfer.title || 'Transfer',
     message: transfer.message || null,
     expires_at: transfer.expires_at,
-    file_count: files.length,
+    file_count: files.length + extraFiles.length,
     total_bytes: totalBytes,
     downloads_remaining: downloadsRemaining(transfer),
-    files: files.map((f) => ({
-      file_id: f.file_id,
-      filename: (useOriginal && f.original_filename) ? f.original_filename : f.filename,
-      size_bytes: f.size_bytes || null,
-    })),
+    files: [...photoEntries, ...extraEntries],
   };
 }
 
@@ -564,20 +620,63 @@ async function streamTransferArchive(transfer, res) {
     }
   }
 
+  // Admin-uploaded deliverable files. Foldered under files/ only when the
+  // transfer also spans multiple events, to match the photo foldering above.
+  const extraFiles = await loadTransferExtraFiles(transfer.id);
+  const usedNames = new Set();
+  for (const extra of extraFiles) {
+    let base = sanitizeForZipEntry(extra.original_filename) || `file-${extra.id}`;
+    if (usedNames.has(base)) base = `${extra.id}-${base}`; // keep same-named uploads apart
+    usedNames.add(base);
+    const name = multiEvent ? `files/${base}` : base;
+    try {
+      const srcStat = storage.kind() === 'local' ? await storage.stat(extra.stored_path) : true;
+      if (!srcStat) throw new Error(`Extra file missing in storage: ${extra.stored_path}`);
+      const stream = await storage.get(extra.stored_path);
+      archive.append(stream, { name });
+      appended += 1;
+    } catch (err) {
+      logger.warn('transferService: skipping extra file in transfer archive', {
+        transferId: transfer.id, extraId: extra.id, error: err.message,
+      });
+    }
+  }
+
   await archive.finalize();
   return appended;
+}
+
+/** Load the admin-uploaded deliverable files for a transfer, in order. */
+async function loadTransferExtraFiles(transferId) {
+  return db('transfer_extra_files')
+    .where('transfer_id', transferId)
+    .orderBy('sort_order', 'asc')
+    .orderBy('id', 'asc')
+    .select('id', 'original_filename', 'stored_path', 'size_bytes', 'mime_type');
 }
 
 /**
  * Stream a single ORIGINAL file from a transfer to `res`. Returns false when
  * the file id isn't part of this transfer or the bytes are missing.
  */
-async function streamTransferFile(transfer, fileId, res) {
+async function streamTransferFile(transfer, rawFileId, res) {
+  // Public file ids are prefixed (see getPublicView): `p<id>` = referenced
+  // gallery photo, `x<id>` = admin-uploaded file. Tolerate a bare number as a
+  // photo id for safety.
+  const idStr = String(rawFileId || '');
+  const prefix = /^[a-z]/i.test(idStr) ? idStr[0].toLowerCase() : 'p';
+  const numId = parseInt(/^[a-z]/i.test(idStr) ? idStr.slice(1) : idStr, 10);
+  if (!Number.isFinite(numId) || numId <= 0) return false;
+
+  if (prefix === 'x') {
+    return streamTransferExtraFile(transfer, numId, res);
+  }
+
   const row = await db('transfer_files')
     .join('photos', 'photos.id', 'transfer_files.photo_id')
     .join('events', 'events.id', 'photos.event_id')
     .where('transfer_files.transfer_id', transfer.id)
-    .where('transfer_files.id', fileId)
+    .where('transfer_files.id', numId)
     .select(
       'photos.*',
       'events.slug as event_slug',
@@ -624,6 +723,143 @@ async function streamTransferFile(transfer, fileId, res) {
     fs.createReadStream(source.value).pipe(res);
   }
   return true;
+}
+
+/** Stream a single admin-uploaded deliverable file from storage to `res`. */
+async function streamTransferExtraFile(transfer, extraId, res) {
+  const row = await db('transfer_extra_files')
+    .where({ id: extraId, transfer_id: transfer.id })
+    .first();
+  if (!row) return false;
+
+  const storage = getStorage();
+  if (storage.kind() === 'local') {
+    const srcStat = await storage.stat(row.stored_path);
+    if (!srcStat) return false;
+  }
+  const stream = await storage.get(row.stored_path);
+  res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(row.original_filename)}"`);
+  stream.pipe(res);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Admin-uploaded deliverable files
+// ---------------------------------------------------------------------------
+
+/** Record an admin-uploaded deliverable file (bytes already written to storage). */
+async function addExtraFile(transferId, { originalFilename, storedPath, sizeBytes, mimeType }) {
+  const maxOrderRow = await db('transfer_extra_files')
+    .where('transfer_id', transferId)
+    .max('sort_order as max')
+    .first();
+  const order = ((maxOrderRow && Number(maxOrderRow.max)) || 0) + 1;
+  const [id] = await db('transfer_extra_files').insert({
+    transfer_id: transferId,
+    original_filename: String(originalFilename || 'file').slice(0, 512),
+    stored_path: storedPath,
+    size_bytes: sizeBytes || null,
+    mime_type: mimeType || null,
+    sort_order: order,
+    created_at: new Date(),
+  }).returning('id');
+  await db('transfers').where({ id: transferId }).update({ updated_at: new Date() });
+  return typeof id === 'object' && id !== null ? id.id : id;
+}
+
+/** Remove one admin-uploaded deliverable file (row + bytes). */
+async function removeExtraFile(transferId, extraId) {
+  const row = await db('transfer_extra_files').where({ id: extraId, transfer_id: transferId }).first();
+  if (!row) return getTransfer(transferId);
+  try {
+    await getStorage().delete(row.stored_path);
+  } catch (err) {
+    logger.warn('transferService: failed to delete extra file', {
+      transferId, path: row.stored_path, error: err.message,
+    });
+  }
+  await db('transfer_extra_files').where({ id: extraId, transfer_id: transferId }).del();
+  await db('transfers').where({ id: transferId }).update({ updated_at: new Date() });
+  return getTransfer(transferId);
+}
+
+/** Delete all admin-uploaded deliverable bytes for a transfer (hard delete). */
+async function removeExtraFiles(transferId) {
+  const rows = await db('transfer_extra_files').where({ transfer_id: transferId }).select('stored_path');
+  const storage = getStorage();
+  for (const r of rows) {
+    if (!r.stored_path) continue;
+    try {
+      await storage.delete(r.stored_path);
+    } catch (err) {
+      logger.warn('transferService: failed to delete extra file', {
+        transferId, path: r.stored_path, error: err.message,
+      });
+    }
+  }
+  try {
+    if (storage.kind() === 'local') {
+      const dir = storage.resolveLocalPath(extraFilesDirKey(transferId));
+      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+    }
+  } catch (_) { /* noop */ }
+}
+
+// ---------------------------------------------------------------------------
+// Email delivery
+// ---------------------------------------------------------------------------
+
+/**
+ * Email the download link to one or more recipients and record them. Sending is
+ * best-effort per address (a bad SMTP config must not fail the whole create);
+ * `sendTemplateEmail` is required lazily to avoid a service-load cycle.
+ */
+async function sendTransferEmails(transferId, emails) {
+  const clean = [...new Set((emails || [])
+    .map((e) => String(e || '').trim())
+    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)))];
+  if (!clean.length) return { sent: 0, recipients: [] };
+
+  const transfer = await db('transfers').where({ id: transferId }).first();
+  if (!transfer) return { sent: 0, recipients: [] };
+
+  const fileCountRow = await db('transfer_files').where('transfer_id', transferId).count('* as c').first();
+  const extraCountRow = await db('transfer_extra_files').where('transfer_id', transferId).count('* as c').first();
+  const fileCount = (Number(fileCountRow?.c) || 0) + (Number(extraCountRow?.c) || 0);
+
+  const { sendTemplateEmail } = require('./emailProcessor');
+  const downloadUrl = `${getFrontendUrl()}/transfer/${transfer.token}`;
+  const vars = {
+    transfer_title: transfer.title || `Transfer #${transferId}`,
+    message: transfer.message || '',
+    download_url: downloadUrl,
+    file_count: String(fileCount),
+    expiry_date: transfer.expires_at ? new Date(transfer.expires_at).toISOString().slice(0, 10) : '',
+  };
+
+  let sent = 0;
+  for (const email of clean) {
+    try {
+      await sendTemplateEmail(email, 'transfer_ready', vars);
+      sent += 1;
+    } catch (err) {
+      logger.warn('transferService: failed to send transfer_ready email', {
+        transferId, email, error: err.message,
+      });
+    }
+    // Record the recipient regardless of delivery so the detail panel shows who
+    // it was addressed to (and a future resend has the list).
+    const existing = await db('transfer_recipients').where({ transfer_id: transferId, email }).first();
+    if (existing) {
+      await db('transfer_recipients').where({ id: existing.id }).update({ last_sent_at: new Date() });
+    } else {
+      await db('transfer_recipients').insert({
+        transfer_id: transferId, email, created_at: new Date(), last_sent_at: new Date(),
+      });
+    }
+  }
+  return { sent, recipients: clean };
 }
 
 // ---------------------------------------------------------------------------
@@ -700,6 +936,7 @@ module.exports = {
   UPLOAD_TOKEN_LENGTH,
   getFrontendUrl,
   uploadDirKey,
+  extraFilesDirKey,
   computeStatus,
   downloadsRemaining,
   // admin CRUD
@@ -710,8 +947,12 @@ module.exports = {
   deleteTransfer,
   addFiles,
   removeFile,
+  addExtraFile,
+  removeExtraFile,
+  removeExtraFiles,
   enableUploads,
   disableUploads,
+  sendTransferEmails,
   // public
   getTransferByToken,
   getTransferByUploadToken,
@@ -720,6 +961,7 @@ module.exports = {
   recordDownload,
   streamTransferArchive,
   streamTransferFile,
+  streamTransferExtraFile,
   // uploads
   assertUploadable,
   addUpload,

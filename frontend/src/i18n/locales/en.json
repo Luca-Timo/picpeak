@@ -244,6 +244,15 @@
     "uploadEnabled": "Upload link enabled",
     "noUploads": "No files uploaded by the client yet.",
     "uploadHint": "Enable this to give the client a 6-character code to send you files (logos etc.).",
+    "createAndSend": "Create & send",
+    "uploadedFiles": "Uploaded files",
+    "addFiles": "Add files",
+    "noUploadedFiles": "No uploaded files. Add files from your computer to include them in the download.",
+    "sentTo": "Emailed to",
+    "delivery": {
+      "link": "Share a link",
+      "email": "Send by email"
+    },
     "col": {
       "title": "Title",
       "files": "Files",
@@ -266,7 +275,15 @@
       "maxDownloads": "Max downloads (0 = unlimited)",
       "allowUploads": "Also give the client an upload link (to send logos etc.)",
       "files": "Files",
-      "noFiles": "No images selected yet."
+      "noFiles": "No images selected yet.",
+      "uploadFiles": "Upload your own files",
+      "chooseFiles": "Choose files",
+      "noUploadFiles": "Optionally add files from your computer to send along.",
+      "delivery": "Delivery",
+      "recipients": "Recipient email addresses",
+      "recipientsPlaceholder": "anna@example.com, ben@example.com",
+      "recipientsCount": "{{count}} recipient(s) — each gets the download link",
+      "recipientsHint": "Separate multiple addresses with commas. Each recipient gets the download link."
     },
     "picker": {
       "title": "Select images from other events",

@@ -68,9 +68,11 @@ router.get('/:token/download', downloadLimiter, tokenValidator, handleAsync(asyn
   await transferService.streamTransferArchive(transfer, res);
 }));
 
-// Download a single original file.
+// Download a single original file. The file id is prefixed — `p<id>` for a
+// referenced gallery photo, `x<id>` for an admin-uploaded deliverable file (a
+// bare number is tolerated as a photo id) — so the service reads the right table.
 router.get('/:token/download/:fileId', downloadLimiter,
-  [...tokenValidator, param('fileId').isInt({ min: 1 })],
+  [...tokenValidator, param('fileId').matches(/^[px]?[0-9]{1,15}$/i)],
   handleAsync(async (req, res) => {
     validateRequest(req);
     const transfer = await transferService.getTransferByToken(req.params.token);
@@ -79,7 +81,7 @@ router.get('/:token/download/:fileId', downloadLimiter,
       return res.status(gate.status).json({ error: 'This link is no longer available', code: gate.code });
     }
     const ok = await transferService.streamTransferFile(
-      transfer, parseInt(req.params.fileId, 10), res,
+      transfer, req.params.fileId, res,
     );
     if (!ok && !res.headersSent) {
       return res.status(404).json({ error: 'File not found', code: 'FILE_NOT_FOUND' });

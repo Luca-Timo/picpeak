@@ -30,6 +30,20 @@ export interface TransferUpload {
   uploaded_at: string;
 }
 
+/** An admin-uploaded deliverable file (not a referenced gallery photo). */
+export interface TransferExtraFile {
+  id: number;
+  filename: string;
+  size_bytes: number | null;
+  mime_type: string | null;
+}
+
+export interface TransferRecipient {
+  id: number;
+  email: string;
+  last_sent_at: string | null;
+}
+
 export interface Transfer {
   id: number;
   token: string;
@@ -44,6 +58,7 @@ export interface Transfer {
   grace_days: number;
   deleted_at: string | null;
   allow_uploads: boolean;
+  delivery_method: 'link' | 'email';
   upload_token: string | null;
   upload_expires_at: string | null;
   created_at: string;
@@ -54,6 +69,8 @@ export interface Transfer {
   file_count: number;
   upload_count: number;
   files?: TransferFile[];
+  extra_files?: TransferExtraFile[];
+  recipients?: TransferRecipient[];
   uploads?: TransferUpload[];
 }
 
@@ -66,6 +83,11 @@ export interface CreateTransferInput {
   allowUploads?: boolean;
   uploadExpiresInDays?: number;
   photoIds?: number[];
+  /** 'link' (default) or 'email' — email the download link to recipientEmails. */
+  deliveryMethod?: 'link' | 'email';
+  recipientEmails?: string[];
+  /** The operator's own files to include in the transfer as deliverables. */
+  files?: File[];
 }
 
 export interface UpdateTransferInput {
@@ -81,7 +103,8 @@ export interface UpdateTransferInput {
 // --- Public shapes ---
 
 export interface PublicTransferFile {
-  file_id: number;
+  // Prefixed on the server: `p<id>` = gallery photo, `x<id>` = uploaded file.
+  file_id: string;
   filename: string;
   size_bytes: number | null;
 }
@@ -117,9 +140,44 @@ export const transfersService = {
     const res = await api.get(`/admin/transfers/${id}`);
     return res.data.transfer;
   },
-  async create(input: CreateTransferInput): Promise<Transfer> {
-    const res = await api.post('/admin/transfers', input);
+  async create(input: CreateTransferInput, onProgress?: (pct: number) => void): Promise<Transfer> {
+    // multipart: the operator's own files ride along with the form fields.
+    const form = new FormData();
+    if (input.title != null) form.append('title', input.title);
+    if (input.message != null) form.append('message', input.message);
+    if (input.expiresInDays != null) form.append('expiresInDays', String(input.expiresInDays));
+    if (input.maxDownloads != null) form.append('maxDownloads', String(input.maxDownloads));
+    if (input.graceDays != null) form.append('graceDays', String(input.graceDays));
+    form.append('allowUploads', String(!!input.allowUploads));
+    if (input.uploadExpiresInDays != null) form.append('uploadExpiresInDays', String(input.uploadExpiresInDays));
+    form.append('photoIds', JSON.stringify(input.photoIds || []));
+    form.append('deliveryMethod', input.deliveryMethod || 'link');
+    form.append('recipientEmails', JSON.stringify(input.recipientEmails || []));
+    (input.files || []).forEach((f) => form.append('files', f));
+    const res = await api.post('/admin/transfers', form, {
+      onUploadProgress: (e) => {
+        if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+      },
+    });
     return res.data.transfer;
+  },
+  /** Add deliverable files to an existing transfer. */
+  async uploadFiles(id: number, files: File[], onProgress?: (pct: number) => void): Promise<Transfer> {
+    const form = new FormData();
+    files.forEach((f) => form.append('files', f));
+    const res = await api.post(`/admin/transfers/${id}/upload-files`, form, {
+      onUploadProgress: (e) => {
+        if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+      },
+    });
+    return res.data.transfer;
+  },
+  async removeExtraFile(id: number, extraId: number): Promise<Transfer> {
+    const res = await api.delete(`/admin/transfers/${id}/extra-files/${extraId}`);
+    return res.data.transfer;
+  },
+  adminExtraFileDownloadUrl(id: number, extraId: number): string {
+    return `${getApiBaseUrl()}/admin/transfers/${id}/extra-files/${extraId}/download`;
   },
   async update(id: number, input: UpdateTransferInput): Promise<Transfer> {
     const res = await api.patch(`/admin/transfers/${id}`, input);
@@ -160,7 +218,7 @@ export const transfersService = {
   publicDownloadAllUrl(token: string): string {
     return `${getApiBaseUrl()}/public/transfer/${token}/download`;
   },
-  publicFileUrl(token: string, fileId: number): string {
+  publicFileUrl(token: string, fileId: string): string {
     return `${getApiBaseUrl()}/public/transfer/${token}/download/${fileId}`;
   },
 

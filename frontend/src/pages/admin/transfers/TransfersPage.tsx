@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import {
   Plus, Send, Link2, Download, Trash2, Upload, X, Copy, Image as ImageIcon,
-  Clock, Ban, RefreshCw,
+  Clock, Ban, RefreshCw, Mail, Paperclip, FileText,
 } from 'lucide-react';
 
 import { Button, Input, Card, CardContent, Loading, useConfirm } from '../../../components/common';
@@ -171,6 +171,16 @@ const CreateTransferModal: React.FC<{ onClose: () => void; onCreated: () => void
   const [allowUploads, setAllowUploads] = useState(false);
   const [picked, setPicked] = useState<PickedPhoto[]>([]);
   const [showPicker, setShowPicker] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const [deliveryMethod, setDeliveryMethod] = useState<'link' | 'email'>('link');
+  const [emails, setEmails] = useState('');
+
+  // Split the free-text recipient field on comma / semicolon / whitespace and
+  // keep only well-formed addresses. Used both to send and to gate the button.
+  const parsedEmails = emails
+    .split(/[,;\s]+/)
+    .map((e) => e.trim())
+    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
 
   const createMutation = useMutationWithToast({
     mutationFn: () => transfersService.create({
@@ -180,11 +190,19 @@ const CreateTransferModal: React.FC<{ onClose: () => void; onCreated: () => void
       maxDownloads: maxDownloads ? parseInt(maxDownloads, 10) : null,
       allowUploads,
       photoIds: picked.map((p) => p.id),
+      files,
+      deliveryMethod,
+      recipientEmails: deliveryMethod === 'email' ? parsedEmails : [],
     }),
     successMessage: t('transfers.created', 'Transfer created'),
     errorMessage: t('transfers.createFailed', 'Could not create transfer'),
     onSuccess: onCreated,
   });
+
+  const addFilesToList = (list: FileList | null) => {
+    if (!list || !list.length) return;
+    setFiles((prev) => [...prev, ...Array.from(list)]);
+  };
 
   const addPicked = (photos: PickedPhoto[]) => {
     setPicked((prev) => {
@@ -257,12 +275,109 @@ const CreateTransferModal: React.FC<{ onClose: () => void; onCreated: () => void
               </div>
             )}
           </div>
+
+          {/* Upload your own files (deliverables not tied to an event) */}
+          <div className="rounded-md border border-neutral-200 p-3 dark:border-neutral-700">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                {t('transfers.field.uploadFiles', 'Upload your own files')} · {files.length}
+              </span>
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-neutral-300 px-2.5 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800">
+                <Upload className="h-4 w-4" />
+                {t('transfers.field.chooseFiles', 'Choose files')}
+                <input
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => { addFilesToList(e.target.files); e.target.value = ''; }}
+                />
+              </label>
+            </div>
+            {files.length === 0 ? (
+              <p className="text-sm text-neutral-400">{t('transfers.field.noUploadFiles', 'Optionally add files from your computer to send along.')}</p>
+            ) : (
+              <ul className="divide-y divide-neutral-100 dark:divide-neutral-800">
+                {files.map((f, idx) => (
+                  <li key={`${f.name}-${idx}`} className="flex items-center justify-between py-1.5 text-sm">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <FileText className="h-4 w-4 shrink-0 text-neutral-400" />
+                      <span className="truncate text-neutral-700 dark:text-neutral-300">{f.name}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFiles((prev) => prev.filter((_, i) => i !== idx))}
+                      className="rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-700"
+                    ><X className="h-3.5 w-3.5" /></button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Delivery: copy a link yourself, or email it to recipients */}
+          <div className="rounded-md border border-neutral-200 p-3 dark:border-neutral-700">
+            <span className="mb-2 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              {t('transfers.field.delivery', 'Delivery')}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDeliveryMethod('link')}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm ${
+                  deliveryMethod === 'link'
+                    ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+                    : 'border-neutral-300 text-neutral-600 dark:border-neutral-600 dark:text-neutral-300'
+                }`}
+              >
+                <Link2 className="h-4 w-4" /> {t('transfers.delivery.link', 'Share a link')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeliveryMethod('email')}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm ${
+                  deliveryMethod === 'email'
+                    ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+                    : 'border-neutral-300 text-neutral-600 dark:border-neutral-600 dark:text-neutral-300'
+                }`}
+              >
+                <Mail className="h-4 w-4" /> {t('transfers.delivery.email', 'Send by email')}
+              </button>
+            </div>
+            {deliveryMethod === 'email' && (
+              <div className="mt-3">
+                <label className="mb-1 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                  {t('transfers.field.recipients', 'Recipient email addresses')}
+                </label>
+                <textarea
+                  value={emails}
+                  onChange={(e) => setEmails(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+                  placeholder={t('transfers.field.recipientsPlaceholder', 'anna@example.com, ben@example.com')}
+                />
+                <p className="mt-1 text-xs text-neutral-400">
+                  {parsedEmails.length > 0
+                    ? t('transfers.field.recipientsCount', '{{count}} recipient(s) — each gets the download link', { count: parsedEmails.length })
+                    : t('transfers.field.recipientsHint', 'Separate multiple addresses with commas. Each recipient gets the download link.')}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex justify-end gap-2 border-t border-neutral-200 px-5 py-3 dark:border-neutral-700">
           <Button variant="outline" onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
-          <Button onClick={() => createMutation.mutate()} isLoading={createMutation.isPending} disabled={picked.length === 0 && !allowUploads}>
-            {t('transfers.create', 'Create transfer')}
+          <Button
+            onClick={() => createMutation.mutate()}
+            isLoading={createMutation.isPending}
+            disabled={
+              (picked.length === 0 && files.length === 0 && !allowUploads)
+              || (deliveryMethod === 'email' && parsedEmails.length === 0)
+            }
+          >
+            {deliveryMethod === 'email'
+              ? t('transfers.createAndSend', 'Create & send')
+              : t('transfers.create', 'Create transfer')}
           </Button>
         </div>
       </div>
@@ -332,6 +447,15 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
     mutationFn: () => transfersService.remove(transferId),
     successMessage: t('transfers.deleted', 'Transfer deleted'),
     onSuccess: onClose,
+  });
+  const uploadFilesMutation = useMutationWithToast({
+    mutationFn: (list: File[]) => transfersService.uploadFiles(transferId, list),
+    successMessage: t('transfers.filesAdded', 'Files added'),
+    onSuccess: () => refetch(),
+  });
+  const removeExtraFileMutation = useMutationWithToast({
+    mutationFn: (extraId: number) => transfersService.removeExtraFile(transferId, extraId),
+    onSuccess: () => refetch(),
   });
 
   const handleDelete = async () => {
@@ -415,6 +539,69 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
                 <p className="text-sm text-neutral-400">{t('transfers.field.noFiles', 'No images selected yet.')}</p>
               )}
             </div>
+
+            {/* Admin-uploaded deliverable files */}
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                  <Paperclip className="h-4 w-4" /> {t('transfers.uploadedFiles', 'Uploaded files')} · {transfer.extra_files?.length || 0}
+                </h3>
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-neutral-300 px-2.5 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800">
+                  <Upload className="h-4 w-4" />
+                  {t('transfers.addFiles', 'Add files')}
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files?.length) uploadFilesMutation.mutate(Array.from(e.target.files));
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+              {transfer.extra_files && transfer.extra_files.length > 0 ? (
+                <ul className="divide-y divide-neutral-100 dark:divide-neutral-800">
+                  {transfer.extra_files.map((f) => (
+                    <li key={f.id} className="flex items-center justify-between py-2 text-sm">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <FileText className="h-4 w-4 shrink-0 text-neutral-400" />
+                        <span className="truncate text-neutral-700 dark:text-neutral-300">{f.filename}</span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-3 text-neutral-500">
+                        <span>{formatBytes(f.size_bytes)}</span>
+                        <a href={transfersService.adminExtraFileDownloadUrl(transferId, f.id)} className="text-primary-600 hover:underline">
+                          <Download className="h-4 w-4" />
+                        </a>
+                        <button
+                          onClick={() => removeExtraFileMutation.mutate(f.id)}
+                          className="rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-red-600 dark:hover:bg-neutral-700"
+                          title={t('common.remove', 'Remove')}
+                        ><X className="h-3.5 w-3.5" /></button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-neutral-400">{t('transfers.noUploadedFiles', 'No uploaded files. Add files from your computer to include them in the download.')}</p>
+              )}
+            </div>
+
+            {/* Email recipients (when delivered by email) */}
+            {transfer.recipients && transfer.recipients.length > 0 && (
+              <div className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-700">
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                  <Mail className="h-4 w-4" /> {t('transfers.sentTo', 'Emailed to')}
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {transfer.recipients.map((r) => (
+                    <span key={r.id} className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
+                      {r.email}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Client uploads */}
             <div className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-700">
