@@ -88,6 +88,11 @@ const KNOWN_FLAGS = [
   // per-event-type presets and global watermark defaults tab. Strictly opt-in;
   // gates all slideshow admin UI (per-event card, type preset, settings tab).
   'slideshow',
+  // PicTransfer (migration 170) — WeTransfer-style cross-event file transfers
+  // (recipient download link + optional client-upload channel). Strictly
+  // opt-in; gates the sidebar entry, the /admin/transfers area AND every
+  // transfer route (admin + public token routes).
+  'transfers',
   // Workflow / automation engine — admin-configurable visual flows (triggers,
   // conditions, branches, loops, approval gates). Strictly opt-in; master
   // kill-switch for the Workflows admin area AND the engine's runtime side
@@ -122,6 +127,7 @@ const DEFAULT_FLAGS = {
   projects: false,
   whatsapp: false,
   slideshow: false,
+  transfers: false,
   workflows: false,
 };
 

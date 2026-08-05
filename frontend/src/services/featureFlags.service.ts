@@ -67,6 +67,11 @@ export type FeatureKey =
   // Live Slideshow ("Diashow") — per-event fullscreen kiosk link + presets +
   // global watermark settings tab. Strictly opt-in; gates all slideshow UI.
   | 'slideshow'
+  // PicTransfer (migration 170) — WeTransfer-style cross-event file transfers:
+  // a token-protected recipient download link plus an optional client-upload
+  // channel. Strictly opt-in; gates the sidebar entry, the /admin/transfers
+  // area and every transfer route (admin + public).
+  | 'transfers'
   // Workflow / automation engine — admin-configurable visual flows (triggers,
   // conditions, branches, loops, approval gates) built on a canvas. Strictly
   // opt-in; gates the Workflows admin area and the engine runtime.

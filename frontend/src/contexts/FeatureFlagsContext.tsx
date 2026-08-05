@@ -64,6 +64,9 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   whatsapp: false,
   // Live Slideshow ("Diashow") — opt-in; gates all slideshow admin UI.
   slideshow: false,
+  // PicTransfer — opt-in; gates the Transfers sidebar entry, the
+  // /admin/transfers area and the public recipient/upload pages.
+  transfers: false,
   // Workflow / automation engine — opt-in; gates the Workflows admin area
   // and the engine runtime (triggers/actions/gates).
   workflows: false,
