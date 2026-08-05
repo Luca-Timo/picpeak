@@ -2,7 +2,7 @@
  * transferService — PicTransfer (#997).
  *
  * A "transfer" is a share link that bundles ORIGINAL photos picked from any
- * number of events and hands them to a recipient (à la WeTransfer). It can
+ * number of events and hands them to a recipient as a download link. It can
  * also open a short (6-char) upload token so the client can send files back
  * (logos etc.).
  *

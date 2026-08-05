@@ -2085,7 +2085,7 @@
       },
       "transfers": {
         "title": "PicTransfer",
-        "description": "Originaldateien aus beliebigen Events als WeTransfer-artigen Download-Link versenden – mit optionalem Kunden-Upload-Code, über den Kunden Ihnen Logos und Dateien zurücksenden können. Strikt optional.",
+        "description": "Originaldateien aus beliebigen Events als sicheren, Token-geschützten Download-Link versenden – mit optionalem Kunden-Upload-Code, über den Kunden Ihnen Logos und Dateien zurücksenden können. Strikt optional.",
         "sidebar": "PicTransfer"
       },
       "workflows": {
