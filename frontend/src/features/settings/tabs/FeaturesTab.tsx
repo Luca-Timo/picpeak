@@ -140,7 +140,7 @@ export const FeaturesTab: React.FC = () => {
             title={t('settings.features.transfers.title', 'PicTransfer')}
             description={t(
               'settings.features.transfers.description',
-              'Send original files from any event(s) as a WeTransfer-style download link, with an optional client-upload code so clients can send you logos and files back. Strictly opt-in.',
+              'Send original files from any event(s) as a secure, token-protected download link, with an optional client-upload code so clients can send you logos and files back. Strictly opt-in.',
             )}
             status="new"
             statusLabel={statusLabel('new')}

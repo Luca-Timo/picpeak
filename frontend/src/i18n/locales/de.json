@@ -244,6 +244,15 @@
     "uploadEnabled": "Upload-Link aktiviert",
     "noUploads": "Der Kunde hat noch keine Dateien hochgeladen.",
     "uploadHint": "Aktivieren Sie dies, um dem Kunden einen 6-stelligen Code zu geben, mit dem er Ihnen Dateien (Logos etc.) senden kann.",
+    "createAndSend": "Erstellen & senden",
+    "uploadedFiles": "Hochgeladene Dateien",
+    "addFiles": "Dateien hinzufügen",
+    "noUploadedFiles": "Keine hochgeladenen Dateien. Fügen Sie Dateien von Ihrem Computer hinzu, um sie in den Download aufzunehmen.",
+    "sentTo": "Per E-Mail an",
+    "delivery": {
+      "link": "Link teilen",
+      "email": "Per E-Mail senden"
+    },
     "col": {
       "title": "Titel",
       "files": "Dateien",
@@ -266,7 +275,15 @@
       "maxDownloads": "Max. Downloads (0 = unbegrenzt)",
       "allowUploads": "Dem Kunden zusätzlich einen Upload-Link geben (für Logos etc.)",
       "files": "Dateien",
-      "noFiles": "Noch keine Bilder ausgewählt."
+      "noFiles": "Noch keine Bilder ausgewählt.",
+      "uploadFiles": "Eigene Dateien hochladen",
+      "chooseFiles": "Dateien auswählen",
+      "noUploadFiles": "Optional Dateien von Ihrem Computer hinzufügen, die mitgesendet werden.",
+      "delivery": "Zustellung",
+      "recipients": "E-Mail-Adressen der Empfänger",
+      "recipientsPlaceholder": "anna@example.com, ben@example.com",
+      "recipientsCount": "{{count}} Empfänger — jeder erhält den Download-Link",
+      "recipientsHint": "Mehrere Adressen durch Kommas trennen. Jeder Empfänger erhält den Download-Link."
     },
     "picker": {
       "title": "Bilder aus anderen Events auswählen",
@@ -2085,7 +2102,7 @@
       },
       "transfers": {
         "title": "PicTransfer",
-        "description": "Originaldateien aus beliebigen Events als WeTransfer-artigen Download-Link versenden – mit optionalem Kunden-Upload-Code, über den Kunden Ihnen Logos und Dateien zurücksenden können. Strikt optional.",
+        "description": "Originaldateien aus beliebigen Events als sicheren, Token-geschützten Download-Link versenden – mit optionalem Kunden-Upload-Code, über den Kunden Ihnen Logos und Dateien zurücksenden können. Strikt optional.",
         "sidebar": "PicTransfer"
       },
       "workflows": {
