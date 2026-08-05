@@ -56,6 +56,9 @@ import { ContractDetailPage } from './pages/admin/contracts/ContractDetailPage';
 import { BlockLibraryPage } from './pages/admin/contracts/BlockLibraryPage';
 import { PaymentCheckPage } from './pages/public/PaymentCheckPage';
 import { AcceptInvitePage } from './pages/public/AcceptInvitePage';
+import { TransfersPage } from './pages/admin/transfers/TransfersPage';
+import { TransferDownloadPage } from './pages/public/TransferDownloadPage';
+import { TransferUploadPage } from './pages/public/TransferUploadPage';
 import {
   CustomerLoginPage,
   CustomerDashboardPage,
@@ -239,6 +242,11 @@ function App() {
                       <Route path="events/:id" element={<EventDetailsPage />} />
                       <Route path="events/:id/feedback" element={<EventFeedbackPage />} />
                       <Route path="archives" element={<ArchivesPage />} />
+                      {/* PicTransfer (#997) — cross-event file transfers.
+                          Gated by the `transfers` flag (strictly opt-in). */}
+                      <Route element={<RequireFeature flag="transfers" />}>
+                        <Route path="transfers" element={<TransfersPage />} />
+                      </Route>
 
                       {/* Feature-gated surfaces — redirect to /admin/dashboard when flag is off. */}
                       <Route element={<RequireFeature flag="analytics" />}>
@@ -411,6 +419,11 @@ function App() {
                       Partial / Not paid" buttons in the payment-
                       check email. */}
                   <Route path="/payment-check/:token" element={<PaymentCheckPage />} />
+
+                  {/* PicTransfer (#997) — recipient download + client upload,
+                      token-only, no auth. */}
+                  <Route path="/transfer/:token" element={<TransferDownloadPage />} />
+                  <Route path="/transfer-upload/:token" element={<TransferUploadPage />} />
 
                   {/* Customer surface (#354). Strictly separate provider /
                       cookie / API surface from /admin/*. The customerPortal

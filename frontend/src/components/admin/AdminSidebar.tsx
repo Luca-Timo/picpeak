@@ -16,6 +16,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Github,
+  Send,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -67,6 +68,7 @@ const navigation: NavItem[] = [
   { nameKey: 'navigation.dashboard', href: '/admin/dashboard', icon: LayoutDashboard, permission: false },
   { nameKey: 'navigation.events',    href: '/admin/events',    icon: Calendar,        permission: 'events.view' },
   { nameKey: 'navigation.archives',  href: '/admin/archives',  icon: Archive,         permission: 'archives.view' },
+  { nameKey: 'navigation.transfers', href: '/admin/transfers', icon: Send,            permission: 'events.view', featureFlag: 'transfers' },
   { nameKey: 'navigation.messages',  href: '/admin/messages', icon: Mail,             permission: 'email.view',     featureFlag: 'messaging' },
   { nameKey: 'admin.analytics',      href: '/admin/analytics', icon: BarChart3,       permission: 'analytics.view', featureFlag: 'analytics' },
   { nameKey: 'navigation.settings',  href: '/admin/settings',  icon: Settings,        permission: 'settings.view' },
