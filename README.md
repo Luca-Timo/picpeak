@@ -173,7 +173,17 @@ PicPeak is free, open source, and self-hostable forever. If it saves you time or
 
 ## 🙏 Acknowledgments
 
-PicPeak is inspired by the best features of commercial platforms while remaining completely open source. It's developed with AI assistance, but human-tested end-to-end, security-audited, and human-reviewed for quality. Special thanks to everyone whose code, reports, and feedback have shaped it.
+PicPeak is inspired by the best features of commercial platforms while remaining completely open source. It's developed with AI assistance, but human-tested end-to-end, security-audited, and human-reviewed for quality.
+
+### 👥 Contributors
+
+A huge thank you to the people whose code, reports, and feedback have shaped PicPeak:
+
+- [**@the-luap**](https://github.com/the-luap) — creator and lead maintainer. Built PicPeak's foundation and the entire gallery experience (events, galleries, uploads, sharing, download protection, templates), plus backup & restore, analytics, system health, branding/theming, and WhatsApp notifications — and the architecture every later feature builds on.
+- [**@Luca-Timo**](https://github.com/Luca-Timo) — native Apple Silicon multi-arch images, external-URL toggle for legal CMS pages, the lazy-loaded folder tree picker, the admin-email picker on event creation, the self-hosted webfont system, the gallery header/banner decoupling, several typed-API refactors, and the CRM + accounting suite (quotes/contracts/invoices, hours logging, calendar, tax report, inbound supplier-invoice capture, expenses, and the Treuhänder/Banana export).
+- [**@Rekoo-PS**](https://github.com/Rekoo-PS) — sharp-eyed bug reporter and product feedback: the login-loop fix, gallery-loading skeletons, redirection cleanup, the mobile-lightbox overhaul, the admin-events search-counter fix, the photo-count column, and the bulk-delete workflow. Also a [BuyMeACoffee](https://buymeacoffee.com/theluap) supporter.
+
+If you've contributed and aren't listed here, please open a PR — this list is meant to grow.
 
 ## 📄 License
 
