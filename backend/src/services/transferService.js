@@ -30,6 +30,7 @@ const { getStorage } = require('./storage');
 const { resolvePhotoStorageKey, resolvePhotoFilePath } = require('./photoResolver');
 const { getUseOriginalFilenames, getZipEntryNames } = require('./downloadFilenameService');
 const { sanitizeForZipEntry } = require('../utils/filenameSanitizer');
+const { filterOwnedEventIds } = require('../middleware/ownership');
 
 // Unambiguous alphabet for the client upload token — no 0/O/1/I/L to keep it
 // easy to read aloud / type from an email. 6 chars ≈ 31 bits; brute force is
@@ -48,12 +49,31 @@ function generateDownloadToken() {
 }
 
 function generateUploadTokenCandidate() {
-  const bytes = crypto.randomBytes(UPLOAD_TOKEN_LENGTH);
   let out = '';
   for (let i = 0; i < UPLOAD_TOKEN_LENGTH; i += 1) {
-    out += UPLOAD_TOKEN_ALPHABET[bytes[i] % UPLOAD_TOKEN_ALPHABET.length];
+    // crypto.randomInt is unbiased over [0, len); a plain byte % len would
+    // over-represent the first (256 % len) characters of the alphabet.
+    out += UPLOAD_TOKEN_ALPHABET[crypto.randomInt(0, UPLOAD_TOKEN_ALPHABET.length)];
   }
   return out;
+}
+
+/**
+ * Return the subset of `photoIds` whose event the admin may act on. Mirrors the
+ * event-ownership rule used everywhere else (super_admin unrestricted; others
+ * get events they created plus ownerless legacy events) so a scoped admin can
+ * never bundle — and then hand out via a public token — originals from an event
+ * they don't own. Foreign and non-existent ids are both dropped.
+ */
+async function filterOwnedPhotoIds(admin, photoIds) {
+  const ids = [...new Set((photoIds || []).map((n) => parseInt(n, 10)).filter(Boolean))];
+  if (!ids.length) return [];
+  const photos = await db('photos').whereIn('id', ids).select('id', 'event_id');
+  const eventIds = [...new Set(photos.map((p) => p.event_id))];
+  if (!eventIds.length) return [];
+  const { allowed } = await filterOwnedEventIds(admin, eventIds);
+  const allowedEvents = new Set(allowed.map(Number));
+  return photos.filter((p) => allowedEvents.has(Number(p.event_id))).map((p) => p.id);
 }
 
 async function generateUniqueUploadToken(conn = db) {
@@ -103,7 +123,8 @@ function downloadsRemaining(transfer) {
 // Admin CRUD
 // ---------------------------------------------------------------------------
 
-async function createTransfer(input, adminId) {
+async function createTransfer(input, admin) {
+  const adminId = admin && admin.id ? admin.id : null;
   const {
     title = '',
     message = null,
@@ -157,20 +178,25 @@ async function createTransfer(input, adminId) {
   const transferId = typeof id === 'object' && id !== null ? id.id : id;
 
   if (Array.isArray(photoIds) && photoIds.length) {
-    await addFiles(transferId, photoIds);
+    await addFiles(transferId, photoIds, admin);
   }
 
   return getTransfer(transferId);
 }
 
-async function listTransfers({ search = '' } = {}) {
-  let query = db('transfers')
-    .whereNull('deleted_at')
-    .orderBy('created_at', 'desc');
+async function listTransfers({ search = '', admin } = {}) {
+  let query = db('transfers').whereNull('deleted_at');
 
+  // Non-super_admins only see their own transfers (plus ownerless legacy rows).
+  // Otherwise the list — which used to carry each transfer's download token —
+  // handed every admin a public link to everyone else's originals.
+  if (admin && admin.roleName !== 'super_admin') {
+    query = query.where((q) => q.whereNull('created_by').orWhere('created_by', admin.id));
+  }
   if (search) {
     query = query.where('title', 'like', `%${search}%`);
   }
+  query = query.orderBy('created_at', 'desc');
 
   const rows = await query;
   const ids = rows.map((r) => r.id);
@@ -193,11 +219,19 @@ async function listTransfers({ search = '' } = {}) {
   const uploadCountMap = new Map(uploadCounts.map((r) => [r.transfer_id, Number(r.count)]));
   const extraCountMap = new Map(extraCounts.map((r) => [r.transfer_id, Number(r.count)]));
 
-  return rows.map((r) => ({
-    ...serializeTransfer(r),
-    file_count: (fileCountMap.get(r.id) || 0) + (extraCountMap.get(r.id) || 0),
-    upload_count: uploadCountMap.get(r.id) || 0,
-  }));
+  return rows.map((r) => {
+    // The list view never needs the secrets — a row is a summary, and the
+    // recipient/upload links live on the detail response. Strip them so the
+    // list can't be used to read another (or one's own, over-broadly) token.
+    const safe = serializeTransfer(r);
+    delete safe.token;
+    delete safe.upload_token;
+    delete safe.download_url;
+    delete safe.upload_url;
+    safe.file_count = (fileCountMap.get(r.id) || 0) + (extraCountMap.get(r.id) || 0);
+    safe.upload_count = uploadCountMap.get(r.id) || 0;
+    return safe;
+  });
 }
 
 function serializeTransfer(row) {
@@ -295,6 +329,11 @@ async function getTransfer(id) {
   };
 }
 
+/** Minimal row for the ownership guard: { id, created_by } or undefined. */
+async function getTransferOwner(id) {
+  return db('transfers').where({ id }).whereNull('deleted_at').first('id', 'created_by');
+}
+
 async function updateTransfer(id, fields) {
   const row = await db('transfers').where({ id }).first();
   if (!row) return null;
@@ -350,13 +389,16 @@ async function deleteTransfer(id) {
   return true;
 }
 
-async function addFiles(transferId, photoIds) {
+async function addFiles(transferId, photoIds, admin) {
   const ids = [...new Set((photoIds || []).map((n) => parseInt(n, 10)).filter(Boolean))];
   if (!ids.length) return getTransfer(transferId);
 
-  // Only real, existing photos.
-  const existing = await db('photos').whereIn('id', ids).select('id');
-  const validIds = new Set(existing.map((p) => p.id));
+  // Only photos whose event the caller owns (ownership implies existence).
+  // Without this a scoped admin could bundle any event's originals and hand
+  // them out through the public download token — every ownership control
+  // bypassed. Mirrors the GHSA-wrg5 fix pattern.
+  const ownedIds = await filterOwnedPhotoIds(admin, ids);
+  const validIds = new Set(ownedIds);
 
   // Skip photos already attached (the unique index would reject them anyway).
   const already = await db('transfer_files')
@@ -943,6 +985,8 @@ module.exports = {
   createTransfer,
   listTransfers,
   getTransfer,
+  getTransferOwner,
+  filterOwnedPhotoIds,
   updateTransfer,
   deleteTransfer,
   addFiles,

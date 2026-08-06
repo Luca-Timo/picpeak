@@ -99,7 +99,6 @@ export const TransfersPage: React.FC = () => {
                   <th className="px-4 py-3 font-medium">{t('transfers.col.downloads', 'Downloads')}</th>
                   <th className="px-4 py-3 font-medium">{t('transfers.col.expires', 'Expires')}</th>
                   <th className="px-4 py-3 font-medium">{t('transfers.col.uploads', 'Uploads')}</th>
-                  <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
@@ -123,15 +122,6 @@ export const TransfersPage: React.FC = () => {
                     </td>
                     <td className="px-4 py-3 text-neutral-500 dark:text-neutral-400">{fmtDate(tr.expires_at)}</td>
                     <td className="px-4 py-3">{tr.allow_uploads ? tr.upload_count : '—'}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        title={t('transfers.copyLink', 'Copy download link')}
-                        className="rounded p-1.5 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-700"
-                        onClick={(e) => { e.stopPropagation(); copyLink(recipientUrl(tr.token)); }}
-                      >
-                        <Link2 className="h-4 w-4" />
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>

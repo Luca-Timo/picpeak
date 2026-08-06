@@ -123,9 +123,31 @@ router.use(adminAuth);
 // actable even by a direct API hit (the sidebar already hides the surface).
 router.use(requireFeatureFlag('transfers'));
 
+/**
+ * Ownership guard for every `/:id` route. A non-super_admin may only touch a
+ * transfer they created (or an ownerless legacy row). Foreign AND missing ids
+ * both 404 so the endpoint isn't an existence oracle — the same posture
+ * filterOwnedEventIds takes. super_admin is unrestricted.
+ */
+async function requireTransferOwnership(req, res, next) {
+  try {
+    if (req.admin.roleName === 'super_admin') return next();
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid id' });
+    const owner = await transferService.getTransferOwner(id);
+    if (!owner) return res.status(404).json({ error: 'Transfer not found' });
+    if (owner.created_by != null && owner.created_by !== req.admin.id) {
+      return res.status(404).json({ error: 'Transfer not found' });
+    }
+    return next();
+  } catch (err) {
+    return next(err);
+  }
+}
+
 // List
 router.get('/', requirePermission('events.view'), handleAsync(async (req, res) => {
-  const transfers = await transferService.listTransfers({ search: req.query.q || '' });
+  const transfers = await transferService.listTransfers({ search: req.query.q || '', admin: req.admin });
   return successResponse(res, { transfers });
 }));
 
@@ -156,7 +178,7 @@ router.post('/',
       uploadExpiresInDays: b.uploadExpiresInDays,
       photoIds,
       deliveryMethod,
-    }, req.admin.id);
+    }, req.admin);
 
     await storeExtraFiles(transfer.id, req.files);
 
@@ -168,6 +190,11 @@ router.post('/',
     return successResponse(res, { transfer: fresh }, 201, 'Transfer created');
   }),
 );
+
+// Ownership guard for every `/:id`, `/:id/files`, `/:id/download`, … route.
+// One mount covers them all — the POST `/` create + GET `/` list above are not
+// matched (no :id), and each route keeps its own requirePermission.
+router.use('/:id', requireTransferOwnership);
 
 // Detail
 router.get('/:id',
@@ -234,7 +261,7 @@ router.post('/:id/files',
     validateRequest(req);
     const existing = await transferService.getTransfer(parseInt(req.params.id, 10));
     if (!existing) return res.status(404).json({ error: 'Transfer not found' });
-    const transfer = await transferService.addFiles(parseInt(req.params.id, 10), req.body.photoIds);
+    const transfer = await transferService.addFiles(parseInt(req.params.id, 10), req.body.photoIds, req.admin);
     return successResponse(res, { transfer }, 200, 'Files added');
   }),
 );
