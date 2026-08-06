@@ -82,7 +82,7 @@ exports.up = async function (knex) {
 </div>
 
 <p style="margin: 24px 0;">
-  <a href="{{download_url}}" style="background-color: #5C8762; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Download your files</a>
+  <a href="{{download_url}}" class="button">Download your files</a>
 </p>
 
 <p><strong>Files:</strong> {{file_count}}<br>
@@ -115,7 +115,7 @@ Your PicPeak Installation`,
 </div>
 
 <p style="margin: 24px 0;">
-  <a href="{{download_url}}" style="background-color: #5C8762; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Dateien herunterladen</a>
+  <a href="{{download_url}}" class="button">Dateien herunterladen</a>
 </p>
 
 <p><strong>Dateien:</strong> {{file_count}}<br>
