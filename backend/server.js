@@ -20,6 +20,7 @@ const path = require('path');
 const { initializeDatabase, db } = require('./src/database/db');
 const { startFileWatcher } = require('./src/services/fileWatcher');
 const { startExpirationChecker } = require('./src/services/expirationChecker');
+const { startTransferCleanup } = require('./src/services/transferCleanupService');
 const { startRevealScheduler } = require('./src/services/revealScheduler');
 const { startInvoiceScheduler } = require('./src/services/invoiceSchedulerService');
 const { initializeTransporter, startEmailQueueProcessor } = require('./src/services/emailProcessor');
@@ -785,8 +786,12 @@ app.use('/api/admin/ledger',     require('./src/routes/adminLedger'));
 app.use('/api/admin/vat-codes',  require('./src/routes/adminVatCodes'));
 app.use('/api/admin/system-health', require('./src/routes/adminSystemHealth'));
 app.use('/api/admin/dev',        require('./src/routes/adminDev'));
+app.use('/api/admin/transfers',  require('./src/routes/adminTransfers'));
 app.use('/api/public/quotes',  require('./src/routes/publicQuotes'));
 app.use('/api/public/contracts', require('./src/routes/publicContracts'));
+// PicTransfer (#997): recipient download + client upload, token-authenticated.
+app.use('/api/public/transfer', require('./src/routes/publicTransfer'));
+app.use('/api/public/transfer-upload', require('./src/routes/publicTransferUpload'));
 app.use('/api/public/payment-check', require('./src/routes/publicPaymentCheck'));
 app.use('/api/public/workflow-approvals', require('./src/routes/publicWorkflowApprovals'));
 app.use('/api/admin/event-types', require('./src/routes/adminEventTypes'));
@@ -904,6 +909,9 @@ async function startServer() {
     
     // Start expiration checker
     startExpirationChecker();
+    // PicTransfer retention sweep (#997): expire links, notify admins, and
+    // hard-delete client uploads once the grace window elapses.
+    startTransferCleanup();
     // Reveal-mode scheduler (#838): minutely stamp for scheduled reveals.
     startRevealScheduler();
     // CRM invoice scheduler: hourly tick to flush scheduled-send invoices
