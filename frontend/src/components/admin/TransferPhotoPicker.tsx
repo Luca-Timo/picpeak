@@ -15,6 +15,7 @@ import { Button, Input, Loading } from '../common';
 import { AdminAuthenticatedImage } from './AdminAuthenticatedImage';
 import { eventsService } from '../../services/events.service';
 import { photosService, type AdminPhoto } from '../../services/photos.service';
+import { useAdminAuth } from '../../contexts/AdminAuthContext';
 
 export interface PickedPhoto {
   id: number;
@@ -38,6 +39,7 @@ export const TransferPhotoPicker: React.FC<TransferPhotoPickerProps> = ({
   isSaving = false,
 }) => {
   const { t } = useTranslation();
+  const { user } = useAdminAuth();
   const [eventSearch, setEventSearch] = useState('');
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [selectedEventName, setSelectedEventName] = useState<string>('');
@@ -52,7 +54,18 @@ export const TransferPhotoPicker: React.FC<TransferPhotoPickerProps> = ({
     queryKey: ['transfer-picker-events', eventSearch],
     queryFn: () => eventsService.getEvents(1, 100, undefined, eventSearch || undefined),
   });
-  const events = eventsData?.events || [];
+  // Only offer events the caller may bundle — mirrors the backend's
+  // filterOwnedEventIds gate (super_admin unrestricted; others get their own
+  // events plus ownerless legacy ones). Without this the picker would show
+  // events whose photos the API silently drops on create — a dead control.
+  // The backend is still the enforcer; this just keeps the UI honest.
+  const roleName = user?.roleName || user?.role?.name;
+  const isSuperAdmin = roleName === 'super_admin';
+  const events = (eventsData?.events || []).filter((ev) => {
+    if (isSuperAdmin) return true;
+    const owner = (ev as { created_by?: number | null }).created_by;
+    return owner == null || owner === user?.id;
+  });
 
   const { data: photos, isLoading: photosLoading } = useQuery({
     queryKey: ['transfer-picker-photos', selectedEventId],
