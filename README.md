@@ -95,9 +95,10 @@ Unlike expensive SaaS solutions, PicPeak gives you:
 - 📊 **Tax Report & Accountant Export** — period-scoped income/cost report with VAT breakdown; PDF/CSV plus a Treuhänder/Banana (Swiss/LI) journal export
 - 🌍 **VAT & Multi-currency** — single VAT-code registry snapshotted onto each document
 
-> ⚠️ Feature-flagged off by default. Seeded contracts, QR/IBAN and tax defaults are **examples only** — review your own legal **and tax** regulations first. Read **[docs/crm-disclaimers.md](docs/crm-disclaimers.md)** before enabling.
-
 </details>
+
+> [!WARNING]
+> **CRM & Accounting — examples only, verify locally.** Feature-flagged off by default. Seeded contract blocks are written by the maintainer, **not a lawyer**; QR-bills/SEPA payloads and every tax, VAT and Treuhänder/Banana figure are computed from your input and defaults and are **jurisdiction-specific guidance only**. Have your lawyer review contracts, scan a test QR with your bank's app, and verify all numbers with your accountant / Treuhänder / tax authority before customer-facing use. Read **[docs/crm-disclaimers.md](docs/crm-disclaimers.md)** first.
 
 ## 📖 Documentation
 
@@ -179,9 +180,20 @@ PicPeak is inspired by the best features of commercial platforms while remaining
 
 A huge thank you to the people whose code, reports, and feedback have shaped PicPeak:
 
-- [**@the-luap**](https://github.com/the-luap) — creator and lead maintainer. Built PicPeak's foundation and the entire gallery experience (events, galleries, uploads, sharing, download protection, templates), plus backup & restore, analytics, system health, branding/theming, and WhatsApp notifications — and the architecture every later feature builds on.
-- [**@Luca-Timo**](https://github.com/Luca-Timo) — native Apple Silicon multi-arch images, external-URL toggle for legal CMS pages, the lazy-loaded folder tree picker, the admin-email picker on event creation, the self-hosted webfont system, the gallery header/banner decoupling, several typed-API refactors, and the CRM + accounting suite (quotes/contracts/invoices, hours logging, calendar, tax report, inbound supplier-invoice capture, expenses, and the Treuhänder/Banana export).
-- [**@Rekoo-PS**](https://github.com/Rekoo-PS) — sharp-eyed bug reporter and product feedback: the login-loop fix, gallery-loading skeletons, redirection cleanup, the mobile-lightbox overhaul, the admin-events search-counter fix, the photo-count column, and the bulk-delete workflow. Also a [BuyMeACoffee](https://buymeacoffee.com/theluap) supporter.
+**[@the-luap](https://github.com/the-luap)** — creator and lead maintainer
+- Gallery foundation (events, uploads, sharing, download protection, templates)
+- Backup & restore, analytics, branding/theming
+- The architecture every later feature builds on
+
+**[@Luca-Timo](https://github.com/Luca-Timo)**
+- Native Apple Silicon multi-arch images
+- CRM & accounting suite (quotes/contracts/invoices)
+- Hours logging & Treuhänder/Banana tax export
+- Gallery header/banner decoupling
+
+**[@Rekoo-PS](https://github.com/Rekoo-PS)** — bug reports & product feedback
+- Login-loop fix, mobile-lightbox overhaul, bulk-delete workflow
+- Also a [BuyMeACoffee](https://buymeacoffee.com/theluap) supporter
 
 If you've contributed and aren't listed here, please open a PR — this list is meant to grow.
 
