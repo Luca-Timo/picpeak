@@ -26,7 +26,7 @@ const HTML_EN = `
 {{/if}}
 
 <p style="margin: 28px 0;">
-  <a href="{{download_url}}" style="background-color: #5C8762; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">Download your files</a>
+  <a href="{{download_url}}" class="button">Download your files</a>
 </p>
 
 <p style="color: #555555;">The link stays active until {{expiry_date}} and includes {{file_count}} file(s).</p>
@@ -64,7 +64,7 @@ const HTML_DE = `
 {{/if}}
 
 <p style="margin: 28px 0;">
-  <a href="{{download_url}}" style="background-color: #5C8762; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;">Dateien herunterladen</a>
+  <a href="{{download_url}}" class="button">Dateien herunterladen</a>
 </p>
 
 <p style="color: #555555;">Der Link ist bis zum {{expiry_date}} gültig und enthält {{file_count}} Datei(en).</p>
