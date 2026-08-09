@@ -200,6 +200,7 @@
     "dashboard": "Dashboard",
     "events": "Events",
     "archives": "Archives",
+    "transfers": "PicTransfer",
     "messages": "Messages",
     "settings": "Settings",
     "systemHealth": "System health",
@@ -214,6 +215,112 @@
     "accounting": "Accounting",
     "workflows": "Workflows",
     "betaTag": "Beta"
+  },
+  "transfers": {
+    "title": "PicTransfer",
+    "subtitle": "Send original files from any event as a download link.",
+    "new": "New transfer",
+    "create": "Create transfer",
+    "created": "Transfer created",
+    "createFailed": "Could not create transfer",
+    "empty": "No transfers yet. Create one to share files.",
+    "untitled": "Untitled transfer",
+    "linkCopied": "Link copied to clipboard",
+    "copyFailed": "Could not copy link",
+    "copyLink": "Copy link",
+    "downloadAll": "Download all",
+    "expiresOn": "Expires",
+    "disableLink": "Disable link",
+    "reactivate": "Re-activate (14 days)",
+    "reactivated": "Link re-activated",
+    "disabled": "Link disabled",
+    "filesAdded": "Files added",
+    "deleted": "Transfer deleted",
+    "deleteConfirmTitle": "Delete transfer?",
+    "deleteConfirmBody": "This removes the link and any client uploads. Source event photos are not affected.",
+    "addImages": "Add images",
+    "clientUpload": "Client upload",
+    "disableUploads": "Disable",
+    "enableUploads": "Enable upload link",
+    "uploadEnabled": "Upload link enabled",
+    "noUploads": "No files uploaded by the client yet.",
+    "uploadHint": "Enable this to give the client a 6-character code to send you files (logos etc.).",
+    "createAndSend": "Create & send",
+    "uploadedFiles": "Uploaded files",
+    "addFiles": "Add files",
+    "noUploadedFiles": "No uploaded files. Add files from your computer to include them in the download.",
+    "sentTo": "Emailed to",
+    "delivery": {
+      "link": "Share a link",
+      "email": "Send by email"
+    },
+    "col": {
+      "title": "Title",
+      "files": "Files",
+      "status": "Status",
+      "downloads": "Downloads",
+      "expires": "Expires",
+      "uploads": "Uploads"
+    },
+    "status": {
+      "active": "Active",
+      "expired": "Expired",
+      "deleted": "Deleted"
+    },
+    "field": {
+      "title": "Title",
+      "titlePlaceholder": "e.g. Wedding finals for the Smiths",
+      "message": "Message (optional)",
+      "messagePlaceholder": "Shown to the recipient on the download page",
+      "expiresInDays": "Link active for (days)",
+      "maxDownloads": "Max downloads (0 = unlimited)",
+      "allowUploads": "Also give the client an upload link (to send logos etc.)",
+      "files": "Files",
+      "noFiles": "No images selected yet.",
+      "uploadFiles": "Upload your own files",
+      "chooseFiles": "Choose files",
+      "noUploadFiles": "Optionally add files from your computer to send along.",
+      "delivery": "Delivery",
+      "recipients": "Recipient email addresses",
+      "recipientsPlaceholder": "anna@example.com, ben@example.com",
+      "recipientsCount": "{{count}} recipient(s) — each gets the download link",
+      "recipientsHint": "Separate multiple addresses with commas. Each recipient gets the download link."
+    },
+    "picker": {
+      "title": "Select images from other events",
+      "searchEvents": "Search events…",
+      "pickEvent": "Pick an event to browse its photos",
+      "noPhotos": "No photos in this event",
+      "select": "Select",
+      "deselect": "Deselect",
+      "alreadyAdded": "Added",
+      "selectedCount": "{{count}} selected",
+      "addSelected": "Add selected",
+      "lightbox": "Lightbox"
+    },
+    "public": {
+      "notFoundTitle": "Link not found",
+      "notFoundBody": "This transfer link is invalid or has been removed.",
+      "expiredTitle": "This link has expired",
+      "expiredBody": "Please ask the sender for a new link.",
+      "limitTitle": "Download limit reached",
+      "limitBody": "This transfer has reached its maximum number of downloads.",
+      "availableUntil": "Available until {{date}}",
+      "fileSummary": "{{count}} files",
+      "downloadFile": "Download"
+    },
+    "upload": {
+      "unavailableTitle": "Upload link unavailable",
+      "unavailableBody": "This upload link is invalid or has expired.",
+      "doneTitle": "Thank you!",
+      "doneBody": "Your files were uploaded successfully.",
+      "uploadMore": "Upload more",
+      "dropzone": "Click to choose files or drag them here",
+      "limits": "Up to {{files}} files, {{mb}} MB each",
+      "tooBig": "Each file must be {{mb}} MB or smaller",
+      "send": "Upload {{count}} files",
+      "failed": "Upload failed. Please try again."
+    }
   },
   "workflows": {
     "title": "Workflows",
@@ -1537,6 +1644,11 @@
       "slideshow": {
         "title": "Live Slideshow",
         "description": "A separate fullscreen \"Diashow\" link per event for projectors at live events — auto-picks-up new uploads, with per-event-type presets and global watermark defaults under Settings → Slideshow."
+      },
+      "transfers": {
+        "title": "PicTransfer",
+        "description": "Send original files from any event(s) as a secure, token-protected download link, with an optional client-upload code so clients can send you logos and files back. Strictly opt-in.",
+        "sidebar": "PicTransfer"
       },
       "workflows": {
         "title": "Workflows",

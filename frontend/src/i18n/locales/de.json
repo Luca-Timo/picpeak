@@ -203,6 +203,7 @@
     "settings": "Einstellungen",
     "systemHealth": "Systemzustand",
     "archives": "Archive",
+    "transfers": "PicTransfer",
     "emailSettings": "E-Mail-Einstellungen",
     "branding": "Markenidentität",
     "eventTypes": "Veranstaltungstypen",
@@ -214,6 +215,112 @@
     "accounting": "Buchhaltung",
     "workflows": "Workflows",
     "betaTag": "Beta"
+  },
+  "transfers": {
+    "title": "PicTransfer",
+    "subtitle": "Originaldateien aus beliebigen Events als Download-Link versenden.",
+    "new": "Neuer Transfer",
+    "create": "Transfer erstellen",
+    "created": "Transfer erstellt",
+    "createFailed": "Transfer konnte nicht erstellt werden",
+    "empty": "Noch keine Transfers. Erstellen Sie einen, um Dateien zu teilen.",
+    "untitled": "Unbenannter Transfer",
+    "linkCopied": "Link in die Zwischenablage kopiert",
+    "copyFailed": "Link konnte nicht kopiert werden",
+    "copyLink": "Link kopieren",
+    "downloadAll": "Alle herunterladen",
+    "expiresOn": "Läuft ab",
+    "disableLink": "Link deaktivieren",
+    "reactivate": "Reaktivieren (14 Tage)",
+    "reactivated": "Link reaktiviert",
+    "disabled": "Link deaktiviert",
+    "filesAdded": "Dateien hinzugefügt",
+    "deleted": "Transfer gelöscht",
+    "deleteConfirmTitle": "Transfer löschen?",
+    "deleteConfirmBody": "Dies entfernt den Link und alle Kunden-Uploads. Die Fotos der Quell-Events sind nicht betroffen.",
+    "addImages": "Bilder hinzufügen",
+    "clientUpload": "Kunden-Upload",
+    "disableUploads": "Deaktivieren",
+    "enableUploads": "Upload-Link aktivieren",
+    "uploadEnabled": "Upload-Link aktiviert",
+    "noUploads": "Der Kunde hat noch keine Dateien hochgeladen.",
+    "uploadHint": "Aktivieren Sie dies, um dem Kunden einen 6-stelligen Code zu geben, mit dem er Ihnen Dateien (Logos etc.) senden kann.",
+    "createAndSend": "Erstellen & senden",
+    "uploadedFiles": "Hochgeladene Dateien",
+    "addFiles": "Dateien hinzufügen",
+    "noUploadedFiles": "Keine hochgeladenen Dateien. Fügen Sie Dateien von Ihrem Computer hinzu, um sie in den Download aufzunehmen.",
+    "sentTo": "Per E-Mail an",
+    "delivery": {
+      "link": "Link teilen",
+      "email": "Per E-Mail senden"
+    },
+    "col": {
+      "title": "Titel",
+      "files": "Dateien",
+      "status": "Status",
+      "downloads": "Downloads",
+      "expires": "Läuft ab",
+      "uploads": "Uploads"
+    },
+    "status": {
+      "active": "Aktiv",
+      "expired": "Abgelaufen",
+      "deleted": "Gelöscht"
+    },
+    "field": {
+      "title": "Titel",
+      "titlePlaceholder": "z. B. Hochzeitsfinals für Familie Schmidt",
+      "message": "Nachricht (optional)",
+      "messagePlaceholder": "Wird dem Empfänger auf der Download-Seite angezeigt",
+      "expiresInDays": "Link aktiv für (Tage)",
+      "maxDownloads": "Max. Downloads (0 = unbegrenzt)",
+      "allowUploads": "Dem Kunden zusätzlich einen Upload-Link geben (für Logos etc.)",
+      "files": "Dateien",
+      "noFiles": "Noch keine Bilder ausgewählt.",
+      "uploadFiles": "Eigene Dateien hochladen",
+      "chooseFiles": "Dateien auswählen",
+      "noUploadFiles": "Optional Dateien von Ihrem Computer hinzufügen, die mitgesendet werden.",
+      "delivery": "Zustellung",
+      "recipients": "E-Mail-Adressen der Empfänger",
+      "recipientsPlaceholder": "anna@example.com, ben@example.com",
+      "recipientsCount": "{{count}} Empfänger — jeder erhält den Download-Link",
+      "recipientsHint": "Mehrere Adressen durch Kommas trennen. Jeder Empfänger erhält den Download-Link."
+    },
+    "picker": {
+      "title": "Bilder aus anderen Events auswählen",
+      "searchEvents": "Events suchen…",
+      "pickEvent": "Wählen Sie ein Event, um dessen Fotos zu durchsuchen",
+      "noPhotos": "Keine Fotos in diesem Event",
+      "select": "Auswählen",
+      "deselect": "Abwählen",
+      "alreadyAdded": "Hinzugefügt",
+      "selectedCount": "{{count}} ausgewählt",
+      "addSelected": "Auswahl hinzufügen",
+      "lightbox": "Lightbox"
+    },
+    "public": {
+      "notFoundTitle": "Link nicht gefunden",
+      "notFoundBody": "Dieser Transfer-Link ist ungültig oder wurde entfernt.",
+      "expiredTitle": "Dieser Link ist abgelaufen",
+      "expiredBody": "Bitte fordern Sie beim Absender einen neuen Link an.",
+      "limitTitle": "Download-Limit erreicht",
+      "limitBody": "Dieser Transfer hat die maximale Anzahl an Downloads erreicht.",
+      "availableUntil": "Verfügbar bis {{date}}",
+      "fileSummary": "{{count}} Dateien",
+      "downloadFile": "Herunterladen"
+    },
+    "upload": {
+      "unavailableTitle": "Upload-Link nicht verfügbar",
+      "unavailableBody": "Dieser Upload-Link ist ungültig oder abgelaufen.",
+      "doneTitle": "Vielen Dank!",
+      "doneBody": "Ihre Dateien wurden erfolgreich hochgeladen.",
+      "uploadMore": "Weitere hochladen",
+      "dropzone": "Zum Auswählen klicken oder Dateien hierher ziehen",
+      "limits": "Bis zu {{files}} Dateien, je {{mb}} MB",
+      "tooBig": "Jede Datei darf höchstens {{mb}} MB groß sein",
+      "send": "{{count}} Dateien hochladen",
+      "failed": "Upload fehlgeschlagen. Bitte erneut versuchen."
+    }
   },
   "workflows": {
     "title": "Workflows",
@@ -1992,6 +2099,11 @@
       "slideshow": {
         "title": "Live-Diashow",
         "description": "Ein separater Vollbild-„Diashow“-Link pro Event für Beamer bei Live-Events – übernimmt neue Uploads automatisch, mit Voreinstellungen je Event-Typ und globalen Wasserzeichen-Vorgaben unter Einstellungen → Diashow."
+      },
+      "transfers": {
+        "title": "PicTransfer",
+        "description": "Originaldateien aus beliebigen Events als sicheren, Token-geschützten Download-Link versenden – mit optionalem Kunden-Upload-Code, über den Kunden Ihnen Logos und Dateien zurücksenden können. Strikt optional.",
+        "sidebar": "PicTransfer"
       },
       "workflows": {
         "title": "Workflows",

@@ -23,6 +23,7 @@ import {
   Wallet,
   FolderKanban,
   MonitorPlay,
+  Send,
   Workflow,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -132,6 +133,20 @@ export const FeaturesTab: React.FC = () => {
             sidebarHiddenLabel={sidebarHiddenLabel}
             enabled={staged.slideshow}
             onToggle={(next) => setFlag('slideshow', next)}
+          />
+
+          <FeatureCard
+            icon={Send}
+            title={t('settings.features.transfers.title', 'PicTransfer')}
+            description={t(
+              'settings.features.transfers.description',
+              'Send original files from any event(s) as a secure, token-protected download link, with an optional client-upload code so clients can send you logos and files back. Strictly opt-in.',
+            )}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarLabel={t('settings.features.transfers.sidebar', 'PicTransfer')}
+            enabled={staged.transfers}
+            onToggle={(next) => setFlag('transfers', next)}
           />
         </Section>
 
