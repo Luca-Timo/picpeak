@@ -5798,7 +5798,7 @@
       "create": "Entwurf erstellen",
       "createdToast": "Vertrag erstellt.",
       "customer": "Kunde",
-      "disclaimerBody": "Die vorausgefüllten Baustein-Texte sind NUR BEISPIELE — vom Maintainer verfasst, nicht von einem Anwalt. Lassen Sie jeden verwendeten Baustein von Ihrem eigenen Anwalt prüfen, bevor Sie den Vertrag versenden. Siehe docs/crm-disclaimers.md.",
+      "disclaimerBody": "Die vorausgefüllten Baustein-Texte sind NUR BEISPIELE — vom Maintainer verfasst, nicht von einem Anwalt. Lassen Sie jeden verwendeten Baustein von Ihrem eigenen Anwalt prüfen, bevor Sie den Vertrag versenden. Siehe https://docs.picpeak.app/features/crm/disclaimers.",
       "disclaimerTitle": "Anwaltliche Prüfung erforderlich",
       "eventDate": "Anlassdatum",
       "eventHelp": "Wird auf den Vertrag übernommen und an jeden daraus erzeugten Anlass / jede Rechnung weitergegeben. Setzen Sie dies, damit Kundenportal und Mahn-E-Mails die richtige Bezeichnung \"Hochzeit Doe / Müller\" anzeigen.",

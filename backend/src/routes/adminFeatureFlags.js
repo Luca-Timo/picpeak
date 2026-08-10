@@ -63,7 +63,7 @@ const KNOWN_FLAGS = [
   // are a standalone legal document type with their own composition
   // (blocks) and signing flow (in-browser canvas + wet-signed PDF
   // upload). Seeded block bodies are EXAMPLES ONLY; admins must have a
-  // lawyer review before sending. See docs/crm-disclaimers.md.
+  // lawyer review before sending. See https://docs.picpeak.app/features/crm/disclaimers.
   'contracts',
   // Accounting (migration 122). Top-level Accounting area — inbound
   // supplier invoices, expenses + re-bill, and the tax report (which

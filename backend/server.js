@@ -496,7 +496,7 @@ app.use('/uploads', setCorsHeaders, secureStatic(path.join(storagePath, 'uploads
 // are stable (e.g. Inter/400.woff2), so an admin replacing the file on disk
 // must be able to roll out the change to clients. With max-age + Last-Modified
 // (set by express.static from file mtime), browsers send If-Modified-Since
-// after expiry and pick up the new version automatically. See docs/fonts.md
+// after expiry and pick up the new version automatically. See https://docs.picpeak.app/guides/custom-fonts
 // "Replacing an existing font" for the documented rollout strategy.
 const fontStaticOpts = { maxAge: '7d' };
 app.use(

@@ -512,7 +512,7 @@ export const ContractEditorPage: React.FC = () => {
           {t('contracts.editor.disclaimerTitle', 'Lawyer review required')}
         </p>
         <p className="text-xs">
-          {t('contracts.editor.disclaimerBody', 'The seeded block bodies are EXAMPLES ONLY — written by the maintainer, not by a lawyer. Have your own lawyer review every block you include before sending the contract. See docs/crm-disclaimers.md.')}
+          {t('contracts.editor.disclaimerBody', 'The seeded block bodies are EXAMPLES ONLY — written by the maintainer, not by a lawyer. Have your own lawyer review every block you include before sending the contract. See https://docs.picpeak.app/features/crm/disclaimers.')}
         </p>
         <p className="text-xs mt-2 pt-2 border-t border-amber-200/60 dark:border-amber-800/60">
           {t('contracts.editor.schriftformWarning',
