@@ -43,7 +43,7 @@ export type FeatureKey =
   // signed in-browser (canvas + checkbox) or via wet-signed PDF
   // upload. Independent of quotes / bills — contracts can be sent on
   // their own. Seeded block bodies are examples only; admins must
-  // have their lawyer review before sending. See docs/crm-disclaimers.md.
+  // have their lawyer review before sending. See https://docs.picpeak.app/features/crm/disclaimers.
   | 'contracts'
   // Accounting (migration 122). Top-level MASTER for the Accounting
   // section (separate from CRM). Its sub-features (tax export, incoming

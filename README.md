@@ -64,7 +64,7 @@ docker compose up -d
 # Access at http://localhost:3000
 ```
 
-On first start, open **http://localhost:3000/admin** and follow the in-browser setup to create your admin account. Full details — the one-time setup token, Docker file permissions, and ARM64 notes — are in **[First-run setup](docs/_to-migrate/first-run-setup.md)**.
+On first start, open **http://localhost:3000/admin** and follow the in-browser setup to create your admin account. Full details — the one-time setup token, Docker file permissions, and ARM64 notes — are in **[First-run setup](https://docs.picpeak.app/getting-started/first-login)**.
 
 > **Updating / release channels:** set `PICPEAK_CHANNEL` (`stable` default, or `beta`) in `.env`, then `docker compose pull && docker compose up -d`. See [RELEASING.md](RELEASING.md) for the promotion cadence.
 
@@ -80,11 +80,11 @@ Unlike expensive SaaS solutions, PicPeak gives you:
 
 ## ✨ Features
 
-**For photographers** — drag & drop upload, auto-expiring & password-protected galleries, automated emails, an analytics dashboard, custom themes, a public landing page, and a [Live Slideshow](docs/live-slideshow.md) projector view that auto-picks-up new uploads during live events.
+**For photographers** — drag & drop upload, auto-expiring & password-protected galleries, automated emails, an analytics dashboard, custom themes, a public landing page, and a [Live Slideshow](https://docs.picpeak.app/features/live-slideshow) projector view that auto-picks-up new uploads during live events.
 
 **For clients** — clean mobile-optimized galleries, one-click bulk downloads, smart search, optional guest uploads, and download protection (watermarking + right-click prevention).
 
-**Technical** — Docker-ready, automatic thumbnail generation, external media reference mode, smart archiving of expired galleries, S3-compatible [storage backends](docs/_to-migrate/storage-backends.md), [webhooks](docs/_to-migrate/webhooks.md), and security-first defaults (JWT, rate limiting, CORS).
+**Technical** — Docker-ready, automatic thumbnail generation, external media reference mode, smart archiving of expired galleries, S3-compatible [storage backends](https://docs.picpeak.app/features/storage-backends), [webhooks](https://docs.picpeak.app/features/webhooks), and security-first defaults (JWT, rate limiting, CORS).
 
 <details>
 <summary><strong>🧾 For studios — CRM &amp; Accounting (Beta, off by default)</strong></summary>
@@ -98,7 +98,7 @@ Unlike expensive SaaS solutions, PicPeak gives you:
 </details>
 
 > [!WARNING]
-> **CRM & Accounting — examples only, verify locally.** Feature-flagged off by default. Seeded contract blocks are written by the maintainer, **not a lawyer**; QR-bills/SEPA payloads and every tax, VAT and Treuhänder/Banana figure are computed from your input and defaults and are **jurisdiction-specific guidance only**. Have your lawyer review contracts, scan a test QR with your bank's app, and verify all numbers with your accountant / Treuhänder / tax authority before customer-facing use. Read **[docs/crm-disclaimers.md](docs/crm-disclaimers.md)** first.
+> **CRM & Accounting — examples only, verify locally.** Feature-flagged off by default. Seeded contract blocks are written by the maintainer, **not a lawyer**; QR-bills/SEPA payloads and every tax, VAT and Treuhänder/Banana figure are computed from your input and defaults and are **jurisdiction-specific guidance only**. Have your lawyer review contracts, scan a test QR with your bank's app, and verify all numbers with your accountant / Treuhänder / tax authority before customer-facing use. Read **[the CRM disclaimers](https://docs.picpeak.app/features/crm/disclaimers)** first.
 
 ## 📖 Documentation
 
@@ -109,14 +109,14 @@ Full documentation lives at **[docs.picpeak.app](https://docs.picpeak.app)** —
 | 🚀 Deployment (Docker, env, reverse proxy, SSL) | [docs.picpeak.app/deployment](https://docs.picpeak.app/deployment) |
 | ⚙️ Admin settings reference | [docs.picpeak.app/guides/admin-settings](https://docs.picpeak.app/guides/admin-settings) |
 | 🎯 Creating events | [docs.picpeak.app/guides/creating-events](https://docs.picpeak.app/guides/creating-events) |
-| 📽️ Live Slideshow | [docs/live-slideshow.md](docs/live-slideshow.md) |
-| 💾 Backup & Restore | [docs/backup-restore.md](docs/backup-restore.md) |
+| 📽️ Live Slideshow | [docs.picpeak.app/features/live-slideshow](https://docs.picpeak.app/features/live-slideshow) |
+| 💾 Backup & Restore | [docs.picpeak.app/guides/backup-restore](https://docs.picpeak.app/guides/backup-restore) |
 | 🔌 API reference | [docs.picpeak.app/api](https://docs.picpeak.app/api) |
-| 🪝 Webhooks | [docs/_to-migrate/webhooks.md](docs/_to-migrate/webhooks.md) |
-| 💾 Storage backends (local / S3) | [docs/_to-migrate/storage-backends.md](docs/_to-migrate/storage-backends.md) |
-| 💻 System requirements & tuning | [docs/_to-migrate/system-requirements.md](docs/_to-migrate/system-requirements.md) |
-| 🧾 CRM & Accounting | [docs.picpeak.app/features/crm](https://docs.picpeak.app/features/crm) · [disclaimers](docs/crm-disclaimers.md) |
-| 🗺️ Roadmap | [docs/_to-migrate/roadmap.md](docs/_to-migrate/roadmap.md) |
+| 🪝 Webhooks | [docs.picpeak.app/features/webhooks](https://docs.picpeak.app/features/webhooks) |
+| 💾 Storage backends (local / S3) | [docs.picpeak.app/features/storage-backends](https://docs.picpeak.app/features/storage-backends) |
+| 💻 System requirements & tuning | [docs.picpeak.app/deployment/system-requirements](https://docs.picpeak.app/deployment/system-requirements) |
+| 🧾 CRM & Accounting | [docs.picpeak.app/features/crm](https://docs.picpeak.app/features/crm) · [disclaimers](https://docs.picpeak.app/features/crm/disclaimers) |
+| 🗺️ Roadmap | [GitHub Issues](https://github.com/PicPeak/picpeak/issues) |
 
 **Project meta:** [Contributing](CONTRIBUTING.md) · [License](LICENSE) · [Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
 
@@ -141,7 +141,7 @@ Full documentation lives at **[docs.picpeak.app](https://docs.picpeak.app)** —
 
 - **Backend**: Node.js, Express, SQLite/PostgreSQL
 - **Frontend**: React, Tailwind CSS, Framer Motion
-- **Storage**: Local filesystem (default) or S3-compatible object store (AWS S3, MinIO, R2, B2, Wasabi, Spaces) — see [Storage Backends](docs/_to-migrate/storage-backends.md)
+- **Storage**: Local filesystem (default) or S3-compatible object store (AWS S3, MinIO, R2, B2, Wasabi, Spaces) — see [Storage Backends](https://docs.picpeak.app/features/storage-backends)
 - **Email**: SMTP with customizable templates
 - **Analytics**: Privacy-focused with Umami integration
 - **External media**: point PicPeak at `EXTERNAL_MEDIA_ROOT` to reference existing originals read-only, index quickly, and generate thumbnails on demand
