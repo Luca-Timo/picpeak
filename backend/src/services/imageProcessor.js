@@ -736,7 +736,75 @@ async function extractCaptureDate(imagePath) {
   }
 }
 
+/**
+ * Downscale to fit inside a box, for the download-resolution feature (#858).
+ *
+ * `fit: 'inside'` + `withoutEnlargement` is exactly the "up to" semantic the
+ * requester asked for on #858: the box is a maximum, aspect ratio is kept
+ * (so a 3:2 box leaves a 4:3 photo slightly smaller than the box on one
+ * edge), and an image already smaller than the box is returned untouched
+ * rather than upscaled into mush.
+ *
+ * Takes and returns a Buffer so callers can chain resize → watermark without
+ * a tmp file. Returns the input unchanged when `box` is null ('original').
+ * Never throws: on a corrupt/undecodable source it logs and returns the input,
+ * because failing a download outright is worse than serving the full size.
+ */
+async function resizeToBox(inputBuffer, box, options = {}) {
+  if (!box || !box.width || !box.height) return inputBuffer;
+  try {
+    const probe = sharp(inputBuffer, { limitInputPixels: 268402689, failOn: 'none' });
+    const metadata = await probe.metadata();
+    // Already inside the box — hand back the original bytes rather than
+    // re-encoding, which would only cost quality and CPU.
+    if (metadata.width && metadata.height
+      && metadata.width <= box.width && metadata.height <= box.height) {
+      return inputBuffer;
+    }
+
+    const format = (metadata.format || '').toLowerCase();
+    // Animated sources must be re-opened with `animated: true`, otherwise
+    // sharp keeps only the first frame and the download silently loses its
+    // animation. `.rotate()` would flatten an animated source, so it is
+    // applied only to stills (where EXIF orientation actually exists).
+    const animated = (metadata.pages || 1) > 1;
+    const image = animated
+      ? sharp(inputBuffer, { limitInputPixels: 268402689, failOn: 'none', animated: true })
+      : probe.rotate();
+
+    let pipeline = image
+      .resize(box.width, box.height, { fit: 'inside', withoutEnlargement: true });
+
+    // Re-encode in the SOURCE format. The download routes keep the original
+    // filename and mime type, so emitting JPEG for a .gif would ship
+    // mislabelled bytes. GIF is an accepted upload format (multerConfig.photos).
+    //
+    // HEIC/HEIF is the exception: sharp builds generally cannot ENCODE it, and
+    // the browser can't display the original anyway (see originalNeedsPreview
+    // in gallery.js). Rather than emit JPEG bytes under a .heic name, leave
+    // those downloads at original size — correct-but-larger beats
+    // mislabelled-and-broken.
+    if (format === 'heif' || format === 'heic') {
+      return inputBuffer;
+    }
+    if (format === 'png') {
+      pipeline = pipeline.png({ compressionLevel: 6 });
+    } else if (format === 'webp') {
+      pipeline = pipeline.webp({ quality: options.quality || 90 });
+    } else if (format === 'gif') {
+      pipeline = pipeline.gif();
+    } else {
+      pipeline = pipeline.jpeg({ quality: options.quality || 90, mozjpeg: true });
+    }
+    return await pipeline.toBuffer();
+  } catch (e) {
+    logger.warn(`resizeToBox failed (${box.width}x${box.height}), serving original: ${e.message}`);
+    return inputBuffer;
+  }
+}
+
 module.exports = {
+  resizeToBox,
   generateThumbnail,
   isThumbnailValid,
   ensureThumbnail,

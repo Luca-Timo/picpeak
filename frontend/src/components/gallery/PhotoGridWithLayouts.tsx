@@ -3,9 +3,10 @@ import { Package } from 'lucide-react';
 import { toast as toastify } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 
-import type { Photo } from '../../types';
+import type { Photo, DownloadResolutionChoice } from '../../types';
 import { useDownloadPhoto } from '../../hooks/useGallery';
 import { PhotoLightbox } from './PhotoLightbox';
+import { DownloadResolutionModal } from './DownloadResolutionModal';
 import { Button } from '../common';
 import { galleryService } from '../../services/gallery.service';
 import { analyticsService } from '../../services/analytics.service';
@@ -42,6 +43,10 @@ interface PhotoGridWithLayoutsProps {
   expiresAt?: string | null;
   feedbackEnabled?: boolean;
   allowDownloads?: boolean;
+  // Resolution picker choices (#858). Empty/absent = no picker, download
+  // straight at the gallery's standard size.
+  downloadChoices?: DownloadResolutionChoice[];
+  downloadStandard?: string;
   protectionLevel?: 'basic' | 'standard' | 'enhanced' | 'maximum';
   useEnhancedProtection?: boolean;
   useCanvasRendering?: boolean;
@@ -87,6 +92,8 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
   feedbackOptions,
   onFeedbackChange,
   allowDownloads = true,
+  downloadChoices,
+  downloadStandard,
   protectionLevel = 'standard',
   useEnhancedProtection = false,
   useCanvasRendering = false,
@@ -117,6 +124,8 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
   const [openFeedbackInitially, setOpenFeedbackInitially] = useState<boolean>(false);
   const [localSelectedPhotos, setLocalSelectedPhotos] = useState<Set<number>>(new Set());
   const [localSelectionMode, setLocalSelectionMode] = useState(false);
+  // Non-null while the resolution picker is open (#858); holds the ids it applies to.
+  const [resolutionPickerIds, setResolutionPickerIds] = useState<number[] | null>(null);
   const downloadPhotoMutation = useDownloadPhoto();
   
   // Use parent state if provided, otherwise use local state
@@ -183,6 +192,14 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
   const handleDownloadSelected = async () => {
     if (selectedPhotos.size === 0) return;
     const ids = Array.from(selectedPhotos);
+
+    // Resolution picker (#858): when the gallery offers a choice, hand off to
+    // the modal — it drives the job build and does the download itself.
+    if (downloadChoices && downloadChoices.length > 1) {
+      setResolutionPickerIds(ids);
+      return;
+    }
+
     toastify.info(t('gallery.downloading', { count: ids.length }));
 
     try {
@@ -215,6 +232,11 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
   const layoutProps = {
     photos,
     slug,
+    // Full-page layouts own their bulk-download control, so the resolution
+    // picker has to reach them too (#858) — otherwise premium/story galleries
+    // silently skip the choice the admin enabled.
+    downloadChoices,
+    onPickResolution: (ids: number[]) => setResolutionPickerIds(ids),
     onPhotoClick: handlePhotoClick,
     onOpenPhotoWithFeedback: handleOpenWithFeedback,
     onFeedbackChange: onFeedbackChange,
@@ -385,6 +407,25 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
           initialShowFeedback={openFeedbackInitially}
           onFeedbackChange={onFeedbackChange}
           showOriginalFilename={showOriginalFilename}
+        />
+      )}
+
+      {/* Download size picker (#858) — drives the job build and the download. */}
+      {resolutionPickerIds && downloadChoices && (
+        <DownloadResolutionModal
+          slug={slug}
+          choices={downloadChoices}
+          standardResolution={downloadStandard}
+          photoIds={resolutionPickerIds}
+          onClose={() => {
+            setResolutionPickerIds(null);
+            setSelectedPhotos(new Set());
+            if (parentToggleSelectionMode) {
+              parentToggleSelectionMode();
+            } else {
+              setLocalSelectionMode(false);
+            }
+          }}
         />
       )}
     </>

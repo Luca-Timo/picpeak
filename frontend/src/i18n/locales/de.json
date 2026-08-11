@@ -153,7 +153,9 @@
     "showAll": "Alle anzeigen",
     "confirm": "Bestätigen",
     "show": "Einblenden",
-    "poweredBy": "Bereitgestellt von"
+    "poweredBy": "Bereitgestellt von",
+    "on": "an",
+    "off": "aus"
   },
   "upload": {
     "photoCategory": "Fotokategorie",
@@ -1044,7 +1046,17 @@
       "socials": "Soziale Netzwerke"
     },
     "photosCount_one": "{{count}} Foto",
-    "photosCount_other": "{{count}} Fotos"
+    "photosCount_other": "{{count}} Fotos",
+    "chooseResolution": "Downloadgröße wählen",
+    "resolutionUpTo": "bis zu {{width}} × {{height}} px",
+    "prepareDownload": "Download vorbereiten",
+    "preparingDownload": "Download wird vorbereitet…",
+    "preparingHint": "Fotos werden verkleinert — bei großen Galerien kann das einen Moment dauern.",
+    "preparingProgress": "{{count}} Fotos verpackt",
+    "downloadReady": "Ihr Download ist bereit",
+    "downloadNow": "Herunterladen",
+    "downloadPrepFailed": "Vorbereitung fehlgeschlagen",
+    "downloadPrepTimeout": "Das dauert länger als erwartet. Bitte erneut versuchen."
   },
   "categories": {
     "title": "Fotokategorien",
@@ -2284,6 +2296,26 @@
         "logoutFromIdpHint": "Die Abmeldung von PicPeak beendet auch die IdP-Sitzung (RP-initiated Logout). Gilt nur für Sitzungen, die per SSO angemeldet wurden; ohne diese Option bleibt die IdP-Sitzung bestehen und der nächste SSO-Klick meldet direkt wieder an.",
         "postLogoutRedirectUri": "Post-Logout-Redirect-URI (beim IdP-Client registrieren, z. B. Keycloak „Valid post logout redirect URIs“)"
       }
+    },
+    "downloads": {
+      "title": "Download-Auflösungen",
+      "intro": "Die Standardgröße gibt jede Galerie standardmäßig heraus. Einzelne Galerien können das überschreiben.",
+      "standard": "Standardauflösung",
+      "original": "Original (volle Größe)",
+      "picker": "Gäste die Downloadgröße wählen lassen",
+      "pickerHint": "Fügt Sammel-Downloads eine Größenauswahl hinzu. Eigene Größen werden bei Bedarf erzeugt und sind nie größer als der Standard.",
+      "allowOriginal": "„Original“ in der Auswahl anbieten",
+      "allowOriginalHint": "Standardmäßig aus: Wer die Standardgröße reduziert, möchte in der Regel keine Dateien in voller Auflösung herausgeben.",
+      "presets": "Verfügbare Größen",
+      "presetsHint": "Größen sind eine Obergrenze — das Seitenverhältnis bleibt erhalten und Fotos werden nie vergrößert.",
+      "label": "Bezeichnung",
+      "width": "Breite",
+      "height": "Höhe",
+      "eventTitle": "Download-Auflösung",
+      "eventIntro": "Überschreibt die globalen Download-Einstellungen nur für diese Galerie. „Erben“ folgt Einstellungen → Download-Auflösungen.",
+      "inheritWith": "Erben ({{value}})",
+      "effective": "Gibt derzeit heraus: {{standard}}",
+      "pickerOn": "Gäste dürfen eine andere Größe wählen"
     }
   },
   "branding": {
