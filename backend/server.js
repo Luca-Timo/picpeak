@@ -723,6 +723,7 @@ app.use('/api/admin/photo-export', require('./src/routes/adminPhotoExport'));
 app.use('/api/admin/css-templates', require('./src/routes/adminCssTemplates'));
 app.use('/api/admin/events', require('./src/routes/adminEventRename'));
 app.use('/api/admin/users', require('./src/routes/adminUsers'));
+app.use('/api/admin/roles', require('./src/routes/adminRoles'));
 // Customer portal (#354). The customerPortal feature flag is a
 // VISIBILITY toggle for the admin surface, not a kill switch for
 // customer access. Enforcement:
@@ -996,6 +997,17 @@ async function startServer() {
       await seedBuiltinWorkflowsAtBoot(db, logger);
     } catch (err) {
       logger.warn('built-in workflow seed failed at boot:', err.message);
+    }
+
+    // Self-heal the RBAC catalog: ensure super_admin holds every permission
+    // (the "Admin tracks all" guarantee) and the solo_photographer preset
+    // exists. New perms never need a compensation migration. See
+    // _permissionsBoot.js + project_permission_gating.
+    try {
+      const { seedPermissionsAtBoot } = require('./src/services/_permissionsBoot');
+      await seedPermissionsAtBoot(db, logger);
+    } catch (err) {
+      logger.warn('permissions self-heal failed at boot:', err.message);
     }
 
     // Install-from-backup trigger. If `RESTORE_ON_INSTALL` (or

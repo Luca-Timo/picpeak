@@ -58,6 +58,7 @@ import { CrmSettingsPage } from './settings/CrmSettingsPage';
 import { ReminderTemplatesPage } from './settings/ReminderTemplatesPage';
 import { BlockLibraryPage } from './contracts/BlockLibraryPage';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
+import { usePermissions } from '../../contexts/PermissionsContext';
 import { Briefcase, Receipt, ScrollText, Landmark, Smartphone, MonitorPlay } from 'lucide-react';
 
 // Tab keys driving the inner-nav. Must include every key used in
@@ -120,10 +121,56 @@ function isValidTab(value: string | null): value is TabType {
   return value !== null && (ALL_TAB_KEYS as string[]).includes(value);
 }
 
+// Per-tab permission gating (multi-photographer permission project). Each tab is
+// shown when the user holds ANY of the listed permissions. `settings.view` is in
+// every set as the baseline "can read settings" grant, so admin/super_admin (who
+// hold it) keep seeing every tab — no regression. A specialised role WITHOUT
+// settings.view (e.g. a bookkeeper granted only settings.banking) reaches
+// Settings via the broadened sidebar gate and sees only the tabs whose specific
+// permission it holds. Backend routes enforce the same perms regardless of UI.
+const TAB_PERMISSIONS: Record<TabType, string[]> = {
+  features:          ['settings.view', 'settings.features'],
+  general:           ['settings.view', 'settings.domains'],
+  events:            ['settings.view'],
+  eventTypes:        ['settings.view', 'event_types.view', 'event_types.manage'],
+  branding:          ['settings.view', 'branding.view', 'branding.edit'],
+  categories:        ['settings.view'],
+  thumbnails:        ['settings.view'],
+  downloads:         ['settings.view'],
+  styling:           ['settings.view', 'branding.edit'],
+  cms:               ['settings.view', 'cms.view', 'cms.edit'],
+  email:             ['settings.view', 'email.view', 'email.edit'],
+  moderation:        ['settings.view'],
+  security:          ['settings.view', 'settings.security'],
+  sso:               ['settings.view', 'settings.security'],
+  imageSecurity:     ['settings.view', 'image_security.view', 'image_security.manage'],
+  seo:               ['settings.view'],
+  apiTokens:         ['settings.view', 'settings.integrations'],
+  webhooks:          ['settings.view', 'settings.integrations'],
+  status:            ['settings.view', 'system.view', 'system.manage'],
+  analytics:         ['settings.view', 'analytics.view'],
+  backup:            ['settings.view', 'backup.view'],
+  businessProfile:   ['settings.view', 'settings.banking'],
+  crm:               ['settings.view'],
+  contracts:         ['settings.view', 'contracts.view', 'contracts.manage'],
+  reminderTemplates: ['settings.view', 'email.view', 'email.edit'],
+  accounting:        ['settings.view', 'settings.banking', 'accounting.view', 'accounting.manage'],
+  whatsapp:          ['settings.view', 'whatsapp.view', 'whatsapp.manage'],
+  slideshow:         ['settings.view'],
+};
+
+// The union of every settings-tab permission — used to decide whether to show
+// the Settings entry in the sidebar for a specialised role that lacks the
+// general settings.view read but holds one specific config permission.
+export const SETTINGS_TAB_PERMISSIONS: string[] = Array.from(
+  new Set(Object.values(TAB_PERMISSIONS).flat())
+);
+
 export const SettingsPage: React.FC = () => {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { flags, isLoading: flagsLoading } = useFeatureFlags();
+  const { hasAnyPermission } = usePermissions();
 
   // Read ?tab=… on mount; default to Features per the redesign.
   const initialTab: TabType = isValidTab(searchParams.get('tab'))
@@ -218,6 +265,28 @@ export const SettingsPage: React.FC = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flagsLoading, flags.quotes, flags.bills, flags.contracts, flags.reminderEmails, flags.accounting, flags.whatsapp, flags.slideshow, activeTab]);
+
+  // Permission snap-back: if the active tab isn't permitted for this role (e.g.
+  // a deep-linked ?tab=security a photographer can't access), move to the first
+  // tab that is both permitted and not feature-flag-gated-off. Sits above the
+  // isLoading early return to keep hook ordering stable.
+  useEffect(() => {
+    if (flagsLoading) return;
+    if (hasAnyPermission(TAB_PERMISSIONS[activeTab] ?? ['settings.view'])) return;
+    const flagOff: Partial<Record<TabType, boolean>> = {
+      crm: !(flags.quotes || flags.bills || flags.contracts),
+      contracts: !flags.contracts,
+      reminderTemplates: !flags.reminderEmails,
+      accounting: !flags.accounting,
+      whatsapp: !flags.whatsapp,
+      slideshow: !flags.slideshow,
+    };
+    const firstVisible = ALL_TAB_KEYS.find(
+      (k) => !flagOff[k] && hasAnyPermission(TAB_PERMISSIONS[k] ?? ['settings.view'])
+    );
+    if (firstVisible && firstVisible !== activeTab) setActiveTab(firstVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flagsLoading, activeTab, flags.quotes, flags.bills, flags.contracts, flags.reminderEmails, flags.accounting, flags.whatsapp, flags.slideshow]);
 
   if (isLoading) {
     return (
@@ -314,7 +383,14 @@ export const SettingsPage: React.FC = () => {
     },
   ];
 
-  const allItems = navGroups.flatMap((g) => g.items);
+  // Permission-filter each group's items, then drop groups left empty. A tab is
+  // shown when the user holds any of its TAB_PERMISSIONS (super_admin bypasses
+  // in the context). See TAB_PERMISSIONS above.
+  const visibleGroups = navGroups
+    .map((g) => ({ ...g, items: g.items.filter((i) => hasAnyPermission(TAB_PERMISSIONS[i.key] ?? ['settings.view'])) }))
+    .filter((g) => g.items.length > 0);
+
+  const allItems = visibleGroups.flatMap((g) => g.items);
   const activeItem = allItems.find((i) => i.key === activeTab) ?? allItems[0];
   // (Visibility snap-back is handled in the useEffect above, which sits
   // before the isLoading early return to keep hook ordering stable.)
@@ -345,7 +421,7 @@ export const SettingsPage: React.FC = () => {
             onChange={(e) => setActiveTab(e.target.value as TabType)}
             className="w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
-            {navGroups.map((group) => (
+            {visibleGroups.map((group) => (
               <optgroup key={group.label} label={group.label}>
                 {group.items.map((item) => (
                   <option key={item.key} value={item.key}>
@@ -363,7 +439,7 @@ export const SettingsPage: React.FC = () => {
             aria-label={t('settings.navAriaLabel', 'Settings navigation')}
             className="sticky top-6 space-y-6"
           >
-            {navGroups.map((group) => (
+            {visibleGroups.map((group) => (
               <div key={group.label}>
                 <h3 className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
                   {group.label}

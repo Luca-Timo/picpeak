@@ -31,7 +31,8 @@
     "cancel": "Cancel",
     "tabs": {
       "users": "Users",
-      "invitations": "Invitations"
+      "invitations": "Invitations",
+      "roles": "Roles"
     },
     "stats": {
       "totalUsers": "Total Users",
@@ -5978,5 +5979,40 @@
     "rebills": "open re-bills",
     "hoursOnly": "Just the hours",
     "rebillsOnly": "Just the re-bills"
+  },
+  "roleEditor": {
+    "loading": "Loading roles…",
+    "subtitle": "Define what each role can do. Start from a preset by cloning it, then trim or extend the permissions.",
+    "newRole": "New role",
+    "systemRole": "System",
+    "permCount": "{{count}} permissions",
+    "userCount": "{{count}} users",
+    "view": "View",
+    "clone": "Clone",
+    "create": "Create role",
+    "createTitle": "Create role",
+    "editTitle": "Edit role: {{name}}",
+    "superAdminLocked": "Super Admin always holds every permission and cannot be edited. It automatically gains new permissions as features are added.",
+    "displayName": "Display name",
+    "displayNamePlaceholder": "e.g. Photographer",
+    "key": "Key (identifier)",
+    "keyLocked": "The key is fixed once a role is created.",
+    "description": "Description",
+    "descriptionPlaceholder": "What this role is for",
+    "permissions": "Permissions",
+    "selectedCount": "{{count}} selected",
+    "selectAll": "Select all",
+    "clearAll": "Clear all",
+    "nameError": "Use lowercase letters, numbers and underscores (2–49 chars, starting with a letter).",
+    "created": "Role created",
+    "updated": "Role updated",
+    "deleted": "Role deleted",
+    "saveError": "Failed to save role",
+    "deleteError": "Failed to delete role",
+    "confirmDelete": {
+      "title": "Delete role?",
+      "message": "Permanently delete the \"{{name}}\" role? This cannot be undone.",
+      "hasUsers": "Reassign the {{count}} user(s) holding \"{{name}}\" before deleting it."
+    }
   }
 }
