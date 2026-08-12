@@ -6,7 +6,7 @@ const { body, validationResult } = require('express-validator');
 const { db, logActivity } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
 const { adminAuth } = require('../middleware/auth');
-const { requirePermission } = require('../middleware/permissions');
+const { requirePermission, userHasAnyPermission } = require('../middleware/permissions');
 const { clearMaintenanceCache } = require('../middleware/maintenance');
 const { clearSettingsCache } = require('../services/rateLimitService');
 const {
@@ -288,7 +288,8 @@ router.put('/customer-surface', adminAuth, requirePermission('settings.edit'), a
 // Accounting settings (km rate, per-diem rate, require-proof). Read via the
 // generic GET /:type ('accounting'); this is the typed write. Rates are
 // integer minor units; verify legal/tax guidance with a Treuhaender.
-router.put('/accounting', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+// Migration 174: VAT/accounting config is money-adjacent → settings.banking.
+router.put('/accounting', adminAuth, requirePermission('settings.banking'), async (req, res) => {
   try {
     const updates = [];
     const setInt = (key) => {
@@ -577,7 +578,8 @@ router.put('/downloads', adminAuth, requirePermission('settings.edit'), async (r
 
 // Read the SSO config. The secret is redacted to a set/unset flag; the
 // computed redirect URI is included for copy-paste into the IdP client.
-router.get('/sso', adminAuth, requirePermission('settings.view'), async (req, res) => {
+// Migration 174: SSO/OIDC + security config → settings.security.
+router.get('/sso', adminAuth, requirePermission(['settings.view', 'settings.security']), async (req, res) => {
   try {
     const oidcService = require('../services/oidcService');
     const cfg = await oidcService.getOidcConfig();
@@ -610,7 +612,7 @@ router.get('/sso', adminAuth, requirePermission('settings.view'), async (req, re
   }
 });
 
-router.put('/sso', adminAuth, requirePermission('settings.edit'), [
+router.put('/sso', adminAuth, requirePermission('settings.security'), [
   body('oidc_enabled').optional().isBoolean(),
   body('oidc_issuer_url').optional({ checkFalsy: true }).isURL({ protocols: ['http', 'https'], require_tld: false }),
   body('oidc_client_id').optional().isString().trim(),
@@ -717,7 +719,7 @@ router.put('/sso', adminAuth, requirePermission('settings.edit'), [
 
 // Server-side discovery probe: confirms the issuer is reachable and speaks
 // OIDC before the admin flips the enable toggle. Uses the SAVED config.
-router.post('/sso/test', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.post('/sso/test', adminAuth, requirePermission('settings.security'), async (req, res) => {
   try {
     const oidcService = require('../services/oidcService');
     const cfg = await oidcService.getOidcConfig();
@@ -1300,6 +1302,29 @@ router.put('/general', adminAuth, requirePermission('settings.edit'), async (req
     const settings = stripReservedSettingKeys({ ...req.body });
     let uploadLimitTouched = false;
 
+    // Migration 174: the public base URL (general_site_url) is a dangerous
+    // domain-config key that lives inside the otherwise-safe /general bucket —
+    // it drives outbound-email + share links. Changing it requires the
+    // dedicated `settings.domains` perm, so a team member holding only the
+    // day-to-day `settings.edit` bucket can't repoint the install. Enforced
+    // only when the value actually changes, so unrelated /general saves by a
+    // safe-settings editor aren't blocked.
+    if (Object.prototype.hasOwnProperty.call(settings, 'general_site_url')) {
+      const current = await db('app_settings').where({ setting_key: 'general_site_url' }).first();
+      let currentValue = null;
+      if (current) {
+        try { currentValue = JSON.parse(current.setting_value); } catch (_) { currentValue = current.setting_value; }
+      }
+      if (String(currentValue ?? '') !== String(settings.general_site_url ?? '')) {
+        if (!(await userHasAnyPermission(req.admin.id, ['settings.domains']))) {
+          return res.status(403).json({
+            error: 'Changing the site URL requires the "Manage Domain & URL Config" permission',
+            code: 'FORBIDDEN'
+          });
+        }
+      }
+    }
+
     const publicSiteKeysTouched = Object.keys(settings).some((key) => key.startsWith('general_public_site_'));
 
     if (Object.prototype.hasOwnProperty.call(settings, 'general_max_files_per_upload')) {
@@ -1425,7 +1450,7 @@ router.put('/general', adminAuth, requirePermission('settings.edit'), async (req
 });
 
 // Update security settings
-router.put('/security', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.put('/security', adminAuth, requirePermission('settings.security'), async (req, res) => {
   try {
     const settings = stripReservedSettingKeys({ ...req.body });
 
@@ -1845,7 +1870,7 @@ router.post('/favicon', adminAuth, requirePermission('settings.edit'), faviconUp
 });
 
 // Update rate limit settings
-router.put('/security/rate-limit', adminAuth, requirePermission('settings.edit'), [
+router.put('/security/rate-limit', adminAuth, requirePermission('settings.security'), [
   body('rate_limit_enabled').isBoolean().withMessage('Enabled must be a boolean'),
   body('rate_limit_window_minutes').isInt({ min: 1, max: 60 }).withMessage('Window must be between 1 and 60 minutes'),
   body('rate_limit_max_requests').isInt({ min: 10, max: 10000 }).withMessage('Max requests must be between 10 and 10000'),

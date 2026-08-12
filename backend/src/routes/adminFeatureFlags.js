@@ -189,7 +189,7 @@ function applyDependencyRules(flags) {
   return out;
 }
 
-router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/', adminAuth, requirePermission(['settings.view', 'settings.features']), async (req, res) => {
   try {
     const flags = await readAllFlags();
     // Always run the rules so derived flags (e.g. `clients`) and
@@ -202,7 +202,7 @@ router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) 
   }
 });
 
-router.put('/', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.put('/', adminAuth, requirePermission('settings.features'), async (req, res) => {
   try {
     const body = req.body || {};
     if (typeof body !== 'object' || Array.isArray(body)) {

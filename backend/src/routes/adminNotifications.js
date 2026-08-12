@@ -6,7 +6,7 @@ const logger = require('../utils/logger');
 const router = express.Router();
 
 // Get notifications (unread activity logs)
-router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/', adminAuth, requirePermission(['settings.view', 'notifications.view']), async (req, res) => {
   try {
     const { limit = 20, includeRead = false } = req.query;
 
@@ -66,7 +66,7 @@ router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) 
 });
 
 // Mark notification as read
-router.put('/:id/read', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.put('/:id/read', adminAuth, requirePermission('notifications.manage'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -84,7 +84,7 @@ router.put('/:id/read', adminAuth, requirePermission('settings.edit'), async (re
 });
 
 // Mark all notifications as read
-router.put('/read-all', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.put('/read-all', adminAuth, requirePermission('notifications.manage'), async (req, res) => {
   try {
     await db('activity_logs')
       .whereNull('read_at')
@@ -108,7 +108,7 @@ router.put('/read-all', adminAuth, requirePermission('settings.edit'), async (re
 // nothing matched the date filter, so it was effectively a confusingly
 // named Clear All anyway. Drop the rename and the branching, return
 // the simple deletedCount the existing test (and frontend toast) expect.
-router.delete('/clear-all', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.delete('/clear-all', adminAuth, requirePermission('notifications.manage'), async (req, res) => {
   try {
     const deletedCount = await db('activity_logs').delete();
     res.json({ message: 'All notifications cleared', deletedCount });
