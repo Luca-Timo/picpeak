@@ -18,7 +18,7 @@ const router = express.Router();
 
 // List tokens for the current admin (or all, if super_admin) — without
 // the plaintext, never recoverable after creation.
-router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/', adminAuth, requirePermission(['settings.view', 'settings.integrations']), async (req, res) => {
   try {
     // Scope to the caller's own tokens unless super_admin — the previous
     // query returned every admin's token metadata (name/preview/scopes/
@@ -60,7 +60,7 @@ router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) 
 router.post(
   '/',
   adminAuth,
-  requirePermission('settings.edit'),
+  requirePermission('settings.integrations'),
   [
     body('name').isString().trim().isLength({ min: 1, max: 100 }),
     body('scopes').isArray({ min: 1 }).custom((arr) => {
@@ -112,7 +112,7 @@ router.post(
 );
 
 // Revoke a token (soft-delete; lookups still find it but reject).
-router.delete('/:id', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.delete('/:id', adminAuth, requirePermission('settings.integrations'), async (req, res) => {
   try {
     const { id } = req.params;
     const row = await db('api_tokens').where({ id }).first();

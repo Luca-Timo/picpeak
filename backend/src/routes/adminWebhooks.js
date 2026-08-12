@@ -20,6 +20,10 @@ const { body, query, validationResult } = require('express-validator');
 const { db, logActivity } = require('../database/db');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
+// Migration 174: webhooks are an integration surface. Mutations require the
+// dedicated `settings.integrations` perm (split out of the old catch-all
+// `settings.edit`); reads allow either the general `settings.view` or the
+// integration perm so a role scoped to integrations can still read them.
 const { validateExternalUrlAsync } = require('../utils/networkValidation');
 const webhookService = require('../services/webhookService');
 const logger = require('../utils/logger');
@@ -52,7 +56,7 @@ function safeJson(s, fallback) {
 }
 
 // ─── List ────────────────────────────────────────────────────────────────
-router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/', adminAuth, requirePermission(['settings.view', 'settings.integrations']), async (req, res) => {
   try {
     const rows = await db('webhooks')
       .leftJoin('admin_users', 'admin_users.id', 'webhooks.created_by')
@@ -75,7 +79,7 @@ router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) 
 router.post(
   '/',
   adminAuth,
-  requirePermission('settings.edit'),
+  requirePermission('settings.integrations'),
   [
     body('name').isString().trim().isLength({ min: 1, max: 100 }),
     body('url').isString().isLength({ max: 2048 }).custom(async (url) => {
@@ -142,7 +146,7 @@ router.post(
 );
 
 // ─── Detail ──────────────────────────────────────────────────────────────
-router.get('/:id', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/:id', adminAuth, requirePermission(['settings.view', 'settings.integrations']), async (req, res) => {
   try {
     const row = await db('webhooks').where({ id: req.params.id }).first();
     if (!row) return res.status(404).json({ error: 'Webhook not found' });
@@ -157,7 +161,7 @@ router.get('/:id', adminAuth, requirePermission('settings.view'), async (req, re
 router.put(
   '/:id',
   adminAuth,
-  requirePermission('settings.edit'),
+  requirePermission('settings.integrations'),
   [
     body('name').optional().isString().trim().isLength({ min: 1, max: 100 }),
     body('url').optional().isString().isLength({ max: 2048 }).custom(async (url) => {
@@ -217,7 +221,7 @@ router.put(
 );
 
 // ─── Delete ──────────────────────────────────────────────────────────────
-router.delete('/:id', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.delete('/:id', adminAuth, requirePermission('settings.integrations'), async (req, res) => {
   try {
     const row = await db('webhooks').where({ id: req.params.id }).first();
     if (!row) return res.status(404).json({ error: 'Webhook not found' });
@@ -236,7 +240,7 @@ router.delete('/:id', adminAuth, requirePermission('settings.edit'), async (req,
 router.post(
   '/:id/test',
   adminAuth,
-  requirePermission('settings.edit'),
+  requirePermission('settings.integrations'),
   [body('event_type').optional().isIn(webhookService.EVENT_TYPES)],
   async (req, res) => {
     try {
@@ -284,7 +288,7 @@ router.post(
 router.get(
   '/:id/deliveries',
   adminAuth,
-  requirePermission('settings.view'),
+  requirePermission(['settings.view', 'settings.integrations']),
   [
     query('status').optional().isIn(['pending', 'success', 'failed']),
     query('page').optional().isInt({ min: 1 }),
@@ -330,7 +334,7 @@ router.get(
 router.get(
   '/:id/deliveries/:deliveryId',
   adminAuth,
-  requirePermission('settings.view'),
+  requirePermission(['settings.view', 'settings.integrations']),
   async (req, res) => {
     try {
       const row = await db('webhook_deliveries')
@@ -352,7 +356,7 @@ router.get(
 router.post(
   '/:id/deliveries/:deliveryId/replay',
   adminAuth,
-  requirePermission('settings.edit'),
+  requirePermission('settings.integrations'),
   async (req, res) => {
     try {
       const row = await db('webhook_deliveries')

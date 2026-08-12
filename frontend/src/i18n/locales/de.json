@@ -31,7 +31,8 @@
     "cancel": "Abbrechen",
     "tabs": {
       "users": "Benutzer",
-      "invitations": "Einladungen"
+      "invitations": "Einladungen",
+      "roles": "Rollen"
     },
     "stats": {
       "totalUsers": "Benutzer gesamt",
@@ -5980,5 +5981,40 @@
     "rebills": "offene Weiterverrechnungen",
     "hoursOnly": "Nur die Stunden",
     "rebillsOnly": "Nur die Weiterverrechnungen"
+  },
+  "roleEditor": {
+    "loading": "Rollen werden geladen…",
+    "subtitle": "Lege fest, was jede Rolle darf. Beginne mit einer Vorlage, indem du sie duplizierst, und passe die Berechtigungen an.",
+    "newRole": "Neue Rolle",
+    "systemRole": "System",
+    "permCount": "{{count}} Berechtigungen",
+    "userCount": "{{count}} Benutzer",
+    "view": "Ansehen",
+    "clone": "Duplizieren",
+    "create": "Rolle erstellen",
+    "createTitle": "Rolle erstellen",
+    "editTitle": "Rolle bearbeiten: {{name}}",
+    "superAdminLocked": "Super Admin besitzt immer alle Berechtigungen und kann nicht bearbeitet werden. Neue Berechtigungen werden automatisch übernommen.",
+    "displayName": "Anzeigename",
+    "displayNamePlaceholder": "z. B. Fotograf",
+    "key": "Schlüssel (Kennung)",
+    "keyLocked": "Der Schlüssel ist nach dem Erstellen fest.",
+    "description": "Beschreibung",
+    "descriptionPlaceholder": "Wofür diese Rolle gedacht ist",
+    "permissions": "Berechtigungen",
+    "selectedCount": "{{count}} ausgewählt",
+    "selectAll": "Alle auswählen",
+    "clearAll": "Alle abwählen",
+    "nameError": "Nur Kleinbuchstaben, Zahlen und Unterstriche (2–49 Zeichen, beginnend mit einem Buchstaben).",
+    "created": "Rolle erstellt",
+    "updated": "Rolle aktualisiert",
+    "deleted": "Rolle gelöscht",
+    "saveError": "Rolle konnte nicht gespeichert werden",
+    "deleteError": "Rolle konnte nicht gelöscht werden",
+    "confirmDelete": {
+      "title": "Rolle löschen?",
+      "message": "Die Rolle \"{{name}}\" endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      "hasUsers": "Weise die {{count}} Benutzer der Rolle \"{{name}}\" neu zu, bevor du sie löschst."
+    }
   }
 }

@@ -33,7 +33,7 @@ const logger = require('../utils/logger');
 // pattern). The Settings UI hides the tab as well; this is defence in depth.
 router.use(requireFeatureFlag('whatsapp'));
 
-router.get('/config', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/config', adminAuth, requirePermission(['settings.view', 'whatsapp.view']), async (req, res) => {
   try {
     const config = await db('whatsapp_configs').first();
     if (!config) {
@@ -62,7 +62,7 @@ router.get('/config', adminAuth, requirePermission('settings.view'), async (req,
   }
 });
 
-router.put('/config', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.put('/config', adminAuth, requirePermission('whatsapp.manage'), async (req, res) => {
   try {
     const { phone_number_id, waba_id, access_token, template_name, template_language, template_params, enabled } = req.body;
 
@@ -142,7 +142,7 @@ router.put('/config', adminAuth, requirePermission('settings.edit'), async (req,
   }
 });
 
-router.post('/test', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.post('/test', adminAuth, requirePermission('whatsapp.manage'), async (req, res) => {
   try {
     const { phone } = req.body;
     if (!phone) {

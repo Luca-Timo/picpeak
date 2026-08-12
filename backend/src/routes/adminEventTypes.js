@@ -19,7 +19,7 @@ const router = express.Router();
  * GET /admin/event-types
  * Get all event types (for admin management)
  */
-router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/', adminAuth, requirePermission(['settings.view', 'event_types.view', 'events.create', 'events.edit']), async (req, res) => {
   try {
     const includeInactive = req.query.includeInactive === 'true';
     const eventTypes = await eventTypeService.getAllEventTypes({
@@ -51,7 +51,7 @@ router.get('/active', adminAuth, async (req, res) => {
  * GET /admin/event-types/:id
  * Get a single event type by ID
  */
-router.get('/:id', adminAuth, requirePermission('settings.view'), [
+router.get('/:id', adminAuth, requirePermission(['settings.view', 'event_types.view', 'events.create', 'events.edit']), [
   param('id').isInt().withMessage('Invalid event type ID')
 ], async (req, res) => {
   try {
@@ -78,7 +78,7 @@ router.get('/:id', adminAuth, requirePermission('settings.view'), [
  * POST /admin/event-types
  * Create a new event type
  */
-router.post('/', adminAuth, requirePermission('settings.edit'), [
+router.post('/', adminAuth, requirePermission('event_types.manage'), [
   body('name').notEmpty().trim().withMessage('Name is required'),
   body('slug_prefix')
     .notEmpty()
@@ -138,7 +138,7 @@ router.post('/', adminAuth, requirePermission('settings.edit'), [
  * PUT /admin/event-types/:id
  * Update an event type
  */
-router.put('/:id', adminAuth, requirePermission('settings.edit'), [
+router.put('/:id', adminAuth, requirePermission('event_types.manage'), [
   param('id').isInt().withMessage('Invalid event type ID'),
   body('name').optional().notEmpty().trim().withMessage('Name cannot be empty'),
   body('slug_prefix')
@@ -190,7 +190,7 @@ router.put('/:id', adminAuth, requirePermission('settings.edit'), [
  * DELETE /admin/event-types/:id
  * Delete an event type (only non-system types with no events)
  */
-router.delete('/:id', adminAuth, requirePermission('settings.edit'), [
+router.delete('/:id', adminAuth, requirePermission('event_types.manage'), [
   param('id').isInt().withMessage('Invalid event type ID')
 ], async (req, res) => {
   try {
@@ -228,7 +228,7 @@ router.delete('/:id', adminAuth, requirePermission('settings.edit'), [
  * POST /admin/event-types/reorder
  * Reorder event types by providing an array of IDs in the desired order
  */
-router.post('/reorder', adminAuth, requirePermission('settings.edit'), [
+router.post('/reorder', adminAuth, requirePermission('event_types.manage'), [
   body('orderedIds').isArray().withMessage('orderedIds must be an array'),
   body('orderedIds.*').isInt().withMessage('Each ID must be an integer')
 ], async (req, res) => {
