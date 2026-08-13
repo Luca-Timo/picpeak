@@ -10,6 +10,7 @@ import { uploadsService } from '../../services/uploads.service';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { getPhotoViewMode, setPhotoViewMode, type PhotoViewMode } from '../../utils/photoViewPrefs';
 import { Button } from '../common';
+import { PermissionGate } from './PermissionGate';
 import { AdminAuthenticatedImage } from './AdminAuthenticatedImage';
 import { BulkCategoryModal } from './BulkCategoryModal';
 
@@ -209,50 +210,54 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                   <span className="text-sm text-neutral-600 dark:text-neutral-400">
                     {t('gallery.photosSelected', { count: selectedPhotos.size })}
                   </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsCategoryModalOpen(true)}
-                    leftIcon={<FolderOpen className="w-4 h-4" />}
-                  >
-                    {t('photos.moveToCategory', 'Move to Category')}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      try {
-                        await photosService.bulkUpdatePhotos(eventId, Array.from(selectedPhotos), { visibility: 'hidden' });
-                        toast.success(t('admin.photos.hiddenSuccess', 'Photos hidden'));
-                        onPhotosDeleted();
-                      } catch { toast.error(t('common.error')); }
-                    }}
-                    leftIcon={<EyeOff className="w-4 h-4" />}
-                  >
-                    {t('admin.photos.hideSelected', 'Hide')}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      try {
-                        await photosService.bulkUpdatePhotos(eventId, Array.from(selectedPhotos), { visibility: 'visible' });
-                        toast.success(t('admin.photos.visibleSuccess', 'Photos visible'));
-                        onPhotosDeleted();
-                      } catch { toast.error(t('common.error')); }
-                    }}
-                    leftIcon={<Eye className="w-4 h-4" />}
-                  >
-                    {t('admin.photos.showSelected', 'Show')}
-                  </Button>
-                  <button
-                    onClick={handleDeleteSelected}
-                    disabled={isDeleting}
-                    className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-red-400 rounded-lg flex items-center gap-2"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    {t('gallery.deleteSelected', 'Delete Selected')}
-                  </button>
+                  <PermissionGate permission="photos.edit">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsCategoryModalOpen(true)}
+                      leftIcon={<FolderOpen className="w-4 h-4" />}
+                    >
+                      {t('photos.moveToCategory', 'Move to Category')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          await photosService.bulkUpdatePhotos(eventId, Array.from(selectedPhotos), { visibility: 'hidden' });
+                          toast.success(t('admin.photos.hiddenSuccess', 'Photos hidden'));
+                          onPhotosDeleted();
+                        } catch { toast.error(t('common.error')); }
+                      }}
+                      leftIcon={<EyeOff className="w-4 h-4" />}
+                    >
+                      {t('admin.photos.hideSelected', 'Hide')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          await photosService.bulkUpdatePhotos(eventId, Array.from(selectedPhotos), { visibility: 'visible' });
+                          toast.success(t('admin.photos.visibleSuccess', 'Photos visible'));
+                          onPhotosDeleted();
+                        } catch { toast.error(t('common.error')); }
+                      }}
+                      leftIcon={<Eye className="w-4 h-4" />}
+                    >
+                      {t('admin.photos.showSelected', 'Show')}
+                    </Button>
+                  </PermissionGate>
+                  <PermissionGate permission="photos.delete">
+                    <button
+                      onClick={handleDeleteSelected}
+                      disabled={isDeleting}
+                      className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-red-400 rounded-lg flex items-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      {t('gallery.deleteSelected', 'Delete Selected')}
+                    </button>
+                  </PermissionGate>
                 </>
               )}
             </>
@@ -420,19 +425,23 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                 
                 {!isSelectionMode && (
                   <div className="flex gap-1">
-                    <button
-                      onClick={(e) => handleDownload(photo, e)}
-                      className="p-1 text-white hover:bg-white/20 rounded"
-                    >
-                      <Download className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={(e) => handleDeleteSingle(photo, e)}
-                      className="p-1 text-white hover:bg-white/20 rounded disabled:opacity-50"
-                      disabled={isDeleting}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                    <PermissionGate permission="photos.download">
+                      <button
+                        onClick={(e) => handleDownload(photo, e)}
+                        className="p-1 text-white hover:bg-white/20 rounded"
+                      >
+                        <Download className="w-3 h-3" />
+                      </button>
+                    </PermissionGate>
+                    <PermissionGate permission="photos.delete">
+                      <button
+                        onClick={(e) => handleDeleteSingle(photo, e)}
+                        className="p-1 text-white hover:bg-white/20 rounded disabled:opacity-50"
+                        disabled={isDeleting}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </PermissionGate>
                   </div>
                 )}
               </div>
@@ -666,21 +675,25 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                   <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                     {!isSelectionMode && (
                       <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                        <button
-                          onClick={(e) => handleDownload(photo, e)}
-                          className="p-1.5 text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-600 rounded"
-                          title={t('common.download', 'Download')}
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteSingle(photo, e)}
-                          className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 rounded disabled:opacity-50"
-                          disabled={isRowDeleting}
-                          title={t('common.delete', 'Delete')}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <PermissionGate permission="photos.download">
+                          <button
+                            onClick={(e) => handleDownload(photo, e)}
+                            className="p-1.5 text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-600 rounded"
+                            title={t('common.download', 'Download')}
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                        </PermissionGate>
+                        <PermissionGate permission="photos.delete">
+                          <button
+                            onClick={(e) => handleDeleteSingle(photo, e)}
+                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 rounded disabled:opacity-50"
+                            disabled={isRowDeleting}
+                            title={t('common.delete', 'Delete')}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </PermissionGate>
                       </div>
                     )}
                   </td>

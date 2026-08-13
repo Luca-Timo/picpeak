@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Archive, Send, Copy } from 'lucide-react';
 import type { Event } from '../../../types';
 import { Button, Card } from '../../../components/common';
+import { PermissionGate } from '../../../components/admin/PermissionGate';
 
 interface EventActionsCardProps {
   event: Event;
@@ -31,7 +32,7 @@ export const EventActionsCard: React.FC<EventActionsCardProps> = ({
 
       <div className="space-y-3">
         {event.is_draft ? (
-          <>
+          <PermissionGate permission="events.edit">
             <Button
               variant="primary"
               leftIcon={<Send className="w-4 h-4" />}
@@ -44,9 +45,9 @@ export const EventActionsCard: React.FC<EventActionsCardProps> = ({
             <p className="text-xs text-neutral-500 dark:text-neutral-400 text-center">
               {t('events.draftBanner')}
             </p>
-          </>
+          </PermissionGate>
         ) : (
-          <>
+          <PermissionGate permission="events.archive">
             <Button
               variant="outline"
               leftIcon={<Archive className="w-4 h-4" />}
@@ -63,19 +64,21 @@ export const EventActionsCard: React.FC<EventActionsCardProps> = ({
             <p className="text-xs text-neutral-500 dark:text-neutral-400 text-center">
               {t('events.archivingInfo')}
             </p>
-          </>
+          </PermissionGate>
         )}
         {/* Duplicate (#626) — visible in both draft and live mode.
             Creates a new draft inheriting this gallery's config. */}
-        <Button
-          variant="outline"
-          leftIcon={<Copy className="w-4 h-4" />}
-          onClick={() => setShowDuplicateDialog(true)}
-          isLoading={isDuplicating}
-          className="w-full justify-center"
-        >
-          {t('events.duplicateEvent', 'Duplicate gallery')}
-        </Button>
+        <PermissionGate permission="events.create">
+          <Button
+            variant="outline"
+            leftIcon={<Copy className="w-4 h-4" />}
+            onClick={() => setShowDuplicateDialog(true)}
+            isLoading={isDuplicating}
+            className="w-full justify-center"
+          >
+            {t('events.duplicateEvent', 'Duplicate gallery')}
+          </Button>
+        </PermissionGate>
       </div>
     </Card>
   );

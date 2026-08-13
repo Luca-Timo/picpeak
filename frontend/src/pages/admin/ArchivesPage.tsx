@@ -16,6 +16,7 @@ import { format, parseISO, isValid } from 'date-fns';
 import { toast } from 'react-toastify';
 
 import { Button, Input, Card, Loading } from '../../components/common';
+import { PermissionGate } from '../../components/admin/PermissionGate';
 import { useQuery } from '@tanstack/react-query';
 import { archiveService } from '../../services/archive.service';
 import { useTranslation } from 'react-i18next';
@@ -302,34 +303,40 @@ export const ArchivesPage: React.FC = () => {
                           Details
                         </Button>
                         */}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDownload(archive)}
-                          leftIcon={<Download className="w-4 h-4" />}
-                          disabled={!archive.archivePath}
-                        >
-                          {t('archives.download')}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRestore(archive)}
-                          leftIcon={<RotateCcw className="w-4 h-4" />}
-                          disabled={restoreMutation.isPending}
-                        >
-                          {t('archives.restore')}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(archive)}
-                          leftIcon={<Trash2 className="w-4 h-4" />}
-                          className="text-red-600 hover:text-red-700"
-                          disabled={deleteMutation.isPending}
-                        >
-                          {t('archives.delete')}
-                        </Button>
+                        <PermissionGate permission="archives.download">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDownload(archive)}
+                            leftIcon={<Download className="w-4 h-4" />}
+                            disabled={!archive.archivePath}
+                          >
+                            {t('archives.download')}
+                          </Button>
+                        </PermissionGate>
+                        <PermissionGate permission="archives.restore">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRestore(archive)}
+                            leftIcon={<RotateCcw className="w-4 h-4" />}
+                            disabled={restoreMutation.isPending}
+                          >
+                            {t('archives.restore')}
+                          </Button>
+                        </PermissionGate>
+                        <PermissionGate permission="archives.delete">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(archive)}
+                            leftIcon={<Trash2 className="w-4 h-4" />}
+                            className="text-red-600 hover:text-red-700"
+                            disabled={deleteMutation.isPending}
+                          >
+                            {t('archives.delete')}
+                          </Button>
+                        </PermissionGate>
                       </div>
                     </td>
                   </tr>
