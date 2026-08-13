@@ -115,7 +115,7 @@ exports.up = async function (knex) {
   const hasRolePermissions = await knex.schema.hasTable('role_permissions');
   const hasRoles = await knex.schema.hasTable('roles');
   if (!hasPermissions || !hasRolePermissions || !hasRoles) {
-    console.log('174: RBAC tables missing, skipping permission seed');
+    console.log('175: RBAC tables missing, skipping permission seed');
     return;
   }
 
@@ -128,7 +128,7 @@ exports.up = async function (knex) {
     const toInsert = ALL_NEW_PERMISSIONS.filter((p) => !existingSet.has(p.name));
     if (toInsert.length > 0) {
       await knex('permissions').insert(toInsert);
-      console.log(`174: inserted ${toInsert.length} new permissions`);
+      console.log(`175: inserted ${toInsert.length} new permissions`);
     }
   }
 
@@ -151,20 +151,29 @@ exports.up = async function (knex) {
     }
   };
 
-  // 2. Project the settings.edit split forward: every role that holds
-  //    settings.edit today gets each new settings.* perm too (compat).
+  // 2. Project every perm that REPLACED a settings.edit gate forward: every role
+  //    holding settings.edit today gets each of them, so nobody loses capability
+  //    on upgrade (compat). This covers both the settings.* split AND the feature
+  //    .manage perms that took over settings.edit WRITE gates (whatsapp,
+  //    event_types, image_security, notifications, system) — projecting both
+  //    lists keeps the pattern symmetric for future phase-2 settings.edit holders.
   {
+    const SETTINGS_EDIT_REPLACEMENTS = [
+      ...SETTINGS_SPLIT_PERMISSIONS.map((p) => p.name),
+      'whatsapp.manage', 'event_types.manage', 'image_security.manage',
+      'notifications.manage', 'system.manage',
+    ];
     const editPerm = await knex('permissions').where({ name: 'settings.edit' }).first();
-    const splitPerms = await knex('permissions')
-      .whereIn('name', SETTINGS_SPLIT_PERMISSIONS.map((p) => p.name))
+    const replacementPerms = await knex('permissions')
+      .whereIn('name', SETTINGS_EDIT_REPLACEMENTS)
       .select('id');
-    const splitIds = splitPerms.map((p) => p.id);
-    if (editPerm && splitIds.length > 0) {
+    const replacementIds = replacementPerms.map((p) => p.id);
+    if (editPerm && replacementIds.length > 0) {
       const rolesWithEdit = await knex('role_permissions')
         .where({ permission_id: editPerm.id })
         .select('role_id');
       for (const { role_id } of rolesWithEdit) {
-        await grantPerms(role_id, splitIds);
+        await grantPerms(role_id, replacementIds);
       }
     }
   }
@@ -204,31 +213,37 @@ exports.up = async function (knex) {
       permIds = rows.map((p) => p.id);
     }
     await grantPerms(role.id, permIds);
-    console.log(`174: seeded ${preset.name} preset (${permIds.length} permissions)`);
+    console.log(`175: seeded ${preset.name} preset (${permIds.length} permissions)`);
   }
 
-  console.log('174: granular permissions + presets migration complete');
+  console.log('175: granular permissions + presets migration complete');
 };
 
 exports.down = async function (knex) {
   const hasPermissions = await knex.schema.hasTable('permissions');
   if (!hasPermissions) return;
 
+  const hasRolePermissions = await knex.schema.hasTable('role_permissions');
   const names = ALL_NEW_PERMISSIONS.map((p) => p.name);
   const perms = await knex('permissions').whereIn('name', names).select('id');
   const ids = perms.map((p) => p.id);
   if (ids.length > 0) {
-    await knex('role_permissions').whereIn('permission_id', ids).del();
+    if (hasRolePermissions) await knex('role_permissions').whereIn('permission_id', ids).del();
     await knex('permissions').whereIn('id', ids).del();
   }
 
-  // Remove the preset roles and their grants.
-  for (const preset of PRESET_ROLES) {
-    const role = await knex('roles').where({ name: preset.name }).first();
-    if (role) {
-      await knex('role_permissions').where({ role_id: role.id }).del();
-      await knex('admin_users').where({ role_id: role.id }).update({ role_id: null });
-      await knex('roles').where({ id: role.id }).del();
+  // Remove the preset roles and their grants (each table guarded — the earlier
+  // hasTable('permissions') check does not imply roles/admin_users exist).
+  const hasRoles = await knex.schema.hasTable('roles');
+  if (hasRoles) {
+    const hasAdminUsers = await knex.schema.hasTable('admin_users');
+    for (const preset of PRESET_ROLES) {
+      const role = await knex('roles').where({ name: preset.name }).first();
+      if (role) {
+        if (hasRolePermissions) await knex('role_permissions').where({ role_id: role.id }).del();
+        if (hasAdminUsers) await knex('admin_users').where({ role_id: role.id }).update({ role_id: null });
+        await knex('roles').where({ id: role.id }).del();
+      }
     }
   }
 };

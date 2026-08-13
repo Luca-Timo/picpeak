@@ -115,9 +115,21 @@ async function seedPermissionsAtBoot(db, logger) {
     const hasRolePerms = await db.schema.hasTable('role_permissions');
     if (!hasRoles || !hasPerms || !hasRolePerms) return;
 
-    const granted = await ensureSuperAdminHasAllPermissions(db, logger);
+    // Per-step try/catch: on a multi-replica start the loser of a
+    // role_permissions insert race can throw a PK violation in one step; that
+    // must not skip the remaining steps (e.g. preset seeding) on that replica.
+    let granted = 0;
+    try {
+      granted = await ensureSuperAdminHasAllPermissions(db, logger);
+    } catch (err) {
+      logger?.warn?.('Permissions self-heal: super_admin backfill failed:', err.message);
+    }
     for (const preset of PRESETS) {
-      await ensurePreset(db, logger, preset);
+      try {
+        await ensurePreset(db, logger, preset);
+      } catch (err) {
+        logger?.warn?.(`Permissions self-heal: preset ${preset.name} failed:`, err.message);
+      }
     }
 
     if (granted > 0) {

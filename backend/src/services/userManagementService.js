@@ -11,7 +11,7 @@ const { generateReadablePassword } = require('../utils/passwordGenerator');
 const { getBcryptRounds } = require('../utils/passwordValidation');
 const { queueEmail } = require('./emailProcessor');
 const logger = require('../utils/logger');
-const { ConflictError, NotFoundError, ValidationError } = require('../utils/errors');
+const { ConflictError, NotFoundError, ValidationError, ForbiddenError } = require('../utils/errors');
 
 /**
  * Create a new admin user invitation
@@ -575,7 +575,7 @@ async function validateInvitationToken(token) {
 // System roles that ship with the app. Their `name` (the semantic key routes
 // check) is immutable and they cannot be deleted; their display/description and
 // (except super_admin) their permission set may be tweaked.
-const RESERVED_ROLE_NAMES = ['super_admin', 'admin', 'editor', 'viewer', 'solo_photographer'];
+const RESERVED_ROLE_NAMES = ['super_admin', 'admin', 'editor', 'viewer', 'solo_photographer', 'team_photographer'];
 
 function clearPermCache() {
   // Bust the RBAC middleware cache so grant changes take effect immediately
@@ -597,6 +597,25 @@ async function resolvePermissionIds(permissionNames) {
     throw new ValidationError(`Unknown permission(s): ${missing.join(', ')}`);
   }
   return rows.map((r) => r.id);
+}
+
+// Contain the roles.manage blast radius (delegation, not root escalation): a
+// non-super_admin managing roles may only grant permissions their OWN role
+// already holds, so `roles.manage` can't be turned into "grant myself
+// everything". super_admin bypasses (it holds the full catalog anyway).
+async function assertActorMayGrant(actorId, permissionNames) {
+  const names = Array.from(new Set((permissionNames || []).filter(Boolean)));
+  if (names.length === 0) return;
+  const actor = await db('admin_users')
+    .leftJoin('roles', 'roles.id', 'admin_users.role_id')
+    .where('admin_users.id', actorId)
+    .select('roles.name as role_name')
+    .first();
+  if (actor && actor.role_name === 'super_admin') return;
+  const { userHasAllPermissions } = require('../middleware/permissions');
+  if (!(await userHasAllPermissions(actorId, names))) {
+    throw new ForbiddenError('You can only grant permissions your own role already holds.');
+  }
 }
 
 async function getRoleWithPermissionsById(id) {
@@ -666,6 +685,7 @@ async function createRole({ name, displayName, description, priority, permission
   const existing = await db('roles').where('name', normalized).first();
   if (existing) throw new ConflictError(`A role named "${normalized}" already exists.`);
 
+  await assertActorMayGrant(createdById, permissions);
   const permIds = await resolvePermissionIds(permissions);
   const rawPriority = Number(priority);
   const safePriority = Number.isFinite(rawPriority) ? Math.max(0, Math.min(99, Math.floor(rawPriority))) : 50;
@@ -707,6 +727,22 @@ async function updateRole(id, { displayName, description, priority, permissions 
   if (!role) throw new NotFoundError('Role', id);
   if (role.name === 'super_admin') {
     throw new ValidationError('The Super Admin role is protected — it always holds every permission and cannot be edited.');
+  }
+
+  // Self-amplification guard: a non-super_admin can't edit their OWN role (which
+  // would let a roles.manage holder grant their own role more), and can only
+  // grant permissions they already hold. See assertActorMayGrant.
+  const actor = await db('admin_users')
+    .leftJoin('roles', 'roles.id', 'admin_users.role_id')
+    .where('admin_users.id', updatedById)
+    .select('admin_users.role_id as role_id', 'roles.name as role_name')
+    .first();
+  const actorIsSuper = actor && actor.role_name === 'super_admin';
+  if (!actorIsSuper && actor && actor.role_id === Number(id)) {
+    throw new ForbiddenError('You cannot edit your own role.');
+  }
+  if (permissions !== undefined) {
+    await assertActorMayGrant(updatedById, permissions);
   }
 
   const patch = { updated_at: db.fn.now() };

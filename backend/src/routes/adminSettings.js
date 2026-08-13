@@ -79,14 +79,35 @@ const PROTECTED_SETTING_KEY_PERMS = [
   { match: (k) => k.startsWith('security_'), perm: 'settings.security' },
   { match: (k) => k.startsWith('accounting_'), perm: 'settings.banking' },
 ];
-const stripUnauthorizedProtectedKeys = async (settings, adminId) => {
+// Returns the list of {key, perm} the caller was NOT allowed to write (and
+// removes them from `settings`). Callers 403 when it's non-empty rather than
+// silently no-op'ing a permission boundary — a silent drop would report
+// "saved" while the protected value was ignored.
+const collectUnauthorizedProtectedKeys = async (settings, adminId) => {
+  const denied = [];
   for (const key of Object.keys(settings)) {
     const rule = PROTECTED_SETTING_KEY_PERMS.find((r) => r.match(key));
     if (rule && !(await userHasAnyPermission(adminId, [rule.perm]))) {
+      denied.push({ key, perm: rule.perm });
       delete settings[key];
     }
   }
-  return settings;
+  return denied;
+};
+// Express helper: 403 (naming the keys + required perms) when the caller tried
+// to write a protected key they don't hold; returns true if the request was
+// rejected so the route can stop.
+const rejectUnauthorizedProtectedKeys = async (settings, req, res) => {
+  const denied = await collectUnauthorizedProtectedKeys(settings, req.admin.id);
+  if (denied.length > 0) {
+    res.status(403).json({
+      error: `You don't have permission to change: ${denied.map((d) => d.key).join(', ')}`,
+      code: 'FORBIDDEN',
+      keys: denied,
+    });
+    return true;
+  }
+  return false;
 };
 
 // Configure multer for logo uploads
@@ -1329,8 +1350,8 @@ router.put('/general', adminAuth, requirePermission('settings.edit'), async (req
     // Migration 174: drop any protected key (site URL / security / accounting)
     // the caller isn't permitted to write, so the settings.edit bucket can't be
     // used to repoint the install via this generic writer. See
-    // stripUnauthorizedProtectedKeys.
-    await stripUnauthorizedProtectedKeys(settings, req.admin.id);
+    // rejectUnauthorizedProtectedKeys (403s when a protected key is denied).
+    if (await rejectUnauthorizedProtectedKeys(settings, req, res)) return;
 
     const publicSiteKeysTouched = Object.keys(settings).some((key) => key.startsWith('general_public_site_'));
 
@@ -1461,7 +1482,7 @@ router.put('/security', adminAuth, requirePermission('settings.security'), async
   try {
     const settings = stripReservedSettingKeys({ ...req.body });
     // A settings.security holder still can't write domain/accounting keys here.
-    await stripUnauthorizedProtectedKeys(settings, req.admin.id);
+    if (await rejectUnauthorizedProtectedKeys(settings, req, res)) return;
 
     // Update or insert each setting
     for (const [key, value] of Object.entries(settings)) {
@@ -1500,7 +1521,7 @@ router.put('/security', adminAuth, requirePermission('settings.security'), async
 router.put('/analytics', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
     const settings = stripReservedSettingKeys({ ...req.body });
-    await stripUnauthorizedProtectedKeys(settings, req.admin.id);
+    if (await rejectUnauthorizedProtectedKeys(settings, req, res)) return;
 
     // Validate the provider switch (#663 Phase 1). Reject unknown values
     // so the dashboard route's factory doesn't have to defensively guard.
@@ -1556,7 +1577,7 @@ router.put('/analytics', adminAuth, requirePermission('settings.edit'), async (r
 router.put('/seo', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
     const settings = stripReservedSettingKeys({ ...req.body });
-    await stripUnauthorizedProtectedKeys(settings, req.admin.id);
+    if (await rejectUnauthorizedProtectedKeys(settings, req, res)) return;
 
     // Validate seo_blocked_ai_agents is an array of strings
     if (settings.seo_blocked_ai_agents !== undefined) {
