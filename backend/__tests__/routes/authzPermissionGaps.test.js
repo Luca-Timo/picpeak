@@ -51,11 +51,13 @@ describe('authorization / ownership gaps', () => {
     }).returning('id');
     adminId = ins[0]?.id ?? ins[0];
     await assignAdminRole(db, adminId, 'admin');
-    // Grant settings.edit to the admin role BEFORE any request populates the
-    // 60s permission cache, so the revoke test exercises the ownership check
-    // (404) rather than the missing-permission gate (403). This models a
-    // custom role that carries settings.edit — the scenario GHSA-gprq needs.
-    await grantPermissionToRole('admin', 'settings.edit');
+    // Grant settings.integrations to the admin role BEFORE any request populates
+    // the 60s permission cache, so the revoke test exercises the ownership check
+    // (404) rather than the missing-permission gate (403). Migration 174 split
+    // API-token management out of the catch-all settings.edit into the dedicated
+    // settings.integrations perm; this models a custom role that carries it —
+    // the scenario GHSA-gprq needs.
+    await grantPermissionToRole('admin', 'settings.integrations');
     adminTok = mintAdminToken(adminId);
 
     app = express();
@@ -96,7 +98,7 @@ describe('authorization / ownership gaps', () => {
       expect(res.body.find((t) => t.id === superTokenId)).toBeDefined();
     });
 
-    it('a non-owner (with settings.edit) cannot revoke another admin\'s token', async () => {
+    it('a non-owner (with settings.integrations) cannot revoke another admin\'s token', async () => {
       const res = await auth(request(app).delete(`/api/admin/api-tokens/${superTokenId}`), adminTok);
       expect(res.status).toBe(404);
       const row = await db('api_tokens').where({ id: superTokenId }).first();

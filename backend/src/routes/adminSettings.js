@@ -65,6 +65,30 @@ const stripReservedSettingKeys = (settings) => {
   return settings;
 };
 
+// Migration 174 hardening — per-key permission boundary for the GENERIC settings
+// writers. /general, /analytics, /seo and /security all upsert arbitrary
+// setting_keys, so without this a role holding only the broad `settings.edit`
+// (or `settings.security`) could set keys owned by a NARROWER permission —
+// repointing the public site URL, security policy, or VAT/accounting config —
+// via the wrong endpoint, defeating the settings.edit split. Any protected key
+// the caller isn't permitted to write is stripped before the upsert. The
+// dedicated routes still work because their caller holds the matching perm
+// (e.g. PUT /accounting is gated by settings.banking, so accounting_* survives).
+const PROTECTED_SETTING_KEY_PERMS = [
+  { match: (k) => k === 'general_site_url', perm: 'settings.domains' },
+  { match: (k) => k.startsWith('security_'), perm: 'settings.security' },
+  { match: (k) => k.startsWith('accounting_'), perm: 'settings.banking' },
+];
+const stripUnauthorizedProtectedKeys = async (settings, adminId) => {
+  for (const key of Object.keys(settings)) {
+    const rule = PROTECTED_SETTING_KEY_PERMS.find((r) => r.match(key));
+    if (rule && !(await userHasAnyPermission(adminId, [rule.perm]))) {
+      delete settings[key];
+    }
+  }
+  return settings;
+};
+
 // Configure multer for logo uploads
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
@@ -1302,28 +1326,11 @@ router.put('/general', adminAuth, requirePermission('settings.edit'), async (req
     const settings = stripReservedSettingKeys({ ...req.body });
     let uploadLimitTouched = false;
 
-    // Migration 174: the public base URL (general_site_url) is a dangerous
-    // domain-config key that lives inside the otherwise-safe /general bucket —
-    // it drives outbound-email + share links. Changing it requires the
-    // dedicated `settings.domains` perm, so a team member holding only the
-    // day-to-day `settings.edit` bucket can't repoint the install. Enforced
-    // only when the value actually changes, so unrelated /general saves by a
-    // safe-settings editor aren't blocked.
-    if (Object.prototype.hasOwnProperty.call(settings, 'general_site_url')) {
-      const current = await db('app_settings').where({ setting_key: 'general_site_url' }).first();
-      let currentValue = null;
-      if (current) {
-        try { currentValue = JSON.parse(current.setting_value); } catch (_) { currentValue = current.setting_value; }
-      }
-      if (String(currentValue ?? '') !== String(settings.general_site_url ?? '')) {
-        if (!(await userHasAnyPermission(req.admin.id, ['settings.domains']))) {
-          return res.status(403).json({
-            error: 'Changing the site URL requires the "Manage Domain & URL Config" permission',
-            code: 'FORBIDDEN'
-          });
-        }
-      }
-    }
+    // Migration 174: drop any protected key (site URL / security / accounting)
+    // the caller isn't permitted to write, so the settings.edit bucket can't be
+    // used to repoint the install via this generic writer. See
+    // stripUnauthorizedProtectedKeys.
+    await stripUnauthorizedProtectedKeys(settings, req.admin.id);
 
     const publicSiteKeysTouched = Object.keys(settings).some((key) => key.startsWith('general_public_site_'));
 
@@ -1453,6 +1460,8 @@ router.put('/general', adminAuth, requirePermission('settings.edit'), async (req
 router.put('/security', adminAuth, requirePermission('settings.security'), async (req, res) => {
   try {
     const settings = stripReservedSettingKeys({ ...req.body });
+    // A settings.security holder still can't write domain/accounting keys here.
+    await stripUnauthorizedProtectedKeys(settings, req.admin.id);
 
     // Update or insert each setting
     for (const [key, value] of Object.entries(settings)) {
@@ -1491,6 +1500,7 @@ router.put('/security', adminAuth, requirePermission('settings.security'), async
 router.put('/analytics', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
     const settings = stripReservedSettingKeys({ ...req.body });
+    await stripUnauthorizedProtectedKeys(settings, req.admin.id);
 
     // Validate the provider switch (#663 Phase 1). Reject unknown values
     // so the dashboard route's factory doesn't have to defensively guard.
@@ -1546,6 +1556,7 @@ router.put('/analytics', adminAuth, requirePermission('settings.edit'), async (r
 router.put('/seo', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
     const settings = stripReservedSettingKeys({ ...req.body });
+    await stripUnauthorizedProtectedKeys(settings, req.admin.id);
 
     // Validate seo_blocked_ai_agents is an array of strings
     if (settings.seo_blocked_ai_agents !== undefined) {
