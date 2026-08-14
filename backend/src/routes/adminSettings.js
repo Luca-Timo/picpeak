@@ -79,18 +79,30 @@ const PROTECTED_SETTING_KEY_PERMS = [
   { match: (k) => k.startsWith('security_'), perm: 'settings.security' },
   { match: (k) => k.startsWith('accounting_'), perm: 'settings.banking' },
 ];
-// Returns the list of {key, perm} the caller was NOT allowed to write (and
-// removes them from `settings`). Callers 403 when it's non-empty rather than
-// silently no-op'ing a permission boundary — a silent drop would report
-// "saved" while the protected value was ignored.
+// Returns the list of {key, perm} the caller tried to CHANGE without the owning
+// permission. Callers 403 when it's non-empty rather than silently no-op'ing a
+// permission boundary. Change-detection matters: the General tab re-posts
+// general_site_url on every save, so a no-op round-trip of the stored value must
+// not 403 an otherwise-safe settings.edit save (the office-manager role this PR
+// exists to enable) — only an actual change is rejected. A denied key the caller
+// couldn't change is left in `settings` (the request 403s before the upsert); an
+// unauthorized no-op is dropped so the rest of the save proceeds.
 const collectUnauthorizedProtectedKeys = async (settings, adminId) => {
   const denied = [];
   for (const key of Object.keys(settings)) {
     const rule = PROTECTED_SETTING_KEY_PERMS.find((r) => r.match(key));
-    if (rule && !(await userHasAnyPermission(adminId, [rule.perm]))) {
-      denied.push({ key, perm: rule.perm });
-      delete settings[key];
+    if (!rule) continue;
+    if (await userHasAnyPermission(adminId, [rule.perm])) continue;
+    const row = await db('app_settings').where({ setting_key: key }).first();
+    let stored = null;
+    if (row) {
+      try { stored = JSON.parse(row.setting_value); } catch (_) { stored = row.setting_value; }
     }
+    if (String(stored ?? '') === String(settings[key] ?? '')) {
+      delete settings[key]; // unchanged — let the rest of the save through
+      continue;
+    }
+    denied.push({ key, perm: rule.perm });
   }
   return denied;
 };
