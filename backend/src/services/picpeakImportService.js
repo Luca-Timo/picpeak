@@ -9,9 +9,10 @@
 // email collides with the current account is overwritten with the current
 // account's credentials (so the operator's known password keeps working).
 //
-// Same-engine only (pg↔pg / sqlite↔sqlite) and forward-only (an older backup
-// restores onto a newer instance; a newer backup is refused). The target's own
-// schema is used as-is — we never replay the backup's DDL.
+// Same-engine (pg↔pg / sqlite↔sqlite) or the upgrade direction (sqlite → pg,
+// #1041) — the reverse is refused. Forward-only (an older backup restores onto
+// a newer instance; a newer backup is refused). The target's own schema is
+// used as-is — we never replay the backup's DDL.
 
 const fs = require('fs');
 const fsp = require('fs').promises;
@@ -45,7 +46,7 @@ async function readManifestFromZip(picpeakPath) {
 }
 
 // Returns an array of human-readable blockers ([] = OK to restore).
-async function validateManifest(manifest, { allowEngineSwitch = false } = {}) {
+async function validateManifest(manifest) {
   const errors = [];
   if (!manifest || manifest.kind !== 'picpeak-backup') {
     return ['This file is not a PicPeak backup (.picpeak).'];
@@ -54,14 +55,16 @@ async function validateManifest(manifest, { allowEngineSwitch = false } = {}) {
     errors.push('This backup was created by a newer version of PicPeak. Update this instance first.');
   }
   const engine = isPostgres() ? 'pg' : 'sqlite';
-  // Cross-engine loads are opt-in and CLI-only (#1038). The archive format is
-  // engine-neutral NDJSON, but this path had never been exercised, so the
-  // upload/restore surface keeps refusing it — only
-  // scripts/migrate-sqlite-to-postgres.js, which exists to move an install
-  // between engines, passes allowEngineSwitch.
-  if (!allowEngineSwitch
-      && manifest.database && manifest.database.engine && manifest.database.engine !== engine) {
-    errors.push(`Database engine mismatch: the backup is "${manifest.database.engine}" but this instance is "${engine}". Restore is only supported between matching engines.`);
+  const backupEngine = manifest.database && manifest.database.engine;
+  // Cross-engine restore is allowed in the UPGRADE direction only: a SQLite
+  // archive onto a Postgres instance (#1041) — the official small-install →
+  // full-stack migration path, same gate for the upload UI and
+  // scripts/migrate-sqlite-to-postgres.js. The reverse stays refused: pg
+  // archives carry ISO "T"/"Z" timestamps that SQLite would store as-is in
+  // text columns (the #1028/#1029 drift class), and engine downgrades are
+  // rarely intentional.
+  if (backupEngine && backupEngine !== engine && !(backupEngine === 'sqlite' && engine === 'pg')) {
+    errors.push(`Database engine mismatch: the backup is "${backupEngine}" but this instance is "${engine}". Cross-engine restore is only supported from a SQLite backup onto a PostgreSQL instance.`);
   }
   // Forward-only: the target schema must be at least as new as the backup's.
   let targetLatest = null;
@@ -424,16 +427,26 @@ async function detectExternalMedia() {
  * @param {Object} opts
  * @param {string} opts.picpeakPath  path to the uploaded/staged .picpeak
  * @param {number} [opts.currentAdminId]  admin to preserve across the wipe
- * @returns {Promise<{restored:boolean, tables:number, filesRestored:number, usesExternalMedia:boolean, manifest:object}>}
+ * @returns {Promise<{restored:boolean, tables:number, filesRestored:number, usesExternalMedia:boolean, crossEngine:boolean, manifest:object}>}
  */
-async function importFromPicpeak({ picpeakPath, currentAdminId, allowEngineSwitch = false }) {
+async function importFromPicpeak({ picpeakPath, currentAdminId }) {
   const manifest = await readManifestFromZip(picpeakPath);
-  const blockers = await validateManifest(manifest, { allowEngineSwitch });
+  const blockers = await validateManifest(manifest);
   if (blockers.length) {
     const err = new Error(blockers[0]);
     err.statusCode = 400;
     err.validation = blockers;
     throw err;
+  }
+
+  // Archives predating the manifest engine field get the target's engine —
+  // i.e. the exact same-engine behavior. After validateManifest, a mismatch
+  // can only be sqlite → pg.
+  const targetEngine = isPostgres() ? 'pg' : 'sqlite';
+  const sourceEngine = (manifest.database && manifest.database.engine) || targetEngine;
+  const crossEngine = sourceEngine !== targetEngine;
+  if (crossEngine) {
+    logger.info(`[picpeak-import] cross-engine restore: ${sourceEngine} backup onto ${targetEngine} instance`);
   }
 
   const currentAdmin = currentAdminId
@@ -470,7 +483,7 @@ async function importFromPicpeak({ picpeakPath, currentAdminId, allowEngineSwitc
       logger.warn(`[picpeak-import] ignoring ${skipped.length} backup table(s) not present in this DB (or protected): ${skipped.join(', ')}`);
     }
 
-    await replaceAllTables(tables, dataDir, currentAdmin, roleSnapshot, { crossEngine: allowEngineSwitch });
+    await replaceAllTables(tables, dataDir, currentAdmin, roleSnapshot, { crossEngine });
 
     // Post-commit fixups (must NOT run inside the restore transaction):
     //  - resync Postgres identity sequences left behind by the explicit-id
@@ -484,9 +497,9 @@ async function importFromPicpeak({ picpeakPath, currentAdminId, allowEngineSwitc
     const usesExternalMedia = await detectExternalMedia();
 
     logger.info(
-      `[picpeak-import] restored ${tables.length} tables, ${filesRestored} files (externalMedia=${usesExternalMedia})`
+      `[picpeak-import] restored ${tables.length} tables, ${filesRestored} files (externalMedia=${usesExternalMedia}, crossEngine=${crossEngine})`
     );
-    return { restored: true, tables: tables.length, filesRestored, usesExternalMedia, manifest };
+    return { restored: true, tables: tables.length, filesRestored, usesExternalMedia, crossEngine, manifest };
   } finally {
     await fsp.rm(staging, { recursive: true, force: true }).catch(() => {});
   }
@@ -499,6 +512,7 @@ module.exports = {
   // exported for testing — the cross-engine coercion (#1038)
   epochToIso,
   coerceForTargetEngine,
+  typedColumnsFor,
   reinjectCurrentAdmin,
   captureOperatorRole,
   preserveOperatorRole,
