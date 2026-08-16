@@ -877,6 +877,10 @@ app.use('/api/images', require('./src/routes/protectedImages'));
 app.use('/api/secure-images', secureImagesRoutes);
 
 // Optional: Serve built frontend (native installs and the all-in-one image, #1042)
+// Set when the SPA is being served, and registered as a catch-all AFTER the
+// /api 404 handler further down — see the registration site for why it cannot
+// live inside this block.
+let spaCatchAll = null;
 try {
   const serveFrontendEnv = process.env.SERVE_FRONTEND; // 'true' | 'false' | undefined
   const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '../frontend/dist');
@@ -956,6 +960,16 @@ try {
     app.get(['/admin', '/admin/*', '/gallery/*'], (req, res) => {
       sendSpa(res);
     });
+
+    // Everything else the router owns client-side. nginx did `try_files $uri
+    // $uri/ /index.html`, so behind compose every client route survived a
+    // reload and the short route list above was never exercised. Without
+    // nginx it is the whole contract: /setup, /customer, /impressum,
+    // /datenschutz, /payment-check, /quote/:token, /contract/:token,
+    // /invite/:token, /transfer/:token, /transfer-upload/:token and the
+    // branded short URLs all 404'd on a direct hit or a refresh. /setup is
+    // the first URL a new install visits.
+    spaCatchAll = (req, res) => sendSpa(res);
   } else {
     logger.info('Frontend static serving disabled or dist not found', { serveFrontendEnv, frontendDir });
     app.get('/', handlePublicSiteRequest, (req, res) => {
@@ -968,6 +982,15 @@ try {
 
 // 404 handler for undefined API routes
 app.use('/api', notFoundHandler);
+
+// SPA history fallback, deliberately registered here — AFTER the /api 404
+// handler, so an unknown /api/* route still answers JSON instead of being
+// handed the HTML shell, and after the short-URL resolver so a real short
+// code still redirects. GET-only: a stray POST/PUT keeps 404ing rather than
+// getting a 200 page back.
+if (spaCatchAll) {
+  app.get('*', spaCatchAll);
+}
 
 // Global error handler (must be last)
 app.use(errorHandler);

@@ -889,6 +889,28 @@ jobs:
         [[ "$code" == "302" && "$loc" == *"/admin/login" ]] \
           || { echo "::error::/ returned $code (Location: ${loc:-none}); expected 302 -> /admin/login"; exit 1; }
 
+    - name: Assert every client route survives a direct hit
+      run: |
+        # nginx did `try_files $uri $uri/ /index.html`, so behind compose these
+        # always worked and nothing caught their absence here. /setup is the
+        # first URL a new install visits.
+        for r in /setup /customer /impressum /datenschutz /payment-check \
+                 /quote/x /contract/x /invite/x /transfer/x /transfer-upload/x; do
+          code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:3000${r}")
+          [[ "$code" == "200" ]] || { echo "::error::${r} returned $code, expected the SPA shell"; exit 1; }
+        done
+
+    - name: Assert the catch-all did not swallow the API or the short-URL resolver
+      run: |
+        # The SPA catch-all is registered after the /api 404 handler, so an
+        # unknown API route must still answer JSON rather than the HTML shell.
+        body=$(curl -s "http://localhost:3000/api/nope")
+        grep -q '<div id="root">' <<< "$body" && { echo "::error::unknown /api route served the SPA shell"; exit 1; } || true
+        grep -q '"error"' <<< "$body" || { echo "::error::unknown /api route did not answer JSON: $body"; exit 1; }
+        # A typo'd short URL must still 404 rather than render the shell (#699).
+        code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/s/nonexistent)
+        [[ "$code" == "404" ]] || { echo "::error::/s/<unknown> returned $code, expected 404"; exit 1; }
+
     - name: Assert the SPA bundle is gzipped
       run: |
         asset=$(curl -fsS http://localhost:3000/admin | grep -oE '/assets/[^"]+\.js' | head -1)
