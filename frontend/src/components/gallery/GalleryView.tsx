@@ -46,6 +46,12 @@ interface GalleryViewProps {
     upload_category_id?: number | null;
     hero_photo_id?: number | null;
     allow_downloads?: boolean;
+    // Banner overrides come from /gallery/:slug/info (the /photos response
+    // does NOT carry them) and are spread straight through to GalleryLayout.
+    promo_mode?: 'inherit' | 'custom' | 'off';
+    promo_markdown?: string | null;
+    info_mode?: 'inherit' | 'custom' | 'off';
+    info_markdown?: string | null;
   };
 }
 
@@ -330,6 +336,7 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event }) => {
         twitter_url: settingsData.branding_twitter_url || '',
         youtube_url: settingsData.branding_youtube_url || '',
         promo_markdown: settingsData.branding_promo_markdown || '',
+        info_markdown: settingsData.branding_info_markdown || '',
         promo_position: settingsData.branding_promo_position === 'below_footer' ? 'below_footer' : 'above_footer',
         // Promo alignment (#482). Defaults to 'center' to match the
         // gallery footer; see GalleryLayout.
@@ -755,7 +762,19 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event }) => {
   if (hiddenUntilReveal) {
     const uploadsOn = Boolean(data?.event?.allow_user_uploads || event?.allow_user_uploads);
     return (
-      <GalleryLayout event={event} brandingSettings={brandingSettings}>
+      <GalleryLayout
+        event={{
+          ...event,
+          // The reveal-hidden view still renders the chrome, so the info
+          // banner resolves here too. The context `event` comes from the
+          // gallery login response and carries no banner fields, which would
+          // silently downgrade a per-event 'off' to 'inherit' and show the
+          // global banner on a gallery the admin muted (#932).
+          info_mode: (data?.event as { info_mode?: 'inherit' | 'custom' | 'off' })?.info_mode,
+          info_markdown: (data?.event as { info_markdown?: string | null })?.info_markdown,
+        }}
+        brandingSettings={brandingSettings}
+      >
         <div className="max-w-xl mx-auto text-center py-16 px-4">
           <div className="mx-auto mb-5 w-16 h-16 rounded-full bg-surface flex items-center justify-center">
             <EyeOff className="w-8 h-8 text-muted-theme" />
@@ -952,11 +971,17 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event }) => {
       <GalleryLayout
         event={{
           ...event,
-          // Per-event promo override (#440). Sourced from the gallery
-          // /info response so the layout can decide between inherit /
-          // custom / off without a second fetch.
+          // Per-event promo override (#440).
           promo_mode: (data?.event as { promo_mode?: 'inherit' | 'custom' | 'off' })?.promo_mode,
           promo_markdown: (data?.event as { promo_markdown?: string | null })?.promo_markdown,
+          // Per-event info-banner override (#932). Read from the /photos
+          // response rather than the context event: the context is seeded from
+          // the gallery LOGIN response, which carries only a small identity
+          // subset, so anything not in that subset is undefined right after a
+          // guest signs in. /photos is the payload that refreshes on every
+          // gallery load, which is why the fields were added there too.
+          info_mode: (data?.event as { info_mode?: 'inherit' | 'custom' | 'off' })?.info_mode,
+          info_markdown: (data?.event as { info_markdown?: string | null })?.info_markdown,
         }}
         brandingSettings={brandingSettings}
         heroLogoVisible={data?.event?.hero_logo_visible !== false}
