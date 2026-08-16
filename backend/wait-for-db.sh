@@ -55,6 +55,14 @@ for _dir in /app/storage /app/data /app/logs; do
   fi
 done
 
+# Explicit SQLite boots (DATABASE_CLIENT=sqlite3 — the all-in-one image's
+# default, #1042) have no Postgres to wait for: skip the whole readiness/
+# create/verify section below. The engine resolver further down still runs,
+# still logs the resolved engine, and still refuses the populated-both
+# conflict (#1038). Compose deployments pin DATABASE_CLIENT=pg and knexfile's
+# production block defaults to pg when unset, so nothing changes for them.
+if [ "${DATABASE_CLIENT:-}" != "sqlite3" ]; then
+
 host="${DB_HOST:-postgres}"
 port="${DB_PORT:-5432}"
 user="${DB_USER:-picpeak}"
@@ -122,6 +130,10 @@ until PGPASSWORD="$DB_PASSWORD" psql -h "$host" -p "$port" -U "$user" -d "$targe
 done
 
 >&2 echo "Target database \"$target_db\" is ready."
+
+else
+  >&2 echo "DATABASE_CLIENT=sqlite3 — skipping the PostgreSQL readiness wait."
+fi # end Postgres wait (skipped for explicit sqlite3 boots)
 
 # Ensure storage directories exist with proper permissions (Issue #67 fix)
 # When host directories are bind-mounted, the container's built-in directories are overridden

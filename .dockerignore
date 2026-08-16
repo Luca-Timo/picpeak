@@ -5,7 +5,10 @@
 .env.*
 docker-compose*.yml
 .DS_Store
-node_modules
+# **/ so backend/node_modules and frontend/node_modules are excluded too —
+# the root-context Dockerfile.aio COPYs those directories and must get its
+# deps from its builder stages, never from the host checkout.
+**/node_modules
 npm-debug.log
 coverage
 .nyc_output
