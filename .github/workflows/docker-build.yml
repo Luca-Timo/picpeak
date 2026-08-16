@@ -861,7 +861,13 @@ jobs:
         body=$(curl -fsS http://localhost:3000/admin)
         echo "$body" | grep -q '<div id="root">' || { echo "::error::/admin did not serve the SPA shell"; exit 1; }
         echo "$body" | grep -q '<title>AIO Smoke</title>' || { echo "::error::BRAND_TITLE was not rendered into index.html"; exit 1; }
-        echo "$body" | grep -q 'BRAND_TITLE' && { echo "::error::unrendered placeholder leaked"; exit 1; } || true
+        # -F on the literal token: index.html's explanatory comment mentions
+        # BRAND_TITLE in prose and Vite keeps that comment in the built shell,
+        # so a bare `grep BRAND_TITLE` always matches. Only an unsubstituted
+        # ${BRAND_TITLE}/${BRAND_DESCRIPTION} is a real leak.
+        for tok in '${BRAND_TITLE}' '${BRAND_DESCRIPTION}'; do
+          echo "$body" | grep -qF "$tok" && { echo "::error::unrendered placeholder $tok leaked"; exit 1; } || true
+        done
 
     - name: Assert hashed assets are cached immutably
       run: |
@@ -873,8 +879,23 @@ jobs:
     - name: Assert API and root respond
       run: |
         curl -fsS http://localhost:3000/api/public/settings > /dev/null
+        # `/` goes to handlePublicSiteRequest, which 302s to /admin/login while
+        # the public landing site is disabled — the state of a fresh install,
+        # which is exactly what this container is. Assert the redirect target
+        # rather than a 200, so the check still proves express.static's index
+        # option isn't shadowing the handler.
         code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/)
-        [[ "$code" == "200" ]] || { echo "::error::/ returned $code"; exit 1; }
+        loc=$(curl -s -o /dev/null -w '%{redirect_url}' http://localhost:3000/)
+        [[ "$code" == "302" && "$loc" == *"/admin/login" ]] \
+          || { echo "::error::/ returned $code (Location: ${loc:-none}); expected 302 -> /admin/login"; exit 1; }
+
+    - name: Assert the SPA bundle is gzipped
+      run: |
+        asset=$(curl -fsS http://localhost:3000/admin | grep -oE '/assets/[^"]+\.js' | head -1)
+        # GET, not HEAD: the compression middleware skips bodyless responses,
+        # so a HEAD probe reports no Content-Encoding even when gzip is active.
+        enc=$(curl -s -o /dev/null -D - -H 'Accept-Encoding: gzip' "http://localhost:3000${asset}" | grep -i '^content-encoding:')
+        grep -qi gzip <<< "$enc" || { echo "::error::asset served uncompressed (compression middleware inactive?)"; exit 1; }
 
     - name: Dump logs on failure
       if: failure()
