@@ -33,7 +33,7 @@ const VALID_SCOPES = ['quote', 'contract', 'contract-signature', 'invoice'];
 
 router.get(
   '/backup-integrity',
-  requirePermission('settings.view'),
+  requirePermission(['settings.view', 'system.view']),
   [
     // CSV string like `?scope=contract,invoice`. Each member must be
     // one of the four known scopes. Empty / omitted means full scan.
@@ -78,7 +78,7 @@ router.get(
  */
 router.get(
   '/backup-coverage',
-  requirePermission('settings.view'),
+  requirePermission(['settings.view', 'system.view']),
   handleAsync(async (req, res) => {
     const report = await getCoverageReport();
     return successResponse(res, { report });
@@ -97,7 +97,7 @@ router.get(
  */
 router.get(
   '/failures',
-  requirePermission('settings.view'),
+  requirePermission(['settings.view', 'system.view']),
   handleAsync(async (req, res) => {
     const stuckEmails = await db('email_queue')
       .where(function () {
@@ -132,7 +132,7 @@ router.get(
  */
 router.post(
   '/failures/email/:id/retry',
-  requirePermission('settings.edit'),
+  requirePermission('system.manage'),
   handleAsync(async (req, res) => {
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
@@ -153,7 +153,7 @@ router.post(
  */
 router.delete(
   '/failures/email/:id',
-  requirePermission('settings.edit'),
+  requirePermission('system.manage'),
   handleAsync(async (req, res) => {
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });

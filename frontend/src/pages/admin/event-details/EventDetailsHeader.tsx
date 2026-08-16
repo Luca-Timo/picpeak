@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { Event } from '../../../types';
 import { Button, Card } from '../../../components/common';
+import { PermissionGate } from '../../../components/admin/PermissionGate';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import { buildShareLinkUrl } from '../../../utils/url';
@@ -137,22 +138,24 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
                   </>
                 ) : (
                   <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      leftIcon={<Edit2 className="w-4 h-4" />}
-                      onClick={handleStartEdit}
-                    >
-                      {t('common.edit')}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      leftIcon={<Type className="w-4 h-4" />}
-                      onClick={() => setShowRenameDialog(true)}
-                    >
-                      {t('events.rename.button', 'Rename')}
-                    </Button>
+                    <PermissionGate permission="events.edit">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        leftIcon={<Edit2 className="w-4 h-4" />}
+                        onClick={handleStartEdit}
+                      >
+                        {t('common.edit')}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        leftIcon={<Type className="w-4 h-4" />}
+                        onClick={() => setShowRenameDialog(true)}
+                      >
+                        {t('events.rename.button', 'Rename')}
+                      </Button>
+                    </PermissionGate>
                     {feedbackSettings?.feedback_enabled && (
                       <Button
                         variant="outline"
@@ -167,21 +170,23 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
                         bill editor with the event snapshot + (when exactly
                         one is linked) the customer. Gated on the bills flag. */}
                     {flags.bills && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        leftIcon={<Receipt className="w-4 h-4" />}
-                        onClick={() => {
-                          const accts = ((event as { customer_accounts?: Array<{ id: number }> }).customer_accounts) || [];
-                          const params = new URLSearchParams({ eventId: String(event.id) });
-                          if (event.event_name) params.set('eventName', event.event_name);
-                          if (event.event_date) params.set('eventDate', String(event.event_date).slice(0, 10));
-                          if (accts.length === 1) params.set('customerAccountId', String(accts[0].id));
-                          navigate(`/admin/clients/bills/new?${params.toString()}`);
-                        }}
-                      >
-                        {t('events.createInvoice', 'Create invoice')}
-                      </Button>
+                      <PermissionGate permission="bills.manage">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          leftIcon={<Receipt className="w-4 h-4" />}
+                          onClick={() => {
+                            const accts = ((event as { customer_accounts?: Array<{ id: number }> }).customer_accounts) || [];
+                            const params = new URLSearchParams({ eventId: String(event.id) });
+                            if (event.event_name) params.set('eventName', event.event_name);
+                            if (event.event_date) params.set('eventDate', String(event.event_date).slice(0, 10));
+                            if (accts.length === 1) params.set('customerAccountId', String(accts[0].id));
+                            navigate(`/admin/clients/bills/new?${params.toString()}`);
+                          }}
+                        >
+                          {t('events.createInvoice', 'Create invoice')}
+                        </Button>
+                      </PermissionGate>
                     )}
                   </>
                 )}
@@ -222,15 +227,17 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
                 {t('events.draftBanner')}
               </p>
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<Send className="w-4 h-4" />}
-              onClick={() => setShowPublishDialog(true)}
-              isLoading={isPublishing}
-            >
-              {t('events.publishAndNotify')}
-            </Button>
+            <PermissionGate permission="events.edit">
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<Send className="w-4 h-4" />}
+                onClick={() => setShowPublishDialog(true)}
+                isLoading={isPublishing}
+              >
+                {t('events.publishAndNotify')}
+              </Button>
+            </PermissionGate>
           </div>
         </Card>
       )}

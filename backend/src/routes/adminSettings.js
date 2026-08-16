@@ -6,7 +6,7 @@ const { body, validationResult } = require('express-validator');
 const { db, logActivity } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
 const { adminAuth } = require('../middleware/auth');
-const { requirePermission } = require('../middleware/permissions');
+const { requirePermission, userHasAnyPermission } = require('../middleware/permissions');
 const { clearMaintenanceCache } = require('../middleware/maintenance');
 const { clearSettingsCache } = require('../services/rateLimitService');
 const {
@@ -63,6 +63,63 @@ const stripReservedSettingKeys = (settings) => {
     if (isReservedSettingKey(key)) delete settings[key];
   }
   return settings;
+};
+
+// Migration 174 hardening — per-key permission boundary for the GENERIC settings
+// writers. /general, /analytics, /seo and /security all upsert arbitrary
+// setting_keys, so without this a role holding only the broad `settings.edit`
+// (or `settings.security`) could set keys owned by a NARROWER permission —
+// repointing the public site URL, security policy, or VAT/accounting config —
+// via the wrong endpoint, defeating the settings.edit split. Any protected key
+// the caller isn't permitted to write is stripped before the upsert. The
+// dedicated routes still work because their caller holds the matching perm
+// (e.g. PUT /accounting is gated by settings.banking, so accounting_* survives).
+const PROTECTED_SETTING_KEY_PERMS = [
+  { match: (k) => k === 'general_site_url', perm: 'settings.domains' },
+  { match: (k) => k.startsWith('security_'), perm: 'settings.security' },
+  { match: (k) => k.startsWith('accounting_'), perm: 'settings.banking' },
+];
+// Returns the list of {key, perm} the caller tried to CHANGE without the owning
+// permission. Callers 403 when it's non-empty rather than silently no-op'ing a
+// permission boundary. Change-detection matters: the General tab re-posts
+// general_site_url on every save, so a no-op round-trip of the stored value must
+// not 403 an otherwise-safe settings.edit save (the office-manager role this PR
+// exists to enable) — only an actual change is rejected. A denied key the caller
+// couldn't change is left in `settings` (the request 403s before the upsert); an
+// unauthorized no-op is dropped so the rest of the save proceeds.
+const collectUnauthorizedProtectedKeys = async (settings, adminId) => {
+  const denied = [];
+  for (const key of Object.keys(settings)) {
+    const rule = PROTECTED_SETTING_KEY_PERMS.find((r) => r.match(key));
+    if (!rule) continue;
+    if (await userHasAnyPermission(adminId, [rule.perm])) continue;
+    const row = await db('app_settings').where({ setting_key: key }).first();
+    let stored = null;
+    if (row) {
+      try { stored = JSON.parse(row.setting_value); } catch (_) { stored = row.setting_value; }
+    }
+    if (String(stored ?? '') === String(settings[key] ?? '')) {
+      delete settings[key]; // unchanged — let the rest of the save through
+      continue;
+    }
+    denied.push({ key, perm: rule.perm });
+  }
+  return denied;
+};
+// Express helper: 403 (naming the keys + required perms) when the caller tried
+// to write a protected key they don't hold; returns true if the request was
+// rejected so the route can stop.
+const rejectUnauthorizedProtectedKeys = async (settings, req, res) => {
+  const denied = await collectUnauthorizedProtectedKeys(settings, req.admin.id);
+  if (denied.length > 0) {
+    res.status(403).json({
+      error: `You don't have permission to change: ${denied.map((d) => d.key).join(', ')}`,
+      code: 'FORBIDDEN',
+      keys: denied,
+    });
+    return true;
+  }
+  return false;
 };
 
 // Configure multer for logo uploads
@@ -288,7 +345,8 @@ router.put('/customer-surface', adminAuth, requirePermission('settings.edit'), a
 // Accounting settings (km rate, per-diem rate, require-proof). Read via the
 // generic GET /:type ('accounting'); this is the typed write. Rates are
 // integer minor units; verify legal/tax guidance with a Treuhaender.
-router.put('/accounting', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+// Migration 174: VAT/accounting config is money-adjacent → settings.banking.
+router.put('/accounting', adminAuth, requirePermission('settings.banking'), async (req, res) => {
   try {
     const updates = [];
     const setInt = (key) => {
@@ -577,7 +635,8 @@ router.put('/downloads', adminAuth, requirePermission('settings.edit'), async (r
 
 // Read the SSO config. The secret is redacted to a set/unset flag; the
 // computed redirect URI is included for copy-paste into the IdP client.
-router.get('/sso', adminAuth, requirePermission('settings.view'), async (req, res) => {
+// Migration 174: SSO/OIDC + security config → settings.security.
+router.get('/sso', adminAuth, requirePermission(['settings.view', 'settings.security']), async (req, res) => {
   try {
     const oidcService = require('../services/oidcService');
     const cfg = await oidcService.getOidcConfig();
@@ -610,7 +669,7 @@ router.get('/sso', adminAuth, requirePermission('settings.view'), async (req, re
   }
 });
 
-router.put('/sso', adminAuth, requirePermission('settings.edit'), [
+router.put('/sso', adminAuth, requirePermission('settings.security'), [
   body('oidc_enabled').optional().isBoolean(),
   body('oidc_issuer_url').optional({ checkFalsy: true }).isURL({ protocols: ['http', 'https'], require_tld: false }),
   body('oidc_client_id').optional().isString().trim(),
@@ -717,7 +776,7 @@ router.put('/sso', adminAuth, requirePermission('settings.edit'), [
 
 // Server-side discovery probe: confirms the issuer is reachable and speaks
 // OIDC before the admin flips the enable toggle. Uses the SAVED config.
-router.post('/sso/test', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.post('/sso/test', adminAuth, requirePermission('settings.security'), async (req, res) => {
   try {
     const oidcService = require('../services/oidcService');
     const cfg = await oidcService.getOidcConfig();
@@ -1300,6 +1359,12 @@ router.put('/general', adminAuth, requirePermission('settings.edit'), async (req
     const settings = stripReservedSettingKeys({ ...req.body });
     let uploadLimitTouched = false;
 
+    // Migration 174: drop any protected key (site URL / security / accounting)
+    // the caller isn't permitted to write, so the settings.edit bucket can't be
+    // used to repoint the install via this generic writer. See
+    // rejectUnauthorizedProtectedKeys (403s when a protected key is denied).
+    if (await rejectUnauthorizedProtectedKeys(settings, req, res)) return;
+
     const publicSiteKeysTouched = Object.keys(settings).some((key) => key.startsWith('general_public_site_'));
 
     if (Object.prototype.hasOwnProperty.call(settings, 'general_max_files_per_upload')) {
@@ -1425,9 +1490,11 @@ router.put('/general', adminAuth, requirePermission('settings.edit'), async (req
 });
 
 // Update security settings
-router.put('/security', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.put('/security', adminAuth, requirePermission('settings.security'), async (req, res) => {
   try {
     const settings = stripReservedSettingKeys({ ...req.body });
+    // A settings.security holder still can't write domain/accounting keys here.
+    if (await rejectUnauthorizedProtectedKeys(settings, req, res)) return;
 
     // Update or insert each setting
     for (const [key, value] of Object.entries(settings)) {
@@ -1466,6 +1533,7 @@ router.put('/security', adminAuth, requirePermission('settings.edit'), async (re
 router.put('/analytics', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
     const settings = stripReservedSettingKeys({ ...req.body });
+    if (await rejectUnauthorizedProtectedKeys(settings, req, res)) return;
 
     // Validate the provider switch (#663 Phase 1). Reject unknown values
     // so the dashboard route's factory doesn't have to defensively guard.
@@ -1521,6 +1589,7 @@ router.put('/analytics', adminAuth, requirePermission('settings.edit'), async (r
 router.put('/seo', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
     const settings = stripReservedSettingKeys({ ...req.body });
+    if (await rejectUnauthorizedProtectedKeys(settings, req, res)) return;
 
     // Validate seo_blocked_ai_agents is an array of strings
     if (settings.seo_blocked_ai_agents !== undefined) {
@@ -1845,7 +1914,7 @@ router.post('/favicon', adminAuth, requirePermission('settings.edit'), faviconUp
 });
 
 // Update rate limit settings
-router.put('/security/rate-limit', adminAuth, requirePermission('settings.edit'), [
+router.put('/security/rate-limit', adminAuth, requirePermission('settings.security'), [
   body('rate_limit_enabled').isBoolean().withMessage('Enabled must be a boolean'),
   body('rate_limit_window_minutes').isInt({ min: 1, max: 60 }).withMessage('Window must be between 1 and 60 minutes'),
   body('rate_limit_max_requests').isInt({ min: 10, max: 10000 }).withMessage('Max requests must be between 10 and 10000'),

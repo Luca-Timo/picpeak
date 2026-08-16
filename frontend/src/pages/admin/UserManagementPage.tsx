@@ -23,8 +23,10 @@ import { Button, Input, Card, Loading } from '../../components/common';
 import { userManagementService } from '../../services/userManagement.service';
 import type { AdminUser, AdminRole, AdminInvitation } from '../../types';
 import { useLocalizedDate, useModal, useMutationWithToast } from "../../hooks";
+import { usePermissions } from '../../contexts/PermissionsContext';
+import { RoleManagementTab } from '../../components/admin/RoleManagementTab';
 
-type TabType = 'users' | 'invitations';
+type TabType = 'users' | 'invitations' | 'roles';
 
 // Role badge colors
 const getRoleBadgeColor = (roleName: string): string => {
@@ -369,6 +371,8 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 export const UserManagementPage: React.FC = () => {
   const { t } = useTranslation();
   const { formatDistanceToNow } = useLocalizedDate()
+  const { hasAnyPermission } = usePermissions();
+  const canManageRoles = hasAnyPermission(['roles.manage', 'users.view']);
 
   // State
   const [activeTab, setActiveTab] = useState<TabType>('users');
@@ -612,6 +616,9 @@ export const UserManagementPage: React.FC = () => {
       label: t('userManagement.tabs.invitations'),
       count: invitations?.length || 0,
     },
+    ...(canManageRoles
+      ? [{ key: 'roles' as TabType, label: t('userManagement.tabs.roles', 'Roles'), count: roles?.length || 0 }]
+      : []),
   ];
 
   return (
@@ -721,23 +728,25 @@ export const UserManagementPage: React.FC = () => {
       </div>
 
       {/* Search */}
-      <Card padding="sm" className="mb-6">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1">
-            <Input
-              type="text"
-              placeholder={
-                activeTab === 'users'
-                  ? t('userManagement.searchUsersPlaceholder')
-                  : t('userManagement.searchInvitationsPlaceholder')
-              }
-              leftIcon={<Search className="w-5 h-5 text-neutral-400" />}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+      {activeTab !== 'roles' && (
+        <Card padding="sm" className="mb-6">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <Input
+                type="text"
+                placeholder={
+                  activeTab === 'users'
+                    ? t('userManagement.searchUsersPlaceholder')
+                    : t('userManagement.searchInvitationsPlaceholder')
+                }
+                leftIcon={<Search className="w-5 h-5 text-neutral-400" />}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      )}
 
       {/* Users Tab Content */}
       {activeTab === 'users' && (
@@ -966,6 +975,9 @@ export const UserManagementPage: React.FC = () => {
           </div>
         </Card>
       )}
+
+      {/* Roles Tab Content */}
+      {activeTab === 'roles' && canManageRoles && <RoleManagementTab />}
 
       {/* Create Invitation Modal */}
       <CreateInvitationModal

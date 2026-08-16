@@ -26,6 +26,7 @@ import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
 import { Button, Input, Card, SkeletonTable, ErrorBoundary } from '../../components/common';
 import { BulkArchiveModal, BulkDeleteModal } from '../../components/admin';
+import { PermissionGate } from '../../components/admin/PermissionGate';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { eventsService, type EventStatusFilter } from '../../services/events.service';
 import { adminService } from '../../services/admin.service';
@@ -314,13 +315,15 @@ export const EventsListPage: React.FC = () => {
             <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">{t('events.title')}</h1>
             <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t('events.subtitle')}</p>
           </div>
-          <Button
-            variant="primary"
-            leftIcon={<Plus className="w-5 h-5" />}
-            onClick={() => navigate('/admin/events/new')}
-          >
-            {t('events.createEvent')}
-          </Button>
+          <PermissionGate permission="events.create">
+            <Button
+              variant="primary"
+              leftIcon={<Plus className="w-5 h-5" />}
+              onClick={() => navigate('/admin/events/new')}
+            >
+              {t('events.createEvent')}
+            </Button>
+          </PermissionGate>
         </div>
 
       {/* Statistics Cards — fed from /admin/dashboard/stats so the totals
@@ -442,21 +445,25 @@ export const EventsListPage: React.FC = () => {
               <Button variant="outline" size="sm" onClick={() => setSelectedEvents([])}>
                 {t('events.clear')}
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => bulkArchiveModal.open()}
-              >
-                {t('events.archiveSelected')}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => bulkDeleteModal.open()}
-                className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/30"
-              >
-                {t('events.deleteSelected', 'Delete Selected')}
-              </Button>
+              <PermissionGate permission="events.archive">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => bulkArchiveModal.open()}
+                >
+                  {t('events.archiveSelected')}
+                </Button>
+              </PermissionGate>
+              <PermissionGate permission="events.delete">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => bulkDeleteModal.open()}
+                  className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/30"
+                >
+                  {t('events.deleteSelected', 'Delete Selected')}
+                </Button>
+              </PermissionGate>
             </div>
           </div>
         )}
@@ -665,44 +672,50 @@ export const EventsListPage: React.FC = () => {
                                     </button>
                                   ) : null}
                                   {!event.is_archived ? (
-                                    <button
-                                      onClick={() => {
-                                        archiveMutation.mutate(event.id);
-                                        setActiveDropdown(null);
-                                        setDropdownPosition(null);
-                                      }}
-                                      className="w-full text-left px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 flex items-center gap-2"
-                                    >
-                                      <Archive className="w-4 h-4" />
-                                      {t('events.archiveEventAction')}
-                                    </button>
+                                    <PermissionGate permission="events.archive">
+                                      <button
+                                        onClick={() => {
+                                          archiveMutation.mutate(event.id);
+                                          setActiveDropdown(null);
+                                          setDropdownPosition(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 flex items-center gap-2"
+                                      >
+                                        <Archive className="w-4 h-4" />
+                                        {t('events.archiveEventAction')}
+                                      </button>
+                                    </PermissionGate>
                                   ) : null}
                                   {event.is_archived ? (
+                                    <PermissionGate permission="archives.download">
+                                      <button
+                                        onClick={() => {
+                                          toast.info(t('events.downloadArchiveSoon'));
+                                          setActiveDropdown(null);
+                                          setDropdownPosition(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 flex items-center gap-2"
+                                      >
+                                        <Download className="w-4 h-4" />
+                                        {t('events.downloadArchiveAction')}
+                                      </button>
+                                    </PermissionGate>
+                                  ) : null}
+                                  <PermissionGate permission="events.delete">
                                     <button
                                       onClick={() => {
-                                        toast.info(t('events.downloadArchiveSoon'));
-                                        setActiveDropdown(null);
-                                        setDropdownPosition(null);
+                                        if (confirm(t('events.deleteEventConfirm'))) {
+                                          deleteMutation.mutate(event.id);
+                                          setActiveDropdown(null);
+                                          setDropdownPosition(null);
+                                        }
                                       }}
-                                      className="w-full text-left px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 flex items-center gap-2"
+                                      className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center gap-2"
                                     >
-                                      <Download className="w-4 h-4" />
-                                      {t('events.downloadArchiveAction')}
+                                      <Trash2 className="w-4 h-4" />
+                                      {t('events.deleteEvent')}
                                     </button>
-                                  ) : null}
-                                  <button
-                                    onClick={() => {
-                                      if (confirm(t('events.deleteEventConfirm'))) {
-                                        deleteMutation.mutate(event.id);
-                                        setActiveDropdown(null);
-                                        setDropdownPosition(null);
-                                      }
-                                    }}
-                                    className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center gap-2"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                    {t('events.deleteEvent')}
-                                  </button>
+                                  </PermissionGate>
                                 </div>
                               </div>
                             )}

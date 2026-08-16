@@ -6,6 +6,7 @@ import { Upload, X } from 'lucide-react';
 import type { Event } from '../../../types';
 import { Button, Card, Loading } from '../../../components/common';
 import { AdminPhotoGrid, AdminPhotoViewer, PhotoFilters, PhotoUploadModal, PhotoFilterPanel, PhotoExportMenu } from '../../../components/admin';
+import { PermissionGate } from '../../../components/admin/PermissionGate';
 import { externalMediaService } from '../../../services/externalMedia.service';
 import { AdminPhoto, type PhotoFilters as PhotoFilterParams, type FeedbackFilters, type FilterSummary } from '../../../services/photos.service';
 import { ExternalFolderPicker } from './ExternalFolderPicker';
@@ -93,29 +94,35 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
       {/* Actions Bar */}
       <div className="mb-4 flex flex-wrap justify-between items-center gap-4">
         <div className="flex items-center gap-3">
-          <Button
-            variant="primary"
-            size="sm"
-            leftIcon={<Upload className="w-4 h-4" />}
-            onClick={() => setShowPhotoUpload(true)}
-          >
-            {t('events.uploadPhotos')}
-          </Button>
-          {event.source_mode === 'reference' && (
+          <PermissionGate permission="photos.upload">
             <Button
-              variant="outline"
+              variant="primary"
               size="sm"
-              onClick={() => setShowExternalImport(true)}
+              leftIcon={<Upload className="w-4 h-4" />}
+              onClick={() => setShowPhotoUpload(true)}
             >
-              {t('events.importExternal', 'Import from External Folder')}
+              {t('events.uploadPhotos')}
             </Button>
+          </PermissionGate>
+          {event.source_mode === 'reference' && (
+            <PermissionGate permission="photos.upload">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowExternalImport(true)}
+              >
+                {t('events.importExternal', 'Import from External Folder')}
+              </Button>
+            </PermissionGate>
           )}
         </div>
-        <PhotoExportMenu
-          eventId={parseInt(id!)}
-          selectedPhotoIds={selectedPhotoIds}
-          filters={feedbackFilters}
-        />
+        <PermissionGate permission="photos.download">
+          <PhotoExportMenu
+            eventId={parseInt(id!)}
+            selectedPhotoIds={selectedPhotoIds}
+            filters={feedbackFilters}
+          />
+        </PermissionGate>
       </div>
 
       {/* Photo Grid */}

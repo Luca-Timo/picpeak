@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Event } from '../../../types';
 import { FeedbackModerationPanel } from '../../../components/admin';
+import { PermissionGate } from '../../../components/admin/PermissionGate';
 import { EventReminderOverrideCard } from '../../../components/admin/EventReminderOverrideCard';
 import { SlideshowSettingsCard } from '../../../components/admin/SlideshowSettingsCard';
 import { DownloadResolutionCard } from '../../../components/admin/DownloadResolutionCard';
@@ -158,15 +159,17 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
         {/* Actions */}
         {!event.is_archived && (
-          <EventActionsCard
-            event={event}
-            onArchive={onArchive}
-            isArchiving={isArchiving}
-            setShowPublishDialog={setShowPublishDialog}
-            isPublishing={isPublishing}
-            setShowDuplicateDialog={setShowDuplicateDialog}
-            isDuplicating={isDuplicating}
-          />
+          <PermissionGate permissions={['events.edit', 'events.archive', 'events.create']}>
+            <EventActionsCard
+              event={event}
+              onArchive={onArchive}
+              isArchiving={isArchiving}
+              setShowPublishDialog={setShowPublishDialog}
+              isPublishing={isPublishing}
+              setShowDuplicateDialog={setShowDuplicateDialog}
+              isDuplicating={isDuplicating}
+            />
+          </PermissionGate>
         )}
       </div>
 
