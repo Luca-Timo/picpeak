@@ -14,9 +14,15 @@
  *      frontend already ships.
  *
  * The shell is inert HTML: it boots, calls /api/public/settings (exempt) and
- * renders MaintenanceMode itself. So the shell passes while every API route and
- * every backend-owned content mount stays gated. This test pins that split —
- * the risk in the fix is over-exemption, so the gated half matters most.
+ * renders MaintenanceMode itself, so letting it through costs nothing.
+ *
+ * The dividing line is taken from frontend/nginx.conf rather than invented:
+ * paths nginx answers from the frontend container are exempt, paths it
+ * proxy_passes to the backend stay gated. That makes the all-in-one image
+ * behave exactly like compose in both directions. The gated half is where the
+ * risk lives — a negative "everything that is not an API is a shell" rule
+ * looks right and quietly un-gates /og/ (event names, cover images) and the
+ * public CMS at the site root — so most of the cases below assert it.
  */
 
 const { maintenanceMiddleware } = require('../../src/middleware/maintenance');
@@ -57,7 +63,7 @@ describe('maintenanceMiddleware — SPA shell vs API split', () => {
       ['/admin/login', 'the page that calls the exempt login API'],
       ['/assets/index-abc123.js', 'hashed bundle the shell loads'],
       ['/gallery/some-event', 'guest gallery route'],
-      ['/', 'site root'],
+      ['/customer/portal', 'customer portal route'],
     ])('%s (%s)', async (path) => {
       const { passed } = await run(path);
       expect(passed).toBe(true);
@@ -71,6 +77,14 @@ describe('maintenanceMiddleware — SPA shell vs API split', () => {
       ['/photos/anything.jpg', 'backend-owned photo mount'],
       ['/thumbnails/anything.jpg', 'backend-owned thumbnail mount'],
       ['/fonts/anything.woff2', 'backend-owned font mount'],
+      // nginx proxy_passes these to the backend, so compose gates them today
+      // and the all-in-one image must not be the one deployment that does not.
+      ['/', 'site root — nginx `location = /` hands this to the public CMS'],
+      ['/og/gallery/some-event', 'OG renderer: leaks the event name'],
+      ['/og/gallery/some-event/cover', 'OG cover: leaks the hero thumbnail'],
+      ['/s/abc123', 'short-link renderer'],
+      ['/robots.txt', 'proxied one-to-one by nginx'],
+      ['/favicon.ico', 'proxied one-to-one by nginx'],
     ])('%s (%s) returns 503', async (path) => {
       const { passed, status, body } = await run(path);
       expect(passed).toBe(false);
