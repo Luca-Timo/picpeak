@@ -38,6 +38,16 @@ if [ -n "${BACKUP_DIR:-}" ]; then
   DATA_DIRS="$DATA_DIRS $BACKUP_DIR"
 fi
 
+# When every root lives under ONE mounted volume (the all-in-one image, #1042),
+# the mount point itself must be adopted too. Chowning only the children leaves
+# a host directory created with 0700/0750 and a foreign owner untraversable by
+# UID 1001 after the su-exec drop, so the preflight below rejects children the
+# script just created. Docker Desktop's permissive bind mounts hide this; a NAS
+# share does not.
+if [ -n "${DATA_ROOT:-}" ]; then
+  DATA_DIRS="$DATA_ROOT $DATA_DIRS"
+fi
+
 # Create the roots before touching them. With the compose layout each is its own
 # mount point so they always exist — but the AIO image mounts ONE volume at
 # /data, and a bind-mounted host directory hides the tree baked into the image.

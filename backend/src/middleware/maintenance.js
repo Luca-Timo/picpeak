@@ -91,12 +91,25 @@ async function maintenanceMiddleware(req, res, next) {
   const isStaticAsset = req.path.startsWith('/uploads/') || 
                        req.path.startsWith('/favicons/') || 
                        req.path.startsWith('/logos/');
+
+  // The admin SHELL and its bundle. The login endpoints above are exempt, but
+  // they are useless if the page that calls them 503s: when the backend serves
+  // the frontend itself (SERVE_FRONTEND / the all-in-one image, #1042) this
+  // middleware runs long before the static block, so /admin/login and
+  // /assets/* returned 503 JSON and an admin who enabled maintenance mode
+  // could never load the UI to turn it back off. nginx serves these in the
+  // compose stack, which is why it never surfaced there.
+  //
+  // Same shape as the /api/auth exemptions: this only opens the admin login
+  // surface, never gallery content or the rest of the API.
+  const isAdminShell = req.path === '/admin' || req.path.startsWith('/admin/');
+  const isFrontendBundle = req.path.startsWith('/assets/');
   
   // Allow admin routes if admin is authenticated
   const isAdminRoute = req.path.startsWith('/api/admin');
   const hasAdminAuth = req.headers.authorization?.startsWith('Bearer ');
   
-  if (skipPaths.includes(req.path) || isStaticAsset || (isAdminRoute && hasAdminAuth)) {
+  if (skipPaths.includes(req.path) || isStaticAsset || isAdminShell || isFrontendBundle || (isAdminRoute && hasAdminAuth)) {
     return next();
   }
   

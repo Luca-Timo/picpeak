@@ -106,7 +106,8 @@ RUN printf '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fo
 # `-v picpeak:/data` and nothing else to remember — back up /data and you have
 # backed up the install. /backup is where migrations 029 + 030 seed the backup
 # destinations, so it is symlinked in rather than left dangling.
-ENV DATA_DIR=/data/db \
+ENV DATA_ROOT=/data \
+    DATA_DIR=/data/db \
     DATABASE_PATH=/data/db/picpeak.db \
     STORAGE_PATH=/data/storage \
     LOG_DIR=/data/logs \
