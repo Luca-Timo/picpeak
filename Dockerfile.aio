@@ -113,6 +113,16 @@ ENV DATA_ROOT=/data \
     LOG_DIR=/data/logs \
     BACKUP_DIR=/data/backup
 
+# Share links are absolute only when a base URL is known: getFrontendBaseUrl()
+# reads FRONTEND_URL, falls back to the general_site_url setting, and otherwise
+# returns "" — which makes share_url come out as a bare "/gallery/<slug>/<token>"
+# in API responses, QR codes and emails. docker-compose.yml defaults this to
+# http://localhost:3000, but the documented one-liner for this image passes only
+# JWT_SECRET, so without a default here every fresh single-container install
+# would hand out unusable links. Same default as compose; override with
+# -e FRONTEND_URL=https://photos.example.com, or set the site URL in Settings.
+ENV FRONTEND_URL=http://localhost:3000
+
 # /app/storage is a second entrance to the same volume. The business-document
 # writers (quoteService, invoice sending/reminders, contract signatures) build
 # their paths from `path.join(process.cwd(), 'storage', ...)` and never consult
