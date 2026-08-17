@@ -113,10 +113,20 @@ ENV DATA_ROOT=/data \
     LOG_DIR=/data/logs \
     BACKUP_DIR=/data/backup
 
+# /app/storage is a second entrance to the same volume. The business-document
+# writers (quoteService, invoice sending/reminders, contract signatures) build
+# their paths from `path.join(process.cwd(), 'storage', ...)` and never consult
+# STORAGE_PATH. Compose hides that because it sets STORAGE_PATH=/app/storage
+# with WORKDIR /app, so the two happen to be the same directory; here they are
+# not, and /app is root-owned, so a quote or invoice PDF would fail to write as
+# UID 1001 — and be lost with the container even if it succeeded. Teaching
+# those services STORAGE_PATH is the real fix and belongs in its own change;
+# the symlink restores the coincidence compose already relies on.
 RUN mkdir -p /data/db /data/storage/events/active /data/storage/events/archived \
              /data/storage/thumbnails /data/logs \
              /data/backup/picpeak /data/backup/database && \
     ln -s /data/backup /backup && \
+    ln -s /data/storage /app/storage && \
     chown -R nodejs:nodejs /data
 
 VOLUME ["/data"]

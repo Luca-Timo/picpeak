@@ -44,9 +44,13 @@ fi
 # UID 1001 after the su-exec drop, so the preflight below rejects children the
 # script just created. Docker Desktop's permissive bind mounts hide this; a NAS
 # share does not.
-if [ -n "${DATA_ROOT:-}" ]; then
-  DATA_DIRS="$DATA_ROOT $DATA_DIRS"
-fi
+#
+# It is deliberately kept out of DATA_DIRS: everything below it is already
+# chowned recursively, so adding it there would walk the whole photo library a
+# second time on every restart — minutes of startup delay on exactly the large
+# NAS libraries this image targets. The mount point needs its own ownership
+# fixed, nothing more, so it gets a shallow chown of its own below.
+DATA_ROOT_DIR="${DATA_ROOT:-}"
 
 # Create the roots before touching them. With the compose layout each is its own
 # mount point so they always exist — but the AIO image mounts ONE volume at
@@ -54,9 +58,15 @@ fi
 # chown would then fail on paths that do not exist and report "the filesystem
 # rejects chown", which is both wrong and a dead end for NAS users.
 # shellcheck disable=SC2086 — intentional word-splitting over the roots
-mkdir -p $DATA_DIRS 2>/dev/null || true
+mkdir -p $DATA_ROOT_DIR $DATA_DIRS 2>/dev/null || true
 
 if [ "$(id -u)" = "0" ]; then
+  if [ -n "$DATA_ROOT_DIR" ] && ! chown nodejs:nodejs "$DATA_ROOT_DIR" 2>/dev/null; then
+    echo "ERROR: failed to chown $DATA_ROOT_DIR to nodejs (UID 1001)." >&2
+    echo "  The mounted volume root must be traversable by UID 1001 after the privilege drop." >&2
+    echo "  Workaround: chown 1001:1001 the host directory you mounted at $DATA_ROOT_DIR." >&2
+    exit 1
+  fi
   if ! chown -R nodejs:nodejs $DATA_DIRS 2>/dev/null; then
     echo "ERROR: failed to chown $DATA_DIRS to nodejs (UID 1001)." >&2
     echo "  This usually means the host filesystem rejects chown (e.g. NFS without root squash" >&2
@@ -75,7 +85,7 @@ fi
 # followed by a confusing migration error and a restart loop.
 _uid="$(id -u)"
 _gid="$(id -g)"
-for _dir in $DATA_DIRS; do
+for _dir in $DATA_ROOT_DIR $DATA_DIRS; do
   if [ ! -w "$_dir" ]; then
     echo "ERROR: $_dir is not writable by UID $_uid." >&2
     echo "  Either drop the 'user:' override from your compose file so the container starts as" >&2

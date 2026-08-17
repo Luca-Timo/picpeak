@@ -994,7 +994,13 @@ if (spaCatchAll) {
   // and /fonts are backend-owned static mounts whose middleware calls next()
   // when the file is missing, and swallowing that would answer 200 text/html
   // under an image or font URL instead of a 404.
-  const BACKEND_OWNED = ['/photos/', '/thumbnails/', '/uploads/', '/fonts/', '/health'];
+  // /assets/ belongs on this list for the same reason even though it is the
+  // frontend's own bundle: after an upgrade a still-open tab requests the old
+  // hashed chunk, which no longer exists. Answering index.html would hand a
+  // JavaScript URL a 200 text/html body, so the module load fails with a MIME
+  // error instead of the plain 404 nginx returns — and the 200 hides it from
+  // any monitoring watching status codes.
+  const BACKEND_OWNED = ['/photos/', '/thumbnails/', '/uploads/', '/fonts/', '/assets/', '/health'];
   app.get('*', (req, res, next) => {
     if (BACKEND_OWNED.some((prefix) => req.path.startsWith(prefix))) return next();
     return spaCatchAll(req, res);
