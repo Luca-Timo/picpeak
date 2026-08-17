@@ -92,24 +92,32 @@ async function maintenanceMiddleware(req, res, next) {
                        req.path.startsWith('/favicons/') || 
                        req.path.startsWith('/logos/');
 
-  // The admin SHELL and its bundle. The login endpoints above are exempt, but
-  // they are useless if the page that calls them 503s: when the backend serves
-  // the frontend itself (SERVE_FRONTEND / the all-in-one image, #1042) this
-  // middleware runs long before the static block, so /admin/login and
-  // /assets/* returned 503 JSON and an admin who enabled maintenance mode
-  // could never load the UI to turn it back off. nginx serves these in the
-  // compose stack, which is why it never surfaced there.
+  // The SPA shell — the HTML document and its bundle, as opposed to an API or a
+  // backend-owned static mount. When the backend serves the frontend itself
+  // (SERVE_FRONTEND / the all-in-one image, #1042) these requests reach this
+  // middleware long before the static block; in the compose stack nginx answers
+  // them and they never arrive here at all, which is why neither problem below
+  // ever surfaced there.
   //
-  // Same shape as the /api/auth exemptions: this only opens the admin login
-  // surface, never gallery content or the rest of the API.
-  const isAdminShell = req.path === '/admin' || req.path.startsWith('/admin/');
-  const isFrontendBundle = req.path.startsWith('/assets/');
+  // Gating them broke two things. An admin who switched maintenance mode on
+  // could not switch it back off: the login endpoints above are exempt, but
+  // /admin/login and /assets/* returned 503 JSON, so the page that calls them
+  // never loaded. And a guest hitting /gallery/... got that same raw JSON
+  // instead of the branded maintenance screen the frontend already ships.
+  //
+  // Letting the shell through costs nothing: it is inert HTML that boots, calls
+  // /api/public/settings (exempt just above) and renders MaintenanceMode on its
+  // own. Every API route stays gated, and so do the backend-owned static mounts
+  // that serve real content — a shell is not photos.
+  const BACKEND_OWNED = ['/api/', '/photos/', '/thumbnails/', '/fonts/'];
+  const isSpaShell = req.method === 'GET'
+    && !BACKEND_OWNED.some((prefix) => req.path.startsWith(prefix));
   
   // Allow admin routes if admin is authenticated
   const isAdminRoute = req.path.startsWith('/api/admin');
   const hasAdminAuth = req.headers.authorization?.startsWith('Bearer ');
   
-  if (skipPaths.includes(req.path) || isStaticAsset || isAdminShell || isFrontendBundle || (isAdminRoute && hasAdminAuth)) {
+  if (skipPaths.includes(req.path) || isStaticAsset || isSpaShell || (isAdminRoute && hasAdminAuth)) {
     return next();
   }
   
