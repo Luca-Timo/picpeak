@@ -853,7 +853,7 @@ jobs:
 
     - name: Assert engine resolved to SQLite
       run: |
-        docker exec aio ls -la /app/data/photo_sharing.db
+        docker exec aio ls -la /data/db/picpeak.db
         docker logs aio 2>&1 | grep -i "sqlite" | head -5
 
     - name: Assert SPA shell served with rendered brand title
@@ -918,6 +918,41 @@ jobs:
         # so a HEAD probe reports no Content-Encoding even when gzip is active.
         enc=$(curl -s -o /dev/null -D - -H 'Accept-Encoding: gzip' "http://localhost:3000${asset}" | grep -i '^content-encoding:')
         grep -qi gzip <<< "$enc" || { echo "::error::asset served uncompressed (compression middleware inactive?)"; exit 1; }
+
+    - name: Assert the one-volume layout and backup destinations
+      run: |
+        # #1042 asks for a single mountable root. Everything that must survive a
+        # container replacement lives under /data, and /backup — where migrations
+        # 029/030 seed the backup destinations — symlinks into it rather than
+        # dangling inside the container.
+        docker exec aio sh -c 'test -L /backup' || { echo "::error::/backup is not a symlink into the volume"; exit 1; }
+        for d in /data/db /data/storage /data/logs /data/backup/picpeak /data/backup/database; do
+          docker exec aio sh -c "test -d $d" || { echo "::error::$d missing from the volume layout"; exit 1; }
+        done
+        docker exec aio sh -c 'touch /backup/database/.w && rm /backup/database/.w' \
+          || { echo "::error::/backup/database is not writable by the app user"; exit 1; }
+
+    - name: Assert the sqlite3 CLI the backup service shells out to
+      run: |
+        # DatabaseBackupService spawns `sqlite3` for .backup and integrity_check;
+        # the npm module does not ship the binary.
+        docker exec aio sqlite3 --version > /dev/null \
+          || { echo "::error::sqlite3 CLI missing — database backups would fail with ENOENT"; exit 1; }
+
+    - name: Assert logs land on the volume
+      run: |
+        docker exec aio sh -c 'ls /data/logs/*.log > /dev/null 2>&1' \
+          || { echo "::error::logs are not being written under /data (LOG_DIR ignored?)"; exit 1; }
+
+    - name: Assert the image carries no runtime data from the build context
+      run: |
+        # Dockerfile.aio builds from the repo root; a checkout used to run
+        # PicPeak must never bake its database, photos or logs into a layer.
+        for leak in '/app/data/*.db' '/app/logs/*' '/app/storage/events'; do
+          if docker exec aio sh -c "ls $leak > /dev/null 2>&1"; then
+            echo "::error::build context leaked $leak into the image"; exit 1
+          fi
+        done
 
     - name: Dump logs on failure
       if: failure()

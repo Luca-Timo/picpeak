@@ -74,13 +74,12 @@ For a home server, a NAS, or a single small studio, the all-in-one image runs th
 
 ```bash
 docker run -d --name picpeak -p 3000:3000 \
-  -v picpeak-data:/app/data \
-  -v picpeak-storage:/app/storage \
+  -v picpeak:/data \
   -e JWT_SECRET="$(openssl rand -base64 48)" \
   ghcr.io/picpeak/picpeak/aio:stable
 ```
 
-Then open **http://localhost:3000/admin** and read the setup token with `docker exec picpeak cat /app/data/SETUP_TOKEN`.
+Then open **http://localhost:3000/admin** and read the setup token with `docker exec picpeak cat /data/db/SETUP_TOKEN`.
 
 The compose stack above is still the right choice for anything busier — SQLite takes one writer at a time, and Postgres is what scales. You can move to it later without reinstalling: take a `.picpeak` backup and restore it into the full stack. See **[Single-container install](https://docs.picpeak.app/deployment/single-container)** for the volume layout, the external-Postgres variant, TLS, and the limits.
 

@@ -25,9 +25,30 @@ unset _pair _var _file _cur
 # hard-coded nodejs user. Compose deployments that pin `user:` to something
 # other than root skip this branch — they own permissions themselves and hit
 # the preflight check below instead.
+# The writable roots. Defaults are the compose layout; the all-in-one image
+# (#1042) points all of them under one mounted volume, so these must follow the
+# same env vars the app itself reads rather than hard-coding /app.
+DATA_DIRS="${STORAGE_PATH:-/app/storage} ${DATA_DIR:-/app/data} ${LOG_DIR:-/app/logs}"
+
+# The backup root is adopted when explicitly configured, but never gates boot:
+# docker-compose.production.yml does not mount /backup, so a hardened non-root
+# deployment would fail `mkdir -p /backup` against a root-owned / and refuse to
+# start over a directory it never needed.
+if [ -n "${BACKUP_DIR:-}" ]; then
+  DATA_DIRS="$DATA_DIRS $BACKUP_DIR"
+fi
+
+# Create the roots before touching them. With the compose layout each is its own
+# mount point so they always exist — but the AIO image mounts ONE volume at
+# /data, and a bind-mounted host directory hides the tree baked into the image.
+# chown would then fail on paths that do not exist and report "the filesystem
+# rejects chown", which is both wrong and a dead end for NAS users.
+# shellcheck disable=SC2086 — intentional word-splitting over the roots
+mkdir -p $DATA_DIRS 2>/dev/null || true
+
 if [ "$(id -u)" = "0" ]; then
-  if ! chown -R nodejs:nodejs /app/storage /app/data /app/logs 2>/dev/null; then
-    echo "ERROR: failed to chown /app/storage, /app/data, /app/logs to nodejs (UID 1001)." >&2
+  if ! chown -R nodejs:nodejs $DATA_DIRS 2>/dev/null; then
+    echo "ERROR: failed to chown $DATA_DIRS to nodejs (UID 1001)." >&2
     echo "  This usually means the host filesystem rejects chown (e.g. NFS without root squash" >&2
     echo "  disabled, or a SELinux/AppArmor policy blocking the operation)." >&2
     echo "  Workaround: pre-chown the host directories to 1001:1001 and pin 'user: \"1001:1001\"'" >&2
@@ -44,7 +65,7 @@ fi
 # followed by a confusing migration error and a restart loop.
 _uid="$(id -u)"
 _gid="$(id -g)"
-for _dir in /app/storage /app/data /app/logs; do
+for _dir in $DATA_DIRS; do
   if [ ! -w "$_dir" ]; then
     echo "ERROR: $_dir is not writable by UID $_uid." >&2
     echo "  Either drop the 'user:' override from your compose file so the container starts as" >&2
@@ -141,6 +162,15 @@ fi # end Postgres wait (skipped for explicit sqlite3 boots)
 echo "Ensuring storage directories exist..."
 STORAGE_BASE="${STORAGE_PATH:-/app/storage}"
 mkdir -p "$STORAGE_BASE/events/active" "$STORAGE_BASE/events/archived" "$STORAGE_BASE/thumbnails" 2>/dev/null || true
+
+# Backup destinations seeded by migrations 029 + 030 (/backup/picpeak and
+# /backup/database). Creating the root alone is not enough: on a bind mount the
+# subdirectories baked into the image are hidden and the backup services do not
+# create them, so a backup would fail with ENOENT.
+BACKUP_BASE="${BACKUP_DIR:-/backup}"
+if [ -d "$BACKUP_BASE" ]; then
+  mkdir -p "$BACKUP_BASE/picpeak" "$BACKUP_BASE/database" 2>/dev/null || true
+fi
 
 # Resolve which database engine this boot should use (#1038) BEFORE migrations
 # run, while the Postgres target is still untouched. An install that has been
