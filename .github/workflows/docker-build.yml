@@ -958,12 +958,22 @@ jobs:
     - name: Assert the image carries no runtime data from the build context
       run: |
         # Dockerfile.aio builds from the repo root; a checkout used to run
-        # PicPeak must never bake its database, photos or logs into a layer.
-        for leak in '/app/data/*.db' '/app/logs/*' '/app/storage/events'; do
+        # PicPeak must never bake its database, photos, logs or secrets into a
+        # layer. /app/storage is deliberately a symlink into the volume, so it
+        # is checked by shape rather than by listing it — following the link
+        # would only find the empty tree the image creates at /data/storage.
+        for leak in '/app/data/*.db' '/app/logs/*' '/app/.env' '/app/*.db' '/app/*.sqlite*'; do
           if docker exec aio sh -c "ls $leak > /dev/null 2>&1"; then
             echo "::error::build context leaked $leak into the image"; exit 1
           fi
         done
+        docker exec aio sh -c 'test -L /app/storage' \
+          || { echo "::error::/app/storage is a real directory — the build context leaked it in"; exit 1; }
+        test "$(docker exec aio sh -c 'readlink /app/storage')" = /data/storage \
+          || { echo "::error::/app/storage does not point into the mounted volume"; exit 1; }
+        # The volume's photo tree must start empty on a fresh install.
+        found=$(docker exec aio sh -c 'find /data/storage/events -type f | head -1')
+        test -z "$found" || { echo "::error::build context leaked photos into /data/storage/events: $found"; exit 1; }
 
     - name: Dump logs on failure
       if: failure()
