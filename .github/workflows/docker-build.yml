@@ -944,6 +944,17 @@ jobs:
         docker exec aio sh -c 'ls /data/logs/*.log > /dev/null 2>&1' \
           || { echo "::error::logs are not being written under /data (LOG_DIR ignored?)"; exit 1; }
 
+    - name: Assert backend static routes still 404 instead of the SPA shell
+      run: |
+        # /photos, /thumbnails, /uploads and /fonts are backend-owned mounts whose
+        # middleware calls next() on a miss. nginx gave them their own location
+        # blocks so try_files never applied; without an explicit exclusion the
+        # catch-all answers 200 text/html under an image or font URL.
+        for r in /photos/missing.jpg /thumbnails/missing.jpg /fonts/missing.woff2; do
+          code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:3000${r}")
+          [[ "$code" != "200" ]] || { echo "::error::${r} returned 200 — the SPA catch-all swallowed a backend 404"; exit 1; }
+        done
+
     - name: Assert the image carries no runtime data from the build context
       run: |
         # Dockerfile.aio builds from the repo root; a checkout used to run

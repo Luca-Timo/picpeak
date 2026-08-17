@@ -989,7 +989,16 @@ app.use('/api', notFoundHandler);
 // code still redirects. GET-only: a stray POST/PUT keeps 404ing rather than
 // getting a 200 page back.
 if (spaCatchAll) {
-  app.get('*', spaCatchAll);
+  // nginx gives these their own `location` blocks, so `try_files` never applied
+  // to them. The fallback has to mirror that: /photos, /thumbnails, /uploads
+  // and /fonts are backend-owned static mounts whose middleware calls next()
+  // when the file is missing, and swallowing that would answer 200 text/html
+  // under an image or font URL instead of a 404.
+  const BACKEND_OWNED = ['/photos/', '/thumbnails/', '/uploads/', '/fonts/', '/health'];
+  app.get('*', (req, res, next) => {
+    if (BACKEND_OWNED.some((prefix) => req.path.startsWith(prefix))) return next();
+    return spaCatchAll(req, res);
+  });
 }
 
 // Global error handler (must be last)
