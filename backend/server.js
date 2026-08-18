@@ -1186,6 +1186,17 @@ async function startServer() {
     // sharp/ffmpeg/EXIF pipeline off the request thread.
     backgroundProcessor.start();
 
+    // Face detection (#1074). Starts alongside the photo processor but stays
+    // idle — every worker tick re-checks the `faces` feature flag, which is
+    // off by default. It is safe to start unconditionally precisely because
+    // it never touches FACE_ML_URL until that flag is on.
+    //
+    // Required HERE rather than at module scope: the face stack pulls in
+    // axios and (via imageProcessor) sharp, and server.js is imported by a
+    // large number of supertest suites that never start a worker. Keeping it
+    // lazy means they don't pay for a module graph they never use.
+    require('./src/services/faceQueue').start();
+
     app.listen(PORT, () => {
       logger.info(`Server running on port ${PORT}`);
       logger.info(`Admin interface: ${process.env.ADMIN_URL || 'http://localhost:3000'}`);

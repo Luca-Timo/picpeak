@@ -156,7 +156,10 @@
     "show": "Show",
     "poweredBy": "Powered by",
     "on": "on",
-    "off": "off"
+    "off": "off",
+    "clear": "Clear",
+    "saved": "Saved",
+    "saveFailed": "Save failed"
   },
   "upload": {
     "photoCategory": "Photo Category",
@@ -602,7 +605,27 @@
     "downloadReady": "Your download is ready",
     "downloadNow": "Download",
     "downloadPrepFailed": "Preparation failed",
-    "downloadPrepTimeout": "This is taking longer than expected. Please try again."
+    "downloadPrepTimeout": "This is taking longer than expected. Please try again.",
+    "people": {
+      "title": "People in this gallery",
+      "showAll": "Show all {{count}}",
+      "show": "Show",
+      "dismiss": "Hide the people bar",
+      "collapsedSummary": "{{count}} people found",
+      "unnamedCount": "{{count}} photos",
+      "filterBy": "Show photos of {{name}}",
+      "filterByUnnamed": "Show photos of this person",
+      "scanning": "Finding people… {{scanned}}/{{total}} photos",
+      "matchAll": "Both people",
+      "matchAny": "Either person",
+      "matchCount": "{{count}} of {{total}} photos",
+      "clear": "Clear",
+      "searchPlaceholder": "Find a person",
+      "noMatches": "No one matches that name.",
+      "privacyNote": "People are detected automatically inside this gallery. Nothing is sent to any external service.",
+      "inThisPhoto": "In this photo:",
+      "downloadThese": "Download these {{count}}"
+    }
   },
   "categories": {
     "title": "Photo Categories",
@@ -1656,6 +1679,11 @@
         "title": "Workflows",
         "description": "Build visual automations on a canvas — triggers, conditions, branches, loops and admin approval gates. Your reminder ladder and booking steps become editable flows. Strictly opt-in.",
         "sidebar": "Workflows"
+      },
+      "faces": {
+        "title": "People in galleries",
+        "description": "Group each gallery's photos by the people in them, so guests can find themselves in two taps and download just their own photos. Runs entirely on your own server in a separate, optional container — nothing is sent anywhere. Detected faces are personal data, so this stays off until you enable it per gallery too.",
+        "lockedSingleContainer": "Not available on the all-in-one image. Face detection needs a separate ML container and competes with image processing for the same CPU and memory, which would slow the whole install down."
       }
     },
     "customerSurface": {
@@ -2657,6 +2685,55 @@
       "email_template_created": "Email template created: {{template_key}}",
       "event_duplicated": "Event duplicated from {{source_event_name}}",
       "whatsapp_config_updated": "WhatsApp configuration updated"
+    },
+    "people": {
+      "title": "People in this gallery",
+      "subtitle": "Rename, merge people who were split apart, or hide someone from guests.",
+      "select": "Select for merging",
+      "unnamed": "Add a name",
+      "namePlaceholder": "Add a name",
+      "photoCount": "{{count}} photos",
+      "hidden": "hidden from guests",
+      "ignored": "ignored",
+      "renamed": "Name saved",
+      "merged": "People merged",
+      "split": "Split into a new person",
+      "updated": "Updated",
+      "merge": "Merge",
+      "mergeHint": "Tap two or more faces to merge them into one person.",
+      "selectedCount": "{{count}} selected",
+      "splitAction": "Split out photos that are someone else",
+      "hideAction": "Hide from guests",
+      "ignoreAction": "Not a real person — ignore",
+      "splitHelp": "Pick the photos that are NOT this person. They become a new entry, and everything else stays.",
+      "splitSelected": "{{count}} selected",
+      "doSplit": "Split out",
+      "empty": "No people detected yet."
+    },
+    "faces": {
+      "manage": "Manage people",
+      "visibleToGuests": "({{count}} shown to guests)",
+      "title": "People in this gallery",
+      "subtitle": "Group photos by the people in them, so guests can find and download their own.",
+      "consentNotice": "Detected faces are personal data, and in the EU they count as a special category. You are the controller for this gallery: make sure you have a lawful basis for the people in these photos before switching this on. Nothing leaves your server — detection runs in your own container.",
+      "enable": "Detect people in this gallery",
+      "enableHint": "Existing photos are scanned in the background. Faces and their numeric signatures are stored in your database; they are never included in backups or exports.",
+      "visible": "Show the people bar to guests",
+      "visibleHint": "Off means you get the grouping as a private tool and guests see an unchanged gallery.",
+      "previewNotice": "Scanning works on the preview-sized copy of each photo. Galleries that have not generated previews yet will create them during the first scan, which uses additional CPU and disk space.",
+      "scanning": "Scanning… {{scanned}} of {{total}} photos",
+      "status": "{{scanned}} / {{total}} photos scanned · {{people}} people",
+      "failed": "{{count}} failed",
+      "queued": "Scanning {{count}} photos for people…",
+      "rescan": "Re-scan",
+      "rescanQueued": "Re-scan queued",
+      "recluster": "Re-group people",
+      "reclustered": "People regrouped",
+      "delete": "Delete all face data",
+      "deleted": "Face data deleted",
+      "confirmDelete": "Delete all detected people and face data for this gallery? This cannot be undone. Photos are not affected.",
+      "autoCategories": "Sort photos into categories automatically",
+      "autoCategoriesHint": "Uses the number of faces to file photos as Details, Portraits, Small groups or Groups. Applies to every gallery, only ever fills an empty category, and never changes one you set yourself."
     }
   },
   "acceptInvitation": {

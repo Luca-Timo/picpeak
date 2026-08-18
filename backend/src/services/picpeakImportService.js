@@ -351,6 +351,21 @@ async function replaceAllTables(tables, dataDir, currentAdmin, roleSnapshot, { c
     for (const table of tables) {
       await trx(table).del();
     }
+
+    // Face data (#1074) is excluded from the archive, which also excludes it
+    // from `tables` — so the LOCAL rows would survive a whole-DB replace.
+    // FK enforcement is deliberately suspended during import, so those
+    // orphans can end up attached to reused photo/event ids from the incoming
+    // archive: one instance's biometric data silently adopted by another's
+    // galleries. Purge them explicitly.
+    for (const faceTable of ['photo_faces', 'event_people']) {
+      try {
+        await trx(faceTable).del();
+      } catch (err) {
+        // Absent on targets that predate migration 177 — nothing to purge.
+      }
+    }
+
     for (const table of tables) {
       const rows = parseNdjson(path.join(dataDir, `${table}.ndjson`));
       if (!rows.length) continue;
@@ -493,7 +508,30 @@ async function importFromPicpeak({ picpeakPath, currentAdminId }) {
     await resyncSequences(tables);
     await setSessionsValidAfter(Math.floor(Date.now() / 1000));
 
+
     const filesRestored = await restoreFiles(staging);
+
+    // Face data (#1074): queue ONLY once the files are on disk. The archive
+    // carries no face rows and the export blanked photos.face_status, but the
+    // event toggles come across enabled, so the "enable" transition that
+    // normally triggers a backfill never happens here.
+    //
+    // Ordering matters: the worker is live during a restore. Queued before
+    // restoreFiles, it races the copy and either scans the PREVIOUS
+    // instance's files or marks photos failed for originals that are not
+    // there yet — and nothing re-queues them afterwards.
+    try {
+      const requeued = await db('photos')
+        .whereIn('event_id', db('events').select('id').where('face_recognition_enabled', true))
+        .update({
+          face_status: 'pending', face_count: null, face_started_at: null, face_error: null,
+        });
+      if (requeued > 0) {
+        logger.info(`picpeakImport: queued ${requeued} photo(s) for face detection after import`);
+      }
+    } catch (err) {
+      logger.debug?.(`picpeakImport: face requeue skipped: ${err.message}`);
+    }
     const usesExternalMedia = await detectExternalMedia();
 
     logger.info(

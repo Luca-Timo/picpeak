@@ -98,6 +98,18 @@ const KNOWN_FLAGS = [
   // kill-switch for the Workflows admin area AND the engine's runtime side
   // effects (no run is created/resumed while off).
   'workflows',
+  // Face recognition — "People in this gallery" (migration 177, #1074).
+  // Requires the optional picpeak-ml sidecar container. THIS FLAG IS THE
+  // GATE for the whole feature: FACE_ML_URL has a working default (the
+  // compose service name), so the variable's presence proves nothing and
+  // cannot be used to detect intent. While this is off the backend never
+  // contacts the sidecar, the face queue idles, no face UI renders anywhere
+  // and no face_status is ever written.
+  //
+  // Face embeddings are biometric data (GDPR Art. 9). Turning this on is only
+  // the first of two deliberate actions — detection still has to be enabled
+  // per event. Strictly opt-in.
+  'faces',
 ];
 
 // Spec defaults for any flag missing from the DB (e.g. a row added by a
@@ -129,6 +141,8 @@ const DEFAULT_FLAGS = {
   slideshow: false,
   transfers: false,
   workflows: false,
+  // #1074 — off by default is the whole "zero behaviour change" guarantee.
+  faces: false,
 };
 
 async function readAllFlags() {
@@ -146,6 +160,15 @@ function applyDependencyRules(flags) {
   const out = { ...flags };
   // Galleries is the foundation — never off.
   out.galleries = true;
+  // Face recognition is unavailable on the all-in-one single-container image
+  // (#1042 / PR #1068) for performance reasons — see
+  // faceSettings.isSingleContainerImage. Forced false in BOTH directions:
+  // GET reports it off so the UI can show it as unavailable rather than a
+  // switch that silently does nothing, and PUT cannot turn it on. The backend
+  // gate refuses independently, so this is presentation plus defence in
+  // depth, not the enforcement itself.
+  const { isSingleContainerImage } = require('../services/faceSettings');
+  if (isSingleContainerImage()) out.faces = false;
   // Sub-features can't outlive their parents.
   if (out.quotes === false) out.bills = false;
   if (out.calendar === false) out.calendarBooking = false;

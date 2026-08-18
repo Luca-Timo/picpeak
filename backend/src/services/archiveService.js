@@ -225,6 +225,35 @@ async function archiveEvent(event) {
       }
     }
 
+    // Purge face data (#1074). photo_faces cascades off photos, but archiving
+    // does NOT delete the photo rows — and event_people hangs off the event,
+    // which also survives. So neither would go without an explicit purge, and
+    // an archived gallery would keep its biometric data indefinitely.
+    //
+    // Face data is derived: if the event is ever restored, re-enabling
+    // detection re-scans. Nothing irreplaceable is lost except assigned
+    // names, which is the same trade already accepted for backups/exports.
+    try {
+      const { purgeEvent } = require('./faceProcessor');
+      await purgeEvent(event.id);
+
+      // Turn detection OFF as well. purgeEvent clears the rows but leaves the
+      // toggle on, so restoring the archive would bring back a gallery that
+      // claims face detection is enabled while having no people and no queued
+      // work — indistinguishable from a broken scan. Off is the honest state:
+      // the photographer re-enables it and gets a fresh backfill, which is
+      // exactly the flow the toggle already implements.
+      await db('events').where({ id: event.id })
+        .update({ face_recognition_enabled: false, faces_last_scan_at: null });
+    } catch (err) {
+      // Never fail an archive over this — but say so loudly, because it
+      // means biometric data outlived the gallery.
+      logger.error(
+        `Archive: failed to purge face data for event ${event.slug} — ` +
+        `face rows may remain. ${err.message}`
+      );
+    }
+
     // Queue completion email — admin_email is nullable on events (migration 073);
     // skip queueing rather than violating email_queue.recipient_email NOT NULL.
     //

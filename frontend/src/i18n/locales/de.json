@@ -156,7 +156,10 @@
     "show": "Einblenden",
     "poweredBy": "Bereitgestellt von",
     "on": "an",
-    "off": "aus"
+    "off": "aus",
+    "clear": "Zurücksetzen",
+    "saved": "Gespeichert",
+    "saveFailed": "Speichern fehlgeschlagen"
   },
   "upload": {
     "photoCategory": "Fotokategorie",
@@ -1061,7 +1064,27 @@
     "downloadReady": "Ihr Download ist bereit",
     "downloadNow": "Herunterladen",
     "downloadPrepFailed": "Vorbereitung fehlgeschlagen",
-    "downloadPrepTimeout": "Das dauert länger als erwartet. Bitte erneut versuchen."
+    "downloadPrepTimeout": "Das dauert länger als erwartet. Bitte erneut versuchen.",
+    "people": {
+      "title": "Personen in dieser Galerie",
+      "showAll": "Alle {{count}} anzeigen",
+      "show": "Anzeigen",
+      "dismiss": "Personenleiste ausblenden",
+      "collapsedSummary": "{{count}} Personen gefunden",
+      "unnamedCount": "{{count}} Fotos",
+      "filterBy": "Fotos von {{name}} anzeigen",
+      "filterByUnnamed": "Fotos dieser Person anzeigen",
+      "scanning": "Personen werden gesucht… {{scanned}}/{{total}} Fotos",
+      "matchAll": "Beide Personen",
+      "matchAny": "Eine der Personen",
+      "matchCount": "{{count}} von {{total}} Fotos",
+      "clear": "Zurücksetzen",
+      "searchPlaceholder": "Person suchen",
+      "noMatches": "Niemand passt zu diesem Namen.",
+      "privacyNote": "Personen werden automatisch innerhalb dieser Galerie erkannt. Es werden keine Daten an externe Dienste gesendet.",
+      "inThisPhoto": "Auf diesem Foto:",
+      "downloadThese": "Diese {{count}} herunterladen"
+    }
   },
   "categories": {
     "title": "Fotokategorien",
@@ -2115,6 +2138,11 @@
         "title": "Workflows",
         "description": "Visuelle Automatisierungen auf einer Canvas erstellen – Auslöser, Bedingungen, Verzweigungen, Schleifen und Freigabe-Gates für Admins. Deine Mahnstufen und Buchungsschritte werden zu bearbeitbaren Abläufen. Strikt optional.",
         "sidebar": "Workflows"
+      },
+      "faces": {
+        "title": "Personen in Galerien",
+        "description": "Gruppiert die Fotos jeder Galerie nach den abgebildeten Personen, damit Gäste sich mit zwei Tipps selbst finden und nur ihre eigenen Fotos herunterladen. Läuft vollständig auf Ihrem eigenen Server in einem separaten, optionalen Container — es werden keine Daten übermittelt. Erkannte Gesichter sind personenbezogene Daten; die Funktion bleibt daher aus, bis Sie sie zusätzlich pro Galerie aktivieren.",
+        "lockedSingleContainer": "Im All-in-One-Image nicht verfügbar. Die Gesichtserkennung benötigt einen separaten ML-Container und konkurriert mit der Bildverarbeitung um dieselbe CPU und denselben Arbeitsspeicher, was die gesamte Installation verlangsamen würde."
       }
     },
     "customerSurface": {
@@ -3085,6 +3113,55 @@
       "email_template_created": "E-Mail-Vorlage erstellt: {{template_key}}",
       "event_duplicated": "Event dupliziert aus {{source_event_name}}",
       "whatsapp_config_updated": "WhatsApp-Konfiguration aktualisiert"
+    },
+    "people": {
+      "title": "Personen in dieser Galerie",
+      "subtitle": "Umbenennen, getrennte Personen zusammenführen oder jemanden vor Gästen verbergen.",
+      "select": "Zum Zusammenführen auswählen",
+      "unnamed": "Namen hinzufügen",
+      "namePlaceholder": "Namen hinzufügen",
+      "photoCount": "{{count}} Fotos",
+      "hidden": "für Gäste verborgen",
+      "ignored": "ignoriert",
+      "renamed": "Name gespeichert",
+      "merged": "Personen zusammengeführt",
+      "split": "Als neue Person abgetrennt",
+      "updated": "Aktualisiert",
+      "merge": "Zusammenführen",
+      "mergeHint": "Tippen Sie zwei oder mehr Gesichter an, um sie zu einer Person zusammenzuführen.",
+      "selectedCount": "{{count}} ausgewählt",
+      "splitAction": "Fotos abtrennen, die jemand anderes zeigen",
+      "hideAction": "Vor Gästen verbergen",
+      "ignoreAction": "Keine echte Person — ignorieren",
+      "splitHelp": "Wählen Sie die Fotos aus, die NICHT diese Person zeigen. Sie werden zu einem neuen Eintrag, alles andere bleibt.",
+      "splitSelected": "{{count}} ausgewählt",
+      "doSplit": "Abtrennen",
+      "empty": "Noch keine Personen erkannt."
+    },
+    "faces": {
+      "manage": "Personen verwalten",
+      "visibleToGuests": "({{count}} für Gäste sichtbar)",
+      "title": "Personen in dieser Galerie",
+      "subtitle": "Fotos nach den abgebildeten Personen gruppieren, damit Gäste ihre eigenen finden und herunterladen können.",
+      "consentNotice": "Erkannte Gesichter sind personenbezogene Daten und gelten in der EU als besondere Kategorie. Sie sind für diese Galerie verantwortlich: Stellen Sie sicher, dass Sie eine Rechtsgrundlage für die abgebildeten Personen haben, bevor Sie dies aktivieren. Nichts verlässt Ihren Server — die Erkennung läuft in Ihrem eigenen Container.",
+      "enable": "Personen in dieser Galerie erkennen",
+      "enableHint": "Vorhandene Fotos werden im Hintergrund durchsucht. Gesichter und ihre numerischen Signaturen werden in Ihrer Datenbank gespeichert; sie sind niemals in Backups oder Exporten enthalten.",
+      "visible": "Personenleiste für Gäste anzeigen",
+      "visibleHint": "Ausgeschaltet erhalten nur Sie die Gruppierung als privates Werkzeug, und Gäste sehen eine unveränderte Galerie.",
+      "previewNotice": "Die Erkennung arbeitet mit der Vorschaugröße jedes Fotos. In Galerien ohne vorhandene Vorschaubilder werden diese beim ersten Durchlauf erzeugt, was zusätzliche CPU-Last und Speicherplatz benötigt.",
+      "scanning": "Wird durchsucht… {{scanned}} von {{total}} Fotos",
+      "status": "{{scanned}} / {{total}} Fotos durchsucht · {{people}} Personen",
+      "failed": "{{count}} fehlgeschlagen",
+      "queued": "{{count}} Fotos werden nach Personen durchsucht…",
+      "rescan": "Erneut durchsuchen",
+      "rescanQueued": "Erneute Suche eingeplant",
+      "recluster": "Personen neu gruppieren",
+      "reclustered": "Personen neu gruppiert",
+      "delete": "Alle Gesichtsdaten löschen",
+      "deleted": "Gesichtsdaten gelöscht",
+      "confirmDelete": "Alle erkannten Personen und Gesichtsdaten dieser Galerie löschen? Dies kann nicht rückgängig gemacht werden. Die Fotos selbst bleiben unverändert.",
+      "autoCategories": "Fotos automatisch in Kategorien einsortieren",
+      "autoCategoriesHint": "Nutzt die Anzahl der Gesichter, um Fotos als Details, Porträts, Kleine Gruppen oder Gruppen abzulegen. Gilt für alle Galerien, füllt ausschließlich leere Kategorien und ändert niemals eine von Ihnen gesetzte."
     }
   },
   "acceptInvitation": {

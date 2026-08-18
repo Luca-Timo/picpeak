@@ -283,6 +283,25 @@ async function processUploadedPhotos(files, eventId, uploadedBy = 'admin', categ
         });
       } catch (e) { /* non-fatal */ }
 
+      // Face detection (#1074). processPhoto() — the ASYNC path — enqueues on
+      // completion, but this synchronous path (chunked-upload completion,
+      // watch-folder import) writes a finished photo row directly and never
+      // reaches it, so those photos stayed unscanned in a face-enabled event
+      // until someone ran a manual re-scan.
+      try {
+        const { isEnabledForEvent } = require('./faceSettings');
+        if (!isVideo && await isEnabledForEvent(event)) {
+          // `db`, NOT `trx`: the transaction is committed above, so a query
+          // through it throws "Transaction query already complete" — which the
+          // catch below swallowed, making this whole enqueue a silent no-op.
+          await db('photos').where({ id: photoId }).update({ face_status: 'pending' });
+        }
+      } catch (err) {
+        logger.warn(`processUploadedPhotos: face enqueue failed for photo ${photoId}`, {
+          error: err.message,
+        });
+      }
+
       uploadedPhotos.push({
         id: photoId,
         filename: newFilename,
@@ -541,6 +560,23 @@ async function processPhoto(photoId) {
   // Mark complete
   updateData.processing_status = 'complete';
   updateData.processing_error = null;
+
+  // Face detection (#1074): this is the only correct place to enqueue.
+  // Earlier and there is no preview rendition to scan; later and there is no
+  // hook at all. Same UPDATE rather than a follow-up write, so a crash
+  // between the two can't leave a complete photo permanently unqueued.
+  // Guarded on BOTH the global flag and the per-event toggle, so installs
+  // without the feature never write a face_status at all.
+  try {
+    const { isEnabledForEvent } = require('./faceSettings');
+    if (!isVideo && await isEnabledForEvent(event)) {
+      updateData.face_status = 'pending';
+    }
+  } catch (err) {
+    // Never let the face feature block a photo from completing.
+    logger.warn(`processPhoto: face enqueue check failed for ${photoId}`, { error: err.message });
+  }
+
   await db('photos').where({ id: photoId }).update(updateData);
 
   // Side effects (best-effort, never fail the photo if these break)
