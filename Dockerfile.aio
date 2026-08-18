@@ -148,6 +148,18 @@ COPY --from=frontend-builder --chown=nodejs:nodejs /app/dist /app/frontend/dist
 ENV SERVE_FRONTEND=true \
     FRONTEND_DIR=/app/frontend/dist
 
+# Marks this as the single-container build. The backend refuses to enable face
+# recognition (#1074) when it sees this, on performance grounds: that feature
+# needs a separate ML container this image does not contain, and it would add
+# a second image-processing pipeline competing with Sharp for the CPU and
+# memory of a container sized for one photographer plus guests browsing. The
+# failure would not be loud — just a slow install that looks broken.
+#
+# An explicit marker rather than inferring it from SERVE_FRONTEND or the
+# SQLite path: legitimate multi-container deployments do both of those, and
+# none of them should lose the feature by accident.
+ENV PICPEAK_SINGLE_CONTAINER=true
+
 # No USER directive — same as backend/Dockerfile: the container starts as root
 # so wait-for-db.sh can chown bind-mounted volumes to UID 1001, then drops
 # privileges via su-exec (#484).

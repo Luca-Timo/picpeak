@@ -142,3 +142,9 @@ docker inspect --format='{{.State.Health.Status}}' picpeak
   PostgreSQL.
 - **No built-in TLS or reverse proxy.**
 - **No Redis**, so nothing here scales horizontally — run one container.
+- **No face recognition.** "People in this gallery" needs a separate ML
+  container this image does not include, and running detection alongside
+  thumbnail and preview generation in one container would slow everything
+  down rather than fail cleanly. The toggle in Settings → Features is
+  disabled here and says so. Use the multi-container deployment if you want
+  it.
