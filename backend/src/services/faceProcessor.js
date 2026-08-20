@@ -34,6 +34,96 @@ class StaleScanError extends Error {
   }
 }
 
+/**
+ * Thrown when the photo's source could not be READ, as opposed to being
+ * unreadable. An NFS or SMB mount that is down, remounting, or refusing
+ * permissions makes ensurePreviewImage return null exactly like a corrupt
+ * JPEG does — but one clears itself and the other never will. Marking the
+ * first 'failed' strands the photo, because the queue only ever claims
+ * 'pending' and nothing re-queues a failure automatically: a mount that
+ * blinked during a scan of an external library would cost the whole gallery
+ * a manual Re-scan.
+ */
+class TransientSourceError extends Error {
+  constructor(photoId, reason, eventId) {
+    super(`Face scan for photo ${photoId} deferred: ${reason}`);
+    this.name = 'TransientSourceError';
+    // The queue backs off per EVENT, not per photo: one dead mount makes every
+    // row in that event unreachable, and probing each of them costs a stat
+    // against storage that may be hard-mounted and slow to time out.
+    this.eventId = eventId;
+  }
+}
+
+/**
+ * Distinguish "this mount is not there" from "this file is not there".
+ *
+ * Deliberately probes the containing DIRECTORY rather than the file. A missing
+ * file inside a healthy directory is a genuinely broken photo and should fail;
+ * a directory that cannot be reached at all means the storage is gone, and
+ * every photo under it would otherwise be burnt in a loop.
+ *
+ * Returns a reason string when the source looks unreachable, null when it
+ * looks like a per-photo problem. Any error deciding that is treated as
+ * per-photo: guessing 'transient' on an unknown condition would retry forever.
+ */
+async function externalSourceUnreachable(photo) {
+  if (photo.source_origin !== 'external' && photo.source_origin !== 'reference') return null;
+  try {
+    const fs = require('fs').promises;
+    const { resolvePhotoFilePath } = require('./photoResolver');
+    const event = await db('events').where({ id: photo.event_id }).first();
+    if (!event) return null;
+
+    const { resolveExternalPath } = require('./externalMediaService');
+    const filePath = resolvePhotoFilePath(event, photo);
+
+    // 1. The EVENT ROOT, not the photo's own directory. This is what decides
+    //    whether the storage is there, and it has to be judged separately: a
+    //    deleted or renamed subfolder (individual/ gone, collages/ still fine)
+    //    also reports ENOENT on the photo's directory, and treating that as an
+    //    outage would defer the whole event and starve the healthy siblings.
+    const eventRoot = resolveExternalPath(event, '');
+    try {
+      await fs.access(eventRoot);
+    } catch (e) {
+      return `source root unreachable (${e.code || e.message})`;
+    }
+    try {
+      // Unmounting an NFS or SMB share usually leaves the mountpoint behind as
+      // an ordinary empty directory, so access() succeeds on storage that is
+      // entirely gone. An empty root is that outage.
+      //
+      // The trade is deliberate: a root an admin genuinely emptied is retried
+      // rather than failed. That costs one attempt per backoff window, because
+      // a deferred row parks in 'processing' rather than returning to the front
+      // of the queue. Burning a gallery on a flapping mount is the worse one.
+      const entries = await fs.readdir(eventRoot);
+      if (entries.length === 0) return 'source root is empty (mount not attached?)';
+    } catch (e) {
+      return `source root unreadable (${e.code || e.message})`;
+    }
+
+    // 2. The storage is up, so anything wrong from here is about this photo —
+    //    with one exception. A file that exists but cannot be READ (EACCES on a
+    //    reconnected share, EIO, or the classic NFS ESTALE handle) is a
+    //    transient condition wearing a per-file disguise; only ENOENT means the
+    //    photo is genuinely gone.
+    try {
+      await fs.access(filePath, fs.constants.R_OK);
+    } catch (e) {
+      if (e.code && e.code !== 'ENOENT') {
+        return `source file unreadable (${e.code})`;
+      }
+    }
+    return null;
+  } catch (e) {
+    // Could not even resolve a path — that is a property of this row, not of
+    // the mount, so let the caller fail it.
+    return null;
+  }
+}
+
 async function streamToBuffer(stream) {
   if (Buffer.isBuffer(stream)) return stream;
   const chunks = [];
@@ -89,6 +179,12 @@ async function processPhotoFaces(photoId) {
   // photo, not an unsupported one.
   const previewKey = await ensurePreviewImage(photo);
   if (!previewKey) {
+    // Before failing the photo, check whether it is the STORAGE that is gone
+    // rather than the file. ensurePreviewImage returns null for both, but only
+    // one of them is the photo's fault — see TransientSourceError.
+    const unreachable = await externalSourceUnreachable(photo);
+    if (unreachable) throw new TransientSourceError(photoId, unreachable, photo.event_id);
+
     // No preview and no way to make one — the source is missing or corrupt.
     // That is a property of this photo, so it fails rather than retries.
     await db('photos').where({ id: photoId }).update({
@@ -322,4 +418,5 @@ async function purgePhotoFaces(photoId, trx = db) {
 
 module.exports = {
   processPhotoFaces, enqueueEvent, purgeEvent, purgePhotoFaces, StaleScanError,
+  TransientSourceError,
 };

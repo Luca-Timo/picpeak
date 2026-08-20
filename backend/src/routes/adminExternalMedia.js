@@ -94,6 +94,33 @@ router.post('/events/:id/import-external', adminAuth, requirePermission('photos.
       }
     }
 
+    // Point the event at the new directory BEFORE inserting anything.
+    //
+    // Two reasons, both about what a half-finished import leaves behind. The
+    // update used to run after the loop, so an import that died at photo 500
+    // of 1000 left those 500 rows carrying external_relpath into the NEW tree
+    // while the event still resolved against the OLD one — every one of them
+    // unreadable. And with face detection on, enqueueEvent accepts
+    // processing_status NULL (faceProcessor.js:243-246), which these inserts
+    // leave unset, so an admin hitting the toggle or Re-scan mid-import could
+    // queue those same rows against the stale path and burn them to 'failed'.
+    //
+    // Safe to do first for existing MANAGED photos: photo.source_origin takes
+    // precedence over event.source_mode in both resolvers (photoResolver.js:23,
+    // :52) and is NOT NULL defaulting to 'managed', so flipping source_mode
+    // does not touch them.
+    //
+    // It does NOT isolate existing EXTERNAL rows — resolveExternalPath prefixes
+    // every one of them with event.external_path
+    // (externalMediaService.js:97-102), so importing folder B into an event
+    // that already references folder A rebases the A rows onto B. That is
+    // pre-existing: the update always did this, just after the loop instead of
+    // before it, so moving it changes when the window opens and not whether it
+    // exists. The underlying limitation is that an event carries a single
+    // external base path, which makes importing a second folder into it
+    // incoherent either way — worth its own fix, not this one.
+    await db('events').where('id', eventId).update({ source_mode: 'reference', external_path });
+
     let imported = 0;
     let thumbnailsGenerated = 0;
     let thumbnailsFailed = 0;
@@ -112,14 +139,11 @@ router.post('/events/:id/import-external', adminAuth, requirePermission('photos.
     // imported after that moment stuck at NULL forever — the toggle endpoint
     // only queues rows that already existed when it fired.
     //
-    // Collected during the loop and marked 'pending' only AFTER
-    // events.external_path is written below. Setting it on insert would publish
-    // claimable rows while the event still carries the old path — or none, on a
-    // first import: the face worker polls continuously, resolvePhotoFilePath
-    // would resolve against the wrong directory, and a multi-minute import
-    // would leave photos permanently 'failed', a state only an explicit
-    // Re-scan clears. No video guard needed either way: walkDir collects only
-    // jpg/jpeg/png/webp.
+    // The event path is already committed (above), so the enqueue below is
+    // free of the ordering hazard it used to carry. It stays at the end anyway
+    // so the setting can be read after the loop, and it only touches rows that
+    // are still untouched — see the whereNull there. No video guard needed:
+    // walkDir collects only jpg/jpeg/png/webp.
     const importedPhotoIds = [];
 
     // Insert photos
@@ -200,11 +224,10 @@ router.post('/events/:id/import-external', adminAuth, requirePermission('photos.
       }
     }
 
-    // Update event fields
-    await db('events').where('id', eventId).update({ source_mode: 'reference', external_path });
-
-    // Only now does the event resolve to the new directory, so only now is it
-    // safe to open the queue. Guarded the same way photoProcessor guards it
+    // The event already resolves to the new directory (set before the loop),
+    // so the queue is safe to open. Still done here rather than on insert so
+    // the setting below is read after the loop. Guarded the same way
+    // photoProcessor guards it
     // (both the global flag and the per-event toggle), so installs without the
     // feature still never write a face_status. Re-read here rather than before
     // the loop so a toggle flipped mid-import is honoured.
@@ -221,12 +244,20 @@ router.post('/events/:id/import-external', adminAuth, requirePermission('photos.
     // Chunked because SQLite caps a statement at 999 bound parameters and an
     // import can be far larger than that.
     if (queueFaces && importedPhotoIds.length) {
+      let queued = 0;
       for (let i = 0; i < importedPhotoIds.length; i += 500) {
-        await db('photos')
+        // whereNull, not a blanket set. Committing the event path before the
+        // loop means a toggle or Re-scan firing mid-import can now genuinely
+        // queue and even finish some of these rows — so an unconditional
+        // update would drag 'done' rows back to 'pending' for a duplicate
+        // scan, and knock 'processing' rows out from under the worker
+        // mid-flight. Only rows nothing has touched are ours to queue.
+        queued += await db('photos')
           .whereIn('id', importedPhotoIds.slice(i, i + 500))
+          .whereNull('face_status')
           .update({ face_status: 'pending' });
       }
-      logger.info(`Queued ${importedPhotoIds.length} imported external photo(s) for face scanning (event ${eventId})`);
+      logger.info(`Queued ${queued} of ${importedPhotoIds.length} imported external photo(s) for face scanning (event ${eventId})`);
     }
 
     await logActivity(

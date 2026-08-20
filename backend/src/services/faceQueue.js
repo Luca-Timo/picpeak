@@ -30,6 +30,7 @@ const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { processPhotoFaces } = require('./faceProcessor');
 const { SidecarUnavailableError } = require('./faceClient');
+const { TransientSourceError } = require('./faceProcessor');
 const { isFeatureEnabled } = require('./faceSettings');
 
 const POLL_INTERVAL_MS = parseInt(process.env.FACE_PROCESSOR_POLL_MS || '2000', 10);
@@ -40,6 +41,65 @@ const JANITOR_INTERVAL_MS = 60 * 1000;
 // Backoff after the sidecar goes away. Without it a down sidecar turns into a
 // hot loop: claim, fail, release, claim again, thousands of times a minute.
 const UNAVAILABLE_BACKOFF_MS = parseInt(process.env.FACE_PROCESSOR_BACKOFF_MS || '30000', 10);
+
+// A dropped mount hits every photo in the event, so the raw message would
+// repeat once per claim. Rate-limited the same way faceClient limits its own
+// unavailable line, and for the same reason: one warning per outage, not one
+// per photo.
+// How long an event whose storage is unreachable is left alone. Distinct from
+// the janitor's stuck timeout on purpose: the janitor exists to rescue rows a
+// crashed worker abandoned, and reusing it here meant that every sweep handed
+// the whole dead gallery back to the worker, which then walked all of it again
+// — one slow stat per photo against a mount that may be hard-mounted — before
+// reaching any healthy event.
+const SOURCE_BACKOFF_MS = parseInt(process.env.FACE_SOURCE_BACKOFF_MS || '300000', 10);
+
+// eventId -> epoch ms before which this event's photos are not worth claiming.
+// In-memory on purpose: a restart should retry immediately, since a restart is
+// usually what follows fixing the mount.
+const deferredEvents = new Map();
+
+function deferEvent(eventId) {
+  if (eventId == null) return;
+  deferredEvents.set(eventId, Date.now() + SOURCE_BACKOFF_MS);
+}
+
+/** Event ids still inside their backoff window; also prunes expired entries. */
+function currentlyDeferredEventIds() {
+  const now = Date.now();
+  for (const [id, until] of deferredEvents) {
+    if (until <= now) deferredEvents.delete(id);
+  }
+  return [...deferredEvents.keys()];
+}
+
+/**
+ * Exclude only the rows the outage actually affects.
+ *
+ * A reference event can hold managed uploads alongside its imported external
+ * ones, and those live in local storage that is fine. Excluding the whole
+ * event id would leave them unscanned for as long as external rows keep
+ * renewing the cooldown — which, during a real outage, is indefinitely.
+ */
+function applySourceBackoff(query, excludeEventIds) {
+  if (!excludeEventIds.length) return query;
+  return query.whereNot(function () {
+    this.whereIn('event_id', excludeEventIds)
+      .whereIn('source_origin', ['external', 'reference']);
+  });
+}
+
+const SOURCE_LOG_INTERVAL_MS = 5 * 60 * 1000;
+let lastUnreachableLogAt = 0;
+function logUnreachableSource(message) {
+  const now = Date.now();
+  if (now - lastUnreachableLogAt < SOURCE_LOG_INTERVAL_MS) return;
+  lastUnreachableLogAt = now;
+  logger.warn(
+    `faceQueue: ${message}. Photos stay queued and will be retried — check the `
+    + 'external media mount. Further identical warnings are suppressed for 5 minutes.'
+  );
+}
 
 let running = false;
 let workerHandles = [];
@@ -57,11 +117,12 @@ function isPostgres() {
  * Same two-path approach as backgroundProcessor: SKIP LOCKED on Postgres so
  * multiple pods race cleanly, a status-guarded UPDATE on SQLite.
  */
-async function claimNextPhoto() {
+async function claimNextPhoto(excludeEventIds = []) {
   if (isPostgres()) {
     return db.transaction(async (trx) => {
       const row = await trx('photos')
         .where('face_status', 'pending')
+        .modify((q) => applySourceBackoff(q, excludeEventIds))
         .orderBy('id', 'asc')
         .forUpdate()
         .skipLocked()
@@ -78,6 +139,7 @@ async function claimNextPhoto() {
   return db.transaction(async (trx) => {
     const row = await trx('photos')
       .where('face_status', 'pending')
+      .modify((q) => applySourceBackoff(q, excludeEventIds))
       .orderBy('id', 'asc')
       .first();
     if (!row) return null;
@@ -114,7 +176,7 @@ async function workerLoop(workerIdx) {
 
     let claimed;
     try {
-      claimed = await claimNextPhoto();
+      claimed = await claimNextPhoto(currentlyDeferredEventIds());
     } catch (e) {
       logger.warn(`faceQueue[${workerIdx}]: claim error`, { error: e.message });
       await sleep(POLL_INTERVAL_MS);
@@ -129,10 +191,34 @@ async function workerLoop(workerIdx) {
     try {
       await processPhotoFaces(claimed.id);
     } catch (err) {
+      // The sidecar being down stops EVERY photo, so returning this one to
+      // 'pending' and backing off costs nothing — there is no other work to
+      // get on with.
       if (err instanceof SidecarUnavailableError) {
         // Retry, don't fail. faceClient already rate-limits the log line.
         await releaseToPending(claimed.id).catch(() => {});
         await sleep(UNAVAILABLE_BACKOFF_MS);
+        continue;
+      }
+
+      // An unreachable source is per-EVENT, not global: other events are
+      // still perfectly scannable. Releasing to 'pending' here would be a
+      // trap — claimNextPhoto orders by id ascending, so the single default
+      // worker would reclaim this same row after every backoff and never
+      // reach any higher id. One dead mount would stall face scanning for
+      // the whole install.
+      //
+      // So leave it parked in 'processing' with its face_started_at intact.
+      // The worker moves straight on to the next claimable row, and the
+      // janitor returns this one to 'pending' once it passes
+      // STUCK_TIMEOUT_MS — which is exactly the "try again later" this
+      // needs, using machinery that already exists.
+      if (err instanceof TransientSourceError) {
+        // Back the whole EVENT off, not just this row. Its siblings are on the
+        // same storage and would each cost another failed preview attempt —
+        // which also logs — before landing here again.
+        deferEvent(err.eventId);
+        logUnreachableSource(err.message);
         continue;
       }
 
