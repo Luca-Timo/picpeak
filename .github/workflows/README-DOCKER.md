@@ -2,7 +2,7 @@
 
 This GitHub Actions workflow automatically builds and pushes Docker images for the backend, the frontend, and the all-in-one image to GitHub Container Registry (ghcr.io).
 
-The **all-in-one image** (`<repo>/aio`, built from `Dockerfile.aio` at the repo root, #1042) bundles the backend and the built frontend into a single container with SQLite as the default engine — one `docker run`, no compose. It follows the same per-arch build → digest-merge → per-version tag scheme as the other two images, is currently GHCR-only (the Docker Hub mirror gets wired later), and every PR additionally runs a `smoke-aio` job that boots the image and asserts the SPA shell, brand-title rendering, immutable asset caching, and the SQLite engine resolution.
+The **all-in-one image** (`<repo>/aio`, built from `Dockerfile.aio` at the repo root, #1042) bundles the backend and the built frontend into a single container with SQLite as the default engine — one `docker run`, no compose. It follows the same per-arch build → digest-merge → per-version tag scheme as the other two images, is mirrored to Docker Hub (`docker.io/picpeak/aio`) alongside GHCR on the canonical org repo, and every PR additionally runs a `smoke-aio` job that boots the image and asserts the SPA shell, brand-title rendering, immutable asset caching, and the SQLite engine resolution.
 
 ## Features
 

@@ -780,6 +780,15 @@ jobs:
       run: |
         repo_lc="${GITHUB_REPOSITORY,,}"
         echo "AIO_IMAGE_NAME=${repo_lc}/aio" >> "$GITHUB_ENV"
+        # Mirror manifests to Docker Hub (picpeak/aio) only on the canonical org
+        # repo, where the DOCKERHUB_* secrets live. Forks (and any other owner)
+        # fall back to GHCR-only — the Docker Hub image line and login are gated
+        # on this flag so their builds keep working unchanged.
+        if [[ "$GITHUB_REPOSITORY" == "PicPeak/picpeak" ]]; then
+          echo "DOCKERHUB_ENABLED=true" >> "$GITHUB_ENV"
+        else
+          echo "DOCKERHUB_ENABLED=false" >> "$GITHUB_ENV"
+        fi
 
     - name: Download digest artifacts
       uses: actions/download-artifact@v4
@@ -811,16 +820,24 @@ jobs:
           echo "is_prerelease=false" >> $GITHUB_OUTPUT
         fi
 
-    # Same per-version tag scheme as backend/frontend: every Release Please
-    # version publishes a matching aio image. GHCR-only for now — the Docker
-    # Hub mirror (docker.io/picpeak/aio) is wired later once the Hub repo
-    # exists: add the images line + Docker Hub login exactly like
-    # merge-backend (#1042).
+    - name: Log in to Docker Hub
+      if: env.DOCKERHUB_ENABLED == 'true'
+      uses: docker/login-action@v3
+      with:
+        registry: docker.io
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    # Same per-version tag scheme as backend/frontend/ml: every Release Please
+    # version publishes a matching aio image, mirrored to Docker Hub
+    # (docker.io/picpeak/aio) on the canonical org repo (#1042).
     - name: Extract metadata for AIO
       id: meta-aio
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ env.AIO_IMAGE_NAME }}
+        images: |
+          ${{ env.REGISTRY }}/${{ env.AIO_IMAGE_NAME }}
+          ${{ env.DOCKERHUB_ENABLED == 'true' && 'docker.io/picpeak/aio' || '' }}
         labels: |
           org.opencontainers.image.title=PicPeak All-in-one
           org.opencontainers.image.description=PicPeak backend + frontend in a single container (SQLite default)
@@ -856,6 +873,11 @@ jobs:
     - name: Inspect manifest (GHCR)
       run: |
         docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.AIO_IMAGE_NAME }}:${{ steps.meta-aio.outputs.version }}
+
+    - name: Inspect manifest (Docker Hub)
+      if: env.DOCKERHUB_ENABLED == 'true'
+      run: |
+        docker buildx imagetools inspect docker.io/picpeak/aio:${{ steps.meta-aio.outputs.version }}
 
   # Boot-level verification of the AIO image on every PR: build for the
   # runner's arch, run it with no DB env (SQLite default), and assert the
@@ -1388,10 +1410,14 @@ jobs:
         if [[ "${{ needs.merge-ml.result }}" == "success" ]]; then
           echo "- ML sidecar (optional): \`${{ env.REGISTRY }}/${{ env.ML_IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
         fi
-        echo "- All-in-one: \`${{ env.REGISTRY }}/${{ env.AIO_IMAGE_NAME }}\` (GHCR only — Docker Hub mirror pending)" >> $GITHUB_STEP_SUMMARY
+        echo "- All-in-one: \`${{ env.REGISTRY }}/${{ env.AIO_IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
         if [[ "$DOCKERHUB_ENABLED" == "true" ]]; then
           echo "- Backend (Docker Hub): \`docker.io/picpeak/backend\`" >> $GITHUB_STEP_SUMMARY
           echo "- Frontend (Docker Hub): \`docker.io/picpeak/frontend\`" >> $GITHUB_STEP_SUMMARY
+          echo "- All-in-one (Docker Hub): \`docker.io/picpeak/aio\`" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.merge-ml.result }}" == "success" ]]; then
+            echo "- ML sidecar (Docker Hub): \`docker.io/picpeak/ml\`" >> $GITHUB_STEP_SUMMARY
+          fi
         fi
 
         echo "" >> $GITHUB_STEP_SUMMARY
