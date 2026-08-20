@@ -7,6 +7,7 @@ const logger = require('../../utils/logger');
 const { getAppSetting } = require('../../utils/appSettings');
 const { AppError } = require('../../utils/errors');
 const { formatShortDate } = require('../../utils/dateFormatter');
+const { getFrontendBaseUrl, DEFAULT_ABSOLUTE_BASE } = require('../../utils/frontendUrl');
 const emailProcessor = require('../emailProcessor');
 const { ensureInt } = require('../../utils/numericHelpers');
 const { formatMajor } = require('./helpers');
@@ -249,9 +250,13 @@ async function queuePaymentCheckEmail(invoiceId, { skipThrottle = false } = {}) 
   const nextLevel = (invoice.reminder_level || 0) + 1;
   const willChargeFee = reminderFeeMinor > 0 && nextLevel >= 2;
 
-  const baseUrl = process.env.FRONTEND_URL
+  // FRONTEND_URL -> general_site_url (the setup wizard's answer) -> the
+  // legacy app_frontend_url key -> localhost. Was defaulting to
+  // https://app.example.com, which shipped a dead placeholder domain into
+  // customer-facing payment-reminder emails (#705).
+  const baseUrl = (await getFrontendBaseUrl())
     || (await getAppSetting('app_frontend_url'))
-    || 'https://app.example.com';
+    || DEFAULT_ABSOLUTE_BASE;
   const buildUrl = (action) =>
     `${baseUrl.replace(/\/$/, '')}/payment-check/${token}?action=${action}`;
 

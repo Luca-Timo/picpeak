@@ -1050,6 +1050,7 @@
       "siteConfiguration": "Site Configuration",
       "siteUrl": "Site URL",
       "siteUrlHelp": "Used for generating gallery links in emails",
+      "siteUrlEnvPinned": "Pinned by the FRONTEND_URL environment variable, which overrides this setting. Remove it from your .env (or container environment) and restart to manage the address here.",
       "defaultExpiration": "Default Expiration (days)",
       "maxFileSize": "Max File Size (MB)",
       "maxFilesPerUpload": "Max Files per Upload",
@@ -3805,7 +3806,7 @@
     "restoreIntro": "Upload a .picpeak backup to clone another instance onto this one. This replaces everything except the account you just created.",
     "config": {
       "subtitle": "Set up your features",
-      "intro": "A few details for the features you picked. Anything you skip keeps its default and can be set later in Settings.",
+      "intro": "A few details to finish setting up. Anything you skip keeps its default and can be set later in Settings.",
       "invoicing": "Invoicing details",
       "invoicingDisclaimer": "Used on your invoices. Bank/IBAN and VAT details are your responsibility — verify them with your bank and Treuhänder/tax advisor.",
       "companyName": "Company / legal name",
@@ -3818,7 +3819,7 @@
       "taxId": "Tax number (or VAT ID)",
       "iban": "IBAN (for invoice payments)",
       "email": "Email delivery (SMTP)",
-      "emailHint": "Required to send reminders, invoices and notifications.",
+      "emailHint": "Used to send gallery links to your clients, plus guest invites, expiry warnings and any reminders or invoices you enable. Leave blank to set it up later in Settings → Email.",
       "smtpHost": "SMTP host",
       "smtpPort": "Port",
       "smtpUser": "Username",
@@ -3827,7 +3828,9 @@
       "fromName": "From name",
       "skip": "Skip for now",
       "finish": "Finish setup",
-      "saveFailed": "Some settings could not be saved — you can finish them in Settings."
+      "saveFailed": "Some settings could not be saved — you can finish them in Settings.",
+      "siteUrl": "Public address",
+      "siteUrlHint": "Where your clients will reach this gallery. Prefilled with the address you opened right now — change it if you will put PicPeak behind a domain or reverse proxy. You can update this any time in Settings → General."
     },
     "eventTypes": {
       "subtitle": "Which events do you photograph?",

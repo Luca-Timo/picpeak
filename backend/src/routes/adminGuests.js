@@ -9,8 +9,7 @@ const { requireEventOwnership } = require('../middleware/ownership');
 const feedbackService = require('../services/feedbackService');
 const logger = require('../utils/logger');
 const { errorResponse } = require('../utils/routeHelpers');
-
-const FRONTEND_URL = process.env.FRONTEND_URL || '';
+const { getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
 
 // ----------------------------------------------------------------------------
 // Helpers
@@ -185,10 +184,11 @@ router.get(
         )
         .orderBy('guest_invites.created_at', 'desc');
 
+      const baseUrl = await getAbsoluteFrontendUrl(req);
       const invites = rows.map((r) => ({
         id: r.id,
         token: r.token,
-        url: `${FRONTEND_URL}/gallery/${event.slug}?invite=${r.token}`,
+        url: `${baseUrl}/gallery/${event.slug}?invite=${r.token}`,
         created_at: r.created_at,
         redeemed_at: r.redeemed_at,
         revoked_at: r.revoked_at,
@@ -261,11 +261,12 @@ router.post(
       );
 
       const event = await db('events').where({ id: eventId }).first();
+      const baseUrl = await getAbsoluteFrontendUrl(req);
       res.json({
         invite: {
           id: inviteId,
           token: inviteToken,
-          url: `${FRONTEND_URL}/gallery/${event.slug}?invite=${inviteToken}`,
+          url: `${baseUrl}/gallery/${event.slug}?invite=${inviteToken}`,
           status: 'pending',
           guest: { id: guestId, name, email: email || null },
         },

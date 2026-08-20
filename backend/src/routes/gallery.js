@@ -501,7 +501,9 @@ const slideshowQrCache = new Map(); // eventId -> { url, dataUrl, at }
 // origin guests can reach — prefer that whenever the configured base is
 // missing or loopback. trust proxy is configured, so req.protocol respects
 // X-Forwarded-Proto behind the standard reverse-proxy setups.
-const QR_LOCAL_BASE_RE = /^https?:\/\/(localhost|127\.|0\.0\.0\.0|\[::1\])/i;
+// Centralised in utils/frontendUrl (#705) so the QR path and the public-origin
+// resolver agree on what counts as a non-shareable base.
+const QR_LOCAL_BASE_RE = { test: (v) => require('../utils/frontendUrl').isLoopbackBase(v) };
 const QR_ORIGIN_RE = /^https?:\/\/[^\s/]+$/i;
 async function slideshowQrDataUrl(event, req) {
   try {

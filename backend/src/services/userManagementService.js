@@ -9,6 +9,7 @@ const { db, logActivity } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
 const { generateReadablePassword } = require('../utils/passwordGenerator');
 const { getBcryptRounds } = require('../utils/passwordValidation');
+const { getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
 const { queueEmail } = require('./emailProcessor');
 const logger = require('../utils/logger');
 const { ConflictError, NotFoundError, ValidationError, ForbiddenError } = require('../utils/errors');
@@ -63,7 +64,9 @@ async function createInvitation({ email, roleId, invitedById, inviterRoleName })
   const id = invitationId?.id || invitationId;
 
   // Queue invitation email
-  const frontendUrl = process.env.FRONTEND_URL || process.env.ADMIN_URL || 'http://localhost:3005';
+  // Was defaulting to localhost:3005 - not even the frontend's port - so an
+  // unconfigured install mailed admin invites pointing nowhere (#705).
+  const frontendUrl = process.env.ADMIN_URL || (await getAbsoluteFrontendUrl());
   await queueEmail(null, email, 'admin_invitation', {
     invite_link: `${frontendUrl}/invite/${token}`,
     role_name: role.display_name,

@@ -26,7 +26,7 @@ const { hasColumnCached } = require('../../utils/schemaCache');
 const { requireEventOwnership } = require('../../middleware/ownership');
 const { getAppSetting } = require('../../utils/appSettings');
 const { clampIntOrUndefined } = require('../../utils/numericHelpers');
-const { getFrontendBaseUrl } = require('../../utils/frontendUrl');
+const { getFrontendBaseUrl, getAbsoluteFrontendUrl } = require('../../utils/frontendUrl');
 const downloadZipService = require('../../services/downloadZipService');
 const { validateHeroImageAnchor, getEventFieldRequirements, readBooleanSetting, getDownloadProtectionDefaults, getBrandingDefaults, getCustomerNameFromPayload, getCustomerEmailFromPayload, getCustomerPhoneFromPayload, isPhoneFieldEnabled, mapEventForApi, hasCustomerContactColumns, deleteEventCascade, SLIDESHOW_TRANSITIONS, SLIDESHOW_COLORFILTERS } = require('./helpers');
 
@@ -576,7 +576,7 @@ module.exports = (router) => {
         // Include client access info in email when enabled (#172)
         if (client_access_enabled && client_password) {
           const createdEvent = await db('events').where('id', eventId).first();
-          const frontendUrl = process.env.FRONTEND_URL || process.env.APP_URL || '';
+          const frontendUrl = process.env.APP_URL || (await getAbsoluteFrontendUrl(req));
           emailData.client_link = `${frontendUrl}/gallery/${slug}/client-access?token=${createdEvent.client_share_token}`;
           emailData.client_password = client_password;
         }

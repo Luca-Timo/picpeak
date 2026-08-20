@@ -12,6 +12,10 @@ export const MAX_FILES_PER_UPLOAD_LIMIT = 2000;
 
 export interface GeneralSettings {
   site_url: string;
+  // FRONTEND_URL in the environment overrides general_site_url at runtime
+  // (#705). Surfaced so the field can say so instead of accepting edits
+  // that never take effect.
+  site_url_env_pinned: boolean;
   default_expiration_days: number;
   max_file_size_mb: number;
   max_files_per_upload: number;
@@ -114,6 +118,7 @@ export function useSettingsState() {
   // General settings state
   const [generalSettings, setGeneralSettings] = useState<GeneralSettings>({
     site_url: '',
+    site_url_env_pinned: false,
     default_expiration_days: 30,
     max_file_size_mb: 50,
     max_files_per_upload: 500,
@@ -200,7 +205,10 @@ export function useSettingsState() {
   useEffect(() => {
     if (settings) {
       setGeneralSettings({
-        site_url: settings.general_site_url || '',
+        site_url: settings.general_site_url_env_pinned
+          ? (settings.general_site_url_effective || '')
+          : (settings.general_site_url || ''),
+        site_url_env_pinned: Boolean(settings.general_site_url_env_pinned),
         default_expiration_days: toNumber(settings.general_default_expiration_days, 30),
         max_file_size_mb: toNumber(settings.general_max_file_size_mb, 50),
         max_files_per_upload: Math.min(

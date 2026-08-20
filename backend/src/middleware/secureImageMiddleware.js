@@ -2,6 +2,7 @@ const { db } = require('../database/db');
 const secureImageService = require('../services/secureImageService');
 const logger = require('../utils/logger');
 const { formatBoolean } = require('../utils/dbCompat');
+const { getFrontendBaseUrlSync } = require('../utils/frontendUrl');
 
 /**
  * Enhanced secure image middleware with comprehensive protection
@@ -272,7 +273,10 @@ class SecureImageMiddleware {
       'X-Download-Policy': 'restricted',
       
       // CORS restrictions
-      'Access-Control-Allow-Origin': process.env.FRONTEND_URL || '*',
+      // Deliberately NOT derived from the request: reflecting the caller's
+      // Origin would defeat the allowlist. Env, else the configured
+      // general_site_url (cached), else the previous wildcard behaviour.
+      'Access-Control-Allow-Origin': getFrontendBaseUrlSync() || '*',
       'Access-Control-Allow-Methods': 'GET',
       'Access-Control-Allow-Headers': 'Authorization, Content-Type',
       'Access-Control-Max-Age': '3600'

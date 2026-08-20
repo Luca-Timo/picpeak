@@ -113,9 +113,12 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
               onChange={(e) => setGeneralSettings(prev => ({ ...prev, site_url: e.target.value }))}
               placeholder="https://yourdomain.com"
               leftIcon={<Globe className="w-5 h-5 text-neutral-400" />}
+              disabled={generalSettings.site_url_env_pinned}
             />
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-              {t('settings.general.siteUrlHelp')}
+              {generalSettings.site_url_env_pinned
+                ? t('settings.general.siteUrlEnvPinned', 'Pinned by the FRONTEND_URL environment variable, which overrides this setting. Remove it from your .env (or container environment) and restart to manage the address here.')
+                : t('settings.general.siteUrlHelp')}
             </p>
           </div>
 
