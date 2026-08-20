@@ -1,8 +1,8 @@
 # Docker Build and Push Workflow
 
-This GitHub Actions workflow automatically builds and pushes Docker images for the backend, the frontend, and the all-in-one image to GitHub Container Registry (ghcr.io).
+This GitHub Actions workflow automatically builds and pushes Docker images for the backend, the frontend, the all-in-one image and the optional ML sidecar to GitHub Container Registry (ghcr.io). On the canonical org repo every one of them is mirrored to Docker Hub as `docker.io/picpeak/{backend,frontend,aio,ml}`; forks build the same images GHCR-only.
 
-The **all-in-one image** (`<repo>/aio`, built from `Dockerfile.aio` at the repo root, #1042) bundles the backend and the built frontend into a single container with SQLite as the default engine — one `docker run`, no compose. It follows the same per-arch build → digest-merge → per-version tag scheme as the other two images, is currently GHCR-only (the Docker Hub mirror gets wired later), and every PR additionally runs a `smoke-aio` job that boots the image and asserts the SPA shell, brand-title rendering, immutable asset caching, and the SQLite engine resolution.
+The **all-in-one image** (`<repo>/aio`, built from `Dockerfile.aio` at the repo root, #1042) bundles the backend and the built frontend into a single container with SQLite as the default engine — one `docker run`, no compose. It follows the same per-arch build → digest-merge → per-version tag scheme as the other two images, is mirrored to Docker Hub (`docker.io/picpeak/aio`) alongside GHCR on the canonical org repo, and every PR additionally runs a `smoke-aio` job that boots the image and asserts the SPA shell, brand-title rendering, immutable asset caching, and the SQLite engine resolution.
 
 ## Features
 
@@ -12,6 +12,7 @@ The **all-in-one image** (`<repo>/aio`, built from `Dockerfile.aio` at the repo 
 - 🔒 **Security scanning** with Trivy vulnerability scanner
 - 💾 **Build caching** for faster subsequent builds
 - 📊 **Build summaries** in GitHub Actions UI
+- 📝 **Docker Hub pages** for `aio` and `ml` synced from `.github/dockerhub/*.md` on every `main` merge (`dockerhub-descriptions` job). `backend` and `frontend` pages are still hand-maintained in the Hub UI — add `.github/dockerhub/{backend,frontend}.md` with their current text before putting them under the same job.
 
 ## Authentication
 
@@ -54,6 +55,11 @@ docker pull ghcr.io/picpeak/picpeak/backend:v1.0.0
 
 # Pull for specific architecture
 docker pull --platform linux/arm64 ghcr.io/picpeak/picpeak/backend:latest
+
+# The same images on Docker Hub (identical tags, identical digests)
+docker pull picpeak/backend:latest
+docker pull picpeak/aio:stable
+docker pull picpeak/ml:stable
 ```
 
 ### Using in Docker Compose
