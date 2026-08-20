@@ -19,7 +19,7 @@
 ![PicPeak Gallery Preview](docs/screenshot-gallery.png)
 
 > [!IMPORTANT]
-> **PicPeak has moved to its own GitHub organization.** Docker images are now at `ghcr.io/picpeak/picpeak/{backend,frontend}` and active development is on `main`. The old `ghcr.io/the-luap/...` path still responds but its tags are **frozen** at 2026-05-27 — if updates never arrive, check your image path first. See **[`docs/migration-to-org.md`](docs/migration-to-org.md)** for the one-line `docker-compose.yml` edit.
+> **PicPeak has moved to its own GitHub organization.** Docker images are now at `ghcr.io/picpeak/picpeak/{backend,frontend,aio,ml}` (and on Docker Hub as `picpeak/{backend,frontend,aio,ml}`) and active development is on `main`. The old `ghcr.io/the-luap/...` path still responds but its tags are **frozen** at 2026-05-27 — if updates never arrive, check your image path first. See **[`docs/migration-to-org.md`](docs/migration-to-org.md)** for the one-line `docker-compose.yml` edit.
 
 ## Contents
 
@@ -83,6 +83,17 @@ Then open **http://localhost:3000/admin** and read the setup token with `docker 
 
 The compose stack above is still the right choice for anything busier — SQLite takes one writer at a time, and Postgres is what scales. You can move to it later without reinstalling: take a `.picpeak` backup and restore it into the full stack. See **[Single-container install](https://docs.picpeak.app/deployment/single-container)** for the volume layout, the external-Postgres variant, TLS, and the limits.
 
+### Docker images
+
+| | GHCR | Docker Hub |
+|---|---|---|
+| Backend | `ghcr.io/picpeak/picpeak/backend` | [`picpeak/backend`](https://hub.docker.com/r/picpeak/backend) |
+| Frontend | `ghcr.io/picpeak/picpeak/frontend` | [`picpeak/frontend`](https://hub.docker.com/r/picpeak/frontend) |
+| All-in-one | `ghcr.io/picpeak/picpeak/aio` | [`picpeak/aio`](https://hub.docker.com/r/picpeak/aio) |
+| ML sidecar (optional) | `ghcr.io/picpeak/picpeak/ml` | [`picpeak/ml`](https://hub.docker.com/r/picpeak/ml) |
+
+Both registries get the same digests and the same tags — `stable`/`latest`, a pinned `x.y.z`, and `beta`/`main` for the active development channel — for `linux/amd64` and `linux/arm64`. Keep every image in one install on the **same** tag.
+
 ## 🌟 Why PicPeak?
 
 Unlike expensive SaaS solutions, PicPeak gives you:
@@ -97,7 +108,7 @@ Unlike expensive SaaS solutions, PicPeak gives you:
 
 **For photographers** — drag & drop upload, auto-expiring & password-protected galleries, automated emails, an analytics dashboard, custom themes, a public landing page, and a [Live Slideshow](https://docs.picpeak.app/features/live-slideshow) projector view that auto-picks-up new uploads during live events.
 
-**For clients** — clean mobile-optimized galleries, one-click bulk downloads, smart search, optional guest uploads, and download protection (watermarking + right-click prevention).
+**For clients** — clean mobile-optimized galleries, one-click bulk downloads, smart search, **People in this gallery** face grouping (opt-in per gallery, needs the optional [ML sidecar](ml/README.md)), optional guest uploads, and download protection (watermarking + right-click prevention).
 
 **Technical** — Docker-ready, automatic thumbnail generation, external media reference mode, smart archiving of expired galleries, S3-compatible [storage backends](https://docs.picpeak.app/features/storage-backends), [webhooks](https://docs.picpeak.app/features/webhooks), and security-first defaults (JWT, rate limiting, CORS).
 

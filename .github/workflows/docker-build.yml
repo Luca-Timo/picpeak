@@ -1306,6 +1306,53 @@ jobs:
       run: |
         docker buildx imagetools inspect docker.io/picpeak/ml:${{ steps.meta-ml.outputs.version }}
 
+  # ---------------------------------------------------------------------------
+  # Docker Hub repository pages
+  # ---------------------------------------------------------------------------
+  # The Hub overview for an image is repository metadata, not part of the
+  # manifest, so pushing tags never updates it. Keep the copy for the two
+  # newest images in-repo and push it from CI, so a Hub visitor is never
+  # reading a page that describes a release from six months ago.
+  #
+  # Scope: aio and ml only. picpeak/{backend,frontend} still have their pages
+  # maintained by hand in the Hub UI — bring them under this job by adding
+  # .github/dockerhub/{backend,frontend}.md with the current text first,
+  # otherwise this would overwrite them with a near-copy.
+  #
+  # Only on `main` pushes for the canonical org repo: descriptions are
+  # per-repository, not per-tag, so once per merge is exactly enough.
+  dockerhub-descriptions:
+    needs: [merge-aio, merge-ml]
+    if: always() && github.repository == 'PicPeak/picpeak' && github.ref == 'refs/heads/main' && needs.merge-aio.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Update picpeak/aio description
+      uses: peter-evans/dockerhub-description@v4
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        repository: picpeak/aio
+        short-description: "picpeak all-in-one — self-hosted photo sharing + CRM in a single container (SQLite)."
+        readme-filepath: .github/dockerhub/aio.md
+
+    # Skipped whenever the sidecar itself was skipped (FACENET_ONNX_URL unset),
+    # since the Hub repository only exists once something has been pushed to it.
+    - name: Update picpeak/ml description
+      if: needs.merge-ml.result == 'success'
+      uses: peter-evans/dockerhub-description@v4
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        repository: picpeak/ml
+        short-description: "picpeak face-detection sidecar — optional and stateless. Pairs with picpeak/backend."
+        readme-filepath: .github/dockerhub/ml.md
+
   summary:
     needs: [build-backend, merge-backend, build-frontend, merge-frontend, build-aio, merge-aio, smoke-aio, build-ml, merge-ml]
     if: always()
