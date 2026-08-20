@@ -98,6 +98,30 @@ router.post('/events/:id/import-external', adminAuth, requirePermission('photos.
     let thumbnailsGenerated = 0;
     let thumbnailsFailed = 0;
 
+    // Face detection (#1090). Managed uploads are enqueued by photoProcessor,
+    // which sets face_status 'pending' once a photo is processed
+    // (photoProcessor.js:573) — but external media never goes through it, it
+    // is inserted directly here. Before #1090 that was invisible, because
+    // faceProcessor skipped externals anyway; now that they are scannable, an
+    // import into an already-enabled event would still sit unscanned until
+    // someone pressed Re-scan.
+    //
+    // Ids are collected unconditionally and the setting is read at the END,
+    // not here: this loop can run for many minutes on a large library, and an
+    // admin who enables detection during it would otherwise leave every photo
+    // imported after that moment stuck at NULL forever — the toggle endpoint
+    // only queues rows that already existed when it fired.
+    //
+    // Collected during the loop and marked 'pending' only AFTER
+    // events.external_path is written below. Setting it on insert would publish
+    // claimable rows while the event still carries the old path — or none, on a
+    // first import: the face worker polls continuously, resolvePhotoFilePath
+    // would resolve against the wrong directory, and a multi-minute import
+    // would leave photos permanently 'failed', a state only an explicit
+    // Re-scan clears. No video guard needed either way: walkDir collects only
+    // jpg/jpeg/png/webp.
+    const importedPhotoIds = [];
+
     // Insert photos
     for (const f of dedupeMap.values()) {
       // Infer type by subfolder names
@@ -169,6 +193,7 @@ router.post('/events/:id/import-external', adminAuth, requirePermission('photos.
           }
         }
 
+        if (photoId != null) importedPhotoIds.push(photoId);
         imported += (inserted?.length ? 1 : 0);
       } catch (e) {
         skipped++;
@@ -177,6 +202,32 @@ router.post('/events/:id/import-external', adminAuth, requirePermission('photos.
 
     // Update event fields
     await db('events').where('id', eventId).update({ source_mode: 'reference', external_path });
+
+    // Only now does the event resolve to the new directory, so only now is it
+    // safe to open the queue. Guarded the same way photoProcessor guards it
+    // (both the global flag and the per-event toggle), so installs without the
+    // feature still never write a face_status. Re-read here rather than before
+    // the loop so a toggle flipped mid-import is honoured.
+    let queueFaces = false;
+    try {
+      const { isEnabledForEvent } = require('../services/faceSettings');
+      const freshEvent = await db('events').where('id', eventId).first();
+      queueFaces = await isEnabledForEvent(freshEvent);
+    } catch (err) {
+      // Never let the face feature break an import — the photos are the point.
+      logger.warn(`Could not resolve face settings for event ${eventId}: ${err.message}`);
+    }
+
+    // Chunked because SQLite caps a statement at 999 bound parameters and an
+    // import can be far larger than that.
+    if (queueFaces && importedPhotoIds.length) {
+      for (let i = 0; i < importedPhotoIds.length; i += 500) {
+        await db('photos')
+          .whereIn('id', importedPhotoIds.slice(i, i + 500))
+          .update({ face_status: 'pending' });
+      }
+      logger.info(`Queued ${importedPhotoIds.length} imported external photo(s) for face scanning (event ${eventId})`);
+    }
 
     await logActivity(
       'external_import_completed',
