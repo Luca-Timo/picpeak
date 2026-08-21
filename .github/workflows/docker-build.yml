@@ -1040,14 +1040,19 @@ jobs:
         [ "$first" = "$second" ] \
           || { echo "::error::jwt.secret changed across a restart — sessions would not survive"; exit 1; }
 
-        # An explicit secret must still win over the generated one.
+        # An explicit secret must still win over the generated one. The $ is
+        # escaped so the comparison happens in the INNERMOST shell, after
+        # wait-for-db.sh has run: unescaped, the runner expands it up front and
+        # the test reduces to `[ x = x ]`, which passes even against a script
+        # that clobbers the variable — an assertion that cannot fail.
         docker run --rm -v aio-nojwt:/data -e JWT_SECRET=explicit-secret-at-least-32-characters-long \
           --entrypoint sh picpeak-aio:smoke -c \
-          './wait-for-db.sh sh -c "[ \"$JWT_SECRET\" = explicit-secret-at-least-32-characters-long ]"' \
+          './wait-for-db.sh sh -c "[ \"\$JWT_SECRET\" = explicit-secret-at-least-32-characters-long ]"' \
           || { echo "::error::an explicit JWT_SECRET did not override the generated file"; exit 1; }
 
         docker rm -f aio-nojwt > /dev/null
-        docker volume rm aio-nojwt > /dev/null
+        # -f alone can return before the volume is released
+        for i in $(seq 1 10); do docker volume rm aio-nojwt > /dev/null 2>&1 && break; sleep 1; done
 
     - name: Assert the sqlite3 CLI the backup service shells out to
       run: |

@@ -77,29 +77,47 @@ mkdir -p $DATA_ROOT_DIR $DATA_DIRS 2>/dev/null || true
 # initialised with, so inventing one at boot would break the connection rather
 # than fix it; the AIO default engine is SQLite and Redis is not used here.
 #
-# Losing the file invalidates every session and gallery link — it lives in the
-# data directory precisely so it shares the database's backup and lifecycle.
+# Losing the file invalidates every session and gallery link. Note the built-in
+# backup does NOT carry it — backupService archives STORAGE_PATH and the
+# database dump, not DATA_DIR — so only a copy of the whole volume preserves it.
 if [ -z "${JWT_SECRET:-}" ]; then
   _jwt_file="${DATA_DIR:-/app/data}/jwt.secret"
-  if [ -s "$_jwt_file" ]; then
-    export JWT_SECRET="$(cat "$_jwt_file")"
+  # Length-check the read-back rather than testing that the file merely exists.
+  # A short write (ENOSPC, a SIGKILL mid-boot) leaves a partial file that a
+  # `-s` test accepts happily on every later boot, and validateEnv only WARNS
+  # below 32 characters — so the install would sign tokens with a truncated key
+  # indefinitely and nothing would ever say so.
+  _jwt_cur="$(cat "$_jwt_file" 2>/dev/null || true)"
+  if [ "${#_jwt_cur}" -ge 32 ]; then
+    export JWT_SECRET="$_jwt_cur"
   else
     # openssl is not in the runtime image; /dev/urandom + base64 always are.
-    # 48 bytes -> 64 base64 chars, comfortably past validateEnv's 32-char floor.
-    _jwt_new="$(head -c 48 /dev/urandom | base64 | tr -d '\n')"
-    if [ -n "$_jwt_new" ] && (umask 077 && printf '%s\n' "$_jwt_new" > "$_jwt_file") 2>/dev/null; then
-      export JWT_SECRET="$_jwt_new"
+    # 48 bytes -> 64 base64 chars, comfortably past the 32 above.
+    _jwt_new="$(head -c 48 /dev/urandom | base64 | tr -d '\n' || true)"
+    # Write to a temp name and rename, so a partial write can never become the
+    # secret; then export by reading the file BACK rather than trusting the
+    # value in hand. Two containers sharing one volume and booting together
+    # would otherwise each sign with their own generated value while the file
+    # holds only one of them — tokens minted by one rejected by the other, and
+    # half the sessions dying at the next restart. Reading back makes them
+    # converge on whichever write won.
+    if [ -n "$_jwt_new" ] \
+       && (umask 077 && printf '%s\n' "$_jwt_new" > "$_jwt_file.tmp") 2>/dev/null \
+       && mv -f "$_jwt_file.tmp" "$_jwt_file" 2>/dev/null; then
+      export JWT_SECRET="$(cat "$_jwt_file")"
       echo "[secrets] No JWT_SECRET supplied — generated one and stored it in $_jwt_file."
-      echo "[secrets] Back it up with your data directory; losing it signs every admin"
-      echo "[secrets] session and gallery link out."
+      echo "[secrets] Back up the whole data volume to keep it; the built-in backup does"
+      echo "[secrets] not include it, and losing it signs every admin session and gallery"
+      echo "[secrets] link out."
     else
+      rm -f "$_jwt_file.tmp" 2>/dev/null || true
       echo "WARNING: no JWT_SECRET supplied and $_jwt_file could not be written." >&2
       echo "  Startup will fail validation. Pass -e JWT_SECRET=... or make the data" >&2
       echo "  directory writable." >&2
     fi
     unset _jwt_new
   fi
-  unset _jwt_file
+  unset _jwt_file _jwt_cur
 fi
 
 if [ "$(id -u)" = "0" ]; then

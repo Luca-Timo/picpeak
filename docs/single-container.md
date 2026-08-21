@@ -21,8 +21,8 @@ docker run -d \
 `:main` is the rolling tag that tracks the default branch. The curated
 `:stable` and `:latest` tags exist for the backend and frontend images but have
 not been cut for this one yet, so `:main` is the tag to pull today — pinning a
-released version like `:v3.108.0-beta.0` also works if you would rather not
-follow the branch.
+published version tag also works if you would rather not follow the branch —
+`docker image ls` on the registry, or the Releases page, shows what is current.
 
 Open `http://<host>:3000`. The first visit lands on the setup wizard, which
 asks for a one-time token:
@@ -158,6 +158,10 @@ docker run -d --name picpeak -p 3000:3000 \
 
 No environment variable is needed — the path is the default. `EXTERNAL_MEDIA_ROOT`
 overrides it if you would rather mount somewhere else.
+
+The location is resolved once at start-up and cached, so add the mount when you
+create the container, or restart it afterwards — it will not appear in a running
+one.
 
 `:ro` is not a precaution, it is accurate: PicPeak only reads from this tree.
 Thumbnails are written into the managed storage on the data volume, so the
