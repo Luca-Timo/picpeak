@@ -3947,6 +3947,7 @@
       "siteUrl": "Öffentliche Adresse",
       "siteUrlHint": "Unter dieser Adresse erreichen Ihre Kundinnen und Kunden die Galerie. Vorausgefüllt mit der Adresse, die Sie gerade geöffnet haben — ändern Sie sie, wenn Sie PicPeak hinter einer Domain oder einem Reverse Proxy betreiben. Sie können das jederzeit unter Einstellungen → Allgemein anpassen.",
       "siteUrlInvalid": "Geben Sie die vollständige Adresse inklusive http:// oder https:// an, zum Beispiel https://galerie.example.com",
+      "siteUrlRejected": "Der Server hat diese Adresse abgelehnt. Verwenden Sie den vollständigen Ursprung, zum Beispiel https://galerie.example.com oder http://192.168.1.50:3000.",
       "fromEmailRequiredPlaceholder": "Absenderadresse (erforderlich)",
       "fromEmailRequired": "Eine Absenderadresse ist erforderlich, wenn ein SMTP-Host gesetzt ist.",
       "fromEmailInvalid": "Geben Sie eine gültige E-Mail-Adresse ein.",

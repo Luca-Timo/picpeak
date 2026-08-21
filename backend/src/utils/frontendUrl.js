@@ -14,7 +14,14 @@ const DEFAULT_ABSOLUTE_BASE = 'http://localhost:3000';
 // links, QR codes and reminder emails point every recipient at THEIR OWN
 // machine. The same guard already existed locally in routes/gallery.js for
 // the slideshow QR (#848) and is centralised here.
-const LOOPBACK_BASE_RE = /^https?:\/\/(localhost|127\.|0\.0\.0\.0|\[::1\])/i;
+//
+// The host token has to end at a real boundary. Bare prefix matching (which is
+// what routes/gallery.js did while this only gated the QR) also demotes
+// https://localhost-nas.example.com — a legitimate public host, and now that
+// this predicate decides "is this configured" for the entire resolver, being
+// demoted means the operator's configured address is silently ignored.
+// 127. stays a bare prefix on purpose: all of 127.0.0.0/8 is loopback.
+const LOOPBACK_BASE_RE = /^https?:\/\/(localhost(?=[:/?#]|$)|127\.|0\.0\.0\.0(?=[:/?#]|$)|\[::1\])/i;
 
 const isLoopbackBase = (url) => !!url && LOOPBACK_BASE_RE.test(url);
 

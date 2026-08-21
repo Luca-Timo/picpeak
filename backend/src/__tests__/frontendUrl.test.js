@@ -228,8 +228,17 @@ describe('isLoopbackBase', () => {
     ['http://127.0.0.1:8080', true],
     ['http://0.0.0.0:3000', true],
     ['http://[::1]:3000', true],
+    ['http://localhost', true],
+    ['http://localhost/gallery', true],
     ['http://192.168.1.50:3000', false],
     ['https://gallery.example.com', false],
+    // The host token must end at a boundary. These are real public hosts that
+    // merely START with a loopback name — demoting them would silently ignore
+    // the address the operator configured, since this predicate now gates the
+    // whole resolver rather than just the slideshow QR.
+    ['https://localhost-nas.example.com', false],
+    ['https://localhostings.io', false],
+    ['http://0.0.0.0.nip.io', false],
     ['', false],
   ])('%s → %s', (url, expected) => {
     const m = loadModule();

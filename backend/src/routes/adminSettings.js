@@ -1404,10 +1404,17 @@ router.put('/general', adminAuth, requirePermission('settings.edit'), async (req
       const siteUrl = typeof settings.general_site_url === 'string'
         ? settings.general_site_url.trim().replace(/\/+$/, '')
         : '';
+      // allow_underscores for the same reason require_tld is off: this has to
+      // accept the addresses LAN and NAS installs actually run on. Browsers
+      // resolve http://my_nas.local happily and the client-side check accepts
+      // it, so rejecting it here only produced a mismatch between the two
+      // validators — and the wizard has no way to show a 400 it did not
+      // predict (#1104 review round 2).
       const looksValid = validator.isURL(siteUrl, {
         protocols: ['http', 'https'],
         require_protocol: true,
         require_tld: false,
+        allow_underscores: true,
       });
       if (siteUrl && !looksValid) {
         return res.status(400).json({

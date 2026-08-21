@@ -51,13 +51,21 @@ export const SetupConfigStep: React.FC<Props> = ({ selectedFeatures, onDone }) =
   // Persist the public origin on BOTH paths — skipping the optional invoicing
   // and SMTP sections must not also skip the address that every gallery link,
   // QR code and reminder email is built from.
+  //
+  // Throws rather than swallowing: PUT /general applies its own URL check, and
+  // a rejection here means the wizard would otherwise finish reporting success
+  // with no public address stored at all — the silent misconfiguration this
+  // whole change exists to remove. Callers decide what to do with it.
   const saveSiteUrl = async () => {
     const value = siteUrl.trim().replace(/\/+$/, '');
     if (!value) return;
-    try {
-      await settingsService.updateSettings({ general_site_url: value });
-    } catch (_) { /* best-effort: Settings → General offers the same field */ }
+    await settingsService.updateSettings({ general_site_url: value });
   };
+
+  const siteUrlRejected = () => t(
+    'setup.config.siteUrlRejected',
+    'The server rejected this address. Use the full origin, for example https://gallery.example.com or http://192.168.1.50:3000.',
+  );
 
   // Blocking validation, run before anything is posted. Everything on this
   // step is optional, but a value that IS filled in has to be usable: the
@@ -93,7 +101,13 @@ export const SetupConfigStep: React.FC<Props> = ({ selectedFeatures, onDone }) =
     }
     setErrors({});
     setSaving(true);
-    await saveSiteUrl();
+    // "Skip for now" always leaves, by contract — but say so rather than
+    // dropping the address without a word.
+    try {
+      await saveSiteUrl();
+    } catch {
+      toast.warn(siteUrlRejected());
+    }
     setSaving(false);
     onDone();
   };
@@ -102,8 +116,20 @@ export const SetupConfigStep: React.FC<Props> = ({ selectedFeatures, onDone }) =
     if (!validate()) return;
     setSaving(true);
     let failed = false;
+
+    // Separate from the block below so the message lands on the address field
+    // instead of the generic "some settings could not be saved" warning. The
+    // server check is stricter than isAbsoluteHttpUrl in places, so this is
+    // reachable even after validate() has passed.
     try {
       await saveSiteUrl();
+    } catch {
+      setSaving(false);
+      setErrors((prev) => ({ ...prev, siteUrl: siteUrlRejected() }));
+      return;
+    }
+
+    try {
       // Invoicing: only persist if they actually started filling it in.
       if (showInvoicing && inv.companyName.trim()) {
         await businessProfileService.update({
@@ -140,7 +166,7 @@ export const SetupConfigStep: React.FC<Props> = ({ selectedFeatures, onDone }) =
         };
         await emailService.updateConfig(config);
       }
-    } catch (_) {
+    } catch {
       // Stay on the step: advancing here discarded everything the user typed,
       // the SMTP password included, with no way back to re-enter it (#1104).
       failed = true;

@@ -3833,6 +3833,7 @@
       "siteUrl": "Public address",
       "siteUrlHint": "Where your clients will reach this gallery. Prefilled with the address you opened right now — change it if you will put PicPeak behind a domain or reverse proxy. You can update this any time in Settings → General.",
       "siteUrlInvalid": "Enter the full address including http:// or https://, for example https://gallery.example.com",
+      "siteUrlRejected": "The server rejected this address. Use the full origin, for example https://gallery.example.com or http://192.168.1.50:3000.",
       "fromEmailRequiredPlaceholder": "From address (required)",
       "fromEmailRequired": "A From address is required when an SMTP host is set.",
       "fromEmailInvalid": "Enter a valid email address.",
