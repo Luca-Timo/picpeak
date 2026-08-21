@@ -107,6 +107,7 @@ Nothing is required. Everything below has a working default.
 | `SMTP_*` | — | Optional override for outbound email, which is normally configured in the setup wizard / Settings → Email. Without either, PicPeak runs fine but sends nothing. |
 | `DATABASE_CLIENT` | `sqlite3` | Set to `pg` to use an external PostgreSQL. Required — the image declares `sqlite3`, and the boot resolver treats a declared client as an explicit instruction, so `DB_*` alone will **not** switch engines. |
 | `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | — | Connection details, used when `DATABASE_CLIENT=pg`. |
+| `EXTERNAL_MEDIA_ROOT` | `/external-media` | Read-only photo library to offer in the picker. Mount a folder there and it works without setting this. |
 
 ### Using an external PostgreSQL
 
@@ -119,6 +120,36 @@ docker run -d --name picpeak -p 3000:3000 -v picpeak:/data \
 
 The image waits for the database to accept connections before running
 migrations, exactly as the compose backend does.
+
+## Using photos that are already on the disk
+
+Galleries do not have to be built from uploads. Mount an existing photo library
+read-only at `/external-media` and it appears in the admin photo picker:
+
+```bash
+docker run -d --name picpeak -p 3000:3000 \
+  -v picpeak:/data \
+  -v /volume1/photo/2026-weddings:/external-media:ro \
+  ghcr.io/picpeak/picpeak/aio:main
+```
+
+No environment variable is needed — the path is the default. `EXTERNAL_MEDIA_ROOT`
+overrides it if you would rather mount somewhere else.
+
+`:ro` is not a precaution, it is accurate: PicPeak only reads from this tree.
+Thumbnails are written into the managed storage on the data volume, so the
+originals are never touched, renamed, or moved.
+
+Two things to get right:
+
+- **Mount it outside `/data`.** The data volume is adopted at boot (`chown` to
+  UID 1001) so the app can write to it. A read-only mount nested inside it makes
+  that fail and the container will not start. `/external-media` is its own path
+  for exactly this reason.
+- **A network share is fine here, and only here.** Because this tree is only
+  read and never adopted, an SMB/CIFS or NFS mount works — which is what makes
+  "the photos already live on the NAS" practical. The same share mounted under
+  `/data` would hang or fail the ownership step instead.
 
 ## TLS
 
