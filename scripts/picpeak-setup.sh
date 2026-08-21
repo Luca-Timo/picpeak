@@ -323,14 +323,28 @@ generate_password() {
 read_env_value() {
     local file="$1" key="$2"
     [[ -f "$file" ]] || return 0
+    # An unreadable file is NOT the same as a missing key: returning empty here
+    # would regenerate the secrets and then overwrite the file that held them.
+    # Say so loudly instead of silently rotating.
+    if [[ ! -r "$file" ]]; then
+        log_warn "Cannot read $file — existing secrets cannot be reused. Fix its permissions and re-run, or the install will get fresh ones."
+        return 0
+    fi
     # Tolerant of the shapes a hand-edited .env actually takes — leading
     # whitespace, an `export` prefix, spaces around the `=`. Reading one of
     # those as "absent" would regenerate the secrets and then overwrite the
     # evidence, which is the exact failure this helper exists to prevent.
     # Never fails: an unreadable file must not abort the installer under
     # `set -e` mid-run.
+    # Trailing whitespace and a CR are stripped too. A .env edited on Windows
+    # yields `abc\r`; docker compose treats the CR as a line terminator, so the
+    # running stack uses `abc`, but re-emitting `abc\r` mid-line into a fresh
+    # LF file makes it part of the value. The secret then silently differs from
+    # the one in use — every session dies for JWT_SECRET, and Postgres refuses
+    # the connection for DB_PASSWORD. That is the exact outcome this reuse
+    # exists to prevent, so it must not be reachable through it.
     sed -n -E "s/^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*=[[:space:]]*//p" \
-        "$file" 2>/dev/null | head -n1 || true
+        "$file" 2>/dev/null | head -n1 | sed -E 's/[[:space:]]+$//' || true
 }
 
 generate_jwt_secret() {
@@ -633,7 +647,12 @@ setup_docker_installation() {
     # three secrets above does not make that safe on its own. Keep a copy first,
     # the same way update_docker_installation already does.
     if [ -f "$app_dir/.env" ]; then
-        cp "$app_dir/.env" "$app_dir/.env.backup-$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+        # The rewrite below is wholesale, so losing this copy loses every other
+        # hand-edit in the file. Fail loudly rather than proceeding without it.
+        if ! cp "$app_dir/.env" "$app_dir/.env.backup-$(date +%Y%m%d-%H%M%S)"; then
+            log_error "Could not back up $app_dir/.env before rewriting it — aborting rather than overwriting it."
+            exit 1
+        fi
     fi
     log_step "Creating configuration..."
     cat > "$app_dir/.env" <<EOF
@@ -884,8 +903,13 @@ setup_native_installation() {
     # Create .env file
     log_step "Creating configuration..."
     if [ -f "$NATIVE_APP_DIR/app/backend/.env" ]; then
-        cp "$NATIVE_APP_DIR/app/backend/.env" \
-           "$NATIVE_APP_DIR/app/backend/.env.backup-$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+        # The rewrite below is wholesale, so losing this copy loses every other
+        # hand-edit in the file. Fail loudly rather than proceeding without it.
+        if ! cp "$NATIVE_APP_DIR/app/backend/.env" \
+                "$NATIVE_APP_DIR/app/backend/.env.backup-$(date +%Y%m%d-%H%M%S)"; then
+            log_error "Could not back up $NATIVE_APP_DIR/app/backend/.env before rewriting it — aborting rather than overwriting it."
+            exit 1
+        fi
     fi
     cat > "$NATIVE_APP_DIR/app/backend/.env" <<EOF
 # PicPeak Native Configuration

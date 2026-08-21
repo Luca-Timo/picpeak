@@ -82,41 +82,85 @@ mkdir -p $DATA_ROOT_DIR $DATA_DIRS 2>/dev/null || true
 # database dump, not DATA_DIR — so only a copy of the whole volume preserves it.
 if [ -z "${JWT_SECRET:-}" ]; then
   _jwt_file="${DATA_DIR:-/app/data}/jwt.secret"
-  # Length-check the read-back rather than testing that the file merely exists.
-  # A short write (ENOSPC, a SIGKILL mid-boot) leaves a partial file that a
-  # `-s` test accepts happily on every later boot, and validateEnv only WARNS
-  # below 32 characters — so the install would sign tokens with a truncated key
-  # indefinitely and nothing would ever say so.
-  _jwt_cur="$(cat "$_jwt_file" 2>/dev/null || true)"
-  if [ "${#_jwt_cur}" -ge 32 ]; then
-    export JWT_SECRET="$_jwt_cur"
-  else
+
+  # Read, trim, and length-check rather than testing that the file merely
+  # exists. A short write (ENOSPC, a SIGKILL mid-boot) leaves a partial file
+  # that a `-s` test accepts on every later boot, and validateEnv only WARNS
+  # below 32 characters — so the install would sign with a truncated key
+  # indefinitely and nothing would say so. Whitespace is stripped first because
+  # validateEnv rejects an all-blank secret as critical, and an all-blank file
+  # long enough to pass a naive length test would boot-loop forever.
+  _jwt_read() {
+    [ -f "$1" ] || return 0
+    tr -d '\r\n\t ' < "$1" 2>/dev/null || true
+  }
+
+  # Loop rather than a single pass, because the two failure causes look
+  # identical on the first read and need opposite responses: a file that is
+  # absent-then-present is a concurrent boot winning the race (adopt it), while
+  # a file that is still unusable after we have tried to link and re-read is
+  # genuine corruption (clear it and retry). Removing on the first pass would
+  # delete a perfectly good secret another container had just created.
+  _jwt_made=""
+  _jwt_cur="$(_jwt_read "$_jwt_file")"
+  _jwt_try=0
+  while [ "${#_jwt_cur}" -lt 32 ] && [ "$_jwt_try" -lt 2 ]; do
+    _jwt_try=$((_jwt_try + 1))
+
+    if [ "$_jwt_try" -gt 1 ] && [ -e "$_jwt_file" ]; then
+      # Second pass: we already attempted a link and re-read, so this is not a
+      # race in flight — the file really is unusable. `rm -f` plus a bare
+      # `rmdir`: a directory here is normally one Docker auto-created for a
+      # mistyped `-v` target and is empty, but if it holds anything it is not
+      # ours to delete — rmdir refuses and the operator is told instead.
+      echo "[secrets] $_jwt_file is unusable — regenerating." >&2
+      rm -f "$_jwt_file" 2>/dev/null || rmdir "$_jwt_file" 2>/dev/null || true
+    fi
+
     # openssl is not in the runtime image; /dev/urandom + base64 always are.
     # 48 bytes -> 64 base64 chars, comfortably past the 32 above.
     _jwt_new="$(head -c 48 /dev/urandom | base64 | tr -d '\n' || true)"
-    # Write to a temp name and rename, so a partial write can never become the
-    # secret; then export by reading the file BACK rather than trusting the
-    # value in hand. Two containers sharing one volume and booting together
-    # would otherwise each sign with their own generated value while the file
-    # holds only one of them — tokens minted by one rejected by the other, and
-    # half the sessions dying at the next restart. Reading back makes them
-    # converge on whichever write won.
-    if [ -n "$_jwt_new" ] \
-       && (umask 077 && printf '%s\n' "$_jwt_new" > "$_jwt_file.tmp") 2>/dev/null \
-       && mv -f "$_jwt_file.tmp" "$_jwt_file" 2>/dev/null; then
-      export JWT_SECRET="$(cat "$_jwt_file")"
+
+    # Two properties are needed at once, and each idiom alone gives only one:
+    #
+    #   * the file must never be READABLE half-written, or a concurrent boot
+    #     reads a partial secret — a plain `set -C` redirect creates the inode
+    #     first and writes after, so a loser can read it in between
+    #   * the create must not CLOBBER, or two containers each believe they own
+    #     the secret and sign with different keys — which is what `mv -f` does
+    #
+    # Writing the full content to a private temp file and hard-linking it into
+    # place gives both: the link is atomic, fails with EEXIST when another
+    # container already won, and the content is complete before the name exists.
+    if [ -n "$_jwt_new" ]; then
+      _jwt_tmp="$_jwt_file.$$.tmp"
+      if (umask 077; printf '%s\n' "$_jwt_new" > "$_jwt_tmp") 2>/dev/null \
+         && ln "$_jwt_tmp" "$_jwt_file" 2>/dev/null; then
+        _jwt_made=yes
+      fi
+      rm -f "$_jwt_tmp" 2>/dev/null || true
+    fi
+
+    # Trust the file, never the value in hand — whoever won the link is the
+    # source of truth for every container on this volume, and the loser adopts
+    # it rather than signing with the value it happened to generate.
+    _jwt_cur="$(_jwt_read "$_jwt_file")"
+  done
+
+  if [ "${#_jwt_cur}" -ge 32 ]; then
+    export JWT_SECRET="$_jwt_cur"
+    if [ -n "$_jwt_made" ]; then
       echo "[secrets] No JWT_SECRET supplied — generated one and stored it in $_jwt_file."
       echo "[secrets] Back up the whole data volume to keep it; the built-in backup does"
       echo "[secrets] not include it, and losing it signs every admin session and gallery"
       echo "[secrets] link out."
-    else
-      rm -f "$_jwt_file.tmp" 2>/dev/null || true
-      echo "WARNING: no JWT_SECRET supplied and $_jwt_file could not be written." >&2
-      echo "  Startup will fail validation. Pass -e JWT_SECRET=... or make the data" >&2
-      echo "  directory writable." >&2
     fi
-    unset _jwt_new
+  else
+    echo "WARNING: no JWT_SECRET supplied and $_jwt_file could not be created." >&2
+    echo "  Startup will fail validation. Pass -e JWT_SECRET=... , or check that the" >&2
+    echo "  data directory is writable and that $_jwt_file is not a directory." >&2
   fi
+  unset _jwt_new _jwt_tmp _jwt_made _jwt_try
   unset _jwt_file _jwt_cur
 fi
 
