@@ -212,12 +212,23 @@ const contentTypeFor = (format) => {
 async function generateThumbnail(imagePath, options = {}) {
   const sourceBasename = path.basename(imagePath);
   const outputBasename = options.outputBasename || sourceBasename;
-  const thumbnailFilename = `thumb_${outputBasename}`;
-  const thumbnailRelKey = path.posix.join('thumbnails', thumbnailFilename);
   const storage = getStorage();
 
   // Get thumbnail settings
   const settings = await getThumbnailSettings();
+
+  // Tag against the CONFIGURED canonical width, not the 300 default — the tag
+  // has to agree with the key ensureThumbnailAtWidth probed for. On an install
+  // with thumbnail_width=600 a w=300 request used to write `thumb_<name>` while
+  // the caller looked for `thumb_w300_<name>`: the cache never hit, so every
+  // single request re-downloaded the original and ran Sharp, and the file it
+  // left behind was in no cleanup list.
+  const canonicalWidth = settings.width || DEFAULT_THUMBNAIL_WIDTH;
+  const widthTag = options.width && options.width !== canonicalWidth
+    ? `w${options.width}_`
+    : '';
+  const thumbnailFilename = `thumb_${widthTag}${outputBasename}`;
+  const thumbnailRelKey = path.posix.join('thumbnails', thumbnailFilename);
 
   // Force regeneration: drop the existing object before writing the new one
   if (options.regenerate) {
@@ -241,7 +252,12 @@ async function generateThumbnail(imagePath, options = {}) {
     // Strip EXIF/metadata from thumbnails (privacy: prevent GPS leak etc.)
     sharpInstance = sharpInstance.withMetadata(false);
 
-    sharpInstance = sharpInstance.resize(settings.width, settings.height, {
+    // options.width/height override the admin setting for responsive tiers
+    // (#1095). The configured `fit` is kept deliberately: the grid renders
+    // with object-cover, so every tier must be cropped the same way or the
+    // browser would swap between differently-framed images as the viewport
+    // changes.
+    sharpInstance = sharpInstance.resize(options.width || settings.width, options.height || settings.height, {
       withoutEnlargement: true,
       fit: settings.fit,
       position: 'center'
@@ -731,6 +747,119 @@ async function deletePreviewTiers(photo) {
   await Promise.all(previewTierKeys(photo).map((k) => storage.delete(k).catch(() => {})));
 }
 
+/**
+ * Thumbnail storage keys for every responsive tier of a photo (#1095).
+ * Mirrors previewTierKeys — see there for why they are derived rather than
+ * tracked.
+ *
+ * Every width is listed, the canonical one included, and deliberately: which
+ * width is canonical depends on the thumbnail_width setting, so on a
+ * 600-configured install it is w300 that exists as a tier file. Reading the
+ * setting here would make the whole cleanup path async for no gain — deleting
+ * a key that was never written is already a swallowed no-op, so the inclusive
+ * list is both simpler and the one that cannot strand a file.
+ */
+function thumbnailTierKeys(photo) {
+  if (!photo) return [];
+  const isExternal = photo.source_origin === 'external' || photo.source_origin === 'reference';
+  const sourceBasename = path.basename(
+    (isExternal ? (photo.external_relpath || photo.filename) : photo.path) || `photo-${photo.id}`
+  );
+  const outputBasename = `p${photo.id}_${sourceBasename}`;
+  return THUMBNAIL_WIDTHS
+    .map((w) => path.posix.join('thumbnails', `thumb_w${w}_${outputBasename}`));
+}
+
+async function deleteThumbnailTiers(photo) {
+  const storage = getStorage();
+  await Promise.all(thumbnailTierKeys(photo).map((k) => storage.delete(k).catch(() => {})));
+}
+
+/**
+ * A thumbnail at a specific tier width (#1095).
+ *
+ * Same contract as ensurePreviewImageAtWidth: pure cache, keyed by width,
+ * never written to photos.thumbnail_path. The key is scoped by photo id for
+ * every source type — basenames are not unique across events, and a tier is
+ * served from a cache hit without re-reading the source, so an unscoped key
+ * would hand one gallery's photo to another.
+ */
+async function ensureThumbnailAtWidth(photo, width) {
+  if (!width) return ensureThumbnail(photo);
+
+  // Against the CONFIGURED canonical width, not the 300 default. An install
+  // that set thumbnail_width to 600 already has a 600px thumbnail; generating
+  // a w600 tier for it would download the original and run Sharp to produce a
+  // byte-equivalent duplicate, once per photo.
+  const settings = await getThumbnailSettings();
+  const canonicalWidth = settings.width || DEFAULT_THUMBNAIL_WIDTH;
+  if (width === canonicalWidth) return ensureThumbnail(photo);
+
+  // Videos never take the tier path. Their thumbnail is a poster frame from
+  // videoProcessor, not a resize of the stored file, so the code below would
+  // hand the video itself to Sharp — after withLocalCopy has downloaded the
+  // whole thing on an S3 backend. Nothing caches that failure, so a crawler
+  // walking ?w= over a gallery of videos repeats the download every request.
+  if (photo.media_type === 'video' || String(photo.mime_type || '').startsWith('video/')) {
+    return ensureThumbnail(photo);
+  }
+
+  const { resolvePhotoStorageKey, resolvePhotoFilePath } = require('./photoResolver');
+  const storage = getStorage();
+
+  let event;
+  try {
+    event = await db('events').where('id', photo.event_id).first();
+  } catch (e) {
+    return null;
+  }
+  if (!event) return null;
+
+  const isExternal = photo.source_origin === 'external' || photo.source_origin === 'reference';
+  const sourceBasename = path.basename(
+    (isExternal ? (photo.external_relpath || photo.filename) : photo.path) || `photo-${photo.id}`
+  );
+  const outputBasename = `p${photo.id}_${sourceBasename}`;
+  const key = path.posix.join('thumbnails', `thumb_w${width}_${outputBasename}`);
+
+  try {
+    if (await storage.stat(key)) return key;
+  } catch (e) {
+    // regenerate below
+  }
+
+  // Scale the height from the configured aspect ratio rather than forcing a
+  // square. Thumbnails are square on a default install, but the settings API
+  // accepts any width/height in 50..1000 — and with fit:'cover' a 300x200
+  // canonical next to a 600x600 tier are two different crops, so the photo
+  // would visibly reframe as the tile size changes.
+  const height = Math.round(width * (settings.height / canonicalWidth));
+
+  try {
+    if (isExternal) {
+      const localPath = resolvePhotoFilePath(event, photo);
+      return await generateThumbnail(localPath, {
+        regenerate: true, outputBasename, width, height,
+      });
+    }
+    const sourceKey = resolvePhotoStorageKey(event, photo);
+    if (!sourceKey) return null;
+    return await withLocalCopy(sourceKey, async (localPath) => {
+      const proc = await withProcessableImage(localPath, sourceKey);
+      try {
+        return await generateThumbnail(proc.path, {
+          regenerate: true, outputBasename, width, height,
+        });
+      } finally {
+        proc.cleanup();
+      }
+    });
+  } catch (e) {
+    logger.warn(`Thumbnail tier w${width} failed for photo ${photo.id}: ${e.message}`);
+    return null;
+  }
+}
+
 async function ensurePreviewImageAtWidth(photo, width) {
   if (!width || width === DEFAULT_PREVIEW_LONG_EDGE) return ensurePreviewImage(photo);
 
@@ -981,6 +1110,9 @@ async function resizeToBox(inputBuffer, box, options = {}) {
 
 module.exports = {
   ensurePreviewImageAtWidth,
+  ensureThumbnailAtWidth,
+  thumbnailTierKeys,
+  deleteThumbnailTiers,
   previewTierKeys,
   deletePreviewTiers,
   PREVIEW_WIDTHS,

@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Download, Maximize2, Check, MessageSquare, Heart } from 'lucide-react';
 import { useInView } from 'react-intersection-observer';
 import { AuthenticatedImage } from '../common';
+import { thumbnailUrlForTile } from './imageTiers';
 import { FeedbackIdentityModal } from './FeedbackIdentityModal';
 import { feedbackService } from '../../services/feedback.service';
 import { useGuestIdentityOptional } from '../../contexts/GuestIdentityContext';
@@ -193,6 +194,34 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
   });
   const inView = !lazy || observedInView;
 
+  // Tile width for the responsive tier (#1095), measured rather than inferred.
+  // The observer entry only exists for `lazy` cards, and Mosaic, Masonry and
+  // Timeline do not pass it — Mosaic is 1-up on mobile where Grid is 2-up, so
+  // those are exactly the layouts a breakpoint guess gets most wrong.
+  //
+  // Gated: the image is not rendered until this has run, so AuthenticatedImage
+  // never mounts with a src it would have to replace. Attaching the observer
+  // ref unconditionally instead would refetch every tile — React flushes
+  // passive effects before the synchronous re-render a layout effect triggers,
+  // so the fetch fires once with the fallback and again with the measurement.
+  //
+  // useLayoutEffect, so the extra commit lands before paint and the skeleton
+  // branch below is never actually seen. One reflow per commit, not per card:
+  // nothing writes to the DOM between the reads, so the browser batches them.
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [tile, setTile] = useState<{ width: number | null } | null>(null);
+  const setContainerRef = useCallback((node: HTMLDivElement | null) => {
+    containerRef.current = node;
+    if (lazy) ref(node);
+  }, [ref, lazy]);
+
+  useLayoutEffect(() => {
+    if (!inView || tile) return;
+    // 0 means not laid out (a hidden tab, say), not a 0px tile — null falls
+    // back to the viewport estimate rather than pinning the smallest tier.
+    setTile({ width: containerRef.current?.offsetWidth || null });
+  }, [inView, tile]);
+
   const showFeedbackActions = feedbackEnabled && Boolean(feedbackOptions);
 
   const overlayVisibilityClass = overlayVisible
@@ -322,17 +351,32 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
       </button>
     ) : null;
 
+  // Responsive grid tier (#1095). Applied here rather than in each layout
+  // because six of the seven funnel their tile through this one image; the
+  // seventh, Carousel, renders 80px filmstrip thumbs that the canonical 300
+  // already covers at DPR 3.
+  //
+  // Only when the src IS the thumbnail route: layouts fall back to photo.url
+  // when thumbnail_url is null, and ?w= on the original-photo route means
+  // something else. Videos are excluded because their thumbnail is a poster
+  // frame from the video pipeline — the tier route would hand the video file
+  // itself to Sharp.
+  const isVideo = photo.media_type === 'video' || photo.type === 'video';
+  const tileSrc = !isVideo && photo.thumbnail_url && imageProps.src === photo.thumbnail_url
+    ? (thumbnailUrlForTile(photo.thumbnail_url, photo, tile?.width) ?? imageProps.src)
+    : imageProps.src;
+
   return (
     <div
-      ref={lazy ? ref : undefined}
+      ref={setContainerRef}
       className={className}
       style={lazy ? { ...style, opacity: !inView && fadeInWhenVisible ? 0 : 1 } : style}
       onClick={handlePhotoClick}
       {...containerProps}
     >
-      {inView ? (
+      {inView && tile ? (
         <>
-          <AuthenticatedImage {...imageProps} />
+          <AuthenticatedImage {...imageProps} src={tileSrc} />
 
           {beforeOverlay}
 

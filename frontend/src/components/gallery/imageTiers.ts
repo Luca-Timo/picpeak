@@ -21,12 +21,7 @@ export const FACE_CROP_WIDTH = 640;
 /** CSS px of the avatar the crop has to fill; used to size the tier. */
 const FACE_AVATAR_PX = 64;
 
-// Thumbnail tiers are NOT here yet. Emitting a srcset whose candidates the
-// server ignores is worse than emitting none: the browser would pick the
-// "600w" candidate, receive the 300px image, and upscale it — the exact
-// softness #1095 reports, made slightly worse. generateThumbnail resolves its
-// width from admin settings rather than an argument, so tiering it is a
-// separate change and lands separately.
+export const THUMBNAIL_WIDTHS = [300, 600, 900] as const;
 
 /** Smallest tier that still covers `needed`, or the largest if none does. */
 function smallestCovering(needed: number, tiers: readonly number[]): number {
@@ -194,4 +189,79 @@ export function adminFacePreviewUrl(
 ): string {
   const width = photo ? faceTierWidth(photo, cover) : FACE_CROP_WIDTH;
   return `/api/admin/photos/${eventId}/preview/${photoId}?w=${width}`;
+}
+
+/**
+ * Device pixels one grid tile occupies, resolved to a tier (#1095).
+ *
+ * `tileCssWidth` is the tile's measured rendered width, which is the only
+ * honest input: column counts differ per layout (Mosaic is 1-up on mobile
+ * where Grid is 2-up) and every layout shifts again with the thumbnailScale
+ * theme setting, so no breakpoint table is right for all of them. When it is
+ * unavailable the viewport falls back to the default grid's columns — 2 up on
+ * phones, 3 on tablets, 4 on desktop — which is approximate but never worse
+ * than the flat 300 it replaces.
+ *
+ * At the mobile default a tile is ~195 CSS px, about 585 device px on a DPR-3
+ * phone, so the 300px thumbnail is upscaled ~1.9x and faces visibly mush.
+ * That is the symptom #1095 reports.
+ *
+ * DPR is capped at 3 for the same reason as the preview tier: a DPR-10 device
+ * would otherwise ask for thousands of pixels and land on the top tier for a
+ * thumbnail nobody can see that much of.
+ */
+export function tileThumbnailWidth(
+  photo?: { width?: number | null; height?: number | null },
+  tileCssWidth?: number | null,
+): number {
+  if (typeof window === 'undefined') return THUMBNAIL_WIDTHS[0];
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const vw = window.innerWidth;
+  const cssWidth = tileCssWidth && tileCssWidth > 0
+    ? tileCssWidth
+    : vw / (vw <= 640 ? 2 : vw <= 1024 ? 3 : 4);
+  const target = smallestCovering(Math.round(cssWidth * dpr), THUMBNAIL_WIDTHS);
+
+  // Thumbnails are square, so the source's SHORT edge is what bounds them: a
+  // 4000x600 panorama can still only fill a 600 tile. Clamp to the first tier
+  // that already covers the whole source — past that, withoutEnlargement means
+  // every larger tier returns the same pixels, so asking buys a second Sharp
+  // run and a second cache entry for a byte-identical file.
+  //
+  // Clamping to the largest tier the source *fits inside* would be the wrong
+  // rule: a 400px source would drop to 300 and lose 100 real pixels, when
+  // asking for 600 returns all 400 of them.
+  const shortEdge = photo?.width && photo?.height
+    ? Math.min(photo.width, photo.height)
+    : null;
+  if (!shortEdge) return target;
+  return Math.min(target, smallestCovering(shortEdge, THUMBNAIL_WIDTHS));
+}
+
+/**
+ * The grid thumbnail URL sized for this device (#1095).
+ *
+ * One URL rather than a srcset, for the same reason the lightbox picks one:
+ * AuthenticatedImage fetches its `src` with the gallery bearer token and
+ * renders the resulting blob. An `<img>` carrying a `w`-descriptor srcset
+ * ignores `src` entirely, so that authenticated fetch would be thrown away and
+ * the browser would issue its own — unauthenticated, and resolved against the
+ * page origin rather than the configured API host.
+ *
+ * Returns the input untouched when there is nothing to size — a null
+ * thumbnail_url means the caller is about to fall back to the original, and
+ * adding ?w= to that URL would mean something else entirely.
+ */
+export function thumbnailUrlForTile(
+  thumbnailUrl: string | null | undefined,
+  photo?: { width?: number | null; height?: number | null },
+  tileCssWidth?: number | null,
+): string | null {
+  if (!thumbnailUrl) return null;
+  const width = applyDataSaver(tileThumbnailWidth(photo, tileCssWidth), THUMBNAIL_WIDTHS);
+  // The canonical tier is what the server already serves without a parameter;
+  // leaving it off keeps those URLs byte-identical to today's, so existing
+  // caches and ETags stay valid.
+  if (width === THUMBNAIL_WIDTHS[0]) return thumbnailUrl;
+  return withWidth(thumbnailUrl, width);
 }

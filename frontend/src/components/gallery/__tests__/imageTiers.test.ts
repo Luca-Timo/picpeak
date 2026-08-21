@@ -8,7 +8,10 @@
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 
-import { previewUrlForViewport, viewportPreviewWidth, PREVIEW_WIDTHS } from '../imageTiers';
+import {
+  previewUrlForViewport, viewportPreviewWidth, thumbnailUrlForTile, tileThumbnailWidth,
+  PREVIEW_WIDTHS,
+} from '../imageTiers';
 
 const realWidth = window.innerWidth;
 const realDpr = window.devicePixelRatio;
@@ -129,5 +132,109 @@ describe('previewUrlForViewport', () => {
   it('never downshifts below the smallest tier', () => {
     setViewport(320, 1, { saveData: true }); // already at 640
     expect(previewUrlForViewport('/p', LANDSCAPE)).toBe('/p?w=640');
+  });
+});
+
+// A source big enough to fill every tier, so the tier comes from the tile
+// geometry rather than the short-edge clamp.
+const BIG = { width: 4000, height: 3000 };
+
+describe('tileThumbnailWidth', () => {
+  it('sizes from the tile, not the viewport', () => {
+    // The bug in #1095: a 2-up phone tile is ~195 CSS px, which is 585 device
+    // px at DPR 3 — the 300px thumbnail upscaled ~1.9x.
+    setViewport(390, 3);
+    expect(tileThumbnailWidth(BIG)).toBe(600);
+
+    // Same tile on a DPR-1 phone genuinely only needs 195, so it keeps the
+    // small file. Sizing off the viewport alone would have shipped 600 here.
+    setViewport(390, 1);
+    expect(tileThumbnailWidth(BIG)).toBe(300);
+
+    setViewport(768, 2);   // 3 up -> 256 CSS px -> 512
+    expect(tileThumbnailWidth(BIG)).toBe(600);
+
+    setViewport(1920, 2);  // 4 up -> 480 CSS px -> 960, past the top tier
+    expect(tileThumbnailWidth(BIG)).toBe(900);
+  });
+
+  it('stops at the first tier that already covers the source', () => {
+    // generateThumbnail resizes withoutEnlargement, so once a tier exceeds the
+    // source every larger one returns the same pixels — for a second Sharp run
+    // and a second cache entry holding a byte-identical file.
+    setViewport(1920, 2);  // wants 900
+    expect(tileThumbnailWidth({ width: 500, height: 400 })).toBe(600);
+    expect(tileThumbnailWidth({ width: 260, height: 200 })).toBe(300);
+  });
+
+  it('does not drop a tier and throw away source pixels', () => {
+    // A 400px short edge fits inside no tier but 300, so clamping to the
+    // largest tier it FITS IN would serve 300 and discard 100 real pixels.
+    // Asking for 600 returns all 400 of them.
+    setViewport(1920, 2);
+    expect(tileThumbnailWidth({ width: 500, height: 400 })).not.toBe(300);
+
+    // And a source that comfortably clears 600 is not held back at it.
+    expect(tileThumbnailWidth({ width: 800, height: 700 })).toBe(900);
+  });
+
+  it('measures the SHORT edge, because thumbnails are square', () => {
+    // A 4000x600 panorama has width to spare and can still only fill a 600
+    // square. Measuring the long edge would over-ask for every panorama.
+    setViewport(1920, 2);
+    expect(tileThumbnailWidth({ width: 4000, height: 600 })).toBe(600);
+  });
+
+  it('prefers the measured tile over the breakpoint fallback', () => {
+    // Mosaic is 1-up on mobile where Grid is 2-up, and thumbnailScale shifts
+    // every layout's column count, so the fallback is wrong for most installs
+    // whenever a real measurement is available.
+    setViewport(390, 3);
+    expect(tileThumbnailWidth(BIG)).toBe(600);          // fallback: 2 up
+    expect(tileThumbnailWidth(BIG, 390)).toBe(900);     // measured: 1 up
+    expect(tileThumbnailWidth(BIG, 96)).toBe(300);      // measured: a dense grid
+
+    // A zero-width measurement is a not-yet-laid-out tile, not a 0px one.
+    expect(tileThumbnailWidth(BIG, 0)).toBe(600);
+  });
+
+  it('falls back to tile geometry when dimensions are unknown', () => {
+    // No guard available; the server clamps with withoutEnlargement anyway, so
+    // the worst case is a tier that returns the source size.
+    setViewport(390, 3);
+    expect(tileThumbnailWidth()).toBe(600);
+    expect(tileThumbnailWidth({ width: null, height: null })).toBe(600);
+  });
+});
+
+describe('thumbnailUrlForTile', () => {
+  it('appends the tier the tile needs', () => {
+    setViewport(390, 3);
+    expect(thumbnailUrlForTile('/api/gallery/x/thumbnail/7', BIG))
+      .toBe('/api/gallery/x/thumbnail/7?w=600');
+  });
+
+  it('leaves the canonical URL byte-identical', () => {
+    // No parameter for the default tier, so existing caches and ETags stay
+    // valid for every client that is already holding one.
+    setViewport(390, 1);
+    expect(thumbnailUrlForTile('/t', BIG)).toBe('/t');
+  });
+
+  it('preserves an existing query string', () => {
+    setViewport(390, 3);
+    expect(thumbnailUrlForTile('/t?wm=1', BIG)).toBe('/t?wm=1&w=600');
+  });
+
+  it('downshifts a tier on save-data', () => {
+    setViewport(390, 3, { saveData: true });
+    expect(thumbnailUrlForTile('/t', BIG)).toBe('/t');
+  });
+
+  it('returns null when there is no thumbnail to size', () => {
+    // The caller is about to fall back to the original; ?w= on that route
+    // means something else entirely.
+    expect(thumbnailUrlForTile(null)).toBeNull();
+    expect(thumbnailUrlForTile(undefined)).toBeNull();
   });
 });
