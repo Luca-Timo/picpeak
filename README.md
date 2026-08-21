@@ -75,11 +75,12 @@ For a home server, a NAS, or a single small studio, the all-in-one image runs th
 ```bash
 docker run -d --name picpeak -p 3000:3000 \
   -v picpeak:/data \
-  -e JWT_SECRET="$(openssl rand -base64 48)" \
   ghcr.io/picpeak/picpeak/aio:main
 ```
 
-Then open **http://localhost:3000/admin** and read the setup token with `docker exec picpeak cat /data/db/SETUP_TOKEN`.
+No environment variables to set — the JWT secret is generated on first start and kept on the volume.
+
+Then open **http://localhost:3000/admin** and read the setup token with `docker exec picpeak cat /data/db/SETUP_TOKEN`, or open `db/SETUP_TOKEN` on the volume with any file manager if the host has no shell.
 
 `:main` is the active-development tag, and today it is the only one the all-in-one image has — `Dockerfile.aio` landed after the current stable release, so `:stable` and `:latest` first appear for this image once the aio build reaches the `stable` branch. Switch to `:stable` then, or pin a version tag (`3.107.4-beta.0`) if you would rather not track `main`.
 

@@ -60,6 +60,48 @@ DATA_ROOT_DIR="${DATA_ROOT:-}"
 # shellcheck disable=SC2086 — intentional word-splitting over the roots
 mkdir -p $DATA_ROOT_DIR $DATA_DIRS 2>/dev/null || true
 
+# Last resort for JWT_SECRET, after the /run/secrets pass above: generate one
+# and persist it next to the database. Deliberately placed here rather than
+# beside that loop because it needs DATA_DIR to exist, and before the chown
+# below so the new file is adopted along with everything else.
+#
+# The compose stack never reaches this — `secrets-init` has already written
+# /run/secrets/jwt_secret. It exists for deployments with no shell: the
+# all-in-one image mounts no secrets volume, and the documented one-liner asks
+# the user to run `openssl rand` on the HOST, which a NAS Container Manager or
+# Container Station form cannot do. Without this, JWT_SECRET is unset,
+# validateEnv treats it as critical, and the container exits — so the whole
+# GUI-driven install path is a dead end (#705).
+#
+# JWT_SECRET only. DB_PASSWORD must match whatever the Postgres volume was
+# initialised with, so inventing one at boot would break the connection rather
+# than fix it; the AIO default engine is SQLite and Redis is not used here.
+#
+# Losing the file invalidates every session and gallery link — it lives in the
+# data directory precisely so it shares the database's backup and lifecycle.
+if [ -z "${JWT_SECRET:-}" ]; then
+  _jwt_file="${DATA_DIR:-/app/data}/jwt.secret"
+  if [ -s "$_jwt_file" ]; then
+    export JWT_SECRET="$(cat "$_jwt_file")"
+  else
+    # openssl is not in the runtime image; /dev/urandom + base64 always are.
+    # 48 bytes -> 64 base64 chars, comfortably past validateEnv's 32-char floor.
+    _jwt_new="$(head -c 48 /dev/urandom | base64 | tr -d '\n')"
+    if [ -n "$_jwt_new" ] && (umask 077 && printf '%s\n' "$_jwt_new" > "$_jwt_file") 2>/dev/null; then
+      export JWT_SECRET="$_jwt_new"
+      echo "[secrets] No JWT_SECRET supplied — generated one and stored it in $_jwt_file."
+      echo "[secrets] Back it up with your data directory; losing it signs every admin"
+      echo "[secrets] session and gallery link out."
+    else
+      echo "WARNING: no JWT_SECRET supplied and $_jwt_file could not be written." >&2
+      echo "  Startup will fail validation. Pass -e JWT_SECRET=... or make the data" >&2
+      echo "  directory writable." >&2
+    fi
+    unset _jwt_new
+  fi
+  unset _jwt_file
+fi
+
 if [ "$(id -u)" = "0" ]; then
   if [ -n "$DATA_ROOT_DIR" ] && ! chown nodejs:nodejs "$DATA_ROOT_DIR" 2>/dev/null; then
     echo "ERROR: failed to chown $DATA_ROOT_DIR to nodejs (UID 1001)." >&2

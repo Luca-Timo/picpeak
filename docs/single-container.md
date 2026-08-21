@@ -15,7 +15,6 @@ docker run -d \
   --name picpeak \
   -p 3000:3000 \
   -v picpeak:/data \
-  -e JWT_SECRET="$(openssl rand -base64 48)" \
   ghcr.io/picpeak/picpeak/aio:main
 ```
 
@@ -32,10 +31,29 @@ asks for a one-time token:
 docker exec picpeak cat /data/db/SETUP_TOKEN
 ```
 
-The token is also printed to the container log on first start.
+No shell? The file is on the volume you mounted, so any file manager can open
+it — with `-v picpeak:/data` it is `db/SETUP_TOKEN` inside the volume, and with
+a host folder it is `<that folder>/db/SETUP_TOKEN`.
 
-`JWT_SECRET` is the only variable you must set. Generate it once and keep it —
-changing it invalidates every existing session and gallery link.
+The token is deliberately **not** written to the container log. It is a live
+credential for creating the first admin, and logging it would leave it sitting
+in `combined.log` and `security.log` on the mounted volume long after setup.
+The log line names the file instead. (If the file could not be written at all,
+the log carries the token as a last-resort recovery path — that is the only
+case where it appears there.)
+
+## Secrets
+
+Nothing to set. On first start the container generates a `JWT_SECRET` and
+stores it at `db/jwt.secret` (mode 0600) on the volume, then reuses it on every
+subsequent boot — so a deployment with no shell, like a NAS Container Manager
+form, needs no preparation.
+
+Back it up along with the rest of the volume: losing that file signs every
+admin session and gallery link out, exactly as changing the secret would.
+
+Passing `-e JWT_SECRET=…` still overrides it, which is what you want for
+config-as-code deployments or when several instances must share sessions.
 
 ## What is inside
 
@@ -79,11 +97,11 @@ you are about to delete.
 
 ## Environment
 
-Only `JWT_SECRET` is required. Everything else has a working default.
+Nothing is required. Everything below has a working default.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `JWT_SECRET` | — | **Required.** Long random string. |
+| `JWT_SECRET` | generated | Generated into `db/jwt.secret` on first start and reused after. Set it explicitly to pin it. |
 | `PORT` | `3000` | Listen port inside the container. |
 | `FRONTEND_URL` | — | Optional override for the public URL. Normally you set this in the setup wizard instead (it proposes the address you opened), and it is editable later under Settings → General. Setting it here pins the value and makes that field read-only. |
 | `SMTP_*` | — | Optional override for outbound email, which is normally configured in the setup wizard / Settings → Email. Without either, PicPeak runs fine but sends nothing. |
@@ -94,7 +112,6 @@ Only `JWT_SECRET` is required. Everything else has a working default.
 
 ```bash
 docker run -d --name picpeak -p 3000:3000 -v picpeak:/data \
-  -e JWT_SECRET="…" \
   -e DATABASE_CLIENT=pg \
   -e DB_HOST=10.0.0.5 -e DB_USER=picpeak -e DB_PASSWORD=… -e DB_NAME=picpeak \
   ghcr.io/picpeak/picpeak/aio:main
@@ -115,7 +132,7 @@ Settings → General (or re-run the setup wizard) so generated links match —
 **Synology (Container Manager)** and **QNAP (Container Station)** can both run
 this from the registry UI: pull `ghcr.io/picpeak/picpeak/aio:main`, map a
 host port to container port `3000`, and add one volume mapping to `/data`.
-Set `JWT_SECRET` under Environment.
+No environment variables are needed — the secret is generated on first start.
 
 Point the volume at a folder on your data pool, not the system partition, and
 prefer a folder you own — the container starts as root only long enough to
