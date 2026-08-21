@@ -95,6 +95,29 @@ Upgrades are `docker pull` + recreate the container; migrations run at start.
 The volume is what carries your data across, so never bind-mount a directory
 you are about to delete.
 
+### Large libraries and slow start-ups
+
+The container starts as root just long enough to take ownership of `/data`
+(UID 1001), then drops privileges. That step walks the tree, so on a big
+library over a slow filesystem it can add noticeable time to **every** restart,
+not only the first.
+
+If that becomes annoying, take ownership once yourself and run as that user —
+the adoption step is then skipped entirely:
+
+```bash
+chown -R 1001:1001 /volume1/docker/picpeak     # once, on the host
+docker run -d --name picpeak -p 3000:3000 \
+  --user 1001:1001 \
+  -v /volume1/docker/picpeak:/data \
+  ghcr.io/picpeak/picpeak/aio:main
+```
+
+The container then verifies the directories are writable and fails with a clear
+message if they are not, rather than trying to fix ownership itself. Note this
+also means files you drop into the storage tree from outside must already be
+readable by UID 1001 — relevant if you use a watched folder to ingest photos.
+
 ## Environment
 
 Nothing is required. Everything below has a working default.
