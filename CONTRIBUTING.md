@@ -73,20 +73,26 @@ cd picpeak
 # Install dependencies
 cd backend && npm install
 cd ../frontend && npm install
-
-# Set up environment
-cp .env.example .env
-# Edit .env with your settings
+cd ..
 
 # Start Postgres and Redis (the app itself runs on the host, see below)
 docker compose up -d postgres redis
 
+# Backend config — note this is backend/.env, not the root one
+cp backend/.env.example backend/.env
+# JWT_SECRET must be set: the host process validates it and exits without one.
+# (The containers generate it themselves; `npm run dev` does not.)
+
 # Backend, with nodemon hot reload — http://localhost:3001
 cd backend && npm run dev
 
-# Frontend, with Vite hot reload, in a second shell — http://localhost:3000
+# Frontend, with Vite hot reload, in a second shell — http://localhost:5173
 cd frontend && npm run dev
 ```
+
+Open **http://localhost:5173**. Vite proxies `/api` to the backend on `3001`, so
+you do not need the root `.env` for this loop at all — that one configures the
+compose stack.
 
 Running the two Node processes on the host is the fastest loop: both reload on save, and you get a real debugger and stack traces without rebuilding an image.
 

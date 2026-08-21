@@ -9,7 +9,12 @@ services:
   secrets-init:
     image: alpine:3.20
     container_name: picpeak-secrets-init
-    env_file: .env
+    # required:false so `docker compose config` works before a .env exists —
+    # without it the volume defaults below deliver nothing, because the file
+    # itself is the hard failure. Needs Compose >= 2.24.
+    env_file:
+      - path: .env
+        required: false
     entrypoint:
       - sh
       - -c
@@ -92,7 +97,12 @@ services:
     # PICPEAK_CHANNEL: 'stable' (default), 'beta', or specific version like 'v2.3.0'
     image: ghcr.io/picpeak/picpeak/backend:${PICPEAK_CHANNEL:-stable}
     container_name: picpeak-backend
-    env_file: .env
+    # required:false so `docker compose config` works before a .env exists —
+    # without it the volume defaults below deliver nothing, because the file
+    # itself is the hard failure. Needs Compose >= 2.24.
+    env_file:
+      - path: .env
+        required: false
     environment:
       - NODE_ENV=production
       - DB_HOST=${DB_HOST:-postgres}
