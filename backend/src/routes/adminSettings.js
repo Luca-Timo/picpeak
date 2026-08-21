@@ -3,6 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const { body, validationResult } = require('express-validator');
+const validator = require('validator');
 const { db, logActivity } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
 const { adminAuth } = require('../middleware/auth');
@@ -21,7 +22,7 @@ const {
 const { sanitizeCss } = require('../utils/cssSanitizer');
 const { upsertAppSetting } = require('../utils/appSettings');
 const { clearShareLinkSettingsCache } = require('../services/shareLinkService');
-const { invalidateSiteUrlCache, isEnvPinned } = require('../utils/frontendUrl');
+const { invalidateSiteUrlCache, isEnvPinned, envPinnedBase } = require('../utils/frontendUrl');
 const { resetSecurityConfigCache } = require('../utils/authSecurity');
 const { errorResponse } = require('../utils/routeHelpers');
 const logger = require('../utils/logger');
@@ -251,7 +252,7 @@ router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) 
     // an editable field whose value is silently ignored at runtime.
     settingsObject.general_site_url_env_pinned = isEnvPinned();
     if (settingsObject.general_site_url_env_pinned) {
-      settingsObject.general_site_url_effective = process.env.FRONTEND_URL.trim().replace(/\/+$/, '');
+      settingsObject.general_site_url_effective = envPinnedBase();
     }
 
     // Mask sensitive secrets before sending to client
@@ -852,7 +853,7 @@ router.get('/:type', adminAuth, requirePermission('settings.view'), async (req, 
     if (type === 'general') {
       settingsObject.general_site_url_env_pinned = isEnvPinned();
       if (settingsObject.general_site_url_env_pinned) {
-        settingsObject.general_site_url_effective = process.env.FRONTEND_URL.trim().replace(/\/+$/, '');
+        settingsObject.general_site_url_effective = envPinnedBase();
       }
     }
 
@@ -1390,6 +1391,31 @@ router.put('/general', adminAuth, requirePermission('settings.edit'), async (req
     // used to repoint the install via this generic writer. See
     // rejectUnauthorizedProtectedKeys (403s when a protected key is denied).
     if (await rejectUnauthorizedProtectedKeys(settings, req, res)) return;
+
+    // The public origin is no longer just an email link: it feeds the CORS
+    // allowlist (server.js) and the Access-Control-Allow-Origin header
+    // (secureImageMiddleware) since #705. A schemeless value like
+    // "gallery.example.com" therefore produces both links that don't resolve
+    // AND an allowlist entry no browser origin can ever match, so validate it
+    // server-side rather than trusting the input type (#1104). require_tld is
+    // off on purpose: LAN and NAS installs legitimately run on http://nas:3000
+    // or a bare IP. Same validator as oidc_issuer_url above.
+    if (Object.prototype.hasOwnProperty.call(settings, 'general_site_url')) {
+      const siteUrl = typeof settings.general_site_url === 'string'
+        ? settings.general_site_url.trim().replace(/\/+$/, '')
+        : '';
+      const looksValid = validator.isURL(siteUrl, {
+        protocols: ['http', 'https'],
+        require_protocol: true,
+        require_tld: false,
+      });
+      if (siteUrl && !looksValid) {
+        return res.status(400).json({
+          error: 'general_site_url must be an absolute http(s) URL, for example https://gallery.example.com'
+        });
+      }
+      settings.general_site_url = siteUrl;
+    }
 
     const publicSiteKeysTouched = Object.keys(settings).some((key) => key.startsWith('general_public_site_'));
 

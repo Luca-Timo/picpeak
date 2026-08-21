@@ -8,6 +8,7 @@ import type { FeatureKey } from '../../services/featureFlags.service';
 import { businessProfileService } from '../../services/businessProfile.service';
 import { emailService, type EmailConfig } from '../../services/email.service';
 import { settingsService } from '../../services/settings.service';
+import { isAbsoluteHttpUrl } from '../../utils/url';
 
 // Email is NOT feature-gated (#705): a gallery-only install still mails the
 // gallery link, guest invites and expiry warnings through the same
@@ -21,8 +22,10 @@ interface Props {
 
 // Lean per-feature config, shown after the "How will you use PicPeak?" step.
 // Only the sections a selected feature actually needs are rendered; everything
-// else keeps its seeded defaults and is tunable later in Settings. Saving is
-// best-effort per section — a failure never traps the user on setup.
+// else keeps its seeded defaults and is tunable later in Settings. Every field
+// is optional — "Skip for now" always leaves — but a section the user DID fill
+// in is validated before it is posted, and a save that fails keeps them on the
+// step with their input intact rather than advancing into a silent data loss.
 export const SetupConfigStep: React.FC<Props> = ({ selectedFeatures, onDone }) => {
   const { t } = useTranslation();
   const showInvoicing = selectedFeatures.has('bills');
@@ -38,6 +41,7 @@ export const SetupConfigStep: React.FC<Props> = ({ selectedFeatures, onDone }) =
   // Prefilled with the address the admin actually reached the wizard on, which
   // on a NAS or LAN install is the one thing no default can guess (#705).
   const [siteUrl, setSiteUrl] = useState(window.location.origin.replace(/\/+$/, ''));
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const invField = (k: keyof typeof inv) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setInv((p) => ({ ...p, [k]: e.target.value }));
@@ -55,7 +59,39 @@ export const SetupConfigStep: React.FC<Props> = ({ selectedFeatures, onDone }) =
     } catch (_) { /* best-effort: Settings → General offers the same field */ }
   };
 
+  // Blocking validation, run before anything is posted. Everything on this
+  // step is optional, but a value that IS filled in has to be usable: the
+  // public address feeds the CORS allowlist (#705), and /admin/email/config
+  // rejects a config whose from_email isn't a valid address — which used to
+  // surface as a generic warning while the wizard advanced anyway, throwing
+  // away every SMTP value including the password (#1104).
+  const validate = () => {
+    const next: Record<string, string> = {};
+    if (siteUrl.trim() && !isAbsoluteHttpUrl(siteUrl)) {
+      next.siteUrl = t('setup.config.siteUrlInvalid', 'Enter the full address including http:// or https://, for example https://gallery.example.com');
+    }
+    if (mail.smtp_host.trim()) {
+      const from = mail.from_email.trim();
+      if (!from) {
+        next.from_email = t('setup.config.fromEmailRequired', 'A From address is required when an SMTP host is set.');
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) {
+        next.from_email = t('setup.config.fromEmailInvalid', 'Enter a valid email address.');
+      }
+      const port = parseInt(mail.smtp_port, 10);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        next.smtp_port = t('setup.config.smtpPortInvalid', 'Enter a port between 1 and 65535.');
+      }
+    }
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
   const skip = async () => {
+    if (siteUrl.trim() && !isAbsoluteHttpUrl(siteUrl)) {
+      setErrors({ siteUrl: t('setup.config.siteUrlInvalid', 'Enter the full address including http:// or https://, for example https://gallery.example.com') });
+      return;
+    }
+    setErrors({});
     setSaving(true);
     await saveSiteUrl();
     setSaving(false);
@@ -63,7 +99,9 @@ export const SetupConfigStep: React.FC<Props> = ({ selectedFeatures, onDone }) =
   };
 
   const finish = async () => {
+    if (!validate()) return;
     setSaving(true);
+    let failed = false;
     try {
       await saveSiteUrl();
       // Invoicing: only persist if they actually started filling it in.
@@ -103,11 +141,14 @@ export const SetupConfigStep: React.FC<Props> = ({ selectedFeatures, onDone }) =
         await emailService.updateConfig(config);
       }
     } catch (_) {
-      toast.warn(t('setup.config.saveFailed', 'Some settings could not be saved — you can finish them in Settings.'));
+      // Stay on the step: advancing here discarded everything the user typed,
+      // the SMTP password included, with no way back to re-enter it (#1104).
+      failed = true;
+      toast.warn(t('setup.config.saveFailed', 'Some settings could not be saved — check the values below, or use “Skip for now” and finish in Settings.'));
     } finally {
       setSaving(false);
-      onDone();
     }
+    if (!failed) onDone();
   };
 
   return (
@@ -128,6 +169,7 @@ export const SetupConfigStep: React.FC<Props> = ({ selectedFeatures, onDone }) =
           placeholder="https://gallery.example.com"
           value={siteUrl}
           onChange={(e) => setSiteUrl(e.target.value)}
+          error={errors.siteUrl}
         />
       </div>
 
@@ -163,14 +205,22 @@ export const SetupConfigStep: React.FC<Props> = ({ selectedFeatures, onDone }) =
         <p className="text-xs text-neutral-500">{t('setup.config.emailHint', 'Used to send gallery links to your clients, plus guest invites, expiry warnings and any reminders or invoices you enable. Leave blank to set it up later in Settings → Email.')}</p>
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2"><Input placeholder={t('setup.config.smtpHost', 'SMTP host')} value={mail.smtp_host} onChange={mailField('smtp_host')} /></div>
-            <Input placeholder={t('setup.config.smtpPort', 'Port')} value={mail.smtp_port} onChange={mailField('smtp_port')} />
+            <Input placeholder={t('setup.config.smtpPort', 'Port')} value={mail.smtp_port} onChange={mailField('smtp_port')} error={errors.smtp_port} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Input placeholder={t('setup.config.smtpUser', 'Username')} value={mail.smtp_user} onChange={mailField('smtp_user')} autoComplete="off" />
             <Input type="password" placeholder={t('setup.config.smtpPass', 'Password')} value={mail.smtp_pass} onChange={mailField('smtp_pass')} autoComplete="new-password" />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Input type="email" placeholder={t('setup.config.fromEmail', 'From address')} value={mail.from_email} onChange={mailField('from_email')} />
+            <Input
+              type="email"
+              placeholder={mail.smtp_host.trim()
+                ? t('setup.config.fromEmailRequiredPlaceholder', 'From address (required)')
+                : t('setup.config.fromEmail', 'From address')}
+              value={mail.from_email}
+              onChange={mailField('from_email')}
+              error={errors.from_email}
+            />
             <Input placeholder={t('setup.config.fromName', 'From name')} value={mail.from_name} onChange={mailField('from_name')} />
           </div>
       </div>

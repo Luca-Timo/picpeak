@@ -1542,7 +1542,8 @@
       "accountEmailRequired": "E-Mail-Adresse ist erforderlich",
       "accountEmailInvalid": "Bitte eine gültige E-Mail-Adresse eingeben",
       "accountSaveButton": "Kontodaten speichern",
-      "accountSaveSuccess": "Kontodaten aktualisiert"
+      "accountSaveSuccess": "Kontodaten aktualisiert",
+      "siteUrlInvalid": "Geben Sie die vollständige Adresse inklusive http:// oder https:// an, zum Beispiel https://galerie.example.com"
     },
     "publicSite": {
       "badge": "Öffentliche Landingpage",
@@ -3942,9 +3943,14 @@
       "fromName": "Absendername",
       "skip": "Vorerst überspringen",
       "finish": "Einrichtung abschließen",
-      "saveFailed": "Einige Einstellungen konnten nicht gespeichert werden — Sie können sie in den Einstellungen abschließen.",
+      "saveFailed": "Einige Einstellungen konnten nicht gespeichert werden — prüfen Sie die Angaben unten oder wählen Sie „Vorerst überspringen“ und schliessen Sie sie in den Einstellungen ab.",
       "siteUrl": "Öffentliche Adresse",
-      "siteUrlHint": "Unter dieser Adresse erreichen Ihre Kundinnen und Kunden die Galerie. Vorausgefüllt mit der Adresse, die Sie gerade geöffnet haben — ändern Sie sie, wenn Sie PicPeak hinter einer Domain oder einem Reverse Proxy betreiben. Sie können das jederzeit unter Einstellungen → Allgemein anpassen."
+      "siteUrlHint": "Unter dieser Adresse erreichen Ihre Kundinnen und Kunden die Galerie. Vorausgefüllt mit der Adresse, die Sie gerade geöffnet haben — ändern Sie sie, wenn Sie PicPeak hinter einer Domain oder einem Reverse Proxy betreiben. Sie können das jederzeit unter Einstellungen → Allgemein anpassen.",
+      "siteUrlInvalid": "Geben Sie die vollständige Adresse inklusive http:// oder https:// an, zum Beispiel https://galerie.example.com",
+      "fromEmailRequiredPlaceholder": "Absenderadresse (erforderlich)",
+      "fromEmailRequired": "Eine Absenderadresse ist erforderlich, wenn ein SMTP-Host gesetzt ist.",
+      "fromEmailInvalid": "Geben Sie eine gültige E-Mail-Adresse ein.",
+      "smtpPortInvalid": "Geben Sie einen Port zwischen 1 und 65535 an."
     },
     "eventTypes": {
       "subtitle": "Welche Veranstaltungen fotografieren Sie?",

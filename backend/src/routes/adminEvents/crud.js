@@ -26,7 +26,7 @@ const { hasColumnCached } = require('../../utils/schemaCache');
 const { requireEventOwnership } = require('../../middleware/ownership');
 const { getAppSetting } = require('../../utils/appSettings');
 const { clampIntOrUndefined } = require('../../utils/numericHelpers');
-const { getFrontendBaseUrl, DEFAULT_ABSOLUTE_BASE } = require('../../utils/frontendUrl');
+const { getFrontendBaseUrl, getAbsoluteFrontendUrl } = require('../../utils/frontendUrl');
 const downloadZipService = require('../../services/downloadZipService');
 const { validateHeroImageAnchor, getEventFieldRequirements, readBooleanSetting, getDownloadProtectionDefaults, getBrandingDefaults, getCustomerNameFromPayload, getCustomerEmailFromPayload, getCustomerPhoneFromPayload, isPhoneFieldEnabled, mapEventForApi, hasCustomerContactColumns, deleteEventCascade, SLIDESHOW_TRANSITIONS, SLIDESHOW_COLORFILTERS } = require('./helpers');
 
@@ -576,11 +576,12 @@ module.exports = (router) => {
         // Include client access info in email when enabled (#172)
         if (client_access_enabled && client_password) {
           const createdEvent = await db('events').where('id', eventId).first();
-          // Same FRONTEND_URL-before-APP_URL order as before; the '' fallback
-          // becomes the resolved origin so this email link is absolute (#705).
-          const frontendUrl = (await getFrontendBaseUrl(req))
-            || process.env.APP_URL
-            || DEFAULT_ABSOLUTE_BASE;
+          // Same FRONTEND_URL-before-APP_URL order as before: APP_URL is
+          // passed as the override so it still outranks the general_site_url
+          // setting and the request origin. Chaining it after the resolver
+          // would make it dead code, because the resolver only returns falsy
+          // when NOTHING is configured (#1104).
+          const frontendUrl = await getAbsoluteFrontendUrl(req, { override: process.env.APP_URL });
           emailData.client_link = `${frontendUrl}/gallery/${slug}/client-access?token=${createdEvent.client_share_token}`;
           emailData.client_password = client_password;
         }

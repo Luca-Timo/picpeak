@@ -1083,7 +1083,8 @@
       "accountEmailRequired": "Email address is required",
       "accountEmailInvalid": "Enter a valid email address",
       "accountSaveButton": "Save account details",
-      "accountSaveSuccess": "Account details updated"
+      "accountSaveSuccess": "Account details updated",
+      "siteUrlInvalid": "Enter the full address including http:// or https://, for example https://gallery.example.com"
     },
     "publicSite": {
       "badge": "Public Landing",
@@ -3828,9 +3829,14 @@
       "fromName": "From name",
       "skip": "Skip for now",
       "finish": "Finish setup",
-      "saveFailed": "Some settings could not be saved — you can finish them in Settings.",
+      "saveFailed": "Some settings could not be saved — check the values below, or use “Skip for now” and finish in Settings.",
       "siteUrl": "Public address",
-      "siteUrlHint": "Where your clients will reach this gallery. Prefilled with the address you opened right now — change it if you will put PicPeak behind a domain or reverse proxy. You can update this any time in Settings → General."
+      "siteUrlHint": "Where your clients will reach this gallery. Prefilled with the address you opened right now — change it if you will put PicPeak behind a domain or reverse proxy. You can update this any time in Settings → General.",
+      "siteUrlInvalid": "Enter the full address including http:// or https://, for example https://gallery.example.com",
+      "fromEmailRequiredPlaceholder": "From address (required)",
+      "fromEmailRequired": "A From address is required when an SMTP host is set.",
+      "fromEmailInvalid": "Enter a valid email address.",
+      "smtpPortInvalid": "Enter a port between 1 and 65535."
     },
     "eventTypes": {
       "subtitle": "Which events do you photograph?",

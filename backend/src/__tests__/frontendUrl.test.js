@@ -3,10 +3,11 @@
  *
  * The zero-touch install depends on this precedence being exactly:
  *   1. FRONTEND_URL, when it is not loopback
- *   2. the `general_site_url` setting written by the setup wizard
- *   3. the origin the request arrived on
- *   4. whichever of those exists at all (a genuine localhost install)
- *   5. '' — so callers that build RELATIVE urls keep doing so
+ *   2. a purpose-specific override the caller passes (ADMIN_URL, APP_URL)
+ *   3. the `general_site_url` setting written by the setup wizard
+ *   4. the origin the request arrived on
+ *   5. whichever of those exists at all (a genuine localhost install)
+ *   6. '' — so callers that build RELATIVE urls keep doing so
  *
  * The loopback demotion in (1) matters because docker-compose used to inject
  * FRONTEND_URL=http://localhost:3000 unconditionally: taking that literally
@@ -143,6 +144,51 @@ describe('getApiBaseUrl', () => {
   });
 });
 
+describe('purpose-specific env override (ADMIN_URL / APP_URL)', () => {
+  beforeEach(() => { delete process.env.FRONTEND_URL; db.mockReset(); });
+
+  it('beats the general_site_url setting, so a split-origin admin host wins', async () => {
+    db.mockImplementation(() => settingRow('https://gallery.example.com'));
+    const m = loadModule();
+
+    expect(await m.getFrontendBaseUrl(null, { override: 'https://admin.example.com' }))
+      .toBe('https://admin.example.com');
+  });
+
+  it('beats the request origin too', async () => {
+    db.mockImplementation(() => settingRow(undefined));
+    const m = loadModule();
+
+    expect(await m.getFrontendBaseUrl(fakeReq('gallery.example.com', 'https'), { override: 'https://admin.example.com' }))
+      .toBe('https://admin.example.com');
+  });
+
+  it('still sits below FRONTEND_URL, preserving the historic order', async () => {
+    process.env.FRONTEND_URL = 'https://pinned.example.com';
+    db.mockImplementation(() => settingRow(undefined));
+    const m = loadModule();
+
+    expect(await m.getFrontendBaseUrl(null, { override: 'https://admin.example.com' }))
+      .toBe('https://pinned.example.com');
+  });
+
+  it('is demoted when it is loopback, like every other candidate', async () => {
+    db.mockImplementation(() => settingRow('https://gallery.example.com'));
+    const m = loadModule();
+
+    expect(await m.getFrontendBaseUrl(null, { override: 'http://localhost:3005' }))
+      .toBe('https://gallery.example.com');
+  });
+
+  it('is used by getAbsoluteFrontendUrl ahead of the terminal fallback', async () => {
+    db.mockImplementation(() => settingRow(undefined));
+    const m = loadModule();
+
+    expect(await m.getAbsoluteFrontendUrl(null, { override: 'https://admin.example.com' }))
+      .toBe('https://admin.example.com');
+  });
+});
+
 describe('isEnvPinned', () => {
   beforeEach(() => { delete process.env.FRONTEND_URL; db.mockReset(); });
 
@@ -154,6 +200,25 @@ describe('isEnvPinned', () => {
     process.env.FRONTEND_URL = 'https://pinned.example.com';
     m = loadModule();
     expect(m.isEnvPinned()).toBe(true);
+  });
+
+  // The upgrade case this whole PR exists for: an install still carrying the
+  // old compose default. The resolver demotes it, so the admin UI must NOT
+  // lock the Site URL field — otherwise that operator can never configure a
+  // public address anywhere (#1104).
+  it('does NOT report a loopback FRONTEND_URL as pinned', () => {
+    process.env.FRONTEND_URL = 'http://localhost:3000';
+    const m = loadModule();
+
+    expect(m.isEnvPinned()).toBe(false);
+    expect(m.envPinnedBase()).toBe('');
+  });
+
+  it('exposes the effective pinned value, normalised', () => {
+    process.env.FRONTEND_URL = 'https://pinned.example.com/// ';
+    const m = loadModule();
+
+    expect(m.envPinnedBase()).toBe('https://pinned.example.com');
   });
 });
 

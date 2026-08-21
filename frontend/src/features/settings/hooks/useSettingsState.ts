@@ -328,6 +328,15 @@ export function useSettingsState() {
     mutationFn: async () => {
       const settingsData: Record<string, unknown> = {};
       Object.entries(generalSettings).forEach(([key, value]) => {
+        // `site_url_env_pinned` is derived server-side and stripped there, and
+        // while it IS pinned the field shows the *effective* env value rather
+        // than the stored setting — reposting that would look like a genuine
+        // change to a protected key and 403 an admin who holds settings.edit
+        // but not settings.domains, even though they changed nothing. The
+        // backend's no-op round-trip allowance only covers the stored value,
+        // so don't send the key at all while it's read-only (#1104).
+        if (key === 'site_url_env_pinned') return;
+        if (key === 'site_url' && generalSettings.site_url_env_pinned) return;
         settingsData[`general_${key}`] = value;
       });
       return settingsService.updateSettings(settingsData);

@@ -81,24 +81,47 @@ const originFromRequest = (req) => {
 
 const envBase = () => normalise(process.env.FRONTEND_URL);
 
+// The env value ONLY when it actually wins the resolution below — i.e. set and
+// not loopback. A loopback FRONTEND_URL is demoted by getFrontendBaseUrl(), so
+// reporting it as authoritative would lock the admin UI's Site URL field for
+// exactly the operators this exists to unblock: an upgrade that still carries
+// the old compose default FRONTEND_URL=http://localhost:3000 must be able to
+// configure its public address through the wizard and Settings (#1104).
+const envPinnedBase = () => {
+  const env = envBase();
+  return env && !isLoopbackBase(env) ? env : '';
+};
+
 // Is the public origin pinned by the environment? The admin UI uses this to
 // show the Site URL field as read-only, so an operator never edits a setting
-// that an env var is silently overriding.
-const isEnvPinned = () => !!envBase();
+// that an env var is silently overriding. Mirrors the resolver exactly.
+const isEnvPinned = () => !!envPinnedBase();
 
 /**
  * Resolve the public origin, best answer first:
  *   1. FRONTEND_URL, when it is not loopback
- *   2. the `general_site_url` setting, when it is not loopback
- *   3. the origin this request arrived on, when it is not loopback
- *   4. whichever of the above exists at all (covers a genuine localhost install)
- *   5. '' - caller decides between a relative url and DEFAULT_ABSOLUTE_BASE
+ *   2. `options.override` - a purpose-specific env var (ADMIN_URL, APP_URL)
+ *      the caller passes in, when it is not loopback
+ *   3. the `general_site_url` setting, when it is not loopback
+ *   4. the origin this request arrived on, when it is not loopback
+ *   5. whichever of the above exists at all (covers a genuine localhost install)
+ *   6. '' - caller decides between a relative url and DEFAULT_ABSOLUTE_BASE
+ *
+ * (2) exists because split-origin deployments are supported (API_URL, #798):
+ * an operator who sets ADMIN_URL for a separate admin host has stated an
+ * explicit per-purpose intent, and that must beat a value derived from the
+ * database or from whichever request happened to trigger the email (#1104).
+ * It sits BELOW FRONTEND_URL to preserve the historic
+ * `FRONTEND_URL || ADMIN_URL` order those call sites used.
  */
-const getFrontendBaseUrl = async (req) => {
+const getFrontendBaseUrl = async (req, options = {}) => {
   // Short-circuit before touching the database: a pinned, non-loopback
   // FRONTEND_URL is the answer, and this runs in per-request paths.
   const env = envBase();
   if (env && !isLoopbackBase(env)) return env;
+
+  const override = normalise(options.override);
+  if (override && !isLoopbackBase(override)) return override;
 
   const setting = await getSiteUrlSetting();
   if (setting && !isLoopbackBase(setting)) return setting;
@@ -106,12 +129,12 @@ const getFrontendBaseUrl = async (req) => {
   const request = originFromRequest(req);
   if (request && !isLoopbackBase(request)) return request;
 
-  return env || setting || request || '';
+  return env || override || setting || request || '';
 };
 
 /** Same precedence, for callers that must produce an absolute url. */
-const getAbsoluteFrontendUrl = async (req) =>
-  (await getFrontendBaseUrl(req)) || DEFAULT_ABSOLUTE_BASE;
+const getAbsoluteFrontendUrl = async (req, options = {}) =>
+  (await getFrontendBaseUrl(req, options)) || DEFAULT_ABSOLUTE_BASE;
 
 /**
  * Synchronous variant for call sites that cannot await (Express middleware
@@ -155,5 +178,6 @@ module.exports = {
   primeSiteUrlCache,
   isLoopbackBase,
   isEnvPinned,
+  envPinnedBase,
   DEFAULT_ABSOLUTE_BASE,
 };

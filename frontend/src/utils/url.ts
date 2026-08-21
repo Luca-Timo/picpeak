@@ -159,3 +159,25 @@ export const buildShareLinkUrl = (link: string | null | undefined): string => {
   const path = link.startsWith('/') ? link : `/gallery/${link}`;
   return buildFromOrigin(path);
 };
+
+/**
+ * Is this an absolute http(s) origin the browser could actually navigate to?
+ *
+ * Used for the public address (`general_site_url`), which since #705 feeds the
+ * CORS allowlist and the Access-Control-Allow-Origin header as well as every
+ * email link — a schemeless "gallery.example.com" saves happily through a
+ * `type="url"` input that is not inside a <form>, and then matches no browser
+ * origin at all. Mirrors the backend check in adminSettings.js: a bare host or
+ * IP is fine (LAN and NAS installs run on http://nas:3000), the scheme is not.
+ */
+export const isAbsoluteHttpUrl = (value: string): boolean => {
+  if (!ABSOLUTE_URL_REGEX.test(value.trim())) {
+    return false;
+  }
+  try {
+    const parsed = new URL(value.trim());
+    return !!parsed.hostname;
+  } catch {
+    return false;
+  }
+};
