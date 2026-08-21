@@ -317,6 +317,15 @@ generate_password() {
     openssl rand -base64 32 | tr -d "=+/" | cut -c1-16
 }
 
+# Read one KEY=value out of an existing .env, ignoring commented lines. Prints
+# the empty string when the file or the key is absent, so callers can fall back
+# to generating a fresh value with `[[ -n "$x" ]] || x=$(generate...)`.
+read_env_value() {
+    local file="$1" key="$2"
+    [[ -f "$file" ]] || return 0
+    sed -n "s/^${key}=//p" "$file" | head -n1
+}
+
 generate_jwt_secret() {
     openssl rand -base64 64 | tr -d "\n"
 }
@@ -589,11 +598,24 @@ setup_docker_installation() {
     fi
 
     # Generate machine secrets. Written to .env so they are stable across
-    # restarts; once PR #714's secrets-init service is present it reuses these
-    # exact values (explicit env always wins), so this stays correct either way.
-    local jwt_secret=$(generate_jwt_secret)
-    local db_password=$(generate_password)
-    local redis_password=$(generate_password)
+    # restarts; the compose secrets-init service reuses these exact values
+    # (explicit env always wins), so this stays correct either way.
+    #
+    # Reuse whatever an existing .env already holds. The file is rewritten
+    # wholesale below, so generating unconditionally would rotate the secrets of
+    # an install that is already running: a new JWT_SECRET invalidates every
+    # admin session and every gallery link, and a new DB_PASSWORD no longer
+    # matches the password baked into the initialised Postgres volume, so the
+    # stack stops booting entirely. `--update` has always been the safe path,
+    # but re-running the installer is an easy mistake to make and it should not
+    # cost the user their data access.
+    local jwt_secret db_password redis_password
+    jwt_secret=$(read_env_value "$app_dir/.env" JWT_SECRET)
+    db_password=$(read_env_value "$app_dir/.env" DB_PASSWORD)
+    redis_password=$(read_env_value "$app_dir/.env" REDIS_PASSWORD)
+    [[ -n "$jwt_secret" ]] || jwt_secret=$(generate_jwt_secret)
+    [[ -n "$db_password" ]] || db_password=$(generate_password)
+    [[ -n "$redis_password" ]] || redis_password=$(generate_password)
 
     local frontend_port="${CUSTOM_PORT:-3000}"
     local site_url; site_url="$(base_url)"

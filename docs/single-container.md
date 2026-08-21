@@ -16,8 +16,14 @@ docker run -d \
   -p 3000:3000 \
   -v picpeak:/data \
   -e JWT_SECRET="$(openssl rand -base64 48)" \
-  ghcr.io/picpeak/picpeak/aio:stable
+  ghcr.io/picpeak/picpeak/aio:main
 ```
+
+`:main` is the rolling tag that tracks the default branch. The curated
+`:stable` and `:latest` tags exist for the backend and frontend images but have
+not been cut for this one yet, so `:main` is the tag to pull today — pinning a
+released version like `:v3.108.0-beta.0` also works if you would rather not
+follow the branch.
 
 Open `http://<host>:3000`. The first visit lands on the setup wizard, which
 asks for a one-time token:
@@ -91,7 +97,7 @@ docker run -d --name picpeak -p 3000:3000 -v picpeak:/data \
   -e JWT_SECRET="…" \
   -e DATABASE_CLIENT=pg \
   -e DB_HOST=10.0.0.5 -e DB_USER=picpeak -e DB_PASSWORD=… -e DB_NAME=picpeak \
-  ghcr.io/picpeak/picpeak/aio:stable
+  ghcr.io/picpeak/picpeak/aio:main
 ```
 
 The image waits for the database to accept connections before running
@@ -107,7 +113,7 @@ Settings → General (or re-run the setup wizard) so generated links match —
 ## NAS notes
 
 **Synology (Container Manager)** and **QNAP (Container Station)** can both run
-this from the registry UI: pull `ghcr.io/picpeak/picpeak/aio:stable`, map a
+this from the registry UI: pull `ghcr.io/picpeak/picpeak/aio:main`, map a
 host port to container port `3000`, and add one volume mapping to `/data`.
 Set `JWT_SECRET` under Environment.
 
