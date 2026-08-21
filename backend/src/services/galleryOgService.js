@@ -2,6 +2,7 @@ const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { ensureThumbnail } = require('./imageProcessor');
 const { getStorage } = require('./storage');
+const { getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
 
 const SOCIAL_CRAWLER_PATTERNS = [
   /facebookexternalhit/i,
@@ -148,8 +149,8 @@ function absoluteUrl(maybeRelative, base) {
   }
 }
 
-function frontendBase() {
-  return (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+async function frontendBase() {
+  return getAbsoluteFrontendUrl();
 }
 
 // Render the event date for the OG preview card respecting the
@@ -171,7 +172,7 @@ async function formatEventDate(value) {
 async function buildOgMetadata(slug, requestPath) {
   const event = await resolveSlug(slug);
   const branding = await fetchBranding();
-  const base = frontendBase();
+  const base = await frontendBase();
   const siteName = branding.companyName || 'PicPeak';
   const logoUrl = absoluteUrl(branding.logoUrl, base) || `${base}/picpeak-logo-transparent.png`;
 

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Input, Card, Loading } from '../components/common';
 import { useAdminAuth } from '../contexts';
 import { setupService } from '../services/setup.service';
+import { settingsService } from '../services/settings.service';
 import { featureFlagsService, type FeatureFlags, type FeatureKey } from '../services/featureFlags.service';
 import { PicpeakRestoreCard } from '../components/admin/PicpeakBackupCard';
 import { SetupConfigStep } from '../components/admin/SetupConfigStep';
@@ -176,6 +177,20 @@ export const SetupPage: React.FC = () => {
         role: { name: user.role.name, displayName: user.role.displayName ?? user.role.name },
       };
       login('', adminUser);
+      // Persist the origin the admin is standing on as the public site URL
+      // (#705). Doing it HERE, not in the optional config step, means an
+      // install that skips the rest of the wizard still has a usable origin
+      // for background jobs (reminder emails, QR codes) that have no request
+      // to derive one from. Best-effort: never block entering the app, and
+      // never overwrite a value the environment already pins.
+      try {
+        const existing = await settingsService.getSettingsByType('general');
+        if (!existing?.general_site_url_env_pinned && !existing?.general_site_url) {
+          await settingsService.updateSettings({
+            general_site_url: window.location.origin.replace(/\/+$/, ''),
+          });
+        }
+      } catch (_) { /* the config step offers the field again */ }
       toast.success(t('setup.success'));
       // Admin now exists and we're logged in (cookie set) — advance to the
       // opt-in "How will you use PicPeak?" step rather than jumping straight to
@@ -249,16 +264,14 @@ export const SetupPage: React.FC = () => {
     }
   };
 
-  // After the event-types step: if the chosen features need config the wizard
-  // can collect (invoicing, email), go to the config step; otherwise skip to
-  // the final community/thank-you step (#732), whose Finish enters the app.
+  // Always visit the config step (#705). It used to be skipped unless a
+  // feature the wizard can configure (invoicing, email) was selected, which
+  // meant a gallery-only install never saw the two things EVERY install needs:
+  // the public address its client links are built from, and the SMTP settings
+  // that send them. Both sections are feature-independent; the invoicing block
+  // is still conditional inside the step.
   const continueAfterEventTypes = () => {
-    const needsConfig =
-      selectedFeatures.has('bills') ||
-      selectedFeatures.has('reminderEmails') ||
-      selectedFeatures.has('incomingMail') ||
-      selectedFeatures.has('whatsapp');
-    setStep(needsConfig ? 'config' : 'community');
+    setStep('config');
   };
 
   const stepNumber = step === 'token' ? 1 : step === 'account' ? 2 : 3;

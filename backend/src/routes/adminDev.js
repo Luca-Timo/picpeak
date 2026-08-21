@@ -128,7 +128,7 @@ router.get(
   })
 );
 
-const FRONTEND_URL_FALLBACK = 'https://app.example.com';
+const { getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
 const DEV_TEST_DIR = () => path.join(getStoragePath(), 'business-docs', 'dev-test');
 
 function fakeMoney(major, currency, locale = 'de') {
@@ -440,7 +440,7 @@ router.post(
       throw new AppError(`Template "${req.body.templateKey}" not seeded yet — run migrations`, 409, 'TEMPLATE_MISSING');
     }
 
-    const frontendUrl = (process.env.FRONTEND_URL || FRONTEND_URL_FALLBACK).replace(/\/$/, '');
+    const frontendUrl = await getAbsoluteFrontendUrl(req);
     const payload = await buildPayloadFor(req.body.templateKey, req.admin.id, frontendUrl);
 
     await emailProcessor.queueEmail(null, admin.email, req.body.templateKey, payload);

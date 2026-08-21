@@ -59,7 +59,10 @@ services:
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASS=${SMTP_PASS}
       - EMAIL_FROM=${EMAIL_FROM:-noreply@picpeak.local}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      # Unset by default (#705): an injected value would always win over the
+      # `general_site_url` admin setting, so the setup wizard could never
+      # take effect. Set this only to pin the origin from config-as-code.
+      - FRONTEND_URL=${FRONTEND_URL:-}
       # Public API origin for split-origin deployments (#798 SSO redirect_uri).
       # Empty = same origin as FRONTEND_URL (the standard proxied setup).
       - API_URL=${API_URL:-}
@@ -68,7 +71,7 @@ services:
       # password login when the IdP is down while SSO-only mode is active.
       - OIDC_ENCRYPTION_KEY=${OIDC_ENCRYPTION_KEY:-}
       - OIDC_BREAK_GLASS=${OIDC_BREAK_GLASS:-}
-      - ADMIN_URL=${ADMIN_URL:-http://localhost:3001}
+      - ADMIN_URL=${ADMIN_URL:-}
       - TZ=${TZ:-UTC}
       - STORAGE_PATH=/app/storage
       # Watch-folder auto-import: max photos processed in parallel (default 2).

@@ -146,11 +146,18 @@ Generated on: ${new Date().toISOString()}
       console.log('Default email templates created');
     }
 
-    // Create default email config if none exists
+    // Seed an email config ONLY when the environment actually supplies a host
+    // (#705). This used to fall back to `mailhog`, the dev compose service, so
+    // every fresh install came up with a LIVE config pointing at a host that
+    // does not exist outside the dev stack — the setup wizard then showed empty
+    // SMTP fields (reading as "nothing configured") while mail silently failed.
+    // With no row at all, emailProcessor logs "No email configuration found"
+    // and the wizard's blank fields are the truth. The dev stack keeps mailhog
+    // by setting SMTP_HOST explicitly in docker-compose.yml.
     const emailConfig = await knex('email_configs').first();
-    if (!emailConfig) {
+    if (!emailConfig && process.env.SMTP_HOST) {
       await knex('email_configs').insert({
-        smtp_host: process.env.SMTP_HOST || 'mailhog',
+        smtp_host: process.env.SMTP_HOST,
         smtp_port: process.env.SMTP_PORT || 1025,
         smtp_secure: process.env.SMTP_SECURE === 'true',
         smtp_user: process.env.SMTP_USER || '',

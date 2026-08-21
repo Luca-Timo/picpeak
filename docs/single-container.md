@@ -79,8 +79,8 @@ Only `JWT_SECRET` is required. Everything else has a working default.
 |---|---|---|
 | `JWT_SECRET` | — | **Required.** Long random string. |
 | `PORT` | `3000` | Listen port inside the container. |
-| `FRONTEND_URL` | — | Public URL. Set it once you are behind a domain, so emails and share links point at the right host. |
-| `SMTP_*` | — | Outbound email. Without it, PicPeak runs fine but sends nothing. |
+| `FRONTEND_URL` | — | Optional override for the public URL. Normally you set this in the setup wizard instead (it proposes the address you opened), and it is editable later under Settings → General. Setting it here pins the value and makes that field read-only. |
+| `SMTP_*` | — | Optional override for outbound email, which is normally configured in the setup wizard / Settings → Email. Without either, PicPeak runs fine but sends nothing. |
 | `DATABASE_CLIENT` | `sqlite3` | Set to `pg` to use an external PostgreSQL. Required — the image declares `sqlite3`, and the boot resolver treats a declared client as an explicit instruction, so `DB_*` alone will **not** switch engines. |
 | `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | — | Connection details, used when `DATABASE_CLIENT=pg`. |
 
@@ -100,8 +100,9 @@ migrations, exactly as the compose backend does.
 ## TLS
 
 None is included. Terminate TLS in front of it — your NAS's reverse proxy,
-Caddy, nginx, or a Cloudflare Tunnel. Set `FRONTEND_URL` to the public
-`https://…` address so generated links match.
+Caddy, nginx, or a Cloudflare Tunnel. Put the public `https://…` address in
+Settings → General (or re-run the setup wizard) so generated links match —
+`FRONTEND_URL` does the same thing but pins it outside the admin UI.
 
 ## NAS notes
 

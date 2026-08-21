@@ -1509,6 +1509,7 @@
       "siteConfiguration": "Website-Konfiguration",
       "siteUrl": "Website-URL",
       "siteUrlHelp": "Wird für die Generierung von Galerielinks in E-Mails verwendet",
+      "siteUrlEnvPinned": "Durch die Umgebungsvariable FRONTEND_URL festgelegt; sie überschreibt diese Einstellung. Entfernen Sie sie aus Ihrer .env (oder der Container-Umgebung) und starten Sie neu, um die Adresse hier zu verwalten.",
       "defaultExpiration": "Standardablauf (Tage)",
       "maxFileSize": "Max. Dateigröße (MB)",
       "maxFilesPerUpload": "Max. Dateien pro Upload",
@@ -1541,7 +1542,8 @@
       "accountEmailRequired": "E-Mail-Adresse ist erforderlich",
       "accountEmailInvalid": "Bitte eine gültige E-Mail-Adresse eingeben",
       "accountSaveButton": "Kontodaten speichern",
-      "accountSaveSuccess": "Kontodaten aktualisiert"
+      "accountSaveSuccess": "Kontodaten aktualisiert",
+      "siteUrlInvalid": "Geben Sie die vollständige Adresse inklusive http:// oder https:// an, zum Beispiel https://galerie.example.com"
     },
     "publicSite": {
       "badge": "Öffentliche Landingpage",
@@ -3919,7 +3921,7 @@
     "restoreIntro": "Laden Sie ein .picpeak-Backup hoch, um eine andere Instanz auf diese zu klonen. Dies ersetzt alles außer dem gerade erstellten Konto.",
     "config": {
       "subtitle": "Richten Sie Ihre Funktionen ein",
-      "intro": "Einige Angaben zu den gewählten Funktionen. Was Sie überspringen, behält den Standard und kann später in den Einstellungen festgelegt werden.",
+      "intro": "Ein paar Angaben zum Abschluss der Einrichtung. Alles, was Sie überspringen, behält seinen Standardwert und kann später in den Einstellungen gesetzt werden.",
       "invoicing": "Rechnungsdaten",
       "invoicingDisclaimer": "Erscheint auf Ihren Rechnungen. Bank-/IBAN- und Mehrwertsteuerangaben liegen in Ihrer Verantwortung — prüfen Sie sie mit Ihrer Bank und Ihrem Treuhänder/Steuerberater.",
       "companyName": "Firma / rechtlicher Name",
@@ -3932,7 +3934,7 @@
       "taxId": "Steuernummer (oder MwSt-Nummer)",
       "iban": "IBAN (für Rechnungszahlungen)",
       "email": "E-Mail-Versand (SMTP)",
-      "emailHint": "Erforderlich, um Erinnerungen, Rechnungen und Benachrichtigungen zu senden.",
+      "emailHint": "Wird verwendet, um Galerielinks an Ihre Kundinnen und Kunden zu senden, ausserdem für Gasteinladungen, Ablaufwarnungen sowie Erinnerungen und Rechnungen, die Sie aktivieren. Leer lassen, um dies später unter Einstellungen → E-Mail einzurichten.",
       "smtpHost": "SMTP-Host",
       "smtpPort": "Port",
       "smtpUser": "Benutzername",
@@ -3941,7 +3943,15 @@
       "fromName": "Absendername",
       "skip": "Vorerst überspringen",
       "finish": "Einrichtung abschließen",
-      "saveFailed": "Einige Einstellungen konnten nicht gespeichert werden — Sie können sie in den Einstellungen abschließen."
+      "saveFailed": "Einige Einstellungen konnten nicht gespeichert werden — prüfen Sie die Angaben unten oder wählen Sie „Vorerst überspringen“ und schliessen Sie sie in den Einstellungen ab.",
+      "siteUrl": "Öffentliche Adresse",
+      "siteUrlHint": "Unter dieser Adresse erreichen Ihre Kundinnen und Kunden die Galerie. Vorausgefüllt mit der Adresse, die Sie gerade geöffnet haben — ändern Sie sie, wenn Sie PicPeak hinter einer Domain oder einem Reverse Proxy betreiben. Sie können das jederzeit unter Einstellungen → Allgemein anpassen.",
+      "siteUrlInvalid": "Geben Sie die vollständige Adresse inklusive http:// oder https:// an, zum Beispiel https://galerie.example.com",
+      "siteUrlRejected": "Der Server hat diese Adresse abgelehnt. Verwenden Sie den vollständigen Ursprung, zum Beispiel https://galerie.example.com oder http://192.168.1.50:3000.",
+      "fromEmailRequiredPlaceholder": "Absenderadresse (erforderlich)",
+      "fromEmailRequired": "Eine Absenderadresse ist erforderlich, wenn ein SMTP-Host gesetzt ist.",
+      "fromEmailInvalid": "Geben Sie eine gültige E-Mail-Adresse ein.",
+      "smtpPortInvalid": "Geben Sie einen Port zwischen 1 und 65535 an."
     },
     "eventTypes": {
       "subtitle": "Welche Veranstaltungen fotografieren Sie?",

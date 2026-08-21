@@ -69,6 +69,11 @@ const compression = require('compression');
 const cors = require('cors');
 const path = require('path');
 const { initializeDatabase, db } = require('./src/database/db');
+const {
+  getFrontendBaseUrlSync,
+  getAbsoluteFrontendUrl,
+  primeSiteUrlCache,
+} = require('./src/utils/frontendUrl');
 const { startFileWatcher } = require('./src/services/fileWatcher');
 const { startExpirationChecker } = require('./src/services/expirationChecker');
 const { startTransferCleanup } = require('./src/services/transferCleanupService');
@@ -212,8 +217,12 @@ app.use((req, res, next) => {
 // CORS configuration (apply only to API routes)
 const corsOptions = {
   origin: function (origin, callback) {
+    // getFrontendBaseUrlSync() resolves FRONTEND_URL, else the configured
+    // general_site_url (#705) — without it, an install that leaves the
+    // environment untouched and answers the setup wizard instead would have
+    // its own public origin missing from the allowlist.
     const allowedOrigins = [
-      process.env.FRONTEND_URL || 'http://localhost:3005',
+      getFrontendBaseUrlSync() || 'http://localhost:3005',
       process.env.ADMIN_URL || 'http://localhost:3005'
     ];
 
@@ -499,7 +508,7 @@ app.use('/api/admin', sessionTimeoutMiddleware);
 const setCorsHeaders = (req, res, next) => {
   const origin = req.headers.origin;
   const staticAllowedOrigins = [
-    process.env.FRONTEND_URL || 'http://localhost:3005',
+    getFrontendBaseUrlSync() || 'http://localhost:3005',
     process.env.ADMIN_URL || 'http://localhost:3005'
   ];
   if (process.env.NODE_ENV === 'development') {
@@ -637,7 +646,7 @@ app.get('/s/:shortSlug', async (req, res) => {
         // social platforms cache OG by URL, and the short URL is the
         // one operators actually share, so that's the cache key we
         // want them to stick with.
-        const base = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+        const base = await getAbsoluteFrontendUrl(req);
         meta.url = `${base}/s/${row.short_slug}`;
         res.set('Cache-Control', 'public, max-age=300');
         res.set('Content-Type', 'text/html; charset=utf-8');
@@ -1015,6 +1024,12 @@ async function startServer() {
   try {
     // Initialize database
     await initializeDatabase();
+
+    // Warm the public-origin cache so the SYNCHRONOUS resolver (CORS headers,
+    // secureImageMiddleware) can see the general_site_url setting. Best-effort:
+    // the async resolver reads through on its own, and a cold cache only means
+    // falling back to the environment.
+    await primeSiteUrlCache().catch(() => {});
 
     // Initialize storage backend (local fs or S3) — fail fast on misconfig
     const { initStorage } = require('./src/services/storage');

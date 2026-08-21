@@ -3,6 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const { body, validationResult } = require('express-validator');
+const validator = require('validator');
 const { db, logActivity } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
 const { adminAuth } = require('../middleware/auth');
@@ -21,6 +22,7 @@ const {
 const { sanitizeCss } = require('../utils/cssSanitizer');
 const { upsertAppSetting } = require('../utils/appSettings');
 const { clearShareLinkSettingsCache } = require('../services/shareLinkService');
+const { invalidateSiteUrlCache, isEnvPinned, envPinnedBase } = require('../utils/frontendUrl');
 const { resetSecurityConfigCache } = require('../utils/authSecurity');
 const { errorResponse } = require('../utils/routeHelpers');
 const logger = require('../utils/logger');
@@ -57,7 +59,12 @@ const RESERVED_SETTING_KEYS = [
 // would do neither, leaving galleries handing out archives at the old size.
 const isReservedSettingKey = (key) => RESERVED_SETTING_KEYS.includes(key)
   || key.startsWith('oidc_')
-  || key.startsWith('download_');
+  || key.startsWith('download_')
+  // Derived, read-only fields the GET response adds for the General tab
+  // (#705). They are computed from the environment, never stored, so a
+  // round-trip of the GET payload must not create phantom setting rows.
+  || key === 'general_site_url_env_pinned'
+  || key === 'general_site_url_effective';
 const stripReservedSettingKeys = (settings) => {
   for (const key of Object.keys(settings)) {
     if (isReservedSettingKey(key)) delete settings[key];
@@ -239,6 +246,14 @@ router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) 
     // with setting_type 'string' and would otherwise leak its ciphertext to
     // any settings.view holder; setup_token is the first-run bootstrap secret.
     stripReservedSettingKeys(settingsObject);
+
+    // Surface whether FRONTEND_URL pins the public origin (#705). The env var
+    // OVERRIDES general_site_url, so without this the General tab would offer
+    // an editable field whose value is silently ignored at runtime.
+    settingsObject.general_site_url_env_pinned = isEnvPinned();
+    if (settingsObject.general_site_url_env_pinned) {
+      settingsObject.general_site_url_effective = envPinnedBase();
+    }
 
     // Mask sensitive secrets before sending to client
     if (settingsObject.security_recaptcha_secret_key) {
@@ -833,6 +848,15 @@ router.get('/:type', adminAuth, requirePermission('settings.view'), async (req, 
     // any settings.view holder; setup_token is the first-run bootstrap secret.
     stripReservedSettingKeys(settingsObject);
 
+    // Same derived read-only fields as GET / (#705) — the General tab reads
+    // through this typed route, so the env-pinned hint must be here too.
+    if (type === 'general') {
+      settingsObject.general_site_url_env_pinned = isEnvPinned();
+      if (settingsObject.general_site_url_env_pinned) {
+        settingsObject.general_site_url_effective = envPinnedBase();
+      }
+    }
+
     // Mask sensitive secrets before sending to client
     if (settingsObject.security_recaptcha_secret_key) {
       settingsObject.security_recaptcha_secret_key = '••••••••';
@@ -1368,6 +1392,38 @@ router.put('/general', adminAuth, requirePermission('settings.edit'), async (req
     // rejectUnauthorizedProtectedKeys (403s when a protected key is denied).
     if (await rejectUnauthorizedProtectedKeys(settings, req, res)) return;
 
+    // The public origin is no longer just an email link: it feeds the CORS
+    // allowlist (server.js) and the Access-Control-Allow-Origin header
+    // (secureImageMiddleware) since #705. A schemeless value like
+    // "gallery.example.com" therefore produces both links that don't resolve
+    // AND an allowlist entry no browser origin can ever match, so validate it
+    // server-side rather than trusting the input type (#1104). require_tld is
+    // off on purpose: LAN and NAS installs legitimately run on http://nas:3000
+    // or a bare IP. Same validator as oidc_issuer_url above.
+    if (Object.prototype.hasOwnProperty.call(settings, 'general_site_url')) {
+      const siteUrl = typeof settings.general_site_url === 'string'
+        ? settings.general_site_url.trim().replace(/\/+$/, '')
+        : '';
+      // allow_underscores for the same reason require_tld is off: this has to
+      // accept the addresses LAN and NAS installs actually run on. Browsers
+      // resolve http://my_nas.local happily and the client-side check accepts
+      // it, so rejecting it here only produced a mismatch between the two
+      // validators — and the wizard has no way to show a 400 it did not
+      // predict (#1104 review round 2).
+      const looksValid = validator.isURL(siteUrl, {
+        protocols: ['http', 'https'],
+        require_protocol: true,
+        require_tld: false,
+        allow_underscores: true,
+      });
+      if (siteUrl && !looksValid) {
+        return res.status(400).json({
+          error: 'general_site_url must be an absolute http(s) URL, for example https://gallery.example.com'
+        });
+      }
+      settings.general_site_url = siteUrl;
+    }
+
     const publicSiteKeysTouched = Object.keys(settings).some((key) => key.startsWith('general_public_site_'));
 
     if (Object.prototype.hasOwnProperty.call(settings, 'general_max_files_per_upload')) {
@@ -1462,6 +1518,12 @@ router.put('/general', adminAuth, requirePermission('settings.edit'), async (req
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'general_short_gallery_urls')) {
       clearShareLinkSettingsCache();
+    }
+    // The public origin is cached (it now sits in per-request CORS paths and
+    // in a synchronous accessor); drop it immediately on write so a corrected
+    // site URL takes effect without waiting out the TTL.
+    if (Object.prototype.hasOwnProperty.call(settings, 'general_site_url')) {
+      invalidateSiteUrlCache();
     }
     // Toggling the original-filenames setting (#493) requires busting the
     // per-event pre-generated zips so the next download-all rebuilds with the

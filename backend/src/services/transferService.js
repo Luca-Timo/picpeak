@@ -40,8 +40,9 @@ const UPLOAD_TOKEN_LENGTH = 6;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function getFrontendUrl() {
-  return (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
+async function getFrontendUrl() {
+  const { getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
+  return getAbsoluteFrontendUrl();
 }
 
 function generateDownloadToken() {
@@ -871,7 +872,7 @@ async function sendTransferEmails(transferId, emails) {
   const fileCount = (Number(fileCountRow?.c) || 0) + (Number(extraCountRow?.c) || 0);
 
   const { sendTemplateEmail } = require('./emailProcessor');
-  const downloadUrl = `${getFrontendUrl()}/transfer/${transfer.token}`;
+  const downloadUrl = `${await getFrontendUrl()}/transfer/${transfer.token}`;
   const vars = {
     transfer_title: transfer.title || `Transfer #${transferId}`,
     message: transfer.message || '',

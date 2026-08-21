@@ -9,6 +9,7 @@ const { db, logActivity } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
 const { generateReadablePassword } = require('../utils/passwordGenerator');
 const { getBcryptRounds } = require('../utils/passwordValidation');
+const { getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
 const { queueEmail } = require('./emailProcessor');
 const logger = require('../utils/logger');
 const { ConflictError, NotFoundError, ValidationError, ForbiddenError } = require('../utils/errors');
@@ -63,7 +64,14 @@ async function createInvitation({ email, roleId, invitedById, inviterRoleName })
   const id = invitationId?.id || invitationId;
 
   // Queue invitation email
-  const frontendUrl = process.env.FRONTEND_URL || process.env.ADMIN_URL || 'http://localhost:3005';
+  // Keeps the original FRONTEND_URL-before-ADMIN_URL order: ADMIN_URL is the
+  // resolver's override, so a split-origin install that points it at a
+  // separate admin host still wins over the general_site_url setting - it
+  // must not sit AFTER the resolver, which only returns falsy when nothing at
+  // all is configured (#1104). Only the terminal fallback changes, from
+  // localhost:3005 - not even the frontend's port, so an unconfigured install
+  // mailed admin invites pointing nowhere - to the resolved origin (#705).
+  const frontendUrl = await getAbsoluteFrontendUrl(null, { override: process.env.ADMIN_URL });
   await queueEmail(null, email, 'admin_invitation', {
     invite_link: `${frontendUrl}/invite/${token}`,
     role_name: role.display_name,

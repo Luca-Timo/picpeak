@@ -7,6 +7,7 @@ const { db } = require('../database/db');
 const { checkForUpdates } = require('./updateCheckService');
 const { sendTemplateEmail, initializeTransporter } = require('./emailProcessor');
 const logger = require('../utils/logger');
+const { getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
 
 /**
  * Get update notification settings from database
@@ -128,7 +129,7 @@ async function checkAndNotifyUpdates() {
     await initializeTransporter();
 
     // Send email to each recipient
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = await getAbsoluteFrontendUrl();
     const releaseNotesUrl = `https://github.com/PicPeak/picpeak/releases/tag/v${newVersion}`;
     const channelLabel = updateInfo.channel === 'beta' ? 'Beta' : 'Stable';
 
