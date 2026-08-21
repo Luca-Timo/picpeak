@@ -41,7 +41,16 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
   // the `type="url"` constraint never fires because this input isn't inside a
   // <form>. Validate it here so a schemeless value can't be saved, mirroring
   // the server-side check in adminSettings.js (#1104).
+  //
+  // Only once the admin has actually touched the field. The key was free-text
+  // until #1104, so an upgraded install can hold a schemeless value nobody
+  // typed today — and flagging that on load would disable Save for every
+  // General setting. An admin with `settings.edit` but not `settings.domains`
+  // could not clear it either: correcting the address is a change to a
+  // protected key and 403s. They would simply be locked out of the tab.
+  const siteUrlDirty = generalSettings.site_url !== generalSettings.site_url_stored;
   const siteUrlError = !generalSettings.site_url_env_pinned
+    && siteUrlDirty
     && generalSettings.site_url.trim()
     && !isAbsoluteHttpUrl(generalSettings.site_url)
     ? t('settings.general.siteUrlInvalid', 'Enter the full address including http:// or https://, for example https://gallery.example.com')

@@ -16,6 +16,12 @@ export interface GeneralSettings {
   // (#705). Surfaced so the field can say so instead of accepting edits
   // that never take effect.
   site_url_env_pinned: boolean;
+  // The value as stored, so the tab can tell an edit from an untouched load.
+  // `general_site_url` was free-text before #1104 added validation, so an
+  // upgraded install can hold something schemeless — and blocking Save on a
+  // value the admin never touched strands anyone without settings.domains,
+  // who cannot correct it either (the write 403s on the protected key).
+  site_url_stored: string;
   default_expiration_days: number;
   max_file_size_mb: number;
   max_files_per_upload: number;
@@ -119,6 +125,7 @@ export function useSettingsState() {
   const [generalSettings, setGeneralSettings] = useState<GeneralSettings>({
     site_url: '',
     site_url_env_pinned: false,
+    site_url_stored: '',
     default_expiration_days: 30,
     max_file_size_mb: 50,
     max_files_per_upload: 500,
@@ -209,6 +216,7 @@ export function useSettingsState() {
           ? (settings.general_site_url_effective || '')
           : (settings.general_site_url || ''),
         site_url_env_pinned: Boolean(settings.general_site_url_env_pinned),
+        site_url_stored: settings.general_site_url || '',
         default_expiration_days: toNumber(settings.general_default_expiration_days, 30),
         max_file_size_mb: toNumber(settings.general_max_file_size_mb, 50),
         max_files_per_upload: Math.min(
@@ -335,8 +343,15 @@ export function useSettingsState() {
         // but not settings.domains, even though they changed nothing. The
         // backend's no-op round-trip allowance only covers the stored value,
         // so don't send the key at all while it's read-only (#1104).
-        if (key === 'site_url_env_pinned') return;
+        if (key === 'site_url_env_pinned' || key === 'site_url_stored') return;
         if (key === 'site_url' && generalSettings.site_url_env_pinned) return;
+        // Unchanged is a no-op, so don't send it. The backend allows a no-op
+        // round-trip of a protected key precisely so a settings.edit admin
+        // without settings.domains can save unrelated General settings — but
+        // that only helps if the request gets made, and an untouched value
+        // that predates the #1104 validation would otherwise be blocked in
+        // the tab before it ever left the browser.
+        if (key === 'site_url' && value === generalSettings.site_url_stored) return;
         settingsData[`general_${key}`] = value;
       });
       return settingsService.updateSettings(settingsData);
