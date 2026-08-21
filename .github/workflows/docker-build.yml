@@ -1036,15 +1036,23 @@ jobs:
           curl -fsS http://localhost:3100/health > /dev/null 2>&1 && break
           sleep 2
         done
+        # Assert recovery rather than falling through to `docker exec`, which
+        # would report a confusing cat failure for a container that never came
+        # back up.
+        curl -fsS http://localhost:3100/health > /dev/null 2>&1 \
+          || { echo "::error::container did not become healthy again after restart"; docker logs aio-nojwt | tail -50; exit 1; }
         second=$(docker exec aio-nojwt cat /data/db/jwt.secret)
         [ "$first" = "$second" ] \
           || { echo "::error::jwt.secret changed across a restart — sessions would not survive"; exit 1; }
 
         # An explicit secret must still win over the generated one. The $ is
         # escaped so the comparison happens in the INNERMOST shell, after
-        # wait-for-db.sh has run: unescaped, the runner expands it up front and
-        # the test reduces to `[ x = x ]`, which passes even against a script
-        # that clobbers the variable — an assertion that cannot fail.
+        # wait-for-db.sh has run. Unescaped it is the CONTAINER's outer `sh -c`
+        # that expands it — the runner's single quotes do protect it, but the
+        # container shell then substitutes the value while parsing the
+        # double-quoted region, before the script runs at all. The test reduces
+        # to `[ x = x ]` and passes even against a script that clobbers the
+        # variable: an assertion that cannot fail.
         docker run --rm -v aio-nojwt:/data -e JWT_SECRET=explicit-secret-at-least-32-characters-long \
           --entrypoint sh picpeak-aio:smoke -c \
           './wait-for-db.sh sh -c "[ \"\$JWT_SECRET\" = explicit-secret-at-least-32-characters-long ]"' \

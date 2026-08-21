@@ -22,7 +22,8 @@ docker run -d \
 `:stable` and `:latest` tags exist for the backend and frontend images but have
 not been cut for this one yet, so `:main` is the tag to pull today — pinning a
 published version tag also works if you would rather not follow the branch —
-`docker image ls` on the registry, or the Releases page, shows what is current.
+the Releases page, or the package's tag list on the registry, shows what is
+current.
 
 Open `http://<host>:3000`. The first visit lands on the setup wizard, which
 asks for a one-time token:
@@ -51,6 +52,10 @@ form, needs no preparation.
 
 Back it up along with the rest of the volume: losing that file signs every
 admin session and gallery link out, exactly as changing the secret would.
+
+Note the **built-in backup does not include it** — that covers the database and
+the storage tree, not the rest of `/data` — so a restore from `/data/backup`
+alone will not bring the secret back. Copy the volume.
 
 Passing `-e JWT_SECRET=…` still overrides it, which is what you want for
 config-as-code deployments or when several instances must share sessions.
@@ -159,9 +164,9 @@ docker run -d --name picpeak -p 3000:3000 \
 No environment variable is needed — the path is the default. `EXTERNAL_MEDIA_ROOT`
 overrides it if you would rather mount somewhere else.
 
-The location is resolved once at start-up and cached, so add the mount when you
-create the container, or restart it afterwards — it will not appear in a running
-one.
+The location is resolved once, on first use, and cached for the life of the
+process — so add the mount when you create the container, or restart it
+afterwards. It will not appear in a running one.
 
 `:ro` is not a precaution, it is accurate: PicPeak only reads from this tree.
 Thumbnails are written into the managed storage on the data volume, so the
