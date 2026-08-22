@@ -46,6 +46,8 @@ export const EventDetailsPage: React.FC = () => {
     allow_comments: true,
     allow_favorites: true,
     allow_reactions: true,
+    allow_color_labels: false,
+    keybind_mode: 'colors',
     require_name_email: false,
     moderate_comments: true,
     show_feedback_to_guests: true,
@@ -92,6 +94,7 @@ export const EventDetailsPage: React.FC = () => {
     hasLikes: false,
     hasFavorites: false,
     hasComments: false,
+    colorLabels: [],
     logic: 'AND'
   });
 
@@ -133,6 +136,7 @@ export const EventDetailsPage: React.FC = () => {
     hasFavorites: feedbackFilters.hasFavorites || undefined,
     hasComments: feedbackFilters.hasComments || undefined,
     minRating: feedbackFilters.minRating ?? undefined,
+    colorLabels: feedbackFilters.colorLabels?.length ? feedbackFilters.colorLabels : undefined,
     logic: feedbackFilters.logic,
   }), [photoFilters, feedbackFilters]);
 

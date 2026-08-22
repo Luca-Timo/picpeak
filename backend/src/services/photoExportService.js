@@ -6,6 +6,8 @@
 const archiver = require('archiver');
 const { PassThrough } = require('stream');
 const { XmpGenerator } = require('./xmpGenerator');
+const { dominantColorLabel } = require('../constants/colorLabels');
+const feedbackService = require('./feedbackService');
 const { neutralizeSpreadsheetFormula } = require('../utils/spreadsheetSafe');
 const { db } = require('../database/db');
 const path = require('path');
@@ -36,6 +38,7 @@ class PhotoExportService {
         'photos.like_count',
         'photos.favorite_count',
         'photos.comment_count',
+        'photos.color_label_count',
         'photos.width',
         'photos.height',
         'photos.size_bytes',
@@ -48,7 +51,21 @@ class PhotoExportService {
       query = query.whereIn('photos.id', photoIds);
     }
 
-    return await query;
+    const photos = await query;
+
+    // Colour labels (#1044). One grouped query for the whole export, then
+    // each row carries both the per-colour tallies and the single colour the
+    // XMP sidecar should claim.
+    const colorCounts = await feedbackService.getEventColorLabelCounts(
+      eventId,
+      photos.map(p => p.id),
+    );
+    for (const photo of photos) {
+      photo.color_labels = colorCounts[photo.id] || {};
+      photo.dominant_color_label = dominantColorLabel(photo.color_labels);
+    }
+
+    return photos;
   }
 
   /**
@@ -139,6 +156,7 @@ class PhotoExportService {
       'likes',
       'favorites',
       'comments',
+      'color_label',
       'category',
       'width',
       'height',
@@ -154,6 +172,7 @@ class PhotoExportService {
       photo.like_count || 0,
       photo.favorite_count || 0,
       photo.comment_count || 0,
+      photo.dominant_color_label || '',
       photo.category_name || '',
       photo.width || '',
       photo.height || '',
@@ -237,6 +256,8 @@ class PhotoExportService {
         likes: photo.like_count || 0,
         favorites: photo.favorite_count || 0,
         comments: photo.comment_count || 0,
+        color_label: photo.dominant_color_label || null,
+        color_labels: photo.color_labels || {},
         dimensions: {
           width: photo.width || null,
           height: photo.height || null

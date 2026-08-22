@@ -24,6 +24,12 @@ export interface AdminPhoto {
   comment_count?: number;
   like_count?: number;
   favorite_count?: number;
+  // Colour labels (#1044). `color_labels` is the per-colour tally across all
+  // guests; `dominant_color_label` is the one the grid badge and the XMP
+  // export use when several guests disagreed.
+  color_label_count?: number;
+  color_labels?: Record<string, number>;
+  dominant_color_label?: string | null;
 }
 
 export interface PhotoFilters {
@@ -37,6 +43,8 @@ export interface PhotoFilters {
   hasFavorites?: boolean;
   hasComments?: boolean;
   minRating?: number | null;
+  /** Colour labels to keep, e.g. ['green'] (#1044). */
+  colorLabels?: string[];
   logic?: 'AND' | 'OR';
 }
 
@@ -58,6 +66,9 @@ class PhotosService {
       if (filters.hasComments) params.append('has_comments', 'true');
       if (filters.minRating !== undefined && filters.minRating !== null) {
         params.append('min_rating', filters.minRating.toString());
+      }
+      if (filters.colorLabels && filters.colorLabels.length > 0) {
+        params.append('color_label', filters.colorLabels.join(','));
       }
       if (filters.logic) params.append('logic', filters.logic);
     }
@@ -245,6 +256,9 @@ class PhotosService {
     if (filters.hasLikes) params.append('has_likes', 'true');
     if (filters.hasFavorites) params.append('has_favorites', 'true');
     if (filters.hasComments) params.append('has_comments', 'true');
+    if (filters.colorLabels && filters.colorLabels.length > 0) {
+      params.append('color_labels', filters.colorLabels.join(','));
+    }
     if (filters.categoryId) params.append('category_id', filters.categoryId.toString());
     if (filters.logic) params.append('logic', filters.logic);
     if (filters.sort) params.append('sort', filters.sort);
@@ -339,6 +353,8 @@ export interface FeedbackFilters {
   hasFavorites?: boolean;
   minFavorites?: number;
   hasComments?: boolean;
+  /** Colour labels to keep, e.g. ['green'] (#1044). Empty = no filtering. */
+  colorLabels?: string[];
   categoryId?: number;
   logic?: 'AND' | 'OR';
   sort?: 'rating' | 'likes' | 'favorites' | 'date' | 'filename';
@@ -353,6 +369,9 @@ export interface FilterSummary {
   withLikes: number;
   withFavorites: number;
   withComments: number;
+  withColorLabels?: number;
+  /** Photos per colour (#1044), e.g. { green: 42 }. */
+  colorLabelCounts?: Record<string, number>;
 }
 
 export interface FilteredPhotosResponse {

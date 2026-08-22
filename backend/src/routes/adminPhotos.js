@@ -13,6 +13,8 @@ const {
   pickRawDownloadName,
 } = require('../services/downloadFilenameService');
 const { escapeLikePattern } = require('../utils/sqlSecurity');
+const { COLOR_LABELS, dominantColorLabel } = require('../constants/colorLabels');
+const feedbackService = require('../services/feedbackService');
 const { validateUploadedFiles } = require('../middleware/uploadValidation');
 const { getMaxFilesPerUpload, getAllowedMimeTypes } = require('../services/uploadSettings');
 const { processUploadedPhotos } = require('../services/photoProcessor');
@@ -1036,7 +1038,7 @@ router.get('/:eventId/photos/:photoId/download', adminAuth, requirePermission('p
 router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requireEventOwnership, async (req, res) => {
   try {
     const { eventId } = req.params;
-    const { category_id, type, search, sort = 'date', has_likes, has_favorites, has_comments, min_rating } = req.query;
+    const { category_id, type, search, sort = 'date', has_likes, has_favorites, has_comments, min_rating, color_label } = req.query;
     const order = ['asc', 'desc'].includes(req.query.order) ? req.query.order : 'desc';
     const logic = req.query.logic === 'OR' ? 'OR' : 'AND';
 
@@ -1090,6 +1092,25 @@ router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requ
         feedbackConditions.push(qb => qb.where('photos.average_rating', '>=', minRatingNum));
       }
     }
+    // Colour-label filter (#1044). Comma-separated colours; unknown values are
+    // dropped rather than passed to the query. Unlike its siblings this can't
+    // read a denormalized count column — "any label" and "a GREEN label" are
+    // different questions — so it runs as an EXISTS over photo_feedback,
+    // which the migration-180 index covers.
+    const requestedColorLabels = String(color_label || '')
+      .split(',')
+      .map(value => value.trim().toLowerCase())
+      .filter(value => COLOR_LABELS.includes(value));
+    if (requestedColorLabels.length > 0) {
+      feedbackConditions.push(qb => qb.whereExists(function () {
+        this.select('*')
+          .from('photo_feedback')
+          .whereRaw('photo_feedback.photo_id = photos.id')
+          .where('photo_feedback.feedback_type', 'color_label')
+          .where('photo_feedback.is_hidden', false)
+          .whereIn('photo_feedback.color_label', requestedColorLabels);
+      }));
+    }
     if (feedbackConditions.length > 0) {
       if (logic === 'OR') {
         query = query.where(builder => {
@@ -1132,6 +1153,13 @@ router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requ
     commentCounts.forEach(c => {
       commentMap[c.photo_id] = parseInt(c.comment_count);
     });
+
+    // Per-colour tallies for the grid badges (#1044) — one grouped query for
+    // the whole page, same shape as commentMap above.
+    const colorLabelMap = await feedbackService.getEventColorLabelCounts(
+      parseInt(eventId, 10),
+      photos.map(p => p.id),
+    );
     
     res.json({
       photos: photos.map(photo => ({
@@ -1159,6 +1187,9 @@ router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requ
         comment_count: commentMap[photo.id] || 0,
         like_count: photo.like_count || 0,
         favorite_count: photo.favorite_count || 0,
+        color_label_count: photo.color_label_count || 0,
+        color_labels: colorLabelMap[photo.id] || {},
+        dominant_color_label: dominantColorLabel(colorLabelMap[photo.id]),
         // Engagement counters (#895 follow-up): the grid reads these, but
         // this explicit mapper never included them — so the Engagement
         // column showed 0 regardless of what the DB counted. This, not

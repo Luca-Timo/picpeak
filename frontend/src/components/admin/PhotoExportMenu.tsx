@@ -115,6 +115,8 @@ export const PhotoExportMenu: React.FC<PhotoExportMenuProps> = ({
         has_favorites: filters.hasFavorites,
         min_favorites: filters.minFavorites,
         has_comments: filters.hasComments,
+        // #1044 — lets "export only the greens" round-trip to Lightroom.
+        color_labels: filters.colorLabels?.length ? filters.colorLabels : undefined,
         category_id: filters.categoryId,
         logic: filters.logic,
         sort: filters.sort,
@@ -134,7 +136,8 @@ export const PhotoExportMenu: React.FC<PhotoExportMenuProps> = ({
     filters.minRating !== null ||
     filters.hasLikes ||
     filters.hasFavorites ||
-    filters.hasComments
+    filters.hasComments ||
+    (filters.colorLabels?.length || 0) > 0
   );
 
   const isDisabled = disabled || (!hasSelection && !hasFilters);

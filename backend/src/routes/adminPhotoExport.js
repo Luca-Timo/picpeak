@@ -29,6 +29,7 @@ router.get('/:eventId/filtered', adminAuth, requirePermission('photos.view'), re
   query('has_favorites').optional().isBoolean(),
   query('min_favorites').optional().isInt({ min: 0 }),
   query('has_comments').optional().isBoolean(),
+  query('color_labels').optional().isString(),
   query('category_id').optional().isInt(),
   query('logic').optional().isIn(['AND', 'OR']),
   query('sort').optional().isIn(['rating', 'likes', 'favorites', 'date', 'filename']),
@@ -62,6 +63,7 @@ router.get('/:eventId/filtered', adminAuth, requirePermission('photos.view'), re
       has_favorites: req.query.has_favorites,
       min_favorites: req.query.min_favorites ? parseInt(req.query.min_favorites) : undefined,
       has_comments: req.query.has_comments,
+      color_labels: req.query.color_labels,
       category_id: req.query.category_id ? parseInt(req.query.category_id) : undefined,
       logic: req.query.logic || 'AND'
     };
@@ -84,6 +86,7 @@ router.get('/:eventId/filtered', adminAuth, requirePermission('photos.view'), re
           'photos.like_count',
           'photos.favorite_count',
           'photos.comment_count',
+          'photos.color_label_count',
           'photos.width',
           'photos.height',
           'photos.uploaded_at',
