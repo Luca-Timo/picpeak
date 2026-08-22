@@ -485,6 +485,37 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
               </div>
             )}
 
+            {/* The admin's OWN mark (#1044 follow-up), next to the client's
+                dot but visually distinct — a white ring and a star count —
+                so a triage pass is never confused with what the client
+                chose. */}
+            {(photo.my_color_label || photo.my_rating) && (
+              <div className="absolute bottom-2 left-9 z-10 flex items-center gap-1">
+                {photo.my_color_label && COLOR_LABEL_SWATCHES[photo.my_color_label as ColorLabel] && (
+                  <span
+                    className="w-5 h-5 rounded-full border-2 border-dashed border-white shadow"
+                    style={{ backgroundColor: COLOR_LABEL_SWATCHES[photo.my_color_label as ColorLabel].fill }}
+                    role="img"
+                    aria-label={t('admin.photos.yourMarkColor', 'Your mark: {{color}}', {
+                      color: t(`feedback.colorLabels.${photo.my_color_label}`, photo.my_color_label),
+                    })}
+                    title={t('admin.photos.yourMarkColor', 'Your mark: {{color}}', {
+                      color: t(`feedback.colorLabels.${photo.my_color_label}`, photo.my_color_label),
+                    })}
+                  />
+                )}
+                {!!photo.my_rating && (
+                  <span
+                    className="bg-white/90 backdrop-blur-sm rounded-full px-1.5 py-0.5 text-xs font-medium text-neutral-700 flex items-center gap-0.5"
+                    title={t('admin.photos.yourMarkRating', 'Your rating: {{count}}', { count: photo.my_rating })}
+                  >
+                    <Star className="w-3 h-3 text-yellow-500" fill="currentColor" />
+                    {photo.my_rating}
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Feedback Indicators (moved to bottom-right to avoid covering category) */}
             {(commentCount > 0 || averageRating > 0 || likeCount > 0) && (
               <div className="absolute bottom-2 right-2 flex items-center gap-1 z-10">

@@ -39,6 +39,8 @@ class PhotoFilterBuilder {
       min_favorites,
       has_comments,
       color_labels,
+      my_color_labels,
+      admin_id,
       category_id,
       logic = 'AND'
     } = filters;
@@ -90,6 +92,20 @@ class PhotoFilterBuilder {
           .where('photo_feedback.feedback_type', 'color_label')
           .where('photo_feedback.is_hidden', false)
           .whereIn('photo_feedback.color_label', requestedColors);
+      }));
+    }
+
+    // The same question against the caller's own marks (#1044 follow-up).
+    // Requires admin_id: without one this would filter by every admin's marks
+    // at once, so it is skipped rather than silently widened.
+    const requestedMyColors = normalizeColorLabels(my_color_labels);
+    if (requestedMyColors.length > 0 && admin_id) {
+      conditions.push(builder => builder.whereExists(function () {
+        this.select('*')
+          .from('photo_admin_marks')
+          .whereRaw('photo_admin_marks.photo_id = photos.id')
+          .where('photo_admin_marks.admin_id', admin_id)
+          .whereIn('photo_admin_marks.color_label', requestedMyColors);
       }));
     }
 

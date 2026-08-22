@@ -2893,7 +2893,15 @@
         "views": "Aufrufe",
         "downloads": "Downloads",
         "likes": "Likes"
-      }
+      },
+      "myMarks": "Deine Markierungen",
+      "myMarksHelp": "Nur für dich sichtbar. Sie erscheinen nie in der Kundengalerie und werden als XMP nach Lightroom exportiert.",
+      "myRating": "Deine Bewertung",
+      "clearRating": "Deine Bewertung entfernen",
+      "rateStars": "Mit {{count}} Sternen bewerten",
+      "markError": "Markierung konnte nicht gespeichert werden",
+      "yourMarkColor": "Deine Markierung: {{color}}",
+      "yourMarkRating": "Deine Bewertung: {{count}}"
     },
     "events": {
       "tabs": {
@@ -3812,7 +3820,9 @@
     "fourStarsPlus": "4+ Sterne",
     "fiveStarsOnly": "Nur 5 Sterne",
     "colorLabels": "Farbmarkierungen",
-    "showOnlyColor": "Nur {{color}} anzeigen"
+    "showOnlyColor": "Nur {{color}} anzeigen",
+    "myColorLabels": "Deine Markierungen",
+    "showOnlyMyColor": "Nur meine Markierungen in {{color}} anzeigen"
   },
   "export": {
     "button": "Exportieren",
@@ -3832,7 +3842,10 @@
       "copied": "In die Zwischenablage kopiert.",
       "copyFailed": "Zugriff auf die Zwischenablage blockiert. Bitte den Text markieren und manuell kopieren.",
       "download": "Als Datei herunterladen"
-    }
+    },
+    "markSource": "XMP-Sterne & -Farbe aus",
+    "markSourceClient": "Kundenauswahl",
+    "markSourceMine": "Deine Markierungen"
   },
   "slideshow": {
     "adminTitle": "Live-Diashow",

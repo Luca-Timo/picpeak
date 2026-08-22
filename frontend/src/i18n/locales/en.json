@@ -2465,7 +2465,15 @@
         "views": "Views",
         "downloads": "Downloads",
         "likes": "Likes"
-      }
+      },
+      "myMarks": "Your marks",
+      "myMarksHelp": "Only you see these. They never appear in the client gallery, and they export to Lightroom as XMP.",
+      "myRating": "Your rating",
+      "clearRating": "Clear your rating",
+      "rateStars": "Rate {{count}} stars",
+      "markError": "Failed to save your mark",
+      "yourMarkColor": "Your mark: {{color}}",
+      "yourMarkRating": "Your rating: {{count}}"
     },
     "events": {
       "tabs": {
@@ -3833,7 +3841,9 @@
     "fourStarsPlus": "4+ Stars",
     "fiveStarsOnly": "5 Stars Only",
     "colorLabels": "Color labels",
-    "showOnlyColor": "Show only {{color}}"
+    "showOnlyColor": "Show only {{color}}",
+    "myColorLabels": "Your marks",
+    "showOnlyMyColor": "Show only my {{color}} marks"
   },
   "setup": {
     "title": "Welcome to PicPeak",
@@ -4128,7 +4138,10 @@
       "copied": "Copied to clipboard.",
       "copyFailed": "Clipboard write blocked. Select the text and copy manually.",
       "download": "Download as file"
-    }
+    },
+    "markSource": "XMP stars & colour from",
+    "markSourceClient": "Client selections",
+    "markSourceMine": "Your marks"
   },
   "photoSort": {
     "defaultSort": "Default Photo Sort",

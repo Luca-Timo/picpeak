@@ -30,6 +30,10 @@ export interface AdminPhoto {
   color_label_count?: number;
   color_labels?: Record<string, number>;
   dominant_color_label?: string | null;
+  // The requesting admin's OWN triage mark (#1044 follow-up) — separate from
+  // the client's selections above, and never shown in the gallery.
+  my_rating?: number | null;
+  my_color_label?: string | null;
 }
 
 export interface PhotoFilters {
@@ -45,10 +49,25 @@ export interface PhotoFilters {
   minRating?: number | null;
   /** Colour labels to keep, e.g. ['green'] (#1044). */
   colorLabels?: string[];
+  /** Same, against the caller's own marks. */
+  myColorLabels?: string[];
   logic?: 'AND' | 'OR';
 }
 
 class PhotosService {
+  /**
+   * Set / change / clear the admin's own mark on a photo (#1044 follow-up).
+   * Omit a field to leave that half alone; pass null to clear it.
+   */
+  async setPhotoMark(
+    eventId: number,
+    photoId: number,
+    mark: { rating?: number | null; color_label?: string | null }
+  ): Promise<{ rating: number | null; color_label: string | null } | null> {
+    const response = await api.put(`/admin/photos/${eventId}/photos/${photoId}/mark`, mark);
+    return response.data.mark;
+  }
+
   async getEventPhotos(eventId: number, filters?: PhotoFilters): Promise<AdminPhoto[]> {
     const params = new URLSearchParams();
     
@@ -69,6 +88,9 @@ class PhotosService {
       }
       if (filters.colorLabels && filters.colorLabels.length > 0) {
         params.append('color_label', filters.colorLabels.join(','));
+      }
+      if (filters.myColorLabels && filters.myColorLabels.length > 0) {
+        params.append('my_color_label', filters.myColorLabels.join(','));
       }
       if (filters.logic) params.append('logic', filters.logic);
     }
@@ -259,6 +281,9 @@ class PhotosService {
     if (filters.colorLabels && filters.colorLabels.length > 0) {
       params.append('color_labels', filters.colorLabels.join(','));
     }
+    if (filters.myColorLabels && filters.myColorLabels.length > 0) {
+      params.append('my_color_labels', filters.myColorLabels.join(','));
+    }
     if (filters.categoryId) params.append('category_id', filters.categoryId.toString());
     if (filters.logic) params.append('logic', filters.logic);
     if (filters.sort) params.append('sort', filters.sort);
@@ -355,6 +380,8 @@ export interface FeedbackFilters {
   hasComments?: boolean;
   /** Colour labels to keep, e.g. ['green'] (#1044). Empty = no filtering. */
   colorLabels?: string[];
+  /** Same, against the caller's own marks. */
+  myColorLabels?: string[];
   categoryId?: number;
   logic?: 'AND' | 'OR';
   sort?: 'rating' | 'likes' | 'favorites' | 'date' | 'filename';
@@ -372,6 +399,8 @@ export interface FilterSummary {
   withColorLabels?: number;
   /** Photos per colour (#1044), e.g. { green: 42 }. */
   colorLabelCounts?: Record<string, number>;
+  /** Same, for the caller's own marks. */
+  myColorLabelCounts?: Record<string, number>;
 }
 
 export interface FilteredPhotosResponse {

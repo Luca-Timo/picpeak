@@ -7,6 +7,7 @@ const archiver = require('archiver');
 const { PassThrough } = require('stream');
 const { XmpGenerator } = require('./xmpGenerator');
 const { dominantColorLabel } = require('../constants/colorLabels');
+const photoAdminMarksService = require('./photoAdminMarksService');
 const feedbackService = require('./feedbackService');
 const { neutralizeSpreadsheetFormula } = require('../utils/spreadsheetSafe');
 const { db } = require('../database/db');
@@ -24,7 +25,7 @@ class PhotoExportService {
    * @param {number[]} photoIds - Photo IDs to export (optional, exports all if not provided)
    * @returns {Promise<Object[]>} Photos with feedback
    */
-  async getPhotosWithFeedback(eventId, photoIds = null) {
+  async getPhotosWithFeedback(eventId, photoIds = null, adminId = null) {
     let query = db('photos')
       .leftJoin('photo_categories', 'photos.category_id', 'photo_categories.id')
       .where('photos.event_id', eventId)
@@ -65,6 +66,18 @@ class PhotoExportService {
       photo.dominant_color_label = dominantColorLabel(photo.color_labels);
     }
 
+    // The exporting photographer's own marks (#1044 follow-up), so a triage
+    // pass can leave the app as XMP the same way a client selection can.
+    if (adminId) {
+      const marks = await photoAdminMarksService.getEventMarks(
+        eventId, adminId, photos.map(p => p.id),
+      );
+      for (const photo of photos) {
+        photo.my_rating = marks[photo.id]?.rating ?? null;
+        photo.my_color_label = marks[photo.id]?.color_label ?? null;
+      }
+    }
+
     return photos;
   }
 
@@ -77,7 +90,9 @@ class PhotoExportService {
    * @returns {Promise<Object>} Export result with stream/content
    */
   async exportPhotos(eventId, photoIds, format, options = {}) {
-    const photos = await this.getPhotosWithFeedback(eventId, photoIds);
+    // admin_id is set by the route from the session, never taken from the
+    // request body — it decides whose marks the export carries.
+    const photos = await this.getPhotosWithFeedback(eventId, photoIds, options.admin_id || null);
 
     if (photos.length === 0) {
       throw new Error('No photos to export');
@@ -157,6 +172,8 @@ class PhotoExportService {
       'favorites',
       'comments',
       'color_label',
+      'my_rating',
+      'my_color_label',
       'category',
       'width',
       'height',
@@ -173,6 +190,8 @@ class PhotoExportService {
       photo.favorite_count || 0,
       photo.comment_count || 0,
       photo.dominant_color_label || '',
+      photo.my_rating ?? '',
+      photo.my_color_label || '',
       photo.category_name || '',
       photo.width || '',
       photo.height || '',
@@ -200,7 +219,17 @@ class PhotoExportService {
    * Export as XMP sidecar files in a ZIP archive
    */
   async exportAsXmpZip(photos, options = {}) {
-    const { filename_format = 'original' } = options;
+    const { filename_format = 'original', mark_source = 'client' } = options;
+
+    // Whose verdict the sidecar carries (#1044 follow-up). Default 'client'
+    // keeps existing exports identical; 'mine' writes the photographer's own
+    // triage instead, which is the point of being able to mark at all.
+    const project = (photo) => (mark_source !== 'mine' ? photo : {
+      ...photo,
+      average_rating: photo.my_rating || 0,
+      dominant_color_label: photo.my_color_label || null,
+      color_labels: {},
+    });
 
     const archive = archiver('zip', { zlib: { level: 9 } });
     const passthrough = new PassThrough();
@@ -211,7 +240,7 @@ class PhotoExportService {
         ? (photo.original_filename || photo.filename)
         : photo.filename;
       const xmpFilename = this.xmpGenerator.getXmpFilename(baseFilename);
-      const xmpContent = this.xmpGenerator.generateXmp(photo, options);
+      const xmpContent = this.xmpGenerator.generateXmp(project(photo), options);
 
       archive.append(xmpContent, { name: xmpFilename });
     }
@@ -258,6 +287,8 @@ class PhotoExportService {
         comments: photo.comment_count || 0,
         color_label: photo.dominant_color_label || null,
         color_labels: photo.color_labels || {},
+        my_rating: photo.my_rating ?? null,
+        my_color_label: photo.my_color_label || null,
         dimensions: {
           width: photo.width || null,
           height: photo.height || null

@@ -1702,7 +1702,15 @@
       "visibleSuccess": "Фотографии теперь видны гостям",
       "processingStatus": "Обработка…",
       "processingFailed": "Ошибка",
-      "retryQueued": "Повтор в очереди"
+      "retryQueued": "Повтор в очереди",
+      "myMarks": "Ваши отметки",
+      "myMarksHelp": "Видны только вам. Они никогда не появляются в клиентской галерее и экспортируются в Lightroom через XMP.",
+      "myRating": "Ваша оценка",
+      "clearRating": "Убрать вашу оценку",
+      "rateStars": "Оценить на {{count}}",
+      "markError": "Не удалось сохранить отметку",
+      "yourMarkColor": "Ваша отметка: {{color}}",
+      "yourMarkRating": "Ваша оценка: {{count}}"
     },
     "events": {
       "tabs": {
@@ -2745,7 +2753,9 @@
     "fourStarsPlus": "4+ звезды",
     "fiveStarsOnly": "Только 5 звёзд",
     "colorLabels": "Цветовые метки",
-    "showOnlyColor": "Показать только «{{color}}»"
+    "showOnlyColor": "Показать только «{{color}}»",
+    "myColorLabels": "Ваши отметки",
+    "showOnlyMyColor": "Показать только мои отметки «{{color}}»"
   },
   "adminLogin": {
     "title": "Вход для администратора",
@@ -2803,7 +2813,10 @@
     "exportSelected_few": "Экспортировать {{count}} выбранных",
     "exportSelected_many": "Экспортировать {{count}} выбранных",
     "exportSelected_one": "Экспортировать {{count}} выбранный",
-    "exportSelected_other": "Экспортировать {{count}} выбранных"
+    "exportSelected_other": "Экспортировать {{count}} выбранных",
+    "markSource": "Звёзды и цвет для XMP из",
+    "markSourceClient": "Выбор клиента",
+    "markSourceMine": "Ваши отметки"
   },
   "photoSort": {
     "defaultSort": "Сортировка фото по умолчанию",

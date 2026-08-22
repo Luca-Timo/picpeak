@@ -1681,7 +1681,15 @@
       "visibleSuccess": "Fotos agora visíveis aos visitantes",
       "processingStatus": "A processar…",
       "processingFailed": "Falhado",
-      "retryQueued": "Nova tentativa em fila"
+      "retryQueued": "Nova tentativa em fila",
+      "myMarks": "As suas marcas",
+      "myMarksHelp": "Só você as vê. Nunca aparecem na galeria do cliente e são exportadas para o Lightroom como XMP.",
+      "myRating": "A sua classificação",
+      "clearRating": "Remover a sua classificação",
+      "rateStars": "Classificar com {{count}} estrelas",
+      "markError": "Não foi possível guardar a sua marca",
+      "yourMarkColor": "A sua marca: {{color}}",
+      "yourMarkRating": "A sua classificação: {{count}}"
     },
     "events": {
       "tabs": {
@@ -2715,7 +2723,9 @@
     "fourStarsPlus": "4+ estrelas",
     "fiveStarsOnly": "Apenas 5 estrelas",
     "colorLabels": "Etiquetas de cor",
-    "showOnlyColor": "Mostrar apenas {{color}}"
+    "showOnlyColor": "Mostrar apenas {{color}}",
+    "myColorLabels": "As suas marcas",
+    "showOnlyMyColor": "Mostrar apenas as minhas marcas {{color}}"
   },
   "adminLogin": {
     "title": "Login Administrativo",
@@ -2772,7 +2782,10 @@
     "hint": "Selecione fotos ou aplique filtros para exportar",
     "exportSelected_many": "Exportar {{count}} selecionados",
     "exportSelected_one": "Exportar {{count}} selecionado",
-    "exportSelected_other": "Exportar {{count}} selecionados"
+    "exportSelected_other": "Exportar {{count}} selecionados",
+    "markSource": "Estrelas e cor XMP a partir de",
+    "markSourceClient": "Seleções do cliente",
+    "markSourceMine": "As suas marcas"
   },
   "photoSort": {
     "defaultSort": "Ordenação padrão das fotos",

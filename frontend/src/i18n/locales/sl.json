@@ -1660,7 +1660,15 @@
       "visibleSuccess": "Fotografije so zdaj vidne gostom",
       "processingStatus": "Obdelava…",
       "processingFailed": "Neuspešno",
-      "retryQueued": "Ponovni poskus v čakalni vrsti"
+      "retryQueued": "Ponovni poskus v čakalni vrsti",
+      "myMarks": "Vaše oznake",
+      "myMarksHelp": "Vidite jih samo vi. V galeriji stranke se nikoli ne prikažejo, izvozijo pa se v Lightroom kot XMP.",
+      "myRating": "Vaša ocena",
+      "clearRating": "Odstrani vašo oceno",
+      "rateStars": "Oceni z {{count}} zvezdicami",
+      "markError": "Oznake ni bilo mogoče shraniti",
+      "yourMarkColor": "Vaša oznaka: {{color}}",
+      "yourMarkRating": "Vaša ocena: {{count}}"
     },
     "events": {
       "tabs": {
@@ -2685,7 +2693,9 @@
     "fourStarsPlus": "4+ zvezdice",
     "fiveStarsOnly": "Samo 5 zvezdic",
     "colorLabels": "Barvne oznake",
-    "showOnlyColor": "Prikaži samo {{color}}"
+    "showOnlyColor": "Prikaži samo {{color}}",
+    "myColorLabels": "Vaše oznake",
+    "showOnlyMyColor": "Prikaži samo moje oznake {{color}}"
   },
   "adminLogin": {
     "title": "Prijava administratorja",
@@ -2741,7 +2751,10 @@
     "exportFiltered": "Izvozi filtrirane fotografije",
     "hint": "Izberite fotografije ali uporabite filtre za izvoz",
     "exportSelected_one": "Izvozi {{count}} izbrano",
-    "exportSelected_other": "Izvozi {{count}} izbranih"
+    "exportSelected_other": "Izvozi {{count}} izbranih",
+    "markSource": "Zvezdice in barva XMP iz",
+    "markSourceClient": "Izbor stranke",
+    "markSourceMine": "Vaše oznake"
   },
   "photoSort": {
     "defaultSort": "Privzeto razvrščanje fotografij",

@@ -1581,7 +1581,15 @@
       "hideSelected": "Ocultar",
       "showSelected": "Mostrar",
       "hiddenSuccess": "Fotos ocultas a los invitados",
-      "visibleSuccess": "Fotos ahora visibles para invitados"
+      "visibleSuccess": "Fotos ahora visibles para invitados",
+      "myMarks": "Tus marcas",
+      "myMarksHelp": "Solo tú las ves. Nunca aparecen en la galería del cliente y se exportan a Lightroom como XMP.",
+      "myRating": "Tu valoración",
+      "clearRating": "Quitar tu valoración",
+      "rateStars": "Valorar con {{count}} estrellas",
+      "markError": "No se pudo guardar tu marca",
+      "yourMarkColor": "Tu marca: {{color}}",
+      "yourMarkRating": "Tu valoración: {{count}}"
     },
     "guests": {
       "columns": {
@@ -2478,7 +2486,9 @@
     "showingPhotos": "Fotos totales",
     "withRatings": "Con valoraciones",
     "colorLabels": "Etiquetas de color",
-    "showOnlyColor": "Mostrar solo {{color}}"
+    "showOnlyColor": "Mostrar solo {{color}}",
+    "myColorLabels": "Tus marcas",
+    "showOnlyMyColor": "Mostrar solo mis marcas en {{color}}"
   },
   "adminLogin": {
     "title": "Acceso admin",
@@ -2534,7 +2544,10 @@
     "error": "Error en la exportación: ",
     "exportSelected": "Exportar {{count}} seleccionadas",
     "exportFiltered": "Exportar fotos filtradas",
-    "hint": "Selecciona fotos o aplica filtros para exportar"
+    "hint": "Selecciona fotos o aplica filtros para exportar",
+    "markSource": "Estrellas y color XMP desde",
+    "markSourceClient": "Selecciones del cliente",
+    "markSourceMine": "Tus marcas"
   },
   "photoSort": {
     "defaultSort": "Orden por defecto",

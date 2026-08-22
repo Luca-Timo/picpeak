@@ -95,6 +95,7 @@ export const EventDetailsPage: React.FC = () => {
     hasFavorites: false,
     hasComments: false,
     colorLabels: [],
+    myColorLabels: [],
     logic: 'AND'
   });
 
@@ -137,6 +138,7 @@ export const EventDetailsPage: React.FC = () => {
     hasComments: feedbackFilters.hasComments || undefined,
     minRating: feedbackFilters.minRating ?? undefined,
     colorLabels: feedbackFilters.colorLabels?.length ? feedbackFilters.colorLabels : undefined,
+    myColorLabels: feedbackFilters.myColorLabels?.length ? feedbackFilters.myColorLabels : undefined,
     logic: feedbackFilters.logic,
   }), [photoFilters, feedbackFilters]);
 

@@ -1660,7 +1660,15 @@
       "visibleSuccess": "Foto's nu zichtbaar voor gasten",
       "processingStatus": "Verwerken…",
       "processingFailed": "Mislukt",
-      "retryQueued": "Nieuwe poging in wachtrij"
+      "retryQueued": "Nieuwe poging in wachtrij",
+      "myMarks": "Jouw markeringen",
+      "myMarksHelp": "Alleen jij ziet deze. Ze verschijnen nooit in de klantgalerij en gaan als XMP naar Lightroom.",
+      "myRating": "Jouw beoordeling",
+      "clearRating": "Jouw beoordeling wissen",
+      "rateStars": "{{count}} sterren geven",
+      "markError": "Markering opslaan mislukt",
+      "yourMarkColor": "Jouw markering: {{color}}",
+      "yourMarkRating": "Jouw beoordeling: {{count}}"
     },
     "events": {
       "tabs": {
@@ -2685,7 +2693,9 @@
     "fourStarsPlus": "4+ sterren",
     "fiveStarsOnly": "Alleen 5 sterren",
     "colorLabels": "Kleurlabels",
-    "showOnlyColor": "Alleen {{color}} tonen"
+    "showOnlyColor": "Alleen {{color}} tonen",
+    "myColorLabels": "Jouw markeringen",
+    "showOnlyMyColor": "Alleen mijn {{color}} markeringen tonen"
   },
   "export": {
     "button": "Exporteren",
@@ -2694,7 +2704,10 @@
     "exportFiltered": "Gefilterde foto's exporteren",
     "hint": "Selecteer foto's of pas filters toe om te exporteren",
     "exportSelected_one": "{{count}} geselecteerde exporteren",
-    "exportSelected_other": "{{count}} geselecteerde exporteren"
+    "exportSelected_other": "{{count}} geselecteerde exporteren",
+    "markSource": "XMP-sterren & -kleur van",
+    "markSourceClient": "Klantselectie",
+    "markSourceMine": "Jouw markeringen"
   },
   "adminLogin": {
     "title": "Beheerder login",
