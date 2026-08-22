@@ -178,8 +178,13 @@ export const AdminPhotoViewer: React.FC<AdminPhotoViewerProps> = ({
   };
 
   // Pressing the same value again clears it, matching the gallery lightbox.
+  //
+  // 0 is the clear sentinel — Lightroom's own binding, and what
+  // resolveFeedbackKey returns for the '0' key. It must become `null` here:
+  // the mark service stores 1-5 only and rejects a literal 0, so passing it
+  // straight through turned "clear my rating" into an error toast.
   const toggleMarkRating = (value: number) =>
-    saveMark({ rating: currentMark.rating === value ? null : value });
+    saveMark({ rating: value === 0 || currentMark.rating === value ? null : value });
   const toggleMarkColor = (color: ColorLabel) =>
     saveMark({ color_label: currentMark.color_label === color ? null : color });
 
