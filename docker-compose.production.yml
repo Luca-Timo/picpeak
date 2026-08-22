@@ -9,12 +9,7 @@ services:
   secrets-init:
     image: alpine:3.20
     container_name: picpeak-secrets-init
-    # required:false so `docker compose config` works before a .env exists —
-    # without it the volume defaults below deliver nothing, because the file
-    # itself is the hard failure. Needs Compose >= 2.24.
-    env_file:
-      - path: .env
-        required: false
+    env_file: .env
     entrypoint:
       - sh
       - -c
@@ -97,12 +92,7 @@ services:
     # PICPEAK_CHANNEL: 'stable' (default), 'beta', or specific version like 'v2.3.0'
     image: ghcr.io/picpeak/picpeak/backend:${PICPEAK_CHANNEL:-stable}
     container_name: picpeak-backend
-    # required:false so `docker compose config` works before a .env exists —
-    # without it the volume defaults below deliver nothing, because the file
-    # itself is the hard failure. Needs Compose >= 2.24.
-    env_file:
-      - path: .env
-        required: false
+    env_file: .env
     environment:
       - NODE_ENV=production
       - DB_HOST=${DB_HOST:-postgres}
@@ -120,10 +110,17 @@ services:
       - FACE_ML_TOKEN=${FACE_ML_TOKEN:-}
       - FACE_PROCESSOR_CONCURRENCY=${FACE_PROCESSOR_CONCURRENCY:-}
     volumes:
-      # Defaulted so `docker compose -f docker-compose.production.yml config`
-      # works before a .env exists — without these it aborts with
-      # "invalid spec: :/app/storage: empty section between colons", which
-      # reads like a broken compose file rather than a missing variable (#705).
+      # Defaulted so a .env that simply does not set these still works. Without
+      # them compose aborts with "invalid spec: :/app/storage: empty section
+      # between colons", which reads like a broken compose file rather than a
+      # missing variable (#705).
+      #
+      # Note this does NOT make `config` work with no .env at all: `env_file`
+      # above still requires the file. Making it optional needs
+      # `required: false`, which is Compose 2.24+ syntax that OLDER Compose
+      # rejects as a schema error — taking the whole stack down rather than
+      # just losing a default. Not worth it for a case the onboarding flow
+      # never hits, since it copies .env.example first.
       - ${APP_STORAGE:-./storage}:/app/storage
       - ${LOGS:-./logs}:/app/logs
       - ${APP_DATA:-./data}:/app/data
