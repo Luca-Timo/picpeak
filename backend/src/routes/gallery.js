@@ -768,28 +768,20 @@ router.get('/:slug/photos', verifyGalleryAccess, resolveGuest, async (req, res) 
         }
 
         // Colour-label filters (#1044), one token per colour: `color:green`.
-        // Guest-scoped first (the guest's own labels are what a proofing
-        // client means by "show my greens"); when there's no guest identity,
-        // fall back to any label of that colour on the photo.
+        // Same OR-of-guest-and-aggregate shape as the sibling tokens above:
+        // the guest's own labels of that colour, plus anyone's. (The public
+        // gallery narrows to "my greens" client-side from `my_color_label`,
+        // which is per-viewer by construction.)
         const requestedColors = COLOR_LABELS.filter(color => filterTokens.has(`color:${color}`));
         if (requestedColors.length > 0) {
-          let aggregateColorRows = null;
           for (const color of requestedColors) {
-            const guestMatches = guestColorLabels?.[color];
-            if (guestMatches && guestMatches.size > 0) {
-              guestMatches.forEach(id => include.add(id));
-              continue;
-            }
-            if (aggregateColorRows === null) {
-              aggregateColorRows = await db('photo_feedback')
-                .where({ event_id: req.event.id, feedback_type: 'color_label', is_hidden: false })
-                .whereIn('color_label', requestedColors)
-                .select('photo_id', 'color_label');
-            }
-            aggregateColorRows
-              .filter(row => row.color_label === color)
-              .forEach(row => include.add(row.photo_id));
+            guestColorLabels?.[color]?.forEach(id => include.add(id));
           }
+          const colorRows = await db('photo_feedback')
+            .where({ event_id: req.event.id, feedback_type: 'color_label', is_hidden: false })
+            .whereIn('color_label', requestedColors)
+            .select('photo_id');
+          colorRows.forEach(row => include.add(row.photo_id));
         }
 
         if (filterTokens.has('commented')) {
