@@ -735,7 +735,14 @@ router.delete('/:eventId/photos/:photoId', adminAuth, requirePermission('photos.
 // the lightbox's colour keys and star keys don't wipe each other.
 router.put('/:eventId/photos/:photoId/mark', adminAuth, requirePermission('photos.edit'), requireEventOwnership, async (req, res) => {
   try {
-    const { eventId, photoId } = req.params;
+    const { eventId } = req.params;
+    // Parse before querying: Postgres errors on `where id = 'abc'` (22P02),
+    // which would answer 500 for what is really a bad URL. SQLite just fails
+    // to match, so without this the two engines disagree.
+    const photoId = parseInt(req.params.photoId, 10);
+    if (!Number.isInteger(photoId) || photoId < 1) {
+      return res.status(404).json({ error: 'Photo not found' });
+    }
 
     // requireEventOwnership proves the caller owns the EVENT; this proves the
     // photo is in it, so a photo id from another event can't be marked
@@ -759,7 +766,7 @@ router.put('/:eventId/photos/:photoId/mark', adminAuth, requirePermission('photo
     }
 
     const result = await photoAdminMarksService.setMark(
-      parseInt(eventId, 10), parseInt(photoId, 10), req.admin.id, mark,
+      parseInt(eventId, 10), photoId, req.admin.id, mark,
     );
 
     res.json({ success: true, mark: result });

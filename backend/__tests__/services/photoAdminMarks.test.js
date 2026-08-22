@@ -133,6 +133,31 @@ describe('photoAdminMarksService (#1044 follow-up)', () => {
     expect(await marks.getEventMarks(eventId, ADMIN_A, [])).toEqual({});
   });
 
+  it('converges instead of 500ing when two marks race into the same row', async () => {
+    // Simulate the check-then-insert race a keyboard triage pass produces:
+    // both calls read "no row", one inserts, the other hits the unique index.
+    // The loser must land on the winner's row, not throw — and the half it
+    // did not address must keep the winner's value, not the stale pre-read.
+    const photoId = photoIds[2];
+    await db('photo_admin_marks').where({ photo_id: photoId }).delete();
+
+    const [first, second] = await Promise.all([
+      marks.setMark(eventId, photoId, ADMIN_A, { rating: 4 }),
+      marks.setMark(eventId, photoId, ADMIN_A, { colorLabel: 'green' }),
+    ]);
+
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+
+    const rows = await db('photo_admin_marks').where({ photo_id: photoId, admin_id: ADMIN_A });
+    expect(rows).toHaveLength(1);
+    // Whichever order they landed in, neither half may be lost.
+    expect(rows[0].rating).toBe(4);
+    expect(rows[0].color_label).toBe('green');
+
+    await db('photo_admin_marks').where({ photo_id: photoId }).delete();
+  });
+
   it('counts colours per admin for the filter chips', async () => {
     await marks.setMark(eventId, photoIds[2], ADMIN_A, { colorLabel: 'green' });
     expect(await marks.getEventMarkColorCounts(eventId, ADMIN_A)).toEqual({ green: 2 });

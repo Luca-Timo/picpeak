@@ -60,7 +60,10 @@ async function setMark(eventId, photoId, adminId, { rating, colorLabel } = {}) {
     await db('photo_admin_marks')
       .where('id', existing.id)
       .update({ ...next, updated_at: now });
-  } else {
+    return next;
+  }
+
+  try {
     await db('photo_admin_marks').insert({
       photo_id: photoId,
       event_id: eventId,
@@ -69,6 +72,31 @@ async function setMark(eventId, photoId, adminId, { rating, colorLabel } = {}) {
       created_at: now,
       updated_at: now,
     });
+  } catch (error) {
+    // The read above and this insert are not atomic, and a triage pass fires
+    // them back to back — press 4 then 9 and both requests can find no row
+    // and both try to insert. The unique index stops the duplicate, which
+    // would otherwise surface as a 500 and a lost keystroke; converge on the
+    // row the winner created instead.
+    const raced = await db('photo_admin_marks')
+      .where({ photo_id: photoId, admin_id: adminId })
+      .first();
+    if (!raced) throw error;
+
+    // Re-resolve against what actually landed, so the half this call did not
+    // address keeps the winner's value rather than the stale pre-read one.
+    const merged = {
+      rating: rating === undefined ? (raced.rating ?? null) : next.rating,
+      color_label: colorLabel === undefined ? (raced.color_label ?? null) : next.color_label,
+    };
+    if (merged.rating === null && merged.color_label === null) {
+      await db('photo_admin_marks').where('id', raced.id).delete();
+      return null;
+    }
+    await db('photo_admin_marks')
+      .where('id', raced.id)
+      .update({ ...merged, updated_at: now });
+    return merged;
   }
 
   return next;
