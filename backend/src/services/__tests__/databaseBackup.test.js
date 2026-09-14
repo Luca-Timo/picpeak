@@ -15,11 +15,9 @@ const cron = require('node-cron');
 
 describe('DatabaseBackupService', () => {
   let service;
-  let mockExecAsync;
 
   beforeEach(() => {
     service = new DatabaseBackupService();
-    mockExecAsync = jest.fn();
     
     // Reset mocks
     jest.clearAllMocks();
@@ -67,6 +65,12 @@ describe('DatabaseBackupService', () => {
       // Mock getTables
       service.getTables = jest.fn().mockResolvedValue(['events', 'photos']);
       
+      // SQLite has no row-to-text cast, so the query builds its length sum from
+      // the column list — the service asks the query builder for it per table.
+      db.mockReturnValue({
+        columnInfo: jest.fn().mockResolvedValue({ id: {}, name: {} })
+      });
+
       // Mock SQLite response
       db.raw = jest.fn()
         .mockResolvedValueOnce([{ row_count: 10, data_sum: 1000 }])

@@ -24,7 +24,7 @@ maybe('maintenance job state on Postgres', () => {
   beforeAll(async () => {
     pgDb = knex({ client: 'pg', connection: PG_URL, pool: { min: 0, max: 10 } });
     await pgDb.raw('DROP TABLE IF EXISTS maintenance_jobs');
-    await require('../../migrations/core/179_maintenance_job_state').up(pgDb);
+    await require('../../migrations/core/189_maintenance_job_state').up(pgDb);
 
     jest.resetModules();
     jest.doMock('../../src/database/db', () => ({ db: pgDb }));

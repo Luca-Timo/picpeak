@@ -201,6 +201,12 @@ function transformProfile(p) {
       : (p.scheduled_email_floor_enabled === true
         || p.scheduled_email_floor_enabled === 1
         || p.scheduled_email_floor_enabled === '1'),
+    // Migration 198 — global email footer signature. Defaults FALSE so an
+    // upgraded install's footer stays byte-identical until an admin opts in.
+    emailSignatureEnabled: p.email_signature_enabled === true
+      || p.email_signature_enabled === 1
+      || p.email_signature_enabled === '1',
+    emailSignatureExtra: p.email_signature_extra || '',
     createdAt: p.created_at,
     updatedAt: p.updated_at,
   };
@@ -239,7 +245,7 @@ router.use(adminAuth);
 // ---- GET / ------------------------------------------------------------
 router.get(
   '/',
-  requirePermission('settings.view'),
+  requirePermission(['settings.view', 'settings.banking']),
   handleAsync(async (req, res) => {
     const { profile, bankAccounts } = await businessProfileService.getProfile();
     return successResponse(res, {
@@ -258,7 +264,7 @@ router.get(
 // an existing file. Read-only — never modifies anything.
 router.get(
   '/logo-diagnostic',
-  requirePermission('settings.view'),
+  requirePermission(['settings.view', 'settings.banking']),
   handleAsync(async (req, res) => {
     const fs = require('fs');
     const path = require('path');
@@ -368,7 +374,7 @@ router.get(
 // branding_logo_path still applies when this is unset.
 router.post(
   '/logo',
-  requirePermission('settings.edit'),
+  requirePermission('settings.banking'),
   pdfLogoUpload.single('logo'),
   handleAsync(async (req, res) => {
     if (!req.file) {
@@ -412,7 +418,7 @@ router.post(
 
 router.delete(
   '/logo',
-  requirePermission('settings.edit'),
+  requirePermission('settings.banking'),
   handleAsync(async (req, res) => {
     const existing = await db('business_profile').where({ id: 1 }).first();
     const prevDisk = uploadedPdfLogoPath(existing?.logo_path, getStoragePath());
@@ -430,7 +436,7 @@ router.delete(
 // ---- PUT / ------------------------------------------------------------
 router.put(
   '/',
-  requirePermission('settings.edit'),
+  requirePermission('settings.banking'),
   [
     // All fields optional — partial update is fine. We only run shallow
     // shape validation on the types that absolutely must be sane;
@@ -503,6 +509,11 @@ router.put(
     }),
     // Migration 114 — scheduled-email floor master switch.
     body('scheduledEmailFloorEnabled').optional().isBoolean(),
+    // Migration 198 — global email footer signature. Boolean uses the
+    // explicit-undefined form so `false` reaches the service and the
+    // toggle can actually be switched off.
+    body('emailSignatureEnabled').optional().isBoolean(),
+    body('emailSignatureExtra').optional({ values: 'falsy' }).isString().isLength({ max: 500 }),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -544,6 +555,9 @@ router.put(
       // Migration 114 — business hours + scheduled-email floor switch.
       businessHours: 'business_hours',
       scheduledEmailFloorEnabled: 'scheduled_email_floor_enabled',
+      // Migration 198 — global email footer signature.
+      emailSignatureEnabled: 'email_signature_enabled',
+      emailSignatureExtra: 'email_signature_extra',
     };
     for (const [api, db] of Object.entries(map)) {
       if (Object.prototype.hasOwnProperty.call(req.body, api)) {
@@ -565,7 +579,7 @@ router.put(
 // ---- bank accounts ----------------------------------------------------
 router.get(
   '/bank-accounts',
-  requirePermission('settings.view'),
+  requirePermission(['settings.view', 'settings.banking']),
   handleAsync(async (req, res) => {
     const { bankAccounts } = await businessProfileService.getProfile();
     return successResponse(res, { bankAccounts: bankAccounts.map(transformBank) });
@@ -574,7 +588,7 @@ router.get(
 
 router.post(
   '/bank-accounts',
-  requirePermission('settings.edit'),
+  requirePermission('settings.banking'),
   [
     body('iban').isString().isLength({ min: 5, max: 64 }).withMessage('IBAN is required')
       .bail().custom(ibanValidator({ required: true })),
@@ -602,7 +616,7 @@ router.post(
 
 router.put(
   '/bank-accounts/:id',
-  requirePermission('settings.edit'),
+  requirePermission('settings.banking'),
   [
     param('id').isInt({ min: 1 }),
     body('iban').optional({ values: 'falsy' }).isString().isLength({ min: 5, max: 64 })
@@ -639,7 +653,7 @@ router.put(
 
 router.delete(
   '/bank-accounts/:id',
-  requirePermission('settings.edit'),
+  requirePermission('settings.banking'),
   [param('id').isInt({ min: 1 })],
   handleAsync(async (req, res) => {
     validateRequest(req);

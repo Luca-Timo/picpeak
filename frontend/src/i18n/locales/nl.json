@@ -124,14 +124,15 @@
     "saveChanges": "Wijzigingen opslaan",
     "resetChanges": "Wijzigingen ongedaan maken",
     "dismiss": "Sluiten",
-    "discard": "Verwerpen"
+    "discard": "Verwerpen",
+    "poweredBy": "Mogelijk gemaakt door"
   },
   "upload": {
     "photoCategory": "Fotocategorie",
     "noCategory": "Geen categorie",
     "eventSpecific": "(Evenement-specifiek)",
     "clickToUpload": "Klik om te uploaden of sleep bestanden hierheen",
-    "fileRequirements": "JPEG, PNG of WebP (max. 50 MB per bestand, {{limit}} bestanden per upload)",
+    "fileRequirements": "{{formats}} (max. {{sizeLimit}} MB per bestand, {{limit}} bestanden per upload)",
     "selectedFiles": "Geselecteerde bestanden",
     "uploading": "Uploaden...",
     "uploadComplete": "Upload voltooid!",
@@ -221,6 +222,10 @@
     "passwordHint": "Het wachtwoord is verstrekt door de organisator van het evenement. Neem contact op als u het niet heeft."
   },
   "gallery": {
+    "revealPendingTitle": "De foto's zijn nog een verrassing",
+    "revealPendingMessage": "De gastheer onthult de galerij later — kom snel terug!",
+    "revealScheduledFor": "Onthulling gepland voor {{date}}",
+    "revealUploadHint": "Je kunt nu al je eigen foto's aan de collectie toevoegen:",
     "expires": "Verloopt",
     "expired": "Verlopen",
     "contactOrganizer": "Neem contact op met de organisator als u toegang tot deze foto's nodig heeft.",
@@ -277,18 +282,6 @@
     "thankYouMessage": "Dat u deel uitmaakte van ons verhaal en onze bijzondere dag onvergetelijk maakte.",
     "rated": "Beoordeeld",
     "commented": "Becommentarieerd",
-    "feedback": {
-      "title": "Feedback",
-      "shareThoughts": "Deel uw gedachten over \"{{name}}\"",
-      "rateThisMoment": "Beoordeel dit moment",
-      "comments": "Opmerkingen",
-      "noComments": "Nog geen opmerkingen. Wees de eerste!",
-      "yourName": "Uw naam",
-      "yourEmail": "Uw e-mail",
-      "writeLovelyNote": "Schrijf een mooi bericht...",
-      "postComment": "Opmerking plaatsen",
-      "anonymous": "Anoniem"
-    },
     "expiresIn_one": "Galerij verloopt over {{count}} dag",
     "expiresIn_other": "Galerij verloopt over {{count}} dagen",
     "downloading_one": "1 foto downloaden…",
@@ -325,7 +318,8 @@
       "emailLabel": "E-mail (optioneel)",
       "emailPlaceholder": "u@voorbeeld.nl",
       "submit": "Doorgaan",
-      "alreadyHere": "Ik ben hier al eerder geweest"
+      "returningHint": "Al eerder hier geweest? Uw eerdere keuzes zijn nog bewaard.",
+      "recoverPicks": "Keuzes terughalen"
     },
     "footer": {
       "forgetMeConfirm": "Uw naam en selecties worden verwijderd uit deze galerij.",
@@ -334,7 +328,15 @@
     },
     "photosCount_one": "{{count}} foto",
     "photosCount_other": "{{count}} foto's",
-    "poweredBy": "Mogelijk gemaakt door PicPeak",
+    "colorFilter": "Kleur",
+    "filterByColor": "Alleen {{color}} tonen",
+    "folders": "Mappen",
+    "openFolder": "Map {{name}} openen",
+    "folderPhotoCount": "{{count}} foto's",
+    "backToGallery": "Alle foto's",
+    "downloadFolder": "Map downloaden ({{count}})",
+    "downloadFolderCapped": "Eerste {{limit}} van {{total}} downloaden",
+    "downloadEverything": "Alle foto's downloaden",
     "videoFormatUnsupported": "Deze video-indeling kan niet in deze browser worden afgespeeld. Download de video om hem te bekijken.",
     "videoLoadFailed": "Deze video kon niet worden geladen."
   },
@@ -360,6 +362,17 @@
     "categoryHeroHint": "Als er geen omslagfoto is ingesteld voor een categorie, wordt de standaard hero-foto gebruikt."
   },
   "events": {
+    "revealMode": "Onthullingsmodus (galerij verbergen tot de onthulling)",
+    "revealModeHelp": "Gasten kunnen uploaden maar zien geen foto's totdat je de galerij onthult — handmatig of op het geplande tijdstip. Diavoorstelling en klanttoegang blijven werken.",
+    "revealAt": "Geplande onthulling (optioneel)",
+    "revealAtHelp": "Laat leeg om handmatig te onthullen met de knop \"Nu onthullen\".",
+    "revealModeStatus": "Onthullingsmodus",
+    "revealed": "Onthuld",
+    "hiddenUntilReveal": "Verborgen voor gasten",
+    "revealScheduled": "Gepland: {{date}}",
+    "revealNow": "Nu onthullen",
+    "revealedToast": "Galerij onthuld — gasten kunnen de foto's nu zien",
+    "revealError": "Galerij onthullen mislukt",
     "title": "Evenementen",
     "create": "Aanmaken",
     "createEvent": "Evenement aanmaken",
@@ -389,6 +402,9 @@
     "archived": "Gearchiveerd",
     "totalSize": "Totale grootte",
     "shareLink": "Deellink",
+    "qrCode": "QR-code",
+    "qrTableCard": "Tafelkaart (A6)",
+    "qrPoster": "Poster (A4)",
     "copyLink": "Link kopieren",
     "linkCopied": "Link gekopieerd!",
     "viewGallery": "Galerij bekijken",
@@ -872,7 +888,17 @@
       "showGalleryFilterBar": "Filterbalk in galerijen tonen",
       "showGalleryFilterBarHelp": "Toont de zoek-op-bestandsnaam en sorteerbediening boven rasterindelingsgalerijen. Uitschakelen voor een cleaner lay-out.",
       "enablePhoneField": "Telefoonnummerveld inschakelen",
-      "enablePhoneFieldHelp": "Voegt een optioneel telefoonnumerinvoerveld toe aan het evenementformulier. Handig voor automatisering zoals WhatsApp-levering via n8n. Altijd optioneel, ook als ingeschakeld."
+      "enablePhoneFieldHelp": "Voegt een optioneel telefoonnumerinvoerveld toe aan het evenementformulier. Handig voor automatisering zoals WhatsApp-levering via n8n. Altijd optioneel, ook als ingeschakeld.",
+      "feedbackTypeDefaultsHelp": "Met welke feedbacktypen nieuwe galerijen starten. Bestaande galerijen veranderen niet — elke galerij blijft afzonderlijk instelbaar.",
+      "defaultAllowRatings": "Sterbeoordelingen",
+      "defaultAllowLikes": "Likes",
+      "defaultAllowFavorites": "Favorieten",
+      "defaultAllowComments": "Reacties",
+      "defaultAllowReactions": "Emoji-reacties",
+      "defaultAllowColorLabels": "Kleurlabels",
+      "defaultKeybindMode": "Standaard sneltoetsen in de weergave",
+      "keybindColors": "Alleen kleuren — 1 groen, 2 geel, 3 rood",
+      "keybindLightroom": "Lightroom — 1-5 sterren, 6-9 kleuren"
     },
     "imageSecurity": {
       "title": "Afbeeldingsbeveiliging",
@@ -883,7 +909,6 @@
       "defaultProtectionHelp": "Deze instellingen zijn van toepassing op alle nieuwe evenementen. Individuele evenementen kunnen deze standaardwaarden overschrijven.",
       "protectionLevel": "Standaard beveiligingsniveau",
       "imageQuality": "Standaard beeldkwaliteit",
-      "fragmentationLevel": "Fragmentatieniveau",
       "enableDevtools": "Standaard DevTools-detectie inschakelen",
       "enableCanvas": "Standaard canvas-rendering inschakelen (geavanceerde beveiliging)",
       "rateLimiting": "Snelheidsbeperking",
@@ -902,7 +927,6 @@
     },
     "moderation": {
       "title": "Moderatie",
-      "wordFilters": "Woordfilters",
       "description": "Beheer woorden die gefilterd of geblokkeerd moeten worden in opmerkingen",
       "addFilter": "Nieuw filter toevoegen",
       "enterWord": "Voer woord in om te filteren",
@@ -1193,7 +1217,10 @@
     "totalPhotos": "Totaal foto's",
     "activeEvents": "Actieve evenementen",
     "notConfigured": "Umami Analytics niet geconfigureerd",
-    "configureInstructions": "Configureer Umami in uw omgevingsvariabelen en beheerdersinstellingen om echte statistieken te zien."
+    "configureInstructions": "Configureer Umami in uw omgevingsvariabelen en beheerdersinstellingen om echte statistieken te zien.",
+    "catalogedMedia": "Gecatalogiseerde media",
+    "storageUnavailable": "niet beschikbaar",
+    "storageNoMeasurement": "geen meting beschikbaar"
   },
   "branding": {
     "title": "Huisstijl & Thema's",
@@ -1555,6 +1582,10 @@
       "archiveDownloaded": "Archief gedownload voor \"{{eventName}}\"",
       "archiveDeleted": "Archief verwijderd voor \"{{eventName}}\"",
       "archiveRestored": "Archief hersteld voor \"{{eventName}}\"",
+      "galleryOpened": "Een gast heeft de galerij “{{eventName}}” geopend",
+      "galleryDownloaded": "Een gast heeft foto’s uit “{{eventName}}” gedownload",
+      "galleryDownloadedCustomer": "Klant heeft foto’s uit “{{eventName}}” gedownload",
+      "photoFavorite": "Een foto in “{{eventName}}” is als favoriet gemarkeerd",
       "systemActivity": "Systeemactiviteit: {{type}}",
       "adminProfileUpdated": "Beheerdersprofiel bijgewerkt door {{actorName}}",
       "photosUploaded_one": "{{count}} foto geüpload naar \"{{eventName}}\"",
@@ -1628,7 +1659,15 @@
       "visibleSuccess": "Foto's nu zichtbaar voor gasten",
       "processingStatus": "Verwerken…",
       "processingFailed": "Mislukt",
-      "retryQueued": "Nieuwe poging in wachtrij"
+      "retryQueued": "Nieuwe poging in wachtrij",
+      "myMarks": "Jouw markeringen",
+      "myMarksHelp": "Alleen jij ziet deze. Ze verschijnen nooit in de klantgalerij en gaan als XMP naar Lightroom.",
+      "myRating": "Jouw beoordeling",
+      "clearRating": "Jouw beoordeling wissen",
+      "rateStars": "{{count}} sterren geven",
+      "markError": "Markering opslaan mislukt",
+      "yourMarkColor": "Jouw markering: {{color}}",
+      "yourMarkRating": "Jouw beoordeling: {{count}}"
     },
     "events": {
       "tabs": {
@@ -1683,7 +1722,9 @@
         "favorites": "Favorieten",
         "comments": "Opmerkingen",
         "ratings": "Beoordelingen",
-        "lastSeen": "Laatste bezoek"
+        "reactions": "Reacties",
+        "lastSeen": "Laatste bezoek",
+        "colorLabels": "Kleurlabels"
       },
       "view": "Details bekijken",
       "export": "Exporteren",
@@ -1696,17 +1737,30 @@
         "liked": "Geliked",
         "favorited": "Favoriet",
         "rated": "Beoordeeld",
-        "commented": "Becommentarieerd"
+        "reacted": "Gereageerd",
+        "commented": "Becommentarieerd",
+        "labeled": "Kleurlabels"
       },
       "inviteStatus": {
         "pending": "In behandeling",
         "redeemed": "Ingewisseld",
         "revoked": "Ingetrokken"
-      }
+      },
+      "duplicatesFound": "{{guests}} gastvermeldingen lijken {{groups}} terugkerende bezoeker(s) — zelfde e-mail, meerdere keren geregistreerd. Hun keuzes blijven gesplitst tot ze zijn samengevoegd.",
+      "reviewDuplicates": "Bekijken",
+      "duplicateBadge": "duplicaat?",
+      "duplicateHint": "Een andere vermelding in deze galerij gebruikt hetzelfde e-mailadres — waarschijnlijk dezelfde persoon die zich twee keer registreerde.",
+      "mergePickKeep": "Kies welk item behouden blijft",
+      "mergePickKeepHint": "Kies het item om te behouden",
+      "mergeKeepColumn": "Behouden",
+      "mergeKeepRow": "{{name}} behouden",
+      "mergeInclude": "{{name}} in de samenvoeging opnemen"
     },
     "analytics": "Analyse",
     "activities": {
       "event_created": "Nieuw evenement aangemaakt: {{eventName}}",
+      "gallery_opened": "Galerij “{{eventName}}” is geopend",
+      "gallery_downloaded": "Foto’s uit “{{eventName}}” zijn gedownload",
       "photos_uploaded": "{{count}} foto's geüpload naar {{eventName}}",
       "event_archived": "Evenement gearchiveerd: {{eventName}}",
       "archive_restored": "Archief hersteld: {{eventName}}",
@@ -1749,7 +1803,9 @@
       "event_renamed": "Evenement hernoemd: {{eventName}}",
       "photo_rating": "Foto beoordeeld in {{eventName}}",
       "photo_comment": "Foto becommentarieerd in {{eventName}}",
+      "photo_reaction": "Fotoreactie in {{eventName}}",
       "guest_feedback_like": "Gast heeft een foto geliked in {{eventName}}",
+      "guest_feedback_reaction": "Gast reageerde op een foto in {{eventName}}",
       "guest_feedback_favorite": "Gast heeft een foto als favoriet gemarkeerd in {{eventName}}",
       "guest_feedback_rating": "Gast heeft een foto beoordeeld in {{eventName}}",
       "guest_feedback_comment": "Gast heeft een opmerking geplaatst op een foto in {{eventName}}",
@@ -1797,7 +1853,10 @@
       "category_hero_updated": "Categorie hero-foto bijgewerkt",
       "public_site_reset_to_default": "Publieke site teruggezet naar standaard",
       "cms_page_logo_uploaded": "CMS-pagina-logo geüpload: {{slug}}"
-    }
+    },
+    "catalogedMedia": "{{size}} gecatalogiseerd",
+    "storageUnavailable": "niet beschikbaar",
+    "catalogedMediaOnly": "gecatalogiseerd — objecten staan in S3"
   },
   "acceptInvitation": {
     "title": "Uitnodiging accepteren",
@@ -1851,6 +1910,7 @@
     }
   },
   "errors": {
+    "downloadFailed": "Downloaden mislukt",
     "galleryNotFound": "Galerij niet gevonden",
     "galleryNotFoundMessage": "Deze galerij bestaat niet of is verwijderd.",
     "somethingWentWrong": "Er is iets misgegaan",
@@ -2392,7 +2452,6 @@
     }
   },
   "cssTemplates": {
-    "title": "Aangepaste CSS-sjablonen",
     "template": "Sjabloon",
     "templateName": "Sjabloonnaam",
     "enableTemplate": "Dit sjabloon inschakelen",
@@ -2477,6 +2536,12 @@
     "patternDescription": "Wachtwoorden worden gegenereerd met uw evenementnaam en datum. Voorbeeld: \"Locatie2024$Augustus\" voor betere beveiliging en herkenbaarheid."
   },
   "feedback": {
+    "reaction": "reactie",
+    "reactions": "Reacties",
+    "reactWith": "Reageer met {{emoji}}",
+    "removeReaction": "{{emoji}}-reactie verwijderen",
+    "reactionError": "Reactie kon niet worden bijgewerkt",
+    "totalReactions": "Totaal reacties",
     "comments": "Opmerkingen",
     "addComment": "Opmerking toevoegen",
     "yourName": "Uw naam",
@@ -2505,12 +2570,17 @@
       "comments": "Opmerkingen",
       "commentsDesc": "Tekstopmerkingen bij foto's",
       "favorites": "Favorieten",
+      "reactions": "Emoji-reacties",
+      "reactionsDesc": "Eén emoji per gast per foto (❤️ 😂 😍 👏 🎉)",
       "favoritesDesc": "Foto's als favoriet markeren",
       "identityMode": "Identiteitsmodus",
       "identityModeSimple": "Eenvoudige feedback",
       "identityModeSimpleDesc": "Anoniem, apparaatgebaseerd. Alle bezoekers op hetzelfde apparaat delen de toestand.",
       "identityModeGuest": "Selecties per gast",
       "identityModeGuestDesc": "Elke bezoeker voert zijn naam in. Maakt tracking per gast en beheerdersinzichten mogelijk.",
+      "identityModeShared": "Eén gedeelde kleurtag",
+      "identityModeSharedDesc": "Eén kleur per foto die iedereen ziet en iedereen kan wijzigen — om samen tot één oordeel te komen. Likes, beoordelingen en reacties blijven per bezoeker.",
+      "identityModeSharedNote": "Kleurtags hebben in deze modus geen auteur, dus de beheerdersweergave kan niet tonen wie er een heeft gezet. Bestaande kleurlabels per bezoeker blijven bewaard maar worden in deze modus niet getoond, en komen terug als je van modus wisselt.",
       "privacyModeration": "Privacy & Moderatie",
       "requireInfo": "Naam en e-mail vereisen",
       "requireInfoDesc": "Gasten moeten naam en e-mail opgeven om feedback te plaatsen",
@@ -2521,7 +2591,14 @@
       "enableRateLimiting": "Snelheidsbeperking inschakelen",
       "rateLimitingDesc": "Voorkom spam door de feedbackfrequentie te beperken",
       "timeWindow": "Tijdvenster (minuten)",
-      "maxRequests": "Max. verzoeken"
+      "maxRequests": "Max. verzoeken",
+      "colorLabels": "Kleurlabels",
+      "colorLabelsDesc": "Eén kleur per gast per foto, met de kleurenset van Lightroom zodat de selectie via XMP meegaat",
+      "keybindMode": "Sneltoetsen",
+      "keybindColors": "Alleen kleuren (eenvoudigst)",
+      "keybindColorsDesc": "1 = groen (1e keuze), 2 = geel (2e keuze), 3 = rood (afgewezen)",
+      "keybindLightroom": "Lightroom-standaard",
+      "keybindLightroomDesc": "1-5 geven sterren, 6-9 geven rood / geel / groen / blauw"
     },
     "settingsUpdated": "Feedbackinstellingen bijgewerkt",
     "settingsUpdateError": "Bijwerken instellingen mislukt",
@@ -2543,7 +2620,8 @@
       "rating": "Beoordelingen",
       "like": "Likes",
       "comment": "Opmerkingen",
-      "favorite": "Favorieten"
+      "favorite": "Favorieten",
+      "reaction": "Reacties"
     },
     "allStatuses": "Alle statussen",
     "status": {
@@ -2595,7 +2673,21 @@
     "onPhoto": "Op foto",
     "showAll_one": "Alle {{count}} openstaande opmerking tonen",
     "showAll_other": "Alle {{count}} openstaande opmerkingen tonen",
-    "viewAllFeedback": "Alle feedback en instellingen bekijken"
+    "viewAllFeedback": "Alle feedback en instellingen bekijken",
+    "colorLabels": {
+      "red": "Rood",
+      "yellow": "Geel",
+      "green": "Groen",
+      "blue": "Blauw",
+      "purple": "Paars"
+    },
+    "colorLabel": "kleurlabel",
+    "colorLabelsTitle": "Kleurlabels",
+    "colorLabelError": "Bijwerken van kleurlabel mislukt",
+    "removeColorLabel": "Label {{color}} verwijderen",
+    "setColorLabel": "Markeren als {{color}}",
+    "markedAs": "Gemarkeerd als {{color}}",
+    "alsoMarkedBy": "Ook door anderen gemarkeerd: {{colors}}"
   },
   "filter": {
     "feedbackFilters": "Feedbackfilters",
@@ -2613,7 +2705,11 @@
     "twoStarsPlus": "2+ sterren",
     "threeStarsPlus": "3+ sterren",
     "fourStarsPlus": "4+ sterren",
-    "fiveStarsOnly": "Alleen 5 sterren"
+    "fiveStarsOnly": "Alleen 5 sterren",
+    "colorLabels": "Kleurlabels",
+    "showOnlyColor": "Alleen {{color}} tonen",
+    "myColorLabels": "Jouw markeringen",
+    "showOnlyMyColor": "Alleen mijn {{color}} markeringen tonen"
   },
   "export": {
     "button": "Exporteren",
@@ -2622,7 +2718,10 @@
     "exportFiltered": "Gefilterde foto's exporteren",
     "hint": "Selecteer foto's of pas filters toe om te exporteren",
     "exportSelected_one": "{{count}} geselecteerde exporteren",
-    "exportSelected_other": "{{count}} geselecteerde exporteren"
+    "exportSelected_other": "{{count}} geselecteerde exporteren",
+    "markSource": "XMP-sterren & -kleur van",
+    "markSourceClient": "Klantselectie",
+    "markSourceMine": "Jouw markeringen"
   },
   "adminLogin": {
     "title": "Beheerder login",
@@ -2644,7 +2743,6 @@
     "invalidCredentials": "Ongeldige e-mail of wachtwoord",
     "generalError": "Er is een fout opgetreden. Probeer het opnieuw.",
     "needHelp": "Hulp nodig? Neem contact op met",
-    "poweredBy": "Powered by PicPeak",
     "devModeHint": "Ontwikkelmodus: Gebruik e-mail: admin@example.com, wachtwoord: admin123"
   },
   "clientAccess": {
@@ -2715,8 +2813,7 @@
       "adminHint": "Op zoek naar het beheerderspaneel? Ga naar /admin/login.",
       "emailPlaceholder": "jij@voorbeeld.com",
       "passwordPlaceholder": "Je wachtwoord",
-      "needHelp": "Hulp nodig?",
-      "poweredBy": "Mogelijk gemaakt door PicPeak"
+      "needHelp": "Hulp nodig?"
     },
     "acceptInvite": {
       "title": "Account aanmaken",

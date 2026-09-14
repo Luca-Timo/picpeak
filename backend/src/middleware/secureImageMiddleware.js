@@ -1,7 +1,7 @@
+const { requestLogPath } = require('../utils/requestLogPath');
 const { db } = require('../database/db');
 const secureImageService = require('../services/secureImageService');
 const logger = require('../utils/logger');
-const { formatBoolean } = require('../utils/dbCompat');
 
 /**
  * Enhanced secure image middleware with comprehensive protection
@@ -11,12 +11,24 @@ class SecureImageMiddleware {
     this.suspiciousIPs = new Set();
     this.blockedFingerprints = new Set();
     this.rateLimitViolations = new Map();
+    this.cleanupTimer = null;
+  }
+
+  start() {
+    if (this.cleanupTimer) return;
+    this.cleanupTimer = setInterval(() => this.cleanup(), 300000);
+    this.cleanupTimer.unref();
+  }
+  dispose() {
+    clearInterval(this.cleanupTimer); this.cleanupTimer = null;
+    this.suspiciousIPs.clear(); this.blockedFingerprints.clear(); this.rateLimitViolations.clear();
   }
 
   /**
    * Main security middleware for image access
    */
   secureImageAccess = async (req, res, next) => {
+    this.start();
     try {
       const startTime = Date.now();
       const clientIP = this.getClientIP(req);
@@ -57,7 +69,7 @@ class SecureImageMiddleware {
         error: error.message,
         stack: error.stack,
         ip: req.ip,
-        path: req.path
+        path: requestLogPath(req.originalUrl || req.path)
       });
       
       res.status(500).json({ 
@@ -69,7 +81,7 @@ class SecureImageMiddleware {
   /**
    * Perform comprehensive security checks
    */
-  async performSecurityChecks(req, res) {
+  async performSecurityChecks(req, _res) {
     const { clientInfo } = req;
     const { photoId } = req.params;
 
@@ -132,7 +144,6 @@ class SecureImageMiddleware {
    */
   async checkRateLimit(req) {
     const { clientInfo } = req;
-    const now = Date.now();
 
     // Get rate limit settings from database
     const settings = await this.getRateLimitSettings();
@@ -271,8 +282,18 @@ class SecureImageMiddleware {
       'X-Protected-Content': 'true',
       'X-Download-Policy': 'restricted',
       
-      // CORS restrictions
-      'Access-Control-Allow-Origin': process.env.FRONTEND_URL || '*',
+      // Access-Control-Allow-ORIGIN is deliberately absent (#1116).
+      // cors(corsOptions) already runs on all of /api (server.js:247) and owns
+      // the whole policy: it validates the request Origin against the
+      // allowlist, sets Vary: Origin, and pairs with credentials:true. Setting
+      // the header again here only overwrote that with a worse answer —
+      //   unresolved -> '*', which combined with the credentials:true from
+      //     cors() is an invalid pair every browser rejects outright
+      //   resolved   -> the frontend origin, even when the request legitimately
+      //     came from the allowlisted ADMIN_URL, so a split admin host got a
+      //     header for the wrong origin and the read failed
+      // Methods/Headers/Max-Age stay: they are route-specific and cors() does
+      // not contradict them.
       'Access-Control-Allow-Methods': 'GET',
       'Access-Control-Allow-Headers': 'Authorization, Content-Type',
       'Access-Control-Max-Age': '3600'
@@ -320,7 +341,7 @@ class SecureImageMiddleware {
         client_ip: req.clientInfo?.ip || req.ip,
         client_fingerprint: req.clientInfo?.fingerprint,
         user_agent: req.get('User-Agent')?.substring(0, 255),
-        request_path: req.path,
+        request_path: requestLogPath(req.originalUrl || req.path),
         request_method: req.method,
         details: JSON.stringify(details),
         timestamp: new Date().toISOString()
@@ -400,10 +421,5 @@ class SecureImageMiddleware {
 
 // Create singleton instance
 const secureImageMiddleware = new SecureImageMiddleware();
-
-// Setup cleanup interval
-setInterval(() => {
-  secureImageMiddleware.cleanup();
-}, 300000); // Every 5 minutes
 
 module.exports = secureImageMiddleware;

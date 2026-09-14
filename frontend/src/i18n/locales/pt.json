@@ -124,14 +124,15 @@
     "saveChanges": "Salvar alterações",
     "resetChanges": "Repor alterações",
     "dismiss": "Dispensar",
-    "discard": "Descartar"
+    "discard": "Descartar",
+    "poweredBy": "Desenvolvido por"
   },
   "upload": {
     "photoCategory": "Categoria da Foto",
     "noCategory": "Sem categoria",
     "eventSpecific": "(Específico do evento)",
     "clickToUpload": "Clique para enviar ou arraste e solte",
-    "fileRequirements": "JPEG, PNG ou WebP (máx. 50MB por arquivo, {{limit}} arquivos por envio)",
+    "fileRequirements": "{{formats}} (máx. {{sizeLimit}}MB por arquivo, {{limit}} arquivos por envio)",
     "selectedFiles": "Arquivos selecionados",
     "uploading": "Enviando...",
     "uploadComplete": "Envio concluído!",
@@ -224,6 +225,10 @@
     "passwordHint": "A senha foi fornecida pelo organizador do evento. Entre em contato se não a tiver."
   },
   "gallery": {
+    "revealPendingTitle": "As fotos ainda são uma surpresa",
+    "revealPendingMessage": "O anfitrião revelará a galeria mais tarde — volte em breve!",
+    "revealScheduledFor": "Revelação agendada para {{date}}",
+    "revealUploadHint": "Você já pode adicionar suas próprias fotos à coleção:",
     "expires": "Expira",
     "expired": "Expirada",
     "contactOrganizer": "Entre em contato com o organizador do evento se precisar de acesso a estas fotos",
@@ -278,18 +283,6 @@
     "searchMemories": "Buscar lembranças...",
     "thankYou": "Obrigado",
     "thankYouMessage": "Por fazer parte da nossa história e tornar nosso dia especial inesquecível.",
-    "feedback": {
-      "title": "Feedback",
-      "shareThoughts": "Compartilhe sua opinião sobre \"{{name}}\"",
-      "rateThisMoment": "Avalie este momento",
-      "comments": "Comentários",
-      "noComments": "Ainda sem comentários. Seja o primeiro!",
-      "yourName": "Seu nome",
-      "yourEmail": "Seu e-mail",
-      "writeLovelyNote": "Escreva uma mensagem carinhosa...",
-      "postComment": "Postar Comentário",
-      "anonymous": "Anônimo"
-    },
     "rated": "Avaliado",
     "commented": "Comentado",
     "expiresIn_many": "A galeria expira em {{count}} dias",
@@ -332,7 +325,8 @@
       "emailLabel": "E-mail (opcional)",
       "emailPlaceholder": "voce@exemplo.pt",
       "submit": "Continuar",
-      "alreadyHere": "Já estive aqui antes"
+      "returningHint": "Já esteve aqui? As suas escolhas anteriores continuam guardadas.",
+      "recoverPicks": "Recuperá-las"
     },
     "footer": {
       "forgetMeConfirm": "O seu nome e seleções serão removidos desta galeria.",
@@ -342,7 +336,15 @@
     "photosCount_many": "{{count}} fotos",
     "photosCount_one": "{{count}} foto",
     "photosCount_other": "{{count}} fotos",
-    "poweredBy": "Desenvolvido por PicPeak",
+    "colorFilter": "Cor",
+    "filterByColor": "Mostrar apenas {{color}}",
+    "folders": "Pastas",
+    "openFolder": "Abrir pasta {{name}}",
+    "folderPhotoCount": "{{count}} fotos",
+    "backToGallery": "Todas as fotos",
+    "downloadFolder": "Baixar pasta ({{count}})",
+    "downloadFolderCapped": "Baixar as primeiras {{limit}} de {{total}}",
+    "downloadEverything": "Baixar todas as fotos",
     "videoFormatUnsupported": "Este formato de vídeo não pode ser reproduzido neste navegador. Baixe o arquivo para assistir.",
     "videoLoadFailed": "Não foi possível carregar este vídeo."
   },
@@ -368,6 +370,17 @@
     "categoryHeroHint": "Se nenhuma foto de capa for definida, a foto de destaque padrão será usada."
   },
   "events": {
+    "revealMode": "Modo revelação (ocultar a galeria até a revelação)",
+    "revealModeHelp": "Os convidados podem enviar fotos, mas não as veem até você revelar a galeria — manualmente ou no horário agendado. A apresentação de slides e o acesso do cliente continuam funcionando.",
+    "revealAt": "Revelação agendada (opcional)",
+    "revealAtHelp": "Deixe vazio para revelar manualmente com o botão \"Revelar agora\".",
+    "revealModeStatus": "Modo revelação",
+    "revealed": "Revelada",
+    "hiddenUntilReveal": "Oculta para os convidados",
+    "revealScheduled": "Agendada: {{date}}",
+    "revealNow": "Revelar agora",
+    "revealedToast": "Galeria revelada — os convidados já podem ver as fotos",
+    "revealError": "Falha ao revelar a galeria",
     "title": "Eventos",
     "create": "Criar",
     "createEvent": "Criar Evento",
@@ -397,6 +410,9 @@
     "archived": "Arquivado",
     "totalSize": "Tamanho Total",
     "shareLink": "Link de Compartilhamento",
+    "qrCode": "Código QR",
+    "qrTableCard": "Cartão de mesa (A6)",
+    "qrPoster": "Pôster (A4)",
     "copyLink": "Copiar Link",
     "linkCopied": "Link copiado!",
     "viewGallery": "Ver Galeria",
@@ -889,7 +905,17 @@
       "showGalleryFilterBar": "Mostrar barra de filtros nas galerias",
       "showGalleryFilterBarHelp": "Exibe a pesquisa por nome de ficheiro e os controlos de ordenação acima das galerias em grelha. Desative para um layout mais limpo.",
       "enablePhoneField": "Ativar campo de número de telefone",
-      "enablePhoneFieldHelp": "Adiciona um campo opcional de número de telefone ao formulário de evento. Útil para automatizações como entrega via WhatsApp com n8n. Sempre opcional mesmo quando ativado."
+      "enablePhoneFieldHelp": "Adiciona um campo opcional de número de telefone ao formulário de evento. Útil para automatizações como entrega via WhatsApp com n8n. Sempre opcional mesmo quando ativado.",
+      "feedbackTypeDefaultsHelp": "Que tipos de feedback as novas galerias trazem. As galerias existentes não são alteradas — cada galeria continua a poder ser ajustada individualmente.",
+      "defaultAllowRatings": "Classificação por estrelas",
+      "defaultAllowLikes": "Gostos",
+      "defaultAllowFavorites": "Favoritos",
+      "defaultAllowComments": "Comentários",
+      "defaultAllowReactions": "Reações emoji",
+      "defaultAllowColorLabels": "Etiquetas de cor",
+      "defaultKeybindMode": "Atalhos predefinidos do visualizador",
+      "keybindColors": "Apenas cores — 1 verde, 2 amarelo, 3 vermelho",
+      "keybindLightroom": "Lightroom — 1-5 estrelas, 6-9 cores"
     },
     "imageSecurity": {
       "title": "Proteção de Imagem",
@@ -900,7 +926,6 @@
       "defaultProtectionHelp": "Aplicado a novos eventos por padrão. Podem ser substituídas individualmente.",
       "protectionLevel": "Nível de Proteção Padrão",
       "imageQuality": "Qualidade de Imagem Padrão",
-      "fragmentationLevel": "Nível de Fragmentação",
       "enableDevtools": "Ativar detecção de DevTools por padrão",
       "enableCanvas": "Ativar renderização em Canvas por padrão",
       "rateLimiting": "Limite de Requisições",
@@ -919,7 +944,6 @@
     },
     "moderation": {
       "title": "Moderação",
-      "wordFilters": "Filtros de Palavras",
       "description": "Gerencie palavras que devem ser filtradas ou bloqueadas nos comentários",
       "addFilter": "Adicionar Novo Filtro",
       "enterWord": "Digite a palavra para filtrar",
@@ -1210,7 +1234,10 @@
     "totalPhotos": "Total de Fotos",
     "activeEvents": "Eventos Ativos",
     "notConfigured": "Umami Analytics não configurado",
-    "configureInstructions": "Para ver dados reais, configure o Umami nas variáveis de ambiente e no painel admin."
+    "configureInstructions": "Para ver dados reais, configure o Umami nas variáveis de ambiente e no painel admin.",
+    "catalogedMedia": "Mídia catalogada",
+    "storageUnavailable": "indisponível",
+    "storageNoMeasurement": "sem medição disponível"
   },
   "branding": {
     "title": "Marca e Temas",
@@ -1572,6 +1599,10 @@
       "archiveDownloaded": "Arquivo baixado para \"{{eventName}}\"",
       "archiveDeleted": "Arquivo excluído de \"{{eventName}}\"",
       "archiveRestored": "Arquivo restaurado para \"{{eventName}}\"",
+      "galleryOpened": "Um convidado abriu a galeria “{{eventName}}”",
+      "galleryDownloaded": "Um convidado baixou fotos de “{{eventName}}”",
+      "galleryDownloadedCustomer": "O cliente baixou fotos de “{{eventName}}”",
+      "photoFavorite": "Uma foto em “{{eventName}}” foi favoritada",
       "systemActivity": "Atividade do sistema: {{type}}",
       "adminProfileUpdated": "Perfil admin atualizado por {{actorName}}",
       "photosUploaded_many": "{{count}} fotos enviadas para \"{{eventName}}\"",
@@ -1649,7 +1680,15 @@
       "visibleSuccess": "Fotos agora visíveis aos visitantes",
       "processingStatus": "A processar…",
       "processingFailed": "Falhado",
-      "retryQueued": "Nova tentativa em fila"
+      "retryQueued": "Nova tentativa em fila",
+      "myMarks": "As suas marcas",
+      "myMarksHelp": "Só você as vê. Nunca aparecem na galeria do cliente e são exportadas para o Lightroom como XMP.",
+      "myRating": "A sua classificação",
+      "clearRating": "Remover a sua classificação",
+      "rateStars": "Classificar com {{count}} estrelas",
+      "markError": "Não foi possível guardar a sua marca",
+      "yourMarkColor": "A sua marca: {{color}}",
+      "yourMarkRating": "A sua classificação: {{count}}"
     },
     "events": {
       "tabs": {
@@ -1708,7 +1747,9 @@
         "favorites": "Favoritos",
         "comments": "Comentários",
         "ratings": "Avaliações",
-        "lastSeen": "Última visita"
+        "reactions": "Reações",
+        "lastSeen": "Última visita",
+        "colorLabels": "Etiquetas de cor"
       },
       "view": "Ver detalhes",
       "export": "Exportar",
@@ -1721,17 +1762,30 @@
         "liked": "Gostou",
         "favorited": "Favorito",
         "rated": "Avaliado",
-        "commented": "Comentado"
+        "reacted": "Reagiu",
+        "commented": "Comentado",
+        "labeled": "Etiquetas de cor"
       },
       "inviteStatus": {
         "pending": "Pendente",
         "redeemed": "Utilizado",
         "revoked": "Revogado"
-      }
+      },
+      "duplicatesFound": "{{guests}} entradas de convidado parecem {{groups}} visitante(s) recorrente(s) — mesmo e-mail, registado mais do que uma vez. As escolhas ficam divididas até serem unidas.",
+      "reviewDuplicates": "Rever",
+      "duplicateBadge": "duplicado?",
+      "duplicateHint": "Outra entrada nesta galeria usa o mesmo e-mail — provavelmente a mesma pessoa registada duas vezes.",
+      "mergePickKeep": "Escolha qual entrada manter",
+      "mergePickKeepHint": "Escolha a entrada a manter",
+      "mergeKeepColumn": "Manter",
+      "mergeKeepRow": "Manter {{name}}",
+      "mergeInclude": "Incluir {{name}} na junção"
     },
     "analytics": "Análise",
     "activities": {
       "event_created": "Novo evento criado: {{eventName}}",
+      "gallery_opened": "A galeria “{{eventName}}” foi aberta",
+      "gallery_downloaded": "Fotos de “{{eventName}}” foram baixadas",
       "photos_uploaded": "{{count}} fotos carregadas para {{eventName}}",
       "event_archived": "Evento arquivado: {{eventName}}",
       "archive_restored": "Arquivo restaurado: {{eventName}}",
@@ -1774,7 +1828,9 @@
       "event_renamed": "Evento renomeado: {{eventName}}",
       "photo_rating": "Foto avaliada em {{eventName}}",
       "photo_comment": "Foto comentada em {{eventName}}",
+      "photo_reaction": "Reação a uma foto em {{eventName}}",
       "guest_feedback_like": "Convidado curtiu uma foto em {{eventName}}",
+      "guest_feedback_reaction": "Convidado reagiu a uma foto em {{eventName}}",
       "guest_feedback_favorite": "Convidado adicionou uma foto aos favoritos em {{eventName}}",
       "guest_feedback_rating": "Convidado avaliou uma foto em {{eventName}}",
       "guest_feedback_comment": "Convidado comentou uma foto em {{eventName}}",
@@ -1822,7 +1878,10 @@
       "category_hero_updated": "Foto principal da categoria atualizada",
       "public_site_reset_to_default": "Site público redefinido ao padrão",
       "cms_page_logo_uploaded": "Logotipo da página CMS carregado: {{slug}}"
-    }
+    },
+    "catalogedMedia": "{{size}} catalogados",
+    "storageUnavailable": "indisponível",
+    "catalogedMediaOnly": "catalogado — os objetos estão no S3"
   },
   "acceptInvitation": {
     "title": "Aceitar Convite",
@@ -1876,6 +1935,7 @@
     }
   },
   "errors": {
+    "downloadFailed": "Falha no download",
     "galleryNotFound": "Galeria Não Encontrada",
     "galleryNotFoundMessage": "Esta galeria não existe ou foi removida.",
     "somethingWentWrong": "Algo deu errado",
@@ -2417,7 +2477,6 @@
     }
   },
   "cssTemplates": {
-    "title": "Modelos CSS Personalizados",
     "template": "Modelo",
     "templateName": "Nome do Modelo",
     "enableTemplate": "Ativar este modelo",
@@ -2502,6 +2561,12 @@
     "patternDescription": "As senhas são geradas usando o nome e data do evento. Ex: \"Evento2024$Agosto\" para melhor memorização."
   },
   "feedback": {
+    "reaction": "reação",
+    "reactions": "Reações",
+    "reactWith": "Reagir com {{emoji}}",
+    "removeReaction": "Remover a reação {{emoji}}",
+    "reactionError": "Não foi possível atualizar a reação",
+    "totalReactions": "Total de reações",
     "comments": "Comentários",
     "addComment": "Adicionar Comentário",
     "yourName": "Seu nome",
@@ -2530,12 +2595,17 @@
       "comments": "Comentários",
       "commentsDesc": "Comentários em texto nas fotos",
       "favorites": "Favoritos",
+      "reactions": "Reações com emojis",
+      "reactionsDesc": "Um emoji por convidado por foto (❤️ 😂 😍 👏 🎉)",
       "favoritesDesc": "Marcar fotos como favoritas",
       "identityMode": "Modo de identidade",
       "identityModeSimple": "Feedback simples",
       "identityModeSimpleDesc": "Anónimo, baseado no dispositivo. Todos os visitantes no mesmo dispositivo partilham o estado.",
       "identityModeGuest": "Seleções por convidado",
       "identityModeGuestDesc": "Cada visitante introduz o seu nome. Ativa o rastreamento por convidado e informações de administração.",
+      "identityModeShared": "Uma etiqueta de cor partilhada",
+      "identityModeSharedDesc": "Uma cor por foto que todos veem e qualquer pessoa pode alterar — para acordar um único veredicto. Gostos, avaliações e comentários continuam a ser por visitante.",
+      "identityModeSharedNote": "As etiquetas de cor não têm autor neste modo, por isso a vista de administração não consegue mostrar quem a definiu. As etiquetas por visitante existentes são mantidas mas não são mostradas enquanto este modo estiver ativo, e voltam se mudar de modo.",
       "privacyModeration": "Privacidade e Moderação",
       "requireInfo": "Exigir nome e e-mail",
       "requireInfoDesc": "Os convidados devem fornecer nome e e-mail para deixar feedback",
@@ -2546,7 +2616,14 @@
       "enableRateLimiting": "Ativar limitação de taxa",
       "rateLimitingDesc": "Previne spam limitando a frequência de feedback",
       "timeWindow": "Janela de tempo (minutos)",
-      "maxRequests": "Pedidos máx."
+      "maxRequests": "Pedidos máx.",
+      "colorLabels": "Etiquetas de cor",
+      "colorLabelsDesc": "Uma cor por convidado e por foto, com o conjunto de cores do Lightroom para que a seleção seja transferida via XMP",
+      "keybindMode": "Atalhos de teclado",
+      "keybindColors": "Apenas cores (mais simples)",
+      "keybindColorsDesc": "1 = verde (1.ª escolha), 2 = amarelo (2.ª escolha), 3 = vermelho (rejeitada)",
+      "keybindLightroom": "Predefinições do Lightroom",
+      "keybindLightroomDesc": "1-5 atribuem estrelas, 6-9 atribuem vermelho / amarelo / verde / azul"
     },
     "settingsUpdated": "Definições de feedback atualizadas",
     "settingsUpdateError": "Falha ao atualizar definições",
@@ -2568,7 +2645,8 @@
       "rating": "Avaliações",
       "like": "Gostos",
       "comment": "Comentários",
-      "favorite": "Favoritos"
+      "favorite": "Favoritos",
+      "reaction": "Reações"
     },
     "allStatuses": "Todos os estados",
     "status": {
@@ -2625,7 +2703,21 @@
     "showAll_many": "Mostrar todos os {{count}} comentários pendentes",
     "showAll_one": "Mostrar o {{count}} comentário pendente",
     "showAll_other": "Mostrar todos os {{count}} comentários pendentes",
-    "viewAllFeedback": "Ver todo o feedback e definições"
+    "viewAllFeedback": "Ver todo o feedback e definições",
+    "colorLabels": {
+      "red": "Vermelho",
+      "yellow": "Amarelo",
+      "green": "Verde",
+      "blue": "Azul",
+      "purple": "Roxo"
+    },
+    "colorLabel": "etiqueta de cor",
+    "colorLabelsTitle": "Etiquetas de cor",
+    "colorLabelError": "Não foi possível atualizar a etiqueta de cor",
+    "removeColorLabel": "Remover a etiqueta {{color}}",
+    "setColorLabel": "Marcar como {{color}}",
+    "markedAs": "Marcado como {{color}}",
+    "alsoMarkedBy": "Também marcado por outros: {{colors}}"
   },
   "filter": {
     "feedbackFilters": "Filtros de Feedback",
@@ -2643,7 +2735,11 @@
     "twoStarsPlus": "2+ estrelas",
     "threeStarsPlus": "3+ estrelas",
     "fourStarsPlus": "4+ estrelas",
-    "fiveStarsOnly": "Apenas 5 estrelas"
+    "fiveStarsOnly": "Apenas 5 estrelas",
+    "colorLabels": "Etiquetas de cor",
+    "showOnlyColor": "Mostrar apenas {{color}}",
+    "myColorLabels": "As suas marcas",
+    "showOnlyMyColor": "Mostrar apenas as minhas marcas {{color}}"
   },
   "adminLogin": {
     "title": "Login Administrativo",
@@ -2665,7 +2761,6 @@
     "invalidCredentials": "E-mail ou senha inválidos",
     "generalError": "Ocorreu um erro. Tente novamente.",
     "needHelp": "Precisa de ajuda? Contate",
-    "poweredBy": "Distribuído por PicPeak",
     "devModeHint": "Modo Desenvolvimento: E-mail: admin@exemplo.com, Senha: admin123"
   },
   "clientAccess": {
@@ -2701,7 +2796,10 @@
     "hint": "Selecione fotos ou aplique filtros para exportar",
     "exportSelected_many": "Exportar {{count}} selecionados",
     "exportSelected_one": "Exportar {{count}} selecionado",
-    "exportSelected_other": "Exportar {{count}} selecionados"
+    "exportSelected_other": "Exportar {{count}} selecionados",
+    "markSource": "Estrelas e cor XMP a partir de",
+    "markSourceClient": "Seleções do cliente",
+    "markSourceMine": "As suas marcas"
   },
   "photoSort": {
     "defaultSort": "Ordenação padrão das fotos",
@@ -2748,8 +2846,7 @@
       "adminHint": "Procurando o painel de administração? Acesse /admin/login.",
       "emailPlaceholder": "voce@exemplo.com",
       "passwordPlaceholder": "Sua senha",
-      "needHelp": "Precisa de ajuda?",
-      "poweredBy": "Desenvolvido por PicPeak"
+      "needHelp": "Precisa de ajuda?"
     },
     "acceptInvite": {
       "title": "Configure sua conta",

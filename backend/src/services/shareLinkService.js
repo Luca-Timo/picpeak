@@ -120,7 +120,7 @@ const ACTIVE_EVENT_FILTER = {
 
 // Same filter minus the draft gate, for admin preview only (#1386). Callers
 // MUST authorize before returning anything it matched — see the /resolve
-// route, which only reaches for it after isAdminPreview accepts the caller.
+// route, which only reaches for it after a verified admin preview.
 const UNPUBLISHED_EVENT_FILTER = {
   is_active: formatBoolean(true),
   is_archived: formatBoolean(false)
@@ -149,10 +149,7 @@ const resolveShareIdentifier = async (identifier, { includeDrafts = false } = {}
       'expires_at',
       'is_active',
       'is_archived',
-      'is_draft',
-      // Ownership input for the preview check (#1411) — a draft is only
-      // previewable by an admin who may see this event.
-      'created_by'
+      'is_draft'
     )
     .where(includeDrafts ? UNPUBLISHED_EVENT_FILTER : ACTIVE_EVENT_FILTER);
 

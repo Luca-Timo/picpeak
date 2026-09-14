@@ -117,6 +117,46 @@ describe('admin events CRUD endpoints (smoke)', () => {
       expect(queued).toHaveLength(0);
     });
 
+    it('409s (not 500) when the slug uniqueness race is lost', async () => {
+      // The route mints the slug with a read-then-insert, so two concurrent
+      // creates for the same name + date both clear the existence check and
+      // the loser's INSERT trips events_slug_unique. Reproduce it without a
+      // timer: slip the colliding row in the instant that existence SELECT is
+      // issued — the route then spends a bcrypt hash before its own INSERT.
+      const { slugify } = require('../../src/utils/slug');
+      const collidingSlug = `wedding-${slugify('Race Wedding')}-2026-09-02`;
+      let injected = null;
+      const onQuery = (q) => {
+        if (injected) return;
+        if (!/from\s+.?events.?\s+where\s+.?slug.?\s*=/i.test(q.sql)) return;
+        injected = insertEvent(db, adminId, { slug: collidingSlug, event_name: 'Race Wedding' });
+      };
+      db.on('query', onQuery);
+
+      try {
+        const res = await auth(request(app).post('/api/admin/events')).send({
+          event_type: 'wedding',
+          event_name: 'Race Wedding',
+          event_date: '2026-09-02',
+          customer_name: 'Client Person',
+          customer_email: 'client@example.com',
+          admin_email: 'admin@example.com',
+          require_password: false,
+          is_draft: true,
+        });
+
+        expect(injected).not.toBeNull(); // the race was actually injected
+        await injected;
+        expect(res.status).toBe(409);
+        expect(res.body.code).toBe('EVENT_SLUG_TAKEN');
+        expect(res.body.error).toMatch(/already exists/i);
+        // Only the injected row survives — no half-created duplicate.
+        expect(await db('events').where({ slug: collidingSlug })).toHaveLength(1);
+      } finally {
+        db.removeListener('query', onQuery);
+      }
+    });
+
     it('400s on an invalid event type', async () => {
       const res = await auth(request(app).post('/api/admin/events')).send({
         event_type: 'not-a-real-type',
@@ -174,6 +214,43 @@ describe('admin events CRUD endpoints (smoke)', () => {
       expect(row.welcome_message).toBe('Hello guests');
     });
 
+    // #1296 — express-validator runs isInt/isIn/isBoolean element-wise on
+    // arrays, so a single-element array satisfies its field validator and
+    // survives into `updates`, which is spread into .update() with no column
+    // allow-list. That put an array into a scalar column (a PG insert error),
+    // and formatBoolean([false]) read as true. Guarded for every field, not
+    // just the ones that prompted it.
+    it.each([
+      ['image_quality', [72]],
+      ['protection_level', ['basic']],
+      ['use_canvas_rendering', [false]],
+      // Not a protection field: the guard is not scoped to that block.
+      ['event_name', ['Arrayed']],
+      ['allow_downloads', [false]],
+    ])('400s on an array value for %s', async (field, value) => {
+      const id = await insertEvent(db, adminId, { event_name: 'Unchanged' });
+      const res = await auth(request(app).put(`/api/admin/events/${id}`))
+        .send({ [field]: value });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(field);
+      // And nothing was written.
+      const row = await db('events').where({ id }).first();
+      expect(row.event_name).toBe('Unchanged');
+    });
+
+    it('still accepts customer_account_ids, the one field that is an array', async () => {
+      const id = await insertEvent(db, adminId, { event_name: 'Keep' });
+      const res = await auth(request(app).put(`/api/admin/events/${id}`)).send({
+        event_name: 'Renamed',
+        customer_account_ids: [],
+      });
+
+      expect(res.status).toBe(200);
+      const row = await db('events').where({ id }).first();
+      expect(row.event_name).toBe('Renamed');
+    });
+
     it('404s when updating a missing event', async () => {
       const res = await auth(request(app).put('/api/admin/events/999999')).send({
         event_name: 'Ghost',
@@ -200,6 +277,34 @@ describe('admin events CRUD endpoints (smoke)', () => {
         hero_logo_visible: 'maybe',
       });
       expect(res.status).toBe(400);
+    });
+
+    // #894 — per-event password-page logo toggle: false hides, null
+    // restores the default (show).
+    it('stores login_logo_visible: false and clears it back to NULL', async () => {
+      const id = await insertEvent(db, adminId);
+      const hide = await auth(request(app).put(`/api/admin/events/${id}`)).send({
+        login_logo_visible: false,
+      });
+      expect(hide.status).toBe(200);
+      let row = await db('events').where({ id }).first();
+      expect([false, 0]).toContain(row.login_logo_visible);
+
+      const clear = await auth(request(app).put(`/api/admin/events/${id}`)).send({
+        login_logo_visible: null,
+      });
+      expect(clear.status).toBe(200);
+      row = await db('events').where({ id }).first();
+      expect(row.login_logo_visible).toBeNull();
+
+      // The string "false" passes isBoolean() validation — it must be
+      // parsed, not treated as a truthy string (would store 1 = show).
+      const hideStr = await auth(request(app).put(`/api/admin/events/${id}`)).send({
+        login_logo_visible: 'false',
+      });
+      expect(hideStr.status).toBe(200);
+      row = await db('events').where({ id }).first();
+      expect([false, 0]).toContain(row.login_logo_visible);
     });
   });
 

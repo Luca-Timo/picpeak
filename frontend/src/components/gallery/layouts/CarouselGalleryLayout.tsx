@@ -1,7 +1,9 @@
+import { usePhotoSelection } from '../../../hooks/usePhotoSelection';
 import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Download, Maximize2, Play, Pause, Heart, MessageSquare } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { AuthenticatedImage, Button } from '../../common';
+import { ColorLabelBadge } from '../ColorLabelBadge';
 import type { BaseGalleryLayoutProps } from './BaseGalleryLayout';
 import { FeedbackIdentityModal } from '../../gallery/FeedbackIdentityModal';
 import { feedbackService } from '../../../services/feedback.service';
@@ -18,7 +20,7 @@ export const CarouselGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
   feedbackOptions
 }) => {
   const { theme } = useTheme();
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const { currentPhoto, currentIndex, setCurrentIndex } = usePhotoSelection(photos);
   const [isPlaying, setIsPlaying] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
@@ -40,7 +42,7 @@ export const CarouselGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [isPlaying, photos.length, interval]);
+  }, [isPlaying, photos.length, interval, setCurrentIndex]);
 
   // Start autoplay if enabled
   useEffect(() => {
@@ -61,9 +63,6 @@ export const CarouselGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
     setIsPlaying(!isPlaying);
   };
 
-  if (photos.length === 0) return null;
-
-  const currentPhoto = photos[currentIndex];
   const [showIdentityModal, setShowIdentityModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<null | { type: 'like'; photoId: number }>(null);
   const [savedIdentity, setSavedIdentity] = useState<{ name: string; email: string } | null>(null);
@@ -79,6 +78,8 @@ export const CarouselGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
   }, [photos]);
   const canQuickComment = Boolean(feedbackEnabled && feedbackOptions?.allowComments && onOpenPhotoWithFeedback);
 
+  if (!currentPhoto) return null;
+
   return (
     <div className="photo-grid relative">
       {/* Main Carousel */}
@@ -88,9 +89,18 @@ export const CarouselGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
           alt={currentPhoto.filename}
           className="w-full h-full object-contain"
           isGallery={true}
-          protectFromDownload={!allowDownloads}
         />
-        
+
+        {/* Colour labels for the photo in view (#1189). Bottom-left because it
+            is the only corner this layout leaves free — top-left carries the
+            counter and category chips, top-right the play/fullscreen buttons,
+            and both sides the prev/next controls. */}
+        <ColorLabelBadge
+          colorLabel={currentPhoto.my_color_label}
+          otherColorLabels={currentPhoto.other_color_labels}
+          position="bottom-4 left-4"
+        />
+
         {/* Navigation Controls */}
         <div className="absolute inset-0 flex items-center justify-between p-4">
           <button
@@ -256,7 +266,16 @@ export const CarouselGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
                   className="w-full h-full object-cover"
                   loading="lazy"
                   isGallery={true}
-                  protectFromDownload={!allowDownloads}
+                />
+                {/* The strip is the only place this layout shows more than one
+                    photo at a time, so it is the only place a label can
+                    actually be scanned (#1189). Small variant: these tiles are
+                    80px, where the grid-sized dots cover most of the image. */}
+                <ColorLabelBadge
+                  colorLabel={photo.my_color_label}
+                  otherColorLabels={photo.other_color_labels}
+                  size="sm"
+                  position="top-1 left-1"
                 />
               </button>
             ))}

@@ -14,13 +14,22 @@ const normalizeGalleryResponse = (response: GalleryAuthResponse): GalleryAuthRes
 
 export const authService = {
   // Admin authentication
-  async adminLogin(credentials: { email: string; password: string; recaptchaToken?: string | null }): Promise<AdminLoginResponse> {
+  async adminLogin(credentials: {
+    email: string;
+    password: string;
+    recaptchaToken?: string | null;
+    rememberMe?: boolean;
+  }): Promise<AdminLoginResponse> {
     // Backend expects 'username' field, but we accept email.
     // Returns either { user } (session set) or an MFA challenge { mfaRequired, mfaToken }.
     const response = await api.post<AdminLoginResponse>('/auth/admin/login', {
       username: credentials.email,
       password: credentials.password,
-      recaptchaToken: credentials.recaptchaToken
+      recaptchaToken: credentials.recaptchaToken,
+      // Only sent when checked (#1186). Omitted otherwise, so the backend's
+      // default 24h session is what an untouched form still gets. The MFA
+      // step does not resend it — it rides along inside the mfa_pending token.
+      remember_me: credentials.rememberMe === true
     });
     return response.data;
   },
@@ -35,10 +44,14 @@ export const authService = {
 
   async adminLogout() {
     try {
-      await api.post('/auth/logout');
+      const response = await api.post('/auth/logout');
+      // RP-initiated logout (#798 phase 3): for SSO sessions with
+      // logout-to-IdP enabled, the backend hands back the IdP's end-session
+      // URL — navigate there so the IdP session ends too; the IdP returns
+      // to /admin/login afterwards.
+      window.location.href = response.data?.ssoLogoutUrl || '/admin/login';
     } catch (err) {
       // Ignore logout errors; fallback to redirect
-    } finally {
       window.location.href = '/admin/login';
     }
   },

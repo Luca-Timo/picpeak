@@ -33,6 +33,8 @@ export interface ArchiveDetails extends Archive {
   };
 }
 
+export type ArchiveSortBy = 'date' | 'name' | 'size';
+
 export interface ArchivesResponse {
   archives: Archive[];
   pagination: {
@@ -41,13 +43,27 @@ export interface ArchivesResponse {
     total: number;
     totalPages: number;
   };
+  // Aggregates over the whole filtered set, not the page — the stat cards
+  // summed the loaded rows, so they described 20 archives out of 802.
+  totals?: {
+    archives: number;
+    photos: number;
+    archiveSize: number;
+  };
 }
 
 export const archiveService = {
-  // Get all archives with pagination
-  async getArchives(page: number = 1, limit: number = 20): Promise<ArchivesResponse> {
+  // Get all archives — pagination, search, type filter and sort are all
+  // resolved server-side so they apply to the whole archive table.
+  async getArchives(
+    page: number = 1,
+    limit: number = 20,
+    search?: string,
+    type?: string,
+    sortBy?: ArchiveSortBy
+  ): Promise<ArchivesResponse> {
     const response = await api.get<ArchivesResponse>('/admin/archives', {
-      params: { page, limit }
+      params: { page, limit, search: search || undefined, type: type || undefined, sortBy }
     });
     return response.data;
   },

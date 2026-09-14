@@ -1,4 +1,10 @@
 const { db } = require('../database/db');
+const logger = require('../utils/logger');
+
+function canAccessEvent(admin, event) {
+  return Boolean(admin && event && (admin.roleName === 'super_admin'
+    || event.created_by == null || Number(event.created_by) === Number(admin.id)));
+}
 
 /**
  * Middleware to enforce event ownership for non-super_admin users.
@@ -22,12 +28,15 @@ function requireEventOwnership(req, res, next) {
         return res.status(404).json({ error: 'Event not found' });
       }
       // Allow access if: event has no owner (legacy/system), or admin owns it
-      if (event.created_by && event.created_by !== req.admin.id) {
+      if (!canAccessEvent(req.admin, event)) {
         return res.status(403).json({ error: 'Access denied' });
       }
       next();
     })
     .catch((err) => {
+      logger.error('Event ownership check failed', {
+        eventId, adminId: req.admin.id, error: err.message, stack: err.stack,
+      });
       res.status(500).json({ error: 'Failed to verify ownership' });
     });
 }
@@ -152,10 +161,16 @@ function requireProjectOwnership(req, res, next) {
       if (!row) return res.status(404).json({ error: 'Project not found' });
       next();
     })
-    .catch(() => res.status(500).json({ error: 'Failed to verify project ownership' }));
+    .catch((err) => {
+      logger.error('Project ownership check failed', {
+        projectId, adminId: req.admin?.id, error: err.message, stack: err.stack,
+      });
+      res.status(500).json({ error: 'Failed to verify project ownership' });
+    });
 }
 
 module.exports = {
+  canAccessEvent,
   requireEventOwnership,
   filterOwnedEventIds,
   scopeEventsQuery,

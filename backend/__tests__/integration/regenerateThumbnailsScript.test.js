@@ -12,9 +12,6 @@
  * Driven against a REAL file on a REAL external mount with the real
  * imageProcessor, not a mock: the whole point is that the source resolves off
  * the mount, and a mocked ensureThumbnail would assert nothing about that.
- *
- * Responsive tiers (#1095/#1109) do not exist on this branch, so the tier
- * backfill in the main twin has nothing to port. Everything else does.
  */
 
 const fs = require('fs');
@@ -134,15 +131,19 @@ describe('regenerate-thumbnails script (#1148)', () => {
     }).returning('id');
     repairPhotoId = typeof rp === 'object' ? rp.id : rp;
 
-    // A photo whose source is not on the mount at all — an unavailable mount,
-    // which is the failure an operator most needs to hear about.
+    // A photo whose source will be removed after its canonical thumbnail is
+    // cached — the "mount went away" case, where the canonical rendition is
+    // served from cache but a tier still needs to read the original.
+    await sharp({
+      create: { width: 1000, height: 700, channels: 3, background: { r: 30, g: 140, b: 60 } },
+    }).jpeg().toFile(path.join(externalRoot, 'vanishing.jpg'));
     const [vp] = await db('photos').insert({
       event_id: eventId,
-      filename: 'missing.jpg',
-      path: 'regen-script-event/missing.jpg',
+      filename: 'vanishing.jpg',
+      path: 'regen-script-event/vanishing.jpg',
       type: 'individual',
       source_origin: 'external',
-      external_relpath: 'missing.jpg',
+      external_relpath: 'wedding/vanishing.jpg',
       uploaded_at: new Date().toISOString(),
     }).returning('id');
     vanishingPhotoId = typeof vp === 'object' ? vp.id : vp;
@@ -164,12 +165,12 @@ describe('regenerate-thumbnails script (#1148)', () => {
     const legacyPath = path.join(process.env.STORAGE_PATH, 'events/active', 'regen-script-event/shot.jpg');
     expect(fs.existsSync(legacyPath)).toBe(false);
 
-    const result = await regenerateThumbnails(eventId);
+    const result = await regenerateThumbnails(eventId, { tiers: false });
 
     // The old script reported an error for this photo and wrote nothing.
-    // The unresolvable row fails; the external photo and the repair row build.
-    expect(result.errorCount).toBe(1);
-    expect(result.successCount).toBe(2);
+    expect(result.errorCount).toBe(0);
+    // The external photo, the repair row and the vanishing one; no video.
+    expect(result.successCount).toBe(3);
 
     const row = await db('photos').where('id', externalPhotoId).first();
     expect(row.thumbnail_path).toBeTruthy();
@@ -193,22 +194,21 @@ describe('regenerate-thumbnails script (#1148)', () => {
     // fileWatcher writes type + mime_type and lets media_type default to
     // 'image', so filtering on media_type alone still fed these to Sharp. The
     // signal is errorCount: the images are already done by now, so the only
-    // NEW thing that could fail this run is a video reaching Sharp. One error
-    // is the deliberately unresolvable row; two would be the video.
-    const result = await regenerateThumbnails(eventId);
+    // thing that can fail this run is a video reaching Sharp.
+    const result = await regenerateThumbnails(eventId, { tiers: false });
 
-    expect(result.errorCount).toBe(1);
+    expect(result.errorCount).toBe(0);
     const row = await db('photos').where('id', watcherVideoId).first();
     expect(row.thumbnail_path).toBeFalsy();
   });
 
   it('is idempotent — a second run skips instead of rebuilding', async () => {
     const before = await db('photos').where('id', externalPhotoId).first();
-    const result = await regenerateThumbnails(eventId);
+    const result = await regenerateThumbnails(eventId, { tiers: false });
 
-    expect(result.errorCount).toBe(1);
+    expect(result.errorCount).toBe(0);
     expect(result.successCount).toBe(0);
-    expect(result.skipCount).toBe(2);
+    expect(result.skipCount).toBe(3);
 
     const after = await db('photos').where('id', externalPhotoId).first();
     expect(after.thumbnail_path).toBe(before.thumbnail_path);
@@ -221,15 +221,53 @@ describe('regenerate-thumbnails script (#1148)', () => {
     const onDisk = path.join(process.env.STORAGE_PATH, row.thumbnail_path);
     await fs.promises.rm(onDisk);
 
-    const result = await regenerateThumbnails(eventId);
+    const result = await regenerateThumbnails(eventId, { tiers: false });
 
     // On local and external storage the rebuilt key is identical, so inferring
     // "skipped" from an unchanged path reports this repair as already valid —
     // the one number an operator running this is actually reading.
     expect(result.successCount).toBe(1);
-    expect(result.skipCount).toBe(1);
-    expect(result.errorCount).toBe(1);
+    expect(result.skipCount).toBe(2);
+    expect(result.errorCount).toBe(0);
     expect(fs.existsSync(onDisk)).toBe(true);
+  });
+
+  it('backfills the responsive tiers, which is what a backfill is for', async () => {
+    // The tiers (#1095/#1109) are cached separately from thumbnail_path, so a
+    // gallery can hold every canonical rendition and still serve phones the
+    // full-size image. The old script only ever produced `thumb_<filename>` at
+    // a hard-coded 300px and could not backfill them at all.
+    const { THUMBNAIL_WIDTHS } = require('../../src/services/imageProcessor');
+    const imageRows = 3; // external, repaired and vanishing; videos excluded
+    const result = await regenerateThumbnails(eventId, { tiers: true });
+
+    expect(result.errorCount).toBe(0);
+    expect(result.tierCount).toBe(THUMBNAIL_WIDTHS.length * imageRows);
+    expect(result.tierFailures).toBe(0);
+  });
+
+  it('reports tiers it could not build instead of claiming success', async () => {
+    // ensureThumbnailAtWidth handles the expected failures itself and returns
+    // NULL rather than throwing — an unreachable mount, a storage write that
+    // did not land. A try/catch alone never sees those, so the run counted
+    // zero errors and printed a clean summary after backfilling nothing.
+    //
+    // Reproduced the honest way: cache the canonical rendition, then take the
+    // source away. The canonical is served from cache; the tiers still need
+    // the original.
+    const row = await db('photos').where('id', vanishingPhotoId).first();
+    expect(row.thumbnail_path).toBeTruthy();
+
+    const { deleteThumbnailTiers } = require('../../src/services/imageProcessor');
+    await deleteThumbnailTiers(row).catch(() => {});
+    await fs.promises.rm(path.join(externalRoot, 'vanishing.jpg'));
+
+    const result = await regenerateThumbnails(eventId, { tiers: true });
+
+    expect(result.tierFailures).toBeGreaterThan(0);
+    // Still not an error against the photo: the canonical rendition is intact
+    // and the gallery falls back to it.
+    expect(result.errorCount).toBe(0);
   });
 
   /** Run the CLI the way cron does, and hand back its exit status. */
@@ -242,18 +280,18 @@ describe('regenerate-thumbnails script (#1148)', () => {
     );
   });
 
-  it('exits nonzero when a photo could not be built', async () => {
-    // Exit status is the only thing a cron job reads, and `missing.jpg` has no
-    // source on the mount.
+  it('exits nonzero when work was left unfinished', async () => {
+    // Exit status is the only thing a cron job reads. `vanishing.jpg` still
+    // has no source, so its tiers cannot be built.
     const failed = await runCli([String(eventId)]);
     expect(failed.code).toBe(1);
     expect(failed.stderr).toContain('completed with failures');
   }, 120000);
 
-  it('exits zero when every photo resolves', async () => {
-    // Drop the unresolvable row: a clean run must not cry wolf at automation.
-    await db('photos').where('id', vanishingPhotoId).del();
-    const ok = await runCli([String(eventId)]);
+  it('exits zero when there is nothing left to do', async () => {
+    // Same event with tiers switched off: every canonical rendition is already
+    // valid, so a clean run must not cry wolf at automation.
+    const ok = await runCli([String(eventId), '--no-tiers']);
     expect(ok.code).toBe(0);
     expect(ok.stdout).toContain('Script completed successfully');
   }, 120000);

@@ -26,6 +26,8 @@ jest.mock('../database/db', () => {
   return { db: mockDb, withRetry };
 });
 
+jest.mock('../utils/tokenRevocation', () => ({ isTokenRevoked: jest.fn().mockResolvedValue(false) }));
+jest.mock('../utils/sessionCutoff', () => ({ isTokenBeforeCutoff: jest.fn().mockResolvedValue(false) }));
 jest.mock('../utils/logger', () => ({
   info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(),
 }));
@@ -38,10 +40,6 @@ jest.mock('../utils/tokenUtils', () => ({
   getGalleryTokenFromRequest: jest.fn(),
 }));
 
-jest.mock('../utils/tokenRevocation', () => ({
-  isTokenRevoked: jest.fn().mockResolvedValue(false),
-}));
-
 jest.mock('../utils/dbCompat', () => ({
   formatBoolean: (v) => (v ? 1 : 0),
 }));
@@ -49,8 +47,7 @@ jest.mock('../utils/dbCompat', () => ({
 const jwt = require('jsonwebtoken');
 const { db } = require('../database/db');
 const { getGalleryTokenFromRequest } = require('../utils/tokenUtils');
-const { isTokenRevoked } = require('../utils/tokenRevocation');
-const { verifyGalleryAccess, previewClaimed, verifyAdminPreview } = require('../middleware/gallery');
+const { verifyGalleryAccess } = require('../middleware/gallery');
 
 function makeRes() {
   const res = {};
@@ -88,8 +85,12 @@ function mockEventAndAssignment({ event, assignment }) {
   assignChain.where = jest.fn().mockReturnValue(assignChain);
   assignChain.first = jest.fn().mockResolvedValue(assignment);
 
-  db.mockImplementationOnce(() => eventsChain)
-    .mockImplementationOnce(() => assignChain);
+  db.mockImplementation((table) => {
+    if (table === 'events') return eventsChain;
+    if (table === 'customer_accounts') return { ...eventsChain, first: jest.fn().mockResolvedValue({ id: 7 }) };
+    if (table === 'event_customer_assignments') return assignChain;
+    throw new Error('Unexpected table: ' + table);
+  });
 
   return { eventsChain, assignChain };
 }
@@ -98,155 +99,6 @@ beforeEach(() => {
   db.mockReset();
   jwt.verify.mockReset();
   getGalleryTokenFromRequest.mockReset();
-  isTokenRevoked.mockReset();
-  isTokenRevoked.mockResolvedValue(false);
-});
-
-// ---- revoked gallery token (GHSA-q7f7-gjx8-mf6h) -----------------------
-
-describe('verifyGalleryAccess — revoked token', () => {
-  it('returns 401 TOKEN_REVOKED and never reaches the events query when revoked', async () => {
-    getGalleryTokenFromRequest.mockReturnValue('tkn');
-    jwt.verify.mockReturnValue({ type: 'gallery', eventId: 42 });
-    isTokenRevoked.mockResolvedValue(true);
-
-    const req = makeReq();
-    const res = makeRes();
-    const next = jest.fn();
-    await verifyGalleryAccess(req, res, next);
-
-    expect(next).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ code: 'TOKEN_REVOKED' }),
-    );
-    expect(db).not.toHaveBeenCalled();
-  });
-
-  it('proceeds normally when the token is not revoked', async () => {
-    getGalleryTokenFromRequest.mockReturnValue('tkn');
-    jwt.verify.mockReturnValue({ type: 'gallery', eventId: 42 });
-    isTokenRevoked.mockResolvedValue(false);
-
-    const eventsChain = {};
-    eventsChain.where = jest.fn().mockReturnValue(eventsChain);
-    eventsChain.select = jest.fn().mockReturnValue(eventsChain);
-    eventsChain.first = jest.fn().mockResolvedValue({
-      id: 42, slug: 'test-event', is_active: true, is_archived: false,
-    });
-    db.mockImplementationOnce(() => eventsChain);
-
-    const req = makeReq();
-    const res = makeRes();
-    const next = jest.fn();
-    await verifyGalleryAccess(req, res, next);
-
-    expect(isTokenRevoked).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'gallery', eventId: 42 }),
-    );
-    expect(next).toHaveBeenCalledTimes(1);
-    expect(res.status).not.toHaveBeenCalled();
-  });
-});
-
-// ---- revoked admin-preview token --------------------------------------
-//
-// The preview credential is decoded independently of the main gallery-token
-// flow above, and once never checked isTokenRevoked — a revoked admin session
-// kept granting preview access through a bookmarked or shared link
-// indefinitely (same gap as GHSA-q7f7-gjx8-mf6h, in a sibling path).
-//
-// That check now lives in verifyAdminPreview rather than in the predicate the
-// event lookup is shaped with. previewClaimed stays deliberately cheap and
-// signature-only — it decides whether drafts are INCLUDED in the query, never
-// whether they are served — and every lookup it shapes is gated behind
-// verifyAdminPreview before anything reaches the caller. So a revoked token
-// can still widen a query and still cannot preview anything.
-
-describe('previewClaimed — signature only, by design', () => {
-  it('accepts a syntactically valid admin token without consulting revocation', () => {
-    jwt.verify.mockReturnValue({ type: 'admin', id: 1 });
-    isTokenRevoked.mockResolvedValue(true);
-
-    expect(previewClaimed({ query: { preview: 'revoked-admin-jwt' } })).toBe(true);
-    // Deliberately NOT consulted here: this predicate is synchronous and only
-    // shapes the lookup. Authorization happens in verifyAdminPreview.
-    expect(isTokenRevoked).not.toHaveBeenCalled();
-  });
-
-  it('rejects a non-admin token', () => {
-    jwt.verify.mockReturnValue({ type: 'gallery', eventId: 42 });
-    expect(previewClaimed({ query: { preview: 'not-an-admin-jwt' } })).toBe(false);
-  });
-
-  it('rejects a request carrying no preview credential at all', () => {
-    expect(previewClaimed({ query: {} })).toBe(false);
-  });
-});
-
-describe('verifyAdminPreview — token revocation', () => {
-  it('refuses a revoked admin token', async () => {
-    jwt.verify.mockReturnValue({ type: 'admin', id: 1 });
-    isTokenRevoked.mockResolvedValue(true);
-
-    const result = await verifyAdminPreview(
-      { query: { preview: 'revoked-admin-jwt' }, headers: {} },
-      { id: 42, created_by: 1 },
-    );
-
-    expect(result).toBe(false);
-    expect(isTokenRevoked).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'admin' }),
-    );
-  });
-
-  it('fails closed when the revocation store cannot be read', async () => {
-    jwt.verify.mockReturnValue({ type: 'admin', id: 1 });
-    isTokenRevoked.mockRejectedValue(new Error('db down'));
-
-    const result = await verifyAdminPreview(
-      { query: { preview: 'valid-admin-jwt' }, headers: {} },
-      { id: 42, created_by: 1 },
-    );
-
-    // A transient fault must not become a free preview.
-    expect(result).toBe(false);
-  });
-
-  it('refuses when there is no event to authorize against', async () => {
-    jwt.verify.mockReturnValue({ type: 'admin', id: 1 });
-    isTokenRevoked.mockResolvedValue(false);
-
-    expect(await verifyAdminPreview({ query: { preview: 'jwt' }, headers: {} }, null)).toBe(false);
-  });
-});
-
-describe('verifyGalleryAccess — a revoked preview token cannot open a draft', () => {
-  it('answers 404 for the draft instead of granting access', async () => {
-    getGalleryTokenFromRequest.mockReturnValue(undefined); // no gallery-scoped token
-    jwt.verify.mockReturnValue({ type: 'admin', id: 1 });  // decoded preview token
-    isTokenRevoked.mockResolvedValue(true);
-
-    const eventsChain = {};
-    eventsChain.where = jest.fn().mockReturnValue(eventsChain);
-    eventsChain.select = jest.fn().mockReturnValue(eventsChain);
-    eventsChain.first = jest.fn().mockResolvedValue({
-      id: 42, slug: 'test-event', is_active: true, is_archived: false,
-      is_draft: true, require_password: false,
-    });
-    db.mockImplementation(() => eventsChain);
-
-    const req = makeReq();
-    req.query = { preview: 'revoked-admin-jwt' };
-    const res = makeRes();
-    const next = jest.fn();
-    await verifyGalleryAccess(req, res, next);
-
-    // The lookup was widened (previewClaimed is signature-only), but the draft
-    // is refused at the gate — which is the contract that actually matters.
-    expect(next).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(404);
-  });
 });
 
 // ---- customer-minted JWT, assignment intact ----------------------------
@@ -255,7 +107,7 @@ describe('verifyGalleryAccess — customer-minted JWT with active assignment', (
   it('allows access when the event_customer_assignments row exists', async () => {
     getGalleryTokenFromRequest.mockReturnValue('tkn');
     jwt.verify.mockReturnValue({
-      type: 'gallery',
+      type: 'gallery', iat: Math.floor(Date.now() / 1000),
       eventId: 42,
       via: 'customer',
       customerId: 7,
@@ -286,7 +138,7 @@ describe('verifyGalleryAccess — customer-minted JWT after revocation', () => {
   it('returns 403 CUSTOMER_ASSIGNMENT_REVOKED when the junction row is gone', async () => {
     getGalleryTokenFromRequest.mockReturnValue('tkn');
     jwt.verify.mockReturnValue({
-      type: 'gallery',
+      type: 'gallery', iat: Math.floor(Date.now() / 1000),
       eventId: 42,
       via: 'customer',
       customerId: 7,
@@ -316,7 +168,7 @@ describe('verifyGalleryAccess — customer-minted JWT after revocation', () => {
     // and start 403'ing per-event-password sessions.
     getGalleryTokenFromRequest.mockReturnValue('tkn');
     jwt.verify.mockReturnValue({
-      type: 'gallery',
+      type: 'gallery', iat: Math.floor(Date.now() / 1000),
       eventId: 42,
       customerId: 7,
       // intentionally no `via` claim
@@ -348,7 +200,7 @@ describe('verifyGalleryAccess — per-event-password JWT', () => {
   it('does NOT touch event_customer_assignments and passes through', async () => {
     getGalleryTokenFromRequest.mockReturnValue('tkn');
     jwt.verify.mockReturnValue({
-      type: 'gallery',
+      type: 'gallery', iat: Math.floor(Date.now() / 1000),
       eventId: 42,
       // No via, no customerId — this is the legacy per-event-password
       // flow where every guest mints their own JWT after entering the

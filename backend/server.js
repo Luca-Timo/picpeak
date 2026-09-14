@@ -65,20 +65,32 @@ logger.info('Server starting up', {
 const fs = require('fs');
 const express = require('express');
 const helmet = require('helmet');
+const compression = require('compression');
 const cors = require('cors');
 const path = require('path');
 const { initializeDatabase, db } = require('./src/database/db');
+const {
+  getFrontendBaseUrlSync,
+  getAbsoluteFrontendUrl,
+  primeSiteUrlCache,
+} = require('./src/utils/frontendUrl');
 const { startFileWatcher } = require('./src/services/fileWatcher');
 const { startExpirationChecker } = require('./src/services/expirationChecker');
+const { startTransferCleanup } = require('./src/services/transferCleanupService');
+const { startDownloadJobCleanup } = require('./src/services/downloadJobCleanupService');
+const { startRevealScheduler } = require('./src/services/revealScheduler');
 const { startInvoiceScheduler } = require('./src/services/invoiceSchedulerService');
 const { initializeTransporter, startEmailQueueProcessor } = require('./src/services/emailProcessor');
+const emailWebhookTransport = require('./src/services/emailWebhookTransport');
 const { startBackupService } = require('./src/services/backupService');
 const { startScheduledBackups } = require('./src/services/databaseBackup');
 const backgroundProcessor = require('./src/services/backgroundProcessor');
 const { maintenanceMiddleware } = require('./src/middleware/maintenance');
 const { sessionTimeoutMiddleware } = require('./src/middleware/sessionTimeout');
 const { errorHandler, notFoundHandler } = require('./src/middleware/errorHandler');
-const { createRateLimiter, createAuthRateLimiter } = require('./src/services/rateLimitService');
+const rateLimitService = require('./src/services/rateLimitService');
+const { createApiRateLimitGate } = require('./src/middleware/apiRateLimitGate');
+const { createAuthRateLimitGate } = require('./src/middleware/authRateLimitGate');
 const { getPublicSitePayload } = require('./src/services/publicSiteService');
 const cookieParser = require('cookie-parser');
 const {
@@ -135,7 +147,7 @@ const cspDirectives = {
   connectSrc: ["'self'", 'https://www.google.com', 'https://www.gstatic.com'], // API connections
   fontSrc: ["'self'", "https:", "data:"], // Web fonts
   objectSrc: ["'none'"], // Disable plugins
-  mediaSrc: ["'self'"], // Audio/video
+  mediaSrc: ["'self'", "blob:"], // Audio/video, incl. page-created blobs (matches imgSrc)
   frameSrc: ["'self'", 'https://www.google.com'],
 };
 // Only upgrade insecure requests when HSTS explicitly enabled (HTTPS deployment)
@@ -206,11 +218,14 @@ app.use((req, res, next) => {
 });
 
 // CORS configuration (apply only to API routes)
-const { isAllowedOrigin, multipartOriginAllowed } = require('./src/utils/requestOrigin');
+const { isAllowedOrigin } = require('./src/utils/requestOrigin');
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allowlist lives in utils/requestOrigin, shared with the multipart gate.
+    // getFrontendBaseUrlSync() resolves FRONTEND_URL, else the configured
+    // general_site_url (#705) — without it, an install that leaves the
+    // environment untouched and answers the setup wizard instead would have
+    // its own public origin missing from the allowlist.
     // Allow requests with no origin (like curl) and allow-listed origins
     if (!origin || isAllowedOrigin(origin)) {
       callback(null, true);
@@ -224,7 +239,12 @@ const corsOptions = {
   // deployments can read the server's chosen download filename. Used
   // by the gallery/admin download flows to honour the #493 "original
   // camera filename" toggle on individual photo downloads (#507).
-  exposedHeaders: ['Content-Disposition'],
+  //
+  // Retry-After is not CORS-safelisted either. AuthenticatedImage reads it
+  // off a 429 to wait out the rate-limit window before retrying a thumbnail
+  // fetch; without it a split-origin deployment would spend its retry budget
+  // inside the window and leave the tile blank after the limit had lifted.
+  exposedHeaders: ['Content-Disposition', 'Retry-After'],
 };
 
 // Only attach CORS to API endpoints, not static assets
@@ -232,9 +252,47 @@ app.use('/api', cors(corsOptions));
 // Handle preflight explicitly for API paths
 app.options('/api/*', cors(corsOptions));
 
+// Same-origin proxy for the configured analytics tracker. Mounted HERE, ahead
+// of the body parsers, so the tracker's beacon payload reaches the proxy as a
+// raw buffer (express.json would consume it, and the CSRF Content-Type gate
+// below would 415 a navigator.sendBeacon `text/plain` POST). It carries no
+// PicPeak state and reads no PicPeak credentials — see the route file for the
+// SSRF/path-allowlist model.
+app.use('/api/analytics/tracker', require('./src/routes/analyticsTrackerProxy'));
+
+// Health check endpoint. `pid` + `uptime` let monitors (and the local E2E
+// watchdog) detect a silent process restart between two checks.
+//
+// Served at BOTH paths: /health is the canonical one, /api/health exists
+// because probes reasonably assume the API lives under /api and otherwise
+// produce a "route not found" warning on every poll. Same handler, same body,
+// same (public) exposure — the alias adds no information.
+//
+// Mounted HERE, ahead of the API middleware chain, so a probe running every
+// couple of seconds does not pay for — or pollute — the body parsers, the
+// request logger, the maintenance gate (/health is on its skip list anyway)
+// or the rate limiter's per-IP budget.
+app.get(['/health', '/api/health'], async (req, res) => {
+  try {
+    await db.raw('SELECT 1');
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      pid: process.pid,
+      uptime: process.uptime()
+    });
+  } catch (error) {
+    logger.error('Health check failed:', error);
+    res.status(503).json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      pid: process.pid,
+      uptime: process.uptime()
+    });
+  }
+});
+
 // Initialize rate limiters (they will be created dynamically)
-let generalRateLimiter;
-let authRateLimiter;
 
 function composeInlineStyles(payload) {
   const { branding } = payload;
@@ -427,19 +485,40 @@ async function handlePublicSiteRequest(req, res, next) {
 
 // Function to initialize rate limiters
 async function initializeRateLimiters() {
-  generalRateLimiter = await createRateLimiter();
-  authRateLimiter = await createAuthRateLimiter();
-  
-  // Apply rate limiting
-  app.use('/api/', generalRateLimiter);
-  app.use('/api/auth', authRateLimiter);
-  app.use('/api/gallery/:slug/verify', authRateLimiter);
-  app.use('/api/admin/auth/login', authRateLimiter);
-  app.use('/api/setup/admin', authRateLimiter);
-  app.use('/api/setup/verify-token', authRateLimiter);
+  // The instances live in rateLimitService so the settings route can
+  // rebuild them when the window changes (#1337); the gates below read
+  // them per request through the service's getters.
+  await rateLimitService.initializeRateLimiters();
+
+  // Neither limiter is registered here — an app.use() at this point runs after
+  // the routers, the /api 404 handler and the error handler are already on the
+  // stack, so it can never see a request. Both are reached through their gates
+  // below, which are registered ahead of the routers and read these variables
+  // per request.
+  //
+  // The five prefix registrations of authRateLimiter that used to live here
+  // were inert for that reason, and could not simply be moved up either: the
+  // widest of them mounted on the whole /api/auth router, so the 5-per-window
+  // auth budget would have covered GET /api/auth/session and POST
+  // /api/auth/password-strength, which the frontend calls far more often than
+  // five times per window. authRateLimitGate matches exact method + path
+  // instead, and counts only failed attempts.
 }
 
-// Note: Rate limiters will be initialized after database connection
+// Rate limiting for /api. Registered HERE — above the routers — because
+// Express dispatches in registration order; see apiRateLimitGate for the full
+// story. The gate is a no-op until initializeRateLimiters() resolves, and it
+// must stay unmounted (no path argument) so req.path keeps its /api prefix.
+// /health and /api/health are mounted above this point and so are never
+// counted, which matters because monitors poll them every couple of seconds.
+app.use(createApiRateLimitGate(rateLimitService.getGeneralLimiter));
+
+// Per-IP limit for credential-verification endpoints only, on its own bucket.
+// Registered after the general gate so that an IP already over the /api budget
+// is rejected there first; see authRateLimitGate for the exact endpoint table
+// and why it must stay unmounted.
+app.use(createAuthRateLimitGate(rateLimitService.getAuthLimiter));
+
 // Body limits. 50mb is only needed by the authenticated admin and API-token
 // surfaces (restore manifests, CMS and email templates, bulk operations);
 // applied globally it let any unauthenticated caller hand JSON.parse a 50mb
@@ -449,43 +528,10 @@ app.use(['/api/admin', '/api/v1'], express.json({ limit: '50mb' }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
-// CSRF protection: require JSON Content-Type on mutating API requests
-// This blocks cross-origin form submissions which cannot set Content-Type: application/json
-app.use('/api', (req, res, next) => {
-  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
-    const contentType = req.headers['content-type'] || '';
-    const contentLength = parseInt(req.headers['content-length'] || '0', 10);
-    // Allow empty-body requests (e.g. logout), multipart for uploads, and JSON for API calls
-    if (contentLength > 0 && !contentType.includes('application/json') && !contentType.includes('multipart/form-data')) {
-      return res.status(415).json({ error: 'Unsupported Content-Type. Use application/json or multipart/form-data.' });
-    }
-    // multipart is exactly what a cross-site <form> can send without a
-    // preflight, and in a split-origin deployment (SameSite=None) the admin
-    // cookie rides along to the upload routes. Browsers label such a
-    // submission Sec-Fetch-Site: cross-site (and always send Origin on a
-    // cross-origin POST); non-browser clients send neither header and pass.
-    if (contentType.includes('multipart/form-data') && !multipartOriginAllowed(req)) {
-      return res.status(403).json({ error: 'Cross-site multipart request rejected' });
-    }
-  }
-  next();
-});
+// Validate the origin independently of body length/content type.
+app.use('/api', require('./src/middleware/csrf'));
 
-// Request logging for API routes (with timestamps)
-const apiRequestLogger = (req, res, next) => {
-  try {
-    const started = Date.now();
-    const ts = new Date().toISOString();
-    logger.info(`[${ts}] ${req.method} ${req.originalUrl}`);
-    res.on('finish', () => {
-      const ms = Date.now() - started;
-      const tsDone = new Date().toISOString();
-      logger.info(`[${tsDone}] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${ms}ms)`);
-    });
-  } catch (_) {}
-  next();
-};
-app.use('/api', apiRequestLogger);
+app.use('/api', require('./src/middleware/apiRequestLogger'));
 
 // Maintenance mode middleware - add after body parsing but before routes
 app.use(maintenanceMiddleware);
@@ -497,7 +543,7 @@ app.use('/api/admin', sessionTimeoutMiddleware);
 const setCorsHeaders = (req, res, next) => {
   const origin = req.headers.origin;
   const staticAllowedOrigins = [
-    process.env.FRONTEND_URL || 'http://localhost:3005',
+    getFrontendBaseUrlSync() || 'http://localhost:3005',
     process.env.ADMIN_URL || 'http://localhost:3005'
   ];
   if (process.env.NODE_ENV === 'development') {
@@ -567,7 +613,7 @@ app.use('/uploads/favicons', setCorsHeaders, secureStatic(path.join(storagePath,
 // are stable (e.g. Inter/400.woff2), so an admin replacing the file on disk
 // must be able to roll out the change to clients. With max-age + Last-Modified
 // (set by express.static from file mtime), browsers send If-Modified-Since
-// after expiry and pick up the new version automatically. See docs/fonts.md
+// after expiry and pick up the new version automatically. See https://docs.picpeak.app/guides/custom-fonts
 // "Replacing an existing font" for the documented rollout strategy.
 const fontStaticOpts = { maxAge: '7d' };
 app.use(
@@ -656,7 +702,7 @@ app.get('/s/:shortSlug', async (req, res) => {
         // social platforms cache OG by URL, and the short URL is the
         // one operators actually share, so that's the cache key we
         // want them to stick with.
-        const base = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+        const base = await getAbsoluteFrontendUrl(req);
         meta.url = `${base}/s/${row.short_slug}`;
         res.set('Cache-Control', 'public, max-age=300');
         res.set('Content-Type', 'text/html; charset=utf-8');
@@ -747,31 +793,11 @@ app.get(
   }
 );
 
-// Health check endpoint. `pid` + `uptime` let monitors (and the local E2E
-// watchdog) detect a silent process restart between two checks.
-app.get('/health', async (req, res) => {
-  try {
-    await db.raw('SELECT 1');
-    res.json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      pid: process.pid,
-      uptime: process.uptime()
-    });
-  } catch (error) {
-    logger.error('Health check failed:', error);
-    res.status(503).json({
-      status: 'error',
-      timestamp: new Date().toISOString(),
-      pid: process.pid,
-      uptime: process.uptime()
-    });
-  }
-});
-
 // Routes
 app.use('/api/setup', setupRoutes); // public first-run bootstrap (self-closes after setup)
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', require('./src/middleware/productUsage').productUsage);
+app.use('/api/admin/usage', require('./src/routes/adminUsage'));
 app.use('/api/admin/external-media', require('./src/routes/adminExternalMedia'));
 // Gallery routes - main routes first, then feedback routes
 app.use('/api/gallery', galleryRoutes);
@@ -798,6 +824,7 @@ app.use('/api/admin/photo-export', require('./src/routes/adminPhotoExport'));
 app.use('/api/admin/css-templates', require('./src/routes/adminCssTemplates'));
 app.use('/api/admin/events', require('./src/routes/adminEventRename'));
 app.use('/api/admin/users', require('./src/routes/adminUsers'));
+app.use('/api/admin/roles', require('./src/routes/adminRoles'));
 // Customer portal (#354). The customerPortal feature flag is a
 // VISIBILITY toggle for the admin surface, not a kill switch for
 // customer access. Enforcement:
@@ -862,16 +889,25 @@ app.use('/api/admin/ledger',     require('./src/routes/adminLedger'));
 app.use('/api/admin/vat-codes',  require('./src/routes/adminVatCodes'));
 app.use('/api/admin/system-health', require('./src/routes/adminSystemHealth'));
 app.use('/api/admin/dev',        require('./src/routes/adminDev'));
+app.use('/api/admin/transfers',  require('./src/routes/adminTransfers'));
+// Newsletter campaigns (#1264). Flag-gated inside the router.
+app.use('/api/admin/newsletters', require('./src/routes/adminNewsletters'));
 app.use('/api/public/quotes',  require('./src/routes/publicQuotes'));
 app.use('/api/public/contracts', require('./src/routes/publicContracts'));
+// PicTransfer (#997): recipient download + client upload, token-authenticated.
+app.use('/api/public/transfer', require('./src/routes/publicTransfer'));
+app.use('/api/public/transfer-upload', require('./src/routes/publicTransferUpload'));
 app.use('/api/public/payment-check', require('./src/routes/publicPaymentCheck'));
+// Newsletter unsubscribe (#1264). Deliberately NOT flag-gated: turning the
+// feature off must not break the links in mail that already went out.
+app.use('/api/public/newsletter', require('./src/routes/publicNewsletter'));
 app.use('/api/public/workflow-approvals', require('./src/routes/publicWorkflowApprovals'));
 app.use('/api/admin/event-types', require('./src/routes/adminEventTypes'));
 app.use('/api/admin/api-tokens', require('./src/routes/adminApiTokens'));
 app.use('/api/admin/webhooks', require('./src/routes/adminWebhooks'));
 // Public v1 API for n8n / external integrations (#322). Mounted under
 // /api/v1; auth handled per-route via apiTokenAuth (Bearer tokens).
-app.use('/api/v1', require('./src/routes/v1/events'));
+app.use('/api/v1', require('./src/middleware/productUsage').productUsageApi, require('./src/routes/v1/events'));
 
 // Swagger UI for the v1 API. Admin-gated since it lists endpoint shapes
 // that should not be enumerable to anonymous users (a common reduce-info-leak hardening).
@@ -895,7 +931,11 @@ app.use('/api/public', require('./src/routes/publicCMS'));
 app.use('/api/images', require('./src/routes/protectedImages'));
 app.use('/api/secure-images', secureImagesRoutes);
 
-// Optional: Serve built frontend (native installs)
+// Optional: Serve built frontend (native installs and the all-in-one image, #1042)
+// Set when the SPA is being served, and registered as a catch-all AFTER the
+// /api 404 handler further down — see the registration site for why it cannot
+// live inside this block.
+let spaCatchAll = null;
 try {
   const serveFrontendEnv = process.env.SERVE_FRONTEND; // 'true' | 'false' | undefined
   const frontendDir = process.env.FRONTEND_DIR || path.join(__dirname, '../frontend/dist');
@@ -904,12 +944,53 @@ try {
   const shouldServe = (serveFrontendEnv === 'true') || ((serveFrontendEnv === undefined || serveFrontendEnv === 'auto') && fs.existsSync(indexPath));
   if (shouldServe) {
     logger.info(`Serving frontend from ${frontendDir}`);
-    // Serve pre-built assets
-    app.use(express.static(frontendDir));
+
+    // The built index.html carries ${BRAND_TITLE} / ${BRAND_DESCRIPTION}
+    // placeholders (#521) that the nginx image renders via envsubst in its
+    // entrypoint. Here the render happens once at boot, in memory — same
+    // semantics: locked to exactly these two vars (never the JS bundle's own
+    // template literals), defaults applied when unset, re-rendered on every
+    // process start so changing the env + restarting is enough.
+    const spaHtml = fs
+      .readFileSync(indexPath, 'utf8')
+      .split('${BRAND_TITLE}').join(process.env.BRAND_TITLE || 'PicPeak')
+      .split('${BRAND_DESCRIPTION}').join(process.env.BRAND_DESCRIPTION || 'Photo gallery shared with PicPeak.');
+    // Mirrors nginx's `location = /index.html` cache rule: the SPA shell must
+    // revalidate so a redeploy is picked up, while the hashed assets below
+    // cache immutably.
+    const sendSpa = (res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.type('html').send(spaHtml);
+    };
+
+    // gzip for the SPA bundle (nginx parity — its server block gzips js/css/
+    // json). Mounted here, after every /api router, so API responses keep
+    // their exact current behavior; only the statics and SPA shell below
+    // pass through it.
+    app.use(compression());
+
+    // /index.html must serve the RENDERED shell, and express.static would
+    // otherwise answer first with the raw template straight off disk.
+    app.get('/index.html', (req, res) => sendSpa(res));
+
+    // Serve pre-built assets. index:false keeps `/` flowing to the landing-page
+    // handler below (nginx parity: `location = /` goes to the backend, it never
+    // serves index.html off disk) — express.static's default index option was
+    // shadowing handlePublicSiteRequest in native installs. Vite's hashed
+    // /assets/* get nginx's 1y-immutable rule; everything else keeps etag
+    // revalidation.
+    app.use(express.static(frontendDir, {
+      index: false,
+      setHeaders: (res, filePath) => {
+        if (/[/\\]assets[/\\]/.test(filePath)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    }));
 
     // Landing page handler or SPA fallback
     app.get('/', handlePublicSiteRequest, (req, res) => {
-      res.sendFile(indexPath);
+      sendSpa(res);
     });
 
     // SPA fallback for admin + gallery routes. For gallery URLs we intercept
@@ -928,12 +1009,22 @@ try {
       }
       return next();
     };
-    app.get('/gallery/:slug/:token?', ogIntercept, (req, res) => res.sendFile(indexPath));
-    app.get('/gallery/:slug/show/:token', ogIntercept, (req, res) => res.sendFile(indexPath));
+    app.get('/gallery/:slug/:token?', ogIntercept, (req, res) => sendSpa(res));
+    app.get('/gallery/:slug/show/:token', ogIntercept, (req, res) => sendSpa(res));
 
     app.get(['/admin', '/admin/*', '/gallery/*'], (req, res) => {
-      res.sendFile(indexPath);
+      sendSpa(res);
     });
+
+    // Everything else the router owns client-side. nginx did `try_files $uri
+    // $uri/ /index.html`, so behind compose every client route survived a
+    // reload and the short route list above was never exercised. Without
+    // nginx it is the whole contract: /setup, /customer, /impressum,
+    // /datenschutz, /payment-check, /quote/:token, /contract/:token,
+    // /invite/:token, /transfer/:token, /transfer-upload/:token and the
+    // branded short URLs all 404'd on a direct hit or a refresh. /setup is
+    // the first URL a new install visits.
+    spaCatchAll = (req, res) => sendSpa(res);
   } else {
     logger.info('Frontend static serving disabled or dist not found', { serveFrontendEnv, frontendDir });
     app.get('/', handlePublicSiteRequest, (req, res) => {
@@ -947,14 +1038,68 @@ try {
 // 404 handler for undefined API routes
 app.use('/api', notFoundHandler);
 
+// SPA history fallback, deliberately registered here — AFTER the /api 404
+// handler, so an unknown /api/* route still answers JSON instead of being
+// handed the HTML shell, and after the short-URL resolver so a real short
+// code still redirects. GET-only: a stray POST/PUT keeps 404ing rather than
+// getting a 200 page back.
+if (spaCatchAll) {
+  // nginx gives these their own `location` blocks, so `try_files` never applied
+  // to them. The fallback has to mirror that: /photos, /thumbnails, /uploads
+  // and /fonts are backend-owned static mounts whose middleware calls next()
+  // when the file is missing, and swallowing that would answer 200 text/html
+  // under an image or font URL instead of a 404.
+  // /assets/ belongs on this list for the same reason even though it is the
+  // frontend's own bundle: after an upgrade a still-open tab requests the old
+  // hashed chunk, which no longer exists. Answering index.html would hand a
+  // JavaScript URL a 200 text/html body, so the module load fails with a MIME
+  // error instead of the plain 404 nginx returns — and the 200 hides it from
+  // any monitoring watching status codes.
+  const BACKEND_OWNED = ['/photos/', '/thumbnails/', '/uploads/', '/fonts/', '/assets/', '/health'];
+  app.get('*', (req, res, next) => {
+    if (BACKEND_OWNED.some((prefix) => req.path.startsWith(prefix))) return next();
+    return spaCatchAll(req, res);
+  });
+}
+
 // Global error handler (must be last)
 app.use(errorHandler);
+
+// App construction is side-effect free with respect to listening and workers.
+let httpServer;
+let shutdownPromise;
+// Docker stops a container 10 s after SIGTERM by default (compose sets no
+// stop_grace_period), so the drain must finish inside that window.
+const SHUTDOWN_TIMEOUT_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS) || 8000;
+async function stopServer() {
+  if (shutdownPromise) return shutdownPromise;
+  shutdownPromise = (async () => {
+    const close = httpServer ? new Promise((resolve, reject) => httpServer.close(err => err ? reject(err) : resolve())) : Promise.resolve();
+    const timeout = setTimeout(() => httpServer?.closeAllConnections(), Math.floor(SHUTDOWN_TIMEOUT_MS / 2));
+    timeout.unref();
+    try {
+      await Promise.all([close, require('./src/services/serviceShutdown').stopServices()]);
+    } finally {
+      clearTimeout(timeout);
+      // Always release the pool: a rejected service stop must not leave
+      // ref'd sockets keeping the process alive until SIGKILL.
+      await db.destroy();
+    }
+  })();
+  return shutdownPromise;
+}
 
 // Initialize services
 async function startServer() {
   try {
     // Initialize database
     await initializeDatabase();
+
+    // Warm the public-origin cache so the SYNCHRONOUS resolver (CORS headers,
+    // secureImageMiddleware) can see the general_site_url setting. Best-effort:
+    // the async resolver reads through on its own, and a cold cache only means
+    // falling back to the environment.
+    await primeSiteUrlCache().catch(() => {});
 
     // Initialize storage backend (local fs or S3) — fail fast on misconfig
     const { initStorage } = require('./src/services/storage');
@@ -968,26 +1113,47 @@ async function startServer() {
     const { initializeCleanupJob } = require('./src/utils/authSecurity');
     initializeCleanupJob();
     
-    // Initialize temp upload cleanup job
-    const { cleanupTempUploads } = require('./src/utils/cleanupTempUploads');
-    // Run cleanup on startup
-    cleanupTempUploads();
-    // Schedule periodic cleanup every hour
-    setInterval(cleanupTempUploads, 60 * 60 * 1000);
-    logger.info('Temp upload cleanup scheduled');
-    
+    require('./src/utils/cleanupTempUploads').startTempUploadCleanup();
+
     // Start file watcher
     startFileWatcher();
+    // External-media folder watcher (issue 1187): imports new files into
+    // reference events that opted in. Not gated on STORAGE_BACKEND like the
+    // managed watcher — EXTERNAL_MEDIA_ROOT is always a local path.
+    try {
+      const { startExternalMediaWatcher } = require('./src/services/externalMediaWatcher');
+      startExternalMediaWatcher();
+    } catch (err) {
+      logger.warn('External-media watcher failed to start:', err.message);
+    }
     
     // Start expiration checker
     startExpirationChecker();
+    // PicTransfer retention sweep (#997): expire links, notify admins, and
+    // hard-delete client uploads once the grace window elapses.
+    startTransferCleanup();
+    // Custom-resolution download archives (#858) are disposable renditions —
+    // sweep them once their TTL passes so .download-cache doesn't grow forever.
+    // Best-effort, as before the scheduler refactor: a transient DB error on
+    // this one UPDATE must not abort the whole server start.
+    await require('./src/services/downloadJobService').recoverOrphanedJobs()
+      .catch((err) => logger.error('Download job recovery failed', { error: err.message }));
+    startDownloadJobCleanup();
+    // Reveal-mode scheduler (#838): minutely stamp for scheduled reveals.
+    startRevealScheduler();
     // CRM invoice scheduler: hourly tick to flush scheduled-send invoices
     // + run the overdue reminder ladder. No-op when the `bills` feature
     // flag is OFF (the service short-circuits on empty result sets).
     startInvoiceScheduler();
     
-    // Initialize email transporter and start queue processor
-    await initializeTransporter();
+    // Initialize email transporter and start queue processor.
+    // Skipped under the webhook transport (#1225): an install that switched to
+    // it may still carry an old, now-unreachable SMTP row, and nodemailer's
+    // verify() would sit on a connection timeout here — delaying boot for a
+    // transport that will never send anything.
+    if (!emailWebhookTransport.isEnabled()) {
+      await initializeTransporter();
+    }
     // Seed CRM / contract / event-reminder email templates and recover
     // any queue rows that exhausted retries because their template
     // didn't exist yet. Runs once per boot via module-level caches in
@@ -1061,6 +1227,17 @@ async function startServer() {
       logger.warn('built-in workflow seed failed at boot:', err.message);
     }
 
+    // Self-heal the RBAC catalog: ensure super_admin holds every permission
+    // (the "Admin tracks all" guarantee) and the solo_photographer preset
+    // exists. New perms never need a compensation migration. See
+    // _permissionsBoot.js + project_permission_gating.
+    try {
+      const { seedPermissionsAtBoot } = require('./src/services/_permissionsBoot');
+      await seedPermissionsAtBoot(db, logger);
+    } catch (err) {
+      logger.warn('permissions self-heal failed at boot:', err.message);
+    }
+
     // Install-from-backup trigger. If `RESTORE_ON_INSTALL` (or
     // `.txt`) exists in the /backup mount AND the DB is empty, run
     // the restore HERE before any admin UI surfaces. Lets admins
@@ -1107,7 +1284,18 @@ async function startServer() {
     // sharp/ffmpeg/EXIF pipeline off the request thread.
     backgroundProcessor.start();
 
-    app.listen(PORT, () => {
+    // Face detection (#1074). Starts alongside the photo processor but stays
+    // idle — every worker tick re-checks the `faces` feature flag, which is
+    // off by default. It is safe to start unconditionally precisely because
+    // it never touches FACE_ML_URL until that flag is on.
+    //
+    // Required HERE rather than at module scope: the face stack pulls in
+    // axios and (via imageProcessor) sharp, and server.js is imported by a
+    // large number of supertest suites that never start a worker. Keeping it
+    // lazy means they don't pay for a module graph they never use.
+    require('./src/services/faceQueue').start();
+
+    httpServer = app.listen(PORT, () => {
       logger.info(`Server running on port ${PORT}`);
       logger.info(`Admin interface: ${process.env.ADMIN_URL || 'http://localhost:3000'}`);
       logger.info(`Frontend: ${process.env.FRONTEND_URL || 'http://localhost:3001'}`);
@@ -1126,10 +1314,32 @@ async function startServer() {
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
-    process.exit(1);
+    await stopServer();
+    process.exitCode = 1;
   }
 }
 
-startServer();
+if (require.main === module) {
+  let stopping = false;
+  for (const signal of ['SIGTERM', 'SIGINT']) {
+    process.on(signal, () => {
+      if (stopping) {
+        logger.warn(`Received ${signal} again during shutdown, exiting immediately`);
+        process.exit(1);
+      }
+      stopping = true;
+      // The drain itself has no deadline; a hung worker must not keep the
+      // process alive past the container's stop grace period.
+      setTimeout(() => {
+        logger.error(`Shutdown exceeded ${SHUTDOWN_TIMEOUT_MS}ms, forcing exit`);
+        process.exit(1);
+      }, SHUTDOWN_TIMEOUT_MS).unref();
+      stopServer().catch(error => { logger.error('Shutdown failed', { error: error.message }); process.exitCode = 1; });
+    });
+  }
+  startServer();
+}
+app.startServer = startServer;
+app.stopServer = stopServer;
 
 module.exports = app; // For testing

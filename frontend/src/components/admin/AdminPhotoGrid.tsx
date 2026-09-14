@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Check, Download, Trash2, Eye, EyeOff, Heart, Package, MessageSquare, Star, Video, FolderOpen, Cog, AlertTriangle, RefreshCw, LayoutGrid, List } from 'lucide-react';
+import { COLOR_LABEL_SWATCHES, type ColorLabel } from '../../services/feedback.service';
 import { toast } from 'react-toastify';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -10,12 +11,15 @@ import { uploadsService } from '../../services/uploads.service';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { getPhotoViewMode, setPhotoViewMode, type PhotoViewMode } from '../../utils/photoViewPrefs';
 import { Button } from '../common';
+import { PermissionGate } from './PermissionGate';
 import { AdminAuthenticatedImage } from './AdminAuthenticatedImage';
 import { BulkCategoryModal } from './BulkCategoryModal';
 
 interface CategoryOption {
   id: number;
   name: string;
+  // #1160: folders are categories too; the move dialog labels them.
+  is_folder?: boolean;
 }
 
 interface AdminPhotoGridProps {
@@ -39,6 +43,15 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
   const { format: formatDate } = useLocalizedDate();
   const queryClient = useQueryClient();
   const [selectedPhotos, setSelectedPhotos] = useState<Set<number>>(new Set());
+  // Where a shift-click measures its range from: the last tile clicked without
+  // the shift key (#1212). The index is what a range needs — a span of the
+  // current ordering — but the id is carried with it so the anchor can prove
+  // it still points at the tile it was set on. Filtering or re-sorting leaves
+  // index 5 meaning a different photo, and a range measured from a stale
+  // anchor selects the wrong span silently, which is worse than not selecting
+  // at all. Validating at use beats clearing on every list change: a
+  // background refetch hands back an equal list and the anchor stays good.
+  const [anchor, setAnchor] = useState<{ index: number; photoId: number } | null>(null);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingPhotos, setDeletingPhotos] = useState<Set<number>>(new Set());
@@ -55,7 +68,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
     setPhotoViewMode(mode);
   };
 
-  const handlePhotoSelect = (photoId: number, e?: React.MouseEvent) => {
+  const handlePhotoSelect = (photoId: number, e?: React.MouseEvent, index?: number) => {
     if (e) {
       e.stopPropagation();
     }
@@ -64,11 +77,38 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
       setIsSelectionMode(true);
     }
     const newSelected = new Set(selectedPhotos);
+
+    // Shift-click selects the span from the last plain click to here (#1212),
+    // the way every file manager does it. Re-assigning a category across a few
+    // hundred imported photos is otherwise a few hundred individual clicks.
+    //
+    // Extends rather than replaces: the grid already lets you accumulate tiles
+    // one at a time, so a range is another addition to that set, not a reset
+    // of it. And it only ever adds — dragging a range back over itself to
+    // deselect is a different gesture, and guessing at it would make a
+    // mis-aimed shift-click destroy a selection instead of growing it.
+    const anchorStillValid = anchor !== null && photos[anchor.index]?.id === anchor.photoId;
+    if (e?.shiftKey && anchorStillValid && index !== undefined) {
+      const from = Math.min(anchor.index, index);
+      const to = Math.max(anchor.index, index);
+      for (let i = from; i <= to; i++) {
+        const photo = photos[i];
+        if (photo) newSelected.add(photo.id);
+      }
+      setSelectedPhotos(newSelected);
+      onSelectionChange?.(Array.from(newSelected));
+      // Anchor deliberately left where it was, so a second shift-click
+      // re-aims the same range from the original point rather than walking
+      // the anchor along behind the cursor.
+      return;
+    }
+
     if (newSelected.has(photoId)) {
       newSelected.delete(photoId);
     } else {
       newSelected.add(photoId);
     }
+    if (index !== undefined) setAnchor({ index, photoId });
     setSelectedPhotos(newSelected);
     onSelectionChange?.(Array.from(newSelected));
   };
@@ -77,6 +117,11 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
     let newSelected: Set<number>;
     if (selectedPhotos.size === photos.length) {
       newSelected = new Set();
+      // Clearing the selection clears what a range would measure from (#1212
+      // review). The anchor is invisible, so an anchor that outlived the
+      // selection made the next shift-click reach back into a session the user
+      // had already ended and select a range they never started.
+      setAnchor(null);
     } else {
       newSelected = new Set(photos.map(p => p.id));
     }
@@ -122,6 +167,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
       await photosService.deletePhotos(eventId, selectedIds);
       toast.success(`${count} photo${count > 1 ? 's' : ''} deleted successfully`);
       setSelectedPhotos(new Set());
+      setAnchor(null);
       setIsSelectionMode(false);
       onSelectionChange?.([]);
       onPhotosDeleted();
@@ -147,6 +193,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
     setIsSelectionMode(!isSelectionMode);
     if (isSelectionMode) {
       setSelectedPhotos(new Set());
+      setAnchor(null);
       onSelectionChange?.([]);
     }
   };
@@ -169,6 +216,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
         })
       );
       setSelectedPhotos(new Set());
+      setAnchor(null);
       setIsSelectionMode(false);
       onSelectionChange?.([]);
       setIsCategoryModalOpen(false);
@@ -209,50 +257,54 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                   <span className="text-sm text-neutral-600 dark:text-neutral-400">
                     {t('gallery.photosSelected', { count: selectedPhotos.size })}
                   </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsCategoryModalOpen(true)}
-                    leftIcon={<FolderOpen className="w-4 h-4" />}
-                  >
-                    {t('photos.moveToCategory', 'Move to Category')}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      try {
-                        await photosService.bulkUpdatePhotos(eventId, Array.from(selectedPhotos), { visibility: 'hidden' });
-                        toast.success(t('admin.photos.hiddenSuccess', 'Photos hidden'));
-                        onPhotosDeleted();
-                      } catch { toast.error(t('common.error')); }
-                    }}
-                    leftIcon={<EyeOff className="w-4 h-4" />}
-                  >
-                    {t('admin.photos.hideSelected', 'Hide')}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      try {
-                        await photosService.bulkUpdatePhotos(eventId, Array.from(selectedPhotos), { visibility: 'visible' });
-                        toast.success(t('admin.photos.visibleSuccess', 'Photos visible'));
-                        onPhotosDeleted();
-                      } catch { toast.error(t('common.error')); }
-                    }}
-                    leftIcon={<Eye className="w-4 h-4" />}
-                  >
-                    {t('admin.photos.showSelected', 'Show')}
-                  </Button>
-                  <button
-                    onClick={handleDeleteSelected}
-                    disabled={isDeleting}
-                    className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-red-400 rounded-lg flex items-center gap-2"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    {t('gallery.deleteSelected', 'Delete Selected')}
-                  </button>
+                  <PermissionGate permission="photos.edit">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsCategoryModalOpen(true)}
+                      leftIcon={<FolderOpen className="w-4 h-4" />}
+                    >
+                      {t('photos.moveToCategory', 'Move to Category')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          await photosService.bulkUpdatePhotos(eventId, Array.from(selectedPhotos), { visibility: 'hidden' });
+                          toast.success(t('admin.photos.hiddenSuccess', 'Photos hidden'));
+                          onPhotosDeleted();
+                        } catch { toast.error(t('common.error')); }
+                      }}
+                      leftIcon={<EyeOff className="w-4 h-4" />}
+                    >
+                      {t('admin.photos.hideSelected', 'Hide')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          await photosService.bulkUpdatePhotos(eventId, Array.from(selectedPhotos), { visibility: 'visible' });
+                          toast.success(t('admin.photos.visibleSuccess', 'Photos visible'));
+                          onPhotosDeleted();
+                        } catch { toast.error(t('common.error')); }
+                      }}
+                      leftIcon={<Eye className="w-4 h-4" />}
+                    >
+                      {t('admin.photos.showSelected', 'Show')}
+                    </Button>
+                  </PermissionGate>
+                  <PermissionGate permission="photos.delete">
+                    <button
+                      onClick={handleDeleteSelected}
+                      disabled={isDeleting}
+                      className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-red-400 rounded-lg flex items-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      {t('gallery.deleteSelected', 'Delete Selected')}
+                    </button>
+                  </PermissionGate>
                 </>
               )}
             </>
@@ -309,6 +361,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
           const isVideo = (photo.media_type === 'video') ||
             (photo.mime_type && photo.mime_type.startsWith('video/')) ||
             photo.type === 'video';
+          const isHidden = (photo as any).visibility === 'hidden';
           return (
             <div
               key={photo.id}
@@ -328,7 +381,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
               className={`absolute top-2 right-2 z-20 transition-opacity ${
                 selectedPhotos.has(photo.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
               }`}
-              onClick={(e) => handlePhotoSelect(photo.id, e)}
+              onClick={(e) => handlePhotoSelect(photo.id, e, index)}
             >
               <div className={`w-6 h-6 rounded border-2 flex items-center justify-center ${
                 selectedPhotos.has(photo.id)
@@ -339,10 +392,19 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
               </div>
             </button>
 
-            {/* Visibility badge (#172) */}
-            {(photo as any).visibility === 'hidden' && (
-              <div className="absolute top-2 left-2 z-20">
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/90 text-white text-[10px] font-medium">
+            {/* Visibility badge (#172). Same badge vocabulary as the list
+                view's row badges — icon + short label, tooltip carrying the
+                explanation. It shares the top-left corner with the category
+                badge, so that one drops a row while this is showing. */}
+            {isHidden && (
+              <div
+                className="absolute top-2 left-2 z-20"
+                data-testid={`admin-photo-hidden-badge-${photo.id}`}
+              >
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/90 text-white text-[10px] font-medium"
+                  title={t('admin.photos.hiddenTooltip', 'Hidden from guests — this photo is not shown in the client gallery.') as string}
+                >
                   <EyeOff className="w-3 h-3" />
                   {t('admin.photos.hidden', 'Hidden')}
                 </span>
@@ -420,19 +482,23 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                 
                 {!isSelectionMode && (
                   <div className="flex gap-1">
-                    <button
-                      onClick={(e) => handleDownload(photo, e)}
-                      className="p-1 text-white hover:bg-white/20 rounded"
-                    >
-                      <Download className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={(e) => handleDeleteSingle(photo, e)}
-                      className="p-1 text-white hover:bg-white/20 rounded disabled:opacity-50"
-                      disabled={isDeleting}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                    <PermissionGate permission="photos.download">
+                      <button
+                        onClick={(e) => handleDownload(photo, e)}
+                        className="p-1 text-white hover:bg-white/20 rounded"
+                      >
+                        <Download className="w-3 h-3" />
+                      </button>
+                    </PermissionGate>
+                    <PermissionGate permission="photos.delete">
+                      <button
+                        onClick={(e) => handleDeleteSingle(photo, e)}
+                        className="p-1 text-white hover:bg-white/20 rounded disabled:opacity-50"
+                        disabled={isDeleting}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </PermissionGate>
                   </div>
                 )}
               </div>
@@ -440,7 +506,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
 
             {/* Category Badge - move to top-left and prevent overlap with select checkbox */}
             {photo.category_name && (
-              <div className="absolute left-2 top-2 pointer-events-none">
+              <div className={`absolute left-2 ${isHidden ? 'top-9' : 'top-2'} pointer-events-none`}>
                 <span className="px-2 py-1 text-xs font-medium bg-white/90 text-neutral-700 rounded max-w-[70%] whitespace-nowrap overflow-hidden text-ellipsis">
                   {photo.category_name}
                 </span>
@@ -456,6 +522,56 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
               </div>
             )}
             
+            {/* Color label (#1044). Bottom-left, opposite the rating/comment
+                indicators, so a labelled photo reads at a glance in the
+                admin grid the same way it does in the client's gallery. */}
+            {photo.dominant_color_label && COLOR_LABEL_SWATCHES[photo.dominant_color_label as ColorLabel] && (
+              <div className="absolute bottom-2 left-2 z-10">
+                <span
+                  className="flex items-center justify-center w-5 h-5 rounded-full border-2 border-white/90 shadow"
+                  style={{ backgroundColor: COLOR_LABEL_SWATCHES[photo.dominant_color_label as ColorLabel].fill }}
+                  role="img"
+                  aria-label={t('feedback.markedAs', 'Marked as {{color}}', {
+                    color: t(`feedback.colorLabels.${photo.dominant_color_label}`, photo.dominant_color_label),
+                  })}
+                  title={t('feedback.markedAs', 'Marked as {{color}}', {
+                    color: t(`feedback.colorLabels.${photo.dominant_color_label}`, photo.dominant_color_label),
+                  })}
+                />
+              </div>
+            )}
+
+            {/* The admin's OWN mark (#1044 follow-up), next to the client's
+                dot but visually distinct — a white ring and a star count —
+                so a triage pass is never confused with what the client
+                chose. */}
+            {(photo.my_color_label || photo.my_rating) && (
+              <div className="absolute bottom-2 left-9 z-10 flex items-center gap-1">
+                {photo.my_color_label && COLOR_LABEL_SWATCHES[photo.my_color_label as ColorLabel] && (
+                  <span
+                    className="w-5 h-5 rounded-full border-2 border-dashed border-white shadow"
+                    style={{ backgroundColor: COLOR_LABEL_SWATCHES[photo.my_color_label as ColorLabel].fill }}
+                    role="img"
+                    aria-label={t('admin.photos.yourMarkColor', 'Your mark: {{color}}', {
+                      color: t(`feedback.colorLabels.${photo.my_color_label}`, photo.my_color_label),
+                    })}
+                    title={t('admin.photos.yourMarkColor', 'Your mark: {{color}}', {
+                      color: t(`feedback.colorLabels.${photo.my_color_label}`, photo.my_color_label),
+                    })}
+                  />
+                )}
+                {!!photo.my_rating && (
+                  <span
+                    className="bg-white/90 backdrop-blur-sm rounded-full px-1.5 py-0.5 text-xs font-medium text-neutral-700 flex items-center gap-0.5"
+                    title={t('admin.photos.yourMarkRating', 'Your rating: {{count}}', { count: photo.my_rating })}
+                  >
+                    <Star className="w-3 h-3 text-yellow-500" fill="currentColor" />
+                    {photo.my_rating}
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Feedback Indicators (moved to bottom-right to avoid covering category) */}
             {(commentCount > 0 || averageRating > 0 || likeCount > 0) && (
               <div className="absolute bottom-2 right-2 flex items-center gap-1 z-10">
@@ -540,7 +656,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                       role="checkbox"
                       aria-checked={isSelected}
                       data-testid={`admin-photo-row-checkbox-${photo.id}`}
-                      onClick={(e) => handlePhotoSelect(photo.id, e)}
+                      onClick={(e) => handlePhotoSelect(photo.id, e, index)}
                     >
                       <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
                         isSelected
@@ -594,7 +710,10 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                             </span>
                           )}
                           {isHidden && (
-                            <span className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-[10px] font-medium">
+                            <span
+                              className="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-[10px] font-medium"
+                              title={t('admin.photos.hiddenTooltip', 'Hidden from guests — this photo is not shown in the client gallery.') as string}
+                            >
                               <EyeOff className="w-3 h-3" />
                               {t('admin.photos.hidden', 'Hidden')}
                             </span>
@@ -666,21 +785,25 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                   <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                     {!isSelectionMode && (
                       <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                        <button
-                          onClick={(e) => handleDownload(photo, e)}
-                          className="p-1.5 text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-600 rounded"
-                          title={t('common.download', 'Download')}
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteSingle(photo, e)}
-                          className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 rounded disabled:opacity-50"
-                          disabled={isRowDeleting}
-                          title={t('common.delete', 'Delete')}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <PermissionGate permission="photos.download">
+                          <button
+                            onClick={(e) => handleDownload(photo, e)}
+                            className="p-1.5 text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-600 rounded"
+                            title={t('common.download', 'Download')}
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                        </PermissionGate>
+                        <PermissionGate permission="photos.delete">
+                          <button
+                            onClick={(e) => handleDeleteSingle(photo, e)}
+                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 rounded disabled:opacity-50"
+                            disabled={isRowDeleting}
+                            title={t('common.delete', 'Delete')}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </PermissionGate>
                       </div>
                     )}
                   </td>

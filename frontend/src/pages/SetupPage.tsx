@@ -1,16 +1,22 @@
 import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Key, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowLeft, ArrowRight, Copy, Check, ExternalLink, Bug, Lightbulb, Star, Coffee } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 
 import { Button, Input, Card, Loading } from '../components/common';
 import { useAdminAuth } from '../contexts';
 import { setupService } from '../services/setup.service';
+import { settingsService } from '../services/settings.service';
 import { featureFlagsService, type FeatureFlags, type FeatureKey } from '../services/featureFlags.service';
+import { productUsageService } from '../services/productUsage.service';
+import { ProductUsageConsentDialog } from '../features/settings/components/ProductUsageConsentDialog';
 import { PicpeakRestoreCard } from '../components/admin/PicpeakBackupCard';
 import { SetupConfigStep } from '../components/admin/SetupConfigStep';
+import { SetupEventTypesStep } from '../components/admin/SetupEventTypesStep';
+import { UsageReportingPoints } from '../components/admin/UsageReportingPitch';
 import { resolveLoginLogoClasses } from '../utils/loginLogoSize';
 import type { AdminUser } from '../types';
 
@@ -25,7 +31,7 @@ const SETUP_DOCS_URL =
 const COMMUNITY_LINKS: {
   key: string;
   href: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: LucideIcon;
 }[] = [
   { key: 'bug', href: 'https://github.com/PicPeak/picpeak/issues/new?template=bug_report.md', icon: Bug },
   { key: 'feature', href: 'https://github.com/PicPeak/picpeak/issues/new?template=feature_request.md', icon: Lightbulb },
@@ -59,6 +65,7 @@ export const SetupPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { login } = useAdminAuth();
+  const queryClient = useQueryClient();
 
   const { data: status, isLoading: statusLoading, isError: statusError } = useQuery({
     queryKey: ['setup-status'],
@@ -67,7 +74,7 @@ export const SetupPage: React.FC = () => {
     staleTime: Infinity,
   });
 
-  const [step, setStep] = useState<'token' | 'account' | 'usage' | 'restore' | 'config' | 'community'>('token');
+  const [step, setStep] = useState<'token' | 'account' | 'usage' | 'eventTypes' | 'restore' | 'config' | 'usageReporting' | 'community'>('token');
   const [form, setForm] = useState({ token: '', email: '', password: '', confirm: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -76,6 +83,14 @@ export const SetupPage: React.FC = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selectedFeatures, setSelectedFeatures] = useState<Set<FeatureKey>>(new Set());
   const [isSavingFeatures, setIsSavingFeatures] = useState(false);
+  const [showUsageConsent, setShowUsageConsent] = useState(false);
+  const [isEnablingUsageReporting, setIsEnablingUsageReporting] = useState(false);
+  const { data: usageStatus, isError: usageStatusError } = useQuery({
+    queryKey: ['productUsage'],
+    queryFn: productUsageService.status,
+    enabled: step === 'usageReporting',
+    retry: false,
+  });
 
   if (statusLoading) {
     return <Loading fullScreen />;
@@ -175,6 +190,20 @@ export const SetupPage: React.FC = () => {
         role: { name: user.role.name, displayName: user.role.displayName ?? user.role.name },
       };
       login('', adminUser);
+      // Persist the origin the admin is standing on as the public site URL
+      // (#705). Doing it HERE, not in the optional config step, means an
+      // install that skips the rest of the wizard still has a usable origin
+      // for background jobs (reminder emails, QR codes) that have no request
+      // to derive one from. Best-effort: never block entering the app, and
+      // never overwrite a value the environment already pins.
+      try {
+        const existing = await settingsService.getSettingsByType('general');
+        if (!existing?.general_site_url_env_pinned && !existing?.general_site_url) {
+          await settingsService.updateSettings({
+            general_site_url: window.location.origin.replace(/\/+$/, ''),
+          });
+        }
+      } catch { /* the config step offers the field again */ }
       toast.success(t('setup.success'));
       // Admin now exists and we're logged in (cookie set) — advance to the
       // opt-in "How will you use PicPeak?" step rather than jumping straight to
@@ -237,21 +266,51 @@ export const SetupPage: React.FC = () => {
       const flags: Partial<FeatureFlags> = {};
       for (const key of ALL_USAGE_FEATURES) flags[key] = selectedFeatures.has(key);
       await featureFlagsService.update(flags);
-    } catch (_) {
+    } catch {
       toast.warn(t('setup.featuresSaveFailed'));
     } finally {
       setIsSavingFeatures(false);
-      // If the chosen features need config the wizard can collect (invoicing,
-      // email), go to the config step; otherwise enter the app.
-      const needsConfig =
-        selectedFeatures.has('bills') ||
-        selectedFeatures.has('reminderEmails') ||
-        selectedFeatures.has('incomingMail') ||
-        selectedFeatures.has('whatsapp');
-      // Both the config branch and the no-config path end on the final
-      // community/thank-you step (#732), whose Finish button enters the app.
-      setStep(needsConfig ? 'config' : 'community');
+      // Event types come next (#800) — the wizard is the one window in which
+      // the seeded defaults can be freely renamed or deleted, because nothing
+      // (events, quotes, reminder mails) references them yet.
+      setStep('eventTypes');
     }
+  };
+
+  // Always visit the config step (#705). It used to be skipped unless a
+  // feature the wizard can configure (invoicing, email) was selected, which
+  // meant a gallery-only install never saw the two things EVERY install needs:
+  // the public address its client links are built from, and the SMTP settings
+  // that send them. Both sections are feature-independent; the invoicing block
+  // is still conditional inside the step.
+  const continueAfterEventTypes = () => {
+    setStep('config');
+  };
+
+  // Best-effort, same as the feature-flag save above: a collector hiccup on a
+  // fresh install must not trap the admin here. They can always opt in later
+  // from Settings → Product usage, where the full disclosure lives.
+  const enableUsageReporting = async () => {
+    setIsEnablingUsageReporting(true);
+    try {
+      queryClient.setQueryData(['productUsage'], await productUsageService.enable());
+      toast.success(t('setup.usageReporting.enabled'));
+    } catch {
+      toast.warn(t('setup.usageReporting.enableFailed'));
+    } finally {
+      setIsEnablingUsageReporting(false);
+      setStep('community');
+    }
+  };
+
+  // Declining here still counts as having been asked (#1360): without this,
+  // the one-time post-update prompt would immediately re-ask the same admin
+  // the same question seconds later on their first dashboard visit.
+  const skipUsageReporting = async () => {
+    try {
+      queryClient.setQueryData(['productUsage'], await productUsageService.promptSeen());
+    } catch { /* best-effort — worst case the dashboard asks once more */ }
+    setStep('community');
   };
 
   const stepNumber = step === 'token' ? 1 : step === 'account' ? 2 : 3;
@@ -278,13 +337,17 @@ export const SetupPage: React.FC = () => {
               ? t('setup.tokenStepSubtitle')
               : step === 'account'
                 ? t('setup.accountStepSubtitle')
-                : step === 'restore'
-                  ? t('setup.restoreStepSubtitle')
-                  : step === 'config'
-                    ? t('setup.config.subtitle')
-                    : step === 'community'
-                      ? t('setup.community.subtitle')
-                      : t('setup.usageSubtitle')}
+                : step === 'eventTypes'
+                  ? t('setup.eventTypes.subtitle')
+                  : step === 'restore'
+                    ? t('setup.restoreStepSubtitle')
+                    : step === 'config'
+                      ? t('setup.config.subtitle')
+                      : step === 'usageReporting'
+                        ? t('setup.usageReporting.subtitle')
+                        : step === 'community'
+                          ? t('setup.community.subtitle')
+                          : t('setup.usageSubtitle')}
           </p>
           {(step === 'token' || step === 'account' || step === 'usage') && (
             <p className="mt-3 text-xs font-medium tracking-wide uppercase" style={{ color: '#171717', opacity: 0.5 }}>
@@ -509,11 +572,55 @@ export const SetupPage: React.FC = () => {
                 {t('setup.back')}
               </Button>
             </div>
+          ) : step === 'eventTypes' ? (
+            <SetupEventTypesStep onDone={continueAfterEventTypes} />
           ) : step === 'config' ? (
             <SetupConfigStep
               selectedFeatures={selectedFeatures}
-              onDone={() => setStep('community')}
+              onDone={() => setStep('usageReporting')}
             />
+          ) : step === 'usageReporting' ? (
+            <div className="space-y-6">
+              <p className="text-sm text-neutral-700">{t('setup.usageReporting.intro')}</p>
+
+              <UsageReportingPoints />
+
+              {(usageStatusError || usageStatus?.collector_error) && (
+                <p role="alert" className="text-sm text-neutral-700">{t('setup.usageReporting.enableFailed')}</p>
+              )}
+
+              <div className="space-y-3">
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="lg"
+                  className="w-full"
+                  isLoading={isEnablingUsageReporting}
+                  disabled={!usageStatus?.collector_url}
+                  onClick={() => setShowUsageConsent(true)}
+                >
+                  {t('productUsage.review')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full"
+                  disabled={isEnablingUsageReporting}
+                  onClick={skipUsageReporting}
+                >
+                  {t('setup.usageReporting.skip')}
+                </Button>
+              </div>
+              {showUsageConsent && usageStatus?.collector_url && (
+                <ProductUsageConsentDialog
+                  collector={usageStatus.collector_url}
+                  busy={isEnablingUsageReporting}
+                  close={() => setShowUsageConsent(false)}
+                  enable={enableUsageReporting}
+                />
+              )}
+            </div>
           ) : (
             <div className="space-y-6">
               <p className="text-sm text-neutral-700">{t('setup.community.mission')}</p>
@@ -546,7 +653,14 @@ export const SetupPage: React.FC = () => {
                 variant="primary"
                 size="lg"
                 className="w-full"
-                onClick={() => navigate('/admin/dashboard', { replace: true })}
+                onClick={async () => {
+                  // One-way marker: re-locks the seeded system event types
+                  // (#800). Best-effort — a failure must not trap the user on
+                  // the thank-you screen, and the flag re-arms nothing risky
+                  // (the delete window also requires zero usage server-side).
+                  try { await setupService.completeSetup(); } catch { /* best-effort */ }
+                  navigate('/admin/dashboard', { replace: true });
+                }}
                 rightIcon={<ArrowRight className="w-4 h-4" />}
               >
                 {t('setup.community.finish')}

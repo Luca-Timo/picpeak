@@ -288,12 +288,20 @@ class RestoreService {
 
       // Step 6: Perform the actual restore based on type
       let restoreResult;
+      // Set by the full/database branches; acted on after step 7c so the
+      // schema — and any data conversion those migrations perform — is in
+      // place before the live face worker can claim a row.
+      let needsFaceRequeue = false;
+      let migrationsApplied = true;
       switch (options.restoreType) {
       case 'full':
         restoreResult = await this.performFullRestore(localBackupPath, manifest, options);
+        // Deferred to after step 7c — see the requeue there.
+        needsFaceRequeue = true;
         break;
       case 'database':
         restoreResult = await this.performDatabaseRestore(localBackupPath, manifest, options);
+        needsFaceRequeue = true;
         break;
       case 'files':
         restoreResult = await this.performFilesRestore(localBackupPath, manifest, options);
@@ -399,9 +407,29 @@ class RestoreService {
         }
         this.log('info', 'Post-restore migrations applied');
       } catch (migErr) {
+        // Also gates the face requeue below: a pre-#1163 backup whose
+        // migration 187 did not run still holds event-relative external
+        // paths, and queueing those hands the live worker rows it will
+        // resolve from the media root and mark 'failed' — a state the later
+        // retry does not clear.
+        migrationsApplied = false;
         this.log('warn',
           'Post-restore migrate:safe failed — restore data is in place but the schema may lag the running image. ' +
           `A container restart will retry via wait-for-db.sh. Error: ${migErr.message}`);
+      }
+
+      // Faces last (#1163). This used to run in step 6, before the migrations
+      // above. On a backup predating migration 187 that meant queueing rows
+      // whose external_relpath was still relative to events.external_path
+      // while the running code resolves from the media root — so the live
+      // worker resolved them against the wrong path and marked them 'failed',
+      // a state the later fold does not clear and only an explicit Re-scan
+      // does. The files are already in place by step 6, so deferring costs
+      // nothing and closes that window.
+      if (needsFaceRequeue && migrationsApplied) {
+        await this.requeueFaceScans();
+      } else if (needsFaceRequeue) {
+        this.log('warn', 'Skipping face requeue — post-restore migrations did not complete, so photo paths may be unconverted');
       }
 
       // Step 8: Clean up temporary files
@@ -822,7 +850,7 @@ class RestoreService {
    * Download backup from S3
    */
   async downloadFromS3(s3Url, manifest, options) {
-    const s3PathMatch = s3Url.match(/^s3:\/\/([^\/]+)\/(.+)$/);
+    const s3PathMatch = s3Url.match(/^s3:\/\/([^/]+)\/(.+)$/);
     if (!s3PathMatch) {
       throw new Error('Invalid S3 URL format');
     }
@@ -915,6 +943,45 @@ class RestoreService {
   /**
    * Perform full restore (database + files)
    */
+  /**
+   * Requeue face detection after a restore (#1074).
+   *
+   * Face data is deliberately excluded from backups — it is derived, and
+   * biometric data should not travel in an archive. But photos.face_status
+   * DOES restore, so without this the restored install claims every photo is
+   * scanned while photo_faces is empty, and the worker never picks them up
+   * because it only claims 'pending'. The gallery shows a finished scan and
+   * no people, forever, with nothing to indicate why.
+   *
+   * MUST run after the FILES are restored, not merely after the database.
+   * The face worker is live throughout a restore; queued earlier it races the
+   * file copy and either scans the previous instance's originals or marks
+   * photos failed for files that are not there yet — and nothing re-queues
+   * them afterwards.
+   *
+   * Only touches rows that had been scanned; NULL stays NULL, so this never
+   * switches the feature on for anyone.
+   */
+  async requeueFaceScans() {
+    try {
+      const { db: restoredDb } = require('../database/db');
+      const requeued = await restoredDb('photos')
+        .whereNotNull('face_status')
+        .update({
+          face_status: 'pending',
+          face_count: null,
+          face_started_at: null,
+          face_error: null,
+        });
+      if (requeued > 0) {
+        this.log('info', `Requeued ${requeued} photo(s) for face detection after restore`);
+      }
+    } catch (err) {
+      // Pre-migration-177 backups have no such column; not an error.
+      this.log('info', `Face state reset skipped: ${err.message}`);
+    }
+  }
+
   async performFullRestore(backupPath, manifest, options) {
     const result = {
       databaseRestored: false,
@@ -942,7 +1009,7 @@ class RestoreService {
   /**
    * Perform database-only restore
    */
-  async performDatabaseRestore(backupPath, manifest, options) {
+  async performDatabaseRestore(backupPath, manifest, _options) {
     this.updateProgress('Restoring database...');
 
     const dbBackupFile = manifest.database.backup_file;
@@ -1262,6 +1329,7 @@ END $$;`
       await reinitPool();
       this.log('info', 'Knex pool re-initialized');
 
+
       // NOTE: we deliberately do NOT call `db.migrate.latest()` here.
       //
       // The picpeak migrations directory contains `helpers.js` (a
@@ -1552,7 +1620,8 @@ END $$;`
     try {
       // Read backup manifest
       const manifestPath = path.join(preRestoreBackupPath, 'backup-manifest.json');
-      const backupManifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+      // Parsed for its side effect: throws if the manifest is missing/corrupt.
+      JSON.parse(await fs.readFile(manifestPath, 'utf8'));
 
       // Restore database if backed up
       const dbBackupPath = path.join(preRestoreBackupPath, 'database.sql.gz');
@@ -1654,7 +1723,7 @@ END $$;`
    * Download file from S3
    */
   async downloadFileFromS3(s3Url, localPath, s3Config) {
-    const s3PathMatch = s3Url.match(/^s3:\/\/([^\/]+)\/(.+)$/);
+    const s3PathMatch = s3Url.match(/^s3:\/\/([^/]+)\/(.+)$/);
     if (!s3PathMatch) {
       throw new Error('Invalid S3 URL format');
     }
@@ -1672,17 +1741,19 @@ END $$;`
     // connects, so a DNS-rebinding attacker (or an infra rebinding
     // condition) could answer the preflight lookup with a public address
     // and the SDK's own later lookup with a private/metadata one.
-    // validateExternalUrlWithAddresses's resolved addresses get pinned
-    // into the S3Client's requestHandler via pinnedRequestOptions, so the
-    // connection can only land on an address that was actually vetted.
+    // validateExternalUrlAsync's resolved addresses get pinned into the
+    // S3Client's requestHandler via pinnedRequestOptions — the same
+    // primitive webhookDeliveryWorker.js/emailWebhookTransport.js use for
+    // outbound HTTP — so the connection can only land on an address that
+    // was actually vetted.
     let pinnedAgents = {};
     if (process.env.NODE_ENV === 'production' && s3Config && s3Config.endpoint) {
-      const { validateExternalUrlWithAddresses } = require('../utils/networkValidation');
+      const { validateExternalUrlAsync } = require('../utils/networkValidation');
       const { pinnedRequestOptions } = require('../utils/pinnedRequest');
       const endpointUrl = /^https?:\/\//.test(s3Config.endpoint)
         ? s3Config.endpoint
         : `https://${s3Config.endpoint}`;
-      const urlCheck = await validateExternalUrlWithAddresses(endpointUrl);
+      const urlCheck = await validateExternalUrlAsync(endpointUrl);
       if (!urlCheck.valid) {
         throw new Error('S3 endpoint resolves to a private or internal network address');
       }

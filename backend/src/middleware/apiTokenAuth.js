@@ -100,7 +100,7 @@ async function apiTokenAuth(req, res, next) {
     }
 
     // Touch last_used_at — async, don't block the request.
-    db('api_tokens').where({ id: row.id }).update({ last_used_at: new Date() })
+    db('api_tokens').where({ id: row.id }).update({ last_used_at: new Date().toISOString() })
       .catch((err) => logger.debug('api_tokens last_used update failed', { err: err.message }));
 
     // Same shape adminAuth produces, so requirePermission / ownership helpers

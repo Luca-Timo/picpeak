@@ -6,54 +6,110 @@ const { formatBoolean } = require('../utils/dbCompat');
 const { slugify } = require('../utils/slug');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
-const archiver = require('archiver');
 const StreamZip = require('node-stream-zip');
 const { requireEventOwnership } = require('../middleware/ownership');
 const { assertZipEntriesWithin } = require('../utils/safePath');
-const { sanitizeForZipEntry } = require('../utils/filenameSanitizer');
+const { escapeLikePattern, likeWithEscape } = require('../utils/sqlSecurity');
 const logger = require('../utils/logger');
+const { sanitizeForZipEntry } = require('../utils/filenameSanitizer');
 const { getPagination } = require('../utils/routeHelpers');
+const { ALLOWED_MEDIA_TYPES, ALLOWED_VIDEO_TYPES } = require('../utils/fileSecurityUtils');
+const { toIso } = require('../utils/dateNormalize');
 const router = express.Router();
+
+/**
+ * Which extracted files are media, for archives too old to carry a manifest.
+ *
+ * Derived from the upload map rather than listed here, so a format the
+ * uploader starts accepting is restorable the same day. The hardcoded
+ * jpg/jpeg/png/gif/webp list this replaced dropped every video and every DNG
+ * the event held. The bytes came back, the rows did not, and a photo with no
+ * row is gone as far as the gallery, the admin grid and every download are
+ * concerned.
+ */
+const flattenExtensions = (map) => new Set(
+  Object.values(map).flatMap((entry) => entry.extensions),
+);
+const RESTORABLE_EXTENSIONS = flattenExtensions(ALLOWED_MEDIA_TYPES);
+const VIDEO_EXTENSIONS = flattenExtensions(ALLOWED_VIDEO_TYPES);
 
 // Get all archived events
 router.get('/', adminAuth, requirePermission('archives.view'), async (req, res) => {
   try {
     const { page, limit, offset } = getPagination(req);
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const type = typeof req.query.type === 'string' ? req.query.type.trim() : '';
+    const sortBy = ['date', 'name', 'size'].includes(req.query.sortBy) ? req.query.sortBy : 'date';
 
-    // Get total count
-    const totalCount = await db('events')
-      .where('is_archived', formatBoolean(true))
-      .count('id as count')
+    // Search and type filtering run in SQL so both the returned rows and
+    // the total count cover the whole archive table, not just the page the
+    // client happens to be on. Values are bound, never interpolated. A
+    // literal % or _ typed into the search box has to match itself rather
+    // than act as a wildcard: escapeLikePattern() backslash-escapes them and
+    // likeWithEscape() names that backslash in an explicit ESCAPE clause,
+    // which matters because SQLite has no default escape character.
+    const applyFilters = (query) => {
+      if (search) {
+        query.whereRaw(
+          likeWithEscape('LOWER(events.event_name)'),
+          [`%${escapeLikePattern(search.toLowerCase())}%`]
+        );
+      }
+      if (type && type !== 'all') {
+        query.where('events.event_type', type);
+      }
+      return query;
+    };
+
+    // Totals for the filtered set, so pagination AND the stat cards describe
+    // the whole result rather than the page. Unjoined: joining photos here
+    // would multiply archive_size by the event's photo count.
+    const totalCount = await applyFilters(
+      db('events').where('events.is_archived', formatBoolean(true))
+    )
+      .count('events.id as count')
+      .sum({ archive_size: 'events.archive_size' })
+      .first();
+
+    // Photo total needs the join, so it is its own query for the same reason.
+    // count(photos.id) rather than count(*): a left-joined event with no
+    // photos must contribute 0, not 1.
+    const photoTotal = await applyFilters(
+      db('events').where('events.is_archived', formatBoolean(true))
+    )
+      .leftJoin('photos', 'events.id', 'photos.event_id')
+      .count('photos.id as count')
       .first();
 
     // Get archived events
-    const archives = await db('events')
-      .select(
-        'events.*',
-        db.raw('COUNT(DISTINCT photos.id) as photo_count'),
-        db.raw('SUM(photos.size_bytes) as total_size')
-      )
-      .leftJoin('photos', 'events.id', 'photos.event_id')
-      .where('events.is_archived', formatBoolean(true))
-      .groupBy('events.id')
-      .orderBy('events.archived_at', 'desc')
-      .limit(limit)
-      .offset(offset);
+    const archivesQuery = applyFilters(
+      db('events')
+        .select(
+          'events.*',
+          db.raw('COUNT(DISTINCT photos.id) as photo_count'),
+          db.raw('SUM(photos.size_bytes) as total_size')
+        )
+        .leftJoin('photos', 'events.id', 'photos.event_id')
+        .where('events.is_archived', formatBoolean(true))
+    ).groupBy('events.id');
 
-    // Check if archive files exist and get their sizes
-    const storagePath = process.env.STORAGE_PATH || path.join(__dirname, '../../../storage');
-    const archivesWithFileInfo = await Promise.all(archives.map(async (archive) => {
-      let archiveFileSize = 0;
-      if (archive.archive_path) {
-        try {
-          const fullArchivePath = path.join(storagePath, archive.archive_path);
-          const stats = await fs.stat(fullArchivePath);
-          archiveFileSize = stats.size;
-        } catch (error) {
-          logger.error(`Archive file not found: ${archive.archive_path}`);
-        }
-      }
+    if (sortBy === 'name') {
+      archivesQuery.orderBy('events.event_name', 'asc');
+    } else if (sortBy === 'size') {
+      // events.archive_size — the same number the Size column renders. It was
+      // the archived *content* size (SUM(photos.size_bytes)) until the column
+      // existed, which meant the list could be ordered by a value that is not
+      // on screen. NULL is an archive whose zip could not be measured (missing
+      // file, or a storage backend the backfill could not stat); it sorts as 0,
+      // i.e. last, which is also what it displays as.
+      archivesQuery.orderByRaw('COALESCE(events.archive_size, 0) desc');
+    } else {
+      archivesQuery.orderBy('events.archived_at', 'desc');
+    }
 
+    const archives = await archivesQuery.limit(limit).offset(offset);
+
+    const archivesWithFileInfo = archives.map((archive) => {
       return {
         id: archive.id,
         slug: archive.slug,
@@ -65,10 +121,11 @@ router.get('/', adminAuth, requirePermission('archives.view'), async (req, res) 
         expiresAt: archive.expires_at ? new Date(archive.expires_at).toISOString() : null,
         photoCount: archive.photo_count || 0,
         originalSize: archive.total_size || 0,
-        archiveSize: archiveFileSize,
+        // Number(): bigInteger comes back from the pg driver as a string.
+        archiveSize: Number(archive.archive_size) || 0,
         archivePath: archive.archive_path
       };
-    }));
+    });
 
     res.json({
       archives: archivesWithFileInfo,
@@ -77,6 +134,14 @@ router.get('/', adminAuth, requirePermission('archives.view'), async (req, res) 
         limit,
         total: totalCount.count,
         totalPages: Math.ceil(totalCount.count / limit)
+      },
+      // Aggregates over the FILTERED set — the stat cards used to sum the rows
+      // the client could see, so every figure was page-scoped while the footer
+      // beside them reported the real total.
+      totals: {
+        archives: Number(totalCount.count) || 0,
+        photos: Number(photoTotal.count) || 0,
+        archiveSize: Number(totalCount.archive_size) || 0
       }
     });
   } catch (error) {
@@ -402,16 +467,21 @@ router.post('/:id/restore', adminAuth, requirePermission('archives.restore'), re
       };
 
       for (const entry of entries) {
-        if (!entry.isDirectory && entry.name.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-          const filename = path.basename(entry.name);
+        if (entry.isDirectory) continue;
+        const filename = path.basename(entry.name);
+        // The manifest names every photo the event held, so an entry it claims
+        // is a photo whatever its extension. The extension set only has to
+        // carry pre-manifest archives, and it keeps the metadata files the
+        // archive writer adds alongside the photos out of the photos table.
+        const manifestEntry = manifestByFilename.get(filename);
+        const extension = path.extname(filename).toLowerCase();
+        if (manifestEntry || RESTORABLE_EXTENSIONS.has(extension)) {
           const dirPath = path.dirname(entry.name);
           const actualFilePath = path.join(eventDir, entry.name);
           
           try {
             // Check if file was extracted successfully
             const stats = await fs.stat(actualFilePath);
-            
-            const manifestEntry = manifestByFilename.get(filename);
 
             // The manifest is the only faithful source for the category, and
             // it is authoritative INCLUDING when it says "none". A manifest
@@ -447,11 +517,14 @@ router.post('/:id/restore', adminAuth, requirePermission('archives.restore'), re
               if (manifestEntry) {
                 categoryId = await resolveCategoryId(manifestEntry.category_name);
               } else if (dirPath && dirPath !== '.') {
-                categoryId = await resolveCategoryId(dirPath.split(path.sep)[0]);
+                categoryId = await resolveCategoryId(dirPath.split('/')[0]);
               }
 
               // Store relative path from storage root
               const relativePath = path.relative(storagePath, actualFilePath);
+              const isVideoEntry = manifestEntry?.media_type === 'video'
+                || String(manifestEntry?.mime_type || '').startsWith('video/')
+                || VIDEO_EXTENSIONS.has(extension);
               extractedPhotos.push({
                 event_id: archive.id,
                 filename: filename,
@@ -461,16 +534,37 @@ router.post('/:id/restore', adminAuth, requirePermission('archives.restore'), re
                 original_filename: manifestEntry?.original_filename || filename,
                 path: relativePath,
                 thumbnail_path: null, // Will be regenerated by thumbnail service
-                type: path.extname(filename).substring(1).toLowerCase(),
+                // Two values, 'individual' or 'collage', and the download zip
+                // groups its folders by them. Restore used to write the file
+                // extension here, which is neither, so every restored photo
+                // filed itself under "Collages". An event restored by that
+                // code and archived again carries the extension in its
+                // manifest, so only the two real values are trusted. The
+                // archive layout is `individual/` / `collages/`, so the
+                // directory is a faithful fallback for the rest, manifest
+                // or not. Zip entry names always use '/'.
+                type: (manifestEntry?.type === 'individual' || manifestEntry?.type === 'collage')
+                  ? manifestEntry.type
+                  : (dirPath.split('/')[0] === 'collages' ? 'collage' : 'individual'),
+                // Omitted entirely before, and the column defaults to 'image',
+                // so restoring an event turned its videos into photos the
+                // player would not play. Any video signal wins over a manifest
+                // 'image': fileWatcher never sets media_type, so its videos sit
+                // at the 'image' default with a video/* mime_type, and every
+                // reader recognises them through the mime alone.
+                media_type: isVideoEntry ? 'video' : 'image',
+                // The readers' second signal, and the only one a watcher video
+                // has. Legacy archives never carried it and still resolve
+                // through the extension.
+                mime_type: manifestEntry?.mime_type || null,
                 size_bytes: stats.size,
                 category_id: categoryId,
-                // .toISOString(), not a Date: inside jest the sqlite3 binding's
-                // type dispatch misses sandbox-created Dates and stores the
-                // literal string "[object Object]", so every restored photo
-                // gets a garbage timestamp that any test reading it would
-                // believe. Production stores Dates as ms-numbers and is
-                // unaffected — which is exactly why this survives unnoticed.
-                uploaded_at: new Date().toISOString()
+                // Restore order is not upload order; stamping the clock here
+                // reshuffled the whole gallery. The manifest holds whatever
+                // shape the row had, and on SQLite a `new Date()` written
+                // through knex is epoch milliseconds, so normalise to ISO
+                // rather than write the number back.
+                uploaded_at: toIso(manifestEntry?.uploaded_at) || new Date().toISOString()
               });
             }
           } catch (statError) {
@@ -503,6 +597,10 @@ router.post('/:id/restore', adminAuth, requirePermission('archives.restore'), re
         is_archived: false,
         is_active: true,
         archive_path: null,
+        // Cleared with the path it measures — a restored event has no zip, and
+        // a stale size would be re-shown verbatim if it is archived again
+        // before the new archive finishes writing.
+        archive_size: null,
         archived_at: null,
         expires_at: thirtyDaysFromNow.toISOString() // Reset expiration - works on both DBs
       });
@@ -609,6 +707,19 @@ router.delete('/:id', adminAuth, requirePermission('archives.delete'), requireEv
           // Ignore errors - thumbnail might already be deleted
         }
       }
+    }
+
+    // Face data (#1074, #1132). This route deletes the event row directly and
+    // relies on the FK cascade, but SQLite only honours ON DELETE CASCADE with
+    // `PRAGMA foreign_keys = ON`, which PicPeak does not set — and
+    // event_people_merge_dismissals has no event FK at all, on either engine.
+    // archiveEvent's purge step is deliberately nonfatal, so an event can
+    // still be carrying face data when it reaches this permanent delete.
+    // Delete explicitly, the same way deleteEventCascade does.
+    await db('photo_faces').where('event_id', req.params.id).del();
+    await db('event_people').where('event_id', req.params.id).del();
+    if (await db.schema.hasTable('event_people_merge_dismissals')) {
+      await db('event_people_merge_dismissals').where('event_id', req.params.id).del();
     }
 
     // Delete from database (cascade will delete photos and logs)

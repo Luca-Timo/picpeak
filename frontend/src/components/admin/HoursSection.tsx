@@ -22,10 +22,14 @@ import { Button, Card, LocalizedDateInput, TimeField } from '../common';
 import { DecimalInput } from '../common/DecimalInput';
 import { parseLocaleDecimal, parseDuration } from '../../utils/parsers';
 import { customerAdminService } from '../../services/customerAdmin.service';
+import { accountingService } from '../../services/accounting.service';
 import { businessProfileService } from '../../services/businessProfile.service';
+import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
+import { usePermission } from '../../hooks/usePermission';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { useMutationWithToast } from '../../hooks';
 import { ProjectSelect } from './ProjectSelect';
+import { CrossAddInvoiceDialog } from './CrossAddInvoiceDialog';
 
 export interface HoursSectionProps {
   customerId: number;
@@ -49,6 +53,13 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
   const { t } = useTranslation();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { flags } = useFeatureFlags();
+  // Billing hours (and the combined path) go through customers.edit (#866 review).
+  const canBill = usePermission('customers.edit');
+  // The open-re-bills counter below reads GET /expenses/inbound/by-customer/:id,
+  // which requires accounting.view — a different permission from the one that
+  // authorises the billing itself (#983).
+  const canViewAccounting = usePermission('accounting.view');
   const { format: fmtDate, formatTime: fmtTime } = useLocalizedDate();
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [startTime, setStartTime] = useState('09:00');
@@ -159,20 +170,54 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
     errorMessage: 'Failed to delete entry',
   });
 
-  const billMutation = useMutation({
-    mutationFn: () => customerAdminService.billUnbilledHourEntries(customerId),
-    onSuccess: ({ invoiceId }) => {
-      qc.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
-      qc.invalidateQueries({ queryKey: ['admin-customer', customerId] });
-      toast.success(t('customers.hours.toast.billed', 'Hours billed'));
-      // Open the new scheduled invoice so the admin can add other line
-      // items in addition to the hours before it ships.
-      if (invoiceId) navigate(`/admin/clients/bills/${invoiceId}/edit`);
-    },
-    onError: (err: any) => {
-      toast.error(err?.response?.data?.error || 'Failed to bill hours');
-    },
+  // Open re-bills count for the cross-add offer (#866) — only when the
+  // incoming-invoices feature is on, the admin can create the invoice
+  // (customers.edit) AND can read the re-bills the count comes from
+  // (accounting.view). Both are required: without the read permission the
+  // request just 403s on every render (#983).
+  const { data: openRebills = 0 } = useQuery({
+    queryKey: ['customer-open-rebills-count', customerId],
+    queryFn: async () => (await accountingService.listCustomerRebills(customerId)).filter((r) => r.status === 'open').length,
+    enabled: !!flags.incomingInvoices && canBill && canViewAccounting,
+    staleTime: 30_000,
   });
+  const [crossAddOpen, setCrossAddOpen] = useState(false);
+  const [billBusy, setBillBusy] = useState(false);
+
+  const onBilled = (invoiceId: number, msg: string) => {
+    qc.invalidateQueries({ queryKey: ['admin-customer-hour-entries', customerId] });
+    qc.invalidateQueries({ queryKey: ['admin-customer', customerId] });
+    qc.invalidateQueries({ queryKey: ['customer-rebills', customerId] });
+    qc.invalidateQueries({ queryKey: ['customer-open-rebills-count', customerId] });
+    toast.success(msg);
+    // Open the new scheduled invoice so the admin can add other line
+    // items in addition to the hours before it ships.
+    if (invoiceId) navigate(`/admin/clients/bills/${invoiceId}/edit`);
+  };
+
+  const runBill = async (includeRebills: boolean) => {
+    setBillBusy(true);
+    try {
+      if (includeRebills) {
+        const { invoiceId } = await customerAdminService.billCombined(customerId, { includeHours: true, includeRebills: true });
+        onBilled(invoiceId, t('customers.hours.toast.billedCombined', 'Invoice created from hours and re-bills.'));
+      } else {
+        const { invoiceId } = await customerAdminService.billUnbilledHourEntries(customerId);
+        onBilled(invoiceId, t('customers.hours.toast.billed', 'Hours billed'));
+      }
+      setCrossAddOpen(false);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Failed to bill hours');
+    } finally {
+      setBillBusy(false);
+    }
+  };
+
+  const handleBillHours = () => {
+    // Offer to fold in open re-bills when the customer has both (Feature 3).
+    if (openRebills > 0) setCrossAddOpen(true);
+    else runBill(false);
+  };
 
   // Single pass — both the count and the money total live behind the
   // same filter. Memoised so a parent re-render (e.g. the
@@ -203,11 +248,15 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
 
   return (
     <Card padding="lg">
-      <h2 className="text-lg font-semibold text-theme mb-1 flex items-center gap-2">
+      {/* Explicit neutral colours (not `text-theme` / `text-muted-theme`):
+          those resolve to the gallery branding theme's --color-text, which
+          is applied globally on <html> and renders near-white inside the
+          light admin chrome (QA S13). */}
+      <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-1 flex items-center gap-2">
         <Clock className="w-5 h-5" />
         {t('customers.hours.section', 'Hours')}
       </h2>
-      <p className="text-xs text-muted-theme mb-4">
+      <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
         {isMonthly
           ? t('customers.hours.monthlyHint',
             'Entries auto-append to the current monthly draft. Edit / delete remains possible until the scheduler arms the draft for send.')
@@ -223,7 +272,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
           is configured anywhere along the chain. */}
       {!compact && (
         <div className="mb-4">
-          <label className="block text-sm font-medium text-theme mb-1">
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
             {t('customers.field.hourlyRate', 'Default hourly rate')}
           </label>
           {onHourlyRateChange ? (
@@ -238,7 +287,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
                 className="w-40 input"
                 placeholder="150.00"
               />
-              <p className="text-xs text-muted-theme mt-1">
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                 {t('customers.field.hourlyRateHint',
                   'Major units (e.g. 150.00 for {{currency}} 150). Leave blank to require a per-entry override on every block.',
                   { currency: profileDefaultCurrency })}
@@ -270,11 +319,11 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
               </div>
             </div>
           ) : (
-            <p className="text-sm text-theme">
+            <p className="text-sm text-neutral-900 dark:text-neutral-100">
               <span className="tabular-nums font-medium">
                 {profileDefaultCurrency} {((effectiveDefaultRateMinor as number) / 100).toFixed(2)}
               </span>
-              <span className="text-xs text-muted-theme ml-2">
+              <span className="text-xs text-neutral-500 dark:text-neutral-400 ml-2">
                 {customerHourlyRateMinor != null
                   ? t('customers.hours.rateSource.customer', 'from this customer')
                   : t('customers.hours.rateSource.installDefault', 'install-wide default')}
@@ -288,28 +337,28 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
           lives on the standalone /admin/clients/hours surface. */}
       {!compact && (
       <div className="border-t border-neutral-200 dark:border-neutral-700 pt-4 mb-4">
-        <h3 className="text-sm font-semibold mb-3">{t('customers.hours.form.title', 'Log new entry')}</h3>
+        <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mb-3">{t('customers.hours.form.title', 'Log new entry')}</h3>
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <div>
-            <label className="block text-xs text-muted-theme mb-1">
+            <label className="block text-xs text-neutral-500 dark:text-neutral-400 mb-1">
               {t('customers.hours.form.date', 'Date')}
             </label>
             <LocalizedDateInput value={entryDate} onChange={setEntryDate} />
           </div>
           <div>
-            <label className="block text-xs text-muted-theme mb-1">
+            <label className="block text-xs text-neutral-500 dark:text-neutral-400 mb-1">
               {t('customers.hours.form.start', 'Start')}
             </label>
             <TimeField value={startTime} onChange={setStartTime} />
           </div>
           <div>
-            <label className="block text-xs text-muted-theme mb-1">
+            <label className="block text-xs text-neutral-500 dark:text-neutral-400 mb-1">
               {t('customers.hours.form.end', 'End')}
             </label>
             <TimeField value={endTime} onChange={setEndTime} />
           </div>
           <div>
-            <label className="block text-xs text-muted-theme mb-1">
+            <label className="block text-xs text-neutral-500 dark:text-neutral-400 mb-1">
               {t('customers.hours.form.duration', 'Duration')}
             </label>
             <input
@@ -330,7 +379,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
               className="input w-full" />
           </div>
           <div>
-            <label className="block text-xs text-muted-theme mb-1">
+            <label className="block text-xs text-neutral-500 dark:text-neutral-400 mb-1">
               {t('customers.hours.form.rateOverride', 'Rate override')}
             </label>
             <input
@@ -345,7 +394,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
           </div>
         </div>
         <div className="mt-3">
-          <label className="block text-xs text-muted-theme mb-1">
+          <label className="block text-xs text-neutral-500 dark:text-neutral-400 mb-1">
             {t('customers.hours.form.note', 'Note / description')}
           </label>
           <textarea rows={2} value={description}
@@ -383,7 +432,7 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
       {/* Bill-these-hours button for per-event customers only. Stays
           visible in compact mode so the customer-detail page can
           still trigger the on-demand billing action. */}
-      {!isMonthly && unbilledCount > 0 && (
+      {!isMonthly && unbilledCount > 0 && canBill && (
         <div className="mb-4 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 rounded p-3">
           <span className="text-sm">
             {t('customers.hours.unbilledCount',
@@ -395,27 +444,36 @@ export const HoursSection: React.FC<HoursSectionProps> = ({
           </span>
           <Button
             variant="primary"
-            disabled={billMutation.isPending}
-            isLoading={billMutation.isPending}
-            onClick={() => billMutation.mutate()}
+            disabled={billBusy}
+            isLoading={billBusy}
+            onClick={handleBillHours}
           >
             {t('customers.hours.billButton', 'Create draft invoice')}
           </Button>
         </div>
       )}
 
+      <CrossAddInvoiceDialog
+        open={crossAddOpen}
+        primary="hours"
+        otherCount={openRebills}
+        busy={billBusy}
+        onConfirm={runBill}
+        onClose={() => setCrossAddOpen(false)}
+      />
+
       {/* Entry list table. */}
       {isLoading ? (
-        <p className="text-sm text-muted-theme">{t('common.loading', 'Loading…')}</p>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">{t('common.loading', 'Loading…')}</p>
       ) : entries.length === 0 ? (
-        <p className="text-sm text-muted-theme">
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">
           {t('customers.hours.empty', 'No entries logged yet.')}
         </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs uppercase text-muted-theme">
+              <tr className="text-left text-xs uppercase text-neutral-500 dark:text-neutral-400">
                 <th className="py-2 pr-3">{t('customers.hours.col.date', 'Date')}</th>
                 <th className="py-2 pr-3">{t('customers.hours.col.range', 'Time')}</th>
                 <th className="py-2 pr-3 text-right">{t('customers.hours.col.hours', 'Hours')}</th>

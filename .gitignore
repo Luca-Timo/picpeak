@@ -131,20 +131,24 @@ docker-compose.dev.yml
 new-layouts/
 
 # Backend runtime storage (generated media, previews, thumbnails,
-# CRM/accounting documents) — never commit. Matches main: a dev instance
-# writes event photos into backend/storage/, and the narrower
-# business-docs-only rule let `git add -A` sweep them into a commit.
+# CRM/accounting documents) — never commit
 backend/storage/
 
-# Python bytecode. The ML sidecar lives on main only, so this branch never
-# needed the rule — which is how a `git add -A` from a shared working tree
-# committed 16 .pyc files here in #1247.
+# Python artifacts — the picpeak-ml sidecar (#1074) is the only Python in
+# this tree, but bytecode and virtualenvs must never be committed.
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+ml/.venv/
+ml/venv/
+# Locally produced model weights. The image fetches these by pinned URL and
+# SHA-256 at build time; a 90MB blob must not end up in git history.
+ml/*.onnx
+ml/*.h5
 
 # Issue / PR screenshots belong on a `screenshots/*` branch, never on main or
 # stable — that is what those branches exist for. Two landed at the repo root
-# on main in #1241 and shipped as part of the source tree; nothing stopped it.
+# in #1241 and shipped as part of the source tree.
 #
 # Anchored with a leading slash so docs/ keeps its own images.
 /issue-*.png

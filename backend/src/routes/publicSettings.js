@@ -18,6 +18,16 @@ router.get('/', async (req, res) => {
               'seo_meta_noindex', 'seo_meta_nofollow', 'seo_meta_noai',
               'event_default_require_password',
               'event_default_feedback_enabled',
+              // Per-type feedback defaults (#1044) — the create form seeds
+              // its feedback panel from these, the same way it seeds the
+              // master toggle above.
+              'event_default_allow_ratings',
+              'event_default_allow_likes',
+              'event_default_allow_favorites',
+              'event_default_allow_comments',
+              'event_default_allow_reactions',
+              'event_default_allow_color_labels',
+              'event_default_keybind_mode',
               'gallery_show_filter_bar',
               'event_phone_field_enabled',
               // #613 — guest upload UI needs to know the per-batch file
@@ -27,7 +37,17 @@ router.get('/', async (req, res) => {
               // backend route also enforces it via getMaxFilesPerUpload,
               // but a client-side guard saves a 4MB+ round-trip when the
               // limit is small.
-              'general_max_files_per_upload'
+              'general_max_files_per_upload',
+              // Same rationale for the per-file size limit — the gallery upload
+              // component renders it in the requirements hint and guards
+              // client-side before posting an oversized file. Backend enforces
+              // via getMaxFileSizeBytes regardless.
+              'general_max_file_size_mb',
+              // #798 — the admin login page needs to know whether to show
+              // the "Sign in with SSO" button (and its label). Only these
+              // two oidc_* keys are public; issuer/client stay admin-only.
+              'oidc_enabled',
+              'oidc_button_label'
             ]);
         })
         .select('setting_key', 'setting_value');
@@ -85,6 +105,10 @@ router.get('/', async (req, res) => {
       branding_twitter_url: settingsObject.branding_twitter_url || '',
       branding_youtube_url: settingsObject.branding_youtube_url || '',
       branding_promo_markdown: settingsObject.branding_promo_markdown || '',
+      // Info banner (#932). Rendered ABOVE the photo grid, unlike the promo
+      // banner by the footer — an onboarding hint is useless below a gallery
+      // the guest has to scroll past. Empty = off everywhere.
+      branding_info_markdown: settingsObject.branding_info_markdown || '',
       branding_promo_position: settingsObject.branding_promo_position === 'below_footer'
         ? 'below_footer'
         : 'above_footer',
@@ -128,6 +152,17 @@ router.get('/', async (req, res) => {
       crm_overview_show_outstanding: settingsObject.crm_overview_show_outstanding !== false,
       crm_overview_show_quotes: settingsObject.crm_overview_show_quotes !== false,
       crm_overview_show_invoices: settingsObject.crm_overview_show_invoices !== false,
+      // OIDC SSO (#798): the admin login page renders the "Sign in with
+      // SSO" button from these. Issuer/client/secret are never public.
+      oidc_enabled: settingsObject.oidc_enabled === true,
+      oidc_button_label: settingsObject.oidc_button_label || '',
+      // EFFECTIVE flag (phase 2): true only while the backend would actually
+      // refuse a password login (SSO enabled + configured + policy on, no
+      // break-glass env) — the login page hides the password form from this,
+      // so it must never claim "disabled" when the API would still allow it.
+      // Cached (10s TTL): this endpoint is unauthenticated and hit by every
+      // new client; the login route itself always checks uncached.
+      oidc_local_login_disabled: await require('../services/oidcService').isLocalLoginDisabledCached().catch(() => false),
       enable_recaptcha: settingsObject.security_enable_recaptcha === true || settingsObject.security_enable_recaptcha === 'true',
       recaptcha_site_key: settingsObject.security_recaptcha_site_key || null,
       maintenance_mode: settingsObject.general_maintenance_mode === true || settingsObject.general_maintenance_mode === 'true',
@@ -181,6 +216,16 @@ router.get('/', async (req, res) => {
       // Defaults to false (matches the prior hard-coded form default), so
       // existing installs see no behaviour change until an admin flips it.
       event_default_feedback_enabled: settingsObject.event_default_feedback_enabled === true,
+      // Per-type feedback defaults (#1044). The fallbacks mirror
+      // FEEDBACK_TOGGLES in services/feedbackDefaults.js — the backend is
+      // still the authority; these only pre-fill the create form.
+      event_default_allow_ratings: settingsObject.event_default_allow_ratings !== false,
+      event_default_allow_likes: settingsObject.event_default_allow_likes !== false,
+      event_default_allow_favorites: settingsObject.event_default_allow_favorites !== false,
+      event_default_allow_comments: settingsObject.event_default_allow_comments !== false,
+      event_default_allow_reactions: settingsObject.event_default_allow_reactions !== false,
+      event_default_allow_color_labels: settingsObject.event_default_allow_color_labels === true,
+      event_default_keybind_mode: settingsObject.event_default_keybind_mode === 'lightroom' ? 'lightroom' : 'colors',
       // Phone-number field on events is opt-in (#322).
       event_phone_field_enabled: settingsObject.event_phone_field_enabled === true,
       // Whether to show the search/sort filter bar in public galleries (default: true)
@@ -198,6 +243,12 @@ router.get('/', async (req, res) => {
       general_max_files_per_upload: Number.isFinite(Number(settingsObject.general_max_files_per_upload))
         ? Number(settingsObject.general_max_files_per_upload)
         : 500,
+      // Per-file size limit (MB). Default mirrors uploadSettings.js
+      // DEFAULT_MAX_FILE_SIZE_MB so the gallery UI shows a sensible number on
+      // installs that never set it explicitly.
+      general_max_file_size_mb: Number.isFinite(Number(settingsObject.general_max_file_size_mb))
+        ? Number(settingsObject.general_max_file_size_mb)
+        : 50,
       // SEO meta tag flags (safe to expose - these are intended for crawlers)
       seo_meta_noindex: settingsObject.seo_meta_noindex === true,
       seo_meta_nofollow: settingsObject.seo_meta_nofollow === true,

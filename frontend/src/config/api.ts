@@ -5,7 +5,7 @@ import {
   inferGallerySlugFromLocation,
   resolveSlugFromRequestUrl,
 } from '../utils/galleryAuthStorage';
-import { getGuestToken } from '../utils/guestIdentityStorage';
+import { clearGuestIdentity, getGuestToken } from '../utils/guestIdentityStorage';
 import { getApiBaseUrl } from '../utils/url';
 
 // Maintenance mode callback
@@ -72,6 +72,16 @@ api.interceptors.request.use(
         && (!!paramSlug || window.location.pathname.startsWith('/gallery/'));
 
       if (isGalleryEndpoint || isGallerySessionCheck) {
+        // Admin preview (#868): the gallery tab was opened with ?admin_preview=1.
+        // Forward that intent flag on every gallery API call so the backend
+        // applies the admin draft/password bypass. The httpOnly admin_token
+        // cookie authenticates server-side (withCredentials) — no secret in the
+        // URL. Harmless for guests: without a valid admin cookie the backend
+        // fails the check closed.
+        if (new URLSearchParams(window.location.search).get('admin_preview') === '1') {
+          config.params = { ...(config.params as Record<string, unknown> | undefined), admin_preview: 1 };
+        }
+
         const fallbackSlug = getActiveGallerySlug()
           || inferGallerySlugFromLocation();
         const slug = pathSlug || paramSlug || fallbackSlug;
@@ -114,16 +124,6 @@ api.interceptors.request.use(
               }
             }
           }
-        }
-
-        // Admin draft preview (#1386). The gallery tab was opened with
-        // ?admin_preview=1; forward that intent flag on every gallery API call
-        // so the backend applies the draft bypass. The HttpOnly admin_token
-        // cookie authenticates it server-side — no credential in the URL.
-        // Harmless for guests: without a valid admin cookie the check fails
-        // closed and they get exactly what they got before.
-        if (new URLSearchParams(window.location.search).get('admin_preview') === '1') {
-          config.params = { ...(config.params as Record<string, unknown> | undefined), admin_preview: 1 };
         }
       }
     }
@@ -181,6 +181,16 @@ api.interceptors.response.use(
           if (!isImageRequest && galleryMatch && galleryMatch[1]) {
             const gallerySlug = galleryMatch[1];
             sessionStorage.removeItem(`gallery_event_${gallerySlug}`);
+            // A guest identity the server no longer accepts must not stay on
+            // the device. The JWT can be perfectly valid and unexpired while
+            // its row has been soft-deleted or merged away by an admin, so no
+            // client-side expiry check catches it. This was self-limiting when
+            // identity died with the tab; now it would persist for the full
+            // 30-day TTL, silently failing every like while the footer still
+            // shows the guest's name (#1265).
+            if (error.response?.data?.code === 'GUEST_IDENTITY_REQUIRED') {
+              clearGuestIdentity(gallerySlug);
+            }
           }
           // Don't redirect - let the component handle the auth state
         } else if (galleryMatch) {

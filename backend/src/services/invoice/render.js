@@ -174,6 +174,14 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
     ? 0
     : ensureInt(invoice.net_amount_minor) - displayedNetMinor;
 
+  // Optional free-text VAT / legal note printed directly under the MwSt. line
+  // on the invoice PDF (#794). Configured globally in Settings → CRM → Invoices.
+  // Data-driven: the admin types the exact wording (e.g. the Austrian
+  // Kleinunternehmer statement, § 6 Abs. 1 Z 27 UStG 1994), so no jurisdiction
+  // is hardcoded. Empty/whitespace → null (row omitted).
+  const vatNoteRaw = await getAppSetting('crm_invoices_vat_note_text');
+  const vatNote = typeof vatNoteRaw === 'string' && vatNoteRaw.trim() ? vatNoteRaw.trim() : null;
+
   return {
     locale: invoice.language || profile?.default_locale || 'de',
     currency: invoice.currency,
@@ -189,6 +197,8 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       iban: bank.iban, bic: bank.bic, currency: bank.currency,
     } : null,
     paymentTerm,
+    // Free-text VAT/legal note (#794) — rendered under the MwSt. line by drawTotals.
+    vatNote,
     lineItems: lineItems.map((li) => ({
       quantity: li.quantity,
       description: li.description,

@@ -9,8 +9,7 @@ const { requireEventOwnership } = require('../middleware/ownership');
 const feedbackService = require('../services/feedbackService');
 const logger = require('../utils/logger');
 const { errorResponse } = require('../utils/routeHelpers');
-
-const FRONTEND_URL = process.env.FRONTEND_URL || '';
+const { getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
 
 // ----------------------------------------------------------------------------
 // Helpers
@@ -83,22 +82,70 @@ router.get(
           db.raw('COUNT(CASE WHEN photo_feedback.feedback_type = \'favorite\' THEN 1 END) AS favorites'),
           db.raw('COUNT(CASE WHEN photo_feedback.feedback_type = \'comment\' THEN 1 END) AS comments'),
           db.raw('COUNT(CASE WHEN photo_feedback.feedback_type = \'rating\' THEN 1 END) AS ratings'),
+          db.raw('COUNT(CASE WHEN photo_feedback.feedback_type = \'reaction\' THEN 1 END) AS reactions'),
+          db.raw('COUNT(CASE WHEN photo_feedback.feedback_type = \'color_label\' THEN 1 END) AS color_labels'),
           db.raw('COUNT(DISTINCT photo_feedback.photo_id) AS distinct_photos')
         )
         .orderBy('gallery_guests.created_at', 'desc');
 
-      const guests = rows.map((r) => ({
-        ...serializeGuest(r),
-        stats: {
-          likes: parseInt(r.likes, 10) || 0,
-          favorites: parseInt(r.favorites, 10) || 0,
-          comments: parseInt(r.comments, 10) || 0,
-          ratings: parseInt(r.ratings, 10) || 0,
-          distinct_photos: parseInt(r.distinct_photos, 10) || 0,
-        },
-      }));
+      // Which rows are the same person registered more than once (#1210).
+      //
+      // Registration always inserts, so a returning client whose token has
+      // expired — or who opens the gallery on a second device — becomes a new
+      // guest, and their picks split across the copies. Merging those already
+      // works; nothing told the admin which rows to merge, so the split
+      // selection had to be spotted by eye before the "final" list could be
+      // trusted.
+      //
+      // Grouped in JS rather than a second grouped query: the list is one
+      // event's guests, and the rows are already in hand. Case-folded because
+      // the same person types Tina@ and tina@ on different days, and trimmed
+      // because a trailing space is invisible in the admin list — both would
+      // otherwise read as distinct people. Email is the only key used: two
+      // guests genuinely called "Anna" are not evidence of anything.
+      const byEmail = new Map();
+      for (const r of rows) {
+        const key = (r.email || '').trim().toLowerCase();
+        if (!key) continue;
+        if (!byEmail.has(key)) byEmail.set(key, []);
+        byEmail.get(key).push(r.id);
+      }
 
-      res.json({ guests });
+      const guests = rows.map((r) => {
+        const key = (r.email || '').trim().toLowerCase();
+        const sharing = key ? byEmail.get(key) || [] : [];
+        return {
+          ...serializeGuest(r),
+          // A group key, not the list of sibling ids (#1210 review). Listing
+          // the others meant every row carried the other n-1 ids, so a group of
+          // n registrations serialised n² ids — and nothing consumed them: the
+          // UI only asks whether a row is in a group and then regroups by this
+          // key anyway. Emitting the normalised email keeps the payload linear
+          // AND keeps the case/whitespace folding in one place instead of
+          // reimplemented on the client.
+          duplicate_group: sharing.length > 1 ? key : null,
+          stats: {
+            likes: parseInt(r.likes, 10) || 0,
+            favorites: parseInt(r.favorites, 10) || 0,
+            comments: parseInt(r.comments, 10) || 0,
+            ratings: parseInt(r.ratings, 10) || 0,
+            reactions: parseInt(r.reactions, 10) || 0,
+            distinct_photos: parseInt(r.distinct_photos, 10) || 0,
+          },
+        };
+      });
+
+      // One number for the banner, so the UI does not have to derive it and
+      // then disagree with the badges when the derivation drifts.
+      const duplicateGroups = [...byEmail.values()].filter((ids) => ids.length > 1);
+
+      res.json({
+        guests,
+        duplicates: {
+          groups: duplicateGroups.length,
+          guests: duplicateGroups.reduce((n, ids) => n + ids.length, 0),
+        },
+      });
     } catch (error) {
       errorResponse(res, error, 500, 'Failed to list guests');
     }
@@ -183,10 +230,11 @@ router.get(
         )
         .orderBy('guest_invites.created_at', 'desc');
 
+      const baseUrl = await getAbsoluteFrontendUrl(req);
       const invites = rows.map((r) => ({
         id: r.id,
         token: r.token,
-        url: `${FRONTEND_URL}/gallery/${event.slug}?invite=${r.token}`,
+        url: `${baseUrl}/gallery/${event.slug}?invite=${r.token}`,
         created_at: r.created_at,
         redeemed_at: r.redeemed_at,
         revoked_at: r.revoked_at,
@@ -259,11 +307,12 @@ router.post(
       );
 
       const event = await db('events').where({ id: eventId }).first();
+      const baseUrl = await getAbsoluteFrontendUrl(req);
       res.json({
         invite: {
           id: inviteId,
           token: inviteToken,
-          url: `${FRONTEND_URL}/gallery/${event.slug}?invite=${inviteToken}`,
+          url: `${baseUrl}/gallery/${event.slug}?invite=${inviteToken}`,
           status: 'pending',
           guest: { id: guestId, name, email: email || null },
         },
@@ -406,6 +455,8 @@ router.get(
           'photo_feedback.feedback_type',
           'photo_feedback.rating',
           'photo_feedback.comment_text',
+          'photo_feedback.reaction',
+          'photo_feedback.color_label',
           'photo_feedback.created_at',
           'photos.id as photo_id',
           'photos.filename',
@@ -428,6 +479,8 @@ router.get(
         favorited: [],
         rated: [],
         commented: [],
+        reacted: [],
+        labeled: [],
       };
       for (const row of feedback) {
         if (row.feedback_type === 'like') {
@@ -442,6 +495,10 @@ router.get(
             comment: row.comment_text,
             created_at: row.created_at,
           });
+        } else if (row.feedback_type === 'reaction') {
+          selections.reacted.push({ photo: photoFor(row), reaction: row.reaction });
+        } else if (row.feedback_type === 'color_label') {
+          selections.labeled.push({ photo: photoFor(row), color_label: row.color_label });
         }
       }
 
@@ -453,6 +510,8 @@ router.get(
             favorites: selections.favorited.length,
             comments: selections.commented.length,
             ratings: selections.rated.length,
+            reactions: selections.reacted.length,
+            color_labels: selections.labeled.length,
           },
         },
         selections,
@@ -583,6 +642,38 @@ router.post(
       }
 
       const result = await feedbackService.mergeGuestFeedback(Number(keepId), mergeIds.map(Number));
+
+      // Canonicalise the survivor's address (#1210 review). Rows are grouped
+      // for review with the case and whitespace folded out, so a merge can be
+      // proposed between `tina@example.com` and `Tina@Example.com ` — and if
+      // the non-canonical one survives, guest recovery can never find it
+      // again: /guest/recover lowercases and trims what the guest types, then
+      // matches on equality (galleryGuests.js). Every write path normalises
+      // today, so this is for rows that predate that, which are exactly the
+      // rows case-folded grouping surfaces.
+      const survivor = all.find((g) => Number(g.id) === Number(keepId));
+      if (survivor?.email) {
+        const canonical = String(survivor.email).trim().toLowerCase();
+        if (canonical !== survivor.email) {
+          await db('gallery_guests').where({ id: Number(keepId) }).update({ email: canonical });
+        }
+      }
+
+      // Carry any unredeemed invite over to the survivor BEFORE the source row
+      // is soft-deleted (#1210 review). guest_invites.guest_id points at a real
+      // gallery_guests row — creating an invite inserts one — and redemption
+      // looks it up with `is_deleted: false`. Merging without this leaves the
+      // emailed link resolving to a deleted guest: the client gets a 404
+      // `guest_missing` while the admin's invite dialog still shows the invite
+      // as Pending, so nothing anywhere says the link is dead.
+      //
+      // Only unredeemed, unrevoked invites move. A spent invite is a historical
+      // record of who redeemed what and retargeting it would rewrite that.
+      await db('guest_invites')
+        .whereIn('guest_id', mergeIds.map(Number))
+        .whereNull('redeemed_at')
+        .whereNull('revoked_at')
+        .update({ guest_id: Number(keepId) });
 
       // Soft-delete the merged (source) guests.
       await db('gallery_guests')

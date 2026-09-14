@@ -24,22 +24,27 @@
  * route drifting apart again.
  *
  * Usage:
- *   node scripts/regenerate-thumbnails.js [eventId]
+ *   node scripts/regenerate-thumbnails.js [eventId] [--no-tiers]
  */
 
 const { db } = require('../src/database/db');
-const { ensureThumbnail, isThumbnailValid } = require('../src/services/imageProcessor');
+const {
+  ensureThumbnail,
+  ensureThumbnailAtWidth,
+  isThumbnailValid,
+  THUMBNAIL_WIDTHS,
+} = require('../src/services/imageProcessor');
 
-async function regenerateThumbnails(eventId = null) {
+async function regenerateThumbnails(eventId = null, { tiers = true } = {}) {
   console.log('Starting thumbnail regeneration...');
 
-  // These columns are what ensureThumbnail branches on to resolve a source and
-  // name its output. Selecting a subset that misses
-  // source_origin/external_relpath is how the old path bug would come back —
-  // an external row would look managed and resolve under events/active.
+  // These columns are what ensureThumbnail and ensureThumbnailAtWidth branch
+  // on to resolve a source and name their output. Selecting a subset that
+  // misses source_origin/external_relpath is how the old path bug would come
+  // back — an external row would look managed and resolve under events/active.
   let query = db('photos').select(
     'id', 'event_id', 'path', 'filename', 'thumbnail_path',
-    'type', 'media_type', 'mime_type', 'source_origin', 'external_relpath'
+    'media_type', 'mime_type', 'source_origin', 'external_relpath'
   );
 
   if (eventId) {
@@ -73,6 +78,8 @@ async function regenerateThumbnails(eventId = null) {
   let successCount = 0;
   let skipCount = 0;
   let errorCount = 0;
+  let tierCount = 0;
+  let tierFailures = 0;
 
   for (const photo of photos) {
     const label = photo.filename || `photo ${photo.id}`;
@@ -98,6 +105,36 @@ async function regenerateThumbnails(eventId = null) {
         successCount++;
         console.log(`✓ Generated thumbnail for ${label}`);
       }
+
+      // The responsive tiers (#1095/#1109) are cached separately from
+      // thumbnail_path, so a gallery can have every canonical rendition and
+      // still serve phones the full-size image. Backfilling them is the most
+      // likely reason to reach for this script at all, so it is the default.
+      // Each call is a no-op when the tier is already stored.
+      if (tiers) {
+        for (const width of THUMBNAIL_WIDTHS) {
+          // Two ways this fails and both have to be reported. It THROWS on an
+          // unexpected error, and it RETURNS NULL on the expected ones it
+          // handles itself — an unreachable mount, a storage operation that
+          // did not land. Ignoring the null said "complete" after backfilling
+          // nothing, which is worse than the error it was hiding.
+          let built = null;
+          try {
+            built = await ensureThumbnailAtWidth({ ...photo, thumbnail_path: thumbnailPath }, width);
+          } catch (error) {
+            console.warn(`  ! tier ${width}px failed for ${label}: ${error.message}`);
+          }
+
+          // One missing tier is not a failed photo — the canonical rendition
+          // above is what the gallery falls back to — so this is counted
+          // separately rather than as an error against the photo.
+          if (built) tierCount++;
+          else {
+            tierFailures++;
+            console.warn(`  ! tier ${width}px not built for ${label}`);
+          }
+        }
+      }
     } catch (error) {
       console.error(`✗ Failed for ${label}: ${error.message}`);
       errorCount++;
@@ -108,13 +145,18 @@ async function regenerateThumbnails(eventId = null) {
   console.log(`- Generated: ${successCount}`);
   console.log(`- Skipped (already valid): ${skipCount}`);
   console.log(`- Errors: ${errorCount}`);
+  if (tiers) {
+    console.log(`- Responsive tiers present: ${tierCount}`);
+    if (tierFailures) console.log(`- Responsive tiers NOT built: ${tierFailures}`);
+  }
   console.log(`- Total processed: ${photos.length}`);
 
-  return { successCount, skipCount, errorCount };
+  return { successCount, skipCount, errorCount, tierCount, tierFailures };
 }
 
 if (require.main === module) {
   const args = process.argv.slice(2);
+  const tiers = !args.includes('--no-tiers');
   const eventArg = args.find((a) => !a.startsWith('--'));
   const eventId = eventArg ? parseInt(eventArg, 10) : null;
 
@@ -123,15 +165,22 @@ if (require.main === module) {
     process.exit(1);
   }
 
-  regenerateThumbnails(eventId)
+  regenerateThumbnails(eventId, { tiers })
     .then(async (result) => {
       await db.destroy();
       // Exit status is the only thing a cron job reads. Resolving with a
       // nonzero errorCount and still exiting 0 told automation the backfill
       // was done when it had failed — which is how an unavailable mount stays
       // unnoticed until someone opens a gallery.
-      if (result.errorCount) {
-        console.error(`Script completed with failures: ${result.errorCount} photo(s)`);
+      //
+      // tierFailures counts too: a run that was asked for tiers and could not
+      // build them is incomplete, even though the canonical renditions are
+      // intact and the gallery still works.
+      if (result.errorCount || result.tierFailures) {
+        console.error(
+          `Script completed with failures: ${result.errorCount} photo(s), `
+          + `${result.tierFailures} tier(s)`
+        );
         process.exit(1);
       }
       console.log('Script completed successfully');

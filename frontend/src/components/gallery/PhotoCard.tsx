@@ -1,10 +1,13 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Download, Maximize2, Check, MessageSquare, Heart } from 'lucide-react';
 import { useInView } from 'react-intersection-observer';
 import { AuthenticatedImage } from '../common';
+import { thumbnailUrlForTile } from './imageTiers';
 import { FeedbackIdentityModal } from './FeedbackIdentityModal';
 import { feedbackService } from '../../services/feedback.service';
+import { ColorLabelBadge } from './ColorLabelBadge';
 import { useGuestIdentityOptional } from '../../contexts/GuestIdentityContext';
+import { useInputMode } from '../../hooks/useInputMode';
 import type { Photo } from '../../types';
 
 export interface PhotoCardFeedbackOptions {
@@ -32,12 +35,21 @@ export interface PhotoCardProps {
   /** Lazy-render via IntersectionObserver with a skeleton placeholder. */
   lazy?: boolean;
   inViewRootMargin?: string;
+  /**
+   * Outer band, in `rootMargin` form. When set, a tile that leaves it is
+   * unmounted again rather than kept for the life of the page (#1287). Opt-in
+   * per layout: only a layout whose skeleton holds the tile's box can release
+   * without reflowing, which today is Grid (`aspect-square`).
+   */
+  releaseRootMargin?: string;
   skeletonClassName?: string;
   /** Keep container at opacity 0 until in view (only meaningful with `lazy`). */
   fadeInWhenVisible?: boolean;
-  /** Tap-to-reveal overlay state machine for touch devices (Grid/Justified). */
-  touchAware?: boolean;
-  /** Static overlay classes; `touchAware` appends computed visibility classes. */
+  /**
+   * Static overlay classes — positioning, backdrop, spacing. Visibility and
+   * hit-testing are owned by this component for every layout (#1263), so a
+   * layout must NOT pass its own `opacity-*` / `group-hover:*` here.
+   */
   overlayBaseClassName: string;
   /** 'light' = white/90 buttons with dark icons; 'dark' = white/20 buttons with white icons. */
   actionVariant?: 'light' | 'dark';
@@ -80,9 +92,9 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
   imageProps,
   lazy = false,
   inViewRootMargin,
+  releaseRootMargin,
   skeletonClassName = 'skeleton w-full h-full rounded-lg',
   fadeInWhenVisible = false,
-  touchAware = false,
   overlayBaseClassName,
   actionVariant = 'light',
   allowDownloads = true,
@@ -105,7 +117,10 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
 }) => {
   const guestIdentity = useGuestIdentityOptional();
   const [overlayVisible, setOverlayVisible] = useState(false);
-  const [isTouchDevice, setIsTouchDevice] = useState(false);
+  // #1275 — the input in use right now, not what the device is capable of.
+  // On a hybrid the two disagree, and acting on the device's primary pointer
+  // handles one of its two inputs as if it were the other.
+  const isTouchDevice = useInputMode() === 'touch';
   const overlayTimeoutRef = useRef<number | null>(null);
 
   // Self-managed identity modal state (identityMode === 'self')
@@ -114,41 +129,6 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
   const [selfIdentity, setSelfIdentity] = useState<{ name: string; email: string } | null>(null);
 
   const savedIdentityValue = identityMode === 'self' ? selfIdentity : savedIdentity;
-
-  // Detect touch device (touch-aware overlay only)
-  useEffect(() => {
-    if (!touchAware || typeof window === 'undefined') return;
-
-    const mediaQuery = window.matchMedia('(hover: none) and (pointer: coarse)');
-    const updateTouchState = () => {
-      const hasNavigator = typeof navigator !== 'undefined';
-      setIsTouchDevice(
-        mediaQuery.matches ||
-        ('ontouchstart' in window) ||
-        (hasNavigator && navigator.maxTouchPoints > 0)
-      );
-    };
-
-    updateTouchState();
-
-    const listener = (event: MediaQueryListEvent) => {
-      setIsTouchDevice(event.matches);
-    };
-
-    if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener('change', listener);
-    } else if (mediaQuery.addListener) {
-      mediaQuery.addListener(listener);
-    }
-
-    return () => {
-      if (mediaQuery.removeEventListener) {
-        mediaQuery.removeEventListener('change', listener);
-      } else if (mediaQuery.removeListener) {
-        mediaQuery.removeListener(listener);
-      }
-    };
-  }, [touchAware]);
 
   const hideOverlay = useCallback(() => {
     if (overlayTimeoutRef.current !== null && typeof window !== 'undefined') {
@@ -185,33 +165,99 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
     }
   }, [isSelectionMode, hideOverlay]);
 
-  // Lazy loading with intersection observer
-  const { ref, inView: observedInView } = useInView({
-    triggerOnce: true,
+  // Lazy loading with intersection observer.
+  //
+  // Two bands with a deliberate gap between them (#1287). The inner one, from
+  // `inViewRootMargin`, decides when a tile starts loading. The outer one,
+  // from `releaseRootMargin`, decides when it is far enough away to unmount —
+  // and unmounting is the part that frees anything, because AuthenticatedImage
+  // revokes its object URL and drops any protection canvas in its cleanup, and
+  // neither is reclaimable while the tile stays mounted. On a 546-photo grid
+  // the old latch meant every tile scrolled past was retained for the life of
+  // the page, which is the memory profile iOS Safari discards a tab over.
+  //
+  // The gap between the bands is the hysteresis: a tile is not released until
+  // it is well outside the band that would immediately reload it, so scrolling
+  // back and forth across one edge cannot thrash. Without a release band the
+  // observer keeps its original `triggerOnce` latch, so every other layout
+  // behaves exactly as before.
+  const releases = Boolean(lazy && releaseRootMargin);
+  const { ref: loadBandRef, inView: withinLoadBand } = useInView({
+    triggerOnce: !releases,
     threshold: 0.1,
     rootMargin: inViewRootMargin,
   });
-  const inView = !lazy || observedInView;
+  const { ref: keepBandRef, inView: withinKeepBand } = useInView({
+    skip: !releases,
+    threshold: 0,
+    rootMargin: releaseRootMargin,
+  });
+  const [rendered, setRendered] = useState(false);
+  useEffect(() => {
+    if (!releases) return;
+    if (withinLoadBand) setRendered(true);
+    else if (!withinKeepBand) setRendered(false);
+  }, [releases, withinLoadBand, withinKeepBand]);
+  const inView = !lazy || (releases ? rendered : withinLoadBand);
+
+  // Tile width for the responsive tier (#1095), measured rather than inferred.
+  // The observer entry only exists for `lazy` cards, and Mosaic, Masonry and
+  // Timeline do not pass it — Mosaic is 1-up on mobile where Grid is 2-up, so
+  // those are exactly the layouts a breakpoint guess gets most wrong.
+  //
+  // Gated: the image is not rendered until this has run, so AuthenticatedImage
+  // never mounts with a src it would have to replace. Attaching the observer
+  // ref unconditionally instead would refetch every tile — React flushes
+  // passive effects before the synchronous re-render a layout effect triggers,
+  // so the fetch fires once with the fallback and again with the measurement.
+  //
+  // useLayoutEffect, so the extra commit lands before paint and the skeleton
+  // branch below is never actually seen. One reflow per commit, not per card:
+  // nothing writes to the DOM between the reads, so the browser batches them.
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [tile, setTile] = useState<{ width: number | null } | null>(null);
+  const setContainerRef = useCallback((node: HTMLDivElement | null) => {
+    containerRef.current = node;
+    if (!lazy) return;
+    loadBandRef(node);
+    if (releases) keepBandRef(node);
+  }, [loadBandRef, keepBandRef, lazy, releases]);
+
+  useLayoutEffect(() => {
+    if (!inView || tile) return;
+    // 0 means not laid out (a hidden tab, say), not a 0px tile — null falls
+    // back to the viewport estimate rather than pinning the smallest tier.
+    setTile({ width: containerRef.current?.offsetWidth || null });
+  }, [inView, tile]);
 
   const showFeedbackActions = feedbackEnabled && Boolean(feedbackOptions);
 
-  const overlayVisibilityClass = overlayVisible
-    ? 'opacity-100 md:opacity-100'
-    : 'opacity-0 md:opacity-0';
+  // #1263 - opacity hides pixels, not hit-testing. An `opacity-0` control is
+  // still tappable, and on a touchscreen (no hover) it is invisible for good,
+  // so a tap in the middle of a tile silently downloaded or liked instead of
+  // opening the photo. Every visibility toggle below therefore moves
+  // pointer-events with it, in both the tap-to-reveal and the hover branch.
+  //
+  // The hover variants are emitted while a mouse is in use, and withheld while
+  // a finger is. Not behind `md:`: width is the wrong proxy for hover, and a
+  // mouse user with a window under 768px got no overlay at all. Not behind the
+  // device's primary pointer either (#1275) — on a hybrid that answers for the
+  // wrong input. Withholding them on touch is what the breakpoint was really
+  // for, since :hover latches on a touchscreen once a tile has been tapped.
+  const revealed = (visible: boolean) => {
+    const base = visible
+      ? 'opacity-100 pointer-events-auto'
+      : 'opacity-0 pointer-events-none';
+    return isTouchDevice
+      ? base
+      : `${base} group-hover:opacity-100 group-hover:pointer-events-auto`;
+  };
 
-  const overlayClassName = touchAware
-    ? `${overlayBaseClassName} ${overlayVisibilityClass} md:group-hover:opacity-100`
-    : overlayBaseClassName;
+  const overlayClassName = `${overlayBaseClassName} ${revealed(overlayVisible)}`;
 
-  const checkboxVisibilityClass = touchAware
-    ? `${
-        isSelected || isSelectionMode || overlayVisible
-          ? 'opacity-100 md:opacity-100'
-          : 'opacity-0 md:opacity-0'
-      } md:group-hover:opacity-100`
-    : isSelected
-      ? 'opacity-100'
-      : 'opacity-0 group-hover:opacity-100';
+  const checkboxVisibilityClass = revealed(
+    isSelected || isSelectionMode || overlayVisible,
+  );
 
   const buttonType = actionVariant === 'dark' ? ('button' as const) : undefined;
   const actionButtonClass =
@@ -221,11 +267,6 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
   const actionIconClass = actionVariant === 'dark' ? 'w-5 h-5 text-white' : 'w-5 h-5 text-neutral-800';
 
   const handlePhotoClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!touchAware) {
-      onClick(e);
-      return;
-    }
-
     if (isTouchDevice && !overlayVisible && !isSelectionMode) {
       e.preventDefault();
       e.stopPropagation();
@@ -322,17 +363,40 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
       </button>
     ) : null;
 
+  // Responsive grid tier (#1095). Applied here rather than in each layout
+  // because six of the seven funnel their tile through this one image; the
+  // seventh, Carousel, renders 80px filmstrip thumbs that the canonical 300
+  // already covers at DPR 3.
+  //
+  // Only when the src IS the thumbnail route: layouts fall back to photo.url
+  // when thumbnail_url is null, and ?w= on the original-photo route means
+  // something else. Videos are excluded because their thumbnail is a poster
+  // frame from the video pipeline — the tier route would hand the video file
+  // itself to Sharp.
+  const isVideo = photo.media_type === 'video' || photo.type === 'video';
+  const tileSrc = !isVideo && photo.thumbnail_url && imageProps.src === photo.thumbnail_url
+    ? (thumbnailUrlForTile(photo.thumbnail_url, photo, tile?.width) ?? imageProps.src)
+    : imageProps.src;
+
   return (
     <div
-      ref={lazy ? ref : undefined}
+      ref={setContainerRef}
       className={className}
       style={lazy ? { ...style, opacity: !inView && fadeInWhenVisible ? 0 : 1 } : style}
       onClick={handlePhotoClick}
       {...containerProps}
     >
-      {inView ? (
+      {inView && tile ? (
         <>
-          <AuthenticatedImage {...imageProps} />
+          <AuthenticatedImage {...imageProps} src={tileSrc} />
+
+          {/* The guest's own colour label (#1044) — visible without hovering
+              or opening anything, which is the point: the client watches
+              their selection progress across the grid. */}
+          <ColorLabelBadge
+            colorLabel={photo.my_color_label}
+            otherColorLabels={photo.other_color_labels}
+          />
 
           {beforeOverlay}
 

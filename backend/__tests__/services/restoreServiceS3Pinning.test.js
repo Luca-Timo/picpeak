@@ -2,22 +2,21 @@
  * DNS-rebinding follow-up to the blind-SSRF fix in restoreServiceS3Ssrf.test.js
  * (GHSA-vm2x-c628-3cx5).
  *
- * isHostAllowed()/validateExternalUrlWithAddresses() are check-then-connect
- * on their own: they resolve the S3 endpoint hostname once to vet it, then
- * hand a bare hostname to the AWS SDK, which resolves it AGAIN when it
- * actually connects. An attacker who controls DNS for the endpoint hostname
- * (or an infra DNS-rebinding condition) can answer the first lookup with a
- * public IP and the second with a private/metadata one.
+ * isHostAllowed()/validateExternalUrlAsync() are check-then-connect on their
+ * own: they resolve the S3 endpoint hostname once to vet it, then hand a
+ * bare hostname to the AWS SDK, which resolves it AGAIN when it actually
+ * connects. An attacker who controls DNS for the endpoint hostname (or an
+ * infra DNS-rebinding condition) can answer the first lookup with a public
+ * IP and the second with a private/metadata one.
  *
  * downloadFileFromS3() now builds pinned http/https agents (pinnedRequest.js
- * — the same primitive webhookDeliveryWorker.js on main uses for outbound
- * HTTP; ported here since stable didn't have it yet) from the validated
- * address and passes them into S3StorageAdapter, which threads them into
- * the S3Client's NodeHttpHandler requestHandler. This asserts that wiring:
- * the agents S3StorageAdapter receives resolve the endpoint hostname to
- * ONLY the address vetted during validation, and never fall through to a
- * second, real DNS lookup that a rebinding attacker could answer
- * differently.
+ * — the same primitive webhookDeliveryWorker.js and emailWebhookTransport.js
+ * use for outbound HTTP) from the validated address and passes them into
+ * S3StorageAdapter, which threads them into the S3Client's NodeHttpHandler
+ * requestHandler. This asserts that wiring: the agents S3StorageAdapter
+ * receives resolve the endpoint hostname to ONLY the address vetted during
+ * validation, and never fall through to a second, real DNS lookup that a
+ * rebinding attacker could answer differently.
  */
 
 const path = require('path');

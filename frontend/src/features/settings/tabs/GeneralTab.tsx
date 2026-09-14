@@ -6,6 +6,7 @@ import type { GeneralSettings } from '../hooks/useSettingsState';
 import { MAX_FILES_PER_UPLOAD_LIMIT } from '../hooks/useSettingsState';
 import { SUPPORTED_LANGUAGES } from "../../../components/common/LanguageSelector.tsx";
 import { MfaSettingsCard } from '../components/MfaSettingsCard';
+import { isAbsoluteHttpUrl } from '../../../utils/url';
 
 interface GeneralTabProps {
   generalSettings: GeneralSettings;
@@ -34,6 +35,26 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
   adminProfileLoading,
 }) => {
   const { t } = useTranslation();
+
+  // The public address reaches the CORS allowlist and the
+  // Access-Control-Allow-Origin header since #705, not just email links — and
+  // the `type="url"` constraint never fires because this input isn't inside a
+  // <form>. Validate it here so a schemeless value can't be saved, mirroring
+  // the server-side check in adminSettings.js (#1104).
+  //
+  // Only once the admin has actually touched the field. The key was free-text
+  // until #1104, so an upgraded install can hold a schemeless value nobody
+  // typed today — and flagging that on load would disable Save for every
+  // General setting. An admin with `settings.edit` but not `settings.domains`
+  // could not clear it either: correcting the address is a change to a
+  // protected key and 403s. They would simply be locked out of the tab.
+  const siteUrlDirty = generalSettings.site_url !== generalSettings.site_url_stored;
+  const siteUrlError = !generalSettings.site_url_env_pinned
+    && siteUrlDirty
+    && generalSettings.site_url.trim()
+    && !isAbsoluteHttpUrl(generalSettings.site_url)
+    ? t('settings.general.siteUrlInvalid', 'Enter the full address including http:// or https://, for example https://gallery.example.com')
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -113,10 +134,16 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
               onChange={(e) => setGeneralSettings(prev => ({ ...prev, site_url: e.target.value }))}
               placeholder="https://yourdomain.com"
               leftIcon={<Globe className="w-5 h-5 text-neutral-400" />}
+              disabled={generalSettings.site_url_env_pinned}
+              error={siteUrlError}
             />
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-              {t('settings.general.siteUrlHelp')}
-            </p>
+            {!siteUrlError && (
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                {generalSettings.site_url_env_pinned
+                  ? t('settings.general.siteUrlEnvPinned', 'Pinned by the FRONTEND_URL environment variable, which overrides this setting. Remove it from your .env (or container environment) and restart to manage the address here.')
+                  : t('settings.general.siteUrlHelp')}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -143,6 +170,20 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
                 min="1"
                 max="500"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                {t('settings.general.maxVideoSize', 'Max Video Size (MB)')}
+              </label>
+              <Input
+                type="number"
+                value={generalSettings.max_video_size_mb}
+                onChange={(e) => setGeneralSettings(prev => ({ ...prev, max_video_size_mb: parseInt(e.target.value) || 500 }))}
+                min="1"
+              />
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                {t('settings.general.maxVideoSizeHelp', 'Separate per-file limit for video uploads, so photos can keep a smaller limit.')}
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
@@ -355,6 +396,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
             variant="primary"
             onClick={() => saveGeneralMutation.mutate()}
             isLoading={saveGeneralMutation.isPending}
+            disabled={!!siteUrlError}
             leftIcon={<Save className="w-5 h-5" />}
           >
             {t('settings.general.saveGeneralSettings')}

@@ -115,6 +115,13 @@ router.post('/inbound/bill-pending', requireIncoming, requirePermission('account
   [body('customerAccountId').isInt({ min: 1 })],
   handleAsync(async (req, res) => { validateRequest(req); return successResponse(res, await expenseService.billPendingRebills(toInt(req.body.customerAccountId), req.admin.id), 201, 'Re-billed'); }));
 
+// Re-bill / passthrough items for one customer, with derived status (open /
+// sent / paid) — feeds the CRM → Customer panel (#866, Feature 2). Registered
+// BEFORE /inbound/:id so the literal path wins.
+router.get('/inbound/by-customer/:customerAccountId', requireIncoming, requirePermission('accounting.view'),
+  [param('customerAccountId').isInt({ min: 1 })],
+  handleAsync(async (req, res) => { validateRequest(req); return successResponse(res, { items: await expenseService.listCustomerRebills(toInt(req.params.customerAccountId)) }); }));
+
 router.get('/inbound/:id/file', requireIncoming, requirePermission('accounting.view'),
   [param('id').isInt({ min: 1 })],
   handleAsync(async (req, res) => {
@@ -126,7 +133,7 @@ router.get('/inbound/:id/file', requireIncoming, requirePermission('accounting.v
     res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
     res.setHeader('Content-Disposition', isPdf ? 'attachment' : 'inline');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    if (!isPdf) res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'");
+    if (!isPdf) res.setHeader('Content-Security-Policy', 'default-src \'none\'; img-src \'self\' data:; style-src \'unsafe-inline\'');
     createReadStream(safe).pipe(res);
   }));
 
@@ -145,7 +152,7 @@ router.get('/inbound/:id/page/:n', requireIncoming, requirePermission('accountin
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Content-Disposition', 'inline');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'");
+    res.setHeader('Content-Security-Policy', 'default-src \'none\'; img-src \'self\' data:; style-src \'unsafe-inline\'');
     createReadStream(safePng).pipe(res);
   }));
 
@@ -213,7 +220,7 @@ router.get('/:id/proof', requireExpenses, requirePermission('accounting.view'),
     res.setHeader('Content-Type', isPdf ? 'application/pdf' : 'application/octet-stream');
     res.setHeader('Content-Disposition', isPdf ? 'attachment' : 'inline');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    if (!isPdf) res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'");
+    if (!isPdf) res.setHeader('Content-Security-Policy', 'default-src \'none\'; img-src \'self\' data:; style-src \'unsafe-inline\'');
     createReadStream(safe).pipe(res);
   }));
 

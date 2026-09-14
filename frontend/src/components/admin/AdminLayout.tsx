@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 
 import { useAdminAuth } from '../../contexts';
@@ -11,6 +11,8 @@ import { MigrationBanner } from './MigrationBanner';
 import { MandatoryPasswordChangeModal } from './MandatoryPasswordChangeModal';
 
 const SIDEBAR_COLLAPSED_KEY = 'admin-sidebar-collapsed';
+const ProductUsageNotice = lazy(() => import('./ProductUsageNotice'));
+const UsageReportingPrompt = lazy(() => import('./UsageReportingPrompt'));
 
 export const AdminLayout: React.FC = () => {
   const { isAuthenticated, isLoading, mustChangePassword } = useAdminAuth();
@@ -72,7 +74,13 @@ interface AdminLayoutInnerProps {
 
 const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, mustChangePassword }) => {
   return (
-    <div className="h-screen bg-neutral-50 dark:bg-neutral-950 flex overflow-hidden">
+    // Explicit text colour on the admin shell: the branding theme sets
+    // --color-text on <html> app-wide (GlobalThemeProvider applies it on every
+    // non-gallery page, by design), so any admin component that forgot its own
+    // colour class inherited it through `body { color: var(--color-text) }` and
+    // rendered near-invisible on a dark-toned theme. Components with an
+    // explicit class or `text-theme` still win over this.
+    <div className="h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 flex overflow-hidden">
       {/* Mandatory Password Change Modal */}
       {mustChangePassword && <MandatoryPasswordChangeModal />}
       
@@ -119,6 +127,8 @@ const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSid
             (or remove this mount) after operators have had time to update their
             docker-compose.yml. See #669. */}
         <MigrationBanner />
+        {!mustChangePassword && <Suspense fallback={null}><ProductUsageNotice /></Suspense>}
+        {!mustChangePassword && <Suspense fallback={null}><UsageReportingPrompt /></Suspense>}
 
         {/* Page content - disabled when password change required.
             overflow moved up to the column so the scrollbar gutter is

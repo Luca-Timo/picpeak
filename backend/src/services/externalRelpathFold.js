@@ -6,7 +6,7 @@
  * event rebased every photo already in it. Root-relative paths make a row
  * self-describing.
  *
- * This lives in a service rather than inside migration 177 because it has two
+ * This lives in a service rather than inside migration 187 because it has two
  * callers. The migration is one. The other is a .picpeak restore: knex_migrations
  * is excluded from the archive, so restoring a pre-#1163 backup onto an
  * already-migrated instance drops base-relative rows into a schema that no
@@ -126,6 +126,35 @@ async function rootUsable(root) {
 }
 
 /**
+ * The order rows claim their folded path in — managed rows first (#745).
+ *
+ * A replaced photo keeps its external_relpath so the folder re-scan can still
+ * dedupe on it, but its source_origin is now 'managed' and its file is the edit
+ * the photographer delivered. Collisions below DELETE the loser, and the
+ * survivor used to be whichever row happened to be claimed first — so a
+ * delivered edit could be destroyed in favour of the untouched camera original
+ * sitting next to it on the share.
+ *
+ * Managed rows claim first, which makes them the survivor in any collision. The
+ * external row that loses is the recoverable one: it is still on the share and
+ * a re-scan re-imports it. The edit is not.
+ *
+ * Exported so the regression test can drive THIS function rather than a copy of
+ * it — a test that re-implements the ordering passes no matter what this does.
+ * The sort is stable, so rows of the same kind keep their relative order.
+ *
+ * @param {Array<[object, string|null]>} placements [row, chosenBase] pairs
+ * @returns {Array<[object, string|null]>} the same pairs, managed rows first
+ */
+function claimOrderFor(placements) {
+  return placements.slice().sort((a, b) => {
+    const aManaged = a[0].source_origin === 'managed' ? 0 : 1;
+    const bManaged = b[0].source_origin === 'managed' ? 0 : 1;
+    return aManaged - bManaged;
+  });
+}
+
+/**
  * @param {import('knex')} knex  a knex instance, or a transaction from a caller
  *   that is already inside one (the restore).
  * @param {(msg: string) => void} [log]
@@ -169,7 +198,7 @@ async function foldExternalRelpaths(knex, log = () => {}) {
     const rows = await knex('photos')
       .where('event_id', eventId)
       .whereNotNull('external_relpath')
-      .select('id', 'external_relpath', 'size_bytes');
+      .select('id', 'external_relpath', 'size_bytes', 'source_origin');
 
     // Deciding health from a SAMPLE was the tempting shortcut and it is not
     // safe: a rebased event whose first few rows happen to come from the most
@@ -222,12 +251,13 @@ async function foldExternalRelpaths(knex, log = () => {}) {
     // `<root>/<relpath>` — permanently pointing at the wrong place, or
     // nowhere, with the marker saying the conversion is done. And it is a
     // duplicate by construction: two rows that resolve to one file is exactly
-    // what migration 176 removes, so it goes through the same helper, which
+    // what migration 186 removes, so it goes through the same helper, which
     // reparents the feedback and marks and reconciles the face clusters.
     const claimed = new Map();
     const resolved = [];
     const losers = new Map();
-    for (const [row, chosen] of placements) {
+
+    for (const [row, chosen] of claimOrderFor(placements)) {
       const next = chosen ? `${chosen}/${row.external_relpath}` : row.external_relpath;
       const winner = claimed.get(next);
       if (winner != null) { losers.set(row.id, winner); collided++; continue; }
@@ -268,7 +298,7 @@ async function foldExternalRelpaths(knex, log = () => {}) {
       // all distinct, but a final value can equal another row's CURRENT one —
       // `photo.jpg` repairing to `Trip/photo.jpg` while the existing
       // `Trip/photo.jpg` is still waiting to fold — so a single pass violates
-      // migration 176's unique index halfway through. And on Postgres that
+      // migration 186's unique index halfway through. And on Postgres that
       // surfaces as 23505, which run-migrations-safe.js mistakes for "schema
       // already exists" and records the migration as applied after the
       // rollback, leaving every path unconverted with no retry.
@@ -301,4 +331,4 @@ async function foldExternalRelpaths(knex, log = () => {}) {
 }
 
 
-module.exports = { foldExternalRelpaths, MARKER };
+module.exports = { foldExternalRelpaths, claimOrderFor, MARKER };

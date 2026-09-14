@@ -23,6 +23,7 @@
  */
 
 const express = require('express');
+const { capabilityEvidence } = require('../usage/capabilityEvidence');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
@@ -161,22 +162,22 @@ function transformContract(c, inclusions) {
     updatedAt: c.updated_at,
     inclusions: Array.isArray(inclusions)
       ? inclusions.map((inc) => ({
-          id: inc.id,
-          blockId: inc.block_id,
-          section: inc.section,
-          position: inc.position,
-          included: inc.included === true || inc.included === 1 || inc.included === '1',
-          block: {
-            slug: inc.block_slug,
-            name: inc.block_name,
-            description: inc.block_description,
-            bodyText: inc.block_body_text,
-            bodyTextDe: inc.block_body_text_de,
-            isSystem: inc.block_is_system === true || inc.block_is_system === 1 || inc.block_is_system === '1',
-          },
-          bodyTextSnapshot: inc.body_text_snapshot,
-          bodyTextDeSnapshot: inc.body_text_de_snapshot,
-        }))
+        id: inc.id,
+        blockId: inc.block_id,
+        section: inc.section,
+        position: inc.position,
+        included: inc.included === true || inc.included === 1 || inc.included === '1',
+        block: {
+          slug: inc.block_slug,
+          name: inc.block_name,
+          description: inc.block_description,
+          bodyText: inc.block_body_text,
+          bodyTextDe: inc.block_body_text_de,
+          isSystem: inc.block_is_system === true || inc.block_is_system === 1 || inc.block_is_system === '1',
+        },
+        bodyTextSnapshot: inc.body_text_snapshot,
+        bodyTextDeSnapshot: inc.body_text_de_snapshot,
+      }))
       : undefined,
   };
 }
@@ -420,6 +421,7 @@ router.post(
   handleAsync(async (req, res) => {
     validateRequest(req);
     const result = await contractService.convertToEvent(parseInt(req.params.id, 10), req.admin?.id);
+    if (!result.alreadyConverted) capabilityEvidence(res, 'crm_document_conversion');
     return successResponse(res, result, 200,
       result.alreadyConverted ? 'Already converted to event' : 'Contract converted to event');
   }),
@@ -433,6 +435,7 @@ router.post(
   handleAsync(async (req, res) => {
     validateRequest(req);
     const result = await contractService.convertToInvoiceOnly(parseInt(req.params.id, 10), req.admin?.id);
+    if (!result.alreadyConverted) capabilityEvidence(res, 'crm_document_conversion');
     return successResponse(res, result, 200, 'Invoices created from contract');
   }),
 );

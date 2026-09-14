@@ -1,4 +1,6 @@
+const { changedFields } = require('../usage/adoptionEvidence');
 const express = require('express');
+const { capabilityEvidence } = require('../usage/capabilityEvidence');
 const nodemailer = require('nodemailer');
 const { body, query, validationResult } = require('express-validator');
 const { db, logActivity } = require('../database/db');
@@ -8,9 +10,12 @@ const { requirePermission } = require('../middleware/permissions');
 // /email mount — the pre-existing config/queue/received endpoints stay ungated).
 const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
 const messagingGate = requireFeatureFlag('messaging');
-const { wrapEmailHtml, processEmailQueue } = require('../services/emailProcessor');
+const { wrapEmailHtml, processEmailQueue, resolveFromIdentity, buildSignatureTextFor, htmlToText } = require('../services/emailProcessor');
+const emailWebhookTransport = require('../services/emailWebhookTransport');
+const businessProfileService = require('../services/businessProfileService');
 const { errorResponse, safeValidationErrors } = require('../utils/routeHelpers');
 const logger = require('../utils/logger');
+const { parseEmailData, secretValues, redactRenderedHtml } = require('../utils/emailSecretRedaction');
 const router = express.Router();
 
 // Get email configuration
@@ -219,6 +224,7 @@ router.post('/incoming-config/test', adminAuth, requirePermission('email.view'),
     if (result && result.ok === false) {
       return res.status(400).json({ error: 'Incoming mail is not configured yet — enter host, username and password first.' });
     }
+    if (result?.ok) capabilityEvidence(res, 'incoming_mail');
     res.json(result);
   } catch (error) {
     logger.error('IMAP connection test error:', error);
@@ -232,7 +238,10 @@ router.post('/incoming-config/roundtrip', adminAuth, requirePermission('email.se
   try {
     const emailIntakeService = require('../services/emailIntakeService');
     const result = await emailIntakeService.roundTripTest();
-    if (result.ok) return res.json(result);
+    if (result.ok) {
+      capabilityEvidence(res, 'incoming_mail', 'smtp');
+      return res.json(result);
+    }
     const map = {
       smtp_unconfigured: 'Configure and save the outgoing SMTP settings first.',
       imap_unconfigured: 'Configure and save the incoming IMAP settings first.',
@@ -255,6 +264,7 @@ router.post('/incoming-config/poll', adminAuth, requirePermission('email.view'),
   try {
     const emailIntakeService = require('../services/emailIntakeService');
     const result = await emailIntakeService.pollOnce();
+    if (result && !result.skipped) capabilityEvidence(res, 'incoming_mail');
     res.json(result); // { processed } or { skipped: 'disabled'|'unconfigured'|'busy' }
   } catch (error) {
     logger.error('Manual poll error:', error);
@@ -369,8 +379,12 @@ router.get('/identities', adminAuth, messagingGate, requirePermission('email.vie
       const cust = await db('mail_accounts').where({ account_key: 'customers' }).first();
       customers = cust?.imap_user || cust?.from_email || null;
     } catch (_) { customers = null; }
+    // A webhook-only install has no email_configs row (#1225), so reading the
+    // automated address from it alone shows "—" in the Messages sidebar for an
+    // instance that is sending perfectly well from EMAIL_FROM.
+    const identity = await resolveFromIdentity();
     res.json({
-      automated: cfg?.from_email || null,
+      automated: cfg?.from_email || identity?.fromEmail || null,
       accounting: cfg?.imap_user || null,
       customers,
     });
@@ -421,7 +435,7 @@ router.post('/accounts', adminAuth, messagingGate, requirePermission('email.edit
         account_key: b.account_key,
         imap_pass: (b.imap_pass && b.imap_pass !== '********') ? b.imap_pass : '',
         smtp_pass: (b.smtp_pass && b.smtp_pass !== '********') ? b.smtp_pass : '',
-        created_at: new Date(),
+        created_at: new Date().toISOString(),
         ...patch,
       });
     }
@@ -450,6 +464,7 @@ router.post('/accounts/test', adminAuth, messagingGate, requirePermission('email
       host: b.imap_host, port: b.imap_port, secure: b.imap_secure,
       user: b.imap_user, pass, folder: b.imap_folder || 'INBOX',
     });
+    if (result?.ok) capabilityEvidence(res, 'incoming_mail');
     res.json(result);
   } catch (error) {
     res.status(422).json({ ok: false, error: `Mailbox test failed (${error.message}).` });
@@ -463,6 +478,50 @@ router.post('/test', adminAuth, requirePermission('email.send'), async (req, res
     
     if (!test_email) {
       return res.status(400).json({ error: 'Test email address is required' });
+    }
+
+    // Webhook transport (#1225): this endpoint is the "does email work" button,
+    // so it has to exercise the transport that actually sends. Left as-is it
+    // built a nodemailer transport from email_configs and told a webhook-only
+    // admin to go configure SMTP — settings their install does not use, on an
+    // instance whose mail is working fine.
+    if (emailWebhookTransport.isEnabled()) {
+      const identity = await resolveFromIdentity();
+      if (!identity) {
+        return res.status(400).json({
+          error: 'No sender address configured. Set EMAIL_FROM for the webhook transport.',
+        });
+      }
+      const webhookSubject = 'Test Email - Photo Sharing Platform';
+      const webhookHtml = await wrapEmailHtml(
+        '<h2>Test Email Successful!</h2>'
+        + '<p>This message was delivered through the configured email webhook, not SMTP.</p>',
+        webhookSubject
+      );
+      try {
+        await emailWebhookTransport.send({
+          from: `${identity.fromName} <${identity.fromEmail}>`,
+          to: test_email,
+          subject: webhookSubject,
+          html: webhookHtml,
+          // The HTML goes through wrapEmailHtml and gains the signature; the
+          // text alternative has to be given it explicitly (#1264 review).
+          text: 'Test Email Successful! Delivered through the configured email webhook.'
+            + await buildSignatureTextFor('en'),
+        });
+      } catch (webhookError) {
+        // Handled here, not by the outer catch: that one maps ECONNREFUSED and
+        // friends to "Failed to connect to SMTP server — check your SMTP
+        // settings", which on a webhook-only install points the admin at
+        // configuration this deploy does not use.
+        logger.error('Webhook test email failed:', webhookError);
+        return res.status(502).json({
+          error: 'Failed to deliver through the email webhook',
+          details: webhookError.message,
+        });
+      }
+      capabilityEvidence(res, 'email_webhook');
+      return res.json({ message: 'Test email sent successfully' });
     }
 
     // Get email config
@@ -535,8 +594,10 @@ router.post('/test', adminAuth, requirePermission('email.send'), async (req, res
       subject,
       html: wrappedHtml,
       text: 'Test Email Successful! Your email configuration is working correctly.'
+        + await buildSignatureTextFor('en')
     });
 
+    capabilityEvidence(res, 'smtp');
     res.json({ message: 'Test email sent successfully' });
   } catch (error) {
     logger.error('Test email error:', error);
@@ -733,8 +794,12 @@ router.get('/queue/:id', adminAuth, messagingGate, requirePermission('email.view
 
     let cc = null;
     let attachments = [];
+    // Rows sent before the processor learned to scrub still carry the
+    // gallery password / client PIN in their variables and body. Redact on
+    // read from the same rule, so the pane never serves a password.
+    const data = parseEmailData(row.email_data);
+    const renderedHtml = redactRenderedHtml(row.rendered_html || null, secretValues(data));
     try {
-      const data = row.email_data ? JSON.parse(row.email_data) : {};
       if (data.cc) cc = Array.isArray(data.cc) ? data.cc.join(', ') : String(data.cc);
       if (Array.isArray(data.attachments)) {
         attachments = data.attachments
@@ -756,7 +821,7 @@ router.get('/queue/:id', adminAuth, messagingGate, requirePermission('email.view
       eventId: row.event_id,
       eventName: row.event_name || null,
       eventSlug: row.event_slug || null,
-      renderedHtml: row.rendered_html || null,
+      renderedHtml,
       cc,
       attachments,
     });
@@ -797,6 +862,8 @@ router.post('/send', adminAuth, messagingGate, requirePermission('email.send'), 
 
     const emailProcessor = require('../services/emailProcessor');
     const result = await emailProcessor.sendRawEmail({ to, cc, subject, html, accountKey });
+    if (result.transport === 'webhook') capabilityEvidence(res, 'email_webhook');
+    if (result.transport === 'smtp') capabilityEvidence(res, 'smtp');
 
     await db('email_queue').insert({
       recipient_email: to,
@@ -810,8 +877,8 @@ router.post('/send', adminAuth, messagingGate, requirePermission('email.send'), 
       status: 'sent',
       origin: 'manual',
       rendered_html: html,
-      created_at: new Date(),
-      sent_at: new Date(),
+      created_at: new Date().toISOString(),
+      sent_at: new Date().toISOString(),
     });
     res.json({ ok: true });
   } catch (error) {
@@ -963,6 +1030,7 @@ router.put('/templates/:key', [
       return res.status(400).json({ error: 'translations object is required' });
     }
 
+    let contentChanged = false;
     // Upsert each language translation
     for (const [language, data] of Object.entries(translations)) {
       if (!data || typeof data !== 'object') continue;
@@ -978,6 +1046,7 @@ router.put('/templates/:key', [
         updated_at: new Date(),
       };
 
+      contentChanged ||= changedFields(existing, row, ['subject', 'body_html', 'body_text']);
       if (existing) {
         await db('email_template_translations')
           .where({ template_id: template.id, language })
@@ -987,7 +1056,7 @@ router.put('/templates/:key', [
           template_id: template.id,
           language,
           ...row,
-          created_at: new Date(),
+          created_at: new Date().toISOString(),
         });
       }
     }
@@ -1025,6 +1094,7 @@ router.put('/templates/:key', [
       { type: 'admin', id: req.admin.id, name: req.admin.username }
     );
 
+    if (contentChanged) capabilityEvidence(res, 'email_template_editing');
     res.json({ message: 'Email template updated successfully' });
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to update email template');
@@ -1101,7 +1171,7 @@ router.post('/templates', [
           subject: content.subject || '',
           body_html: content.body_html || '',
           body_text: content.body_text || '',
-          created_at: new Date(),
+          created_at: new Date().toISOString(),
           updated_at: new Date(),
         });
       }
@@ -1112,6 +1182,8 @@ router.post('/templates', [
       null,
       { type: 'admin', id: req.admin.id, name: req.admin.username });
 
+    if (Object.values(translations).some(content => content && changedFields({}, content,
+      ['subject', 'body_html', 'body_text']))) capabilityEvidence(res, 'email_template_editing');
     return res.status(201).json({ template_key: templateKey, id: templateId });
   } catch (error) {
     return errorResponse(res, error, 500, 'Failed to create email template');
@@ -1188,8 +1260,21 @@ router.post('/templates/:key/preview', adminAuth, requirePermission('email.view'
     res.json({
       subject,
       body_html: wrappedHtml,
-      body_text: textContent,
-      language
+      // The Text tab has to show what a text-only client will receive, which
+      // includes the signature the HTML tab already displays (#1264 review).
+      //
+      // The `|| htmlToText(...)` half mirrors sendTemplateEmail: a
+      // translation may legitimately have HTML and an EMPTY body_text, and
+      // the real send derives the text part from the HTML in that case.
+      // Concatenating the signature onto '' produced a non-empty string, so
+      // the Text tab rendered a footer with no message above it.
+      body_text: (textContent || htmlToText(wrappedHtml))
+        + await buildSignatureTextFor(language),
+      language,
+      // Migration 198 — the wrapper above already rendered the global
+      // signature into body_html when it's on. This flag just lets the
+      // preview UI say so, and point at Business profile when it's off.
+      signature: (await businessProfileService.getEmailSignature()) !== null
     });
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to preview email template');

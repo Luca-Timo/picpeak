@@ -23,10 +23,14 @@ import {
   Wallet,
   FolderKanban,
   MonitorPlay,
+  Send,
   Workflow,
+  Megaphone,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button, Card } from '../../../components/common';
+import { api } from '../../../config/api';
 import { FeatureCard } from '../components/FeatureCard';
 import { SidebarPreview } from '../components/SidebarPreview';
 import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
@@ -47,6 +51,17 @@ const Section: React.FC<SectionProps> = ({ title, children }) => (
 );
 
 export const FeaturesTab: React.FC = () => {
+  // The all-in-one image cannot run face recognition (#1074) — see
+  // faceSettings.isSingleContainerImage. Read it from the version endpoint the
+  // admin UI already calls, so the card can say WHY rather than offering a
+  // switch that refuses to stay on.
+  const { data: systemVersion } = useQuery({
+    queryKey: ['admin-system-version'],
+    queryFn: async () => (await api.get('/admin/system/version')).data,
+    staleTime: 5 * 60_000,
+  });
+  const isSingleContainer = systemVersion?.single_container === true;
+
   const { t } = useTranslation();
   const { staged, setFlag, save, reset, isDirty, isSaving } = useFeatureFlags();
 
@@ -132,6 +147,47 @@ export const FeaturesTab: React.FC = () => {
             sidebarHiddenLabel={sidebarHiddenLabel}
             enabled={staged.slideshow}
             onToggle={(next) => setFlag('slideshow', next)}
+          />
+
+          <FeatureCard
+            icon={Send}
+            title={t('settings.features.transfers.title', 'PicTransfer')}
+            description={t(
+              'settings.features.transfers.description',
+              'Send original files from any event(s) as a secure, token-protected download link, with an optional client-upload code so clients can send you logos and files back. Strictly opt-in.',
+            )}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarLabel={t('settings.features.transfers.sidebar', 'PicTransfer')}
+            enabled={staged.transfers}
+            onToggle={(next) => setFlag('transfers', next)}
+          />
+
+          {/* Face recognition (#1074). Requires the optional picpeak-ml
+              sidecar container — with the flag on but no sidecar running,
+              photos simply stay queued and nothing breaks. Two deliberate
+              actions are still needed before any face is processed: this
+              toggle, and the per-event switch on each gallery. */}
+          <FeatureCard
+            icon={Users}
+            title={t('settings.features.faces.title', 'People in galleries')}
+            description={t(
+              'settings.features.faces.description',
+              'Group each gallery\u2019s photos by the people in them, so guests can find themselves in two taps and download just their own photos. Runs entirely on your own server in a separate, optional container \u2014 nothing is sent anywhere. Detected faces are personal data, so this stays off until you enable it per gallery too.',
+            )}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarHidden
+            sidebarHiddenLabel={sidebarHiddenLabel}
+            enabled={staged.faces && !isSingleContainer}
+            onToggle={(next) => setFlag('faces', next)}
+            disabled={isSingleContainer}
+            lockedReason={isSingleContainer
+              ? t(
+                'settings.features.faces.lockedSingleContainer',
+                'Not available on the all-in-one image. Face detection needs a separate ML container and competes with image processing for the same CPU and memory, which would slow the whole install down.',
+              )
+              : undefined}
           />
         </Section>
 
@@ -326,6 +382,22 @@ export const FeaturesTab: React.FC = () => {
             sidebarLabel={t('settings.features.bills.sidebar', 'Invoices')}
             enabled={staged.bills}
             onToggle={(next) => setFlag('bills', next)}
+          />
+
+          {/* Newsletter campaigns (#1264). Clients child. Mass marketing mail
+              to customer accounts, so the copy leads with consent. */}
+          <FeatureCard
+            icon={Megaphone}
+            title={t('settings.features.newsletters.title', 'Newsletters')}
+            description={t(
+              'settings.features.newsletters.description',
+              'Send a marketing campaign to your customer accounts. Compose the body with the rich-text editor, preview it, send yourself a test, then queue it — sends are spread over time so your mail provider does not rate-limit you. Every customer can be opted out individually, opted-out customers are skipped automatically, and every campaign carries an unsubscribe link. Emails about galleries, quotes and invoices are never affected.',
+            )}
+            status="new"
+            statusLabel={statusLabel('new')}
+            sidebarLabel={t('settings.features.newsletters.sidebar', 'Newsletters')}
+            enabled={staged.newsletters}
+            onToggle={(next) => setFlag('newsletters', next)}
           />
 
           <FeatureCard

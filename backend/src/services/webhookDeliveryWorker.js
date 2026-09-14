@@ -2,6 +2,7 @@ const axios = require('axios');
 const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { signPayload, renderTemplate } = require('./webhookService');
+const { pinnedRequestOptions } = require('../utils/pinnedRequest');
 const { validateExternalUrlAsync } = require('../utils/networkValidation');
 
 const POLL_INTERVAL_MS = parseInt(process.env.WEBHOOK_DELIVERY_INTERVAL_MS || '5000', 10);
@@ -32,7 +33,7 @@ const BACKOFF_MS = [
   12 * 60 * 60_000,  // 12 h (only used when MAX_ATTEMPTS extended past 5)
 ];
 
-let intervalHandle = null;
+
 let stopped = false;
 // Tracks deliveries currently being processed in this tick — guards
 // against the same row being claimed twice if a tick takes longer than
@@ -51,7 +52,7 @@ async function fetchPending(limit) {
   const excludeIds = Array.from(inFlight);
   let q = db('webhook_deliveries')
     .where('status', 'pending')
-    .where('next_retry_at', '<=', new Date())
+    .where('next_retry_at', '<=', new Date().toISOString())
     .orderBy('next_retry_at', 'asc')
     .limit(limit);
   if (excludeIds.length > 0) {
@@ -71,7 +72,7 @@ async function deliverOne(row) {
       .update({
         status: 'failed',
         last_error: 'webhook subscription no longer exists',
-        completed_at: new Date(),
+        completed_at: new Date().toISOString(),
         attempt_count: row.attempt_count + 1,
       });
     return;
@@ -85,7 +86,7 @@ async function deliverOne(row) {
       .update({
         status: 'failed',
         last_error: 'webhook is disabled',
-        completed_at: new Date(),
+        completed_at: new Date().toISOString(),
         attempt_count: row.attempt_count + 1,
       });
     return;
@@ -95,6 +96,7 @@ async function deliverOne(row) {
   // host and vets every A/AAAA record (a public-looking name that now
   // resolves to an internal IP is rejected). Admin can opt out via
   // WEBHOOK_ALLOW_PRIVATE_URLS=true for local-receiver dev runs.
+  let connectionOptions = {};
   if (!allowPrivateUrls) {
     const urlCheck = await validateExternalUrlAsync(webhook.url);
     if (!urlCheck.valid) {
@@ -111,6 +113,7 @@ async function deliverOne(row) {
       }
       return;
     }
+    connectionOptions = pinnedRequestOptions(urlCheck);
   }
 
   const envelopeBody = typeof row.payload === 'string' ? row.payload : JSON.stringify(row.payload);
@@ -139,6 +142,7 @@ async function deliverOne(row) {
   let networkError;
   try {
     response = await axios.post(webhook.url, rawBody, {
+      ...connectionOptions,
       headers: {
         'Content-Type': contentType,
         [SIGNATURE_HEADER]: signature,
@@ -172,10 +176,10 @@ async function deliverOne(row) {
         response_body: truncate(stringifyBody(response.data), RESPONSE_TRUNCATE_BYTES),
         latency_ms: latency,
         attempt_count: newAttempt,
-        completed_at: new Date(),
+        completed_at: new Date().toISOString(),
         next_retry_at: null,
       });
-    await db('webhooks').where({ id: webhook.id }).update({ last_success_at: new Date() });
+    await db('webhooks').where({ id: webhook.id }).update({ last_success_at: new Date().toISOString() });
     return;
   }
 
@@ -194,10 +198,10 @@ async function deliverOne(row) {
         last_error: errorMsg,
         latency_ms: latency,
         attempt_count: newAttempt,
-        completed_at: new Date(),
+        completed_at: new Date().toISOString(),
         next_retry_at: null,
       });
-    await db('webhooks').where({ id: webhook.id }).update({ last_failure_at: new Date() });
+    await db('webhooks').where({ id: webhook.id }).update({ last_failure_at: new Date().toISOString() });
     return;
   }
 
@@ -211,9 +215,9 @@ async function deliverOne(row) {
       last_error: errorMsg,
       latency_ms: latency,
       attempt_count: newAttempt,
-      next_retry_at: new Date(Date.now() + backoff),
+      next_retry_at: new Date(Date.now() + backoff).toISOString(),
     });
-  await db('webhooks').where({ id: webhook.id }).update({ last_failure_at: new Date() });
+  await db('webhooks').where({ id: webhook.id }).update({ last_failure_at: new Date().toISOString() });
 }
 
 async function markFailedFinal(row, reason) {
@@ -223,10 +227,10 @@ async function markFailedFinal(row, reason) {
       status: 'failed',
       last_error: reason,
       attempt_count: row.attempt_count + 1,
-      completed_at: new Date(),
+      completed_at: new Date().toISOString(),
       next_retry_at: null,
     });
-  await db('webhooks').where({ id: row.webhook_id }).update({ last_failure_at: new Date() });
+  await db('webhooks').where({ id: row.webhook_id }).update({ last_failure_at: new Date().toISOString() });
 }
 
 // Schedule the normal retry/backoff for a transient failure that must not
@@ -242,7 +246,7 @@ async function scheduleTransientRetry(row, webhook, errorMsg) {
         status: 'failed',
         last_error: errorMsg,
         attempt_count: newAttempt,
-        completed_at: new Date(),
+        completed_at: new Date().toISOString(),
         next_retry_at: null,
       });
   } else {
@@ -253,10 +257,10 @@ async function scheduleTransientRetry(row, webhook, errorMsg) {
         status: 'pending',
         last_error: errorMsg,
         attempt_count: newAttempt,
-        next_retry_at: new Date(Date.now() + backoff),
+        next_retry_at: new Date(Date.now() + backoff).toISOString(),
       });
   }
-  await db('webhooks').where({ id: webhook.id }).update({ last_failure_at: new Date() });
+  await db('webhooks').where({ id: webhook.id }).update({ last_failure_at: new Date().toISOString() });
 }
 
 function stringifyBody(data) {
@@ -266,7 +270,7 @@ function stringifyBody(data) {
   try { return JSON.stringify(data); } catch { return String(data); }
 }
 
-async function tick() {
+async function runTick() {
   if (stopped) return;
   try {
     const slots = Math.max(0, CONCURRENCY - inFlight.size);
@@ -286,22 +290,15 @@ async function tick() {
   }
 }
 
+const pollingTask = require('./scheduledTask').scheduledTask(runTick, { interval: POLL_INTERVAL_MS });
+const tick = () => runTick(); // Explicit test/manual tick does not start a timer.
 function startWebhookDeliveryWorker() {
-  if (intervalHandle) return; // idempotent
   stopped = false;
-  intervalHandle = setInterval(tick, POLL_INTERVAL_MS);
-  logger.info(
-    `[webhookWorker] started — interval=${POLL_INTERVAL_MS}ms, concurrency=${CONCURRENCY}, ` +
-    `max_attempts=${MAX_ATTEMPTS}, allow_private=${allowPrivateUrls}`
-  );
+  pollingTask.start();
 }
-
-function stopWebhookDeliveryWorker() {
+async function stopWebhookDeliveryWorker() {
   stopped = true;
-  if (intervalHandle) {
-    clearInterval(intervalHandle);
-    intervalHandle = null;
-  }
+  await pollingTask.stop();
 }
 
 module.exports = {

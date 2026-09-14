@@ -36,8 +36,6 @@ const ANIMATED_GIF = Buffer.from([
   0x3B,
 ]);
 
-// No width-tier case here: the responsive `?w=` renditions (#1095) are
-// main-only, so this branch has a single canonical preview per photo.
 describe('generatePreviewImage encodes for the source (#1166 follow-up)', () => {
   let storage; let storageRoot; let srcDir; let imageProcessor;
 
@@ -123,6 +121,22 @@ describe('generatePreviewImage encodes for the source (#1166 follow-up)', () => 
 
     expect(key).toBe('previews/preview_opaque.jpg');
     expect((await outMeta(key)).format).toBe('jpeg');
+  });
+
+  it('carries the encoding into the width tiers too', async () => {
+    // The tier variant goes through the same function with a different
+    // longEdge, so it must not quietly fall back to JPEG.
+    const src = path.join(srcDir, 'tiered.png');
+    await sharp({
+      create: { width: 1600, height: 1200, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    }).png().toFile(src);
+
+    const key = await imageProcessor.generatePreviewImage(src, { regenerate: true, longEdge: 640 });
+
+    expect(key).toBe('previews/preview_w640_tiered.webp');
+    const meta = await outMeta(key);
+    expect(meta.hasAlpha).toBe(true);
+    expect(meta.width).toBe(640);
   });
 
   it('returns null on an unreadable source instead of throwing', async () => {

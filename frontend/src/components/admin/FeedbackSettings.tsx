@@ -1,7 +1,8 @@
 import React from 'react';
-import { MessageSquare, Star, Heart, Bookmark, Shield, Eye, User, Users } from 'lucide-react';
+import { MessageSquare, Star, Heart, Bookmark, Shield, Eye, User, Users, Smile, Palette, Keyboard, Tag } from 'lucide-react';
 import { Card } from '../common';
 import { useTranslation } from 'react-i18next';
+import { COLOR_LABELS, COLOR_LABEL_SWATCHES, KEYBIND_SCHEMES, type KeybindMode } from '../../services/feedback.service';
 
 interface FeedbackSettingsProps {
   settings: FeedbackSettings;
@@ -15,13 +16,16 @@ interface FeedbackSettings {
   allow_likes: boolean;
   allow_comments: boolean;
   allow_favorites: boolean;
+  allow_reactions: boolean;
+  allow_color_labels: boolean;
+  keybind_mode?: KeybindMode;
   require_name_email: boolean;
   moderate_comments: boolean;
   show_feedback_to_guests: boolean;
   enable_rate_limiting: boolean;
   rate_limit_window_minutes?: number;
   rate_limit_max_requests?: number;
-  identity_mode?: 'simple' | 'guest';
+  identity_mode?: 'simple' | 'guest' | 'shared';
   // Per-guest caps (#655). null/0 = unlimited.
   max_favorites_per_guest?: number | null;
   max_likes_per_guest?: number | null;
@@ -137,7 +141,50 @@ export const FeedbackSettings: React.FC<FeedbackSettingsProps> = ({
                     </div>
                   </div>
                 </label>
+
+                {/* Shared colour tag (#1197). Deliberately worded around what
+                    it changes and what it does not: it drops the identity from
+                    the COLOUR TAG only, and it is the one mode where a guest
+                    can overwrite someone else's mark — both of which an
+                    operator has to know before picking it. */}
+                <label
+                  className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer border transition ${
+                    settings.identity_mode === 'shared'
+                      ? 'border-accent-dark bg-accent-dark/15'
+                      : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="identity_mode"
+                    value="shared"
+                    checked={settings.identity_mode === 'shared'}
+                    onChange={() => onChange({ ...settings, identity_mode: 'shared' })}
+                    className="mt-0.5 w-4 h-4 text-accent focus:ring-primary-500"
+                  />
+                  <Tag className="w-5 h-5 mt-0.5 text-neutral-600 dark:text-neutral-400" />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                      {t('feedback.settings.identityModeShared', 'One shared colour tag')}
+                    </div>
+                    <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                      {t(
+                        'feedback.settings.identityModeSharedDesc',
+                        'One colour per photo that everyone sees and anyone can change — for agreeing a single verdict. Likes, ratings and comments stay per-visitor.'
+                      )}
+                    </div>
+                  </div>
+                </label>
               </div>
+
+              {settings.identity_mode === 'shared' && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  {t(
+                    'feedback.settings.identityModeSharedNote',
+                    'Colour tags in this mode have no author, so the admin view cannot show who set one. Existing per-visitor colour labels are kept but not shown while this mode is on, and come back if you switch away.'
+                  )}
+                </p>
+              )}
             </div>
 
             <div className="border-t border-neutral-200 dark:border-neutral-700 pt-4" />
@@ -219,8 +266,122 @@ export const FeedbackSettings: React.FC<FeedbackSettingsProps> = ({
                     </div>
                   </div>
                 </label>
+
+                <label className="flex items-center gap-3 p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={settings.allow_reactions}
+                    onChange={() => handleToggle('allow_reactions')}
+                    className="w-4 h-4 text-accent bg-neutral-100 border-neutral-300 rounded focus:ring-primary-500"
+                  />
+                  <Smile className="w-5 h-5 text-neutral-600 dark:text-neutral-400" />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                      {t('feedback.settings.reactions', 'Emoji Reactions')}
+                    </div>
+                    <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                      {t('feedback.settings.reactionsDesc', 'One emoji per guest per photo (❤️ 😂 😍 👏 🎉)')}
+                    </div>
+                  </div>
+                </label>
+
+                {/* Color labels (#1044) */}
+                <label className="flex items-center gap-3 p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={settings.allow_color_labels}
+                    onChange={() => handleToggle('allow_color_labels')}
+                    className="w-4 h-4 text-accent bg-neutral-100 border-neutral-300 rounded focus:ring-primary-500"
+                  />
+                  <Palette className="w-5 h-5 text-neutral-600 dark:text-neutral-400" />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
+                      {t('feedback.settings.colorLabels', 'Color Labels')}
+                      <span className="flex items-center gap-1" aria-hidden="true">
+                        {COLOR_LABELS.map((color) => (
+                          <span
+                            key={color}
+                            className="w-3 h-3 rounded-full border"
+                            style={{
+                              backgroundColor: COLOR_LABEL_SWATCHES[color].fill,
+                              borderColor: COLOR_LABEL_SWATCHES[color].ring,
+                            }}
+                          />
+                        ))}
+                      </span>
+                    </div>
+                    <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                      {t('feedback.settings.colorLabelsDesc', "One color per guest per photo, using Lightroom's color set so selections carry over via XMP")}
+                    </div>
+                  </div>
+                </label>
               </div>
             </div>
+
+            {/* Keyboard scheme for the lightbox (#1044). Only meaningful once
+                color labels are on — stars alone already use 1-5. */}
+            {settings.allow_color_labels && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
+                  <Keyboard className="w-4 h-4" />
+                  {t('feedback.settings.keybindMode', 'Keyboard shortcuts')}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {(['colors', 'lightroom'] as KeybindMode[]).map((mode) => (
+                    <label
+                      key={mode}
+                      className={`flex gap-3 p-3 rounded-lg cursor-pointer border ${
+                        (settings.keybind_mode || 'colors') === mode
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                          : 'border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="keybind_mode"
+                        checked={(settings.keybind_mode || 'colors') === mode}
+                        onChange={() => onChange({ ...settings, keybind_mode: mode })}
+                        className="mt-1 w-4 h-4 text-accent border-neutral-300 focus:ring-primary-500"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                          {mode === 'colors'
+                            ? t('feedback.settings.keybindColors', 'Colors only (simplest)')
+                            : t('feedback.settings.keybindLightroom', 'Lightroom defaults')}
+                        </div>
+                        <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                          {mode === 'colors'
+                            ? t('feedback.settings.keybindColorsDesc', '1 = green (1st choice), 2 = yellow (2nd choice), 3 = red (rejected)')
+                            : t('feedback.settings.keybindLightroomDesc', '1-5 set the star rating, 6-9 set red / yellow / green / blue')}
+                        </div>
+                        {/* The actual keymap, read from the shared scheme so
+                            this preview can never claim a binding the
+                            lightbox doesn't have. */}
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {Object.entries(KEYBIND_SCHEMES[mode].colors).map(([key, color]) => (
+                            <span
+                              key={key}
+                              className="flex items-center gap-1 text-[11px] text-neutral-600 dark:text-neutral-300"
+                            >
+                              <kbd className="px-1.5 py-0.5 rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900">
+                                {key}
+                              </kbd>
+                              <span
+                                className="w-3 h-3 rounded-full border"
+                                style={{
+                                  backgroundColor: COLOR_LABEL_SWATCHES[color].fill,
+                                  borderColor: COLOR_LABEL_SWATCHES[color].ring,
+                                }}
+                              />
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Per-guest caps (#655). Two numeric inputs; 0 / empty = unlimited.
                 Only renders when the matching toggle is on — the cap is

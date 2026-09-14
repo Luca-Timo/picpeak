@@ -3,18 +3,31 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
 const { db, logActivity } = require('../database/db');
+const { RECOVERABLE_PASSWORD_COLUMNS } = require('./adminEvents/helpers');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const { ensureThumbnail } = require('../services/imageProcessor');
 const { isVideoMimeType } = require('../services/videoProcessor');
+const { acceptedUpload, capabilityEvidence } = require('../usage/capabilityEvidence');
 const { generatePhotoFilename, buildContentDisposition } = require('../utils/filenameSanitizer');
 const {
   getUseOriginalFilenames,
   pickRawDownloadName,
 } = require('../services/downloadFilenameService');
-const { escapeLikePattern } = require('../utils/sqlSecurity');
+const { escapeLikePattern, likeWithEscape } = require('../utils/sqlSecurity');
+const { COLOR_LABELS, dominantColorLabel, SHARED_COLOR_LABEL_IDENTITY } = require('../constants/colorLabels');
+const feedbackService = require('../services/feedbackService');
+const photoAdminMarksService = require('../services/photoAdminMarksService');
 const { validateUploadedFiles } = require('../middleware/uploadValidation');
-const { getMaxFilesPerUpload, getAllowedMimeTypes, EXTENSION_TO_MIME } = require('../services/uploadSettings');
+const {
+  getMaxFilesPerUpload,
+  getAllowedMimeTypes,
+  getMaxFileSizeBytes,
+  getMaxVideoSizeBytes,
+  DEFAULT_MAX_FILE_SIZE_MB,
+  DEFAULT_MAX_VIDEO_SIZE_MB,
+  EXTENSION_TO_MIME
+} = require('../services/uploadSettings');
 const { resolvePhotoContentType } = require('../utils/photoContentType');
 const { processUploadedPhotos } = require('../services/photoProcessor');
 const chunkedUpload = require('../services/chunkedUploadService');
@@ -30,25 +43,46 @@ const router = express.Router();
 // Get storage path from environment or default
 const getStoragePath = () => process.env.STORAGE_PATH || path.join(__dirname, '../../../storage');
 
+// Resolve a numeric category id within the scope of one event: it must belong
+// to that event or be a global category (#500 / #525 — the same contract the
+// public v1 upload route enforces). Returns undefined for an out-of-scope id,
+// which every caller turns into a 400 rather than silently filing the photo
+// under another event's category.
+const findScopedCategory = (eventId, categoryId) => db('photo_categories')
+  .where({ id: categoryId })
+  .andWhere(function () {
+    this.where({ event_id: eventId }).orWhere('is_global', true);
+  })
+  .first();
+
+const outOfScopeCategoryError = (categoryId) => ({
+  error: `Unknown or out-of-scope category_id ${categoryId}`
+});
+
 // Configure multer for file uploads
 // IMPORTANT: Using synchronous functions to prevent file corruption
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     logger.info('Multer destination called for file:', file.originalname);
-    const { eventId } = req.params;
-    
+
     // We'll validate the event exists in the route handler
-    // For now, just create a temp destination
-    const tempPath = path.join(getStoragePath(), 'temp', `upload_${Date.now()}_${Math.random().toString(36).substring(7)}`);
-    
-    // Create directory synchronously
-    require('fs').mkdirSync(tempPath, { recursive: true });
-    logger.info('Temp destination path:', tempPath);
-    
-    // Store temp path for cleanup
-    req.tempUploadPath = tempPath;
-    
-    cb(null, tempPath);
+    // For now, just create a temp destination.
+    // One directory per REQUEST, not per file: this callback runs for every
+    // file and used to overwrite req.tempUploadPath each time, so cleanup
+    // only ever removed the last file's directory and a multi-file upload
+    // left the rest behind. Temp filenames are already collision-proof.
+    if (!req.tempUploadPath) {
+      const tempPath = path.join(getStoragePath(), 'temp', `upload_${Date.now()}_${Math.random().toString(36).substring(7)}`);
+
+      // Create directory synchronously
+      require('fs').mkdirSync(tempPath, { recursive: true });
+      logger.info('Temp destination path:', tempPath);
+
+      // Store temp path for cleanup
+      req.tempUploadPath = tempPath;
+    }
+
+    cb(null, req.tempUploadPath);
   },
   filename: (req, file, cb) => {
     logger.info('Multer filename called for file:', file.originalname);
@@ -65,18 +99,24 @@ const { validateFileType, createFileUploadValidator } = require('../utils/fileSe
 // The allowed types are fetched from the database once per request (before multer
 // processes files) and attached to req.allowedMimeTypes so that the fileFilter
 // callback can read them synchronously.
-const upload = multer({
+//
+// The per-file size cap is resolved per request too (general_max_file_size_mb),
+// so the uploader has to be built per request like the transfer routes do. It
+// was hardcoded to 10GB here, which meant the advertised "max. 50MB per file"
+// in the dropzone was never enforced anywhere server-side. getMaxFileSizeBytes()
+// clamps to MAX_ALLOWED_FILE_SIZE_MB (10GB), so that hard ceiling still applies.
+const createUpload = (maxFileSizeBytes) => multer({
   storage: storage,
   limits: {
-    fileSize: 10 * 1024 * 1024 * 1024, // 10GB limit per file to support large videos
+    fileSize: maxFileSizeBytes,
     files: 2000, // Hard safety ceiling; actual limit enforced dynamically
     fieldSize: 10 * 1024 * 1024, // 10MB for non-file fields
     parts: 10000,
     headerPairs: 2000,
     // CVE-2026-82333: files arrive as repeated `photos` parts via
-    // .array('photos', N) — not bracket-indexed field names like
-    // `photos[0]` — so no legitimate field name uses array-index syntax
-    // at all. Reject any that do.
+    // multer's own .array('photos', N) — not bracket-indexed field names
+    // like `photos[0]` — so no legitimate field name uses array-index
+    // syntax at all. Reject any that do.
     fieldArrayIndexLimit: 0
   },
   fileFilter: (req, file, cb) => {
@@ -106,12 +146,50 @@ const resolveAllowedTypes = async (req, res, next) => {
 // Dynamic content validator middleware that reads allowed types from req
 const validateUploadContent = async (req, res, next) => {
   const allowedTypes = req.allowedMimeTypes || ['image/jpeg', 'image/png', 'image/webp'];
+  const photoCapBytes = req.maxFileSizeBytes || DEFAULT_MAX_FILE_SIZE_MB * 1024 * 1024;
+  const videoCapBytes = req.maxVideoSizeBytes || DEFAULT_MAX_VIDEO_SIZE_MB * 1024 * 1024;
+  const capFor = (file) => (isVideoMimeType(file.mimetype) ? videoCapBytes : photoCapBytes);
+
+  // Photos and videos have separate caps (general_max_file_size_mb /
+  // general_max_video_size_mb), but multer's limit is global — it streamed
+  // against the larger of the two because it can't branch on MIME type. So
+  // the per-kind decision has to happen here, where the type is known,
+  // otherwise a 50MB photo cap would be silently raised to the video cap.
+  const oversized = (req.files || []).find((file) => file.size > capFor(file));
+  if (oversized) {
+    const capMb = Math.floor(capFor(oversized) / (1024 * 1024));
+    return res.status(400).json({ error: `File too large. Maximum size is ${capMb} MB per file.` });
+  }
+
   const validator = createFileUploadValidator({
     allowedTypes,
-    maxFileSize: 10 * 1024 * 1024 * 1024, // 10GB to support large videos
+    // Same per-request caps as above, so the two layers can't disagree.
+    maxFileSize: photoCapBytes,
+    maxVideoFileSize: videoCapBytes,
     validateContent: true
   });
   return validator(req, res, next);
+};
+
+// Remove the multer temp directory on every exit path — success, validation
+// 4xx, multer error, server 5xx or a client disconnect. Registered BEFORE
+// multer runs (the closure reads req.tempUploadPath lazily) because a
+// rejected upload never reaches the final handler, where this used to live:
+// every rejection leaked its temp directory and the file inside it.
+const registerTempUploadCleanup = (req, res, next) => {
+  let cleanupDone = false;
+  const cleanupTempDir = async () => {
+    if (cleanupDone || !req.tempUploadPath) return;
+    cleanupDone = true;
+    try {
+      await fs.rm(req.tempUploadPath, { recursive: true, force: true });
+    } catch (e) {
+      logger.error('Failed to clean up temp upload directory:', e);
+    }
+  };
+  res.on('finish', cleanupTempDir);
+  res.on('close', cleanupTempDir);
+  next();
 };
 
 // Request timeout middleware for uploads
@@ -135,21 +213,31 @@ const uploadTimeout = (timeout = 300000) => { // 5 minutes default
 };
 
 // Upload photos for an event
-// Max file count is configurable via general settings
-router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), requireEventOwnership, uploadTimeout(600000), resolveAllowedTypes, async (req, res, next) => { // 10 minute timeout
+// Max file count and max file size are configurable via general settings
+router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), requireEventOwnership, uploadTimeout(600000), resolveAllowedTypes, registerTempUploadCleanup, async (req, res, next) => { // 10 minute timeout
   let maxFilesPerUpload;
+  let maxFileSizeBytes;
+  let maxVideoSizeBytes;
   try {
     maxFilesPerUpload = await getMaxFilesPerUpload();
+    maxFileSizeBytes = await getMaxFileSizeBytes();
+    maxVideoSizeBytes = await getMaxVideoSizeBytes();
   } catch (error) {
     return errorResponse(res, error, 500, 'Unable to determine upload limits');
   }
+  req.maxFileSizeBytes = maxFileSizeBytes;
+  req.maxVideoSizeBytes = maxVideoSizeBytes;
+  // multer's limit is global, so it has to be the larger of the two caps;
+  // validateUploadContent then holds each file to the cap for its own kind.
+  const multerLimitBytes = Math.max(maxFileSizeBytes, maxVideoSizeBytes);
+  const maxFileSizeMb = Math.floor(multerLimitBytes / (1024 * 1024));
 
-  upload.array('photos', maxFilesPerUpload)(req, res, (err) => {
+  createUpload(multerLimitBytes).array('photos', maxFilesPerUpload)(req, res, (err) => {
     if (err) {
       logger.error('Multer error:', err);
       if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(400).json({ error: 'File too large. Maximum size is 10GB per file.' });
+          return res.status(400).json({ error: `File too large. Maximum size is ${maxFileSizeMb} MB per file.` });
         }
         if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE') {
           return res.status(400).json({ error: `Too many files. Maximum ${maxFilesPerUpload} files per upload.` });
@@ -161,28 +249,19 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
     next();
   });
 }, validateUploadContent, validateUploadedFiles, async (req, res) => {
-  // Single cleanup site for the multer temp directory — runs on every
-  // exit path (success, validation 4xx, server 5xx, multer error). The
-  // previous code had three inline cleanup blocks for individual early
-  // returns and missed the success path entirely, leaving an empty
-  // per-request directory behind on every successful upload (#357 review).
-  let tempCleanupDone = false;
-  const cleanupTempDir = async () => {
-    if (tempCleanupDone || !req.tempUploadPath) return;
-    tempCleanupDone = true;
-    try {
-      await fs.rm(req.tempUploadPath, { recursive: true, force: true });
-    } catch (e) {
-      logger.error('Failed to clean up temp upload directory:', e);
-    }
-  };
-  res.on('finish', cleanupTempDir);
-  res.on('close', cleanupTempDir);
-
+  // Temp-directory cleanup is registered by registerTempUploadCleanup above,
+  // before multer runs, so it also covers the exit paths that never reach
+  // this handler (multer errors and validation 4xx).
   try {
     const { eventId } = req.params;
-    const { category_id, replace_by_name } = req.body;
+    const { category_id, replace_by_name, match_mode } = req.body;
     const replaceByName = replace_by_name === 'true' || replace_by_name === true;
+    // How replace_by_name finds its target (#745). 'exact' is the historical
+    // behaviour and stays the default; 'number_token' matches on the trailing
+    // digit run so a render renamed in Lightroom still lands on its proof.
+    // Anything else falls back to 'exact' rather than erroring — an unknown
+    // mode must not silently widen the match.
+    const matchMode = match_mode === 'number_token' ? 'number_token' : 'exact';
 
     logger.info('Upload request received for event:', eventId);
     logger.info('Body:', req.body);
@@ -208,7 +287,9 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
       // Subtract likely replacements from cap calculation
       if (replaceByName && req.files) {
         for (const file of req.files) {
-          const candidate = await findReplacementCandidate(parseInt(eventId), file.originalname);
+          const candidate = await findReplacementCandidate(
+            parseInt(eventId), file.originalname, { matchMode }
+          );
           if (candidate && !candidate.ambiguous) newFilesCount--;
         }
       }
@@ -226,8 +307,11 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
     }
     
     // Parse category_id to number if provided (handle string values like 'individual', 'collage')
+    // Same 0-is-not-a-category rule as the PATCH route below: '0' is truthy, so
+    // it parsed to 0 and the scope-validation guard (`if (parsedCategoryId && ...)`)
+    // then skipped on the falsy 0 and let it into the insert unvalidated.
     const rawParsed = category_id ? parseInt(category_id, 10) : NaN;
-    const parsedCategoryId = !isNaN(rawParsed) ? rawParsed : null;
+    const parsedCategoryId = rawParsed > 0 ? rawParsed : null;
 
     // Determine photo type and category name
     let photoType = 'individual'; // default
@@ -240,16 +324,9 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
     // belong to a different event. The v1 route rejects out-of-scope ids
     // with 400; mirror that here so admin and v1 stay consistent.
     if (parsedCategoryId && !isNaN(parsedCategoryId)) {
-      const category = await db('photo_categories')
-        .where({ id: parsedCategoryId })
-        .andWhere(function () {
-          this.where({ event_id: event.id }).orWhere('is_global', true);
-        })
-        .first();
+      const category = await findScopedCategory(event.id, parsedCategoryId);
       if (!category) {
-        return res.status(400).json({
-          error: `Unknown or out-of-scope category_id ${parsedCategoryId}`
-        });
+        return res.status(400).json(outOfScopeCategoryError(parsedCategoryId));
       }
       categoryName = category.slug || category.name.toLowerCase().replace(/\s+/g, '_');
       // Use category slug for type determination
@@ -276,7 +353,9 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
     if (replaceByName && req.files.length > 0) {
       const newFiles = [];
       for (const file of req.files) {
-        const candidate = await findReplacementCandidate(parseInt(eventId), file.originalname);
+        const candidate = await findReplacementCandidate(
+          parseInt(eventId), file.originalname, { matchMode }
+        );
         if (candidate && !candidate.ambiguous) {
           // Replace existing photo
           const result = await replacePhoto(candidate, file.path, {
@@ -285,6 +364,12 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
             event,
           });
           if (result.success) {
+            capabilityEvidence(res, 'photo_replacement');
+            acceptedUpload(res, {
+              video: isVideoMimeType(file.mimetype),
+              raw: path.extname(file.originalname).toLowerCase() === '.dng',
+              s3: process.env.STORAGE_BACKEND === 's3'
+            });
             replacedPhotos.push({
               id: result.photo.id,
               filename: result.photo.filename,
@@ -297,7 +382,12 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
         } else if (candidate && candidate.ambiguous) {
           skippedReplacements.push({
             filename: file.originalname,
-            reason: `${candidate.count} photos share this name — uploaded as new`,
+            reason: matchMode === 'number_token'
+              ? `${candidate.count} photos share this number — uploaded as new. `
+                + 'Multi-camera shoots should prefix the camera index into the '
+                + 'filename (cam11234.jpg / cam21234.jpg) and keep it in the '
+                + 'delivery name.'
+              : `${candidate.count} photos share this name — uploaded as new`,
           });
           newFiles.push(file);
         } else {
@@ -376,6 +466,10 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
             event_id: parseInt(eventId, 10),
             filename: newFilename,
             original_filename: file.originalname,
+            // Camera-original name, kept separate so a later replace can
+            // overwrite original_filename without losing the Lightroom
+            // round-trip's match key (migration 193, #745).
+            source_filename: file.originalname,
             path: relativePath,
             thumbnail_path: null,
             type: photoType,
@@ -389,6 +483,8 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
           })
           .returning('id');
         const photoId = inserted[0]?.id || inserted[0];
+
+        acceptedUpload(res, { video: isVideo, raw: extension.toLowerCase() === '.dng', s3: process.env.STORAGE_BACKEND === 's3' });
 
         uploadedPhotos.push({
           id: photoId,
@@ -683,6 +779,12 @@ router.delete('/:eventId/photos/:photoId', adminAuth, requirePermission('photos.
     if (photo.preview_path) {
       await storage.delete(photo.preview_path).catch(() => {});
     }
+    // Outside the preview_path guard on purpose: a responsive tier (#1095) can
+    // exist when the canonical rendition never did — they are generated
+    // independently, on demand — so keying their cleanup off preview_path
+    // would strand exactly the photos that were only ever viewed on a phone.
+    await require('../services/imageProcessor').deletePreviewTiers(photo);
+    await require('../services/imageProcessor').deleteThumbnailTiers(photo);
 
     // Delete pre-generated watermark if exists
     if (photo.watermark_path) {
@@ -690,6 +792,18 @@ router.delete('/:eventId/photos/:photoId', adminAuth, requirePermission('photos.
     }
 
     // Remove from database
+    // Face data (#1074): the FK cascade is inert on SQLite, and cannot fix up
+    // event_people counts anyway. See faceProcessor.purgePhotoFaces.
+    try {
+      const { purgePhotoFaces } = require('../services/faceProcessor');
+      await purgePhotoFaces(photoId);
+    } catch (err) {
+      logger.warn(`deletePhoto: face purge failed for photo ${photoId}`, { error: err.message });
+    }
+
+    // An external photo's file stays on the NAS; make sure the folder watcher
+    // (issue 1187) does not re-import it on its next pass.
+    await require('../services/externalImportService').recordExclusions(Number(eventId), [photo]);
     await db('photos').where({ id: photoId }).delete();
 
     // Log activity (event was fetched above for storage key resolution)
@@ -712,6 +826,61 @@ router.delete('/:eventId/photos/:photoId', adminAuth, requirePermission('photos.
     res.json({ message: 'Photo deleted successfully' });
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to delete photo');
+  }
+});
+
+// The photographer's own star / colour mark on a photo (#1044 follow-up).
+//
+// Separate from guest feedback in every sense: its own table, its own
+// endpoint, and never surfaced to the gallery. `rating` and `color_label` are
+// tri-state — omit a key to leave that half alone, send null to clear it — so
+// the lightbox's colour keys and star keys don't wipe each other.
+router.put('/:eventId/photos/:photoId/mark', adminAuth, requirePermission('photos.edit'), requireEventOwnership, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    // Parse before querying: Postgres errors on `where id = 'abc'` (22P02),
+    // which would answer 500 for what is really a bad URL. SQLite just fails
+    // to match, so without this the two engines disagree.
+    const photoId = parseInt(req.params.photoId, 10);
+    if (!Number.isInteger(photoId) || photoId < 1) {
+      return res.status(404).json({ error: 'Photo not found' });
+    }
+
+    // requireEventOwnership proves the caller owns the EVENT; this proves the
+    // photo is in it, so a photo id from another event can't be marked
+    // through an event the caller does own.
+    const photo = await db('photos')
+      .where({ id: photoId, event_id: eventId })
+      .first();
+    if (!photo) {
+      return res.status(404).json({ error: 'Photo not found' });
+    }
+
+    const mark = {};
+    if (Object.prototype.hasOwnProperty.call(req.body, 'rating')) {
+      mark.rating = req.body.rating === null ? null : req.body.rating;
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'color_label')) {
+      mark.colorLabel = req.body.color_label === null ? null : req.body.color_label;
+    }
+    if (Object.keys(mark).length === 0) {
+      return res.status(400).json({ error: 'Send rating and/or color_label' });
+    }
+
+    const result = await photoAdminMarksService.setMark(
+      parseInt(eventId, 10), photoId, req.admin.id, mark,
+    );
+
+    capabilityEvidence(res, 'photo_admin_marks');
+    res.json({ success: true, mark: result });
+  } catch (error) {
+    // Validation errors from the service are the caller's fault, not a 500.
+    // Keyed on the code, not the message: matching text would couple this
+    // status to the service's wording.
+    if (error.code === photoAdminMarksService.INVALID_MARK) {
+      return res.status(400).json({ error: error.message });
+    }
+    errorResponse(res, error, 500, 'Failed to save mark');
   }
 });
 
@@ -749,14 +918,34 @@ router.patch('/:eventId/photos/:photoId', adminAuth, requirePermission('photos.e
       // Explicitly clear category
       updateData.category_id = null;
     } else {
-      // Handle numeric category IDs from photo_categories table
+      // Handle numeric category IDs from photo_categories table.
+      // 0 and negatives mean "no category", not category zero: photo_categories.id
+      // is an increments() column so it starts at 1, and a <select> whose "none"
+      // option carries value="0" is exactly how '0' reaches this route. Storing 0
+      // left the photo in a black hole — the grid's category filters never match
+      // it, and the "uncategorized" filter is whereNull() so it misses it too,
+      // while the list mapper renders it as uncategorized because 0 is falsy.
+      // NaN (unparseable input) already fell through to null and still does.
       const numericCategoryId = parseInt(category_id, 10);
-      if (!isNaN(numericCategoryId)) {
+      if (numericCategoryId > 0) {
+        // Same scope check the upload route runs: without it any positive id
+        // was accepted, so a photo could be moved into another event's
+        // category (the grid then never shows it under any filter).
+        const category = await findScopedCategory(parseInt(eventId, 10), numericCategoryId);
+        if (!category) {
+          return res.status(400).json(outOfScopeCategoryError(numericCategoryId));
+        }
         updateData.category_id = numericCategoryId;
       } else {
         updateData.category_id = null;
       }
     }
+
+    // A human just set (or cleared) this category, so it is no longer an
+    // automatic assignment (#1074 phase 3). Without resetting the flag,
+    // "undo automatic categories" would later wipe the photographer's own
+    // choice — exactly the guarantee the rule engine advertises.
+    updateData.auto_categorized = false;
 
     // Update photo
     await db('photos')
@@ -829,12 +1018,35 @@ router.post('/:eventId/photos/bulk-delete', adminAuth, requirePermission('photos
       if (photo.preview_path) {
         await storage.delete(photo.preview_path).catch(() => {});
       }
+      // Outside the guard: a tier can exist when the canonical rendition never
+      // did, so keying cleanup off preview_path would strand phone-only photos.
+      await require('../services/imageProcessor').deletePreviewTiers(photo);
+      await require('../services/imageProcessor').deleteThumbnailTiers(photo);
       if (photo.watermark_path) {
         await watermarkGeneratorService.deleteForPhoto(photo.id);
       }
     }
 
+    // Face data (#1074), bulk path. Same reasoning as the single delete: the
+    // SQLite FK cascade never fires, and event_people counts need rebuilding
+    // regardless of engine.
+    // Iterate the VALIDATED rows, not the raw request ids. `photos` is already
+    // scoped to this event; `photoIds` is user input, and purgePhotoFaces has
+    // no event scope of its own — so looping the raw ids let an editor delete
+    // face data (and recompute people) in a gallery they do not own, even
+    // though the photo deletion below is correctly scoped.
+    for (const photo of photos) {
+      try {
+        const { purgePhotoFaces } = require('../services/faceProcessor');
+        await purgePhotoFaces(photo.id);
+      } catch (err) {
+        logger.warn(`bulk delete: face purge failed for photo ${photo.id}`, { error: err.message });
+      }
+    }
+
     // Delete from database
+    // Same as the single delete: keep the watcher from bringing these back.
+    await require('../services/externalImportService').recordExclusions(Number(eventId), photos);
     await db('photos')
       .whereIn('id', photoIds)
       .where('event_id', eventId)
@@ -907,13 +1119,25 @@ router.post('/:eventId/photos/bulk-update', adminAuth, requirePermission('photos
         updateData.category_id = null;
       } else {
         // Handle numeric category IDs from photo_categories table
+        // (0/negative mean "no category" — see the PATCH route above)
         const numericCategoryId = parseInt(updates.category_id, 10);
-        if (!isNaN(numericCategoryId)) {
+        if (numericCategoryId > 0) {
+          // Scope check, as on the PATCH and upload routes above.
+          const category = await findScopedCategory(parseInt(eventId, 10), numericCategoryId);
+          if (!category) {
+            return res.status(400).json(outOfScopeCategoryError(numericCategoryId));
+          }
           updateData.category_id = numericCategoryId;
         } else {
           updateData.category_id = null;
         }
       }
+
+      // A human just set (or cleared) this category, so it is no longer an
+      // automatic assignment (#1074 phase 3). Without resetting the flag,
+      // "undo automatic categories" would later wipe the photographer's own
+      // choice — exactly the guarantee the rule engine advertises.
+      updateData.auto_categorized = false;
     }
 
     await db('photos')
@@ -994,7 +1218,7 @@ router.get('/:eventId/photos/:photoId/download', adminAuth, requirePermission('p
 router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requireEventOwnership, async (req, res) => {
   try {
     const { eventId } = req.params;
-    const { category_id, type, search, sort = 'date', has_likes, has_favorites, has_comments, min_rating } = req.query;
+    const { category_id, type, search, sort = 'date', has_likes, has_favorites, has_comments, min_rating, color_label } = req.query;
     const order = ['asc', 'desc'].includes(req.query.order) ? req.query.order : 'desc';
     const logic = req.query.logic === 'OR' ? 'OR' : 'AND';
 
@@ -1025,10 +1249,17 @@ router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requ
       query = query.where({ 'photos.type': type });
     }
 
-    // Search by filename
+    // Search by filename. original_filename is included because that is the
+    // name printed on every card ("Original: …") — matching only the stored
+    // renamed filename returned 0 results for a substring the admin can read
+    // on screen. Grouped, because the feedback AND/OR conditions are appended
+    // right below and a bare orWhere would leak across them.
     if (search) {
-      const escapedSearch = escapeLikePattern(search);
-      query = query.where('photos.filename', 'like', `%${escapedSearch}%`);
+      const pattern = `%${escapeLikePattern(search)}%`;
+      query = query.where((qb) => {
+        qb.whereRaw(likeWithEscape('photos.filename'), [pattern])
+          .orWhereRaw(likeWithEscape('photos.original_filename'), [pattern]);
+      });
     }
 
     // Feedback filters (has likes / favorites / comments / min rating) with AND/OR logic
@@ -1047,6 +1278,54 @@ router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requ
       if (!isNaN(minRatingNum)) {
         feedbackConditions.push(qb => qb.where('photos.average_rating', '>=', minRatingNum));
       }
+    }
+    // Colour-label filter (#1044). Comma-separated colours; unknown values are
+    // dropped rather than passed to the query. Unlike its siblings this can't
+    // read a denormalized count column — "any label" and "a GREEN label" are
+    // different questions — so it runs as an EXISTS over photo_feedback,
+    // which the migration-180 index covers.
+    const requestedColorLabels = String(color_label || '')
+      .split(',')
+      .map(value => value.trim().toLowerCase())
+      .filter(value => COLOR_LABELS.includes(value));
+    if (requestedColorLabels.length > 0) {
+      // Only the colour-label set the event's mode actually uses (#1197).
+      // Switching identity_mode leaves the other set in place, and a filter
+      // that matched it would return photos whose badge shows no such colour.
+      const { identity_mode: identityMode } =
+        await feedbackService.getEventFeedbackSettings(eventId);
+      feedbackConditions.push(qb => qb.whereExists(function () {
+        this.select('*')
+          .from('photo_feedback')
+          .whereRaw('photo_feedback.photo_id = photos.id')
+          .where('photo_feedback.feedback_type', 'color_label')
+          .where('photo_feedback.is_hidden', false)
+          .whereIn('photo_feedback.color_label', requestedColorLabels);
+        if (identityMode === 'shared') {
+          this.where('photo_feedback.guest_identifier', SHARED_COLOR_LABEL_IDENTITY);
+        } else {
+          this.where(function () {
+            this.whereNot('photo_feedback.guest_identifier', SHARED_COLOR_LABEL_IDENTITY)
+              .orWhereNull('photo_feedback.guest_identifier');
+          });
+        }
+      }));
+    }
+    // The same filter against the caller's OWN marks (#1044 follow-up).
+    // Scoped to req.admin.id: one photographer's triage must not filter by
+    // another's, even on a shared event.
+    const requestedMyColorLabels = String(req.query.my_color_label || '')
+      .split(',')
+      .map(value => value.trim().toLowerCase())
+      .filter(value => COLOR_LABELS.includes(value));
+    if (requestedMyColorLabels.length > 0) {
+      feedbackConditions.push(qb => qb.whereExists(function () {
+        this.select('*')
+          .from('photo_admin_marks')
+          .whereRaw('photo_admin_marks.photo_id = photos.id')
+          .where('photo_admin_marks.admin_id', req.admin.id)
+          .whereIn('photo_admin_marks.color_label', requestedMyColorLabels);
+      }));
     }
     if (feedbackConditions.length > 0) {
       if (logic === 'OR') {
@@ -1090,6 +1369,20 @@ router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requ
     commentCounts.forEach(c => {
       commentMap[c.photo_id] = parseInt(c.comment_count);
     });
+
+    // Per-colour tallies for the grid badges (#1044) — one grouped query for
+    // the whole page, same shape as commentMap above.
+    const colorLabelMap = await feedbackService.getEventColorLabelCounts(
+      parseInt(eventId, 10),
+      photos.map(p => p.id),
+    );
+
+    // The caller's own marks for this page (#1044 follow-up).
+    const myMarks = await photoAdminMarksService.getEventMarks(
+      parseInt(eventId, 10),
+      req.admin.id,
+      photos.map(p => p.id),
+    );
     
     res.json({
       photos: photos.map(photo => ({
@@ -1101,6 +1394,13 @@ router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requ
         // Always expose a thumbnail URL; backend will generate on demand if missing
         thumbnail_url: `/admin/photos/${eventId}/thumbnail/${photo.id}`,
         type: photo.type,
+        // Guest visibility (#172). This explicit mapper never included it,
+        // so the admin grid's "Hidden" badge could never render and a photo
+        // hidden from clients looked identical to a visible one (QA warning).
+        visibility: photo.visibility === 'hidden' ? 'hidden' : 'visible',
+        // Same omission: the grid's "Processing…" and "Failed"/Retry
+        // placeholders read this, so neither could ever render either.
+        processing_status: photo.processing_status || 'complete',
         category_id: photo.category_id || photo.type,
         category_name: photo.pc_name || (photo.type === 'individual' ? 'Individual Photos' : 'Collages'),
         category_slug: photo.pc_slug || photo.type,
@@ -1117,6 +1417,13 @@ router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requ
         comment_count: commentMap[photo.id] || 0,
         like_count: photo.like_count || 0,
         favorite_count: photo.favorite_count || 0,
+        color_label_count: photo.color_label_count || 0,
+        color_labels: colorLabelMap[photo.id] || {},
+        dominant_color_label: dominantColorLabel(colorLabelMap[photo.id]),
+        // The requesting admin's own mark — never the whole team's, and never
+        // shown to guests.
+        my_rating: myMarks[photo.id]?.rating ?? null,
+        my_color_label: myMarks[photo.id]?.color_label ?? null,
         // Engagement counters (#895 follow-up): the grid reads these, but
         // this explicit mapper never included them — so the Engagement
         // column showed 0 regardless of what the DB counted. This, not
@@ -1246,14 +1553,73 @@ router.get('/:eventId/thumbnail/:photoId', adminAuth, requirePermission('photos.
   }
 });
 
+/**
+ * Aspect-preserved rendition for admin surfaces that need one.
+ *
+ * The face avatars need this specifically. faceCropStyle positions a crop by
+ * scaling the WHOLE frame and offsetting so the face lands centre, which only
+ * works while the rendition is the entire image at a uniform scale. Thumbnails
+ * are not: thumbnail_fit is seeded to 'cover' (migration 040), so they are
+ * centre-cropped and every face avatar rendered against one is silently
+ * offset. Previews use fit: 'inside', so they are safe.
+ *
+ * ?w= is whitelisted the same way the gallery route's is — an open parameter
+ * would let anyone fill the disk with renditions.
+ */
+router.get('/:eventId/preview/:photoId', adminAuth, requirePermission('photos.view'), requireEventOwnership, async (req, res) => {
+  try {
+    const { eventId, photoId } = req.params;
+
+    const photo = await db('photos').where({ id: photoId, event_id: eventId }).first();
+    if (!photo) return res.status(404).json({ error: 'Photo not found' });
+
+    if (photo.processing_status === 'pending' || photo.processing_status === 'processing') {
+      res.setHeader('Retry-After', '2');
+      return res.status(503).json({ error: 'Preview not ready', status: photo.processing_status });
+    }
+
+    const { PREVIEW_WIDTHS, normalizeTierWidth, ensurePreviewImageAtWidth, ensurePreviewImage } =
+      require('../services/imageProcessor');
+    const tierWidth = normalizeTierWidth(req.query.w, PREVIEW_WIDTHS);
+
+    const previewPath = tierWidth
+      ? (await ensurePreviewImageAtWidth(photo, tierWidth)) || (await ensurePreviewImage(photo))
+      : await ensurePreviewImage(photo);
+
+    if (!previewPath) {
+      return res.status(404).json({ error: 'Preview generation failed' });
+    }
+
+    const storage = getStorage();
+    const stat = await storage.stat(previewPath);
+    if (!stat) return res.status(404).json({ error: 'Preview not found' });
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Content-Length', stat.size);
+    (await storage.get(previewPath)).pipe(res);
+  } catch (error) {
+    logger.error('Error serving admin preview:', error);
+    errorResponse(res, error, 500, 'Failed to serve preview');
+  }
+});
+
 // Debug endpoint to check photo existence
 router.get('/:eventId/debug', adminAuth, requirePermission('photos.view'), requireEventOwnership, async (req, res) => {
   try {
     const { eventId } = req.params;
     
-    const event = await db('events').where({ id: eventId }).first();
+    const eventRow = await db('events').where({ id: eventId }).first();
     const photoCount = await db('photos').where({ event_id: eventId }).count('id as count').first();
     const photos = await db('photos').where({ event_id: eventId }).limit(5);
+    // Never hand out the hashes or the recoverable copies (#1271) — this is
+    // a photos.view surface, not an events.edit one.
+    let event = eventRow;
+    if (eventRow) {
+      event = { ...eventRow };
+      for (const column of ['password_hash', 'client_password_hash', ...RECOVERABLE_PASSWORD_COLUMNS]) delete event[column];
+    }
     
     res.json({
       event: event || 'Not found',
@@ -1288,6 +1654,21 @@ router.post('/:eventId/chunked-upload/init', adminAuth, requirePermission('photo
       return res.status(400).json({ error: 'Missing required fields: filename, fileSize' });
     }
 
+
+    // Validate file size against the configured per-file cap. Hardcoding 10GB
+    // here let the chunked path sidestep general_max_file_size_mb entirely.
+    let maxSize;
+    try {
+      maxSize = await getMaxFileSizeBytes();
+    } catch {
+      maxSize = DEFAULT_MAX_FILE_SIZE_MB * 1024 * 1024;
+    }
+    if (fileSize > maxSize) {
+      return res.status(400).json({
+        error: `File too large. Maximum size is ${Math.floor(maxSize / (1024 * 1024))} MB per file.`
+      });
+    }
+
     // The client-declared mimeType is not trusted. It used to be stored on
     // the photo row verbatim and echoed as Content-Type by the gallery
     // routes, so a JPEG/HTML polyglot declared as text/html rendered inline
@@ -1303,18 +1684,15 @@ router.post('/:eventId/chunked-upload/init', adminAuth, requirePermission('photo
       return res.status(400).json({ error: 'File type not allowed' });
     }
 
-    // Validate file size (max 10GB)
-    const maxSize = 10 * 1024 * 1024 * 1024;
-    if (fileSize > maxSize) {
-      return res.status(400).json({ error: 'File too large. Maximum size is 10GB.' });
-    }
-
     const result = await chunkedUpload.initializeUpload({
       filename,
       fileSize,
       mimeType,
       eventId: parseInt(eventId),
-      totalChunks
+      totalChunks,
+      // The declared fileSize check above is client-controlled; the service
+      // enforces this cap on the bytes it actually receives and merges.
+      maxFileSizeBytes: maxSize
     });
 
     res.json(result);
@@ -1328,17 +1706,32 @@ router.post('/:eventId/chunked-upload/:uploadId/chunk/:chunkIndex', adminAuth, r
   try {
     const { uploadId, chunkIndex } = req.params;
 
-    // Get chunk data from request body
-    const chunks = [];
-    for await (const chunk of req) {
-      chunks.push(chunk);
-    }
-    const chunkData = Buffer.concat(chunks);
-
-    const result = await chunkedUpload.uploadChunk(uploadId, parseInt(chunkIndex), chunkData);
+    // The request stream is handed over unread (#1403). Every check — unknown
+    // upload id, bad index, the per-file cap against Content-Length — runs
+    // inside uploadChunk before a byte is consumed, and the body is then
+    // streamed to the chunk file under a hard cap rather than concatenated in
+    // memory. Buffering it first meant a rejected 300MB request still cost
+    // 300MB of heap.
+    const declaredBytes = Number(req.headers['content-length']);
+    const result = await chunkedUpload.uploadChunk(uploadId, parseInt(chunkIndex), req, {
+      declaredBytes: Number.isFinite(declaredBytes) ? declaredBytes : undefined,
+    });
 
     res.json(result);
   } catch (error) {
+    // Client-caused states (unknown/finished/expired upload, bad index, too
+    // large) carry their own status. Only a genuinely unexpected error should
+    // reach the 500 below and the error log with it.
+    if (error.statusCode) {
+      // Refusing the body early is the point — but it leaves unread bytes in
+      // flight on a connection this response still advertises as keep-alive.
+      // Node does not drain them, so the NEXT request on that socket hangs
+      // until it times out. Retire the connection instead.
+      if (!req.readableEnded) {
+        res.set('Connection', 'close');
+      }
+      return res.status(error.statusCode).json({ error: error.message });
+    }
     logger.error('Error uploading chunk:', error);
     res.status(500).json({ error: error.message || 'Failed to upload chunk' });
   }
@@ -1367,6 +1760,11 @@ router.post('/:eventId/chunked-upload/:uploadId/complete', adminAuth, requirePer
       'admin',
       category_id || null
     );
+    if (uploadedPhotos.length) acceptedUpload(res, {
+      video: isVideoMimeType(fileObj.mimetype),
+      raw: path.extname(fileObj.originalname).toLowerCase() === '.dng',
+      s3: process.env.STORAGE_BACKEND === 's3'
+    });
 
     // Clean up temp directory
     try {
@@ -1381,6 +1779,11 @@ router.post('/:eventId/chunked-upload/:uploadId/complete', adminAuth, requirePer
       photos: uploadedPhotos
     });
   } catch (error) {
+    // Same rule as the chunk route: a tagged status is a client-caused state
+    // (unknown/expired upload, missing chunks), not a server fault.
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
     logger.error('Error completing chunked upload:', error);
     res.status(500).json({ error: error.message || 'Failed to complete upload' });
   }

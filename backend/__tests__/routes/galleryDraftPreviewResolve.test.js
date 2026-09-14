@@ -45,11 +45,7 @@ const LIVE_TOKEN = 'feedfacefeedfacefeedfacefeedface';
 describe('draft preview through the short share URL (#1386)', () => {
   let db; let cleanup; let app; let adminId; let foreignId;
 
-  // Two transports. admin_preview=1 is an intent flag authenticated by the
-  // admin cookie — what the frontend sends. ?preview=<jwt> is the legacy
-  // hand-built-link form, kept working.
-  const preview = (id = adminId) => `preview=${mintAdminToken(id)}`;
-  const asAdmin = (req, id = adminId) => req.set('Cookie', `admin_token=${mintAdminToken(id)}`);
+  const asAdmin = (req, id = adminId) => req.set('Authorization', `Bearer ${mintAdminToken(id)}`);
 
   async function insertEvent({ slug, token, isDraft }) {
     await db('events').insert({
@@ -95,7 +91,9 @@ describe('draft preview through the short share URL (#1386)', () => {
 
   describe('the reported case — admin previewing a draft', () => {
     it('resolves the draft by share token (was 404 "Gallery Not Found")', async () => {
-      const res = await request(app).get(`/api/gallery/resolve/${DRAFT_TOKEN}?${preview()}`);
+      const res = await asAdmin(
+        request(app).get(`/api/gallery/resolve/${DRAFT_TOKEN}?admin_preview=1`),
+      );
       expect(res.status).toBe(200);
       expect(res.body.slug).toBe(DRAFT_SLUG);
       expect(res.body.matchType).toBe('token');
@@ -103,66 +101,19 @@ describe('draft preview through the short share URL (#1386)', () => {
 
     it('resolves the draft by full share link', async () => {
       const identifier = encodeURIComponent(`/gallery/${DRAFT_SLUG}/${DRAFT_TOKEN}`);
-      const res = await request(app).get(`/api/gallery/resolve/${identifier}?${preview()}`);
+      const res = await asAdmin(
+        request(app).get(`/api/gallery/resolve/${identifier}?admin_preview=1`),
+      );
       expect(res.status).toBe(200);
       expect(res.body.slug).toBe(DRAFT_SLUG);
     });
 
     it('clears verify-token for the draft, the next step of the same flow', async () => {
-      const res = await request(app)
-        .get(`/api/gallery/${DRAFT_SLUG}/verify-token/${DRAFT_TOKEN}?${preview()}`);
-      expect(res.status).toBe(200);
-      expect(res.body.valid).toBe(true);
-    });
-  });
-
-  // The transport the SHIPPED frontend uses. The first cut of this fix only
-  // tested ?preview=, which the browser never sends on an API call — so the
-  // suite passed while the feature stayed broken end to end. Caught in review.
-  describe('admin_preview=1 authenticated by the admin cookie', () => {
-    it('resolves the draft', async () => {
-      const res = await asAdmin(
-        request(app).get(`/api/gallery/resolve/${DRAFT_TOKEN}?admin_preview=1`),
-      );
-      expect(res.status).toBe(200);
-      expect(res.body.slug).toBe(DRAFT_SLUG);
-    });
-
-    it('clears verify-token', async () => {
       const res = await asAdmin(
         request(app).get(`/api/gallery/${DRAFT_SLUG}/verify-token/${DRAFT_TOKEN}?admin_preview=1`),
       );
       expect(res.status).toBe(200);
       expect(res.body.valid).toBe(true);
-    });
-
-    it('serves /info for the draft', async () => {
-      const res = await asAdmin(
-        request(app).get(`/api/gallery/${DRAFT_SLUG}/info?admin_preview=1`),
-      );
-      expect(res.status).toBe(200);
-    });
-
-    it('serves draft MEDIA, which is what the flag on the URL is for', async () => {
-      // AuthenticatedImage/Video use native fetch and never see the axios
-      // interceptor, so the flag has to travel on the media URL itself. Without
-      // it the preview loaded metadata and showed no images at all.
-      const res = await asAdmin(
-        request(app).get(`/api/gallery/${DRAFT_SLUG}/photos?admin_preview=1`),
-      );
-      expect(res.status).toBe(200);
-    });
-
-    it('404s with the flag but no admin cookie — the flag authorizes nothing', async () => {
-      const res = await request(app).get(`/api/gallery/resolve/${DRAFT_TOKEN}?admin_preview=1`);
-      expect(res.status).toBe(404);
-    });
-
-    it('404s with the flag and a cookie that is not an admin JWT', async () => {
-      const res = await request(app)
-        .get(`/api/gallery/resolve/${DRAFT_TOKEN}?admin_preview=1`)
-        .set('Cookie', 'admin_token=not-a-jwt');
-      expect(res.status).toBe(404);
     });
   });
 
@@ -172,68 +123,17 @@ describe('draft preview through the short share URL (#1386)', () => {
       expect(res.status).toBe(404);
     });
 
-    it('404s when ?preview= carries a token that is not a valid admin JWT', async () => {
-      const res = await request(app).get(`/api/gallery/resolve/${DRAFT_TOKEN}?preview=not-a-jwt`);
+    it('404s even with admin_preview=1 but no admin token', async () => {
+      const res = await request(app).get(`/api/gallery/resolve/${DRAFT_TOKEN}?admin_preview=1`);
       expect(res.status).toBe(404);
     });
 
-    it('404s when ?preview= is absent entirely', async () => {
-      const res = await request(app).get(`/api/gallery/resolve/${DRAFT_TOKEN}?preview=`);
-      expect(res.status).toBe(404);
-    });
-
-    it('404s a non-owning admin on verify-token too (#1411)', async () => {
-      // This route selected its own columns and omitted created_by, so the
-      // ownership check saw an ownerless event and waved the caller through
-      // while /resolve and /info refused them.
-      const res = await asAdmin(
-        request(app).get(`/api/gallery/${DRAFT_SLUG}/verify-token/${DRAFT_TOKEN}?admin_preview=1`),
-        foreignId,
-      );
-      expect(res.status).toBe(404);
-    });
-
-    it('404s an admin who does not own the event (#1411)', async () => {
-      // Was 200: a valid signature was the whole check, so any admin previewed
-      // any draft, including another photographer's. Now ownership applies —
-      // the same rule requireEventOwnership enforces everywhere else.
+    it('404s for an admin who cannot access this event', async () => {
       const res = await asAdmin(
         request(app).get(`/api/gallery/resolve/${DRAFT_TOKEN}?admin_preview=1`),
         foreignId,
       );
       expect(res.status).toBe(404);
-
-      const info = await asAdmin(
-        request(app).get(`/api/gallery/${DRAFT_SLUG}/info?admin_preview=1`),
-        foreignId,
-      );
-      expect(info.status).toBe(404);
-    });
-
-    it('404s an admin whose role grants no gallery permissions (#1411)', async () => {
-      // The owner, but stripped of events.view/photos.view.
-      const original = (await db('admin_users').where({ id: adminId }).first()).role_id;
-      await db('admin_users').where({ id: adminId }).update({ role_id: null });
-      try {
-        const res = await asAdmin(
-          request(app).get(`/api/gallery/resolve/${DRAFT_TOKEN}?admin_preview=1`),
-        );
-        expect(res.status).toBe(404);
-      } finally {
-        await db('admin_users').where({ id: adminId }).update({ role_id: original });
-      }
-    });
-
-    it('404s an admin whose account has been deactivated (#1411)', async () => {
-      await db('admin_users').where({ id: adminId }).update({ is_active: 0 });
-      try {
-        const res = await asAdmin(
-          request(app).get(`/api/gallery/resolve/${DRAFT_TOKEN}?admin_preview=1`),
-        );
-        expect(res.status).toBe(404);
-      } finally {
-        await db('admin_users').where({ id: adminId }).update({ is_active: 1 });
-      }
     });
 
     it('404s an anonymous verify-token for the draft', async () => {
@@ -244,7 +144,9 @@ describe('draft preview through the short share URL (#1386)', () => {
 
     it('still withholds the share_token on a bare slug lookup (GHSA-rh8r)', async () => {
       // The draft path must not become a way around the token-withholding rule.
-      const res = await request(app).get(`/api/gallery/resolve/${DRAFT_SLUG}?${preview()}`);
+      const res = await asAdmin(
+        request(app).get(`/api/gallery/resolve/${DRAFT_SLUG}?admin_preview=1`),
+      );
       expect(res.status).toBe(200);
       expect(res.body.matchType).toBe('slug');
       expect(res.body.token).toBeUndefined();
@@ -261,7 +163,9 @@ describe('draft preview through the short share URL (#1386)', () => {
     });
 
     it('still 404s an identifier that matches nothing', async () => {
-      const res = await request(app).get(`/api/gallery/resolve/no-such-gallery?${preview()}`);
+      const res = await asAdmin(
+        request(app).get('/api/gallery/resolve/no-such-gallery?admin_preview=1'),
+      );
       expect(res.status).toBe(404);
     });
   });

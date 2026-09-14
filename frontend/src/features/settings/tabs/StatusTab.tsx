@@ -9,6 +9,8 @@ import {
   Activity,
   Ruler,
   CalendarClock,
+  RotateCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button, Card, Input } from '../../../components/common';
 import { useTranslation } from 'react-i18next';
@@ -62,13 +64,25 @@ export const StatusTab: React.FC<StatusTabProps> = ({
   const { storageInfo, systemStatus } = useStatusTab(isActive);
   const queryClient = useQueryClient();
 
+  // Gated on the same permission the endpoint requires, so a role without it
+  // never starts the poll. Without this the card would poll a 403 every ten
+  // seconds for anyone who can open the Status tab but cannot run the repair,
+  // filling the logs with denials for a panel they were never shown.
+  //
+  // Named for the card it gates rather than for the permission, because #1179
+  // adds a second system.manage-gated card to this same component. Two flags
+  // with one name merge without a conflict and then fail to compile
+  // (TS2451) — and since each PR is green on its own, nothing catches it until
+  // main's build breaks. Once both have landed these can collapse into one.
+  const canRepairDimensions = usePermission('system.manage');
+
   const { data: dimensionStatus } = useQuery({
     queryKey: ['photo-dimension-status'],
     queryFn: async () => {
       const res = await api.get('/admin/photos/repair-dimensions/status');
       return res.data;
     },
-    enabled: isActive,
+    enabled: isActive && canRepairDimensions,
     refetchInterval: 10000,
   });
 
@@ -87,10 +101,9 @@ export const StatusTab: React.FC<StatusTabProps> = ({
   // it gets the same status/poll/mutation treatment.
   // Gated on the same permission the endpoint requires, so a role without it
   // never starts the poll. Without this the card would poll a 403 every ten
-  // seconds for anyone who can open the Status tab but cannot run the job —
-  // which on this branch is every built-in admin, since they hold settings.view
-  // but not settings.edit.
-  const canEditSettings = usePermission('settings.edit');
+  // seconds for anyone who can open the Status tab but cannot run the job,
+  // filling the logs with denials for a panel they were never shown.
+  const canManageSystem = usePermission('system.manage');
 
   const { data: captureDateStatus } = useQuery({
     queryKey: ['photo-capture-date-status'],
@@ -98,8 +111,32 @@ export const StatusTab: React.FC<StatusTabProps> = ({
       const res = await api.get('/admin/photos/repair-capture-dates/status');
       return res.data;
     },
-    enabled: isActive && canEditSettings,
+    enabled: isActive && canManageSystem,
     refetchInterval: 10000,
+  });
+
+  // Orientation backfill (#1198). No backlog counter of its own: unlike the
+  // other two it cannot know how many rows need it without re-reading every
+  // original, which is the job itself. So the button is always available and
+  // the result line is what tells the operator whether it found anything.
+  const { data: orientationStatus } = useQuery({
+    queryKey: ['photo-orientation-status'],
+    queryFn: async () => {
+      const res = await api.get('/admin/photos/repair-orientation/status');
+      return res.data;
+    },
+    enabled: isActive && canManageSystem,
+    refetchInterval: 10000,
+  });
+
+  const orientationMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.post('/admin/photos/repair-orientation');
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['photo-orientation-status'] });
+    },
   });
 
   const captureDateMutation = useMutation({
@@ -234,6 +271,11 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                       percentage derived from it — is higher (#1164). */}
                   {settingsService.formatBytes(storageInfo.total_used)}{storageInfo.storage_partial ? '+' : ''}
                 </p>
+                {storageInfo.storage_measurement === 'catalog' && (
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                    {t('settings.storage.catalogMeasurement', 'Catalogued size — objects live in the configured S3 bucket, not on this disk')}
+                  </p>
+                )}
               </div>
               <div className="bg-neutral-50 dark:bg-neutral-800 rounded-lg p-4">
                 <p className="text-sm text-neutral-600 dark:text-neutral-400">{t('settings.storage.archiveStorage')}</p>
@@ -544,12 +586,30 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                 </div>
                 <p className="text-xs text-neutral-600 dark:text-neutral-400">{t('settings.systemStatus.expirationCheckerDesc')}</p>
               </div>
+              {/* #1262 — this card used to render a green check unconditionally,
+                  against an API field that was itself the literal 'active'. Both
+                  ends now tell the truth: a stopped or bailing processor is the
+                  reason queued mail never arrives, and this is one of the two
+                  places an admin looks to find that out. */}
               <div className="bg-neutral-50 dark:bg-neutral-800 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{t('settings.systemStatus.emailProcessor')}</p>
-                  <CheckCircle className="w-5 h-5 text-green-600" />
+                  {systemStatus?.services?.emailProcessor?.status === 'active' ? (
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                  ) : (
+                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                  )}
                 </div>
-                <p className="text-xs text-neutral-600 dark:text-neutral-400">{t('settings.systemStatus.emailProcessorDesc')}</p>
+                <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                  {systemStatus?.services?.emailProcessor?.status === 'stopped'
+                    ? t('settings.systemStatus.emailProcessorStopped',
+                      'Not running — queued emails are written but nothing sends them.')
+                    : systemStatus?.services?.emailProcessor?.status === 'degraded'
+                      ? t('settings.systemStatus.emailProcessorDegraded',
+                        'Running, but the last pass could not send: {{error}}',
+                        { error: systemStatus?.services?.emailProcessor?.lastError })
+                      : t('settings.systemStatus.emailProcessorDesc')}
+                </p>
               </div>
             </div>
 
@@ -590,7 +650,11 @@ export const StatusTab: React.FC<StatusTabProps> = ({
       )}
 
       {/* Photo Dimensions */}
-      {dimensionStatus && (
+      {/* canRepairDimensions as well as the payload: TanStack keeps the cached
+          status after `enabled` flips false, so without it a lower-privileged
+          admin logging in behind a system.manage user inside the cache lifetime
+          would still be shown the card and a button whose POST 403s. */}
+      {dimensionStatus && canRepairDimensions && (
         <Card padding="md">
           <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
             <Ruler className="w-5 h-5" />
@@ -645,11 +709,11 @@ export const StatusTab: React.FC<StatusTabProps> = ({
       )}
 
       {/* Capture Dates (#1172) */}
-      {/* canEditSettings as well as the payload: TanStack keeps the cached
-          status after `enabled` flips false, so without it a built-in admin
-          logging in behind a settings.edit user inside the cache lifetime would
-          still be shown the card and a button whose POST 403s. */}
-      {captureDateStatus && canEditSettings && (
+      {/* canManageSystem as well as the payload: TanStack keeps the cached
+          status after `enabled` flips false, so without it a lower-privileged
+          admin logging in behind a system.manage user inside the cache lifetime
+          would still be shown the card and a button whose POST 403s. */}
+      {captureDateStatus && canManageSystem && (
         <Card padding="md">
           <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
             <CalendarClock className="w-5 h-5" />
@@ -689,10 +753,11 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                 failed: captureDateStatus.lastResult.failed,
                 defaultValue: 'Last run: {{success}} updated, {{noExif}} with no date found, {{failed}} unreachable',
               })}
-              {/* Only when it happened. Without it the three numbers above
-                  silently stop adding up to the count the run started with: a
-                  photo that was replaced, renamed or dated by someone else
-                  mid-run is read but not written.
+              {/* Only when it happened, like the orientation job's staleTiers
+                  below. Without it the three numbers above silently stop
+                  adding up to the count the run started with: a photo that
+                  was replaced, renamed or dated by someone else mid-run is
+                  read but not written.
                   Deliberately says "not updated" and not "will be retried":
                   one of the two ways to land here is another writer having
                   filled captured_at, and that photo is finished, not backlog.
@@ -723,6 +788,54 @@ export const StatusTab: React.FC<StatusTabProps> = ({
                 : Number(captureDateStatus.withoutCaptureDate) === 0
                   ? t('settings.captureDates.noneToFill', 'All photos already have a capture date')
                   : t('settings.captureDates.button', 'Backfill Capture Dates')}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {orientationStatus && canManageSystem && (
+        <Card padding="md">
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
+            <RotateCw className="w-5 h-5 text-primary-600" />
+            {t('settings.orientationBackfill.title', 'Photo Orientation')}
+          </h2>
+
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+            {t('settings.orientationBackfill.description', 'Re-read EXIF orientation for photos imported before rotation was applied, correct their stored dimensions, and clear the thumbnails, previews and hero images generated from the unrotated originals. Only photos whose orientation actually changed are touched.')}
+          </p>
+
+          {orientationStatus.lastResult && (
+            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+              {t('settings.orientationBackfill.resultSuccess', {
+                checked: orientationStatus.lastResult.checked,
+                corrected: orientationStatus.lastResult.corrected,
+                requeued: orientationStatus.lastResult.requeuedFaces,
+                failed: orientationStatus.lastResult.failed,
+                defaultValue: 'Last run: {{checked}} checked, {{corrected}} corrected, {{requeued}} requeued for face scanning, {{failed}} unreachable',
+              })}
+              {Number(orientationStatus.lastResult.staleTiers) > 0 && (
+                <span className="block text-amber-600 dark:text-amber-400 mt-1">
+                  {t('settings.orientationBackfill.staleTiers', {
+                    count: orientationStatus.lastResult.staleTiers,
+                    defaultValue: '{{count}} cached size(s) could not be deleted and will keep serving the old orientation — re-run once storage is writable.',
+                  })}
+                </span>
+              )}
+            </p>
+          )}
+
+          <div className="flex justify-end">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => orientationMutation.mutate()}
+              isLoading={orientationMutation.isPending || orientationStatus.isRunning}
+              disabled={orientationStatus.isRunning}
+              leftIcon={<RotateCw className="w-4 h-4" />}
+            >
+              {orientationStatus.isRunning
+                ? t('settings.orientationBackfill.running', 'Checking orientation...')
+                : t('settings.orientationBackfill.button', 'Fix Photo Orientation')}
             </Button>
           </div>
         </Card>

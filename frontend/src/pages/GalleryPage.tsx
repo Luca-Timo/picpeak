@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { AlertCircle, Clock } from 'lucide-react';
+import { AlertCircle, Check, Clock, Copy } from 'lucide-react';
 import { differenceInDays, parseISO } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import { useLocalizedDate } from '../hooks/useLocalizedDate';
 import { usePublicSettings } from '../hooks/usePublicSettings';
 
-import { Card, CardContent, Input, Button, ReCaptcha, CMSContentBlock } from '../components/common';
+import { Card, CardContent, Input, Button, ReCaptcha, CMSContentBlock, PoweredBy } from '../components/common';
 import { useGalleryAuth, useTheme } from '../contexts';
 import { useGalleryInfo } from '../hooks/useGallery';
 import { GalleryView } from '../components/gallery';
@@ -29,9 +29,25 @@ export const GalleryPage: React.FC = () => {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
   const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
+  // #868 admin preview: signalled by ?admin_preview=1 in the (dedicated) gallery
+  // tab URL. It renders the gallery directly with NO gallery session — the
+  // backend grants each request per the flag + admin cookie. We must skip the
+  // public empty-password auto-login below, which would otherwise POST an empty
+  // password against a genuinely protected gallery and 401 (#981 review).
+  const isAdminPreview = React.useMemo(
+    () => new URLSearchParams(window.location.search).get('admin_preview') === '1',
+    [],
+  );
   // Evaluate once per mount — UA doesn't change at runtime, and using useMemo
   // avoids re-running detection on every render of the form.
   const iabDetection = React.useMemo(() => detectInAppBrowser(), []);
+  // Field reports on #654 show the password form failing inside Instagram's
+  // IAB even with the input-attribute/trim defenses, so the form is hidden
+  // there by default. `iabOverride` is the guest's escape hatch (also covers
+  // a UA-detection false positive, or Instagram fixing their webview).
+  const [iabOverride, setIabOverride] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const iabBlocked = iabDetection.app === 'instagram' && !iabOverride;
   const [resolvedSlug, setResolvedSlug] = useState<string | null>(() => {
     if (rawSlug && !rawToken && /^[0-9a-fA-F]{32}$/.test(rawSlug)) {
       return null;
@@ -152,14 +168,8 @@ export const GalleryPage: React.FC = () => {
         themeToApply = settingsData.theme_config;
       }
 
-      // Inject hero photo ID into theme gallery settings
-      if (themeToApply && galleryInfo.hero_photo_id) {
-        if (themeToApply.gallerySettings) {
-          themeToApply.gallerySettings.heroImageId = galleryInfo.hero_photo_id;
-        } else {
-          themeToApply.gallerySettings = { heroImageId: galleryInfo.hero_photo_id };
-        }
-      }
+      // The hero photo ID is injected into gallerySettings by GalleryView,
+      // which reads it off the /photos response. /info doesn't carry it.
 
       // Apply theme. Force color mode is enforced inside ThemeContext.applyTheme
       // (it subscribes to public settings) so callers don't have to wrap the
@@ -175,7 +185,7 @@ export const GalleryPage: React.FC = () => {
       return;
     }
 
-    if (galleryInfo && isGalleryPublic(galleryInfo.requires_password) && !isAuthenticated && !autoLoginAttempted && !isLoadingSettings) {
+    if (galleryInfo && !isAdminPreview && isGalleryPublic(galleryInfo.requires_password) && !isAuthenticated && !autoLoginAttempted && !isLoadingSettings) {
       setAutoLoginAttempted(true);
       setIsLoggingIn(true);
       login(resolvedSlug, '')
@@ -192,7 +202,7 @@ export const GalleryPage: React.FC = () => {
           setIsLoggingIn(false);
         });
     }
-  }, [galleryInfo, isAuthenticated, autoLoginAttempted, login, resolvedSlug, isResolvingIdentifier, isLoadingSettings]);
+  }, [galleryInfo, isAdminPreview, isAuthenticated, autoLoginAttempted, login, resolvedSlug, isResolvingIdentifier, isLoadingSettings]);
 
   // Calculate days until expiration (null if no expiration set)
   const daysUntilExpiration = galleryInfo?.expires_at
@@ -219,12 +229,12 @@ export const GalleryPage: React.FC = () => {
       // Trim the password before sending. The Instagram in-app browser's
       // predictive-text keyboard frequently appends a trailing space when the
       // user taps the submit button, which then fails byte-exact bcrypt
-      // compare on the backend with no visible cause (#654). Event-gallery
-      // passwords don't legitimately carry leading/trailing whitespace, so
-      // trimming silently is safe.
+      // compare on the backend with no visible cause (#654). Mid-string
+      // invisible Unicode from chat-app copy-paste is handled server-side as
+      // a same-request compare fallback (see auth.js gallery/verify).
       const submittedPassword = requiresPassword ? password.trim() : '';
       await login(resolvedSlug, submittedPassword, recaptchaToken);
-      
+
       if (requiresPassword) {
         analyticsService.trackGalleryEvent('password_entry', {
           gallery: resolvedSlug,
@@ -233,11 +243,20 @@ export const GalleryPage: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Login error:', error);
-      const errorMessage = error.response?.data?.error || 'Invalid password';
+      const errorMessage = error.response?.data?.error || '';
       const statusCode = error.response?.status;
-      
+
       // Map backend error messages to user-friendly translations
-      if (statusCode === 401 || errorMessage.toLowerCase().includes('invalid password')) {
+      if (!error.response) {
+        // The request never got a response (offline, proxy/webview killed
+        // it). Falling through to "incorrect password" here sent #654
+        // reporters chasing the wrong cause — name the real failure.
+        setLoginError(t('auth.networkError', 'Connection failed. Please check your internet connection and try again.'));
+      } else if (statusCode === 400 && errorMessage.toLowerCase().includes('recaptcha')) {
+        // reCAPTCHA rejection is not a wrong password either — the widget
+        // regularly fails to load inside in-app webviews (#654).
+        setLoginError(t('auth.recaptchaFailed', 'Security verification failed. Please reload the page and try again.'));
+      } else if (statusCode === 401 || errorMessage.toLowerCase().includes('invalid password')) {
         setLoginError(t('auth.wrongPassword'));
       } else if (statusCode === 429 || errorMessage.toLowerCase().includes('too many')) {
         setLoginError(t('auth.tooManyAttempts'));
@@ -260,6 +279,35 @@ export const GalleryPage: React.FC = () => {
       // Do not clear the password
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+    } catch {
+      // The async clipboard API is often unavailable inside in-app webviews —
+      // fall back to the legacy textarea + execCommand path.
+      const textarea = document.createElement('textarea');
+      textarea.value = url;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        // execCommand signals failure via its return value, not by throwing —
+        // only report "copied" when it actually worked; otherwise leave the
+        // label unchanged and the user can still long-press the address bar.
+        if (document.execCommand('copy')) {
+          setLinkCopied(true);
+        }
+      } catch {
+        // Same as a false return: keep the label unchanged.
+      }
+      document.body.removeChild(textarea);
     }
   };
 
@@ -332,9 +380,7 @@ export const GalleryPage: React.FC = () => {
                 {t('legal.datenschutz')}
               </Link>
             </div>
-            <p className="text-xs mt-2 text-neutral-500">
-              Powered by <span className="font-semibold">PicPeak</span>
-            </p>
+            <PoweredBy className="text-xs mt-2 text-neutral-500" />
           </div>
         </div>
       </div>
@@ -342,6 +388,28 @@ export const GalleryPage: React.FC = () => {
   }
 
   const gallerySlugForView = resolvedSlug ?? rawSlug ?? '';
+
+  // Admin preview (#868): render the gallery directly, no gallery session.
+  // GalleryView fetches photos by slug (the axios interceptor forwards
+  // admin_preview=1 + the admin cookie), and reads its live event from that
+  // response; this prop only seeds the initial header from /info.
+  if (isAdminPreview && galleryInfo) {
+    return (
+      <GalleryView
+        slug={gallerySlugForView}
+        event={{
+          id: 0,
+          event_name: galleryInfo.event_name,
+          event_type: galleryInfo.event_type,
+          event_date: galleryInfo.event_date,
+          color_theme: galleryInfo.color_theme,
+          expires_at: galleryInfo.expires_at,
+          allow_user_uploads: galleryInfo.allow_user_uploads,
+          allow_downloads: galleryInfo.allow_downloads,
+        }}
+      />
+    );
+  }
 
   // Show gallery view if authenticated
   if (isAuthenticated && event) {
@@ -397,16 +465,18 @@ export const GalleryPage: React.FC = () => {
     <div className="min-h-screen" style={{ backgroundColor: 'var(--color-background, #fafafa)' }}>
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-lg">
-          {/* Logo/Header */}
+          {/* Logo/Header. The logo can be hidden per gallery (#894). */}
           <div className="text-center mb-4 sm:mb-6">
-            <img 
-              src={settingsData?.branding_logo_url ? 
-                buildResourceUrl(settingsData.branding_logo_url) : 
-                '/picpeak-logo-transparent.png'
-              } 
-              alt={settingsData?.branding_company_name || 'PicPeak'}
-              className="h-12 sm:h-16 lg:h-20 w-auto object-contain mx-auto mb-3 sm:mb-4"
-            />
+            {galleryInfo?.login_logo_visible !== false && (
+              <img
+                src={settingsData?.branding_logo_url ?
+                  buildResourceUrl(settingsData.branding_logo_url) :
+                  '/picpeak-logo-transparent.png'
+                }
+                alt={settingsData?.branding_company_name || 'PicPeak'}
+                className="h-12 sm:h-16 lg:h-20 w-auto object-contain mx-auto mb-3 sm:mb-4"
+              />
+            )}
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 px-2" style={{ color: 'var(--color-primary, #5C8762)' }}>
               {galleryInfo?.event_name}
             </h1>
@@ -433,33 +503,60 @@ export const GalleryPage: React.FC = () => {
             <CardContent className="p-4 sm:p-6">
               <h2 className="text-base sm:text-lg lg:text-xl font-semibold mb-4">{t('auth.enterPassword')}</h2>
 
-              {/* Instagram in-app browser warning (#654). The IAB's keyboard
-                  bridge silently mangles password inputs (autocaps overrides,
-                  predictive-text-appended trailing spaces, stale autofill).
-                  Detect it and surface a "open in your normal browser" hint
-                  so the user can self-rescue. */}
-              {iabDetection.app === 'instagram' && (
+              {/* Instagram in-app browser blocker (#654). Field reports show
+                  password login failing inside the IAB even with the
+                  input-attribute + trim defenses, so instead of a warning
+                  above the form we replace the form: "open in your normal
+                  browser" instructions plus a copy-link button. "Try anyway"
+                  restores the form as an escape hatch (UA false positive, or
+                  Instagram fixing their webview). */}
+              {iabBlocked && (
                 <div
                   role="alert"
-                  className="mb-4 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-3 text-sm text-amber-900 dark:text-amber-100"
+                  className="rounded-lg border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/40 p-4 text-sm text-red-900 dark:text-red-100"
                 >
-                  <p className="font-medium">
-                    {t('auth.iab.instagram.title', 'Open this link in your browser')}
-                  </p>
-                  <p className="mt-1 text-xs">
-                    {iabDetection.platform === 'ios'
-                      ? t(
-                        'auth.iab.instagram.ios',
-                        "Instagram's built-in browser sometimes blocks the password login. Tap the ⋯ menu in the top right, then \"Open in external browser\" (or copy the link and paste into Safari).",
-                      )
-                      : t(
-                        'auth.iab.instagram.android',
-                        "Instagram's built-in browser sometimes blocks the password login. Tap the ⋮ menu in the top right, then \"Open in external browser\" (or copy the link and paste into Chrome).",
-                      )}
-                  </p>
+                  <div className="flex items-start">
+                    <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 mr-2 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">
+                        {t('auth.iab.instagram.blockedTitle', "Instagram's browser can't open this gallery")}
+                      </p>
+                      <p className="mt-1 text-xs">
+                        {iabDetection.platform === 'ios'
+                          ? t(
+                            'auth.iab.instagram.blockedIos',
+                            'Password login does not work reliably in Instagram\'s built-in browser. Tap the ⋯ menu in the top right and choose "Open in external browser", or copy the link and paste it into Safari.',
+                          )
+                          : t(
+                            'auth.iab.instagram.blockedAndroid',
+                            'Password login does not work reliably in Instagram\'s built-in browser. Tap the ⋮ menu in the top right and choose "Open in external browser", or copy the link and paste it into Chrome.',
+                          )}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="lg"
+                    className="w-full mt-4 text-sm sm:text-base"
+                    onClick={handleCopyLink}
+                    leftIcon={linkCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  >
+                    {linkCopied
+                      ? t('auth.iab.instagram.linkCopied', 'Link copied')
+                      : t('auth.iab.instagram.copyLink', 'Copy link')}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setIabOverride(true)}
+                    className="mt-3 w-full text-center text-xs text-red-800 dark:text-red-200 underline"
+                  >
+                    {t('auth.iab.instagram.tryAnyway', 'Try entering the password here anyway')}
+                  </button>
                 </div>
               )}
 
+              {!iabBlocked && (
               <form onSubmit={handleLogin} className="space-y-4">
                 <Input
                   type="password"
@@ -499,10 +596,13 @@ export const GalleryPage: React.FC = () => {
                   {t('gallery.viewGallery')}
                 </Button>
               </form>
+              )}
 
-              <p className="text-xs text-neutral-500 text-center mt-4 sm:mt-6">
-                {t('auth.passwordHint')}
-              </p>
+              {!iabBlocked && (
+                <p className="text-xs text-neutral-500 text-center mt-4 sm:mt-6">
+                  {t('auth.passwordHint')}
+                </p>
+              )}
             </CardContent>
           </Card>
 
@@ -523,9 +623,7 @@ export const GalleryPage: React.FC = () => {
                 {t('legal.datenschutz')}
               </Link>
             </div>
-            <p className="text-xs mt-2 text-neutral-500">
-              Powered by <span className="font-semibold">PicPeak</span>
-            </p>
+            <PoweredBy className="text-xs mt-2 text-neutral-500" />
           </div>
         </div>
       </div>

@@ -16,13 +16,13 @@ interface RestoreResult {
   tables: number;
   filesRestored: number;
   usesExternalMedia: boolean;
+  crossEngine?: boolean;
+  sessionInvalidated?: boolean;
   // False when the pre-#1163 external-path conversion failed. Rows and files
   // are in place, but no external original resolves until it is retried — so
   // this must not be presented as a plain success.
   externalPathsConverted?: boolean;
   externalPathError?: string | null;
-  crossEngine?: boolean;
-  sessionInvalidated?: boolean;
 }
 
 // ── Download half (Dashboard) ────────────────────────────────────────────────

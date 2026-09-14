@@ -1,3 +1,4 @@
+const { isGalleryAvailable, isGalleryExpired } = require('../utils/galleryLifecycle');
 /**
  * Customer dashboard routes
  *
@@ -14,9 +15,9 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { body, param, validationResult } = require('express-validator');
 const { db, logActivity } = require('../database/db');
-const { formatBoolean } = require('../utils/dbCompat');
 const { getBcryptRounds, MAX_PASSWORD_LENGTH } = require('../utils/passwordValidation');
 const { assertContractPdfPath } = require('../utils/safePath');
 const logger = require('../utils/logger');
@@ -94,6 +95,13 @@ function shapeProfile(row) {
     state: row.state,
     countryCode: row.country_code,
     preferredLanguage: row.preferred_language || 'en',
+    // Newsletter consent (migration 199, #1264). Read-only here — it is
+    // changed through /profile/marketing, which logs the consent change
+    // with its own activity entry rather than burying it in a generic
+    // profile update.
+    marketingOptOut: row.marketing_opt_out === true
+      || row.marketing_opt_out === 1
+      || row.marketing_opt_out === '1',
   };
 }
 
@@ -159,9 +167,11 @@ router.get('/events/:slug/access-token', [
     if (event.is_archived) {
       return res.status(410).json({ error: 'This gallery has been archived' });
     }
-    if (event.expires_at && new Date(event.expires_at) < new Date()) {
+    if (isGalleryExpired(event)) {
       return res.status(410).json({ error: 'This gallery has expired' });
     }
+
+    if (!isGalleryAvailable(event)) return res.status(404).json({ error: 'Event not found' });
 
     const hasAccess = await customerAccountsService.customerHasAccessToEvent(
       req.customer.id,
@@ -183,10 +193,12 @@ router.get('/events/:slug/access-token', [
       eventId: event.id,
       eventSlug: event.slug,
       type: 'gallery',
+      // Unique per token: the revocation key falls back to eventId+iat otherwise,
+      // so one guest's logout would revoke every same-second login (#1357).
+      jti: crypto.randomUUID(),
       ip: ipAddress,
       loginTime: Date.now(),
-      // Optional bookkeeping claim — surfaces the originating customer in
-      // logs when the token is later used. Doesn't affect authorization.
+      // Rechecked on each gallery/media request, including account status.
       via: 'customer',
       customerId: req.customer.id,
     }, process.env.JWT_SECRET, {
@@ -316,6 +328,60 @@ router.put('/profile', [
     res.json({ profile: shapeProfile(row) });
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to update profile');
+  }
+});
+
+/**
+ * GET /profile/marketing
+ *
+ * Newsletter consent, on its own endpoint (migration 199, #1264).
+ *
+ * Not folded into PUT /profile because a consent change is an auditable
+ * event: it needs its own `customer_marketing_opt_out` activity entry with
+ * the source recorded, and burying it in a 14-field profile update would
+ * lose that. Transactional mail is unaffected either way, which the response
+ * says explicitly so the UI never has to guess.
+ */
+router.get('/profile/marketing', customerAuth, async (req, res) => {
+  try {
+    const row = await db('customer_accounts')
+      .where('id', req.customer.id)
+      .select('marketing_opt_out', 'marketing_opt_out_at')
+      .first();
+    if (!row) return res.status(404).json({ error: 'Profile not found' });
+    res.json({
+      marketingOptOut: row.marketing_opt_out === true
+        || row.marketing_opt_out === 1
+        || row.marketing_opt_out === '1',
+      marketingOptOutAt: row.marketing_opt_out_at || null,
+    });
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to load marketing preferences');
+  }
+});
+
+/**
+ * PUT /profile/marketing  { optOut: boolean }
+ */
+router.put('/profile/marketing', [
+  customerAuth,
+  body('optOut').isBoolean(),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: safeValidationErrors(errors) });
+    }
+    const newsletterService = require('../services/newsletterService');
+    await newsletterService.setMarketingOptOut(
+      req.customer.id,
+      Boolean(req.body.optOut),
+      'portal',
+      { type: 'customer', id: req.customer.id, name: req.customer.email }
+    );
+    res.json({ marketingOptOut: Boolean(req.body.optOut) });
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to update marketing preferences');
   }
 });
 

@@ -126,7 +126,16 @@ async function createInvitation({ email, invitedById, prefill }) {
     .first();
   if (existingCustomer && existingCustomer.password_hash) {
     // Already-active customer with this email — duplicate, reject.
-    throw new ConflictError('A customer account with this email already exists', 'email');
+    //
+    // Carries the same code the send-invite route uses for its own
+    // already-active check (#1261). Both conflicts are 409 and both can mean
+    // "this address already has portal access" — the route reads the customer
+    // before this recheck runs, so an invitation accepted in between lands
+    // here instead — and a caller that cannot tell the two apart ends up
+    // telling the admin to cancel an invitation acceptance already closed.
+    const err = new ConflictError('A customer account with this email already exists', 'email');
+    err.code = 'CUSTOMER_ALREADY_ACTIVE';
+    throw err;
   }
   // If the existing customer is PASSIVE (password_hash IS NULL), this
   // is the "promote to active" path: the admin clicked "Send portal
@@ -139,7 +148,9 @@ async function createInvitation({ email, invitedById, prefill }) {
     .where('expires_at', '>', new Date())
     .first();
   if (pendingInvite) {
-    throw new ConflictError('A pending invitation already exists for this email', 'email');
+    const err = new ConflictError('A pending invitation already exists for this email', 'email');
+    err.code = 'INVITATION_ALREADY_PENDING';
+    throw err;
   }
 
   // 64-char hex = 32 bytes = 256 bits of entropy. Same as admin invites.
@@ -554,6 +565,9 @@ async function getCustomerById(id) {
  * typo before the customer accepts. Uniqueness is enforced.
  */
 async function updateCustomer(id, updates, updatedByAdminId) {
+  // Set when marketing_opt_out actually flips, so the dedicated consent
+  // event can be logged after the write lands.
+  let marketingConsentTransition = null;
   const customer = await db('customer_accounts').where('id', id).first();
   if (!customer) {
     throw new NotFoundError('Customer', id);
@@ -581,6 +595,15 @@ async function updateCustomer(id, updates, updatedByAdminId) {
     // Per-customer Skonto opt-out (migration 112). Boolean, coerced
     // via formatBoolean below for SQLite compatibility.
     'skonto_disabled',
+    // Per-customer re-bill proof-attachment override (migration 169, #866).
+    // Tri-state: null = inherit global default, true/false = force. Handled
+    // in its own branch below so null survives (formatBoolean would coerce
+    // it to false and silently lose the "inherit" state).
+    'rebill_attach_proof',
+    // Newsletter consent (migration 199, #1264). Admin-settable so a
+    // customer who unsubscribes by phone can be honoured without waiting
+    // for them to click a link. Transactional mail ignores it entirely.
+    'marketing_opt_out',
   ];
   for (const f of fields) {
     if (updates[f] !== undefined) {
@@ -597,6 +620,29 @@ async function updateCustomer(id, updates, updatedByAdminId) {
         || f === 'skonto_disabled'
       ) {
         allowed[f] = formatBoolean(updates[f]);
+      } else if (f === 'marketing_opt_out') {
+        // Only stamp on an actual transition. The customer form submits this
+        // field on every full-profile save, so saving an unrelated field
+        // while the customer stayed opted out would move
+        // marketing_opt_out_at to now — overwriting the moment consent was
+        // actually withdrawn with the moment someone edited a phone number.
+        const wasOptedOut = customer.marketing_opt_out === true
+          || customer.marketing_opt_out === 1
+          || customer.marketing_opt_out === '1';
+        const nowOptedOut = Boolean(updates[f]);
+        allowed[f] = formatBoolean(nowOptedOut);
+        if (wasOptedOut !== nowOptedOut) {
+          allowed.marketing_opt_out_at = nowOptedOut ? new Date().toISOString() : null;
+          // Consent changes are designed to be auditable in their own right.
+          // The generic `customer_updated` entry records only that a field
+          // named marketing_opt_out was touched — not the new value, and not
+          // that an admin made the change on the customer's behalf.
+          marketingConsentTransition = nowOptedOut;
+        }
+      } else if (f === 'rebill_attach_proof') {
+        // Tri-state override. null/'' → NULL (inherit global default);
+        // otherwise a real boolean (coerced for SQLite).
+        allowed[f] = (updates[f] === null || updates[f] === '') ? null : formatBoolean(updates[f]);
       } else if (f === 'hourly_rate_minor') {
         // Default hourly rate. Null clears it (forces per-entry
         // overrides); otherwise coerce to a non-negative bigint-safe
@@ -659,6 +705,17 @@ async function updateCustomer(id, updates, updatedByAdminId) {
     null,
     { type: 'admin', id: updatedByAdminId, name: 'system' }
   );
+
+  // The dedicated consent event, alongside the generic one. It is what the
+  // newsletter audit trail reads: the new VALUE and the source, rather than
+  // just the fact that a field with that name was written (#1264).
+  if (marketingConsentTransition !== null) {
+    await logActivity('customer_marketing_opt_out',
+      { customerId: id, optOut: marketingConsentTransition, source: 'admin' },
+      null,
+      { type: 'admin', id: updatedByAdminId, name: 'system' }
+    );
+  }
 
   return getCustomerById(id);
 }
@@ -1110,7 +1167,12 @@ async function getAssignmentsForEvent(eventId) {
       'customer_accounts.display_name',
       'customer_accounts.first_name',
       'customer_accounts.last_name',
-      'customer_accounts.is_active'
+      'customer_accounts.is_active',
+      // NOT the hash itself — only whether one exists. A passive customer is
+      // identified by password_hash IS NULL (see createDirect), and callers
+      // that mail a portal link need to know the recipient can actually sign
+      // in to follow it.
+      db.raw('(customer_accounts.password_hash IS NOT NULL) as can_sign_in')
     )
     .orderBy('customer_accounts.email', 'asc');
 }

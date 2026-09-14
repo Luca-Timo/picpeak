@@ -10,7 +10,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
 import { AdminPhotoGrid } from '../AdminPhotoGrid';
 import type { AdminPhoto } from '../../../services/photos.service';
@@ -37,6 +37,13 @@ vi.mock('../../../services/photos.service', () => ({
   photosService: {
     formatBytes: (n: number) => `${n} B`
   }
+}));
+
+// AdminPhotoGrid now wraps its action buttons in PermissionGate (which needs a
+// PermissionsProvider). This test is about the layout toggle, not gating, so
+// stub the gate to a passthrough that always renders its children.
+vi.mock('../PermissionGate', () => ({
+  PermissionGate: ({ children }: { children: ReactNode }) => <>{children}</>
 }));
 
 const renderWithQueryClient = (ui: ReactElement) => {

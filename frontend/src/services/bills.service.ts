@@ -96,6 +96,9 @@ export interface InvoiceSummary {
    *  (migration 128). Carries status 'scheduled' but never auto-sends
    *  (manual) — shown with a "Draft" badge in the list. */
   isMonthlyDraft?: boolean;
+  /** Storno wiring (migration 114). On a reissued invoice, the id of the
+   *  original cancelled invoice — drives the "Reissue" badge. */
+  replacesInvoiceId?: number | null;
 }
 
 /**
@@ -272,8 +275,14 @@ export const billsService = {
     return data.data || data;
   },
 
-  async send(id: number): Promise<{ sent: true }> {
-    const { data } = await api.post(`/admin/invoices/${id}/send`);
+  /**
+   * Send the invoice now. `proofInboundIds` (issue #866) is the admin's per-file
+   * re-bill proof selection from the Send dialog; omit to let the resolved
+   * per-customer/global default decide all-or-none.
+   */
+  async send(id: number, proofInboundIds?: number[]): Promise<{ sent: true }> {
+    const { data } = await api.post(`/admin/invoices/${id}/send`,
+      proofInboundIds !== undefined ? { proofInboundIds } : undefined);
     return data.data || data;
   },
 

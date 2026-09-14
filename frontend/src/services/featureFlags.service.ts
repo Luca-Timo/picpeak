@@ -43,7 +43,7 @@ export type FeatureKey =
   // signed in-browser (canvas + checkbox) or via wet-signed PDF
   // upload. Independent of quotes / bills — contracts can be sent on
   // their own. Seeded block bodies are examples only; admins must
-  // have their lawyer review before sending. See docs/crm-disclaimers.md.
+  // have their lawyer review before sending. See https://docs.picpeak.app/features/crm/disclaimers.
   | 'contracts'
   // Accounting (migration 122). Top-level MASTER for the Accounting
   // section (separate from CRM). Its sub-features (tax export, incoming
@@ -67,10 +67,29 @@ export type FeatureKey =
   // Live Slideshow ("Diashow") — per-event fullscreen kiosk link + presets +
   // global watermark settings tab. Strictly opt-in; gates all slideshow UI.
   | 'slideshow'
+  // PicTransfer (migration 170) — cross-event file transfers:
+  // a token-protected recipient download link plus an optional client-upload
+  // channel. Strictly opt-in; gates the sidebar entry, the /admin/transfers
+  // area and every transfer route (admin + public).
+  | 'transfers'
   // Workflow / automation engine — admin-configurable visual flows (triggers,
   // conditions, branches, loops, approval gates) built on a canvas. Strictly
   // opt-in; gates the Workflows admin area and the engine runtime.
-  | 'workflows';
+  | 'workflows'
+  // Face recognition — "People in this gallery" (migration 177, #1074).
+  // Requires the optional picpeak-ml sidecar container. THIS FLAG IS THE
+  // GATE for the whole feature: the backend's FACE_ML_URL has a working
+  // default, so the sidecar's presence can't be detected from config alone.
+  // While this is off, no face UI renders anywhere — no admin panel, no
+  // people strip, no lightbox chips — and the backend never contacts the
+  // sidecar. Face embeddings are biometric data (GDPR Art. 9); turning this
+  // on is only the first of two deliberate actions, since detection is still
+  // enabled per event.
+  | 'faces'
+  // Newsletter campaigns (migration 199, #1264). Child of `clients` —
+  // mass marketing mail to customer accounts, with per-customer opt-out
+  // and an unsubscribe link on every send. Strictly opt-in.
+  | 'newsletters';
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
 

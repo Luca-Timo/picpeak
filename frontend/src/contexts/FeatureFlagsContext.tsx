@@ -64,9 +64,18 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   whatsapp: false,
   // Live Slideshow ("Diashow") — opt-in; gates all slideshow admin UI.
   slideshow: false,
+  // PicTransfer — opt-in; gates the Transfers sidebar entry, the
+  // /admin/transfers area and the public recipient/upload pages.
+  transfers: false,
   // Workflow / automation engine — opt-in; gates the Workflows admin area
   // and the engine runtime (triggers/actions/gates).
   workflows: false,
+  // #1074 — off by default is the whole "zero behaviour change" guarantee.
+  faces: false,
+  // Newsletter campaigns (migration 199, #1264). Off by default — an
+  // install that never turns this on never gains a nav entry or a way to
+  // mass-mail its customers.
+  newsletters: false,
 };
 
 export const FEATURE_FLAGS_QUERY_KEY = ['feature-flags'] as const;
@@ -126,6 +135,9 @@ function applyDependencyRules(flags: FeatureFlags): FeatureFlags {
     // NOTE: taxReport is intentionally NOT here anymore — the Tax export
     // moved permanently into the Accounting section (its own master).
     // future siblings: || out.messaging
+    // #1264 — newsletters is a Clients child; without it here the staged
+    // sidebar preview disagrees with the server until Save.
+    || out.newsletters
   );
   return out;
 }
@@ -192,7 +204,19 @@ export const FeatureFlagsProvider: React.FC<ProviderProps> = ({ children }) => {
 
   const setFlag = useCallback((key: FeatureKey, value: boolean) => {
     if (key === 'galleries') return; // locked
-    setStaged((prev) => applyDependencyRules({ ...prev, [key]: value }));
+    setStaged((prev) => {
+      const next = { ...prev, [key]: value };
+      // Reverse the bills→accounting force-enable. applyDependencyRules is a
+      // pure invariant over one state — it can't tell "Accounting is on
+      // because the admin wants it" from "…because Invoices forced it on", so
+      // turning Invoices off used to leave the Accounting master (and its
+      // sidebar entry) silently on and freshly unlocked (QA S9). The
+      // reversal has to live here, at the toggle, where the transition is
+      // known; the admin sees the switch flip in the same staged state and
+      // can turn Accounting back on before saving if they want it standalone.
+      if (key === 'bills' && !value && prev.bills) next.accounting = false;
+      return applyDependencyRules(next);
+    });
   }, []);
 
   const reset = useCallback(() => {

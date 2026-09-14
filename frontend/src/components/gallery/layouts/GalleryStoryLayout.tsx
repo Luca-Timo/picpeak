@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Search, Heart, Menu, LogOut } from 'lucide-react';
+import { Search, Heart, LogOut } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { BaseGalleryLayoutProps } from './BaseGalleryLayout';
@@ -14,7 +14,6 @@ import {
   StoryScene,
   StoryPhotoCard,
   StoryCarousel,
-  StoryFeedbackSheet,
   StoryScrollToTop
 } from './story';
 import { PhotoLightbox } from '../PhotoLightbox';
@@ -51,15 +50,22 @@ export const GalleryStoryLayout: React.FC<GalleryStoryLayoutProps> = ({
   eventName,
   eventDate,
   allowDownloads = true,
+  suppressEmptyState = false,
+  eventPhotoCount,
+  onDownloadEverything,
+  downloadChoices,
+  onPickResolution,
   protectionLevel = 'standard',
   useEnhancedProtection = false,
   useCanvasRendering = false,
   feedbackEnabled = false,
-  feedbackOptions,
   heroPhotoOverride,
   welcomeMessage,
   onLogout,
   showOriginalFilename = false,
+
+  people,
+  onSelectPerson,
 }) => {
   // These props are passed by parent but we use our own feedback system, so mark as intentionally unused
   void _onPhotoClick;
@@ -72,11 +78,7 @@ export const GalleryStoryLayout: React.FC<GalleryStoryLayoutProps> = ({
   const [scrolled, setScrolled] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
-  const [selectedPhotoForFeedback, setSelectedPhotoForFeedback] = useState<Photo | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [comments, setComments] = useState<Record<number, Array<{ id: string; author: string; text: string; date: string }>>>({});
-  const [ratings, setRatings] = useState<Record<number, number>>({});
-  const [savedIdentity, setSavedIdentity] = useState<{ name: string; email: string } | null>(null);
 
   // Track scroll for nav background
   useEffect(() => {
@@ -106,12 +108,17 @@ export const GalleryStoryLayout: React.FC<GalleryStoryLayoutProps> = ({
   const scenes = useMemo<CategoryScene[]>(() => {
     const photosByCategory: PhotosByCategory = {};
 
-    // Filter by search query
+    // Filter by search query. `original_filename` is in here because that is
+    // the camera name the guest actually sees on the card/lightbox — matching
+    // only the internal renamed `filename` gave "no results" for a substring
+    // the guest could read on screen (QA P4-B.02).
     const filteredPhotos = searchQuery
-      ? photos.filter(p =>
-          p.filename.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (p.category_name && p.category_name.toLowerCase().includes(searchQuery.toLowerCase()))
-        )
+      ? photos.filter(p => {
+          const term = searchQuery.toLowerCase();
+          return p.filename.toLowerCase().includes(term) ||
+            (p.original_filename?.toLowerCase().includes(term) ?? false) ||
+            (p.category_name && p.category_name.toLowerCase().includes(term));
+        })
       : photos;
 
     // Group by category
@@ -134,7 +141,10 @@ export const GalleryStoryLayout: React.FC<GalleryStoryLayoutProps> = ({
     }));
   }, [photos, searchQuery, t]);
 
-  const totalPhotos = photos.length;
+  // #1160: on a folder-only root this component renders its shell with an empty
+  // scope, so fall back to the event-wide count rather than announcing 0 Photos
+  // directly above folder tiles that hold them.
+  const totalPhotos = photos.length || eventPhotoCount || 0;
   const stats = `${totalPhotos} ${t('gallery.photos', 'Photos')}`;
 
   const handleToggleFavorite = useCallback(async (photoId: number) => {
@@ -150,93 +160,44 @@ export const GalleryStoryLayout: React.FC<GalleryStoryLayoutProps> = ({
     try {
       await feedbackService.submitFeedback(slug, String(photoId), {
         feedback_type: 'like',
-        guest_name: savedIdentity?.name,
-        guest_email: savedIdentity?.email,
       });
       onFeedbackChange?.();
     } catch (err) {
       console.warn('Like submit failed', err);
     }
-  }, [favorites, slug, savedIdentity, onFeedbackChange]);
-
-  const handleOpenFeedback = useCallback((photo: Photo) => {
-    setSelectedPhotoForFeedback(photo);
-  }, []);
+  }, [favorites, slug, onFeedbackChange]);
 
   const handleOpenLightbox = useCallback((photo: Photo) => {
     const index = photos.findIndex(p => p.id === photo.id);
     setLightboxIndex(index >= 0 ? index : 0);
   }, [photos]);
 
-  const handleCloseFeedback = useCallback(() => {
-    setSelectedPhotoForFeedback(null);
-  }, []);
-
-  const handleAddComment = useCallback(async (text: string, name?: string, email?: string) => {
-    if (!selectedPhotoForFeedback) return;
-
-    if (name && email) {
-      setSavedIdentity({ name, email });
-    }
-
-    const newComment = {
-      id: `${Date.now()}`,
-      author: name || savedIdentity?.name || t('gallery.feedback.anonymous', 'Anonymous'),
-      text,
-      date: new Date().toLocaleDateString()
-    };
-
-    setComments(prev => ({
-      ...prev,
-      [selectedPhotoForFeedback.id]: [...(prev[selectedPhotoForFeedback.id] || []), newComment]
-    }));
-
-    try {
-      await feedbackService.submitFeedback(slug, String(selectedPhotoForFeedback.id), {
-        feedback_type: 'comment',
-        comment_text: text,
-        guest_name: name || savedIdentity?.name,
-        guest_email: email || savedIdentity?.email,
-      });
-      onFeedbackChange?.();
-    } catch (err) {
-      console.warn('Comment submit failed', err);
-    }
-  }, [selectedPhotoForFeedback, slug, savedIdentity, onFeedbackChange, t]);
-
-  const handleRate = useCallback(async (rating: number) => {
-    if (!selectedPhotoForFeedback) return;
-
-    setRatings(prev => ({
-      ...prev,
-      [selectedPhotoForFeedback.id]: rating
-    }));
-
-    try {
-      await feedbackService.submitFeedback(slug, String(selectedPhotoForFeedback.id), {
-        feedback_type: 'rating',
-        rating: rating,
-        guest_name: savedIdentity?.name,
-        guest_email: savedIdentity?.email,
-      });
-      onFeedbackChange?.();
-    } catch (err) {
-      console.warn('Rating submit failed', err);
-    }
-  }, [selectedPhotoForFeedback, slug, savedIdentity, onFeedbackChange]);
-
   const handleDownloadAll = useCallback(async () => {
-    toast.info(t('gallery.downloading', { count: photos.length }));
+    // Whole-gallery path when available: posting ids would hit the server's
+    // 500-id cap and silently truncate a large gallery (#1160).
+    if (onDownloadEverything) {
+      onDownloadEverything();
+      return;
+    }
+    const ids = photos.map(p => p.id);
+    // #858: hand off to the resolution picker when the gallery offers a choice.
+    if (downloadChoices && downloadChoices.length > 1 && onPickResolution) {
+      onPickResolution(ids);
+      return;
+    }
+    toast.info(t('gallery.downloading', { count: ids.length }));
     try {
-      const ids = photos.map(p => p.id);
       await galleryService.downloadSelectedPhotos(slug, ids);
       analyticsService.trackGalleryEvent('bulk_download', { gallery: slug, photo_count: ids.length });
     } catch {
       toast.error(t('gallery.downloadError'));
     }
-  }, [photos, slug, t]);
+  }, [photos, onDownloadEverything, slug, t, downloadChoices, onPickResolution]);
 
-  if (photos.length === 0) {
+  // #1160: a folder-only root has no photos to show here, but the folder tiles
+  // above prove the gallery isn't empty — render the shell (hero, logout,
+  // controls) without the contradictory message.
+  if (photos.length === 0 && !suppressEmptyState) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">{t('gallery.noPhotosFound')}</p>
@@ -294,9 +255,7 @@ export const GalleryStoryLayout: React.FC<GalleryStoryLayoutProps> = ({
         photo={heroPhoto}
         slug={slug}
         allowDownloads={allowDownloads}
-        protectionLevel={protectionLevel}
         useEnhancedProtection={useEnhancedProtection}
-        useCanvasRendering={useCanvasRendering}
       />
 
       {/* Main Content - Scenes */}
@@ -320,9 +279,7 @@ export const GalleryStoryLayout: React.FC<GalleryStoryLayoutProps> = ({
                   onPhotoClick={handleOpenLightbox}
                   slug={slug}
                   allowDownloads={allowDownloads}
-                  protectionLevel={protectionLevel}
                   useEnhancedProtection={useEnhancedProtection}
-                  useCanvasRendering={useCanvasRendering}
                 />
               ) : (
                 <div id={`gallery-${scene.id}`} className="story-gallery-grid">
@@ -337,9 +294,7 @@ export const GalleryStoryLayout: React.FC<GalleryStoryLayoutProps> = ({
                       slug={slug}
                       galleryId={`gallery-${scene.id}`}
                       allowDownloads={allowDownloads}
-                      protectionLevel={protectionLevel}
                       useEnhancedProtection={useEnhancedProtection}
-                      useCanvasRendering={useCanvasRendering}
                       // Mark first photo in each grid as featured
                       featured={index === 0 && scene.photos.length > 4}
                     />
@@ -357,14 +312,21 @@ export const GalleryStoryLayout: React.FC<GalleryStoryLayoutProps> = ({
         <p className="story-footer-text">
           {welcomeMessage || t('gallery.thankYouMessage', 'For being part of our story and making our special day unforgettable.')}
         </p>
-        {allowDownloads && (
+        {/* Needs something to download: either the whole-gallery callback, or
+            photos in the current scope. On a folder-only root of a gallery with
+            a category download opt-out it has neither, and posting an empty id
+            list is a 400 (#1160). */}
+        {allowDownloads && (onDownloadEverything || photos.length > 0) && (
           <button className="story-footer-btn" onClick={handleDownloadAll}>
             {t('common.downloadAll', 'Download All Photos')}
           </button>
         )}
       </footer>
 
-      {/* Lightbox */}
+      {/* Lightbox. It owns the whole feedback surface on this theme — ratings,
+          comments, reactions and colour labels — the same way the Premium
+          layout routes feedback through its own lightbox instead of a
+          per-card affordance. */}
       {lightboxIndex !== null && (
         <PhotoLightbox
           photos={photos}
@@ -378,21 +340,11 @@ export const GalleryStoryLayout: React.FC<GalleryStoryLayoutProps> = ({
           useCanvasRendering={useCanvasRendering}
           onFeedbackChange={onFeedbackChange}
           showOriginalFilename={showOriginalFilename}
-        />
-      )}
-
-      {/* Feedback Sheet */}
-      {feedbackEnabled && (
-        <StoryFeedbackSheet
-          isOpen={!!selectedPhotoForFeedback}
-          onClose={handleCloseFeedback}
-          photo={selectedPhotoForFeedback}
-          comments={selectedPhotoForFeedback ? (comments[selectedPhotoForFeedback.id] || []) : []}
-          rating={selectedPhotoForFeedback ? (ratings[selectedPhotoForFeedback.id] || selectedPhotoForFeedback.average_rating || 0) : 0}
-          onAddComment={handleAddComment}
-          onRate={handleRate}
-          requireNameEmail={feedbackOptions?.requireNameEmail}
-          savedIdentity={savedIdentity}
+          // #1074: this layout renders its own lightbox, so the people props
+          // have to be threaded through explicitly or the "In this photo"
+          // chips silently disappear on the Story theme.
+          people={people}
+          onSelectPerson={onSelectPerson}
         />
       )}
     </div>

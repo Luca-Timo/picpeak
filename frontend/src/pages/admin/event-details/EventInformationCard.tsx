@@ -27,6 +27,7 @@ import type { AdminPhoto } from '../../../services/photos.service';
 import type { FeedbackSettings as FeedbackSettingsType } from '../../../services/feedback.service';
 import { ExternalFolderPicker } from './ExternalFolderPicker';
 import { safeParseDate } from './utils';
+import { usePermission } from '../../../hooks/usePermission';
 import type { EditFormState } from './types';
 
 interface EventInformationCardProps {
@@ -39,10 +40,12 @@ interface EventInformationCardProps {
   setShowNewPassword: (show: boolean) => void;
   feedbackSettings: FeedbackSettingsType;
   setFeedbackSettings: React.Dispatch<React.SetStateAction<FeedbackSettingsType>>;
-  categories: Array<{ id: number; name: string; slug: string }>;
+  categories: Array<{ id: number; name: string; slug: string; is_folder?: boolean }>;
   photos: AdminPhoto[];
   phoneFieldEnabled: boolean;
   daysUntilExpiration: number | null;
+  // Reveal mode (#838): stamps revealed_at via POST /events/:id/reveal
+  onRevealNow?: () => void;
 }
 
 export const EventInformationCard: React.FC<EventInformationCardProps> = ({
@@ -58,9 +61,15 @@ export const EventInformationCard: React.FC<EventInformationCardProps> = ({
   categories,
   photos,
   phoneFieldEnabled,
-  daysUntilExpiration
+  daysUntilExpiration,
+  onRevealNow
 }) => {
   const { t } = useTranslation();
+  // Enabling the watcher makes the server import on the admin's behalf, which
+  // the backend gates on photos.upload like the Import button. Mirror that
+  // here rather than letting the save bounce with a 403.
+  const canEnableWatch = usePermission('photos.upload');
+  
   const { format } = useLocalizedDate();
   const queryClient = useQueryClient();
   const [logoUploading, setLogoUploading] = useState(false);
@@ -317,11 +326,16 @@ export const EventInformationCard: React.FC<EventInformationCardProps> = ({
             <select
               value={editForm.source_mode}
               onChange={(e) => {
-                const mode = e.target.value as 'managed' | 'reference';
+                // Named `sourceMode`, not `mode`: the i18n extractor's TS
+                // resolver matches locals by name across the whole file, so a
+                // local called `mode` here leaked 'managed' | 'reference' into
+                // the promo/info banner mode_ templates further down and had it
+                // emit four phantom keys that the code can never request.
+                const sourceMode = e.target.value as 'managed' | 'reference';
                 setEditForm(prev => ({
                   ...prev,
-                  source_mode: mode,
-                  external_path: mode === 'reference'
+                  source_mode: sourceMode,
+                  external_path: sourceMode === 'reference'
                     ? (prev.external_path || event.external_path || '')
                     : ''
                 }));
@@ -348,6 +362,28 @@ export const EventInformationCard: React.FC<EventInformationCardProps> = ({
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                 {t('events.externalFolderHint', 'These folders come from the /external-media mount inside the container. Ensure it is accessible to the backend process.')}
               </p>
+              <label className={`flex items-start gap-2 mt-3 ${canEnableWatch || editForm.external_watch ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}>
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded border-neutral-300 dark:border-neutral-600 text-accent focus:ring-primary-500"
+                  checked={editForm.external_watch === true}
+                  disabled={!canEnableWatch && !editForm.external_watch}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, external_watch: e.target.checked }))}
+                />
+                <span className="text-sm">
+                  <span className="font-medium text-neutral-900 dark:text-neutral-100">
+                    {t('events.externalWatch', 'Watch folder for new files')}
+                  </span>
+                  <span className="block text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                    {t('events.externalWatchHint', 'New images copied into this folder are imported automatically, the same way the Import button does it. Files removed from the folder are never deleted from the gallery.')}
+                  </span>
+                  {!canEnableWatch && !editForm.external_watch && (
+                    <span className="block text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                      {t('events.externalWatchNoPermission', 'Requires the permission to upload photos.')}
+                    </span>
+                  )}
+                </span>
+              </label>
             </div>
           )}
 
@@ -362,6 +398,11 @@ export const EventInformationCard: React.FC<EventInformationCardProps> = ({
                 value={editForm.photo_cap}
                 onChange={(e) => setEditForm(prev => ({ ...prev, photo_cap: parseInt(e.target.value) || 0 }))}
                 min={0}
+                // events.photo_cap is a signed 32-bit int (migration 074).
+                // Without an explicit max, input[type=number] reports
+                // aria-valuemax="0", and an out-of-range value only fails at
+                // INSERT.
+                max={2147483647}
                 className="w-24 px-3 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-accent-dark"
               />
               <span className="text-xs text-neutral-500 dark:text-neutral-400">
@@ -430,6 +471,42 @@ export const EventInformationCard: React.FC<EventInformationCardProps> = ({
             </div>
           )}
 
+          {/* Reveal mode (#838) — only meaningful with guest uploads */}
+          {editForm.allow_user_uploads && (
+            <div>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={editForm.reveal_mode}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, reveal_mode: e.target.checked }))}
+                  className="w-4 h-4 text-accent border-neutral-300 dark:border-neutral-600 rounded focus:ring-primary-500"
+                />
+                <span className="ml-2 text-sm text-neutral-700 dark:text-neutral-300">
+                  {t('events.revealMode', 'Reveal mode (hide gallery until reveal)')}
+                </span>
+              </label>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 ml-6">
+                {t('events.revealModeHelp', 'Guests can upload but see no photos until you reveal the gallery — manually or at the scheduled time. Slideshow and client access keep working.')}
+              </p>
+              {editForm.reveal_mode && (
+                <div className="mt-2 ml-6">
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                    {t('events.revealAt', 'Scheduled reveal (optional)')}
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={editForm.reveal_at}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, reveal_at: e.target.value }))}
+                    className="px-3 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  />
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                    {t('events.revealAtHelp', 'Leave empty to reveal manually with the "Reveal now" button.')}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Feedback Settings */}
           <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
             <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mb-3">{t('feedback.settings.title', 'Guest Feedback Settings')}</h3>
@@ -478,7 +555,55 @@ export const EventInformationCard: React.FC<EventInformationCardProps> = ({
                     <p className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400 mb-2">
                       {t('events.promoBanner.preview', 'Preview')}
                     </p>
-                    <MarkdownContent source={editForm.promo_markdown} className="text-sm text-neutral-800 dark:text-neutral-200 prose-sm prose-a:text-primary-600 dark:prose-a:text-primary-400" />
+                    <MarkdownContent source={editForm.promo_markdown} className="prose prose-sm dark:prose-invert max-w-none text-sm text-neutral-800 dark:text-neutral-200 prose-a:text-primary-600 dark:prose-a:text-primary-400" />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Info Banner Override (#932) — three-way: inherit / custom / off.
+              Mirrors the promotional override above, but this banner renders
+              at the TOP of the gallery, above the photos. */}
+          <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+            <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mb-3">
+              {t('events.infoBanner.title', 'Info Banner')}
+            </h3>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">
+              {t('events.infoBanner.help', 'A short note shown above the photos in this gallery. "Inherit" uses your global default; "Custom" overrides it for this event; "Off" hides it entirely.')}
+            </p>
+            <div className="space-y-2">
+              {(['inherit', 'custom', 'off'] as const).map((mode) => (
+                <label key={mode} className="flex items-center">
+                  <input
+                    type="radio"
+                    name="info_mode"
+                    value={mode}
+                    checked={editForm.info_mode === mode}
+                    onChange={() => setEditForm(prev => ({ ...prev, info_mode: mode }))}
+                    className="w-4 h-4 text-accent border-neutral-300 dark:border-neutral-600 focus:ring-primary-500"
+                  />
+                  <span className="ml-2 text-sm text-neutral-700 dark:text-neutral-300">
+                    {t(`events.infoBanner.mode_${mode}`, mode === 'inherit' ? 'Inherit global default' : mode === 'custom' ? 'Custom override for this event' : 'Off (hide for this event)')}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {editForm.info_mode === 'custom' && (
+              <div className="mt-3 space-y-2">
+                <textarea
+                  value={editForm.info_markdown}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, info_markdown: e.target.value }))}
+                  rows={3}
+                  placeholder={t('events.infoBanner.placeholder', 'Use the menu button in the top-left corner to filter the photos.')}
+                  className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-accent-dark font-mono text-sm"
+                />
+                {editForm.info_markdown.trim() && (
+                  <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg p-3 bg-neutral-50 dark:bg-neutral-900">
+                    <p className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400 mb-2">
+                      {t('events.infoBanner.preview', 'Preview')}
+                    </p>
+                    <MarkdownContent source={editForm.info_markdown} className="prose prose-sm dark:prose-invert max-w-none text-sm text-neutral-800 dark:text-neutral-200 prose-a:text-primary-600 dark:prose-a:text-primary-400" />
                   </div>
                 )}
               </div>
@@ -522,10 +647,6 @@ export const EventInformationCard: React.FC<EventInformationCardProps> = ({
                   onChange={(e) => setEditForm(prev => ({
                     ...prev,
                     watermark_downloads: e.target.checked,
-                    // Watermarking and presigned URLs are mutually
-                    // exclusive — presigned URLs serve raw bytes from
-                    // S3 without going through the watermark pipeline.
-                    allow_presigned_download: e.target.checked ? false : prev.allow_presigned_download,
                   }))}
                   className="w-4 h-4 text-accent border-neutral-300 dark:border-neutral-600 rounded focus:ring-primary-500"
                 />
@@ -533,25 +654,7 @@ export const EventInformationCard: React.FC<EventInformationCardProps> = ({
                 <span className="text-sm text-neutral-700 dark:text-neutral-300">{t('events.watermarkDownloads', 'Add watermark to downloads')}</span>
               </label>
 
-              <label
-                className={`flex items-center ${editForm.watermark_downloads ? 'opacity-50 cursor-not-allowed' : ''}`}
-                title={editForm.watermark_downloads
-                  ? 'Disabled while watermarks are on — presigned URLs bypass the watermark pipeline.'
-                  : 'When the backend uses STORAGE_BACKEND=s3, "Download All" returns a 5-minute presigned S3 URL instead of streaming through the backend. Saves bandwidth on huge galleries; bypasses watermarking.'
-                }
-              >
-                <input
-                  type="checkbox"
-                  checked={!!editForm.allow_presigned_download}
-                  disabled={editForm.watermark_downloads}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, allow_presigned_download: e.target.checked }))}
-                  className="w-4 h-4 text-accent border-neutral-300 dark:border-neutral-600 rounded focus:ring-primary-500"
-                />
-                <Download className="w-4 h-4 ml-2 mr-1 text-neutral-500 dark:text-neutral-400" />
-                <span className="text-sm text-neutral-700 dark:text-neutral-300">
-                  {t('events.allowPresignedDownload', 'Allow direct S3 download (no watermark, S3 mode only)')}
-                </span>
-              </label>
+
 
               <label className="flex items-center">
                 <input
@@ -572,7 +675,7 @@ export const EventInformationCard: React.FC<EventInformationCardProps> = ({
                   className="w-4 h-4 text-accent border-neutral-300 dark:border-neutral-600 rounded focus:ring-primary-500"
                 />
                 <Image className="w-4 h-4 ml-2 mr-1 text-neutral-500 dark:text-neutral-400" />
-                <span className="text-sm text-neutral-700 dark:text-neutral-300">{t('events.useCanvasRendering', 'Canvas rendering (advanced protection)')}</span>
+                <span className="text-sm text-neutral-700 dark:text-neutral-300">{t('events.useCanvasRendering', 'Canvas rendering in the lightbox (advanced protection)')}</span>
               </label>
 
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-2">
@@ -718,6 +821,26 @@ export const EventInformationCard: React.FC<EventInformationCardProps> = ({
                 </>
               )}
 
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1 flex items-center gap-1">
+                  <Image className="w-4 h-4 text-neutral-500 dark:text-neutral-400" />
+                  {t('events.loginLogoVisible', 'Display logo on password page')}
+                </label>
+                <select
+                  // #894: two-state — null keeps the default (show), false
+                  // hides the branding logo on this gallery's password page.
+                  value={editForm.login_logo_visible === false ? 'hide' : 'show'}
+                  onChange={(e) => setEditForm(prev => ({
+                    ...prev,
+                    login_logo_visible: e.target.value === 'hide' ? false : null
+                  }))}
+                  className="w-full sm:w-64 px-3 py-2 border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 rounded-md shadow-sm focus:ring-primary-500 focus:border-accent-dark text-sm"
+                >
+                  <option value="show">{t('events.loginLogoShow', 'Show (default)')}</option>
+                  <option value="hide">{t('events.loginLogoHide', 'Hide')}</option>
+                </select>
+              </div>
+
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-2">
                 {t('events.heroLogoInfo', 'These settings apply when the gallery uses the Hero layout. You can hide the logo or customize its size and position.')}
               </p>
@@ -732,6 +855,11 @@ export const EventInformationCard: React.FC<EventInformationCardProps> = ({
               {event.source_mode === 'reference' ? t('events.sourceModeReference', 'Reference external folder') : t('events.sourceModeManaged', 'Managed (upload to PicPeak)')}
               {event.source_mode === 'reference' && event.external_path ? (
                 <span className="text-neutral-500 dark:text-neutral-400 ml-2">/external-media/{event.external_path}</span>
+              ) : null}
+              {event.source_mode === 'reference' && event.external_watch ? (
+                <span className="block text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                  {t('events.externalWatchActive', 'Folder is watched — new files are imported automatically.')}
+                </span>
               ) : null}
             </dd>
           </div>
@@ -833,6 +961,39 @@ export const EventInformationCard: React.FC<EventInformationCardProps> = ({
               )}
             </dd>
           </div>
+
+          {Boolean(event.reveal_mode) && (
+            <div>
+              <dt className="text-sm font-medium text-neutral-500 dark:text-neutral-400">{t('events.revealModeStatus', 'Reveal mode')}</dt>
+              <dd className="mt-1 text-sm text-neutral-900 dark:text-neutral-100">
+                {event.revealed_at ? (
+                  <span className="inline-flex items-center px-2 py-1 text-xs font-medium text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 rounded">
+                    {t('events.revealed', 'Revealed')}
+                  </span>
+                ) : (
+                  <div className="space-y-2">
+                    <span className="inline-flex items-center px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 rounded">
+                      {t('events.hiddenUntilReveal', 'Hidden from guests')}
+                    </span>
+                    {event.reveal_at && (
+                      <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                        {t('events.revealScheduled', 'Scheduled: {{date}}', { date: new Date(event.reveal_at).toLocaleString() })}
+                      </p>
+                    )}
+                    {onRevealNow && (
+                      <button
+                        type="button"
+                        onClick={onRevealNow}
+                        className="block px-3 py-1.5 text-xs font-medium text-white bg-accent hover:bg-accent-dark rounded transition-colors"
+                      >
+                        {t('events.revealNow', 'Reveal now')}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </dd>
+            </div>
+          )}
 
           {/* Download Protection Display */}
           <div className="pt-3 mt-3 border-t border-neutral-200 dark:border-neutral-700">

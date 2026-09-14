@@ -3,9 +3,10 @@ import { Package } from 'lucide-react';
 import { toast as toastify } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 
-import type { Photo } from '../../types';
+import type { Photo, DownloadResolutionChoice, GalleryPerson } from '../../types';
 import { useDownloadPhoto } from '../../hooks/useGallery';
 import { PhotoLightbox } from './PhotoLightbox';
+import { DownloadResolutionModal } from './DownloadResolutionModal';
 import { Button } from '../common';
 import { galleryService } from '../../services/gallery.service';
 import { analyticsService } from '../../services/analytics.service';
@@ -42,6 +43,10 @@ interface PhotoGridWithLayoutsProps {
   expiresAt?: string | null;
   feedbackEnabled?: boolean;
   allowDownloads?: boolean;
+  // Resolution picker choices (#858). Empty/absent = no picker, download
+  // straight at the gallery's standard size.
+  downloadChoices?: DownloadResolutionChoice[];
+  downloadStandard?: string;
   protectionLevel?: 'basic' | 'standard' | 'enhanced' | 'maximum';
   useEnhancedProtection?: boolean;
   useCanvasRendering?: boolean;
@@ -52,6 +57,7 @@ interface PhotoGridWithLayoutsProps {
     allowFavorites?: boolean;
     allowRatings?: boolean;
     allowComments?: boolean;
+    allowReactions?: boolean;
     requireNameEmail?: boolean;
   };
   onFeedbackChange?: () => void;
@@ -74,10 +80,29 @@ interface PhotoGridWithLayoutsProps {
   // Mirror of the admin original-filename toggle (#508). When true, the
   // lightbox bottom toolbar surfaces each photo's original camera name.
   showOriginalFilename?: boolean;
+  // People in this gallery (#1074) — forwarded to the lightbox so it can
+  // show "In this photo: …". Undefined when the feature is off.
+  people?: GalleryPerson[];
+  onSelectPerson?: (personId: number) => void;
+  /**
+   * Suppress the "no photos found" message (#1160). A gallery whose photos all
+   * live in folders has an empty root grid while its folder tiles sit directly
+   * above — printing "no photos" there contradicts the tiles. Only the message
+   * is suppressed: the full-page layouts render their hero, title, logout and
+   * download controls from inside this component, so unmounting it would strip
+   * the whole gallery shell.
+   */
+  suppressEmptyState?: boolean;
+  /** #1160: event-wide count + whole-gallery download for layout chrome. */
+  eventPhotoCount?: number;
+  onDownloadEverything?: () => void;
 }
 
 export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
   photos,
+  suppressEmptyState = false,
+  eventPhotoCount,
+  onDownloadEverything,
   slug,
   categoryId,
   heroPhotoOverride,
@@ -87,6 +112,8 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
   feedbackOptions,
   onFeedbackChange,
   allowDownloads = true,
+  downloadChoices,
+  downloadStandard,
   protectionLevel = 'standard',
   useEnhancedProtection = false,
   useCanvasRendering = false,
@@ -110,6 +137,8 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
   isClient = false,
   onToggleVisibility,
   showOriginalFilename = false,
+  people,
+  onSelectPerson,
 }) => {
   const { t } = useTranslation();
   const { theme } = useTheme();
@@ -117,6 +146,8 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
   const [openFeedbackInitially, setOpenFeedbackInitially] = useState<boolean>(false);
   const [localSelectedPhotos, setLocalSelectedPhotos] = useState<Set<number>>(new Set());
   const [localSelectionMode, setLocalSelectionMode] = useState(false);
+  // Non-null while the resolution picker is open (#858); holds the ids it applies to.
+  const [resolutionPickerIds, setResolutionPickerIds] = useState<number[] | null>(null);
   const downloadPhotoMutation = useDownloadPhoto();
   
   // Use parent state if provided, otherwise use local state
@@ -183,6 +214,14 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
   const handleDownloadSelected = async () => {
     if (selectedPhotos.size === 0) return;
     const ids = Array.from(selectedPhotos);
+
+    // Resolution picker (#858): when the gallery offers a choice, hand off to
+    // the modal — it drives the job build and does the download itself.
+    if (downloadChoices && downloadChoices.length > 1) {
+      setResolutionPickerIds(ids);
+      return;
+    }
+
     toastify.info(t('gallery.downloading', { count: ids.length }));
 
     try {
@@ -201,11 +240,15 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
   };
 
   if (photos.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-muted-theme">{t('gallery.noPhotosFound')}</p>
-      </div>
-    );
+    // Suppressed (#1160): a folder-only root has folder tiles above proving the
+    // gallery isn't empty, so the message would contradict them.
+    if (!suppressEmptyState) {
+      return (
+        <div className="text-center py-12">
+          <p className="text-muted-theme">{t('gallery.noPhotosFound')}</p>
+        </div>
+      );
+    }
   }
 
   // Get the current layout from theme
@@ -214,7 +257,24 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
   // Select the appropriate layout component
   const layoutProps = {
     photos,
+    // Forwarded so the full-bleed layouts, which render their OWN
+    // noPhotosFound return, don't contradict the folder tiles above them on a
+    // folder-only root (#1160).
+    suppressEmptyState,
+    eventPhotoCount,
+    onDownloadEverything,
     slug,
+    // Face data (#1074) must reach the full-page layouts too — they render
+    // their OWN lightbox rather than the one below, so without this the
+    // "In this photo" chips silently vanish on gallery-premium and
+    // gallery-story even when the feature is fully enabled.
+    people,
+    onSelectPerson,
+    // Full-page layouts own their bulk-download control, so the resolution
+    // picker has to reach them too (#858) — otherwise premium/story galleries
+    // silently skip the choice the admin enabled.
+    downloadChoices,
+    onPickResolution: (ids: number[]) => setResolutionPickerIds(ids),
     onPhotoClick: handlePhotoClick,
     onOpenPhotoWithFeedback: handleOpenWithFeedback,
     onFeedbackChange: onFeedbackChange,
@@ -293,9 +353,7 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
           heroLogoPosition={heroLogoPosition}
           dividerStyle={heroDividerStyle}
           allowDownloads={allowDownloads}
-          protectionLevel={protectionLevel}
           useEnhancedProtection={useEnhancedProtection}
-          useCanvasRendering={useCanvasRendering}
           heroImageAnchor={heroImageAnchor}
         />
       )}
@@ -385,6 +443,27 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
           initialShowFeedback={openFeedbackInitially}
           onFeedbackChange={onFeedbackChange}
           showOriginalFilename={showOriginalFilename}
+          people={people}
+          onSelectPerson={onSelectPerson}
+        />
+      )}
+
+      {/* Download size picker (#858) — drives the job build and the download. */}
+      {resolutionPickerIds && downloadChoices && (
+        <DownloadResolutionModal
+          slug={slug}
+          choices={downloadChoices}
+          standardResolution={downloadStandard}
+          photoIds={resolutionPickerIds}
+          onClose={() => {
+            setResolutionPickerIds(null);
+            setSelectedPhotos(new Set());
+            if (parentToggleSelectionMode) {
+              parentToggleSelectionMode();
+            } else {
+              setLocalSelectionMode(false);
+            }
+          }}
         />
       )}
     </>

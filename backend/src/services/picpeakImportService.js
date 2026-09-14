@@ -24,6 +24,7 @@ const { db } = require('../database/db');
 const knexConfig = require('../../knexfile');
 const { getStoragePath } = require('../config/storage');
 const { hasColumnCached } = require('../utils/schemaCache');
+const { setSessionsValidAfter } = require('../utils/sessionCutoff');
 const logger = require('../utils/logger');
 const { PICPEAK_FORMAT_VERSION, EXCLUDED_TABLES, listDataTables } = require('./picpeakExportService');
 const {
@@ -119,7 +120,7 @@ function parseNdjson(filePath) {
 //     preserved, its own FKs stay valid) to free the username;
 //   - only when no row has the operator's email do we insert a fresh row.
 async function reinjectCurrentAdmin(trx, currentAdmin) {
-  if (!currentAdmin) return;
+  if (!currentAdmin) return null;
 
   const emailMatch = await trx('admin_users')
     .whereRaw('lower(email) = lower(?)', [currentAdmin.email])
@@ -149,6 +150,7 @@ async function reinjectCurrentAdmin(trx, currentAdmin) {
       if (field in currentAdmin) authUpdate[field] = currentAdmin[field];
     }
     await trx('admin_users').where({ id: emailMatch.id }).update(authUpdate);
+    return emailMatch.id;
   } else {
     // The operator's email isn't in the backup, so nothing restored references
     // their id — a fresh row can't dangle a reference TO the operator. Null the
@@ -163,6 +165,84 @@ async function reinjectCurrentAdmin(trx, currentAdmin) {
     const maxRow = await trx('admin_users').max({ m: 'id' }).first();
     snapshot.id = (Number(maxRow && maxRow.m) || 0) + 1;
     await trx('admin_users').insert(snapshot);
+    return snapshot.id;
+  }
+}
+
+// Capture the operator's role and its granted permission NAMES before the wipe,
+// so preserveOperatorRole() can re-establish the operator's authorization after
+// the RBAC tables are replaced. Permission NAMES (not ids) are captured because
+// the restored permissions table reassigns ids. Returns null if the operator
+// has no role.
+async function captureOperatorRole(roleId) {
+  if (!roleId) return null;
+  const role = await db('roles').where({ id: roleId }).first();
+  if (!role) return null;
+  const permissions = await db('role_permissions')
+    .join('permissions', 'permissions.id', 'role_permissions.permission_id')
+    .where('role_permissions.role_id', roleId)
+    .pluck('permissions.name');
+  return { role, permissions };
+}
+
+// Restore the operator's authorization after roles/role_permissions are
+// replaced. A restore rewrites the RBAC tables, so the operator's pre-restore
+// role_id may now name a different (or missing) role — a crafted backup could
+// silently downgrade them, and reinjectCurrentAdmin deliberately does NOT copy
+// role_id (it could dangle). Here we resolve the role by NAME against the
+// restored data: if a role with the operator's role name exists we trust it
+// (it's the backup the operator chose to restore); otherwise we re-create the
+// role from the captured snapshot and re-grant the captured permissions that
+// still exist, so the operator can never be locked out of their own instance.
+async function preserveOperatorRole(trx, operatorId, snapshot) {
+  if (!operatorId || !snapshot || !snapshot.role) return;
+  const { role, permissions } = snapshot;
+
+  let target = await trx('roles').whereRaw('lower(name) = lower(?)', [role.name]).first();
+  if (!target) {
+    const roleRow = { ...role };
+    delete roleRow.id;
+    const maxRole = await trx('roles').max({ m: 'id' }).first();
+    const newRoleId = (Number(maxRole && maxRole.m) || 0) + 1; // sequence resynced post-commit
+    roleRow.id = newRoleId;
+    await trx('roles').insert(roleRow);
+    if (permissions && permissions.length) {
+      const perms = await trx('permissions').whereIn('name', permissions).select('id');
+      if (perms.length) {
+        await trx('role_permissions').insert(
+          perms.map((p) => ({ role_id: newRoleId, permission_id: p.id }))
+        );
+      }
+    }
+    target = { id: newRoleId };
+  }
+  await trx('admin_users').where({ id: operatorId }).update({ role_id: target.id });
+}
+
+// Fast-forward each restored table's Postgres identity sequence to its current
+// max(id). batchInsert writes explicit ids without advancing the sequence, so
+// the next natural insert into any restored table (a new event, an accepted
+// invitation, etc.) would otherwise collide on the primary key. Runs AFTER the
+// restore transaction commits (setval is non-transactional and would survive a
+// rollback) and guards every table with a column-existence check —
+// pg_get_serial_sequence RAISES on a table lacking an `id` column (e.g. the
+// composite-key role_permissions), so an unguarded call would abort here.
+// No-op on SQLite, whose AUTOINCREMENT tracks the high-water mark itself.
+async function resyncSequences(tables) {
+  if (!isPostgres()) return;
+  for (const table of tables) {
+    try {
+      if (!(await db.schema.hasColumn(table, 'id'))) continue;
+      const res = await db.raw('SELECT pg_get_serial_sequence(?, ?) AS seq', [table, 'id']);
+      const seq = res && res.rows && res.rows[0] && res.rows[0].seq;
+      if (!seq) continue; // `id` isn't a serial/identity column
+      await db.raw(
+        'SELECT setval(?, (SELECT COALESCE(MAX(id), 1) FROM ??), (SELECT MAX(id) IS NOT NULL FROM ??))',
+        [seq, table, table]
+      );
+    } catch (err) {
+      logger.warn(`[picpeak-import] could not resync sequence for ${table}: ${err.message}`);
+    }
   }
 }
 
@@ -181,7 +261,7 @@ const PRESERVED_AUTH_FIELDS = [
 async function jsonColumnsFor(trx, table) {
   if (!isPostgres()) return new Set();
   const res = await trx.raw(
-    "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ? AND data_type IN ('json', 'jsonb')",
+    'SELECT column_name FROM information_schema.columns WHERE table_schema = \'public\' AND table_name = ? AND data_type IN (\'json\', \'jsonb\')',
     [table]
   );
   return new Set(res.rows.map((r) => r.column_name));
@@ -253,31 +333,11 @@ function coerceForTargetEngine(rows, { timestamps, booleans }) {
 // session_replication_role=replica on the trx connection, reset before commit;
 // sqlite: defer_foreign_keys so checks run at commit). knex_migrations is never
 // in the data set, so the target's schema/migration state is left intact.
-// Advance Postgres identity sequences past the ids just inserted. Needed after
-// any explicit-id load; here it backs the SQLite → Postgres migration (#1038).
-async function resyncSequences(tables) {
-  if (!isPostgres()) return;
-  for (const table of tables) {
-    try {
-      if (!(await db.schema.hasColumn(table, 'id'))) continue;
-      const res = await db.raw('SELECT pg_get_serial_sequence(?, ?) AS seq', [table, 'id']);
-      const seq = res && res.rows && res.rows[0] && res.rows[0].seq;
-      if (!seq) continue; // `id` isn't a serial/identity column
-      await db.raw(
-        'SELECT setval(?, (SELECT COALESCE(MAX(id), 1) FROM ??), (SELECT MAX(id) IS NOT NULL FROM ??))',
-        [seq, table, table]
-      );
-    } catch (err) {
-      logger.warn(`[picpeak-import] could not resync sequence for ${table}: ${err.message}`);
-    }
-  }
-}
-
-async function replaceAllTables(tables, dataDir, currentAdmin, { crossEngine = false } = {}) {
+async function replaceAllTables(tables, dataDir, currentAdmin, roleSnapshot, { crossEngine = false } = {}) {
   await db.transaction(async (trx) => {
     if (isPostgres()) {
       try {
-        await trx.raw("SET session_replication_role = 'replica'");
+        await trx.raw('SET session_replication_role = \'replica\'');
       } catch (_) {
         // session_replication_role requires a Postgres SUPERUSER. The bundled
         // postgres image's role is one; managed Postgres (RDS / Cloud SQL / …)
@@ -294,7 +354,7 @@ async function replaceAllTables(tables, dataDir, currentAdmin, { crossEngine = f
     }
 
     // Suspending FK enforcement does not suspend UNIQUE indexes on either
-    // engine (#1162). A backup taken before migration 176 carries the
+    // engine (#1162). A backup taken before migration 186 carries the
     // duplicate photo rows that migration exists to remove, so batchInsert
     // below would hit photos_event_external_relpath_uniq and roll the whole
     // restore back — after every table had already been emptied. Drop it for
@@ -309,6 +369,21 @@ async function replaceAllTables(tables, dataDir, currentAdmin, { crossEngine = f
     for (const table of tables) {
       await trx(table).del();
     }
+
+    // Face data (#1074) is excluded from the archive, which also excludes it
+    // from `tables` — so the LOCAL rows would survive a whole-DB replace.
+    // FK enforcement is deliberately suspended during import, so those
+    // orphans can end up attached to reused photo/event ids from the incoming
+    // archive: one instance's biometric data silently adopted by another's
+    // galleries. Purge them explicitly.
+    for (const faceTable of ['photo_faces', 'event_people', 'event_people_merge_dismissals']) {
+      try {
+        await trx(faceTable).del();
+      } catch (err) {
+        // Absent on targets that predate migration 177 — nothing to purge.
+      }
+    }
+
     for (const table of tables) {
       const rows = parseNdjson(path.join(dataDir, `${table}.ndjson`));
       if (!rows.length) continue;
@@ -328,7 +403,7 @@ async function replaceAllTables(tables, dataDir, currentAdmin, { crossEngine = f
     }
 
     // Restore the constraint the load ran without. Deduping first because the
-    // incoming rows may be exactly the duplicates migration 176 removes; the
+    // incoming rows may be exactly the duplicates migration 186 removes; the
     // index creation then also proves the repair worked, inside the same
     // transaction that would otherwise leave the target unprotected.
     if (hadRelpathIndex) {
@@ -339,10 +414,13 @@ async function replaceAllTables(tables, dataDir, currentAdmin, { crossEngine = f
       await createExternalRelpathIndex(trx);
     }
 
-    await reinjectCurrentAdmin(trx, currentAdmin);
+    const operatorId = await reinjectCurrentAdmin(trx, currentAdmin);
+    if (operatorId && roleSnapshot) {
+      await preserveOperatorRole(trx, operatorId, roleSnapshot);
+    }
 
     // Reset the pg session flag BEFORE the connection returns to the pool.
-    if (isPostgres()) await trx.raw("SET session_replication_role = 'origin'");
+    if (isPostgres()) await trx.raw('SET session_replication_role = \'origin\'');
   });
 }
 
@@ -419,6 +497,9 @@ async function importFromPicpeak({ picpeakPath, currentAdminId }) {
   const currentAdmin = currentAdminId
     ? await db('admin_users').where({ id: currentAdminId }).first()
     : null;
+  // Capture the operator's role + granted permission names BEFORE the wipe so
+  // their authorization can be re-established after the RBAC tables are replaced.
+  const roleSnapshot = currentAdmin ? await captureOperatorRole(currentAdmin.role_id) : null;
 
   const staging = await fsp.mkdtemp(path.join(os.tmpdir(), 'picpeak-import-'));
   try {
@@ -447,23 +528,33 @@ async function importFromPicpeak({ picpeakPath, currentAdminId }) {
       logger.warn(`[picpeak-import] ignoring ${skipped.length} backup table(s) not present in this DB (or protected): ${skipped.join(', ')}`);
     }
 
-    await replaceAllTables(tables, dataDir, currentAdmin, { crossEngine });
+    await replaceAllTables(tables, dataDir, currentAdmin, roleSnapshot, { crossEngine });
 
-    // Post-commit fixup: rows are inserted with explicit ids, which leaves
-    // Postgres identity sequences behind, so the next natural insert collides
-    // on the primary key. Runs unconditionally, matching main — the guard used
-    // to be `if (allowEngineSwitch)`, which this change removes, and which also
-    // left a same-engine pg → pg restore with stale sequences.
+    // Post-commit fixups (must NOT run inside the restore transaction):
+    //  - resync Postgres identity sequences left behind by the explicit-id
+    //    batchInsert, so the next natural insert doesn't collide;
+    //  - stamp a global session cutoff so every JWT issued before this restore
+    //    (admin, customer, gallery) stops authenticating — ids may have shifted.
     await resyncSequences(tables);
+    await setSessionsValidAfter(Math.floor(Date.now() / 1000));
+
 
     const filesRestored = await restoreFiles(staging);
 
     // External media paths (#1163). knex_migrations is excluded from the
-    // archive, so migration 177 does not re-run after a restore — a pre-#1163
+    // archive, so migration 187 does not re-run after a restore — a pre-#1163
     // backup would otherwise drop base-relative rows onto an instance that
     // resolves them from the media root, and every original in the restored
     // library would be unreachable with nothing logged. The fold is a no-op
     // when the restored app_settings already carries the marker.
+    //
+    // BEFORE the face requeue below, and for the same reason that requeue sits
+    // after restoreFiles: the worker is live throughout. Queued first, it can
+    // claim an external row while the row is still base-relative, resolve it
+    // against the wrong path with the root-only resolver, and mark the photo
+    // failed — a state only an explicit Re-scan clears, and one the fold does
+    // not undo. Probing a cold mount takes long enough for that to be likely
+    // rather than theoretical.
     let externalPathsConverted = true;
     let externalPathError = null;
     try {
@@ -481,6 +572,35 @@ async function importFromPicpeak({ picpeakPath, currentAdminId }) {
       externalPathsConverted = false;
       externalPathError = err.message;
       logger.error(`picpeakImport: external path conversion FAILED — originals will not resolve until this is retried: ${err.message}`);
+    }
+    // Face data (#1074): queue ONLY once the files are on disk. The archive
+    // carries no face rows and the export blanked photos.face_status, but the
+    // event toggles come across enabled, so the "enable" transition that
+    // normally triggers a backfill never happens here.
+    //
+    // Ordering matters: the worker is live during a restore. Queued before
+    // restoreFiles, it races the copy and either scans the PREVIOUS
+    // instance's files or marks photos failed for originals that are not
+    // there yet — and nothing re-queues them afterwards.
+    try {
+      if (!externalPathsConverted) {
+        // Queueing now would hand the live worker rows whose paths the
+        // resolver cannot follow, and it would mark them 'failed' — a state
+        // only an explicit Re-scan clears. Leave them unqueued; the operator
+        // re-runs the conversion and then re-scans.
+        logger.warn('picpeakImport: skipping face requeue — external paths are unconverted');
+      } else {
+        const requeued = await db('photos')
+          .whereIn('event_id', db('events').select('id').where('face_recognition_enabled', true))
+          .update({
+            face_status: 'pending', face_count: null, face_started_at: null, face_error: null,
+          });
+        if (requeued > 0) {
+          logger.info(`picpeakImport: queued ${requeued} photo(s) for face detection after import`);
+        }
+      }
+    } catch (err) {
+      logger.debug?.(`picpeakImport: face requeue skipped: ${err.message}`);
     }
 
     const usesExternalMedia = await detectExternalMedia();
@@ -515,6 +635,7 @@ module.exports = {
   coerceForTargetEngine,
   typedColumnsFor,
   reinjectCurrentAdmin,
-  // The cross-engine suite drives the post-restore sequence fixup directly.
+  captureOperatorRole,
+  preserveOperatorRole,
   resyncSequences,
 };

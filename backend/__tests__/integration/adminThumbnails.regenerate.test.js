@@ -1,12 +1,6 @@
 /**
  * POST /admin/thumbnails/regenerate for external/reference photos (#1129).
  *
- * STABLE TWIN. Diverges from the main version in one place: stable has no
- * responsive ?w= tiers (#1095/#1109), so there is no deleteThumbnailTiers call
- * to assert and the "drops the tiers first" test is absent here. Everything
- * else — the external rebuild, the thumbnail_path:null contract, video
- * skipping, per-event scoping and the superseded-key deletion — is identical.
- *
  * The route used to resolve every source as `storage/events/active/<path>` and
  * `fs.access` it. External and reference rows do not live there — their
  * originals sit under `events.external_path` — so every one of them failed the
@@ -29,7 +23,7 @@ const express = require('express');
 const request = require('supertest');
 
 describe('admin thumbnail regeneration (#1129)', () => {
-  let tmpDir; let db; let cleanup; let app; let imageProcessor; let storage;
+  let tmpDir; let db; let cleanup; let app; let imageProcessor; let storage; let logInfo;
 
   beforeAll(async () => {
     tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'picpeak-regen-'));
@@ -56,8 +50,13 @@ describe('admin thumbnail regeneration (#1129)', () => {
     jest.doMock('../../src/services/imageProcessor', () => ({
       ensureThumbnail: jest.fn().mockResolvedValue('thumbnails/thumb_ext1_shot.jpg'),
       ensurePreviewImage: jest.fn().mockResolvedValue('previews/p.jpg'),
+      deleteThumbnailTiers: jest.fn().mockResolvedValue(undefined),
       deletePreviewTiers: jest.fn().mockResolvedValue(undefined),
     }));
+
+    // Same module registry as the route, so the spy sees its calls. The
+    // completion line is what drain() below waits for.
+    logInfo = jest.spyOn(require('../../src/utils/logger'), 'info');
 
     // bootCrmDb, not run-migrations: the latter calls process.exit(0) on
     // success, which ends the jest worker mid-suite.
@@ -99,8 +98,20 @@ describe('admin thumbnail regeneration (#1129)', () => {
     return typeof row === 'object' ? row.id : row;
   }
 
-  /** The work runs in setImmediate; give it room to finish. */
-  const drain = () => new Promise((resolve) => setTimeout(resolve, 150));
+  /**
+   * The work runs in setImmediate, after the response. Wait for the loop's
+   * "regeneration complete" log line rather than a fixed 150 ms: under a
+   * loaded machine (fifteen suites in parallel, each booting a migrated
+   * SQLite) the loop occasionally took longer than that, and the assertions
+   * then ran against a half-finished mock call list.
+   */
+  const drain = async () => {
+    const deadline = Date.now() + 10000;
+    const done = () => logInfo.mock.calls.some((c) => /regeneration complete/.test(String(c[0])));
+    while (!done() && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  };
 
   it('rebuilds the canonical thumbnail for an external photo instead of erroring', async () => {
     const eventId = await seedEvent();
@@ -139,6 +150,18 @@ describe('admin thumbnail regeneration (#1129)', () => {
     // Carried through so ensureThumbnail can resolve off the mount rather than
     // under events/active.
     expect(photoArg.external_relpath).toBe('shot.jpg');
+  });
+
+  it('still drops the responsive tiers first', async () => {
+    const eventId = await seedEvent();
+    await seedPhoto(eventId, { source_origin: 'external', external_relpath: 'shot.jpg' });
+
+    await request(app).post('/admin/thumbnails/regenerate').send({});
+    await drain();
+
+    // They are keyed by width outside thumbnail_path and carry no settings
+    // version, so leaving them serves the old fit to phones indefinitely.
+    expect(imageProcessor.deleteThumbnailTiers).toHaveBeenCalledTimes(1);
   });
 
   it('leaves videos alone rather than handing a container file to Sharp', async () => {

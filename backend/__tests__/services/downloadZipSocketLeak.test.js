@@ -86,12 +86,10 @@ jest.mock('../../src/services/storage', () => ({
   initStorage: async () => mockStorage,
 }));
 
-// Nothing to watermark, so the builder takes the stream-from-storage branch,
-// which is the one that holds sockets. (This branch has no rendition step —
-// the resize/watermark split that main mocks out here does not exist yet.)
-jest.mock('../../src/services/watermarkService', () => ({
-  getWatermarkSettings: jest.fn(async () => ({ enabled: false })),
-  applyWatermark: jest.fn(),
+// Nothing to resize or watermark, so the builder takes the stream-from-storage
+// branch, which is the one that holds sockets.
+jest.mock('../../src/services/downloadRendition', () => ({
+  renderPhotoForDownload: jest.fn(async () => null),
 }));
 
 const { bootCrmDb, seedMinimal } = require('../integration/helpers/crmDb');

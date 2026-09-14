@@ -1,4 +1,572 @@
 {
+  "productUsagePrompt": {
+    "title": "Help shape PicPeak?",
+    "intro": "Help shape PicPeak with optional product usage reports. Review the pseudonymous data, who can see it and where it is sent before deciding."
+  },
+  "productUsage": {
+    "fields": "usage.v5 reports contain an installation fingerprint, PicPeak version, UTC report date and generation time, schema/signing metadata, controlled gallery layouts, 87 fixed capability signals (64 configured/used pairs and 23 configuration-only booleans), and two installation totals: stored galleries and photo records excluding videos. Drafts and archived galleries and their retained photo records are included. The catalog below defines every field. There are no action counts or visitor observations.",
+    "catalogTitle": "Full catalog: 87 capability signals and 2 inventory totals (usage.v5)",
+    "catalogExplanation": "Configured describes current technical availability or configuration. Built-in means available, not used. Used is one installation-wide yes/no bit since consent to the reporting schema; accepted jobs mean initiated, not necessarily completed. Configuration-only capabilities omit used. Inventory contains only current gallery/photo record totals, with no per-gallery breakdown. No actor, entity identifier, action time or frequency is stored in usage markers.",
+    "catalogSearch": "Search capability name or key",
+    "catalogEmpty": "No matching capabilities.",
+    "configuredLabel": "Availability / configuration",
+    "usedLabel": "Used",
+    "configurationOnly": "Configuration only — actual use is not collected.",
+    "versionDisclosure": "This consent covers usage.v5 / usage-consent.v5: 87 capabilities and the same two inventory totals. New booleans distinguish real CMS/template/branding/SEO/category/event-type edits and actual template-email transport acceptance, including background sends, from defaults, unchanged saves, previews and tests. No content, recipient, template key, action timestamp or frequency is collected. Observations begin only after accepted consent; false does not mean an installation still uses defaults. Previous versions keep their meanings and scope until upgrade; queued packets stay unchanged and markers restart after confirmation.",
+    "currentSchema": "Current reporting schema: {{schema}}",
+    "reviewUpgrade": "Upgrade to usage.v5",
+    "upgrade": "Explicitly agree to usage.v5",
+    "upgradeExplanation": "Your existing participation keeps its current scope. Review the expanded catalog and the two inventory totals before deciding whether to upgrade. Declining does not end participation.",
+    "upgradePending": "The signed consent upgrade is pending confirmation. Only the previously accepted scope is collected. Retry when the collector is available, or disable participation to stop and delete.",
+    "pendingBlocksActions": "The v5 upgrade and the usage portal are unavailable until the pending report is retried or delivered — use \"Retry / send if due\" above.",
+    "pendingBlocksPortal": "The usage portal is unavailable until the pending report is retried or delivered — use \"Retry / send if due\" above.",
+    "catalog": {
+      "crm": {
+        "name": "Client management",
+        "configured": "The clients capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "crm_quotes": {
+        "name": "Quotes",
+        "configured": "The quotes capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "crm_invoices": {
+        "name": "Invoices",
+        "configured": "The bills capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "crm_contracts": {
+        "name": "Contracts",
+        "configured": "The contracts capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "crm_projects": {
+        "name": "Projects",
+        "configured": "The projects capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "crm_calendar": {
+        "name": "Admin calendar",
+        "configured": "The calendar capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "crm_hours": {
+        "name": "Hours logging",
+        "configured": "The hoursLogging capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "customer_portal": {
+        "name": "Customer portal",
+        "configured": "The customerPortal capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "accounting": {
+        "name": "Accounting",
+        "configured": "The accounting capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "workflows": {
+        "name": "Workflows",
+        "configured": "The workflows capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "newsletters": {
+        "name": "Newsletters",
+        "configured": "The newsletters capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "face_recognition": {
+        "name": "ML face recognition",
+        "configured": "The faces capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "custom_css": {
+        "name": "Custom CSS",
+        "configured": "Custom CSS is configured globally or applied through a gallery/theme/template; CSS text is not sent.",
+        "used": "Applied CSS observed after consent, without observing visitors."
+      },
+      "oauth": {
+        "name": "Admin SSO",
+        "configured": "Admin OIDC is enabled and issuer/client configuration is present; no provider or credential values.",
+        "used": "Successful admin SSO login; no account, identity-provider or session details."
+      },
+      "smtp": {
+        "name": "SMTP delivery",
+        "configured": "An outgoing SMTP host is configured; no host, account, address or credentials.",
+        "used": "A successful explicitly initiated admin SMTP test/send; no recipients or messages."
+      },
+      "whatsapp": {
+        "name": "WhatsApp integration",
+        "configured": "The WhatsApp capability is enabled and a usable configuration is present; no phone number, token or template.",
+        "used": "Successful admin integration test; no recipient, message or delivery history."
+      },
+      "backup": {
+        "name": "Backups",
+        "configured": "A full or database backup schedule is enabled; no schedule, path, storage sizes or backup names.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "s3_storage": {
+        "name": "S3 storage",
+        "configured": "S3 is configured for media or backups; no bucket, endpoint, credentials or object keys.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "share_mounts": {
+        "name": "External folders",
+        "configured": "At least one gallery uses an external folder; only existence, no folder paths or gallery identifiers.",
+        "used": "An admin initiated an accepted external-folder import; no scanned paths, files or counts."
+      },
+      "galleries": {
+        "name": "Gallery management",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "photo_management": {
+        "name": "Media management",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "photo_exports": {
+        "name": "Admin media export",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "photo_processing": {
+        "name": "Media maintenance tools",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "archive_management": {
+        "name": "Gallery archives",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "gallery_sharing": {
+        "name": "Gallery sharing and QR",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "short_links": {
+        "name": "Short links",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "gallery_categories": {
+        "name": "Photo categories",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "event_types": {
+        "name": "Event types and presets",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "slideshow": {
+        "name": "Live slideshow",
+        "configured": "The slideshow capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "transfers": {
+        "name": "PicTransfer",
+        "configured": "The transfers capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "video_uploads": {
+        "name": "Admin video uploads",
+        "configured": "Video extensions are allowed in global upload settings; no uploaded-file metadata.",
+        "used": "At least one admin video file was successfully stored/accepted; no names, formats, lengths, sizes or processing/visitor history."
+      },
+      "camera_raw_uploads": {
+        "name": "Admin camera RAW uploads",
+        "configured": "Camera RAW (DNG) is allowed in global upload settings; no camera models or EXIF.",
+        "used": "At least one admin camera RAW upload was stored/accepted; only the capability bit, no filename or metadata."
+      },
+      "messaging": {
+        "name": "Messaging tools",
+        "configured": "The messaging capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "incoming_mail": {
+        "name": "IMAP intake",
+        "configured": "Incoming mail is enabled and an IMAP configuration is present; no mailbox, server, folders or credentials.",
+        "used": "A successful explicit admin connection test or non-skipped manual poll; no background intake, messages, attachments or counts."
+      },
+      "reminder_emails": {
+        "name": "Automatic event reminders",
+        "configured": "The reminderEmails capability switch is effectively enabled; only a boolean."
+      },
+      "email_templates": {
+        "name": "Email templates",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "email_webhook": {
+        "name": "Email webhook transport",
+        "configured": "Both email webhook settings are present; no URL or secret.",
+        "used": "Successful explicitly initiated admin send/test through the webhook transport; no recipients, messages or automatic deliveries."
+      },
+      "accounting_incoming_invoices": {
+        "name": "Incoming invoices",
+        "configured": "The incomingInvoices capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "accounting_expenses": {
+        "name": "Expenses",
+        "configured": "The expenses capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "accounting_tax_report": {
+        "name": "Tax reports",
+        "configured": "The taxReport capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "accounting_ledger": {
+        "name": "Ledger and accounting export",
+        "configured": "The accounting capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "crm_installments": {
+        "name": "Installment-plan tools",
+        "configured": "Quotes or invoices are enabled; no actual payment plans, amounts or statuses are inspected.",
+        "used": "An admin saved an installment plan; no dates, amounts, currencies, payment status or document IDs."
+      },
+      "document_templates": {
+        "name": "Document presets and blocks",
+        "configured": "Quotes or contracts are enabled, making document presets/blocks available; no template content.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "cms": {
+        "name": "CMS pages",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "public_site": {
+        "name": "Public landing page",
+        "configured": "The public landing-page setting is enabled; no page HTML, texts, domains or visitors."
+      },
+      "branding": {
+        "name": "Branding settings",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "seo_customization": {
+        "name": "SEO settings",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "admin_management": {
+        "name": "Admin and role management",
+        "configured": "The userManagement capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "api_integration": {
+        "name": "HTTP API integration",
+        "configured": "An unrevoked, unexpired API credential exists; no tokens, names, scopes or owner data.",
+        "used": "Successful authenticated HTTP API capability call; only this bit, never URLs, request values, token/owner IDs or call counts. Does not trigger a report."
+      },
+      "webhooks": {
+        "name": "Outbound webhooks",
+        "configured": "At least one active webhook is configured; no destinations, subscriptions, secrets or delivery logs.",
+        "used": "Successful explicit admin webhook test/replay; no automatic or visitor-triggered deliveries."
+      },
+      "restore": {
+        "name": "Restore",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "portable_backup": {
+        "name": "Portable PicPeak export/import",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "database_backup": {
+        "name": "Database backups",
+        "configured": "Scheduled database backups are enabled; no schedules, file names or database contents.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "s3_photo_storage": {
+        "name": "S3 media storage",
+        "configured": "S3 is the configured media backend and required credentials are present; no values are sent.",
+        "used": "Successful admin media storage/accepted upload to S3; no buckets, objects or sizes."
+      },
+      "s3_backups": {
+        "name": "S3 backup destination",
+        "configured": "The configured backup destination is S3 with a bucket present; no bucket or credentials.",
+        "used": "An admin started a backup to the configured S3 destination or a successful S3 test upload; local exports never imply S3 use."
+      },
+      "analytics_dashboard": {
+        "name": "Existing analytics module",
+        "configured": "The analytics capability switch is effectively enabled; only a boolean.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "feedback_moderation": {
+        "name": "Feedback moderation",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "guest_management": {
+        "name": "Guest administration tools",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "A documented successful authenticated admin capability operation was observed since consent to this schema. No actor, operation history, parameters or counts."
+      },
+      "gallery_feedback_likes": {
+        "name": "Gallery likes enabled",
+        "configured": "Enabled in applicable gallery/global configuration; only existence across the installation, never gallery IDs or counts."
+      },
+      "gallery_feedback_ratings": {
+        "name": "Gallery star ratings enabled",
+        "configured": "Enabled in applicable gallery/global configuration; only existence across the installation, never gallery IDs or counts."
+      },
+      "gallery_feedback_comments": {
+        "name": "Gallery comments enabled",
+        "configured": "Enabled in applicable gallery/global configuration; only existence across the installation, never gallery IDs or counts."
+      },
+      "gallery_feedback_favorites": {
+        "name": "Gallery favorites enabled",
+        "configured": "Enabled in applicable gallery/global configuration; only existence across the installation, never gallery IDs or counts."
+      },
+      "gallery_feedback_reactions": {
+        "name": "Gallery reactions enabled",
+        "configured": "Enabled in applicable gallery/global configuration; only existence across the installation, never gallery IDs or counts."
+      },
+      "gallery_feedback_color_labels": {
+        "name": "Gallery color labels enabled",
+        "configured": "Enabled in applicable gallery/global configuration; only existence across the installation, never gallery IDs or counts."
+      },
+      "gallery_guest_accounts": {
+        "name": "Guest identities enabled",
+        "configured": "Enabled in applicable gallery/global configuration; only existence across the installation, never gallery IDs or counts."
+      },
+      "gallery_guest_uploads": {
+        "name": "Guest uploads enabled",
+        "configured": "Enabled in applicable gallery/global configuration; only existence across the installation, never gallery IDs or counts."
+      },
+      "gallery_downloads": {
+        "name": "Gallery downloads allowed",
+        "configured": "Enabled in applicable gallery/global configuration; only existence across the installation, never gallery IDs or counts."
+      },
+      "download_resolution_picker": {
+        "name": "Download resolution picker enabled",
+        "configured": "Enabled in applicable gallery/global configuration; only existence across the installation, never gallery IDs or counts."
+      },
+      "gallery_client_access": {
+        "name": "Client access enabled",
+        "configured": "Enabled in applicable gallery/global configuration; only existence across the installation, never gallery IDs or counts."
+      },
+      "gallery_watermarks": {
+        "name": "Watermarks enabled",
+        "configured": "Enabled in applicable gallery/global configuration; only existence across the installation, never gallery IDs or counts."
+      },
+      "gallery_image_protection": {
+        "name": "Image protection enabled",
+        "configured": "Enabled beyond the shipped defaults — a stronger protection level, canvas rendering, or right-click disabled — globally or on at least one gallery; only existence across the installation, never gallery IDs or counts."
+      },
+      "gallery_reveal": {
+        "name": "Gallery reveal enabled",
+        "configured": "Enabled in applicable gallery/global configuration; only existence across the installation, never gallery IDs or counts."
+      },
+      "gallery_expiration": {
+        "name": "Gallery expiration configured",
+        "configured": "At least one gallery has an expiry configured; no dates, gallery IDs or counts."
+      },
+      "photo_xmp_export": {
+        "name": "XMP export",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "An admin successfully generated an XMP export; no sidecars, filenames, ratings, selections or counts."
+      },
+      "photo_replacement": {
+        "name": "Photo replacement",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "An admin upload actually replaced a photo successfully; no filenames, matching values, IDs or counts."
+      },
+      "photo_admin_marks": {
+        "name": "Photographer marks",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "An admin successfully saved their own photo mark; no rating, color, photo or admin identity."
+      },
+      "gallery_folders": {
+        "name": "Gallery folders configured",
+        "configured": "An applicable global or gallery category is configured as a folder; no names, contents, counts or visitor activity."
+      },
+      "transfer_upload_links": {
+        "name": "PicTransfer upload links enabled",
+        "configured": "PicTransfer is enabled and a non-deleted transfer allows unexpired uploads; no links, tokens, dates, recipients or uploads."
+      },
+      "workflow_automation_enabled": {
+        "name": "Workflow automation enabled",
+        "configured": "The workflows module and at least one workflow are enabled; no names, graphs, triggers, decisions or runs."
+      },
+      "s3_auto_import": {
+        "name": "S3 automatic import enabled",
+        "configured": "S3 media storage is configured and STORAGE_AUTO_IMPORT is enabled; no bucket, prefix, credentials, polling or imported objects."
+      },
+      "crm_invoice_import": {
+        "name": "Invoice import",
+        "configured": "The required product capabilities are effectively enabled; only a boolean.",
+        "used": "An admin successfully imported an existing invoice; no PDF, invoice number, amount, currency, customer or payment status."
+      },
+      "crm_combined_billing": {
+        "name": "Combined billing",
+        "configured": "The required product capabilities are effectively enabled; only a boolean.",
+        "used": "An admin successfully created a combined bill; no hours, expenses, customer, documents or financial values."
+      },
+      "crm_monthly_billing_manual": {
+        "name": "Manual monthly billing",
+        "configured": "The required product capabilities are effectively enabled; only a boolean.",
+        "used": "An admin successfully released a monthly draft for delivery; actual email delivery is not measured. No scheduler activity, customer, cadence or invoice values."
+      },
+      "crm_document_conversion": {
+        "name": "Document conversion",
+        "configured": "The required product capabilities are effectively enabled; only a boolean.",
+        "used": "An admin successfully converted a quote or contract into a document or gallery; no content, links, acceptance states or automatic workflows."
+      },
+      "gallery_capture_date_sort": {
+        "name": "Capture-date sorting configured",
+        "configured": "A gallery defaults to sorting by capture date; no capture dates, EXIF or visitor sorting actions."
+      },
+      "download_original_filenames": {
+        "name": "Original download filenames enabled",
+        "configured": "The original-download-filenames switch is enabled; no filenames or downloads are read or sent."
+      },
+      "gallery_downloads_restricted": {
+        "name": "Gallery downloads restricted",
+        "configured": "At least one gallery has downloads switched off; only existence across the installation, never gallery IDs or counts."
+      },
+      "cms_content_editing": {
+        "name": "CMS content editing",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "An admin saved a real change to an internal CMS page title or body since consent. Unchanged saves, external links, logos, seeded pages and page views do not count. This does not measure whether anyone read the page."
+      },
+      "email_template_editing": {
+        "name": "Email template customization",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "An admin created a nonempty template or saved a real subject/body change since consent. Defaults, unchanged saves, previews and sending are excluded. This does not establish the current customization of templates edited before consent."
+      },
+      "branding_editing": {
+        "name": "Branding customization",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "An admin changed branding settings, a theme or a logo since consent. Reading settings and unchanged saves do not count. A change can also restore a default; this is not a claim about the current design."
+      },
+      "seo_editing": {
+        "name": "SEO customization",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "An admin saved a real change to an allowlisted SEO setting since consent. Defaults, reading and unchanged saves do not count; no rules, paths or search-engine activity are collected."
+      },
+      "event_type_editing": {
+        "name": "Event type customization",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "An admin created, changed or deleted an event type since consent. Seeded presets, reading and unchanged saves do not count. No names, presets or identifiers are retained."
+      },
+      "category_editing": {
+        "name": "Category customization",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "An admin created, changed or deleted a category since consent. Seeded categories, reading and unchanged saves do not count. No names, memberships or identifiers are retained."
+      },
+      "email_template_delivery": {
+        "name": "Emails sent using templates",
+        "configured": "Built-in capability is available; this is not evidence of use.",
+        "used": "At least one real template email was accepted by SMTP or the configured mail webhook since consent, including background sends. Previews, test messages and template-free messages are excluded. Acceptance does not prove receipt or reading. No template key, recipient, contents, message identifier, send time or count is stored in usage markers."
+      }
+    },
+    "auditTitle": "Export and deletion receipts",
+    "auditDescription": "Download your private audit receipts. PicPeak keeps only the latest export receipt during participation and the latest deletion confirmation. These contain no installation hash, key or report/feedback content. Opt-out removes the local export receipt; the identity-free deletion confirmation remains. The collector does not keep an export/access history.",
+    "auditDownload": "Download privacy receipts",
+    "title": "Product usage & feedback",
+    "noticeTitle": "Help shape PicPeak",
+    "notice": "Optional product usage reports show which features matter to the community. Reporting is off until you choose to participate.",
+    "ignore": "Ignore",
+    "ignoreHint": "If you ignore this, the notice won't appear again — you can still join from Settings → Product usage.",
+    "review": "Review participation",
+    "cancel": "Cancel",
+    "loading": "Loading participation settings…",
+    "failed": "The operation could not be completed. Check the status and try again.",
+    "purpose": "Help prioritize PicPeak features, fixes, and maintenance using coarse information about participating installations.",
+    "consentTitle": "Choose whether to share product usage",
+    "sectionFields": "What a report contains",
+    "sectionExcluded": "What is never included",
+    "sectionTransport": "How it is sent",
+    "sectionVisibility": "Where it is visible",
+    "sectionDeletion": "Leaving and deleting",
+    "sectionFeedback": "Feedback is separate",
+    "excluded": "No visitor activity, clickstreams, per-gallery or per-photo breakdowns, names, emails, domains, filenames, image contents, biometric results, financial values or configuration secrets are included in automatic reports.",
+    "transport": "Your PicPeak backend keeps the signing key and sends signed usage reports to {{collector}} once per UTC day during admin use. Preview reports and download each unique accepted report exactly as first received; transport retries are deduplicated. Rejected attempts and separately submitted feedback are not part of this report export.",
+    "sectionOneWay": "Sending only — no return channel",
+    "oneWay": "PicPeak only sends. It never fetches anything from the collector, never asks it for instructions, and exposes no endpoint the collector could call — there is no scheduled job and no inbound route on this path. From a reply it reads only the acknowledgement for the packet it just sent, and checks every field of that acknowledgement against the packet before accepting it; anything else is discarded. A data export you request yourself is handed to you as a file and is never interpreted or executed. So this channel cannot deliver code, configuration or content into your installation — not even from a collector that has been taken over.",
+    "visibility": "Participating installations can inspect the shared dataset of latest feature combinations and inventory totals, including groups of one, and shared aggregate history. Maintainers can inspect and export all retained original reports and private feedback. This does not authorize publication of private feedback. The schema and source are public. Your fingerprint and data are pseudonymous, not anonymous. Keep your lookup hash private: it grants read-only access to your own reports and the participant dataset.",
+    "deletion": "Disabling immediately stops collection and requests deletion of reports, aggregate contributions, feedback, published items, votes and sessions. During an outage, only credentials needed to finish deletion remain and the UI shows deletion pending. After confirmation, the local hash and key are erased; rejoining creates a new identity. The collector retains a one-way revocation digest and short-lived identity-free abuse counters. PicPeak keeps a downloadable local deletion receipt without the old hash, key or payloads.",
+    "feedbackDisclosure": "Feedback is separate from automatic reports and is sent only when you submit it. Each item is anonymous unless you include a name, and private to maintainers unless you explicitly permit publication. Public items require maintainer review. Marketing use of a testimonial requires separate permission.",
+    "consentCheck": "I have read this disclosure and explicitly agree to participate.",
+    "enable": "Enable product usage",
+    "disable": "Disable & delete my data",
+    "retry": "Retry / send if due",
+    "openUsagePortal": "Open usage portal",
+    "portalReady": "Open the portal in a new tab",
+    "transparency": "Read the public schema & privacy details",
+    "linkCollector": "Where reports are sent",
+    "hash": "Your private lookup hash",
+    "lastReport": "Last accepted report: {{date}} (UTC)",
+    "deliveryProblem": "Delivery needs attention. Collection stops during deletion or an identity conflict. Use retry, or disable participation to delete its data.",
+    "invalidCollectorUrl": "The configured usage collector URL is not valid, so participation cannot be started or delivered. Set USAGE_COLLECTOR_URL to an https origin with no path, query or credentials (or leave it unset to use the default).",
+    "signingKeyUnreadable": "The usage signing key cannot be read, which usually means USAGE_ENCRYPTION_KEY — or JWT_SECRET, which it falls back to — was changed. Reports cannot be sent and the deletion request cannot be signed either. Restore the original encryption material to finish deletion; retrying or disabling will not resolve it on its own.",
+    "schemaNotAccepted": "The collector rejected the packet outright, which means it does not accept this report version yet — usually a collector that has not been upgraded. Retrying will not change that. Nothing has been registered, so you can discard the participation and join again once the collector supports it.",
+    "inspect": "See exactly what is shared",
+    "preview": "Preview next report",
+    "lastPacket": "Last accepted signed usage report",
+    "export": "Download all accepted usage reports",
+    "queued": "The operation is saved for retry. It has not been confirmed as delivered.",
+    "feedbackTitle": "Feedback & feature requests",
+    "kind": "Type",
+    "subject": "Title",
+    "message": "Your message",
+    "includeName": "Include a name with this item",
+    "name": "Display name",
+    "saveName": "Remember this name locally",
+    "saved": "Preference saved. Future items still default to anonymous.",
+    "allowPublic": "I allow this text and included name to be published on the usage portal after review.",
+    "allowMarketing": "I also allow PicPeak to use this testimonial and included name for homepage marketing.",
+    "sendFeedback": "Submit feedback",
+    "feedbackSent": "Feedback received. Publication requires your permission and maintainer review.",
+    "states": {
+      "disabled": "Participation is off",
+      "activation_pending": "Activation pending",
+      "active": "You are participating",
+      "deletion_pending": "Deletion pending",
+      "identity_conflict": "Installation identity conflict"
+    },
+    "stateDetails": {
+      "disabled": "No product usage is collected or sent. You can review the details before deciding.",
+      "activation_pending": "Consent is saved. Registration will be retried when you use PicPeak or choose retry.",
+      "active": "Only the disclosed feature signals are collected. Daily reports run when an admin uses PicPeak.",
+      "deletion_pending": "Collection and reporting are stopped. The signing credentials remain only to finish authenticated deletion. Retry when the collector is reachable.",
+      "identity_conflict": "This may be a restored or cloned installation, or its report sequence no longer matches the collector. Reporting is stopped. Disable and delete the old participation before joining with a new identity; this also deletes data shared by another copy of the same identity."
+    },
+    "kinds": {
+      "feedback": "Private feedback",
+      "feature_request": "Feature request",
+      "testimonial": "Testimonial"
+    },
+    "retryScheduled": "The next automatic attempt is at {{time}}. \"Retry\" sends immediately.",
+    "abandon": "Discard local identity",
+    "abandonExplanation": "The deletion request cannot be signed without the original encryption material. If you cannot restore it, you can discard the local identity: collection and keys are removed here, but the collector does not confirm the deletion.",
+    "abandonExplanationUnregistered": "This participation was never accepted by the collector, so nothing is stored there and there is nothing to delete. You can discard it here and start again at any time.",
+    "abandonConfirm": "This deletes the installation identity, the key material and every local marker. The collector is not notified and keeps the reports already sent — the receipt records that as unconfirmed. You can join again afterwards.",
+    "abandonConfirmUnregistered": "This deletes the local installation identity, the key material and every local marker. The collector never accepted this participation, so nothing is removed anywhere else. You can join again afterwards.",
+    "auditPreviousParticipation": "Deletion confirmations refer to an earlier participation, not the current one.",
+    "inventoryTitle": "Two inventory totals",
+    "inventoryExplanation": "Totals describe currently stored database records, not upload activity or unique files. Thumbnails and videos are excluded from the photo total. Only these two numbers leave the installation.",
+    "inventory": {
+      "galleries": {
+        "name": "Stored galleries",
+        "description": "Current number of gallery records, including drafts, inactive and archived galleries. Deleted galleries are excluded. One total for the installation, no breakdown or identifiers."
+      },
+      "photos": {
+        "name": "Stored photo records",
+        "description": "Current number of non-video photo records, including RAW, guest uploads and records of archived galleries. One total for the installation; not unique files, thumbnails, processing success or photo contents. Deleted records are excluded."
+      }
+    },
+    "builtinLabel": "Built in — availability is not use",
+    "enabledLabel": "Enabled — may be a default"
+  },
   "userManagement": {
     "title": "User Management",
     "subtitle": "Manage admin users and invitations",
@@ -31,7 +599,8 @@
     "cancel": "Cancel",
     "tabs": {
       "users": "Users",
-      "invitations": "Invitations"
+      "invitations": "Invitations",
+      "roles": "Roles"
     },
     "stats": {
       "totalUsers": "Total Users",
@@ -71,7 +640,23 @@
     "confirmCancelInvitation": {
       "title": "Cancel Invitation",
       "message": "Are you sure you want to cancel the invitation for {{email}}?"
-    }
+    },
+    "userActivated": "User reactivated successfully",
+    "activateUserError": "Failed to reactivate user",
+    "userDeleted": "User deleted successfully",
+    "deleteUserError": "Failed to delete user",
+    "activateUser": "Reactivate user",
+    "deleteUser": "Delete user permanently",
+    "confirmActivate": {
+      "title": "Reactivate user?",
+      "message": "Reactivate {{name}}? They will be able to log in again immediately."
+    },
+    "confirmDelete": {
+      "title": "Delete user permanently?",
+      "message": "Permanently delete {{name}}? This cannot be undone. Their pending invitations and API tokens will be removed; records they created elsewhere will be kept but de-attributed."
+    },
+    "activate": "Reactivate",
+    "delete": "Delete permanently"
   },
   "systemHealth": {
     "title": "System health",
@@ -90,7 +675,30 @@
         "error": "Error",
         "queued": "Queued",
         "actions": "Actions"
-      }
+      },
+      "emptyNotAllClear": "Nothing has failed — but see above."
+    },
+    "waitingEmails": {
+      "title": "Waiting to send",
+      "empty": "Nothing waiting — the queue is being worked.",
+      "description": "Queued more than 10 minutes ago, due now, and still unsent. These have not failed — nothing has tried to send them.",
+      "neverAttempted": "never attempted",
+      "attempted": "{{count}} attempt(s), last error: {{error}}",
+      "unknownError": "unknown",
+      "col": {
+        "attempts": "Attempts"
+      },
+      "emptyButUnworked": "Nothing is overdue yet, but nothing is sending either — see the processor above. Anything queued from now on will sit here.",
+      "truncated": "The pending queue is too large to check in full — nothing overdue was found in the rows read, but this is not an all-clear."
+    },
+    "processor": {
+      "title": "Email queue processor",
+      "running": "Running.",
+      "stopped": "Not running on this instance. Queued emails are written to the database but nothing is sending them.",
+      "degraded": "Running, but the last pass could not send: {{error}}",
+      "lastRun": "Last pass {{when}}",
+      "neverRan": "Has not run since this instance started.",
+      "lastResult": "{{sent}} sent, {{failed}} failed"
     }
   },
   "common": {
@@ -152,22 +760,39 @@
     "duplicate": "Duplicate",
     "showAll": "Show all",
     "confirm": "Confirm",
-    "show": "Show"
+    "show": "Show",
+    "poweredBy": "Powered by",
+    "on": "on",
+    "off": "off",
+    "clear": "Clear",
+    "saved": "Saved",
+    "saveFailed": "Save failed",
+    "menu": "Menu",
+    "deleted": "Deleted.",
+    "actions": "Actions",
+    "copyFailed": "Could not copy to clipboard",
+    "searching": "Searching…",
+    "language": "Language"
   },
   "upload": {
     "photoCategory": "Photo Category",
     "noCategory": "No category",
     "eventSpecific": "(Event specific)",
     "clickToUpload": "Click to upload or drag and drop",
-    "fileRequirements": "JPEG, PNG or WebP (max 50MB per file, {{limit}} files per upload)",
+    "fileRequirements": "{{formats}} (max {{sizeLimit}}MB per file, {{limit}} files per upload)",
+    "videoSizeLimit": "Videos: max {{sizeLimit}}MB per file",
     "selectedFiles": "Selected files",
     "uploading": "Uploading...",
     "transferring": "Transferring",
     "processing": "Processing photos...",
     "processingHint": "Files are uploaded. PicPeak is now generating thumbnails and reading metadata. You can leave this page — work continues in the background.",
     "processingProgress": "{{complete}} of {{total}} done",
+    "processingFailed_one": "{{count}} photo failed to process",
+    "processingFailed_other": "{{count}} photos failed to process",
+    "processingStillRunning": "Your upload is still being processed — it will appear in the gallery shortly.",
     "retryFailed": "Retry failed",
     "uploadComplete": "Upload complete!",
+    "partialComplete": "{{uploaded}} of {{total}} files uploaded — {{failed}} could not be uploaded.",
     "someFilesFailed": "Some files failed to upload",
     "failures": {
       "title": "{{count}} file(s) could not be uploaded",
@@ -177,7 +802,11 @@
       "kindProcessing": "Processing failed",
       "transferReason": "Transfer failed",
       "unknownReason": "Unknown error",
-      "unknownFile": "Unknown file"
+      "unknownFile": "Unknown file",
+      "toast_one": "{{count}} file(s) could not be uploaded — see the list below.",
+      "toast_other": "{{count}} file(s) could not be uploaded — see the list below.",
+      "title_one": "{{count}} file(s) could not be uploaded",
+      "title_other": "{{count}} file(s) could not be uploaded"
     },
     "replaceByName": "Replace existing photos with same name",
     "uploadPhotos": "Upload Photos",
@@ -189,15 +818,15 @@
     "limitReached": "Upload limit reached ({{limit}} files per batch)",
     "replacedFiles_one": "{{count}} photo replaced",
     "replacedFiles_other": "{{count}} photos replaced",
-    "processingFailed_one": "{{count}} photo failed to process",
-    "processingFailed_other": "{{count}} photos failed to process",
     "uploadingChunks_one": "{{count}} chunk uploading",
-    "uploadingChunks_other": "{{count}} chunks uploading"
+    "uploadingChunks_other": "{{count}} chunks uploading",
+    "fileTooLarge": "File too large: {{name}} (max {{limit}}MB)"
   },
   "navigation": {
     "dashboard": "Dashboard",
     "events": "Events",
     "archives": "Archives",
+    "transfers": "PicTransfer",
     "messages": "Messages",
     "settings": "Settings",
     "systemHealth": "System health",
@@ -212,6 +841,120 @@
     "accounting": "Accounting",
     "workflows": "Workflows",
     "betaTag": "Beta"
+  },
+  "transfers": {
+    "title": "PicTransfer",
+    "subtitle": "Send original files from any event as a download link.",
+    "new": "New transfer",
+    "create": "Create transfer",
+    "created": "Transfer created",
+    "createFailed": "Could not create transfer",
+    "empty": "No transfers yet. Create one to share files.",
+    "untitled": "Untitled transfer",
+    "linkCopied": "Link copied to clipboard",
+    "copyFailed": "Could not copy link",
+    "copyLink": "Copy link",
+    "downloadAll": "Download all",
+    "expiresOn": "Expires",
+    "disableLink": "Disable link",
+    "reactivate": "Re-activate (14 days)",
+    "reactivated": "Link re-activated",
+    "disabled": "Link disabled",
+    "filesAdded": "Files added",
+    "deleted": "Transfer deleted",
+    "deleteConfirmTitle": "Delete transfer?",
+    "deleteConfirmBody": "This removes the link and any client uploads. Source event photos are not affected.",
+    "addImages": "Add images",
+    "clientUpload": "Client upload",
+    "disableUploads": "Disable",
+    "enableUploads": "Enable upload link",
+    "uploadEnabled": "Upload link enabled",
+    "noUploads": "No files uploaded by the client yet.",
+    "uploadHint": "Enable this to give the client a 6-character code to send you files (logos etc.).",
+    "createAndSend": "Create & send",
+    "uploadedFiles": "Uploaded files",
+    "addFiles": "Add files",
+    "noUploadedFiles": "No uploaded files. Add files from your computer to include them in the download.",
+    "sentTo": "Emailed to",
+    "delivery": {
+      "link": "Share a link",
+      "email": "Send by email"
+    },
+    "col": {
+      "title": "Title",
+      "files": "Files",
+      "status": "Status",
+      "downloads": "Downloads",
+      "expires": "Expires",
+      "uploads": "Uploads"
+    },
+    "status": {
+      "active": "Active",
+      "expired": "Expired",
+      "deleted": "Deleted"
+    },
+    "field": {
+      "title": "Title",
+      "titlePlaceholder": "e.g. Wedding finals for the Smiths",
+      "message": "Message (optional)",
+      "messagePlaceholder": "Shown to the recipient on the download page",
+      "expiresInDays": "Link active for (days)",
+      "maxDownloads": "Max downloads (0 = unlimited)",
+      "allowUploads": "Also give the client an upload link (to send logos etc.)",
+      "files": "Files",
+      "noFiles": "No images selected yet.",
+      "uploadFiles": "Upload your own files",
+      "chooseFiles": "Choose files",
+      "noUploadFiles": "Optionally add files from your computer to send along.",
+      "delivery": "Delivery",
+      "recipients": "Recipient email addresses",
+      "recipientsPlaceholder": "anna@example.com, ben@example.com",
+      "recipientsCount": "{{count}} recipient(s) — each gets the download link",
+      "recipientsHint": "Separate multiple addresses with commas. Each recipient gets the download link.",
+      "recipientsCount_one": "{{count}} recipient(s) — each gets the download link",
+      "recipientsCount_other": "{{count}} recipient(s) — each gets the download link"
+    },
+    "picker": {
+      "title": "Select images from other events",
+      "searchEvents": "Search events…",
+      "pickEvent": "Pick an event to browse its photos",
+      "noPhotos": "No photos in this event",
+      "select": "Select",
+      "deselect": "Deselect",
+      "alreadyAdded": "Added",
+      "selectedCount": "{{count}} selected",
+      "addSelected": "Add selected",
+      "lightbox": "Lightbox",
+      "selectedCount_one": "{{count}} selected",
+      "selectedCount_other": "{{count}} selected"
+    },
+    "public": {
+      "notFoundTitle": "Link not found",
+      "notFoundBody": "This transfer link is invalid or has been removed.",
+      "expiredTitle": "This link has expired",
+      "expiredBody": "Please ask the sender for a new link.",
+      "limitTitle": "Download limit reached",
+      "limitBody": "This transfer has reached its maximum number of downloads.",
+      "availableUntil": "Available until {{date}}",
+      "fileSummary": "{{count}} files",
+      "downloadFile": "Download",
+      "fileSummary_one": "{{count}} files",
+      "fileSummary_other": "{{count}} files"
+    },
+    "upload": {
+      "unavailableTitle": "Upload link unavailable",
+      "unavailableBody": "This upload link is invalid or has expired.",
+      "doneTitle": "Thank you!",
+      "doneBody": "Your files were uploaded successfully.",
+      "uploadMore": "Upload more",
+      "dropzone": "Click to choose files or drag them here",
+      "limits": "Up to {{files}} files, {{mb}} MB each",
+      "tooBig": "Each file must be {{mb}} MB or smaller",
+      "send": "Upload {{count}} files",
+      "failed": "Upload failed. Please try again.",
+      "send_one": "Upload {{count}} files",
+      "send_other": "Upload {{count}} files"
+    }
   },
   "workflows": {
     "title": "Workflows",
@@ -350,15 +1093,24 @@
     "tooManyAttempts": "Too many failed login attempts. Please try again later.",
     "pleaseEnterPassword": "Please enter a password",
     "passwordHint": "The password was provided by the event organizer. Contact them if you don't have it.",
+    "networkError": "Connection failed. Please check your internet connection and try again.",
+    "recaptchaFailed": "Security verification failed. Please reload the page and try again.",
     "iab": {
       "instagram": {
-        "title": "Open this link in your browser",
-        "ios": "Instagram's built-in browser sometimes blocks the password login. Tap the ⋯ menu in the top right, then \"Open in external browser\" (or copy the link and paste into Safari).",
-        "android": "Instagram's built-in browser sometimes blocks the password login. Tap the ⋮ menu in the top right, then \"Open in external browser\" (or copy the link and paste into Chrome)."
+        "blockedTitle": "Instagram's browser can't open this gallery",
+        "blockedIos": "Password login does not work reliably in Instagram's built-in browser. Tap the ⋯ menu in the top right and choose \"Open in external browser\", or copy the link and paste it into Safari.",
+        "blockedAndroid": "Password login does not work reliably in Instagram's built-in browser. Tap the ⋮ menu in the top right and choose \"Open in external browser\", or copy the link and paste it into Chrome.",
+        "copyLink": "Copy link",
+        "linkCopied": "Link copied",
+        "tryAnyway": "Try entering the password here anyway"
       }
     }
   },
   "gallery": {
+    "revealPendingTitle": "The photos are still a surprise",
+    "revealPendingMessage": "The host will reveal the gallery later — check back soon!",
+    "revealScheduledFor": "Reveal scheduled for {{date}}",
+    "revealUploadHint": "You can already add your own photos to the collection:",
     "expires": "Expires",
     "expired": "Expired",
     "contactOrganizer": "Please contact the event organizer if you need access to these photos.",
@@ -413,18 +1165,6 @@
     "searchMemories": "Search memories...",
     "thankYou": "Thank You",
     "thankYouMessage": "For being part of our story and making our special day unforgettable.",
-    "feedback": {
-      "title": "Feedback",
-      "shareThoughts": "Share your thoughts on \"{{name}}\"",
-      "rateThisMoment": "Rate this moment",
-      "comments": "Comments",
-      "noComments": "No comments yet. Be the first!",
-      "yourName": "Your name",
-      "yourEmail": "Your email",
-      "writeLovelyNote": "Write a lovely note...",
-      "postComment": "Post Comment",
-      "anonymous": "Anonymous"
-    },
     "rated": "Rated",
     "commented": "Commented",
     "expiresIn_one": "Gallery expires in {{count}} day",
@@ -459,20 +1199,76 @@
       "emailLabel": "Email (optional)",
       "emailPlaceholder": "you@example.com",
       "submit": "Continue",
-      "alreadyHere": "I've been here before"
+      "returningHint": "Been here before? Your earlier picks are still saved.",
+      "recoverPicks": "Get them back"
     },
     "footer": {
       "forgetMeConfirm": "Your name and selections will be removed from this gallery.",
       "forgetMe": "Forget me ({{name}})",
+      "notYou": "Not you?",
       "socials": "Social media"
     },
     "photosCount_one": "{{count}} photo",
     "photosCount_other": "{{count}} photos",
-    "poweredBy": "Powered by PicPeak",
     "photosSelected_one": "{{count}} photo selected",
     "photosSelected_other": "{{count}} photos selected",
     "downloadSelected_one": "Download {{count}} photo",
     "downloadSelected_other": "Download {{count}} photos",
+    "chooseResolution": "Choose a download size",
+    "resolutionUpTo": "up to {{width}} × {{height}} px",
+    "prepareDownload": "Prepare download",
+    "preparingDownload": "Preparing your download…",
+    "preparingHint": "Resizing photos — this can take a moment for large galleries.",
+    "preparingProgress": "{{count}} photos packaged",
+    "downloadReady": "Your download is ready",
+    "downloadNow": "Download",
+    "downloadPrepFailed": "Preparation failed",
+    "downloadPrepTimeout": "This is taking longer than expected. Please try again.",
+    "people": {
+      "title": "People in this gallery",
+      "showAll": "Show all {{count}}",
+      "show": "Show",
+      "dismiss": "Hide the people bar",
+      "collapsedSummary": "{{count}} people found",
+      "unnamedCount": "{{count}} photos",
+      "filterBy": "Show photos of {{name}}",
+      "filterByUnnamed": "Show photos of this person",
+      "scanning": "Finding people… {{scanned}}/{{total}} photos",
+      "matchAll": "Both people",
+      "matchAny": "Either person",
+      "matchCount": "{{count}} of {{total}} photos",
+      "clear": "Clear",
+      "searchPlaceholder": "Find a person",
+      "noMatches": "No one matches that name.",
+      "privacyNote": "People are detected automatically inside this gallery. Nothing is sent to any external service.",
+      "inThisPhoto": "In this photo:",
+      "downloadThese": "Download these {{count}}",
+      "unnamedCount_one": "{{count}} photo",
+      "unnamedCount_other": "{{count}} photos",
+      "collapsedSummary_one": "{{count}} person found",
+      "collapsedSummary_other": "{{count}} people found",
+      "showAll_one": "Show all {{count}}",
+      "showAll_other": "Show all {{count}}",
+      "matchCount_one": "{{count}} of {{total}} photos",
+      "matchCount_other": "{{count}} of {{total}} photos",
+      "downloadThese_one": "Download this {{count}} photo",
+      "downloadThese_other": "Download these {{count}}"
+    },
+    "colorFilter": "Color",
+    "filterByColor": "Show only {{color}}",
+    "folders": "Folders",
+    "openFolder": "Open folder {{name}}",
+    "folderPhotoCount": "{{count}} photos",
+    "backToGallery": "All photos",
+    "downloadFolder": "Download folder ({{count}})",
+    "downloadFolderCapped": "Download first {{limit}} of {{total}}",
+    "downloadEverything": "Download all photos",
+    "downloadFolder_one": "Download folder ({{count}})",
+    "downloadFolder_other": "Download folder ({{count}})",
+    "folderPhotoCount_one": "{{count}} photos",
+    "folderPhotoCount_other": "{{count}} photos",
+    "preparingProgress_one": "{{count}} photos packaged",
+    "preparingProgress_other": "{{count}} photos packaged",
     "videoFormatUnsupported": "This video format cannot be played in this browser. Download it to watch it.",
     "videoLoadFailed": "This video could not be loaded."
   },
@@ -496,13 +1292,38 @@
     "coverPhotoRemoved": "Cover photo removed",
     "failedToSetCoverPhoto": "Failed to set cover photo",
     "categoryHeroHint": "If no cover photo is set for a category, the default hero photo will be used.",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "failedToReorder": "Failed to update category order",
+    "galleryOrder": "Gallery order",
+    "resetToDefault": "Reset to default",
+    "orderReset": "Reverted to the default order",
+    "orderCustomisedHint": "This gallery uses a custom order. Reset to follow the global default (Settings → Photo Categories).",
+    "orderDefaultHint": "Use the arrows to set the order for this gallery. Otherwise it follows the global default (Settings → Photo Categories).",
+    "sharedBadge": "Shared",
     "downloadsEnabled": "Downloads enabled for this category",
     "downloadsDisabled": "Downloads disabled for this category",
     "enableDownloadsTitle": "Click to enable downloads for this category",
     "disableDownloadsTitle": "Click to disable downloads for this category",
-    "failedToToggleDownloads": "Failed to update download permission"
+    "failedToToggleDownloads": "Failed to update download permission",
+    "folderEnabled": "Photos in this category now sit inside a folder",
+    "folderDisabled": "This category filters the gallery again",
+    "failedToToggleFolder": "Failed to update folder setting",
+    "disableFolderTitle": "Folder: these photos are hidden from the main grid and shown only inside the folder. Click to make it a filter again.",
+    "enableFolderTitle": "Filter: these photos stay in the main grid. Click to turn it into a folder — hides them from the grid, does NOT restrict access."
   },
   "events": {
+    "revealMode": "Reveal mode (hide gallery until reveal)",
+    "revealModeHelp": "Guests can upload but see no photos until you reveal the gallery — manually or at the scheduled time. Slideshow and client access keep working.",
+    "revealAt": "Scheduled reveal (optional)",
+    "revealAtHelp": "Leave empty to reveal manually with the \"Reveal now\" button.",
+    "revealModeStatus": "Reveal mode",
+    "revealed": "Revealed",
+    "hiddenUntilReveal": "Hidden from guests",
+    "revealScheduled": "Scheduled: {{date}}",
+    "revealNow": "Reveal now",
+    "revealedToast": "Gallery revealed — guests can see the photos now",
+    "revealError": "Failed to reveal the gallery",
     "title": "Events",
     "create": "Create",
     "createEvent": "Create Event",
@@ -535,6 +1356,9 @@
     "archived": "Archived",
     "totalSize": "Total Size",
     "shareLink": "Share Link",
+    "qrCode": "QR code",
+    "qrTableCard": "Table card (A6)",
+    "qrPoster": "Poster (A4)",
     "copyLink": "Copy Link",
     "linkCopied": "Link copied!",
     "viewGallery": "View Gallery",
@@ -557,6 +1381,10 @@
     "sourceModeHelp": "Use managed mode for direct uploads or point to a mounted /external-media folder when using local storage.",
     "externalFolder": "External Folder",
     "externalFolderHint": "These folders are read from the /external-media mount inside your container or host.",
+    "externalWatch": "Watch folder for new files",
+    "externalWatchHint": "New images copied into this folder are imported automatically, the same way the Import button does it. Files removed from the folder are never deleted from the gallery.",
+    "externalWatchActive": "Folder is watched — new files are imported automatically.",
+    "externalWatchNoPermission": "Requires the permission to upload photos.",
     "externalFolderRequired": "Please select an external folder before saving.",
     "externalFolderEmpty": "No subfolders",
     "clearSelection": "Clear",
@@ -582,12 +1410,23 @@
       "errors": {
         "slugTaken": "That short URL is already taken — try {{suggested}} instead.",
         "invalidSlug": "Short URLs must be lowercase letters, digits, and hyphens (1–64 chars)."
-      }
+      },
+      "hits_one": "{{count}} hits",
+      "hits_other": "{{count}} hits"
     },
     "resetGalleryPassword": "Reset Gallery Password",
     "resendCreationEmail": "Resend Creation Email",
     "creationEmailResent": "Creation email has been queued for sending",
+    "emailQueuedHint": "The queue processor sends it — check System health if it does not arrive.",
     "failedToResendEmail": "Failed to resend creation email",
+    "showGalleryPassword": "Show password",
+    "hideGalleryPassword": "Hide password",
+    "galleryPasswordLabel": "Gallery password",
+    "clientPinLabel": "Client PIN",
+    "galleryPasswordNotStored": "No stored password for this gallery. Passwords are kept from the moment the setting was switched on; reset the password to store a new one.",
+    "failedToLoadPassword": "Failed to load the stored password",
+    "resendWithStoredPasswordHint": "If a password is stored for this gallery, the email includes it.",
+    "passwordCopied": "Copied",
     "photoStatistics": "Photo Statistics",
     "totalPhotos": "Total Photos",
     "managePhotos": "Manage Photos",
@@ -627,7 +1466,9 @@
       "toastError": "Failed to reset password",
       "toastCopied": "Password copied to clipboard",
       "errorMinLength": "Password must be at least 6 characters",
-      "errorMismatch": "Passwords do not match"
+      "errorMismatch": "Passwords do not match",
+      "hide": "Hide",
+      "show": "Show"
     },
     "themeAndStyle": "Theme & Style",
     "galleryExpiration": "Gallery Expiration",
@@ -650,7 +1491,7 @@
     "disableRightClick": "Block right-click menu",
     "watermarkDownloads": "Add watermark to downloads",
     "enableDevtoolsProtection": "Detect developer tools",
-    "useCanvasRendering": "Canvas rendering (advanced protection)",
+    "useCanvasRendering": "Canvas rendering in the lightbox (advanced protection)",
     "protectionInfo": "Protection features help prevent unauthorized downloads but cannot block all methods.",
     "protectionLevelBasic": "Basic - Right-click blocking only",
     "protectionLevelStandard": "Standard - Keyboard shortcuts blocked",
@@ -661,6 +1502,9 @@
     "heroLogoInherit": "Use branding default",
     "heroLogoShow": "Always show",
     "heroLogoHide": "Always hide",
+    "loginLogoVisible": "Display logo on password page",
+    "loginLogoShow": "Show (default)",
+    "loginLogoHide": "Hide",
     "heroLogoSize": "Logo Size",
     "heroLogoSizeSmall": "Small",
     "heroLogoSizeMedium": "Medium",
@@ -711,7 +1555,13 @@
       "passwordLabel": "Gallery password",
       "passwordPlaceholder": "Enter the gallery password",
       "passwordHelp": "Re-type the password set at creation (or pick a new one). The email includes this exact text; the backend re-hashes it so the gallery login still works.",
-      "errorMinLength": "Password must be at least 6 characters long."
+      "errorMinLength": "Password must be at least 6 characters long.",
+      "notifyLabel": "Send the gallery email now",
+      "notifyHelp": "Uncheck to publish quietly — the gallery goes live and nothing is sent. You can send the email later from this page.",
+      "descriptionQuiet": "Publishing \"{{eventName}}\" makes the gallery accessible. No email will be sent — you can send it later from this page.",
+      "descriptionWhatsapp": "Publishing \"{{eventName}}\" makes the gallery accessible. If WhatsApp is configured, the customer is notified there.",
+      "descriptionAssignedAccount_one": "Publishing \"{{eventName}}\" makes the gallery accessible. The assigned customer account(s) will be notified by email (in their language) that it is available.",
+      "descriptionAssignedAccount_other": "Publishing \"{{eventName}}\" makes the gallery accessible. The assigned customer account(s) will be notified by email (in their language) that it is available."
     },
     "duplicateEvent": "Duplicate gallery",
     "duplicateDialog": {
@@ -849,10 +1699,50 @@
       "placeholder": "Markdown content (e.g. **Special offer:** [book your next session](https://example.com))",
       "preview": "Preview"
     },
+    "infoBanner": {
+      "title": "Info Banner",
+      "help": "A short note shown above the photos in this gallery. \"Inherit\" uses your global default; \"Custom\" overrides it for this event; \"Off\" hides it entirely.",
+      "mode_inherit": "Inherit global default",
+      "mode_custom": "Custom override for this event",
+      "mode_off": "Off (hide for this event)",
+      "placeholder": "Use the menu button in the top-left corner to filter the photos.",
+      "preview": "Preview"
+    },
     "ogShare": {
       "title": "Use hero photo as social-share preview",
       "help": "When this gallery URL is shared on WhatsApp, Facebook, Slack, etc., the link preview will show the hero photo above. The thumbnail is fetched unauthenticated by link-preview crawlers — anyone with the URL effectively makes this image public. Off by default; pick a hero you are comfortable surfacing publicly before enabling.",
       "heroRequired": "Pick a hero photo above first — this option uses it as the WhatsApp / Facebook / Slack preview image."
+    },
+    "publishQuietSuccess": "Gallery published. No email was sent.",
+    "sendGalleryEmail": {
+      "button": "Send gallery email",
+      "help": "Sends the gallery link to the customer. You confirm the password first if the gallery has one.",
+      "confirm": "Send the gallery email to {{recipient}}?",
+      "success": "Gallery email queued to {{recipient}}.",
+      "title": "Send gallery email",
+      "description": "Sends the gallery link for \"{{eventName}}\" to {{recipient}}.",
+      "passwordHelp": "The email includes this exact text. Re-type the gallery password (or pick a new one) — the backend re-hashes it so the login still works."
+    },
+    "bulkArchive": {
+      "title": "Confirm Bulk Archive",
+      "intro_one": "You are about to archive {{count}} event. This action will:",
+      "intro_other": "You are about to archive {{count}} events. This action will:",
+      "effectZip": "Create a ZIP archive of all photos for each event",
+      "effectInaccessible": "Make the galleries inaccessible to guests",
+      "effectDelisted": "Remove the events from active listings",
+      "effectStorage": "Free up storage space by compressing photos",
+      "listHeading": "Events to be archived:",
+      "submit_one": "Archive {{count}} event",
+      "submit_other": "Archive {{count}} events"
+    },
+    "customerPicker": {
+      "help": "Customers added here can log in at /customer/login and view this gallery without entering the per-event password.",
+      "label": "Customer accounts",
+      "removeAria": "Remove {{name}}",
+      "placeholder": "Search by email, name, or company",
+      "searching": "Searching…",
+      "noResultsCanCreate": "No matches. Use “Create new customer” to add one.",
+      "noResultsNoPermission": "No matches, and your role cannot create customers. Ask an administrator to add this customer."
     }
   },
   "settings": {
@@ -864,8 +1754,11 @@
       "siteConfiguration": "Site Configuration",
       "siteUrl": "Site URL",
       "siteUrlHelp": "Used for generating gallery links in emails",
+      "siteUrlEnvPinned": "Pinned by the FRONTEND_URL environment variable, which overrides this setting. Remove it from your .env (or container environment) and restart to manage the address here.",
       "defaultExpiration": "Default Expiration (days)",
       "maxFileSize": "Max File Size (MB)",
+      "maxVideoSize": "Max Video Size (MB)",
+      "maxVideoSizeHelp": "Separate per-file limit for video uploads, so photos can keep a smaller limit.",
       "maxFilesPerUpload": "Max Files per Upload",
       "maxFilesPerUploadHelp": "Maximum number of photos allowed in a single upload batch (1-{{max}}).",
       "maxUploadBatchSize": "Max Upload Batch Size (MB)",
@@ -896,7 +1789,12 @@
       "accountEmailRequired": "Email address is required",
       "accountEmailInvalid": "Enter a valid email address",
       "accountSaveButton": "Save account details",
-      "accountSaveSuccess": "Account details updated"
+      "accountSaveSuccess": "Account details updated",
+      "siteUrlInvalid": "Enter the full address including http:// or https://, for example https://gallery.example.com",
+      "timeFormat": "Time format",
+      "timeFormat24h": "24-hour (14:30)",
+      "timeFormat12h": "12-hour (2:30 PM)",
+      "timeFormatHelp": "Controls how times render across admin views, customer-facing pages, and PDFs. Storage stays 24-hour (HH:mm); only the display switches."
     },
     "publicSite": {
       "badge": "Public Landing",
@@ -955,7 +1853,8 @@
       "capacityRequiredForAvailable": "Enter a total capacity before setting available space.",
       "availableExceedsCapacity": "Available space cannot exceed the total capacity.",
       "storageUsage": "Storage Usage",
-      "unlimited": "Unlimited"
+      "unlimited": "Unlimited",
+      "catalogMeasurement": "Catalogued size — objects live in the configured S3 bucket, not on this disk"
     },
     "security": {
       "title": "Security",
@@ -981,6 +1880,27 @@
       "secretKey": "Secret Key",
       "recaptchaHelp": "Get your reCAPTCHA keys from",
       "saveSecuritySettings": "Save Security Settings",
+      "rateLimitTitle": "API rate limiting",
+      "rateLimitIntro": "Caps how many API requests one client IP may make per window. A visitor over the budget gets 429 responses for the rest of the window, which shows up as a gallery that stops loading, not as an error.",
+      "rateLimitEnabled": "Enable the API rate limiter",
+      "rateLimitWindowMinutes": "Window (minutes)",
+      "rateLimitWindowMinutesHelp": "Sliding window per client IP. 1 to 60.",
+      "rateLimitMaxRequests": "Max requests per window",
+      "rateLimitMaxRequestsHelp": "Budget for API requests that are not exempt. Default 300. 10 to 10000.",
+      "rateLimitAuthMaxRequests": "Failed logins per window",
+      "rateLimitAuthMaxRequestsHelp": "Separate budget for admin login and gallery password checks; only failed attempts count. Default 5. 1 to 100.",
+      "rateLimitSkipAuthenticated": "Do not count authenticated requests",
+      "rateLimitSkipAuthenticatedHelp": "Admin sessions are exempt, and so are a signed-in gallery viewer's own image requests (thumbnails, previews, photos).",
+      "rateLimitPublicOnly": "Count public endpoints only",
+      "rateLimitPublicOnlyHelp": "When on, only /api/public and /api/gallery requests count.",
+      "rateLimitNatNote": "The unit is the client IP. An office, a household or a venue's Wi-Fi share one address and therefore one budget. Behind a reverse proxy the client IP is only correct if TRUST_PROXY covers the proxy; otherwise every visitor shares the proxy's budget. Rejected requests are logged as \"Rate limit exceeded\" in the backend log.",
+      "rateLimitInvalid": "Rate limiter values are out of range: window 1–60 minutes, requests 10–10000, failed logins 1–100. Nothing was saved.",
+      "galleryPasswordsTitle": "Gallery passwords",
+      "galleryPasswordRecoverable": "Keep gallery passwords recoverable",
+      "galleryPasswordRecoverableHelp": "Stores an encrypted copy of each gallery password and client PIN next to the hash, so you can show it on the event page and resend the access email without generating a new password.",
+      "galleryPasswordRecoverableWarningTitle": "This weakens the protection of your galleries",
+      "galleryPasswordRecoverableWarning": "The copy is encrypted with the server secret, but anyone with access to the database and the server configuration — or with admin access here — can read every stored password. Every reveal is written to the activity log. Leave it off unless you need it.",
+      "galleryPasswordRecoverableOffNote": "Switching it off deletes all stored copies. Only passwords set while it is on are kept.",
       "twoFactorTitle": "Two-factor authentication",
       "twoFactorNote": "Two-factor authentication is now managed per admin from Settings → General → Admin Account. Each admin enables it for their own login."
     },
@@ -1014,7 +1934,9 @@
       "pending": "Pending",
       "sent": "Sent",
       "failed": "Failed",
-      "lastUpdate": "Last update"
+      "lastUpdate": "Last update",
+      "emailProcessorStopped": "Not running — queued emails are written but nothing sends them.",
+      "emailProcessorDegraded": "Running, but the last pass could not send: {{error}}"
     },
     "photoDimensions": {
       "title": "Photo Dimensions",
@@ -1075,7 +1997,17 @@
       "enablePhoneField": "Enable phone number field",
       "enablePhoneFieldHelp": "Adds an optional phone number input to the event form. Useful for downstream automations like WhatsApp delivery via n8n. Always optional even when enabled.",
       "defaultFeedbackEnabled": "Enable Guest Feedback by default",
-      "defaultFeedbackEnabledHelp": "Pre-check \"Guest Feedback\" when creating new events. Individual feedback options (likes, ratings, comments) can still be customised per event."
+      "defaultFeedbackEnabledHelp": "Pre-check \"Guest Feedback\" when creating new events. Individual feedback options (likes, ratings, comments) can still be customised per event.",
+      "feedbackTypeDefaultsHelp": "Which feedback types new galleries start with. Existing galleries are not affected — each gallery can still be changed individually.",
+      "defaultAllowRatings": "Star ratings",
+      "defaultAllowLikes": "Likes",
+      "defaultAllowFavorites": "Favorites",
+      "defaultAllowComments": "Comments",
+      "defaultAllowReactions": "Emoji reactions",
+      "defaultAllowColorLabels": "Color labels",
+      "defaultKeybindMode": "Default lightbox shortcuts",
+      "keybindColors": "Colors only — 1 green, 2 yellow, 3 red",
+      "keybindLightroom": "Lightroom — 1-5 stars, 6-9 colors"
     },
     "imageSecurity": {
       "title": "Image Protection",
@@ -1086,9 +2018,8 @@
       "defaultProtectionHelp": "These settings apply to all new events. Individual events can override these defaults.",
       "protectionLevel": "Default Protection Level",
       "imageQuality": "Default Image Quality",
-      "fragmentationLevel": "Fragmentation Level",
       "enableDevtools": "Enable DevTools detection by default",
-      "enableCanvas": "Enable canvas rendering by default (advanced protection)",
+      "enableCanvas": "Enable canvas rendering in the lightbox by default (advanced protection)",
       "rateLimiting": "Rate Limiting",
       "rateLimitingHelp": "Limit how many images can be requested to prevent scraping.",
       "requestsPerMinute": "Requests per minute",
@@ -1101,11 +2032,13 @@
       "blockSuspiciousIps": "Automatically block suspicious IPs",
       "logEvents": "Log security events to database",
       "infoTitle": "About Image Protection",
-      "infoText": "These protection features help prevent casual downloading and copying but cannot block all methods. Determined users may still find ways to capture images. Consider using watermarks and legal agreements for comprehensive protection."
+      "infoText": "These protection features help prevent casual downloading and copying but cannot block all methods. Determined users may still find ways to capture images. Consider using watermarks and legal agreements for comprehensive protection.",
+      "imageQualityHelp": "1-100, higher = better quality",
+      "suspiciousActivityThresholdHelp": "Violations before flagging as suspicious",
+      "autoBlockThresholdHelp": "Violations before auto-blocking IP"
     },
     "moderation": {
       "title": "Moderation",
-      "wordFilters": "Word Filters",
       "description": "Manage words that should be filtered or blocked in comments",
       "addFilter": "Add New Filter",
       "enterWord": "Enter word to filter",
@@ -1212,6 +2145,9 @@
         "custom": "Custom (paste your own script)"
       },
       "providerNoneInfo": "No external tracker injected. The admin dashboard still shows summary cards + the daily chart from PicPeak's own access_logs; the device-breakdown chart uses a coarse user-agent heuristic.",
+      "proxiedNotice": "Served from your own domain",
+      "proxiedNoticeText": "PicPeak loads the tracker script and forwards its events through its own domain, so no Content-Security-Policy or reverse-proxy change is needed — and ad blockers see first-party requests. Your tracker still gets each visitor's IP and user agent (forwarded as X-Forwarded-For), so device and location reporting keeps working. The URL must be reachable from the PicPeak server and resolve to a public address.",
+      "customOnlyCspWarningText": "PicPeak ships with a strict CSP (`script-src 'self'; connect-src 'self'`). Unlike the Umami and Rybbit options above, a pasted snippet is not proxied — add your tracker's domain to BOTH `script-src` (to load the script) and `connect-src` (for the events it sends) in your reverse-proxy or nginx CSP config, otherwise the browser silently blocks it.",
       "rybbitUrl": "Rybbit URL",
       "rybbitUrlHelp": "Your Rybbit instance URL — `https://app.rybbit.io` for the SaaS, or `https://rybbit.yourdomain.com` for self-hosted.",
       "rybbitWebsiteId": "Site ID",
@@ -1221,7 +2157,6 @@
       "customHeadHtml": "Custom <head> HTML",
       "customHeadHtmlHelp": "Paste your tracker's `<head>` snippet (Plausible, Matomo, Pirsch, GA4, GoatCounter, Fathom, Cloudflare Web Analytics, …). Sanitised on save: only `<script>`, `<noscript>`, `<link rel=\"preconnect|dns-prefetch\">` and `<meta>` tags survive, and event-handler attributes are stripped. The admin dashboard's device-breakdown chart falls back to a server-side user-agent heuristic in this mode — pick Umami or Rybbit if you want the tracker-side numbers.",
       "customCspWarning": "Content-Security-Policy reminder",
-      "customCspWarningText": "PicPeak ships with a strict CSP (`script-src 'self'`). If your tracker loads from another domain, add that domain to your reverse-proxy or nginx CSP config — otherwise the browser silently blocks the script.",
       "umamiIntegration": "Umami Analytics Integration",
       "enableUmami": "Enable Umami Analytics",
       "umamiUrl": "Umami URL",
@@ -1242,7 +2177,9 @@
       "uniqueVisitors": "Unique visitors by IP",
       "deviceTypes": "Device types from user agents",
       "privacy": "Privacy",
-      "privacyText": "IP addresses are hashed for privacy. No personal data is stored. Analytics data is retained for 90 days."
+      "privacyText": "IP addresses are hashed for privacy. No personal data is stored. Analytics data is retained for 90 days.",
+      "umamiApiKey": "API key",
+      "umamiApiKeyHelp": "Optional. Required only for the device-breakdown chart on the Analytics dashboard. Generate in Umami → Settings → Profile → API Keys. Stored masked as •••••••• once saved — leave the masked value to keep the existing key."
     },
     "groups": {
       "general": "General",
@@ -1328,7 +2265,41 @@
       "createError": "Failed to create webhook",
       "updateError": "Failed to update webhook",
       "deletedToast": "Webhook deleted",
-      "deleteError": "Failed to delete webhook"
+      "deleteError": "Failed to delete webhook",
+      "deliveries": {
+        "back": "Back to Settings",
+        "notFound": "Webhook not found.",
+        "sendTest": "Send test event",
+        "sendTestHelp": "Fires a synthetic delivery to your receiver with a stub payload, no actual side effects.",
+        "refresh": "Refresh",
+        "send": "Send",
+        "eventType": "Event type",
+        "total_one": "{{count}} total",
+        "total_other": "{{count}} total",
+        "empty": "No deliveries yet. Create an event or send a test event to see something here.",
+        "colTime": "Time",
+        "colEvent": "Event",
+        "colStatus": "Status",
+        "colAttempts": "Attempts",
+        "colHttp": "HTTP",
+        "colLatency": "Latency",
+        "replay": "Replay",
+        "replayEnqueued": "Replay enqueued",
+        "replayError": "Failed to replay",
+        "testEnqueued": "Test event enqueued",
+        "testError": "Failed to send test",
+        "detailTitle": "Delivery #{{id}}",
+        "lastError": "Last error",
+        "responseStatus": "Response status",
+        "responseBody": "Response body (truncated to 1KB)",
+        "payload": "Payload (signed body)",
+        "status": {
+          "all": "all",
+          "pending": "pending",
+          "success": "success",
+          "failed": "failed"
+        }
+      }
     },
     "sectionLabel": "Settings section",
     "navAriaLabel": "Settings navigation",
@@ -1484,10 +2455,20 @@
         "title": "Live Slideshow",
         "description": "A separate fullscreen \"Diashow\" link per event for projectors at live events — auto-picks-up new uploads, with per-event-type presets and global watermark defaults under Settings → Slideshow."
       },
+      "transfers": {
+        "title": "PicTransfer",
+        "description": "Send original files from any event(s) as a secure, token-protected download link, with an optional client-upload code so clients can send you logos and files back. Strictly opt-in.",
+        "sidebar": "PicTransfer"
+      },
       "workflows": {
         "title": "Workflows",
         "description": "Build visual automations on a canvas — triggers, conditions, branches, loops and admin approval gates. Your reminder ladder and booking steps become editable flows. Strictly opt-in.",
         "sidebar": "Workflows"
+      },
+      "faces": {
+        "title": "People in galleries",
+        "description": "Group each gallery's photos by the people in them, so guests can find themselves in two taps and download just their own photos. Runs entirely on your own server in a separate, optional container — nothing is sent anywhere. Detected faces are personal data, so this stays off until you enable it per gallery too.",
+        "lockedSingleContainer": "Not available on the all-in-one image. Face detection needs a separate ML container and competes with image processing for the same CPU and memory, which would slow the whole install down."
       }
     },
     "customerSurface": {
@@ -1533,7 +2514,11 @@
         "hourlyRate": "Default hourly rate",
         "hourlyRatePlaceholder": "e.g. 120.00",
         "hourlyRateHint": "Billing fallback used when a customer has no own rate (hours logging). In {{currency}}, major units. Leave blank to require a per-customer or per-entry rate."
-      }
+      },
+      "rebillAttachProof": "Attach the supplier proof to re-billed invoices by default",
+      "rebillAttachProofHint": "When a captured supplier invoice is re-billed or passed through, attach its stored PDF to the client-invoice email as a separate proof. This is the default — a per-customer override and a per-file choice in the Send dialog can change it each time.",
+      "rebillProofNameFormat": "Proof filename format",
+      "rebillProofNameFormatHint": "Filename for the attached proof PDF. Tokens: {INVOICE}, {SUPPLIER}, {YEAR}, {MONTH}, {SEQ} (or {SEQ:03d}). Leave blank for the default “Beleg-{INVOICE}”. When several proofs ride one invoice, an index is appended automatically. Keep a prefix like “Beleg-” so the proof isn’t named identically to the invoice PDF."
     },
     "slideshow": {
       "title": "Slideshow",
@@ -1609,7 +2594,77 @@
       "setupFailed": "Could not start two-factor setup. Please try again.",
       "enableFailed": "Could not enable two-factor authentication. Check the code and try again.",
       "disableFailed": "Could not disable two-factor authentication. Check the code and try again.",
-      "regenerateFailed": "Could not regenerate recovery codes. Check the code and try again."
+      "regenerateFailed": "Could not regenerate recovery codes. Check the code and try again.",
+      "recoveryCodesRemaining_one": "{{count}} recovery code remaining."
+    },
+    "sso": {
+      "title": "Single Sign-On (OIDC)",
+      "intro": "Let admins sign in through your identity provider (Keycloak, Authentik, Pocket ID, or any OIDC-compliant IdP). Local email/password login stays available as a fallback.",
+      "redirectUri": "Redirect URI (register this on your IdP client)",
+      "issuerUrl": "Issuer URL",
+      "issuerHint": "The base URL that serves /.well-known/openid-configuration.",
+      "clientId": "Client ID",
+      "clientSecret": "Client Secret",
+      "secretSetPlaceholder": "•••••• (saved — type to replace)",
+      "secretUnsetPlaceholder": "Paste the client secret",
+      "secretHint": "Stored encrypted; never shown again. Leave blank to keep the current one.",
+      "scopes": "Scopes",
+      "autoprovision": "Auto-provision unknown users",
+      "autoprovisionHint": "Create an admin account on first SSO login. Off: only existing/linked admins can sign in.",
+      "defaultRole": "Role for new users",
+      "buttonLabel": "Login button label (optional)",
+      "buttonLabelPlaceholder": "Sign in with SSO",
+      "enabled": "Enable SSO login",
+      "enabledHint": "Shows the SSO button on the admin login page. Requires issuer, client ID and secret.",
+      "test": "Test connection",
+      "testHint": "Test runs OIDC discovery against the saved configuration — save first.",
+      "testOk": "Discovery succeeded — issuer is reachable: {{issuer}}",
+      "testFailed": "Discovery failed",
+      "saved": "SSO settings saved",
+      "saveError": "Failed to save SSO settings",
+      "roleMapping": {
+        "title": "Role mapping",
+        "intro": "Assign PicPeak roles from a role or group claim in the ID token. Roles are re-evaluated on every SSO login — the IdP becomes the source of truth.",
+        "enabled": "Enable role mapping",
+        "enabledHint": "Off: existing admins keep their role and new users get the default role above.",
+        "claim": "Roles claim (dot-path)",
+        "claimHint": "Keycloak: realm_access.roles · Authentik: groups · Entra ID: roles or groups",
+        "mappings": "Mappings (IdP value → PicPeak role)",
+        "noMappings": "No mappings yet — without one, no login gets a role from the IdP.",
+        "idpValuePlaceholder": "IdP role or group, e.g. picpeak-admins",
+        "addMapping": "Add mapping",
+        "requireRole": "Require a mapped role to sign in",
+        "requireRoleHint": "Refuse SSO logins whose token maps to no role — only members of the mapped IdP groups get in. The last active Super Admin is never demoted by mapping."
+      },
+      "policy": {
+        "title": "Login policy",
+        "disableLocalLogin": "Disable local password login",
+        "disableLocalLoginHint": "The login page shows only the SSO button and the API refuses password logins. Only possible while SSO is enabled; turning SSO off restores password login automatically.",
+        "breakGlassHint": "Locked out because the IdP is down or misconfigured? Set the environment variable OIDC_BREAK_GLASS=true on the backend and restart — password login comes back immediately.",
+        "logoutFromIdp": "Also sign out of the identity provider",
+        "logoutFromIdpHint": "Logging out of PicPeak also ends the IdP session (RP-initiated logout). Only applies to sessions that signed in via SSO; without this, logging out of PicPeak leaves the IdP session alive and the next SSO click signs straight back in.",
+        "postLogoutRedirectUri": "Post-logout redirect URI (register this on your IdP client, e.g. Keycloak \"Valid post logout redirect URIs\")"
+      }
+    },
+    "downloads": {
+      "title": "Download resolutions",
+      "intro": "The standard size is what every gallery hands out by default. Individual galleries can override this.",
+      "standard": "Standard resolution",
+      "original": "Original (full size)",
+      "picker": "Let guests choose a download size",
+      "pickerHint": "Adds a size picker to bulk downloads. Custom sizes are prepared on demand and are never larger than the standard.",
+      "allowOriginal": "Offer \"Original\" in the picker",
+      "allowOriginalHint": "Off by default: lowering the standard size normally means full-resolution files should not be handed out.",
+      "presets": "Available sizes",
+      "presetsHint": "Sizes are an upper bound — the aspect ratio is kept and photos are never enlarged.",
+      "label": "Label",
+      "width": "Width",
+      "height": "Height",
+      "eventTitle": "Download resolution",
+      "eventIntro": "Override the site-wide download settings for this gallery only. \"Inherit\" follows Settings → Download resolutions.",
+      "inheritWith": "Inherit ({{value}})",
+      "effective": "Currently hands out: {{standard}}",
+      "pickerOn": "guests may choose another size"
     },
     "captureDates": {
       "title": "Capture Dates",
@@ -1621,8 +2676,22 @@
       "noneToFill": "All photos already have a capture date",
       "resultSuccess": "Last run: {{success}} updated, {{noExif}} with no date found, {{failed}} unreachable",
       "skipped": "{{count}} photo(s) were changed by something else while the run was reading them and were not updated.",
-      "description": "Backfill \"Date Taken\" from EXIF for photos imported before capture dates were read. External/reference imports never recorded one, so their galleries sort by import order instead of when the photos were taken."
-    }
+      "description": "Backfill \"Date Taken\" from EXIF for photos imported before capture dates were read. External/reference imports never recorded one, so their galleries sort by import order instead of when the photos were taken.",
+      "skipped_one": "{{count}} photo(s) were changed by something else while the run was reading them and were not updated.",
+      "skipped_other": "{{count}} photo(s) were changed by something else while the run was reading them and were not updated."
+    },
+    "orientationBackfill": {
+      "title": "Photo Orientation",
+      "description": "Re-read EXIF orientation for photos imported before rotation was applied, correct their stored dimensions, and clear the thumbnails, previews and hero images generated from the unrotated originals. Only photos whose orientation actually changed are touched.",
+      "button": "Fix Photo Orientation",
+      "running": "Checking orientation...",
+      "resultSuccess": "Last run: {{checked}} checked, {{corrected}} corrected, {{requeued}} requeued for face scanning, {{failed}} unreachable",
+      "staleTiers": "{{count}} cached size(s) could not be deleted and will keep serving the old orientation — re-run once storage is writable.",
+      "staleTiers_one": "{{count}} cached size(s) could not be deleted and will keep serving the old orientation — re-run once storage is writable.",
+      "staleTiers_other": "{{count}} cached size(s) could not be deleted and will keep serving the old orientation — re-run once storage is writable."
+    },
+    "saved": "Settings saved",
+    "saveError": "Failed to save settings"
   },
   "analytics": {
     "title": "Analytics Dashboard",
@@ -1947,7 +3016,29 @@
       "alignment": "Alignment",
       "alignLeft": "Left",
       "alignCenter": "Center (default — matches footer)",
-      "alignRight": "Right"
+      "alignRight": "Right",
+      "title": "Gallery Promotional Banner",
+      "help": "Markdown shown above or below the gallery footer (e.g. seasonal offer, print discount). Per-event overrides take priority.",
+      "position": "Position",
+      "aboveFooter": "Above footer",
+      "belowFooter": "Below footer",
+      "content": "Content (markdown)",
+      "placeholder": "**Spring offer**: 20% off prints with code SPRING — see the [print shop](https://example.com).",
+      "markdownHelp": "Bold, italic, links, lists, and headings supported. HTML is stripped.",
+      "preview": "Preview"
+    },
+    "infoBanner": {
+      "title": "Gallery Info Banner",
+      "description": "A short note shown at the top of every gallery, above the photos — useful for usage hints. Leave empty to hide it. Individual events can override or switch it off.",
+      "content": "Content (markdown)",
+      "placeholder": "Use the menu button in the top-left corner to filter the photos.",
+      "markdownHelp": "Bold, italic, links, lists, and headings supported. HTML is stripped.",
+      "preview": "Preview"
+    },
+    "socialMedia": {
+      "title": "Social Media",
+      "help": "Add URLs to render social-media icons in the gallery footer. Leave a field empty to hide that icon.",
+      "whatsappHelp": "A wa.me URL or a phone number with country code (will be converted)."
     }
   },
   "admin": {
@@ -1984,6 +3075,7 @@
       "channelBeta": "Beta",
       "beta": "BETA",
       "viewReleaseNotes": "View Release Notes",
+      "viewOnGithub": "View PicPeak on GitHub",
       "updateAvailableShort": "v{{version}} available",
       "upToDate": "You're up to date",
       "updateNow": "Update Now",
@@ -1996,7 +3088,25 @@
         "copyAllCommands": "Copy All Commands",
         "completeChecklist": "Complete the checklist before updating",
         "error": "Failed to load update instructions"
-      }
+      },
+      "viewDetails": "View release notes and upgrade instructions",
+      "registryMoved": {
+        "title": "Pulling from the retired image registry",
+        "body": "This update will not arrive until you change the image path in docker-compose.yml to {{newPath}}. The old path still responds, so `docker compose pull` appears to succeed while serving the same frozen build.",
+        "link": "See migration notes"
+      },
+      "copyFailed": "Could not copy to clipboard",
+      "modalTitle": "Update available",
+      "modalSubtitle": "v{{current}} → v{{latest}}",
+      "howToUpgrade": "How to upgrade",
+      "detectedEnv": "Detected environment: {{env}}",
+      "copyCommand": "Copy command",
+      "releaseNotes": "Release notes",
+      "changelogError": "Could not load release notes. Check the release pages directly on GitHub.",
+      "noReleases": "No release notes available.",
+      "viewOnGitHub": "View on GitHub",
+      "noNotes": "No release notes provided.",
+      "dismissUntilNext": "Dismiss until next version"
     },
     "notifications": "Notifications",
     "markAllRead": "Mark all read",
@@ -2030,6 +3140,10 @@
       "archiveDownloaded": "Archive downloaded for \"{{eventName}}\"",
       "archiveDeleted": "Archive deleted for \"{{eventName}}\"",
       "archiveRestored": "Archive restored for \"{{eventName}}\"",
+      "galleryOpened": "A guest opened the gallery “{{eventName}}”",
+      "galleryDownloaded": "A guest downloaded photos from “{{eventName}}”",
+      "galleryDownloadedCustomer": "Customer downloaded photos from “{{eventName}}”",
+      "photoFavorite": "A photo in “{{eventName}}” was favorited",
       "systemActivity": "System activity: {{type}}",
       "adminProfileUpdated": "Admin profile updated by {{actorName}}",
       "photosUploaded_one": "{{count}} photo uploaded to \"{{eventName}}\"",
@@ -2140,7 +3254,12 @@
       "feedbackModerated": "Feedback moderated",
       "feedbackSettingsUpdated": "Feedback settings updated for {{eventName}}",
       "wordFilterAdded": "Word filter added: {{word}}",
-      "whatsappConfigUpdated": "WhatsApp configuration updated"
+      "whatsappConfigUpdated": "WhatsApp configuration updated",
+      "bulkDeleteCompleted_one": "Bulk delete completed: {{count}} event removed",
+      "bulkDeleteCompleted_other": "Bulk delete completed: {{count}} events removed",
+      "bulkArchiveCompleted_one": "Bulk archive completed: {{count}} event archived",
+      "bulkArchiveCompleted_other": "Bulk archive completed: {{count}} events archived",
+      "cssTemplateRemoteUrlsRemoved": "Remote URLs removed from {{count}} CSS template(s) — see the release notes"
     },
     "notificationToasts": {
       "markedAllRead": "All notifications marked as read",
@@ -2163,6 +3282,7 @@
     "noRecentActivity": "No recent activity",
     "photos": {
       "hidden": "Hidden",
+      "hiddenTooltip": "Hidden from guests — this photo is not shown in the client gallery.",
       "hideSelected": "Hide",
       "showSelected": "Show",
       "hiddenSuccess": "Photos hidden from guests",
@@ -2184,7 +3304,19 @@
         "views": "Views",
         "downloads": "Downloads",
         "likes": "Likes"
-      }
+      },
+      "myMarks": "Your marks",
+      "myMarksHelp": "Only you see these. They never appear in the client gallery, and they export to Lightroom as XMP.",
+      "myRating": "Your rating",
+      "clearRating": "Clear your rating",
+      "rateStars": "Rate {{count}} stars",
+      "markError": "Failed to save your mark",
+      "yourMarkColor": "Your mark: {{color}}",
+      "yourMarkRating": "Your rating: {{count}}",
+      "rateStars_one": "Rate {{count}} stars",
+      "rateStars_other": "Rate {{count}} stars",
+      "yourMarkRating_one": "Your rating: {{count}}",
+      "yourMarkRating_other": "Your rating: {{count}}"
     },
     "events": {
       "tabs": {
@@ -2239,7 +3371,9 @@
         "favorites": "Favorites",
         "comments": "Comments",
         "ratings": "Ratings",
-        "lastSeen": "Last seen"
+        "reactions": "Reactions",
+        "lastSeen": "Last seen",
+        "colorLabels": "Color labels"
       },
       "view": "View details",
       "export": "Export",
@@ -2252,17 +3386,30 @@
         "liked": "Liked",
         "favorited": "Favorited",
         "rated": "Rated",
-        "commented": "Commented"
+        "reacted": "Reacted",
+        "commented": "Commented",
+        "labeled": "Color labels"
       },
       "inviteStatus": {
         "pending": "Pending",
         "redeemed": "Redeemed",
         "revoked": "Revoked"
-      }
+      },
+      "duplicatesFound": "{{guests}} guest entries look like {{groups}} returning visitor(s) — same email, registered more than once. Their picks are split until they are merged.",
+      "reviewDuplicates": "Review",
+      "duplicateBadge": "duplicate?",
+      "duplicateHint": "Another entry on this gallery uses the same email — likely the same person registered twice.",
+      "mergePickKeep": "Choose which entry to keep",
+      "mergePickKeepHint": "Pick the entry to keep",
+      "mergeKeepColumn": "Keep",
+      "mergeKeepRow": "Keep {{name}}",
+      "mergeInclude": "Include {{name}} in the merge"
     },
     "analytics": "Analytics",
     "activities": {
       "event_created": "New event created: {{eventName}}",
+      "gallery_opened": "Gallery “{{eventName}}” was opened",
+      "gallery_downloaded": "Photos were downloaded from “{{eventName}}”",
       "photos_uploaded": "{{count}} photos uploaded to {{eventName}}",
       "event_archived": "Event archived: {{eventName}}",
       "archive_restored": "Archive restored: {{eventName}}",
@@ -2282,7 +3429,9 @@
       "photo_favorite": "Photo favorited in {{eventName}}",
       "photo_rating": "Photo rated in {{eventName}}",
       "photo_comment": "Photo commented in {{eventName}}",
+      "photo_reaction": "Photo reaction in {{eventName}}",
       "guest_feedback_like": "Guest liked a photo in {{eventName}}",
+      "guest_feedback_reaction": "Guest reacted to a photo in {{eventName}}",
       "guest_feedback_favorite": "Guest favorited a photo in {{eventName}}",
       "guest_feedback_rating": "Guest rated a photo in {{eventName}}",
       "guest_feedback_comment": "Guest commented on a photo in {{eventName}}",
@@ -2411,11 +3560,116 @@
       "email_queue_flushed": "Email queue flushed",
       "email_template_created": "Email template created: {{template_key}}",
       "event_duplicated": "Event duplicated from {{source_event_name}}",
-      "whatsapp_config_updated": "WhatsApp configuration updated"
+      "whatsapp_config_updated": "WhatsApp configuration updated",
+      "feature_flags_summary_one": "{{count}} features updated: {{summary}}",
+      "feature_flags_summary_other": "{{count}} features updated: {{summary}}",
+      "feature_flags_updated": "Feature settings updated",
+      "newsletter_created": "Newsletter campaign created",
+      "newsletter_updated": "Newsletter campaign updated",
+      "newsletter_test_sent": "Newsletter test email sent",
+      "newsletter_queued": "Newsletter queued to {{recipients}} recipients",
+      "newsletter_cancelled": "Newsletter campaign cancelled",
+      "newsletter_completed": "Newsletter finished — {{sent}} sent, {{failed}} failed",
+      "newsletter_deleted": "Newsletter campaign deleted",
+      "customer_marketing_opt_out": "Customer newsletter consent changed",
+      "css_template_remote_urls_removed": "Remote URLs removed from {{count}} CSS template(s) — see the release notes"
+    },
+    "people": {
+      "title": "People in this gallery",
+      "subtitle": "Rename, merge people who were split apart, or hide someone from guests.",
+      "select": "Select for merging",
+      "unnamed": "Add a name",
+      "namePlaceholder": "Add a name",
+      "photoCount": "{{count}} photos",
+      "hidden": "hidden from guests",
+      "ignored": "ignored",
+      "renamed": "Name saved",
+      "merged": "People merged",
+      "split": "Split into a new person",
+      "updated": "Updated",
+      "merge": "Merge",
+      "mergeHint": "Tap two or more faces to merge them into one person.",
+      "selectedCount": "{{count}} selected",
+      "coverTruncated": "Showing the {{limit}} highest-confidence faces of this person.",
+      "contextTruncated": "Showing the first {{limit}} appearances of this person.",
+      "contextUnavailable": "No photo could be loaded for this person.",
+      "contextAction": "See this person in their photo",
+      "contextHelp": "The detected face, outlined in its original photo — who they were standing next to is usually what settles whether two similar people are the same one.",
+      "contextNoBox": "This photo has no stored dimensions, so the detected face cannot be outlined.",
+      "contextPrev": "Previous photo of this person",
+      "contextNext": "Next photo of this person",
+      "coverAction": "Choose which photo represents this person",
+      "coverHelp": "Pick the photo that best shows this person. It becomes their avatar here and in the guest-facing people strip.",
+      "coverPick": "Use as cover",
+      "coverSet": "Cover updated",
+      "splitAction": "Split out photos that are someone else",
+      "hideAction": "Hide from guests",
+      "ignoreAction": "Not a real person — ignore",
+      "splitHelp": "Pick the photos that are NOT this person. They become a new entry, and everything else stays.",
+      "splitSelected": "{{count}} selected",
+      "doSplit": "Split out",
+      "empty": "No people detected yet.",
+      "photoCount_one": "{{count}} photo",
+      "photoCount_other": "{{count}} photos",
+      "suggestionsHeading": "These might be the same person. Grouping was not confident enough to merge them on its own.",
+      "suggestionScore": "{{percent}}% alike",
+      "suggestionAccept": "Same person",
+      "suggestionReject": "Not the same",
+      "suggestionDismissed": "Kept separate",
+      "merged_one": "People merged",
+      "merged_other": "People merged",
+      "splitSelected_one": "{{count}} selected",
+      "splitSelected_other": "{{count}} selected",
+      "suggestionsHeading_one": "These might be the same person. Grouping was not confident enough to merge them on its own.",
+      "suggestionsHeading_other": "These might be the same person. Grouping was not confident enough to merge them on its own.",
+      "selectedCount_one": "{{count}} selected",
+      "selectedCount_other": "{{count}} selected"
+    },
+    "faces": {
+      "manage": "Manage people",
+      "visibleToGuests": "({{count}} shown to guests)",
+      "title": "People in this gallery",
+      "subtitle": "Group photos by the people in them, so guests can find and download their own.",
+      "consentNotice": "Detected faces are personal data, and in the EU they count as a special category. You are the controller for this gallery: make sure you have a lawful basis for the people in these photos before switching this on. Nothing leaves your server — detection runs in your own container.",
+      "consentLearnMore": "Read the guidance",
+      "enable": "Detect people in this gallery",
+      "enableHint": "Existing photos are scanned in the background. Faces and their numeric signatures are stored in your database; they are never included in backups or exports.",
+      "visible": "Show the people bar to guests",
+      "visibleHint": "Off means you get the grouping as a private tool and guests see an unchanged gallery.",
+      "previewNotice": "Scanning works on the preview-sized copy of each photo. Galleries that have not generated previews yet will create them during the first scan, which uses additional CPU and disk space.",
+      "scanning": "Scanning… {{scanned}} of {{total}} photos",
+      "status": "{{scanned}} / {{total}} photos scanned · {{people}} people",
+      "failed": "{{count}} failed",
+      "queued": "Scanning {{count}} photos for people…",
+      "rescan": "Re-scan",
+      "rescanQueued": "Re-scan queued",
+      "recluster": "Re-group people",
+      "reclustered": "People regrouped",
+      "delete": "Delete all face data",
+      "deleted": "Face data deleted",
+      "confirmDelete": "Delete all detected people and face data for this gallery? This cannot be undone. Photos are not affected.",
+      "autoCategories": "Sort photos into categories automatically",
+      "autoCategoriesHint": "Uses the number of faces to file photos as Details, Portraits, Small groups or Groups. Applies to every gallery, only ever fills an empty category, and never changes one you set yourself.",
+      "sidecarUnreachable": "Can't reach the face-detection service at {{url}}, so the {{pending}} queued photos aren't being processed. Nothing is lost — the scan resumes on its own once the service is up. Start it with `docker compose --profile faces up -d`, and note it exits immediately unless FACE_ML_TOKEN is set to the same value as the backend — there is no default.",
+      "sidecarUnauthorized": "The face-detection service at {{url}} is rejecting our token, and photos are being marked failed rather than retried. Make FACE_ML_TOKEN identical on the backend and the picpeak-ml container, restart both, then use Re-scan — fixing the token alone will not reprocess the photos that already failed.",
+      "sidecarRejected": "{{url}} answered, but not like the face-detection service — photos are being marked failed rather than retried. Check FACE_ML_URL points at the picpeak-ml container and that nothing is proxying that address, then use Re-scan for the photos that already failed.",
+      "sidecarStateNow": "Service state right now — some of the failures above may have a different cause, but a re-scan will not succeed until this is fixed:",
+      "consolidated_one": "Grouping merged {{count}} look-alike pair automatically after the last scan. Open Manage people to check it — anything merged wrongly can be separated again with Split.",
+      "consolidated_other": "Grouping merged {{count}} look-alike pairs automatically after the last scan. Open Manage people to check them — anything merged wrongly can be separated again with Split.",
+      "queued_one": "Scanning {{count}} photo for people…",
+      "queued_other": "Scanning {{count}} photos for people…",
+      "visibleToGuests_one": "({{count}} shown to guests)",
+      "visibleToGuests_other": "({{count}} shown to guests)",
+      "failed_one": "{{count}} failed",
+      "failed_other": "{{count}} failed"
     },
     "catalogedMedia": "{{size}} catalogued",
+    "storageUnavailable": "unavailable",
     "catalogedMediaOnly": "catalogued — objects live in S3",
-    "storageUnavailable": "unavailable"
+    "viewReleaseNotes": "View release notes on GitHub",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "viewOnGithub": "View PicPeak on GitHub"
   },
   "acceptInvitation": {
     "title": "Accept Invitation",
@@ -2469,6 +3723,7 @@
     }
   },
   "errors": {
+    "downloadFailed": "Download failed",
     "galleryNotFound": "Gallery Not Found",
     "galleryNotFoundMessage": "This gallery does not exist or has been removed.",
     "somethingWentWrong": "Something went wrong",
@@ -2580,7 +3835,11 @@
       "noFolders": "No folders returned by the server.",
       "detectFailed": "Could not detect folders.",
       "requiredFields": "Host, port and username are required.",
-      "savedToast": "Incoming mail settings saved."
+      "savedToast": "Incoming mail settings saved.",
+      "pollOk_one": "Checked mailbox — {{count}} new email(s) ingested.",
+      "pollOk_other": "Checked mailbox — {{count}} new email(s) ingested.",
+      "foldersDetected_one": "{{count}} folders found.",
+      "foldersDetected_other": "{{count}} folders found."
     },
     "received": {
       "tab": "Received emails",
@@ -2619,7 +3878,11 @@
         "created": "Queued",
         "sent": "Sent",
         "event": "Event"
-      }
+      },
+      "retries_one": "{{count}} retries",
+      "retries_other": "{{count}} retries",
+      "pagination_one": "Page {{page}} of {{total}} · {{count}} emails",
+      "pagination_other": "Page {{page}} of {{total}} · {{count}} emails"
     },
     "commonSmtpSettings": "Common SMTP Settings:",
     "editTemplate": "Edit Template",
@@ -2716,7 +3979,10 @@
       "requiredFields": "Host, port and username are required.",
       "testOk": "Connected to {{folder}} — {{messages}} messages, {{unseen}} unread.",
       "testFailed": "Connection failed."
-    }
+    },
+    "signatureOn": "Footer signature is on — your business address is appended to automatic emails. Replies you write in Messages are sent as typed.",
+    "signatureOff": "Footer signature is off — emails show the logo and company name only.",
+    "signatureEdit": "Edit in Business profile"
   },
   "cms": {
     "title": "CMS Pages",
@@ -2745,7 +4011,77 @@
     "noLogo": "no override",
     "replaceLogo": "Replace Logo",
     "uploadLogo": "Upload Logo",
-    "clearLogo": "Use site default"
+    "clearLogo": "Use site default",
+    "editor": {
+      "placeholder": "Start typing your content here...",
+      "viewEdit": "Edit",
+      "viewPreview": "Preview",
+      "viewSplit": "Split",
+      "save": "Save",
+      "help": "Help & Keyboard Shortcuts",
+      "enterFullscreen": "Enter Fullscreen",
+      "exitFullscreen": "Exit Fullscreen",
+      "linkUrlPlaceholder": "Enter URL...",
+      "addLink": "Add Link",
+      "wordCount_one": "{{count}} words",
+      "wordCount_other": "{{count}} words",
+      "charCount_one": "{{count}} characters",
+      "charCount_other": "{{count}} characters",
+      "lineBreakHint": "Press Shift+Enter for line break, Enter for new paragraph",
+      "helpTitle": "Editor Help & Keyboard Shortcuts",
+      "helpFormatting": "Text Formatting",
+      "helpHeadings": "Headings",
+      "helpLists": "Lists & Blocks",
+      "helpAlignment": "Text Alignment",
+      "helpAlignmentClick": "Click alignment buttons in toolbar",
+      "helpAlignmentScope": "Works on paragraphs and headings",
+      "helpLineBreaks": "Line Breaks",
+      "helpNewParagraph": "New paragraph",
+      "helpLineBreak": "Line break (preserves formatting)",
+      "helpNavigation": "Navigation",
+      "tool": {
+        "heading1": "Heading 1 (Ctrl+Alt+1)",
+        "heading2": "Heading 2 (Ctrl+Alt+2)",
+        "heading3": "Heading 3 (Ctrl+Alt+3)",
+        "heading4": "Heading 4 (Ctrl+Alt+4)",
+        "heading5": "Heading 5 (Ctrl+Alt+5)",
+        "heading6": "Heading 6 (Ctrl+Alt+6)",
+        "bold": "Bold (Ctrl+B)",
+        "italic": "Italic (Ctrl+I)",
+        "inlineCode": "Inline Code (Ctrl+E)",
+        "codeBlock": "Code Block (Ctrl+Alt+C)",
+        "bulletList": "Bullet List (Ctrl+Shift+8)",
+        "numberedList": "Numbered List (Ctrl+Shift+9)",
+        "blockquote": "Blockquote (Ctrl+Shift+B)",
+        "addLink": "Add Link (Ctrl+K)",
+        "horizontalRule": "Horizontal Rule",
+        "alignLeft": "Align Left",
+        "alignCenter": "Align Center",
+        "alignRight": "Align Right",
+        "justify": "Justify",
+        "clearFormatting": "Clear Formatting",
+        "undo": "Undo (Ctrl+Z)",
+        "redo": "Redo (Ctrl+Y)",
+        "boldShort": "Bold",
+        "italicShort": "Italic",
+        "inlineCodeShort": "Inline code",
+        "addLinkShort": "Add link",
+        "heading1Short": "Heading 1",
+        "heading2Short": "Heading 2",
+        "heading3Short": "Heading 3",
+        "heading4Short": "Heading 4",
+        "heading5Short": "Heading 5",
+        "heading6Short": "Heading 6",
+        "bulletListShort": "Bullet list",
+        "numberedListShort": "Numbered list",
+        "blockquoteShort": "Blockquote",
+        "codeBlockShort": "Code block",
+        "undoShort": "Undo",
+        "redoShort": "Redo"
+      }
+    },
+    "showInFooter": "Show in gallery footer",
+    "showInFooterHelp": "When off, this page is hidden from the public gallery footer. The page itself remains accessible at its direct URL."
   },
   "eventTypes": {
     "title": "Event Types",
@@ -2800,7 +4136,27 @@
   "backup": {
     "picpeak": {
       "restoreIntro": "Upload a .picpeak taken from this or another instance. Restoring a SQLite backup onto a PostgreSQL instance is supported (the upgrade path); other engine combinations must match.",
-      "crossEngineNote": "Cross-engine restore: a SQLite backup was converted onto this PostgreSQL instance."
+      "crossEngineNote": "Cross-engine restore: a SQLite backup was converted onto this PostgreSQL instance.",
+      "downloadFailed": "Could not create the backup file.",
+      "title": "Portable backup (.picpeak)",
+      "intro": "Download a single self-contained file, then upload it on another instance to clone this one — all through the browser.",
+      "includePhotos": "Include original gallery photos (larger file)",
+      "secretsWarning": "This file contains secrets in plain text (email password, admin credentials, API keys). Store it securely and only transfer it over trusted channels.",
+      "download": "Download .picpeak",
+      "externalPathsFailed": "Backup restored, but external photo paths could not be converted — those originals will not load until this is retried.",
+      "restoreDone": "Backup restored.",
+      "reloginRequired": "Restore complete — please sign in again.",
+      "restoreFailed": "Restore failed.",
+      "restoreTitle": "Restore from a .picpeak",
+      "chooseFile": "Choose .picpeak file…",
+      "restoreSummary": "{{tables}} tables and {{files}} files restored.",
+      "externalPathsFailedDetail": "External photo paths were not converted, so every referenced original is currently unreachable. Re-run the restore or the pending migrations once the cause is resolved.",
+      "externalMediaNote": "This backup references an external-media library. Make sure external-media routing is configured on this instance.",
+      "externalMediaLink": "Setup guide",
+      "reload": "Reload app",
+      "confirmTitle": "Restore will delete all current data",
+      "confirmBody": "This permanently replaces ALL data on this instance with the uploaded backup, except your current account. This cannot be undone.",
+      "confirmRestore": "Delete & restore"
     },
     "title": "Backup Management",
     "subtitle": "Manage system backups, configure automated backups, and restore from previous backups.",
@@ -2954,6 +4310,15 @@
         "good": "Good",
         "warning": "Warning",
         "critical": "Critical"
+      },
+      "lastSuccessful": "Last successful backup",
+      "lastAttempt": "Last attempt",
+      "zombieRuns_one": "{{count}} backup(s) running >30min — may have crashed without completing",
+      "zombieRuns_other": "{{count}} backup(s) running >30min — may have crashed without completing",
+      "status": {
+        "completed": "Completed",
+        "failed": "Failed",
+        "running": "Running"
       }
     },
     "configuration": {
@@ -3032,7 +4397,8 @@
       "messages": {
         "requiredFields": "Please fill in all required fields",
         "connectionSuccess": "Connection test successful!",
-        "connectionFailed": "Connection test failed"
+        "connectionFailed": "Connection test failed",
+        "invalidCron": "Please enter a valid cron expression (5 fields)"
       },
       "testingConnection": "Testing connection...",
       "saveSettings": "Save Configuration",
@@ -3113,7 +4479,15 @@
         "encrypted": "Encrypted Backup",
         "encryptedMessage": "You'll need to provide the encryption passphrase to restore this backup.",
         "enterPassphrase": "Enter encryption passphrase",
-        "at": "at"
+        "at": "at",
+        "filesOnlyHint": "This backup has no database dump — restoring it will NOT recover the database (CRM data, customers, quotes, invoices, contracts will be empty after restore).",
+        "filesOnlyBadge": "No DB",
+        "corruptHint": "The manifest file is unreadable — the backup may be incomplete or damaged.",
+        "corruptBadge": "Corrupt",
+        "filesOnlyWarning": {
+          "title": "Selected backup has no database dump",
+          "message": "Restoring this backup will recover files (photos, PDFs) but the database — including admin users, customers, quotes, invoices, contracts, and settings — will NOT come back. Pick a different backup if you have one with a database dump, or proceed only if files-only is what you want."
+        }
       },
       "restoreTypes": {
         "full": {
@@ -3188,7 +4562,12 @@
           "title": "Restore Completed Successfully",
           "message": "Your data has been restored. Please verify everything is working correctly.",
           "verifyIntegrity": "Verify document integrity now"
-        }
+        },
+        "failedSubtitle": "Restore failed — see error below. Destination has been rolled back to its pre-restore state.",
+        "idle": "No restore in progress.",
+        "errorTitle": "Restore did not complete",
+        "errorUnknown": "No error message recorded.",
+        "rolledBack": "Pre-restore safety backup was used to roll back. Destination is in its pre-restore state — safe to retry once the issue above is resolved."
       },
       "actions": {
         "back": "Back",
@@ -3207,7 +4586,6 @@
     }
   },
   "cssTemplates": {
-    "title": "Custom CSS Templates",
     "template": "Template",
     "templateName": "Template Name",
     "enableTemplate": "Enable this template",
@@ -3297,6 +4675,12 @@
     "patternDescription": "Passwords are generated using your event name and date. Example: \"Venue2024$August\" for better security and memorability."
   },
   "feedback": {
+    "reaction": "reaction",
+    "reactions": "Reactions",
+    "reactWith": "React with {{emoji}}",
+    "removeReaction": "Remove {{emoji}} reaction",
+    "reactionError": "Failed to update reaction",
+    "totalReactions": "Total Reactions",
     "comments": "Comments",
     "addComment": "Add Comment",
     "yourName": "Your name",
@@ -3325,6 +4709,8 @@
       "comments": "Comments",
       "commentsDesc": "Text comments on photos",
       "favorites": "Favorites",
+      "reactions": "Emoji Reactions",
+      "reactionsDesc": "One emoji per guest per photo (❤️ 😂 😍 👏 🎉)",
       "favoritesDesc": "Mark photos as favorites",
       "perGuestLimits": "Per-guest limits",
       "perGuestLimitsDesc": "Cap how many photos each guest can favorite or like — useful for \"pick your top N for the album\" workflows. Leave at 0 for no limit. Lowering a cap below an existing guest's count keeps their existing rows; only new adds are blocked until they remove some.",
@@ -3337,6 +4723,9 @@
       "identityModeSimpleDesc": "Anonymous, device-based. All visitors on the same device share state.",
       "identityModeGuest": "Per-guest selections",
       "identityModeGuestDesc": "Each visitor enters their name. Enables per-guest tracking and admin insights.",
+      "identityModeShared": "One shared colour tag",
+      "identityModeSharedDesc": "One colour per photo that everyone sees and anyone can change — for agreeing a single verdict. Likes, ratings and comments stay per-visitor.",
+      "identityModeSharedNote": "Colour tags in this mode have no author, so the admin view cannot show who set one. Existing per-visitor colour labels are kept but not shown while this mode is on, and come back if you switch away.",
       "privacyModeration": "Privacy & Moderation",
       "requireInfo": "Require Name & Email",
       "requireInfoDesc": "Guests must provide name and email to leave feedback",
@@ -3347,7 +4736,14 @@
       "enableRateLimiting": "Enable Rate Limiting",
       "rateLimitingDesc": "Prevent spam by limiting feedback frequency",
       "timeWindow": "Time Window (minutes)",
-      "maxRequests": "Max Requests"
+      "maxRequests": "Max Requests",
+      "colorLabels": "Color Labels",
+      "colorLabelsDesc": "One color per guest per photo, using Lightroom's color set so selections carry over via XMP",
+      "keybindMode": "Keyboard shortcuts",
+      "keybindColors": "Colors only (simplest)",
+      "keybindColorsDesc": "1 = green (1st choice), 2 = yellow (2nd choice), 3 = red (rejected)",
+      "keybindLightroom": "Lightroom defaults",
+      "keybindLightroomDesc": "1-5 set the star rating, 6-9 set red / yellow / green / blue"
     },
     "settingsUpdated": "Feedback settings updated",
     "settingsUpdateError": "Failed to update settings",
@@ -3369,7 +4765,8 @@
       "rating": "Ratings",
       "like": "Likes",
       "comment": "Comments",
-      "favorite": "Favorites"
+      "favorite": "Favorites",
+      "reaction": "Reactions"
     },
     "allStatuses": "All Statuses",
     "status": {
@@ -3432,7 +4829,21 @@
     "viewAllFeedback": "View all feedback & settings",
     "exportShapeLabel": "Shape",
     "exportShapeLong": "Per-action (long)",
-    "exportShapePivot": "Per-guest (pivot)"
+    "exportShapePivot": "Per-guest (pivot)",
+    "colorLabels": {
+      "red": "Red",
+      "yellow": "Yellow",
+      "green": "Green",
+      "blue": "Blue",
+      "purple": "Purple"
+    },
+    "colorLabel": "color label",
+    "colorLabelsTitle": "Color labels",
+    "colorLabelError": "Failed to update color label",
+    "removeColorLabel": "Remove {{color}} label",
+    "setColorLabel": "Mark as {{color}}",
+    "markedAs": "Marked as {{color}}",
+    "alsoMarkedBy": "Also marked by others: {{colors}}"
   },
   "filter": {
     "feedbackFilters": "Feedback Filters",
@@ -3450,7 +4861,11 @@
     "twoStarsPlus": "2+ Stars",
     "threeStarsPlus": "3+ Stars",
     "fourStarsPlus": "4+ Stars",
-    "fiveStarsOnly": "5 Stars Only"
+    "fiveStarsOnly": "5 Stars Only",
+    "colorLabels": "Color labels",
+    "showOnlyColor": "Show only {{color}}",
+    "myColorLabels": "Your marks",
+    "showOnlyMyColor": "Show only my {{color}} marks"
   },
   "setup": {
     "title": "Welcome to PicPeak",
@@ -3472,7 +4887,7 @@
     "restoreIntro": "Upload a .picpeak backup to clone another instance onto this one. This replaces everything except the account you just created.",
     "config": {
       "subtitle": "Set up your features",
-      "intro": "A few details for the features you picked. Anything you skip keeps its default and can be set later in Settings.",
+      "intro": "A few details to finish setting up. Anything you skip keeps its default and can be set later in Settings.",
       "invoicing": "Invoicing details",
       "invoicingDisclaimer": "Used on your invoices. Bank/IBAN and VAT details are your responsibility — verify them with your bank and Treuhänder/tax advisor.",
       "companyName": "Company / legal name",
@@ -3485,7 +4900,7 @@
       "taxId": "Tax number (or VAT ID)",
       "iban": "IBAN (for invoice payments)",
       "email": "Email delivery (SMTP)",
-      "emailHint": "Required to send reminders, invoices and notifications.",
+      "emailHint": "Used to send gallery links to your clients, plus guest invites, expiry warnings and any reminders or invoices you enable. Leave blank to set it up later in Settings → Email.",
       "smtpHost": "SMTP host",
       "smtpPort": "Port",
       "smtpUser": "Username",
@@ -3494,7 +4909,44 @@
       "fromName": "From name",
       "skip": "Skip for now",
       "finish": "Finish setup",
-      "saveFailed": "Some settings could not be saved — you can finish them in Settings."
+      "saveFailed": "Some settings could not be saved — check the values below, or use “Skip for now” and finish in Settings.",
+      "siteUrl": "Public address",
+      "siteUrlHint": "Where your clients will reach this gallery. Prefilled with the address you opened right now — change it if you will put PicPeak behind a domain or reverse proxy. You can update this any time in Settings → General.",
+      "siteUrlInvalid": "Enter the full address including http:// or https://, for example https://gallery.example.com",
+      "siteUrlRejected": "The server rejected this address. Use the full origin, for example https://gallery.example.com or http://192.168.1.50:3000.",
+      "fromEmailRequiredPlaceholder": "From address (required)",
+      "fromEmailRequired": "A From address is required when an SMTP host is set.",
+      "fromEmailInvalid": "Enter a valid email address.",
+      "smtpPortInvalid": "Enter a port between 1 and 65535."
+    },
+    "eventTypes": {
+      "subtitle": "Which events do you photograph?",
+      "intro": "Event types organize your galleries — each one gets its own URL prefix and default theme. The suggestions below are just a starting point: rename them, remove what you don't need, or add your own. This is the only time the built-in types can be deleted; later they can only be renamed or deactivated.",
+      "nameLabel": "Display name",
+      "namePlaceholder": "e.g. Family Shoot",
+      "slugLabel": "URL prefix",
+      "slugPlaceholder": "e.g. family",
+      "add": "Add event type",
+      "hint": "The URL prefix appears in gallery links (e.g. family-smith-2025-06-01). Icons, themes and order can be tuned later in Settings → Event Types.",
+      "atLeastOne": "Keep at least one event type — every gallery needs one.",
+      "loadFailed": "Could not load the event types — you can adjust them later in Settings → Event Types.",
+      "saveFailed": "Some event type changes could not be saved — you can finish them in Settings → Event Types.",
+      "deleteFailed": "A deletion failed — the list has been reloaded. Built-in types can only be deleted here, so retry or continue with them kept."
+    },
+    "usageReporting": {
+      "subtitle": "One more thing",
+      "intro": "Help shape PicPeak with optional product usage reports. Reports use a pseudonymous installation ID; review exactly what is shared before deciding.",
+      "oneWayTitle": "Reporting stays under your control",
+      "oneWayDesc": "PicPeak sends signed usage reports. This channel cannot execute commands on your installation. Photos, customer names, emails and gallery visitor tracking are excluded.",
+      "mutualTitle": "See what everyone else uses",
+      "mutualDesc": "Participants can inspect shared feature combinations and gallery/photo totals, including groups of one. The consent disclosure explains the complete scope.",
+      "feedbackTitle": "Share feedback directly",
+      "feedbackDesc": "Send quick feedback or feature requests straight to the maintainer, right from Settings.",
+      "consentCheck": "I agree to participate — I can turn this off anytime in Settings → Product usage.",
+      "enable": "Yes, I'll participate",
+      "skip": "Maybe later",
+      "enabled": "Thanks for participating!",
+      "enableFailed": "Couldn't enable it just now — you can try again anytime in Settings → Product usage."
     },
     "community": {
       "subtitle": "You're all set",
@@ -3558,7 +5010,6 @@
     "invalidCredentials": "Invalid email or password",
     "generalError": "An error occurred. Please try again.",
     "needHelp": "Need help? Contact",
-    "poweredBy": "Powered by PicPeak",
     "devModeHint": "Development Mode: Use email: admin@example.com, password: admin123",
     "mfa": {
       "title": "Two-factor authentication",
@@ -3577,6 +5028,18 @@
       "sessionExpired": "Your verification session expired. Please sign in again.",
       "locked": "Account temporarily locked due to too many attempts. Try again later.",
       "lockedRetry": "Account temporarily locked. Try again in {{seconds}} seconds."
+    },
+    "ssoDivider": "or",
+    "ssoSignIn": "Sign in with SSO",
+    "ssoOnlyHint": "Password login is disabled on this instance — sign in through your identity provider.",
+    "ssoErrors": {
+      "config": "SSO is misconfigured — check the SSO settings or sign in with email and password.",
+      "state": "The SSO sign-in expired or was tampered with. Please try again.",
+      "idp": "The identity provider rejected the sign-in. Please try again or use email and password.",
+      "inactive": "Your admin account is deactivated.",
+      "not_provisioned": "No admin account matches your SSO identity. Ask an administrator to invite you.",
+      "no_email": "Your identity provider supplied no email address — an account cannot be created.",
+      "no_role": "Your identity provider granted no role that is mapped to this instance — ask an administrator to add you to a mapped group."
     }
   },
   "slideshow": {
@@ -3609,7 +5072,17 @@
       "cool": "Cool",
       "vignette": "Vignette"
     },
+    "orderLabel": "Play order",
+    "order": {
+      "chronological": "Chronological",
+      "random": "Random (shuffle)"
+    },
+    "categoryLabel": "Show only category",
+    "categoryAll": "All photos",
     "watermarkToggle": "Show logo watermark",
+    "qrToggle": "Gallery QR code",
+    "qrDescription": "Show the gallery link as a QR code so guests can scan it straight off the screen.",
+    "qrModeHint": "Position, size and opacity are configured under Settings → Slideshow.",
     "watermarkDescription": "Overlay a white, semi-transparent logo in a corner (like a TV station ident).",
     "watermarkSourceLabel": "Logo",
     "watermarkSource": {
@@ -3702,7 +5175,10 @@
       "copied": "Copied to clipboard.",
       "copyFailed": "Clipboard write blocked. Select the text and copy manually.",
       "download": "Download as file"
-    }
+    },
+    "markSource": "XMP stars & colour from",
+    "markSourceClient": "Client selections",
+    "markSourceMine": "Your marks"
   },
   "photoSort": {
     "defaultSort": "Default Photo Sort",
@@ -3724,7 +5200,8 @@
     "movedToCategory_one": "{{count}} photos moved to {{category}}",
     "movedToCategory_other": "{{count}} photos moved to {{category}}",
     "moveToCategoryFailed": "Failed to move photos to category",
-    "moveToCategory": "Move to Category"
+    "moveToCategory": "Move to Category",
+    "folderOption": "{{name}} (folder — hidden from the main grid)"
   },
   "customer": {
     "login": {
@@ -3747,8 +5224,7 @@
       "adminHint": "Looking for the admin panel? Visit /admin/login.",
       "emailPlaceholder": "you@example.com",
       "passwordPlaceholder": "Your password",
-      "needHelp": "Need help?",
-      "poweredBy": "Powered by PicPeak"
+      "needHelp": "Need help?"
     },
     "acceptInvite": {
       "title": "Set up your account",
@@ -3810,7 +5286,8 @@
       "bills": "Invoices",
       "profile": "Profile",
       "soon": "Soon",
-      "new": "New"
+      "new": "New",
+      "contracts": "Contracts"
     },
     "comingSoon": {
       "tag": "Coming soon"
@@ -3865,7 +5342,9 @@
       "label": "Filter",
       "all": "All",
       "countAll": "{{count}} total",
-      "countFiltered": "{{visible}} of {{total}}"
+      "countFiltered": "{{visible}} of {{total}}",
+      "countAll_one": "{{count}} total",
+      "countAll_other": "{{count}} total"
     },
     "profile": {
       "title": "Customer profile",
@@ -3932,13 +5411,30 @@
       "successToast": "Password updated. Please log in.",
       "invalidSubmission": "Could not update your password.",
       "generalError": "Could not update your password. Please try again."
+    },
+    "contracts": {
+      "title": "Contracts",
+      "disabled": "This feature is currently disabled for your account.",
+      "loadError": "Could not load contracts.",
+      "subtitle": "Every contract your photographer has sent you. Open the signing link on awaiting-signature contracts, or download the signed PDF once both parties have signed.",
+      "empty": "No contracts yet.",
+      "popupBlocked": "Allow pop-ups for this site to download the contract PDF.",
+      "issued": "Issued",
+      "signedByYou": "Signed by you",
+      "counterSigned": "Counter-signed",
+      "openSign": "Open & sign",
+      "downloadSigned": "Download signed PDF",
+      "download": "Download PDF"
     }
   },
   "customers": {
     "field": {
       "featureHoursLogging": "Hours logging",
       "hourlyRate": "Default hourly rate",
-      "hourlyRateHint": "Major units (e.g. 150.00 for {{currency}} 150). Leave blank to require a per-entry override on every block."
+      "hourlyRateHint": "Major units (e.g. 150.00 for {{currency}} 150). Leave blank to require a per-entry override on every block.",
+      "marketingOptOut": "Unsubscribed from newsletters",
+      "marketingOptOutHelp": "When on, this customer is skipped by every newsletter campaign. Emails about their galleries, quotes and invoices are not affected.",
+      "marketingOptOutSince": "Since {{date}}"
     },
     "hours": {
       "section": "Hours",
@@ -3981,7 +5477,8 @@
       "toast": {
         "created": "Entry logged",
         "deleted": "Entry deleted",
-        "billed": "Hours billed"
+        "billed": "Hours billed",
+        "billedCombined": "Invoice created from hours and re-bills."
       },
       "noRate": {
         "title": "No hourly rate configured",
@@ -3996,7 +5493,9 @@
       "error": {
         "noRate": "No hourly rate set for this customer. Enter a rate override, set a rate on the customer, or configure an install-wide default in Settings.",
         "createFailed": "Failed to log entry"
-      }
+      },
+      "unbilledCount_one": "{{count}} unbilled entries totaling {{total}}",
+      "unbilledCount_other": "{{count}} unbilled entries totaling {{total}}"
     },
     "create": {
       "openButton": "Create passive customer",
@@ -4007,10 +5506,13 @@
       "saveAsPassive": "Save as passive customer",
       "saveAndInvite": "Save & send portal invitation",
       "savedPassiveToast": "Passive customer created.",
-      "savedActiveToast": "Customer created and portal invitation sent.",
-      "inviteFailedToast": "Customer saved (passive). Invitation email failed — retry from the customer detail page.",
+      "savedActiveToast": "Customer created and portal invitation queued. It is sent by the email queue — check System health if it does not arrive.",
+      "inviteFailedToast": "Customer saved as PASSIVE — no invitation went out. Retry \"Send portal invitation\" from the customer detail page.",
       "emailRequired": "A valid email is required.",
-      "nameRequired": "Enter at least a company name or a contact name."
+      "nameRequired": "Enter at least a company name or a contact name.",
+      "inviteAlreadyPendingToast": "Customer saved. An invitation for this address is already open — cancel it on the Invitations tab before sending a new one.",
+      "inviteAlreadyActiveToast": "Customer saved. This address already has portal access, so no invitation was needed.",
+      "inviteUnconfirmedToast": "Customer saved, but the invitation could not be confirmed — check the Invitations tab before sending another."
     },
     "passive": {
       "badge": "Passive — admin only",
@@ -4134,7 +5636,11 @@
       "noContracts": "No contracts for this customer yet.",
       "billsSection": "Invoices",
       "noBills": "No invoices for this customer yet.",
-      "manageEvents": "Manage galleries"
+      "manageEvents": "Manage galleries",
+      "rebillsSection": "Re-bills & passthrough",
+      "noRebills": "No re-billed or passed-through supplier invoices for this customer yet.",
+      "companyName": "Company name",
+      "marketingSection": "Newsletter consent"
     },
     "billing": {
       "section": "Billing cadence",
@@ -4159,7 +5665,12 @@
         "title": "Pending in this month's bill",
         "titleManual": "Pending — ships on manual trigger",
         "periodRange": "{{number}} · {{from}} – {{to}}"
-      }
+      },
+      "rebillAttachProof": "Attach supplier proof to re-billed invoices",
+      "rebillAttachProofInherit": "Use tenant default",
+      "rebillAttachProofOn": "Always attach",
+      "rebillAttachProofOff": "Never attach",
+      "rebillAttachProofHint": "Overrides the global default for this customer. The Send dialog still lets you pick individual proofs each time an invoice goes out."
     },
     "reactivate": {
       "button": "Reactivate",
@@ -4191,7 +5702,15 @@
       "addedN": "{{count}} added",
       "removedN": "{{count}} removed",
       "error": "Could not update assignments",
-      "clearSearchAria": "Clear search"
+      "clearSearchAria": "Clear search",
+      "addedN_one": "{{count}} added",
+      "addedN_other": "{{count}} added",
+      "removedN_one": "{{count}} removed",
+      "removedN_other": "{{count}} removed"
+    },
+    "invitePending": {
+      "badge": "Invitation pending",
+      "hint": "An invitation link for this address is open and has not been accepted. That is not proof the email reached them — check System health if they say it never arrived."
     }
   },
   "clients": {
@@ -4211,7 +5730,8 @@
       "calendar": "Calendar",
       "bills": "Invoices",
       "taxReport": "Tax",
-      "development": "Development"
+      "development": "Development",
+      "newsletters": "Newsletters"
     }
   },
   "accounting": {
@@ -4345,7 +5865,10 @@
       "pendingCount_other": "{{count}} items",
       "billPending": "Bill these",
       "bundledToast": "Bundled {{count}} re-bill into one invoice.",
-      "bundledToast_other": "Bundled {{count}} re-bills into one invoice."
+      "bundledToast_other": "Bundled {{count}} re-bills into one invoice.",
+      "amountRequired": "Enter the invoice amount before re-billing (0 is allowed).",
+      "bundledToast_one": "Bundled {{count}} re-bill(s) into one invoice.",
+      "pendingCount_one": "{{count}} item(s)"
     },
     "expense": {
       "kind": "Type",
@@ -4483,7 +6006,13 @@
     },
     "error": {
       "customerMismatch": "That belongs to a different customer than this project."
-    }
+    },
+    "status": {
+      "active": "Active",
+      "archived": "Archived"
+    },
+    "eventCount_one": "{{count}} events",
+    "eventCount_other": "{{count}} events"
   },
   "calendar": {
     "pageTitle": "Calendar",
@@ -4526,7 +6055,8 @@
       "featureOffToast": "Hour logging is disabled.",
       "lockedTooltip": "Already billed — Storno the invoice to edit.",
       "noDescription": "No description.",
-      "untitledCustomer": "Hours"
+      "untitledCustomer": "Hours",
+      "customerLoggingDisabled": "This customer has hour logging disabled. Enable it on the customer's detail page to log hours."
     }
   },
   "hoursLogging": {
@@ -4668,7 +6198,9 @@
       "ledger_account_default_expense": "Default expense account",
       "ledger_account_mileage": "Mileage account",
       "ledger_account_per_diem": "Per-diem account",
-      "ledger_account_rebilled_revenue": "Re-billed expenses (revenue)"
+      "ledger_account_rebilled_revenue": "Re-billed expenses (revenue)",
+      "ledger_vat_map": "VAT code by tax treatment (costs)",
+      "ledger_output_vat_map": "VAT code by revenue rate"
     },
     "vatMap": {
       "title": "VAT code by tax treatment (costs)"
@@ -4796,7 +6328,10 @@
       "reference": "Reference",
       "party": "Customer / supplier",
       "tax": "Tax"
-    }
+    },
+    "cancelledFootnote_one": "{{count}} cancelled invoice(s) — amounts excluded from totals (shown for audit-trail continuity).",
+    "cancelledFootnote_other": "{{count}} cancelled invoice(s) — amounts excluded from totals (shown for audit-trail continuity).",
+    "costsErrorTitle": "Costs could not be loaded"
   },
   "quotes": {
     "errors": {
@@ -4841,7 +6376,14 @@
       "ccPdfEmailPlaceholder": "name@example.com",
       "ccPdfPickFromAdmins": "Pick from admins:",
       "ccPdfCustom": "Custom email",
-      "internalNotes": "Internal notes (not on PDF)"
+      "internalNotes": "Internal notes (not on PDF)",
+      "eventType": "Event type",
+      "eventTypeNone": "— Use default —",
+      "eventTypeHint": "Used for the event created when this quote is accepted.",
+      "bookingWorkflow": "Booking workflow (on acceptance)",
+      "bookingWorkflowNone": "— None —",
+      "bookingWorkflowDisabled": "(disabled)",
+      "bookingWorkflowHint": "The flow that runs when the customer accepts. Leave as None to run no booking flow. The flow must be enabled to fire."
     },
     "responseWindowOpen": "Open until {{at}}",
     "section": {
@@ -4891,7 +6433,21 @@
       "after_event": "after event",
       "after_delivery": "after delivery",
       "fixed_date": "on fixed date"
-    }
+    },
+    "acceptOnBehalf": "Accept on behalf",
+    "confirmAcceptOnBehalf": "Mark this quote as accepted on behalf of the customer? Use only when they have verbally agreed (e.g. on the phone).",
+    "acceptedOnBehalfToast": "Quote marked as accepted.",
+    "convertToInvoice": "Convert to invoice only",
+    "confirmConvertToInvoice": "Convert this quote into invoice(s) only? No gallery / event will be created.",
+    "convertedToInvoiceToast": "{{count}} invoice(s) created from this quote",
+    "convertToContract": "Convert to contract",
+    "confirmConvertToContract": "Draft a contract from this quote? The customer + admin will both sign before event / invoice creation.",
+    "convertedToContractToast": "Contract drafted from this quote.",
+    "contractAlreadyLinkedToast": "A contract was already drafted from this quote.",
+    "pagination_one": "Page {{page}} of {{total}} · {{count}} quotes",
+    "pagination_other": "Page {{page}} of {{total}} · {{count}} quotes",
+    "convertedToInvoiceToast_one": "{{count}} invoice(s) created from this quote",
+    "convertedToInvoiceToast_other": "{{count}} invoice(s) created from this quote"
   },
   "crm": {
     "lineItems": {
@@ -4916,6 +6472,9 @@
       "detailsPlaceholder": "Optional notes — fine print, package inclusions, conditions…",
       "autoTotaledHint": "Total auto-computed from sub-items below",
       "autoTotaledNote": "= sum of sub-items"
+    },
+    "customerPicker": {
+      "search": "Search customer by email or company…"
     }
   },
   "bills": {
@@ -5017,7 +6576,8 @@
       "ccPdfPickFromAdmins": "Pick from admins:",
       "paymentTermHelp": "Net days + Skonto for this invoice. Leave blank to inherit from the source quote or the global CRM defaults.",
       "skontoDisabled": "Disable Skonto for this invoice (suppresses the early-payment-discount block on the PDF and the \"Paid with Skonto\" buttons in the admin email / record-payment dialog).",
-      "sourceContract": "From contract"
+      "sourceContract": "From contract",
+      "status": "Status"
     },
     "import": "Import historical",
     "importTitle": "Import historical invoice",
@@ -5073,6 +6633,20 @@
       "overdue": "Overdue",
       "cancelled": "Cancelled",
       "skipped": "Skipped (empty month)"
+    },
+    "send": {
+      "title": "Send invoice",
+      "proofIntro": "This invoice re-bills captured supplier invoices. Choose which supplier proofs to attach to the email — the invoice PDF is always attached.",
+      "proofsLabel": "Supplier proofs",
+      "selectAll": "Select all",
+      "selectNone": "None",
+      "unknownSupplier": "Supplier",
+      "modePassthrough": "passthrough",
+      "modeRebill": "re-bill",
+      "noProofFile": "No stored proof file",
+      "sendWithCount": "Send with {{count}} proof(s)",
+      "sendWithCount_one": "Send with {{count}} proof(s)",
+      "sendWithCount_other": "Send with {{count}} proof(s)"
     }
   },
   "businessProfile": {
@@ -5125,7 +6699,22 @@
       "defaultLocale": "Default locale",
       "timezone": "Timezone (IANA)",
       "defaultQrFormat": "Default invoice QR",
-      "footerLine": "PDF footer line"
+      "footerLine": "PDF footer line",
+      "timezoneSystemDefault": "System default",
+      "pdfLogoUpload": "PDF letterhead logo (PNG, JPEG, or SVG)",
+      "pdfLogoUploadHelp": "Used on every quote and invoice PDF. SVG is accepted and rasterised to PNG automatically. When empty, the renderer falls back to the global Branding logo.",
+      "pdfLogoHeight": "PDF logo height (pt, 24-200)",
+      "pdfFoldingMarks": "Folding marks on PDF page edge",
+      "pdfShowLogo": "Show logo in PDF letterhead",
+      "pdfShowLogoHelp": "When off, the logo image is suppressed on every PDF even if a logo is uploaded.",
+      "pdfShowCompanyName": "Show company name in PDF letterhead",
+      "pdfShowCompanyNameHelp": "When off, the company-name line is suppressed (useful if the logo is a wordmark already containing the name).",
+      "pdfCompanyNameInline": "Render company name inline with address",
+      "pdfCompanyNameInlineHelp": "When on, the company name appears as a plain line directly above the street address (same size + weight). When off, it renders as a bold title under the logo.",
+      "pdfQuoteShowNetDays": "Show net payment days on quote PDFs",
+      "pdfQuoteShowNetDaysHelp": "When on, quote PDFs include the \"X days from invoice date.\" line in the payment conditions block. Invoices always show this row regardless.",
+      "pdfQuoteShowSkonto": "Show Skonto / early-payment discount on quote PDFs",
+      "pdfQuoteShowSkontoHelp": "When on, quote PDFs include the Skonto offer and the \"Amount with discount\" line. Invoices always show these regardless."
     },
     "qrFormat": {
       "none": "None",
@@ -5143,7 +6732,33 @@
       "makeDefault": "Make default",
       "confirmDelete": "Remove this bank account?"
     },
-    "noBanks": "No bank accounts configured yet."
+    "noBanks": "No bank accounts configured yet.",
+    "foldingMarks": {
+      "none": "None",
+      "half": "Half (148.5mm) — for C5 envelopes",
+      "third": "Thirds (105 + 210mm) — for DL / DIN long envelopes",
+      "both": "All three marks"
+    },
+    "qrDisclaimer": {
+      "title": "QR-bill / bank data — verify before going live",
+      "body": "Picpeak is open source. We render the QR code and IBAN block from the values you typed — we don't validate them. Print a test invoice and scan it with your bank's app before sending real invoices. We are not responsible for any mistakes that come from sending an invoice with bad data on it."
+    },
+    "logoUploadedToast": "PDF logo uploaded.",
+    "logoConfirmClear": "Remove the PDF logo? The renderer will fall back to the Branding logo if one is set.",
+    "logoClearedToast": "PDF logo removed.",
+    "bankUpdatedToast": "Bank account updated.",
+    "emailSignature": {
+      "title": "Email signature",
+      "subtitle": "Append your company details to the footer of every email this installation sends. Built from the address and contact fields above — nothing is duplicated.",
+      "toggle": "Show signature in email footers",
+      "toggleHelp": "When off, emails keep the plain logo + company name footer. Applies to every automatic email — gallery notices, quotes, invoices, reminders — plus test sends and previews. Replies you write yourself in Messages are sent as typed and do not get the signature.",
+      "extra": "Legal line (optional)",
+      "extraPlaceholder": "Handelsregister Vaduz FL-0002.123.456-7",
+      "extraHelp": "Registration number, disclaimer or any line with no field of its own. Plain text, up to 500 characters.",
+      "previewTitle": "Footer preview",
+      "previewOff": "Signature is off — emails show the logo and company name only.",
+      "previewEmpty": "Signature is on but every field above is blank — nothing will be added to the footer."
+    }
   },
   "crmSettings": {
     "savedToast": "CRM settings saved.",
@@ -5219,6 +6834,11 @@
     },
     "crm_invoices_late_fee_label": {
       "label": "Late fee label"
+    },
+    "crm_invoices_vat_note_text": {
+      "label": "VAT / free-text note on invoices",
+      "placeholder": "e.g. Gemäß § 6 Abs. 1 Z 27 UStG 1994 wird keine Umsatzsteuer berechnet (Kleinunternehmer).",
+      "help": "Printed directly under the MwSt. line on every invoice PDF. Leave empty to hide. Please confirm the exact wording with your tax advisor."
     },
     "crm_invoices_skonto_percent_default": {
       "label": "Skonto rate (default %)"
@@ -5319,7 +6939,13 @@
     "changeWithin": "You can change your response until {{at}}.",
     "intro": "Please accept or decline this quote:",
     "accept": "Accept quote",
-    "decline": "Decline"
+    "decline": "Decline",
+    "tosRequiredError": "Please tick \"I accept the Terms of Service\" before accepting the quote, or click Decline to refuse.",
+    "submitting": "Recording your response…",
+    "tosCheckbox": "I have read and accept the Terms of Service.",
+    "tosLink": "Read the full Terms",
+    "preselectAcceptHint": "You followed the \"Accept\" link from the email — click the button below to confirm.",
+    "preselectDeclineHint": "You followed the \"Decline\" link from the email — click the button below to confirm."
   },
   "reminderTemplates": {
     "title": "Pre-event reminder emails",
@@ -5428,7 +7054,20 @@
       "cancelled": "Cancelled"
     },
     "list": {
-      "new": "New contract"
+      "new": "New contract",
+      "blocksLibrary": "Block library",
+      "searchPlaceholder": "Search by number, title or customer…",
+      "empty": "No contracts yet.",
+      "table": {
+        "number": "Number",
+        "customer": "Customer",
+        "title": "Title",
+        "issueDate": "Issued",
+        "status": "Status"
+      },
+      "pagination": "Page {{page}} of {{total}} · {{count}} contracts",
+      "pagination_one": "Page {{page}} of {{total}} · {{count}} contracts",
+      "pagination_other": "Page {{page}} of {{total}} · {{count}} contracts"
     },
     "detail": {
       "previewPdf": "Preview PDF",
@@ -5510,7 +7149,9 @@
       "signedNamePlaceholder": "Your full name",
       "uploadError": "Upload failed",
       "uploadSigned": "Upload signed PDF",
-      "uploadedToast": "Signed PDF uploaded."
+      "uploadedToast": "Signed PDF uploaded.",
+      "convertedToInvoiceToast_one": "{{count}} invoice(s) created from this contract",
+      "convertedToInvoiceToast_other": "{{count}} invoice(s) created from this contract"
     },
     "editor": {
       "back": "Back to list",
@@ -5518,7 +7159,7 @@
       "create": "Create draft",
       "createdToast": "Contract created.",
       "customer": "Customer",
-      "disclaimerBody": "The seeded block bodies are EXAMPLES ONLY — written by the maintainer, not by a lawyer. Have your own lawyer review every block you include before sending the contract. See docs/crm-disclaimers.md.",
+      "disclaimerBody": "The seeded block bodies are EXAMPLES ONLY — written by the maintainer, not by a lawyer. Have your own lawyer review every block you include before sending the contract. See https://docs.picpeak.app/features/crm/disclaimers.",
       "disclaimerTitle": "Lawyer review required",
       "eventDate": "Event date",
       "eventHelp": "Snapshotted onto the contract and propagated to any event / invoice generated from it. Set this so the customer portal and dunning emails show the right \"Wedding Doe / Müller\" label.",
@@ -5555,6 +7196,44 @@
       "titleNew": "New contract",
       "titlePlaceholder": "e.g. Wedding contract Doe / Müller",
       "validUntil": "Sign by (optional)"
+    },
+    "blocks": {
+      "back": "Back to contracts",
+      "title": "Contract block library",
+      "hideInactive": "Hide inactive",
+      "disclaimerTitle": "Examples only — have your lawyer review",
+      "disclaimerBody": "The seeded \"System\" blocks are written by the picpeak maintainer, not by a lawyer. They are intended as starting points only — review and adapt every block you intend to send with your own lawyer. Edits to system blocks are persisted; replace the seeded body text with the lawyer-reviewed version in place.",
+      "sidebarHeading": "Blocks",
+      "new": "New block",
+      "systemBadge": "System",
+      "empty": "No blocks yet.",
+      "selectPrompt": "Select a block on the left or create a new one to start editing.",
+      "active": "Active",
+      "inactive": "Inactive",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this block?",
+      "save": "Save",
+      "noTranslation": "No translation yet",
+      "createdToast": "Block created.",
+      "createError": "Create failed",
+      "updatedToast": "Block updated.",
+      "updateError": "Update failed",
+      "deletedToast": "Block deleted.",
+      "deleteError": "Delete failed",
+      "dialog": {
+        "createTitle": "New block",
+        "editTitle": "Edit block",
+        "name": "Name",
+        "section": "Section",
+        "description": "Description (admin hint)",
+        "body": "Body",
+        "placeholderHint": "You can use {{customer_name}}, {{event_name}}, {{event_date}}, {{net_days}}, {{skonto_percent}}, {{skonto_within_days}}, {{cancellation_30d_percent}}, {{currency}}, {{issuer_company_name}}, {{issuer_address}}, {{contract_number}}, {{source_quote_number}} as placeholders — substituted when the contract is rendered."
+      },
+      "quoteLineItems": {
+        "calloutTitle": "Auto-generated table follows the body",
+        "calloutBody": "When this block is included in a contract that was created from a quote, the PDF inserts a real table of the source quote's line items (#, Description, Qty, Unit, Total) immediately after the body text above. Sub-items render indented with a ↳ marker. Contracts without a source quote skip the table and render only the body.",
+        "previewExample": "Example rendered output:"
+      }
     }
   },
   "messages": {
@@ -5638,6 +7317,283 @@
     "syncUnconfigured": "Configure a mailbox under Settings → Email first.",
     "syncBusy": "A sync is already running.",
     "syncFailed": "Sync failed.",
-    "actionFailed": "Action failed."
+    "actionFailed": "Action failed.",
+    "syncOk_one": "Checked mailboxes — {{count}} new.",
+    "syncOk_other": "Checked mailboxes — {{count}} new."
+  },
+  "rebills": {
+    "createInvoice": "Create invoice from re-bills",
+    "unknownSupplier": "Supplier",
+    "costLabel": "cost {{amount}}",
+    "proofError": "Proof not attached: {{err}}",
+    "status": {
+      "open": "Open",
+      "sent": "Sent",
+      "paid": "Paid"
+    },
+    "mode": {
+      "passthrough": "Passthrough",
+      "rebill": "Re-bill"
+    },
+    "toast": {
+      "billed": "Invoice created from re-bills.",
+      "billedCombined": "Invoice created from re-bills and hours.",
+      "billFailed": "Failed to create invoice"
+    }
+  },
+  "crossAdd": {
+    "title": "Add other open items?",
+    "body": "This customer also has {{count}} {{label}}. Add them to the same invoice? They stay as a separate group — hours and re-bills are never mixed into one line.",
+    "addBoth": "Add both",
+    "hours": "open hours",
+    "rebills": "open re-bills",
+    "hoursOnly": "Just the hours",
+    "rebillsOnly": "Just the re-bills",
+    "body_one": "This customer also has {{count}} {{label}}. Add them to the same invoice? They stay as a separate group — hours and re-bills are never mixed into one line.",
+    "body_other": "This customer also has {{count}} {{label}}. Add them to the same invoice? They stay as a separate group — hours and re-bills are never mixed into one line."
+  },
+  "roleEditor": {
+    "loading": "Loading roles…",
+    "subtitle": "Define what each role can do. Start from a preset by cloning it, then trim or extend the permissions.",
+    "newRole": "New role",
+    "systemRole": "System",
+    "permCount": "{{count}} permissions",
+    "userCount": "{{count}} users",
+    "view": "View",
+    "clone": "Clone",
+    "create": "Create role",
+    "createTitle": "Create role",
+    "editTitle": "Edit role: {{name}}",
+    "superAdminLocked": "Super Admin always holds every permission and cannot be edited. It automatically gains new permissions as features are added.",
+    "displayName": "Display name",
+    "displayNamePlaceholder": "e.g. Photographer",
+    "key": "Key (identifier)",
+    "keyLocked": "The key is fixed once a role is created.",
+    "description": "Description",
+    "descriptionPlaceholder": "What this role is for",
+    "permissions": "Permissions",
+    "selectedCount": "{{count}} selected",
+    "selectAll": "Select all",
+    "clearAll": "Clear all",
+    "nameError": "Use lowercase letters, numbers and underscores (2–49 chars, starting with a letter).",
+    "created": "Role created",
+    "updated": "Role updated",
+    "deleted": "Role deleted",
+    "saveError": "Failed to save role",
+    "deleteError": "Failed to delete role",
+    "confirmDelete": {
+      "title": "Delete role?",
+      "message": "Permanently delete the \"{{name}}\" role? This cannot be undone.",
+      "hasUsers": "Reassign the {{count}} user(s) holding \"{{name}}\" before deleting it.",
+      "hasUsers_one": "Reassign the {{count}} user(s) holding \"{{name}}\" before deleting it.",
+      "hasUsers_other": "Reassign the {{count}} user(s) holding \"{{name}}\" before deleting it."
+    },
+    "permCount_one": "{{count}} permissions",
+    "permCount_other": "{{count}} permissions",
+    "userCount_one": "{{count}} users",
+    "userCount_other": "{{count}} users",
+    "selectedCount_one": "{{count}} selected",
+    "selectedCount_other": "{{count}} selected"
+  },
+  "paymentCheck": {
+    "missingToken": "Missing token",
+    "alreadyUsed": "This link has already been used (action: {{action}}). If you need to record another payment, open the invoice in admin.",
+    "expired": "This link has expired. Open the invoice in admin to record the payment manually.",
+    "loadError": "Could not load invoice. The link may be invalid.",
+    "partialInvalid": "Enter a positive amount.",
+    "partialTooHigh": "Amount cannot exceed the outstanding total ({{max}}).",
+    "submitError": "Could not record action.",
+    "title": "Confirm payment",
+    "subtitle": "Select what was received for this invoice. The choice is logged and the appropriate reminder is queued automatically.",
+    "field": {
+      "invoice": "Invoice",
+      "customer": "Customer",
+      "issued": "Issued",
+      "due": "Due",
+      "total": "Total",
+      "outstanding": "Outstanding",
+      "paid": "Already paid",
+      "lateFee": "Late fee"
+    },
+    "action": {
+      "paidFull": "Paid in full",
+      "paidFullHelp": "Mark the entire outstanding amount ({{amount}}) as received. No reminder is sent.",
+      "paidSkonto": "Paid with Skonto",
+      "paidSkontoHelp": "Customer settled within the Skonto window. Record {{amount}} ({{percent}}% discount) as paid.",
+      "partial": "Partially paid",
+      "partialHelp": "Log the amount received, then queue the customer reminder for the remainder.",
+      "partialAmount": "Amount received",
+      "partialMax": "Max: {{max}}",
+      "unpaid": "Not paid yet",
+      "unpaidHelp": "Nothing received. The customer reminder will be queued{{fee}}.",
+      "unpaidWithFee": " (with late fee at second reminder)"
+    },
+    "submitting": "Recording…",
+    "submit": "Confirm",
+    "result": {
+      "title": "Action recorded",
+      "paid": "Invoice {{n}} marked as paid in full.",
+      "paidSkonto": "Invoice {{n}} marked as paid with Skonto applied.",
+      "partial": "Partial payment logged for invoice {{n}}. Customer reminder queued for the remainder.",
+      "unpaidMax": "Recorded as unpaid. Maximum reminder level already reached — handle this customer offline.",
+      "unpaid": "Recorded as unpaid. Customer reminder queued (level {{lvl}}).",
+      "close": "You can close this tab."
+    }
+  },
+  "publicContract": {
+    "errorAccept": "Please tick the acceptance box.",
+    "errorName": "Please enter your name.",
+    "errorSignatureRequired": "A drawn signature is required for this contract.",
+    "notFoundTitle": "Contract not available",
+    "notFoundBody": "This signing link is invalid or expired. Please contact the sender.",
+    "fallbackTitle": "Contract",
+    "signed": {
+      "title": "Thank you — the contract is signed.",
+      "by": "Signed by",
+      "counterBy": "Counter-signed by",
+      "auditTitle": "Signing audit trail",
+      "auditBody": "For your records. Save or screenshot this — the SHA-256 hash lets you prove later that the PDF you downloaded is exactly what we issued (re-hash the file you have and compare).",
+      "contractNumber": "Contract",
+      "signedAt": "Signed at",
+      "ipAddress": "IP at signing",
+      "counterSignedAt": "Counter-signed at",
+      "signedSha": "Signed PDF SHA-256",
+      "unsignedSha": "Original PDF SHA-256"
+    },
+    "downloadSigned": "Download signed PDF",
+    "download": "Download PDF",
+    "signTitle": "Sign this contract",
+    "nameField": "Your full name",
+    "signaturePromptRequired": "Draw your signature",
+    "signaturePrompt": "Draw your signature (optional)",
+    "clearSignature": "Clear",
+    "acceptCheckbox": "I have read this contract and agree to be bound by its terms.",
+    "submit": "Sign contract",
+    "uploadAlternative": "Or upload a wet-signed PDF",
+    "uploadHint": "Sign the printed contract by hand, scan it, and upload the PDF here.",
+    "uploadButton": "Upload signed PDF"
+  },
+  "crmOverview": {
+    "title": "CRM overview",
+    "loadError": "Could not load CRM stats. Check that you have bills.view or quotes.view permission and that the backend is on the latest build.",
+    "revenue": {
+      "month": "Revenue · last 30 days",
+      "quarter": "Revenue · last 90 days",
+      "yearCalendar": "Revenue · this year",
+      "year": "Revenue · last 365 days",
+      "toggleHint": "Tap to switch window"
+    },
+    "outstanding": "Outstanding payments",
+    "outstandingSub_one": "{{count}} invoice(s) unpaid",
+    "outstandingSub_other": "{{count}} invoice(s) unpaid",
+    "quotes": {
+      "title": "Quotes"
+    },
+    "viewAll": "View all",
+    "invoices": {
+      "title": "Invoices"
+    }
+  },
+  "users": {
+    "roles": {
+      "viewer": "Viewer",
+      "editor": "Editor",
+      "admin": "Admin",
+      "super_admin": "Super Admin"
+    }
+  },
+  "newsletters": {
+    "title": "Newsletters",
+    "subtitle": "Send a campaign to your customer accounts. Everyone who has opted out is skipped automatically, and every send carries an unsubscribe link.",
+    "new": "New campaign",
+    "untitled": "Untitled campaign",
+    "untitledSubject": "Newsletter",
+    "empty": "No campaigns yet.",
+    "allStatuses": "All statuses",
+    "filterByStatus": "Filter by status",
+    "backToList": "All campaigns",
+    "recipientsTitle": "Recipients",
+    "notEditable": "This campaign has already been queued and can no longer be edited.",
+    "viewCampaign": "View campaign",
+    "status": {
+      "draft": "Draft",
+      "queued": "Queued",
+      "sending": "Sending",
+      "sent": "Sent",
+      "cancelled": "Cancelled",
+      "failed": "Failed"
+    },
+    "recipientStatus": {
+      "queued": "Queued",
+      "sent": "Sent",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "skipped_opt_out": "Skipped (opted out)"
+    },
+    "col": {
+      "name": "Name",
+      "status": "Status",
+      "recipients": "Recipients",
+      "sent": "Sent",
+      "failed": "Failed",
+      "created": "Created"
+    },
+    "section": {
+      "content": "Content",
+      "recipients": "Recipients & send",
+      "preview": "Preview"
+    },
+    "field": {
+      "name": "Campaign name (internal)",
+      "subject": "Subject",
+      "body": "Body",
+      "rate": "Send rate (emails per minute)",
+      "testTo": "Send a test to"
+    },
+    "mode": {
+      "allActive": "All active customers",
+      "manual": "Pick customers"
+    },
+    "showCss": "Custom CSS (optional)",
+    "hideCss": "Hide custom CSS",
+    "cssHelp": "Many email clients drop a <style> block — keep the important styling on inline attributes. Remote images and @import are stripped.",
+    "rateHelp": "Sends are spread out so your mail provider does not rate-limit you, and so a sudden burst does not look like spam. Check your provider's hourly cap before raising this.",
+    "recipientCount": "{{count}} recipients",
+    "skippedOptOut": "{{count}} skipped (opted out)",
+    "saveToRefresh": "Save to refresh this count.",
+    "refreshPreview": "Refresh preview",
+    "previewTitle": "Newsletter preview",
+    "sendTest": "Test",
+    "queueButton": "Queue campaign",
+    "queueBlocked": "A subject, a body and at least one recipient are needed before sending.",
+    "queueTitle": "Send this campaign?",
+    "queueBody": "This will email {{count}} customers at {{rate}} per minute (roughly {{minutes}} min). It cannot be undone once messages start going out.",
+    "queueConfirm": "Send to {{count}} customers",
+    "cancel": "Cancel campaign",
+    "cancelTitle": "Cancel this campaign?",
+    "cancelBody": "Emails that have not gone out yet will be dropped. Emails already sent cannot be recalled.",
+    "cancelled": "{{count}} pending emails cancelled.",
+    "sendingAt": "Sending at {{rate}} emails per minute.",
+    "deleteTitle": "Delete campaign?",
+    "deleteBody": "\"{{name}}\" will be deleted. This cannot be undone.",
+    "deleteAria": "Delete {{name}}",
+    "saved": "Campaign saved.",
+    "queued": "Campaign queued.",
+    "deleted": "Campaign deleted.",
+    "testSent": "Test email sent to {{to}}.",
+    "createFailed": "Could not create the campaign.",
+    "saveFailed": "Could not save the campaign.",
+    "deleteFailed": "Could not delete the campaign.",
+    "previewFailed": "Could not render the preview.",
+    "testFailed": "Could not send the test email.",
+    "queueFailed": "Could not queue the campaign.",
+    "cancelFailed": "Could not cancel the campaign.",
+    "previewEmpty": "Refresh the preview to see the email as a customer will.",
+    "largeSend": {
+      "title": "Large send — check your sending reputation first",
+      "body": "Mailing {{count}} people at once from a domain that usually sends only transactional email is what makes spam filters take notice. Providers may throttle, junk or block the whole batch, and a bad run damages delivery of your gallery emails too.",
+      "advice": "Confirm SPF, DKIM and DMARC are set up for your sending domain, send yourself a test first, and consider splitting a first campaign across several smaller sends.",
+      "duration": "At {{rate}}/minute this takes about {{minutes}} minutes. The send queue is shared, so while it runs other email — gallery invitations, password resets — can be delayed behind it."
+    }
   }
 }

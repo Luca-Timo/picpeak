@@ -8,7 +8,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Star, Pencil, Save, Clock, Copy } from 'lucide-react';
+import { Plus, Trash2, Star, Pencil, Save, Clock, Copy, Mail } from 'lucide-react';
 import {
   businessProfileService,
   type BusinessProfile,
@@ -27,7 +27,6 @@ import { useMutationWithToast } from '../../../hooks';
 // engine that lacks it.
 const IANA_TIMEZONES: string[] = (() => {
   try {
-    // @ts-expect-error supportedValuesOf is ES2022, not yet in all TS lib defs
     return Intl.supportedValuesOf('timeZone') as string[];
   } catch {
     return ['UTC', 'Europe/Vaduz', 'Europe/Zurich', 'Europe/Berlin', 'Europe/Vienna', 'Europe/Paris', 'Europe/London'];
@@ -64,13 +63,15 @@ export const SettingsBusinessProfilePage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold">{t('businessProfile.title', 'Business profile')}</h2>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            {t('businessProfile.subtitle', 'Issuer block shown on every quote and invoice PDF.')}
-          </p>
-        </div>
+      {/* No tab title here — the Settings shell renders the section
+          heading (icon + label + divider) for every tab that isn't in
+          SettingsPage's TABS_WITH_OWN_HEADER, and its label resolves to
+          the same string, so repeating it stacked two identical H2s on
+          top of each other (QA warning). The subtitle stays. */}
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          {t('businessProfile.subtitle', 'Issuer block shown on every quote and invoice PDF.')}
+        </p>
         <Button
           onClick={() => saveProfile.mutate()}
           disabled={saveProfile.isPending}
@@ -82,7 +83,7 @@ export const SettingsBusinessProfilePage: React.FC = () => {
       </div>
 
       <Card>
-        <h3 className="font-semibold mb-3">{t('businessProfile.section.company', 'Company')}</h3>
+        <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-3">{t('businessProfile.section.company', 'Company')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Input label={t('businessProfile.field.companyName', 'Company name') as string} value={profile.companyName}
             onChange={(e) => setProfile({ ...profile, companyName: e.target.value })} />
@@ -116,7 +117,7 @@ export const SettingsBusinessProfilePage: React.FC = () => {
       </Card>
 
       <Card>
-        <h3 className="font-semibold mb-3">{t('businessProfile.section.contact', 'Contact')}</h3>
+        <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-3">{t('businessProfile.section.contact', 'Contact')}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Input label={t('businessProfile.field.phone', 'Phone') as string} value={profile.phone}
             onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
@@ -130,7 +131,7 @@ export const SettingsBusinessProfilePage: React.FC = () => {
       </Card>
 
       <Card>
-        <h3 className="font-semibold mb-3">{t('businessProfile.section.defaults', 'Defaults')}</h3>
+        <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-3">{t('businessProfile.section.defaults', 'Defaults')}</h3>
         {/* Pointer so admins who look for the old VAT/hourly-rate fields here
             know where they went. */}
         <p className="mb-3 rounded-md border border-blue-200 dark:border-blue-900/50 bg-blue-50 dark:bg-blue-900/20 px-3 py-2 text-xs text-blue-800 dark:text-blue-300">
@@ -147,7 +148,7 @@ export const SettingsBusinessProfilePage: React.FC = () => {
             <select
               value={normalizeCurrency(profile.defaultCurrency)}
               onChange={(e) => setProfile({ ...profile, defaultCurrency: e.target.value })}
-              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               {currencyOptions(profile.defaultCurrency).map((c) => (
                 <option key={c} value={c}>{c}</option>
@@ -166,7 +167,7 @@ export const SettingsBusinessProfilePage: React.FC = () => {
             <select
               value={profile.timezone || ''}
               onChange={(e) => setProfile({ ...profile, timezone: e.target.value || null })}
-              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="">
                 {t('businessProfile.field.timezoneSystemDefault', 'System default')} ({Intl.DateTimeFormat().resolvedOptions().timeZone})
@@ -180,9 +181,9 @@ export const SettingsBusinessProfilePage: React.FC = () => {
               Settings → Accounting (so all financial/VAT config lives in one
               place). See the callout above. */}
           <div>
-            <label className="block text-sm font-medium mb-1">{t('businessProfile.field.defaultQrFormat', 'Default invoice QR')}</label>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">{t('businessProfile.field.defaultQrFormat', 'Default invoice QR')}</label>
             <select value={profile.defaultQrFormat} onChange={(e) => setProfile({ ...profile, defaultQrFormat: e.target.value as QrFormat })}
-              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm">
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm">
               <option value="none">{t('businessProfile.qrFormat.none', 'None')}</option>
               <option value="swiss">{t('businessProfile.qrFormat.swiss', 'Swiss QR-bill (CH / LI)')}</option>
               <option value="epc">{t('businessProfile.qrFormat.epc', 'EPC QR (SEPA / EUR)')}</option>
@@ -204,12 +205,12 @@ export const SettingsBusinessProfilePage: React.FC = () => {
             onChange={(e) => setProfile({ ...profile, pdfLogoHeight: Number(e.target.value) })} />
           {/* Folding marks dropdown. */}
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               {t('businessProfile.field.pdfFoldingMarks', 'Folding marks on PDF page edge')}
             </label>
             <select value={profile.pdfFoldingMarks || 'none'}
               onChange={(e) => setProfile({ ...profile, pdfFoldingMarks: e.target.value as any })}
-              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm">
+              className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm">
               <option value="none">{t('businessProfile.foldingMarks.none', 'None')}</option>
               <option value="half">{t('businessProfile.foldingMarks.half', 'Half (148.5mm) — for C5 envelopes')}</option>
               <option value="third">{t('businessProfile.foldingMarks.third', 'Thirds (105 + 210mm) — for DL / DIN long envelopes')}</option>
@@ -280,7 +281,7 @@ export const SettingsBusinessProfilePage: React.FC = () => {
       <Card>
         <div className="flex items-center gap-2 mb-1">
           <Clock className="w-5 h-5 text-neutral-500" />
-          <h3 className="font-semibold">{t('businessProfile.businessHours.title', 'Business hours')}</h3>
+          <h3 className="font-semibold text-neutral-900 dark:text-neutral-100">{t('businessProfile.businessHours.title', 'Business hours')}</h3>
         </div>
         <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
           {t('businessProfile.businessHours.subtitle',
@@ -304,10 +305,62 @@ export const SettingsBusinessProfilePage: React.FC = () => {
         </div>
       </Card>
 
+      {/* Global email footer signature (migration 198, issue #1264).
+          Rendered by wrapEmailHtml only, so flipping this toggle changes
+          the footer of EVERY outgoing mail — transactional, preview, test
+          and manual — without any per-template edit. Every value except
+          the legal line below comes from the fields already on this page. */}
+      <Card>
+        <div className="flex items-center gap-2 mb-1">
+          <Mail className="w-5 h-5 text-neutral-500" />
+          <h3 className="font-semibold text-neutral-900 dark:text-neutral-100">
+            {t('businessProfile.emailSignature.title', 'Email signature')}
+          </h3>
+        </div>
+        <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+          {t('businessProfile.emailSignature.subtitle',
+            'Append your company details to the footer of every email this installation sends. Built from the address and contact fields above — nothing is duplicated.')}
+        </p>
+
+        <PdfToggleRow
+          label={t('businessProfile.emailSignature.toggle', 'Show signature in email footers') as string}
+          description={t('businessProfile.emailSignature.toggleHelp',
+            'When off, emails keep the plain logo + company name footer. Applies to every automatic email — gallery notices, quotes, invoices, reminders — plus test sends and previews. Replies you write yourself in Messages are sent as typed and do not get the signature.') as string}
+          enabled={profile.emailSignatureEnabled}
+          onChange={(v) => setProfile({ ...profile, emailSignatureEnabled: v })}
+        />
+
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            {t('businessProfile.emailSignature.extra', 'Legal line (optional)')}
+          </label>
+          <textarea
+            rows={3}
+            maxLength={500}
+            value={profile.emailSignatureExtra}
+            onChange={(e) => setProfile({ ...profile, emailSignatureExtra: e.target.value })}
+            placeholder={t('businessProfile.emailSignature.extraPlaceholder',
+              'Handelsregister Vaduz FL-0002.123.456-7') as string}
+            className="w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100"
+          />
+          <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+            {t('businessProfile.emailSignature.extraHelp',
+              'Registration number, disclaimer or any line with no field of its own. Plain text, up to 500 characters.')}
+          </p>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+          <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-2 uppercase tracking-wide">
+            {t('businessProfile.emailSignature.previewTitle', 'Footer preview')}
+          </p>
+          <EmailSignaturePreview profile={profile} />
+        </div>
+      </Card>
+
       {/* Disclaimer banner for QR-bill / IBAN data. picpeak renders
           what the operator types — it cannot validate IBAN/BIC, QR-IID
           or scan-compatibility with any specific bank's e-banking app.
-          See docs/crm-disclaimers.md. */}
+          See https://docs.picpeak.app/features/crm/disclaimers. */}
       <div className="mt-4 p-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-sm text-amber-900 dark:text-amber-200">
         <p className="font-medium mb-1">
           {t('businessProfile.qrDisclaimer.title', 'QR-bill / bank data — verify before going live')}
@@ -359,6 +412,64 @@ const PdfToggleRow: React.FC<PdfToggleRowProps> = ({ label, description, enabled
     </button>
   </label>
 );
+
+/**
+ * Read-only render of the email footer signature (migration 198).
+ *
+ * Deliberately mirrors `renderEmailSignature` in the backend's
+ * emailProcessor: same field order, same middle-dot separators, same
+ * omit-when-empty rule. It is a preview, not a second renderer — the mail
+ * itself is always built server-side.
+ */
+const EmailSignaturePreview: React.FC<{ profile: BusinessProfile }> = ({ profile }) => {
+  const { t, i18n } = useTranslation();
+
+  if (!profile.emailSignatureEnabled) {
+    return (
+      <p className="text-sm text-neutral-500 dark:text-neutral-400 italic">
+        {t('businessProfile.emailSignature.previewOff', 'Signature is off — emails show the logo and company name only.')}
+      </p>
+    );
+  }
+
+  // "LI-9494 Schaan / Liechtenstein" — the same shape the PDF issuer
+  // block uses, assembled identically on the backend.
+  const cc = profile.countryCode ? profile.countryCode.toUpperCase() : '';
+  const pc = profile.postalCode || '';
+  const left = [cc && pc ? `${cc}-${pc}` : (pc || cc), profile.city || ''].filter(Boolean).join(' ');
+  const cityCountry = [left, profile.countryName || ''].filter(Boolean).join(' / ');
+
+  const addressLines = [profile.addressLine1, profile.addressLine2, cityCountry]
+    .map((l) => (l || '').trim())
+    .filter(Boolean);
+  const contacts = [profile.phone, profile.mobile, profile.email, profile.website]
+    .map((c) => (c || '').trim())
+    .filter(Boolean);
+  const vatLabel = i18n.language?.startsWith('de') ? 'USt-IdNr.' : 'VAT ID';
+
+  const isEmpty = !profile.companyName && !addressLines.length && !contacts.length
+    && !profile.vatId && !profile.emailSignatureExtra;
+  if (isEmpty) {
+    return (
+      <p className="text-sm text-amber-700 dark:text-amber-400">
+        {t('businessProfile.emailSignature.previewEmpty',
+          'Signature is on but every field above is blank — nothing will be added to the footer.')}
+      </p>
+    );
+  }
+
+  return (
+    <div data-testid="email-signature-preview" className="rounded-md bg-neutral-50 dark:bg-neutral-800/60 p-3 text-center text-xs text-neutral-600 dark:text-neutral-400 space-y-1">
+      {profile.companyName && <p>{profile.companyName}</p>}
+      {addressLines.length > 0 && <p>{addressLines.join(' \u00b7 ')}</p>}
+      {contacts.length > 0 && <p>{contacts.join(' \u00b7 ')}</p>}
+      {profile.vatId && <p>{vatLabel}: {profile.vatId}</p>}
+      {profile.emailSignatureExtra && (
+        <p className="text-[11px] whitespace-pre-line">{profile.emailSignatureExtra}</p>
+      )}
+    </div>
+  );
+};
 
 /**
  * Per-weekday business-hours editor (migration 114). Google-style: each
@@ -546,7 +657,7 @@ const PdfLogoUploader: React.FC<PdfLogoUploaderProps> = ({ profile, setProfile }
 
   return (
     <div>
-      <label className="block text-sm font-medium mb-1">
+      <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
         {t('businessProfile.field.pdfLogoUpload', 'PDF letterhead logo (PNG, JPEG, or SVG)')}
       </label>
       <div className="flex items-center gap-3 flex-wrap">
@@ -655,7 +766,7 @@ const BankAccountsSection: React.FC<BankAccountsSectionProps> = ({ accounts }) =
           onChange={(e) => setDraft({ ...draft, bic: e.target.value })} />
         <Input label={t('businessProfile.bank.currency', 'Currency') as string} value={draft.currency}
           maxLength={3} onChange={(e) => setDraft({ ...draft, currency: e.target.value.toUpperCase() })} />
-        <label className="flex items-center gap-2 text-sm pt-6">
+        <label className="flex items-center gap-2 text-sm text-neutral-800 dark:text-neutral-200 pt-6">
           <input type="checkbox" checked={draft.isDefault}
             onChange={(e) => setDraft({ ...draft, isDefault: e.target.checked })} />
           {t('businessProfile.bank.isDefault', 'Default for this currency')}
@@ -679,7 +790,7 @@ const BankAccountsSection: React.FC<BankAccountsSectionProps> = ({ accounts }) =
   return (
     <Card>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold">{t('businessProfile.section.banks', 'Bank accounts')}</h3>
+        <h3 className="font-semibold text-neutral-900 dark:text-neutral-100">{t('businessProfile.section.banks', 'Bank accounts')}</h3>
         <Button size="sm" onClick={() => {
           if (openForm === 'new') closeForm();
           else { setDraft(EMPTY_DRAFT); setOpenForm('new'); }
@@ -698,7 +809,7 @@ const BankAccountsSection: React.FC<BankAccountsSectionProps> = ({ accounts }) =
             <React.Fragment key={b.id}>
               <li className="py-2 flex items-center justify-between">
                 <div>
-                  <div className="font-medium text-sm">{b.label || b.iban}
+                  <div className="font-medium text-sm text-neutral-900 dark:text-neutral-100">{b.label || b.iban}
                     {b.isDefault && <Star className="inline w-4 h-4 ml-1 text-amber-500" />}
                   </div>
                   <div className="text-xs text-neutral-500 font-mono">{b.iban.replace(/(.{4})/g, '$1 ').trim()}{b.currency ? ` · ${b.currency}` : ''}</div>

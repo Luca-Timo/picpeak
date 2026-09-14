@@ -13,8 +13,10 @@ const DEFAULT_SETTINGS: SlideshowSettings = {
   transition: 'crossfade',
   transition_ms: 800,
   colorfilter: 'none',
+  order: 'chronological',
   fit: 'cover',
   watermark: null,
+  qr: null,
 };
 
 // How often the running show re-checks settings + photo count (tiny payload).
@@ -71,6 +73,17 @@ function watermarkCorner(position: string): React.CSSProperties {
 }
 
 type Phase = 'splash' | 'running' | 'ended';
+
+// Fisher–Yates shuffle for the 'random' play order (#202). Used once on the
+// initial photo set; live-appended uploads keep landing at the end.
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 export function SlideshowPage() {
   const { slug = '', token = '' } = useParams<{ slug: string; token: string }>();
@@ -166,13 +179,15 @@ export function SlideshowPage() {
       storeGalleryToken(slug, session.token);
       setActiveGallerySlug(slug);
       setEventName(session.event.event_name || '');
-      setSettings(session.settings || DEFAULT_SETTINGS);
+      const settings = session.settings || DEFAULT_SETTINGS;
+      setSettings(settings);
 
       // Load the list and DECODE the first slide (and the next) before we flip
       // to running, so playback starts on an already-rasterised image instead
       // of struggling on the first transition.
       const data = await galleryService.getGalleryPhotos(slug);
-      const list = data.photos || [];
+      // 'random' shuffles the initial set once; new uploads still append (#202).
+      const list = settings.order === 'random' ? shuffle(data.photos || []) : (data.photos || []);
       setPhotos(list);
       await preloadDecode(list[0]);
       void preloadDecode(list[1]);
@@ -218,16 +233,20 @@ export function SlideshowPage() {
           transition: state.transition,
           transition_ms: state.transition_ms,
           colorfilter: state.colorfilter,
+          order: state.order,
           fit: state.fit,
           watermark: state.watermark,
+          qr: state.qr,
         };
         if (JSON.stringify(next) !== JSON.stringify({
           interval_ms: prev.interval_ms,
           transition: prev.transition,
           transition_ms: prev.transition_ms,
           colorfilter: prev.colorfilter,
+          order: prev.order,
           fit: prev.fit,
           watermark: prev.watermark,
+          qr: prev.qr,
         })) {
           setSettings(next);
         }
@@ -445,7 +464,32 @@ export function SlideshowPage() {
               }}
             />
           )}
+
         </>
+      )}
+
+      {/* Share-link QR overlay (#837): guests scan the gallery straight off
+          the beamer. White padding box keeps the code scannable on any photo.
+          Rendered OUTSIDE the photos-gate so an empty/awaiting slideshow still
+          shows the code — the "scan to add the first photos" case (codex
+          review of #848). */}
+      {phase === 'running' && settings.qr && (
+        <img
+          src={settings.qr.data_url}
+          alt=""
+          draggable={false}
+          style={{
+            position: 'absolute',
+            ...watermarkCorner(settings.qr.position),
+            width: `${settings.qr.size ?? 14}vmin`,
+            height: `${settings.qr.size ?? 14}vmin`,
+            opacity: Math.min(1, Math.max(0, (settings.qr.opacity ?? 90) / 100)),
+            background: '#ffffff',
+            padding: '0.6vmin',
+            borderRadius: '1vmin',
+            pointerEvents: 'none',
+          }}
+        />
       )}
 
       {phase === 'ended' && (

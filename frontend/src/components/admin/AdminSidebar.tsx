@@ -15,11 +15,14 @@ import {
   Workflow,
   PanelLeftClose,
   PanelLeftOpen,
+  Github,
+  Send,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { settingsService } from '../../services/settings.service';
 import { VersionInfo } from './VersionInfo';
+import { repoUrl } from '../../utils/githubReleaseUrl';
 import { usePermissions } from '../../contexts/PermissionsContext';
 import { useAdminDarkMode } from '../../contexts/AdminDarkModeContext';
 import { useFeatureFlags, type FeatureKey } from '../../contexts/FeatureFlagsContext';
@@ -49,6 +52,13 @@ interface NavItem {
    * constraint.
    */
   featureFlagsAny?: FeatureKey[];
+  /**
+   * Alternative permissions, any ONE of which reveals the entry. For a
+   * section whose sub-features are gated independently server-side — Clients
+   * hosts both customer accounts and newsletters, and the backend supports a
+   * role holding `newsletters.view` without `customers.view` (#1264).
+   */
+  permissionAny?: string[];
 }
 
 // Sidebar shape after the Settings reorg (#feature-flags-settings-reorg).
@@ -61,10 +71,14 @@ interface NavItem {
 // Feature-gated (only render when the corresponding feature flag is on):
 //   Analytics → flags.analytics
 //   Users     → flags.userManagement
-const navigation: NavItem[] = [
+// Exported so Settings → Features can render its "Sidebar preview" against
+// the same declaration the real sidebar uses (it used to keep a second,
+// hand-maintained array that only knew about 2 of the feature gates).
+export const adminNavigation: NavItem[] = [
   { nameKey: 'navigation.dashboard', href: '/admin/dashboard', icon: LayoutDashboard, permission: false },
   { nameKey: 'navigation.events',    href: '/admin/events',    icon: Calendar,        permission: 'events.view' },
   { nameKey: 'navigation.archives',  href: '/admin/archives',  icon: Archive,         permission: 'archives.view' },
+  { nameKey: 'navigation.transfers', href: '/admin/transfers', icon: Send,            permission: 'events.view', featureFlag: 'transfers' },
   { nameKey: 'navigation.messages',  href: '/admin/messages', icon: Mail,             permission: 'email.view',     featureFlag: 'messaging' },
   { nameKey: 'admin.analytics',      href: '/admin/analytics', icon: BarChart3,       permission: 'analytics.view', featureFlag: 'analytics' },
   { nameKey: 'navigation.settings',  href: '/admin/settings',  icon: Settings,        permission: 'settings.view' },
@@ -86,7 +100,9 @@ const navigation: NavItem[] = [
   // their own permission keys and the gate here grows into an OR.
   {
     nameKey: 'navigation.clients', href: '/admin/clients', icon: Briefcase,
-    permission: 'customers.view',
+    // Any of these opens the section; each sub-page is gated on its own
+    // permission once inside.
+    permissionAny: ['customers.view', 'newsletters.view'],
     featureFlag: 'clients',
     // Hide the entry when the parent is on but no sub-feature is —
     // there's nothing inside ClientsLayout to link to. Mirror the same
@@ -101,6 +117,9 @@ const navigation: NavItem[] = [
     featureFlagsAny: [
       'customerPortal', 'crmDevelopment', 'quotes', 'bills',
       'hoursLogging', 'contracts', 'calendar', 'projects',
+      // #1264 — newsletters is a Clients child and must light up the entry,
+      // or a newsletter-only install has no way into the section.
+      'newsletters',
     ],
   },
   // Accounting section (migration 122) — inbound supplier invoices,
@@ -152,8 +171,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
   const showLogoBrand = logoInSidebar && !!sidebarBrandImageUrl;
   const brandAlt = publicSettings?.branding_company_name?.trim() || t('admin.title');
 
-  const filteredNavigation = navigation.filter((item) => {
+  const filteredNavigation = adminNavigation.filter((item) => {
     if (item.permission && !hasPermission(item.permission as string)) return false;
+    if (item.permissionAny?.length
+      && !item.permissionAny.some((p) => hasPermission(p))) return false;
     if (item.featureFlag && !flags[item.featureFlag]) return false;
     // featureFlagsAny: entry is hidden when none of the listed
     // sub-flags are on, even if the parent flag IS on. Used by
@@ -324,6 +345,20 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
 
             {/* Storage Info */}
             <StorageInfo />
+
+            {/* Link to the project on GitHub (#778). Subtle footer row so
+                admins can reach the repo — star, source, report an issue —
+                from anywhere in the dashboard, not just the setup screen. */}
+            <a
+              href={repoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mx-4 mb-3 flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 transition-colors"
+              title={t('admin.viewOnGithub', 'View PicPeak on GitHub')}
+            >
+              <Github className="w-3.5 h-3.5" />
+              <span>{t('admin.viewOnGithub', 'View PicPeak on GitHub')}</span>
+            </a>
           </div>
         )}
       </div>
@@ -361,8 +396,10 @@ const StorageInfo: React.FC = () => {
         <div className="flex items-center justify-between text-sm">
           <span className="text-neutral-700 dark:text-neutral-300">{t('admin.storageUsed')}</span>
           <span className="font-medium text-neutral-900 dark:text-neutral-100">
-            {/* `+` marks a floor: part of the storage root was unreadable, so
-                the real figure — and the percentage below — is higher (#1164). */}
+            {/* The `+` marks a floor: part of the storage root was unreadable,
+                so the real figure — and the percentage below — is higher than
+                this. Without it an EACCES subtree reads as "safely under the
+                limit" (#1164). */}
             {settingsService.formatBytes(storageInfo.total_used)}{storageInfo.storage_partial ? '+' : ''}
           </span>
         </div>

@@ -24,6 +24,16 @@ export interface AdminPhoto {
   comment_count?: number;
   like_count?: number;
   favorite_count?: number;
+  // Colour labels (#1044). `color_labels` is the per-colour tally across all
+  // guests; `dominant_color_label` is the one the grid badge and the XMP
+  // export use when several guests disagreed.
+  color_label_count?: number;
+  color_labels?: Record<string, number>;
+  dominant_color_label?: string | null;
+  // The requesting admin's OWN triage mark (#1044 follow-up) — separate from
+  // the client's selections above, and never shown in the gallery.
+  my_rating?: number | null;
+  my_color_label?: string | null;
 }
 
 export interface PhotoFilters {
@@ -37,10 +47,27 @@ export interface PhotoFilters {
   hasFavorites?: boolean;
   hasComments?: boolean;
   minRating?: number | null;
+  /** Colour labels to keep, e.g. ['green'] (#1044). */
+  colorLabels?: string[];
+  /** Same, against the caller's own marks. */
+  myColorLabels?: string[];
   logic?: 'AND' | 'OR';
 }
 
 class PhotosService {
+  /**
+   * Set / change / clear the admin's own mark on a photo (#1044 follow-up).
+   * Omit a field to leave that half alone; pass null to clear it.
+   */
+  async setPhotoMark(
+    eventId: number,
+    photoId: number,
+    mark: { rating?: number | null; color_label?: string | null }
+  ): Promise<{ rating: number | null; color_label: string | null } | null> {
+    const response = await api.put(`/admin/photos/${eventId}/photos/${photoId}/mark`, mark);
+    return response.data.mark;
+  }
+
   async getEventPhotos(eventId: number, filters?: PhotoFilters): Promise<AdminPhoto[]> {
     const params = new URLSearchParams();
     
@@ -58,6 +85,12 @@ class PhotosService {
       if (filters.hasComments) params.append('has_comments', 'true');
       if (filters.minRating !== undefined && filters.minRating !== null) {
         params.append('min_rating', filters.minRating.toString());
+      }
+      if (filters.colorLabels && filters.colorLabels.length > 0) {
+        params.append('color_label', filters.colorLabels.join(','));
+      }
+      if (filters.myColorLabels && filters.myColorLabels.length > 0) {
+        params.append('my_color_label', filters.myColorLabels.join(','));
       }
       if (filters.logic) params.append('logic', filters.logic);
     }
@@ -129,8 +162,13 @@ class PhotosService {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
-  // Chunked upload methods for large files (videos up to 10GB)
+  // Chunked upload methods for large files (videos up to 10GB).
+  // 10MB chunks stay under Cloudflare Tunnel / free-proxy ~100MB body limits.
   private CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
+
+  // Default single-request threshold — aligns with Cloudflare-safe batch headroom.
+  // Prefer general_max_upload_batch_size_mb from settings when calling from UI.
+  private DEFAULT_CHUNKED_THRESHOLD = 95 * 1024 * 1024;
 
   async initChunkedUpload(
     eventId: number,
@@ -160,7 +198,9 @@ class PhotosService {
       {
         headers: {
           'Content-Type': 'application/octet-stream'
-        }
+        },
+        // Large videos: many sequential 10MB parts; avoid client-side abort mid-transfer.
+        timeout: 0,
       }
     );
     return response.data;
@@ -173,7 +213,9 @@ class PhotosService {
   ): Promise<{ success: boolean; uploaded: number; photos: AdminPhoto[] }> {
     const response = await api.post(
       `/admin/photos/${eventId}/chunked-upload/${uploadId}/complete`,
-      { category_id: categoryId }
+      { category_id: categoryId },
+      // Merge + ffmpeg thumbnail can take a while on large videos.
+      { timeout: 0 }
     );
     return response.data;
   }
@@ -224,9 +266,10 @@ class PhotosService {
     }
   }
 
-  // Check if file should use chunked upload (> 100MB)
-  shouldUseChunkedUpload(fileSize: number): boolean {
-    return fileSize > 100 * 1024 * 1024; // 100MB threshold
+  // Check if file should use chunked upload (default > 95MB Cloudflare-safe batch).
+  shouldUseChunkedUpload(fileSize: number, thresholdBytes?: number): boolean {
+    const threshold = thresholdBytes ?? this.DEFAULT_CHUNKED_THRESHOLD;
+    return fileSize > threshold;
   }
 
   // ============================================
@@ -245,6 +288,12 @@ class PhotosService {
     if (filters.hasLikes) params.append('has_likes', 'true');
     if (filters.hasFavorites) params.append('has_favorites', 'true');
     if (filters.hasComments) params.append('has_comments', 'true');
+    if (filters.colorLabels && filters.colorLabels.length > 0) {
+      params.append('color_labels', filters.colorLabels.join(','));
+    }
+    if (filters.myColorLabels && filters.myColorLabels.length > 0) {
+      params.append('my_color_labels', filters.myColorLabels.join(','));
+    }
     if (filters.categoryId) params.append('category_id', filters.categoryId.toString());
     if (filters.logic) params.append('logic', filters.logic);
     if (filters.sort) params.append('sort', filters.sort);
@@ -339,6 +388,10 @@ export interface FeedbackFilters {
   hasFavorites?: boolean;
   minFavorites?: number;
   hasComments?: boolean;
+  /** Colour labels to keep, e.g. ['green'] (#1044). Empty = no filtering. */
+  colorLabels?: string[];
+  /** Same, against the caller's own marks. */
+  myColorLabels?: string[];
   categoryId?: number;
   logic?: 'AND' | 'OR';
   sort?: 'rating' | 'likes' | 'favorites' | 'date' | 'filename';
@@ -353,6 +406,11 @@ export interface FilterSummary {
   withLikes: number;
   withFavorites: number;
   withComments: number;
+  withColorLabels?: number;
+  /** Photos per colour (#1044), e.g. { green: 42 }. */
+  colorLabelCounts?: Record<string, number>;
+  /** Same, for the caller's own marks. */
+  myColorLabelCounts?: Record<string, number>;
 }
 
 export interface FilteredPhotosResponse {
@@ -367,9 +425,31 @@ export interface FilteredPhotosResponse {
   summary: FilterSummary;
 }
 
+/**
+ * Wire shape of the export `filter` block. The export endpoint feeds it
+ * straight into the backend's PhotoFilterBuilder, which reads snake_case
+ * keys — so this is deliberately NOT FeedbackFilters (camelCase, used by
+ * the in-app filter UI). Callers convert between the two.
+ */
+export interface ExportFilter {
+  min_rating?: number | null;
+  max_rating?: number | null;
+  has_likes?: boolean;
+  min_likes?: number;
+  has_favorites?: boolean;
+  min_favorites?: number;
+  has_comments?: boolean;
+  color_labels?: string[];
+  my_color_labels?: string[];
+  category_id?: number;
+  logic?: 'AND' | 'OR';
+  sort?: 'rating' | 'likes' | 'favorites' | 'date' | 'filename';
+  order?: 'asc' | 'desc';
+}
+
 export interface ExportOptions {
   photo_ids?: number[];
-  filter?: FeedbackFilters;
+  filter?: ExportFilter;
   format: 'txt' | 'csv' | 'xmp' | 'json';
   options?: {
     filename_format?: 'original' | 'picpeak';
@@ -379,6 +459,8 @@ export interface ExportOptions {
     include_label?: boolean;
     include_description?: boolean;
     include_keywords?: boolean;
+    /** Whose marks the export reads: the guests' ('client') or the admin's own ('mine'). */
+    mark_source?: 'client' | 'mine';
   };
 }
 

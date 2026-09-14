@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { MasonryPhotoAlbum } from 'react-photo-album';
 import 'react-photo-album/masonry.css';
 import Lightbox from 'yet-another-react-lightbox';
@@ -9,6 +10,7 @@ import Download from 'yet-another-react-lightbox/plugins/download';
 import Captions from 'yet-another-react-lightbox/plugins/captions';
 import 'yet-another-react-lightbox/styles.css';
 import 'yet-another-react-lightbox/plugins/thumbnails.css';
+import { ColorLabelBadge } from '../ColorLabelBadge';
 import 'yet-another-react-lightbox/plugins/captions.css';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download as DownloadIcon, Heart, Check, Star, MessageSquare, Package, LogOut } from 'lucide-react';
@@ -17,9 +19,12 @@ import { useInView } from 'react-intersection-observer';
 
 import type { BaseGalleryLayoutProps } from './BaseGalleryLayout';
 import type { Photo } from '../../../types';
-import { AuthenticatedImage } from '../../common';
+import { AuthenticatedImage, PoweredBy } from '../../common';
+import { thumbnailUrlForTile } from '../imageTiers';
 import { feedbackService } from '../../../services/feedback.service';
+import { PhotoReactions } from '../PhotoReactions';
 import { useGuestIdentityOptional } from '../../../contexts/GuestIdentityContext';
+import { useInputMode } from '../../../hooks/useInputMode';
 import { FeedbackIdentityModal } from '../FeedbackIdentityModal';
 import { galleryService } from '../../../services/gallery.service';
 import { analyticsService } from '../../../services/analytics.service';
@@ -28,6 +33,7 @@ import { toast } from 'react-toastify';
 
 import './GalleryPremiumLayout.css';
 import { lightboxImageUrl } from '../imageTiers';
+import { renderPremiumLightboxImage } from './PremiumLightboxImage';
 
 interface PhotoCardProps {
   photo: Photo;
@@ -41,9 +47,7 @@ interface PhotoCardProps {
   isLiked: boolean;
   slug: string;
   allowDownloads?: boolean;
-  protectionLevel?: 'basic' | 'standard' | 'enhanced' | 'maximum';
   useEnhancedProtection?: boolean;
-  useCanvasRendering?: boolean;
   feedbackEnabled?: boolean;
   // #506: track the per-event "allow likes" toggle so the per-photo
   // Like button respects it. `feedbackEnabled` alone isn't enough —
@@ -63,25 +67,30 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
   isSelectionMode,
   isLiked,
   slug,
-  allowDownloads = true,
-  protectionLevel = 'standard',
-  useEnhancedProtection = false,
-  useCanvasRendering = false,
   feedbackEnabled = false,
   allowLikes = false,
   index
 }) => {
-  // The height MasonryPhotoAlbum computed from photos.width/height is used, not
-  // discarded (#1130). Letting the tile size itself from the image meant the
-  // rendered shape came from whatever rendition was served — and with
-  // thumbnail_fit seeded to 'cover' (migration 040) every rendition is square,
-  // so the masonry laid out identical squares and was indistinguishable from
-  // the fixed grid. The photo's real aspect ratio is in the DB and is what the
-  // album already laid out against.
+  // The height MasonryPhotoAlbum computed from photos.width/height is used,
+  // not discarded (#1130). Letting the tile size itself from the image meant
+  // the rendered shape came from whatever rendition happened to be served —
+  // and with thumbnail_fit seeded to 'cover' (migration 040) every rendition
+  // is square, so the masonry laid out 79 identical squares and was
+  // indistinguishable from the fixed grid. The photo's real aspect ratio is
+  // in the DB and is what the album already laid out against.
   const { ref, inView } = useInView({
     triggerOnce: true,
     threshold: 0.1,
   });
+
+  // Responsive tier (#1095). This layout has its own card rather than the
+  // shared PhotoCard, so it needs its own call — but MasonryPhotoAlbum hands
+  // the laid-out tile width straight to the render prop, so the measurement
+  // the shared card has to take is simply a parameter here.
+  const isVideo = photo.media_type === 'video' || photo.type === 'video';
+  const tieredSrc = (!isVideo && photo.thumbnail_url
+    ? thumbnailUrlForTile(photo.thumbnail_url, photo, width)
+    : null) || photo.thumbnail_url || photo.url;
 
   const likeCount = photo.like_count ?? 0;
   const averageRating = photo.average_rating ?? 0;
@@ -99,23 +108,23 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
       data-testid={`photo-card-${photo.id}`}
     >
       <AuthenticatedImage
-        src={photo.thumbnail_url || photo.url}
+        src={tieredSrc}
         alt={photo.filename}
         // No inline height: the card now has a definite one, so the
         // stylesheet's `.gallery-premium-photo-card img { height: 100% }` can
-        // finally apply and object-fit: cover crops a square rendition INTO the
-        // correctly-shaped tile, rather than the rendition dictating the shape.
+        // finally apply and object-fit: cover crops a square rendition INTO
+        // the correctly-shaped tile, rather than the rendition dictating the
+        // tile's shape.
         className="w-full h-full object-cover"
         loading="lazy"
         isGallery={true}
         slug={slug}
-        photoId={photo.id}
-        requiresToken={photo.requires_token}
-        secureUrlTemplate={photo.secure_url_template}
-        protectFromDownload={!allowDownloads || useEnhancedProtection}
-        protectionLevel={protectionLevel}
-        useEnhancedProtection={useEnhancedProtection}
-        useCanvasRendering={useCanvasRendering || protectionLevel === 'maximum'}
+      />
+
+      {/* Colour label (#1044) — same badge every layout uses. */}
+      <ColorLabelBadge
+        colorLabel={photo.my_color_label}
+        otherColorLabels={photo.other_color_labels}
       />
 
       {/* Overlay Gradient */}
@@ -173,9 +182,12 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
 
 interface GalleryPremiumLayoutProps extends BaseGalleryLayoutProps {
   heroPhotoOverride?: Photo | null;
+  suppressEmptyState?: boolean;
 }
 
 export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
+  // #1160: folder-only root — render the shell, skip the empty message.
+  suppressEmptyState = false,
   photos,
   slug,
   onPhotoClick: _onPhotoClick,
@@ -190,6 +202,8 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
   eventName,
   eventDate,
   allowDownloads = true,
+  downloadChoices,
+  onPickResolution,
   protectionLevel = 'standard',
   useEnhancedProtection = false,
   useCanvasRendering = false,
@@ -206,6 +220,17 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
   const { t } = useTranslation();
   const downloadPhotoMutation = useDownloadPhoto();
   const [lightboxIndex, setLightboxIndex] = useState(-1);
+  // The delivered preview can be smaller than the original. Keep Zoom's
+  // pixel limit/aspect ratio tied to the loaded rendition, as its default
+  // image renderer does internally.
+  const [imageDimensions, setImageDimensions] = useState<Record<string, { width: number; height: number }>>({});
+  const handleLightboxImageLoad = useCallback((src: string, dimensions: { width: number; height: number }) => {
+    setImageDimensions((previous) => (
+      previous[src]?.width === dimensions.width && previous[src]?.height === dimensions.height
+        ? previous
+        : { ...previous, [src]: dimensions }
+    ));
+  }, []);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [likedPhotoIds, setLikedPhotoIds] = useState<Set<number>>(new Set());
   // Seed from server is_liked on first non-empty payload (#590 follow-up).
@@ -217,7 +242,16 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
     likedSeededRef.current = true;
   }, [photos]);
   const [savedIdentity, setSavedIdentity] = useState<{ name: string; email: string } | null>(null);
+  // Emoji reactions (#839) inside the premium lightbox. This layout uses
+  // yet-another-react-lightbox instead of the shared PhotoLightbox, so the
+  // reaction bar is a fixed overlay fed by its own per-photo fetch.
+  const [reactionState, setReactionState] = useState<{
+    photoId: number;
+    mine: string | null;
+    counts: Record<string, number>;
+  } | null>(null);
   const guestIdentity = useGuestIdentityOptional();
+  const inputMode = useInputMode();
   const [showIdentityModal, setShowIdentityModal] = useState(false);
   const [pendingLikePhotoId, setPendingLikePhotoId] = useState<number | null>(null);
 
@@ -237,6 +271,41 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
     if (!activeCategory) return photos;
     return photos.filter(photo => photo.category_name === activeCategory);
   }, [photos, activeCategory]);
+
+  const currentLightboxPhoto = lightboxIndex >= 0 ? filteredPhotos[lightboxIndex] : null;
+  const reactionsActive = feedbackEnabled && !!feedbackOptions?.allowReactions;
+
+  // Fetch the current photo's reaction tallies + my selection when the
+  // lightbox lands on it. Optimistic updates below keep it fresh in place.
+  useEffect(() => {
+    if (!currentLightboxPhoto || !reactionsActive) {
+      setReactionState(null);
+      return undefined;
+    }
+    let alive = true;
+    feedbackService.getPhotoFeedback(slug, String(currentLightboxPhoto.id))
+      .then((d) => {
+        if (!alive) return;
+        setReactionState({
+          photoId: currentLightboxPhoto.id,
+          mine: d.my_feedback.reaction || null,
+          counts: d.reactions || {},
+        });
+      })
+      .catch(() => { /* bar simply stays hidden for this photo */ });
+    return () => { alive = false; };
+  }, [currentLightboxPhoto?.id, reactionsActive, slug]);
+
+  const handleReactionChange = useCallback((next: string | null) => {
+    setReactionState((prev) => {
+      if (!prev) return prev;
+      const counts = { ...prev.counts };
+      if (prev.mine) counts[prev.mine] = Math.max(0, (counts[prev.mine] || 0) - 1);
+      if (next) counts[next] = (counts[next] || 0) + 1;
+      return { ...prev, mine: next, counts };
+    });
+    onFeedbackChange?.();
+  }, [onFeedbackChange]);
 
   // Get hero photo
   const heroPhoto = heroPhotoOverride || photos[0];
@@ -264,19 +333,20 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
       // deliberately stays on photo.url: what a guest saves must be the full
       // original.
       src: lightboxImageUrl(photo),
-      // The download handler recovers the photo by id, because matching
-      // slide.src against photo.url stops working the moment src is a
-      // derivative — Download would silently do nothing.
+      // The download handler used to recover the photo by matching slide.src
+      // against photo.url. src is a derivative now, so that lookup would find
+      // nothing and Download would silently do nothing (#1166 review).
       photoId: photo.id,
       alt: photo.filename,
-      width: photo.width || 1200,
-      height: photo.height || 800,
+      width: imageDimensions[lightboxImageUrl(photo)]?.width || photo.width || 1200,
+      height: imageDimensions[lightboxImageUrl(photo)]?.height || photo.height || 800,
+      thumbnail: photo.thumbnail_url || undefined,
       download: allowDownloads ? photo.url : undefined,
       title: showOriginalFilename
         ? (photo.original_filename || photo.filename)
         : undefined,
     }));
-  }, [filteredPhotos, allowDownloads, showOriginalFilename]);
+  }, [filteredPhotos, allowDownloads, showOriginalFilename, imageDimensions]);
 
   const handleLike = useCallback(async (photo: Photo, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -372,6 +442,11 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
   const handleDownloadSelected = useCallback(async () => {
     if (selectedPhotos.size === 0) return;
     const ids = Array.from(selectedPhotos);
+    // #858: hand off to the resolution picker when the gallery offers a choice.
+    if (downloadChoices && downloadChoices.length > 1 && onPickResolution) {
+      onPickResolution(ids);
+      return;
+    }
     toast.info(t('gallery.downloading', { count: ids.length }));
 
     try {
@@ -380,7 +455,7 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
     } catch {
       toast.error(t('gallery.downloadError'));
     }
-  }, [selectedPhotos, slug, t]);
+  }, [selectedPhotos, slug, t, downloadChoices, onPickResolution]);
 
   const handleDownloadFromLightbox = useCallback((slide: { src?: string; photoId?: number }) => {
     if (!allowDownloads || !slide.src) return;
@@ -407,7 +482,10 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
     day: '2-digit'
   }) : null;
 
-  if (photos.length === 0) {
+  // #1160: a folder-only root has no photos to show here, but the folder tiles
+  // above prove the gallery isn't empty — render the shell (hero, logout,
+  // controls) without the contradictory message.
+  if (photos.length === 0 && !suppressEmptyState) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">{t('gallery.noPhotosFound')}</p>
@@ -416,7 +494,10 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
   }
 
   return (
-    <div className="gallery-premium-layout">
+    // #1275 — the stylesheet keys its touch rules off this rather than a
+    // primary-pointer media query, so the checkbox and like button follow the
+    // input actually in use on a device that has both.
+    <div className="gallery-premium-layout" data-input-mode={inputMode}>
       {/* Hero Section */}
       <div className="gallery-premium-hero">
         <div
@@ -500,7 +581,7 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
                 <Heart className="w-4 h-4" />
               </button>
             )}
-            {allowDownloads && (
+            {allowDownloads && photos.length > 0 && (
               <button
                 className="gallery-premium-nav-btn"
                 title={t('common.downloadAll', 'Download All')}
@@ -556,9 +637,7 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
                   isLiked={likedPhotoIds.has(originalPhoto.id)}
                   slug={slug}
                   allowDownloads={allowDownloads}
-                  protectionLevel={protectionLevel}
                   useEnhancedProtection={useEnhancedProtection}
-                  useCanvasRendering={useCanvasRendering}
                   feedbackEnabled={feedbackEnabled}
                   allowLikes={!!feedbackOptions?.allowLikes}
                   index={photoIndex}
@@ -577,7 +656,7 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
 
       {/* Footer */}
       <footer className="gallery-premium-footer">
-        <p>{t('gallery.poweredBy', 'Powered by PicPeak')}</p>
+        <PoweredBy />
         <p>© {new Date().getFullYear()} {t('gallery.allRightsReserved', 'All rights reserved')}</p>
       </footer>
 
@@ -591,6 +670,9 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
         // slide change — same semantics as PhotoLightbox's beacon.
         on={{
           view: ({ index }) => {
+            // Keep the controlled index in sync when loaded dimensions update
+            // the slides array; otherwise YARL jumps back to the opening photo.
+            setLightboxIndex(index);
             const photo = filteredPhotos[index];
             if (photo) galleryService.trackPhotoView(slug, photo.id);
           },
@@ -608,6 +690,9 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
           thumbnail: { border: 'none' }
         }}
         render={{
+          slide: (props) => renderPremiumLightboxImage({
+            ...props, slug, useCanvasRendering, protectionLevel, onImageLoad: handleLightboxImageLoad,
+          }),
           buttonPrev: slides.length <= 1 ? () => null : undefined,
           buttonNext: slides.length <= 1 ? () => null : undefined,
         }}
@@ -618,6 +703,26 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
           }
         }}
       />
+
+      {/* Emoji reaction bar over the lightbox (#839). Portaled to
+          document.body: inside the layout tree an ancestor stacking context
+          (framer-motion transforms) would paint it UNDER yarl's body-level
+          portal and its backdrop would swallow every click. As a body child
+          the z-index 10000 genuinely beats yarl's 9999. */}
+      {currentLightboxPhoto && reactionsActive && reactionState?.photoId === currentLightboxPhoto.id && createPortal(
+        <div className="gallery-premium-lightbox-reactions">
+          <PhotoReactions
+            photoId={String(currentLightboxPhoto.id)}
+            gallerySlug={slug}
+            myReaction={reactionState.mine}
+            reactionCounts={reactionState.counts}
+            isEnabled={true}
+            requireNameEmail={!!feedbackOptions?.requireNameEmail}
+            onReactionChange={handleReactionChange}
+          />
+        </div>,
+        document.body
+      )}
 
       {/* Identity Modal */}
       <FeedbackIdentityModal

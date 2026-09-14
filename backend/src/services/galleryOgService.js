@@ -2,6 +2,7 @@ const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { ensureThumbnail } = require('./imageProcessor');
 const { getStorage } = require('./storage');
+const { getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
 
 const SOCIAL_CRAWLER_PATTERNS = [
   /facebookexternalhit/i,
@@ -148,8 +149,8 @@ function absoluteUrl(maybeRelative, base) {
   }
 }
 
-function frontendBase() {
-  return (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+async function frontendBase() {
+  return getAbsoluteFrontendUrl();
 }
 
 // Render the event date for the OG preview card respecting the
@@ -182,7 +183,7 @@ async function buildOgMetadata(slug, requestPath) {
   const resolved = await resolveSlug(slug);
   const event = isPubliclyVisible(resolved) ? resolved : null;
   const branding = await fetchBranding();
-  const base = frontendBase();
+  const base = await frontendBase();
   const siteName = branding.companyName || 'PicPeak';
   const logoUrl = absoluteUrl(branding.logoUrl, base) || `${base}/picpeak-logo-transparent.png`;
 
@@ -218,7 +219,11 @@ async function buildOgMetadata(slug, requestPath) {
   // the logo on any of those misses so a half-configured event still
   // gets a polished link preview rather than a broken image.
   let image = logoUrl;
-  if (event.og_image_share_enabled && event.hero_photo_id) {
+  // Reveal mode (#838): while the gallery is hidden from guests, social
+  // crawlers must not get the hero photo either — fall back to the brand
+  // logo like the opt-out case.
+  const { isGalleryHidden } = require('../utils/revealMode');
+  if (event.og_image_share_enabled && event.hero_photo_id && !isGalleryHidden(event)) {
     const heroPhoto = await db('photos')
       .where({ id: event.hero_photo_id, event_id: event.id })
       .select('id', 'thumbnail_path')
@@ -313,7 +318,8 @@ async function handleGalleryOgCover(req, res) {
       return;
     }
     const event = await resolveSlug(slug);
-    if (!event || !event.og_image_share_enabled || !event.hero_photo_id) {
+    const { isGalleryHidden } = require('../utils/revealMode');
+    if (!event || !event.og_image_share_enabled || !event.hero_photo_id || isGalleryHidden(event)) {
       res.status(404).type('text/plain').send('Cover not available');
       return;
     }

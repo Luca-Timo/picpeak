@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { X, Heart, Bookmark, Star, MessageCircle } from 'lucide-react';
+import { X, Heart, Bookmark, Star, MessageCircle, Smile, Palette } from 'lucide-react';
 import { Loading } from '../common';
 import { guestsService, AdminGuest } from '../../services/guests.service';
 import { AuthenticatedImage } from '../common/AuthenticatedImage';
@@ -14,12 +14,17 @@ interface AdminGuestDetailProps {
   onClose: () => void;
 }
 
-type Tab = 'all' | 'liked' | 'favorited' | 'rated' | 'commented';
+type Tab = 'all' | 'liked' | 'favorited' | 'rated' | 'commented' | 'reacted' | 'labeled';
 
 export const AdminGuestDetail: React.FC<AdminGuestDetailProps> = ({ eventId, guest, onClose }) => {
   const { t } = useTranslation();
   const { formatDateTime: fmtDateTime } = useLocalizedDate();
   const [tab, setTab] = useState<Tab>('all');
+
+  // Badges are plain strings in this grid, so a colour label shows as its
+  // name rather than a swatch — which also keeps it readable for anyone who
+  // can't tell the five colours apart.
+  const colorBadge = (color: string) => t(`feedback.colorLabels.${color}`, color);
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-guest-detail', eventId, guest.id],
@@ -31,6 +36,8 @@ export const AdminGuestDetail: React.FC<AdminGuestDetailProps> = ({ eventId, gue
   const favorited = selections?.favorited || [];
   const rated = selections?.rated || [];
   const commented = selections?.commented || [];
+  const reacted = selections?.reacted || [];
+  const labeled = selections?.labeled || [];
 
   // "all" view combines the three visual selection types.
   type GridItem = { photo: { id: number; filename: string; thumbnail_url: string }; badges: string[] };
@@ -48,6 +55,8 @@ export const AdminGuestDetail: React.FC<AdminGuestDetailProps> = ({ eventId, gue
   liked.forEach((p) => add(p, 'like'));
   favorited.forEach((p) => add(p, 'favorite'));
   rated.forEach((r) => add(r.photo, 'rating'));
+  reacted.forEach((r) => add(r.photo, r.reaction));
+  labeled.forEach((r) => add(r.photo, colorBadge(r.color_label)));
 
   const visibleItems: GridItem[] =
     tab === 'all'
@@ -58,6 +67,10 @@ export const AdminGuestDetail: React.FC<AdminGuestDetailProps> = ({ eventId, gue
       ? favorited.map((p) => ({ photo: p, badges: ['favorite'] }))
       : tab === 'rated'
       ? rated.map((r) => ({ photo: r.photo, badges: [`${r.rating}★`] }))
+      : tab === 'reacted'
+      ? reacted.map((r) => ({ photo: r.photo, badges: [r.reaction] }))
+      : tab === 'labeled'
+      ? labeled.map((r) => ({ photo: r.photo, badges: [colorBadge(r.color_label)] }))
       : [];
 
   return (
@@ -87,7 +100,7 @@ export const AdminGuestDetail: React.FC<AdminGuestDetailProps> = ({ eventId, gue
         ) : (
           <div className="overflow-y-auto p-4">
             {/* Stats */}
-            <div className="grid grid-cols-4 gap-2 mb-4">
+            <div className="grid grid-cols-5 gap-2 mb-4">
               <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded text-center">
                 <div className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">
                   {liked.length}
@@ -124,11 +137,29 @@ export const AdminGuestDetail: React.FC<AdminGuestDetailProps> = ({ eventId, gue
                   {t('admin.guests.columns.comments', 'Comments')}
                 </div>
               </div>
+              <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded text-center">
+                <div className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">
+                  {reacted.length}
+                </div>
+                <div className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center justify-center gap-1">
+                  <Smile className="w-3 h-3" />
+                  {t('admin.guests.columns.reactions', 'Reactions')}
+                </div>
+              </div>
+              <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded text-center">
+                <div className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">
+                  {labeled.length}
+                </div>
+                <div className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center justify-center gap-1">
+                  <Palette className="w-3 h-3" />
+                  {t('admin.guests.columns.colorLabels', 'Color labels')}
+                </div>
+              </div>
             </div>
 
             {/* Tabs */}
             <div className="flex gap-1 border-b border-neutral-200 dark:border-neutral-700 mb-4">
-              {(['all', 'liked', 'favorited', 'rated', 'commented'] as const).map((k) => (
+              {(['all', 'liked', 'favorited', 'rated', 'commented', 'reacted', 'labeled'] as const).map((k) => (
                 <button
                   key={k}
                   type="button"
