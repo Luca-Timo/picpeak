@@ -115,6 +115,21 @@ function keyInfo() {
   return { keyId, source };
 }
 
+/**
+ * Where the key comes from, without creating one (System Health):
+ * `env`, `file`, `none` (created with the first signature) or `unreadable`.
+ */
+function keyStatus() {
+  const env = !!process.env.PICPEAK_EVIDENCE_KEY;
+  if (!env && !fs.existsSync(path.join(getStoragePath(), KEY_FILE))) return { source: 'none', keyId: null };
+  try {
+    const { keyId, source } = loadKey();
+    return { source, keyId };
+  } catch (_) {
+    return { source: 'unreadable', keyId: null };
+  }
+}
+
 /** The lookup hash of an email address. */
 function hashEmail(email) {
   return crypto.createHash('sha256').update(String(email || '').trim().toLowerCase()).digest('hex');
@@ -125,6 +140,7 @@ module.exports = {
   decrypt,
   tryDecrypt,
   keyInfo,
+  keyStatus,
   hashEmail,
   _resetForTests: () => { cache = null; },
 };

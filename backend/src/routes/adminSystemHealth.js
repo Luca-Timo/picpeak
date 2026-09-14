@@ -235,12 +235,16 @@ router.get(
     // stay pending until an admin marks them clean, so a growing pending
     // count is the thing to notice here.
     const customerDocuments = await require('../services/customerDocumentsService').getReviewCounts();
+    // Where the key for signing evidence comes from (#1446): the env var, the
+    // file in business-docs (backed up), or not created yet. Never the key.
+    const evidenceKey = require('../utils/fieldEncryption').keyStatus();
 
     return successResponse(res, {
       stuckEmails: stuckEmails.map(mapEmailRow),
       waitingEmails: waitingEmails.map(mapEmailRow),
       processor: getQueueProcessorStatus(),
       customerDocuments,
+      evidenceKey,
       counts: {
         stuckEmails: stuckEmails.length,
         waitingEmails: waitingEmails.length,

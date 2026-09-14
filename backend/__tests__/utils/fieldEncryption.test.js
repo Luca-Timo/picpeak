@@ -34,6 +34,16 @@ test('values round-trip and each encryption is different', () => {
   expect(fieldEncryption.decrypt(null)).toBeNull();
 });
 
+test('the status says where the key comes from without creating one', () => {
+  expect(fieldEncryption.keyStatus()).toEqual({ source: 'none', keyId: null });
+  expect(fs.existsSync(path.join(tmp, 'business-docs', 'keys', 'evidence.key'))).toBe(false);
+  fieldEncryption.encrypt('x');
+  expect(fieldEncryption.keyStatus()).toEqual({ source: 'file', keyId: expect.stringMatching(/^[0-9a-f]{8}$/) });
+  process.env.PICPEAK_EVIDENCE_KEY = 'b'.repeat(64);
+  expect(fieldEncryption.keyStatus().source).toBe('env');
+  delete process.env.PICPEAK_EVIDENCE_KEY;
+});
+
 test('the key file is created once, private, under business-docs', () => {
   fieldEncryption.encrypt('x');
   const file = path.join(tmp, 'business-docs', 'keys', 'evidence.key');
