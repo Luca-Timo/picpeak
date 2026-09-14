@@ -32,9 +32,12 @@ const { buildContentDisposition } = require('../utils/filenameSanitizer');
 const { clientIpForAudit } = require('../utils/clientIp');
 const { getAppSetting } = require('../utils/appSettings');
 const { getStoragePath } = require('../config/storage');
+const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
 const signingV2 = require('../services/contract/signingV2');
 
 const router = express.Router();
+// With contracts switched off, signing is off too — same code as the admin routes.
+router.use(requireFeatureFlag('contracts', 'CONTRACTS_DISABLED'));
 
 const limiter = (windowMs, max) => rateLimit({ windowMs, max, standardHeaders: true, legacyHeaders: false });
 const viewLimiter = limiter(60 * 1000, 30);

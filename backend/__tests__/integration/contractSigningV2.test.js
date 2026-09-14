@@ -258,3 +258,11 @@ test('the portal opens a session for the signer with the customer\'s email', asy
 
   await expect(signingV2.portalSigningAccess({ ...customer, id: customer.id + 999 }, id)).rejects.toThrow(/not found/i);
 });
+
+test('signing sits behind the contracts flag', async () => {
+  await setFlag('contracts', false);
+  const res = await request(signingApp).get(`/api/public/contract-signing/invite/${'a'.repeat(64)}`);
+  expect(res.status).toBe(403);
+  expect(res.body.code).toBe('CONTRACTS_DISABLED');
+  await setFlag('contracts', true);
+});
