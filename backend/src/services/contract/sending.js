@@ -83,9 +83,19 @@ async function sendContract(id, adminId) {
   // bodies (matches post-send reads).
   const refreshed = await getContractById(id);
   const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions, refreshed.textSections);
-  const buffer = await pdfService.renderContractToBuffer(ctx);
-  const { filePath: pdfPath, sha256: pdfSha256 } = await persistContractPdf(refreshed.contract, buffer, '',
-    { kind: 'unsigned', theme: ctx.theme, issuer: ctx.issuer, templateVersionId: refreshed.contract.template_version_id });
+  const rendered = await pdfService.renderContractToBuffer(ctx);
+  // Attachments (#1445): merged ones go between the body and the signature
+  // page, separate ones are delivered next to the PDF; each is checked
+  // against the sha256 the contract recorded for it.
+  const attachments = require('./attachments');
+  const sendable = await attachments.buildSendable(refreshed.contract, rendered);
+  const { filePath: pdfPath, sha256: pdfSha256 } = await persistContractPdf(refreshed.contract, sendable.buffer, '', {
+    kind: 'unsigned',
+    theme: ctx.theme,
+    issuer: ctx.issuer,
+    templateVersionId: refreshed.contract.template_version_id,
+    manifest: sendable.manifest,
+  });
 
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = contract.valid_until
@@ -120,6 +130,19 @@ async function sendContract(id, adminId) {
   // ON; an admin who prefers a link-only email turns it off and the
   // customer reaches the PDF via the public sign page instead.
   const attachPdf = await getAppSetting('crm_contracts_pdf_attachment_enabled');
+  const emailAttachments = [
+    ...((attachPdf !== false && pdfPath) ? [{
+      filename: `${contract.contract_number}.pdf`,
+      contentPath: pdfPath,
+      contentType: 'application/pdf',
+    }] : []),
+    // Attachments delivered as separate files (#1445).
+    ...sendable.separate.map((file) => ({
+      filename: attachments.downloadName(file.name),
+      contentPath: file.path,
+      contentType: 'application/pdf',
+    })),
+  ];
   await emailProcessor.queueEmail(null, customer.email, 'contract_sent', {
     contract_number: contract.contract_number,
     customer_name: customer.display_name
@@ -129,11 +152,7 @@ async function sendContract(id, adminId) {
     title: contract.title || '',
     event_name: contract.event_name || '',
     valid_until: formatShortDate(contract.valid_until),
-    attachments: (attachPdf !== false && pdfPath) ? [{
-      filename: `${contract.contract_number}.pdf`,
-      contentPath: pdfPath,
-      contentType: 'application/pdf',
-    }] : undefined,
+    attachments: emailAttachments.length ? emailAttachments : undefined,
   });
 
   try {

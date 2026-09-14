@@ -184,9 +184,41 @@ router.get(
       brandingLogoUrl,
       brandingLogoUrlDark,
     );
+    // Attachments (#1445): merged ones are inside the PDF; separate ones
+    // download from /:token/attachments/:attachmentId.
+    view.attachments = (data.attachments || []).map((a) => ({
+      id: a.attachment_id, name: a.name, delivery: a.delivery, pages: Number(a.page_count),
+    }));
     view.allowPdfUpload = allowPdfUpload;
     view.requireDrawnSignature = requireDrawnSignature;
     return successResponse(res, { contract: view });
+  }),
+);
+
+// One of the contract's attachments (#1445), for the customer holding the
+// signing link. The attachment must belong to this contract, and its bytes
+// must still match what the contract recorded.
+router.get(
+  '/:token/attachments/:attachmentId',
+  previewLimiter,
+  [
+    param('token').isString().isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i),
+    param('attachmentId').isInt({ min: 1 }).toInt(),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const tokenRow = await loadActionToken(req, res, {
+      tableName: 'contract_action_tokens',
+      token: req.params.token,
+    });
+    if (!tokenRow) return;
+    const attachments = require('../services/contract/attachments');
+    const file = await attachments.openContractAttachment(tokenRow.contract_id, req.params.attachmentId);
+    const { buildContentDisposition } = require('../utils/filenameSanitizer');
+    res.set('Referrer-Policy', 'no-referrer');
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', buildContentDisposition(attachments.downloadName(file.name), 'attachment'));
+    return res.send(file.buffer);
   }),
 );
 

@@ -1491,6 +1491,7 @@
       "reason": "Public/customer/gallery/visitor surface or existing optional third-party analytics proxy: no product-usage middleware, callbacks, counters or report triggers.",
       "route_signatures": [
         "GET /:token",
+        "GET /:token/attachments/:attachmentId",
         "POST /:token/sign",
         "POST /:token/upload-signed-pdf",
         "GET /:token/pdf"
@@ -1736,6 +1737,20 @@
         "POST /:id/restore",
         "POST /:id/default",
         "POST /:id/preview"
+      ]
+    },
+    "adminDocumentAttachments.js": {
+      "decision": "partial",
+      "signals": [
+        "document_templates"
+      ],
+      "reason": "Admin attachment-library operations only (upload, archive, restore, download). No file names, contents or checksums.",
+      "route_signatures": [
+        "GET /",
+        "POST /",
+        "GET /:id/download",
+        "POST /:id/archive",
+        "POST /:id/restore"
       ]
     }
   },

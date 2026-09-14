@@ -143,7 +143,9 @@ async function getContractById(id) {
       );
     // Free-text sections (#1445), in contract order.
     const textSections = await db('contract_text_sections').where({ contract_id: id }).orderBy('position', 'asc');
-    return { contract, inclusions, textSections };
+    // Attachments (#1445), in delivery order.
+    const attachments = await require('./attachments').loadContractAttachments(id);
+    return { contract, inclusions, textSections, attachments };
   });
 }
 
@@ -473,6 +475,9 @@ async function updateContract(id, payload, adminId) {
       await writeInclusions(trx, id, payload.blocks, previous);
     }
     if (Array.isArray(payload.textSections)) await writeTextSections(trx, id, payload.textSections);
+    if (Array.isArray(payload.attachments)) {
+      await require('./attachments').writeContractAttachments(trx, id, payload.attachments);
+    }
 
     try {
       // Pass `trx` so the audit insert rides the transaction's connection;

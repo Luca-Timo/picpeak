@@ -7432,7 +7432,8 @@
       "pagination": "Page {{page}} of {{total}} · {{count}} contracts",
       "pagination_one": "Page {{page}} of {{total}} · {{count}} contracts",
       "pagination_other": "Page {{page}} of {{total}} · {{count}} contracts",
-      "templates": "Templates"
+      "templates": "Templates",
+      "attachments": "Attachments"
     },
     "detail": {
       "previewPdf": "Preview PDF",
@@ -7714,6 +7715,40 @@
       "draftFromVersion": "New draft from this version",
       "draftFromVersionConfirm": "Replace the current draft with a copy of version {{version}}?",
       "draftCreated": "Draft created from version {{version}}"
+    },
+    "attachments": {
+      "heading": "Attachments",
+      "title": "Contract attachments",
+      "intro": "PDFs that go out with contracts — terms and conditions, a privacy notice, an appendix. Add them to a template or a single contract, either inside the contract PDF or as a separate file.",
+      "none": "No attachments.",
+      "empty": "No attachments yet.",
+      "pages": "{{count}} pages",
+      "archived": "Archived",
+      "archivedInLibrary": "Archived in the library",
+      "delivery": "Delivery",
+      "merged": "In the contract PDF",
+      "separate": "Separate file",
+      "mergedHint": "Attachments in the contract PDF come after the clauses, before the signature page.",
+      "pick": "Attachment from the library",
+      "add": "Add attachment",
+      "manageLibrary": "Manage the library",
+      "file": "PDF (up to 20 MB)",
+      "name": "Name",
+      "description": "Description (optional)",
+      "upload": "Upload",
+      "uploaded": "Attachment added",
+      "alreadyThere": "This file is already in the library as \"{{name}}\".",
+      "uploadFailed": "The file could not be uploaded.",
+      "open": "Open",
+      "errors": {
+        "tooLarge": "The file is larger than 20 MB.",
+        "notPdf": "That file isn't a PDF.",
+        "encrypted": "The PDF is password-protected. Save it without a password and upload it again.",
+        "malformed": "The PDF can't be read. Export it again from the original and upload that.",
+        "activeContent": "The PDF contains scripts, form fields or embedded files. Print it to a new PDF (\"Save as PDF\") and upload that.",
+        "empty": "The PDF has no pages.",
+        "tooManyPages": "The PDF has more than 100 pages."
+      }
     }
   },
   "messages": {
@@ -7951,7 +7986,12 @@
     "submit": "Sign contract",
     "uploadAlternative": "Or upload a wet-signed PDF",
     "uploadHint": "Sign the printed contract by hand, scan it, and upload the PDF here.",
-    "uploadButton": "Upload signed PDF"
+    "uploadButton": "Upload signed PDF",
+    "attachments": {
+      "title": "Attachments",
+      "download": "Download",
+      "inPdf": "Part of the contract PDF"
+    }
   },
   "crmOverview": {
     "title": "CRM overview",

@@ -84,6 +84,9 @@ export const ContractsListPage: React.FC = () => {
           <Link to="/admin/clients/contracts/templates">
             <Button variant="outline">{t('contracts.list.templates', 'Templates')}</Button>
           </Link>
+          <Link to="/admin/clients/contracts/attachments">
+            <Button variant="outline">{t('contracts.list.attachments', 'Attachments')}</Button>
+          </Link>
           <Link to="/admin/clients/contracts/blocks">
             <Button variant="outline">
               <BookOpen className="w-4 h-4 mr-1" />

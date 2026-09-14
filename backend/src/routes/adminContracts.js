@@ -36,6 +36,7 @@ const { validateFileType } = require('../utils/fileSecurityUtils');
 const contractService = require('../services/contractService');
 const contractBlocksService = require('../services/contractBlocksService');
 const contractContent = require('../services/contract/content');
+const contractAttachments = require('../services/contract/attachments');
 const { db } = require('../database/db');
 
 const router = express.Router();
@@ -92,7 +93,7 @@ const signedPdfUpload = multer({
 // Transforms (snake_case DB → camelCase API)
 // ---------------------------------------------------------------------
 
-function transformContract(c, inclusions, textSections) {
+function transformContract(c, inclusions, textSections, attachmentRows) {
   if (!c) return null;
   return {
     id: c.id,
@@ -175,6 +176,7 @@ function transformContract(c, inclusions, textSections) {
         body: contractContent.parseLocaleMap(s.body),
       }))
       : undefined,
+    attachments: Array.isArray(attachmentRows) ? attachmentRows.map(contractAttachments.inclusionToApi) : undefined,
     createdAt: c.created_at,
     updatedAt: c.updated_at,
     inclusions: Array.isArray(inclusions)
@@ -399,7 +401,7 @@ router.post(
     const data = await contractService.getContractById(id);
     return successResponse(
       res,
-      { contract: transformContract(data.contract, data.inclusions, data.textSections), ...(replayed && { replayed: true }) },
+      { contract: transformContract(data.contract, data.inclusions, data.textSections, data.attachments), ...(replayed && { replayed: true }) },
       replayed ? 200 : 201,
     );
   }),
@@ -413,7 +415,7 @@ router.get(
     validateRequest(req);
     const data = await contractService.getContractById(parseInt(req.params.id, 10));
     if (!data) return res.status(404).json({ error: 'Contract not found' });
-    return successResponse(res, { contract: transformContract(data.contract, data.inclusions, data.textSections) });
+    return successResponse(res, { contract: transformContract(data.contract, data.inclusions, data.textSections, data.attachments) });
   }),
 );
 
@@ -460,12 +462,15 @@ router.put(
     body('textSections.*.body').optional({ nullable: true }).isObject(),
     // Optimistic lock (#1445): the lockVersion the editor loaded.
     body('lockVersion').optional().isInt({ min: 1 }),
+    body('attachments').optional().isArray({ max: 20 }),
+    body('attachments.*.attachmentId').optional().isInt({ min: 1 }),
+    body('attachments.*.delivery').optional().isIn(['merged', 'separate']),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
     await contractService.updateContract(parseInt(req.params.id, 10), req.body, req.admin?.id);
     const data = await contractService.getContractById(parseInt(req.params.id, 10));
-    return successResponse(res, { contract: transformContract(data.contract, data.inclusions, data.textSections) });
+    return successResponse(res, { contract: transformContract(data.contract, data.inclusions, data.textSections, data.attachments) });
   }),
 );
 

@@ -86,6 +86,9 @@ router.put(
     body('items.*.section').optional({ nullable: true }).isString().isLength({ max: 32 }),
     body('items.*.heading').optional({ nullable: true }).isString().isLength({ max: 255 }),
     body('items.*.body').optional({ nullable: true }).isObject(),
+    body('attachments').optional().isArray({ max: 20 }),
+    body('attachments.*.attachmentId').optional().isInt({ min: 1 }),
+    body('attachments.*.delivery').optional().isIn(['merged', 'separate']),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);

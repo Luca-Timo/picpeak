@@ -5,6 +5,7 @@
  * responses for PDFs via URL.createObjectURL.
  */
 import { api } from '../config/api';
+import type { AttachmentSelection, IncludedAttachment } from './documentAttachments.service';
 
 /** One leg of the integrity-check response (unsigned or signed PDF).
  *  `expected` is the stored SHA-256 column value; `actual` is freshly
@@ -204,6 +205,8 @@ export interface ContractSummary {
   lockVersion?: number;
   /** sha256 of the content frozen at send. */
   renderedContentSha256?: string | null;
+  /** PDFs sent with the contract (#1445), in order. */
+  attachments?: IncludedAttachment[];
   createdAt: string;
   updatedAt: string;
   inclusions?: ContractBlockInclusion[];
@@ -263,6 +266,8 @@ export interface ContractUpdatePayload {
   projectId?: number | null;
   /** The lockVersion the editor loaded; a newer save gets 409 (#1445). */
   lockVersion?: number;
+  /** The full attachment list; omit to leave it unchanged (#1445). */
+  attachments?: AttachmentSelection[];
 }
 
 export interface ContractBlockCreatePayload {
@@ -507,6 +512,9 @@ export interface PublicContractView {
    *  Server re-enforces both — these only drive the UI. */
   allowPdfUpload?: boolean;
   requireDrawnSignature?: boolean;
+  /** Attachments (#1445): merged ones are inside the PDF, separate ones
+   *  download on their own. */
+  attachments?: Array<{ id: number; name: string; delivery: 'merged' | 'separate'; pages: number }>;
 }
 
 export const publicContractsService = {

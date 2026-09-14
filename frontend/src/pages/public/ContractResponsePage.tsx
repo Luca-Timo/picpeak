@@ -302,6 +302,34 @@ export const ContractResponsePage: React.FC = () => {
           )}
         </div>
 
+        {/* Attachments (#1445): merged ones are part of the contract PDF,
+            separate ones download on their own. */}
+        {(c.attachments || []).length > 0 && (
+          <div className="mt-6 bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 md:p-8">
+            <h2 className="text-lg font-semibold mb-3">{t('publicContract.attachments.title', 'Attachments')}</h2>
+            <ul className="space-y-2 text-sm">
+              {(c.attachments || []).map((a) => (
+                <li key={a.id} className="flex flex-wrap items-center gap-3">
+                  <span className="font-medium flex-1 min-w-[160px]">{a.name}</span>
+                  {a.delivery === 'separate' ? (
+                    <a
+                      href={`/api/public/contracts/${token}/attachments/${a.id}`}
+                      className="inline-flex items-center gap-1 text-sm underline text-neutral-700 dark:text-neutral-300"
+                    >
+                      <Download className="w-4 h-4" />
+                      {t('publicContract.attachments.download', 'Download')}
+                    </a>
+                  ) : (
+                    <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                      {t('publicContract.attachments.inPdf', 'Part of the contract PDF')}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Signing card */}
         <div className="mt-6 bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6 md:p-8">
           {alreadySigned ? (

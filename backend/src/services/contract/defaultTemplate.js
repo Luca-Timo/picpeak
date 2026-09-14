@@ -48,6 +48,7 @@ async function createSystemTemplate() {
       position: index + 1, section: block.section, kind: 'block', block: block.slug, heading: null,
       body: content.blockBodies(block),
     })),
+    attachments: [],
   });
 
   return db.transaction(async (trx) => {

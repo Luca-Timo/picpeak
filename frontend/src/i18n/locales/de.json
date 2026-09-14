@@ -7433,7 +7433,8 @@
       "pagination": "Seite {{page}} von {{total}} · {{count}} Verträge",
       "pagination_one": "Seite {{page}} von {{total}} · {{count}} Vertrag",
       "pagination_other": "Seite {{page}} von {{total}} · {{count}} Verträge",
-      "templates": "Vorlagen"
+      "templates": "Vorlagen",
+      "attachments": "Anhänge"
     },
     "detail": {
       "previewPdf": "PDF-Vorschau",
@@ -7715,6 +7716,40 @@
       "draftFromVersion": "Neuer Entwurf aus dieser Version",
       "draftFromVersionConfirm": "Den aktuellen Entwurf durch eine Kopie von Version {{version}} ersetzen?",
       "draftCreated": "Entwurf aus Version {{version}} erstellt"
+    },
+    "attachments": {
+      "heading": "Anhänge",
+      "title": "Vertragsanhänge",
+      "intro": "PDFs, die mit Verträgen verschickt werden – AGB, Datenschutzhinweise, ein Anhang. Fügen Sie sie einer Vorlage oder einem einzelnen Vertrag hinzu, im Vertrags-PDF oder als eigene Datei.",
+      "none": "Keine Anhänge.",
+      "empty": "Noch keine Anhänge.",
+      "pages": "{{count}} Seiten",
+      "archived": "Archiviert",
+      "archivedInLibrary": "In der Bibliothek archiviert",
+      "delivery": "Zustellung",
+      "merged": "Im Vertrags-PDF",
+      "separate": "Eigene Datei",
+      "mergedHint": "Anhänge im Vertrags-PDF stehen nach den Klauseln, vor der Unterschriftenseite.",
+      "pick": "Anhang aus der Bibliothek",
+      "add": "Anhang hinzufügen",
+      "manageLibrary": "Bibliothek verwalten",
+      "file": "PDF (bis 20 MB)",
+      "name": "Name",
+      "description": "Beschreibung (optional)",
+      "upload": "Hochladen",
+      "uploaded": "Anhang hinzugefügt",
+      "alreadyThere": "Diese Datei ist bereits als „{{name}}“ in der Bibliothek.",
+      "uploadFailed": "Die Datei konnte nicht hochgeladen werden.",
+      "open": "Öffnen",
+      "errors": {
+        "tooLarge": "Die Datei ist größer als 20 MB.",
+        "notPdf": "Diese Datei ist kein PDF.",
+        "encrypted": "Das PDF ist passwortgeschützt. Speichern Sie es ohne Passwort und laden Sie es erneut hoch.",
+        "malformed": "Das PDF kann nicht gelesen werden. Exportieren Sie es erneut aus dem Original und laden Sie das hoch.",
+        "activeContent": "Das PDF enthält Skripte, Formularfelder oder eingebettete Dateien. Drucken Sie es in ein neues PDF („Als PDF sichern“) und laden Sie das hoch.",
+        "empty": "Das PDF hat keine Seiten.",
+        "tooManyPages": "Das PDF hat mehr als 100 Seiten."
+      }
     }
   },
   "messages": {
@@ -7952,7 +7987,12 @@
     "submit": "Vertrag unterschreiben",
     "uploadAlternative": "Oder ein handschriftlich unterschriebenes PDF hochladen",
     "uploadHint": "Unterschreiben Sie den ausgedruckten Vertrag von Hand, scannen Sie ihn ein und laden Sie das PDF hier hoch.",
-    "uploadButton": "Unterschriebenes PDF hochladen"
+    "uploadButton": "Unterschriebenes PDF hochladen",
+    "attachments": {
+      "title": "Anhänge",
+      "download": "Herunterladen",
+      "inPdf": "Teil des Vertrags-PDFs"
+    }
   },
   "crmOverview": {
     "title": "CRM-Übersicht",

@@ -16,6 +16,8 @@ import { ArrowDown, ArrowLeft, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { Button, Card, Input, Loading } from '../../../components/common';
 import { PermissionGate } from '../../../components/admin/PermissionGate';
+import { AttachmentListEditor, type AttachmentRow } from '../../../components/admin/AttachmentListEditor';
+import type { IncludedAttachment } from '../../../services/documentAttachments.service';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import {
   contractsService, CONTRACT_SECTIONS, type ContractBlock, type ContractBlockSection,
@@ -39,6 +41,8 @@ interface DraftItem {
   blockArchived: boolean;
   expanded: boolean;
 }
+
+const toAttachmentRows = (list?: IncludedAttachment[]): AttachmentRow[] => (list || []).map((a) => ({ attachmentId: a.attachmentId, delivery: a.delivery, name: a.name, pages: a.pages, bytes: a.bytes, isActive: a.isActive }));
 
 let keyCounter = 0;
 const nextKey = () => {
@@ -151,6 +155,7 @@ export const ContractTemplateEditorPage: React.FC = () => {
   const [intro, setIntro] = useState<LocaleText>({});
   const [outro, setOutro] = useState<LocaleText>({});
   const [items, setItems] = useState<DraftItem[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentRow[]>([]);
   const [lockVersion, setLockVersion] = useState(1);
   const [problem, setProblem] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -168,6 +173,7 @@ export const ContractTemplateEditorPage: React.FC = () => {
     setIntro(source?.introText || {});
     setOutro(source?.outroText || {});
     setItems(toDraftItems(detail));
+    setAttachments(toAttachmentRows(source?.attachments));
     setLockVersion(detail.template.lockVersion);
   }, [detail]);
 
@@ -205,6 +211,7 @@ export const ContractTemplateEditorPage: React.FC = () => {
         items: items.map((item) => (item.kind === 'block'
           ? { kind: 'block', blockId: item.blockId, body: item.body }
           : { kind: 'text', section: item.section, heading: item.heading.trim() || null, body: item.body })),
+        attachments: attachments.map((a) => ({ attachmentId: a.attachmentId, delivery: a.delivery })),
       });
       store(saved);
       return saved;
@@ -471,6 +478,11 @@ export const ContractTemplateEditorPage: React.FC = () => {
             </Button>
           </div>
         )}
+      </Card>
+
+      <Card padding="lg" className="space-y-3">
+        <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{t('contracts.attachments.heading', 'Attachments')}</h2>
+        <AttachmentListEditor idPrefix="contract-template-attachment" value={attachments} onChange={setAttachments} readOnly={readOnly} />
       </Card>
 
       <div className="flex flex-wrap justify-end gap-2">

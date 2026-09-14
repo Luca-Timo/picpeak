@@ -892,6 +892,8 @@ app.use('/api/admin/invoices',   require('./src/routes/adminInvoices'));
 app.use('/api/admin/contracts',  require('./src/routes/adminContracts'));
 // Contract templates (#1445) — own prefix, behind the contracts flag.
 app.use('/api/admin/contract-templates', require('./src/routes/adminContractTemplates'));
+// The attachment library for contract templates and contracts (#1445).
+app.use('/api/admin/document-attachments', require('./src/routes/adminDocumentAttachments'));
 app.use('/api/admin/projects',   require('./src/routes/adminProjects'));
 app.use('/api/admin/calendar',   require('./src/routes/adminCalendar'));
 app.use('/api/admin/deals',      require('./src/routes/adminDeals'));

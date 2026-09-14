@@ -5,6 +5,7 @@
  */
 import { api } from '../config/api';
 import type { ContractBlockSection } from './contracts.service';
+import type { AttachmentSelection, IncludedAttachment } from './documentAttachments.service';
 
 export type ContractLocale = 'de' | 'en' | 'fr' | 'nl' | 'pt' | 'ru';
 /** Tab order in the editors: German and English first. */
@@ -61,6 +62,8 @@ export interface ContractTemplateVersion {
   contentSha256: string | null;
   publishedAt: string | null;
   items?: ContractTemplateItem[];
+  /** PDFs sent with contracts from this version, in order. */
+  attachments?: IncludedAttachment[];
 }
 
 export interface ContractTemplateDetail {
@@ -85,6 +88,7 @@ export interface ContractTemplateDraftPayload {
     heading?: string | null;
     body?: LocaleText;
   }>;
+  attachments?: AttachmentSelection[];
 }
 
 const base = '/admin/contract-templates';

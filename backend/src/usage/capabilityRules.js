@@ -16,6 +16,7 @@ const RULES_V2 = [
   [WRITE, /^\/deals\/[^/]+\/installment-plan\/?$/, ['crm', 'crm_installments']],
   [WRITE, /^\/(?:quotes\/presets|contracts\/blocks)(?:\/|$)/, ['document_templates']],
   [WRITE, /^\/contract-templates(?:\/|$)/, ['document_templates']],
+  [WRITE, /^\/document-attachments(?:\/|$)/, ['document_templates']],
   // Quote catalogue + templates (#1451): creating a quote from a template is
   // quote use, maintaining the catalogue is template use.
   [['POST'], /^\/quote-catalog\/templates\/[^/]+\/quotes\/?$/, ['crm', 'crm_quotes']],

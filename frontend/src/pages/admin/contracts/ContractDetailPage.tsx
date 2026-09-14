@@ -33,6 +33,7 @@ import {
 } from '../../../services/contracts.service';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { useMutationWithToast } from '../../../hooks';
+import { formatAttachmentSize } from '../../../services/documentAttachments.service';
 
 function statusBadgeClass(status: ContractStatus): string {
   return status === 'fully_signed'         ? 'bg-green-100 text-green-800'
@@ -612,6 +613,25 @@ export const ContractDetailPage: React.FC = () => {
           </p>
         )}
       </Card>
+
+      {(c.attachments || []).length > 0 && (
+        <Card padding="lg" className="mt-4">
+          <h2 className="font-semibold mb-2">{t('contracts.attachments.heading', 'Attachments')}</h2>
+          <ul className="space-y-1 text-sm">
+            {(c.attachments || []).map((a) => (
+              <li key={a.attachmentId} className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-neutral-900 dark:text-neutral-100">{a.name}</span>
+                <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                  {a.delivery === 'merged'
+                    ? t('contracts.attachments.merged', 'In the contract PDF')
+                    : t('contracts.attachments.separate', 'Separate file')}
+                  {' · '}{t('contracts.attachments.pages', '{{count}} pages', { count: a.pages })} · {formatAttachmentSize(a.bytes)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {/* Audit trail (issue #5 from the maintainer plan) — a
           chronological timeline of every event recorded on this

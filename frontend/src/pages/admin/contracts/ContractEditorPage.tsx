@@ -28,6 +28,7 @@ import { ProjectSelect } from '../../../components/admin/ProjectSelect';
 import { customerAdminService } from '../../../services/customerAdmin.service';
 import { describeSaveError, newIdempotencyKey, type SaveErrorView } from './contractSaveError';
 import { contractTemplatesService } from '../../../services/contractTemplates.service';
+import { AttachmentListEditor, type AttachmentRow } from '../../../components/admin/AttachmentListEditor';
 
 const CRM_DISCLAIMER_URL = 'https://docs.picpeak.app/features/crm/disclaimers';
 
@@ -78,6 +79,9 @@ export const ContractEditorPage: React.FC = () => {
   const [templateChoice, setTemplateChoice] = useState<number | 'none' | null>(null);
   // Optimistic lock for edits: the version this page loaded.
   const [lockVersion, setLockVersion] = useState<number | null>(null);
+  // Attachments (#1445), in delivery order. Edits only: a new contract gets
+  // its template version's attachments.
+  const [attachments, setAttachments] = useState<AttachmentRow[]>([]);
 
   // Why the last save failed, shown inline instead of a toast that vanished
   // before the admin could read which field was wrong or whether a draft now
@@ -189,6 +193,9 @@ export const ContractEditorPage: React.FC = () => {
     setValidUntil(c.validUntil || '');
     setProjectId(c.projectId ?? null);
     setLockVersion(c.lockVersion ?? null);
+    setAttachments((c.attachments || []).map((a) => ({
+      attachmentId: a.attachmentId, delivery: a.delivery, name: a.name, pages: a.pages, bytes: a.bytes, isActive: a.isActive,
+    })));
     setBlocks((c.inclusions || []).map((inc) => ({
       blockId: inc.blockId,
       section: inc.section,
@@ -225,7 +232,7 @@ export const ContractEditorPage: React.FC = () => {
   // re-set to the same content in the background (the block library seeding
   // `blocks` after a load) must not wipe the summary before anyone read it.
   const formSnapshot = JSON.stringify([customerAccountId, title, eventName, eventDate, eventTimeStart,
-    eventTimeEnd, introText, outroText, language, issueDate, validUntil, projectId, blocks]);
+    eventTimeEnd, introText, outroText, language, issueDate, validUntil, projectId, blocks, attachments]);
   const errorFormSnapshotRef = useRef<string | null>(null);
   useEffect(() => {
     if (!saveError) {
@@ -355,6 +362,7 @@ export const ContractEditorPage: React.FC = () => {
           blockId: b.blockId, included: b.included, position: b.position,
         })),
         lockVersion: lockVersion ?? undefined,
+        attachments: attachments.map((a) => ({ attachmentId: a.attachmentId, delivery: a.delivery })),
       });
     },
     onSuccess: () => {
@@ -856,6 +864,13 @@ export const ContractEditorPage: React.FC = () => {
           )}
         </Card>
       ))}
+
+      {isEdit && (
+        <Card padding="lg" className="mb-3">
+          <h2 className="text-lg font-semibold mb-2">{t('contracts.attachments.heading', 'Attachments')}</h2>
+          <AttachmentListEditor idPrefix="contract-attachment" value={attachments} onChange={setAttachments} />
+        </Card>
+      )}
 
       {isEdit && (existing?.contract.textSections || []).length > 0 && (
         <Card padding="lg" className="mb-3">

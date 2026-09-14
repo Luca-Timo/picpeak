@@ -27,6 +27,8 @@ const { canonicalSha256 } = require('../../utils/canonicalJson');
 const { ALLOWED_SECTIONS } = require('../contractBlocksService');
 const { DEFAULT_SETTING, ensureDefaultTemplate, getDefaultTemplateId } = require('./defaultTemplate');
 const content = require('./content');
+const attachments = require('./attachments');
+const { insertBeforeLastPage } = require('../pdf/merge');
 
 const MAX_ITEMS = 200;
 const MAX_DESCRIPTION = 2000;
@@ -97,7 +99,7 @@ function itemToApi(row) {
   };
 }
 
-function versionToApi(version, items) {
+function versionToApi(version, items, attachmentRows) {
   return {
     id: version.id,
     version: ensureInt(version.version_number),
@@ -108,6 +110,7 @@ function versionToApi(version, items) {
     contentSha256: version.content_sha256 || null,
     publishedAt: version.published_at || null,
     ...(items ? { items: items.map(itemToApi) } : {}),
+    ...(attachmentRows ? { attachments: attachmentRows.map(attachments.inclusionToApi) } : {}),
   };
 }
 
@@ -155,8 +158,12 @@ async function getTemplate(id) {
   const publishedRow = versions.find((v) => v.status === 'published') || null;
   return {
     template: templateToApi(template, await getDefaultTemplateId()),
-    draft: draftRow ? versionToApi(draftRow, await loadItems(draftRow.id)) : null,
-    published: publishedRow ? versionToApi(publishedRow, await loadItems(publishedRow.id)) : null,
+    draft: draftRow
+      ? versionToApi(draftRow, await loadItems(draftRow.id), await attachments.loadVersionAttachments(draftRow.id))
+      : null,
+    published: publishedRow
+      ? versionToApi(publishedRow, await loadItems(publishedRow.id), await attachments.loadVersionAttachments(publishedRow.id))
+      : null,
     versions: versions.filter((v) => v.status !== 'draft').map((v) => versionToApi(v)),
   };
 }
@@ -166,7 +173,7 @@ async function getVersion(templateId, versionNumber) {
     .where({ template_id: templateId, version_number: versionNumber })
     .first();
   if (!version) throw new AppError('Template version not found', 404, 'TEMPLATE_VERSION_NOT_FOUND');
-  return versionToApi(version, await loadItems(version.id));
+  return versionToApi(version, await loadItems(version.id), await attachments.loadVersionAttachments(version.id));
 }
 
 // ---------------------------------------------------------------------
@@ -286,7 +293,10 @@ async function ensureDraft(trx, template, fromVersion = null) {
     created_at: now,
     updated_at: now,
   }).returning('id'));
-  if (source) await copyItems(trx, source.id, id);
+  if (source) {
+    await copyItems(trx, source.id, id);
+    await attachments.copyVersionAttachments(trx, source.id, id);
+  }
   return trx('contract_template_versions').where({ id }).first();
 }
 
@@ -325,7 +335,10 @@ async function duplicateTemplate(id, payload, adminId) {
       title: from ? from.title : null, intro_text: from ? from.intro_text : null, outro_text: from ? from.outro_text : null,
       created_at: now, updated_at: now,
     }).returning('id'));
-    if (from) await copyItems(trx, from.id, versionId);
+    if (from) {
+      await copyItems(trx, from.id, versionId);
+      await attachments.copyVersionAttachments(trx, from.id, versionId);
+    }
     return templateId;
   });
   await audit('contract_template_duplicated', { templateId: newId, sourceTemplateId: id }, adminId);
@@ -364,6 +377,9 @@ async function saveDraft(id, payload, adminId) {
         })));
       }
     }
+    if (payload.attachments !== undefined) {
+      await attachments.writeVersionAttachments(trx, draft.id, await attachments.sanitizeAttachmentList(payload.attachments, trx));
+    }
   });
   await audit('contract_template_draft_saved', { templateId: id }, adminId);
   return getTemplate(id);
@@ -391,6 +407,10 @@ async function publishTemplate(id, { lockVersion }, adminId) {
       if (item.kind === 'text' && !Object.keys(content.parseLocaleMap(item.body_override)).length) {
         problems.push(`Free-text section "${item.heading || `#${item.position}`}" has no text`);
       }
+    }
+    const versionAttachments = await attachments.loadVersionAttachments(draft.id, trx);
+    for (const attachment of versionAttachments) {
+      if (!truthy(attachment.is_active)) problems.push(`"${attachment.name}" is archived in the attachment library`);
     }
     const texts = [draft.intro_text, draft.outro_text, ...items.map((item) => item.body_override)]
       .flatMap((value) => Object.values(content.parseLocaleMap(value)));
@@ -423,6 +443,8 @@ async function publishTemplate(id, { lockVersion }, adminId) {
       intro: content.parseLocaleMap(draft.intro_text),
       outro: content.parseLocaleMap(draft.outro_text),
       items: resolved,
+      // Attachments are bound to the version by their bytes.
+      attachments: versionAttachments.map((a) => ({ position: a.position, delivery: a.delivery, sha256: a.sha256 })),
     });
 
     await trx('contract_template_versions').where({ template_id: id, status: 'published' })
@@ -575,6 +597,7 @@ async function seedContractFromVersion(trx, contractId, version) {
   }
   if (inclusions.length) await trx('contract_block_inclusions').insert(inclusions);
   if (texts.length) await trx('contract_text_sections').insert(texts);
+  await attachments.seedContractAttachments(trx, contractId, version.id);
 }
 
 /**
@@ -617,7 +640,12 @@ async function renderTemplatePreview(id, { version: versionNumber } = {}) {
   const { buildRenderContext } = require('./renderContext');
   const pdfService = require('../pdfService');
   const ctx = await buildRenderContext(fakeContract, inclusions, textSections);
-  return pdfService.renderContractToBuffer(ctx);
+  const buffer = await pdfService.renderContractToBuffer(ctx);
+  // Merged attachments where a sent contract has them: before the signature page.
+  const merged = (await attachments.loadVersionAttachments(version.id))
+    .filter((row) => row.delivery === 'merged')
+    .map((row) => attachments.readStoredFile(row).buffer);
+  return (await insertBeforeLastPage(buffer, merged, { title: 'PREVIEW' })).buffer;
 }
 
 module.exports = {
