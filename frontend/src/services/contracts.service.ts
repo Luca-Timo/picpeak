@@ -198,6 +198,9 @@ export interface ContractCreatePayload {
   validUntil?: string;
   /** Migration 121 — optional link to a Project Overview project. */
   projectId?: number | null;
+  /** Initial inclusions, written in the same transaction as the contract.
+   *  Omit to seed every active system block toggled on. */
+  blocks?: Array<{ blockId: number; included?: boolean; position?: number }>;
 }
 
 export interface ContractUpdatePayload {
@@ -255,8 +258,20 @@ export const contractsService = {
     return data.data || data;
   },
 
-  async create(payload: ContractCreatePayload): Promise<{ contract: ContractDetail }> {
-    const { data } = await api.post('/admin/contracts', payload);
+  /**
+   * `idempotencyKey` makes a retry safe: the server answers a key it has
+   * already seen with the draft that key created (`replayed: true`) instead
+   * of creating a second one. Reuse the key until a create succeeds.
+   */
+  async create(
+    payload: ContractCreatePayload,
+    options: { idempotencyKey?: string } = {},
+  ): Promise<{ contract: ContractDetail; replayed?: boolean }> {
+    const { data } = await api.post(
+      '/admin/contracts',
+      payload,
+      options.idempotencyKey ? { headers: { 'Idempotency-Key': options.idempotencyKey } } : undefined,
+    );
     return data.data || data;
   },
 
