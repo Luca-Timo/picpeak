@@ -32,7 +32,6 @@ let customerId;
 let token;
 let templatesApp;
 let contractsApp;
-let publicApp;
 const ids = {};
 
 const prevCwd = process.cwd();
@@ -77,7 +76,6 @@ beforeAll(async () => {
 
   templatesApp = buildRouteApp('/api/admin/contract-templates', require('../../src/routes/adminContractTemplates'));
   contractsApp = buildRouteApp('/api/admin/contracts', require('../../src/routes/adminContracts'));
-  publicApp = buildRouteApp('/api/public/contracts', require('../../src/routes/publicContracts'));
 }, 120000);
 
 afterAll(async () => {
@@ -243,8 +241,11 @@ test('sending freezes the resolved content, and the signing page shows it', asyn
   await db('customer_accounts').where({ id: customerId }).update({ first_name: 'Berta' });
   await db('contract_text_sections').where({ contract_id: id }).update({ body: JSON.stringify({ de: 'Geändert' }) });
 
-  const tokenRow = await db('contract_action_tokens').where({ contract_id: id }).first();
-  const view = await ok(request(publicApp).get(`/api/public/contracts/${tokenRow.token}`));
+  // A verified signer (#1446) sees the same content.
+  const signerRow = await db('contract_signers').where({ contract_id: id, role: 'customer' }).first();
+  const { token: session } = await require('../../src/services/contract/signers').createSession(signerRow.id, 'otp');
+  const signingApp = buildRouteApp('/api/public/contract-signing', require('../../src/routes/publicContractSigning'));
+  const view = await ok(request(signingApp).get('/api/public/contract-signing/session').set('X-Signing-Session', session));
   const bodies = view.contract.sections.flatMap((s) => s.blocks.map((b) => b.body));
   expect(bodies).toEqual(['Eigener Text für Hochzeit Muster', 'Freitext']);
   expect(view.contract.introText).toBe('Hallo Anna Muster');

@@ -1,17 +1,11 @@
 // Extracted verbatim from contractService.js — see ../contractService.js for the
 // module-level overview. Do not add behavior here without updating the entry re-exports.
 
-const crypto = require('crypto');
 const { db, logActivity } = require('../../database/db');
 const logger = require('../../utils/logger');
-const { getAppSetting } = require('../../utils/appSettings');
 const { AppError } = require('../../utils/errors');
-const { hasColumnCached } = require('../../utils/schemaCache');
-const { formatShortDate } = require('../../utils/dateFormatter');
 const pdfService = require('../pdfService');
-const emailProcessor = require('../emailProcessor');
 const { ensureContractEmailTemplatesSeeded } = require('../contractEmailTemplates');
-const { getFrontendBaseUrl } = require('../../utils/frontendUrl');
 const { adminActor, emitContractEvent, ensureCustomerActive } = require('./helpers');
 const { buildRenderContext } = require('./renderContext');
 const { persistContractPdf } = require('./signatureAssets');
@@ -30,8 +24,9 @@ async function renderContractPdfBuffer(contractId) {
 }
 
 /**
- * Send the contract: snapshot every included block's body, render PDF,
- * persist, mint a signing token, queue the customer email.
+ * Send the contract: snapshot every included block's body, render the PDF
+ * with a signature slot per signer, persist it, and invite the signers
+ * (signatures v2, #1446 — each signer gets their own link).
  */
 async function sendContract(id, adminId) {
   // Self-heal: dev installs that ran migration 130 BEFORE we added
@@ -79,10 +74,16 @@ async function sendContract(id, adminId) {
     updated_at: new Date(),
   });
 
-  // Re-fetch with snapshots populated so the renderer uses the frozen
-  // bodies (matches post-send reads).
+  // The signers (#1446): the ones set on the draft, or the contract's
+  // customer; each gets a slot on the signature page, the issuer last.
+  const signingV2 = require('./signingV2');
   const refreshed = await getContractById(id);
+  const { slots: signatureSlots } = await signingV2.prepareSend(refreshed.contract);
+
+  // Re-fetched with snapshots populated so the renderer uses the frozen
+  // bodies (matches post-send reads).
   const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions, refreshed.textSections);
+  ctx.signatureSlots = signatureSlots;
   // Where each signature slot landed goes into the record (#1445).
   const { buffer: rendered, slots } = await pdfService.renderContractWithSlots(ctx);
   // Attachments (#1445): merged ones go between the body and the signature
@@ -98,72 +99,18 @@ async function sendContract(id, adminId) {
     manifest: sendable.manifest,
   });
 
-  const token = crypto.randomBytes(32).toString('hex');
-  const expiresAt = contract.valid_until
-    ? new Date(new Date(contract.valid_until).getTime() + 14 * 24 * 60 * 60 * 1000)
-    : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
-
-  // Schema-drift guard for the new pdf_sha256 column (migration 130
-  // in-place edit). Dev installs that haven't re-migrated skip the
-  // hash write; the send still succeeds.
-  const hasPdfSha = await hasColumnCached('contracts', 'pdf_sha256');
-
-  await db.transaction(async (trx) => {
-    await trx('contract_action_tokens').insert({
-      contract_id: id,
-      token,
-      expires_at: expiresAt,
-      created_at: new Date(),
-    });
-    const updates = {
-      status: 'sent',
-      sent_at: new Date(),
-      pdf_path: pdfPath,
-      updated_at: new Date(),
-    };
-    if (hasPdfSha) updates.pdf_sha256 = pdfSha256;
-    await trx('contracts').where({ id }).update(updates);
-  });
-
-  const frontendUrl = (await getFrontendBaseUrl()) || 'http://localhost:3000';
-  const responseUrl = `${frontendUrl}/contract/${token}`;
-  // Honour the admin's "Attach contract PDF to email" toggle. Default
-  // ON; an admin who prefers a link-only email turns it off and the
-  // customer reaches the PDF via the public sign page instead.
-  const attachPdf = await getAppSetting('crm_contracts_pdf_attachment_enabled');
-  const emailAttachments = [
-    ...((attachPdf !== false && pdfPath) ? [{
-      filename: `${contract.contract_number}.pdf`,
-      contentPath: pdfPath,
-      contentType: 'application/pdf',
-    }] : []),
-    // Attachments delivered as separate files (#1445).
-    ...sendable.separate.map((file) => ({
-      filename: attachments.downloadName(file.name),
-      contentPath: file.path,
-      contentType: 'application/pdf',
-    })),
-  ];
-  await emailProcessor.queueEmail(null, customer.email, 'contract_sent', {
-    contract_number: contract.contract_number,
-    customer_name: customer.display_name
-      || [customer.first_name, customer.last_name].filter(Boolean).join(' ')
-      || customer.email.split('@')[0],
-    response_url: responseUrl,
-    title: contract.title || '',
-    event_name: contract.event_name || '',
-    valid_until: formatShortDate(contract.valid_until),
-    attachments: emailAttachments.length ? emailAttachments : undefined,
-  });
+  // Marks the contract sent, starts the event log and emails each signer
+  // who may sign now their own link.
+  const invited = await signingV2.completeSend(id, { pdfPath, pdfSha256, adminId });
 
   try {
-    await logActivity('contract_sent', { contractId: id, token }, null, await adminActor(adminId));
+    await logActivity('contract_sent', { contractId: id, signersInvited: invited }, null, await adminActor(adminId));
   } catch (_) { /* logging is best-effort */ }
 
   await emitContractEvent(contract, 'sent');
 
   logger.info('Contract sent', { adminId, contractId: id });
-  return { token, pdfPath };
+  return { pdfPath, invited };
 }
 module.exports = {
   renderContractPdfBuffer,

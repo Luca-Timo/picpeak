@@ -714,18 +714,6 @@ router.get('/contracts', customerAuth, async (req, res) => {
         'pdf_path', 'signed_pdf_path',
       );
 
-    // Live tokens for the public sign page so customer dashboard can
-    // deep-link the "Sign now" button on `sent` contracts.
-    const tokensByContract = new Map();
-    if (rows.length > 0 && await dbi.schema.hasTable('contract_action_tokens')) {
-      const tokens = await dbi('contract_action_tokens')
-        .whereIn('contract_id', rows.map((r) => r.id))
-        .whereNull('used_at')
-        .where('expires_at', '>', new Date())
-        .select('contract_id', 'token');
-      for (const tk of tokens) tokensByContract.set(tk.contract_id, tk.token);
-    }
-
     res.json({
       contracts: rows.map((c) => ({
         id: c.id,
@@ -743,11 +731,31 @@ router.get('/contracts', customerAuth, async (req, res) => {
         // Surface flags only — no paths leaked to the customer.
         hasPdf: !!c.pdf_path,
         hasSignedPdf: !!c.signed_pdf_path,
-        responseToken: tokensByContract.get(c.id) || null,
       })),
     });
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to load contracts');
+  }
+});
+
+// Signing from the portal (#1446): a signing session for the signer with
+// this customer's email — no code needed, they are signed in — or a
+// one-hour link for a contract sent before signatures v2. The list above
+// hands out nothing that opens a contract.
+router.post('/contracts/:id/signing-access', customerAuth, async (req, res) => {
+  try {
+    if (!(await customerFeatureAllowed(req, res, 'contracts', 'Contracts'))) return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid contract id' });
+    const { db: dbi } = require('../database/db');
+    const customer = await dbi('customer_accounts').where({ id: req.customer.id }).first();
+    if (!customer) return res.status(404).json({ error: 'Contract not found' });
+    const result = await require('../services/contract/signingV2').portalSigningAccess(customer, id);
+    return res.json(result);
+  } catch (error) {
+    const status = error.statusCode || error.status;
+    if (status) return res.status(status).json({ error: error.message, code: error.code });
+    return errorResponse(res, error, 500, 'Failed to open the contract for signing');
   }
 });
 

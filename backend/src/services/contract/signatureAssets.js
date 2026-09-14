@@ -66,6 +66,8 @@ async function persistContractPdf(contract, buffer, suffix = '', meta = {}) {
     issuer: meta.issuer,
     manifest: meta.manifest,
     templateVersionId: meta.templateVersionId,
+    // Inside a transaction the record has to go through it (SQLite has one writer).
+    conn: meta.conn,
   });
   return { filePath: stored.path, sha256: stored.sha256 };
 }

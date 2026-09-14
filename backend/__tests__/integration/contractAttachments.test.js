@@ -35,6 +35,7 @@ let attachmentsApp;
 let templatesApp;
 let contractsApp;
 let publicApp;
+let signingApp;
 const ids = {};
 const files = {};
 
@@ -84,6 +85,7 @@ beforeAll(async () => {
   templatesApp = buildRouteApp('/api/admin/contract-templates', require('../../src/routes/adminContractTemplates'));
   contractsApp = buildRouteApp('/api/admin/contracts', require('../../src/routes/adminContracts'));
   publicApp = buildRouteApp('/api/public/contracts', require('../../src/routes/publicContracts'));
+  signingApp = buildRouteApp('/api/public/contract-signing', require('../../src/routes/publicContractSigning'));
 
   files.terms = await makePdf(2, [300, 400]);
   files.privacy = await makePdf(1, [200, 200]);
@@ -209,26 +211,33 @@ test('sending merges attachments before the signature page and mails the separat
 });
 
 test('the signing page lists the attachments and downloads only this contract\'s files', async () => {
-  const tokenRow = await db('contract_action_tokens').where({ contract_id: ids.contract.id }).first();
-  const view = await ok(request(publicApp).get(`/api/public/contracts/${tokenRow.token}`));
+  // A verified signer's session (#1446).
+  const signerRow = await db('contract_signers').where({ contract_id: ids.contract.id, role: 'customer' }).first();
+  const { token: session } = await require('../../src/services/contract/signers').createSession(signerRow.id, 'otp');
+  const signing = (url) => request(signingApp).get(`/api/public/contract-signing/session${url}`).set('X-Signing-Session', session);
+  const view = await ok(signing(''));
   expect(view.contract.attachments.map((a) => [a.id, a.delivery])).toEqual([
     [ids.terms, 'merged'], [ids.privacy, 'separate'],
   ]);
 
-  const download = await request(publicApp).get(`/api/public/contracts/${tokenRow.token}/attachments/${ids.privacy}`)
-    .buffer(true).parse(binary);
+  const download = await signing(`/attachments/${ids.privacy}`).buffer(true).parse(binary);
   expect(download.status).toBe(200);
   expect(download.headers['content-type']).toMatch(/application\/pdf/);
   expect(download.body.equals(files.privacy)).toBe(true);
 
-  const notOnContract = await request(publicApp).get(`/api/public/contracts/${tokenRow.token}/attachments/${ids.other}`);
+  const notOnContract = await signing(`/attachments/${ids.other}`);
   expect(notOnContract.status).toBe(404);
+
+  // A contract sent before signatures v2 serves them from its link as well.
+  const legacyToken = await require('./helpers/crmDb').createPublicToken(db, 'contract_action_tokens', { contract_id: ids.contract.id });
+  const legacy = await request(publicApp).get(`/api/public/contracts/${legacyToken}/attachments/${ids.privacy}`).buffer(true).parse(binary);
+  expect(legacy.status).toBe(200);
 
   // A stored file that no longer matches its recorded sha256 isn't served.
   const row = await db('document_attachments').where({ id: ids.privacy }).first();
   const absolute = path.join(process.env.STORAGE_PATH, row.storage_key);
   fs.writeFileSync(absolute, files.other);
-  const changed = await request(publicApp).get(`/api/public/contracts/${tokenRow.token}/attachments/${ids.privacy}`);
+  const changed = await signing(`/attachments/${ids.privacy}`);
   expect(changed.status).toBe(409);
   expect(changed.body.code).toBe('ATTACHMENT_CHANGED');
   fs.writeFileSync(absolute, files.privacy);

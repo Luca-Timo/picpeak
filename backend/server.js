@@ -911,6 +911,8 @@ app.use('/api/admin/transfers',  require('./src/routes/adminTransfers'));
 app.use('/api/admin/newsletters', require('./src/routes/adminNewsletters'));
 app.use('/api/public/quotes',  require('./src/routes/publicQuotes'));
 app.use('/api/public/contracts', require('./src/routes/publicContracts'));
+// Signing with a link per signer and an emailed code (#1446).
+app.use('/api/public/contract-signing', require('./src/routes/publicContractSigning'));
 // PicTransfer (#997): recipient download + client upload, token-authenticated.
 app.use('/api/public/transfer', require('./src/routes/publicTransfer'));
 app.use('/api/public/transfer-upload', require('./src/routes/publicTransferUpload'));

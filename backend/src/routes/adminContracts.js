@@ -38,6 +38,7 @@ const contractBlocksService = require('../services/contractBlocksService');
 const contractContent = require('../services/contract/content');
 const contractAttachments = require('../services/contract/attachments');
 const { db } = require('../database/db');
+const { clientIpForAudit } = require('../utils/clientIp');
 
 const router = express.Router();
 
@@ -570,6 +571,64 @@ router.post(
   }),
 );
 
+// Signers and the signing log (#1446). Reading needs contracts.view;
+// changing the signers, sending a link again and opening the encrypted
+// evidence need contracts.manage. Signers only change on drafts.
+router.get(
+  '/:id/signers',
+  requirePermission('contracts.view'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const signingV2 = require('../services/contract/signingV2');
+    return successResponse(res, await signingV2.adminOverview(parseInt(req.params.id, 10)));
+  }),
+);
+
+router.put(
+  '/:id/signers',
+  requirePermission('contracts.manage'),
+  [
+    param('id').isInt({ min: 1 }),
+    body('order').optional().isIn(['parallel', 'sequential']),
+    body('signers').isArray({ min: 1, max: 5 }),
+    body('signers.*.name').isString().trim().isLength({ min: 1, max: 255 }),
+    body('signers.*.email').isString().trim().isEmail().isLength({ max: 255 }),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    await require('../services/contract/signers').setSigners(id, { signers: req.body.signers, order: req.body.order });
+    return successResponse(res, await require('../services/contract/signingV2').adminOverview(id));
+  }),
+);
+
+router.post(
+  '/:id/signers/:signerId/resend',
+  requirePermission('contracts.manage'),
+  [param('id').isInt({ min: 1 }), param('signerId').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const signingV2 = require('../services/contract/signingV2');
+    return successResponse(res, await signingV2.resendInvitation(
+      parseInt(req.params.id, 10), parseInt(req.params.signerId, 10), req.admin?.id,
+    ));
+  }),
+);
+
+// The encrypted evidence (IP address, user agent, a decline reason),
+// decrypted for a dispute. Every opening is written to the activity log.
+router.get(
+  '/:id/signing-evidence',
+  requirePermission('contracts.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const signingV2 = require('../services/contract/signingV2');
+    return successResponse(res, { evidence: await signingV2.revealEvidence(parseInt(req.params.id, 10), req.admin?.id) });
+  }),
+);
+
 router.post(
   '/:id/countersign',
   requirePermission('contracts.manage'),
@@ -577,13 +636,18 @@ router.post(
     param('id').isInt({ min: 1 }),
     body('name').isString().isLength({ min: 1, max: 255 }),
     body('signatureDataUrl').optional({ nullable: true }).isString(),
+    body('mode').optional().isIn(['drawn', 'typed']),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const ip = req.ip || req.headers['x-forwarded-for'] || null;
+    // req.ip only (utils/clientIp): X-Forwarded-For can be set by anyone.
+    const ip = clientIpForAudit(req);
     const result = await contractService.recordAdminCountersignature(
       parseInt(req.params.id, 10),
-      { name: req.body.name, ip, signatureDataUrl: req.body.signatureDataUrl },
+      {
+        name: req.body.name, ip, userAgent: req.get('user-agent') || null,
+        signatureDataUrl: req.body.signatureDataUrl, mode: req.body.mode,
+      },
       req.admin?.id,
     );
     return successResponse(res, result);

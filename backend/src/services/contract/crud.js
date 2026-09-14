@@ -502,6 +502,8 @@ async function cancelContract(id, adminId) {
   await db('contract_action_tokens').where({ contract_id: id, used_at: null }).update({
     expires_at: new Date(),
   });
+  // Signatures v2 (#1446): every signer's link and session stops working.
+  if (Number(contract.signing_version) === 2) await require('./signingV2').revokeOnCancel(id, adminId);
   try {
     await logActivity('contract_cancelled', { contractId: id }, null, await adminActor(adminId));
   } catch (_) { /* logging is best-effort */ }

@@ -398,6 +398,10 @@
         "POST /:id/convert-to-invoice",
         "POST /:id/resend-signed",
         "POST /:id/restamp-signatures",
+        "GET /:id/signers",
+        "PUT /:id/signers",
+        "POST /:id/signers/:signerId/resend",
+        "GET /:id/signing-evidence",
         "POST /:id/countersign",
         "POST /:id/upload-signed-pdf",
         "GET /:id/pdf",
@@ -1413,6 +1417,7 @@
         "GET /quotes/:id/pdf",
         "GET /invoices/:id/pdf",
         "GET /contracts",
+        "POST /contracts/:id/signing-access",
         "GET /contracts/:id/pdf",
         "GET /dashboard",
         "GET /events/:slug/overview",
@@ -1751,6 +1756,22 @@
         "GET /:id/download",
         "POST /:id/archive",
         "POST /:id/restore"
+      ]
+    },
+    "publicContractSigning.js": {
+      "decision": "excluded",
+      "signals": [],
+      "reason": "Public/customer/gallery/visitor surface or existing optional third-party analytics proxy: no product-usage middleware, callbacks, counters or report triggers.",
+      "route_signatures": [
+        "GET /invite/:token",
+        "POST /invite/:token/code",
+        "POST /invite/:token/verify",
+        "GET /session",
+        "GET /session/pdf",
+        "GET /session/attachments/:attachmentId",
+        "POST /session/sign",
+        "POST /session/decline",
+        "POST /session/upload-signed-pdf"
       ]
     }
   },
