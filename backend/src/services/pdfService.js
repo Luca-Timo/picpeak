@@ -147,6 +147,12 @@ const CONTRACT_SIGNATURE_LAYOUT = {
   adminX: PAGE.marginLeft + ((PAGE.contentWidth - 20) / 2) + 20,
 };
 
+// Signature slots (#1445): two to a row; a row is the label, the box and three
+// caption lines (name, date and time, how it was signed) plus a gap. The first
+// row is exactly the two legacy boxes above.
+const SIGNATURE_ROW_HEIGHT = 160;
+const MAX_SIGNATURE_SLOTS = 6;
+
 /**
  * ISO 3166-1 alpha-2 → full country name, locale-aware. Falls back to
  * the bare code when not in the map (no need to maintain every nation
@@ -1865,7 +1871,13 @@ async function renderInvoiceToBuffer(context) {
  *     they're stamped into the box; otherwise blank lines for handwritten
  *     wet-signing.
  */
-function renderContractToBuffer(context) {
+/**
+ * Render a contract. Resolves `{ buffer, slots }`: where each signature slot
+ * landed on the signature page (#1445), for the stamp service and the
+ * generated document's record.
+ */
+function renderContractWithSlots(context) {
+  let placedSlots = [];
   return new Promise((resolve, reject) => {
     (async () => {
       try {
@@ -1894,7 +1906,7 @@ function renderContractToBuffer(context) {
 
         const chunks = [];
         doc.on('data', (c) => chunks.push(c));
-        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('end', () => resolve({ buffer: Buffer.concat(chunks), slots: placedSlots }));
         doc.on('error', reject);
 
         doc._theme = theme;
@@ -2115,33 +2127,38 @@ function renderContractToBuffer(context) {
           width: PAGE.contentWidth, align: 'left',
         });
 
-        // Two empty signature boxes — customer on the left, admin on
-        // the right. drawn at fixed coordinates so the stamp service
-        // can find them later by constant rather than runtime layout.
-        const drawEmptySignaturePane = (x, label, info) => {
+        // Signature slots (#1445): one per signer, customers first and the
+        // issuer last, two to a row. Without signers the two legacy boxes sit
+        // exactly where CONTRACT_SIGNATURE_LAYOUT always put them. Where each
+        // slot landed goes back to the caller, so signatures are stamped from
+        // the document's record rather than from a constant.
+        const slotDefs = Array.isArray(ctx.signatureSlots) && ctx.signatureSlots.length
+          ? ctx.signatureSlots.slice(0, MAX_SIGNATURE_SLOTS)
+          : [
+            { key: 'customer', role: 'customer', label: t(locale, 'signature_customer'), ...(ctx.signatures?.customer || {}) },
+            { key: 'admin', role: 'issuer', label: t(locale, 'signature_admin'), ...(ctx.signatures?.admin || {}) },
+          ];
+        const { count: pageCount } = doc.bufferedPageRange();
+        placedSlots = slotDefs.map((slot, index) => {
+          const offset = Math.floor(index / 2) * SIGNATURE_ROW_HEIGHT;
+          const x = index % 2 === 0 ? L.customerX : L.adminX;
+          const boxY = L.boxY + offset;
           doc.font(doc._fonts.bold).fontSize(10).fillColor(themeColor(doc, 'text'));
-          doc.text(label, x, L.paneLabelY, { width: L.boxWidth });
-          doc.strokeColor('#cccccc').lineWidth(0.5)
-            .rect(x, L.boxY, L.boxWidth, L.boxHeight)
-            .stroke();
-          // Caption labels — name + date placeholders that the
-          // stamp service overwrites with the actual values when
-          // the signature is applied. The unsigned PDF shows these
-          // as empty labels.
-          const captionY = L.boxY + L.boxHeight + 6;
+          doc.text(slot.label || '', x, L.paneLabelY + offset, { width: L.boxWidth, lineBreak: false, ellipsis: true });
+          doc.strokeColor('#cccccc').lineWidth(0.5).rect(x, boxY, L.boxWidth, L.boxHeight).stroke();
+          // Caption labels: the name (known for invited signers) and an empty
+          // date, which the stamp service fills in when the slot is signed.
+          const captionY = boxY + L.boxHeight + 6;
           doc.font(doc._fonts.body).fontSize(9).fillColor(themeColor(doc, 'text'));
-          doc.text(
-            `${t(locale, 'signed_label_name')}: ${info?.name || ''}`,
-            x, captionY, { width: L.boxWidth },
-          );
-          doc.text(
-            `${t(locale, 'signed_label_date')}: ${info?.signedAt ? formatDate(info.signedAt, dateFormat) : ''}`,
-            x, captionY + 12, { width: L.boxWidth },
-          );
-        };
-
-        drawEmptySignaturePane(L.customerX, t(locale, 'signature_customer'), ctx.signatures?.customer);
-        drawEmptySignaturePane(L.adminX,    t(locale, 'signature_admin'),    ctx.signatures?.admin);
+          doc.text(`${t(locale, 'signed_label_name')}: ${slot.name || ''}`, x, captionY,
+            { width: L.boxWidth, lineBreak: false, ellipsis: true });
+          doc.text(`${t(locale, 'signed_label_date')}: ${slot.signedAt ? formatDate(slot.signedAt, dateFormat) : ''}`,
+            x, captionY + 12, { width: L.boxWidth, lineBreak: false });
+          return {
+            key: slot.key, role: slot.role, label: slot.label || '', pageIndex: pageCount - 1,
+            x, y: boxY, width: L.boxWidth, height: L.boxHeight, captionY,
+          };
+        });
 
         // ---- page numbers ("Page 1 of N" / "Seite 1 von N") ----------
         // Same stamp the quote/invoice renderer uses (line 1680 above).
@@ -2165,10 +2182,16 @@ function renderContractToBuffer(context) {
   });
 }
 
+/** The contract PDF alone (see renderContractWithSlots). */
+async function renderContractToBuffer(context) {
+  return (await renderContractWithSlots(context)).buffer;
+}
+
 module.exports = {
   renderQuoteToBuffer,
   renderInvoiceToBuffer,
   renderContractToBuffer,
+  renderContractWithSlots,
   // Building blocks shared with other PDF features (tax report etc.) —
   // they all run through createBaseDocument so the font + orientation
   // story stays consistent.
@@ -2179,11 +2202,13 @@ module.exports = {
   // render uses to draw empty signature boxes are used to overlay
   // signature PNGs at stamping time. Single source of truth.
   CONTRACT_SIGNATURE_LAYOUT,
+  SIGNATURE_ROW_HEIGHT,
+  MAX_SIGNATURE_SLOTS,
   PAGE,
   FONT_BODY,
   FONT_BOLD,
   // Exposed for unit tests + advanced callers.
   _internal: {
-    formatMinor, formatDate, t, registerCustomFonts, drawLineItems, stampPageNumbers, themeColor,
+    formatMinor, formatDate, t, registerCustomFonts, registerThemeFonts, drawLineItems, stampPageNumbers, themeColor,
   },
 };

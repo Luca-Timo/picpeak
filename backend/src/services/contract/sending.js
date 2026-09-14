@@ -83,12 +83,13 @@ async function sendContract(id, adminId) {
   // bodies (matches post-send reads).
   const refreshed = await getContractById(id);
   const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions, refreshed.textSections);
-  const rendered = await pdfService.renderContractToBuffer(ctx);
+  // Where each signature slot landed goes into the record (#1445).
+  const { buffer: rendered, slots } = await pdfService.renderContractWithSlots(ctx);
   // Attachments (#1445): merged ones go between the body and the signature
   // page, separate ones are delivered next to the PDF; each is checked
   // against the sha256 the contract recorded for it.
   const attachments = require('./attachments');
-  const sendable = await attachments.buildSendable(refreshed.contract, rendered);
+  const sendable = await attachments.buildSendable(refreshed.contract, rendered, { slots });
   const { filePath: pdfPath, sha256: pdfSha256 } = await persistContractPdf(refreshed.contract, sendable.buffer, '', {
     kind: 'unsigned',
     theme: ctx.theme,

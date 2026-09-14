@@ -279,9 +279,23 @@ async function writeContractAttachments(trx, contractId, list) {
  * Returns the bytes, the manifest stored with the generated document, and
  * the separate files.
  */
-async function buildSendable(contract, contractBuffer) {
+async function buildSendable(contract, contractBuffer, { slots = [] } = {}) {
   const rows = await loadContractAttachments(contract.id);
-  if (!rows.length) return { buffer: contractBuffer, manifest: null, separate: [] };
+  // Signature slots (#1445) sit on the contract's last page; merged
+  // attachments go before it, so each slot moves down by their pages.
+  const insertedPages = rows.filter((row) => row.delivery === 'merged')
+    .reduce((sum, row) => sum + Number(row.page_count), 0);
+  const placed = slots.map((slot) => ({
+    key: slot.key, role: slot.role, label: slot.label, page: slot.pageIndex + 1 + insertedPages,
+    x: slot.x, y: slot.y, width: slot.width, height: slot.height, captionY: slot.captionY,
+  }));
+  if (!rows.length) {
+    return {
+      buffer: contractBuffer,
+      manifest: placed.length ? { attachments: [], signaturePage: placed[0].page, slots: placed } : null,
+      separate: [],
+    };
+  }
   const files = rows.map((row) => {
     const { absolute, buffer } = readStoredFile(row);
     if (sha256(buffer) !== row.inclusion_sha256) throw changed(row.name);
@@ -305,6 +319,7 @@ async function buildSendable(contract, contractBuffer) {
     }),
     // 1-based; the signature page is always the last one.
     signaturePage: result.lastPageIndex == null ? null : result.lastPageIndex + 1,
+    ...(placed.length ? { slots: placed } : {}),
   };
   return {
     buffer: result.buffer,
