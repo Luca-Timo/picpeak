@@ -3510,6 +3510,57 @@
       "title": "Soziale Medien",
       "help": "Hinterlegen Sie URLs, um Social-Media-Symbole in der Galerie-Fußzeile anzuzeigen. Lassen Sie ein Feld leer, um das jeweilige Symbol auszublenden.",
       "whatsappHelp": "Eine wa.me-URL oder eine Telefonnummer mit Ländervorwahl (wird umgewandelt)."
+    },
+    "pdfTheme": {
+      "title": "PDF-Design",
+      "description": "Farben, Schrift, Fußzeile und Seitenzahlen für Angebote, Rechnungen und Verträge. Leere Felder übernehmen die Werte von „Alle Dokumente“, danach aus Ihrem Unternehmensprofil.",
+      "scopeLabel": "Dokumentart",
+      "scope": {
+        "default": "Alle Dokumente",
+        "quote": "Angebote",
+        "invoice": "Rechnungen",
+        "contract": "Verträge"
+      },
+      "colors": "Farben",
+      "color": {
+        "text": "Text",
+        "accent": "Titel und Überschriften",
+        "muted": "Nebentext",
+        "subtle": "Fußzeile und Seitenzahlen",
+        "rule": "Linien"
+      },
+      "inherited": "Übernommen",
+      "inherit": "Übernehmen ({{value}})",
+      "reset": "Zurücksetzen",
+      "titleSize": "Titelgröße",
+      "font": "Schrift",
+      "pageNumbers": "Seitenzahlen",
+      "pageNumbersOption": {
+        "bottom-right": "Unten rechts",
+        "bottom-center": "Unten mittig",
+        "none": "Keine"
+      },
+      "foldingMarks": "Falzmarken",
+      "foldingOption": {
+        "none": "Keine",
+        "half": "Halbfalz",
+        "third": "Drittelfalz (DIN 5008)",
+        "both": "Halb- und Drittelfalz"
+      },
+      "footer": "Fußzeile",
+      "footerMode": {
+        "address": "Geschäftsadresse",
+        "custom": "Eigener Text",
+        "none": "Keine Fußzeile"
+      },
+      "footerText": "Fußzeilentext",
+      "marginsNote": "Die Ränder folgen dem Briefformat nach DIN 5008 und lassen sich nicht anpassen.",
+      "preview": "PDF-Vorschau",
+      "resetScope": "Auf übernommene Werte zurücksetzen",
+      "save": "Design speichern",
+      "saved": "PDF-Design gespeichert",
+      "saveFailed": "Das PDF-Design konnte nicht gespeichert werden",
+      "previewFailed": "Die Vorschau konnte nicht erstellt werden"
     }
   },
   "admin": {

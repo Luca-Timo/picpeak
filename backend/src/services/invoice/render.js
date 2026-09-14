@@ -189,6 +189,8 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
     currency: invoice.currency,
     qrFormat: resolvedQrFormat,
     dateFormat,
+    // PDF theme (#1445): font family, colours, footer, page numbers.
+    theme: await require('../pdfThemeService').resolveTheme('invoice'),
     // Shared issuer + recipient builders. Invoices skip the quote-only
     // payment-block toggles; the invoice PDF always shows the payment
     // block. See backend/src/services/_renderContext.js.

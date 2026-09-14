@@ -27,7 +27,6 @@
  */
 
 const crypto = require('crypto');
-const { getStoragePath } = require('../config/storage');
 const { db, withRetry, logActivity } = require('../database/db');
 const logger = require('../utils/logger');
 const { getAppSetting } = require('../utils/appSettings');
@@ -38,6 +37,8 @@ const { nextDocumentNumber } = require('../utils/documentSequences');
 const { resolveDefaultEventType } = require('./eventTypeService');
 const { formatShortDate } = require('../utils/dateFormatter');
 const businessProfileService = require('./businessProfileService');
+const pdfThemeService = require('./pdfThemeService');
+const documentArtifactService = require('./documentArtifactService');
 const { buildIssuerBlock, buildRecipientBlock } = require('./_renderContext');
 const pdfService = require('./pdfService');
 const emailProcessor = require('./emailProcessor');
@@ -49,8 +50,6 @@ const {
 } = require('../utils/lineItemTotals');
 const { prepareQuoteLineItems } = require('./quoteCatalogService');
 const { readStoredDocumentPdf } = require('../utils/storedDocumentPdf');
-const fs = require('fs');
-const path = require('path');
 
 // Every write to `quotes.status` goes through assertQuoteTransition below.
 //
@@ -922,6 +921,8 @@ async function buildRenderContext(quote, lineItems) {
     currency: quote.currency,
     qrFormat: 'none', // quotes never carry a Swiss QR-bill
     dateFormat,
+    // PDF theme (#1445): font family, colours, footer, page numbers.
+    theme: await pdfThemeService.resolveTheme('quote'),
     // Issuer + recipient blocks are shared across all three doc services.
     // The quote variant opts into the two extra payment-block toggles.
     // See backend/src/services/_renderContext.js for the spec + drift
@@ -1089,7 +1090,7 @@ async function sendQuote(id, adminId) {
   // Render PDF + persist snapshot.
   const ctx = await buildRenderContext(quote, lineItems);
   const buffer = await pdfService.renderQuoteToBuffer(ctx);
-  const pdfPath = await persistDocPdf('quote', quote, buffer);
+  const pdfPath = await persistDocPdf('quote', quote, buffer, '', { kind: 'sent', theme: ctx.theme, issuer: ctx.issuer });
 
   // Snapshot payment term so future template edits don't mutate the doc.
   // Migration 124 — prefer the two new split FKs; fall back to the legacy
@@ -1183,18 +1184,26 @@ function formatMajor(minor, currency, locale, issuerCountryCode) {
 }
 
 /**
- * Persist a rendered PDF under storage/business-docs/quote/<YEAR>/<NUMBER>.pdf
+ * Persist a rendered PDF under storage/business-docs/quote/<YEAR>/<NUMBER><suffix>.pdf
+ * and record it in generated_documents (#1445). `suffix` keeps a later
+ * version (e.g. '-accepted') next to the sent file; `meta` carries the kind
+ * and the theme / issuer it was rendered with.
  */
-async function persistDocPdf(type, doc, buffer, suffix = '') {
+async function persistDocPdf(type, doc, buffer, suffix = '', meta = {}) {
   const number = doc.quote_number || doc.invoice_number;
   if (!number) return null;
   const year = (doc.issue_date ? new Date(doc.issue_date) : new Date()).getFullYear();
-  const root = path.join(getStoragePath(), 'business-docs', type, String(year));
-  fs.mkdirSync(root, { recursive: true });
-  // `suffix` keeps a later version (e.g. '-accepted') next to the sent file.
-  const filePath = path.join(root, `${number}${suffix}.pdf`);
-  fs.writeFileSync(filePath, buffer);
-  return filePath;
+  const stored = await documentArtifactService.persist({
+    docType: type,
+    docId: doc.id,
+    kind: meta.kind || (suffix ? 'accepted' : 'sent'),
+    buffer,
+    fileName: `${number}${suffix}.pdf`,
+    year,
+    theme: meta.theme,
+    issuer: meta.issuer,
+  });
+  return stored.path;
 }
 
 // ---------------------------------------------------------------------
@@ -1343,7 +1352,8 @@ async function storeAcceptedQuotePdf(quoteId) {
     const data = await getQuoteById(quoteId);
     const ctx = await buildRenderContext(data.quote, data.lineItems);
     const buffer = await pdfService.renderQuoteToBuffer(ctx);
-    const pdfPath = await persistDocPdf('quote', data.quote, buffer, '-accepted');
+    const pdfPath = await persistDocPdf('quote', data.quote, buffer, '-accepted',
+      { kind: 'accepted', theme: ctx.theme, issuer: ctx.issuer });
     await db('quotes').where({ id: quoteId }).update({ pdf_path: pdfPath });
   } catch (err) {
     // pdf_path is already cleared, so the quote renders live — with the
@@ -1669,7 +1679,8 @@ async function adminAcceptQuote(id, adminId) {
       // Persist PDF snapshot under the same convention sendQuote uses
       // — keeps every issued PDF on disk for the audit trail.
       // Kept next to the sent file rather than over it (#1451).
-      const pdfPath = await persistDocPdf('quote', fresh, buffer, '-accepted');
+      const pdfPath = await persistDocPdf('quote', fresh, buffer, '-accepted',
+        { kind: 'accepted', theme: ctx.theme, issuer: ctx.issuer });
       // Record it like sendQuote does: the accepted quote opens as this
       // file from now on instead of re-rendering (#1451).
       await db('quotes').where({ id }).update({ pdf_path: pdfPath });

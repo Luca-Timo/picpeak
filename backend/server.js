@@ -881,6 +881,9 @@ app.use('/api/customer', noStoreCache, require('./src/routes/customer'));
 // permission rather than a CRM-specific one. The public endpoints
 // host the customer-side accept/decline / sign / payment-check pages.
 app.use('/api/admin/business-profile', require('./src/routes/adminBusinessProfile'));
+// PDF theme for quotes, invoices and contracts (#1445) — same settings
+// permissions as the business profile's PDF settings.
+app.use('/api/admin/pdf-themes', require('./src/routes/adminPdfThemes'));
 app.use('/api/admin/quotes',     require('./src/routes/adminQuotes'));
 // Quote catalogue + templates (#1451). Own prefix so its collection paths
 // never collide with /api/admin/quotes/:id.

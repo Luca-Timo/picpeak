@@ -69,7 +69,8 @@ async function sendContract(id, adminId) {
   const refreshed = await getContractById(id);
   const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
   const buffer = await pdfService.renderContractToBuffer(ctx);
-  const { filePath: pdfPath, sha256: pdfSha256 } = await persistContractPdf(refreshed.contract, buffer);
+  const { filePath: pdfPath, sha256: pdfSha256 } = await persistContractPdf(refreshed.contract, buffer, '',
+    { kind: 'unsigned', theme: ctx.theme, issuer: ctx.issuer });
 
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = contract.valid_until

@@ -3042,6 +3042,57 @@
       "title": "Social Media",
       "help": "Add URLs to render social-media icons in the gallery footer. Leave a field empty to hide that icon.",
       "whatsappHelp": "A wa.me URL or a phone number with country code (will be converted)."
+    },
+    "pdfTheme": {
+      "title": "PDF theme",
+      "description": "Colours, font, footer and page numbers for quotes, invoices and contracts. Empty fields inherit from \"All documents\", then your business profile.",
+      "scopeLabel": "Document type",
+      "scope": {
+        "default": "All documents",
+        "quote": "Quotes",
+        "invoice": "Invoices",
+        "contract": "Contracts"
+      },
+      "colors": "Colours",
+      "color": {
+        "text": "Text",
+        "accent": "Title and headings",
+        "muted": "Secondary text",
+        "subtle": "Footer and page numbers",
+        "rule": "Lines"
+      },
+      "inherited": "Inherited",
+      "inherit": "Inherit ({{value}})",
+      "reset": "Reset",
+      "titleSize": "Title size",
+      "font": "Font",
+      "pageNumbers": "Page numbers",
+      "pageNumbersOption": {
+        "bottom-right": "Bottom right",
+        "bottom-center": "Bottom centre",
+        "none": "None"
+      },
+      "foldingMarks": "Folding marks",
+      "foldingOption": {
+        "none": "None",
+        "half": "Half fold",
+        "third": "Thirds (DIN 5008)",
+        "both": "Half and thirds"
+      },
+      "footer": "Footer",
+      "footerMode": {
+        "address": "Business address",
+        "custom": "Custom text",
+        "none": "No footer"
+      },
+      "footerText": "Footer text",
+      "marginsNote": "Margins follow the DIN 5008 letter layout and aren't adjustable.",
+      "preview": "Preview PDF",
+      "resetScope": "Reset to inherited",
+      "save": "Save theme",
+      "saved": "PDF theme saved",
+      "saveFailed": "Could not save the PDF theme",
+      "previewFailed": "Could not render the preview"
     }
   },
   "admin": {

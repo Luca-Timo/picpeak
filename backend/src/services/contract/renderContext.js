@@ -217,6 +217,8 @@ async function buildRenderContext(contract, inclusions) {
   return {
     locale,
     dateFormat,
+    // PDF theme (#1445): font family, colours, footer, folding marks.
+    theme: await require('../pdfThemeService').resolveTheme('contract'),
     // Mirror the quote/invoice issuer shape EXACTLY so drawIssuerBlock
     // honours the same business-profile toggles (pdf_show_logo,
     // pdf_show_company_name, pdf_logo_height, pdf_company_name_inline,
