@@ -430,7 +430,7 @@
         "crm_combined_billing",
         "crm_monthly_billing_manual"
       ],
-      "reason": "Successful admin CRM/hour-entry/invitation operations only. No customer/account names, IDs, rates, billed hours, payment state or portal behavior. v3 adds only: crm_combined_billing, crm_monthly_billing_manual. Exact definitions are in features.v4.json; configuration-only signals never observe the public surface.",
+      "reason": "Successful admin CRM/hour-entry/invitation operations only. No customer/account names, IDs, rates, billed hours, payment state or portal behavior. v3 adds only: crm_combined_billing, crm_monthly_billing_manual. Exact definitions are in features.v4.json; configuration-only signals never observe the public surface. Customer-document writes (v5) only count as crm: no file names, sizes, counts or review outcomes.",
       "route_signatures": [
         "GET /",
         "GET /search",
@@ -454,7 +454,15 @@
         "POST /:id/hour-entries/bill",
         "POST /:id/bill-combined",
         "POST /:id/trigger-monthly-bill",
-        "GET /:id/monthly-draft"
+        "GET /:id/monthly-draft",
+        "GET /:id/documents",
+        "POST /:id/documents",
+        "PATCH /:id/documents/:docId",
+        "POST /:id/documents/:docId/share",
+        "POST /:id/documents/:docId/unshare",
+        "POST /:id/documents/:docId/review",
+        "GET /:id/documents/:docId/download",
+        "DELETE /:id/documents/:docId"
       ]
     },
     "adminDashboard.js": {
@@ -1405,7 +1413,12 @@
         "GET /quotes/:id/pdf",
         "GET /invoices/:id/pdf",
         "GET /contracts",
-        "GET /contracts/:id/pdf"
+        "GET /contracts/:id/pdf",
+        "GET /dashboard",
+        "GET /events/:slug/overview",
+        "GET /documents",
+        "POST /documents",
+        "GET /documents/:id/download"
       ]
     },
     "customerAuth.js": {
@@ -1779,6 +1792,10 @@
         "customer_portal"
       ],
       "reason": "Only effective configuration boolean; dependency rules apply, no flag values/history beyond this boolean."
+    },
+    "documents": {
+      "signals": [],
+      "reason": "Excluded: customer document exchange is not reported as its own capability; no flag value, file names, sizes or counts."
     },
     "expenses": {
       "signals": [

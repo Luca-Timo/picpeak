@@ -231,10 +231,16 @@ router.get(
       if (offset + WAITING_PAGE_SIZE >= WAITING_SCAN_MAX) scanTruncated = true;
     }
 
+    // Customer documents waiting for a review, or rejected (#1444). Uploads
+    // stay pending until an admin marks them clean, so a growing pending
+    // count is the thing to notice here.
+    const customerDocuments = await require('../services/customerDocumentsService').getReviewCounts();
+
     return successResponse(res, {
       stuckEmails: stuckEmails.map(mapEmailRow),
       waitingEmails: waitingEmails.map(mapEmailRow),
       processor: getQueueProcessorStatus(),
+      customerDocuments,
       counts: {
         stuckEmails: stuckEmails.length,
         waitingEmails: waitingEmails.length,

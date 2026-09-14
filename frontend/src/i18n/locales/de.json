@@ -699,6 +699,11 @@
       "lastRun": "Letzter Durchlauf {{when}}",
       "neverRan": "Seit dem Start dieser Instanz nicht gelaufen.",
       "lastResult": "{{sent}} gesendet, {{failed}} fehlgeschlagen"
+    },
+    "customerDocuments": {
+      "title": "Kundendokumente",
+      "counts": "{{pending}} warten auf Prüfung, {{rejected}} abgelehnt.",
+      "hint": "Kunden-Uploads bleiben für den Kunden gesperrt, bis sie im Kundendatensatz als unbedenklich markiert sind. Abgelehnte Dateien werden nach Ablauf der Aufbewahrungsfrist gelöscht."
     }
   },
   "common": {
@@ -2971,6 +2976,10 @@
         "title": "Personen in Galerien",
         "description": "Gruppiert die Fotos jeder Galerie nach den abgebildeten Personen, damit Gäste sich mit zwei Tipps selbst finden und nur ihre eigenen Fotos herunterladen. Läuft vollständig auf Ihrem eigenen Server in einem separaten, optionalen Container — es werden keine Daten übermittelt. Erkannte Gesichter sind personenbezogene Daten; die Funktion bleibt daher aus, bis Sie sie zusätzlich pro Galerie aktivieren.",
         "lockedSingleContainer": "Im All-in-One-Image nicht verfügbar. Die Gesichtserkennung benötigt einen separaten ML-Container und konkurriert mit der Bildverarbeitung um dieselbe CPU und denselben Arbeitsspeicher, was die gesamte Installation verlangsamen würde."
+      },
+      "documents": {
+        "title": "Kundendokumente",
+        "description": "PDFs mit einem Kunden in seinem Portal teilen und PDFs von ihm empfangen. Kunden-Uploads bleiben gesperrt, bis Sie sie im Kundendatensatz als unbedenklich markieren. Nur PDF; es gelten Grössen- und Speicherlimits."
       }
     },
     "customerSurface": {
@@ -5328,7 +5337,22 @@
       "sortNewest": "Neueste zuerst",
       "sortOldest": "Älteste zuerst",
       "sortName": "Nach Name",
-      "open": "Öffnen"
+      "open": "Öffnen",
+      "needsAction": "Braucht Ihre Aufmerksamkeit",
+      "quoteAwaiting": "Angebot {{number}} wartet auf Ihre Antwort",
+      "validUntil": "Gültig bis {{date}}",
+      "viewQuote": "Angebot ansehen",
+      "contractAwaiting": "Vertrag {{number}} wartet auf Ihre Unterschrift",
+      "viewContract": "Vertrag ansehen",
+      "invoiceOverdue": "Rechnung {{number}} ist überfällig",
+      "invoiceDue": "Rechnung {{number}} ist fällig am {{date}}",
+      "openAmount": "Offen: {{amount}}",
+      "viewInvoice": "Rechnung ansehen",
+      "details": "Details",
+      "detailsAria": "Details zu {{name}}",
+      "notAvailable": "Noch nicht verfügbar",
+      "expiredTitle": "Abgelaufene Galerien",
+      "expiredHint": "Diese Galerien sind abgelaufen und lassen sich nicht mehr öffnen. Wenden Sie sich an Ihren Fotografen, wenn Sie die Fotos noch brauchen."
     },
     "layout": {
       "greeting": "Hallo, {{name}}"
@@ -5341,7 +5365,8 @@
       "profile": "Profil",
       "soon": "Bald",
       "new": "Neu",
-      "contracts": "Verträge"
+      "contracts": "Verträge",
+      "documents": "Dokumente"
     },
     "comingSoon": {
       "tag": "Demnächst"
@@ -5479,6 +5504,62 @@
       "openSign": "Öffnen & unterschreiben",
       "downloadSigned": "Unterschriebenes PDF herunterladen",
       "download": "PDF herunterladen"
+    },
+    "documents": {
+      "title": "Dokumente",
+      "subtitle": "Dateien, die Ihr Fotograf mit Ihnen geteilt hat, und PDFs, die Sie ihm geschickt haben.",
+      "disabled": "Dokumente sind für Ihr Konto nicht verfügbar.",
+      "loadError": "Ihre Dokumente konnten nicht geladen werden.",
+      "uploadTitle": "Dokument senden",
+      "uploadHint": "Nur PDF, bis {{size}} pro Datei. {{used}} von {{quota}} belegt.",
+      "uploadHintShort": "Nur PDF.",
+      "fileLabel": "PDF-Datei",
+      "eventLabel": "Event (optional)",
+      "noEvent": "Kein Event",
+      "cancel": "Abbrechen",
+      "retry": "Erneut versuchen",
+      "upload": "Hochladen",
+      "progress": "Upload-Fortschritt",
+      "uploaded": "{{name}} ist angekommen. Die Datei steht zur Verfügung, sobald Ihr Fotograf sie geprüft hat.",
+      "cancelled": "Upload von {{name}} abgebrochen.",
+      "empty": "Noch keine Dokumente.",
+      "fromYou": "Von Ihnen hochgeladen",
+      "fromStudio": "Von Ihrem Fotografen geteilt",
+      "pendingHint": "Ihr Fotograf prüft jeden Upload, bevor er verfügbar wird.",
+      "rejectedWithReason": "Nicht angenommen: {{reason}}",
+      "rejectedHint": "Ihr Fotograf hat diese Datei nicht angenommen. Fragen Sie nach, wenn Ihnen der Grund unklar ist.",
+      "download": "Herunterladen",
+      "downloadAria": "{{name}} herunterladen",
+      "status": {
+        "available": "Verfügbar",
+        "pending": "Wird geprüft",
+        "rejected": "Abgelehnt"
+      },
+      "errors": {
+        "notPdf": "{{name}} ist kein PDF. Es können nur PDF-Dokumente hochgeladen werden.",
+        "encrypted": "{{name}} ist passwortgeschützt. Entfernen Sie das Passwort und laden Sie die Datei erneut hoch.",
+        "tooLarge": "{{name}} ist grösser als {{size}}. Laden Sie eine kleinere Datei hoch.",
+        "quota": "Für {{name}} ist nicht genug Platz. Bitten Sie Ihren Fotografen, ältere Dokumente zu entfernen.",
+        "rateLimited": "Zu viele Uploads in kurzer Zeit. Warten Sie ein paar Minuten und versuchen Sie {{name}} dann erneut.",
+        "generic": "{{name}} konnte nicht hochgeladen werden. Bitte versuchen Sie es erneut.",
+        "stillPending": "{{name}} wird noch geprüft.",
+        "gone": "{{name}} ist nicht mehr mit Ihnen geteilt.",
+        "purged": "{{name}} wurde entfernt.",
+        "download": "{{name}} konnte nicht heruntergeladen werden. Bitte versuchen Sie es erneut."
+      }
+    },
+    "event": {
+      "notFound": "Dieses Event wurde nicht gefunden, oder Sie haben keinen Zugriff mehr darauf.",
+      "back": "Zurück zu Ihren Galerien",
+      "gallery": "Galerie",
+      "openGallery": "Galerie öffnen",
+      "galleryExpired": "Diese Galerie ist am {{date}} abgelaufen und lässt sich nicht mehr öffnen. Wenden Sie sich an Ihren Fotografen, wenn Sie die Fotos noch brauchen.",
+      "galleryUnavailable": "Diese Galerie ist noch nicht verfügbar.",
+      "popupBlocked": "Erlauben Sie Pop-ups für diese Seite, um das PDF zu öffnen.",
+      "pdfError": "Das PDF konnte nicht geöffnet werden. Bitte versuchen Sie es erneut.",
+      "pdf": "PDF",
+      "dueOn": "Fällig am {{date}}",
+      "nothingElse": "Zu diesem Event gibt es noch keine Dokumente."
     }
   },
   "customers": {
@@ -5767,6 +5848,53 @@
     "invitePending": {
       "badge": "Einladung offen",
       "hint": "Für diese Adresse ist ein Einladungslink offen und noch nicht angenommen. Das ist kein Beleg dafür, dass die E-Mail angekommen ist — prüfen Sie den Systemzustand, falls der Kunde nichts erhalten hat."
+    },
+    "documents": {
+      "title": "Dokumente",
+      "hint": "PDFs, die mit diesem Kunden in seinem Portal geteilt sind, und die Dateien, die er Ihnen geschickt hat. Ein Kunden-Upload bleibt für ihn gesperrt, bis Sie ihn als unbedenklich markieren.",
+      "usage": "Kunden-Uploads: {{used}} von {{quota}}.",
+      "fileLabel": "PDF zum Teilen",
+      "eventLabel": "Event",
+      "contractLabel": "Vertrag",
+      "noLink": "Keine",
+      "shareNow": "Mit dem Kunden teilen",
+      "upload": "Hochladen",
+      "uploaded": "{{name}} hochgeladen.",
+      "actionError": "Das hat nicht geklappt. Bitte erneut versuchen.",
+      "deleteTitle": "Dokument löschen?",
+      "deleteBody": "{{name}} verschwindet sofort aus dem Portal des Kunden. Die Datei selbst wird nach Ablauf der Aufbewahrungsfrist entfernt.",
+      "delete": "Löschen",
+      "deleted": "Dokument gelöscht.",
+      "status": {
+        "pending": "Wartet auf Prüfung",
+        "clean": "Unbedenklich",
+        "rejected": "Abgelehnt"
+      },
+      "shared": "Geteilt",
+      "notShared": "Nicht geteilt",
+      "fromCustomer": "Vom Kunden hochgeladen",
+      "fromAdmin": "Hochgeladen von {{name}}",
+      "anAdmin": "einem Admin",
+      "viewed": "Vom Kunden {{times}}× heruntergeladen, zuletzt {{date}}",
+      "notViewed": "Vom Kunden noch nicht heruntergeladen",
+      "rejectedNote": "Angegebener Grund: {{note}}",
+      "download": "Herunterladen",
+      "downloadStarted": "Download gestartet.",
+      "markClean": "Als unbedenklich markieren",
+      "markedClean": "Als unbedenklich markiert.",
+      "reject": "Ablehnen",
+      "rejectPlaceholder": "Grund, wird dem Kunden angezeigt (optional)",
+      "confirmReject": "Datei ablehnen",
+      "rejectedToast": "Abgelehnt.",
+      "unshare": "Nicht mehr teilen",
+      "unsharedToast": "Nicht mehr geteilt.",
+      "share": "Teilen",
+      "sharedToast": "Mit dem Kunden geteilt.",
+      "link": "Verknüpfen",
+      "saveLinks": "Verknüpfungen speichern",
+      "linkSaved": "Verknüpfungen gespeichert.",
+      "empty": "Noch keine Dokumente.",
+      "loadError": "Dokumente konnten nicht geladen werden."
     }
   },
   "clients": {
