@@ -137,9 +137,6 @@ backend/storage/
 # Python artifacts — the picpeak-ml sidecar (#1074) is the only Python in
 # this tree, but bytecode and virtualenvs must never be committed.
 __pycache__/
-# Python bytecode: the ML sidecar ships .py sources, and a `git add -A`
-# from a shared working tree once committed 16 .pyc files (#1247).
-*.pyc
 *.py[cod]
 .pytest_cache/
 ml/.venv/
