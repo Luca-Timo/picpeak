@@ -52,9 +52,9 @@ export const PdfThemeCard: React.FC = () => {
   }, [row?.settings, scope]);
 
   const setColor = (key: PdfColorKey, value: string | null) => setDraft((d) => {
-    const colors = { ...(d.colors || {}) };
+    const colors: Partial<Record<PdfColorKey, string>> = { ...(d.colors || {}) };
     if (value) colors[key] = value; else delete colors[key];
-    const next = { ...d, colors };
+    const next: PdfThemeSettings = { ...d, colors };
     if (Object.keys(colors).length === 0) delete next.colors;
     return next;
   });

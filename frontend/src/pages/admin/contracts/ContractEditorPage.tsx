@@ -29,6 +29,7 @@ import { customerAdminService } from '../../../services/customerAdmin.service';
 import { describeSaveError, newIdempotencyKey, type SaveErrorView } from './contractSaveError';
 import { contractTemplatesService } from '../../../services/contractTemplates.service';
 import { AttachmentListEditor, type AttachmentRow } from '../../../components/admin/AttachmentListEditor';
+import { SignersEditorCard } from './SignersEditorCard';
 
 const CRM_DISCLAIMER_URL = 'https://docs.picpeak.app/features/crm/disclaimers';
 
@@ -870,6 +871,10 @@ export const ContractEditorPage: React.FC = () => {
           <h2 className="text-lg font-semibold mb-2">{t('contracts.attachments.heading', 'Attachments')}</h2>
           <AttachmentListEditor idPrefix="contract-attachment" value={attachments} onChange={setAttachments} />
         </Card>
+      )}
+
+      {isEdit && numericId !== null && (
+        <SignersEditorCard contractId={numericId} customerName={customerLabel || null} />
       )}
 
       {isEdit && (existing?.contract.textSections || []).length > 0 && (

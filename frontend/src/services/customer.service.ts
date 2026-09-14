@@ -428,7 +428,19 @@ export const customerService = {
     const res = await api.get(`/customer/contracts/${id}/pdf`, { responseType: 'blob' });
     return URL.createObjectURL(res.data);
   },
+
+  /** Open a contract for signing: a signing session for a signatures-v2
+   *  contract (no code needed — the portal login confirms the email), or a
+   *  short-lived link for a contract sent before. */
+  async contractSigningAccess(id: number): Promise<CustomerContractSigningAccess> {
+    const response = await api.post<CustomerContractSigningAccess>(`/customer/contracts/${id}/signing-access`);
+    return response.data;
+  },
 };
+
+export type CustomerContractSigningAccess =
+  | { mode: 'session'; sessionToken: string; expiresAt: string }
+  | { mode: 'link'; token: string };
 
 export interface CustomerQuote {
   id: number;
@@ -503,7 +515,7 @@ export interface CustomerInvoice {
 export interface CustomerContract {
   id: number;
   contractNumber: string;
-  status: 'sent' | 'signed_by_customer' | 'signed_by_admin' | 'fully_signed' | 'cancelled';
+  status: 'sent' | 'signed_by_customer' | 'signed_by_admin' | 'fully_signed' | 'declined' | 'cancelled';
   language: string;
   issueDate: string;
   validUntil: string | null;
@@ -515,7 +527,4 @@ export interface CustomerContract {
   signedAdminName: string | null;
   hasPdf: boolean;
   hasSignedPdf: boolean;
-  /** Live signing-link token for `sent` contracts so the dashboard can
-   *  deep-link the public sign page when the customer lost the email. */
-  responseToken: string | null;
 }

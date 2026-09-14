@@ -51,7 +51,7 @@ import { HoursLoggingPage } from './pages/admin/clients/HoursLoggingPage';
 const CalendarPage = lazy(() => import('./pages/admin/clients/CalendarPage').then((m) => ({ default: m.CalendarPage })));
 const MessagesPage = lazy(() => import('./pages/admin/messages/MessagesPage').then((m) => ({ default: m.MessagesPage })));
 import { QuoteResponsePage } from './pages/public/QuoteResponsePage';
-import { ContractResponsePage } from './pages/public/ContractResponsePage';
+import { ContractResponsePage, ContractSigningSessionPage } from './pages/public/ContractResponsePage';
 import { ProjectsListPage } from './pages/admin/projects/ProjectsListPage';
 import { ProjectCockpitPage } from './pages/admin/projects/ProjectCockpitPage';
 import { WorkflowsListPage } from './pages/admin/workflows/WorkflowsListPage';
@@ -444,6 +444,10 @@ function App() {
                   {/* Public quote accept/decline page (CRM). Token-only,
                       no auth required. */}
                   <Route path="/quote/:token" element={<QuoteResponsePage />} />
+                  {/* Contract signing. The static /contract/signing (a session
+                      opened from the customer portal) is listed first and,
+                      being static, always outranks /contract/:token. */}
+                  <Route path="/contract/signing" element={<ContractSigningSessionPage />} />
                   <Route path="/contract/:token" element={<ContractResponsePage />} />
 
                   {/* Admin payment-check page (CRM) — token only,

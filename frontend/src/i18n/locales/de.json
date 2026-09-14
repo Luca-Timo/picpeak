@@ -704,6 +704,15 @@
       "title": "Kundendokumente",
       "counts": "{{pending}} warten auf Prüfung, {{rejected}} abgelehnt.",
       "hint": "Kunden-Uploads bleiben für den Kunden gesperrt, bis sie im Kundendatensatz als unbedenklich markiert sind. Abgelehnte Dateien werden nach Ablauf der Aufbewahrungsfrist gelöscht."
+    },
+    "evidenceKey": {
+      "title": "Schlüssel für Signaturnachweise",
+      "env": "Gesetzt über PICPEAK_EVIDENCE_KEY.",
+      "file": "Gespeichert in business-docs/keys/evidence.key, das in jedem Backup enthalten ist.",
+      "none": "Noch nicht erstellt. Er wird bei der ersten Unterschrift erstellt.",
+      "unreadable": "Die Schlüsseldatei kann nicht gelesen werden. Stellen Sie sie aus einem Backup wieder her, sonst lassen sich gespeicherte Signaturnachweise nicht entschlüsseln.",
+      "id": "Schlüssel-ID {{id}}",
+      "hint": "IP-Adressen und Browser der Unterzeichnenden werden mit diesem Schlüssel verschlüsselt gespeichert. Ohne ihn lassen sich diese Nachweise nicht lesen; Unterschriften und PDFs bleiben gültig."
     }
   },
   "common": {
@@ -5503,7 +5512,13 @@
       "counterSigned": "Gegengezeichnet",
       "openSign": "Öffnen & unterschreiben",
       "downloadSigned": "Unterschriebenes PDF herunterladen",
-      "download": "PDF herunterladen"
+      "download": "PDF herunterladen",
+      "notSigner": "Sie sind nicht als unterzeichnende Person dieses Vertrags eingetragen. Verwenden Sie stattdessen den Link aus der E-Mail zum Unterschreiben.",
+      "notSignable": "Dieser Vertrag wartet nicht mehr auf Ihre Unterschrift. Laden Sie die Seite neu, um den aktuellen Stand zu sehen.",
+      "signError": "Der Vertrag konnte nicht zum Unterschreiben geöffnet werden. Versuchen Sie es gleich noch einmal.",
+      "declinedHint": "Dieser Vertrag wurde abgelehnt und kann nicht mehr unterschrieben werden.",
+      "opening": "Wird geöffnet…",
+      "sign": "Unterschreiben"
     },
     "documents": {
       "title": "Dokumente",
@@ -7416,7 +7431,8 @@
       "signed_by_customer": "Kunde unterzeichnet",
       "signed_by_admin": "Gegengezeichnet",
       "fully_signed": "Beidseitig unterzeichnet",
-      "cancelled": "Storniert"
+      "cancelled": "Storniert",
+      "declined": "Abgelehnt"
     },
     "list": {
       "new": "Neuer Vertrag",
@@ -7529,7 +7545,14 @@
         "signed": "Unterschrieben",
         "audit": "Prüfzertifikat",
         "wet_upload": "Hochgeladene unterschriebene Kopie"
-      }
+      },
+      "countersignDrawRequired": "Zeichnen Sie Ihre Unterschrift, oder verwenden Sie stattdessen Ihren eingegebenen Namen.",
+      "countersignCustomersPending": "Alle Personen auf Kundenseite müssen unterschreiben, bevor Sie gegenzeichnen können.",
+      "countersignHelpV2": "Alle auf Kundenseite haben unterschrieben. Ihre Unterschrift wird in das Feld des Ausstellers im PDF eingesetzt; nach Ihrer Unterschrift wird das Signaturzertifikat ausgestellt.",
+      "countersignModeLabel": "Wie möchten Sie unterschreiben?",
+      "countersignModeDrawn": "Unterschrift zeichnen",
+      "countersignModeTyped": "Eingegebenen Namen verwenden",
+      "countersignTypedHint": "Ihr oben eingegebener Name wird in das Unterschriftsfeld eingesetzt."
     },
     "editor": {
       "back": "Zurück zur Liste",
@@ -7749,6 +7772,115 @@
         "activeContent": "Das PDF enthält Skripte, Formularfelder oder eingebettete Dateien. Drucken Sie es in ein neues PDF („Als PDF sichern“) und laden Sie das hoch.",
         "empty": "Das PDF hat keine Seiten.",
         "tooManyPages": "Das PDF hat mehr als 100 Seiten."
+      }
+    },
+    "signers": {
+      "errors": {
+        "none": "Fügen Sie mindestens eine unterzeichnende Person hinzu.",
+        "nameRequired": "Person {{number}}: Geben Sie einen Namen ein.",
+        "emailInvalid": "Person {{number}}: Geben Sie eine gültige E-Mail-Adresse ein.",
+        "emailDuplicate": "Person {{number}}: Jede unterzeichnende Person braucht eine eigene E-Mail-Adresse.",
+        "notDraft": "Der Vertrag wurde bereits versendet, die Unterzeichnenden können nicht mehr geändert werden.",
+        "invalid": "Prüfen Sie Namen und E-Mail-Adressen: Jede unterzeichnende Person braucht einen Namen und eine eigene, gültige E-Mail-Adresse.",
+        "generic": "Die Unterzeichnenden konnten nicht gespeichert werden. Versuchen Sie es erneut."
+      },
+      "saved": "Unterzeichnende gespeichert.",
+      "issuerYou": "Sie (Aussteller)",
+      "empty": "Noch keine Unterzeichnenden hinzugefügt – standardmäßig unterschreibt der Kunde des Vertrags ({{name}}).",
+      "emptyNoName": "Noch keine Unterzeichnenden hinzugefügt – standardmäßig unterschreibt der Kunde des Vertrags.",
+      "issuerRow": "Unterschreibt zuletzt, auf dieser Seite",
+      "title": "Unterzeichnende",
+      "unsaved": "Nicht gespeicherte Änderungen",
+      "hint": "Wird getrennt vom Vertrag gespeichert. Die Unterzeichnenden können geändert werden, bis der Vertrag versendet ist.",
+      "loadError": "Die Unterzeichnenden konnten nicht geladen werden. Laden Sie die Seite neu, um es erneut zu versuchen.",
+      "nameOf": "Name von Person {{number}}",
+      "nameLabel": "Name",
+      "emailOf": "E-Mail von Person {{number}}",
+      "emailLabel": "E-Mail",
+      "remove": "Person {{number}} entfernen",
+      "onlyListedHint": "Nur die hier aufgeführten Personen unterschreiben. Fügen Sie auch den Kunden hinzu, wenn er unterschreiben soll.",
+      "add": "Person hinzufügen",
+      "max": "Sie können bis zu {{max}} Personen hinzufügen.",
+      "orderLabel": "Reihenfolge",
+      "orderParallel": "Alle gleichzeitig",
+      "orderSequential": "Nacheinander",
+      "orderParallelHint": "Alle erhalten ihren Link, sobald Sie den Vertrag versenden.",
+      "orderSequentialHint": "Die Personen erhalten ihren Link in der angegebenen Reihenfolge, jeweils sobald die vorherige unterschrieben hat.",
+      "saving": "Wird gespeichert…",
+      "save": "Unterzeichnende speichern",
+      "resent": "Ein neuer Link wurde an {{email}} gesendet.",
+      "resendNotDue": "Diese Person kann jetzt keinen neuen Link erhalten: Sie ist noch nicht an der Reihe oder hat bereits unterschrieben.",
+      "resendNotSignable": "Links können nur erneut gesendet werden, solange der Vertrag zur Unterschrift versendet ist.",
+      "resendError": "Der Link konnte nicht erneut gesendet werden. Versuchen Sie es erneut.",
+      "status": {
+        "signed": "Unterschrieben",
+        "declined": "Abgelehnt",
+        "invited": "Link gesendet",
+        "issuerPending": "Zeichnet zuletzt gegen",
+        "pending": "Noch nicht eingeladen"
+      },
+      "via": {
+        "otp": "E-Mail mit Code bestätigt",
+        "portal": "Im Kundenportal angemeldet",
+        "admin": "Hier gegengezeichnet"
+      },
+      "countersignLater": "Sie zeichnen hier gegen, sobald alle Personen auf Kundenseite unterschrieben haben.",
+      "role": {
+        "issuer": "Aussteller",
+        "customer": "Kunde"
+      },
+      "invitedAt": "Link gesendet am {{date}}",
+      "signedAt": "Unterschrieben am {{date}}",
+      "mode": {
+        "drawn": "Gezeichnete Unterschrift",
+        "typed": "Eingegebener Name"
+      },
+      "declinedAt": "Abgelehnt am {{date}}",
+      "resendConfirm": "{{name}} einen neuen Link zum Unterschreiben senden? Der bisherige Link funktioniert dann nicht mehr.",
+      "resend": "Link erneut senden",
+      "log": {
+        "title": "Signaturprotokoll",
+        "chainOk": "Kette intakt",
+        "chainCount": "Geprüfte Einträge: {{count}}",
+        "chainBroken": "Kette unterbrochen bei #{{seq}}",
+        "help": "Jeder Schritt der Unterzeichnung in zeitlicher Reihenfolge. Jeder Eintrag ist mit dem vorherigen verkettet, sodass eine Änderung an einem Eintrag bei der Prüfung auffällt.",
+        "empty": "Noch keine Einträge.",
+        "type": {
+          "sent": "Zur Unterschrift versendet",
+          "invited": "Link gesendet",
+          "invitation_resent": "Link erneut gesendet",
+          "code_sent": "Code per E-Mail gesendet",
+          "verified": "E-Mail bestätigt",
+          "signed": "Unterschrieben",
+          "declined": "Abgelehnt",
+          "countersigned": "Gegengezeichnet",
+          "completed": "Abgeschlossen",
+          "wet_upload": "Unterschriebenes PDF hochgeladen",
+          "revoked": "Links zurückgezogen"
+        },
+        "actor": {
+          "admin": "Admin",
+          "signer": "Unterzeichnende Person",
+          "system": "System"
+        },
+        "reason": {
+          "missing_event": "Ein Eintrag fehlt.",
+          "broken_link": "Ein Eintrag ist nicht mit dem vorherigen verknüpft.",
+          "altered_event": "Ein Eintrag wurde nachträglich verändert.",
+          "head_mismatch": "Der letzte Eintrag stimmt nicht mit dem gespeicherten Ende der Kette überein."
+        }
+      },
+      "evidence": {
+        "hide": "Nachweise ausblenden",
+        "show": "Nachweise anzeigen",
+        "note": "Zeigt die für jede Person erfasste IP-Adresse, den Browser und den Ablehnungsgrund. Jedes Öffnen wird im Aktivitätsprotokoll festgehalten.",
+        "error": "Die Nachweise konnten nicht geladen werden. Versuchen Sie es erneut.",
+        "empty": "Noch nichts erfasst.",
+        "ip": "IP-Adresse",
+        "userAgent": "Browser",
+        "declineReason": "Ablehnungsgrund",
+        "signatureSha": "SHA-256 des Unterschriftsbilds",
+        "documentSha": "SHA-256 des unterschriebenen Dokuments"
       }
     }
   },
@@ -8115,6 +8247,123 @@
       "body": "{{count}} Personen auf einmal von einer Domain anzuschreiben, die sonst nur Transaktionsmails versendet, lässt Spamfilter aufmerksam werden. Anbieter können den gesamten Versand drosseln, als Spam einstufen oder blockieren — und ein schlechter Lauf beeinträchtigt auch die Zustellung Ihrer Galerie-E-Mails.",
       "advice": "Stellen Sie sicher, dass SPF, DKIM und DMARC für Ihre Versanddomain eingerichtet sind, senden Sie sich zuerst einen Test, und teilen Sie eine erste Kampagne nach Möglichkeit in mehrere kleinere Sendungen auf.",
       "duration": "Bei {{rate}}/Minute dauert dies etwa {{minutes}} Minuten. Die Versand-Warteschlange wird geteilt: Während der Kampagne können andere E-Mails — Galerie-Einladungen, Passwort-Zurücksetzungen — dahinter verzögert werden."
+    }
+  },
+  "contractSigning": {
+    "gone": {
+      "revokedTitle": "Dieser Link funktioniert nicht mehr",
+      "revokedBody": "Es wurde ein neuerer Link verschickt, oder der Vertrag kann nicht mehr unterschrieben werden. Verwenden Sie den Link aus der neuesten E-Mail oder wenden Sie sich an den Absender.",
+      "expiredTitle": "Dieser Link ist abgelaufen",
+      "expiredBody": "Bitten Sie den Absender, Ihnen einen neuen Link zum Unterschreiben zu senden.",
+      "withdrawnTitle": "Dieser Vertrag wurde zurückgezogen",
+      "withdrawnBody": "Der Absender hat diesen Vertrag zurückgezogen, daher kann er nicht mehr unterschrieben werden. Bei Fragen wenden Sie sich bitte an den Absender."
+    },
+    "loadError": {
+      "title": "Diese Seite konnte nicht geladen werden",
+      "body": "Prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
+      "retry": "Erneut versuchen"
+    },
+    "portal": {
+      "endedTitle": "Ihre Sitzung zum Unterschreiben ist abgelaufen",
+      "endedBody": "Öffnen Sie den Vertrag erneut über Ihr Kundenportal, um fortzufahren.",
+      "backToContracts": "Zu Ihren Verträgen"
+    },
+    "verify": {
+      "heading": "Vertrag {{number}}",
+      "from": "{{company}} bittet Sie, diesen Vertrag zu unterschreiben."
+    },
+    "sessionEnded": "Ihre Sitzung zum Unterschreiben ist abgelaufen. Bestätigen Sie Ihre E-Mail-Adresse erneut, um fortzufahren.",
+    "documents": {
+      "downloadError": "Die Datei konnte nicht heruntergeladen werden. Versuchen Sie es gleich noch einmal.",
+      "title": "Dokumente",
+      "downloading": "Wird vorbereitet…",
+      "downloadPdf": "Vertrag herunterladen (PDF)"
+    },
+    "upload": {
+      "doneTitle": "Vielen Dank – Ihr unterschriebenes PDF wurde hochgeladen.",
+      "doneBody": "Sie können diese Seite jetzt schließen.",
+      "errors": {
+        "disabled": "Das Hochladen eines unterschriebenen PDFs ist für diesen Vertrag deaktiviert. Bitte unterschreiben Sie direkt im Browser.",
+        "generic": "Das Hochladen ist fehlgeschlagen. Stellen Sie sicher, dass die Datei ein PDF unter 10 MB ist, und versuchen Sie es erneut."
+      }
+    },
+    "declined": {
+      "title": "Sie haben diesen Vertrag abgelehnt",
+      "body": "Der Absender wurde informiert. Falls das ein Versehen war, wenden Sie sich an den Absender – er kann Ihnen einen neuen Vertrag senden.",
+      "otherTitle": "Dieser Vertrag wurde abgelehnt",
+      "otherBody": "Eine andere Person hat ihn abgelehnt, daher kann er nicht mehr unterschrieben werden."
+    },
+    "waiting": {
+      "title": "Sie sind noch nicht an der Reihe",
+      "body": "Die Personen vor Ihnen unterschreiben zuerst. Wir benachrichtigen Sie per E-Mail, sobald Sie an der Reihe sind."
+    },
+    "notSignable": {
+      "title": "Dieser Vertrag wartet nicht auf Ihre Unterschrift",
+      "body": "Im Moment gibt es für Sie nichts zu unterschreiben. Wenden Sie sich an den Absender, falls Sie eine Unterschrift erwartet haben."
+    },
+    "signers": {
+      "title": "Wer unterschreibt",
+      "sequential": "Es wird nacheinander in dieser Reihenfolge unterschrieben.",
+      "parallel": "Alle können gleichzeitig unterschreiben.",
+      "issuer": "Zeichnet zuletzt gegen",
+      "status": {
+        "signed": "Unterschrieben",
+        "declined": "Abgelehnt",
+        "pending": "Noch nicht unterschrieben"
+      }
+    },
+    "result": {
+      "complete": "Alle haben unterschrieben – der Vertrag ist vollständig.",
+      "issuerNext": "Alle haben unterschrieben. Der Vertrag wird jetzt gegengezeichnet, und Sie erhalten das endgültige PDF per E-Mail.",
+      "othersPending": "Der Vertrag ist vollständig, sobald alle unterschrieben haben. Wir senden Ihnen dann das endgültige PDF per E-Mail.",
+      "title": "Vielen Dank – Sie haben den Vertrag unterschrieben.",
+      "signedAt": "Unterschrieben am {{date}}"
+    },
+    "sign": {
+      "errors": {
+        "notYourTurn": "Zuerst muss eine andere Person unterschreiben. Wir benachrichtigen Sie per E-Mail, sobald Sie an der Reihe sind.",
+        "notSignable": "Dieser Vertrag kann nicht mehr unterschrieben werden – er wurde möglicherweise zurückgezogen oder abgelehnt. Bei Fragen wenden Sie sich an den Absender.",
+        "drawOrType": "Zeichnen Sie Ihre Unterschrift in das Feld, oder geben Sie stattdessen Ihren Namen ein.",
+        "tooLarge": "Ihre gezeichnete Unterschrift ist zu groß zum Speichern. Löschen Sie sie und zeichnen Sie sie erneut.",
+        "generic": "Ihre Unterschrift konnte nicht gespeichert werden. Versuchen Sie es erneut; falls es weiterhin nicht klappt, wenden Sie sich an den Absender."
+      },
+      "modeLabel": "Wie möchten Sie unterschreiben?",
+      "modeDrawn": "Zeichnen",
+      "modeTyped": "Namen eingeben",
+      "typedHint": "Ihr oben eingegebener Name wird in Ihr Unterschriftsfeld eingesetzt.",
+      "submitting": "Wird unterschrieben…"
+    },
+    "otp": {
+      "errors": {
+        "network": "Der Server ist nicht erreichbar. Prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
+        "wrong": "Dieser Code ist nicht korrekt. Prüfen Sie die neueste E-Mail und geben Sie die sechs Ziffern erneut ein.",
+        "expired": "Dieser Code ist abgelaufen oder wurde bereits verwendet. Fordern Sie einen neuen Code an.",
+        "locked": "Zu viele falsche Versuche für diesen Code. Fordern Sie einen neuen Code an.",
+        "rateLimited": "Sie haben in der letzten Stunde mehrere Codes angefordert. Verwenden Sie den neuesten Code aus Ihrer E-Mail, oder versuchen Sie es in einer Stunde erneut.",
+        "tooManyRequests": "Zu viele Versuche von dieser Verbindung. Warten Sie einige Minuten und versuchen Sie es dann erneut.",
+        "generic": "Etwas ist schiefgelaufen. Versuchen Sie es erneut; falls es weiterhin auftritt, wenden Sie sich an den Absender.",
+        "format": "Geben Sie den sechsstelligen Code aus der E-Mail ein."
+      },
+      "title": "E-Mail-Adresse bestätigen",
+      "intro": "Bevor Sie den Vertrag lesen und unterschreiben können, senden wir einen sechsstelligen Code an {{email}}.",
+      "sending": "Wird gesendet…",
+      "send": "Code senden",
+      "sent": "Wir haben einen Code an {{email}} gesendet. Die Zustellung kann bis zu einer Minute dauern; der Code ist {{minutes}} Minuten gültig.",
+      "codeLabel": "Sechsstelliger Code",
+      "verifying": "Wird geprüft…",
+      "verify": "Code bestätigen",
+      "resend": "Neuen Code senden"
+    },
+    "decline": {
+      "error": "Der Vertrag konnte nicht abgelehnt werden. Versuchen Sie es erneut; falls es weiterhin nicht klappt, wenden Sie sich an den Absender.",
+      "open": "Vertrag ablehnen",
+      "confirmTitle": "Diesen Vertrag ablehnen?",
+      "confirmBody": "Der Absender wird informiert, dass Sie abgelehnt haben, und niemand kann diesen Vertrag mehr unterschreiben. Das lässt sich nicht rückgängig machen.",
+      "reasonLabel": "Grund (optional)",
+      "reasonHint": "Wird dem Absender mitgeteilt.",
+      "keep": "Nicht ablehnen",
+      "declining": "Wird abgelehnt…",
+      "confirm": "Vertrag ablehnen"
     }
   }
 }

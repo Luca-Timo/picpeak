@@ -704,6 +704,15 @@
       "title": "Customer documents",
       "counts": "{{pending}} awaiting review, {{rejected}} rejected.",
       "hint": "Customer uploads stay unavailable to them until they are marked clean on the customer record. Rejected files are deleted after the retention period."
+    },
+    "evidenceKey": {
+      "title": "Signing evidence key",
+      "env": "Set with PICPEAK_EVIDENCE_KEY.",
+      "file": "Stored in business-docs/keys/evidence.key, which is part of every backup.",
+      "none": "Not created yet. It is created with the first signature.",
+      "unreadable": "The key file can't be read. Restore it from a backup, otherwise stored signing evidence can't be decrypted.",
+      "id": "Key ID {{id}}",
+      "hint": "Signers' IP addresses and browsers are stored encrypted with this key. Without it that evidence can't be read; the signatures and PDFs stay valid."
     }
   },
   "common": {
@@ -5503,7 +5512,13 @@
       "counterSigned": "Counter-signed",
       "openSign": "Open & sign",
       "downloadSigned": "Download signed PDF",
-      "download": "Download PDF"
+      "download": "Download PDF",
+      "notSigner": "You're not listed as a signer of this contract. Use the link in the signing email instead.",
+      "notSignable": "This contract is no longer waiting for your signature. Reload the page to see its current status.",
+      "signError": "The contract couldn't be opened for signing. Try again in a moment.",
+      "declinedHint": "This contract was declined and can no longer be signed.",
+      "opening": "Opening…",
+      "sign": "Sign"
     },
     "documents": {
       "title": "Documents",
@@ -7415,7 +7430,8 @@
       "signed_by_customer": "Signed by customer",
       "signed_by_admin": "Counter-signed",
       "fully_signed": "Fully signed",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "declined": "Declined"
     },
     "list": {
       "new": "New contract",
@@ -7528,7 +7544,14 @@
         "signed": "Signed",
         "audit": "Audit certificate",
         "wet_upload": "Uploaded signed copy"
-      }
+      },
+      "countersignDrawRequired": "Draw your signature, or switch to typing your name.",
+      "countersignCustomersPending": "Every customer has to sign before you counter-sign.",
+      "countersignHelpV2": "Every customer has signed. Your signature goes into the issuer's field on the PDF, and the signing certificate is issued once you sign.",
+      "countersignModeLabel": "How do you want to sign?",
+      "countersignModeDrawn": "Draw my signature",
+      "countersignModeTyped": "Use my typed name",
+      "countersignTypedHint": "Your name, as typed above, is placed in the signature field."
     },
     "editor": {
       "back": "Back to list",
@@ -7748,6 +7771,115 @@
         "activeContent": "The PDF contains scripts, form fields or embedded files. Print it to a new PDF (\"Save as PDF\") and upload that.",
         "empty": "The PDF has no pages.",
         "tooManyPages": "The PDF has more than 100 pages."
+      }
+    },
+    "signers": {
+      "errors": {
+        "none": "Add at least one signer.",
+        "nameRequired": "Signer {{number}}: enter a name.",
+        "emailInvalid": "Signer {{number}}: enter a valid email address.",
+        "emailDuplicate": "Signer {{number}}: each signer needs their own email address.",
+        "notDraft": "The contract has been sent, so its signers can no longer change.",
+        "invalid": "Check the names and email addresses: each signer needs a name and their own valid email address.",
+        "generic": "The signers couldn't be saved. Try again."
+      },
+      "saved": "Signers saved.",
+      "issuerYou": "You (the issuer)",
+      "empty": "No signers added yet — the contract's customer ({{name}}) signs by default.",
+      "emptyNoName": "No signers added yet — the contract's customer signs by default.",
+      "issuerRow": "Signs last, from this page",
+      "title": "Signers",
+      "unsaved": "Unsaved changes",
+      "hint": "Saved separately from the contract. Signers can change until the contract is sent.",
+      "loadError": "The signers couldn't be loaded. Reload the page to try again.",
+      "nameOf": "Name of signer {{number}}",
+      "nameLabel": "Name",
+      "emailOf": "Email of signer {{number}}",
+      "emailLabel": "Email",
+      "remove": "Remove signer {{number}}",
+      "onlyListedHint": "Only the people listed here sign. Add the customer too if they should sign.",
+      "add": "Add signer",
+      "max": "You can add up to {{max}} signers.",
+      "orderLabel": "Signing order",
+      "orderParallel": "All at once",
+      "orderSequential": "One after the other",
+      "orderParallelHint": "Everyone gets their link when you send the contract.",
+      "orderSequentialHint": "Signers get their link in the order listed, each once the one before has signed.",
+      "saving": "Saving…",
+      "save": "Save signers",
+      "resent": "A new link was sent to {{email}}.",
+      "resendNotDue": "This signer can't get a new link now: it isn't their turn yet, or they have already signed.",
+      "resendNotSignable": "Links can only be sent again while the contract is out for signature.",
+      "resendError": "The link couldn't be sent again. Try again.",
+      "status": {
+        "signed": "Signed",
+        "declined": "Declined",
+        "invited": "Link sent",
+        "issuerPending": "Counter-signs last",
+        "pending": "Not invited yet"
+      },
+      "via": {
+        "otp": "Email confirmed with a code",
+        "portal": "Signed in to the customer portal",
+        "admin": "Counter-signed here"
+      },
+      "countersignLater": "You counter-sign here once every customer signer has signed.",
+      "role": {
+        "issuer": "Issuer",
+        "customer": "Customer"
+      },
+      "invitedAt": "Link sent {{date}}",
+      "signedAt": "Signed {{date}}",
+      "mode": {
+        "drawn": "Drawn signature",
+        "typed": "Typed name"
+      },
+      "declinedAt": "Declined {{date}}",
+      "resendConfirm": "Send {{name}} a new signing link? The previous link stops working.",
+      "resend": "Send the link again",
+      "log": {
+        "title": "Signing log",
+        "chainOk": "Chain intact",
+        "chainCount": "Entries checked: {{count}}",
+        "chainBroken": "Chain broken at #{{seq}}",
+        "help": "Every step of the signing, in order. Each entry is chained to the one before, so a change to any entry shows up in the check.",
+        "empty": "No entries yet.",
+        "type": {
+          "sent": "Sent for signature",
+          "invited": "Link sent",
+          "invitation_resent": "Link sent again",
+          "code_sent": "Code emailed",
+          "verified": "Email confirmed",
+          "signed": "Signed",
+          "declined": "Declined",
+          "countersigned": "Counter-signed",
+          "completed": "Completed",
+          "wet_upload": "Signed PDF uploaded",
+          "revoked": "Links withdrawn"
+        },
+        "actor": {
+          "admin": "Admin",
+          "signer": "Signer",
+          "system": "System"
+        },
+        "reason": {
+          "missing_event": "An entry is missing.",
+          "broken_link": "An entry doesn't link to the one before it.",
+          "altered_event": "An entry was changed after it was written.",
+          "head_mismatch": "The latest entry doesn't match the stored end of the chain."
+        }
+      },
+      "evidence": {
+        "hide": "Hide evidence",
+        "show": "Show evidence",
+        "note": "Shows the IP address, browser and decline reason recorded for each signer. Each time you open it, that is recorded in the activity log.",
+        "error": "The evidence couldn't be loaded. Try again.",
+        "empty": "Nothing recorded yet.",
+        "ip": "IP address",
+        "userAgent": "Browser",
+        "declineReason": "Decline reason",
+        "signatureSha": "Signature image SHA-256",
+        "documentSha": "Signed document SHA-256"
       }
     }
   },
@@ -8114,6 +8246,123 @@
       "body": "Mailing {{count}} people at once from a domain that usually sends only transactional email is what makes spam filters take notice. Providers may throttle, junk or block the whole batch, and a bad run damages delivery of your gallery emails too.",
       "advice": "Confirm SPF, DKIM and DMARC are set up for your sending domain, send yourself a test first, and consider splitting a first campaign across several smaller sends.",
       "duration": "At {{rate}}/minute this takes about {{minutes}} minutes. The send queue is shared, so while it runs other email — gallery invitations, password resets — can be delayed behind it."
+    }
+  },
+  "contractSigning": {
+    "gone": {
+      "revokedTitle": "This link no longer works",
+      "revokedBody": "A newer link was sent, or the contract is no longer open for signing. Use the link in the most recent email, or contact the sender.",
+      "expiredTitle": "This link has expired",
+      "expiredBody": "Ask the sender to send you a new signing link.",
+      "withdrawnTitle": "This contract has been withdrawn",
+      "withdrawnBody": "The sender withdrew this contract, so it can no longer be signed. Contact them if you have questions."
+    },
+    "loadError": {
+      "title": "We couldn't load this page",
+      "body": "Check your connection and try again.",
+      "retry": "Try again"
+    },
+    "portal": {
+      "endedTitle": "Your signing session has ended",
+      "endedBody": "Open the contract again from your customer portal to continue.",
+      "backToContracts": "Go to your contracts"
+    },
+    "verify": {
+      "heading": "Contract {{number}}",
+      "from": "{{company}} has asked you to sign this contract."
+    },
+    "sessionEnded": "Your signing session has ended. Confirm your email again to continue.",
+    "documents": {
+      "downloadError": "The file couldn't be downloaded. Try again in a moment.",
+      "title": "Documents",
+      "downloading": "Preparing…",
+      "downloadPdf": "Download the contract (PDF)"
+    },
+    "upload": {
+      "doneTitle": "Thank you — your signed PDF was uploaded.",
+      "doneBody": "You can close this page.",
+      "errors": {
+        "disabled": "Uploading a signed PDF is switched off for this contract. Please sign in your browser instead.",
+        "generic": "The upload failed. Make sure the file is a PDF under 10 MB, then try again."
+      }
+    },
+    "declined": {
+      "title": "You declined this contract",
+      "body": "The sender has been told. If this was a mistake, contact them — they can send you a new contract.",
+      "otherTitle": "This contract was declined",
+      "otherBody": "Another signer declined it, so it can no longer be signed."
+    },
+    "waiting": {
+      "title": "It isn't your turn yet",
+      "body": "The signers before you sign first. We'll email you when it's your turn."
+    },
+    "notSignable": {
+      "title": "This contract isn't waiting for your signature",
+      "body": "There is nothing for you to sign right now. Contact the sender if you expected to sign."
+    },
+    "signers": {
+      "title": "Who signs",
+      "sequential": "Signers sign one after the other, in this order.",
+      "parallel": "Everyone can sign at the same time.",
+      "issuer": "Counter-signs last",
+      "status": {
+        "signed": "Signed",
+        "declined": "Declined",
+        "pending": "Not signed yet"
+      }
+    },
+    "result": {
+      "complete": "Everyone has signed — the contract is complete.",
+      "issuerNext": "Everyone has signed. The contract is now counter-signed, and you'll get the final PDF by email.",
+      "othersPending": "The contract is complete once everyone has signed. We'll email you the final PDF then.",
+      "title": "Thank you — you have signed the contract.",
+      "signedAt": "Signed on {{date}}"
+    },
+    "sign": {
+      "errors": {
+        "notYourTurn": "Another signer has to sign first. We'll email you when it's your turn.",
+        "notSignable": "This contract can no longer be signed — it may have been withdrawn or declined. Contact the sender if you have questions.",
+        "drawOrType": "Draw your signature in the box, or switch to typing your name.",
+        "tooLarge": "Your drawn signature is too large to save. Clear it and draw it again.",
+        "generic": "Your signature couldn't be saved. Try again; if it keeps failing, contact the sender."
+      },
+      "modeLabel": "How do you want to sign?",
+      "modeDrawn": "Draw",
+      "modeTyped": "Type my name",
+      "typedHint": "Your name, as typed above, is placed in your signature field.",
+      "submitting": "Signing…"
+    },
+    "otp": {
+      "errors": {
+        "network": "We couldn't reach the server. Check your connection and try again.",
+        "wrong": "That code isn't right. Check the latest email and enter the six digits again.",
+        "expired": "This code has expired or was already used. Send a new code.",
+        "locked": "Too many wrong tries for this code. Send a new code.",
+        "rateLimited": "You have asked for several codes in the last hour. Use the latest code from your email, or try again in an hour.",
+        "tooManyRequests": "Too many attempts from this connection. Wait a few minutes, then try again.",
+        "generic": "Something went wrong. Try again; if it keeps happening, contact the sender.",
+        "format": "Enter the six-digit code from the email."
+      },
+      "title": "Confirm your email address",
+      "intro": "Before you can read and sign the contract, we send a six-digit code to {{email}}.",
+      "sending": "Sending…",
+      "send": "Send code",
+      "sent": "We sent a code to {{email}}. It can take up to a minute to arrive and is valid for {{minutes}} minutes.",
+      "codeLabel": "Six-digit code",
+      "verifying": "Checking…",
+      "verify": "Confirm code",
+      "resend": "Send a new code"
+    },
+    "decline": {
+      "error": "The contract couldn't be declined. Try again; if it keeps failing, contact the sender.",
+      "open": "Decline the contract",
+      "confirmTitle": "Decline this contract?",
+      "confirmBody": "The sender is told that you declined, and nobody can sign this contract any more. This can't be undone.",
+      "reasonLabel": "Reason (optional)",
+      "reasonHint": "Shared with the sender.",
+      "keep": "Keep the contract",
+      "declining": "Declining…",
+      "confirm": "Decline contract"
     }
   }
 }

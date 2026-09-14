@@ -42,7 +42,81 @@ export type ContractStatus =
   | 'signed_by_customer'
   | 'signed_by_admin'
   | 'fully_signed'
+  | 'declined'
   | 'cancelled';
+
+// ----- Signatures v2 (#1446): signers and the signing log -------------
+
+export type ContractSigningOrder = 'parallel' | 'sequential';
+export type ContractSignerRole = 'customer' | 'issuer';
+export type ContractSignerStatus = 'pending' | 'invited' | 'signed' | 'declined';
+
+export interface ContractSigner {
+  id: number;
+  position: number;
+  role: ContractSignerRole;
+  slotKey: string;
+  name: string | null;
+  email: string | null;
+  status: ContractSignerStatus;
+  invitedAt: string | null;
+  verifiedAt: string | null;
+  verifiedVia: 'otp' | 'portal' | 'admin' | null;
+  signedAt: string | null;
+  declinedAt: string | null;
+  signatureMode: 'drawn' | 'typed' | null;
+}
+
+export type ContractSigningEventType =
+  | 'sent' | 'invited' | 'invitation_resent' | 'code_sent' | 'verified' | 'signed'
+  | 'declined' | 'countersigned' | 'completed' | 'wet_upload' | 'revoked';
+
+export interface ContractSigningEvent {
+  seq: number;
+  /** One of ContractSigningEventType; unknown types render their raw name. */
+  type: string;
+  actorType: 'admin' | 'signer' | 'system' | string;
+  actorLabel: string | null;
+  signerId: number | null;
+  occurredAt: string;
+  eventHash: string;
+  artifactSha256: string | null;
+}
+
+/** Result of re-checking the hash chain of the signing log. */
+export interface ContractSigningChain {
+  ok: boolean;
+  count: number;
+  head: string | null;
+  brokenAt: number | null;
+  reason: string | null;
+}
+
+export interface ContractSignersOverview {
+  /** 2 for signatures v2; null for a contract sent before (single link). */
+  version: 2 | null;
+  order: ContractSigningOrder;
+  signers: ContractSigner[];
+  events: ContractSigningEvent[];
+  chain: ContractSigningChain | null;
+}
+
+export interface ContractSignersPayload {
+  order?: ContractSigningOrder;
+  /** 1–5 customer signers; the issuer is added automatically. */
+  signers: Array<{ name: string; email: string }>;
+}
+
+/** Decrypted evidence for one signer — every opening is logged. */
+export interface ContractSignerEvidence {
+  signerId: number;
+  name: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  declineReason: string | null;
+  signatureSha256: string | null;
+  documentSha256: string | null;
+}
 
 export type ContractSort =
   | 'newest' | 'oldest'
@@ -374,11 +448,36 @@ export const contractsService = {
     return data.data || data;
   },
 
+  /** `mode` is read for signatures-v2 contracts (drawn or typed). */
   async countersign(
     id: number,
-    payload: { name: string; signatureDataUrl?: string | null },
+    payload: { name: string; signatureDataUrl?: string | null; mode?: 'drawn' | 'typed' },
   ): Promise<{ status: ContractStatus; signedAt: string }> {
     const { data } = await api.post(`/admin/contracts/${id}/countersign`, payload);
+    return data.data || data;
+  },
+
+  /** Signers, the signing log and its chain check (#1446). */
+  async signers(id: number): Promise<ContractSignersOverview> {
+    const { data } = await api.get(`/admin/contracts/${id}/signers`);
+    return data.data || data;
+  },
+
+  /** Replace a draft's customer signers and signing order. */
+  async setSigners(id: number, payload: ContractSignersPayload): Promise<ContractSignersOverview> {
+    const { data } = await api.put(`/admin/contracts/${id}/signers`, payload);
+    return data.data || data;
+  },
+
+  /** A new link for one signer; the previous link stops working. */
+  async resendSignerLink(id: number, signerId: number): Promise<{ resent: true }> {
+    const { data } = await api.post(`/admin/contracts/${id}/signers/${signerId}/resend`);
+    return data.data || data;
+  },
+
+  /** IP address, user agent and decline reasons, decrypted. Logged on every call. */
+  async signingEvidence(id: number): Promise<{ evidence: ContractSignerEvidence[] }> {
+    const { data } = await api.get(`/admin/contracts/${id}/signing-evidence`);
     return data.data || data;
   },
 

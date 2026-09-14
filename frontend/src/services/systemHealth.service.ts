@@ -37,6 +37,8 @@ export interface SystemHealthFailures {
   counts: { stuckEmails: number; waitingEmails: number; pendingScanned?: number };
   /** Customer documents (#1444): uploads waiting for a review, and rejected ones. */
   customerDocuments?: { pending: number; rejected: number };
+  /** Where the key for signing evidence comes from (#1446) — never the key itself. */
+  evidenceKey?: { source: 'env' | 'file' | 'none' | 'unreadable'; keyId: string | null };
 }
 
 export const systemHealthService = {
