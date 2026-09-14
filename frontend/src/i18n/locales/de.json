@@ -6580,6 +6580,14 @@
     },
     "textBlocks": {
       "insert": "Textbaustein einfügen…"
+    },
+    "selection": {
+      "title": "Zusatzleistungen bei Annahme",
+      "byCustomer": "Vom Kunden gewählt am {{date}}",
+      "byAdmin": "Bei Ihrer Annahme festgehalten am {{date}}",
+      "none": "Keine Zusatzleistungen gewählt",
+      "chosen": "Gewählt",
+      "notChosen": "Nicht gewählt"
     }
   },
   "crm": {
@@ -7114,7 +7122,16 @@
     "tosCheckbox": "Ich habe die Allgemeinen Geschäftsbedingungen gelesen und akzeptiere sie.",
     "tosLink": "Vollständige AGB lesen",
     "preselectAcceptHint": "Sie sind dem Link „Annehmen“ aus der E-Mail gefolgt — klicken Sie zur Bestätigung auf die Schaltfläche unten.",
-    "preselectDeclineHint": "Sie sind dem Link „Ablehnen“ aus der E-Mail gefolgt — klicken Sie zur Bestätigung auf die Schaltfläche unten."
+    "preselectDeclineHint": "Sie sind dem Link „Ablehnen“ aus der E-Mail gefolgt — klicken Sie zur Bestätigung auf die Schaltfläche unten.",
+    "addons": {
+      "hint": "Wählen Sie die gewünschten Zusatzleistungen aus. Der Gesamtbetrag passt sich dabei an.",
+      "optional": "Optional",
+      "included": "Enthalten",
+      "notChosen": "Nicht gewählt",
+      "updating": "Gesamtbetrag wird aktualisiert…",
+      "totalChanged": "Der Gesamtbetrag beträgt jetzt {{total}}. Bitte prüfen Sie ihn und nehmen Sie das Angebot erneut an.",
+      "locked": "Die Zusatzleistungen wurden bei der Annahme festgelegt. Bitte kontaktieren Sie uns für ein angepasstes Angebot."
+    }
   },
   "reminderTemplates": {
     "title": "Erinnerungs-E-Mails vor dem Anlass",

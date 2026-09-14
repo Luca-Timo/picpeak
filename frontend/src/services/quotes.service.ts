@@ -68,6 +68,9 @@ export interface QuoteSummary {
   /** The template (and version) this quote was created from, if any. */
   sourceTemplateId?: number | null;
   sourceTemplateVersion?: number | null;
+  /** #1451 phase 2 — the add-on choice fixed at acceptance. */
+  selectionAcceptedAt?: string | null;
+  optionalSelection?: QuoteOptionalSelection | null;
   customer: {
     email: string | null;
     displayName: string | null;
@@ -443,7 +446,12 @@ export interface PublicQuoteView {
     lineKind?: LineKind;
     unit?: LineUnit | null;
     promotionName?: string | null;
+    /** #1451 phase 2 — an optional add-on and whether it's selected. */
+    isOptional?: boolean;
+    selected?: boolean;
   }>;
+  /** The add-on choice was fixed by the first acceptance. */
+  selectionLocked?: boolean;
   /** Terms of Service block driven by the global `crm_quotes_tos_*`
    *  settings. When `required` is true, the public page must show a
    *  checkbox the customer ticks before Accept can fire. The text +
@@ -472,15 +480,44 @@ export const publicQuotesService = {
     const { data } = await api.get(`/public/quotes/${token}`);
     return data.data || data;
   },
+  /** Totals for a choice of optional add-ons (positions), computed server-side. */
+  async totals(token: string, selected: number[]): Promise<PublicSelectionTotals> {
+    const { data } = await api.get(`/public/quotes/${token}/totals`, {
+      params: selected.length ? { selected: selected.join(',') } : {},
+    });
+    return data.data || data;
+  },
   async respond(
     token: string,
     action: 'accept' | 'decline',
-    options: { tosAccepted?: boolean } = {},
+    options: { tosAccepted?: boolean; selectedOptional?: number[]; expectedTotalMinor?: number } = {},
   ): Promise<{ status: QuoteStatus; lockedAt: string }> {
     const { data } = await api.post(`/public/quotes/${token}/respond`, {
       action,
       tosAccepted: options.tosAccepted,
+      selectedOptional: options.selectedOptional,
+      expectedTotalMinor: options.expectedTotalMinor,
     });
     return data.data || data;
   },
 };
+
+/** Server totals for an add-on choice on the public quote page (#1451 phase 2). */
+export interface PublicSelectionTotals {
+  selectedOptional: number[];
+  netAmountMinor: number;
+  vatAmountMinor: number;
+  shippingAmountMinor: number;
+  totalAmountMinor: number;
+  lines: Array<{ position: number; lineTotalMinor: number }>;
+}
+
+/** What was chosen when a quote with add-ons was accepted. */
+export interface QuoteOptionalSelection {
+  by: 'customer' | 'admin';
+  selectedOptional: number[];
+  addOns: Array<{ position: number; description: string; selected: boolean }>;
+  netAmountMinor: number;
+  vatAmountMinor: number;
+  totalAmountMinor: number;
+}

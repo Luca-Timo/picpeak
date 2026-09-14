@@ -13,14 +13,14 @@
  */
 
 const express = require('express');
-const { body, param } = require('express-validator');
+const { body, param, query } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const quoteService = require('../services/quoteService');
 const { db } = require('../database/db');
 const { clientIpForAudit } = require('../utils/clientIp');
 const { loadActionToken } = require('../utils/publicTokenGuards');
-const { countedLineItems, parsePromotionSnapshot } = require('../utils/lineItemTotals');
+const { isTruthyFlag, isUnselectedOptional, parsePromotionSnapshot } = require('../utils/lineItemTotals');
 
 const router = express.Router();
 
@@ -68,9 +68,10 @@ function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosTe
       quote.responded_at && quote.response_locked_at &&
       new Date(quote.response_locked_at).getTime() > Date.now()
     )),
-    // Unselected optional add-ons aren't part of the offer shown here —
-    // same as on the PDF (#1451; customer selection arrives in phase 2).
-    lineItems: countedLineItems(lineItems).map((li) => ({
+    // Optional add-ons are listed with their selection so the customer can
+    // choose them (#1451 phase 2); the page leaves unselected ones out of
+    // the totals, as the server does.
+    lineItems: lineItems.map((li) => ({
       position: li.position,
       quantity: Number(li.quantity),
       description: li.description,
@@ -88,7 +89,11 @@ function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosTe
       lineKind: li.line_kind || 'item',
       unit: li.unit || null,
       promotionName: li.line_kind === 'discount' ? (parsePromotionSnapshot(li.promotion_snapshot)?.name || null) : null,
+      isOptional: isTruthyFlag(li.is_optional),
+      selected: !isUnselectedOptional(li),
     })),
+    // Once accepted, the add-on choice is fixed.
+    selectionLocked: Boolean(quote.selection_accepted_at),
     recipient: customer ? {
       displayName: customer.display_name || [customer.first_name, customer.last_name].filter(Boolean).join(' '),
       email: customer.email,
@@ -171,6 +176,29 @@ router.get(
   })
 );
 
+// Totals for an add-on choice while the customer ticks boxes (#1451 phase 2).
+// Read-only, same token guard and limiter as the quote view; accepting
+// recalculates on the server regardless of what this returned.
+router.get(
+  '/:token/totals',
+  previewLimiter,
+  [
+    param('token').isString().isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i),
+    query('selected').optional().isString().isLength({ max: 1000 }).matches(/^(\d{1,6}(,\d{1,6}){0,199})?$/),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const tokenRow = await loadActionToken(req, res, {
+      tableName: 'quote_action_tokens',
+      token: req.params.token,
+    });
+    if (!tokenRow) return;
+    const selected = req.query.selected ? String(req.query.selected).split(',').map(Number) : [];
+    const totals = await quoteService.previewOptionalSelection(tokenRow.quote_id, selected);
+    return successResponse(res, totals);
+  })
+);
+
 router.post(
   '/:token/respond',
   respondLimiter,
@@ -180,6 +208,11 @@ router.post(
     // ToS box: optional flag, only meaningful when the global
     // `crm_quotes_tos_required` setting is on. Service enforces.
     body('tosAccepted').optional().isBoolean(),
+    // Optional add-ons (#1451 phase 2): the chosen positions and the total
+    // the page showed. The service recomputes and refuses a mismatch.
+    body('selectedOptional').optional().isArray({ max: 200 }),
+    body('selectedOptional.*').isInt({ min: 1 }).toInt(),
+    body('expectedTotalMinor').optional().isInt().toInt(),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -192,9 +225,18 @@ router.post(
         action: req.body.action,
         ip,
         tosAccepted: req.body.tosAccepted === true,
+        selectedOptional: req.body.selectedOptional,
+        expectedTotalMinor: req.body.expectedTotalMinor,
       });
       return successResponse(res, { status: result.status, lockedAt: result.lockedAt });
     } catch (err) {
+      if (err.code === 'TOTAL_MISMATCH') {
+        return res.status(409).json({
+          error: err.message,
+          code: 'TOTAL_MISMATCH',
+          totalAmountMinor: err.totalAmountMinor,
+        });
+      }
       if (err.code === 'RESPONSE_LOCKED') {
         return res.status(423).json({
           error: err.message,

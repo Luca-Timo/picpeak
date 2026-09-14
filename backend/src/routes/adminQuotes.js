@@ -62,6 +62,13 @@ router.use(requireQuotesFlag);
 // Transforms (snake_case DB → camelCase API)
 // ---------------------------------------------------------------------
 
+/** A JSON text column (a string on SQLite and Postgres), or null. */
+function parseJsonColumn(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'object') return value;
+  try { return JSON.parse(value); } catch (_) { return null; }
+}
+
 function transformQuote(q) {
   if (!q) return null;
   return {
@@ -131,6 +138,9 @@ function transformQuote(q) {
     days: q.days == null ? null : Number(q.days),
     sourceTemplateId: q.source_template_id || null,
     sourceTemplateVersion: q.source_template_version || null,
+    // #1451 phase 2 — the add-on choice fixed at acceptance.
+    selectionAcceptedAt: q.selection_accepted_at || null,
+    optionalSelection: parseJsonColumn(q.optional_selection_snapshot),
     createdAt: q.created_at,
     updatedAt: q.updated_at,
   };

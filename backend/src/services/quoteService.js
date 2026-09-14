@@ -45,6 +45,7 @@ const { getFrontendBaseUrl } = require('../utils/frontendUrl');
 const { hasColumnCached } = require('../utils/schemaCache');
 const {
   normalizeLineItems, countedLineItems, resolveDiscountLines, extendedLineColumns, parsePromotionSnapshot,
+  isTruthyFlag, isUnselectedOptional,
 } = require('../utils/lineItemTotals');
 const { prepareQuoteLineItems } = require('./quoteCatalogService');
 const { readStoredDocumentPdf } = require('../utils/storedDocumentPdf');
@@ -1122,6 +1123,9 @@ async function sendQuote(id, adminId) {
       sent_at: new Date(),
       pdf_path: pdfPath,
       payment_term_snapshot: paymentTermSnapshot ? JSON.stringify(paymentTermSnapshot) : null,
+      // A (re)sent quote is a new offer: the customer chooses add-ons afresh.
+      optional_selection_snapshot: null,
+      selection_accepted_at: null,
       updated_at: new Date(),
     });
   });
@@ -1181,15 +1185,207 @@ function formatMajor(minor, currency, locale, issuerCountryCode) {
 /**
  * Persist a rendered PDF under storage/business-docs/quote/<YEAR>/<NUMBER>.pdf
  */
-async function persistDocPdf(type, doc, buffer) {
+async function persistDocPdf(type, doc, buffer, suffix = '') {
   const number = doc.quote_number || doc.invoice_number;
   if (!number) return null;
   const year = (doc.issue_date ? new Date(doc.issue_date) : new Date()).getFullYear();
   const root = path.join(getStoragePath(), 'business-docs', type, String(year));
   fs.mkdirSync(root, { recursive: true });
-  const filePath = path.join(root, `${number}.pdf`);
+  // `suffix` keeps a later version (e.g. '-accepted') next to the sent file.
+  const filePath = path.join(root, `${number}${suffix}.pdf`);
   fs.writeFileSync(filePath, buffer);
   return filePath;
+}
+
+// ---------------------------------------------------------------------
+// Optional add-ons chosen when a quote is accepted (#1451 phase 2)
+// ---------------------------------------------------------------------
+
+/** A quote's lines with `parent_position`, the shape getQuoteById returns. */
+async function loadQuoteLinesWithParentPosition(quoteId) {
+  return db('quote_line_items as li')
+    .leftJoin('quote_line_items as parent', 'parent.id', 'li.parent_line_item_id')
+    .where('li.quote_id', quoteId)
+    .orderBy('li.position', 'asc')
+    .select('li.*', 'parent.position as parent_position');
+}
+
+const isTopLevelRow = (li) => li.parent_position == null || li.parent_position === '';
+const topPositionOf = (li) => ensureInt(isTopLevelRow(li) ? li.position : li.parent_position);
+
+/** Positions of the top-level optional add-ons a quote offers. */
+function offeredOptionalPositions(lineItems) {
+  return lineItems
+    .filter((li) => isTopLevelRow(li) && li.line_kind !== 'discount' && isTruthyFlag(li.is_optional))
+    .map((li) => ensureInt(li.position));
+}
+
+/** The offered add-ons that are currently selected, in position order. */
+function currentOptionalSelection(lineItems) {
+  const offered = new Set(offeredOptionalPositions(lineItems));
+  return lineItems
+    .filter((li) => isTopLevelRow(li) && offered.has(ensureInt(li.position)) && !isUnselectedOptional(li))
+    .map((li) => ensureInt(li.position))
+    .sort((a, b) => a - b);
+}
+
+/**
+ * The lines with `selected` set from a choice of add-on positions; sub-items
+ * follow their parent. Anything that isn't an offered add-on is refused, so
+ * a choice can only switch optional lines on or off.
+ */
+function applyOptionalSelection(lineItems, selectedPositions) {
+  const offered = new Set(offeredOptionalPositions(lineItems));
+  const chosen = new Set();
+  for (const value of selectedPositions || []) {
+    const position = ensureInt(value);
+    if (!offered.has(position)) {
+      throw new AppError('Only optional add-ons can be chosen', 400, 'INVALID_SELECTION');
+    }
+    chosen.add(position);
+  }
+  return {
+    chosen: [...chosen].sort((a, b) => a - b),
+    lines: lineItems.map((li) => (offered.has(topPositionOf(li))
+      ? { ...li, selected: chosen.has(topPositionOf(li)) }
+      : li)),
+  };
+}
+
+/** Totals for an add-on choice — the same computeTotals a save runs. */
+async function totalsForSelection(quote, lineItems, selectedPositions) {
+  const { chosen, lines } = applyOptionalSelection(lineItems, selectedPositions);
+  const roundTotal = (await getAppSetting('crm_invoice_round_total', false)) === true;
+  const totals = computeTotals(lines, quote.vat_rate, quote.shipping_amount_minor, { roundTotal });
+  return { chosen, totals };
+}
+
+/**
+ * Live totals for the public quote page while the customer ticks add-ons.
+ * Read-only: the same calculation runs again, authoritatively, on accept.
+ */
+async function previewOptionalSelection(quoteId, selectedPositions) {
+  const quote = await db('quotes').where({ id: quoteId }).first();
+  if (!quote) throw new AppError('Quote not found', 404);
+  const lineItems = await loadQuoteLinesWithParentPosition(quoteId);
+  const { chosen, totals } = await totalsForSelection(quote, lineItems, selectedPositions);
+  return {
+    selectedOptional: chosen,
+    netAmountMinor: totals.netAmountMinor,
+    vatAmountMinor: totals.vatAmountMinor,
+    shippingAmountMinor: totals.shippingAmountMinor,
+    totalAmountMinor: totals.totalAmountMinor,
+    // Discount lines follow the subtotal, so their amounts move with the choice.
+    lines: totals.lineItems.map((li) => ({
+      position: ensureInt(li.position),
+      lineTotalMinor: ensureInt(li.line_total_minor),
+    })),
+  };
+}
+
+function selectionSnapshot(lineItems, chosen, totals, by) {
+  const offered = new Set(offeredOptionalPositions(lineItems));
+  const chosenSet = new Set(chosen);
+  return {
+    by,
+    selectedOptional: chosen,
+    addOns: lineItems
+      .filter((li) => isTopLevelRow(li) && offered.has(ensureInt(li.position)))
+      .map((li) => ({
+        position: ensureInt(li.position),
+        description: li.description,
+        selected: chosenSet.has(ensureInt(li.position)),
+      })),
+    netAmountMinor: totals.netAmountMinor,
+    vatAmountMinor: totals.vatAmountMinor,
+    totalAmountMinor: totals.totalAmountMinor,
+  };
+}
+
+/**
+ * Store an accepted add-on choice: the line flags, the recomputed discount
+ * amounts and quote totals, and a snapshot of what was chosen. The stored
+ * PDF pointer is cleared — the sent file shows the offer, not the choice —
+ * until storeAcceptedQuotePdf writes the accepted version.
+ */
+async function writeAcceptedSelection(trx, quote, lineItems, { chosen, totals }, by, at) {
+  const offered = new Set(offeredOptionalPositions(lineItems));
+  const chosenSet = new Set(chosen);
+  const on = [];
+  const off = [];
+  for (const li of lineItems) {
+    const top = topPositionOf(li);
+    if (!offered.has(top)) continue;
+    (chosenSet.has(top) ? on : off).push(li.id);
+  }
+  if (on.length) await trx('quote_line_items').whereIn('id', on).update({ selected: formatBoolean(true) });
+  if (off.length) await trx('quote_line_items').whereIn('id', off).update({ selected: formatBoolean(false) });
+  for (const li of totals.lineItems) {
+    if (li.line_kind !== 'discount' || li.id == null) continue;
+    await trx('quote_line_items').where({ id: li.id }).update({
+      unit_price_minor: ensureInt(li.unit_price_minor),
+      line_total_minor: ensureInt(li.line_total_minor),
+    });
+  }
+  await trx('quotes').where({ id: quote.id }).update({
+    net_amount_minor: totals.netAmountMinor,
+    vat_amount_minor: totals.vatAmountMinor,
+    total_amount_minor: totals.totalAmountMinor,
+    optional_selection_snapshot: JSON.stringify(selectionSnapshot(lineItems, chosen, totals, by)),
+    selection_accepted_at: at,
+    pdf_path: null,
+  });
+}
+
+/** Render and keep the accepted version of a quote; the sent file stays as it was. */
+async function storeAcceptedQuotePdf(quoteId) {
+  try {
+    const data = await getQuoteById(quoteId);
+    const ctx = await buildRenderContext(data.quote, data.lineItems);
+    const buffer = await pdfService.renderQuoteToBuffer(ctx);
+    const pdfPath = await persistDocPdf('quote', data.quote, buffer, '-accepted');
+    await db('quotes').where({ id: quoteId }).update({ pdf_path: pdfPath });
+  } catch (err) {
+    // pdf_path is already cleared, so the quote renders live — with the
+    // chosen add-ons — until a file is stored.
+    logger.warn('Could not store the accepted quote PDF', { quoteId, error: err.message });
+  }
+}
+
+/**
+ * The add-on choice a customer's acceptance carries, checked against the
+ * total their page showed. Returns null when the quote offers no add-ons, or
+ * when the choice was already made: it is fixed from the first acceptance
+ * on, and switching back to "accept" inside the response window keeps it.
+ */
+async function resolveCustomerSelection(quote, { selectedOptional, expectedTotalMinor }) {
+  const lineItems = await loadQuoteLinesWithParentPosition(quote.id);
+  if (offeredOptionalPositions(lineItems).length === 0) return null;
+  if (quote.selection_accepted_at) {
+    if (Array.isArray(selectedOptional)) {
+      const asked = [...new Set(selectedOptional.map(ensureInt))].sort((a, b) => a - b);
+      if (asked.join(',') !== currentOptionalSelection(lineItems).join(',')) {
+        throw new AppError(
+          'The add-ons were fixed when this quote was first accepted. Ask for a revised quote to change them.',
+          409,
+          'SELECTION_LOCKED',
+        );
+      }
+    }
+    return null;
+  }
+  const selection = await totalsForSelection(
+    quote, lineItems, Array.isArray(selectedOptional) ? selectedOptional : currentOptionalSelection(lineItems),
+  );
+  if (expectedTotalMinor == null) {
+    throw new AppError('Confirm the total before accepting', 400, 'TOTAL_REQUIRED');
+  }
+  if (ensureInt(expectedTotalMinor) !== selection.totals.totalAmountMinor) {
+    const err = new AppError('The total has changed. Check it and accept again.', 409, 'TOTAL_MISMATCH');
+    err.totalAmountMinor = selection.totals.totalAmountMinor;
+    throw err;
+  }
+  return { lineItems, ...selection };
 }
 
 /**
@@ -1296,7 +1492,7 @@ async function finalizeQuoteResponses(limit = 200) {
   return emitted;
 }
 
-async function recordResponse({ token, action, ip, tosAccepted }) {
+async function recordResponse({ token, action, ip, tosAccepted, selectedOptional, expectedTotalMinor }) {
   if (!['accept', 'decline'].includes(action)) {
     throw new AppError('Invalid action', 400);
   }
@@ -1350,6 +1546,10 @@ async function recordResponse({ token, action, ip, tosAccepted }) {
   const respondedAt = quote.responded_at || now;
   const responseLockedAt = new Date(new Date(respondedAt).getTime() + windowMinutes * 60 * 1000);
   assertQuoteTransition(quote.status, newStatus);
+  // Optional add-ons (#1451 phase 2), checked before anything is written.
+  const selection = isAccept
+    ? await resolveCustomerSelection(quote, { selectedOptional, expectedTotalMinor })
+    : null;
 
   await db.transaction(async (trx) => {
     const updates = {
@@ -1369,12 +1569,17 @@ async function recordResponse({ token, action, ip, tosAccepted }) {
       updates.tos_text_snapshot = tosText || null;
     }
     await trx('quotes').where({ id: quote.id }).update(updates);
+    if (selection) {
+      await writeAcceptedSelection(trx, quote, selection.lineItems, selection, 'customer', now);
+    }
     await trx('quote_action_tokens').where({ id: tokenRow.id }).update({
       used_at: now,
       used_action: newStatus,
       used_ip: ip || null,
     });
   });
+
+  if (selection) await storeAcceptedQuotePdf(quote.id);
 
   try {
     // Raw bearer token must not reach the activity log (GHSA-prch).
@@ -1436,6 +1641,14 @@ async function adminAcceptQuote(id, adminId) {
     updated_at: now,
   });
 
+  // Record which add-ons the acceptance covers (#1451 phase 2): the choice
+  // as the admin set it in the editor.
+  const acceptedLines = await loadQuoteLinesWithParentPosition(id);
+  if (offeredOptionalPositions(acceptedLines).length > 0) {
+    const selection = await totalsForSelection(quote, acceptedLines, currentOptionalSelection(acceptedLines));
+    await db.transaction((trx) => writeAcceptedSelection(trx, quote, acceptedLines, selection, 'admin', now));
+  }
+
   try {
     await logActivity('quote_accepted_by_admin', { quoteId: id }, null, `admin:${adminId}`);
   } catch (_) { /* non-fatal */ }
@@ -1455,7 +1668,8 @@ async function adminAcceptQuote(id, adminId) {
       const buffer = await pdfService.renderQuoteToBuffer(ctx);
       // Persist PDF snapshot under the same convention sendQuote uses
       // — keeps every issued PDF on disk for the audit trail.
-      const pdfPath = await persistDocPdf('quote', fresh, buffer);
+      // Kept next to the sent file rather than over it (#1451).
+      const pdfPath = await persistDocPdf('quote', fresh, buffer, '-accepted');
       // Record it like sendQuote does: the accepted quote opens as this
       // file from now on instead of re-rendering (#1451).
       await db('quotes').where({ id }).update({ pdf_path: pdfPath });
@@ -2302,6 +2516,7 @@ module.exports = {
   recalculateRates,
   getQuotePdfBuffer,
   recordResponse,
+  previewOptionalSelection,
   adminAcceptQuote,
   adminDeclineQuote,
   finalizeQuoteResponses,

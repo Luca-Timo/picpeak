@@ -264,6 +264,32 @@ export const QuoteDetailPage: React.FC = () => {
         </div>
       </Card>
 
+      {q.optionalSelection && (
+        <Card>
+          <h3 className="font-semibold mb-2">{t('quotes.selection.title', 'Add-ons at acceptance')}</h3>
+          {q.selectionAcceptedAt && (
+            <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-2">
+              {q.optionalSelection.by === 'customer'
+                ? t('quotes.selection.byCustomer', 'Chosen by the customer on {{date}}', { date: fmtDateTime(q.selectionAcceptedAt) })
+                : t('quotes.selection.byAdmin', 'Recorded when you accepted on {{date}}', { date: fmtDateTime(q.selectionAcceptedAt) })}
+            </p>
+          )}
+          {q.optionalSelection.addOns.every((a) => !a.selected) && (
+            <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-2">{t('quotes.selection.none', 'No add-ons chosen')}</p>
+          )}
+          <ul className="text-sm space-y-1">
+            {q.optionalSelection.addOns.map((a) => (
+              <li key={a.position} className="flex justify-between gap-4">
+                <span className="text-neutral-900 dark:text-neutral-100">{a.description}</span>
+                <span className={a.selected ? 'text-green-700 dark:text-green-400' : 'text-neutral-500 dark:text-neutral-400'}>
+                  {a.selected ? t('quotes.selection.chosen', 'Chosen') : t('quotes.selection.notChosen', 'Not chosen')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
       <Card>
         <h3 className="font-semibold mb-3">{t('quotes.section.lineItems', 'Line items')}</h3>
         <table className="w-full text-sm">
