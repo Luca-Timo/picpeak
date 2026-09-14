@@ -12,6 +12,7 @@ import { quotesService, type QuoteStatus, type QuoteSort } from '../../../servic
 import { Button, Card, Loading, SortableHeader, useColumnSort, type SortColumnMap } from '../../../components/common';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
+import { PermissionGate } from '../../../components/admin/PermissionGate';
 
 const STATUSES: QuoteStatus[] = ['draft', 'sent', 'accepted', 'declined', 'expired', 'converted'];
 
@@ -73,7 +74,9 @@ export const QuotesListPage: React.FC = () => {
           <Link to="/admin/clients/quotes/catalog">
             <Button variant="outline"><Layers className="w-4 h-4 mr-1" />{t('quotes.catalog.title', 'Catalogue & templates')}</Button>
           </Link>
-          <Button onClick={() => setPickerOpen(true)}><Plus className="w-4 h-4 mr-1" />{t('quotes.new', 'New quote')}</Button>
+          <PermissionGate permission="quotes.manage">
+            <Button onClick={() => setPickerOpen(true)}><Plus className="w-4 h-4 mr-1" />{t('quotes.new', 'New quote')}</Button>
+          </PermissionGate>
         </div>
         <TemplatePickerModal open={pickerOpen} onClose={() => setPickerOpen(false)} />
       </div>
