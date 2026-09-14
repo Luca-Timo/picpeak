@@ -77,6 +77,8 @@ import {
   CustomerBillsPage,
   CustomerContractsPage,
   CustomerResetPasswordPage,
+  CustomerDocumentsPage,
+  CustomerEventPage,
 } from './pages/customer';
 import { CustomerAuthProvider } from './contexts/CustomerAuthContext';
 import { AdminLayout, AdminAuthWrapper } from './components/admin';
@@ -479,6 +481,8 @@ function App() {
                           <Route path="quotes" element={<CustomerQuotesPage />} />
                           <Route path="contracts" element={<CustomerContractsPage />} />
                           <Route path="bills" element={<CustomerBillsPage />} />
+                          <Route path="documents" element={<CustomerDocumentsPage />} />
+                          <Route path="events/:slug" element={<CustomerEventPage />} />
                           <Route path="profile" element={<CustomerProfilePage />} />
                         </Route>
 

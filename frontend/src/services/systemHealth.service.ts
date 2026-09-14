@@ -35,6 +35,8 @@ export interface SystemHealthFailures {
    *  `waitingEmails` then means "nothing found yet", not "nothing". */
   scanTruncated?: boolean;
   counts: { stuckEmails: number; waitingEmails: number; pendingScanned?: number };
+  /** Customer documents (#1444): uploads waiting for a review, and rejected ones. */
+  customerDocuments?: { pending: number; rejected: number };
 }
 
 export const systemHealthService = {

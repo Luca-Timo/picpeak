@@ -699,6 +699,11 @@
       "lastRun": "Last pass {{when}}",
       "neverRan": "Has not run since this instance started.",
       "lastResult": "{{sent}} sent, {{failed}} failed"
+    },
+    "customerDocuments": {
+      "title": "Customer documents",
+      "counts": "{{pending}} awaiting review, {{rejected}} rejected.",
+      "hint": "Customer uploads stay unavailable to them until they are marked clean on the customer record. Rejected files are deleted after the retention period."
     }
   },
   "common": {
@@ -2469,6 +2474,10 @@
         "title": "People in galleries",
         "description": "Group each gallery's photos by the people in them, so guests can find themselves in two taps and download just their own photos. Runs entirely on your own server in a separate, optional container — nothing is sent anywhere. Detected faces are personal data, so this stays off until you enable it per gallery too.",
         "lockedSingleContainer": "Not available on the all-in-one image. Face detection needs a separate ML container and competes with image processing for the same CPU and memory, which would slow the whole install down."
+      },
+      "documents": {
+        "title": "Customer documents",
+        "description": "Share PDFs with a customer in their portal and receive PDFs from them. Customer uploads stay unavailable until you mark them clean on the customer record. PDF only; size and storage limits apply."
       }
     },
     "customerSurface": {
@@ -5277,7 +5286,22 @@
       "sortNewest": "Newest first",
       "sortOldest": "Oldest first",
       "sortName": "By name",
-      "open": "Open"
+      "open": "Open",
+      "needsAction": "Needs your attention",
+      "quoteAwaiting": "Quote {{number}} is waiting for your answer",
+      "validUntil": "Valid until {{date}}",
+      "viewQuote": "View quote",
+      "contractAwaiting": "Contract {{number}} is waiting for your signature",
+      "viewContract": "View contract",
+      "invoiceOverdue": "Invoice {{number}} is overdue",
+      "invoiceDue": "Invoice {{number}} is due {{date}}",
+      "openAmount": "Open: {{amount}}",
+      "viewInvoice": "View invoice",
+      "details": "Details",
+      "detailsAria": "Details for {{name}}",
+      "notAvailable": "Not available yet",
+      "expiredTitle": "Expired galleries",
+      "expiredHint": "These galleries have expired and can no longer be opened. Contact your photographer if you still need the photos."
     },
     "layout": {
       "greeting": "Hi, {{name}}"
@@ -5290,7 +5314,8 @@
       "profile": "Profile",
       "soon": "Soon",
       "new": "New",
-      "contracts": "Contracts"
+      "contracts": "Contracts",
+      "documents": "Documents"
     },
     "comingSoon": {
       "tag": "Coming soon"
@@ -5428,6 +5453,62 @@
       "openSign": "Open & sign",
       "downloadSigned": "Download signed PDF",
       "download": "Download PDF"
+    },
+    "documents": {
+      "title": "Documents",
+      "subtitle": "Files your photographer shared with you, and PDFs you sent them.",
+      "disabled": "Documents are not available for your account.",
+      "loadError": "Could not load your documents.",
+      "uploadTitle": "Send a document",
+      "uploadHint": "PDF only, up to {{size}} per file. {{used}} of {{quota}} used.",
+      "uploadHintShort": "PDF only.",
+      "fileLabel": "PDF file",
+      "eventLabel": "Event (optional)",
+      "noEvent": "No event",
+      "cancel": "Cancel",
+      "retry": "Try again",
+      "upload": "Upload",
+      "progress": "Upload progress",
+      "uploaded": "{{name}} was received. It becomes available once your photographer has reviewed it.",
+      "cancelled": "Upload of {{name}} cancelled.",
+      "empty": "No documents yet.",
+      "fromYou": "Uploaded by you",
+      "fromStudio": "Shared by your photographer",
+      "pendingHint": "Your photographer checks every upload before it becomes available.",
+      "rejectedWithReason": "Not accepted: {{reason}}",
+      "rejectedHint": "Your photographer did not accept this file. Contact them if you are unsure why.",
+      "download": "Download",
+      "downloadAria": "Download {{name}}",
+      "status": {
+        "available": "Available",
+        "pending": "Awaiting review",
+        "rejected": "Rejected"
+      },
+      "errors": {
+        "notPdf": "{{name}} is not a PDF. Only PDF documents can be uploaded.",
+        "encrypted": "{{name}} is password-protected. Remove the password and upload it again.",
+        "tooLarge": "{{name}} is larger than {{size}}. Upload a smaller file.",
+        "quota": "There is not enough room for {{name}}. Ask your photographer to remove older documents.",
+        "rateLimited": "Too many uploads in a short time. Wait a few minutes, then try {{name}} again.",
+        "generic": "{{name}} could not be uploaded. Please try again.",
+        "stillPending": "{{name}} is still being reviewed.",
+        "gone": "{{name}} is no longer shared with you.",
+        "purged": "{{name}} has been removed.",
+        "download": "{{name}} could not be downloaded. Please try again."
+      }
+    },
+    "event": {
+      "notFound": "This event was not found, or you no longer have access to it.",
+      "back": "Back to your galleries",
+      "gallery": "Gallery",
+      "openGallery": "Open gallery",
+      "galleryExpired": "This gallery expired on {{date}} and can no longer be opened. Contact your photographer if you still need the photos.",
+      "galleryUnavailable": "This gallery is not available yet.",
+      "popupBlocked": "Allow pop-ups for this site to open the PDF.",
+      "pdfError": "The PDF could not be opened. Please try again.",
+      "pdf": "PDF",
+      "dueOn": "Due {{date}}",
+      "nothingElse": "There are no documents for this event yet."
     }
   },
   "customers": {
@@ -5716,6 +5797,53 @@
     "invitePending": {
       "badge": "Invitation pending",
       "hint": "An invitation link for this address is open and has not been accepted. That is not proof the email reached them — check System health if they say it never arrived."
+    },
+    "documents": {
+      "title": "Documents",
+      "hint": "PDFs shared with this customer in their portal, and the files they sent you. A customer upload stays unavailable to them until you mark it clean.",
+      "usage": "Customer uploads: {{used}} of {{quota}}.",
+      "fileLabel": "PDF to share",
+      "eventLabel": "Event",
+      "contractLabel": "Contract",
+      "noLink": "None",
+      "shareNow": "Share with the customer",
+      "upload": "Upload",
+      "uploaded": "{{name}} uploaded.",
+      "actionError": "That did not work. Please try again.",
+      "deleteTitle": "Delete document?",
+      "deleteBody": "{{name}} disappears from the customer's portal at once. The file itself is removed after the retention period.",
+      "delete": "Delete",
+      "deleted": "Document deleted.",
+      "status": {
+        "pending": "Awaiting review",
+        "clean": "Clean",
+        "rejected": "Rejected"
+      },
+      "shared": "Shared",
+      "notShared": "Not shared",
+      "fromCustomer": "Uploaded by the customer",
+      "fromAdmin": "Uploaded by {{name}}",
+      "anAdmin": "an admin",
+      "viewed": "Customer downloaded it {{times}}×, last {{date}}",
+      "notViewed": "Not downloaded by the customer yet",
+      "rejectedNote": "Reason given: {{note}}",
+      "download": "Download",
+      "downloadStarted": "Download started.",
+      "markClean": "Mark clean",
+      "markedClean": "Marked clean.",
+      "reject": "Reject",
+      "rejectPlaceholder": "Reason, shown to the customer (optional)",
+      "confirmReject": "Reject file",
+      "rejectedToast": "Rejected.",
+      "unshare": "Unshare",
+      "unsharedToast": "No longer shared.",
+      "share": "Share",
+      "sharedToast": "Shared with the customer.",
+      "link": "Link",
+      "saveLinks": "Save links",
+      "linkSaved": "Links saved.",
+      "empty": "No documents yet.",
+      "loadError": "Could not load documents."
     }
   },
   "clients": {
