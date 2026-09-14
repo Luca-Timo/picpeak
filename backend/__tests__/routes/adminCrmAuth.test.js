@@ -39,6 +39,7 @@ const {
 // require pre-seeded resource ids.
 const ROUTES = [
   { name: 'adminQuotes',          mount: '/api/admin/quotes',           loader: () => require('../../src/routes/adminQuotes'),          getPath: '/' },
+  { name: 'adminQuoteCatalog',    mount: '/api/admin/quote-catalog',    loader: () => require('../../src/routes/adminQuoteCatalog'),    getPath: '/templates' },
   { name: 'adminContracts',       mount: '/api/admin/contracts',        loader: () => require('../../src/routes/adminContracts'),       getPath: '/' },
   { name: 'adminInvoices',        mount: '/api/admin/invoices',         loader: () => require('../../src/routes/adminInvoices'),        getPath: '/' },
   { name: 'adminCalendar',        mount: '/api/admin/calendar',         loader: () => require('../../src/routes/adminCalendar'),        getPath: '/items?from=2026-01-01&to=2026-12-31' },

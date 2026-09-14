@@ -7,6 +7,7 @@ const { formatShortDate } = require('../../utils/dateFormatter');
 const businessProfileService = require('../businessProfileService');
 const { buildIssuerBlock, buildRecipientBlock } = require('../_renderContext');
 const { ensureInt } = require('../../utils/numericHelpers');
+const { countedLineItems } = require('../../utils/lineItemTotals');
 const { SECTIONS_ORDER } = require('./helpers');
 
 
@@ -135,11 +136,12 @@ async function buildRenderContext(contract, inclusions) {
     if (srcQuote) {
       quoteCurrency = srcQuote.currency;
       quoteNumber = srcQuote.quote_number;
-      quoteLineItems = await db('quote_line_items as li')
+      // Unselected optional add-ons aren't part of the deal (#1451).
+      quoteLineItems = countedLineItems(await db('quote_line_items as li')
         .leftJoin('quote_line_items as parent', 'parent.id', 'li.parent_line_item_id')
         .where('li.quote_id', contract.source_quote_id)
         .orderBy('li.position', 'asc')
-        .select('li.*', 'parent.position as parent_position');
+        .select('li.*', 'parent.position as parent_position'));
     }
   }
 

@@ -43,6 +43,11 @@ const pdfService = require('./pdfService');
 const emailProcessor = require('./emailProcessor');
 const { getFrontendBaseUrl } = require('../utils/frontendUrl');
 const { hasColumnCached } = require('../utils/schemaCache');
+const {
+  normalizeLineItems, countedLineItems, resolveDiscountLines, extendedLineColumns, parsePromotionSnapshot,
+} = require('../utils/lineItemTotals');
+const { prepareQuoteLineItems } = require('./quoteCatalogService');
+const { readStoredDocumentPdf } = require('../utils/storedDocumentPdf');
 const fs = require('fs');
 const path = require('path');
 
@@ -127,7 +132,9 @@ function computeTotals(lineItems, vatRate, shippingAmountMinor = 0, options = {}
   // Phase 1: compute raw line_total_minor for every row from its own
   // qty × unit × discount. Sub-item lines are computed here too so
   // the renderer can display their individual amounts.
-  const computed = lineItems.map((li) => {
+  // normalizeLineItems applies the migration-214 rules (line kind, add-on
+  // flags inherited by sub-items, discount lines stay top-level).
+  const computed = normalizeLineItems(lineItems).map((li) => {
     const qty = ensureNumber(li.quantity, 1);
     const unit = ensureInt(li.unit_price_minor);
     const discount = Math.max(0, Math.min(100, ensureNumber(li.discount_percent, 0)));
@@ -164,9 +171,15 @@ function computeTotals(lineItems, vatRate, shippingAmountMinor = 0, options = {}
     }
   }
 
+  // Phase 2b (#1451): discount lines take their amount from the regular
+  // subtotal — percentage promotions first, then fixed, capped at the
+  // subtotal. Unselected optional add-ons don't count toward anything.
+  resolveDiscountLines(computed);
+  const counted = countedLineItems(computed);
+
   // Phase 3: net = sum of top-level line totals (resolved).
   let netMinor = 0;
-  for (const li of computed) {
+  for (const li of counted) {
     if (li.parent_position == null) netMinor += ensureInt(li.line_total_minor);
   }
 
@@ -179,7 +192,7 @@ function computeTotals(lineItems, vatRate, shippingAmountMinor = 0, options = {}
   const roundedNet = netMinor;
   let roundingAdjustmentMinor = 0;
   if (options.roundTotal) {
-    const clean = cleanNetMinor(computed, { parentKey: 'parent_position', positionKey: 'position' });
+    const clean = cleanNetMinor(counted, { parentKey: 'parent_position', positionKey: 'position' });
     roundingAdjustmentMinor = clean - roundedNet;
     netMinor = clean;
   }
@@ -518,10 +531,14 @@ async function createQuote(payload, adminId) {
   const validUntil = payload.validUntil || new Date(Date.now() + validDays * 24 * 60 * 60 * 1000)
     .toISOString().slice(0, 10);
 
-  // Authoritative totals.
+  // Authoritative totals. Rates, hours/days and promotions are resolved
+  // server-side first (#1451).
   const roundTotal = (await getAppSetting('crm_invoice_round_total', false)) === true;
+  const preparedLineItems = await prepareQuoteLineItems(payload.lineItems, {
+    customerId: payload.customerAccountId, currency, hours: payload.hours, days: payload.days,
+  });
   const totals = computeTotals(
-    Array.isArray(payload.lineItems) ? payload.lineItems : [],
+    preparedLineItems,
     payload.vatRate,
     payload.shippingAmountMinor,
     { roundTotal }
@@ -550,7 +567,7 @@ async function createQuote(payload, adminId) {
   const hasEventType = await hasColumnCached('quotes', 'event_type');
   const hasBookingWorkflowId = await hasColumnCached('quotes', 'booking_workflow_id');
 
-  return await db.transaction(async (trx) => {
+  const createdId = await db.transaction(async (trx) => {
     // SQLite's 1-connection default deadlocks when claimNextSequence
     // opens its own micro-transaction inside this outer one — thread
     // trx so both run on the same connection. Postgres tolerates
@@ -569,6 +586,12 @@ async function createQuote(payload, adminId) {
       event_time_start: payload.eventTimeStart || null,
       event_time_end: payload.eventTimeEnd || null,
       expected_duration_hours: payload.expectedDurationHours == null ? null : ensureNumber(payload.expectedDurationHours),
+      // Migration 214 — quote-wide hours / days that bound lines follow,
+      // and the template this quote was created from (reporting only).
+      hours: payload.hours == null || payload.hours === '' ? null : ensureNumber(payload.hours),
+      days: payload.days == null || payload.days === '' ? null : ensureNumber(payload.days),
+      source_template_id: payload.sourceTemplateId || null,
+      source_template_version: payload.sourceTemplateVersion || null,
       payment_term_template_id: payload.paymentTermTemplateId || null,
       // Migration 124 — split payment-term picker. Editor stops writing
       // to the legacy single FK once both new ones are present; the
@@ -643,6 +666,7 @@ async function createQuote(payload, adminId) {
         line_total_minor: li.line_total_minor,
         details_text: li.details_text || null,
         parent_position: li.parent_position || null,
+        ...extendedLineColumns(li),
       }));
       validateLineItemHierarchy(rows);
       await insertLineItemsHierarchical(trx, 'quote_line_items', 'quote_id', quoteId, rows);
@@ -657,6 +681,11 @@ async function createQuote(payload, adminId) {
     logger.info('Quote created', { adminId, quoteId, quoteNumber });
     return quoteId;
   });
+  // {{placeholders}} in intro / outro resolve once the quote exists (they can
+  // include its number) — whether typed in, inserted from a text block or
+  // copied from a template (#1451).
+  await require('./quoteTemplateService').resolveQuoteTextPlaceholders(createdId);
+  return createdId;
 }
 
 /**
@@ -683,8 +712,14 @@ async function updateQuote(id, payload, adminId) {
   }
 
   const roundTotal = (await getAppSetting('crm_invoice_round_total', false)) === true;
+  const preparedLineItems = await prepareQuoteLineItems(payload.lineItems, {
+    customerId: existing.customer_account_id,
+    currency: existing.currency,
+    hours: Object.prototype.hasOwnProperty.call(payload, 'hours') ? payload.hours : existing.hours,
+    days: Object.prototype.hasOwnProperty.call(payload, 'days') ? payload.days : existing.days,
+  });
   const totals = computeTotals(
-    Array.isArray(payload.lineItems) ? payload.lineItems : [],
+    preparedLineItems,
     payload.vatRate ?? existing.vat_rate,
     payload.shippingAmountMinor ?? existing.shipping_amount_minor,
     { roundTotal }
@@ -700,7 +735,7 @@ async function updateQuote(id, payload, adminId) {
     );
   }
 
-  return await db.transaction(async (trx) => {
+  await db.transaction(async (trx) => {
     const updates = {
       updated_at: new Date(),
       net_amount_minor: totals.netAmountMinor,
@@ -732,6 +767,9 @@ async function updateQuote(id, payload, adminId) {
       businessBankAccountId: 'business_bank_account_id',
       validUntil: 'valid_until',
       language: 'language',
+      // Migration 214 — quote-wide hours / days.
+      hours: 'hours',
+      days: 'days',
     };
     for (const [api, col] of Object.entries(map)) {
       if (Object.prototype.hasOwnProperty.call(payload, api)) {
@@ -788,15 +826,20 @@ async function updateQuote(id, payload, adminId) {
         line_total_minor: li.line_total_minor,
         details_text: li.details_text || null,
         parent_position: li.parent_position || null,
+        ...extendedLineColumns(li),
       }));
       validateLineItemHierarchy(rows);
       await insertLineItemsHierarchical(trx, 'quote_line_items', 'quote_id', id, rows);
     }
 
     try {
-      await logActivity('quote_updated', { quoteId: id }, null, `admin:${adminId}`);
+      // Pass `trx` — the global db deadlocks the single-connection SQLite
+      // pool inside this transaction (same fix as createQuote).
+      await logActivity('quote_updated', { quoteId: id }, null, `admin:${adminId}`, trx);
     } catch (_) { /* non-fatal */ }
   });
+  // Same as createQuote: resolve {{placeholders}} in intro / outro (#1451).
+  await require('./quoteTemplateService').resolveQuoteTextPlaceholders(id);
 }
 
 /**
@@ -862,7 +905,10 @@ async function buildRenderContext(quote, lineItems) {
   // foots with the items; the stored net may be the clean (rounded-once)
   // value, in which case the gap is shown as a "Rundung" row. For
   // legacy/unrounded quotes the two are equal ⇒ adjustment 0, no row.
-  const displayedNetMinor = lineItems.reduce(
+  // Unselected optional add-ons (and their sub-items) are left off the PDF
+  // body and out of the displayed net (#1451).
+  const visibleLineItems = countedLineItems(lineItems);
+  const displayedNetMinor = visibleLineItems.reduce(
     (s, li) => (li.parent_line_item_id == null && (li.parent_position == null || li.parent_position === '')
       ? s + ensureInt(li.line_total_minor) : s),
     0,
@@ -896,12 +942,17 @@ async function buildRenderContext(quote, lineItems) {
       skontoPercent,
       skontoWithinDays,
     } : null,
-    lineItems: lineItems.map((li) => ({
+    lineItems: visibleLineItems.map((li) => ({
       quantity: li.quantity,
       description: li.description,
       unitPriceMinor: li.unit_price_minor,
       discountPercent: li.discount_percent,
       lineTotalMinor: li.line_total_minor,
+      // Migration 214 — discount lines render as a labelled minus row;
+      // `unit` fills the unit column.
+      lineKind: li.line_kind || 'item',
+      unit: li.unit || null,
+      promotion: parsePromotionSnapshot(li.promotion_snapshot),
       // Migration 119 hierarchy + details — surfaced to the PDF
       // renderer so drawLineItems can indent sub-items + render
       // details_text below.
@@ -936,6 +987,21 @@ async function renderQuotePdfBuffer(quoteId) {
 }
 
 /**
+ * The quote PDF to show an admin or the customer. Once a quote has been
+ * sent, that is the file that went out — later template, branding or
+ * setting changes never alter it. A draft renders live.
+ */
+async function getQuotePdfBuffer(quoteId) {
+  const quote = await db('quotes').where({ id: quoteId }).first('status', 'pdf_path');
+  if (!quote) throw new AppError('Quote not found', 404);
+  if (quote.status !== 'draft') {
+    const stored = readStoredDocumentPdf(quote.pdf_path, 'quote');
+    if (stored) return stored;
+  }
+  return renderQuotePdfBuffer(quoteId);
+}
+
+/**
  * Preview a quote PDF from an unsaved payload — never touches the DB.
  * The frontend "Preview" button on the editor calls this with the
  * current form state so the admin can validate before saving.
@@ -943,8 +1009,14 @@ async function renderQuotePdfBuffer(quoteId) {
 async function renderQuotePdfFromPayload(payload) {
   const customer = await db('customer_accounts').where({ id: payload.customerAccountId }).first();
   const roundTotal = (await getAppSetting('crm_invoice_round_total', false)) === true;
+  const preparedLineItems = await prepareQuoteLineItems(payload.lineItems, {
+    customerId: payload.customerAccountId,
+    currency: (payload.currency || 'CHF').toUpperCase(),
+    hours: payload.hours,
+    days: payload.days,
+  });
   const totals = computeTotals(
-    Array.isArray(payload.lineItems) ? payload.lineItems : [],
+    preparedLineItems,
     payload.vatRate,
     payload.shippingAmountMinor,
     { roundTotal }
@@ -981,6 +1053,10 @@ async function renderQuotePdfFromPayload(payload) {
     line_total_minor: li.line_total_minor,
     parent_position: li.parent_position == null || li.parent_position === '' ? null : Number(li.parent_position),
     details_text: li.details_text || null,
+    line_kind: li.line_kind,
+    unit: li.unit || null,
+    is_optional: li.is_optional,
+    selected: li.selected,
   })));
   return await pdfService.renderQuoteToBuffer(ctx);
 }
@@ -1553,7 +1629,8 @@ async function convertToInvoiceOnly(quoteId, adminId, options = {}) {
       customer,
       currency: quote.currency,
       language: quote.language,
-      lineItems,
+      // Unselected optional add-ons never reach an invoice (#1451).
+      lineItems: countedLineItems(lineItems),
       totals: {
         net: quote.net_amount_minor,
         vatRate: quote.vat_rate,
@@ -1755,7 +1832,8 @@ async function convertToEvent(quoteId, adminId, options = {}) {
         customer,
         currency: quote.currency,
         language: quote.language,
-        lineItems,
+        // Unselected optional add-ons never reach an invoice (#1451).
+        lineItems: countedLineItems(lineItems),
         totals: {
           net: quote.net_amount_minor,
           vatRate: quote.vat_rate,
@@ -1804,6 +1882,38 @@ async function convertToEvent(quoteId, adminId, options = {}) {
   return result;
 }
 
+/**
+ * Re-apply the current customer / business hour and day rates to the lines
+ * whose price came from a rate (#1451). Drafts only: a sent quote keeps the
+ * prices the customer saw. Lines with a pinned catalogue rate or a typed
+ * price are left alone.
+ */
+async function recalculateRates(id, adminId) {
+  const data = await getQuoteById(id);
+  if (!data) throw new AppError('Quote not found', 404);
+  if (data.quote.status !== 'draft') {
+    throw new AppError('Only draft quotes can pick up new rates', 409, 'QUOTE_NOT_DRAFT');
+  }
+  const lineItems = data.lineItems.map((li) => ({
+    position: li.position,
+    quantity: li.quantity,
+    description: li.description,
+    unit_price_minor: li.unit_price_minor,
+    discount_percent: li.discount_percent,
+    parent_position: li.parent_position == null ? null : li.parent_position,
+    details_text: li.details_text || null,
+    line_kind: li.line_kind,
+    unit: li.unit,
+    is_optional: li.is_optional,
+    selected: li.selected,
+    price_mode: li.price_mode,
+    rate_source: li.rate_source === 'customer' || li.rate_source === 'default' ? 'auto' : li.rate_source,
+    bound_to: li.bound_to,
+    promotion_snapshot: li.promotion_snapshot,
+  }));
+  await updateQuote(id, { lineItems }, adminId);
+}
+
 async function duplicateQuote(id, adminId) {
   const { quote, lineItems } = (await getQuoteById(id)) || {};
   if (!quote) throw new AppError('Quote not found', 404);
@@ -1827,12 +1937,27 @@ async function duplicateQuote(id, adminId) {
     internalNotes: quote.internal_notes,
     ccPdfEmail: quote.cc_pdf_email,
     businessBankAccountId: quote.business_bank_account_id,
+    hours: quote.hours,
+    days: quote.days,
+    // Full line shape: sub-items, notes and the migration-214 fields used to
+    // be dropped here (and this is what the prepare_quote workflow action
+    // copies). Stored rates stay as they are — nothing is re-resolved.
     lineItems: lineItems.map((li) => ({
       position: li.position,
       quantity: li.quantity,
       description: li.description,
       unit_price_minor: li.unit_price_minor,
       discount_percent: li.discount_percent,
+      parent_position: li.parent_position == null ? null : li.parent_position,
+      details_text: li.details_text || null,
+      line_kind: li.line_kind,
+      unit: li.unit,
+      is_optional: li.is_optional,
+      selected: li.selected,
+      price_mode: li.price_mode,
+      rate_source: li.rate_source,
+      bound_to: li.bound_to,
+      promotion_snapshot: li.promotion_snapshot,
     })),
   }, adminId);
 }
@@ -1841,10 +1966,32 @@ async function duplicateQuote(id, adminId) {
 // Presets (line items + payment terms)
 // ---------------------------------------------------------------------
 
-async function listLineItemPresets() {
-  return await db('quote_line_item_presets')
-    .where({ is_active: formatBoolean(true) })
-    .orderBy('display_order', 'asc').orderBy('id', 'asc');
+// The editor's preset picker wants active rows only; the catalogue admin
+// page lists inactive (archived) ones too.
+async function listLineItemPresets({ includeInactive = false } = {}) {
+  const query = db('quote_line_item_presets');
+  if (!includeInactive) query.where({ is_active: formatBoolean(true) });
+  return await query.orderBy('display_order', 'asc').orderBy('id', 'asc');
+}
+
+const PRESET_PRICE_MODES = ['fixed', 'hour', 'day'];
+
+// Migration 214 — service-catalogue columns on the presets table.
+function presetCatalogueColumns(payload) {
+  const out = {};
+  if (payload.unit !== undefined) out.unit = payload.unit || null;
+  if (payload.details_text !== undefined) out.details_text = payload.details_text || null;
+  if (payload.category !== undefined) out.category = payload.category ? String(payload.category).slice(0, 64) : null;
+  if (payload.vat_code !== undefined) out.vat_code = payload.vat_code ? String(payload.vat_code).slice(0, 16) : null;
+  if (payload.price_mode !== undefined) {
+    out.price_mode = PRESET_PRICE_MODES.includes(payload.price_mode) ? payload.price_mode : 'fixed';
+  }
+  if (payload.pinned_rate_minor !== undefined) {
+    out.pinned_rate_minor = payload.pinned_rate_minor == null || payload.pinned_rate_minor === ''
+      ? null
+      : ensureInt(payload.pinned_rate_minor);
+  }
+  return out;
 }
 
 async function createLineItemPreset(payload) {
@@ -1856,6 +2003,7 @@ async function createLineItemPreset(payload) {
     quantity_default: ensureNumber(payload.quantity_default, 1),
     display_order: ensureInt(payload.display_order),
     is_active: formatBoolean(true),
+    ...presetCatalogueColumns(payload),
     created_at: new Date(),
     updated_at: new Date(),
   };
@@ -1871,11 +2019,14 @@ async function updateLineItemPreset(id, payload) {
     display_order: 'display_order', is_active: 'is_active',
   };
   const updates = { updated_at: new Date() };
+  // Only fields the request actually sent: the route always passes every key,
+  // and `Boolean(undefined)` used to archive the item on any partial edit.
   for (const [api, col] of Object.entries(map)) {
-    if (Object.prototype.hasOwnProperty.call(payload, api)) {
+    if (payload[api] !== undefined) {
       updates[col] = col === 'is_active' ? formatBoolean(Boolean(payload[api])) : payload[api];
     }
   }
+  Object.assign(updates, presetCatalogueColumns(payload));
   await db('quote_line_item_presets').where({ id }).update(updates);
   return await db('quote_line_item_presets').where({ id }).first();
 }
@@ -2138,6 +2289,8 @@ module.exports = {
   updateQuote,
   sendQuote,
   duplicateQuote,
+  recalculateRates,
+  getQuotePdfBuffer,
   recordResponse,
   adminAcceptQuote,
   adminDeclineQuote,
@@ -2171,6 +2324,9 @@ module.exports = {
   // Internals exposed for tests + invoiceService re-use.
   _internal: {
     computeTotals,
+    // Shared with quoteTemplateService so {{hourly_rate}} reads exactly like
+    // the amounts in the quote email.
+    formatMajor,
     ensureCustomerFeatureEnabled,
     nextQuoteNumber,
     persistDocPdf,

@@ -875,6 +875,9 @@ app.use('/api/customer', noStoreCache, require('./src/routes/customer'));
 // host the customer-side accept/decline / sign / payment-check pages.
 app.use('/api/admin/business-profile', require('./src/routes/adminBusinessProfile'));
 app.use('/api/admin/quotes',     require('./src/routes/adminQuotes'));
+// Quote catalogue + templates (#1451). Own prefix so its collection paths
+// never collide with /api/admin/quotes/:id.
+app.use('/api/admin/quote-catalog', require('./src/routes/adminQuoteCatalog'));
 app.use('/api/admin/invoices',   require('./src/routes/adminInvoices'));
 app.use('/api/admin/contracts',  require('./src/routes/adminContracts'));
 app.use('/api/admin/projects',   require('./src/routes/adminProjects'));

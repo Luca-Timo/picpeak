@@ -28,6 +28,10 @@ const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const { renumberLineItemPositions } = require('../utils/lineItemPositions');
+const {
+  LINE_KINDS, UNITS, PRICE_MODES, BOUND_TO, RATE_SOURCES,
+  extendedLineColumns, lineItemFieldsFromApi, lineItemFieldsToApi,
+} = require('../utils/lineItemTotals');
 const { getStoragePath } = require('../config/storage');
 const invoiceService = require('../services/invoiceService');
 const expenseService = require('../services/expenseService');
@@ -219,6 +223,8 @@ function transformLineItem(li) {
     parentLineItemId: li.parent_line_item_id || null,
     parentPosition: li.parent_position == null ? null : Number(li.parent_position),
     detailsText: li.details_text || null,
+    // Migration 214 — line kind, unit, rate + promotion.
+    ...lineItemFieldsToApi(li),
   };
 }
 
@@ -290,6 +296,14 @@ const INVOICE_BODY_VALIDATORS = [
   // (validateLineItemHierarchy).
   body('lineItems.*.parentPosition').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('lineItems.*.detailsText').optional({ values: 'falsy' }).isString().isLength({ max: 2000 }),
+  // Migration 214 (#1451). Invoices carry a quote's discount lines and units
+  // over; optional add-ons don't exist on invoices.
+  body('lineItems.*.lineKind').optional({ values: 'falsy' }).isIn(LINE_KINDS),
+  body('lineItems.*.unit').optional({ values: 'falsy' }).isIn(UNITS),
+  body('lineItems.*.priceMode').optional({ values: 'falsy' }).isIn(PRICE_MODES),
+  body('lineItems.*.rateSource').optional({ values: 'falsy' }).isIn(RATE_SOURCES),
+  body('lineItems.*.boundTo').optional({ values: 'falsy' }).isIn(BOUND_TO),
+  body('lineItems.*.promotionSnapshot').optional({ nullable: true }).isObject(),
 ];
 
 function mapPayloadToService(body) {
@@ -338,6 +352,7 @@ function mapPayloadToService(body) {
       // quotes so the editor's payload shape is identical for both.
       parent_position: li.parentPosition == null || li.parentPosition === '' ? null : Number(li.parentPosition),
       details_text: li.detailsText == null ? null : String(li.detailsText),
+      ...lineItemFieldsFromApi(li),
     })));
   }
   return out;
@@ -714,6 +729,8 @@ router.put(
           line_total_minor: lineTotal,
           parent_position: isSubItem ? parseInt(li.parent_position, 10) : null,
           details_text: li.details_text || null,
+          // Migration 214 — keep line kind, unit, rate + promotion on edit.
+          ...extendedLineColumns(li, { invoice: true }),
         };
       });
       const { resolveParentTotalsFromSubItems } = require('../services/quoteService')._internal;
@@ -922,7 +939,8 @@ router.get(
   handleAsync(async (req, res) => {
     validateRequest(req);
     const id = parseInt(req.params.id, 10);
-    const buf = await invoiceService.renderInvoicePdfBuffer(id);
+    // A sent invoice opens the file that went out; a scheduled one renders live.
+    const buf = await invoiceService.getInvoicePdfBuffer(id);
     // Build a useful filename: `<invoiceNumber>_<customerName>.pdf`.
     // The number + customer come from a small joined fetch; we
     // already loaded everything inside renderInvoicePdfBuffer, but

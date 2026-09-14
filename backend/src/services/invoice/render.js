@@ -9,6 +9,8 @@ const businessProfileService = require('../businessProfileService');
 const { buildIssuerBlock, buildRecipientBlock } = require('../_renderContext');
 const pdfService = require('../pdfService');
 const { ensureInt, ensureNumber } = require('../../utils/numericHelpers');
+const { parsePromotionSnapshot } = require('../../utils/lineItemTotals');
+const { readStoredDocumentPdf } = require('../../utils/storedDocumentPdf');
 const { getHierarchyHelpers } = require('./helpers');
 const { getInvoiceById } = require('./queries');
 
@@ -209,6 +211,11 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       parentLineItemId: li.parent_line_item_id || null,
       parentPosition: li.parent_position == null ? null : Number(li.parent_position),
       detailsText: li.details_text || null,
+      // Migration 214 — discount lines render as a labelled minus row;
+      // `unit` fills the unit column.
+      lineKind: li.line_kind || 'item',
+      unit: li.unit || null,
+      promotion: parsePromotionSnapshot(li.promotion_snapshot),
     })),
     totals: {
       netAmountMinor: displayedNetMinor,
@@ -357,8 +364,25 @@ async function renderInvoicePdfFromPayload(payload) {
   const ctx = await buildInvoiceRenderContext(fakeInvoice, items);
   return await pdfService.renderInvoiceToBuffer(ctx);
 }
+/**
+ * The invoice PDF to show an admin or the customer. Once an invoice has
+ * left `scheduled`, that is the file that went out — later template,
+ * branding or setting changes never alter it. Scheduled invoices render
+ * live; imported ones keep streaming their original (renderInvoicePdfBuffer).
+ */
+async function getInvoicePdfBuffer(invoiceId) {
+  const invoice = await db('invoices').where({ id: invoiceId }).first('status', 'pdf_path', 'imported_pdf_path');
+  if (!invoice) throw new AppError('Invoice not found', 404);
+  if (invoice.status !== 'scheduled' && !invoice.imported_pdf_path) {
+    const stored = readStoredDocumentPdf(invoice.pdf_path, 'invoice');
+    if (stored) return stored;
+  }
+  return renderInvoicePdfBuffer(invoiceId);
+}
+
 module.exports = {
   buildInvoiceRenderContext,
   renderInvoicePdfBuffer,
   renderInvoicePdfFromPayload,
+  getInvoicePdfBuffer,
 };

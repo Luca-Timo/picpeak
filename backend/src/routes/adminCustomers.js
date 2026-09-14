@@ -89,6 +89,8 @@ function transformCustomer(c) {
     // un-selected) reads as ON so existing customers keep the Contracts tab.
     featureContracts: c.feature_contracts === undefined ? true : (c.feature_contracts === true || c.feature_contracts === 1),
     hourlyRateMinor: c.hourly_rate_minor != null ? Number(c.hourly_rate_minor) : null,
+    // Migration 214 — the customer's own day rate for per-day quote lines.
+    dayRateMinor: c.day_rate_minor != null ? Number(c.day_rate_minor) : null,
     // Per-customer Skonto opt-out (migration 112). When true, none of
     // this customer's invoices qualify for an early-payment discount,
     // regardless of template / global defaults.
@@ -419,6 +421,7 @@ router.put('/:id', [
   // Hours logging (migration 129).
   body('feature_hours_logging').optional().isBoolean(),
   body('hourly_rate_minor').optional({ nullable: true }).isInt({ min: 0 }),
+  body('day_rate_minor').optional({ nullable: true }).isInt({ min: 0 }),
   // CRM billing cadence — see migration 102. `per_event` keeps the
   // existing per-event payment plan; monthly/quarterly snap every
   // generated invoice to billing_cycle_day of the next period.

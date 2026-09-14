@@ -631,7 +631,8 @@ router.get('/quotes/:id/pdf', customerAuth, async (req, res) => {
       return res.status(404).json({ error: 'Quote not found' });
     }
     const quoteService = require('../services/quoteService');
-    const buf = await quoteService.renderQuotePdfBuffer(quote.id);
+    // The file the customer was sent, not a re-render from today's data.
+    const buf = await quoteService.getQuotePdfBuffer(quote.id);
     const { buildPdfFilename } = require('../utils/pdfFilename');
     const { buildContentDisposition } = require('../utils/filenameSanitizer');
     const customer = await dbi('customer_accounts').where({ id: req.customer.id }).first();
@@ -663,7 +664,8 @@ router.get('/invoices/:id/pdf', customerAuth, async (req, res) => {
       return res.status(404).json({ error: 'Invoice not found' });
     }
     const invoiceService = require('../services/invoiceService');
-    const buf = await invoiceService.renderInvoicePdfBuffer(invoice.id);
+    // The file the customer was sent, not a re-render from today's data.
+    const buf = await invoiceService.getInvoicePdfBuffer(invoice.id);
     const { buildPdfFilename } = require('../utils/pdfFilename');
     const { buildContentDisposition } = require('../utils/filenameSanitizer');
     const customer = await dbi('customer_accounts').where({ id: req.customer.id }).first();

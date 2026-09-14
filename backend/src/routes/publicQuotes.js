@@ -20,6 +20,7 @@ const quoteService = require('../services/quoteService');
 const { db } = require('../database/db');
 const { clientIpForAudit } = require('../utils/clientIp');
 const { loadActionToken } = require('../utils/publicTokenGuards');
+const { countedLineItems, parsePromotionSnapshot } = require('../utils/lineItemTotals');
 
 const router = express.Router();
 
@@ -67,7 +68,9 @@ function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosTe
       quote.responded_at && quote.response_locked_at &&
       new Date(quote.response_locked_at).getTime() > Date.now()
     )),
-    lineItems: lineItems.map((li) => ({
+    // Unselected optional add-ons aren't part of the offer shown here —
+    // same as on the PDF (#1451; customer selection arrives in phase 2).
+    lineItems: countedLineItems(lineItems).map((li) => ({
       position: li.position,
       quantity: Number(li.quantity),
       description: li.description,
@@ -81,6 +84,10 @@ function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosTe
       parentLineItemId: li.parent_line_item_id || null,
       parentPosition: li.parent_position == null ? null : Number(li.parent_position),
       detailsText: li.details_text || null,
+      // Migration 214 — discount lines and units, as on the PDF.
+      lineKind: li.line_kind || 'item',
+      unit: li.unit || null,
+      promotionName: li.line_kind === 'discount' ? (parsePromotionSnapshot(li.promotion_snapshot)?.name || null) : null,
     })),
     recipient: customer ? {
       displayName: customer.display_name || [customer.first_name, customer.last_name].filter(Boolean).join(' '),

@@ -33,6 +33,9 @@ const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const { renumberLineItemPositions } = require('../utils/lineItemPositions');
+const {
+  LINE_KINDS, UNITS, PRICE_MODES, BOUND_TO, RATE_SOURCES, lineItemFieldsFromApi, lineItemFieldsToApi,
+} = require('../utils/lineItemTotals');
 const quoteService = require('../services/quoteService');
 const { db } = require('../database/db');
 
@@ -123,6 +126,11 @@ function transformQuote(q) {
     convertedContractNumber: q.converted_contract_number || null,
     pdfPath: q.pdf_path,
     businessBankAccountId: q.business_bank_account_id,
+    // Migration 214.
+    hours: q.hours == null ? null : Number(q.hours),
+    days: q.days == null ? null : Number(q.days),
+    sourceTemplateId: q.source_template_id || null,
+    sourceTemplateVersion: q.source_template_version || null,
     createdAt: q.created_at,
     updatedAt: q.updated_at,
   };
@@ -144,6 +152,8 @@ function transformLineItem(li) {
     parentLineItemId: li.parent_line_item_id || null,
     parentPosition: li.parent_position == null ? null : Number(li.parent_position),
     detailsText: li.details_text || null,
+    // Migration 214 — line kind, unit, optional add-on, rate + promotion.
+    ...lineItemFieldsToApi(li),
   };
 }
 
@@ -205,6 +215,13 @@ function transformLineItemPreset(p) {
     quantityDefault: Number(p.quantity_default),
     displayOrder: p.display_order,
     isActive: p.is_active === 1 || p.is_active === true,
+    // Migration 214 — service catalogue fields.
+    unit: p.unit || null,
+    detailsText: p.details_text || null,
+    category: p.category || null,
+    vatCode: p.vat_code || null,
+    priceMode: p.price_mode || 'fixed',
+    pinnedRateMinor: p.pinned_rate_minor == null ? null : Number(p.pinned_rate_minor),
   };
 }
 
@@ -232,6 +249,8 @@ function mapPayloadToService(body) {
     businessBankAccountId: 'businessBankAccountId',
     // Migration 121 — optional Project Overview link.
     projectId: 'projectId',
+    // Migration 214 — quote-wide hours / days that bound lines follow.
+    hours: 'hours', days: 'days',
   };
   for (const [api, svc] of Object.entries(map)) {
     if (Object.prototype.hasOwnProperty.call(body, api)) out[svc] = body[api];
@@ -252,6 +271,7 @@ function mapPayloadToService(body) {
       // the parents.
       parent_position: li.parentPosition == null || li.parentPosition === '' ? null : Number(li.parentPosition),
       details_text: li.detailsText == null ? null : String(li.detailsText),
+      ...lineItemFieldsFromApi(li),
     })));
   }
   return out;
@@ -316,6 +336,40 @@ router.get(
 // Create + update
 // ---------------------------------------------------------------------
 
+// Per-line rules, shared by POST and PUT (PUT used to accept line items
+// with no per-field checks at all).
+const QUOTE_LINE_VALIDATORS = [
+  body('lineItems.*.description').optional({ values: 'falsy' }).isString().isLength({ min: 1, max: 1000 }),
+  body('lineItems.*.quantity').optional({ values: 'falsy' }).isFloat({ min: 0 }),
+  // Negative unit prices are allowed so admins can add manual
+  // discount / Rabatt lines (e.g. "Treuerabatt -50,00 €"). The
+  // service-layer total guard rejects quotes whose net goes below
+  // zero — see quoteService.
+  body('lineItems.*.unitPriceMinor').optional({ values: 'falsy' }).isInt(),
+  body('lineItems.*.discountPercent').optional({ values: 'falsy' }).isFloat({ min: 0, max: 100 }),
+  // Migration 119: sub-item + details support. Cross-row constraints
+  // (parent must exist, max 1 level deep) are enforced by the service
+  // (validateLineItemHierarchy); these per-field validators just keep
+  // bad data from reaching it.
+  body('lineItems.*.parentPosition').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  body('lineItems.*.detailsText').optional({ values: 'falsy' }).isString().isLength({ max: 2000 }),
+  // Migration 214 (#1451). Cross-row rules (a discount line is never a
+  // sub-item, sub-items follow their parent's add-on flags) live in
+  // utils/lineItemTotals.normalizeLineItems.
+  body('lineItems.*.lineKind').optional({ values: 'falsy' }).isIn(LINE_KINDS),
+  body('lineItems.*.unit').optional({ values: 'falsy' }).isIn(UNITS),
+  body('lineItems.*.isOptional').optional({ nullable: true }).isBoolean(),
+  body('lineItems.*.selected').optional({ nullable: true }).isBoolean(),
+  body('lineItems.*.priceMode').optional({ values: 'falsy' }).isIn(PRICE_MODES),
+  // 'auto' asks the server to apply the customer's or the default rate.
+  body('lineItems.*.rateSource').optional({ values: 'falsy' }).isIn([...RATE_SOURCES, 'auto']),
+  body('lineItems.*.boundTo').optional({ values: 'falsy' }).isIn(BOUND_TO),
+  body('lineItems.*.promotionId').optional({ values: 'falsy' }).isInt({ min: 1 }),
+  body('lineItems.*.promotionSnapshot').optional({ nullable: true }).isObject(),
+  body('hours').optional({ nullable: true, checkFalsy: true }).isFloat({ min: 0, max: 9999 }),
+  body('days').optional({ nullable: true, checkFalsy: true }).isFloat({ min: 0, max: 999 }),
+];
+
 const QUOTE_BODY_VALIDATORS = [
   body('customerAccountId').isInt({ min: 1 }).withMessage('Customer is required'),
   body('language').optional({ values: 'falsy' }).isString().isLength({ max: 8 }),
@@ -346,20 +400,7 @@ const QUOTE_BODY_VALIDATORS = [
   body('ccPdfEmail').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
   body('businessBankAccountId').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('lineItems').optional({ values: 'falsy' }).isArray(),
-  body('lineItems.*.description').optional({ values: 'falsy' }).isString().isLength({ min: 1, max: 1000 }),
-  body('lineItems.*.quantity').optional({ values: 'falsy' }).isFloat({ min: 0 }),
-  // Negative unit prices are allowed so admins can add manual
-  // discount / Rabatt lines (e.g. "Treuerabatt -50,00 €"). The
-  // service-layer total guard rejects quotes whose net goes below
-  // zero — see quoteService.
-  body('lineItems.*.unitPriceMinor').optional({ values: 'falsy' }).isInt(),
-  body('lineItems.*.discountPercent').optional({ values: 'falsy' }).isFloat({ min: 0, max: 100 }),
-  // Migration 119: sub-item + details support. Cross-row constraints
-  // (parent must exist, max 1 level deep) are enforced by the service
-  // (validateLineItemHierarchy); these per-field validators just keep
-  // bad data from reaching it.
-  body('lineItems.*.parentPosition').optional({ values: 'falsy' }).isInt({ min: 1 }),
-  body('lineItems.*.detailsText').optional({ values: 'falsy' }).isString().isLength({ max: 2000 }),
+  ...QUOTE_LINE_VALIDATORS,
 ];
 
 router.post(
@@ -407,6 +448,7 @@ router.put(
     body('ccPdfEmail').optional({ values: 'falsy' }).isString().isLength({ max: 255 }),
     body('businessBankAccountId').optional({ values: 'falsy' }).isInt({ min: 1 }),
     body('lineItems').optional({ values: 'falsy' }).isArray(),
+    ...QUOTE_LINE_VALIDATORS,
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -444,6 +486,25 @@ router.post(
     validateRequest(req);
     const newId = await quoteService.duplicateQuote(parseInt(req.params.id, 10), req.admin.id);
     return successResponse(res, { id: newId }, 201, 'Quote duplicated');
+  })
+);
+
+// Re-apply the current customer / business rates to the lines that took
+// their price from a rate (#1451). Drafts only — a sent quote keeps the
+// prices the customer saw. Pinned and typed prices are left alone.
+router.post(
+  '/:id/recalculate-rates',
+  requirePermission('quotes.manage'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    await quoteService.recalculateRates(id, req.admin.id);
+    const data = await quoteService.getQuoteById(id);
+    return successResponse(res, {
+      quote: transformQuote(data.quote),
+      lineItems: data.lineItems.map(transformLineItem),
+    });
   })
 );
 
@@ -543,7 +604,8 @@ router.get(
   handleAsync(async (req, res) => {
     validateRequest(req);
     const id = parseInt(req.params.id, 10);
-    const buf = await quoteService.renderQuotePdfBuffer(id);
+    // A sent quote opens the file that went out; a draft renders live.
+    const buf = await quoteService.getQuotePdfBuffer(id);
     const { buildPdfFilename } = require('../utils/pdfFilename');
     const { buildContentDisposition } = require('../utils/filenameSanitizer');
     const quote = await db('quotes').where({ id }).first();
@@ -590,11 +652,36 @@ router.post(
 router.get(
   '/presets/line-items',
   requirePermission('quotes.view'),
+  // `includeInactive=true` for the catalogue admin page; the editor's
+  // picker keeps the default (active only).
+  [query('includeInactive').optional().isIn(['true', 'false'])],
   handleAsync(async (req, res) => {
-    const rows = await quoteService.listLineItemPresets();
+    validateRequest(req);
+    const rows = await quoteService.listLineItemPresets({ includeInactive: req.query.includeInactive === 'true' });
     return successResponse(res, { presets: rows.map(transformLineItemPreset) });
   })
 );
+
+// Migration 214 — service-catalogue fields, shared by POST and PUT.
+const PRESET_CATALOGUE_VALIDATORS = [
+  body('unit').optional({ values: 'falsy' }).isIn(UNITS),
+  body('detailsText').optional({ values: 'falsy' }).isString().isLength({ max: 2000 }),
+  body('category').optional({ values: 'falsy' }).isString().isLength({ max: 64 }),
+  body('vatCode').optional({ values: 'falsy' }).isString().isLength({ max: 16 }),
+  body('priceMode').optional({ values: 'falsy' }).isIn(PRICE_MODES),
+  body('pinnedRateMinor').optional({ nullable: true }).isInt({ min: 0 }),
+];
+
+function presetCatalogueFields(reqBody) {
+  return {
+    unit: reqBody.unit,
+    details_text: reqBody.detailsText,
+    category: reqBody.category,
+    vat_code: reqBody.vatCode,
+    price_mode: reqBody.priceMode,
+    pinned_rate_minor: reqBody.pinnedRateMinor,
+  };
+}
 
 router.post(
   '/presets/line-items',
@@ -606,6 +693,7 @@ router.post(
     body('currency').optional({ values: 'falsy' }).isString().isLength({ min: 3, max: 3 }),
     body('quantityDefault').optional({ values: 'falsy' }).isFloat({ min: 0 }),
     body('displayOrder').optional({ values: 'falsy' }).isInt({ min: 0, max: 9999 }),
+    ...PRESET_CATALOGUE_VALIDATORS,
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -616,6 +704,7 @@ router.post(
       currency: req.body.currency,
       quantity_default: req.body.quantityDefault,
       display_order: req.body.displayOrder,
+      ...presetCatalogueFields(req.body),
     });
     return successResponse(res, { preset: transformLineItemPreset(row) }, 201);
   })
@@ -624,7 +713,17 @@ router.post(
 router.put(
   '/presets/line-items/:id',
   requirePermission('quotes.manage'),
-  [param('id').isInt({ min: 1 })],
+  [
+    param('id').isInt({ min: 1 }),
+    body('name').optional({ values: 'falsy' }).isString().isLength({ min: 1, max: 128 }),
+    body('description').optional({ values: 'falsy' }).isString().isLength({ max: 5000 }),
+    body('unitPriceMinor').optional({ values: 'falsy' }).isInt({ min: 0 }),
+    body('currency').optional({ values: 'falsy' }).isString().isLength({ min: 3, max: 3 }),
+    body('quantityDefault').optional({ values: 'falsy' }).isFloat({ min: 0 }),
+    body('displayOrder').optional({ values: 'falsy' }).isInt({ min: 0, max: 9999 }),
+    body('isActive').optional().isBoolean(),
+    ...PRESET_CATALOGUE_VALIDATORS,
+  ],
   handleAsync(async (req, res) => {
     validateRequest(req);
     const id = parseInt(req.params.id, 10);
@@ -636,6 +735,7 @@ router.put(
       quantity_default: req.body.quantityDefault,
       display_order: req.body.displayOrder,
       is_active: req.body.isActive,
+      ...presetCatalogueFields(req.body),
     });
     return successResponse(res, { preset: transformLineItemPreset(row) });
   })

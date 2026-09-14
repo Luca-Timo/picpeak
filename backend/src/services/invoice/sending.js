@@ -11,6 +11,7 @@ const { resolveBillingRecipients } = require('../_billingRecipients');
 const pdfService = require('../pdfService');
 const emailProcessor = require('../emailProcessor');
 const { ensureInt, ensureNumber } = require('../../utils/numericHelpers');
+const { extendedLineColumns } = require('../../utils/lineItemTotals');
 const { computeDueDate, ensureCustomerCanBill, formatMajor, getHierarchyHelpers, nextInvoiceNumber, resolveNetDaysForRow } = require('./helpers');
 const { getInvoiceById } = require('./queries');
 const { createInvoice } = require('./create');
@@ -334,6 +335,8 @@ async function createStorno(originalId, adminId, trx = db) {
       line_total_minor: ensureInt(li.line_total_minor),
       parent_position: li.parent_position == null ? null : ensureInt(li.parent_position),
       details_text: li.details_text || null,
+      // Migration 214 — a discount line stays a discount line on the Storno.
+      ...extendedLineColumns(li, { invoice: true }),
     }));
     const { validateLineItemHierarchy, insertLineItemsHierarchical } = getHierarchyHelpers();
     validateLineItemHierarchy(cloned);
@@ -505,6 +508,7 @@ async function reissueInvoice(id, adminId) {
       discount_percent: Number(li.discount_percent || 0),
       parent_position: li.parent_position == null ? null : Number(li.parent_position),
       details_text: li.details_text || null,
+      ...extendedLineColumns(li, { invoice: true }),
     }));
 
     const { invoiceIds: reissuedIds } = await createInvoice({

@@ -512,6 +512,7 @@ async function listCustomers({ search } = {}) {
       'customer_accounts.feature_hours_logging',
       'customer_accounts.feature_contracts',
       'customer_accounts.hourly_rate_minor',
+      'customer_accounts.day_rate_minor',
       'customer_accounts.last_login',
       'customer_accounts.created_at',
       db.raw('COUNT(event_customer_assignments.id) as event_count')
@@ -592,6 +593,9 @@ async function updateCustomer(id, updates, updatedByAdminId) {
     // Hour-logging default rate (migration 129). Minor units; null
     // means admin must enter a per-entry override on every entry.
     'hourly_rate_minor',
+    // Default day rate for per-day quote lines (migration 214). Minor
+    // units; null falls back to the business default.
+    'day_rate_minor',
     // Per-customer Skonto opt-out (migration 112). Boolean, coerced
     // via formatBoolean below for SQLite compatibility.
     'skonto_disabled',
@@ -647,6 +651,14 @@ async function updateCustomer(id, updates, updatedByAdminId) {
         // Default hourly rate. Null clears it (forces per-entry
         // overrides); otherwise coerce to a non-negative bigint-safe
         // integer. Anything funky → null.
+        if (updates[f] === null || updates[f] === '') {
+          allowed[f] = null;
+        } else {
+          const v = parseInt(updates[f], 10);
+          allowed[f] = Number.isFinite(v) && v >= 0 ? v : null;
+        }
+      } else if (f === 'day_rate_minor') {
+        // Default day rate — same rules as the hourly one above.
         if (updates[f] === null || updates[f] === '') {
           allowed[f] = null;
         } else {
