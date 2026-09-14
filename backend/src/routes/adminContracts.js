@@ -35,6 +35,7 @@ const { handleAsync, validateRequest, successResponse } = require('../utils/rout
 const { validateFileType } = require('../utils/fileSecurityUtils');
 const contractService = require('../services/contractService');
 const contractBlocksService = require('../services/contractBlocksService');
+const contractContent = require('../services/contract/content');
 const { db } = require('../database/db');
 
 const router = express.Router();
@@ -91,7 +92,7 @@ const signedPdfUpload = multer({
 // Transforms (snake_case DB → camelCase API)
 // ---------------------------------------------------------------------
 
-function transformContract(c, inclusions) {
+function transformContract(c, inclusions, textSections) {
   if (!c) return null;
   return {
     id: c.id,
@@ -158,6 +159,20 @@ function transformContract(c, inclusions) {
     // service writes them through hasColumn guards).
     sourceQuoteId: c.source_quote_id || null,
     convertedEventId: c.converted_event_id || null,
+    // Contract templates (#1445).
+    templateId: c.template_id || null,
+    templateVersionId: c.template_version_id || null,
+    lockVersion: c.lock_version == null ? 1 : Number(c.lock_version),
+    renderedContentSha256: c.rendered_content_sha256 || null,
+    textSections: Array.isArray(textSections)
+      ? textSections.map((s) => ({
+        id: s.id,
+        section: s.section,
+        position: s.position,
+        heading: s.heading || null,
+        body: contractContent.parseLocaleMap(s.body),
+      }))
+      : undefined,
     createdAt: c.created_at,
     updatedAt: c.updated_at,
     inclusions: Array.isArray(inclusions)
@@ -173,10 +188,17 @@ function transformContract(c, inclusions) {
           description: inc.block_description,
           bodyText: inc.block_body_text,
           bodyTextDe: inc.block_body_text_de,
+          bodyTextRu: inc.block_body_text_ru ?? null,
+          bodyTextPt: inc.block_body_text_pt ?? null,
+          bodyTextNl: inc.block_body_text_nl ?? null,
+          bodyTextFr: inc.block_body_text_fr ?? null,
           isSystem: inc.block_is_system === true || inc.block_is_system === 1 || inc.block_is_system === '1',
         },
         bodyTextSnapshot: inc.body_text_snapshot,
         bodyTextDeSnapshot: inc.body_text_de_snapshot,
+        // #1445: every frozen language, and the per-contract override.
+        snapshot: contractContent.inclusionSnapshot(inc),
+        bodyOverride: contractContent.parseLocaleMap(inc.body_override),
       }))
       : undefined,
   };
@@ -343,6 +365,15 @@ router.post(
     body('blocks.*.blockId').optional().isInt({ min: 1 }),
     body('blocks.*.included').optional().isBoolean(),
     body('blocks.*.position').optional().isInt({ min: 0 }),
+    // Contract templates (#1445): the version to start from, per-clause
+    // overrides and free-text sections.
+    body('templateVersionId').optional({ nullable: true }).isInt({ min: 1 }),
+    body('blocks.*.body').optional({ nullable: true }).isObject(),
+    body('textSections').optional().isArray({ max: 100 }),
+    body('textSections.*.section').optional().isString().isLength({ max: 32 }),
+    body('textSections.*.position').optional().isInt({ min: 0 }),
+    body('textSections.*.heading').optional({ nullable: true }).isString().isLength({ max: 255 }),
+    body('textSections.*.body').optional({ nullable: true }).isObject(),
     // The editor sends one key per save and reuses it on retry (issue 1447).
     header('Idempotency-Key').optional()
       .matches(/^[A-Za-z0-9_-]{8,128}$/)
@@ -366,7 +397,7 @@ router.post(
     const data = await contractService.getContractById(id);
     return successResponse(
       res,
-      { contract: transformContract(data.contract, data.inclusions), ...(replayed && { replayed: true }) },
+      { contract: transformContract(data.contract, data.inclusions, data.textSections), ...(replayed && { replayed: true }) },
       replayed ? 200 : 201,
     );
   }),
@@ -380,7 +411,23 @@ router.get(
     validateRequest(req);
     const data = await contractService.getContractById(parseInt(req.params.id, 10));
     if (!data) return res.status(404).json({ error: 'Contract not found' });
-    return successResponse(res, { contract: transformContract(data.contract, data.inclusions) });
+    return successResponse(res, { contract: transformContract(data.contract, data.inclusions, data.textSections) });
+  }),
+);
+
+// The PDFs generated for this contract (#1445): unsigned, signed, audit
+// certificate — kind, sha256, size, pages, template version. No paths.
+router.get(
+  '/:id/documents',
+  requirePermission('contracts.view'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    const exists = await db('contracts').where({ id }).first('id');
+    if (!exists) return res.status(404).json({ error: 'Contract not found' });
+    const documents = await require('../services/documentArtifactService').listForDocument('contract', id);
+    return successResponse(res, { documents });
   }),
 );
 
@@ -403,12 +450,20 @@ router.put(
     body('blocks.*.blockId').optional().isInt({ min: 1 }),
     body('blocks.*.included').optional().isBoolean(),
     body('blocks.*.position').optional().isInt({ min: 0 }),
+    body('blocks.*.body').optional({ nullable: true }).isObject(),
+    body('textSections').optional().isArray({ max: 100 }),
+    body('textSections.*.section').optional().isString().isLength({ max: 32 }),
+    body('textSections.*.position').optional().isInt({ min: 0 }),
+    body('textSections.*.heading').optional({ nullable: true }).isString().isLength({ max: 255 }),
+    body('textSections.*.body').optional({ nullable: true }).isObject(),
+    // Optimistic lock (#1445): the lockVersion the editor loaded.
+    body('lockVersion').optional().isInt({ min: 1 }),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
     await contractService.updateContract(parseInt(req.params.id, 10), req.body, req.admin?.id);
     const data = await contractService.getContractById(parseInt(req.params.id, 10));
-    return successResponse(res, { contract: transformContract(data.contract, data.inclusions) });
+    return successResponse(res, { contract: transformContract(data.contract, data.inclusions, data.textSections) });
   }),
 );
 

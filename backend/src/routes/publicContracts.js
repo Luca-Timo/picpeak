@@ -81,36 +81,21 @@ const signedPdfUpload = multer({
  * The IP / signature image paths are NEVER exposed publicly even after
  * signing — they're audit evidence.
  */
-function publicContractView(contract, inclusions, customer, profile, locale, brandingLogoUrl, brandingLogoUrlDark) {
-  const orderedSections = ['basics', 'scope', 'privacy', 'commercial', 'nda', 'closing'];
-  const blocksBySection = {};
-  for (const s of orderedSections) blocksBySection[s] = [];
-  for (const inc of inclusions) {
-    if (!(inc.included === true || inc.included === 1 || inc.included === '1')) continue;
-    const bodyEn = inc.body_text_snapshot || inc.block_body_text || '';
-    const bodyDe = inc.body_text_de_snapshot || inc.block_body_text_de || '';
-    // 1) Strip the leading `**Title**\n` line — the block.name is
-    //    already rendered above as a bold sub-heading, so a bold
-    //    first line in the body would duplicate it.
-    // 2) Strip remaining `**bold**` inline markers — the React sign
-    //    page renders body as plain `whitespace-pre-line` text and
-    //    has no inline-bold UI. The PDF path keeps them as bold
-    //    runs via pdfService.renderBodyMarkdown.
-    const body = (locale === 'de' ? (bodyDe || bodyEn) : (bodyEn || bodyDe))
-      .replace(/^\s*\*\*[^*\n]+\*\*\s*\n+/, '')
-      .replace(/\*\*([^*]+)\*\*/g, '$1');
-    if (!blocksBySection[inc.section]) continue;
-    blocksBySection[inc.section].push({
-      blockId: inc.block_id,
-      section: inc.section,
-      position: inc.position,
-      name: inc.block_name,
-      body,
-    });
-  }
-  const sections = orderedSections
-    .map((s) => ({ section: s, blocks: blocksBySection[s] }))
-    .filter((s) => s.blocks.length > 0);
+function publicContractView(contract, display, customer, profile, brandingLogoUrl, brandingLogoUrlDark) {
+  // The clauses as the contract shows them (#1445): from the sent snapshot,
+  // in the contract's language, placeholders filled in — the same content
+  // as the PDF. The signing page renders plain `whitespace-pre-line` text,
+  // so inline `**bold**` markers are dropped (the PDF keeps them as bold).
+  const sections = display.sections.map((s) => ({
+    section: s.section,
+    blocks: s.blocks.map((b) => ({
+      blockId: b.blockId,
+      section: s.section,
+      position: b.position,
+      name: b.name,
+      body: String(b.body || '').replace(/\*\*([^*]+)\*\*/g, '$1'),
+    })),
+  }));
 
   return {
     contractNumber: contract.contract_number,
@@ -118,9 +103,9 @@ function publicContractView(contract, inclusions, customer, profile, locale, bra
     language: contract.language,
     issueDate: contract.issue_date,
     validUntil: contract.valid_until,
-    title: contract.title,
-    introText: contract.intro_text,
-    outroText: contract.outro_text,
+    title: display.title || contract.title,
+    introText: display.introText,
+    outroText: display.outroText,
     sentAt: contract.sent_at,
     signedByCustomerAt: contract.signed_by_customer_at,
     signedByAdminAt: contract.signed_by_admin_at,
@@ -188,12 +173,14 @@ router.get(
     const requireDrawnSignature = (await getAppSetting('crm_contracts_require_drawn_signature')) === true;
     const brandingLogoUrl = await getAppSetting('branding_logo_url', null);
     const brandingLogoUrlDark = await getAppSetting('branding_logo_url_dark', null);
+    const display = await require('../services/contract/renderContext').resolveDisplayContent(
+      data.contract, data.inclusions, data.textSections || [], data.contract.language || 'de', { customer },
+    );
     const view = publicContractView(
       data.contract,
-      data.inclusions,
+      display,
       customer,
       profile,
-      data.contract.language || 'de',
       brandingLogoUrl,
       brandingLogoUrlDark,
     );

@@ -25,7 +25,7 @@ const { getContractById } = require('./crud');
 async function renderContractPdfBuffer(contractId) {
   const data = await getContractById(contractId);
   if (!data) throw new AppError('Contract not found', 404);
-  const ctx = await buildRenderContext(data.contract, data.inclusions);
+  const ctx = await buildRenderContext(data.contract, data.inclusions, data.textSections);
   return await pdfService.renderContractToBuffer(ctx);
 }
 
@@ -52,25 +52,40 @@ async function sendContract(id, adminId) {
   ensureCustomerActive(customer);
 
   // Snapshot every included block's body into the inclusion row so
-  // future block edits don't mutate the sent contract.
+  // future block edits don't mutate the sent contract — in every language
+  // (#1445; only EN and DE were frozen). Text a template already froze into
+  // the contract stays as it is.
+  const content = require('./content');
   await db.transaction(async (trx) => {
     for (const inc of inclusions) {
       if (!(inc.included === true || inc.included === 1 || inc.included === '1')) continue;
+      const frozen = content.inclusionSnapshot(inc);
       await trx('contract_block_inclusions').where({ id: inc.id }).update({
-        body_text_snapshot: inc.block_body_text || null,
-        body_text_de_snapshot: inc.block_body_text_de || null,
+        ...content.snapshotColumns(Object.keys(frozen).length ? frozen : content.blockBodies(inc, 'block_')),
         updated_at: new Date(),
       });
     }
   });
 
+  // Freeze the resolved content — clauses in every language, title, intro,
+  // outro and the placeholder values of this moment — with its sha256
+  // (#1445). The PDF, the signing page and later re-renders read this.
+  const frozenDraft = await getContractById(id);
+  const { snapshot, sha256: contentSha256 } = await require('./renderContext')
+    .buildContentSnapshot(frozenDraft.contract, frozenDraft.inclusions, frozenDraft.textSections);
+  await db('contracts').where({ id }).update({
+    rendered_content: JSON.stringify(snapshot),
+    rendered_content_sha256: contentSha256,
+    updated_at: new Date(),
+  });
+
   // Re-fetch with snapshots populated so the renderer uses the frozen
   // bodies (matches post-send reads).
   const refreshed = await getContractById(id);
-  const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
+  const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions, refreshed.textSections);
   const buffer = await pdfService.renderContractToBuffer(ctx);
   const { filePath: pdfPath, sha256: pdfSha256 } = await persistContractPdf(refreshed.contract, buffer, '',
-    { kind: 'unsigned', theme: ctx.theme, issuer: ctx.issuer });
+    { kind: 'unsigned', theme: ctx.theme, issuer: ctx.issuer, templateVersionId: refreshed.contract.template_version_id });
 
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = contract.valid_until

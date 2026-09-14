@@ -34,6 +34,26 @@ const QUOTE_PLACEHOLDERS = Object.freeze([
 ]);
 
 /** Every placeholder key used in `text`, in order of first appearance. */
+// Keys contract texts may use (#1445) — the values
+// services/contract/renderContext.buildPlaceholderContext provides.
+const CONTRACT_PLACEHOLDERS = Object.freeze([
+  'customer_name',
+  'customer_address',
+  'event_name',
+  'event_date',
+  'issue_date',
+  'contract_number',
+  'title',
+  'net_days',
+  'skonto_percent',
+  'skonto_within_days',
+  'cancellation_30d_percent',
+  'currency',
+  'issuer_company_name',
+  'issuer_address',
+  'source_quote_number',
+]);
+
 function findPlaceholders(text) {
   if (typeof text !== 'string' || !text) return [];
   const keys = [];
@@ -72,6 +92,7 @@ function renderPlaceholders(text, values = {}, { allowlist = QUOTE_PLACEHOLDERS,
 
 module.exports = {
   QUOTE_PLACEHOLDERS,
+  CONTRACT_PLACEHOLDERS,
   findPlaceholders,
   unknownPlaceholders,
   renderPlaceholders,
