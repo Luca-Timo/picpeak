@@ -1142,6 +1142,9 @@ async function startServer() {
     // PicTransfer retention sweep (#997): expire links, notify admins, and
     // hard-delete client uploads once the grace window elapses.
     startTransferCleanup();
+    // Customer documents retention (#1444): delete long-rejected files and
+    // remove the bytes of deleted ones once the retention window elapses.
+    require('./src/services/customerDocumentRetentionService').startCustomerDocumentRetention();
     // Custom-resolution download archives (#858) are disposable renditions —
     // sweep them once their TTL passes so .download-cache doesn't grow forever.
     // Best-effort, as before the scheduler refactor: a transient DB error on

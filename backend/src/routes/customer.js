@@ -25,7 +25,11 @@ const { errorResponse, safeValidationErrors } = require('../utils/routeHelpers')
 const { getClientIp } = require('../utils/requestIp');
 const { customerAuth } = require('../middleware/customerAuth');
 const { setGalleryAuthCookies } = require('../utils/tokenUtils');
+const rateLimit = require('express-rate-limit');
+const { receivePdfUpload, discardTempFile, sendPdfAttachment } = require('../middleware/customerDocumentUpload');
 const customerAccountsService = require('../services/customerAccountsService');
+const customerDocumentsService = require('../services/customerDocumentsService');
+const customerPortalService = require('../services/customerPortalService');
 
 // Gate a customer-facing route on BOTH the global master flag AND the
 // per-customer override — getEffectiveFeaturesForCustomer combines them, so an
@@ -114,18 +118,9 @@ const GALLERY_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 router.get('/events', customerAuth, async (req, res) => {
   try {
     const events = await customerAccountsService.listEventsForCustomer(req.customer.id);
-    res.json({
-      events: events.map((e) => ({
-        id: e.id,
-        slug: e.slug,
-        eventName: e.event_name,
-        eventType: e.event_type,
-        eventDate: e.event_date,
-        expiresAt: e.expires_at,
-        isActive: e.is_active,
-        assignedAt: e.assigned_at,
-      })),
-    });
+    // shapeEvent adds `availability` (active | expired | unavailable), decided
+    // server-side so the portal never works out expiry from the browser clock.
+    res.json({ events: events.map(customerPortalService.shapeEvent) });
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to load events');
   }
@@ -794,6 +789,157 @@ router.get('/contracts/:id/pdf', customerAuth, async (req, res) => {
     fs.createReadStream(safePath).pipe(res);
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to render contract PDF');
+  }
+});
+
+// ---- dashboard + per-event page (#1444) --------------------------------
+
+/**
+ * GET /dashboard
+ *
+ * What needs the customer's attention (quotes awaiting a response, contracts
+ * awaiting their signature, invoices due or overdue) and their galleries,
+ * split into active and expired. Each section follows the customer's
+ * effective features. customerPortalService builds this and the event page
+ * below from the same queries.
+ */
+router.get('/dashboard', customerAuth, async (req, res) => {
+  try {
+    res.json(await customerPortalService.getDashboard(req.customer.id));
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to load dashboard');
+  }
+});
+
+/**
+ * GET /events/:slug/overview
+ *
+ * One event: gallery state, quotes, contracts, invoices and documents.
+ * 404 when the event is unknown, archived or not assigned to this customer —
+ * the three look the same from outside.
+ */
+router.get('/events/:slug/overview', [
+  customerAuth,
+  param('slug').isString().isLength({ min: 1, max: 255 }),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: safeValidationErrors(errors) });
+    }
+    const overview = await customerPortalService.getEventOverview(req.customer.id, req.params.slug);
+    if (!overview) return res.status(404).json({ error: 'Event not found' });
+    res.json(overview);
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to load event');
+  }
+});
+
+// ---- documents (#1444) ---------------------------------------------------
+// PDFs shared by the studio plus the customer's own uploads. Every query in
+// customerDocumentsService is scoped to req.customer.id.
+
+// Global `documents` flag AND the per-customer override, like the other
+// customer features.
+async function requireDocumentsFeature(req, res, next) {
+  try {
+    if (await customerFeatureAllowed(req, res, 'documents', 'Documents')) next();
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to check document access');
+  }
+}
+
+// Uploads get their own bucket per customer account. Otherwise customers only
+// share the global per-IP limit, which everyone behind one address uses up
+// together.
+const documentUploadLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `customer-documents:${req.customer.id}`,
+  message: { error: 'Too many uploads. Please wait a few minutes and try again.', code: 'UPLOAD_RATE_LIMITED' },
+});
+
+// A 4xx AppError carries a message written for the customer; anything else is
+// logged and answered generically.
+function sendDocumentError(res, error, fallback) {
+  if (error && error.statusCode && error.statusCode < 500) {
+    return res.status(error.statusCode).json({ error: error.message, code: error.code });
+  }
+  return errorResponse(res, error, 500, fallback);
+}
+
+router.get('/documents', customerAuth, requireDocumentsFeature, async (req, res) => {
+  try {
+    const documents = await customerDocumentsService.listForCustomer(req.customer.id);
+    const limits = await customerDocumentsService.getLimits();
+    const usedBytes = await customerDocumentsService.getUsageBytes(req.customer.id);
+    res.json({ documents, limits: { ...limits, usedBytes } });
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to load documents');
+  }
+});
+
+/**
+ * POST /documents  multipart: file (PDF), eventId?, contractId?
+ *
+ * The file stays `pending` — not downloadable — until the studio has
+ * reviewed it. Quota is checked before multer (no bytes written when it is
+ * already used up) and again with the real size.
+ */
+router.post('/documents', customerAuth, requireDocumentsFeature, documentUploadLimiter, async (req, res) => {
+  let file = null;
+  try {
+    const limits = await customerDocumentsService.getLimits();
+    const usedBytes = await customerDocumentsService.getUsageBytes(req.customer.id);
+    if (usedBytes >= limits.quotaBytes) {
+      return res.status(413).json({ error: 'Your document storage is full.', code: 'QUOTA_EXCEEDED' });
+    }
+    file = await receivePdfUpload(req, res, { maxBytes: limits.maxUploadBytes });
+    if (!file) return res.status(400).json({ error: 'No file was uploaded.', code: 'NO_FILE' });
+    if (usedBytes + file.size > limits.quotaBytes) {
+      return res.status(413).json({ error: 'This file would exceed your document storage.', code: 'QUOTA_EXCEEDED' });
+    }
+    const row = await customerDocumentsService.createDocument({
+      customerId: req.customer.id,
+      uploaderType: 'customer',
+      uploaderId: req.customer.id,
+      file,
+      links: { eventId: req.body.eventId, contractId: req.body.contractId },
+      actor: { type: 'customer', id: req.customer.id, name: req.customer.email },
+    });
+    res.status(201).json({ document: customerDocumentsService.toCustomerDto(row) });
+  } catch (error) {
+    sendDocumentError(res, error, 'Failed to upload document');
+  } finally {
+    discardTempFile(file);
+  }
+});
+
+router.get('/documents/:id/download', customerAuth, requireDocumentsFeature, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const row = Number.isInteger(id) && id > 0
+      ? await customerDocumentsService.getForCustomer(req.customer.id, id)
+      : null;
+    if (!row) return res.status(404).json({ error: 'Document not found', code: 'DOCUMENT_NOT_FOUND' });
+    if (row.status === 'pending') {
+      return res.status(409).json({ error: 'This document is still being reviewed.', code: 'DOCUMENT_PENDING_REVIEW' });
+    }
+    if (row.status !== 'clean') {
+      return res.status(409).json({ error: 'This document was rejected and cannot be downloaded.', code: 'DOCUMENT_REJECTED' });
+    }
+    const stream = await customerDocumentsService.openStream(row);
+    await customerDocumentsService.recordView(row.id, 'customer', req.customer.id);
+    await logActivity('customer_document_downloaded',
+      { documentId: row.id, customerId: req.customer.id },
+      row.event_id || null,
+      { type: 'customer', id: req.customer.id, name: req.customer.email }
+    );
+    sendPdfAttachment(res, stream, row.original_name);
+  } catch (error) {
+    sendDocumentError(res, error, 'Failed to download document');
   }
 });
 
