@@ -134,9 +134,17 @@ async function listTemplates() {
   const rows = await db('contract_templates')
     .orderBy('is_system', 'desc')
     .orderBy('name', 'asc');
-  const drafts = await db('contract_template_versions').where({ status: 'draft' }).select('template_id');
-  const withDraft = new Set(drafts.map((d) => Number(d.template_id)));
-  return rows.map((t) => ({ ...templateToApi(t, defaultId), hasDraft: withDraft.has(Number(t.id)) }));
+  const versions = await db('contract_template_versions')
+    .whereIn('status', ['draft', 'published'])
+    .select('id', 'template_id', 'status');
+  const withDraft = new Set(versions.filter((v) => v.status === 'draft').map((v) => Number(v.template_id)));
+  const publishedId = new Map(versions.filter((v) => v.status === 'published').map((v) => [Number(v.template_id), v.id]));
+  return rows.map((t) => ({
+    ...templateToApi(t, defaultId),
+    hasDraft: withDraft.has(Number(t.id)),
+    // What a new contract from this template is made from.
+    currentVersionId: publishedId.get(Number(t.id)) || null,
+  }));
 }
 
 async function getTemplate(id) {

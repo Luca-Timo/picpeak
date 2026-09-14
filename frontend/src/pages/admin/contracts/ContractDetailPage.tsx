@@ -233,6 +233,11 @@ export const ContractDetailPage: React.FC = () => {
           <ScrollText className="w-6 h-6" />
           <span className="font-mono text-base">{c.contractNumber}</span>
           {c.title && <span className="text-base text-neutral-600 dark:text-neutral-400">— {c.title}</span>}
+          {c.templateName && (
+            <span className="text-xs font-normal text-neutral-600 dark:text-neutral-400">
+              {t('contracts.detail.fromTemplate', 'Template: {{name}} · v{{version}}', { name: c.templateName, version: c.templateVersion ?? '' })}
+            </span>
+          )}
         </h1>
         <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${statusBadgeClass(c.status)}`}>
           {t(`contracts.status.${c.status}`, c.status)}
@@ -614,6 +619,7 @@ export const ContractDetailPage: React.FC = () => {
           included blocks at the bottom of the page so it doesn't
           dominate the layout but is always reachable. */}
       {numericId && <IntegrityCheckCard contractId={numericId} />}
+      {numericId && <GeneratedDocumentsCard contractId={numericId} />}
       {numericId && <AuditTrailCard contractId={numericId} />}
     </div>
   );
@@ -746,6 +752,52 @@ const IntegrityCheckCard: React.FC<{ contractId: number }> = ({ contractId }) =>
  * actor + a human-readable label per activity_type. Hashes / token
  * fragments etc. are surfaced in monospace so they're auditor-friendly.
  */
+/**
+ * Every PDF generated for the contract (#1445) — sent for signature,
+ * signed, audit certificate — with its checksum, so a copy can be re-hashed
+ * and compared.
+ */
+const GeneratedDocumentsCard: React.FC<{ contractId: number }> = ({ contractId }) => {
+  const { t } = useTranslation();
+  const { formatDateTime: fmtDateTime } = useLocalizedDate();
+  const { data } = useQuery({
+    queryKey: ['contract-documents', contractId],
+    queryFn: () => contractsService.documents(contractId),
+  });
+  const documents = data?.documents || [];
+  return (
+    <Card padding="lg" className="mt-4">
+      <h3 className="text-lg font-semibold mb-1">{t('contracts.detail.documents', 'Generated documents')}</h3>
+      <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">
+        {t('contracts.detail.documentsHelp', 'Every PDF made for this contract, with its checksum. Re-hash a copy to confirm it matches.')}
+      </p>
+      {documents.length === 0 ? (
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">{t('contracts.detail.documentsEmpty', 'No PDFs generated yet.')}</p>
+      ) : (
+        <ul className="divide-y divide-neutral-200 dark:divide-neutral-700 text-sm">
+          {documents.map((d) => (
+            <li key={d.id} className="py-2 flex flex-wrap items-center gap-3">
+              <span className="font-medium text-neutral-900 dark:text-neutral-100">
+                {t(`contracts.detail.documentKind.${d.kind}`, d.kind)}
+              </span>
+              <span className="text-neutral-600 dark:text-neutral-400">{fmtDateTime(d.generatedAt)}</span>
+              {d.pages != null && (
+                <span className="text-neutral-600 dark:text-neutral-400">
+                  {t('contracts.detail.documentPages', 'Pages: {{count}}', { count: d.pages })}
+                </span>
+              )}
+              <span className="text-neutral-600 dark:text-neutral-400">{Math.max(1, Math.round(d.bytes / 1024))} KB</span>
+              <span className="font-mono text-xs text-neutral-500 dark:text-neutral-400 break-all" title={d.sha256}>
+                {d.sha256.slice(0, 16)}…
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+};
+
 const AuditTrailCard: React.FC<{ contractId: number }> = ({ contractId }) => {
   const { t } = useTranslation();
   // formatDateTime honors `general_date_format` + `general_time_format`

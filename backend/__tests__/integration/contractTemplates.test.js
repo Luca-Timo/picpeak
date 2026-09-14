@@ -96,6 +96,8 @@ test('the standard template holds the system blocks in their usual order', async
   expect(detail.published.items.map((i) => i.blockId)).toEqual(expected.map((b) => b.id));
   expect(detail.published.contentSha256).toMatch(/^[0-9a-f]{64}$/);
   ids.systemVersionId = detail.published.id;
+  // What a new contract from it is made from.
+  expect(system.currentVersionId).toBe(detail.published.id);
 });
 
 test('a new contract without a block list starts from the default template', async () => {
@@ -143,6 +145,8 @@ test('a contract from a version carries its overrides and free text', async () =
   const contract = await createContract({ templateVersionId: ids.weddingVersionId, eventName: 'Hochzeit Muster', language: 'de' });
   ids.weddingContract = contract;
   expect(contract.templateVersionId).toBe(ids.weddingVersionId);
+  expect(contract.templateName).toBe('Hochzeit');
+  expect(contract.templateVersion).toBe(1);
   expect(contract.title).toBe('Hochzeitsvertrag');
   expect(contract.introText).toBe('Hallo {{customer_name}}');
   expect(contract.inclusions).toHaveLength(1);

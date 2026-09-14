@@ -162,6 +162,8 @@ function transformContract(c, inclusions, textSections) {
     // Contract templates (#1445).
     templateId: c.template_id || null,
     templateVersionId: c.template_version_id || null,
+    templateName: c.template_name || null,
+    templateVersion: c.template_version_number == null ? null : Number(c.template_version_number),
     lockVersion: c.lock_version == null ? 1 : Number(c.lock_version),
     renderedContentSha256: c.rendered_content_sha256 || null,
     textSections: Array.isArray(textSections)

@@ -63,6 +63,31 @@ export const CONTRACT_SECTIONS: ContractBlockSection[] = [
   'basics', 'scope', 'privacy', 'commercial', 'nda', 'closing',
 ];
 
+/** A text per language (#1445): clause overrides and free-text sections. */
+export type ContractLocaleText = Partial<Record<'de' | 'en' | 'fr' | 'nl' | 'pt' | 'ru', string>>;
+
+/** A free-text section on a contract (from its template). */
+export interface ContractTextSection {
+  id: number;
+  section: ContractBlockSection;
+  position: number;
+  heading: string | null;
+  body: ContractLocaleText;
+}
+
+/** A PDF generated for a contract: unsigned, signed, audit certificate… */
+export interface ContractGeneratedDocument {
+  id: number;
+  kind: 'unsigned' | 'signed' | 'audit' | 'wet_upload' | string;
+  sha256: string;
+  bytes: number;
+  pages: number | null;
+  templateVersionId: number | null;
+  rendererVersion: string | null;
+  parentId: number | null;
+  generatedAt: string;
+}
+
 export interface ContractBlock {
   id: number;
   slug: string;
@@ -101,6 +126,9 @@ export interface ContractBlockInclusion {
   };
   bodyTextSnapshot: string | null;
   bodyTextDeSnapshot: string | null;
+  /** Every frozen language, and this contract's own text (#1445). */
+  snapshot?: ContractLocaleText;
+  bodyOverride?: ContractLocaleText;
 }
 
 export interface ContractSummary {
@@ -167,6 +195,15 @@ export interface ContractSummary {
    *  haven't migrated yet. */
   sourceQuoteId?: number | null;
   convertedEventId?: number | null;
+  /** The template and version the contract was made from (#1445). */
+  templateId?: number | null;
+  templateVersionId?: number | null;
+  templateName?: string | null;
+  templateVersion?: number | null;
+  /** Optimistic lock: send it back on update. */
+  lockVersion?: number;
+  /** sha256 of the content frozen at send. */
+  renderedContentSha256?: string | null;
   createdAt: string;
   updatedAt: string;
   inclusions?: ContractBlockInclusion[];
@@ -174,6 +211,7 @@ export interface ContractSummary {
 
 export type ContractDetail = ContractSummary & {
   inclusions: ContractBlockInclusion[];
+  textSections?: ContractTextSection[];
 };
 
 export interface ContractListResponse {
@@ -199,8 +237,11 @@ export interface ContractCreatePayload {
   /** Migration 121 — optional link to a Project Overview project. */
   projectId?: number | null;
   /** Initial inclusions, written in the same transaction as the contract.
-   *  Omit to seed every active system block toggled on. */
+   *  Omit to start from a template version (the default one when
+   *  templateVersionId is omitted too). */
   blocks?: Array<{ blockId: number; included?: boolean; position?: number }>;
+  /** A published template version to start from (#1445). */
+  templateVersionId?: number;
 }
 
 export interface ContractUpdatePayload {
@@ -220,6 +261,8 @@ export interface ContractUpdatePayload {
   blocks?: Array<{ blockId: number; included?: boolean; position?: number }>;
   /** Migration 121 — optional Project Overview link. null clears it. */
   projectId?: number | null;
+  /** The lockVersion the editor loaded; a newer save gets 409 (#1445). */
+  lockVersion?: number;
 }
 
 export interface ContractBlockCreatePayload {
@@ -378,6 +421,12 @@ export const contractsService = {
   },
 
   // ----- Block library -------------------------------------------------
+  /** The PDFs generated for a contract (#1445): kind, checksum, size, pages. */
+  async documents(id: number): Promise<{ documents: ContractGeneratedDocument[] }> {
+    const { data } = await api.get(`/admin/contracts/${id}/documents`);
+    return data.data || data;
+  },
+
   async listBlocks(params: { section?: ContractBlockSection; includeInactive?: boolean } = {}): Promise<{ blocks: ContractBlock[] }> {
     const { data } = await api.get('/admin/contracts/blocks', { params });
     return data.data || data;

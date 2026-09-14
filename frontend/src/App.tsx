@@ -61,6 +61,8 @@ import { ContractsListPage } from './pages/admin/contracts/ContractsListPage';
 import { ContractEditorPage } from './pages/admin/contracts/ContractEditorPage';
 import { ContractDetailPage } from './pages/admin/contracts/ContractDetailPage';
 import { BlockLibraryPage } from './pages/admin/contracts/BlockLibraryPage';
+import { ContractTemplatesPage } from './pages/admin/contracts/ContractTemplatesPage';
+import { ContractTemplateEditorPage } from './pages/admin/contracts/ContractTemplateEditorPage';
 import { PaymentCheckPage } from './pages/public/PaymentCheckPage';
 import { AcceptInvitePage } from './pages/public/AcceptInvitePage';
 import { TransfersPage } from './pages/admin/transfers/TransfersPage';
@@ -321,6 +323,8 @@ function App() {
                             <Route path="contracts" element={<ContractsListPage />} />
                             <Route path="contracts/new" element={<ContractEditorPage />} />
                             <Route path="contracts/blocks" element={<BlockLibraryPage />} />
+                            <Route path="contracts/templates" element={<ContractTemplatesPage />} />
+                            <Route path="contracts/templates/:id" element={<ContractTemplateEditorPage />} />
                             <Route path="contracts/:id" element={<ContractDetailPage />} />
                             <Route path="contracts/:id/edit" element={<ContractEditorPage />} />
                           </Route>

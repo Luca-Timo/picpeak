@@ -88,9 +88,14 @@ async function getContractById(id) {
   return await withRetry(async () => {
     const contract = await db('contracts')
       .leftJoin('customer_accounts', 'contracts.customer_account_id', 'customer_accounts.id')
+      // The template and version it was made from (#1445), for the badge.
+      .leftJoin('contract_templates as tpl', 'tpl.id', 'contracts.template_id')
+      .leftJoin('contract_template_versions as tplv', 'tplv.id', 'contracts.template_version_id')
       .where('contracts.id', id)
       .select(
         'contracts.*',
+        'tpl.name as template_name',
+        'tplv.version_number as template_version_number',
         'customer_accounts.email as customer_email',
         'customer_accounts.display_name as customer_display_name',
         'customer_accounts.first_name as customer_first_name',
