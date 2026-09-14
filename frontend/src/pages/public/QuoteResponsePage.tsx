@@ -228,19 +228,25 @@ export const QuoteResponsePage: React.FC = () => {
                 const rows: React.ReactNode[] = [];
                 for (const li of quote.lineItems) {
                   const isSub = li.parentLineItemId != null || li.parentPosition != null;
-                  if (!isSub) topCount += 1;
+                  // Discount lines (#1451) carry no number, quantity or unit price.
+                  const isDiscount = li.lineKind === 'discount';
+                  if (!isSub && !isDiscount) topCount += 1;
                   const priceless = isSub && (!li.unitPriceMinor || Number(li.unitPriceMinor) === 0);
+                  const unitLabel = li.unit ? t(`crm.lineItems.unitShort.${li.unit}`, li.unit) : '';
+                  const quantityText = isDiscount
+                    ? ''
+                    : li.unit === 'flat' ? unitLabel : `${Number(li.quantity)}${unitLabel ? ` ${unitLabel}` : ''}`;
                   rows.push(
                     <tr key={`row-${li.position}`} className={`border-b border-neutral-100 dark:border-neutral-700/70 ${
                       isSub ? 'text-neutral-600 dark:text-neutral-400' : ''
                     }`}>
-                      <td className="py-2">{isSub ? '' : topCount}</td>
+                      <td className="py-2">{isSub || isDiscount ? '' : topCount}</td>
                       <td className={`py-2 whitespace-pre-line ${isSub ? 'pl-6' : ''}`}>
                         {isSub ? '• ' : ''}{li.description}
                       </td>
-                      <td className="py-2 text-right">{Number(li.quantity)}</td>
+                      <td className="py-2 text-right">{quantityText}</td>
                       <td className="py-2 text-right tabular-nums">
-                        {priceless ? '' : formatMoney(Number(li.unitPriceMinor) / 100, quote.currency)}
+                        {priceless || isDiscount ? '' : formatMoney(Number(li.unitPriceMinor) / 100, quote.currency)}
                       </td>
                       <td className={`py-2 text-right tabular-nums ${isSub ? 'italic' : ''}`}>
                         {priceless

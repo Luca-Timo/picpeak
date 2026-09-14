@@ -31,6 +31,8 @@ import {
   QuotesListPage,
   QuoteEditorPage,
   QuoteDetailPage,
+  QuoteCatalogPage,
+  QuoteTemplateEditorPage,
   BillsListPage,
   BillEditorPage,
   BillDetailPage,
@@ -289,6 +291,9 @@ function App() {
                           {/* Quotes (CRM) — gated by `quotes`. */}
                           <Route element={<RequireFeature flag="quotes" />}>
                             <Route path="quotes" element={<QuotesListPage />} />
+                            {/* Catalogue + templates (#1451). Static segments outrank quotes/:id. */}
+                            <Route path="quotes/catalog" element={<QuoteCatalogPage />} />
+                            <Route path="quotes/catalog/templates/:id" element={<QuoteTemplateEditorPage />} />
                             <Route path="quotes/new" element={<QuoteEditorPage />} />
                             <Route path="quotes/:id" element={<QuoteDetailPage />} />
                             <Route path="quotes/:id/edit" element={<QuoteEditorPage />} />

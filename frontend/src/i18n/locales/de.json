@@ -3015,7 +3015,10 @@
         "vatLabelHint": "Wird als Bezeichnung der MwSt-Zeile auf Rechnungs-/Angebots-PDFs gedruckt. Leer lassen, um die Standardbezeichnung der Dokumentsprache zu verwenden.",
         "hourlyRate": "Standard-Stundensatz",
         "hourlyRatePlaceholder": "z. B. 120.00",
-        "hourlyRateHint": "Verrechnungs-Fallback, wenn ein Kunde keinen eigenen Satz hat (Stundenerfassung). In {{currency}}, in Hauptwährungseinheiten. Leer lassen, um einen Satz pro Kunde oder pro Eintrag zu verlangen."
+        "hourlyRateHint": "Verrechnungs-Fallback, wenn ein Kunde keinen eigenen Satz hat (Stundenerfassung). In {{currency}}, in Hauptwährungseinheiten. Leer lassen, um einen Satz pro Kunde oder pro Eintrag zu verlangen.",
+        "dayRate": "Standard-Tagessatz",
+        "dayRateHint": "Für Angebotspositionen pro Tag, wenn der Kunde keinen eigenen Tagessatz hat. In {{currency}}.",
+        "dayRatePlaceholder": "z. B. 1200.00"
       },
       "rebillAttachProof": "Lieferantenbeleg bei Weiterverrechnungen standardmäßig anhängen",
       "rebillAttachProofHint": "Wenn eine erfasste Lieferantenrechnung weiterverrechnet oder durchlaufend berechnet wird, wird ihr gespeichertes PDF der Rechnungs-E-Mail als separater Beleg beigefügt. Dies ist die Voreinstellung — eine kundenspezifische Einstellung und eine Auswahl pro Datei im Senden-Dialog können sie jederzeit ändern.",
@@ -5434,7 +5437,9 @@
       "hourlyRateHint": "Haupteinheiten (z. B. 150.00 für {{currency}} 150). Leer lassen, um pro Eintrag einen Satz zu verlangen.",
       "marketingOptOut": "Vom Newsletter abgemeldet",
       "marketingOptOutHelp": "Wenn aktiv, wird dieser Kunde von jeder Newsletter-Kampagne übersprungen. E-Mails zu Galerien, Offerten und Rechnungen sind nicht betroffen.",
-      "marketingOptOutSince": "Seit {{date}}"
+      "marketingOptOutSince": "Seit {{date}}",
+      "dayRate": "Standard-Tagessatz",
+      "dayRateHint": "Für Angebotspositionen pro Tag. In {{currency}}. Leer lassen, um den Standard-Tagessatz aus Einstellungen → Buchhaltung zu verwenden."
     },
     "hours": {
       "section": "Stunden",
@@ -6391,7 +6396,11 @@
       "bookingWorkflow": "Buchungs-Workflow (bei Annahme)",
       "bookingWorkflowNone": "— Keiner —",
       "bookingWorkflowDisabled": "(deaktiviert)",
-      "bookingWorkflowHint": "Der Ablauf, der startet, wenn der Kunde annimmt. Auf „Keiner“ lassen, um keinen Buchungsablauf auszuführen. Der Ablauf muss aktiviert sein, damit er ausgelöst wird."
+      "bookingWorkflowHint": "Der Ablauf, der startet, wenn der Kunde annimmt. Auf „Keiner“ lassen, um keinen Buchungsablauf auszuführen. Der Ablauf muss aktiviert sein, damit er ausgelöst wird.",
+      "days": "Tage",
+      "daysHint": "Positionen, die den Tagen des Angebots folgen, übernehmen diese Menge.",
+      "hours": "Stunden",
+      "hoursHint": "Positionen, die den Stunden des Angebots folgen, übernehmen diese Menge."
     },
     "responseWindowOpen": "Offen bis {{at}}",
     "section": {
@@ -6447,7 +6456,131 @@
     "pagination_one": "Seite {{page}} von {{total}} · {{count}} Angebot",
     "pagination_other": "Seite {{page}} von {{total}} · {{count}} Angebote",
     "convertedToInvoiceToast_one": "{{count}} Rechnung aus diesem Angebot erstellt",
-    "convertedToInvoiceToast_other": "{{count}} Rechnungen aus diesem Angebot erstellt"
+    "convertedToInvoiceToast_other": "{{count}} Rechnungen aus diesem Angebot erstellt",
+    "catalog": {
+      "addItem": "Leistung hinzufügen",
+      "archive": "Archivieren",
+      "archived": "Archiviert",
+      "boundTo": "Menge",
+      "boundToNone": "Feste Menge",
+      "emptyPackages": "Noch keine Pakete.",
+      "emptyPromotions": "Noch keine Aktionen.",
+      "emptyServices": "Noch keine Leistungen.",
+      "emptyTemplates": "Noch keine Vorlagen.",
+      "emptyTextBlocks": "Noch keine Textbausteine.",
+      "field": {
+        "amount": "Betrag",
+        "body": "Text",
+        "category": "Kategorie",
+        "description": "Beschreibung",
+        "detailsText": "Notiz unter der Position",
+        "kind": "Art",
+        "language": "Sprache",
+        "name": "Name",
+        "percent": "Prozent",
+        "pinnedRate": "Eigener Satz (optional)",
+        "pinnedRateHint": "Leer lassen, um den Satz des Kunden oder den Standardsatz aus Einstellungen → Buchhaltung zu verwenden.",
+        "priceMode": "Preis",
+        "promotionType": "Art",
+        "quantityDefault": "Standardmenge",
+        "unitPrice": "Einzelpreis",
+        "validFrom": "Gültig ab",
+        "validUntil": "Gültig bis"
+      },
+      "newPackage": "Neues Paket",
+      "newPromotion": "Neue Aktion",
+      "newService": "Neue Leistung",
+      "newTextBlock": "Neuer Textbaustein",
+      "packageItem": "Leistung",
+      "packageItems": "Leistungen",
+      "packagesIntro": "Ein Paket mit einer Leistung zeigt den Preis auf der Paketzeile; bei mehreren Leistungen behält jede ihren Preis und die Paketzeile zeigt die Summe.",
+      "perDay": "pro Tag",
+      "perHour": "pro Stunde",
+      "placeholdersHint": "Platzhalter:",
+      "priceMode": {
+        "day": "Pro Tag (Satz)",
+        "fixed": "Fixpreis",
+        "hour": "Pro Stunde (Satz)"
+      },
+      "promotionType": {
+        "fixed": "Fester Betrag",
+        "percent": "Prozent"
+      },
+      "promotionsIntro": "Werden im Angebotseditor angekreuzt. Prozente gelten zuerst, dann feste Beträge, vor der MwSt. — nie mehr als die Zwischensumme.",
+      "rateFromChain": "Kunden- / Standardsatz",
+      "restore": "Wiederherstellen",
+      "savedToast": "Gespeichert.",
+      "servicesIntro": "Leistungen mit Fixpreis oder pro Stunde / Tag. Sie stehen im Angebotseditor und in Paketen zur Auswahl.",
+      "tab": {
+        "packages": "Pakete",
+        "promotions": "Aktionen",
+        "services": "Leistungen",
+        "templates": "Vorlagen",
+        "textBlocks": "Textbausteine"
+      },
+      "templatesIntro": "Eine Vorlage füllt ein neues Angebot aus. Beim Veröffentlichen wird eine Version eingefroren – spätere Katalogänderungen verändern bestehende Angebote nie.",
+      "textBlockKind": {
+        "closing": "Schluss",
+        "intro": "Einleitung",
+        "note": "Hinweis",
+        "scope": "Leistungsumfang",
+        "terms": "Bedingungen"
+      },
+      "textBlocksIntro": "Wiederverwendbare Texte für Einleitung und Schluss des Angebots. Platzhalter werden beim Speichern des Angebots ausgefüllt.",
+      "title": "Katalog & Vorlagen"
+    },
+    "promotions": {
+      "panelHint": "Prozente gelten zuerst, dann feste Beträge – nie mehr als die Zwischensumme.",
+      "panelTitle": "Rabatte"
+    },
+    "ratesRecalculatedToast": "Sätze auf die heutigen Werte aktualisiert.",
+    "recalculateRates": "Mit aktuellen Sätzen neu berechnen",
+    "recalculateRatesConfirm": "Heutige Sätze auf diesen Entwurf anwenden? Ungespeicherte Änderungen auf dieser Seite gehen verloren.",
+    "templates": {
+      "addItem": "Katalogleistung",
+      "addLine": "Eigene Position",
+      "addPackage": "Paket",
+      "archiveConfirm": "Diese Vorlage archivieren? Bestehende Angebote sind nicht betroffen.",
+      "blankQuote": "Leeres Angebot",
+      "createFromTemplate": "Angebot erstellen",
+      "defaults": "Standardwerte für neue Angebote",
+      "details": "Details",
+      "hoursHint": "Leer lassen, um die Stunden der Vorlage zu verwenden.",
+      "newPrompt": "Name der neuen Vorlage",
+      "newTemplate": "Neue Vorlage",
+      "noneYet": "Noch keine veröffentlichten Vorlagen – diese werden unter Katalog & Vorlagen angelegt.",
+      "pickLabel": "Starten mit",
+      "promotions": "Vorausgewählte Rabatte",
+      "publish": "Veröffentlichen",
+      "publishedToast": "Als Version {{version}} veröffentlicht.",
+      "saveAsPrompt": "Name der neuen Vorlage",
+      "saveAsTemplate": "Als Vorlage speichern",
+      "saveDraft": "Entwurf speichern",
+      "savedFromQuoteToast": "Vorlage als Entwurf erstellt.",
+      "savedToast": "Vorlage gespeichert.",
+      "section": {
+        "item": "Katalogleistung",
+        "line": "Eigene Position",
+        "package": "Paket"
+      },
+      "sections": "Positionen",
+      "skippedPromotions": "Nicht angewendet (heute nicht gültig): {{names}}",
+      "startBlank": "Leer beginnen",
+      "status": {
+        "archived": "Archiviert",
+        "draft": "Entwurf",
+        "published": "Veröffentlicht"
+      },
+      "textFromBlock": "Textbaustein",
+      "textNone": "Keiner",
+      "textOwn": "Eigener Text",
+      "texts": "Einleitung und Schluss",
+      "validityDays": "Gültig für (Tage)",
+      "versions": "Veröffentlichte Versionen"
+    },
+    "textBlocks": {
+      "insert": "Textbaustein einfügen…"
+    }
   },
   "crm": {
     "lineItems": {
@@ -6471,7 +6604,42 @@
       "detailsFilled": "Details",
       "detailsPlaceholder": "Optionale Notizen — Kleingedrucktes, Paketinhalte, Bedingungen…",
       "autoTotaledHint": "Summe automatisch aus den Unterpositionen berechnet",
-      "autoTotaledNote": "= Σ Unterpositionen"
+      "autoTotaledNote": "= Σ Unterpositionen",
+      "discountLine": "Rabatt",
+      "discountPercentHint": "{{percent}} % der Zwischensumme",
+      "followsDays": "Folgt den Tagen des Angebots",
+      "followsHours": "Folgt den Stunden des Angebots",
+      "included": "Enthalten",
+      "insertPackage": "Paket einfügen…",
+      "notIncluded": "nicht enthalten",
+      "optional": "Optionale Zusatzleistung",
+      "optionalIncluded": "(optional, enthalten)",
+      "optionalNotIncluded": "(optional, nicht enthalten)",
+      "rateSource": {
+        "auto": "Satz wird beim Speichern übernommen",
+        "customer": "Kundensatz",
+        "default": "Standardsatz",
+        "item": "Eigener Satz der Leistung"
+      },
+      "remove": "Entfernen",
+      "unitLabel": "Einheit",
+      "unitNone": "—",
+      "unitOption": {
+        "day": "Tag",
+        "flat": "Pauschal",
+        "hour": "Stunde",
+        "km": "km",
+        "piece": "Stück"
+      },
+      "unitShort": {
+        "day": "Tg.",
+        "flat": "pauschal",
+        "hour": "Std.",
+        "km": "km",
+        "piece": "Stk."
+      },
+      "useDayRate": "Tagessatz verwenden",
+      "useHourlyRate": "Stundensatz verwenden"
     },
     "customerPicker": {
       "search": "Kunde nach E-Mail oder Firma suchen…"

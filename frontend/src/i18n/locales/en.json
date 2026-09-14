@@ -2513,7 +2513,10 @@
         "vatLabelHint": "Printed as the VAT-line label on invoice / quote PDFs. Leave blank to use the document language default.",
         "hourlyRate": "Default hourly rate",
         "hourlyRatePlaceholder": "e.g. 120.00",
-        "hourlyRateHint": "Billing fallback used when a customer has no own rate (hours logging). In {{currency}}, major units. Leave blank to require a per-customer or per-entry rate."
+        "hourlyRateHint": "Billing fallback used when a customer has no own rate (hours logging). In {{currency}}, major units. Leave blank to require a per-customer or per-entry rate.",
+        "dayRate": "Default day rate",
+        "dayRateHint": "Used by per-day quote lines when a customer has no own day rate. In {{currency}}, major units.",
+        "dayRatePlaceholder": "e.g. 1200.00"
       },
       "rebillAttachProof": "Attach the supplier proof to re-billed invoices by default",
       "rebillAttachProofHint": "When a captured supplier invoice is re-billed or passed through, attach its stored PDF to the client-invoice email as a separate proof. This is the default — a per-customer override and a per-file choice in the Send dialog can change it each time.",
@@ -5434,7 +5437,9 @@
       "hourlyRateHint": "Major units (e.g. 150.00 for {{currency}} 150). Leave blank to require a per-entry override on every block.",
       "marketingOptOut": "Unsubscribed from newsletters",
       "marketingOptOutHelp": "When on, this customer is skipped by every newsletter campaign. Emails about their galleries, quotes and invoices are not affected.",
-      "marketingOptOutSince": "Since {{date}}"
+      "marketingOptOutSince": "Since {{date}}",
+      "dayRate": "Default day rate",
+      "dayRateHint": "Used by per-day quote lines. Major units ({{currency}}). Leave blank to use the default day rate from Settings → Accounting."
     },
     "hours": {
       "section": "Hours",
@@ -6383,7 +6388,11 @@
       "bookingWorkflow": "Booking workflow (on acceptance)",
       "bookingWorkflowNone": "— None —",
       "bookingWorkflowDisabled": "(disabled)",
-      "bookingWorkflowHint": "The flow that runs when the customer accepts. Leave as None to run no booking flow. The flow must be enabled to fire."
+      "bookingWorkflowHint": "The flow that runs when the customer accepts. Leave as None to run no booking flow. The flow must be enabled to fire.",
+      "days": "Days",
+      "daysHint": "Lines set to follow the quote days use this quantity.",
+      "hours": "Hours",
+      "hoursHint": "Lines set to follow the quote hours use this quantity."
     },
     "responseWindowOpen": "Open until {{at}}",
     "section": {
@@ -6447,7 +6456,131 @@
     "pagination_one": "Page {{page}} of {{total}} · {{count}} quotes",
     "pagination_other": "Page {{page}} of {{total}} · {{count}} quotes",
     "convertedToInvoiceToast_one": "{{count}} invoice(s) created from this quote",
-    "convertedToInvoiceToast_other": "{{count}} invoice(s) created from this quote"
+    "convertedToInvoiceToast_other": "{{count}} invoice(s) created from this quote",
+    "catalog": {
+      "addItem": "Add item",
+      "archive": "Archive",
+      "archived": "Archived",
+      "boundTo": "Quantity",
+      "boundToNone": "Fixed quantity",
+      "emptyPackages": "No packages yet.",
+      "emptyPromotions": "No promotions yet.",
+      "emptyServices": "No services yet.",
+      "emptyTemplates": "No templates yet.",
+      "emptyTextBlocks": "No text blocks yet.",
+      "field": {
+        "amount": "Amount",
+        "body": "Text",
+        "category": "Category",
+        "description": "Description",
+        "detailsText": "Notes under the line",
+        "kind": "Kind",
+        "language": "Language",
+        "name": "Name",
+        "percent": "Percent",
+        "pinnedRate": "Own rate (optional)",
+        "pinnedRateHint": "Leave blank to use the customer's rate, or the default rate from Settings → Accounting.",
+        "priceMode": "Price",
+        "promotionType": "Type",
+        "quantityDefault": "Default quantity",
+        "unitPrice": "Unit price",
+        "validFrom": "Valid from",
+        "validUntil": "Valid until"
+      },
+      "newPackage": "New package",
+      "newPromotion": "New promotion",
+      "newService": "New service",
+      "newTextBlock": "New text block",
+      "packageItem": "Item",
+      "packageItems": "Items",
+      "packagesIntro": "A package with one item shows its price on the package line; with several items, each item keeps its price and the package line shows the sum.",
+      "perDay": "per day",
+      "perHour": "per hour",
+      "placeholdersHint": "Placeholders:",
+      "priceMode": {
+        "day": "Per day (rate)",
+        "fixed": "Fixed price",
+        "hour": "Per hour (rate)"
+      },
+      "promotionType": {
+        "fixed": "Fixed amount",
+        "percent": "Percentage"
+      },
+      "promotionsIntro": "Ticked in the quote editor. Percentages apply first, then fixed amounts, before VAT — never more than the subtotal.",
+      "rateFromChain": "Customer / default rate",
+      "restore": "Restore",
+      "savedToast": "Saved.",
+      "servicesIntro": "Your services with a fixed price or priced by the hour / day. They appear in the quote editor's \"Add from preset\" list and in packages.",
+      "tab": {
+        "packages": "Packages",
+        "promotions": "Promotions",
+        "services": "Services",
+        "templates": "Templates",
+        "textBlocks": "Text blocks"
+      },
+      "templatesIntro": "A template fills in a new quote. Publishing freezes a version, so later catalogue changes never alter quotes you already created.",
+      "textBlockKind": {
+        "closing": "Closing",
+        "intro": "Intro",
+        "note": "Note",
+        "scope": "Scope",
+        "terms": "Terms"
+      },
+      "textBlocksIntro": "Reusable texts for the quote intro and outro. Placeholders are filled in when the quote is saved.",
+      "title": "Catalogue & templates"
+    },
+    "promotions": {
+      "panelHint": "Percentages apply first, then fixed amounts — never more than the subtotal.",
+      "panelTitle": "Discounts"
+    },
+    "ratesRecalculatedToast": "Rates updated to today's values.",
+    "recalculateRates": "Recalculate with current rates",
+    "recalculateRatesConfirm": "Apply today's rates to this draft? Unsaved changes on this page are discarded.",
+    "templates": {
+      "addItem": "Catalogue item",
+      "addLine": "Own line",
+      "addPackage": "Package",
+      "archiveConfirm": "Archive this template? Existing quotes are not affected.",
+      "blankQuote": "Blank quote",
+      "createFromTemplate": "Create quote",
+      "defaults": "Defaults for new quotes",
+      "details": "Details",
+      "hoursHint": "Leave blank to use the template's hours.",
+      "newPrompt": "Name for the new template",
+      "newTemplate": "New template",
+      "noneYet": "No published templates yet — create one under Catalogue & templates.",
+      "pickLabel": "Start from",
+      "promotions": "Pre-ticked discounts",
+      "publish": "Publish",
+      "publishedToast": "Published as version {{version}}.",
+      "saveAsPrompt": "Name for the new template",
+      "saveAsTemplate": "Save as template",
+      "saveDraft": "Save draft",
+      "savedFromQuoteToast": "Template created as a draft.",
+      "savedToast": "Template saved.",
+      "section": {
+        "item": "Catalogue item",
+        "line": "Own line",
+        "package": "Package"
+      },
+      "sections": "Lines",
+      "skippedPromotions": "Not applied (not valid today): {{names}}",
+      "startBlank": "Start blank",
+      "status": {
+        "archived": "Archived",
+        "draft": "Draft",
+        "published": "Published"
+      },
+      "textFromBlock": "Text block",
+      "textNone": "None",
+      "textOwn": "Own text",
+      "texts": "Intro and outro",
+      "validityDays": "Valid for (days)",
+      "versions": "Published versions"
+    },
+    "textBlocks": {
+      "insert": "Insert text block…"
+    }
   },
   "crm": {
     "lineItems": {
@@ -6471,7 +6604,42 @@
       "detailsFilled": "Details",
       "detailsPlaceholder": "Optional notes — fine print, package inclusions, conditions…",
       "autoTotaledHint": "Total auto-computed from sub-items below",
-      "autoTotaledNote": "= sum of sub-items"
+      "autoTotaledNote": "= sum of sub-items",
+      "discountLine": "Discount",
+      "discountPercentHint": "{{percent}} % of the subtotal",
+      "followsDays": "Follows the quote days",
+      "followsHours": "Follows the quote hours",
+      "included": "Included",
+      "insertPackage": "Insert package…",
+      "notIncluded": "not included",
+      "optional": "Optional add-on",
+      "optionalIncluded": "(optional, included)",
+      "optionalNotIncluded": "(optional, not included)",
+      "rateSource": {
+        "auto": "Rate applied on save",
+        "customer": "Customer rate",
+        "default": "Default rate",
+        "item": "Item rate"
+      },
+      "remove": "Remove",
+      "unitLabel": "Unit",
+      "unitNone": "—",
+      "unitOption": {
+        "day": "Day",
+        "flat": "Flat rate",
+        "hour": "Hour",
+        "km": "km",
+        "piece": "Piece"
+      },
+      "unitShort": {
+        "day": "d",
+        "flat": "flat rate",
+        "hour": "h",
+        "km": "km",
+        "piece": "pcs"
+      },
+      "useDayRate": "Use day rate",
+      "useHourlyRate": "Use hourly rate"
     },
     "customerPicker": {
       "search": "Search customer by email or company…"

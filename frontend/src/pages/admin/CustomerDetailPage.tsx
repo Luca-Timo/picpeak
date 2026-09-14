@@ -40,7 +40,7 @@ type EditableFields =
   | 'addressLine1' | 'addressLine2' | 'postalCode' | 'city' | 'state'
   | 'countryCode' | 'countryName' | 'preferredLanguage' | 'notes'
   | 'featureCalendar' | 'featureQuotes' | 'featureBills' | 'featureHoursLogging' | 'featureContracts'
-  | 'hourlyRateMinor' | 'billingCadence' | 'billingCycleDay' | 'skontoDisabled' | 'rebillAttachProof'
+  | 'hourlyRateMinor' | 'dayRateMinor' | 'billingCadence' | 'billingCycleDay' | 'skontoDisabled' | 'rebillAttachProof'
   | 'marketingOptOut';
 
 // `fmtDate` (from useLocalizedDate, below) is the single canonical date
@@ -142,6 +142,7 @@ export const CustomerDetailPage: React.FC = () => {
         // saved before the per-customer override existed.
         featureContracts: customer.featureContracts ?? true,
         hourlyRateMinor: customer.hourlyRateMinor ?? null,
+        dayRateMinor: customer.dayRateMinor ?? null,
         billingCadence: customer.billingCadence ?? 'per_event',
         billingCycleDay: customer.billingCycleDay ?? 1,
         skontoDisabled: customer.skontoDisabled ?? false,
@@ -696,7 +697,8 @@ export const CustomerDetailPage: React.FC = () => {
             customer who isn't using hours logging. The rate is the
             DEFAULT for new entries; admin can still override on a
             per-entry basis from the standalone Hours logging page. */}
-        {flags.hoursLogging && form.featureHoursLogging && (
+        {/* Quotes price per-hour / per-day lines from these rates too (#1451). */}
+        {((flags.hoursLogging && form.featureHoursLogging) || (flags.quotes && form.featureQuotes)) && (
           <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
             <label className="block text-sm font-medium text-neutral-900 dark:text-neutral-100 mb-1">
               {t('customers.field.hourlyRate', 'Default hourly rate')}
@@ -718,6 +720,30 @@ export const CustomerDetailPage: React.FC = () => {
                 'Major units (e.g. 150.00 for {{currency}} 150). Leave blank to require a per-entry override on every block.',
                 { currency: profileDefaultCurrency })}
             </p>
+            {flags.quotes && form.featureQuotes && (
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-neutral-900 dark:text-neutral-100 mb-1">
+                  {t('customers.field.dayRate', 'Default day rate')}
+                </label>
+                <DecimalInput
+                  value={form.dayRateMinor != null ? form.dayRateMinor / 100 : NaN}
+                  fractionDigits={2}
+                  onChange={(n) => {
+                    setForm((prev) => ({
+                      ...prev,
+                      dayRateMinor: Number.isFinite(n) ? Math.max(0, Math.round(n * 100)) : null,
+                    } as any));
+                  }}
+                  placeholder="1200.00"
+                  className="w-40 input"
+                />
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                  {t('customers.field.dayRateHint',
+                    'Used by per-day quote lines. Major units ({{currency}}). Leave blank to use the default day rate from Settings → Accounting.',
+                    { currency: profileDefaultCurrency })}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
