@@ -12,7 +12,9 @@ import { Button, Card, Loading } from '../../../components/common';
 import { DocumentLineageCard } from '../../../components/admin/DocumentLineageCard';
 import { quotesService } from '../../../services/quotes.service';
 import { quoteCatalogService } from '../../../services/quoteCatalog.service';
+import { PermissionGate } from '../../../components/admin/PermissionGate';
 import { formatMoney } from '../../../components/admin/LineItemsTable';
+import { formatMoneyMinor } from '../../../utils/money';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import { toast } from 'react-toastify';
@@ -193,7 +195,9 @@ export const QuoteDetailPage: React.FC = () => {
             <Edit2 className="w-4 h-4 mr-1" />{t('common.edit', 'Edit')}
           </Button>
           <Button variant="outline" onClick={handleDuplicate}><Copy className="w-4 h-4 mr-1" />{t('common.duplicate', 'Duplicate')}</Button>
-          <Button variant="outline" onClick={handleSaveAsTemplate}>{t('quotes.templates.saveAsTemplate', 'Save as template')}</Button>
+          <PermissionGate permission="quotes.manage">
+            <Button variant="outline" onClick={handleSaveAsTemplate}>{t('quotes.templates.saveAsTemplate', 'Save as template')}</Button>
+          </PermissionGate>
           {canSend && <Button onClick={handleSend}><Send className="w-4 h-4 mr-1" />{q.status === 'draft' ? t('quotes.send', 'Send') : t('quotes.resend', 'Resend')}</Button>}
           {/* Accept-on-behalf — shown while the quote is in a state
               that hasn't been responded to yet (draft / sent /
@@ -296,8 +300,8 @@ export const QuoteDetailPage: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td className="py-2 text-right tabular-nums">{isDiscountLine ? '' : formatMoney(Number(li.unitPriceMinor || 0) / 100, q.currency)}</td>
-                    <td className="py-2 text-right tabular-nums">{formatMoney(Number(li.lineTotalMinor || 0) / 100, q.currency)}</td>
+                    <td className="py-2 text-right tabular-nums">{isDiscountLine ? '' : formatMoneyMinor(Number(li.unitPriceMinor || 0), q.currency)}</td>
+                    <td className="py-2 text-right tabular-nums">{formatMoneyMinor(Number(li.lineTotalMinor || 0), q.currency)}</td>
                   </tr>
                 );
               });

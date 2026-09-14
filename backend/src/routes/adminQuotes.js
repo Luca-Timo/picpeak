@@ -126,7 +126,7 @@ function transformQuote(q) {
     convertedContractNumber: q.converted_contract_number || null,
     pdfPath: q.pdf_path,
     businessBankAccountId: q.business_bank_account_id,
-    // Migration 214.
+    // Migration 215.
     hours: q.hours == null ? null : Number(q.hours),
     days: q.days == null ? null : Number(q.days),
     sourceTemplateId: q.source_template_id || null,
@@ -152,7 +152,7 @@ function transformLineItem(li) {
     parentLineItemId: li.parent_line_item_id || null,
     parentPosition: li.parent_position == null ? null : Number(li.parent_position),
     detailsText: li.details_text || null,
-    // Migration 214 — line kind, unit, optional add-on, rate + promotion.
+    // Migration 215 — line kind, unit, optional add-on, rate + promotion.
     ...lineItemFieldsToApi(li),
   };
 }
@@ -215,7 +215,7 @@ function transformLineItemPreset(p) {
     quantityDefault: Number(p.quantity_default),
     displayOrder: p.display_order,
     isActive: p.is_active === 1 || p.is_active === true,
-    // Migration 214 — service catalogue fields.
+    // Migration 215 — service catalogue fields.
     unit: p.unit || null,
     detailsText: p.details_text || null,
     category: p.category || null,
@@ -249,7 +249,7 @@ function mapPayloadToService(body) {
     businessBankAccountId: 'businessBankAccountId',
     // Migration 121 — optional Project Overview link.
     projectId: 'projectId',
-    // Migration 214 — quote-wide hours / days that bound lines follow.
+    // Migration 215 — quote-wide hours / days that bound lines follow.
     hours: 'hours', days: 'days',
   };
   for (const [api, svc] of Object.entries(map)) {
@@ -353,7 +353,7 @@ const QUOTE_LINE_VALIDATORS = [
   // bad data from reaching it.
   body('lineItems.*.parentPosition').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('lineItems.*.detailsText').optional({ values: 'falsy' }).isString().isLength({ max: 2000 }),
-  // Migration 214 (#1451). Cross-row rules (a discount line is never a
+  // Migration 215 (#1451). Cross-row rules (a discount line is never a
   // sub-item, sub-items follow their parent's add-on flags) live in
   // utils/lineItemTotals.normalizeLineItems.
   body('lineItems.*.lineKind').optional({ values: 'falsy' }).isIn(LINE_KINDS),
@@ -662,7 +662,7 @@ router.get(
   })
 );
 
-// Migration 214 — service-catalogue fields, shared by POST and PUT.
+// Migration 215 — service-catalogue fields, shared by POST and PUT.
 const PRESET_CATALOGUE_VALIDATORS = [
   body('unit').optional({ values: 'falsy' }).isIn(UNITS),
   body('detailsText').optional({ values: 'falsy' }).isString().isLength({ max: 2000 }),

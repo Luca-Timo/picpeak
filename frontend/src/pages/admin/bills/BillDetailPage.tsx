@@ -91,7 +91,7 @@ export const BillDetailPage: React.FC = () => {
             {isSub ? '• ' : ''}{li.description}
           </td>
           <td className="py-2 text-right tabular-nums">
-            {priceless || isDiscount ? '' : formatMoney(Number(li.unitPriceMinor || 0) / 100, currency)}
+            {priceless || isDiscount ? '' : formatMoneyMinor(Number(li.unitPriceMinor || 0), currency)}
           </td>
           <td className={`py-2 text-right tabular-nums ${isSub ? 'italic' : ''}`}>
             {priceless

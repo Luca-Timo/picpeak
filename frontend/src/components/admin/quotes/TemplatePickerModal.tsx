@@ -12,6 +12,7 @@ import { toast } from 'react-toastify';
 import { Button, Input, LocalizedDateInput } from '../../common';
 import { DecimalInput } from '../../common/DecimalInput';
 import { CustomerPicker } from '../CustomerPicker';
+import { PermissionGate } from '../PermissionGate';
 import { quoteCatalogService } from '../../../services/quoteCatalog.service';
 
 interface Props {
@@ -111,7 +112,7 @@ export const TemplatePickerModal: React.FC<Props> = ({ open, onClose }) => {
                 onClear={() => setCustomer({ id: null, label: '', isPassive: false })}
                 searchPlaceholder={t('quotes.customerSearch', 'Search customer by email or company…') as string}
               />
-              <Input label={t('quotes.field.eventName', 'Event name') as string} value={eventName}
+              <Input label={t('quotes.field.eventName', 'Event') as string} value={eventName}
                 onChange={(e) => setEventName(e.target.value)} />
               <LocalizedDateInput label={t('quotes.field.eventDate', 'Event date') as string} value={eventDate}
                 onChange={(iso) => setEventDate(iso)} />
@@ -130,9 +131,11 @@ export const TemplatePickerModal: React.FC<Props> = ({ open, onClose }) => {
         <div className="flex justify-end gap-2 border-t border-neutral-200 dark:border-neutral-700 px-5 py-3">
           <Button variant="outline" onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
           {selected ? (
-            <Button onClick={create} disabled={busy || !customer.id}>
-              {t('quotes.templates.createFromTemplate', 'Create quote')}
-            </Button>
+            <PermissionGate permission="quotes.manage">
+              <Button onClick={create} disabled={busy || !customer.id}>
+                {t('quotes.templates.createFromTemplate', 'Create quote')}
+              </Button>
+            </PermissionGate>
           ) : (
             <Button onClick={() => { onClose(); navigate('/admin/clients/quotes/new'); }}>
               {t('quotes.templates.startBlank', 'Start blank')}

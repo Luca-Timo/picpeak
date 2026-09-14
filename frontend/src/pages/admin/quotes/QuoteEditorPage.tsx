@@ -79,7 +79,7 @@ interface FormState {
   /** Migration 121 — optional Project Overview link. */
   projectId: number | null;
   lineItems: EditableLineItem[];
-  /** Migration 214 — quote-wide hours / days that bound lines follow. */
+  /** Migration 215 — quote-wide hours / days that bound lines follow. */
   hours: number | null;
   days: number | null;
   // Ad-hoc installments (commit #6). null = use the payment-timing
@@ -156,7 +156,7 @@ function buildPayload(f: FormState): QuoteCreatePayload {
     businessBankAccountId: f.businessBankAccountId || undefined,
     // Migration 121 — Project Overview link. Send null to clear.
     projectId: f.projectId ?? null,
-    // Migration 214 — quote-wide hours / days that bound lines follow.
+    // Migration 215 — quote-wide hours / days that bound lines follow.
     hours: f.hours,
     days: f.days,
     // Sub-items, details, units, rates, add-ons and promotions all pass
@@ -644,7 +644,7 @@ export const QuoteEditorPage: React.FC = () => {
           <Input type="number" step="0.5" label={t('quotes.field.expectedDuration', 'Expected duration (h)') as string}
             value={form.expectedDurationHours}
             onChange={(e) => setForm((f) => ({ ...f, expectedDurationHours: e.target.value }))} />
-          {/* Migration 214 — lines set to follow the quote hours / days take these. */}
+          {/* Migration 215 — lines set to follow the quote hours / days take these. */}
           <div>
             <label htmlFor="quote-hours" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               {t('quotes.field.hours', 'Hours')}

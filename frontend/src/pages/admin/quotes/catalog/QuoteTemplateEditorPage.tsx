@@ -13,6 +13,7 @@ import { toast } from 'react-toastify';
 import { Button, Card, Input, Loading } from '../../../../components/common';
 import { DecimalInput } from '../../../../components/common/DecimalInput';
 import { VatRateSelect } from '../../../../components/admin/VatRateSelect';
+import { PermissionGate } from '../../../../components/admin/PermissionGate';
 import { quotesService } from '../../../../services/quotes.service';
 import {
   quoteCatalogService,
@@ -210,17 +211,20 @@ export const QuoteTemplateEditorPage: React.FC = () => {
           </button>
           <h2 className="text-xl font-bold text-neutral-900 dark:text-neutral-100">
             {template.name}
-            <span className="ml-2 text-sm font-normal text-neutral-500">
+            <span className="ml-2 text-sm font-normal text-neutral-500 dark:text-neutral-400">
               {statusLabel}{template.currentVersion != null && ` · v${template.currentVersion}`}
             </span>
           </h2>
         </div>
+        {/* Writes need quotes.manage; with quotes.view the editor is read-only. */}
         {!archived && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={archive} disabled={busy}>{t('quotes.catalog.archive', 'Archive')}</Button>
-            <Button variant="outline" onClick={() => save()} disabled={busy}>{t('quotes.templates.saveDraft', 'Save draft')}</Button>
-            <Button onClick={publish} disabled={busy || draft.sections.length === 0}>{t('quotes.templates.publish', 'Publish')}</Button>
-          </div>
+          <PermissionGate permission="quotes.manage">
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={archive} disabled={busy}>{t('quotes.catalog.archive', 'Archive')}</Button>
+              <Button variant="outline" onClick={() => save()} disabled={busy}>{t('quotes.templates.saveDraft', 'Save draft')}</Button>
+              <Button onClick={publish} disabled={busy || draft.sections.length === 0}>{t('quotes.templates.publish', 'Publish')}</Button>
+            </div>
+          </PermissionGate>
         )}
       </div>
 
@@ -265,7 +269,7 @@ export const QuoteTemplateEditorPage: React.FC = () => {
           {draft.sections.map((section, idx) => (
             <div key={idx} className="rounded-lg border border-neutral-200 dark:border-neutral-700 p-3">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-neutral-500">{sectionTitle(section)}</span>
+                <span className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">{sectionTitle(section)}</span>
                 <div className="flex items-center gap-1">
                   <label className="mr-2 inline-flex items-center gap-1 text-xs text-neutral-600 dark:text-neutral-400">
                     <input type="checkbox" checked={section.isOptional}

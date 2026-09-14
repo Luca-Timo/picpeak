@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { Tag } from 'lucide-react';
 import type { EditableLineItem } from '../LineItemsTable';
 import type { QuotePromotion } from '../../../services/quoteCatalog.service';
-import { formatMoney } from '../../../utils/money';
+import { formatMoneyMinor } from '../../../utils/money';
 
 interface Props {
   promotions: QuotePromotion[];
@@ -18,7 +18,11 @@ interface Props {
   onChange: (items: EditableLineItem[]) => void;
 }
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+// Local calendar date — toISOString() would be UTC, a day off around midnight.
+const todayIso = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 /** Same rules the server applies: active, valid today, fixed ones in the quote's currency. */
 function applicable(promotion: QuotePromotion, currency: string) {
@@ -67,7 +71,7 @@ export const DiscountsPanel: React.FC<Props> = ({ promotions, items, currency, o
 
   const valueLabel = (p: QuotePromotion) => (p.type === 'percent'
     ? `−${p.percent} %`
-    : `−${formatMoney(Number(p.valueMinor || 0) / 100, p.currency || currency)}`);
+    : `−${formatMoneyMinor(Number(p.valueMinor || 0), p.currency || currency)}`);
 
   return (
     <div className="mt-4 rounded-lg border border-neutral-200 dark:border-neutral-700 p-3">

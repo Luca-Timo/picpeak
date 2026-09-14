@@ -1,5 +1,5 @@
 /**
- * Unit tests for utils/lineItemTotals (#1451, migration 214): line kinds,
+ * Unit tests for utils/lineItemTotals (#1451, migration 215): line kinds,
  * optional add-ons and discount promotions. Pure helpers, no database.
  */
 const {

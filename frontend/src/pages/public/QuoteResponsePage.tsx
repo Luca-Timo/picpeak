@@ -20,7 +20,7 @@ import { publicQuotesService } from '../../services/quotes.service';
 import { usePublicDarkMode } from '../../hooks/usePublicDarkMode';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { Loading } from '../../components/common';
-import { formatMoney } from '../../utils/money';
+import { formatMoney, formatMoneyMinor } from '../../utils/money';
 
 /**
  * Format a date string as DD.MM.YYYY (the customer-facing format used
@@ -246,7 +246,7 @@ export const QuoteResponsePage: React.FC = () => {
                       </td>
                       <td className="py-2 text-right">{quantityText}</td>
                       <td className="py-2 text-right tabular-nums">
-                        {priceless || isDiscount ? '' : formatMoney(Number(li.unitPriceMinor) / 100, quote.currency)}
+                        {priceless || isDiscount ? '' : formatMoneyMinor(Number(li.unitPriceMinor), quote.currency)}
                       </td>
                       <td className={`py-2 text-right tabular-nums ${isSub ? 'italic' : ''}`}>
                         {priceless

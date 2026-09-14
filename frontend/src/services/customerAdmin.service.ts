@@ -38,7 +38,7 @@ export interface CustomerAccountSummary {
    *  per-block override. */
   hourlyRateMinor?: number | null;
   /** Default day rate in minor units for per-day quote lines (migration
-   *  214). null falls back to the business default day rate. */
+   *  215). null falls back to the business default day rate. */
   dayRateMinor?: number | null;
   /** Newsletter consent (migration 199, #1264). Opt-OUT: false means the
    *  customer still receives campaigns. Transactional mail — galleries,
@@ -176,7 +176,7 @@ export const customerAdminService = {
       featureContracts: 'feature_contracts',
       // Hour-logging default rate (migration 129).
       hourlyRateMinor: 'hourly_rate_minor',
-      // Quote day rate (migration 214).
+      // Quote day rate (migration 215).
       dayRateMinor: 'day_rate_minor',
       // CRM billing cadence (migration 102 + 128).
       billingCadence: 'billing_cadence',

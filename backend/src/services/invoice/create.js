@@ -104,7 +104,7 @@ async function createInvoice(payload, adminId, trx = db) {
       line_total_minor: lineTotal,
       parent_position: isSubItem ? ensureInt(li.parent_position) : null,
       details_text: li.details_text || null,
-      // Migration 214 — line kind, unit, rate + promotion carry over.
+      // Migration 215 — line kind, unit, rate + promotion carry over.
       ...extendedLineColumns(li, { invoice: true }),
     };
   });

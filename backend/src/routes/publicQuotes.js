@@ -84,7 +84,7 @@ function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosTe
       parentLineItemId: li.parent_line_item_id || null,
       parentPosition: li.parent_position == null ? null : Number(li.parent_position),
       detailsText: li.details_text || null,
-      // Migration 214 — discount lines and units, as on the PDF.
+      // Migration 215 — discount lines and units, as on the PDF.
       lineKind: li.line_kind || 'item',
       unit: li.unit || null,
       promotionName: li.line_kind === 'discount' ? (parsePromotionSnapshot(li.promotion_snapshot)?.name || null) : null,
@@ -160,8 +160,13 @@ router.get(
     const brandingLogoUrl = await getAppSetting('branding_logo_url', null);
     const brandingLogoUrlDark = await getAppSetting('branding_logo_url_dark', null);
 
+    // The quote keeps its raw intro / outro; {{placeholders}} resolve for display (#1451).
+    const texts = await require('../services/quoteTemplateService')
+      .resolveQuoteTexts(data.quote, { customer: customer || null, profile });
+    const shownQuote = { ...data.quote, intro_text: texts.introText, outro_text: texts.outroText };
+
     return successResponse(res, {
-      quote: publicQuoteView(data.quote, data.lineItems, customer, profile, tosRequired, tosText, tosUrl, brandingLogoUrl, brandingLogoUrlDark),
+      quote: publicQuoteView(shownQuote, data.lineItems, customer, profile, tosRequired, tosText, tosUrl, brandingLogoUrl, brandingLogoUrlDark),
     });
   })
 );

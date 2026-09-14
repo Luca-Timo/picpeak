@@ -41,7 +41,7 @@ const LABELS = {
     table_discount: 'Discount',
     table_unit_price: 'Unit price',
     table_line_total: 'Total',
-    // Migration 214 — units shown in the quantity cell ("8 h").
+    // Migration 215 — units shown in the quantity cell ("8 h").
     unit_hour: 'h',
     unit_day: 'd',
     unit_piece: 'pcs',

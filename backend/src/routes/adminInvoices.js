@@ -223,7 +223,7 @@ function transformLineItem(li) {
     parentLineItemId: li.parent_line_item_id || null,
     parentPosition: li.parent_position == null ? null : Number(li.parent_position),
     detailsText: li.details_text || null,
-    // Migration 214 — line kind, unit, rate + promotion.
+    // Migration 215 — line kind, unit, rate + promotion.
     ...lineItemFieldsToApi(li),
   };
 }
@@ -296,7 +296,7 @@ const INVOICE_BODY_VALIDATORS = [
   // (validateLineItemHierarchy).
   body('lineItems.*.parentPosition').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('lineItems.*.detailsText').optional({ values: 'falsy' }).isString().isLength({ max: 2000 }),
-  // Migration 214 (#1451). Invoices carry a quote's discount lines and units
+  // Migration 215 (#1451). Invoices carry a quote's discount lines and units
   // over; optional add-ons don't exist on invoices.
   body('lineItems.*.lineKind').optional({ values: 'falsy' }).isIn(LINE_KINDS),
   body('lineItems.*.unit').optional({ values: 'falsy' }).isIn(UNITS),
@@ -729,7 +729,7 @@ router.put(
           line_total_minor: lineTotal,
           parent_position: isSubItem ? parseInt(li.parent_position, 10) : null,
           details_text: li.details_text || null,
-          // Migration 214 — keep line kind, unit, rate + promotion on edit.
+          // Migration 215 — keep line kind, unit, rate + promotion on edit.
           ...extendedLineColumns(li, { invoice: true }),
         };
       });

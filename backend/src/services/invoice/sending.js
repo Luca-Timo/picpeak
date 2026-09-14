@@ -335,7 +335,7 @@ async function createStorno(originalId, adminId, trx = db) {
       line_total_minor: ensureInt(li.line_total_minor),
       parent_position: li.parent_position == null ? null : ensureInt(li.parent_position),
       details_text: li.details_text || null,
-      // Migration 214 — a discount line stays a discount line on the Storno.
+      // Migration 215 — a discount line stays a discount line on the Storno.
       ...extendedLineColumns(li, { invoice: true }),
     }));
     const { validateLineItemHierarchy, insertLineItemsHierarchical } = getHierarchyHelpers();

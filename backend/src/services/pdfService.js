@@ -561,7 +561,7 @@ function drawLineItems(doc, ctx) {
   // its source quote's lines, so it follows the quote's discount rule.
   const showDiscount = (type === 'quote' || type === 'contract')
     && lineItems.some((li) => li.lineKind !== 'discount' && Number(li.discountPercent) > 0);
-  // Units (migration 214) go into the quantity cell ("8 Std."), which is
+  // Units (migration 215) go into the quantity cell ("8 Std."), which is
   // widened — borrowed from the description — only when a line has one.
   const hasUnits = lineItems.some((li) => li.unit);
   const unitLabel = (unit) => t(locale, `unit_${unit}`);
@@ -644,7 +644,7 @@ function drawLineItems(doc, ctx) {
   let topLevelCount = 0;
   const buildItemRow = (li) => {
     const isSubItem = li.parentLineItemId != null || li.parentPosition != null;
-    // A discount line (migration 214) is a labelled minus row: no position
+    // A discount line (migration 215) is a labelled minus row: no position
     // number, no quantity or unit price — just its amount.
     const isDiscount = li.lineKind === 'discount';
     const posLabel = isSubItem || isDiscount ? '' : String(++topLevelCount);

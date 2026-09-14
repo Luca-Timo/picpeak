@@ -36,7 +36,7 @@ function readStoredDocumentPdf(pdfPath, type) {
     ]);
     return fs.readFileSync(resolved);
   } catch (err) {
-    logger.warn('Stored document PDF unavailable, rendering it live instead', { type, code: err.code || err.name });
+    logger.warn('Stored document PDF unavailable, rendering it live instead', { type, pdfPath, code: err.code || err.name });
     return null;
   }
 }

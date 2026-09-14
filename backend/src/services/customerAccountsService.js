@@ -593,7 +593,7 @@ async function updateCustomer(id, updates, updatedByAdminId) {
     // Hour-logging default rate (migration 129). Minor units; null
     // means admin must enter a per-entry override on every entry.
     'hourly_rate_minor',
-    // Default day rate for per-day quote lines (migration 214). Minor
+    // Default day rate for per-day quote lines (migration 215). Minor
     // units; null falls back to the business default.
     'day_rate_minor',
     // Per-customer Skonto opt-out (migration 112). Boolean, coerced

@@ -6,7 +6,7 @@
  * before the quote service computes totals.
  *
  * The service items themselves are the existing quote_line_item_presets
- * (extended in migration 214) and keep their CRUD in quoteService.
+ * (extended in migration 215) and keep their CRUD in quoteService.
  *
  * Nothing here is ever hard-deleted: "delete" archives (is_active = false),
  * because quotes, templates and packages copy from these rows and a removed
@@ -28,14 +28,22 @@ function insertedId(inserted) {
   return typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 }
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+/** YYYY-MM-DD of a Date in server-local time. */
+function localIsoDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-/** Postgres returns DATE columns as Date objects, SQLite as strings. */
+function todayIso() {
+  return localIsoDate(new Date());
+}
+
+/**
+ * Postgres returns DATE columns as Date objects at local midnight, SQLite as
+ * strings. toISOString() would give the previous day on a server east of UTC.
+ */
 function dateOnly(value) {
   if (!value) return null;
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (value instanceof Date) return localIsoDate(value);
   return String(value).slice(0, 10);
 }
 

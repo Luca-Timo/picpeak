@@ -169,7 +169,7 @@ function transformProfile(p) {
     // null = no global default; the hours page then requires a per-
     // customer or per-entry rate.
     defaultHourlyRateMinor: p.default_hourly_rate_minor == null ? null : Number(p.default_hourly_rate_minor),
-    // Install-wide fallback day rate (migration 214), minor units.
+    // Install-wide fallback day rate (migration 215), minor units.
     defaultDayRateMinor: p.default_day_rate_minor == null ? null : Number(p.default_day_rate_minor),
     defaultCurrency: p.default_currency || 'CHF',
     defaultLocale: p.default_locale || 'de',

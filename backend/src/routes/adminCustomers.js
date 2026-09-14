@@ -89,7 +89,7 @@ function transformCustomer(c) {
     // un-selected) reads as ON so existing customers keep the Contracts tab.
     featureContracts: c.feature_contracts === undefined ? true : (c.feature_contracts === true || c.feature_contracts === 1),
     hourlyRateMinor: c.hourly_rate_minor != null ? Number(c.hourly_rate_minor) : null,
-    // Migration 214 — the customer's own day rate for per-day quote lines.
+    // Migration 215 — the customer's own day rate for per-day quote lines.
     dayRateMinor: c.day_rate_minor != null ? Number(c.day_rate_minor) : null,
     // Per-customer Skonto opt-out (migration 112). When true, none of
     // this customer's invoices qualify for an early-payment discount,

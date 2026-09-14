@@ -132,7 +132,7 @@ function computeTotals(lineItems, vatRate, shippingAmountMinor = 0, options = {}
   // Phase 1: compute raw line_total_minor for every row from its own
   // qty × unit × discount. Sub-item lines are computed here too so
   // the renderer can display their individual amounts.
-  // normalizeLineItems applies the migration-214 rules (line kind, add-on
+  // normalizeLineItems applies the migration-215 rules (line kind, add-on
   // flags inherited by sub-items, discount lines stay top-level).
   const computed = normalizeLineItems(lineItems).map((li) => {
     const qty = ensureNumber(li.quantity, 1);
@@ -567,7 +567,7 @@ async function createQuote(payload, adminId) {
   const hasEventType = await hasColumnCached('quotes', 'event_type');
   const hasBookingWorkflowId = await hasColumnCached('quotes', 'booking_workflow_id');
 
-  const createdId = await db.transaction(async (trx) => {
+  return await db.transaction(async (trx) => {
     // SQLite's 1-connection default deadlocks when claimNextSequence
     // opens its own micro-transaction inside this outer one — thread
     // trx so both run on the same connection. Postgres tolerates
@@ -586,7 +586,7 @@ async function createQuote(payload, adminId) {
       event_time_start: payload.eventTimeStart || null,
       event_time_end: payload.eventTimeEnd || null,
       expected_duration_hours: payload.expectedDurationHours == null ? null : ensureNumber(payload.expectedDurationHours),
-      // Migration 214 — quote-wide hours / days that bound lines follow,
+      // Migration 215 — quote-wide hours / days that bound lines follow,
       // and the template this quote was created from (reporting only).
       hours: payload.hours == null || payload.hours === '' ? null : ensureNumber(payload.hours),
       days: payload.days == null || payload.days === '' ? null : ensureNumber(payload.days),
@@ -681,11 +681,6 @@ async function createQuote(payload, adminId) {
     logger.info('Quote created', { adminId, quoteId, quoteNumber });
     return quoteId;
   });
-  // {{placeholders}} in intro / outro resolve once the quote exists (they can
-  // include its number) — whether typed in, inserted from a text block or
-  // copied from a template (#1451).
-  await require('./quoteTemplateService').resolveQuoteTextPlaceholders(createdId);
-  return createdId;
 }
 
 /**
@@ -735,7 +730,7 @@ async function updateQuote(id, payload, adminId) {
     );
   }
 
-  await db.transaction(async (trx) => {
+  return await db.transaction(async (trx) => {
     const updates = {
       updated_at: new Date(),
       net_amount_minor: totals.netAmountMinor,
@@ -748,6 +743,11 @@ async function updateQuote(id, payload, adminId) {
     if (existing.status === 'sent') {
       assertQuoteTransition(existing.status, 'draft');
       updates.status = 'draft';
+    }
+    // An edited expired quote no longer matches the file it was sent as;
+    // drop the pointer so it renders live until it is sent again (#1451).
+    if (existing.status === 'expired') {
+      updates.pdf_path = null;
     }
     const map = {
       eventName: 'event_name',
@@ -767,7 +767,7 @@ async function updateQuote(id, payload, adminId) {
       businessBankAccountId: 'business_bank_account_id',
       validUntil: 'valid_until',
       language: 'language',
-      // Migration 214 — quote-wide hours / days.
+      // Migration 215 — quote-wide hours / days.
       hours: 'hours',
       days: 'days',
     };
@@ -833,13 +833,12 @@ async function updateQuote(id, payload, adminId) {
     }
 
     try {
-      // Pass `trx` — the global db deadlocks the single-connection SQLite
-      // pool inside this transaction (same fix as createQuote).
+      // Pass trx: through the global db this insert waits on the single-
+      // connection SQLite pool for the connection this transaction holds,
+      // stalling every save for the 60s acquire timeout and losing the row.
       await logActivity('quote_updated', { quoteId: id }, null, `admin:${adminId}`, trx);
     } catch (_) { /* non-fatal */ }
   });
-  // Same as createQuote: resolve {{placeholders}} in intro / outro (#1451).
-  await require('./quoteTemplateService').resolveQuoteTextPlaceholders(id);
 }
 
 /**
@@ -850,6 +849,8 @@ async function updateQuote(id, payload, adminId) {
 async function buildRenderContext(quote, lineItems) {
   const { profile } = await businessProfileService.getProfile();
   const customer = await db('customer_accounts').where({ id: quote.customer_account_id }).first();
+  // The row keeps the raw intro / outro; {{placeholders}} resolve here (#1451).
+  const texts = await require('./quoteTemplateService').resolveQuoteTexts(quote, { customer: customer || null, profile });
   const bank = quote.business_bank_account_id
     ? await db('business_bank_accounts').where({ id: quote.business_bank_account_id }).first()
     : await businessProfileService.resolveBankAccountForCurrency(quote.currency);
@@ -948,7 +949,7 @@ async function buildRenderContext(quote, lineItems) {
       unitPriceMinor: li.unit_price_minor,
       discountPercent: li.discount_percent,
       lineTotalMinor: li.line_total_minor,
-      // Migration 214 — discount lines render as a labelled minus row;
+      // Migration 215 — discount lines render as a labelled minus row;
       // `unit` fills the unit column.
       lineKind: li.line_kind || 'item',
       unit: li.unit || null,
@@ -972,8 +973,8 @@ async function buildRenderContext(quote, lineItems) {
       quoteNumber: quote.quote_number,
       issueDate: quote.issue_date,
       validUntil: quote.valid_until,
-      introText: quote.intro_text,
-      outroText: quote.outro_text,
+      introText: texts.introText,
+      outroText: texts.outroText,
       totalAmountMinor: quote.total_amount_minor,
     },
   };
@@ -1030,6 +1031,11 @@ async function renderQuotePdfFromPayload(payload) {
     valid_until: payload.validUntil,
     intro_text: payload.introText,
     outro_text: payload.outroText,
+    // What the intro / outro {{placeholders}} read.
+    event_name: payload.eventName,
+    event_date: payload.eventDate,
+    hours: payload.hours,
+    days: payload.days,
     payment_term_template_id: payload.paymentTermTemplateId,
     business_bank_account_id: payload.businessBankAccountId,
     net_amount_minor: totals.netAmountMinor,
@@ -1057,6 +1063,7 @@ async function renderQuotePdfFromPayload(payload) {
     unit: li.unit || null,
     is_optional: li.is_optional,
     selected: li.selected,
+    promotion_snapshot: li.promotion_snapshot || null,
   })));
   return await pdfService.renderQuoteToBuffer(ctx);
 }
@@ -1449,6 +1456,9 @@ async function adminAcceptQuote(id, adminId) {
       // Persist PDF snapshot under the same convention sendQuote uses
       // — keeps every issued PDF on disk for the audit trail.
       const pdfPath = await persistDocPdf('quote', fresh, buffer);
+      // Record it like sendQuote does: the accepted quote opens as this
+      // file from now on instead of re-rendering (#1451).
+      await db('quotes').where({ id }).update({ pdf_path: pdfPath });
 
       const formatMoney = (minor, currency, locale) =>
         new Intl.NumberFormat(locale === 'de' ? 'de-CH' : 'en-GB', {
@@ -1939,7 +1949,7 @@ async function duplicateQuote(id, adminId) {
     businessBankAccountId: quote.business_bank_account_id,
     hours: quote.hours,
     days: quote.days,
-    // Full line shape: sub-items, notes and the migration-214 fields used to
+    // Full line shape: sub-items, notes and the migration-215 fields used to
     // be dropped here (and this is what the prepare_quote workflow action
     // copies). Stored rates stay as they are — nothing is re-resolved.
     lineItems: lineItems.map((li) => ({
@@ -1976,7 +1986,7 @@ async function listLineItemPresets({ includeInactive = false } = {}) {
 
 const PRESET_PRICE_MODES = ['fixed', 'hour', 'day'];
 
-// Migration 214 — service-catalogue columns on the presets table.
+// Migration 215 — service-catalogue columns on the presets table.
 function presetCatalogueColumns(payload) {
   const out = {};
   if (payload.unit !== undefined) out.unit = payload.unit || null;

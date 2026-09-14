@@ -1,12 +1,13 @@
 /**
- * Quote catalogue + templates — integration tests (#1451, migration 214).
+ * Quote catalogue + templates — integration tests (#1451, migration 215).
  *
  * Real admin routes → services → SQLite with the full core-migration run
  * (helpers/crmDb). Pins:
  *   - a published template creates a quote with packages priced the agreed
  *     way (one item: price on the package line; several: sum of priced items),
  *     hour rates from the chain, bound hours, pinned rates, an unticked
- *     optional add-on, a pre-ticked promotion and resolved placeholders;
+ *     optional add-on, a pre-ticked promotion and placeholders that resolve
+ *     on display while the stored text keeps them;
  *   - published versions are immutable: catalogue edits only reach a new
  *     version;
  *   - publishing refuses unknown placeholders and archived catalogue items;
@@ -151,10 +152,13 @@ test('publishing creates version 1 and the quote is built from it', async () => 
   expect(byDescription('Vereinsrabatt')[0]).toEqual(expect.objectContaining({ lineKind: 'discount', lineTotalMinor: -30000 }));
   // The unticked optional add-on isn't in the net.
   expect(quote.netAmountMinor).toBe(200000 + 18000 - 30000);
-  // Placeholders resolved.
-  expect(quote.introText).toContain('Hallo Anna Muster');
-  expect(quote.introText).toContain('Hochzeit Muster am 12.06.2027');
-  expect(quote.introText).toMatch(/8 h à CHF\s?150\.00/);
+  // The quote keeps the raw text; placeholders resolve where it is shown.
+  expect(quote.introText).toContain('{{');
+  const row = await db('quotes').where({ id: quote.id }).first();
+  const { introText } = await require('../../src/services/quoteTemplateService').resolveQuoteTexts(row);
+  expect(introText).toContain('Hallo Anna Muster');
+  expect(introText).toContain('Hochzeit Muster am 12.06.2027');
+  expect(introText).toMatch(/8 h à CHF\s?150\.00/);
 });
 
 test('catalogue edits never change a published version, only the next one', async () => {
@@ -213,6 +217,9 @@ test('save as template keeps the lines and stays customer-neutral', async () => 
   const photo = sections[0].children.find((c) => c.description === 'Photography on location');
   expect(photo).toEqual(expect.objectContaining({ rateSource: 'auto', unitPriceMinor: 0 }));
   expect(sections[1].isOptional).toBe(true);
+  // The intro comes over with its placeholders, not this customer's details.
+  expect(template.draft.introText).toContain('{{customer_name}}');
+  expect(template.draft.introText).not.toContain('Anna');
 });
 
 test('the catalogue is behind the quotes feature flag', async () => {

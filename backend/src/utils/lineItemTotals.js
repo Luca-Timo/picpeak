@@ -2,7 +2,7 @@
 
 /**
  * Line kinds, optional add-ons and discount promotions on CRM line items
- * (#1451, migration 214). Shared by quotes and invoices so both documents
+ * (#1451, migration 215). Shared by quotes and invoices so both documents
  * agree on what counts toward the net.
  *
  * - `line_kind = 'discount'` is a promotion line ("Vereinsrabatt −300 CHF",
@@ -94,7 +94,7 @@ function validatePromotionSnapshot(snapshot) {
 }
 
 /**
- * Normalise the migration-214 fields on a payload (returns copies):
+ * Normalise the migration-215 fields on a payload (returns copies):
  * defaults `line_kind` to 'item', coerces the add-on flags, makes sub-items
  * follow their parent's optional/selected state, and enforces that a
  * discount line is a top-level line nobody nests under.
@@ -201,7 +201,7 @@ function resolveDiscountLines(items, { parentKey = 'parent_position' } = {}) {
 }
 
 /**
- * Migration-214 columns for a line-item DB row (quotes and invoices).
+ * Migration-215 columns for a line-item DB row (quotes and invoices).
  * Invoices have no optional add-ons — unselected ones are dropped when a
  * quote converts — so `{ invoice: true }` stores every line as a plain,
  * selected one.
@@ -238,7 +238,7 @@ function lineItemFieldsFromApi(li) {
   return out;
 }
 
-/** Line-item DB row → migration-214 API fields (camelCase). */
+/** Line-item DB row → migration-215 API fields (camelCase). */
 function lineItemFieldsToApi(li) {
   return {
     lineKind: li.line_kind || 'item',

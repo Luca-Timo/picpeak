@@ -9,7 +9,7 @@
  *   - Per-item `detailsText` is an optional free-form notes block
  *     rendered below the description on the PDF + customer view.
  *
- * Migration 214 (#1451) adds, per line:
+ * Migration 215 (#1451) adds, per line:
  *   - a unit (hour / day / piece / km / flat) shown in the quantity cell;
  *   - quotes only: a price from the customer's or the default hour / day
  *     rate (resolved on save), a quantity that follows the quote-wide
@@ -56,7 +56,7 @@ export interface EditableLineItem {
   parentPosition?: number | null;
   /** Optional free-form notes rendered below the description. */
   detailsText?: string;
-  // Migration 214 (#1451).
+  // Migration 215 (#1451).
   lineKind?: LineKind;
   unit?: LineUnit | null;
   isOptional?: boolean;
@@ -509,7 +509,7 @@ export const LineItemsTable: React.FC<Props> = ({
               const parentAutoTotaled = !sub && hasPricedChildren(li.position);
               const priceFromChain = isQuote && isRatePriced(li) && usesRateChain(li);
               const qtyBound = isQuote && !!li.boundTo;
-              const disabledInputClass = 'bg-neutral-100 dark:bg-neutral-700 text-neutral-400 cursor-not-allowed';
+              const disabledInputClass = 'bg-neutral-100 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-500 cursor-not-allowed';
               const enabledInputClass = 'bg-white dark:bg-neutral-800';
               const qtyDisabled = parentAutoTotaled || qtyBound;
               const priceDisabled = parentAutoTotaled || priceFromChain;
@@ -518,7 +518,7 @@ export const LineItemsTable: React.FC<Props> = ({
               if (discountRow) {
                 return (
                   <tr key={li.position} className="border-t border-neutral-200 dark:border-neutral-700 bg-emerald-50/50 dark:bg-emerald-900/10">
-                    <td className="px-2 py-2 align-top text-neutral-500"><Tag className="w-3.5 h-3.5" aria-hidden /></td>
+                    <td className="px-2 py-2 align-top text-neutral-500 dark:text-neutral-400"><Tag className="w-3.5 h-3.5" aria-hidden /></td>
                     <td className="px-2 py-2 align-top"></td>
                     <td className="px-2 py-2 align-top text-neutral-800 dark:text-neutral-200">
                       <div className="font-medium">{li.description || li.promotionSnapshot?.name}</div>
@@ -583,7 +583,7 @@ export const LineItemsTable: React.FC<Props> = ({
                         onChange={(e) => setItem(idx, { description: e.target.value })}
                         placeholder={t('crm.lineItems.descriptionPlaceholder', 'Description (multi-line OK)') as string}
                       />
-                      {/* Migration 214 — unit, rate and add-on controls. */}
+                      {/* Migration 215 — unit, rate and add-on controls. */}
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-600 dark:text-neutral-400">
                         <label className="inline-flex items-center gap-1">
                           <span>{t('crm.lineItems.unitLabel', 'Unit')}</span>
@@ -766,7 +766,7 @@ export const LineItemsTable: React.FC<Props> = ({
               );
             })}
             {items.length === 0 && (
-              <tr><td colSpan={colCount} className="px-2 py-6 text-center text-neutral-500">
+              <tr><td colSpan={colCount} className="px-2 py-6 text-center text-neutral-500 dark:text-neutral-400">
                 {t('crm.lineItems.empty', 'No line items yet — add one to get started.')}
               </td></tr>
             )}

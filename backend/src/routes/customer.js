@@ -475,9 +475,19 @@ router.get('/quotes', customerAuth, async (req, res) => {
         'net_amount_minor', 'vat_rate', 'vat_amount_minor',
         'shipping_amount_minor', 'total_amount_minor',
         'intro_text', 'outro_text',
+        // What intro / outro {{placeholders}} read (#1451); not returned.
+        'language', 'hours', 'days',
         'sent_at', 'responded_at', 'response_locked_at',
         'accepted_at', 'declined_at',
       );
+
+    // Intro / outro keep their {{placeholders}}; resolve them for display
+    // (texts without any return as they are, without a lookup).
+    const { resolveQuoteTexts } = require('../services/quoteTemplateService');
+    const textsByQuote = new Map();
+    for (const q of rows) {
+      textsByQuote.set(q.id, await resolveQuoteTexts({ ...q, customer_account_id: req.customer.id }));
+    }
 
     // Look up the active accept/decline token for each non-locked
     // quote so the customer dashboard can deep-link back into the
@@ -509,8 +519,8 @@ router.get('/quotes', customerAuth, async (req, res) => {
         vatAmountMinor: q.vat_amount_minor,
         shippingAmountMinor: q.shipping_amount_minor,
         totalAmountMinor: q.total_amount_minor,
-        introText: q.intro_text,
-        outroText: q.outro_text,
+        introText: textsByQuote.get(q.id).introText,
+        outroText: textsByQuote.get(q.id).outroText,
         sentAt: q.sent_at,
         respondedAt: q.responded_at,
         responseLockedAt: q.response_locked_at,

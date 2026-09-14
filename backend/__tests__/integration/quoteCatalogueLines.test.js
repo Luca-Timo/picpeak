@@ -1,6 +1,6 @@
 /**
  * Quote lines with promotions, hour/day rates and optional add-ons —
- * integration tests (#1451, migration 214).
+ * integration tests (#1451, migration 215).
  *
  * Drives the real admin routes → quoteService / invoiceService → SQLite with
  * the full core-migration run (helpers/crmDb), and pins:

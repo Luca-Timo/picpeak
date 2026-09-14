@@ -29,6 +29,7 @@
 
 const { db, logActivity } = require('../database/db');
 const { AppError } = require('../utils/errors');
+const { isUniqueViolation } = require('../utils/dbErrors');
 const { ensureInt, ensureNumber } = require('../utils/numericHelpers');
 const {
   isTruthyFlag, parsePromotionSnapshot, UNITS, PRICE_MODES, BOUND_TO,
@@ -394,19 +395,29 @@ async function publishTemplate(id, adminId) {
     eventType: template.event_type || null,
   };
 
-  const version = await db.transaction(async (trx) => {
-    const last = await trx('quote_template_versions').where({ template_id: id }).max('version as v').first();
-    const next = ensureInt(last && last.v) + 1;
-    await trx('quote_template_versions').insert({
-      template_id: id,
-      version: next,
-      snapshot: JSON.stringify(snapshot),
-      published_at: new Date(),
-      published_by_admin_id: adminId || null,
+  let version;
+  try {
+    version = await db.transaction(async (trx) => {
+      const last = await trx('quote_template_versions').where({ template_id: id }).max('version as v').first();
+      const next = ensureInt(last && last.v) + 1;
+      await trx('quote_template_versions').insert({
+        template_id: id,
+        version: next,
+        snapshot: JSON.stringify(snapshot),
+        published_at: new Date(),
+        published_by_admin_id: adminId || null,
+      });
+      await trx('quote_templates').where({ id }).update({ status: 'published', current_version: next, updated_at: new Date() });
+      return next;
     });
-    await trx('quote_templates').where({ id }).update({ status: 'published', current_version: next, updated_at: new Date() });
-    return next;
-  });
+  } catch (err) {
+    // Two publishes at once both claim the same next number; the unique
+    // (template_id, version) index lets one win.
+    if (isUniqueViolation(err)) {
+      throw new AppError('This template was just published by someone else — reload and try again', 409, 'TEMPLATE_PUBLISH_CONFLICT');
+    }
+    throw err;
+  }
   try {
     await logActivity('quote_template_published', { templateId: id, version }, null, `admin:${adminId}`);
   } catch (_) { /* non-fatal */ }
@@ -447,17 +458,19 @@ function toServiceLine(line, { position, parentPosition = null }) {
 }
 
 async function placeholderValues(quote, customer, profile) {
-  const rates = await rateResolver.loadRates(customer.id);
-  const hourly = rateResolver.pickRate(rates, 'hour');
-  const daily = rateResolver.pickRate(rates, 'day');
+  // The editor preview can render before a customer is picked.
+  const c = customer || {};
+  const rates = customer ? await rateResolver.loadRates(customer.id) : null;
+  const hourly = rates ? rateResolver.pickRate(rates, 'hour') : null;
+  const daily = rates ? rateResolver.pickRate(rates, 'day') : null;
   const { formatMajor } = quoteService()._internal;
   const country = buildIssuerBlock(profile, null).countryCode;
   const money = (rate) => (rate ? formatMajor(rate.rateMinor, quote.currency, quote.language, country) : null);
   const number = (value) => (value == null || value === '' ? null : String(Number(value)));
-  const person = [customer.first_name, customer.last_name].map((s) => (s || '').trim()).filter(Boolean).join(' ');
+  const person = [c.first_name, c.last_name].map((s) => (s || '').trim()).filter(Boolean).join(' ');
   return {
-    customer_name: person || (customer.display_name || '').trim() || (customer.company_name || '').trim() || customer.email || null,
-    customer_company: (customer.company_name || '').trim() || null,
+    customer_name: person || (c.display_name || '').trim() || (c.company_name || '').trim() || c.email || null,
+    customer_company: (c.company_name || '').trim() || null,
     event_name: quote.event_name || null,
     event_date: quote.event_date ? formatShortDate(quote.event_date) : null,
     quote_number: quote.quote_number,
@@ -471,27 +484,28 @@ async function placeholderValues(quote, customer, profile) {
 }
 
 /**
- * Replace allowlisted {{placeholders}} in a quote's intro / outro with its
- * own data. Called by quoteService after every create / update, so a text
- * block typed or inserted by hand resolves the same way as one a template
- * brought along. Unknown keys stay visible; texts without placeholders are
- * left alone.
+ * A quote's intro / outro with its allowlisted {{placeholders}} filled in
+ * from the quote's own data. The quote row keeps the raw text: resolving
+ * happens wherever the text is shown (PDF, public quote page, customer
+ * portal), so later edits, a rate recalculation and "save as template" still
+ * see the placeholders, and a value that isn't known yet (an event date)
+ * fills in once it is. Unknown keys stay visible. `customer` and `profile`
+ * are loaded when the caller doesn't pass them.
  */
-async function resolveQuoteTextPlaceholders(quoteId) {
-  const quote = await db('quotes').where({ id: quoteId }).first();
-  if (!quote) return;
-  const hasPlaceholders = [quote.intro_text, quote.outro_text]
+async function resolveQuoteTexts(quote, { customer, profile } = {}) {
+  const raw = { introText: quote.intro_text ?? null, outroText: quote.outro_text ?? null };
+  const hasPlaceholders = [raw.introText, raw.outroText]
     .some((text) => typeof text === 'string' && text.includes('{{'));
-  if (!hasPlaceholders) return;
-  const customer = await db('customer_accounts').where({ id: quote.customer_account_id }).first();
-  if (!customer) return;
-  const { profile } = await businessProfileService.getProfile();
-  const values = await placeholderValues(quote, customer, profile);
-  const introText = renderPlaceholders(quote.intro_text, values);
-  const outroText = renderPlaceholders(quote.outro_text, values);
-  if (introText !== quote.intro_text || outroText !== quote.outro_text) {
-    await db('quotes').where({ id: quoteId }).update({ intro_text: introText, outro_text: outroText, updated_at: new Date() });
-  }
+  if (!hasPlaceholders) return raw;
+  const who = customer !== undefined
+    ? customer
+    : await db('customer_accounts').where({ id: quote.customer_account_id }).first();
+  const biz = profile !== undefined ? profile : (await businessProfileService.getProfile()).profile;
+  const values = await placeholderValues(quote, who || null, biz);
+  return {
+    introText: renderPlaceholders(raw.introText, values),
+    outroText: renderPlaceholders(raw.outroText, values),
+  };
 }
 
 /**
@@ -576,7 +590,6 @@ async function createQuoteFromTemplate(templateId, payload, adminId) {
     sourceTemplateVersion: versionRow.version,
   }, adminId);
 
-  // createQuote has already resolved the {{placeholders}} in intro / outro.
   try {
     await logActivity('quote_created_from_template',
       { quoteId, templateId: template.id, version: Number(versionRow.version) }, null, `admin:${adminId}`);
@@ -656,5 +669,5 @@ module.exports = {
   publishTemplate,
   createQuoteFromTemplate,
   saveQuoteAsTemplate,
-  resolveQuoteTextPlaceholders,
+  resolveQuoteTexts,
 };
