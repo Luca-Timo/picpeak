@@ -5,12 +5,14 @@ import { toast } from 'react-toastify';
 import { Button } from '../common';
 import { api } from '../../config/api';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
-import { extensionsToMimeTypes, buildUploadAcceptString } from '../../utils/fileTypes';
+import { extensionsToMimeTypes, buildUploadAcceptString, extensionsToLabel } from '../../utils/fileTypes';
 
 interface UserPhotoUploadProps {
   eventId: number;
   categoryId: number | null | undefined;
-  onUploadComplete: () => void;
+  // Receives the upload-group ids the backend queued the files under, so the
+  // caller can poll their processing status instead of guessing (B7).
+  onUploadComplete: (uploadIds: string[]) => void;
   onClose: () => void;
 }
 
@@ -43,6 +45,14 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
     ? Number(publicSettings?.general_max_files_per_upload)
     : 500;
 
+  // Per-file size limit (MB). Was hardcoded to 50MB below, so the admin's
+  // "Max File Size" setting never applied to guests (#613 follow-up). Surfaced
+  // via publicSettings (default 50); the backend enforces the same value.
+  const maxFileSizeMb = Number.isFinite(Number(publicSettings?.general_max_file_size_mb))
+    ? Number(publicSettings?.general_max_file_size_mb)
+    : 50;
+  const maxFileSizeBytes = maxFileSizeMb * 1024 * 1024;
+
   const allowedMimeTypes = useMemo(
     () => extensionsToMimeTypes(publicSettings?.allowed_file_types),
     [publicSettings?.allowed_file_types]
@@ -55,6 +65,13 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
     [publicSettings?.allowed_file_types]
   );
 
+  // #821 — the requirements hint used to hardcode "JPEG, PNG or WebP"; render
+  // the actually-configured formats so it never contradicts what's accepted.
+  const formatsLabel = useMemo(
+    () => extensionsToLabel(publicSettings?.allowed_file_types),
+    [publicSettings?.allowed_file_types]
+  );
+
   // Shared filter pipeline for both <input> change and drag-and-drop (#504).
   const addFiles = (incoming: File[]) => {
     const validFiles = incoming.filter((file) => {
@@ -62,9 +79,9 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
         toast.error(`Invalid file type: ${file.name}`);
         return false;
       }
-      // Check file size (50MB max)
-      if (file.size > 50 * 1024 * 1024) {
-        toast.error(`File too large: ${file.name}`);
+      // Check file size against the configured per-file limit.
+      if (file.size > maxFileSizeBytes) {
+        toast.error(t('upload.fileTooLarge', { name: file.name, limit: maxFileSizeMb }));
         return false;
       }
       return true;
@@ -127,6 +144,10 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
     setUploading(true);
     let successCount = 0;
     let failedCount = 0;
+    // The 202 hands back the id of the upload group the files were queued
+    // under. One request per file means one id per file; the gallery polls
+    // them together to know when the background worker is done (B7).
+    const uploadIds: string[] = [];
 
     for (const file of files) {
       const formData = new FormData();
@@ -136,7 +157,11 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
       }
 
       try {
-        await api.post(`/gallery/${eventId}/upload`, formData, {
+        const response = await api.post<{
+          upload_id?: string;
+          count?: number;
+          errors?: Array<{ filename?: string; error?: string }>;
+        }>(`/gallery/${eventId}/upload`, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
@@ -153,12 +178,30 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
             }
           },
         });
-        // Request resolved → file fully processed by backend.
         setProcessingFiles(prev => {
           const next = { ...prev };
           delete next[file.name];
           return next;
         });
+
+        // A 202 does NOT mean the file landed: the route still answers 202
+        // with `count: 0` and an `errors[]` entry when the queue refuses it
+        // (content/type mismatch, cap hit). Counting that as a success fired
+        // "Upload completed successfully" for a photo that never existed —
+        // the guest-side twin of QA P4-B.05 / 7.05.
+        const queuedCount = response.data?.count;
+        if (typeof queuedCount === 'number' && queuedCount === 0) {
+          failedCount++;
+          const reason = response.data?.errors?.[0]?.error || t('upload.someFilesFailed');
+          toast.error(`${file.name}: ${reason}`);
+          continue;
+        }
+
+        // Bytes are stored and queued. Processing continues in the background
+        // worker; `upload_id` is how the gallery follows it.
+        if (response.data?.upload_id) {
+          uploadIds.push(response.data.upload_id);
+        }
         successCount++;
       } catch (error: any) {
         // Upload error handled - user notified via UI
@@ -174,7 +217,7 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
 
     if (successCount > 0) {
       toast.success(t('toast.uploadSuccess') + ` (${successCount} ${t('common.photos')})`);
-      onUploadComplete();
+      onUploadComplete(uploadIds);
     }
     
     if (failedCount > 0) {
@@ -230,7 +273,7 @@ export const UserPhotoUpload: React.FC<UserPhotoUploadProps> = ({
                     {/* #613 — pass { limit } so `{{limit}}` interpolates
                         with the real number from settings instead of
                         rendering literally. */}
-                    {t('upload.fileRequirements', { limit: maxFilesPerUpload })}
+                    {t('upload.fileRequirements', { formats: formatsLabel, limit: maxFilesPerUpload, sizeLimit: maxFileSizeMb })}
                   </p>
                   <input
                     type="file"

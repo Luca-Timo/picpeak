@@ -3,7 +3,7 @@
  *
  * Every filter token on /photos is an OR of two halves: what THIS viewer
  * marked, and what ANYONE marked. The response fields built from the second
- * half — like_count, comment_count — are all gated on
+ * half — like_count, comment_count, color_label_count — are all gated on
  * show_feedback_to_guests. The FILTER was not.
  *
  * So with the setting off, the numbers were hidden but `?filter=liked` still
@@ -52,6 +52,19 @@ describe('guest filters and show_feedback_to_guests (#1044)', () => {
     process.env.JWT_SECRET,
     { expiresIn: '1h', issuer: 'picpeak-auth' }
   );
+
+  // The photo payload itself, not just the filtered id list — `is_liked` and
+  // the aggregate counts live here (#1286).
+  const payload = async ({ as = 'me' } = {}) => {
+    const req = request(app)
+      .get(`/api/gallery/${SLUG}/photos`)
+      .set('Authorization', `Bearer ${galleryToken()}`);
+    if (as === 'me') req.set('x-guest-token', guestToken());
+    const res = await req;
+    expect(res.status).toBe(200);
+    const photos = Array.isArray(res.body) ? res.body : res.body.photos;
+    return Object.fromEntries((photos || []).map((p) => [p.id, p]));
+  };
 
   const filter = async (token, { as = 'me', claimGuestId } = {}) => {
     const req = request(app)
@@ -107,6 +120,7 @@ describe('guest filters and show_feedback_to_guests (#1044)', () => {
       allow_comments: true,
       allow_ratings: true,
       allow_favorites: true,
+      allow_color_labels: true,
       moderate_comments: false,
       show_feedback_to_guests: true,
     });
@@ -141,10 +155,11 @@ describe('guest filters and show_feedback_to_guests (#1044)', () => {
     await feedback(theirs, SOMEONE_ELSE, 'favorite');
     await feedback(theirs, SOMEONE_ELSE, 'comment', { comment_text: 'lovely' });
     await feedback(theirs, SOMEONE_ELSE, 'rating', { rating: 5 });
+    await feedback(theirs, SOMEONE_ELSE, 'color_label', { color_label: 'green' });
 
     // The denormalized counters the aggregate half of the filter reads.
     await db('photos').where('id', theirs).update({
-      like_count: 1, favorite_count: 1, comment_count: 1, average_rating: 5,
+      like_count: 1, favorite_count: 1, comment_count: 1, average_rating: 5, color_label_count: 1,
     });
     await db('photos').where('id', mine).update({ like_count: 1 });
 
@@ -166,6 +181,7 @@ describe('guest filters and show_feedback_to_guests (#1044)', () => {
       expect(await filter('favorited')).toEqual([theirs]);
       expect(await filter('rated')).toEqual([theirs]);
       expect(await filter('commented')).toEqual([theirs]);
+      expect(await filter('color:green')).toEqual([theirs]);
     });
   });
 
@@ -179,6 +195,7 @@ describe('guest filters and show_feedback_to_guests (#1044)', () => {
       expect(await filter('favorited')).toEqual([]);
       expect(await filter('rated')).toEqual([]);
       expect(await filter('commented')).toEqual([]);
+      expect(await filter('color:green')).toEqual([]);
     });
 
     it('still filters by what the viewer marked themselves', async () => {
@@ -209,8 +226,75 @@ describe('guest filters and show_feedback_to_guests (#1044)', () => {
       // read that guest's hidden memberships one token at a time — straight
       // back through the gate this file exists to pin.
       expect(await filter('favorited', { claimGuestId: SOMEONE_ELSE })).toEqual([]);
+      expect(await filter('color:green', { claimGuestId: SOMEONE_ELSE })).toEqual([]);
       // And an anonymous caller claiming to be me gets nothing of mine.
       expect(await filter('liked', { as: 'anon', claimGuestId: ME })).toEqual([]);
+    });
+  });
+  // #1286 — the viewer's OWN like is not other people's feedback.
+  describe("a guest's own likes with feedback hidden (#1286)", () => {
+    beforeAll(() => setVisibility(false));
+
+    it('still reports is_liked on the photo the viewer liked', async () => {
+      // The regression: every heart came back empty on a gallery with
+      // sharing off, so the grid looked like it had discarded the guest's
+      // choices on every reload.
+      const photos = await payload();
+      expect(photos[mine].is_liked).toBe(true);
+    });
+
+    it("does not report is_liked for someone else's like", async () => {
+      const photos = await payload();
+      expect(photos[theirs].is_liked).toBe(false);
+    });
+
+    it('keeps the aggregate like_count hidden', async () => {
+      // The count IS other people's feedback and must stay gated — the fix
+      // must not leak it back through the same payload.
+      const photos = await payload();
+      expect(photos[mine].like_count).toBe(0);
+      expect(photos[theirs].like_count).toBe(0);
+      expect(photos[theirs].has_feedback).toBe(false);
+    });
+
+    it('reports nothing as liked for a viewer who liked nothing', async () => {
+      const photos = await payload({ as: 'anon' });
+      expect(photos[mine].is_liked).toBe(false);
+      expect(photos[theirs].is_liked).toBe(false);
+    });
+
+    it("still respects an admin hiding the viewer's own like (#1150)", async () => {
+      await db('photo_feedback')
+        .where({ photo_id: mine, guest_id: myGuestRowId, feedback_type: 'like' })
+        .update({ is_hidden: true });
+
+      const photos = await payload();
+      expect(photos[mine].is_liked).toBe(false);
+
+      await db('photo_feedback')
+        .where({ photo_id: mine, guest_id: myGuestRowId, feedback_type: 'like' })
+        .update({ is_hidden: false });
+    });
+
+    it('matches what the liked filter already returned', async () => {
+      // The filter half was never gated; the payload flag was. After the fix
+      // the two agree, which is what makes the grid and the Likes chip show
+      // the same set.
+      expect(await filter('liked')).toEqual([mine]);
+      const photos = await payload();
+      const flagged = Object.values(photos).filter((p) => p.is_liked).map((p) => p.id);
+      expect(flagged).toEqual([mine]);
+    });
+  });
+
+  describe('with feedback visible again (#1286 regression guard)', () => {
+    beforeAll(() => setVisibility(true));
+
+    it('is_liked and the counts both come back', async () => {
+      const photos = await payload();
+      expect(photos[mine].is_liked).toBe(true);
+      expect(photos[theirs].is_liked).toBe(false);
+      expect(photos[theirs].like_count).toBe(1);
     });
   });
 });

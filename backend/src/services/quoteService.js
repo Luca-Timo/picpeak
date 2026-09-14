@@ -35,6 +35,7 @@ const { cleanNetMinor } = require('../utils/invoiceRounding');
 const { AppError } = require('../utils/errors');
 const { formatBoolean } = require('../utils/dbCompat');
 const { nextDocumentNumber } = require('../utils/documentSequences');
+const { resolveDefaultEventType } = require('./eventTypeService');
 const { formatShortDate } = require('../utils/dateFormatter');
 const businessProfileService = require('./businessProfileService');
 const { buildIssuerBlock, buildRecipientBlock } = require('./_renderContext');
@@ -45,14 +46,46 @@ const { hasColumnCached } = require('../utils/schemaCache');
 const fs = require('fs');
 const path = require('path');
 
+// Every write to `quotes.status` goes through assertQuoteTransition below.
+//
+// The table was written before the admin-side flows existed and did not match
+// what the service actually performs; it has been reconciled against every
+// call site rather than the other way round, since each of those flows is
+// deliberate and covered by its own guard:
+//   draft    → accepted   adminAcceptQuote ("customer accepted on the phone")
+//   declined → sent       sendQuote (revise + resend after a decline)
+//   expired  → sent/accepted/declined  sendQuote / adminAccept / adminDecline
+//                         all accept `expired` — a lapsed quote is revivable
+//   accepted → accepted   recordResponse re-affirm inside the toggle window
+//   declined → declined   recordResponse re-decline inside the toggle window
+//
+// `sent → expired` is retained as documented intent: no scheduler sets
+// `expired` today, so nothing reaches that state on its own.
 const VALID_QUOTE_TRANSITIONS = {
-  draft: new Set(['sent', 'declined']),
+  draft: new Set(['sent', 'accepted', 'declined']),
   sent: new Set(['draft', 'accepted', 'declined', 'expired']),
-  accepted: new Set(['converted', 'declined']),
-  declined: new Set(['draft', 'accepted']),
-  expired: new Set(['draft']),
+  accepted: new Set(['accepted', 'converted', 'declined']),
+  declined: new Set(['draft', 'sent', 'accepted', 'declined']),
+  expired: new Set(['draft', 'sent', 'accepted', 'declined']),
   converted: new Set([]),
 };
+
+/**
+ * Backstop for the state machine above. The call sites keep their own, more
+ * specific guards (they produce better-worded 409s naming the exact reason);
+ * this catches anything they miss — including a status the table has never
+ * heard of — as a 409 rather than letting it through or 500ing downstream.
+ */
+function assertQuoteTransition(from, to) {
+  const allowed = VALID_QUOTE_TRANSITIONS[from];
+  if (!allowed || !allowed.has(to)) {
+    throw new AppError(
+      `Cannot change quote status from '${from}' to '${to}'`,
+      409,
+      'QUOTE_INVALID_TRANSITION',
+    );
+  }
+}
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -307,25 +340,6 @@ async function insertLineItemsHierarchical(trx, tableName, ownerColumn, ownerId,
 // admin creates and could emit `Q-2026-AB12C3` after 5 retries.
 async function nextQuoteNumber(trx) {
   return nextDocumentNumber('quote', 'crm_quotes_number_format', 'Q-{YEAR}-{SEQ:04d}', trx);
-}
-
-/**
- * Resolve the fallback event type for a quote→event conversion when the quote
- * itself carries none. Never hardcodes a specific slug (any of them, incl.
- * 'other', can be disabled by the admin): prefer the generic 'other' catch-all
- * when it's active, else the first active type by display order, and only fall
- * back to the literal 'other' if the catalog is somehow empty/unreadable.
- */
-async function resolveDefaultEventType(conn) {
-  const q = conn || db;
-  try {
-    const other = await q('event_types').where({ slug_prefix: 'other', is_active: true }).first('slug_prefix');
-    if (other) return 'other';
-    const firstActive = await q('event_types').where({ is_active: true }).orderBy('display_order', 'asc').first('slug_prefix');
-    return firstActive?.slug_prefix || 'other';
-  } catch (_) {
-    return 'other';
-  }
 }
 
 function ensureCustomerFeatureEnabled(customer, feature) {
@@ -638,7 +652,7 @@ async function createQuote(payload, adminId) {
       // Pass `trx` so the audit insert rides the transaction's connection —
       // the global db here deadlocks the single-connection SQLite pool.
       await logActivity('quote_created', { quoteId, quoteNumber, customerAccountId: payload.customerAccountId }, null, `admin:${adminId}`, trx);
-    } catch (_) {}
+    } catch (_) { /* non-fatal */ }
 
     logger.info('Quote created', { adminId, quoteId, quoteNumber });
     return quoteId;
@@ -696,7 +710,10 @@ async function updateQuote(id, payload, adminId) {
       vat_rate: ensureNumber(payload.vatRate ?? existing.vat_rate, 0),
     };
     // Revert sent → draft on edit so the admin must explicitly resend.
-    if (existing.status === 'sent') updates.status = 'draft';
+    if (existing.status === 'sent') {
+      assertQuoteTransition(existing.status, 'draft');
+      updates.status = 'draft';
+    }
     const map = {
       eventName: 'event_name',
       eventDate: 'event_date',
@@ -778,7 +795,7 @@ async function updateQuote(id, payload, adminId) {
 
     try {
       await logActivity('quote_updated', { quoteId: id }, null, `admin:${adminId}`);
-    } catch (_) {}
+    } catch (_) { /* non-fatal */ }
   });
 }
 
@@ -980,6 +997,7 @@ async function sendQuote(id, adminId) {
   if (!['draft', 'declined', 'expired'].includes(quote.status)) {
     throw new AppError(`Cannot send a quote with status '${quote.status}'`, 409);
   }
+  assertQuoteTransition(quote.status, 'sent');
 
   const customer = await db('customer_accounts').where({ id: quote.customer_account_id }).first();
   ensureCustomerFeatureEnabled(customer, 'quotes');
@@ -1051,7 +1069,7 @@ async function sendQuote(id, adminId) {
     // Do NOT log the raw bearer token — it grants quote actions and the
     // activity log is readable later (GHSA-prch). The quoteId is the audit key.
     await logActivity('quote_sent', { quoteId: id }, null, `admin:${adminId}`);
-  } catch (_) {}
+  } catch (_) { /* non-fatal */ }
 
   // Fire the quote.sent workflow trigger (best-effort; emit is fail-closed when
   // the workflows flag is off). The accepted/declined emits already exist; this
@@ -1248,6 +1266,7 @@ async function recordResponse({ token, action, ip, tosAccepted }) {
   const newStatus = isAccept ? 'accepted' : 'declined';
   const respondedAt = quote.responded_at || now;
   const responseLockedAt = new Date(new Date(respondedAt).getTime() + windowMinutes * 60 * 1000);
+  assertQuoteTransition(quote.status, newStatus);
 
   await db.transaction(async (trx) => {
     const updates = {
@@ -1277,7 +1296,7 @@ async function recordResponse({ token, action, ip, tosAccepted }) {
   try {
     // Raw bearer token must not reach the activity log (GHSA-prch).
     await logActivity(`quote_${newStatus}`, { quoteId: quote.id }, null, 'customer:public');
-  } catch (_) {}
+  } catch (_) { /* non-fatal */ }
 
   // Defer the workflow emit until the 15-min toggle window locks — so accepting
   // (then converting) can't strip the customer's ability to decline. The
@@ -1317,6 +1336,7 @@ async function adminAcceptQuote(id, adminId) {
   if (quote.status === 'converted') {
     throw new AppError('Quote already converted to an event/invoice', 409, 'QUOTE_CONVERTED');
   }
+  assertQuoteTransition(quote.status, 'accepted');
 
   const now = new Date();
   const windowMinutes = ensureInt(await getAppSetting('crm_quotes_accept_window_minutes')) || 15;
@@ -1335,7 +1355,7 @@ async function adminAcceptQuote(id, adminId) {
 
   try {
     await logActivity('quote_accepted_by_admin', { quoteId: id }, null, `admin:${adminId}`);
-  } catch (_) {}
+  } catch (_) { /* non-fatal */ }
 
   // ---- customer confirmation email -------------------------------
   // Renders the quote PDF + queues a "quote accepted — on your
@@ -1416,6 +1436,7 @@ async function adminDeclineQuote(id, adminId, reason = null) {
   if (quote.status === 'converted') {
     throw new AppError('Quote already converted to an event/invoice', 409, 'QUOTE_CONVERTED');
   }
+  assertQuoteTransition(quote.status, 'declined');
 
   const now = new Date();
   const cleanReason = typeof reason === 'string' && reason.trim() ? reason.trim().slice(0, 5000) : null;
@@ -1446,7 +1467,7 @@ async function adminDeclineQuote(id, adminId, reason = null) {
 
   try {
     await logActivity('quote_declined_by_admin', { quoteId: id, reason: cleanReason }, null, `admin:${adminId}`);
-  } catch (_) {}
+  } catch (_) { /* non-fatal */ }
 
   // Admin decline locks the window immediately (response_locked_at = now), so
   // this emits straight away (and stamps emitted) rather than deferring.
@@ -1485,6 +1506,7 @@ async function convertToInvoiceOnly(quoteId, adminId, options = {}) {
   if (quote.status !== 'accepted') {
     throw new AppError(`Cannot convert a quote with status '${quote.status}'`, 409);
   }
+  assertQuoteTransition(quote.status, 'converted');
   if (quote.converted_event_id) {
     // Already has a linked event — nothing to do here; tell the
     // caller to use the event-detail page for new invoices.
@@ -1587,7 +1609,7 @@ async function convertToInvoiceOnly(quoteId, adminId, options = {}) {
   try {
     await logActivity('quote_converted_invoices_only', { quoteId: quote.id, installments: result.installmentsCreated },
       null, `admin:${adminId}`);
-  } catch (_) {}
+  } catch (_) { /* non-fatal */ }
 
   logger.info('Quote converted to invoices only (no event)', { adminId, quoteId: quote.id, installments: result.installmentsCreated });
   return result;
@@ -1599,6 +1621,7 @@ async function convertToEvent(quoteId, adminId, options = {}) {
   if (quote.status !== 'accepted') {
     throw new AppError(`Cannot convert a quote with status '${quote.status}'`, 409);
   }
+  assertQuoteTransition(quote.status, 'converted');
   if (quote.converted_event_id) {
     // Idempotent re-entry (e.g. workflow crash-recovery): hand back the
     // already-created event and its scheduled invoices so the caller can
@@ -1660,6 +1683,8 @@ async function convertToEvent(quoteId, adminId, options = {}) {
     // ask the DB which columns exist and only keep the matching pairs
     // — bullet-proof against schema drift in either direction.
     const eventCols = await trx('events').columnInfo();
+    const { getImageSecurityDefaults, resolveImageSecurityColumns } = require('../routes/adminEvents/helpers');
+    const imageSecurityColumns = resolveImageSecurityColumns({}, await getImageSecurityDefaults(trx));
     const candidate = {
       slug: `quote-${quote.quote_number.toLowerCase()}-${crypto.randomBytes(3).toString('hex')}`,
       event_name: quote.event_name || `Event ${quote.quote_number}`,
@@ -1682,6 +1707,11 @@ async function convertToEvent(quoteId, adminId, options = {}) {
       quote_id: quote.id,
       created_at: new Date(),
       updated_at: new Date(),
+      // #1296 — a converted quote produces a real gallery, so the global
+      // Image Security defaults have to reach it too. Required lazily: this
+      // is a service reaching into a route helper, and the lazy form keeps
+      // the module graph acyclic the way the storage require below does.
+      ...imageSecurityColumns,
     };
     const eventRow = {};
     for (const [k, v] of Object.entries(candidate)) {
@@ -1768,7 +1798,7 @@ async function convertToEvent(quoteId, adminId, options = {}) {
   // (prepare_event runs this unattended from the booking flow).
   try {
     await logActivity('quote_converted', { quoteId: quote.id, eventId: result.eventId }, result.eventId, `admin:${adminId}`);
-  } catch (_) {}
+  } catch (_) { /* non-fatal */ }
 
   logger.info('Quote converted to event', { adminId, quoteId: quote.id, eventId: result.eventId });
   return result;

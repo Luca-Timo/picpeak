@@ -4,13 +4,14 @@ const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const secureImageMiddleware = require('../middleware/secureImageMiddleware');
 const logger = require('../utils/logger');
+const { decodeSettingValue } = require('./adminEvents/helpers');
 
 const router = express.Router();
 
 /**
  * Get image security settings
  */
-router.get('/settings', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/settings', adminAuth, requirePermission(['settings.view', 'image_security.view']), async (req, res) => {
   try {
     const settings = await db('app_settings')
       .whereIn('setting_key', [
@@ -22,7 +23,6 @@ router.get('/settings', adminAuth, requirePermission('settings.view'), async (re
         'max_image_requests_per_hour',
         'suspicious_activity_threshold',
         'enable_canvas_rendering',
-        'default_fragmentation_level',
         'security_monitoring_enabled',
         'block_suspicious_ips',
         'log_security_events_to_db',
@@ -32,9 +32,15 @@ router.get('/settings', adminAuth, requirePermission('settings.view'), async (re
 
     const config = {};
     settings.forEach(setting => {
-      // PostgreSQL JSON columns are already parsed by the driver
-      // Just use the value directly - no need to JSON.parse
-      config[setting.setting_key] = setting.setting_value;
+      // setting_value is JSON text on SQLite, and already decoded by the
+      // driver on a PG json column — so returning it raw shipped strings
+      // like "true" to a tab that types the field as boolean. Worse, the
+      // tab PUTs this whole object straight back through JSON.stringify,
+      // so every save wrapped another layer of quoting around values nobody
+      // edited, until consumers could no longer read them (#1296). Decode
+      // here so a round trip is idempotent. This terminates: each parse of
+      // a string is strictly shorter than its input.
+      config[setting.setting_key] = decodeSettingValue(setting.setting_value);
     });
 
     res.json(config);
@@ -47,7 +53,7 @@ router.get('/settings', adminAuth, requirePermission('settings.view'), async (re
 /**
  * Update image security settings
  */
-router.put('/settings', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.put('/settings', adminAuth, requirePermission('image_security.manage'), async (req, res) => {
   try {
     const updates = req.body;
     
@@ -61,7 +67,6 @@ router.put('/settings', adminAuth, requirePermission('settings.edit'), async (re
       'max_image_requests_per_hour',
       'suspicious_activity_threshold',
       'enable_canvas_rendering',
-      'default_fragmentation_level',
       'security_monitoring_enabled',
       'block_suspicious_ips',
       'log_security_events_to_db',
@@ -98,23 +103,23 @@ router.put('/settings', adminAuth, requirePermission('settings.edit'), async (re
 /**
  * Get security monitoring dashboard data
  */
-router.get('/dashboard', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/dashboard', adminAuth, requirePermission(['settings.view', 'image_security.view']), async (req, res) => {
   try {
     const { timeframe = '24h' } = req.query;
     
     let timeFilter;
     switch (timeframe) {
-      case '1h':
-        timeFilter = new Date(Date.now() - 3600000);
-        break;
-      case '24h':
-        timeFilter = new Date(Date.now() - 86400000);
-        break;
-      case '7d':
-        timeFilter = new Date(Date.now() - 604800000);
-        break;
-      default:
-        timeFilter = new Date(Date.now() - 86400000);
+    case '1h':
+      timeFilter = new Date(Date.now() - 3600000);
+      break;
+    case '24h':
+      timeFilter = new Date(Date.now() - 86400000);
+      break;
+    case '7d':
+      timeFilter = new Date(Date.now() - 604800000);
+      break;
+    default:
+      timeFilter = new Date(Date.now() - 86400000);
     }
 
     // Get image access statistics
@@ -203,7 +208,7 @@ router.get('/dashboard', adminAuth, requirePermission('settings.view'), async (r
 /**
  * Get detailed security logs
  */
-router.get('/logs', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/logs', adminAuth, requirePermission(['settings.view', 'image_security.view']), async (req, res) => {
   try {
     const { 
       page = 1, 
@@ -214,17 +219,17 @@ router.get('/logs', adminAuth, requirePermission('settings.view'), async (req, r
 
     let timeFilter;
     switch (timeframe) {
-      case '1h':
-        timeFilter = new Date(Date.now() - 3600000);
-        break;
-      case '24h':
-        timeFilter = new Date(Date.now() - 86400000);
-        break;
-      case '7d':
-        timeFilter = new Date(Date.now() - 604800000);
-        break;
-      default:
-        timeFilter = new Date(Date.now() - 86400000);
+    case '1h':
+      timeFilter = new Date(Date.now() - 3600000);
+      break;
+    case '24h':
+      timeFilter = new Date(Date.now() - 86400000);
+      break;
+    case '7d':
+      timeFilter = new Date(Date.now() - 604800000);
+      break;
+    default:
+      timeFilter = new Date(Date.now() - 86400000);
     }
 
     let query = db('security_logs')
@@ -272,7 +277,7 @@ router.get('/logs', adminAuth, requirePermission('settings.view'), async (req, r
 /**
  * Get image access logs for a specific event
  */
-router.get('/events/:eventId/access-logs', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/events/:eventId/access-logs', adminAuth, requirePermission(['settings.view', 'image_security.view']), async (req, res) => {
   try {
     const { eventId } = req.params;
     const { page = 1, limit = 50 } = req.query;
@@ -322,7 +327,7 @@ router.get('/events/:eventId/access-logs', adminAuth, requirePermission('setting
 /**
  * Block/unblock suspicious IPs
  */
-router.post('/block-ip', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.post('/block-ip', adminAuth, requirePermission('image_security.manage'), async (req, res) => {
   try {
     const { ip, action = 'block' } = req.body;
     
@@ -368,23 +373,23 @@ router.post('/block-ip', adminAuth, requirePermission('settings.edit'), async (r
 /**
  * Clear security logs older than specified time
  */
-router.delete('/logs/cleanup', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.delete('/logs/cleanup', adminAuth, requirePermission('image_security.manage'), async (req, res) => {
   try {
     const { olderThan = '30d' } = req.body;
     
     let cutoffDate;
     switch (olderThan) {
-      case '7d':
-        cutoffDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case '30d':
-        cutoffDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        break;
-      case '90d':
-        cutoffDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-        break;
-      default:
-        cutoffDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    case '7d':
+      cutoffDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      break;
+    case '30d':
+      cutoffDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      break;
+    case '90d':
+      cutoffDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+      break;
+    default:
+      cutoffDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     }
 
     // Delete old security logs
@@ -425,23 +430,23 @@ router.delete('/logs/cleanup', adminAuth, requirePermission('settings.edit'), as
 /**
  * Export security data for analysis
  */
-router.get('/export', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/export', adminAuth, requirePermission(['settings.view', 'image_security.view']), async (req, res) => {
   try {
     const { format = 'json', timeframe = '7d' } = req.query;
     
     let timeFilter;
     switch (timeframe) {
-      case '24h':
-        timeFilter = new Date(Date.now() - 86400000);
-        break;
-      case '7d':
-        timeFilter = new Date(Date.now() - 604800000);
-        break;
-      case '30d':
-        timeFilter = new Date(Date.now() - 2592000000);
-        break;
-      default:
-        timeFilter = new Date(Date.now() - 604800000);
+    case '24h':
+      timeFilter = new Date(Date.now() - 86400000);
+      break;
+    case '7d':
+      timeFilter = new Date(Date.now() - 604800000);
+      break;
+    case '30d':
+      timeFilter = new Date(Date.now() - 2592000000);
+      break;
+    default:
+      timeFilter = new Date(Date.now() - 604800000);
     }
 
     // Get security logs

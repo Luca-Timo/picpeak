@@ -2,7 +2,7 @@ const express = require('express');
 const { db } = require('../database/db');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
-const { sanitizeDays, addDateRangeCondition } = require('../utils/sqlSecurity');
+const { sanitizeDays } = require('../utils/sqlSecurity');
 const { formatBoolean } = require('../utils/dbCompat');
 const { resolveAdapter } = require('../services/trackers');
 const logger = require('../utils/logger');
@@ -99,20 +99,25 @@ router.get('/stats', adminAuth, requirePermission('analytics.view'), async (req,
     // Storage used: what is actually on this machine. In reference mode the
     // originals above live on a NAS and contribute nothing here; conversely
     // this counts what the sum never did — thumbnails, previews, hero
-    // renditions, watermarks and the per-event download cache.
+    // renditions and the per-event download cache.
     //
     // Deliberately NOT event-scoped, unlike everything else on this endpoint:
     // it is a disk measurement, and disk is not divisible by which admin owns
-    // which event.
-    //
+    // which event. A scoped admin gets the same number a super_admin does,
+    // which is the honest answer to "is this box running out of space" and
+    // leaks nothing beyond the aggregate they can already infer from the
+    // system-health page.
     // Skipped entirely on an S3 backend: the objects are in the bucket and a
     // walk of STORAGE_PATH would report near-zero, which is worse than the
-    // catalogued figure those installs had before #1164.
+    // catalogued figure those installs had before #1164. `storageUsed` is null
+    // there and the tile shows the catalogued number it already carries.
     const usesLocalBackend = (process.env.STORAGE_BACKEND || 'local').toLowerCase() !== 's3';
     let localStorage = null;
     try {
       if (usesLocalBackend) localStorage = await measureLocalStorageUsage();
     } catch (err) {
+      // The dashboard must render without it; the tile falls back to showing
+      // the catalogued figure, labelled as such.
       logger.warn(`Dashboard storage measurement failed: ${err.message}`);
     }
 
@@ -177,9 +182,9 @@ router.get('/stats', adminAuth, requirePermission('analytics.view'), async (req,
       activeEvents: activeEvents.count || 0,
       expiringEvents: expiringEvents.count || 0,
       totalPhotos: totalPhotos.count || 0,
-      // Real bytes on this disk. Null when the measurement failed or was
-      // skipped, which the UI shows as "unavailable" rather than substituting
-      // a number that means something else.
+      // Real bytes on this disk. Null when the measurement failed, which the
+      // UI shows as "unavailable" rather than substituting a number that
+      // means something else.
       storageUsed: localStorage ? localStorage.total : null,
       // Three states, not two: 'catalog' means the backend is S3 and the
       // objects are in the bucket, which is a fact about the install;
@@ -187,6 +192,8 @@ router.get('/stats', adminAuth, requirePermission('analytics.view'), async (req,
       // made a failed local measurement claim the objects live in S3.
       storageMeasurement: localStorage ? 'disk' : (usesLocalBackend ? 'unavailable' : 'catalog'),
       storageBreakdown: localStorage ? localStorage.breakdown : null,
+      // True when part of the storage root could not be read, so the total is
+      // a floor rather than the answer.
       storagePartial: localStorage ? localStorage.partial : false,
       // Catalogued original bytes — what `storageUsed` used to report (#1164).
       catalogedBytes: Number(catalogedBytes.total) || 0,

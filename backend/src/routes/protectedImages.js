@@ -3,8 +3,10 @@ const { resolvePhotoContentType } = require('../utils/photoContentType');
 const { db } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
 const { verifyGalleryAccess } = require('../middleware/gallery');
+const { blockHiddenGallery, bypassesReveal, isGalleryHidden } = require('../utils/revealMode');
 const watermarkService = require('../services/watermarkService');
 const secureImageService = require('../services/secureImageService');
+const galleryAccessService = require('../services/galleryAccessService');
 const { getStorage } = require('../services/storage');
 const { resolvePhotoStorageKey, resolvePhotoFilePath } = require('../services/photoResolver');
 const { withLocalCopy } = require('../services/imageProcessor');
@@ -18,14 +20,13 @@ const router = express.Router();
 /**
  * Generate a signed URL token for image access
  */
-function generateImageToken(photoId, expiresIn = 3600, clientBypass = false) {
+function generateImageToken(photoId, expiresIn = 3600, revealBypass = false, clientBypass = false, galleryAccess) {
   const secret = process.env.JWT_SECRET;
   const expires = Date.now() + (expiresIn * 1000);
-  // Third segment: whether the minter was a PIN-client, letting the serve
-  // route still deliver a photo hidden AFTER minting (TOCTOU) — a guest's
-  // token carries 0, so it stops working the moment the photo is hidden.
-  // Old two-segment tokens verify unchanged and read the flag as no-bypass.
-  const data = `${photoId}:${expires}:${clientBypass ? 1 : 0}`;
+  // Bind the URL to its issuing access grant. Old tokens without a grant
+  // must be refreshed: they cannot prove session revocation or ownership.
+  const grant = Buffer.from(JSON.stringify(galleryAccess)).toString('base64url');
+  const data = `${photoId}:${expires}:${revealBypass ? 1 : 0}:${clientBypass ? 1 : 0}:${grant}`;
   const signature = crypto.createHmac('sha256', secret).update(data).digest('hex');
   return `${Buffer.from(data).toString('base64')}.${signature}`;
 }
@@ -38,7 +39,7 @@ function verifyImageToken(token) {
     const secret = process.env.JWT_SECRET;
     const [data, signature] = token.split('.');
     const decoded = Buffer.from(data, 'base64').toString();
-    const [photoId, expires, clientFlag] = decoded.split(':');
+    const [photoId, expires, bypassFlag, clientFlag, grant] = decoded.split(':');
 
     // Verify signature (constant-time — avoids leaking the HMAC byte-by-byte)
     const expectedSignature = crypto.createHmac('sha256', secret).update(decoded).digest('hex');
@@ -47,13 +48,16 @@ function verifyImageToken(token) {
     }
 
     // Check expiration
-    if (Date.now() > parseInt(expires)) {
+    if (!Number.isFinite(Number(expires)) || Date.now() >= Number(expires) || !grant) {
       return null;
     }
+
     return {
       photoId: parseInt(photoId),
       expires: parseInt(expires),
+      revealBypass: bypassFlag === '1',
       clientBypass: clientFlag === '1',
+      galleryAccess: JSON.parse(Buffer.from(grant, 'base64url').toString()),
     };
   } catch (error) {
     return null;
@@ -63,10 +67,10 @@ function verifyImageToken(token) {
 /**
  * Serve protected image with enhanced security
  */
-router.get('/:slug/photo/:photoId/view', verifyGalleryAccess, async (req, res) => {
+router.get('/:slug/photo/:photoId/view', verifyGalleryAccess, blockHiddenGallery, async (req, res) => {
   try {
     const { photoId } = req.params;
-    const { protectionLevel = 'standard', token } = req.query;
+    const { protectionLevel = 'standard' } = req.query;
     
     // Create client fingerprint
     const clientFingerprint = secureImageService.createClientFingerprint(req);
@@ -112,8 +116,7 @@ router.get('/:slug/photo/:photoId/view', verifyGalleryAccess, async (req, res) =
     const protectionSettings = {
       protectionLevel: eventProtectionLevel,
       quality: req.event.image_quality || 85,
-      addFingerprint: req.event.add_fingerprint !== false,
-      fragmentImage: eventProtectionLevel === 'maximum'
+      addFingerprint: req.event.add_fingerprint !== false
     };
 
     // Resolve photo location through the storage backend (managed) or local
@@ -146,21 +149,6 @@ router.get('/:slug/photo/:photoId/view', verifyGalleryAccess, async (req, res) =
         ? await withLocalCopy(storageKey, runProcessing)
         : await runProcessing(resolvePhotoFilePath(req.event, photo));
 
-      if (processedImage.type === 'fragmented') {
-        return res.json({
-          type: 'fragmented',
-          fragments: processedImage.fragments.map(f => ({
-            index: f.index,
-            row: f.row,
-            col: f.col,
-            data: f.buffer.toString('base64'),
-            position: f.position
-          })),
-          dimensions: processedImage.originalDimensions,
-          fragmentDimensions: processedImage.fragmentDimensions
-        });
-      }
-
       finalImage = processedImage;
     }
     
@@ -181,6 +169,7 @@ router.get('/:slug/photo/:photoId/view', verifyGalleryAccess, async (req, res) =
     res.send(finalImage);
     
   } catch (error) {
+    if (error.isOperational) return res.status(error.statusCode).json({ error: error.message, code: error.code });
     logger.error('Error serving protected image:', error);
     res.status(500).json({ error: 'Failed to serve image' });
   }
@@ -189,7 +178,7 @@ router.get('/:slug/photo/:photoId/view', verifyGalleryAccess, async (req, res) =
 /**
  * Generate secure token for enhanced image access
  */
-router.post('/:slug/photo/:photoId/generate-secure-token', verifyGalleryAccess, async (req, res) => {
+router.post('/:slug/photo/:photoId/generate-secure-token', verifyGalleryAccess, blockHiddenGallery, async (req, res) => {
   try {
     const { photoId } = req.params;
     const { protectionLevel = 'standard', expiresIn = 300 } = req.body;
@@ -218,6 +207,7 @@ router.post('/:slug/photo/:photoId/generate-secure-token', verifyGalleryAccess, 
     // Generate secure token. clientBypass lets a client's token keep serving
     // a photo hidden after minting; a guest's stops at the serve route.
     const token = secureImageService.generateSecureToken(photoId, req.sessionID || 'anonymous', {
+      galleryAccess: req.galleryAccess,
       expiresIn,
       maxUses: protectionLevel === 'maximum' ? 1 : 3,
       clientFingerprint,
@@ -233,6 +223,7 @@ router.post('/:slug/photo/:photoId/generate-secure-token', verifyGalleryAccess, 
     });
     
   } catch (error) {
+    if (error.isOperational) return res.status(error.statusCode).json({ error: error.message, code: error.code });
     logger.error('Error generating secure token:', error);
     res.status(500).json({ error: 'Failed to generate token' });
   }
@@ -242,6 +233,11 @@ router.post('/:slug/photo/:photoId/generate-secure-token', verifyGalleryAccess, 
  * Generate signed URL for image access (legacy support)
  */
 router.post('/:slug/photo/:photoId/generate-url', verifyGalleryAccess, async (req, res) => {
+  // Reveal-gated for plain guests; bypass callers get a token that stays
+  // valid at SERVE time too (third token segment below).
+  if (require('../utils/revealMode').guestBlockedByReveal(req)) {
+    return res.status(403).json({ error: 'Gallery is hidden until reveal', code: 'GALLERY_HIDDEN' });
+  }
   try {
     const { photoId } = req.params;
     
@@ -268,7 +264,7 @@ router.post('/:slug/photo/:photoId/generate-url', verifyGalleryAccess, async (re
     // Generate signed token. The client-bypass flag lets a PIN-client's
     // token keep serving a photo hidden after minting; a guest's token
     // (clientBypass=0) stops the moment the photo is hidden.
-    const token = generateImageToken(photoId, 3600, canSeeHiddenPhotos(req.accessLevel));
+    const token = generateImageToken(photoId, 3600, bypassesReveal(req), canSeeHiddenPhotos(req.accessLevel), req.galleryAccess);
     const signedUrl = `/api/images/${req.params.slug}/photo/${photoId}/signed/${token}`;
     
     res.json({ 
@@ -277,6 +273,7 @@ router.post('/:slug/photo/:photoId/generate-url', verifyGalleryAccess, async (re
     });
     
   } catch (error) {
+    if (error.isOperational) return res.status(error.statusCode).json({ error: error.message, code: error.code });
     logger.error('Error generating signed URL:', error);
     res.status(500).json({ error: 'Failed to generate URL' });
   }
@@ -304,7 +301,15 @@ router.get('/:slug/photo/:photoId/signed/:token', async (req, res) => {
     if (!event) {
       return res.status(404).json({ error: 'Event not found' });
     }
-    
+
+    await galleryAccessService.authorize(event, tokenData.galleryAccess);
+
+    // Reveal mode (#838): a signed URL minted before a re-hide must not keep
+    // serving hidden photos; tokens minted by bypass contexts carry the flag.
+    if (isGalleryHidden(event) && !tokenData.revealBypass) {
+      return res.status(403).json({ error: 'Gallery is hidden until reveal', code: 'GALLERY_HIDDEN' });
+    }
+
     // Get photo
     const photo = await db('photos')
       .where({
@@ -338,7 +343,7 @@ router.get('/:slug/photo/:photoId/signed/:token', async (req, res) => {
     res.set({
       'Content-Type': resolvePhotoContentType(photo),
       'Content-Length': imageBuffer.length,
-      'Cache-Control': 'private, max-age=3600',
+      'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff'
     });
     
@@ -346,6 +351,7 @@ router.get('/:slug/photo/:photoId/signed/:token', async (req, res) => {
     res.send(imageBuffer);
     
   } catch (error) {
+    if (error.isOperational) return res.status(error.statusCode).json({ error: error.message, code: error.code });
     logger.error('Error serving signed image:', error);
     res.status(500).json({ error: 'Failed to serve image' });
   }

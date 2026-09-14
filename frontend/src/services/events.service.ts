@@ -1,6 +1,7 @@
 import { api } from '../config/api';
 import type { Event } from '../types';
 import { normalizeRequirePassword } from '../utils/accessControl';
+import { toBoolean } from '../utils/parsers';
 
 const normalizeEvent = (event: Event): Event => {
   const legacyHostName = (event as any)?.host_name;
@@ -14,6 +15,10 @@ const normalizeEvent = (event: Event): Event => {
     customer_name: customerName,
     customer_email: customerEmail,
     require_password: normalizeRequirePassword((event as any)?.require_password, true),
+    // SQLite hands these back as 0/1, so a strict `=== false` consumer reads
+    // an inactive gallery as active (the #1028 class). Coerced once here with
+    // the same default the backend's parseBooleanInput uses.
+    is_active: toBoolean((event as any)?.is_active, true),
   };
 };
 
@@ -36,6 +41,7 @@ interface CreateEventData {
   allow_likes?: boolean;
   allow_comments?: boolean;
   allow_favorites?: boolean;
+  allow_reactions?: boolean;
   require_name_email?: boolean;
   moderate_comments?: boolean;
   show_feedback_to_guests?: boolean;
@@ -55,15 +61,25 @@ interface UpdateEventData {
   admin_email?: string;
   require_password?: boolean;
   password?: string;
+  // Client (photographer's customer) access to the gallery. The plaintext
+  // PIN is hashed server-side; `regenerate_client_token` mints a fresh
+  // share token. Validated in adminEvents/crud.js on the update route.
+  client_access_enabled?: boolean;
+  client_password?: string;
+  regenerate_client_token?: boolean;
   welcome_message?: string;
   color_theme?: string;
   expires_at?: string;
   is_active?: boolean;
   allow_user_uploads?: boolean;
+  // Reveal mode (#838)
+  reveal_mode?: boolean;
+  reveal_at?: string | null;
   upload_category_id?: number | null;
   hero_photo_id?: number | null;
   source_mode?: 'managed' | 'reference';
   external_path?: string | null;
+  external_watch?: boolean;
   photo_cap?: number | null;
   default_photo_sort?: string;
   // Per-event opt-in for hero photo as social-share preview (#474).
@@ -136,6 +152,12 @@ export const eventsService = {
   },
 
   // Update event (admin)
+  // Reveal now (#838): stamps revealed_at so the gallery opens for guests.
+  async revealEvent(id: number): Promise<{ revealed_at: string }> {
+    const response = await api.post(`/admin/events/${id}/reveal`);
+    return response.data;
+  },
+
   async updateEvent(id: number, data: UpdateEventData): Promise<Event> {
     const response = await api.put<Event>(`/admin/events/${id}`, data);
     return response.data;
@@ -165,7 +187,10 @@ export const eventsService = {
       show_transition?: string;
       show_transition_ms?: number;
       show_watermark?: boolean | null;
+      show_qr?: boolean | null;
       show_colorfilter?: string;
+      show_order?: string;
+      show_category_id?: number | null;
     }
   ): Promise<Record<string, unknown>> {
     const response = await api.patch(`/admin/events/${id}/slideshow`, settings);
@@ -219,7 +244,7 @@ export const eventsService = {
   },
 
   // Get event categories
-  async getEventCategories(eventId: number): Promise<Array<{ id: number; name: string; slug: string }>> {
+  async getEventCategories(eventId: number): Promise<Array<{ id: number; name: string; slug: string; is_folder?: boolean }>> {
     const response = await api.get(`/admin/categories/event/${eventId}`);
     return response.data || [];
   },
@@ -244,6 +269,25 @@ export const eventsService = {
     return response.data;
   },
 
+  // Whether recoverable gallery passwords (#1271) are switched on. Answered
+  // per event so editors without settings access can ask too.
+  async getGalleryPasswordStatus(eventId: number): Promise<{ enabled: boolean }> {
+    const response = await api.get(`/admin/events/${eventId}/password-status`);
+    return response.data;
+  },
+
+  // Stored gallery password / client PIN (#1271). Only populated when the
+  // security setting "gallery_password_recoverable" is on; `enabled: false`
+  // means the feature is off and there is nothing to show.
+  async getGalleryPassword(eventId: number): Promise<{
+    enabled: boolean;
+    password: string | null;
+    client_password: string | null;
+  }> {
+    const response = await api.get(`/admin/events/${eventId}/password`);
+    return response.data;
+  },
+
   // Validate rename
   async validateRename(eventId: number, newEventName: string): Promise<{
     valid: boolean;
@@ -260,10 +304,29 @@ export const eventsService = {
   // (#627) — the backend also re-hashes it so the stored hash matches.
   async publishEvent(
     eventId: number,
+    options?: { password?: string; notifyCustomer?: boolean },
+  ): Promise<{ message: string; is_draft: boolean; notified_customer?: boolean }> {
+    // Only send what was actually chosen. Omitting notify_customer entirely
+    // when it is true keeps the request identical to the pre-#1235 shape.
+    const body: Record<string, unknown> = {};
+    if (options?.password) body.password = options.password;
+    if (options?.notifyCustomer === false) body.notify_customer = false;
+    const response = await api.post(
+      `/admin/events/${eventId}/publish`,
+      Object.keys(body).length ? body : undefined,
+    );
+    return response.data;
+  },
+
+  // Send the gallery email for an already-published gallery (#1235). The other
+  // half of publishing quietly: the address often arrives after the gallery
+  // does. Also covers an ordinary re-send when the first one was lost.
+  async sendGalleryEmail(
+    eventId: number,
     options?: { password?: string },
-  ): Promise<{ message: string; is_draft: boolean }> {
+  ): Promise<{ message: string; recipient: string }> {
     const body = options?.password ? { password: options.password } : undefined;
-    const response = await api.post(`/admin/events/${eventId}/publish`, body);
+    const response = await api.post(`/admin/events/${eventId}/send-gallery-email`, body);
     return response.data;
   },
 
@@ -283,7 +346,6 @@ export const eventsService = {
     return response.data;
   },
 
-  // Get admin preview token (uses existing admin session token)
   // Rename event
   async renameEvent(eventId: number, newEventName: string, resendEmail: boolean = false): Promise<{
     success: boolean;
@@ -302,5 +364,26 @@ export const eventsService = {
   }> {
     const response = await api.post(`/admin/events/${eventId}/rename`, { newEventName, resendEmail });
     return response.data;
+  },
+
+  // Gallery QR code (#836). Admin API uses Bearer auth, so images are fetched
+  // as blobs — an <img src> would not carry the token. `origin` is passed so
+  // the backend can fall back to the admin browser's origin when the
+  // configured FRONTEND_URL is missing/localhost — the QR must encode the
+  // same URL the share-link card displays.
+  async getQrBlob(eventId: number, format: 'png' | 'svg', size?: number): Promise<Blob> {
+    const { data } = await api.get(`/admin/events/${eventId}/qr`, {
+      params: { format, size, origin: window.location.origin },
+      responseType: 'blob',
+    });
+    return data;
+  },
+
+  async getQrPrintBlob(eventId: number, template: 'table-card' | 'poster', lang: string): Promise<Blob> {
+    const { data } = await api.get(`/admin/events/${eventId}/qr-print`, {
+      params: { template, lang, origin: window.location.origin },
+      responseType: 'blob',
+    });
+    return data;
   },
 };

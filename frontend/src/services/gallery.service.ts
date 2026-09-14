@@ -1,8 +1,24 @@
+import type { AxiosResponse } from 'axios';
 import { api } from '../config/api';
-import type { GalleryInfo, GalleryData, GalleryStats, ResolvedGalleryIdentifier } from '../types';
+import type {
+  GalleryInfo, GalleryData, GalleryStats, ResolvedGalleryIdentifier,
+  DownloadJobStatus, DownloadJobState, GalleryPeopleResponse,
+} from '../types';
 import { normalizeRequirePassword } from '../utils/accessControl';
 import { parseContentDispositionFilename } from '../utils/contentDisposition';
-import { withAdminPreview } from '../utils/adminPreview';
+
+// Gallery pages beyond the first are fetched this many at a time (#1357).
+const PAGE_FETCH_CONCURRENCY = 4;
+
+// Admin preview (#868): the preview tab carries `?admin_preview=1`. Browser-native
+// download navigations (a real `<a href>` / `api.getUri`) bypass the axios request
+// interceptor that forwards the flag on API calls, so append it to those URLs
+// directly. The httpOnly admin_token cookie authenticates server-side.
+function withAdminPreview(url: string): string {
+  if (typeof window === 'undefined') return url;
+  if (new URLSearchParams(window.location.search).get('admin_preview') !== '1') return url;
+  return `${url}${url.includes('?') ? '&' : '?'}admin_preview=1`;
+}
 
 // iOS is the only platform whose system share sheet exposes a
 // first-party "Save Image" / "Save to Photos" action for files
@@ -31,6 +47,15 @@ function isIOS(): boolean {
 // the existing server-side zip flow.
 const MAX_WEB_SHARE_FILES = 25;
 
+// Counts-only snapshot returned by GET /gallery/:slug/uploads/status.
+export interface UploadProcessingStatus {
+  total: number;
+  pending: number;
+  processing: number;
+  complete: number;
+  failed: number;
+}
+
 export const galleryService = {
   // Verify share token
   async verifyToken(slug: string, token: string): Promise<{ valid: boolean }> {
@@ -53,17 +78,51 @@ export const galleryService = {
   async getGalleryPhotos(
     slug: string,
     filter?: 'liked' | 'favorited' | 'commented' | 'rated' | 'all',
-    guestId?: string
+    guestId?: string,
+    signal?: AbortSignal
   ): Promise<GalleryData> {
-    const params: any = {};
+    const params: Record<string, string | number> = { limit: 250, page: 1 };
     if (filter && filter !== 'all') {
       params.filter = filter;
       if (guestId) {
         params.guest_id = guestId;
       }
     }
-    const response = await api.get<GalleryData>(`/gallery/${slug}/photos`, { params });
+    const response = await api.get<GalleryData>(`/gallery/${slug}/photos`, { params: { ...params }, signal });
     const data = response.data;
+    // Existing filter/folder/lightbox consumers require the complete set.
+    // Fetch bounded pages so the API only hydrates feedback and faces for 250
+    // photos at once. A cancelled gallery query also cancels later pages.
+    const photos = new Map(data.photos.map(photo => [photo.id, photo]));
+    let pagination = data.pagination;
+    if (pagination?.has_more) {
+      const fetchPage = async (page: number) =>
+        (await api.get<GalleryData>(`/gallery/${slug}/photos`, { params: { ...params, page }, signal })).data;
+      // Page 1 reports the total, so the remaining pages are known up front
+      // and fetched a few at a time instead of one round-trip after another.
+      const pageSize = pagination.limit || Number(params.limit);
+      const lastKnownPage = pagination.total ? Math.ceil(pagination.total / pageSize) : pagination.page + 1;
+      const firstPage = pagination.page;
+      const pending = Array.from({ length: Math.max(0, lastKnownPage - firstPage) }, (_, i) => firstPage + 1 + i);
+      const fetched = new Map<number, GalleryData>();
+      await Promise.all(Array.from({ length: Math.min(PAGE_FETCH_CONCURRENCY, pending.length) }, async () => {
+        for (let page = pending.shift(); page !== undefined; page = pending.shift()) {
+          fetched.set(page, await fetchPage(page));
+        }
+      }));
+      // Insert in page order: the Map keeps the server's sort.
+      for (const page of [...fetched.keys()].sort((a, b) => a - b)) {
+        const result = fetched.get(page) as GalleryData;
+        result.photos.forEach(photo => photos.set(photo.id, photo));
+        pagination = result.pagination;
+      }
+      // Photos added while paging push the total past what page 1 reported.
+      while (pagination?.has_more) {
+        const next = await fetchPage(pagination.page + 1);
+        next.photos.forEach(photo => photos.set(photo.id, photo));
+        pagination = next.pagination;
+      }
+    }
     const normalizedEvent = data?.event
       ? {
           ...data.event,
@@ -72,8 +131,21 @@ export const galleryService = {
       : data.event;
     return {
       ...data,
+      photos: [...photos.values()],
       event: normalizedEvent,
     };
+  },
+
+  // Processing status for the guest's own uploads (B7). A guest upload is
+  // queued — the route answers 202 and getGalleryPhotos only returns rows that
+  // finished processing — so this is what tells the gallery whether a photo
+  // that has not appeared yet is still in the worker's queue or failed
+  // outright. Scoped server-side to the gallery this token unlocked.
+  async getUploadStatus(slug: string, uploadIds: string[]): Promise<UploadProcessingStatus> {
+    const response = await api.get<UploadProcessingStatus>(`/gallery/${slug}/uploads/status`, {
+      params: { ids: uploadIds.join(',') },
+    });
+    return response.data;
   },
 
   // Save single photo. iOS routes through the Web Share API so the
@@ -89,12 +161,7 @@ export const galleryService = {
   async savePhotoToDevice(slug: string, photoId: number, filename: string): Promise<void> {
     if (!isIOS()) {
       this.triggerDirectDownload(
-        // Native anchor download: bypasses the axios interceptor, so a draft
-        // preview needs the flag on the URL itself (#1386). Applied to the
-        // relative path BEFORE getUri: with an absolute VITE_API_URL getUri
-        // returns an absolute URL, and withAdminPreview refuses those by
-        // design, which would silently drop the flag.
-        api.getUri({ url: withAdminPreview(`/gallery/${slug}/download/${photoId}`) }),
+        withAdminPreview(api.getUri({ url: `/gallery/${slug}/download/${photoId}` })),
         filename,
       );
       return;
@@ -141,7 +208,7 @@ export const galleryService = {
     slug: string,
     photoId: number,
   ): Promise<{ blob: Blob; serverFilename: string | null }> {
-    const readResponse = (response: { data: Blob; headers: Record<string, string> }) => {
+    const readResponse = (response: AxiosResponse<Blob>) => {
       const headerName =
         response.headers['content-disposition'] || response.headers['Content-Disposition'];
       return {
@@ -151,7 +218,7 @@ export const galleryService = {
     };
 
     try {
-      const response = await api.get(`/gallery/${slug}/download/${photoId}`, {
+      const response = await api.get<Blob>(`/gallery/${slug}/download/${photoId}`, {
         responseType: 'blob',
       });
       return readResponse(response);
@@ -160,7 +227,7 @@ export const galleryService = {
       // the original is missing and only a derivative remains). The
       // view endpoint doesn't emit a download-oriented Content-Disposition,
       // so serverFilename will be null and the caller's name wins.
-      const response = await api.get(`/gallery/${slug}/photo/${photoId}`, {
+      const response = await api.get<Blob>(`/gallery/${slug}/photo/${photoId}`, {
         responseType: 'blob',
       });
       return readResponse(response);
@@ -276,6 +343,39 @@ export const galleryService = {
     window.URL.revokeObjectURL(url);
   },
 
+  // ── Custom-resolution downloads (#858) ──────────────────────────────────
+  // A non-standard resolution has nothing cached behind it and can take
+  // minutes to build, so the server does it as a job we poll rather than
+  // holding a request open past the proxy timeout.
+
+  // Kick off a build. `photoIds` omitted = the whole gallery.
+  async startDownloadJob(
+    slug: string,
+    resolution: string,
+    photoIds?: number[]
+  ): Promise<{ token: string; status: DownloadJobStatus }> {
+    const body: Record<string, unknown> = { resolution };
+    if (photoIds && photoIds.length) body.photo_ids = photoIds;
+    const response = await api.post(`/gallery/${slug}/download-jobs`, body);
+    return response.data;
+  },
+
+  async getDownloadJob(slug: string, token: string): Promise<DownloadJobState> {
+    const response = await api.get(`/gallery/${slug}/download-jobs/${token}`);
+    return response.data;
+  },
+
+  // Native browser download so the archive streams with Content-Length
+  // (real progress bar, no in-memory blob for a multi-GB gallery).
+  downloadJobFile(slug: string, token: string, filename: string): void {
+    const link = document.createElement('a');
+    link.href = withAdminPreview(`/api/gallery/${slug}/download-jobs/${token}/file`);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  },
+
   // iOS-only Web Share path for a selection of photos.
   //
   // Returns:
@@ -341,6 +441,18 @@ export const galleryService = {
 
   async resolveIdentifier(identifier: string): Promise<ResolvedGalleryIdentifier> {
     const response = await api.get<ResolvedGalleryIdentifier>(`/gallery/resolve/${identifier}`);
+    return response.data;
+  },
+
+  /**
+   * People detected in this gallery (#1074).
+   *
+   * Returns an empty list rather than an error when the feature is off, so a
+   * guest can't tell "no people here" from "feature disabled". Counts and
+   * cover faces are scoped server-side to the photos this viewer may see.
+   */
+  async getPeople(slug: string): Promise<GalleryPeopleResponse> {
+    const response = await api.get<GalleryPeopleResponse>(`/gallery/${slug}/people`);
     return response.data;
   },
 };

@@ -1,17 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useDevToolsProtection } from '../../hooks/useDevToolsProtection';
-import { X, ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut, MessageSquare, Heart, Star } from 'lucide-react';
-import type { Photo } from '../../types';
+import { X, ChevronLeft, ChevronRight, Download, ZoomIn, ZoomOut, Minimize2, MessageSquare, Heart, Star } from 'lucide-react';
+import type { Photo, GalleryPerson } from '../../types';
 import { useSavePhotoToDevice } from '../../hooks/useGallery';
 import { AuthenticatedImage } from '../common';
 import { PhotoFeedback } from './PhotoFeedback';
-import { feedbackService } from '../../services/feedback.service';
+import { lightboxImageUrl } from './imageTiers';
+import { feedbackService, type ColorLabel, type KeybindMode } from '../../services/feedback.service';
+import { PhotoColorLabels } from './PhotoColorLabels';
+import { resolveFeedbackKey, colorShortcutHints } from '../../utils/feedbackKeybinds';
 import { galleryService } from '../../services/gallery.service';
 import { FeedbackIdentityModal } from './FeedbackIdentityModal';
 import { VideoPlayer } from './VideoPlayer';
 import { useGuestIdentityOptional } from '../../contexts/GuestIdentityContext';
 import { useFeedbackLimitModal } from '../../hooks/useFeedbackLimitModal';
-import { lightboxImageUrl } from './imageTiers';
 
 interface PhotoLightboxProps {
   photos: Photo[];
@@ -32,6 +35,14 @@ interface PhotoLightboxProps {
   // back to source files (#508). Tied to the admin-side toggle that
   // also drives original-filename downloads (#493).
   showOriginalFilename?: boolean;
+  // People in this gallery (#1074). Passed only when the feature is on for
+  // the event AND visible to this viewer — an empty list means "scanned,
+  // nobody found", which the chips row handles by not rendering.
+  people?: GalleryPerson[];
+  // Applying a person filter closes the lightbox and filters the grid
+  // behind it, so the guest lands on the result rather than paging through
+  // the old set.
+  onSelectPerson?: (personId: number) => void;
 }
 
 export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
@@ -49,6 +60,8 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
   disableRightClick = false,
   enableDevtoolsProtection = false,
   showOriginalFilename = false,
+  people,
+  onSelectPerson,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [zoom, setZoom] = useState(1);
@@ -81,19 +94,26 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
     allow_likes?: boolean;
     allow_ratings?: boolean;
     allow_comments?: boolean;
+    allow_reactions?: boolean;
+    allow_color_labels?: boolean;
+    keybind_mode?: KeybindMode;
     show_feedback_to_guests?: boolean;
     require_name_email?: boolean;
   } | null>(null);
   const [myLiked, setMyLiked] = useState<boolean>(false);
   const [myRating, setMyRating] = useState<number>(0);
+  const [myColorLabel, setMyColorLabel] = useState<ColorLabel | null>(null);
+  const [colorLabelCounts, setColorLabelCounts] = useState<Partial<Record<ColorLabel, number>>>({});
   const [likeCount, setLikeCount] = useState<number>(0);
   const [avgRating, setAvgRating] = useState<number>(0);
   const [totalRatings, setTotalRatings] = useState<number>(0);
   const [savedIdentity, setSavedIdentity] = useState<{ name: string; email: string } | null>(null);
   const [showIdentityModal, setShowIdentityModal] = useState(false);
-  const [pendingAction, setPendingAction] = useState<null | { type: 'like' | 'rating'; rating?: number }>(null);
+  const [pendingAction, setPendingAction] = useState<null | { type: 'like' | 'rating' | 'color_label'; rating?: number; color?: ColorLabel }>(null);
   const guestIdentity = useGuestIdentityOptional();
   const isGuestMode = guestIdentity?.identityMode === 'guest';
+  // Which shortcut scheme this gallery uses (#1044).
+  const keybindMode: KeybindMode = feedbackSettings?.keybind_mode || 'colors';
   // Per-guest cap modal (#655) — shared across every submitFeedback call site
   // in the lightbox (guest mode, simple mode, identity-modal-confirm path).
   const { modal: limitModal, handleError: handleLimitError } = useFeedbackLimitModal();
@@ -103,6 +123,31 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  // The bottom toolbar is opaque and the image area stops above it (#888)
+  // so the toolbar never masks part of the photo. Its height varies
+  // (flex-wrap on small screens, optional filename line, safe-area
+  // padding), so measure it and keep the measurement fresh.
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [toolbarHeight, setToolbarHeight] = useState(0);
+  useLayoutEffect(() => {
+    const el = toolbarRef.current;
+    if (!el) return;
+    setToolbarHeight(el.offsetHeight);
+    const observer = new ResizeObserver(() => setToolbarHeight(el.offsetHeight));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Keep the index valid when the photo list shrinks while open (see
+  // currentPhoto fallback below).
+  useEffect(() => {
+    if (photos.length === 0) {
+      onClose();
+    } else if (currentIndex > photos.length - 1) {
+      setCurrentIndex(photos.length - 1);
+    }
+  }, [photos.length, currentIndex]);
 
   // View beacon (#895): count exactly the photo that became the visible
   // slide. The image fetches themselves can't be counted — preloaded
@@ -122,7 +167,23 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
   // otherwise have to chain Files → unzip → save (#531). Desktop and
   // unsupported browsers fall through to a regular <a download>.
   const downloadPhotoMutation = useSavePhotoToDevice();
-  const currentPhoto = photos[currentIndex];
+  // Fall back to the last photo when the list shrinks under us: clearing
+  // your rating under the "Rated" feedback filter (#884) — like unliking
+  // under "Likes" — refetches the gallery and can drop the current photo,
+  // leaving currentIndex past the end. The effect below re-syncs the
+  // index (or closes the lightbox when nothing is left).
+  const currentPhoto = photos[currentIndex] ?? photos[photos.length - 1];
+
+  const { t } = useTranslation();
+
+  // People detected in the open photo (#1074). Resolved against the list the
+  // server returned rather than the raw ids, so a person the photographer
+  // hid or ignored has no entry to match and simply never appears.
+  const peopleInPhoto = useMemo<GalleryPerson[]>(() => {
+    const ids = currentPhoto?.person_ids;
+    if (!ids?.length || !people?.length) return [];
+    return people.filter((person) => ids.includes(person.id));
+  }, [currentPhoto?.person_ids, people]);
   // Per-category download permission (#640). AND'd with the event-level
   // allowDownloads — disabling at either level hides the download button.
   // Defaults true for uncategorised photos and pre-migration-135 categories.
@@ -171,6 +232,21 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
     };
   }, [disableRightClick]);
 
+  // The keydown effect below is registered with [currentIndex] deps, so its
+  // closure would still hold the settings from the moment the lightbox
+  // opened — i.e. `null`, since they load asynchronously, leaving every
+  // proofing shortcut dead until the user changed photo. A ref refreshed on
+  // every render keeps the handler reading current state without
+  // re-registering the listener on each keystroke's worth of state change.
+  const proofingRef = useRef({
+    feedbackEnabled: false,
+    allowColorLabels: false,
+    allowRatings: false,
+    keybindMode: 'colors' as KeybindMode,
+    myRating: 0,
+    submitColorLabel: (async () => {}) as (color: ColorLabel | null) => Promise<void>,
+    submitRating: (async () => {}) as (value: number) => Promise<void>,
+  });
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       switch (e.key) {
@@ -197,6 +273,30 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
             handleDownload();
           }
           break;
+        default: {
+          // Proofing shortcuts (#1044). Resolved from the event's keybind
+          // scheme so 1/2/3 mean colours in colour-only mode and stars in
+          // Lightroom mode; the helper ignores modified keys and anything
+          // typed into a field.
+          const proofing = proofingRef.current;
+          if (!proofing.feedbackEnabled) break;
+          const action = resolveFeedbackKey(e, {
+            mode: proofing.keybindMode,
+            allowColorLabels: proofing.allowColorLabels,
+            allowRatings: proofing.allowRatings,
+          });
+          if (!action) break;
+          e.preventDefault();
+          if (action.type === 'color') {
+            void proofing.submitColorLabel(action.color);
+          } else if (action.type === 'rating') {
+            // Pressing the current rating again clears it (#884).
+            void proofing.submitRating(action.value === proofing.myRating ? 0 : action.value);
+          } else {
+            void proofing.submitColorLabel(null);
+          }
+          break;
+        }
       }
     };
 
@@ -238,11 +338,13 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
     let mounted = true;
     (async () => {
       try {
-        if (!feedbackSettings?.feedback_enabled) return;
+        if (!feedbackSettings?.feedback_enabled || !currentPhoto) return;
         const data = await feedbackService.getPhotoFeedback(slug, String(currentPhoto.id));
         if (!mounted) return;
         setMyLiked(!!data.my_feedback.liked);
         setMyRating(data.my_feedback.rating || 0);
+        setMyColorLabel((data.my_feedback.color_label as ColorLabel) || null);
+        setColorLabelCounts(data.color_labels || {});
         setLikeCount(Number(data.summary?.like_count) || 0);
         setAvgRating(Number(data.summary?.average_rating) || 0);
         setTotalRatings(Number(data.summary?.total_ratings) || 0);
@@ -251,7 +353,7 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
       }
     })();
     return () => { mounted = false; };
-  }, [slug, currentPhoto.id, feedbackSettings?.feedback_enabled]);
+  }, [slug, currentPhoto?.id, feedbackSettings?.feedback_enabled]);
 
   const submitLike = async () => {
     // Guest identity mode: ensure we have a per-person guest token. The
@@ -300,6 +402,11 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
         setLikeCount(c => Math.max(0, c + (next ? 1 : -1)));
         return next;
       });
+      // Keep the gallery's photo list (like_count drives the feedback
+      // filter chips) in sync — the guest-mode path above already does
+      // this; without it, likes made in the lightbox don't appear in
+      // the Likes filter until a full page reload.
+      if (onFeedbackChange) onFeedbackChange();
     } catch (err) {
       if (handleLimitError(err)) return;
       // eslint-disable-next-line no-console
@@ -354,6 +461,80 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
       setAvgRating(Number(fresh.summary?.average_rating) || 0);
       setTotalRatings(Number(fresh.summary?.total_ratings) || 0);
     } catch {}
+    // Sync gallery photo list so the Rated filter reflects this rating
+    // without a reload (parity with the guest-mode path above).
+    if (onFeedbackChange) onFeedbackChange();
+  };
+
+  /**
+   * Set / switch / clear the guest's colour label (#1044). Same identity
+   * handling as submitLike above; `null` means "clear", which the backend
+   * expresses as submitting the current colour again.
+   */
+  const submitColorLabel = async (color: ColorLabel | null) => {
+    if (!feedbackSettings?.allow_color_labels) return;
+    // Clearing means re-submitting the current colour — the backend toggles
+    // a repeat submission off. With nothing set there is nothing to clear.
+    const value = color ?? myColorLabel;
+    if (!value) return;
+    // What the server did, not what this client guessed. In shared mode the
+    // tag belongs to the photo and another guest can move it between this
+    // viewer's last read and this keypress (#1197), so a locally computed
+    // toggle can blank a swatch the server has just set. The per-guest modes
+    // always agree with the guess — only the guest can move their own label.
+    const resolve = (result: any) => (result?.removed ? null : value);
+
+    if (isGuestMode && guestIdentity) {
+      try {
+        await guestIdentity.ensureIdentity();
+      } catch {
+        return;
+      }
+      try {
+        const result = await feedbackService.submitFeedback(slug, String(currentPhoto.id), {
+          feedback_type: 'color_label',
+          color_label: value,
+        });
+        setMyColorLabel(resolve(result));
+        if (onFeedbackChange) onFeedbackChange();
+      } catch (err) {
+        if (handleLimitError(err)) return;
+        console.warn('Color label submit failed', err);
+      }
+      return;
+    }
+
+    const needIdentity = feedbackSettings?.require_name_email && !savedIdentity;
+    if (needIdentity) {
+      setPendingAction({ type: 'color_label', color: value });
+      setShowIdentityModal(true);
+      return;
+    }
+    try {
+      const result = await feedbackService.submitFeedback(slug, String(currentPhoto.id), {
+        feedback_type: 'color_label',
+        color_label: value,
+        guest_name: savedIdentity?.name,
+        guest_email: savedIdentity?.email,
+      });
+      setMyColorLabel(resolve(result));
+      if (onFeedbackChange) onFeedbackChange();
+    } catch (err) {
+      if (handleLimitError(err)) return;
+      console.warn('Color label submit failed', err);
+    }
+  };
+
+  // Refreshed on every render (see the ref's declaration above): the keydown
+  // listener reads current settings and handlers without being re-registered.
+  proofingRef.current = {
+    feedbackEnabled: !!feedbackEnabled && !!feedbackSettings?.feedback_enabled,
+    allowColorLabels: !!feedbackSettings?.allow_color_labels,
+    allowRatings: !!feedbackSettings?.allow_ratings,
+    keybindMode,
+    myRating,
+    submitColorLabel,
+    submitRating,
   };
 
   const goToPrevious = () => {
@@ -411,12 +592,62 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
     setIsDragging(false);
   };
 
-  const handleImageClick = (e: React.MouseEvent) => {
-    // Only close if clicking the background, not the image
-    if (e.target === e.currentTarget) {
-      onClose();
+  // Double-click returns a zoomed image to fit-to-screen (#886). At zoom 1
+  // it does nothing.
+  const handleDoubleClick = () => {
+    if (zoom > 1) {
+      resetZoom();
     }
   };
+
+  // Mouse-wheel zoom centered on the cursor (#885). Multiplicative steps
+  // feel uniform across the 1–3 range and are finer than the 0.5-step
+  // toolbar buttons. Attached as a native non-passive listener because
+  // the event must be preventDefault()ed to keep the page behind the
+  // lightbox from scrolling, and React's onWheel can't guarantee that.
+  const wheelStateRef = useRef({ zoom, dragOffset });
+  wheelStateRef.current = { zoom, dragOffset };
+  useEffect(() => {
+    const el = trackContainerRef.current;
+    if (!el || currentPhoto?.media_type === 'video') return;
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const { zoom: prevZoom, dragOffset: prevOffset } = wheelStateRef.current;
+      // Normalise deltaY to pixels: deltaMode 1 = lines (Firefox),
+      // deltaMode 2 = pages (rare; deltaY is ±1 per notch there).
+      const deltaPx = e.deltaMode === 1 ? e.deltaY * 33
+        : e.deltaMode === 2 ? e.deltaY * 300
+        : e.deltaY;
+      const nextZoom = Math.min(3, Math.max(1, prevZoom * Math.exp(-deltaPx * 0.002)));
+      if (nextZoom === prevZoom) return;
+      if (nextZoom <= 1) {
+        // Sync the ref before the async setState so a burst of wheel
+        // events landing within one render frame chains each step off
+        // the previous one instead of all reading the same stale zoom.
+        wheelStateRef.current = { zoom: 1, dragOffset: { x: 0, y: 0 } };
+        setZoom(1);
+        setDragOffset({ x: 0, y: 0 });
+        return;
+      }
+      // Keep the image point under the cursor fixed while the scale
+      // changes: take the cursor's offset from the container centre (the
+      // image's natural centre) and rescale its distance to the current
+      // pan offset by the zoom ratio.
+      const rect = el.getBoundingClientRect();
+      const cx = e.clientX - (rect.left + rect.width / 2);
+      const cy = e.clientY - (rect.top + rect.height / 2);
+      const ratio = nextZoom / prevZoom;
+      const nextOffset = {
+        x: cx - (cx - prevOffset.x) * ratio,
+        y: cy - (cy - prevOffset.y) * ratio,
+      };
+      wheelStateRef.current = { zoom: nextZoom, dragOffset: nextOffset };
+      setZoom(nextZoom);
+      setDragOffset(nextOffset);
+    };
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [currentPhoto]);
 
   // Touch event handlers: pinch-to-zoom (2 fingers) + single-finger
   // carousel-style swipe nav. Swipe is suppressed while zoomed in so the
@@ -617,6 +848,12 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
     `fixed inset-0 bg-black z-50 flex items-center justify-center protected-image protection-${protectionLevel}` :
     'fixed inset-0 bg-black z-50 flex items-center justify-center';
 
+  // Empty list (last photo dropped out of the current filter): the effect
+  // above is about to close the lightbox — render nothing meanwhile.
+  if (!currentPhoto) {
+    return null;
+  }
+
   const desktopFeedbackWidth = 416; // 26rem; keep in sync with panel width
   const isDesktopFeedback = showFeedback && !isSmallScreen;
 
@@ -659,9 +896,12 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
       {/* Bottom toolbar. flex-wrap + reduced gap/padding on mobile prevent
          the action row from clipping when feedback (likes / 5-star ratings /
          comments) is enabled. pb-[env(safe-area-inset-bottom)] keeps the
-         buttons above the iOS home indicator. */}
+         buttons above the iOS home indicator. Opaque, and the image area
+         above is shortened by toolbarHeight so it never masks the photo
+         (#888). */}
       <div
-        className="absolute bottom-0 left-0 bg-gradient-to-t from-black/80 to-transparent px-3 pt-3 pb-3 sm:p-4 z-20"
+        ref={toolbarRef}
+        className="absolute bottom-0 left-0 bg-black px-3 pt-3 pb-3 sm:p-4 z-20"
         style={{
           right: isDesktopFeedback ? `${desktopFeedbackWidth}px` : 0,
           paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))'
@@ -685,6 +925,37 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
                 {currentPhoto.original_filename || currentPhoto.filename}
               </p>
             )}
+
+            {/* People in this photo (#1074). The second way into the face
+                filter: a guest looking at a photo of themselves can act on
+                it without scrolling back to the strip.
+
+                Only people the server already returned are shown, so hidden
+                and ignored ones never appear here either. Unnamed people
+                show their photo count, never an invented name. */}
+            {peopleInPhoto.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                <span className="text-xs text-white opacity-60">
+                  {t('gallery.people.inThisPhoto', { defaultValue: 'In this photo:' })}
+                </span>
+                {peopleInPhoto.map((person) => (
+                  <button
+                    key={person.id}
+                    type="button"
+                    onClick={() => {
+                      onSelectPerson?.(person.id);
+                      onClose();
+                    }}
+                    className="px-2 py-0.5 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs transition-colors"
+                  >
+                    {person.label || t('gallery.people.unnamedCount', {
+                      count: person.face_count,
+                      defaultValue: `${person.face_count} photos`,
+                    })}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
@@ -707,7 +978,18 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
             >
               <ZoomIn className="w-5 h-5 text-white" />
             </button>
-            
+            {/* One-click return from zoomed to fit-to-screen (#886).
+                Double-clicking the image does the same. */}
+            <button
+              onClick={resetZoom}
+              disabled={zoom <= 1}
+              className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Fit to screen"
+              title="Fit to screen"
+            >
+              <Minimize2 className="w-5 h-5 text-white" />
+            </button>
+
             <div className="w-px h-6 bg-white/20 mx-2" />
             
             {photoAllowsDownload && (
@@ -751,10 +1033,12 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
                 {[1,2,3,4,5].map((i) => (
                   <button
                     key={i}
-                    onClick={() => submitRating(i)}
+                    // Clicking the current rating again clears it (#884) —
+                    // 0 tells the backend to delete the guest's rating.
+                    onClick={() => submitRating(i === myRating ? 0 : i)}
                     className="p-1"
-                    aria-label={`Rate ${i} star${i>1?'s':''}`}
-                    title={`Rate ${i}`}
+                    aria-label={i === myRating ? 'Remove rating' : `Rate ${i} star${i>1?'s':''}`}
+                    title={i === myRating ? 'Remove rating' : `Rate ${i}`}
                   >
                     <Star className={`w-5 h-5 ${myRating >= i ? 'text-yellow-400 fill-yellow-400' : 'text-white/70'}`} />
                   </button>
@@ -763,12 +1047,32 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
               </div>
             )}
             
-            {/* Feedback button with indicator. Gated on allow_comments
-                because likes/ratings already have their own dedicated
-                toolbar buttons above — this MessageSquare button only
-                opens the comments panel, so it has nothing to do when
-                comments are off (#518). */}
-            {feedbackEnabled && feedbackSettings?.allow_comments && (
+            {/* Inline color labels (#1044). In the toolbar rather than the
+                feedback panel: the whole point is a fast keyboard/click
+                proofing pass, which a panel toggle would interrupt. */}
+            {feedbackEnabled && feedbackSettings?.allow_color_labels && (
+              <div className="flex items-center gap-1 ml-1">
+                <PhotoColorLabels
+                  photoId={String(currentPhoto.id)}
+                  gallerySlug={slug}
+                  myColorLabel={myColorLabel}
+                  colorLabelCounts={feedbackSettings?.show_feedback_to_guests ? colorLabelCounts : {}}
+                  isEnabled
+                  requireNameEmail={!!feedbackSettings?.require_name_email}
+                  shortcutHints={colorShortcutHints(keybindMode)}
+                  onColorLabelChange={(label) => {
+                    setMyColorLabel(label);
+                    if (onFeedbackChange) onFeedbackChange();
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Feedback button with indicator. Likes/ratings have their
+                own dedicated toolbar buttons above, so this panel toggle
+                only has work to do when comments (#518) or the emoji
+                reaction bar (#839) live inside the panel. */}
+            {feedbackEnabled && (feedbackSettings?.allow_comments || feedbackSettings?.allow_reactions) && (
               <button
                 onClick={() => {
                   setShowFeedback(!showFeedback);
@@ -839,9 +1143,15 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
                   />
                 ) : (
                   <AuthenticatedImage
-                    // The preview tier, falling back to slideshow_url when the
-                    // admin never flipped lightbox_preview_enabled (#1166) —
-                    // otherwise a stock install renders the untouched original.
+                    // The user is looking at this one right now: top tier,
+                    // ahead of both the grid backlog and the neighbour
+                    // prefetches enqueued around it (#1287).
+                    queuePriority="high"
+                    // Prefer the lightbox preview tier when the admin
+                    // opted in (#492). Falls back to `url` (the
+                    // original) when preview_url is null — happens
+                    // when the toggle is off, when the photo is a
+                    // video, or briefly while lazy generation runs.
                     src={lightboxImageUrl(photo)}
                     alt={photo.filename}
                     fallbackSrc={photo.thumbnail_url || undefined}
@@ -849,9 +1159,6 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
                     draggable={false}
                     isGallery={true}
                     slug={slug}
-                    photoId={photo.id}
-                    requiresToken={photo.requires_token}
-                    secureUrlTemplate={photo.secure_url_template}
                   />
                 )}
               </div>
@@ -863,10 +1170,13 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
               key={slideKey(photo, slot)}
               className="h-full flex items-center justify-center"
               style={{ flex: '0 0 33.3333%' }}
-              onClick={handleImageClick}
             >
               <AuthenticatedImage
-                // Same source selection as the off-screen tile above (#1166).
+                // One arrow-key press from being on screen: ahead of the grid
+                // backlog, but never ahead of the slide being viewed (#1287).
+                queuePriority="prefetch"
+                // Same preview-prefer-with-fallback logic as the
+                // off-screen tile above (#492).
                 src={lightboxImageUrl(photo)}
                 alt={photo.filename}
                 fallbackSrc={photo.thumbnail_url || undefined}
@@ -876,21 +1186,9 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
                   transition: isDragging ? 'none' : 'transform 0.2s',
                 }}
                 draggable={false}
-                useWatermark={useEnhancedProtection}
-                watermarkText={useEnhancedProtection ? `${photo.filename} - Protected` : undefined}
                 isGallery={true}
                 slug={slug}
-                photoId={photo.id}
-                requiresToken={photo.requires_token}
-                secureUrlTemplate={photo.secure_url_template}
-                protectFromDownload={!allowDownloads || useEnhancedProtection}
-                protectionLevel={protectionLevel}
-                useEnhancedProtection={useEnhancedProtection}
                 useCanvasRendering={useCanvasRendering || protectionLevel === 'maximum'}
-                fragmentGrid={protectionLevel === 'enhanced' || protectionLevel === 'maximum'}
-                blockKeyboardShortcuts={useEnhancedProtection}
-                detectPrintScreen={useEnhancedProtection}
-                detectDevTools={protectionLevel === 'enhanced' || protectionLevel === 'maximum'}
                 onProtectionViolation={(violationType) => {
                   console.warn(`Protection violation in lightbox for photo ${photo.id}: ${violationType}`);
 
@@ -916,8 +1214,8 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
         return (
           <div
             ref={trackContainerRef}
-            className="absolute top-0 left-0 bottom-0 overflow-hidden z-0"
-            onClick={isVideoCurrent ? undefined : handleImageClick}
+            className="absolute top-0 left-0 overflow-hidden z-0"
+            onDoubleClick={isVideoCurrent ? undefined : handleDoubleClick}
             onMouseDown={isVideoCurrent ? undefined : handleMouseDown}
             onMouseMove={isVideoCurrent ? undefined : handleMouseMove}
             onMouseUp={isVideoCurrent ? undefined : handleMouseUp}
@@ -929,6 +1227,9 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
             style={{
               cursor: isVideoCurrent ? 'default' : (zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'),
               right: isDesktopFeedback ? `${desktopFeedbackWidth}px` : 0,
+              // Stop above the opaque toolbar so it never masks the
+              // photo (#888).
+              bottom: `${toolbarHeight}px`,
               // Tell the browser we handle horizontal gestures ourselves so
               // it doesn't fight us with edge-swipe back navigation, native
               // pinch-zoom, etc. Videos keep default touch behaviour.
@@ -1011,7 +1312,9 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
               // Per-guest cap reached (#655) on the post-identity-modal submit.
               if (!handleLimitError(err)) throw err;
             }
-          } else if (pendingAction?.type === 'rating' && pendingAction.rating) {
+          } else if (pendingAction?.type === 'rating' && typeof pendingAction.rating === 'number') {
+            // Explicit number check above: a pending rating of 0 (= clear
+            // my rating, #884) must still be submitted.
             await feedbackService.submitFeedback(slug, String(currentPhoto.id), {
               feedback_type: 'rating',
               rating: pendingAction.rating,
@@ -1019,10 +1322,37 @@ export const PhotoLightbox: React.FC<PhotoLightboxProps> = ({
               guest_email: email,
             });
             setMyRating(pendingAction.rating);
+            // Refresh the visible average/count — parity with the direct
+            // submit paths, and required for a clear (#884) so the old
+            // average doesn't linger until the photo is reopened.
+            try {
+              const fresh = await feedbackService.getPhotoFeedback(slug, String(currentPhoto.id));
+              setAvgRating(Number(fresh.summary?.average_rating) || 0);
+              setTotalRatings(Number(fresh.summary?.total_ratings) || 0);
+            } catch {}
+          } else if (pendingAction?.type === 'color_label' && pendingAction.color) {
+            try {
+              await feedbackService.submitFeedback(slug, String(currentPhoto.id), {
+                feedback_type: 'color_label',
+                color_label: pendingAction.color,
+                guest_name: name,
+                guest_email: email,
+              });
+              setMyColorLabel(pendingAction.color === myColorLabel ? null : pendingAction.color);
+            } catch (err) {
+              if (!handleLimitError(err)) throw err;
+            }
           }
+          // Sync gallery photo list (feedback filter chips) — parity with
+          // the direct submit paths.
+          if (onFeedbackChange) onFeedbackChange();
           setPendingAction(null);
         }}
-        feedbackType={pendingAction?.type === 'rating' ? 'rating' : 'like'}
+        feedbackType={
+          pendingAction?.type === 'rating' ? 'rating'
+            : pendingAction?.type === 'color_label' ? 'color label'
+              : 'like'
+        }
       />
       {/* Per-guest cap modal (#655). Single instance fires for any of the
           lightbox's submitFeedback paths via the shared hook. */}

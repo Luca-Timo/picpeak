@@ -44,6 +44,8 @@ export interface PublicSettings {
   branding_twitter_url?: string;
   branding_youtube_url?: string;
   branding_promo_markdown?: string;
+  // Global default for the gallery info banner (#932).
+  branding_info_markdown?: string;
   branding_promo_position?: 'above_footer' | 'below_footer';
   // Per-install promo banner alignment (#482). Defaults to 'center'
   // so the banner aligns with the gallery footer's centering.
@@ -82,6 +84,9 @@ export interface PublicSettings {
   // modal can render the real number in `upload.fileRequirements` and refuse
   // oversized batches client-side. Backend enforces the same value too.
   general_max_files_per_upload?: number;
+  // #613 follow-up — per-file size limit (MB), surfaced so the guest upload
+  // modal shows the real limit and guards client-side. Backend enforces it too.
+  general_max_file_size_mb?: number;
   // Event field requirements
   event_require_customer_name?: boolean;
   event_require_customer_email?: boolean;
@@ -90,12 +95,25 @@ export interface PublicSettings {
   event_require_expiration?: boolean;
   event_default_require_password?: boolean;
   event_default_feedback_enabled?: boolean;
+  // Per-type feedback defaults (#1044) — seed the create form's feedback panel.
+  event_default_allow_ratings?: boolean;
+  event_default_allow_likes?: boolean;
+  event_default_allow_favorites?: boolean;
+  event_default_allow_comments?: boolean;
+  event_default_allow_reactions?: boolean;
+  event_default_allow_color_labels?: boolean;
+  event_default_keybind_mode?: 'colors' | 'lightroom';
   gallery_show_filter_bar?: boolean;
   event_phone_field_enabled?: boolean;
   // SEO meta tags (consumed by RobotsMetaTags)
   seo_meta_noindex?: boolean;
   seo_meta_nofollow?: boolean;
   seo_meta_noai?: boolean;
+  // OIDC SSO (#798) — drives the "Sign in with SSO" button on /admin/login.
+  oidc_enabled?: boolean;
+  oidc_button_label?: string;
+  /** Effective flag (phase 2): the API refuses password logins right now. */
+  oidc_local_login_disabled?: boolean;
 }
 
 export const publicSettingsService = {

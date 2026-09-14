@@ -173,6 +173,8 @@ describe('concurrent external imports (#1162)', () => {
       path: 'x/a.jpg',
       type: 'individual',
       source_origin: 'external',
+      // Root-relative, as the route now writes it (#1163) — the competing
+      // writer has to target the same value for the race to be real.
       external_relpath: path.join('nas', 'individual', 'a.jpg'),
     };
 
@@ -194,6 +196,8 @@ describe('concurrent external imports (#1162)', () => {
       path: 'x/a.jpg',
       type: 'individual',
       source_origin: 'external',
+      // Root-relative, as the route now writes it (#1163) — the competing
+      // writer has to target the same value for the race to be real.
       external_relpath: path.join('nas', 'individual', 'a.jpg'),
     };
 

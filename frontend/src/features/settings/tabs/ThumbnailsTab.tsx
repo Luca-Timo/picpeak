@@ -288,11 +288,12 @@ export const ThumbnailsTab: React.FC = () => {
         </Button>
       </Card>
 
-      {/* Lightbox preview tier (#492). Independent opt-in from the
-          thumbnail size/quality settings above — costs disk but
-          dramatically speeds up lightbox open on mobile / slow
-          connections by serving an aspect-preserved ~1920px JPEG
-          instead of the multi-megabyte original. */}
+      {/* Lightbox preview tier (#492). The toggle no longer decides whether
+          the lightbox uses previews — since #1166 it always does, falling back
+          to slideshow_url, which the server emits for every image. Saving it
+          does not itself generate anything, so the copy does not claim to:
+          what it does is unlock the regenerate button below and keep
+          preview_url emitted. */}
       <Card padding="md">
         <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-1 flex items-center gap-2">
           <Image className="w-5 h-5 text-primary-600" />

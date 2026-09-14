@@ -3,10 +3,44 @@
  * Builds Knex queries for filtering photos by feedback metrics
  */
 
+const { COLOR_LABELS, SHARED_COLOR_LABEL_IDENTITY } = require('../constants/colorLabels');
+
+// The colour-label rows the event's current mode actually uses (#1197).
+// Switching identity_mode is non-destructive, so an event can hold a dormant
+// set alongside the live one; a filter that ignored the distinction would
+// match photos on labels the mode does not show.
+function scopeColorLabelsToMode(query, identityMode, column = 'photo_feedback.guest_identifier') {
+  if (identityMode === 'shared') {
+    return query.where(column, SHARED_COLOR_LABEL_IDENTITY);
+  }
+  return query.where(function () {
+    this.whereNot(column, SHARED_COLOR_LABEL_IDENTITY).orWhereNull(column);
+  });
+}
+
+/**
+ * Accept a colour filter as an array or a comma-separated string, drop
+ * anything that isn't one of the five known colours, and de-duplicate.
+ */
+function normalizeColorLabels(value) {
+  if (!value) return [];
+  const raw = Array.isArray(value) ? value : String(value).split(',');
+  const seen = new Set();
+  for (const entry of raw) {
+    const color = String(entry).trim().toLowerCase();
+    if (COLOR_LABELS.includes(color)) seen.add(color);
+  }
+  return [...seen];
+}
+
 class PhotoFilterBuilder {
-  constructor(queryBuilder, eventId) {
+  constructor(queryBuilder, eventId, identityMode = 'simple') {
     this.query = queryBuilder;
     this.eventId = eventId;
+    // Which colour-label set is live (#1197). Passed in rather than looked up:
+    // applyFilters is synchronous, and every caller already has the event's
+    // settings in hand.
+    this.identityMode = identityMode;
   }
 
   /**
@@ -21,6 +55,12 @@ class PhotoFilterBuilder {
       has_favorites,
       min_favorites,
       has_comments,
+      color_labels,
+      my_color_labels,
+      my_min_rating,
+      marked_only,
+      mark_source = 'either',
+      admin_id,
       category_id,
       logic = 'AND'
     } = filters;
@@ -57,6 +97,90 @@ class PhotoFilterBuilder {
 
     if (has_comments === true || has_comments === 'true') {
       conditions.push(builder => builder.where('photos.comment_count', '>', 0));
+    }
+
+    // Colour labels (#1044): "only the greens". Can't read a denormalized
+    // count — "has any label" and "has a GREEN label" are different questions
+    // — so this is an EXISTS over photo_feedback, covered by the
+    // photo_feedback_color_label_idx index from migration 180.
+    const requestedColors = normalizeColorLabels(color_labels);
+    if (requestedColors.length > 0) {
+      const identityMode = this.identityMode;
+      conditions.push(builder => builder.whereExists(function () {
+        scopeColorLabelsToMode(
+          this.select('*')
+            .from('photo_feedback')
+            .whereRaw('photo_feedback.photo_id = photos.id')
+            .where('photo_feedback.feedback_type', 'color_label')
+            .where('photo_feedback.is_hidden', false)
+            .whereIn('photo_feedback.color_label', requestedColors),
+          identityMode,
+        );
+      }));
+    }
+
+    // The same question against the caller's own marks (#1044 follow-up).
+    // Requires admin_id: without one this would filter by every admin's marks
+    // at once, so it is skipped rather than silently widened.
+    const requestedMyColors = normalizeColorLabels(my_color_labels);
+    if (requestedMyColors.length > 0 && admin_id) {
+      conditions.push(builder => builder.whereExists(function () {
+        this.select('*')
+          .from('photo_admin_marks')
+          .whereRaw('photo_admin_marks.photo_id = photos.id')
+          .where('photo_admin_marks.admin_id', admin_id)
+          .whereIn('photo_admin_marks.color_label', requestedMyColors);
+      }));
+    }
+
+    // The caller's own star rating (#745). Same admin_id requirement as the
+    // colour filter above, and skipped rather than widened without one.
+    if (my_min_rating !== undefined && my_min_rating !== null && admin_id) {
+      conditions.push(builder => builder.whereExists(function () {
+        this.select('*')
+          .from('photo_admin_marks')
+          .whereRaw('photo_admin_marks.photo_id = photos.id')
+          .where('photo_admin_marks.admin_id', admin_id)
+          .where('photo_admin_marks.rating', '>=', my_min_rating);
+      }));
+    }
+
+    // "Only the photos somebody actually marked" — the Lightroom round-trip's
+    // import scope (#745). This is ONE condition that ORs internally rather
+    // than several pushed conditions, so it still behaves as a single clause
+    // when the caller asked for `logic: 'AND'` alongside other filters.
+    //
+    // `mark_source` decides whose marks count: the client's proofing verdict,
+    // the photographer's own triage, or either. 'mine' and 'either' need an
+    // admin_id for the same reason the filters above do; without one the
+    // admin half is dropped instead of matching every admin's marks.
+    if (marked_only === true || marked_only === 'true') {
+      const wantsClient = mark_source === 'client' || mark_source === 'either';
+      const wantsMine = (mark_source === 'mine' || mark_source === 'either') && Boolean(admin_id);
+
+      conditions.push(builder => builder.where(function () {
+        if (wantsClient) {
+          this.orWhere('photos.color_label_count', '>', 0);
+          this.orWhere('photos.average_rating', '>', 0);
+        }
+        if (wantsMine) {
+          this.orWhereExists(function () {
+            this.select('*')
+              .from('photo_admin_marks')
+              .whereRaw('photo_admin_marks.photo_id = photos.id')
+              .where('photo_admin_marks.admin_id', admin_id)
+              .where(function () {
+                this.whereNotNull('photo_admin_marks.color_label')
+                  .orWhereNotNull('photo_admin_marks.rating');
+              });
+          });
+        }
+        // Neither half available (mark_source 'mine' with no admin_id) —
+        // match nothing rather than silently returning the whole event.
+        if (!wantsClient && !wantsMine) {
+          this.whereRaw('1 = 0');
+        }
+      }));
     }
 
     if (category_id) {
@@ -123,10 +247,11 @@ class PhotoFilterBuilder {
   /**
    * Build a count query for the same filters
    */
-  static buildCountQuery(db, eventId, filters = {}) {
+  static buildCountQuery(db, eventId, filters = {}, identityMode = 'simple') {
     const builder = new PhotoFilterBuilder(
       db('photos').count('* as count'),
-      eventId
+      eventId,
+      identityMode
     );
     builder.applyFilters(filters);
     return builder.getQuery();
@@ -135,7 +260,7 @@ class PhotoFilterBuilder {
   /**
    * Build a summary query for feedback counts
    */
-  static async getSummary(db, eventId) {
+  static async getSummary(db, eventId, identityMode = 'simple') {
     const result = await db('photos')
       .where('event_id', eventId)
       .select(
@@ -143,18 +268,39 @@ class PhotoFilterBuilder {
         db.raw('COUNT(CASE WHEN average_rating > 0 THEN 1 END) as with_ratings'),
         db.raw('COUNT(CASE WHEN like_count > 0 THEN 1 END) as with_likes'),
         db.raw('COUNT(CASE WHEN favorite_count > 0 THEN 1 END) as with_favorites'),
-        db.raw('COUNT(CASE WHEN comment_count > 0 THEN 1 END) as with_comments')
+        db.raw('COUNT(CASE WHEN comment_count > 0 THEN 1 END) as with_comments'),
+        db.raw('COUNT(CASE WHEN color_label_count > 0 THEN 1 END) as with_color_labels')
       )
       .first();
+
+    // Per-colour totals for the filter chips (#1044) — the swatch row shows
+    // "Green 42" so the photographer knows which colours are worth filtering.
+    const colorRows = await scopeColorLabelsToMode(
+      db('photo_feedback')
+        .where({ event_id: eventId, feedback_type: 'color_label' })
+        .where('is_hidden', false),
+      identityMode,
+    )
+      .groupBy('color_label')
+      .select('color_label')
+      .countDistinct('photo_id as count');
+
+    const colorLabelCounts = {};
+    for (const color of COLOR_LABELS) colorLabelCounts[color] = 0;
+    for (const row of colorRows) {
+      if (row.color_label) colorLabelCounts[row.color_label] = parseInt(row.count) || 0;
+    }
 
     return {
       total: parseInt(result.total) || 0,
       withRatings: parseInt(result.with_ratings) || 0,
       withLikes: parseInt(result.with_likes) || 0,
       withFavorites: parseInt(result.with_favorites) || 0,
-      withComments: parseInt(result.with_comments) || 0
+      withComments: parseInt(result.with_comments) || 0,
+      withColorLabels: parseInt(result.with_color_labels) || 0,
+      colorLabelCounts
     };
   }
 }
 
-module.exports = { PhotoFilterBuilder };
+module.exports = { PhotoFilterBuilder, normalizeColorLabels };

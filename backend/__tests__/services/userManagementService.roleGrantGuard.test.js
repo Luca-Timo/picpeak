@@ -17,10 +17,9 @@
  * far more permissions than the inviter itself held — via
  * POST /admin/users/invite.
  *
- * The fix adds assertActorMayGrant() — a local containment guard, since
- * stable does not yet have main's custom-role-creation service or its
- * roles.manage equivalent — inside both updateAdminUser's role_id branch
- * and createInvitation().
+ * The fix reuses assertActorMayGrant() — the same containment already
+ * applied to roles.manage (see adminRolesGuards.test.js) — inside both
+ * updateAdminUser's role_id branch and createInvitation().
  *
  * Both describe blocks below share a single bootCrmDb() call: the
  * `db` module (`src/database/db.js`) is a singleton keyed off
@@ -43,23 +42,6 @@ const { bootCrmDb, seedMinimal, assignAdminRole } = require('../integration/help
 const svc = require('../../src/services/userManagementService');
 const { clearPermissionCache } = require('../../src/middleware/permissions');
 
-// Stable has no custom-role-creation service (that's main-only); build a role
-// directly against the roles/permissions/role_permissions schema instead.
-async function createRole(db, name, permissionNames) {
-  const [roleRow] = await db('roles').insert({
-    name, display_name: name, is_system: false, priority: 10, created_at: new Date(), updated_at: new Date(),
-  }).returning('id');
-  const roleId = roleRow?.id ?? roleRow;
-  if (permissionNames.length > 0) {
-    const perms = await db('permissions').whereIn('name', permissionNames).select('id', 'name');
-    if (perms.length !== permissionNames.length) {
-      throw new Error(`Missing seeded permission(s) for: ${permissionNames.join(', ')}`);
-    }
-    await db('role_permissions').insert(perms.map((p) => ({ role_id: roleId, permission_id: p.id })));
-  }
-  return { id: roleId };
-}
-
 let db; let cleanup;
 let superId;
 
@@ -74,13 +56,16 @@ afterAll(async () => { if (cleanup) await cleanup(); });
 
 describe('updateAdminUser — role-grant privilege-escalation guard (GHSA-rv8w-m6mx-7j4q)', () => {
   let limitedRoleId; let limitedId; // holds only users.edit + events.view
-  let powerfulRoleId; // carries settings.edit, which limitedId does NOT hold
+  let powerfulRoleId; // carries settings.banking, which limitedId does NOT hold
   let modestRoleId; // carries only events.view, a subset of what limitedId holds
   let targetId; // account whose role limitedId will try to change
 
   beforeAll(async () => {
     // The attacker in GHSA-rv8w-m6mx-7j4q: users.edit only, nothing else.
-    const limitedRole = await createRole(db, 'limited_user_editor', ['users.edit', 'events.view']);
+    const limitedRole = await svc.createRole(
+      { name: 'limited_user_editor', permissions: ['users.edit', 'events.view'] },
+      superId,
+    );
     limitedRoleId = limitedRole.id;
     const limitedIns = await db('admin_users').insert({
       username: 'limited', email: 'limited@example.com', password_hash: 'x',
@@ -89,11 +74,17 @@ describe('updateAdminUser — role-grant privilege-escalation guard (GHSA-rv8w-m
     limitedId = limitedIns[0]?.id ?? limitedIns[0];
 
     // A role carrying a permission the limited actor does not hold.
-    const powerfulRole = await createRole(db, 'powerful_role', ['users.edit', 'settings.edit']);
+    const powerfulRole = await svc.createRole(
+      { name: 'powerful_role', permissions: ['users.edit', 'settings.banking'] },
+      superId,
+    );
     powerfulRoleId = powerfulRole.id;
 
     // A role whose permissions ARE a subset of what the limited actor holds.
-    const modestRole = await createRole(db, 'modest_role', ['events.view']);
+    const modestRole = await svc.createRole(
+      { name: 'modest_role', permissions: ['events.view'] },
+      superId,
+    );
     modestRoleId = modestRole.id;
 
     clearPermissionCache();
@@ -165,12 +156,15 @@ describe('updateAdminUser — role-grant privilege-escalation guard (GHSA-rv8w-m
 
 describe('createInvitation — role-grant privilege-escalation guard (GHSA-rv8w-m6mx-7j4q)', () => {
   let limitedRoleId; let limitedId; // holds only users.create + events.view
-  let powerfulRoleId; // carries settings.edit, which limitedId does NOT hold
+  let powerfulRoleId; // carries settings.banking, which limitedId does NOT hold
   let modestRoleId; // carries only events.view, a subset of what limitedId holds
   let inviteCounter = 0;
 
   beforeAll(async () => {
-    const limitedRole = await createRole(db, 'limited_inviter', ['users.create', 'events.view']);
+    const limitedRole = await svc.createRole(
+      { name: 'limited_inviter', permissions: ['users.create', 'events.view'] },
+      superId,
+    );
     limitedRoleId = limitedRole.id;
     const limitedIns = await db('admin_users').insert({
       username: 'limited_inviter', email: 'limited_inviter@example.com', password_hash: 'x',
@@ -178,10 +172,16 @@ describe('createInvitation — role-grant privilege-escalation guard (GHSA-rv8w-
     }).returning('id');
     limitedId = limitedIns[0]?.id ?? limitedIns[0];
 
-    const powerfulRole = await createRole(db, 'powerful_invite_role', ['users.create', 'settings.edit']);
+    const powerfulRole = await svc.createRole(
+      { name: 'powerful_invite_role', permissions: ['users.create', 'settings.banking'] },
+      superId,
+    );
     powerfulRoleId = powerfulRole.id;
 
-    const modestRole = await createRole(db, 'modest_invite_role', ['events.view']);
+    const modestRole = await svc.createRole(
+      { name: 'modest_invite_role', permissions: ['events.view'] },
+      superId,
+    );
     modestRoleId = modestRole.id;
 
     clearPermissionCache();

@@ -71,6 +71,7 @@ jest.mock('../../src/services/imageProcessor', () => {
   const mockExtractCaptureDate = jest.fn();
   return {
     generateThumbnail: mockGenerateThumbnail,
+    generateVideoPlaceholder: jest.fn(async (filename) => `thumbnails/thumb_${filename.replace(/\.[^.]+$/, '')}.jpg`),
     extractCaptureDate: mockExtractCaptureDate,
     // processPhoto routes stored dimensions through this to get the displayed
     // ones (#1185). Mirrored rather than requireActual'd, because pulling the
@@ -84,11 +85,19 @@ jest.mock('../../src/services/imageProcessor', () => {
     withLocalCopy: jest.fn(async (key, fn) =>
       fn(`/tmp/local-copy-${require('path').basename(key)}`)
     ),
+    // Pass-through for ordinary (non-RAW) images: returns the path unchanged
+    // with a no-op cleanup, matching the real helper's behaviour for jpg/png.
+    withProcessableImage: jest.fn(async (localPath) => ({
+      path: localPath,
+      outputBasename: undefined,
+      cleanup: () => {},
+    })),
   };
 });
 
 jest.mock('../../src/services/videoProcessor', () => ({
   processUploadedVideo: jest.fn(),
+  extractVideoMetadata: jest.fn(),
   isVideoMimeType: (mime) => typeof mime === 'string' && mime.startsWith('video/'),
 }));
 
@@ -212,6 +221,44 @@ describe('photoProcessor.processPhoto', () => {
 
     // Watermark queue is image-only.
     expect(watermarkService.generateForPhoto).not.toHaveBeenCalled();
+  });
+
+  it('keeps a video complete with a placeholder thumbnail when ffmpeg fails', async () => {
+    dbModule.__setPhoto({
+      id: 203,
+      event_id: 9,
+      filename: 'drone-clip.mp4',
+      original_filename: 'drone.mp4',
+      mime_type: 'video/mp4',
+      media_type: 'video',
+      size_bytes: 12345,
+      captured_at: null,
+    });
+    dbModule.__setEvent({ id: 9, slug: 'wedding', event_name: 'Wedding' });
+
+    // ffmpeg thumbnail pipeline throws (e.g. unsupported pixel format)…
+    videoProcessor.processUploadedVideo.mockRejectedValueOnce(new Error('ffmpeg exited with code 1'));
+    // …but a plain probe still works.
+    videoProcessor.extractVideoMetadata.mockResolvedValueOnce({
+      duration: 42,
+      videoCodec: 'hevc',
+      audioCodec: 'aac',
+      width: 3840,
+      height: 2160,
+    });
+
+    const { processPhoto } = require('../../src/services/photoProcessor');
+    await processPhoto(203);
+
+    const finalUpdate = dbModule.__recorded().updateCalls.pop();
+    // The row must complete — 'failed' rows are invisible to guests.
+    expect(finalUpdate.data.processing_status).toBe('complete');
+    // Placeholder instead of NULL: a completed video without thumbnail would
+    // make the grid fetch the original video file for the tile (#845 review).
+    expect(finalUpdate.data.thumbnail_path).toBe('thumbnails/thumb_drone-clip.jpg');
+    expect(imageProcessor.generateVideoPlaceholder).toHaveBeenCalledWith('drone-clip.mp4');
+    expect(finalUpdate.data.duration).toBe(42);
+    expect(finalUpdate.data.video_codec).toBe('hevc');
   });
 
   it('throws when the photo row no longer exists', async () => {

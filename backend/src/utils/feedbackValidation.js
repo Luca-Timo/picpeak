@@ -2,6 +2,9 @@ const { body, param, validationResult } = require('express-validator');
 const { safeValidationErrors } = require('./routeHelpers');
 const validator = require('validator');
 const { IDENTITY_PRESERVING_NORMALIZE_EMAIL } = require('./emailNormalization');
+const { REACTION_EMOJIS } = require('../constants/reactions');
+const { COLOR_LABELS } = require('../constants/colorLabels');
+const { KEYBIND_MODES } = require('../services/feedbackDefaults');
 
 /**
  * Validation rules for feedback submission
@@ -87,6 +90,7 @@ function sanitizeComment(text) {
   text = text.replace(/[\u200B-\u200D\uFEFF]/g, '');
   
   // Remove control characters
+  // eslint-disable-next-line no-control-regex -- intentional: strips control chars from feedback text
   text = text.replace(/[\x00-\x1F\x7F]/g, '');
   
   // Limit consecutive special characters
@@ -134,14 +138,31 @@ function getValidationRules(feedbackType) {
  */
 const validateFeedbackSubmission = [
   body('feedback_type')
-    .isIn(['rating', 'like', 'comment', 'favorite'])
+    .isIn(['rating', 'like', 'comment', 'favorite', 'reaction', 'color_label'])
     .withMessage('Invalid feedback type'),
-  
-  // Conditional validation based on feedback type
+
+  // Conditional validation based on feedback type. 0 clears the guest's
+  // existing rating (#884). toInt so a numeric string "0" reaches the
+  // service as a real 0 and hits the removal path.
   body('rating')
     .if(body('feedback_type').equals('rating'))
-    .isInt({ min: 1, max: 5 })
-    .withMessage('Rating must be between 1 and 5'),
+    .isInt({ min: 0, max: 5 })
+    .withMessage('Rating must be between 0 and 5')
+    .toInt(),
+
+  // Reactions (#839): fixed curated set only — no free-form emoji.
+  body('reaction')
+    .if(body('feedback_type').equals('reaction'))
+    .custom((value) => REACTION_EMOJIS.includes(value))
+    .withMessage('Invalid reaction'),
+
+  // Colour labels (#1044): Lightroom's five colours only — the value ends up
+  // in an XMP field Lightroom parses, so free-form strings are rejected here
+  // rather than sanitised later.
+  body('color_label')
+    .if(body('feedback_type').equals('color_label'))
+    .custom((value) => COLOR_LABELS.includes(value))
+    .withMessage('Invalid color label'),
   
   body('comment_text')
     .if(body('feedback_type').equals('comment'))
@@ -184,11 +205,19 @@ const validateFeedbackSettings = [
   body('allow_likes').optional().isBoolean(),
   body('allow_comments').optional().isBoolean(),
   body('allow_favorites').optional().isBoolean(),
+  body('allow_reactions').optional().isBoolean(),
+  body('allow_color_labels').optional().isBoolean(),
+  body('keybind_mode').optional().isIn(KEYBIND_MODES)
+    .withMessage(`keybind_mode must be one of: ${KEYBIND_MODES.join(', ')}`),
   body('require_name_email').optional().isBoolean(),
   body('moderate_comments').optional().isBoolean(),
   body('show_feedback_to_guests').optional().isBoolean(),
-  body('identity_mode').optional().isIn(['simple', 'guest'])
-    .withMessage('identity_mode must be "simple" or "guest"'),
+  // 'shared' (#1197) is a third identity model, not a third kind of person:
+  // it drops the identity dimension from the COLOUR TAG only — one tag per
+  // photo that any guest can overwrite — and leaves likes, ratings, comments,
+  // favourites and reactions behaving exactly as in 'simple'.
+  body('identity_mode').optional().isIn(['simple', 'guest', 'shared'])
+    .withMessage('identity_mode must be "simple", "guest" or "shared"'),
   // Per-guest caps (#655). null / 0 = unlimited; positive integers enforced.
   // Upper bound is intentionally generous — operators occasionally run
   // "everyone, pick everything you like" galleries.
@@ -214,7 +243,7 @@ const validateWordFilter = [
     .withMessage('Word must be between 2 and 100 characters'),
   body('severity')
     .optional()
-    .isIn(['mild', 'moderate', 'severe'])
+    .isIn(['low', 'moderate', 'high', 'block'])
     .withMessage('Invalid severity level')
 ];
 

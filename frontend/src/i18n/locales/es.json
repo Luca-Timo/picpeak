@@ -119,14 +119,15 @@
     "select": "Seleccionar",
     "selected": "Seleccionado",
     "chunk": "Fragmento",
-    "optional": "opcional"
+    "optional": "opcional",
+    "poweredBy": "Desarrollado por"
   },
   "upload": {
     "photoCategory": "Categoría de foto",
     "noCategory": "Sin categoría",
     "eventSpecific": "(Específico del evento)",
     "clickToUpload": "Haz clic para subir o arrastra y suelta",
-    "fileRequirements": "JPEG, PNG o WebP (máx. 50MB por archivo, {{limit}} archivos por subida)",
+    "fileRequirements": "{{formats}} (máx. {{sizeLimit}}MB por archivo, {{limit}} archivos por subida)",
     "fileRequirementsMedia": "Imágenes JPEG, PNG o WebP y videos MP4/MOV/WEBM (máx. 50MB por archivo, {{limit}} archivos por subida)",
     "unsupportedFiles": "Algunos archivos se omitieron porque el formato no es compatible (usa JPEG/PNG/WebP/MP4/MOV/WEBM).",
     "selectedFiles": "Archivos seleccionados",
@@ -223,6 +224,10 @@
     "passwordHint": "La contraseña la proporcionó el organizador del evento. Contacta con ellos si no la tienes."
   },
   "gallery": {
+    "revealPendingTitle": "Las fotos siguen siendo una sorpresa",
+    "revealPendingMessage": "El anfitrión revelará la galería más tarde — ¡vuelve pronto!",
+    "revealScheduledFor": "Revelación programada para {{date}}",
+    "revealUploadHint": "Ya puedes añadir tus propias fotos a la colección:",
     "title": "Galería de fotos",
     "welcomeMessage": "Mensaje de bienvenida",
     "expiresOn": "Expira el",
@@ -300,20 +305,17 @@
     "searchMemories": "Buscar recuerdos...",
     "thankYou": "Gracias",
     "thankYouMessage": "Gracias por ser parte de nuestra historia y hacer nuestro día inolvidable.",
-    "feedback": {
-      "title": "Comentarios",
-      "shareThoughts": "Comparte tus pensamientos sobre \"{{name}}\"",
-      "rateThisMoment": "Valora este momento",
-      "comments": "Comentarios",
-      "noComments": "No hay comentarios aún. ¡Sé el primero!",
-      "yourName": "Tu nombre",
-      "yourEmail": "Tu correo",
-      "writeLovelyNote": "Escribe una nota agradable...",
-      "postComment": "Publicar comentario",
-      "anonymous": "Anónimo"
-    },
     "rated": "Valorado",
     "commented": "Comentado",
+    "colorFilter": "Color",
+    "filterByColor": "Mostrar solo {{color}}",
+    "folders": "Carpetas",
+    "openFolder": "Abrir carpeta {{name}}",
+    "folderPhotoCount": "{{count}} fotos",
+    "backToGallery": "Todas las fotos",
+    "downloadFolder": "Descargar carpeta ({{count}})",
+    "downloadFolderCapped": "Descargar las primeras {{limit}} de {{total}}",
+    "downloadEverything": "Descargar todas las fotos",
     "videoFormatUnsupported": "Este formato de vídeo no se puede reproducir en este navegador. Descárgalo para verlo.",
     "videoLoadFailed": "No se ha podido cargar este vídeo."
   },
@@ -344,6 +346,17 @@
     "categoryHeroHint": "Si no se establece una foto de portada para una categoría, se usará la foto hero por defecto."
   },
   "events": {
+    "revealMode": "Modo revelación (ocultar la galería hasta revelarla)",
+    "revealModeHelp": "Los invitados pueden subir fotos pero no verlas hasta que reveles la galería — manualmente o a la hora programada. La presentación y el acceso de clientes siguen funcionando.",
+    "revealAt": "Revelación programada (opcional)",
+    "revealAtHelp": "Déjalo vacío para revelar manualmente con el botón \"Revelar ahora\".",
+    "revealModeStatus": "Modo revelación",
+    "revealed": "Revelada",
+    "hiddenUntilReveal": "Oculta para los invitados",
+    "revealScheduled": "Programada: {{date}}",
+    "revealNow": "Revelar ahora",
+    "revealedToast": "Galería revelada — los invitados ya pueden ver las fotos",
+    "revealError": "No se pudo revelar la galería",
     "title": "Eventos",
     "create": "Crear",
     "createEvent": "Crear evento",
@@ -395,6 +408,9 @@
     "photoCount": "{{count}} fotos",
     "totalSize": "Tamaño total",
     "shareLink": "Enlace para compartir",
+    "qrCode": "Código QR",
+    "qrTableCard": "Tarjeta de mesa (A6)",
+    "qrPoster": "Póster (A4)",
     "copyLink": "Copiar enlace",
     "linkCopied": "Enlace copiado!",
     "viewGallery": "Ver galería",
@@ -906,7 +922,17 @@
       "expirationWarning": "Las galerías sin expiración permanecerán activas hasta ser archivadas manualmente",
       "saveSettings": "Guardar ajustes de eventos",
       "noteTitle": "Nota",
-      "noteText": "Estos ajustes solo afectan a la creación de nuevos eventos. Los eventos existentes no se ven afectados. El comportamiento por defecto requiere todos los campos."
+      "noteText": "Estos ajustes solo afectan a la creación de nuevos eventos. Los eventos existentes no se ven afectados. El comportamiento por defecto requiere todos los campos.",
+      "feedbackTypeDefaultsHelp": "Qué tipos de valoración traen las galerías nuevas. Las galerías existentes no cambian: cada una se puede ajustar por separado.",
+      "defaultAllowRatings": "Valoración con estrellas",
+      "defaultAllowLikes": "Me gusta",
+      "defaultAllowFavorites": "Favoritos",
+      "defaultAllowComments": "Comentarios",
+      "defaultAllowReactions": "Reacciones emoji",
+      "defaultAllowColorLabels": "Etiquetas de color",
+      "defaultKeybindMode": "Atajos predeterminados del visor",
+      "keybindColors": "Solo colores — 1 verde, 2 amarillo, 3 rojo",
+      "keybindLightroom": "Lightroom — 1-5 estrellas, 6-9 colores"
     },
     "imageSecurity": {
       "title": "Proteger Imagen",
@@ -917,7 +943,6 @@
       "defaultProtectionHelp": "Estos ajustes se aplican a todos los nuevos eventos. Los eventos individuales pueden anular estos valores por defecto.",
       "protectionLevel": "Nivel de protección por defecto",
       "imageQuality": "Calidad de imagen por defecto",
-      "fragmentationLevel": "Nivel de fragmentación",
       "enableDevtools": "Habilitar detección de DevTools por defecto",
       "enableCanvas": "Habilitar renderizado con canvas por defecto (protección avanzada)",
       "rateLimiting": "Limitación de velocidad",
@@ -936,7 +961,6 @@
     },
     "moderation": {
       "title": "Moderación",
-      "wordFilters": "Filtros de palabras",
       "description": "Gestiona palabras que deben filtrarse o bloquearse en comentarios",
       "addFilter": "Agregar nuevo filtro",
       "enterWord": "Introduce palabra a filtrar",
@@ -1080,7 +1104,10 @@
     "notConfigured": "Umami no está configurado",
     "configureInstructions": "Para ver datos reales, configura Umami en tus variables de entorno y en los ajustes.",
     "noData": "No hay datos disponibles",
-    "percentChange": "{{percent}}% respecto al periodo anterior"
+    "percentChange": "{{percent}}% respecto al periodo anterior",
+    "catalogedMedia": "Medios catalogados",
+    "storageUnavailable": "no disponible",
+    "storageNoMeasurement": "sin medición disponible"
   },
   "branding": {
     "title": "Marca y temas",
@@ -1422,6 +1449,10 @@
       "archiveDownloaded": "Archivo descargado para \"{{eventName}}\"",
       "archiveDeleted": "Archivo eliminado para \"{{eventName}}\"",
       "archiveRestored": "Archivo restaurado para \"{{eventName}}\"",
+      "galleryOpened": "Un invitado abrió la galería «{{eventName}}»",
+      "galleryDownloaded": "Un invitado descargó fotos de «{{eventName}}»",
+      "galleryDownloadedCustomer": "El cliente descargó fotos de «{{eventName}}»",
+      "photoFavorite": "Se marcó como favorita una foto de «{{eventName}}»",
       "systemActivity": "Actividad del sistema: {{type}}",
       "adminProfileUpdated": "Perfil de admin actualizado por {{actorName}}"
     },
@@ -1466,6 +1497,8 @@
     "analytics": "Analíticas",
     "activities": {
       "event_created": "Nuevo evento creado: {{eventName}}",
+      "gallery_opened": "Se abrió la galería «{{eventName}}»",
+      "gallery_downloaded": "Se descargaron fotos de «{{eventName}}»",
       "photos_uploaded": "{{count}} fotos subidas a {{eventName}}",
       "event_archived": "Evento archivado: {{eventName}}",
       "archive_restored": "Archivo restaurado: {{eventName}}",
@@ -1485,7 +1518,9 @@
       "photo_favorite": "Foto añadida a favoritos en {{eventName}}",
       "photo_rating": "Foto valorada en {{eventName}}",
       "photo_comment": "Comentario en foto en {{eventName}}",
+      "photo_reaction": "Reacción a una foto en {{eventName}}",
       "guest_feedback_like": "Invitado marcó me gusta en {{eventName}}",
+      "guest_feedback_reaction": "Invitado reaccionó a una foto en {{eventName}}",
       "guest_feedback_favorite": "Invitado añadió a favoritos en {{eventName}}",
       "guest_feedback_rating": "Invitado valoró una foto en {{eventName}}",
       "guest_feedback_comment": "Invitado comentó en una foto en {{eventName}}",
@@ -1544,8 +1579,27 @@
       "hideSelected": "Ocultar",
       "showSelected": "Mostrar",
       "hiddenSuccess": "Fotos ocultas a los invitados",
-      "visibleSuccess": "Fotos ahora visibles para invitados"
-    }
+      "visibleSuccess": "Fotos ahora visibles para invitados",
+      "myMarks": "Tus marcas",
+      "myMarksHelp": "Solo tú las ves. Nunca aparecen en la galería del cliente y se exportan a Lightroom como XMP.",
+      "myRating": "Tu valoración",
+      "clearRating": "Quitar tu valoración",
+      "rateStars": "Valorar con {{count}} estrellas",
+      "markError": "No se pudo guardar tu marca",
+      "yourMarkColor": "Tu marca: {{color}}",
+      "yourMarkRating": "Tu valoración: {{count}}"
+    },
+    "guests": {
+      "columns": {
+        "colorLabels": "Etiquetas de color"
+      },
+      "detail": {
+        "labeled": "Etiquetas de color"
+      }
+    },
+    "catalogedMedia": "{{size}} catalogados",
+    "storageUnavailable": "no disponible",
+    "catalogedMediaOnly": "catalogado — los objetos están en S3"
   },
   "permissions": {
     "insufficient": "No tienes permiso para realizar esta acción",
@@ -1610,6 +1664,7 @@
     }
   },
   "errors": {
+    "downloadFailed": "Error al descargar",
     "notFound": "No encontrado",
     "galleryNotFound": "Galería no encontrada",
     "galleryNotFoundMessage": "Esta galería no existe o ha sido eliminada.",
@@ -2253,7 +2308,6 @@
     }
   },
   "cssTemplates": {
-    "title": "Plantillas CSS personalizadas",
     "template": "Plantilla",
     "templateName": "Nombre de la plantilla",
     "enableTemplate": "Habilitar esta plantilla",
@@ -2340,6 +2394,12 @@
     "patternDescription": "Las contraseñas se generan usando el nombre y la fecha del evento. Ejemplo: \"Venue2024$August\" para mayor seguridad y memorización."
   },
   "feedback": {
+    "reaction": "reacción",
+    "reactions": "Reacciones",
+    "reactWith": "Reaccionar con {{emoji}}",
+    "removeReaction": "Quitar la reacción {{emoji}}",
+    "reactionError": "No se pudo actualizar la reacción",
+    "totalReactions": "Reacciones totales",
     "comments": "Comentarios",
     "addComment": "Añadir comentario",
     "yourName": "Tu nombre",
@@ -2379,13 +2439,39 @@
       "comments": "Comentarios",
       "commentsDesc": "Comentarios de texto en fotos",
       "favorites": "Favoritos",
+      "reactions": "Reacciones con emojis",
+      "reactionsDesc": "Un emoji por invitado y foto (❤️ 😂 😍 👏 🎉)",
       "favoritesDesc": "Marcar fotos como favoritas",
       "identityMode": "Modo de identidad",
       "identityModeSimple": "Feedback simple",
       "identityModeSimpleDesc": "Anónimo, basado en dispositivo. Visitantes del mismo dispositivo comparten estado.",
       "identityModeGuest": "Por invitado",
-      "identityModeGuestDesc": "Cada visitante introduce su nombre. Habilita rastreo por invitado e insights admin."
-    }
+      "identityModeGuestDesc": "Cada visitante introduce su nombre. Habilita rastreo por invitado e insights admin.",
+      "identityModeShared": "Una etiqueta de color compartida",
+      "identityModeSharedDesc": "Un color por foto que todos ven y cualquiera puede cambiar — para acordar un único veredicto. Los me gusta, las valoraciones y los comentarios siguen siendo por visitante.",
+      "identityModeSharedNote": "Las etiquetas de color no tienen autor en este modo, así que la vista de administración no puede mostrar quién la puso. Las etiquetas por visitante existentes se conservan pero no se muestran mientras este modo esté activo, y vuelven si cambias de modo.",
+      "colorLabels": "Etiquetas de color",
+      "colorLabelsDesc": "Un color por invitado y foto, con el conjunto de colores de Lightroom para que la selección se traslade mediante XMP",
+      "keybindMode": "Atajos de teclado",
+      "keybindColors": "Solo colores (lo más sencillo)",
+      "keybindColorsDesc": "1 = verde (1.ª opción), 2 = amarillo (2.ª opción), 3 = rojo (descartada)",
+      "keybindLightroom": "Valores por defecto de Lightroom",
+      "keybindLightroomDesc": "1-5 asignan estrellas, 6-9 asignan rojo / amarillo / verde / azul"
+    },
+    "colorLabels": {
+      "red": "Rojo",
+      "yellow": "Amarillo",
+      "green": "Verde",
+      "blue": "Azul",
+      "purple": "Morado"
+    },
+    "colorLabel": "etiqueta de color",
+    "colorLabelsTitle": "Etiquetas de color",
+    "colorLabelError": "No se pudo actualizar la etiqueta de color",
+    "removeColorLabel": "Quitar la etiqueta {{color}}",
+    "setColorLabel": "Marcar como {{color}}",
+    "markedAs": "Marcado como {{color}}",
+    "alsoMarkedBy": "También marcado por otros: {{colors}}"
   },
   "filter": {
     "feedbackFilters": "Filtros de feedback",
@@ -2402,7 +2488,11 @@
     "hasFavorites": "Con favoritos",
     "hasComments": "Con comentarios",
     "showingPhotos": "Fotos totales",
-    "withRatings": "Con valoraciones"
+    "withRatings": "Con valoraciones",
+    "colorLabels": "Etiquetas de color",
+    "showOnlyColor": "Mostrar solo {{color}}",
+    "myColorLabels": "Tus marcas",
+    "showOnlyMyColor": "Mostrar solo mis marcas en {{color}}"
   },
   "adminLogin": {
     "title": "Acceso admin",
@@ -2425,7 +2515,6 @@
     "invalidCredentials": "Correo o contraseña inválidos",
     "generalError": "Ocurrió un error. Por favor, inténtalo de nuevo.",
     "needHelp": "¿Necesitas ayuda? Contacta",
-    "poweredBy": "Desarrollado por PicPeak",
     "devModeHint": "Modo desarrollo: usa admin@example.com, contraseña: admin123"
   },
   "clientAccess": {
@@ -2459,7 +2548,10 @@
     "error": "Error en la exportación: ",
     "exportSelected": "Exportar {{count}} seleccionadas",
     "exportFiltered": "Exportar fotos filtradas",
-    "hint": "Selecciona fotos o aplica filtros para exportar"
+    "hint": "Selecciona fotos o aplica filtros para exportar",
+    "markSource": "Estrellas y color XMP desde",
+    "markSourceClient": "Selecciones del cliente",
+    "markSourceMine": "Tus marcas"
   },
   "photoSort": {
     "defaultSort": "Orden por defecto",

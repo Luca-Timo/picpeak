@@ -31,7 +31,13 @@ router.get('/config', adminAuth, requirePermission('backup.view'), async (req, r
         config[setting.setting_key] = setting.setting_value;
       }
     });
-    
+
+    // Never return the stored credentials — mask like the email/WhatsApp
+    // config endpoints do. The PUT below skips the mask sentinel, so the
+    // form round-trips without clobbering the real values.
+    if (config.backup_s3_secret_key) config.backup_s3_secret_key = '••••••••';
+    if (config.backup_rsync_ssh_key) config.backup_rsync_ssh_key = '••••••••';
+
     res.json(config);
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to get backup configuration');
@@ -86,6 +92,11 @@ router.put('/config', adminAuth, requirePermission('backup.create'), async (req,
 
     // Update settings
     for (const [key, value] of Object.entries(updates)) {
+      // An unchanged secret round-trips as the GET mask sentinel — keep the
+      // stored value instead of overwriting it with bullets.
+      if (value === '••••••••') {
+        continue;
+      }
       if (key.startsWith('backup_')) {
         await db('app_settings')
           .insert({
@@ -214,18 +225,15 @@ router.post('/picpeak/import', adminAuth, requirePermission('backup.restore'), p
     // letting a crafted .picpeak take over every admin account (GHSA-qxfx-4493-4v8f).
     const result = await importFromPicpeak({ picpeakPath, currentAdminId: req.admin && req.admin.id });
 
-    // The restore rewrote admin_users, so ids may have shifted. The operator's
-    // current JWT is bound only to the pre-restore admin id (adminAuth trusts
-    // `decoded.id` — IP is logged, not enforced, and the backup controls
-    // password_changed_at), which could now resolve to a DIFFERENT restored
-    // account and silently grant its permissions. Force a fresh login instead
-    // of trusting the old session: revoke the token and clear the cookie.
-    // Clearing the cookie is the guarantee — it drops the operator's browser
-    // session unconditionally. Revocation is the extra layer that also kills a
-    // Bearer-header copy of the JWT; revokeToken() swallows DB errors and
-    // returns false, so check the result and log loudly if the denylist write
-    // didn't land (the operator should still re-login, which the cookie clear
-    // forces).
+    // The restore rewrote admin_users, so ids may have shifted. importFromPicpeak
+    // already stamped a GLOBAL session cutoff (see setSessionsValidAfter), so
+    // every JWT issued before the restore — admin, customer, gallery — now fails
+    // auth. Here we additionally give the importing admin an immediate, clean
+    // logout: revoke this token and clear the cookie so their browser drops the
+    // session at once rather than on the next 401. Cookie clear is the
+    // unconditional guarantee; revokeToken() swallows DB errors and returns
+    // false, so check the result and log loudly if the denylist write didn't
+    // land (the operator still re-logs-in, which the cookie clear forces).
     let tokenRevoked = false;
     try {
       if (req.token) {
@@ -244,12 +252,12 @@ router.post('/picpeak/import', adminAuth, requirePermission('backup.restore'), p
       tables: result.tables,
       filesRestored: result.filesRestored,
       usesExternalMedia: result.usesExternalMedia,
+      crossEngine: result.crossEngine,
       // False when the pre-#1163 external-path conversion failed. The rows and
       // files are in place, but no external original resolves until it is
       // retried — the UI must say so rather than showing a plain success.
       externalPathsConverted: result.externalPathsConverted !== false,
       externalPathError: result.externalPathError || null,
-      crossEngine: result.crossEngine,
       sessionInvalidated: true,
     });
   } catch (error) {
@@ -342,7 +350,7 @@ router.post('/test-connection', adminAuth, requirePermission('backup.create'), a
     const { destination_type, ...config } = req.body;
     
     switch (destination_type) {
-    case 'local':
+    case 'local': {
       // Test local path access
       const fs = require('fs').promises;
       try {
@@ -356,8 +364,9 @@ router.post('/test-connection', adminAuth, requirePermission('backup.create'), a
         res.json({ success: false, message: 'Cannot write to local path. Check server logs for details.' });
       }
       break;
-        
-    case 'rsync':
+    }
+
+    case 'rsync': {
       // Test rsync connection using spawn with argument arrays to prevent command injection
       const { spawn } = require('child_process');
 
@@ -421,7 +430,7 @@ router.post('/test-connection', adminAuth, requirePermission('backup.create'), a
       sshArgs.push('echo', 'Connection successful');
 
       try {
-        const result = await new Promise((resolve, reject) => {
+        await new Promise((resolve, reject) => {
           const sshProcess = spawn('ssh', sshArgs, {
             timeout: 15000,
             stdio: ['ignore', 'pipe', 'pipe']
@@ -455,7 +464,8 @@ router.post('/test-connection', adminAuth, requirePermission('backup.create'), a
         res.json({ success: false, message: 'Rsync connection failed. Check server logs for details.' });
       }
       break;
-        
+    }
+
     case 's3':
       // Test S3 connection (would need AWS SDK)
       res.json({ success: false, message: 'S3 testing not implemented yet' });
@@ -789,6 +799,8 @@ router.post('/s3/test-upload', adminAuth, requirePermission('backup.create'), as
     
     // Test deletion
     await s3Adapter.delete(testKey);
+
+    if (contentMatch) require('../usage/capabilityEvidence').capabilityEvidence(res, 's3_storage', 's3_backups');
     
     res.json({
       success: true,
@@ -825,7 +837,7 @@ router.get('/download/:backupId', adminAuth, requirePermission('backup.view'), a
     
     // Handle different backup types
     switch (config.backup_destination_type) {
-    case 'local':
+    case 'local': {
       // Stream local backup as zip
       const backupPath = path.join(config.backup_destination_path, `backup-${backupRun.id}`);
       const archive = archiver('zip', { zlib: { level: 9 } });
@@ -843,8 +855,9 @@ router.get('/download/:backupId', adminAuth, requirePermission('backup.view'), a
         
       await archive.finalize();
       break;
-        
-    case 's3':
+    }
+
+    case 's3': {
       // For S3, provide pre-signed URLs or stream files
       const s3Adapter = new S3StorageAdapter({
         endpoint: config.backup_s3_endpoint,
@@ -878,7 +891,8 @@ router.get('/download/:backupId', adminAuth, requirePermission('backup.view'), a
         message: 'Use the provided URLs to download individual files'
       });
       break;
-        
+    }
+
     case 'rsync':
       return res.status(400).json({ error: 'Direct download not available for rsync backups' });
         
@@ -905,7 +919,7 @@ router.get('/checksums', adminAuth, requirePermission('backup.view'), async (req
     }
     
     // Calculate checksums for files
-    async function calculateDirChecksums(dirPath, relative = '') {
+    const calculateDirChecksums = async (dirPath, relative = '') => {
       try {
         const entries = await fs.readdir(dirPath, { withFileTypes: true });
         
@@ -936,7 +950,7 @@ router.get('/checksums', adminAuth, requirePermission('backup.view'), async (req
       } catch (error) {
         logger.error(`Failed to calculate checksums for ${dirPath}:`, error);
       }
-    }
+    };
     
     await calculateDirChecksums(basePath);
     
@@ -974,7 +988,7 @@ router.post('/estimate', adminAuth, requirePermission('backup.view'), async (req
     const breakdown = {};
     
     // Estimate size for each directory
-    async function estimateDir(dirPath, category) {
+    const estimateDir = async (dirPath, category) => {
       let dirSize = 0;
       let dirCount = 0;
       
@@ -1001,7 +1015,7 @@ router.post('/estimate', adminAuth, requirePermission('backup.view'), async (req
       }
       
       return { size: dirSize, count: dirCount };
-    }
+    };
     
     // Estimate each category
     const categories = [

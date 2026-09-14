@@ -5,7 +5,7 @@ import { Lock, Mail, Eye, EyeOff, AlertCircle, ShieldCheck, KeyRound, ArrowLeft 
 import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Input, Card, ReCaptcha } from '../../components/common';
+import { Button, Input, Card, ReCaptcha, PoweredBy } from '../../components/common';
 import { useAdminAuth } from '../../contexts';
 import { authService } from '../../services/auth.service';
 import { isMfaChallenge } from '../../types';
@@ -13,6 +13,7 @@ import { setupService } from '../../services/setup.service';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
 import { useAdminDarkMode } from '../../contexts/AdminDarkModeContext';
 import { resolveLoginLogoClasses } from '../../utils/loginLogoSize';
+import { buildResourceUrl } from '../../utils/url';
 import { api } from '../../config/api';
 
 export const AdminLoginPage: React.FC = () => {
@@ -24,6 +25,7 @@ export const AdminLoginPage: React.FC = () => {
     email: '',
     password: '',
   });
+  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -59,6 +61,16 @@ export const AdminLoginPage: React.FC = () => {
     if (searchParams.get('session') === 'expired') {
       toast.info(t('adminLogin.sessionExpired'));
     }
+  }, [searchParams, t]);
+
+  // SSO callback failures land here as ?sso_error=<key> (#798) — surface a
+  // translated message instead of a silent bounce back to the form.
+  useEffect(() => {
+    const ssoError = searchParams.get('sso_error');
+    if (!ssoError) return;
+    const known = ['config', 'state', 'idp', 'inactive', 'not_provisioned', 'no_email', 'no_role'];
+    const key = known.includes(ssoError) ? ssoError : 'idp';
+    toast.error(t(`adminLogin.ssoErrors.${key}`));
   }, [searchParams, t]);
 
   // Fresh instance with no admin yet → send to first-run setup.
@@ -110,7 +122,8 @@ export const AdminLoginPage: React.FC = () => {
     try {
       const response = await authService.adminLogin({
         ...formData,
-        recaptchaToken
+        recaptchaToken,
+        rememberMe
       });
       // MFA enabled → move to the second step instead of logging in.
       if (isMfaChallenge(response)) {
@@ -251,7 +264,26 @@ export const AdminLoginPage: React.FC = () => {
 
         {/* Login Form */}
         <Card padding="lg">
-          {step === 'credentials' ? (
+          {step === 'credentials' && settingsData?.oidc_enabled === true && settingsData?.oidc_local_login_disabled === true ? (
+          // SSO-only mode (#798 phase 2): the backend refuses password logins
+          // while oidc_disable_local_login is effective, so the form would
+          // only produce 403s — show the SSO entry alone instead.
+          <div className="space-y-6">
+            <p className="text-sm text-center text-neutral-600">
+              {t('adminLogin.ssoOnlyHint', 'Password login is disabled on this instance — sign in through your identity provider.')}
+            </p>
+            <Button
+              type="button"
+              variant="primary"
+              size="lg"
+              className="w-full"
+              leftIcon={<KeyRound className="w-4 h-4" />}
+              onClick={() => { window.location.href = buildResourceUrl('/api/auth/admin/sso/login'); }}
+            >
+              {settingsData.oidc_button_label?.trim() || t('adminLogin.ssoSignIn', 'Sign in with SSO')}
+            </Button>
+          </div>
+          ) : step === 'credentials' ? (
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Form Error */}
             {errors.form && (
@@ -315,6 +347,8 @@ export const AdminLoginPage: React.FC = () => {
               <label className="flex items-center">
                 <input
                   type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
                   className="w-4 h-4 text-accent border-neutral-300 rounded focus:ring-primary-500"
                 />
                 <span className="ml-2 text-sm text-neutral-700">{t('adminLogin.rememberMe')}</span>
@@ -337,6 +371,35 @@ export const AdminLoginPage: React.FC = () => {
             >
               {t('adminLogin.signIn')}
             </Button>
+
+            {/* SSO (#798): plain navigation — the backend route redirects to
+                the IdP; the callback sets the same admin cookie as the local
+                login and lands on the dashboard. */}
+            {settingsData?.oidc_enabled === true && (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 border-t border-neutral-200" />
+                  <span className="text-xs uppercase tracking-wide text-neutral-400">
+                    {t('adminLogin.ssoDivider', 'or')}
+                  </span>
+                  <div className="flex-1 border-t border-neutral-200" />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full"
+                  leftIcon={<KeyRound className="w-4 h-4" />}
+                  // buildResourceUrl respects an absolute VITE_API_URL, so
+                  // split-origin deployments start the flow on the API host
+                  // (where the state cookie must live) instead of 404ing on
+                  // the frontend origin.
+                  onClick={() => { window.location.href = buildResourceUrl('/api/auth/admin/sso/login'); }}
+                >
+                  {settingsData.oidc_button_label?.trim() || t('adminLogin.ssoSignIn', 'Sign in with SSO')}
+                </Button>
+              </>
+            )}
           </form>
           ) : (
           <form onSubmit={handleMfaSubmit} className="space-y-6">
@@ -427,9 +490,7 @@ export const AdminLoginPage: React.FC = () => {
               {settingsData?.branding_support_email || 'support@example.com'}
             </a>
           </p>
-          <p className="text-xs mt-2" style={{ color: 'var(--color-text, #171717)', opacity: 0.5 }}>
-            {t('adminLogin.poweredBy')}
-          </p>
+          <PoweredBy className="text-xs mt-2" style={{ color: 'var(--color-text, #171717)', opacity: 0.5 }} />
         </div>
 
         {/* Development Hint */}

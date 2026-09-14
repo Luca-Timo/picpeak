@@ -91,33 +91,46 @@ class WatermarkService {
   /**
    * Apply watermark to an image
    */
+  /**
+   * `imagePath` may be a path OR an in-memory Buffer (#858). Buffers let the
+   * download paths resize first and watermark second without a second tmp
+   * file — which matters because the mark is sized relative to the input's
+   * own width, so it has to be applied at the OUTPUT size to come out right.
+   */
   async applyWatermark(imagePath, settings) {
+    const isBuffer = Buffer.isBuffer(imagePath);
     try {
       if (!settings || !settings.enabled) {
         // Return original image if watermarking is disabled
-        return await fs.readFile(imagePath);
+        return isBuffer ? imagePath : await fs.readFile(imagePath);
       }
 
-      // Check cache first
-      const cacheKey = `${imagePath}_${JSON.stringify(settings)}`;
-      const cached = this.cache.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < this.cacheMaxAge) {
-        return cached.buffer;
+      // Check cache first. Buffer inputs are already-resized intermediates:
+      // they have no stable key (hashing megabytes per photo would cost more
+      // than the watermark) and no reuse across requests, so skip the cache.
+      const cacheKey = isBuffer ? null : `${imagePath}_${JSON.stringify(settings)}`;
+      if (cacheKey) {
+        const cached = this.cache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < this.cacheMaxAge) {
+          return cached.buffer;
+        }
       }
 
-      // Load the main image
+      // Load the main image.
+      //
       // .rotate() for the same reason as the other generators (#1185): sharp
-      // decodes pixels as stored, so an orientation-tagged photo would be
+      // decodes the pixels as stored, so an orientation-tagged photo would be
       // composited and re-encoded sideways — and gallery.js serves
       // watermark_path ahead of the original, so this is exactly what a guest
-      // sees on a watermarked gallery.
+      // sees.
       const image = sharp(imagePath).rotate();
 
       // Deliberately NOT `await image.metadata()`: .rotate() does not change
       // what metadata() reports — a 400x200 source tagged orientation 6 still
       // reads 400x200 there, even though the pipeline now emits 200x400. Every
-      // use below is positioning, so it has to be the DISPLAYED size or the
-      // mark lands against the wrong axis.
+      // use below is positioning (watermark scale, font size, composite
+      // extent), so it has to be the DISPLAYED size or the mark lands against
+      // the wrong axis.
       const rawMetadata = await sharp(imagePath).metadata();
       const oriented = orientedDimensions(rawMetadata);
       const metadata = { ...rawMetadata, width: oriented.width, height: oriented.height };
@@ -193,12 +206,13 @@ class WatermarkService {
         settings.position
       );
 
-      // Apply watermark with high quality output to preserve original image quality
+      // Apply watermark with high quality output to preserve original image quality.
+      //
       // Floored: getPositionCoordinates derives from the SVG's estimated text
       // extent, which is fractional, and sharp rejects a non-integer offset
       // outright — applyWatermark then catches its own error and silently
-      // returns the unwatermarked original. Whether it landed on a whole pixel
-      // was previously luck.
+      // returns the unwatermarked original. Whether it lands on a whole pixel
+      // was previously luck; nothing guaranteed it.
       let watermarkedImage = image.composite([{
         input: watermarkBuffer,
         top: Math.max(0, Math.floor(position.top)),
@@ -218,20 +232,24 @@ class WatermarkService {
         watermarkedBuffer = await watermarkedImage.jpeg({ quality: 100, mozjpeg: true }).toBuffer();
       }
 
-      // Cache the result
-      this.cache.set(cacheKey, {
-        buffer: watermarkedBuffer,
-        timestamp: Date.now()
-      });
+      // Cache the result (path inputs only — see cacheKey above)
+      if (cacheKey) {
+        this.cache.set(cacheKey, {
+          buffer: watermarkedBuffer,
+          timestamp: Date.now()
+        });
 
-      // Clean old cache entries
-      this.cleanCache();
+        // Clean old cache entries
+        this.cleanCache();
+      }
 
       return watermarkedBuffer;
     } catch (error) {
       logger.error('Error applying watermark:', error);
-      // Return original image on error
-      return await fs.readFile(imagePath);
+      // Return the un-watermarked input on error. Buffer inputs are already
+      // in memory — readFile() would treat the Buffer as a path and throw,
+      // turning a cosmetic watermark failure into a failed download.
+      return isBuffer ? imagePath : await fs.readFile(imagePath);
     }
   }
 

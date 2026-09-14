@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { verifyGalleryAccess, denySlideshowToken } = require('../middleware/gallery');
+const { guestBlockedByReveal, blockHiddenGallery } = require('../utils/revealMode');
 const { feedbackRateLimit, generateGuestIdentifier } = require('../middleware/feedbackRateLimit');
 const { resolveGuest } = require('../middleware/guestAuth');
 const feedbackService = require('../services/feedbackService');
@@ -13,7 +14,6 @@ const {
   checkValidation,
   validateGuestRequirements
 } = require('../utils/feedbackValidation');
-const { escapeLikePattern } = require('../utils/sqlSecurity');
 
 // Get feedback settings for a gallery
 router.get('/:slug/feedback-settings',
@@ -31,6 +31,10 @@ router.get('/:slug/feedback-settings',
         allow_likes: Boolean(settings.allow_likes),
         allow_comments: Boolean(settings.allow_comments),
         allow_favorites: Boolean(settings.allow_favorites),
+        allow_reactions: Boolean(settings.allow_reactions),
+        allow_color_labels: Boolean(settings.allow_color_labels),
+        // Which lightbox shortcut scheme this gallery uses (#1044).
+        keybind_mode: settings.keybind_mode || 'colors',
         require_name_email: Boolean(settings.require_name_email),
         show_feedback_to_guests: Boolean(settings.show_feedback_to_guests),
         identity_mode: settings.identity_mode || 'simple',
@@ -52,6 +56,9 @@ router.get('/:slug/feedback-settings',
 // Get feedback for a specific photo
 router.get('/:slug/photos/:photoId/feedback',
   verifyGalleryAccess,
+  // Reveal-gated (#838): sequential photo ids would let hidden-gallery
+  // guests enumerate comments/stats.
+  blockHiddenGallery,
   resolveGuest,
   validatePhotoId,
   checkValidation,
@@ -80,7 +87,9 @@ router.get('/:slug/photos/:photoId/feedback',
       // Get feedback based on settings
       const options = {
         approved_only: true,
-        include_hidden: false
+        include_hidden: false,
+        // Only the colour-label set this event is actually using (#1197).
+        identity_mode: settings.identity_mode,
       };
       
       // Include guest's own feedback even if not approved
@@ -88,8 +97,14 @@ router.get('/:slug/photos/:photoId/feedback',
       
       // Get guest's own feedback separately
       const guestFeedback = await feedbackService.getPhotoFeedback(photoId, {
-        guest_identifier: guestIdentifier
+        guest_identifier: guestIdentifier,
+        identity_mode: settings.identity_mode,
       });
+
+      // The photo's shared tag (#1197), when the event is in that mode.
+      const sharedColorLabel = settings.identity_mode === 'shared'
+        ? (await feedbackService.getSharedColorLabels(event.id, [photoId]))[photoId] || null
+        : null;
       
       // Combine and deduplicate
       const allFeedback = [...feedback];
@@ -117,6 +132,10 @@ router.get('/:slug/photos/:photoId/feedback',
             .then(r => r.count),
           like_count: photo.like_count || 0,
           favorite_count: photo.favorite_count || 0,
+          // Gated like the per-emoji map below — aggregate reaction data is
+          // a new surface, kept fully hidden while sharing is off.
+          reaction_count: settings.show_feedback_to_guests ? (photo.reaction_count || 0) : 0,
+          color_label_count: settings.show_feedback_to_guests ? (photo.color_label_count || 0) : 0,
           comment_count: await db('photo_feedback')
             .where({ 
               photo_id: photoId, 
@@ -128,10 +147,33 @@ router.get('/:slug/photos/:photoId/feedback',
             .first()
             .then(r => r.count)
         },
+        // Per-emoji tallies for the reaction bar (#839). Gated on
+        // show_feedback_to_guests: with sharing off a guest sees only their
+        // own selection (my_feedback.reaction below), no aggregate counts.
+        reactions: settings.show_feedback_to_guests
+          ? await feedbackService.getPhotoReactionCounts(photoId)
+          : {},
+        // Per-colour tallies (#1044), gated exactly like `reactions` above:
+        // with sharing off the guest sees only their own label.
+        color_labels: settings.show_feedback_to_guests
+          ? await feedbackService.getPhotoColorLabelCounts(photoId)
+          : {},
         my_feedback: {
           rating: guestFeedback.find(f => f.feedback_type === 'rating')?.rating,
           liked: !!guestFeedback.find(f => f.feedback_type === 'like'),
-          favorited: !!guestFeedback.find(f => f.feedback_type === 'favorite')
+          favorited: !!guestFeedback.find(f => f.feedback_type === 'favorite'),
+          reaction: guestFeedback.find(f => f.feedback_type === 'reaction')?.reaction || null,
+          // In shared mode the photo's one tag IS this viewer's tag (#1197):
+          // there is no per-guest row to find, and returning null here would
+          // leave the lightbox swatch unselected while the photo plainly
+          // carries a colour. Delivered through my_feedback rather than the
+          // gated `color_labels` map above on purpose — the shared tag is the
+          // photo's own state, so it stays visible even with
+          // show_feedback_to_guests off, while the per-colour tallies (which
+          // are other people's data) stay hidden.
+          color_label: settings.identity_mode === 'shared'
+            ? sharedColorLabel
+            : (guestFeedback.find(f => f.feedback_type === 'color_label')?.color_label || null)
         }
       });
     } catch (error) {
@@ -145,6 +187,8 @@ router.get('/:slug/photos/:photoId/feedback',
 router.post('/:slug/photos/:photoId/feedback',
   verifyGalleryAccess,
   denySlideshowToken,
+  // Reveal-gated (#838): no interacting with photos you cannot see.
+  blockHiddenGallery,
   resolveGuest,
   validatePhotoId,
   validateFeedbackSubmission,
@@ -181,7 +225,9 @@ router.post('/:slug/photos/:photoId/feedback',
         rating: settings.allow_ratings,
         like: settings.allow_likes,
         comment: settings.allow_comments,
-        favorite: settings.allow_favorites
+        favorite: settings.allow_favorites,
+        reaction: settings.allow_reactions,
+        color_label: settings.allow_color_labels
       };
 
       if (!typeAllowed[feedbackType]) {
@@ -227,6 +273,12 @@ router.post('/:slug/photos/:photoId/feedback',
         feedback_type: feedbackType,
         rating: req.body.rating,
         comment_text: req.body.comment_text,
+        reaction: req.body.reaction,
+        color_label: req.body.color_label,
+        // Read by the service to route a colour label to the photo's one
+        // shared slot instead of the guest's own row (#1197). Passed rather
+        // than re-fetched: the settings are already in hand here.
+        identity_mode: settings.identity_mode,
         guest_name: req.guest?.name ?? req.body.guest_name,
         guest_email: req.guest?.email ?? req.body.guest_email,
         guest_id: req.guest?.id ?? null,
@@ -243,6 +295,21 @@ router.post('/:slug/photos/:photoId/feedback',
         // Moderate the comment
         const moderationResult = await feedbackModeration.moderateText(req.body.comment_text);
         
+        if (moderationResult.blocked) {
+          // `block` severity means rejected outright — never stored, not even
+          // as a pending row for a moderator to see. Anything else that isn't
+          // approved falls through to the held-for-moderation branch below.
+          logger.warn('Comment rejected by word filter:', {
+            eventId: event.id,
+            reason: moderationResult.reason,
+            violations: moderationResult.violations
+          });
+          return res.status(400).json({
+            error: 'Your comment contains words that are not allowed here.',
+            code: 'COMMENT_BLOCKED'
+          });
+        }
+
         if (!moderationResult.approved) {
           // Still save but mark as not approved
           feedbackData.is_approved = false;
@@ -313,7 +380,13 @@ router.get('/:slug/feedback-summary',
   async (req, res) => {
     try {
       const event = req.event;
-      
+
+      // Reveal mode (#838): the summary lists top photos by filename —
+      // hidden along with the gallery for plain guests.
+      if (guestBlockedByReveal(req)) {
+        return res.json({ enabled: false, summary: null });
+      }
+
       // Get feedback settings
       const settings = await feedbackService.getEventFeedbackSettings(event.id);
       
@@ -346,7 +419,10 @@ router.get('/:slug/feedback-summary',
           allow_ratings: settings.allow_ratings,
           allow_likes: settings.allow_likes,
           allow_comments: settings.allow_comments,
-          allow_favorites: settings.allow_favorites
+          allow_favorites: settings.allow_favorites,
+          allow_reactions: settings.allow_reactions,
+          allow_color_labels: settings.allow_color_labels,
+          keybind_mode: settings.keybind_mode || 'colors'
         },
         summary: guestSummary
       });
@@ -364,6 +440,13 @@ router.get('/:slug/my-feedback',
   async (req, res) => {
     try {
       const event = req.event;
+
+      // Reveal mode (#838): rows join photos (filename + storage path) —
+      // return the empty back-compat shape rather than a 403 so the gallery
+      // shell loading in parallel doesn't surface error toasts.
+      if (guestBlockedByReveal(req)) {
+        return res.json([]);
+      }
 
       const query = db('photo_feedback')
         .join('photos', 'photo_feedback.photo_id', 'photos.id')

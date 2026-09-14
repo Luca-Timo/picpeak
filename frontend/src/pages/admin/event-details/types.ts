@@ -6,6 +6,9 @@ export type EditFormState = {
   css_template_id: number | null;
   expires_at: string;
   allow_user_uploads: boolean;
+  // Reveal mode (#838): reveal_at is a datetime-local input string ('' = none)
+  reveal_mode: boolean;
+  reveal_at: string;
   upload_category_id: number | null;
   hero_photo_id: number | null;
   customer_name: string;
@@ -13,6 +16,7 @@ export type EditFormState = {
   customer_phone: string;
   source_mode: 'managed' | 'reference';
   external_path: string;
+  external_watch: boolean;
   require_password: boolean;
   new_password: string;
   confirm_new_password: string;
@@ -21,13 +25,14 @@ export type EditFormState = {
   disable_right_click: boolean;
   allow_downloads: boolean;
   watermark_downloads: boolean;
-  allow_presigned_download: boolean;
   enable_devtools_protection: boolean;
   use_canvas_rendering: boolean;
   // Hero logo settings. null = inherit the global branding toggle (#756).
   hero_logo_visible: boolean | null;
   hero_logo_size: 'small' | 'medium' | 'large' | 'xlarge' | null;
   hero_logo_position: 'top' | 'center' | 'bottom';
+  // #894: null = default (show); false hides the logo on the password page.
+  login_logo_visible: boolean | null;
   // Hero image anchor position (#162) – keyword or "X% Y%" focal point
   hero_image_anchor: string;
   // Photo cap
@@ -40,6 +45,9 @@ export type EditFormState = {
   //   off     → no promo for this event regardless of global
   promo_mode: 'inherit' | 'custom' | 'off';
   promo_markdown: string;
+  // Info banner (#932) — same three-way mode, rendered above the grid.
+  info_mode: 'inherit' | 'custom' | 'off';
+  info_markdown: string;
   // Customer accounts assigned to this event (#354). Hydrated from
   // the GET /admin/events/:id response and sent back as a flat id
   // array on save.
@@ -54,6 +62,8 @@ export const INITIAL_EDIT_FORM: EditFormState = {
   css_template_id: null,
   expires_at: '',
   allow_user_uploads: false,
+  reveal_mode: false,
+  reveal_at: '',
   upload_category_id: null,
   hero_photo_id: null,
   customer_name: '',
@@ -61,6 +71,7 @@ export const INITIAL_EDIT_FORM: EditFormState = {
   customer_phone: '',
   source_mode: 'managed',
   external_path: '',
+  external_watch: false,
   require_password: true,
   new_password: '',
   confirm_new_password: '',
@@ -69,13 +80,13 @@ export const INITIAL_EDIT_FORM: EditFormState = {
   disable_right_click: true,
   allow_downloads: true,
   watermark_downloads: false,
-  allow_presigned_download: false,
   enable_devtools_protection: true,
   use_canvas_rendering: false,
   // Hero logo settings — null = inherit global branding toggle (#756)
   hero_logo_visible: null,
   hero_logo_size: null,
   hero_logo_position: 'top',
+  login_logo_visible: null,
   // Hero image anchor position (#162)
   hero_image_anchor: 'center',
   // Photo cap
@@ -85,6 +96,8 @@ export const INITIAL_EDIT_FORM: EditFormState = {
   // Per-event promotional override (#440)
   promo_mode: 'inherit',
   promo_markdown: '',
+  info_mode: 'inherit',
+  info_markdown: '',
   // Customer accounts (#354) — hydrated from event response.
   customer_accounts: [],
   // Per-event social-share opt-in (#474). Default false everywhere

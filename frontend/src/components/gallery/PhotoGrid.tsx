@@ -196,7 +196,6 @@ export const PhotoGrid: React.FC<PhotoGridProps> = ({
             allowDownloads={allowDownloads}
             protectionLevel={protectionLevel}
             useEnhancedProtection={useEnhancedProtection}
-            useCanvasRendering={useCanvasRendering}
             slug={slug}
             feedbackEnabled={feedbackEnabled}
           />
@@ -214,6 +213,7 @@ export const PhotoGrid: React.FC<PhotoGridProps> = ({
           allowDownloads={allowDownloads}
           protectionLevel={protectionLevel}
           useEnhancedProtection={useEnhancedProtection}
+          useCanvasRendering={useCanvasRendering}
           disableRightClick={disableRightClick}
           enableDevtoolsProtection={enableDevtoolsProtection}
         />
@@ -231,7 +231,6 @@ interface PhotoThumbnailProps {
   allowDownloads?: boolean;
   protectionLevel?: 'basic' | 'standard' | 'enhanced' | 'maximum';
   useEnhancedProtection?: boolean;
-  useCanvasRendering?: boolean;
   slug: string; // Add slug as required prop
   feedbackEnabled?: boolean;
 }
@@ -244,8 +243,6 @@ const PhotoThumbnail: React.FC<PhotoThumbnailProps> = ({
   onDownload,
   allowDownloads = true,
   protectionLevel = 'standard',
-  useEnhancedProtection = false,
-  useCanvasRendering = false,
   slug,
   feedbackEnabled = false
 }) => {
@@ -269,18 +266,6 @@ const PhotoThumbnail: React.FC<PhotoThumbnailProps> = ({
             loading="lazy"
             isGallery={true}
             slug={slug}
-            photoId={photo.id}
-            requiresToken={photo.requires_token}
-            secureUrlTemplate={photo.secure_url_template}
-            protectFromDownload={!allowDownloads || useEnhancedProtection}
-            protectionLevel={protectionLevel}
-            useEnhancedProtection={useEnhancedProtection}
-            useCanvasRendering={useCanvasRendering || protectionLevel === 'maximum'}
-            fragmentGrid={protectionLevel === 'enhanced' || protectionLevel === 'maximum'}
-            blockKeyboardShortcuts={useEnhancedProtection}
-            detectPrintScreen={useEnhancedProtection}
-            detectDevTools={protectionLevel === 'maximum'}
-            watermarkText={useEnhancedProtection ? 'Protected' : undefined}
             onProtectionViolation={(violationType) => {
               // Track analytics
               if (typeof window !== 'undefined' && (window as any).umami) {
@@ -311,8 +296,11 @@ const PhotoThumbnail: React.FC<PhotoThumbnailProps> = ({
             </div>
           )}
           
-          {/* Overlay on hover/tap - Always visible on mobile for better UX */}
-          <div className="absolute inset-0 bg-black/40 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200 rounded-lg flex items-center justify-center gap-2">
+          {/* Overlay on hover/tap - Always visible on mobile for better UX.
+              #1263: `md:opacity-0` hides the pixels but not the hit area, so
+              on a narrow pointer-device window the buttons stayed tappable
+              while invisible. pointer-events tracks opacity. */}
+          <div className="absolute inset-0 bg-black/40 opacity-100 pointer-events-auto md:opacity-0 md:pointer-events-none md:group-hover:opacity-100 md:group-hover:pointer-events-auto transition-opacity duration-200 rounded-lg flex items-center justify-center gap-2">
             {!isSelectionMode && (
               <>
                 <button
@@ -328,7 +316,12 @@ const PhotoThumbnail: React.FC<PhotoThumbnailProps> = ({
                 {allowDownloads && (
                   <button
                     className="p-2 sm:p-2 bg-white/90 rounded-full hover:bg-white transition-colors"
-                    onClick={onDownload}
+                    // #1263 — without stopPropagation the tap also reached the
+                    // tile's own onClick, so downloading opened the lightbox too.
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDownload(e);
+                    }}
                     aria-label="Download photo"
                   >
                     <Download className="w-5 h-5 text-theme" />

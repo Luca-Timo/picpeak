@@ -29,6 +29,8 @@ const SETTING_KEYS = [
   'crm_quotes_tos_url',
   'crm_invoices_qr_enabled',
   'crm_invoice_round_total',
+  // Free-text VAT/legal note printed under the MwSt. line on invoice PDFs (#794).
+  'crm_invoices_vat_note_text',
   'crm_invoices_reminders_enabled',
   'crm_invoices_reminder_first_days',
   'crm_invoices_reminder_second_days',
@@ -134,7 +136,7 @@ export const CrmSettingsPage: React.FC = () => {
 
   const setVal = (k: string, v: any) => setValues((s) => ({ ...s, [k]: v }));
   const checkbox = (k: string, label: string) => (
-    <label className="flex items-center gap-2 text-sm py-1">
+    <label className="flex items-center gap-2 text-sm text-neutral-800 dark:text-neutral-200 py-1">
       <input type="checkbox" checked={!!values[k]} onChange={(e) => setVal(k, e.target.checked)} />
       <span>{t(`crmSettings.${k}.label`, label)}</span>
     </label>
@@ -156,7 +158,7 @@ export const CrmSettingsPage: React.FC = () => {
     const stored = values[k];
     const effective = stored === undefined || stored === null ? true : !!stored;
     return (
-      <label className="flex items-center gap-2 text-sm py-1">
+      <label className="flex items-center gap-2 text-sm text-neutral-800 dark:text-neutral-200 py-1">
         <input
           type="checkbox"
           checked={effective}
@@ -169,13 +171,15 @@ export const CrmSettingsPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold">{t('crmSettings.title', 'CRM settings')}</h2>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            {t('crmSettings.subtitle', 'Fine-tune quote and invoice behaviour.')}
-          </p>
-        </div>
+      {/* No tab title here — the Settings shell renders the section
+          heading (icon + label + divider) for every tab that isn't in
+          SettingsPage's TABS_WITH_OWN_HEADER, so a page title repeated
+          the nav label the admin just clicked (QA warning). The subtitle
+          stays. */}
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          {t('crmSettings.subtitle', 'Fine-tune quote and invoice behaviour.')}
+        </p>
         <Button onClick={() => saveAll.mutate()} disabled={saveAll.isPending || !anySection}>
           <SaveIcon className="w-4 h-4 mr-1" />{t('common.save', 'Save')}
         </Button>
@@ -192,7 +196,7 @@ export const CrmSettingsPage: React.FC = () => {
 
       {showQuotes && (
       <Card>
-        <h3 className="font-semibold mb-3">{t('crmSettings.section.quotes', 'Quotes')}</h3>
+        <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-3">{t('crmSettings.section.quotes', 'Quotes')}</h3>
         {checkbox('crm_quotes_pdf_attachment_enabled', 'Attach quote PDF to email')}
         {checkbox('crm_quotes_skonto_enabled', 'Allow early-payment discount (Skonto) on quotes')}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
@@ -215,7 +219,7 @@ export const CrmSettingsPage: React.FC = () => {
             must tick before Accept fires. The text snapshot is
             recorded on the quote at acceptance time for audit. */}
         <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
-          <h4 className="font-semibold mb-2 text-sm">
+          <h4 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-2 text-sm">
             {t('crmSettings.section.quotesTos', 'Terms of Service / AGB step')}
           </h4>
           {checkbox('crm_quotes_tos_required', 'Require customers to tick "I accept the Terms of Service" before accepting')}
@@ -227,7 +231,7 @@ export const CrmSettingsPage: React.FC = () => {
               onChange={(e) => setVal('crm_quotes_tos_url', e.target.value)} />
           </div>
           <div className="mt-3">
-            <label className="block text-sm font-medium mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               {t('crmSettings.crm_quotes_tos_text.label', 'Inline Terms text shown on the quote page')}
             </label>
             <textarea
@@ -245,9 +249,28 @@ export const CrmSettingsPage: React.FC = () => {
 
       {showInvoices && (
       <Card>
-        <h3 className="font-semibold mb-3">{t('crmSettings.section.invoices', 'Invoices')}</h3>
+        <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-3">{t('crmSettings.section.invoices', 'Invoices')}</h3>
         {checkbox('crm_invoices_qr_enabled', 'Render payment QR on invoice PDFs')}
         {checkbox('crm_invoice_round_total', 'Reconcile sub-cent rounding to a clean total (adds a "Rundung" row when per-line rounding drifts from qty × rate)')}
+
+        {/* Free-text VAT / legal note (#794) — printed directly under the MwSt.
+            line on every invoice PDF. Data-driven: the admin types the exact
+            wording (Austrian Kleinunternehmer, German §19, reverse-charge, …). */}
+        <div className="mt-3">
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            {t('crmSettings.crm_invoices_vat_note_text.label', 'VAT / free-text note on invoices')}
+          </label>
+          <textarea
+            value={values.crm_invoices_vat_note_text ?? ''}
+            onChange={(e) => setVal('crm_invoices_vat_note_text', e.target.value)}
+            rows={2}
+            placeholder={t('crmSettings.crm_invoices_vat_note_text.placeholder', 'e.g. Gemäß § 6 Abs. 1 Z 27 UStG 1994 wird keine Umsatzsteuer berechnet (Kleinunternehmer).') as string}
+            className="w-full px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100"
+          />
+          <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+            {t('crmSettings.crm_invoices_vat_note_text.help', 'Printed directly under the MwSt. line on every invoice PDF. Leave empty to hide. Please confirm the exact wording with your tax advisor.')}
+          </p>
+        </div>
 
         {/* Reminder TIMING: owned by the Invoice dunning workflow when the
             engine is live (callout); otherwise the legacy schedule controls. The
@@ -335,7 +358,7 @@ export const CrmSettingsPage: React.FC = () => {
             on every new multi-installment plan. Per-document edits
             still override. */}
         <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
-          <h4 className="font-semibold mb-2 text-sm">
+          <h4 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-2 text-sm">
             {t('crmSettings.section.installmentDefaults', 'Default installment triggers')}
           </h4>
           <p className="text-xs text-neutral-500 mb-3">
@@ -344,13 +367,13 @@ export const CrmSettingsPage: React.FC = () => {
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 {t('crmSettings.crm_invoices_installment_trigger_first.label', 'First installment trigger')}
               </label>
               <select
                 value={values.crm_invoices_installment_trigger_first ?? 'quote_accepted'}
                 onChange={(e) => setVal('crm_invoices_installment_trigger_first', e.target.value)}
-                className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+                className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
               >
                 <option value="quote_accepted">{t('crmSettings.installmentDefaults.trigger.quote_accepted', 'At signing / creation')}</option>
                 <option value="before_event">{t('crmSettings.installmentDefaults.trigger.before_event', 'Before event')}</option>
@@ -380,7 +403,7 @@ export const CrmSettingsPage: React.FC = () => {
             pickers — admin can override per document — but new
             drafts auto-prefill from these two settings. */}
         <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
-          <h4 className="font-semibold mb-2 text-sm">
+          <h4 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-2 text-sm">
             {t('crmSettings.section.paymentDefaults', 'Default payment conditions')}
           </h4>
           <p className="text-xs text-neutral-500 mb-3">
@@ -389,11 +412,11 @@ export const CrmSettingsPage: React.FC = () => {
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 {t('crmSettings.crm_invoices_default_payment_net_days_template_id.label', 'Default net days')}
               </label>
               <select
-                className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+                className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
                 value={values.crm_invoices_default_payment_net_days_template_id ?? ''}
                 onChange={(e) => setVal('crm_invoices_default_payment_net_days_template_id', e.target.value ? Number(e.target.value) : null)}
               >
@@ -404,11 +427,11 @@ export const CrmSettingsPage: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                 {t('crmSettings.crm_invoices_default_payment_timing_template_id.label', 'Default payment schedule')}
               </label>
               <select
-                className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+                className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
                 value={values.crm_invoices_default_payment_timing_template_id ?? ''}
                 onChange={(e) => setVal('crm_invoices_default_payment_timing_template_id', e.target.value ? Number(e.target.value) : null)}
               >
@@ -429,7 +452,7 @@ export const CrmSettingsPage: React.FC = () => {
          shape: 3 behaviour toggles, then a 2-column input grid, then
          the number-format input with helper text. */
       <Card>
-        <h3 className="font-semibold mb-3">{t('crmSettings.section.contracts', 'Contracts')}</h3>
+        <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-3">{t('crmSettings.section.contracts', 'Contracts')}</h3>
         {/* Three of these four toggles use `!== false` semantics on
             the backend — a missing app_settings row behaves as if
             checked. `checkboxDefaultOn` mirrors that so the UI tells
@@ -470,7 +493,7 @@ export const CrmSettingsPage: React.FC = () => {
          component reads these via /public/settings and hides the
          matching tile when the value is explicit false. */
       <Card>
-        <h3 className="font-semibold mb-1">
+        <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
           {t('crmSettings.section.dashboardOverview', 'Dashboard CRM overview')}
         </h3>
         <p className="text-xs text-neutral-500 mb-3">

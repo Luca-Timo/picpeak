@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, withRetry } = require('../database/db');
+const { db } = require('../database/db');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const fs = require('fs').promises;
@@ -9,6 +9,7 @@ const { formatBoolean } = require('../utils/dbCompat');
 const logger = require('../utils/logger');
 const { resolveSqlitePath } = require('../utils/databaseEngine');
 const { checkForUpdates, getCurrentChannel, getCurrentVersion, getReleasesSince, compareVersions } = require('../services/updateCheckService');
+const { getQueueProcessorStatus } = require('../services/emailProcessor');
 const { getAppSetting, upsertAppSetting } = require('../utils/appSettings');
 const { parseWhatsNew } = require('../utils/whatsNew');
 const { detectEnvironment, generateUpdateInstructions } = require('../services/environmentService');
@@ -20,7 +21,7 @@ const {
 const router = express.Router();
 
 // Get system version
-router.get('/version', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/version', adminAuth, requirePermission(['settings.view', 'system.view']), async (req, res) => {
   try {
     // Read backend version from package.json
     let backendVersion = '1.0.0';
@@ -35,12 +36,20 @@ router.get('/version', adminAuth, requirePermission('settings.view'), async (req
 
     const channel = getCurrentChannel(backendVersion);
 
+    // `single_container` lets the admin UI explain why a feature is
+    // unavailable instead of rendering a switch that silently refuses to
+    // stay on. Currently only face recognition is gated this way (#1074 on
+    // the all-in-one image, #1042 / PR #1068) — see
+    // faceSettings.isSingleContainerImage for the reasoning.
+    const { isSingleContainerImage } = require('../services/faceSettings');
+
     res.json({
       backend: backendVersion,
       frontend: '1.0.0', // This will be set by frontend
       node: process.version,
       environment: process.env.NODE_ENV || 'production',
-      channel: channel
+      channel: channel,
+      single_container: isSingleContainerImage()
     });
   } catch (error) {
     logger.error('Error fetching version:', error);
@@ -49,7 +58,7 @@ router.get('/version', adminAuth, requirePermission('settings.view'), async (req
 });
 
 // Check for updates
-router.get('/updates', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/updates', adminAuth, requirePermission(['settings.view', 'system.view']), async (req, res) => {
   try {
     // Check if update checking is enabled
     const updateCheckEnabled = process.env.UPDATE_CHECK_ENABLED !== 'false';
@@ -92,7 +101,7 @@ router.get('/updates', adminAuth, requirePermission('settings.view'), async (req
 // brand-new install initialises the marker silently so it never pops
 // "what's new" with nothing to compare against. Best-effort: any failure
 // (GitHub unreachable, etc.) returns hasNews:false, never errors.
-router.get('/updates/whatsnew', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/updates/whatsnew', adminAuth, requirePermission(['settings.view', 'system.view']), async (req, res) => {
   try {
     if (process.env.UPDATE_CHECK_ENABLED === 'false') {
       return res.json({ enabled: false, hasNews: false });
@@ -137,7 +146,7 @@ router.get('/updates/whatsnew', adminAuth, requirePermission('settings.view'), a
 
 // Acknowledge the What's New — advance the per-instance marker to the
 // running version so it stops showing for every admin.
-router.post('/updates/whatsnew/seen', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.post('/updates/whatsnew/seen', adminAuth, requirePermission(['settings.view', 'system.view']), async (req, res) => {
   try {
     const running = await getCurrentVersion();
     await upsertAppSetting('whatsnew_last_seen_version', JSON.stringify(running), 'system');
@@ -153,7 +162,7 @@ router.post('/updates/whatsnew/seen', adminAuth, requirePermission('settings.vie
 // admin can read release notes for ALL versions they're behind on, not
 // just the latest. Body is raw GitHub-flavoured markdown; rendering is
 // the client's job (frontend uses `marked`).
-router.get('/updates/changelog', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/updates/changelog', adminAuth, requirePermission(['settings.view', 'system.view']), async (req, res) => {
   try {
     const updateCheckEnabled = process.env.UPDATE_CHECK_ENABLED !== 'false';
     if (!updateCheckEnabled) {
@@ -176,7 +185,7 @@ router.get('/updates/changelog', adminAuth, requirePermission('settings.view'), 
 });
 
 // Get update instructions for current environment
-router.get('/updates/instructions', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/updates/instructions', adminAuth, requirePermission(['settings.view', 'system.view']), async (req, res) => {
   try {
     // Check if update checking is enabled
     const updateCheckEnabled = process.env.UPDATE_CHECK_ENABLED !== 'false';
@@ -217,7 +226,7 @@ router.get('/updates/instructions', adminAuth, requirePermission('settings.view'
 });
 
 // Get comprehensive system status
-router.get('/status', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/status', adminAuth, requirePermission(['settings.view', 'system.view']), async (req, res) => {
   try {
     // Database size. Read the LIVE connection rather than re-deriving any of
     // this from the environment (#1038): DATABASE_CLIENT is not the only thing
@@ -338,7 +347,17 @@ router.get('/status', adminAuth, requirePermission('settings.view'), async (req,
       services: {
         fileWatcher: { status: 'active' }, // These would ideally check actual service status
         expirationChecker: { status: 'active' },
-        emailProcessor: { status: 'active' }
+        // #1262 — this used to be hardcoded 'active', which reported a healthy
+        // worker on a deployment whose queue had never been touched. Report
+        // what the processor itself recorded instead.
+        emailProcessor: (() => {
+          const p = getQueueProcessorStatus();
+          return {
+            status: p.started && !p.lastError ? 'active' : (p.started ? 'degraded' : 'stopped'),
+            lastRunAt: p.lastRunAt,
+            lastError: p.lastError,
+          };
+        })()
       },
       timestamp: new Date()
     };
@@ -351,7 +370,7 @@ router.get('/status', adminAuth, requirePermission('settings.view'), async (req,
 });
 
 // Get database statistics
-router.get('/database', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/database', adminAuth, requirePermission(['settings.view', 'system.view']), async (req, res) => {
   try {
     // Get table info
     const tables = [
@@ -413,7 +432,7 @@ router.get('/database', adminAuth, requirePermission('settings.view'), async (re
 });
 
 // Get update notification settings
-router.get('/updates/notifications', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/updates/notifications', adminAuth, requirePermission(['settings.view', 'system.view']), async (req, res) => {
   try {
     const settings = await getUpdateNotificationSettings();
     res.json(settings);
@@ -424,7 +443,7 @@ router.get('/updates/notifications', adminAuth, requirePermission('settings.view
 });
 
 // Update notification settings
-router.put('/updates/notifications', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.put('/updates/notifications', adminAuth, requirePermission('system.manage'), async (req, res) => {
   try {
     const { enabled, recipients } = req.body;
 
@@ -460,7 +479,7 @@ router.put('/updates/notifications', adminAuth, requirePermission('settings.edit
 // `version_update_available`, so admins on the latest version can still
 // verify their SMTP + recipient config — the previous handler bailed
 // with "No updates available" when nothing was pending (#418).
-router.post('/updates/notifications/send', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.post('/updates/notifications/send', adminAuth, requirePermission('system.manage'), async (req, res) => {
   try {
     const result = await sendTestUpdateNotification();
     res.json(result);
@@ -471,7 +490,7 @@ router.post('/updates/notifications/send', adminAuth, requirePermission('setting
 });
 
 // Check and send update notifications (called on admin login or periodically)
-router.post('/updates/notifications/check', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.post('/updates/notifications/check', adminAuth, requirePermission(['settings.view', 'system.view']), async (req, res) => {
   try {
     const result = await checkAndNotifyUpdates();
     res.json(result);

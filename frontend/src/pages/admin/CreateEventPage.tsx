@@ -64,9 +64,15 @@ interface FormData {
     allow_likes: boolean;
     allow_comments: boolean;
     allow_favorites: boolean;
+    allow_reactions: boolean;
+    allow_color_labels: boolean;
+    // Optional, mirroring the shared FeedbackSettings contract — the
+    // <FeedbackSettings> editor's onChange emits that shape.
+    keybind_mode?: 'colors' | 'lightroom';
     require_name_email: boolean;
     moderate_comments: boolean;
     show_feedback_to_guests: boolean;
+    identity_mode?: 'simple' | 'guest' | 'shared';
     enable_rate_limiting: boolean;
     rate_limit_window_minutes?: number;
     rate_limit_max_requests?: number;
@@ -95,6 +101,12 @@ export const CreateEventPage: React.FC = () => {
   const { t } = useTranslation();
   const { format } = useLocalizedDate();
   const isMountedRef = useRef(true);
+  // Re-entrancy guard for the create submit. The Button's
+  // `disabled={createMutation.isPending}` covers the ordinary double-click, but
+  // not a submission that never touches the button (implicit form submission,
+  // a programmatic requestSubmit) — those raced two POSTs onto the same slug,
+  // one of which 500'd on `events_slug_unique` (QA 7.03).
+  const isSubmittingRef = useRef(false);
   const [showThemeCustomizer, setShowThemeCustomizer] = useState(false);
   // const [showPreview, setShowPreview] = useState(false);
   
@@ -132,9 +144,13 @@ export const CreateEventPage: React.FC = () => {
       allow_likes: true,
       allow_comments: true,
       allow_favorites: true,
+      allow_reactions: true,
+      allow_color_labels: false,
+      keybind_mode: 'colors',
       require_name_email: false,
       moderate_comments: true,
       show_feedback_to_guests: true,
+      identity_mode: 'simple',
       enable_rate_limiting: true,
       rate_limit_window_minutes: 15,
       rate_limit_max_requests: 10,
@@ -181,6 +197,18 @@ export const CreateEventPage: React.FC = () => {
       : FALLBACK_EVENT_TYPES),
     [eventTypes]
   );
+
+  // The hardcoded initial form value ('wedding') may not exist in the live
+  // catalog — the setup wizard can rename or delete the defaults (#800), and
+  // the backend now rejects unknown slugs. Snap to the first active type; a
+  // user-picked value is always in the list, so this never fights the user.
+  useEffect(() => {
+    if (!availableEventTypes.length) return;
+    if (!availableEventTypes.some(t => t.value === formData.event_type)) {
+      setFormData(prev => ({ ...prev, event_type: availableEventTypes[0].value }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableEventTypes, formData.event_type]);
 
   // Fetch default settings
   const { data: settings } = useQuery({
@@ -256,11 +284,12 @@ export const CreateEventPage: React.FC = () => {
     }));
   }, [publicSettings]);
 
-  // Honour the global "Enable Guest Feedback by default" admin setting (#520).
-  // Same one-shot apply pattern as require_password above — only seeds the
-  // master toggle. The sub-toggles (likes / ratings / comments) keep their
-  // hard-coded true defaults so a flipped master immediately gives sensible
-  // behaviour without a second admin setting to manage.
+  // Honour the global guest-feedback defaults (#520 for the master toggle,
+  // #1044 for the per-type ones). Same one-shot apply pattern as
+  // require_password above. This form POSTs every sub-toggle explicitly, so
+  // seeding them here is what makes the Settings > Events defaults actually
+  // reach a gallery created through the UI — the server-side inheritance in
+  // feedbackDefaults.js only covers callers that omit them (the v1 API).
   const feedbackEnabledDefaultApplied = useRef(false);
   useEffect(() => {
     if (feedbackEnabledDefaultApplied.current) return;
@@ -270,7 +299,14 @@ export const CreateEventPage: React.FC = () => {
       ...prev,
       feedback_settings: {
         ...prev.feedback_settings,
-        feedback_enabled: publicSettings.event_default_feedback_enabled === true
+        feedback_enabled: publicSettings.event_default_feedback_enabled === true,
+        allow_ratings: publicSettings.event_default_allow_ratings !== false,
+        allow_likes: publicSettings.event_default_allow_likes !== false,
+        allow_favorites: publicSettings.event_default_allow_favorites !== false,
+        allow_comments: publicSettings.event_default_allow_comments !== false,
+        allow_reactions: publicSettings.event_default_allow_reactions !== false,
+        allow_color_labels: publicSettings.event_default_allow_color_labels === true,
+        keybind_mode: publicSettings.event_default_keybind_mode === 'lightroom' ? 'lightroom' : 'colors'
       }
     }));
   }, [publicSettings]);
@@ -368,6 +404,9 @@ export const CreateEventPage: React.FC = () => {
         toast.error(errorMessage);
       }
     },
+    onSettled: () => {
+      isSubmittingRef.current = false;
+    },
   });
 
   const validateForm = (): boolean => {
@@ -433,7 +472,11 @@ export const CreateEventPage: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    if (isSubmittingRef.current) {
+      return;
+    }
+
     if (!validateForm()) {
       return;
     }
@@ -470,9 +513,15 @@ export const CreateEventPage: React.FC = () => {
       allow_likes: feedbackSettings.allow_likes,
       allow_comments: feedbackSettings.allow_comments,
       allow_favorites: feedbackSettings.allow_favorites,
+      allow_reactions: feedbackSettings.allow_reactions,
+      allow_color_labels: feedbackSettings.allow_color_labels,
+      keybind_mode: feedbackSettings.keybind_mode,
       require_name_email: feedbackSettings.require_name_email,
       moderate_comments: feedbackSettings.moderate_comments,
       show_feedback_to_guests: feedbackSettings.show_feedback_to_guests,
+      // The chooser has always been on this form; the value was never sent, so
+      // the gallery came out in the default mode whatever was picked (#1197).
+      identity_mode: feedbackSettings.identity_mode,
       // Client access (#172)
       client_access_enabled: formData.client_access_enabled,
       client_password: formData.client_access_enabled ? formData.client_password : undefined,
@@ -484,6 +533,7 @@ export const CreateEventPage: React.FC = () => {
       customer_account_ids: formData.customer_accounts.map((c) => c.id),
     };
 
+    isSubmittingRef.current = true;
     createMutation.mutate(payload);
   };
 
@@ -1009,11 +1059,18 @@ export const CreateEventPage: React.FC = () => {
               </label>
               <div className="flex items-center gap-2">
                 <div className="w-32">
+                  {/* `max` is required, not cosmetic: without it Blink
+                      reports the spin button's range as unbounded and the
+                      a11y tree exposes aria-valuemax="0" (QA warning), and
+                      an out-of-range value only fails at INSERT time. The
+                      ceiling is the events.photo_cap column's own — a
+                      signed 32-bit integer (migration 074). */}
                   <Input
                     type="number"
                     value={formData.photo_cap}
                     onChange={(e) => setFormData({ ...formData, photo_cap: parseInt(e.target.value) || 0 })}
                     min={0}
+                    max={2147483647}
                     leftIcon={<Image className="w-5 h-5" />}
                   />
                 </div>

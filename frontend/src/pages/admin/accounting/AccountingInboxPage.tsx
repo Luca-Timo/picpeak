@@ -229,6 +229,12 @@ const TriageModal: React.FC<{ doc: InboundDocument; categories: ExpenseCategory[
   });
 
   const rebillNeedsCustomer = disposition === 'rebill' && !customer[0];
+  // A doc attached to a customer becomes a client invoice line, which needs an
+  // amount. 0 is a valid amount (a zero-value pass-through); an EMPTY field
+  // (totalMinor === null) is not — block it here so it can't dead-end later at
+  // billing. Only enforced when it's actually being billed to a customer.
+  const rebillNeedsAmount = BOOKING_DISPOSITIONS.includes(disposition) && !!customer[0] && totalMinor == null;
+  const cannotSave = rebillNeedsCustomer || rebillNeedsAmount;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
@@ -289,7 +295,11 @@ const TriageModal: React.FC<{ doc: InboundDocument; categories: ExpenseCategory[
             {BOOKING_DISPOSITIONS.includes(disposition) && (
               <div className="space-y-3 rounded-lg border border-neutral-200 dark:border-neutral-700 p-3">
                 <div><label className={labelCls}>{t('accounting.inbox.field.customer', 'Client')} {disposition === 'rebill' ? '*' : ''}</label>
-                  <CustomerAccountPicker value={customer.slice(0, 1)} onChange={(next) => setCustomer(next.slice(-1))} />
+                  {/* portalAssignment={false} — same reason as the expenses
+                      ledger: this is an `incomingInvoices` flow, not a
+                      customer-portal one, and the rebill disposition's
+                      required field would otherwise render label-only. */}
+                  <CustomerAccountPicker portalAssignment={false} value={customer.slice(0, 1)} onChange={(next) => setCustomer(next.slice(-1))} />
                   {disposition === 'durchlaufend' && <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{t('accounting.inbox.field.passthroughCustomerHint', 'Optional — attach a client to re-bill this passthrough; leave empty to only book it to the event.')}</p>}
                 </div>
                 {/* Markup is a re-bill concept only. A pass-through is invoiced
@@ -308,11 +318,16 @@ const TriageModal: React.FC<{ doc: InboundDocument; categories: ExpenseCategory[
             )}
           </div>
         </div>
-        <div className="flex flex-wrap justify-end gap-2 border-t border-neutral-200 dark:border-neutral-700 px-5 py-3">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-neutral-200 dark:border-neutral-700 px-5 py-3">
+          {rebillNeedsAmount && (
+            <span className="mr-auto text-xs text-amber-600 dark:text-amber-400">
+              {t('accounting.incoming.amountRequired', 'Enter the invoice amount before re-billing (0 is allowed).')}
+            </span>
+          )}
           <Button variant="outline" onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
           {/* #5: categorize-only OR categorize then continue to mark paid. */}
-          <Button variant="outline" onClick={() => save.mutate(true)} disabled={save.isPending || rebillNeedsCustomer}>{t('accounting.inbox.saveCategorizePay', 'Save & mark paid')}</Button>
-          <Button onClick={() => save.mutate(false)} disabled={save.isPending || rebillNeedsCustomer}>{save.isPending ? t('common.saving', 'Saving…') : t('accounting.inbox.saveCategorize', 'Save')}</Button>
+          <Button variant="outline" onClick={() => save.mutate(true)} disabled={save.isPending || cannotSave}>{t('accounting.inbox.saveCategorizePay', 'Save & mark paid')}</Button>
+          <Button onClick={() => save.mutate(false)} disabled={save.isPending || cannotSave}>{save.isPending ? t('common.saving', 'Saving…') : t('accounting.inbox.saveCategorize', 'Save')}</Button>
         </div>
       </div>
     </div>

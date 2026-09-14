@@ -32,6 +32,7 @@ describe('downloadZipService background regen concurrency (#1399)', () => {
     peak = 0;
     inFlight = 0;
     release = [];
+    service.stopped = false;
     service.regenActive = 0;
     service.regenWaiters = [];
     service.debounceTimers.clear();
@@ -107,8 +108,8 @@ describe('downloadZipService background regen concurrency (#1399)', () => {
     expect(inFlight).toBe(3);
   });
 
-  it('leaves the queue empty once every rebuild has run', async () => {
-    const rows = Array.from({ length: 5 }, (_, i) => ({ id: i + 1 }));
+  it('releases anything parked for a slot on shutdown', async () => {
+    const rows = Array.from({ length: 6 }, (_, i) => ({ id: i + 1 }));
     db.mockReturnValue({
       whereNotNull: () => ({ select: () => Promise.resolve(rows) }),
     });
@@ -118,10 +119,10 @@ describe('downloadZipService background regen concurrency (#1399)', () => {
     await flush();
     expect(service.regenWaiters.length).toBeGreaterThan(0);
 
-    while (release.length) { release.shift()(); await flush(); }
-    // Nothing parked, nothing counted as running — no slot leaked on the way
-    // through, which is what would quietly wedge the next burst.
+    // stop() must not hang on a queue that will never drain.
+    const stopping = service.stop();
+    release.forEach((fn) => fn());
+    await expect(stopping).resolves.toBeUndefined();
     expect(service.regenWaiters).toHaveLength(0);
-    expect(service.regenActive).toBe(0);
   });
 });

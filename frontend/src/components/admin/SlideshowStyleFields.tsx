@@ -15,12 +15,17 @@ import {
   SLIDESHOW_TRANSITIONS,
   SLIDESHOW_COLORFILTERS,
   SLIDESHOW_WATERMARK_MODES,
+  SLIDESHOW_ORDERS,
   type SlideshowStyle,
 } from '../../services/slideshow.service';
+import type { PhotoCategory } from '../../services/categories.service';
 
 export interface SlideshowStyleFieldsProps {
   value: SlideshowStyle;
   onChange: (next: SlideshowStyle) => void;
+  /** Event categories for the content filter (#202). Omitted/empty → the
+   *  category picker is hidden (e.g. events without any categories). */
+  categories?: PhotoCategory[];
 }
 
 const inputClass =
@@ -29,7 +34,7 @@ const labelClass = 'block text-sm font-medium text-neutral-700 dark:text-neutral
 
 const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export const SlideshowStyleFields: React.FC<SlideshowStyleFieldsProps> = ({ value, onChange }) => {
+export const SlideshowStyleFields: React.FC<SlideshowStyleFieldsProps> = ({ value, onChange, categories = [] }) => {
   const { t } = useTranslation();
   const set = (patch: Partial<SlideshowStyle>) => onChange({ ...value, ...patch });
 
@@ -92,6 +97,39 @@ export const SlideshowStyleFields: React.FC<SlideshowStyleFieldsProps> = ({ valu
         </select>
       </div>
 
+      {/* Play order + content filter (#202) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className={labelClass}>{t('slideshow.orderLabel', 'Play order')}</label>
+          <select
+            value={value.order}
+            onChange={(e) => set({ order: e.target.value as SlideshowStyle['order'] })}
+            className={inputClass}
+          >
+            {SLIDESHOW_ORDERS.map((o) => (
+              <option key={o} value={o}>
+                {t(`slideshow.order.${o}`, o === 'random' ? 'Random (shuffle)' : 'Chronological')}
+              </option>
+            ))}
+          </select>
+        </div>
+        {categories.length > 0 && (
+          <div>
+            <label className={labelClass}>{t('slideshow.categoryLabel', 'Show only category')}</label>
+            <select
+              value={value.category_id ?? ''}
+              onChange={(e) => set({ category_id: e.target.value === '' ? null : parseInt(e.target.value, 10) })}
+              className={inputClass}
+            >
+              <option value="">{t('slideshow.categoryAll', 'All photos')}</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
       {/* Watermark — MODE only. The look (logo/position/opacity/style/size)
           lives in Settings → Slideshow, so it isn't duplicated here. */}
       <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700">
@@ -109,6 +147,25 @@ export const SlideshowStyleFields: React.FC<SlideshowStyleFieldsProps> = ({ valu
         </select>
         <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
           {t('slideshow.watermarkModeHint', 'The logo, position, opacity, style and size are configured under Settings → Slideshow.')}
+        </p>
+      </div>
+
+      {/* QR overlay (#837) — MODE only, same pattern as the watermark. */}
+      <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700">
+        <label className={labelClass}>{t('slideshow.qrToggle', 'Gallery QR code')}</label>
+        <select
+          value={value.qr}
+          onChange={(e) => set({ qr: e.target.value as SlideshowStyle['qr'] })}
+          className={inputClass}
+        >
+          {SLIDESHOW_WATERMARK_MODES.map((m) => (
+            <option key={m} value={m}>
+              {t(`slideshow.watermarkMode.${m}`, m === 'inherit' ? 'Use global default' : m === 'on' ? 'On' : 'Off')}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+          {t('slideshow.qrModeHint', 'Position, size and opacity are configured under Settings → Slideshow.')}
         </p>
       </div>
     </div>

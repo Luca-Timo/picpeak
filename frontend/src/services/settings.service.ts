@@ -1,4 +1,5 @@
 import { api } from '../config/api';
+import type { SlideshowGlobalDefaults } from './slideshow.service';
 
 export interface BrandingSettings {
   company_name: string;
@@ -54,6 +55,11 @@ export interface BrandingSettings {
   // Per-install promo banner alignment (#482). Defaults to center
   // so the banner aligns with the gallery footer.
   promo_alignment?: 'left' | 'center' | 'right';
+  // Gallery info banner (#932). Must also be mapped in
+  // formatBrandingSettings below — a field declared here but missing
+  // from the read mapper loads empty and the next save wipes it (see
+  // the note on the footer/promo block there).
+  info_markdown?: string;
 }
 
 export interface ThemeSettings {
@@ -85,10 +91,15 @@ export interface StorageInfo {
   // share. Was the summed size of the catalogued originals, which on a
   // reference-mode install is the size of a NAS.
   total_used: number;
+  // Summed photos.size_bytes — what total_used used to be.
   cataloged_bytes?: number;
   // True when part of the storage root could not be read, so total_used is a
-  // floor. Anything comparing it against a limit has to say so.
+  // floor rather than the answer. Anything comparing it against a limit has to
+  // say so, or an unreadable subtree reads as "safely under".
   storage_partial?: boolean;
+  // Where total_used came from. 'disk' is the filesystem walk; 'catalog' means
+  // the backend is S3, where the objects are in the bucket and a walk of the
+  // local storage root would report near-zero.
   storage_measurement?: 'disk' | 'catalog' | 'unavailable';
   archive_storage: number;
   storage_by_event: Array<{
@@ -153,7 +164,9 @@ export interface SystemStatus {
   services: {
     fileWatcher: { status: string };
     expirationChecker: { status: string };
-    emailProcessor: { status: string };
+    // 'active' | 'degraded' | 'stopped' (#1262). Was a hardcoded 'active'
+    // until the processor started reporting what it actually did.
+    emailProcessor: { status: string; lastRunAt?: string | null; lastError?: string | null };
   };
   timestamp: string;
 }
@@ -203,7 +216,7 @@ export const settingsService = {
   },
 
   // Update global Live Slideshow defaults (watermark)
-  async updateSlideshowDefaults(settings: Record<string, unknown>): Promise<void> {
+  async updateSlideshowDefaults(settings: SlideshowGlobalDefaults): Promise<void> {
     await api.put('/admin/settings/slideshow', settings);
   },
 
@@ -299,6 +312,18 @@ export const settingsService = {
     await api.put('/admin/settings/theme', settings);
   },
 
+  // General API rate limiter (#1337). Its own route validates ranges and
+  // clears the limiter's settings cache, so changes apply at once.
+  async updateRateLimit(settings: {
+    rate_limit_enabled: boolean;
+    rate_limit_window_minutes: number;
+    rate_limit_max_requests: number;
+    rate_limit_auth_max_requests: number;
+    rate_limit_skip_authenticated: boolean;
+    rate_limit_public_endpoints_only: boolean;
+  }): Promise<void> {
+    await api.put('/admin/settings/security/rate-limit', settings);
+  },
   // Update multiple settings at once
   async updateSettings(settings: Record<string, any>): Promise<void> {
     // Determine the endpoint based on setting keys
@@ -384,6 +409,7 @@ export const settingsService = {
       twitter_url: rawSettings.branding_twitter_url || '',
       youtube_url: rawSettings.branding_youtube_url || '',
       promo_markdown: rawSettings.branding_promo_markdown || '',
+      info_markdown: rawSettings.branding_info_markdown || '',
       promo_position: rawSettings.branding_promo_position === 'below_footer' ? 'below_footer' : 'above_footer',
       promo_alignment: ['left', 'center', 'right'].includes(rawSettings.branding_promo_alignment)
         ? rawSettings.branding_promo_alignment

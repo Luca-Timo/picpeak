@@ -1,10 +1,15 @@
+const { changedEvidence } = require('../usage/adoptionEvidence');
+const { capabilityEvidence } = require('../usage/capabilityEvidence');
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { safeValidationErrors } = require('../utils/routeHelpers');
 const { db, logActivity } = require('../database/db');
 const { formatBoolean } = require('../utils/dbCompat');
+const { parseBooleanInput } = require('../utils/parsers');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
+const { requireEventOwnership } = require('../middleware/ownership');
+const { getEventCategoriesOrdered } = require('../utils/categoryOrder');
 const logger = require('../utils/logger');
 const router = express.Router();
 
@@ -13,8 +18,9 @@ router.get('/global', adminAuth, requirePermission('settings.view'), async (req,
   try {
     const categories = await db('photo_categories')
       .where('is_global', formatBoolean(true))
+      .orderBy('display_order', 'asc')
       .orderBy('name', 'asc');
-    
+
     res.json(categories);
   } catch (error) {
     logger.error('Error fetching categories:', error);
@@ -22,19 +28,12 @@ router.get('/global', adminAuth, requirePermission('settings.view'), async (req,
   }
 });
 
-// Get categories for a specific event (global + event-specific)
-router.get('/event/:eventId', adminAuth, requirePermission('settings.view'), async (req, res) => {
+// Get categories for a specific event (global + event-specific), resolved to
+// the event's effective order: per-event override, else global default, else
+// name (#782). Each row carries `override_position` (null when not customised).
+router.get('/event/:eventId', adminAuth, requirePermission('settings.view'), requireEventOwnership, async (req, res) => {
   try {
-    const { eventId } = req.params;
-    
-    const categories = await db('photo_categories')
-      .where(function() {
-        this.where('is_global', formatBoolean(true))
-          .orWhere('event_id', eventId);
-      })
-      .orderBy('is_global', 'desc')
-      .orderBy('name', 'asc');
-    
+    const categories = await getEventCategoriesOrdered(req.params.eventId);
     res.json(categories);
   } catch (error) {
     logger.error('Error fetching event categories:', error);
@@ -44,10 +43,15 @@ router.get('/event/:eventId', adminAuth, requirePermission('settings.view'), asy
 
 // Create a new category
 router.post('/', adminAuth, requirePermission('settings.edit'), [
-  body('name').notEmpty().withMessage('Category name is required'),
+  // photo_categories.name is varchar(100) — without the length check Postgres
+  // raises "value too long" and the catch below turns it into a raw 500 with
+  // no usable message for the form.
+  body('name').notEmpty().withMessage('Category name is required')
+    .isLength({ max: 100 }).withMessage('Category name must be at most 100 characters'),
   body('slug').optional(),
   body('is_global').optional().isBoolean(),
-  body('event_id').optional().isInt()
+  body('event_id').optional().isInt(),
+  body('is_folder').optional().isBoolean()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -55,7 +59,7 @@ router.post('/', adminAuth, requirePermission('settings.edit'), [
       return res.status(400).json({ errors: safeValidationErrors(errors) });
     }
     
-    const { name, slug, is_global = true, event_id = null } = req.body;
+    const { name, slug, is_global = true, event_id = null, is_folder = false } = req.body;
     
     // Generate slug if not provided
     const categorySlug = slug || name
@@ -82,12 +86,32 @@ router.post('/', adminAuth, requirePermission('settings.edit'), [
       return res.status(400).json({ error: 'Category with this slug already exists' });
     }
     
+    // Append to the end of its scope so a new category doesn't jump to the
+    // top of an admin-defined order (#782).
+    const maxRow = await db('photo_categories')
+      .where(function() {
+        if (is_global) {
+          this.where('is_global', formatBoolean(true));
+        } else {
+          this.where('event_id', event_id);
+        }
+      })
+      .max('display_order as maxOrder')
+      .first();
+    const nextOrder = (maxRow?.maxOrder || 0) + 1;
+
     // Create category
     const insertResult = await db('photo_categories').insert({
       name,
       slug: categorySlug,
       is_global,
-      event_id: is_global ? null : event_id
+      event_id: is_global ? null : event_id,
+      display_order: nextOrder,
+      // #1160: a folder contains its photos instead of filtering them.
+      // parseBooleanInput, not `!!`: express-validator's isBoolean() accepts the
+      // STRINGS "false" and "0", and `!!'false'` is true — a form-encoded caller
+      // asking for a filter would silently get a folder.
+      is_folder: formatBoolean(parseBooleanInput(is_folder, false))
     }).returning('id');
     
     const categoryId = insertResult[0]?.id || insertResult[0];
@@ -101,6 +125,7 @@ router.post('/', adminAuth, requirePermission('settings.edit'), [
       { type: 'admin', id: req.admin.id, name: req.admin.username }
     );
     
+    capabilityEvidence(res, 'category_editing');
     res.json(category);
   } catch (error) {
     logger.error('Error creating category:', error);
@@ -110,12 +135,14 @@ router.post('/', adminAuth, requirePermission('settings.edit'), [
 
 // Update a category
 router.put('/:id', adminAuth, requirePermission('settings.edit'), [
-  body('name').notEmpty().withMessage('Category name is required'),
+  body('name').notEmpty().withMessage('Category name is required')
+    .isLength({ max: 100 }).withMessage('Category name must be at most 100 characters'),
   body('hero_photo_id').optional({ nullable: true }).custom((value) => {
     if (value === null || value === undefined) return true;
     return Number.isInteger(Number(value));
   }).withMessage('hero_photo_id must be an integer or null'),
-  body('allow_downloads').optional().isBoolean()
+  body('allow_downloads').optional().isBoolean(),
+  body('is_folder').optional().isBoolean()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -162,6 +189,13 @@ router.put('/:id', adminAuth, requirePermission('settings.edit'), [
       updateData.allow_downloads = req.body.allow_downloads;
     }
 
+    // Folder vs filter (#1160). Flipping this moves the category's photos out of
+    // (or back into) the root grid with no re-upload — it only changes where they
+    // render, never which photos exist or who may reach them.
+    if (Object.prototype.hasOwnProperty.call(req.body, 'is_folder')) {
+      updateData.is_folder = formatBoolean(parseBooleanInput(req.body.is_folder, false));
+    }
+
     await db('photo_categories')
       .where('id', id)
       .update(updateData);
@@ -175,6 +209,8 @@ router.put('/:id', adminAuth, requirePermission('settings.edit'), [
       { type: 'admin', id: req.admin.id, name: req.admin.username }
     );
 
+    changedEvidence(res, 'category_editing', category, updated,
+      ['name', 'slug', 'hero_photo_id', 'allow_downloads', 'is_folder']);
     res.json(updated);
   } catch (error) {
     logger.error('Error updating category:', error);
@@ -229,6 +265,7 @@ router.put('/:id/hero', adminAuth, requirePermission('settings.edit'), [
       { type: 'admin', id: req.admin.id, name: req.admin.username }
     );
 
+    changedEvidence(res, 'category_editing', category, updated, ['hero_photo_id']);
     res.json(updated);
   } catch (error) {
     logger.error('Error updating category hero:', error);
@@ -263,10 +300,145 @@ router.delete('/:id', adminAuth, requirePermission('settings.edit'), async (req,
       { type: 'admin', id: req.admin.id, name: req.admin.username }
     );
     
+    capabilityEvidence(res, 'category_editing');
     res.json({ message: 'Category deleted successfully' });
   } catch (error) {
     logger.error('Error deleting category:', error);
     res.status(500).json({ error: 'Failed to delete category' });
+  }
+});
+
+// Set a per-event category order override (#782). The client sends the full
+// ordered id list for THIS event — globals + event-specific, interleaved — and
+// we replace the event's override rows in one transaction. This overrides the
+// global default order for this gallery only.
+router.post('/reorder', adminAuth, requirePermission('settings.edit'), [
+  body('event_id').isInt().withMessage('event_id must be an integer'),
+  body('orderedIds').isArray({ min: 1 }).withMessage('orderedIds must be a non-empty array'),
+  body('orderedIds.*').isInt().withMessage('Each id must be an integer')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: safeValidationErrors(errors) });
+    }
+
+    const eventId = parseInt(req.body.event_id, 10);
+    const orderedIds = req.body.orderedIds.map((id) => parseInt(id, 10));
+
+    // Event ownership (event_id comes from the body, so requireEventOwnership —
+    // which reads req.params — can't be used here). Mirror it: super_admins
+    // bypass; other admins may only reorder events they own (ownerless
+    // legacy/system events allowed).
+    if (req.admin.roleName !== 'super_admin') {
+      const event = await db('events').where('id', eventId).first();
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+      if (event.created_by && event.created_by !== req.admin.id) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+
+    // Every id must be a category available to this event: a shared global OR
+    // one of the event's own categories. Anything else is out of scope.
+    const available = await db('photo_categories')
+      .where(function() {
+        this.where('is_global', formatBoolean(true)).orWhere('event_id', eventId);
+      })
+      .pluck('id');
+    const availableSet = new Set(available);
+    const invalid = orderedIds.filter((id) => !availableSet.has(id));
+    if (invalid.length > 0) {
+      return res.status(400).json({ error: 'One or more categories are not available for this event' });
+    }
+
+    const before = await db('event_category_order').where('event_id', eventId).orderBy('position', 'asc').pluck('category_id');
+    await db.transaction(async (trx) => {
+      await trx('event_category_order').where('event_id', eventId).del();
+      await trx('event_category_order').insert(
+        orderedIds.map((id, i) => ({ event_id: eventId, category_id: id, position: i + 1 }))
+      );
+    });
+    changedEvidence(res, 'category_editing', { order: before }, { order: orderedIds }, ['order']);
+
+    // Log activity after commit (avoids a SQLite in-transaction global write).
+    await logActivity('event_category_order_set',
+      { eventId, count: orderedIds.length },
+      eventId,
+      { type: 'admin', id: req.admin.id, name: req.admin.username }
+    );
+
+    res.json(await getEventCategoriesOrdered(eventId));
+  } catch (error) {
+    logger.error('Error reordering categories:', error);
+    res.status(500).json({ error: 'Failed to reorder categories' });
+  }
+});
+
+// Clear an event's override — revert this gallery to the global default order.
+router.delete('/reorder/:eventId', adminAuth, requirePermission('settings.edit'), requireEventOwnership, async (req, res) => {
+  try {
+    const eventId = parseInt(req.params.eventId, 10);
+    const removed = await db('event_category_order').where('event_id', eventId).del();
+    if (removed > 0) capabilityEvidence(res, 'category_editing');
+
+    await logActivity('event_category_order_reset',
+      { eventId },
+      eventId,
+      { type: 'admin', id: req.admin.id, name: req.admin.username }
+    );
+
+    res.json(await getEventCategoriesOrdered(eventId));
+  } catch (error) {
+    logger.error('Error resetting category order:', error);
+    res.status(500).json({ error: 'Failed to reset category order' });
+  }
+});
+
+// Set the GLOBAL default order for shared (global) categories (#782). Applies
+// to every gallery that hasn't set its own override. Rewrites display_order.
+router.post('/reorder-global', adminAuth, requirePermission('settings.edit'), [
+  body('orderedIds').isArray({ min: 1 }).withMessage('orderedIds must be a non-empty array'),
+  body('orderedIds.*').isInt().withMessage('Each id must be an integer')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: safeValidationErrors(errors) });
+    }
+
+    const orderedIds = req.body.orderedIds.map((id) => parseInt(id, 10));
+
+    const globals = await db('photo_categories').where('is_global', formatBoolean(true))
+      .orderBy('display_order', 'asc').orderBy('name', 'asc').pluck('id');
+    const globalsSet = new Set(globals);
+    const invalid = orderedIds.filter((id) => !globalsSet.has(id));
+    if (invalid.length > 0) {
+      return res.status(400).json({ error: 'One or more categories are not global' });
+    }
+
+    await db.transaction(async (trx) => {
+      for (let i = 0; i < orderedIds.length; i += 1) {
+        await trx('photo_categories').where('id', orderedIds[i]).update({ display_order: i + 1 });
+      }
+    });
+
+    await logActivity('global_category_order_set',
+      { count: orderedIds.length },
+      null,
+      { type: 'admin', id: req.admin.id, name: req.admin.username }
+    );
+
+    const categories = await db('photo_categories')
+      .where('is_global', formatBoolean(true))
+      .orderBy('display_order', 'asc')
+      .orderBy('name', 'asc');
+    changedEvidence(res, 'category_editing', { order: globals }, { order: categories.map((category) => category.id) }, ['order']);
+    res.json(categories);
+  } catch (error) {
+    logger.error('Error reordering global categories:', error);
+    res.status(500).json({ error: 'Failed to reorder global categories' });
   }
 });
 

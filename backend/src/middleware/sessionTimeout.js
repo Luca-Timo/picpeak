@@ -26,7 +26,7 @@ const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes - reduced DB queries
 // behaviour is unchanged: the timer fires every 5 min as long as
 // the server has anything else keeping the loop alive (HTTP server,
 // other intervals), which is always.
-setInterval(() => {
+const cleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [token, lastActivity] of sessions.entries()) {
     if (now - lastActivity > DEFAULT_SESSION_TIMEOUT) {
@@ -94,6 +94,16 @@ async function sessionTimeoutMiddleware(req, res, next) {
       return next();
     }
     
+    // "Remember me" opts out of the IDLE timeout (#1186). Not out of expiry:
+    // the token still dies on its own 30-day `exp`, and every other control
+    // (revocation, deactivation, password change) is untouched. Without this
+    // the checkbox does nothing observable — the default idle timeout is 60
+    // minutes, so a remembered admin was logged out the same hour.
+    if (decoded.rememberMe === true) {
+      sessions.set(token, Date.now());
+      return next();
+    }
+
     const now = Date.now();
     const lastActivity = sessions.get(token);
     const timeout = await getSessionTimeout();
@@ -125,7 +135,7 @@ async function sessionTimeoutMiddleware(req, res, next) {
     // Clean up old token if user has a new one
     // This prevents memory leaks from token renewals
     const userId = decoded.id;
-    for (const [oldToken, _] of sessions.entries()) {
+    for (const oldToken of sessions.keys()) {
       if (oldToken !== token) {
         try {
           const oldDecoded = jwt.verify(oldToken, process.env.JWT_SECRET, { algorithms: ['HS256'] });
@@ -164,6 +174,10 @@ async function sessionTimeoutMiddleware(req, res, next) {
 // tracks activity; /auth/session is read-only by design.
 async function isSessionExpired(token, decoded) {
   if (!token || !decoded || !decoded.id) return false;
+  // Same exemption as sessionTimeoutMiddleware (#1186) — these two must agree,
+  // or /auth/session and the request path would disagree about whether the
+  // caller is still logged in.
+  if (decoded.rememberMe === true) return false;
   const now = Date.now();
   const timeout = await getSessionTimeout();
   const lastActivity = sessions.get(token);
@@ -184,7 +198,7 @@ function getActiveSessions() {
   const now = Date.now();
   let active = 0;
   
-  for (const [_, lastActivity] of sessions.entries()) {
+  for (const lastActivity of sessions.values()) {
     if (now - lastActivity <= DEFAULT_SESSION_TIMEOUT) {
       active++;
     }
@@ -194,6 +208,7 @@ function getActiveSessions() {
 }
 
 module.exports = {
+  dispose: () => { clearInterval(cleanupTimer); sessions.clear(); cachedTimeout = null; cacheExpiry = 0; },
   sessionTimeoutMiddleware,
   isSessionExpired,
   endSession,

@@ -14,7 +14,7 @@ const { body, param, validationResult } = require('express-validator');
 const { safeValidationErrors } = require('../utils/routeHelpers');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
-const { requireEventOwnership } = require('../middleware/ownership');
+const { requireEventOwnership, canAccessEvent } = require('../middleware/ownership');
 const { db } = require('../database/db');
 const galleryShortUrlService = require('../services/galleryShortUrlService');
 const logger = require('../utils/logger');
@@ -91,10 +91,9 @@ router.post(
  * Ownership guard for the by-short-url-id DELETE route (GHSA-9h7q-2jpf-vj85).
  * GET/POST take :eventId directly so requireEventOwnership applies as-is;
  * DELETE takes the short URL row's own :id, so resolve its event first and
- * apply the same ownership predicate requireEventOwnership uses (event has
- * no owner, or the admin owns it). Sends the response and returns false
- * when the caller may not act on it (404 if the row doesn't exist, 403 if
- * it exists but belongs to another admin).
+ * apply the same ownership predicate requireEventOwnership uses. Sends the
+ * response and returns false when the caller may not act on it (404 if the
+ * row doesn't exist, 403 if it exists but belongs to another admin).
  */
 async function assertOwnsShortUrl(req, res, id) {
   const row = await db('gallery_short_urls').where({ id }).first('event_id');
@@ -104,7 +103,7 @@ async function assertOwnsShortUrl(req, res, id) {
   }
   if (req.admin.roleName !== 'super_admin') {
     const event = await db('events').where({ id: row.event_id }).first('created_by');
-    if (event && event.created_by && event.created_by !== req.admin.id) {
+    if (!canAccessEvent(req.admin, event)) {
       res.status(403).json({ error: 'Access denied' });
       return false;
     }

@@ -5,9 +5,10 @@ process.env.WEBHOOK_ALLOW_PRIVATE_URLS = 'true';
 process.env.WEBHOOK_DELIVERY_INTERVAL_MS = '50';
 
 const http = require('http');
-const { db } = require('../../src/database/db');
-const webhookService = require('../../src/services/webhookService');
-const { __test, startWebhookDeliveryWorker, stopWebhookDeliveryWorker } = require('../../src/services/webhookDeliveryWorker');
+const { bootCrmDb, seedMinimal } = require('./helpers/crmDb');
+let db, cleanup, adminId;
+let webhookService;
+let __test, startWebhookDeliveryWorker, stopWebhookDeliveryWorker;
 
 // Local-only test stub: matches what dev/webhook-receiver/server.js does
 // in the docker-compose flow but spun up inside the Jest process so the
@@ -43,7 +44,7 @@ async function insertWebhook(url, events = ['event.published'], extras = {}) {
     secret_preview: preview,
     events: JSON.stringify(events),
     active: extras.active !== false,
-    created_by: 1,
+    created_by: adminId,
   }).returning('id');
   const id = insert[0]?.id || insert[0];
   return { id, secret: plaintext };
@@ -56,16 +57,15 @@ async function clearWebhooks() {
 
 describe('webhook delivery worker (#327)', () => {
   beforeAll(async () => {
-    // Schema is expected to already be applied by `npm run migrate`. We
-    // just verify the webhooks tables exist; if not, the test harness has
-    // missed running migration 082.
-    const ok = await db.schema.hasTable('webhooks');
-    if (!ok) throw new Error('webhooks table missing — run `npm run migrate` first');
+    ({ db, cleanup } = await bootCrmDb());
+    ({ adminId } = await seedMinimal(db));
+    webhookService = require('../../src/services/webhookService');
+    ({ __test, startWebhookDeliveryWorker, stopWebhookDeliveryWorker } = require('../../src/services/webhookDeliveryWorker'));
   }, 30000);
 
   afterAll(async () => {
-    stopWebhookDeliveryWorker();
-    await db.destroy();
+    await stopWebhookDeliveryWorker();
+    await cleanup();
   });
 
   beforeEach(async () => {
@@ -146,8 +146,8 @@ describe('webhook delivery worker (#327)', () => {
         payload: JSON.stringify({ id: 'd1', type: 'event.published', data: {} }),
         attempt_count: 4,
         status: 'pending',
-        next_retry_at: new Date(),
-        created_at: new Date(),
+        next_retry_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
       });
       await __test.tick();
 
@@ -190,8 +190,8 @@ describe('webhook delivery worker (#327)', () => {
         payload: JSON.stringify({ id: 'd1', type: 'event.published', data: {} }),
         attempt_count: 0,
         status: 'pending',
-        next_retry_at: new Date(),
-        created_at: new Date(),
+        next_retry_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
       });
       await __test.tick();
 
@@ -214,8 +214,8 @@ describe('webhook delivery worker (#327)', () => {
         payload: JSON.stringify({ id: 'd1', type: 'event.published', data: {} }),
         attempt_count: 0,
         status: 'pending',
-        next_retry_at: new Date(),
-        created_at: new Date(),
+        next_retry_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
       });
       await __test.tick();
 

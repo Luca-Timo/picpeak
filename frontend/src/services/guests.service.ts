@@ -17,6 +17,8 @@ export interface AdminGuestStats {
   favorites: number;
   comments: number;
   ratings: number;
+  reactions: number;
+  color_labels: number;
   distinct_photos: number;
 }
 
@@ -28,6 +30,11 @@ export interface AdminGuest {
   last_seen_at: string;
   email_verified_at: string | null;
   is_deleted: boolean;
+  // Set when this row shares an email with another on the same event (#1210)
+  // — the same person who registered again after their token expired or on a
+  // second device. The value is the normalised email, so it doubles as the
+  // grouping key; null for everyone else.
+  duplicate_group?: string | null;
   stats: AdminGuestStats;
 }
 
@@ -45,6 +52,8 @@ export interface AdminGuestSelections {
   favorited: AdminGuestPhoto[];
   rated: Array<{ photo: AdminGuestPhoto; rating: number }>;
   commented: Array<{ photo: AdminGuestPhoto; comment: string; created_at: string }>;
+  reacted: Array<{ photo: AdminGuestPhoto; reaction: string }>;
+  labeled: Array<{ photo: AdminGuestPhoto; color_label: string }>;
 }
 
 export interface AdminGuestDetail {
@@ -106,7 +115,10 @@ class GuestsService {
   // Admin-side
   // ===================================================================
 
-  async getEventGuests(eventId: number): Promise<{ guests: AdminGuest[] }> {
+  async getEventGuests(eventId: number): Promise<{
+    guests: AdminGuest[];
+    duplicates?: { groups: number; guests: number };
+  }> {
     const response = await api.get(`/admin/events/${eventId}/guests`);
     return response.data;
   }

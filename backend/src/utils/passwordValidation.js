@@ -93,7 +93,7 @@ function validatePassword(password, options = {}) {
   }
   
   // Check special character requirement
-  if (config.requireSpecialChars && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+  if (config.requireSpecialChars && !/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
     errors.push('Password must contain at least one special character');
   }
   
@@ -257,7 +257,7 @@ async function validatePasswordInContext(password, context, userData = {}) {
     
     // Only allow date-format passwords when complexity is 'simple'
     if (complexityLevel === 'simple') {
-      const datePattern = /^\d{1,2}[.\/-]\d{1,2}[.\/-]\d{4}$/;
+      const datePattern = /^\d{1,2}[./-]\d{1,2}[./-]\d{4}$/;
       if (datePattern.test(password)) {
         return {
           valid: true,

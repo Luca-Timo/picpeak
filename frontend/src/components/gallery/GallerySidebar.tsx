@@ -1,9 +1,11 @@
 import React, { useEffect, useRef } from 'react';
-import { X, Download, Filter, SortAsc, Search, Calendar, Type, HardDrive, Check, Star, Upload, Camera } from 'lucide-react';
+import { X, Download, Filter, SortAsc, SortDesc, Search, Calendar, Type, HardDrive, Check, Star, Upload, Camera } from 'lucide-react';
 import { Button } from '../common';
 import { PhotoCategory } from '../../types';
 import { useTranslation } from 'react-i18next';
-import { GalleryFilter, type FilterType } from './GalleryFilter';
+import { GalleryFilter, type FilterType, type FeedbackFilterType } from './GalleryFilter';
+import { ColorLabelFilterChips } from './ColorLabelFilterChips';
+import type { ColorLabel } from '../../services/feedback.service';
 
 interface GallerySidebarProps {
   isOpen: boolean;
@@ -15,6 +17,9 @@ interface GallerySidebarProps {
   onSearchChange: (term: string) => void;
   sortBy: 'date' | 'name' | 'size' | 'rating' | 'capture_date';
   onSortChange: (sort: 'date' | 'name' | 'size' | 'rating' | 'capture_date') => void;
+  // Sort direction (#889)
+  sortDesc?: boolean;
+  onSortDescChange?: (desc: boolean) => void;
   isSelectionMode: boolean;
   onToggleSelectionMode: () => void;
   selectedCount: number;
@@ -24,16 +29,29 @@ interface GallerySidebarProps {
   allowDownloads?: boolean;
   photoCounts?: Record<number | string, number>;
   totalPhotos: number;
+  /**
+   * Event-wide count for the Download All control (#1160). `totalPhotos` is the
+   * current folder scope and drives the category list; Download All fetches the
+   * whole event, so labelling it from the scoped count would understate it and
+   * disable it entirely on a folder-only root.
+   */
+  downloadAllTotal?: number;
   isMobile: boolean;
   galleryLayout?: string;
   allowUploads?: boolean;
   onUploadClick?: () => void;
   feedbackEnabled?: boolean;
-  filterType?: FilterType;
+  // Multi-select feedback filters (#889): empty array = "All".
+  activeFilters?: FeedbackFilterType[];
   onFilterChange?: (filter: FilterType) => void;
   likeCount?: number;
   favoriteCount?: number;
   ratedCount?: number;
+  // Colour-label filters (#1044).
+  colorLabelsEnabled?: boolean;
+  activeColorFilters?: ColorLabel[];
+  onColorFilterChange?: (color: ColorLabel) => void;
+  colorLabelCounts?: Partial<Record<ColorLabel, number>>;
   mediaFilter?: 'all' | 'photo' | 'video';
   onMediaFilterChange?: (filter: 'all' | 'photo' | 'video') => void;
   showMediaFilter?: boolean;
@@ -49,6 +67,8 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
   onSearchChange,
   sortBy,
   onSortChange,
+  sortDesc = true,
+  onSortDescChange,
   isSelectionMode,
   onToggleSelectionMode,
   selectedCount,
@@ -58,16 +78,21 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
   allowDownloads = true,
   photoCounts = {},
   totalPhotos,
+  downloadAllTotal,
   isMobile,
   galleryLayout,
   allowUploads,
   onUploadClick,
   feedbackEnabled = false,
-  filterType = 'all',
+  activeFilters = [],
   onFilterChange,
   likeCount = 0,
   favoriteCount = 0,
   ratedCount = 0,
+  colorLabelsEnabled = false,
+  activeColorFilters = [],
+  onColorFilterChange,
+  colorLabelCounts = {},
   mediaFilter = 'all',
   onMediaFilterChange,
   showMediaFilter = false
@@ -188,10 +213,10 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
                   size="sm"
                   leftIcon={<Download className="w-4 h-4" />}
                   onClick={onDownloadAll}
-                  disabled={isDownloading || totalPhotos === 0}
+                  disabled={isDownloading || (downloadAllTotal ?? totalPhotos) === 0}
                   className="gallery-btn gallery-btn-download w-full"
                 >
-                  {t('gallery.downloadAll')} ({totalPhotos})
+                  {t('gallery.downloadAll')} ({downloadAllTotal ?? totalPhotos})
                 </Button>
 
                 <Button
@@ -223,11 +248,11 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
           {feedbackEnabled && onFilterChange && (
             <div className="gallery-sidebar-section gallery-sidebar-feedback p-4 border-b border-surface">
               <GalleryFilter
-                currentFilter={filterType}
-                onFilterChange={(filter) => {
-                  onFilterChange(filter);
-                  if (isMobile) onClose();
-                }}
+                activeFilters={activeFilters}
+                // Unlike the single-select category/sort buttons, feedback
+                // filters are multi-select toggles (#889) — keep the mobile
+                // sidebar open so several can be combined in one visit.
+                onFilterChange={onFilterChange}
                 feedbackEnabled={feedbackEnabled}
                 likeCount={likeCount}
                 favoriteCount={favoriteCount}
@@ -235,6 +260,15 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
                 className="w-full"
                 variant="compact"
               />
+              {/* Colour filter (#1044) */}
+              {colorLabelsEnabled && onColorFilterChange && (
+                <ColorLabelFilterChips
+                  className="mt-3"
+                  activeColors={activeColorFilters}
+                  onToggle={onColorFilterChange}
+                  counts={colorLabelCounts}
+                />
+              )}
             </div>
           )}
 
@@ -374,6 +408,30 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
                   );
                 })}
               </div>
+
+              {/* Sort direction (#889) */}
+              {onSortDescChange && (
+                <div className="flex items-center gap-2 mt-3">
+                  <Button
+                    variant={!sortDesc ? 'primary' : 'outline'}
+                    size="sm"
+                    leftIcon={<SortAsc className="w-4 h-4" />}
+                    onClick={() => onSortDescChange(false)}
+                    className="gallery-btn flex-1"
+                  >
+                    {t('gallery.sortAscending', 'Sort ascending')}
+                  </Button>
+                  <Button
+                    variant={sortDesc ? 'primary' : 'outline'}
+                    size="sm"
+                    leftIcon={<SortDesc className="w-4 h-4" />}
+                    onClick={() => onSortDescChange(true)}
+                    className="gallery-btn flex-1"
+                  >
+                    {t('gallery.sortDescending', 'Sort descending')}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>

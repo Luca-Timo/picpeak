@@ -234,3 +234,66 @@ describe('renderInvoiceToBuffer — Storno branch', () => {
     expect(stornoBuf.length).toBeLessThan(invoiceBuf.length);
   });
 });
+
+// VAT free-text note (#794) + multi-page page-number placement. Same
+// constraint as the Storno tests: PDFKit Flate-compresses content streams,
+// so we can't grep the note text — but the page-TREE objects are NOT
+// compressed, so `/Type /Page` (not `/Pages`) is countable to assert
+// pagination, and a byte-size delta proves the note actually rendered.
+describe('renderInvoiceToBuffer — VAT note + multi-page footer (#794)', () => {
+  function baseCtx(overrides = {}) {
+    return {
+      locale: 'de', currency: 'CHF',
+      issuer: { companyName: 'AcmeCo' },
+      recipient: {
+        companyName: 'KundenCo', addressLine1: 'Strasse 1',
+        city: 'Bern', postalCode: '3000',
+      },
+      lineItems: [{
+        quantity: 1, description: 'Photo session',
+        unitPriceMinor: 30000, lineTotalMinor: 30000,
+        parentLineItemId: null, parentPosition: null,
+      }],
+      totals: {
+        netAmountMinor: 30000, vatRate: 0, vatAmountMinor: 0,
+        shippingAmountMinor: 0, totalAmountMinor: 30000,
+      },
+      doc: { invoiceNumber: 'R-2026-0042', issueDate: '2026-04-12' },
+      qrFormat: 'none',
+      paymentTerm: { netDays: 30 },
+      ...overrides,
+    };
+  }
+  const pageCount = (buf) => (buf.toString('latin1').match(/\/Type\s*\/Page(?![s])/g) || []).length;
+  const VAT_NOTE = 'Gemäß § 6 Abs. 1 Z 27 UStG 1994 wird keine Umsatzsteuer berechnet (Kleinunternehmer).';
+
+  it('renders the VAT note on a single-page invoice (adds content, valid PDF)', async () => {
+    const withNote = await pdfService.renderInvoiceToBuffer(baseCtx({ vatNote: VAT_NOTE }));
+    const without = await pdfService.renderInvoiceToBuffer(baseCtx());
+    expect(withNote.slice(0, 4).toString('ascii')).toBe('%PDF');
+    expect(pageCount(withNote)).toBe(1);
+    expect(withNote.length).toBeGreaterThan(without.length);
+  });
+
+  it('paginates a long invoice (with the note) across multiple pages without a stray blank page', async () => {
+    const manyItems = Array.from({ length: 60 }, (_, i) => ({
+      quantity: 1, description: `Position ${i + 1} — fotografische Leistung`,
+      unitPriceMinor: 3225, lineTotalMinor: 3225,
+      parentLineItemId: null, parentPosition: null,
+    }));
+    const buf = await pdfService.renderInvoiceToBuffer(baseCtx({
+      lineItems: manyItems,
+      totals: {
+        netAmountMinor: 193500, vatRate: 0, vatAmountMinor: 0,
+        shippingAmountMinor: 0, totalAmountMinor: 193500,
+      },
+      vatNote: VAT_NOTE,
+    }));
+    expect(buf.slice(0, 4).toString('ascii')).toBe('%PDF');
+    const pages = pageCount(buf);
+    expect(pages).toBeGreaterThanOrEqual(2);
+    // 60 short rows fit in 2–3 pages; a stray blank page (the old margin
+    // bug) or a runaway loop would blow past this.
+    expect(pages).toBeLessThanOrEqual(3);
+  });
+});

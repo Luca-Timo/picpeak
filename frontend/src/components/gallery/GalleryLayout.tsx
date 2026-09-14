@@ -5,7 +5,7 @@ import { Calendar, Clock, Download, LogOut, Facebook, Instagram, Twitter, Youtub
 import { parseISO } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
-import { Button, MarkdownContent } from '../common';
+import { Button, MarkdownContent, PoweredBy } from '../common';
 import { DynamicFavicon } from '../common/DynamicFavicon';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useGuestIdentityOptional } from '../../contexts/GuestIdentityContext';
@@ -24,6 +24,10 @@ interface GalleryLayoutProps {
     // 'off' hides the promo slot entirely for this event.
     promo_mode?: 'inherit' | 'custom' | 'off';
     promo_markdown?: string | null;
+    // Per-event info-banner override (#932). Same three-way mode as promo,
+    // but the slot renders above the photo grid instead of by the footer.
+    info_mode?: 'inherit' | 'custom' | 'off';
+    info_markdown?: string | null;
   };
   // Effective hero-logo visibility for THIS gallery, already resolved by the
   // backend (per-event override, else the global branding toggle) (#756).
@@ -48,7 +52,6 @@ interface GalleryLayoutProps {
     logo_display_header?: boolean;
     logo_display_hero?: boolean;
     logo_display_mode?: 'logo_only' | 'text_only' | 'logo_and_text';
-    hide_powered_by?: boolean;
     // Footer overhaul (#441 + #440). Empty strings hide each socials icon.
     facebook_url?: string;
     instagram_url?: string;
@@ -60,6 +63,8 @@ interface GalleryLayoutProps {
     // Horizontal alignment for the promo content (#482). Defaults
     // to 'center' so the banner aligns with the footer.
     promo_alignment?: 'left' | 'center' | 'right';
+    // Global default for the info banner (#932). Empty = off everywhere.
+    info_markdown?: string;
   };
   showLogout?: boolean;
   onLogout?: () => void;
@@ -290,6 +295,32 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
     </div>
   ) : null;
 
+  // Info banner (#932). Resolved exactly like promo above, but rendered
+  // above the photo grid: the reporter's case is an onboarding hint ("use
+  // the menu button to filter"), which a guest must see on load rather than
+  // after scrolling the whole gallery. No alignment knob — this is short
+  // helper copy, not marketing content, so it stays centred with the grid.
+  const infoMode = event.info_mode || 'inherit';
+  const infoMarkdown = (() => {
+    if (infoMode === 'off') return '';
+    if (infoMode === 'custom') {
+      const eventMd = (event.info_markdown || '').trim();
+      return eventMd || (brandingSettings?.info_markdown || '');
+    }
+    return brandingSettings?.info_markdown || '';
+  })().trim();
+
+  const infoSlot = infoMarkdown ? (
+    <div className="gallery-info-banner border-b border-surface bg-surface/50">
+      <div className="container py-3 sm:py-4 px-4">
+        <MarkdownContent
+          source={infoMarkdown}
+          className="prose prose-sm max-w-none text-sm text-theme prose-a:text-accent text-center"
+        />
+      </div>
+    </div>
+  ) : null;
+
   // Legal links per #441: each CMS page has show_in_footer (default true).
   // When BOTH are hidden we still render the surrounding row only if
   // there's a guest "Forget me" button or socials to show.
@@ -475,8 +506,7 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                 )}
                 {/* Accent Download CTA — also rendered in the minimal header
                     so the action stays one click away regardless of header
-                    style. Intentionally NOT shown in the no-header variant
-                    where the gallery is fully chromeless by design. */}
+                    style. */}
                 {showHeaderDownload && onHeaderDownload && (
                   <HeaderDownloadButton
                     onClick={onHeaderDownload}
@@ -520,6 +550,17 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                   >
                     <span className="hidden sm:inline">{t('gallery.downloadAll')}</span>
                   </Button>
+                )}
+                {/* Accent Download CTA — 'none' suppresses the *title* header,
+                    not the download affordance: this bar still renders the
+                    menu, headerExtra and logout, so leaving the CTA out just
+                    stranded guests with per-tile downloads only (QA P4-B.05). */}
+                {showHeaderDownload && onHeaderDownload && (
+                  <HeaderDownloadButton
+                    onClick={onHeaderDownload}
+                    isDownloading={isDownloading}
+                    label={t('gallery.download', 'Download')}
+                  />
                 )}
                 {showLogout && onLogout && (
                   <Button
@@ -565,9 +606,7 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                 )}
 
                 {/* Accent Download CTA — also rendered above the hero so the
-                    primary download action is reachable without scrolling.
-                    Intentionally NOT shown in the no-header variant where
-                    the gallery is fully chromeless by design. */}
+                    primary download action is reachable without scrolling. */}
                 {showHeaderDownload && onHeaderDownload && (
                   <HeaderDownloadButton
                     onClick={onHeaderDownload}
@@ -679,6 +718,9 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
         </div>
       )}
 
+      {/* Info banner (#932) — above the grid so guests see it on load. */}
+      {infoSlot}
+
       {/* Main Content */}
       <main className="container">{children}</main>
 
@@ -702,9 +744,7 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
           )}
           <p className="text-xs sm:text-sm text-muted-theme">
             {brandingSettings?.footer_text || `© ${new Date().getFullYear()}${brandingSettings?.company_name ? ` ${brandingSettings.company_name}` : ''}. All rights reserved.`}
-            {!brandingSettings?.hide_powered_by && (
-              <> | Powered by <span className="font-semibold">PicPeak</span></>
-            )}
+            <PoweredBy inline />
           </p>
           {brandingSettings?.company_name && brandingSettings?.company_tagline && (
             <p className="text-xs text-muted-theme mt-2">
@@ -788,6 +828,19 @@ export const GalleryLayout: React.FC<GalleryLayoutProps> = ({
                     }}
                   >
                     {t('gallery.footer.forgetMe', 'Forget me ({{name}})', { name: guestIdentity.identity.name })}
+                  </button>
+                  {/* Non-destructive counterpart to "Forget me". Identity now
+                      survives a tab close (#1265), so someone else on a shared
+                      device can be greeted by the previous visitor's name —
+                      and "Forget me" would delete that person's selections.
+                      This only clears the identity on this device. */}
+                  <span className="text-xs text-muted-theme">|</span>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-theme hover:text-theme transition-colors"
+                    onClick={() => guestIdentity.signOut()}
+                  >
+                    {t('gallery.footer.notYou', 'Not you?')}
                   </button>
                 </>
               )}

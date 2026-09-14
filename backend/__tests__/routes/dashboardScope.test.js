@@ -149,7 +149,7 @@ describe('dashboard scoping (GHSA-c2jj / gqx7 / jhcf)', () => {
   it('/stats reports the catalogued figure on an S3 backend, not a near-zero disk walk', async () => {
     // STORAGE_PATH holds only incidental local files when objects live in a
     // bucket, so walking it would report near-zero and drag the soft-limit
-    // recommendation with it.
+    // recommendation with it (#1164 review).
     const prev = process.env.STORAGE_BACKEND;
     process.env.STORAGE_BACKEND = 's3';
     try {

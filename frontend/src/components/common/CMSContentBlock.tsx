@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import DOMPurify from 'dompurify';
 import { Card } from './Card';
 import { Loading } from './Loading';
+import { PoweredBy } from './PoweredBy';
 import { cmsService } from '../../services/cms.service';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
 import { buildResourceUrl } from '../../utils/url';
@@ -82,7 +83,18 @@ export const CMSContentBlock: React.FC<CMSContentBlockProps> = ({ slug, fallback
 
       <main className="flex-1 flex items-start justify-center px-4">
         <div className="max-w-2xl w-full">
-          <Card padding="lg">
+          {/*
+           * The card surface has to follow the theme too: `.card` hardcodes
+           * bg-white, so a dark-toned branding theme paired with the themed
+           * text below rendered near-white text on a white card (QA S3/S4).
+           */}
+          <Card
+            padding="lg"
+            style={{
+              backgroundColor: 'var(--color-surface)',
+              borderColor: 'var(--color-surface-border)',
+            }}
+          >
             {/*
              * Heading + body now read from theme tokens so dark themes
              * (and force-dark mode) render correctly without dark: variants
@@ -95,7 +107,7 @@ export const CMSContentBlock: React.FC<CMSContentBlockProps> = ({ slug, fallback
               {page.title}
             </h1>
             <div
-              className="prose prose-neutral dark:prose-invert max-w-none"
+              className="prose prose-neutral dark:prose-invert max-w-none text-theme"
               style={{ color: 'var(--color-text)' }}
               dangerouslySetInnerHTML={{
                 __html: DOMPurify.sanitize(page.content, {
@@ -132,11 +144,7 @@ export const CMSContentBlock: React.FC<CMSContentBlockProps> = ({ slug, fallback
             {lang === 'de' ? 'Datenschutz' : 'Privacy Policy'}
           </Link>
         </div>
-        {!settings?.branding_hide_powered_by && (
-          <p className="mt-2">
-            Powered by <span className="font-semibold">PicPeak</span>
-          </p>
-        )}
+        <PoweredBy className="mt-2" />
       </footer>
     </div>
   );

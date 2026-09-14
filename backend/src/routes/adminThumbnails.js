@@ -12,10 +12,12 @@ const logger = require('../utils/logger');
  *
  * Compared the way the storage backends do, not as raw strings.
  * LocalFsStorage._resolve and S3StorageBackend._key both fold `\` to `/` and
- * strip a leading `./`, so a legacy thumbnail_path in any of those shapes is
- * the SAME file as the freshly generated POSIX key while comparing unequal —
- * and the "the key moved, delete the old one" branch below would then delete
- * the thumbnail that had just been written.
+ * strip a leading `./`, so `thumbnails\thumb_x.jpg`, `./thumbnails/thumb_x.jpg`
+ * and `thumbnails/thumb_x.jpg` are all one file. A legacy thumbnail_path in
+ * any of those shapes would compare unequal to the freshly generated POSIX
+ * key — and the "the key moved, delete the old one" branch below would then
+ * delete the thumbnail that had just been written, leaving every regenerated
+ * photo pointing at nothing.
  */
 function sameStorageKey(a, b) {
   const canonical = (key) => String(key)
@@ -140,22 +142,26 @@ router.post('/regenerate', adminAuth, requirePermission('photos.edit'), async (r
   try {
     const { eventId } = req.body; // Optional: regenerate for specific event only
     
-    // source_origin/external_relpath/filename are what ensureThumbnail branches
-    // on to resolve an external source off its mount instead of under
-    // events/active. thumbnail_path is selected so it can be nulled — see below.
-    let query = db('photos').select(
-      'id', 'event_id', 'path', 'media_type', 'mime_type', 'thumbnail_path',
-      'source_origin', 'external_relpath', 'filename'
-    );
+    // source_origin/external_relpath/filename feed BOTH deleteThumbnailTiers
+    // (which derives the tier keys from the same fields ensureThumbnailAtWidth
+    // wrote them with) and ensureThumbnail, which branches on them to resolve
+    // an external source off its mount instead of under events/active.
+    // thumbnail_path is selected so it can be nulled — see below.
+    let query = db('photos')
+      .select(
+        'id', 'event_id', 'path', 'media_type', 'mime_type', 'thumbnail_path',
+        'source_origin', 'external_relpath', 'filename'
+      );
     if (eventId) {
       query = query.where('event_id', eventId);
     }
-    // Skip videos: their thumbnail is a poster frame from videoProcessor, so
-    // handing the container file to Sharp only ever produced an error per row.
+    // Skip videos, matching /regenerate-previews. Their thumbnail is a poster
+    // frame from videoProcessor, so handing the container file to Sharp here
+    // only ever produced an error per video row.
     query = query.where(function() {
       this.whereNull('media_type').orWhere('media_type', '!=', 'video');
     });
-    
+
     const photos = await query;
     
     if (photos.length === 0) {
@@ -175,33 +181,50 @@ router.post('/regenerate', adminAuth, requirePermission('photos.edit'), async (r
       
       for (const photo of photos) {
         try {
-          // Through ensureThumbnail, not a hand-rolled path (#1129). This route
-          // used to resolve every source as `storage/events/active/<path>` and
-          // fs.access it — a location that does not exist for external or
-          // reference rows, whose originals live under events.external_path. So
-          // every one of them failed the check and was counted as an error: on a
-          // reference install the endpoint rebuilt nothing while the UI reported
-          // success, because the response is sent before this loop starts.
+          // Drop the responsive tiers first (#1095), same as the preview
+          // endpoint below. They are cached by width outside thumbnail_path
+          // and their key carries no settings version, so regenerating only
+          // the canonical rendition leaves phones served the old fit, quality
+          // or format indefinitely — which is exactly what this endpoint is
+          // invoked to undo after a settings change.
+          await require('../services/imageProcessor').deleteThumbnailTiers(photo);
+
+          // Through ensureThumbnail, not a hand-rolled path (#1129). This
+          // route used to resolve the source as `storage/events/active/<path>`
+          // and fs.access it — a location that does not exist for external or
+          // reference rows, whose originals live under events.external_path.
+          // Every such photo failed the check and was counted as an error, so
+          // on a reference install the endpoint dropped every tier and
+          // rebuilt nothing, while the UI reported success (the response is
+          // sent before this loop starts).
           //
-          // ensureThumbnail already resolves both source kinds, uses the
-          // per-photo ext<id>_ output name so two events referencing one NAS
-          // basename cannot clobber each other, and writes thumbnail_path back
-          // itself. Nulling thumbnail_path is what stops it short-circuiting on
-          // isThumbnailValid — necessary rather than cosmetic, because the old
-          // thumbnail is normally still readable at exactly the moment someone
-          // presses regenerate.
-          const newThumbnailPath = await ensureThumbnail({ ...photo, thumbnail_path: null });
+          // ensureThumbnail already resolves both source kinds via
+          // resolvePhotoFilePath/resolvePhotoStorageKey, uses the per-photo
+          // ext<id>_ output name so two events referencing one NAS basename
+          // cannot clobber each other, and writes thumbnail_path back itself.
+          // Nulling thumbnail_path is what stops it short-circuiting on
+          // isThumbnailValid — the same trick /regenerate-previews uses.
+          // `force` is what stops it joining a lazy generation that is still
+          // running under the OLD settings and adopting that result (#1020).
+          const newThumbnailPath = await ensureThumbnail({ ...photo, thumbnail_path: null }, { force: true });
 
           if (newThumbnailPath) {
-            // Drop the superseded rendition when the key MOVED. On S3 the source
-            // is downloaded to a randomly-named temp file and, for non-RAW input,
-            // the key is derived from that name — so it differs every run, and
-            // nulling thumbnail_path hides the old key from everything that would
-            // otherwise clean it up. Guarded on the key actually changing: local
-            // storage is stable, and deleting the equal key would delete the file
-            // just written.
+            // Drop the superseded canonical rendition when the key MOVED.
+            //
+            // For a managed photo on S3, ensureThumbnail downloads the source
+            // to a randomly-named temp file, and for non-RAW input
+            // withProcessableImage passes no outputBasename — so the key is
+            // derived from that random name and differs on every run. Nulling
+            // thumbnail_path above hides the old key from everything that
+            // would otherwise clean it up, so without this each regeneration
+            // strands a full thumbnail in the bucket, once per photo per run.
+            //
+            // Guarded on the key actually changing: on local storage it is
+            // stable, and deleting the equal key would delete the file that
+            // was just written.
             if (photo.thumbnail_path && !sameStorageKey(photo.thumbnail_path, newThumbnailPath)) {
               await getStorage().delete(photo.thumbnail_path).catch((err) => {
+                // Losing the old object is untidy, not a failed regeneration.
                 logger.warn(
                   `Could not remove superseded thumbnail ${photo.thumbnail_path} for photo ${photo.id}: ${err.message}`
                 );
@@ -266,7 +289,14 @@ router.post('/regenerate-previews', adminAuth, requirePermission('photos.edit'),
           // Force regeneration regardless of existing preview state by
           // nulling the cached path so ensurePreviewImage doesn't
           // short-circuit on a stale isPreviewValid check.
-          const newPreviewPath = await ensurePreviewImage({ ...photo, preview_path: null });
+          // Drop the responsive tiers first (#1095). They are cached by width
+          // outside preview_path, so regenerating only the canonical rendition
+          // leaves phones served the stale 640/1280 copy indefinitely — which
+          // is precisely the case this endpoint exists for (a replaced
+          // reference source, or a corrupted rendition).
+          await require('../services/imageProcessor').deletePreviewTiers(photo);
+          // `force`: never adopt a lazy generation already in flight (#1020).
+          const newPreviewPath = await ensurePreviewImage({ ...photo, preview_path: null }, { force: true });
           if (newPreviewPath) {
             successCount++;
           } else {

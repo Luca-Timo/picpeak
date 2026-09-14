@@ -13,7 +13,7 @@ const { parseBooleanInput } = require('../../utils/parsers');
 const { requireEventOwnership } = require('../../middleware/ownership');
 const { requireFeatureFlag } = require('../../middleware/requireFeatureFlag');
 const { getFrontendBaseUrl } = require('../../utils/frontendUrl');
-const { SLIDESHOW_TRANSITIONS, SLIDESHOW_COLORFILTERS } = require('./helpers');
+const { SLIDESHOW_TRANSITIONS, SLIDESHOW_COLORFILTERS, SLIDESHOW_ORDERS } = require('./helpers');
 
 // The watermark LOOK (source/position/opacity/style/size) is global-only
 // (app_settings, Settings → Slideshow); events only carry the show_watermark
@@ -105,7 +105,10 @@ module.exports = (router) => {
     body('show_transition').optional().isIn(SLIDESHOW_TRANSITIONS),
     body('show_transition_ms').optional().isInt({ min: 100, max: 5000 }),
     body('show_watermark').optional({ nullable: true }),
-    body('show_colorfilter').optional().isIn(SLIDESHOW_COLORFILTERS)
+    body('show_qr').optional({ nullable: true }),
+    body('show_colorfilter').optional().isIn(SLIDESHOW_COLORFILTERS),
+    body('show_order').optional().isIn(SLIDESHOW_ORDERS),
+    body('show_category_id').optional({ nullable: true }).isInt({ min: 1 })
   ], async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -129,7 +132,30 @@ module.exports = (router) => {
           ? null
           : formatBoolean(parseBooleanInput(req.body.show_watermark, false));
       }
+      // QR overlay (#837) — same tri-state semantics as show_watermark.
+      if (req.body.show_qr !== undefined) {
+        updates.show_qr = req.body.show_qr === null
+          ? null
+          : formatBoolean(parseBooleanInput(req.body.show_qr, false));
+      }
       if (req.body.show_colorfilter !== undefined) updates.show_colorfilter = req.body.show_colorfilter;
+      if (req.body.show_order !== undefined) updates.show_order = req.body.show_order;
+      // Category filter (#202). null clears it (all photos). A non-null id must
+      // belong to this event or be a global category — otherwise ignore it so a
+      // stale/foreign id can't leak another event's category selection.
+      if (req.body.show_category_id !== undefined) {
+        if (req.body.show_category_id === null) {
+          updates.show_category_id = null;
+        } else {
+          const catId = parseInt(req.body.show_category_id, 10);
+          const cat = await db('photo_categories')
+            .where({ id: catId })
+            .where(function () { this.where('event_id', event.id).orWhere('is_global', formatBoolean(true)); })
+            .first();
+          if (!cat) return res.status(400).json({ error: 'Category does not belong to this event' });
+          updates.show_category_id = catId;
+        }
+      }
 
       // Knex throws on an empty update; only write if something changed.
       if (Object.keys(updates).length > 0) {
@@ -141,7 +167,10 @@ module.exports = (router) => {
         show_transition: updates.show_transition ?? event.show_transition ?? 'crossfade',
         show_transition_ms: updates.show_transition_ms ?? event.show_transition_ms ?? 800,
         show_watermark: updates.show_watermark ?? event.show_watermark ?? null,
-        show_colorfilter: updates.show_colorfilter ?? event.show_colorfilter ?? 'none'
+        show_qr: 'show_qr' in updates ? updates.show_qr : (event.show_qr ?? null),
+        show_colorfilter: updates.show_colorfilter ?? event.show_colorfilter ?? 'none',
+        show_order: updates.show_order ?? event.show_order ?? 'chronological',
+        show_category_id: 'show_category_id' in updates ? updates.show_category_id : (event.show_category_id ?? null)
       });
     } catch (error) {
       errorResponse(res, error, 500, 'Failed to update slideshow settings');

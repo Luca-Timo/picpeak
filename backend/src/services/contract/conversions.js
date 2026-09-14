@@ -11,6 +11,7 @@ const businessProfileService = require('../businessProfileService');
 const { ensureSystemBlocksSeeded } = require('../contractBlocksService');
 const { ensureInt } = require('../../utils/numericHelpers');
 const { adminActor, ensureCustomerActive, nextContractNumber } = require('./helpers');
+const { resolveDefaultEventType } = require('../eventTypeService');
 
 
 /**
@@ -221,7 +222,15 @@ async function convertToEvent(contractId, adminId) {
   const placeholderHash = crypto.randomBytes(32).toString('hex');
   const shareToken = crypto.randomBytes(32).toString('hex');
 
+  // Event type: the configurable org default, else the resolved catch-all —
+  // same chain as quoteService.convertToEvent. Never a hardcoded slug: the
+  // admin may have renamed or deleted 'wedding' (#800).
+  const eventType = (await getAppSetting('crm_default_event_type'))
+    || (await resolveDefaultEventType());
+
   const eventCols = await db('events').columnInfo();
+  const { getImageSecurityDefaults, resolveImageSecurityColumns } = require('../../routes/adminEvents/helpers');
+  const imageSecurityColumns = resolveImageSecurityColumns({}, await getImageSecurityDefaults());
   const candidate = {
     slug: `contract-${contract.contract_number.toLowerCase()}-${crypto.randomBytes(3).toString('hex')}`,
     // Prefer the contract's event_name snapshot (set on the contract
@@ -236,7 +245,7 @@ async function convertToEvent(contractId, adminId) {
     customer_email: customerEmail,
     customer_phone: customer.phone,
     admin_email: adminEmail,
-    event_type: 'wedding',
+    event_type: eventType,
     password_hash: placeholderHash,
     share_link: shareToken,
     share_token: shareToken,
@@ -248,6 +257,11 @@ async function convertToEvent(contractId, adminId) {
     quote_id: null,
     created_at: new Date(),
     updated_at: new Date(),
+    // #1296 — a signed standalone contract converts straight to a gallery
+    // here, without going through quoteService, so the global Image Security
+    // defaults have to be applied on this path too. Not inside a transaction,
+    // so the global db read is fine.
+    ...imageSecurityColumns,
   };
   const eventRow = {};
   for (const [k, v] of Object.entries(candidate)) {

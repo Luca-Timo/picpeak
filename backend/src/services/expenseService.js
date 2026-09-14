@@ -21,6 +21,9 @@ const { db, logActivity } = require('../database/db');
 const { AppError } = require('../utils/errors');
 const logger = require('../utils/logger');
 const invoiceService = require('./invoiceService');
+// Tri-state proof-attach resolver — single source of truth lives with the
+// send-time attachment logic (no require cycle: rebillProofs never imports us).
+const { resolveDefaultAttach } = require('./invoice/rebillProofs');
 
 /**
  * Actor for logActivity. `adminId` is legitimately absent on automated paths —
@@ -54,7 +57,7 @@ function toIsoDate(v) {
 // ── Accounting settings (app_settings, type 'accounting') ───────────────────
 async function getAccountingSettings() {
   const keys = ['accounting_km_rate_minor', 'accounting_per_diem_rate_minor', 'accounting_require_proof',
-    'accounting_vat_reclaim_countries'];
+    'accounting_vat_reclaim_countries', 'accounting_rebill_attach_proof'];
   let rows = [];
   try {
     rows = await db('app_settings').whereIn('setting_key', keys).select('setting_key', 'setting_value');
@@ -69,6 +72,8 @@ async function getAccountingSettings() {
     kmRateMinor: Number.isFinite(Number(map.accounting_km_rate_minor)) ? Number(map.accounting_km_rate_minor) : 0,
     perDiemRateMinor: Number.isFinite(Number(map.accounting_per_diem_rate_minor)) ? Number(map.accounting_per_diem_rate_minor) : 0,
     requireProof: map.accounting_require_proof === true || map.accounting_require_proof === 1 || map.accounting_require_proof === '1',
+    // Global default for attaching supplier proof PDFs on re-bill invoices (#866).
+    rebillAttachProof: map.accounting_rebill_attach_proof === true || map.accounting_rebill_attach_proof === 1 || map.accounting_rebill_attach_proof === '1',
     vatReclaimCountries: Array.isArray(map.accounting_vat_reclaim_countries)
       ? map.accounting_vat_reclaim_countries.map((c) => String(c || '').toUpperCase()) : [],
   };
@@ -423,6 +428,14 @@ async function categorizeInbound(id, payload, adminId) {
     if (!row) throw new AppError('Incoming invoice not found', 404, 'INBOUND_NOT_FOUND');
     const doc = transformInbound(row);
 
+    // A doc attached to a customer will become a client invoice line, which
+    // needs an amount. Require one NOW (0 is fine — a legitimately zero-value
+    // pass-through — but null is not) rather than letting a value-less item sit
+    // PENDING and blow up the whole bundle later at bill time.
+    if (customerAccountId && doc.totalAmountMinor == null && doc.netAmountMinor == null) {
+      throw new AppError('Set the invoice amount before re-billing (0 is allowed).', 400, 'AMOUNT_REQUIRED');
+    }
+
     // #1: unwind any prior re-bill so the disposition can change.
     if (doc.billedInvoiceId) await unwindBilledLine(trx, doc);
 
@@ -483,6 +496,11 @@ async function rebillInbound(id, payload, adminId, trx0) {
     const row = await trx('inbound_documents').where({ id }).first();
     if (!row) throw new AppError('Incoming invoice not found', 404, 'INBOUND_NOT_FOUND');
     const doc = transformInbound(row);
+    // A client invoice line needs an amount (0 allowed, null not) — fail here
+    // rather than deep inside buildInboundLineItem.
+    if (doc.totalAmountMinor == null && doc.netAmountMinor == null) {
+      throw new AppError('Set the invoice amount before re-billing (0 is allowed).', 400, 'AMOUNT_REQUIRED');
+    }
     if (doc.billedInvoiceId) await unwindBilledLine(trx, doc);
     const markup = await resolveMarkup(
       { markupType: doc.markupType, markupPercent: doc.markupPercent, markupFlatMinor: doc.markupFlatMinor },
@@ -559,6 +577,44 @@ async function listPendingRebillSummary() {
   return Array.from(byCustomer.values()).sort((a, b) => b.openAmountMinor - a.openAmountMinor);
 }
 
+// Load this customer's pending (categorised-but-unbilled) rebill/passthrough
+// documents and build their invoice line items (no `position` yet — the caller
+// assigns it, so re-bills can be combined contiguously with hours in one
+// invoice; #866). Shared by the re-bills-only path and the combined orchestrator.
+async function buildPendingRebillLineItems(trx, customer) {
+  const docs = await trx('inbound_documents')
+    .where({ customer_account_id: customer.id })
+    .whereNull('billed_invoice_id')
+    .whereIn('disposition', CUSTOMER_DISPOSITIONS)
+    .where('status', 'categorized')
+    .orderBy('invoice_date', 'asc').orderBy('id', 'asc');
+  const lineItems = [];
+  for (let i = 0; i < docs.length; i += 1) {
+    const doc = transformInbound(docs[i]);
+    // eslint-disable-next-line no-await-in-loop
+    const markup = await resolveMarkup(
+      { markupType: doc.markupType, markupPercent: doc.markupPercent, markupFlatMinor: doc.markupFlatMinor },
+      null, null, trx,
+    );
+    lineItems.push(buildInboundLineItem(doc, doc.disposition, markup));
+  }
+  return { docs, lineItems };
+}
+
+// Stamp each inbound document with the invoice + its specific line-item id.
+// `lineIds` is aligned to `docs` order.
+async function stampBilledRebills(trx, docs, invoiceId, lineIds) {
+  const now = new Date();
+  for (let i = 0; i < docs.length; i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await trx('inbound_documents').where({ id: docs[i].id }).update({
+      billed_invoice_id: invoiceId,
+      billed_invoice_line_item_id: lineIds[i] || null,
+      updated_at: now,
+    });
+  }
+}
+
 /**
  * Per-event flow: bundle all pending rebill/passthrough documents for a
  * customer into ONE invoice, one line per document. Refuses for monthly/manual
@@ -576,24 +632,9 @@ async function billPendingRebills(customerId, adminId) {
   }
 
   const result = await db.transaction(async (trx) => {
-    const pending = await trx('inbound_documents')
-      .where({ customer_account_id: customer.id })
-      .whereNull('billed_invoice_id')
-      .whereIn('disposition', CUSTOMER_DISPOSITIONS)
-      .where('status', 'categorized')
-      .orderBy('invoice_date', 'asc').orderBy('id', 'asc');
+    const { docs: pending, lineItems: rawLines } = await buildPendingRebillLineItems(trx, customer);
     if (pending.length === 0) throw new AppError('No pending re-bills to bill', 409, 'NO_PENDING');
-
-    const lineItems = [];
-    for (let i = 0; i < pending.length; i += 1) {
-      const doc = transformInbound(pending[i]);
-      // eslint-disable-next-line no-await-in-loop
-      const markup = await resolveMarkup(
-        { markupType: doc.markupType, markupPercent: doc.markupPercent, markupFlatMinor: doc.markupFlatMinor },
-        null, null, trx,
-      );
-      lineItems.push({ ...buildInboundLineItem(doc, doc.disposition, markup), position: i + 1 });
-    }
+    const lineItems = rawLines.map((li, idx) => ({ ...li, position: idx + 1 }));
 
     const { invoiceIds } = await invoiceService.createInvoice({
       customerAccountId: customer.id,
@@ -603,21 +644,114 @@ async function billPendingRebills(customerId, adminId) {
 
     const insertedLines = await trx('invoice_line_items').where({ invoice_id: invoiceId }).orderBy('position', 'asc');
     const lineByPos = new Map(insertedLines.map((li) => [li.position, li.id]));
-    const now = new Date();
-    for (let i = 0; i < pending.length; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
-      await trx('inbound_documents').where({ id: pending[i].id }).update({
-        billed_invoice_id: invoiceId,
-        billed_invoice_line_item_id: lineByPos.get(i + 1) || null,
-        updated_at: now,
-      });
-    }
+    const lineIds = pending.map((_, i) => lineByPos.get(i + 1) || null);
+    await stampBilledRebills(trx, pending, invoiceId, lineIds);
 
     return { invoiceId, count: pending.length };
   });
   // Audit log after commit (global-db write — see billInboundNow).
   await logActivity('incoming_invoices_rebilled_bundle', { customerId: customer.id, invoiceId: result.invoiceId, count: result.count }, null, adminActor(adminId));
   return result;
+}
+
+// Derive a re-bill row's status from its linked client-invoice lifecycle — no
+// duplicated status column (avoids drift, #866). A covering invoice that was
+// cancelled (Storno) drops back to 'open' so storno'd items never inflate the
+// sent/paid aggregates.
+function deriveRebillStatus(billedInvoiceId, invoiceStatus) {
+  if (!billedInvoiceId) return 'open';
+  if (invoiceStatus === 'paid') return 'paid';
+  if (invoiceStatus === 'cancelled') return 'open';
+  return 'sent'; // scheduled / sent / overdue
+}
+
+/**
+ * Re-bill / passthrough items for one customer (issue #866, Feature 2). One row
+ * per captured supplier invoice attached to this customer as a rebill/
+ * passthrough, with cost vs re-billed amount (incl. markup), mode, linked event
+ * + client invoice, and a status DERIVED from the invoice lifecycle. History-
+ * only — feeds the CRM → Customer panel.
+ */
+async function listCustomerRebills(customerId) {
+  const rows = await db('inbound_documents as d')
+    .leftJoin('invoices as inv', 'd.billed_invoice_id', 'inv.id')
+    .leftJoin('events as e', 'd.event_id', 'e.id')
+    .where('d.customer_account_id', customerId)
+    .whereIn('d.disposition', CUSTOMER_DISPOSITIONS)
+    .where('d.status', 'categorized')
+    .orderBy('d.invoice_date', 'desc').orderBy('d.id', 'desc')
+    .select(
+      'd.id', 'd.supplier_name', 'd.invoice_date', 'd.currency',
+      'd.net_amount_minor', 'd.total_amount_minor', 'd.disposition',
+      'd.markup_type', 'd.markup_percent', 'd.markup_flat_minor',
+      'd.billed_invoice_id', 'd.proof_attach_error', 'd.file_path', 'd.event_id',
+      'e.event_name as event_name',
+      'inv.invoice_number as invoice_number', 'inv.status as invoice_status',
+    );
+
+  return rows.map((r) => {
+    const base = r.total_amount_minor != null ? Number(r.total_amount_minor)
+      : (r.net_amount_minor != null ? Number(r.net_amount_minor) : 0);
+    const isPassthrough = r.disposition === 'durchlaufend';
+    // Passthrough is invoiced at cost (VAT-neutral, no markup); re-bill carries
+    // the stored markup snapshot.
+    const markup = isPassthrough ? { type: 'none', percent: null, flatMinor: null } : {
+      type: MARKUP_TYPES.includes(r.markup_type) ? r.markup_type : 'none',
+      percent: r.markup_percent != null ? Number(r.markup_percent) : null,
+      flatMinor: Number.isInteger(r.markup_flat_minor) ? r.markup_flat_minor : null,
+    };
+    const status = deriveRebillStatus(r.billed_invoice_id, r.invoice_status);
+    const billed = status !== 'open';
+    return {
+      id: r.id,
+      supplierName: r.supplier_name || null,
+      date: toIsoDate(r.invoice_date),
+      currency: r.currency || null,
+      costMinor: base,
+      rebilledMinor: base + computeMarkupMinor(base, markup),
+      mode: isPassthrough ? 'passthrough' : 'rebill',
+      eventId: r.event_id || null,
+      eventName: r.event_name || null,
+      hasProof: !!r.file_path,
+      proofAttachError: r.proof_attach_error || null,
+      status,
+      invoiceId: billed ? r.billed_invoice_id : null,
+      invoiceNumber: billed ? (r.invoice_number || null) : null,
+    };
+  });
+}
+
+/**
+ * Re-bill proofs attached to ONE (not-yet-sent) client invoice, for the Send
+ * dialog's per-file selection (#866, Feature 1). Also returns the resolved
+ * attach default (per-customer override else global) so the dialog can
+ * pre-check the boxes.
+ */
+async function listInvoiceRebillProofs(invoiceId) {
+  const rows = await db('inbound_documents')
+    .where({ billed_invoice_id: invoiceId })
+    .whereIn('disposition', CUSTOMER_DISPOSITIONS)
+    .orderBy('id', 'asc')
+    .select('id', 'supplier_name', 'original_filename', 'file_path', 'currency',
+      'net_amount_minor', 'total_amount_minor', 'disposition', 'proof_attach_error');
+  const proofs = rows.map((r) => ({
+    id: r.id,
+    supplierName: r.supplier_name || null,
+    filename: r.original_filename || null,
+    hasProof: !!r.file_path,
+    currency: r.currency || null,
+    amountMinor: r.total_amount_minor != null ? Number(r.total_amount_minor)
+      : (r.net_amount_minor != null ? Number(r.net_amount_minor) : 0),
+    mode: r.disposition === 'durchlaufend' ? 'passthrough' : 'rebill',
+    proofAttachError: r.proof_attach_error || null,
+  }));
+
+  const inv = await db('invoices').where({ id: invoiceId }).first('customer_account_id');
+  const customer = inv && inv.customer_account_id
+    ? await db('customer_accounts').where({ id: inv.customer_account_id }).first('rebill_attach_proof')
+    : null;
+  const { rebillAttachProof } = await getAccountingSettings();
+  return { proofs, attachDefault: resolveDefaultAttach(customer, rebillAttachProof) };
 }
 
 /** Mark the supplier paid on the incoming invoice (the payable lives here). */
@@ -833,6 +967,11 @@ module.exports = {
   rebillInbound,
   listPendingRebillSummary,
   billPendingRebills,
+  listCustomerRebills,
+  listInvoiceRebillProofs,
+  // Shared with the combined hours+re-bills orchestrator (#866).
+  buildPendingRebillLineItems,
+  stampBilledRebills,
   markInboundSupplierPayment,
   // expenses
   createExpense,

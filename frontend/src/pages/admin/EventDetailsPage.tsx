@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useExpiryRefresh } from '../../hooks/useExpiryRefresh';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 
-import { Loading } from '../../components/common';
-import { PasswordResetModal, PublishGalleryDialog, DuplicateEventDialog, EventRenameDialog, AdminGuestsList } from '../../components/admin';
+import { Button, Card, Loading } from '../../components/common';
+import { PasswordResetModal, PublishGalleryDialog, SendGalleryEmailDialog, DuplicateEventDialog, EventRenameDialog, AdminGuestsList } from '../../components/admin';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { eventsService } from '../../services/events.service';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
@@ -23,9 +23,16 @@ import { OverviewTab } from './event-details/OverviewTab';
 import { PhotosTab } from './event-details/PhotosTab';
 import { CategoriesTab } from './event-details/CategoriesTab';
 
+const ALL_TAB_KEYS: EventDetailsTab[] = ['overview', 'photos', 'categories', 'guests'];
+
+function isValidTab(value: string | null): value is EventDetailsTab {
+  return value !== null && (ALL_TAB_KEYS as string[]).includes(value);
+}
+
 export const EventDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { format } = useLocalizedDate();
@@ -45,6 +52,9 @@ export const EventDetailsPage: React.FC = () => {
     allow_likes: true,
     allow_comments: true,
     allow_favorites: true,
+    allow_reactions: true,
+    allow_color_labels: false,
+    keybind_mode: 'colors',
     require_name_email: false,
     moderate_comments: true,
     show_feedback_to_guests: true,
@@ -52,11 +62,36 @@ export const EventDetailsPage: React.FC = () => {
     rate_limit_window_minutes: 15,
     rate_limit_max_requests: 10,
   });
-  const [activeTab, setActiveTab] = useState<EventDetailsTab>('overview');
+  // Read ?tab=… on mount, same shape as SettingsPage so both surfaces answer
+  // deep links identically; an unknown value falls back to the default tab and
+  // the sync effect below rewrites the URL to match (QA follow-up).
+  const [activeTab, setActiveTab] = useState<EventDetailsTab>(
+    isValidTab(searchParams.get('tab')) ? (searchParams.get('tab') as EventDetailsTab) : 'overview'
+  );
+
+  // Keep the URL in sync when the user clicks tabs, so copy-pasting the address
+  // lands the recipient on the same tab.
+  useEffect(() => {
+    if (searchParams.get('tab') === activeTab) return;
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', activeTab);
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // Reflect external URL changes (back/forward) back into local state.
+  useEffect(() => {
+    const urlTab = searchParams.get('tab');
+    if (isValidTab(urlTab) && urlTab !== activeTab) {
+      setActiveTab(urlTab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showPublishDialog, setShowPublishDialog] = useState(false);
+  const [showSendEmailDialog, setShowSendEmailDialog] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<ThemeConfig | null>(null);
   const [currentPresetName, setCurrentPresetName] = useState<string>('default');
@@ -91,11 +126,17 @@ export const EventDetailsPage: React.FC = () => {
     hasLikes: false,
     hasFavorites: false,
     hasComments: false,
+    colorLabels: [],
+    myColorLabels: [],
     logic: 'AND'
   });
 
   // Fetch event details
-  const { data: event, isLoading: eventLoading, refetch: refetchEvent } = useQuery({
+  // dataUpdatedAt doubles as the "password may have changed" signal for the
+  // share card (#1271): every successful (re)fetch — after an edit, a PIN
+  // change, a publish, a reset — drops a revealed copy, even when the event
+  // comes back structurally equal and therefore reference-equal.
+  const { data: event, isLoading: eventLoading, isError: eventError, refetch: refetchEvent, dataUpdatedAt: eventUpdatedAt } = useQuery({
     queryKey: ['admin-event', id],
     queryFn: () => eventsService.getEvent(parseInt(id!)),
     enabled: !!id,
@@ -109,11 +150,21 @@ export const EventDetailsPage: React.FC = () => {
   useExpiryRefresh([event?.expires_at], bumpExpiryTick);
 
   // Fetch feedback settings
-  const { data: eventFeedbackSettings } = useQuery({
+  const { data: eventFeedbackSettings, isLoading: feedbackSettingsLoading } = useQuery({
     queryKey: ['admin-event-feedback-settings', id],
     queryFn: () => feedbackService.getEventFeedbackSettings(id!),
     enabled: !!id,
   });
+
+  // Guests is only rendered in guest identity mode, so a ?tab=guests deep link
+  // on any other event would show an empty content area. Snap back once the
+  // settings have actually loaded — not while they're still undefined.
+  useEffect(() => {
+    if (feedbackSettingsLoading) return;
+    if (activeTab === 'guests' && eventFeedbackSettings?.identity_mode !== 'guest') {
+      setActiveTab('overview');
+    }
+  }, [feedbackSettingsLoading, eventFeedbackSettings?.identity_mode, activeTab]);
 
   // Update local feedback settings when fetched from server
   useEffect(() => {
@@ -132,6 +183,8 @@ export const EventDetailsPage: React.FC = () => {
     hasFavorites: feedbackFilters.hasFavorites || undefined,
     hasComments: feedbackFilters.hasComments || undefined,
     minRating: feedbackFilters.minRating ?? undefined,
+    colorLabels: feedbackFilters.colorLabels?.length ? feedbackFilters.colorLabels : undefined,
+    myColorLabels: feedbackFilters.myColorLabels?.length ? feedbackFilters.myColorLabels : undefined,
     logic: feedbackFilters.logic,
   }), [photoFilters, feedbackFilters]);
 
@@ -139,7 +192,7 @@ export const EventDetailsPage: React.FC = () => {
   // While any photo is still in pending/processing state we poll every
   // 2s so the admin grid auto-updates as the background worker drains
   // the queue. Once everything is complete/failed the polling stops.
-  const { data: photos = [], isLoading: photosLoading, refetch: refetchPhotos } = useQuery({
+  const { data: photos = [], isLoading: photosLoading, isError: photosError, refetch: refetchPhotos } = useQuery({
     queryKey: ['admin-event-photos', id, combinedPhotoFilters],
     queryFn: () => photosService.getEventPhotos(parseInt(id!), combinedPhotoFilters),
     enabled: !!id && (activeTab === 'photos' || isEditing),
@@ -212,6 +265,18 @@ export const EventDetailsPage: React.FC = () => {
   });
 
   // Archive mutation
+  // Reveal now (#838)
+  const revealMutation = useMutation({
+    mutationFn: () => eventsService.revealEvent(Number(id)),
+    onSuccess: () => {
+      toast.success(t('events.revealedToast', 'Gallery revealed — guests can see the photos now'));
+      refetchEvent();
+    },
+    onError: () => {
+      toast.error(t('events.revealError', 'Failed to reveal the gallery'));
+    },
+  });
+
   const archiveMutation = useMutation({
     mutationFn: () => eventsService.archiveEvent(parseInt(id!)),
     onSuccess: () => {
@@ -226,13 +291,47 @@ export const EventDetailsPage: React.FC = () => {
   // Publish mutation (Draft mode). Accepts the admin-typed password so the
   // gallery_created email can carry the real plaintext (#627).
   const publishMutation = useMutation({
-    mutationFn: (password?: string) =>
-      eventsService.publishEvent(parseInt(id!), password ? { password } : undefined),
-    onSuccess: () => {
+    mutationFn: (vars: { password?: string; notifyCustomer?: boolean }) =>
+      eventsService.publishEvent(parseInt(id!), {
+        password: vars.password,
+        notifyCustomer: vars.notifyCustomer,
+      }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['admin-event', id] });
       queryClient.invalidateQueries({ queryKey: ['admin-events'] });
-      toast.success(t('events.publishSuccess'));
+      // Say which of the two happened — "published" and "published and
+      // emailed your customer" are different enough that a single message
+      // would leave the admin unsure whether anything went out (#1235).
+      toast.success(
+        result?.notified_customer === false
+          ? t('events.publishQuietSuccess', 'Gallery published. No email was sent.')
+          : t('events.publishSuccess'),
+      );
       setShowPublishDialog(false);
+    },
+    onError: () => {
+      toast.error(t('errors.somethingWentWrong'));
+    },
+  });
+
+  // Send the gallery email after the fact (#1235). Pairs with publishing
+  // quietly: the address usually arrives later than the gallery does.
+  const sendGalleryEmailMutation = useMutation({
+    mutationFn: (password?: string) =>
+      eventsService.sendGalleryEmail(parseInt(id!), password ? { password } : undefined),
+    onSuccess: (result) => {
+      // #1262 — queueing is not delivery, and a queue nobody is working
+      // reports no failure at all. Point at where the queue is visible.
+      toast.success(
+        `${t('events.sendGalleryEmail.success', {
+          recipient: result.recipient,
+          defaultValue: 'Gallery email queued to {{recipient}}.',
+        })} ${t('events.emailQueuedHint', 'The queue processor sends it — check System health if it does not arrive.')}`,
+      );
+      setShowSendEmailDialog(false);
+      // The send may have replaced the password (#627); a refetch bumps the
+      // version the share card keys its revealed copy on (#1271).
+      queryClient.invalidateQueries({ queryKey: ['admin-event', id] });
     },
     onError: () => {
       toast.error(t('errors.somethingWentWrong'));
@@ -275,11 +374,24 @@ export const EventDetailsPage: React.FC = () => {
     },
   });
 
-  if (eventLoading || !event) {
+  if (eventLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loading size="lg" text={t('events.loadingEventDetails')} />
       </div>
+    );
+  }
+
+  // A 404 (or any settled failure) leaves `event` undefined forever — without
+  // this branch the spinner above never resolved (QA 7.02).
+  if (eventError || !event) {
+    return (
+      <Card padding="lg">
+        <p className="text-neutral-900 dark:text-neutral-100">{t('events.notFound', 'Event not found')}</p>
+        <Button variant="outline" className="mt-4" onClick={() => navigate('/admin/events')}>
+          {t('events.backToEvents')}
+        </Button>
+      </Card>
     );
   }
 
@@ -300,6 +412,11 @@ export const EventDetailsPage: React.FC = () => {
       css_template_id: event.css_template_id || null,
       expires_at: expiresAtDate ? format(expiresAtDate, 'yyyy-MM-dd') : '',
       allow_user_uploads: event.allow_user_uploads || false,
+      reveal_mode: event.reveal_mode || false,
+      // datetime-local wants local "YYYY-MM-DDTHH:mm"
+      reveal_at: event.reveal_at
+        ? (() => { const d = new Date(event.reveal_at); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); })()
+        : '',
       upload_category_id: event.upload_category_id || null,
       hero_photo_id: event.hero_photo_id || null,
       customer_name: event.customer_name || '',
@@ -307,6 +424,7 @@ export const EventDetailsPage: React.FC = () => {
       customer_phone: event.customer_phone || '',
       source_mode: event.source_mode === 'reference' ? 'reference' : 'managed',
       external_path: event.external_path || '',
+      external_watch: Boolean(event.external_watch),
       require_password: normalizeRequirePassword(event.require_password),
       new_password: '',
       confirm_new_password: '',
@@ -315,7 +433,6 @@ export const EventDetailsPage: React.FC = () => {
       disable_right_click: event.disable_right_click ?? true,
       allow_downloads: event.allow_downloads ?? true,
       watermark_downloads: event.watermark_downloads ?? false,
-      allow_presigned_download: (event as { allow_presigned_download?: boolean }).allow_presigned_download ?? false,
       enable_devtools_protection: event.enable_devtools_protection ?? true,
       use_canvas_rendering: event.use_canvas_rendering ?? false,
       // Load hero logo settings from event. Preserve null = "inherit global"
@@ -324,6 +441,10 @@ export const EventDetailsPage: React.FC = () => {
       // Preserve null = "inherit global size" (#756) — don't collapse to medium.
       hero_logo_size: event.hero_logo_size ?? null,
       hero_logo_position: event.hero_logo_position || 'top',
+      // #894: null = default (show); only false hides the password-page logo.
+      // Boolean() folds SQLite's 0/1 into real booleans so the edit form's
+      // strict `=== false` check reads a persisted hide correctly.
+      login_logo_visible: event.login_logo_visible == null ? null : Boolean(event.login_logo_visible),
       // Hero image anchor position (#162)
       hero_image_anchor: event.hero_image_anchor || 'center',
       // Photo cap
@@ -332,7 +453,9 @@ export const EventDetailsPage: React.FC = () => {
       default_photo_sort: event.default_photo_sort || 'upload_date_desc',
       // Per-event promotional override (#440)
       promo_mode: ((event as { promo_mode?: 'inherit' | 'custom' | 'off' }).promo_mode) || 'inherit',
+      info_mode: ((event as { info_mode?: 'inherit' | 'custom' | 'off' }).info_mode) || 'inherit',
       promo_markdown: (event as { promo_markdown?: string }).promo_markdown || '',
+      info_markdown: (event as { info_markdown?: string }).info_markdown || '',
       // Customer accounts (#354). The backend returns
       // `customer_accounts: [{ id, email, display_name, ... }]`; map to
       // the picker's shape.
@@ -439,6 +562,10 @@ export const EventDetailsPage: React.FC = () => {
     const updateData: any = {
       expires_at: editForm.expires_at || null,
       allow_user_uploads: editForm.allow_user_uploads,
+      reveal_mode: editForm.allow_user_uploads && editForm.reveal_mode,
+      reveal_at: editForm.allow_user_uploads && editForm.reveal_mode && editForm.reveal_at
+        ? new Date(editForm.reveal_at).toISOString()
+        : null,
       require_password: editForm.require_password,
       css_template_id: editForm.css_template_id,
       // Download protection settings
@@ -446,13 +573,13 @@ export const EventDetailsPage: React.FC = () => {
       disable_right_click: editForm.disable_right_click,
       allow_downloads: editForm.allow_downloads,
       watermark_downloads: editForm.watermark_downloads,
-      allow_presigned_download: editForm.allow_presigned_download,
       enable_devtools_protection: editForm.enable_devtools_protection,
       use_canvas_rendering: editForm.use_canvas_rendering,
       // Hero logo settings
       hero_logo_visible: editForm.hero_logo_visible,
       hero_logo_size: editForm.hero_logo_size,
       hero_logo_position: editForm.hero_logo_position,
+      login_logo_visible: editForm.login_logo_visible,
       // Hero image anchor position (#162)
       hero_image_anchor: editForm.hero_image_anchor,
       // Photo cap
@@ -466,6 +593,8 @@ export const EventDetailsPage: React.FC = () => {
       // promo_markdown automatically when mode != 'custom'.
       promo_mode: editForm.promo_mode,
       promo_markdown: editForm.promo_mode === 'custom' ? editForm.promo_markdown : null,
+      info_mode: editForm.info_mode,
+      info_markdown: editForm.info_mode === 'custom' ? editForm.info_markdown : null,
       // Customer accounts (#354) — flat array of ids. Backend diffs
       // against existing assignments in one transaction.
       customer_account_ids: editForm.customer_accounts.map((c) => c.id),
@@ -496,6 +625,9 @@ export const EventDetailsPage: React.FC = () => {
     updateData.external_path = editForm.source_mode === 'reference'
       ? externalPathToSave
       : null;
+    // Always sent, like og_image_share_enabled: the backend writes through
+    // formatBoolean, so a save can switch the watcher off again.
+    updateData.external_watch = editForm.source_mode === 'reference' && editForm.external_watch;
     if (editForm.customer_name !== undefined && editForm.customer_name !== null) {
       updateData.customer_name = editForm.customer_name;
     }
@@ -573,6 +705,7 @@ export const EventDetailsPage: React.FC = () => {
         <OverviewTab
           event={event}
           id={id}
+          passwordVersion={eventUpdatedAt}
           isEditing={isEditing}
           editForm={editForm}
           setEditForm={setEditForm}
@@ -584,11 +717,14 @@ export const EventDetailsPage: React.FC = () => {
           photos={photos}
           phoneFieldEnabled={phoneFieldEnabled}
           daysUntilExpiration={daysUntilExpiration}
+          onRevealNow={() => revealMutation.mutate()}
           refetchEvent={refetchEvent}
           setActiveTab={setActiveTab}
           setShowPasswordReset={setShowPasswordReset}
           setShowPublishDialog={setShowPublishDialog}
           setShowDuplicateDialog={setShowDuplicateDialog}
+          onSendGalleryEmail={() => setShowSendEmailDialog(true)}
+          isSendingGalleryEmail={sendGalleryEmailMutation.isPending}
           onArchive={() => archiveMutation.mutate()}
           isArchiving={archiveMutation.isPending}
           isPublishing={publishMutation.isPending}
@@ -609,6 +745,7 @@ export const EventDetailsPage: React.FC = () => {
           id={id}
           photos={photos}
           photosLoading={photosLoading}
+          photosError={photosError}
           refetchPhotos={refetchPhotos}
           categories={categories}
           photoFilters={photoFilters}
@@ -634,10 +771,12 @@ export const EventDetailsPage: React.FC = () => {
       {showPasswordReset && (
         <PasswordResetModal
           eventName={event.event_name}
-          eventDate={event.event_date}
+          eventDate={event.event_date ?? undefined}
           eventType={event.event_type}
           onConfirm={async (sendEmail, password) => {
             const result = await eventsService.resetPassword(event.id, sendEmail, password);
+            // refetch so the share card drops a revealed password (#1271)
+            queryClient.invalidateQueries({ queryKey: ['admin-event', id] });
             return result;
           }}
           onClose={() => setShowPasswordReset(false)}
@@ -668,13 +807,37 @@ export const EventDetailsPage: React.FC = () => {
       {showPublishDialog && (
         <PublishGalleryDialog
           eventName={event.event_name}
-          requirePassword={isGalleryPublic(event) ? false : true}
+          requirePassword={!isGalleryPublic(event.require_password)}
           customerEmail={event.customer_email}
+          customerPhone={event.customer_phone}
           assignedCustomerCount={((event as { customer_accounts?: Array<{ id: number }> }).customer_accounts || []).length}
           isPublishing={publishMutation.isPending}
-          onConfirm={(password) => publishMutation.mutate(password)}
+          onConfirm={(password, notifyCustomer) => publishMutation.mutate({ password, notifyCustomer })}
           onClose={() => {
             if (!publishMutation.isPending) setShowPublishDialog(false);
+          }}
+        />
+      )}
+
+      {/* Send Gallery Email Dialog (#1235) — asks for the password for the
+          same reason publish does: the plaintext only exists in this request,
+          and this action is most useful right after a quiet publish, which
+          never collected one. */}
+      {showSendEmailDialog && (
+        <SendGalleryEmailDialog
+          eventName={event.event_name}
+          recipient={event.customer_email}
+          // Only the inline-email path carries the password. With no
+          // customer_email the backend takes the account fallback, which sends
+          // customer_gallery_assigned — a portal link that never mentions a
+          // password — and deliberately skips the rehash (crud.js). Asking for
+          // one there blocks the send behind a value nothing consumes, and the
+          // dialog's promise that it will be rehashed would be false.
+          requirePassword={!!event.customer_email && !isGalleryPublic(event.require_password)}
+          isSending={sendGalleryEmailMutation.isPending}
+          onConfirm={(password) => sendGalleryEmailMutation.mutate(password)}
+          onClose={() => {
+            if (!sendGalleryEmailMutation.isPending) setShowSendEmailDialog(false);
           }}
         />
       )}

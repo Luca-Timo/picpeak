@@ -10,9 +10,6 @@
  *   if (allow_downloads === false)  → never fires, so ALL download endpoints
  *                                     kept serving with downloads switched off
  *
- * (The download-jobs route asserted on main is #858, which is beta-only —
- * this branch covers the three download endpoints that exist here.)
- *
  * The harness runs on SQLite, so these assertions exercise the real engine
  * values rather than a mock. Every test here fails on the unfixed code.
  */
@@ -124,6 +121,11 @@ describe('gallery flags survive SQLite 0/1 storage (#1028)', () => {
       const res = await request(app)
         .post(`/api/gallery/${SLUG}/download-selected`)
         .send({ photo_ids: [photoId] });
+      expect(res.status).toBe(403);
+    });
+
+    test('download-jobs is refused', async () => {
+      const res = await request(app).post(`/api/gallery/${SLUG}/download-jobs`).send({});
       expect(res.status).toBe(403);
     });
   });

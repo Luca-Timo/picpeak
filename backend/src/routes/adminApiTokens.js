@@ -12,13 +12,14 @@ const { db, logActivity } = require('../database/db');
 const { adminAuth } = require('./../middleware/auth');
 const { requirePermission } = require('./../middleware/permissions');
 const { generateApiToken, VALID_SCOPES } = require('./../middleware/apiTokenAuth');
+const { toIso } = require('../utils/dateNormalize');
 const logger = require('../utils/logger');
 
 const router = express.Router();
 
 // List tokens for the current admin (or all, if super_admin) — without
 // the plaintext, never recoverable after creation.
-router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) => {
+router.get('/', adminAuth, requirePermission(['settings.view', 'settings.integrations']), async (req, res) => {
   try {
     // Scope to the caller's own tokens unless super_admin — the previous
     // query returned every admin's token metadata (name/preview/scopes/
@@ -41,7 +42,15 @@ router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) 
       tokensQuery.where('api_tokens.created_by', req.admin.id);
     }
     const tokens = await tokensQuery;
-    res.json(tokens);
+    // toIso: last_used_at / revoked_at were written as raw Dates before
+    // this fix — SQLite installs hold epoch numbers in existing rows.
+    res.json(tokens.map((t) => ({
+      ...t,
+      created_at: toIso(t.created_at),
+      expires_at: toIso(t.expires_at),
+      last_used_at: toIso(t.last_used_at),
+      revoked_at: toIso(t.revoked_at),
+    })));
   } catch (error) {
     logger.error('Failed to list API tokens', { error: error.message });
     res.status(500).json({ error: 'Failed to list tokens' });
@@ -52,7 +61,7 @@ router.get('/', adminAuth, requirePermission('settings.view'), async (req, res) 
 router.post(
   '/',
   adminAuth,
-  requirePermission('settings.edit'),
+  requirePermission('settings.integrations'),
   [
     body('name').isString().trim().isLength({ min: 1, max: 100 }),
     body('scopes').isArray({ min: 1 }).custom((arr) => {
@@ -104,7 +113,7 @@ router.post(
 );
 
 // Revoke a token (soft-delete; lookups still find it but reject).
-router.delete('/:id', adminAuth, requirePermission('settings.edit'), async (req, res) => {
+router.delete('/:id', adminAuth, requirePermission('settings.integrations'), async (req, res) => {
   try {
     const { id } = req.params;
     const row = await db('api_tokens').where({ id }).first();
@@ -117,7 +126,7 @@ router.delete('/:id', adminAuth, requirePermission('settings.edit'), async (req,
     }
     if (row.revoked_at) return res.status(400).json({ error: 'Token already revoked' });
 
-    await db('api_tokens').where({ id }).update({ revoked_at: new Date() });
+    await db('api_tokens').where({ id }).update({ revoked_at: new Date().toISOString() });
     await logActivity('api_token_revoked', { name: row.name }, null, {
       type: 'admin', id: req.admin.id, name: req.admin.username
     });

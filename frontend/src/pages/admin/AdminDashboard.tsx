@@ -19,6 +19,7 @@ import { parseISO } from 'date-fns';
 import { useQueryClient } from '@tanstack/react-query';
 import { useExpiryRefresh } from '../../hooks/useExpiryRefresh';
 import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n/config';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { useMutationWithToast } from '../../hooks';
 
@@ -28,7 +29,7 @@ import { WhatsNewBanner } from '../../components/admin/WhatsNewBanner';
 import { CrmOverviewSection } from '../../components/admin/CrmOverviewSection';
 import { useQuery } from '@tanstack/react-query';
 import { eventsService } from '../../services/events.service';
-import { adminService, ActivityType } from '../../services/admin.service';
+import { adminService, ActivityType, type Activity } from '../../services/admin.service';
 import { workflowsService } from '../../services/workflows.service';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 
@@ -38,6 +39,30 @@ interface StatCard {
   change?: string;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
+}
+
+/**
+ * Interpolation values for an `admin.activities.*` line.
+ *
+ * The activity's own metadata is spread in first: the keys interpolate
+ * whatever the backend recorded for that type ({{name}} for
+ * webhook_created, {{quoteNumber}} for quote_created, {{contractNumber}},
+ * {{username}}, {{word}}, …). Before that, only a fixed five-value
+ * allowlist was passed, so every other key rendered its raw "{{…}}"
+ * placeholder in the activity feed (QA S7). The explicit entries below
+ * stay as derived/defaulted overrides — they resolve from columns that
+ * are not in metadata, or need a fallback when metadata is empty.
+ */
+export function buildActivityParams(activity: Activity): Record<string, unknown> {
+  const t = i18n.t;
+  return {
+    ...activity.metadata,
+    eventName: activity.eventName || t('common.unknown'),
+    email: activity.metadata?.email || activity.actorName || '',
+    count: activity.metadata?.count || 0,
+    template: activity.metadata?.template_key || '',
+    categoryName: activity.metadata?.category_name || '',
+  };
 }
 
 export const AdminDashboard: React.FC = () => {
@@ -171,14 +196,22 @@ export const AdminDashboard: React.FC = () => {
     {
       // Real bytes under the storage root (#1164). This used to be the summed
       // size of the catalogued originals, which on a reference-mode install is
-      // the size of a NAS. `== null` rather than `||`: an absent measurement
-      // must read as unavailable, not as 0 Bytes.
+      // the size of a NAS — the one number an admin reaches for when asking
+      // "am I running out of disk" pointed away from the answer. `?? ` rather
+      // than `|| `: null means the measurement failed and must read as
+      // unavailable, not as 0 Bytes.
       title: t('admin.storageUsed'),
+      // On an S3 backend there is no disk to measure, so the catalogued figure
+      // IS the answer available and stands in — labelled by the subtitle below
+      // rather than pretending a walk happened.
       value: dashboardStats?.storageUsed == null
         ? (dashboardStats?.storageMeasurement === 'catalog'
           ? adminService.formatBytes(dashboardStats.catalogedBytes)
           : t('admin.storageUnavailable', 'unavailable'))
         : `${adminService.formatBytes(dashboardStats.storageUsed)}${dashboardStats.storagePartial ? '+' : ''}`,
+      // The catalogued figure alongside, so the difference is visible rather
+      // than conflated. On a managed install they track each other; on a
+      // reference one they are supposed to diverge.
       change: dashboardStats
         ? (dashboardStats.storageMeasurement === 'catalog'
           ? t('admin.catalogedMediaOnly', 'catalogued — objects live in S3')
@@ -408,17 +441,7 @@ export const AdminDashboard: React.FC = () => {
 
                 // Format activity message with translations
                 const getActivityMessage = (): string => {
-                  const params: Record<string, any> = {
-                    eventName: activity.eventName || t('common.unknown'),
-                    // Customer/account activity keys (customer_login,
-                    // customer_invitation_*, customer_updated, …) interpolate
-                    // {{email}}; without it the literal placeholder rendered.
-                    // Sourced the same way formatActivityMessage does.
-                    email: activity.metadata?.email || activity.actorName || '',
-                    count: activity.metadata?.count || 0,
-                    template: activity.metadata?.template_key || '',
-                    categoryName: activity.metadata?.category_name || ''
-                  };
+                  const params = buildActivityParams(activity);
                   const translated = t(`admin.activities.${activity.type}`, params);
 
                   // Translate; if key missing i18n returns the key string itself

@@ -438,14 +438,20 @@ export const AnalyticsPage: React.FC = () => {
 
           {/* Storage Information */}
           {dashboardStats && (() => {
+            // Real local bytes (#1164). This used to be the summed size of the
+            // catalogued originals, so a reference-mode install — where those
+            // files are on a NAS — compared a number from the NAS against a
+            // limit meant for this disk.
+            const localUsed = dashboardStats.storageUsed;
             // On S3 there is no disk to walk and the catalogued figure IS the
             // available answer; a failed local walk has none at all.
-            const measured = dashboardStats.storageUsed ?? (
-              dashboardStats.storageMeasurement === 'catalog' ? dashboardStats.catalogedBytes : null);
+            const measured = localUsed ?? (dashboardStats.storageMeasurement === 'catalog'
+              ? dashboardStats.catalogedBytes
+              : null);
             const softLimitBytes = storageInfo?.storage_soft_limit ?? storageInfo?.storage_limit ?? storageInfo?.recommended_soft_limit ?? null;
-            // `measured`, not storageUsed. An editor or viewer holds
+            // `measured`, not `localUsed`. An editor or viewer holds
             // analytics.view but not settings.view, so /storage/info 403s and
-            // storageInfo is undefined — and on S3 storageUsed is null, which
+            // storageInfo is undefined — and on S3 localUsed is null, which
             // made this denominator 1 and rendered percentages in the billions.
             const safeSoftLimit = Math.max(
               softLimitBytes ?? storageInfo?.recommended_soft_limit ?? (measured || 1),
@@ -457,7 +463,7 @@ export const AnalyticsPage: React.FC = () => {
             // No measurement, or no limit, means no percentage. Coercing null
             // to 0 drew an empty bar at "0% of limit" and suppressed the
             // over-limit state — reading as plenty of room precisely when
-            // nothing is known (#1164).
+            // nothing is known.
             const usageRatio = (measured == null || !hasLimit) ? null : measured / safeSoftLimit;
             const usagePercent = usageRatio == null ? null : Math.round(usageRatio * 100);
             const usageWidth = usageRatio == null ? 0 : Math.min(usageRatio * 100, 100);
@@ -507,6 +513,10 @@ export const AnalyticsPage: React.FC = () => {
                     </p>
                   </div>
                   <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700">
+                    {/* The catalogued size of the originals, shown separately
+                        rather than as "used" (#1164). On a reference-mode
+                        install this is large and none of it is on this disk,
+                        which is the distinction the old single figure hid. */}
                     <div className="flex justify-between text-sm">
                       <span className="text-neutral-600 dark:text-neutral-400">{t('analytics.catalogedMedia', 'Catalogued media')}</span>
                       <span className="font-medium text-neutral-900 dark:text-neutral-100">{adminService.formatBytes(dashboardStats.catalogedBytes)}</span>

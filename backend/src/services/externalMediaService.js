@@ -61,27 +61,23 @@ async function list(relativePath = '') {
   const targetDir = safePathJoin(root, relativePath || '.');
 
   const entries = [];
-  try {
-    const dirents = await fs.readdir(targetDir, { withFileTypes: true });
-    for (const d of dirents) {
-      // Skip hidden files and directories
-      if (d.name.startsWith('.')) continue;
-      const full = path.join(targetDir, d.name);
-      const stat = await fs.stat(full).catch(() => null);
-      if (!stat) continue;
+  // Errors propagate to the caller to handle (e.g. invalid path).
+  const dirents = await fs.readdir(targetDir, { withFileTypes: true });
+  for (const d of dirents) {
+    // Skip hidden files and directories
+    if (d.name.startsWith('.')) continue;
+    const full = path.join(targetDir, d.name);
+    const stat = await fs.stat(full).catch(() => null);
+    if (!stat) continue;
 
-      if (d.isDirectory()) {
-        entries.push({ name: d.name, type: 'dir' });
-      } else if (d.isFile()) {
-        const ext = path.extname(d.name).toLowerCase();
-        if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
-          entries.push({ name: d.name, type: 'file', size: stat.size, mtime: stat.mtime });
-        }
+    if (d.isDirectory()) {
+      entries.push({ name: d.name, type: 'dir' });
+    } else if (d.isFile()) {
+      const ext = path.extname(d.name).toLowerCase();
+      if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
+        entries.push({ name: d.name, type: 'file', size: stat.size, mtime: stat.mtime });
       }
     }
-  } catch (e) {
-    // Propagate errors for caller to handle (e.g., invalid path)
-    throw e;
   }
 
   const rootResolved = path.resolve(root);
@@ -98,8 +94,9 @@ async function list(relativePath = '') {
  * A path under an EVENT's configured base directory.
  *
  * Still the right resolver for anything that means "the folder this event was
- * imported from" — the import walk in particular. It is NOT how a photo's
- * original is found any more: see resolveExternalPhotoPath (#1163).
+ * imported from" — the import walk, and the mount-health probe in
+ * faceProcessor. It is NOT how a photo's original is found any more: see
+ * resolveExternalPhotoPath (#1163).
  */
 function resolveExternalPath(event, relpath) {
   const root = getExternalMediaRoot();
@@ -119,7 +116,7 @@ function resolveExternalPath(event, relpath) {
  * 7547 of 8004 rows resolving to files that did not exist.
  *
  * Root-relative makes a row self-describing: nothing an admin does to the event
- * afterwards can move an already-imported photo. Migration 177 rewrote the
+ * afterwards can move an already-imported photo. Migration 187 rewrote the
  * existing rows.
  */
 function resolveExternalPhotoPath(photo) {

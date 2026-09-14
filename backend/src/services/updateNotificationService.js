@@ -6,7 +6,9 @@
 const { db } = require('../database/db');
 const { checkForUpdates } = require('./updateCheckService');
 const { sendTemplateEmail, initializeTransporter } = require('./emailProcessor');
+const emailWebhookTransport = require('./emailWebhookTransport');
 const logger = require('../utils/logger');
+const { getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
 
 /**
  * Get update notification settings from database
@@ -125,10 +127,12 @@ async function checkAndNotifyUpdates() {
     }
 
     // Ensure email transporter is initialized
-    await initializeTransporter();
+    // Skipped under the webhook transport (#1225): there is no SMTP to warm,
+    // and a stale unreachable config would sit on nodemailer's connect timeout.
+    if (!emailWebhookTransport.isEnabled()) await initializeTransporter();
 
     // Send email to each recipient
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = await getAbsoluteFrontendUrl();
     const releaseNotesUrl = `https://github.com/PicPeak/picpeak/releases/tag/v${newVersion}`;
     const channelLabel = updateInfo.channel === 'beta' ? 'Beta' : 'Stable';
 
@@ -214,7 +218,9 @@ async function sendTestUpdateNotification() {
 
     const channelLabel = updateInfo.channel === 'beta' ? 'Beta' : 'Stable';
 
-    await initializeTransporter();
+    // Skipped under the webhook transport (#1225): there is no SMTP to warm,
+    // and a stale unreachable config would sit on nodemailer's connect timeout.
+    if (!emailWebhookTransport.isEnabled()) await initializeTransporter();
 
     let successCount = 0;
     let errorCount = 0;
@@ -225,7 +231,7 @@ async function sendTestUpdateNotification() {
           current_version: updateInfo.current,
           channel: channelLabel,
           recipient_email: email
-        });
+        }, { usageEligible: false });
         successCount++;
       } catch (error) {
         errorCount++;

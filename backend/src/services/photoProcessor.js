@@ -1,9 +1,9 @@
 const path = require('path');
 const fs = require('fs').promises;
 const { db } = require('../database/db');
-const { generateThumbnail, extractCaptureDate, withLocalCopy } = require('./imageProcessor');
+const { generateThumbnail, generateVideoPlaceholder, extractCaptureDate, withLocalCopy, withProcessableImage } = require('./imageProcessor');
 const { generatePhotoFilename } = require('../utils/filenameSanitizer');
-const { processUploadedVideo, isVideoMimeType } = require('./videoProcessor');
+const { processUploadedVideo, extractVideoMetadata, isVideoMimeType } = require('./videoProcessor');
 const { getStorage } = require('./storage');
 const { resolvePhotoStorageKey } = require('./photoResolver');
 const logger = require('../utils/logger');
@@ -141,21 +141,49 @@ async function processUploadedPhotos(files, eventId, uploadedBy = 'admin', categ
           'thumbnails',
           `thumb_${newFilename.replace(/\.[^.]+$/, '.jpg')}`
         );
-        const result = await processUploadedVideo(tempPath, videoThumbnailKey);
-        videoMetadata = result.metadata;
-        thumbnailPath = result.thumbnailKey;
-      } else {
-        thumbnailPath = await generateThumbnail(tempPath);
+        // A thumbnail/probe failure must not lose the video: without this
+        // guard the whole upload errors here, while the image branch below
+        // already survives its thumbnail failures. Fall back to metadata-only
+        // plus the static play-button placeholder — a completed video with a
+        // NULL thumbnail would make the grid fetch the ORIGINAL video file
+        // as an <img> blob (thumbnail_url || url), i.e. a multi-GB download
+        // for a broken tile (codex review of #845).
         try {
-          const sharp = require('sharp');
-          const metadata = await sharp(tempPath).metadata();
-          // Oriented, not raw — see imageProcessor.orientedDimensions (#1185).
-          const dims = require('./imageProcessor').orientedDimensions(metadata);
-          if (dims.width && dims.height) {
-            imageMetadata = { width: dims.width, height: dims.height };
+          const result = await processUploadedVideo(tempPath, videoThumbnailKey);
+          videoMetadata = result.metadata;
+          thumbnailPath = result.thumbnailKey;
+        } catch (videoErr) {
+          logger.warn(`Video processing failed for ${file.originalname}, using placeholder thumbnail:`, videoErr.message);
+          try {
+            videoMetadata = await extractVideoMetadata(tempPath);
+          } catch (metaErr) {
+            logger.warn(`Video metadata extraction also failed for ${file.originalname}:`, metaErr.message);
           }
-        } catch (metadataError) {
-          logger.warn(`Could not extract image dimensions for ${file.originalname}:`, metadataError.message);
+          // ffmpeg-free (sharp-rendered SVG); returns null on failure.
+          thumbnailPath = await generateVideoPlaceholder(newFilename);
+        }
+      } else {
+        // RAW/DNG can't be fed to sharp directly (no raw loader), so extract the
+        // embedded JPEG preview first and thumbnail/measure THAT. Pass-through
+        // for ordinary images. The stored original stays the RAW (download).
+        // Use the unique stored filename (not the client-supplied original) so
+        // the RAW-derived thumbnail's global key can't collide across galleries.
+        const proc = await withProcessableImage(tempPath, newFilename);
+        try {
+          thumbnailPath = await generateThumbnail(proc.path, { outputBasename: proc.outputBasename });
+          try {
+            const sharp = require('sharp');
+            const metadata = await sharp(proc.path).metadata();
+            // Oriented, not raw — see orientedDimensions (#1185).
+            const dims = require('./imageProcessor').orientedDimensions(metadata);
+            if (dims.width && dims.height) {
+              imageMetadata = { width: dims.width, height: dims.height };
+            }
+          } catch (metadataError) {
+            logger.warn(`Could not extract image dimensions for ${file.originalname}:`, metadataError.message);
+          }
+        } finally {
+          await proc.cleanup();
         }
       }
 
@@ -253,6 +281,25 @@ async function processUploadedPhotos(files, eventId, uploadedBy = 'admin', categ
           },
         });
       } catch (e) { /* non-fatal */ }
+
+      // Face detection (#1074). processPhoto() — the ASYNC path — enqueues on
+      // completion, but this synchronous path (chunked-upload completion,
+      // watch-folder import) writes a finished photo row directly and never
+      // reaches it, so those photos stayed unscanned in a face-enabled event
+      // until someone ran a manual re-scan.
+      try {
+        const { isEnabledForEvent } = require('./faceSettings');
+        if (!isVideo && await isEnabledForEvent(event)) {
+          // `db`, NOT `trx`: the transaction is committed above, so a query
+          // through it throws "Transaction query already complete" — which the
+          // catch below swallowed, making this whole enqueue a silent no-op.
+          await db('photos').where({ id: photoId }).update({ face_status: 'pending' });
+        }
+      } catch (err) {
+        logger.warn(`processUploadedPhotos: face enqueue failed for photo ${photoId}`, {
+          error: err.message,
+        });
+      }
 
       uploadedPhotos.push({
         id: photoId,
@@ -448,33 +495,65 @@ async function processPhoto(photoId) {
         'thumbnails',
         `thumb_${photo.filename.replace(/\.[^.]+$/, '.jpg')}`
       );
-      const result = await processUploadedVideo(localPath, videoThumbnailKey);
-      updateData.thumbnail_path = result.thumbnailKey;
-      if (result.metadata) {
-        if (result.metadata.duration != null) updateData.duration = result.metadata.duration;
-        if (result.metadata.videoCodec) updateData.video_codec = result.metadata.videoCodec;
-        if (result.metadata.audioCodec) updateData.audio_codec = result.metadata.audioCodec;
-        if (result.metadata.width) updateData.width = result.metadata.width;
-        if (result.metadata.height) updateData.height = result.metadata.height;
+      // A thumbnail/probe failure must not fail the row: processPhoto's caller
+      // marks failed rows 'failed' and the guest gallery only lists 'complete',
+      // so the video would become permanently invisible. The image branch below
+      // already survives its thumbnail failures — mirror that: fall back to
+      // metadata-only plus the static play-button placeholder. A completed
+      // video with a NULL thumbnail would make the grid fetch the ORIGINAL
+      // video file as an <img> blob (thumbnail_url || url) — a multi-GB
+      // download for a broken tile (codex review of #845).
+      let videoResult = null;
+      try {
+        videoResult = await processUploadedVideo(localPath, videoThumbnailKey);
+      } catch (videoErr) {
+        logger.warn(`processPhoto: video processing failed for ${photoId}, using placeholder thumbnail`, { error: videoErr.message });
+        try {
+          videoResult = { metadata: await extractVideoMetadata(localPath) };
+        } catch (metaErr) {
+          logger.warn(`processPhoto: video metadata extraction also failed for ${photoId}`, { error: metaErr.message });
+        }
+        // ffmpeg-free (sharp-rendered SVG); returns null on failure.
+        const placeholderKey = await generateVideoPlaceholder(photo.filename);
+        if (placeholderKey) videoResult = { ...(videoResult || {}), thumbnailKey: placeholderKey };
+      }
+      if (videoResult?.thumbnailKey) updateData.thumbnail_path = videoResult.thumbnailKey;
+      if (videoResult?.metadata) {
+        const m = videoResult.metadata;
+        if (m.duration != null) updateData.duration = m.duration;
+        if (m.videoCodec) updateData.video_codec = m.videoCodec;
+        if (m.audioCodec) updateData.audio_codec = m.audioCodec;
+        if (m.width) updateData.width = m.width;
+        if (m.height) updateData.height = m.height;
       }
     } else {
+      // RAW/DNG can't be sharp-decoded directly — extract the embedded JPEG
+      // preview and thumbnail/measure that. Pass-through for ordinary images.
+      // This is the ASYNC worker path (backgroundProcessor → processPhoto), the
+      // one real uploads actually take; the synchronous processUploadedPhotos()
+      // has the same handling.
+      const proc = await withProcessableImage(localPath, photo.filename);
       try {
-        const thumbnailPath = await generateThumbnail(localPath);
-        if (thumbnailPath) updateData.thumbnail_path = thumbnailPath;
-      } catch (e) {
-        logger.warn(`processPhoto: thumbnail generation failed for ${photoId}`, { error: e.message });
-      }
-      try {
-        const sharp = require('sharp');
-        const metadata = await sharp(localPath).metadata();
-        // Oriented, not raw — see imageProcessor.orientedDimensions (#1185).
-        const dims = require('./imageProcessor').orientedDimensions(metadata);
-        if (dims.width && dims.height) {
-          updateData.width = dims.width;
-          updateData.height = dims.height;
+        try {
+          const thumbnailPath = await generateThumbnail(proc.path, { outputBasename: proc.outputBasename });
+          if (thumbnailPath) updateData.thumbnail_path = thumbnailPath;
+        } catch (e) {
+          logger.warn(`processPhoto: thumbnail generation failed for ${photoId}`, { error: e.message });
         }
-      } catch (e) {
-        logger.warn(`processPhoto: dimensions extraction failed for ${photoId}`, { error: e.message });
+        try {
+          const sharp = require('sharp');
+          const metadata = await sharp(proc.path).metadata();
+          // Oriented, not raw — see orientedDimensions (#1185).
+          const dims = require('./imageProcessor').orientedDimensions(metadata);
+          if (dims.width && dims.height) {
+            updateData.width = dims.width;
+            updateData.height = dims.height;
+          }
+        } catch (e) {
+          logger.warn(`processPhoto: dimensions extraction failed for ${photoId}`, { error: e.message });
+        }
+      } finally {
+        await proc.cleanup();
       }
     }
   });
@@ -482,6 +561,23 @@ async function processPhoto(photoId) {
   // Mark complete
   updateData.processing_status = 'complete';
   updateData.processing_error = null;
+
+  // Face detection (#1074): this is the only correct place to enqueue.
+  // Earlier and there is no preview rendition to scan; later and there is no
+  // hook at all. Same UPDATE rather than a follow-up write, so a crash
+  // between the two can't leave a complete photo permanently unqueued.
+  // Guarded on BOTH the global flag and the per-event toggle, so installs
+  // without the feature never write a face_status at all.
+  try {
+    const { isEnabledForEvent } = require('./faceSettings');
+    if (!isVideo && await isEnabledForEvent(event)) {
+      updateData.face_status = 'pending';
+    }
+  } catch (err) {
+    // Never let the face feature block a photo from completing.
+    logger.warn(`processPhoto: face enqueue check failed for ${photoId}`, { error: err.message });
+  }
+
   await db('photos').where({ id: photoId }).update(updateData);
 
   // Side effects (best-effort, never fail the photo if these break)

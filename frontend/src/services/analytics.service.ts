@@ -10,7 +10,24 @@
 //   Custom  → render admin-pasted HTML (sanitised server-side) into <head>;
 //             no runtime API hook — `track()` becomes a no-op.
 
+import { getApiBaseUrl } from '../utils/url';
+
 export type TrackerProvider = 'none' | 'umami' | 'rybbit' | 'custom';
+
+// Umami and Rybbit scripts are loaded from PicPeak's OWN origin and proxied to
+// the configured tracker by `backend/src/routes/analyticsTrackerProxy.js`.
+// Loading them from the tracker's domain directly was always blocked by the
+// shipped CSP (`script-src 'self' …`, and `connect-src 'self' …` for the
+// beacon), which cannot be made dynamic in the Docker deployment — nginx
+// serves index.html off disk and strips the backend's CSP header. Proxying
+// removes the need for a CSP change entirely, and is what both vendors
+// document for first-party tracking.
+//
+// Both scripts derive their collect endpoint from their own `src`:
+//   Umami  — `<script-dir>/api/send` (also honours data-host-url, set below)
+//   Rybbit — `src.split('/script.js')[0]` + `/track`
+// so the single prefix below is all the backend has to expose.
+const trackerProxyBase = (): string => `${getApiBaseUrl().replace(/\/+$/, '')}/analytics/tracker`;
 
 interface BaseInitConfig {
   provider: TrackerProvider;
@@ -48,9 +65,17 @@ type InitConfig = UmamiInitConfig | RybbitInitConfig | CustomInitConfig | NoneIn
 declare global {
   interface Window {
     umami?: {
-      track: (eventName: string, eventData?: any) => void;
-      trackView: (url?: string, referrer?: string, websiteId?: string) => void;
-      trackEvent: (
+      // Current script.js (v2): `track(name, data)` sends a named event;
+      // `track(fn)` sends fn(defaultPayload) — a payload without `name` is a
+      // page view. This is the only page-view API the shipped tracker has.
+      track?: {
+        (eventName: string, eventData?: any): void;
+        (payload: (props: Record<string, unknown>) => Record<string, unknown>): void;
+      };
+      // Legacy (v1) API. Absent from current script.js — calling it
+      // unguarded is what threw on every admin route change (issue 1316).
+      trackView?: (url?: string, referrer?: string, websiteId?: string) => void;
+      trackEvent?: (
         eventValue: string,
         eventType: string,
         url?: string,
@@ -83,10 +108,16 @@ class AnalyticsService {
         return;
       }
       this.websiteId = config.websiteId;
+      const proxyBase = trackerProxyBase();
       const script = document.createElement('script');
       script.async = true;
       script.defer = true;
-      script.src = `${config.hostUrl.replace(/\/+$/, '')}/script.js`;
+      script.src = `${proxyBase}/script.js`;
+      // Pin the collect host explicitly rather than relying on the tracker's
+      // src-directory fallback: an Umami built with COLLECT_API_HOST set would
+      // otherwise post straight to the tracker's domain and be blocked by
+      // `connect-src 'self'`.
+      script.setAttribute('data-host-url', proxyBase);
       script.setAttribute('data-website-id', config.websiteId);
       // Auto-track OFF by default (GHSA-7m6c): Umami's auto page-view capture
       // reads window.location verbatim, so a gallery URL /gallery/:slug/:token
@@ -106,7 +137,10 @@ class AnalyticsService {
       const script = document.createElement('script');
       script.async = true;
       script.defer = true;
-      script.src = `${config.hostUrl.replace(/\/+$/, '')}/api/script.js`;
+      // `/script.js` (not the upstream's `/api/script.js`): Rybbit's script
+      // computes its analytics host as `src.split('/script.js')[0]`, so the
+      // proxy prefix has to be the part before that literal segment.
+      script.src = `${trackerProxyBase()}/script.js`;
       script.setAttribute('data-site-id', config.websiteId);
       // GHSA-7m6c: Rybbit auto-tracks page views (initial load + SPA route
       // changes) reading window.location, so a gallery URL would ship the raw
@@ -159,7 +193,7 @@ class AnalyticsService {
   track(eventName: string, eventData?: Record<string, any>) {
     if (!this.initialized) return;
     if (this.provider === 'umami' && typeof window !== 'undefined' && window.umami) {
-      window.umami.track(eventName, eventData);
+      window.umami.track?.(eventName, eventData);
     } else if (this.provider === 'rybbit' && typeof window !== 'undefined' && window.rybbit) {
       window.rybbit.event(eventName, eventData);
     }
@@ -191,10 +225,30 @@ class AnalyticsService {
     // ONLY page-view source. Rybbit keeps its own auto-tracking with
     // data-mask-patterns doing the redaction, so a manual call would
     // double-count — skip it. 'none'/'custom' have no page-view API.
-    if (this.provider !== 'umami' || typeof window === 'undefined' || !window.umami) return;
+    if (this.provider !== 'umami' || typeof window === 'undefined') return;
+    // The script tag is injected async, so `window.umami` is absent until it
+    // has loaded; a route change before that is simply not recorded.
+    const umami = window.umami;
+    if (!umami) return;
     const raw = url ?? window.location.pathname;
     const safe = this.sanitizeTrackedUrl(raw);
-    window.umami.trackView(safe, referrer, this.websiteId || undefined);
+    try {
+      if (typeof umami.track === 'function') {
+        // Umami v2 page view: merge the sanitized URL into the tracker's own
+        // default payload (website, screen, language, title, …). Without a
+        // `name` the collector records it as a page view.
+        umami.track((props) => ({
+          ...props,
+          url: safe,
+          ...(referrer !== undefined ? { referrer } : {}),
+        }));
+      } else if (typeof umami.trackView === 'function') {
+        umami.trackView(safe, referrer, this.websiteId || undefined);
+      }
+      // Neither API → no-op. Analytics must never break navigation.
+    } catch (err) {
+      console.warn('Analytics: page-view tracking failed', err);
+    }
   }
 
   // Gallery-specific tracking events

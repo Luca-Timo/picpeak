@@ -1,8 +1,11 @@
 import React from 'react';
 import type { Event } from '../../../types';
 import { FeedbackModerationPanel } from '../../../components/admin';
+import { PermissionGate } from '../../../components/admin/PermissionGate';
 import { EventReminderOverrideCard } from '../../../components/admin/EventReminderOverrideCard';
 import { SlideshowSettingsCard } from '../../../components/admin/SlideshowSettingsCard';
+import { DownloadResolutionCard } from '../../../components/admin/DownloadResolutionCard';
+import { FaceRecognitionCard } from '../../../components/admin/FaceRecognitionCard';
 import { ShortUrlsCard } from '../../../components/admin/ShortUrlsCard';
 import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import type { AdminPhoto } from '../../../services/photos.service';
@@ -17,10 +20,12 @@ import { EventActionsCard } from './EventActionsCard';
 import { PhotoStatisticsCard } from './PhotoStatisticsCard';
 import { EventThemeSection } from './EventThemeSection';
 import { ArchiveStatusCard } from './ArchiveStatusCard';
+import { toBoolean } from '../../../utils/parsers';
 
 interface OverviewTabProps {
   event: Event;
   id: string | undefined;
+  passwordVersion?: number;
   isEditing: boolean;
   editForm: EditFormState;
   setEditForm: React.Dispatch<React.SetStateAction<EditFormState>>;
@@ -28,14 +33,17 @@ interface OverviewTabProps {
   setShowNewPassword: (show: boolean) => void;
   feedbackSettings: FeedbackSettingsType;
   setFeedbackSettings: React.Dispatch<React.SetStateAction<FeedbackSettingsType>>;
-  categories: Array<{ id: number; name: string; slug: string }>;
+  categories: Array<{ id: number; name: string; slug: string; is_folder?: boolean }>;
   photos: AdminPhoto[];
   phoneFieldEnabled: boolean;
   daysUntilExpiration: number | null;
+  onRevealNow?: () => void;
   refetchEvent: () => void;
   setActiveTab: (tab: EventDetailsTab) => void;
   setShowPasswordReset: (show: boolean) => void;
   setShowPublishDialog: (show: boolean) => void;
+  onSendGalleryEmail: () => void;
+  isSendingGalleryEmail: boolean;
   setShowDuplicateDialog: (show: boolean) => void;
   onArchive: () => void;
   isArchiving: boolean;
@@ -52,6 +60,7 @@ interface OverviewTabProps {
 export const OverviewTab: React.FC<OverviewTabProps> = ({
   event,
   id,
+  passwordVersion,
   isEditing,
   editForm,
   setEditForm,
@@ -63,10 +72,13 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   photos,
   phoneFieldEnabled,
   daysUntilExpiration,
+  onRevealNow,
   refetchEvent,
   setActiveTab,
   setShowPasswordReset,
   setShowPublishDialog,
+  onSendGalleryEmail,
+  isSendingGalleryEmail,
   setShowDuplicateDialog,
   onArchive,
   isArchiving,
@@ -100,10 +112,11 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           photos={photos}
           phoneFieldEnabled={phoneFieldEnabled}
           daysUntilExpiration={daysUntilExpiration}
+          onRevealNow={onRevealNow}
         />
 
         {/* Share Link */}
-        <ShareLinkCard event={event} setShowPasswordReset={setShowPasswordReset} />
+        <ShareLinkCard event={event} setShowPasswordReset={setShowPasswordReset} passwordVersion={passwordVersion} />
 
         {/* Branded short URLs (#699). Sits between the canonical share-link
             card and the Client Access card — same "things you share with
@@ -112,6 +125,18 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
         {/* Client Access (#172) */}
         <ClientAccessCard event={event} refetchEvent={refetchEvent} />
+
+        {/* Per-gallery download resolution override (#858). Sits with the
+            other "what the customer receives" controls. */}
+        <DownloadResolutionCard eventId={event.id} onChanged={() => refetchEvent()} />
+
+        {/* People in this gallery (#1074). Gated behind the `faces` feature
+            flag — which is itself gated on the operator running the optional
+            picpeak-ml sidecar, so this card is invisible on the vast majority
+            of installs. */}
+        {flags.faces && (
+          <FaceRecognitionCard eventId={event.id} isArchived={event.is_archived} />
+        )}
 
         {/* Live Slideshow ("Diashow") link + live display settings (migrations 138/139).
             Gated behind the `slideshow` feature flag. */}
@@ -126,6 +151,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             show_transition: event.show_transition,
             show_transition_ms: event.show_transition_ms,
             show_watermark: event.show_watermark,
+            show_qr: event.show_qr,
             show_colorfilter: event.show_colorfilter,
           }}
           onChanged={() => refetchEvent()}
@@ -149,15 +175,36 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
         {/* Actions */}
         {!event.is_archived && (
-          <EventActionsCard
-            event={event}
-            onArchive={onArchive}
-            isArchiving={isArchiving}
-            setShowPublishDialog={setShowPublishDialog}
-            isPublishing={isPublishing}
-            setShowDuplicateDialog={setShowDuplicateDialog}
-            isDuplicating={isDuplicating}
-          />
+          <PermissionGate permissions={['events.edit', 'events.archive', 'events.create']}>
+            <EventActionsCard
+              event={event}
+              onArchive={onArchive}
+              isArchiving={isArchiving}
+              setShowPublishDialog={setShowPublishDialog}
+              isPublishing={isPublishing}
+              setShowDuplicateDialog={setShowDuplicateDialog}
+              isDuplicating={isDuplicating}
+              onSendGalleryEmail={onSendGalleryEmail}
+              isSendingGalleryEmail={isSendingGalleryEmail}
+              assignedCustomerCount={
+                ((event as {
+                  customer_accounts?: Array<{
+                    id: number; email?: string; is_active?: unknown; can_sign_in?: unknown
+                  }>
+                }).customer_accounts || [])
+                  // Only accounts the endpoint would actually mail count, or
+                  // the button appears and then 400s. Mirrors
+                  // canReceiveGalleryNotice in crud.js: active, holding an
+                  // address, and able to sign in — a PASSIVE customer
+                  // (never invited, so no password) would get a portal link
+                  // to a door that will not open. toBoolean rather than
+                  // `!== false` because SQLite returns 0/1.
+                  .filter((c) => toBoolean(c.is_active, true)
+                    && toBoolean(c.can_sign_in, true)
+                    && !!c.email).length
+              }
+            />
+          </PermissionGate>
         )}
       </div>
 

@@ -6,7 +6,7 @@
  * overlapping imports both walked through it. A reporter's event held 8004 rows
  * for 6012 distinct paths.
  *
- * This lives in a service rather than inside migration 176 because it has two
+ * This lives in a service rather than inside migration 186 because it has two
  * callers. The migration is one. The other is a .picpeak restore: the archive
  * carries the photos table verbatim, so a backup taken before this fix lands
  * duplicate rows into a schema that now has a unique index on them — and
@@ -339,7 +339,7 @@ async function externalRelpathIndexExists(knex) {
  * 42701 and 42710 as "schema already exists" and marks the migration applied
  * (run-migrations-safe.js:138) — and a CREATE UNIQUE INDEX that finds
  * duplicate rows raises exactly 23505 on Postgres. Letting the driver's error
- * through would therefore record 176 as done on an install that never got the
+ * through would therefore record 186 as done on an install that never got the
  * index, with nothing to trigger a retry: the precise outcome the throw
  * exists to prevent.
  */

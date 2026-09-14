@@ -12,8 +12,21 @@ export const MAX_FILES_PER_UPLOAD_LIMIT = 2000;
 
 export interface GeneralSettings {
   site_url: string;
+  // FRONTEND_URL in the environment overrides general_site_url at runtime
+  // (#705). Surfaced so the field can say so instead of accepting edits
+  // that never take effect.
+  site_url_env_pinned: boolean;
+  // The value as stored, so the tab can tell an edit from an untouched load.
+  // `general_site_url` was free-text before #1104 added validation, so an
+  // upgraded install can hold something schemeless — and blocking Save on a
+  // value the admin never touched strands anyone without settings.domains,
+  // who cannot correct it either (the write 403s on the protected key).
+  site_url_stored: string;
   default_expiration_days: number;
   max_file_size_mb: number;
+  /** Videos get their own per-file cap — the photo cap would otherwise
+   *  block every normal clip. */
+  max_video_size_mb: number;
   max_files_per_upload: number;
   allowed_file_types: string;
   // #509 — re-added after the main-into-beta merge dropped it.
@@ -42,6 +55,34 @@ export interface SecuritySettings {
   enable_recaptcha: boolean;
   recaptcha_site_key: string;
   recaptcha_secret_key: string;
+  // #1271 — opt-in reversible storage of gallery passwords and client PINs
+  gallery_password_recoverable: boolean;
+}
+
+/** The general per-IP API rate limiter (#1337). Keys match app_settings. */
+export interface RateLimitSettings {
+  rate_limit_enabled: boolean;
+  rate_limit_window_minutes: number;
+  rate_limit_max_requests: number;
+  rate_limit_auth_max_requests: number;
+  rate_limit_skip_authenticated: boolean;
+  rate_limit_public_endpoints_only: boolean;
+}
+
+/** The ranges the backend route enforces; checked before anything is written. */
+export const RATE_LIMIT_RANGES: Record<'rate_limit_window_minutes' | 'rate_limit_max_requests' | 'rate_limit_auth_max_requests', [number, number]> = {
+  rate_limit_window_minutes: [1, 60],
+  rate_limit_max_requests: [10, 10000],
+  rate_limit_auth_max_requests: [1, 100]
+};
+
+/** Returns the first out-of-range field, or null when everything is valid. */
+export function validateRateLimitSettings(settings: RateLimitSettings): keyof typeof RATE_LIMIT_RANGES | null {
+  for (const [key, [min, max]] of Object.entries(RATE_LIMIT_RANGES) as Array<[keyof typeof RATE_LIMIT_RANGES, [number, number]]>) {
+    const value = settings[key];
+    if (!Number.isInteger(value) || value < min || value > max) return key;
+  }
+  return null;
 }
 
 export type TrackerProvider = 'none' | 'umami' | 'rybbit' | 'custom';
@@ -79,6 +120,15 @@ export interface EventSettings {
   event_require_expiration: boolean;
   event_default_require_password: boolean;
   event_default_feedback_enabled: boolean;
+  // Per-type guest-feedback defaults for new galleries (#1044). These are
+  // DEFAULTS: changing one never touches a gallery that already exists.
+  event_default_allow_ratings: boolean;
+  event_default_allow_likes: boolean;
+  event_default_allow_favorites: boolean;
+  event_default_allow_comments: boolean;
+  event_default_allow_reactions: boolean;
+  event_default_allow_color_labels: boolean;
+  event_default_keybind_mode: 'colors' | 'lightroom';
   gallery_show_filter_bar: boolean;
   event_phone_field_enabled: boolean;
 }
@@ -114,8 +164,11 @@ export function useSettingsState() {
   // General settings state
   const [generalSettings, setGeneralSettings] = useState<GeneralSettings>({
     site_url: '',
+    site_url_env_pinned: false,
+    site_url_stored: '',
     default_expiration_days: 30,
     max_file_size_mb: 50,
+    max_video_size_mb: 500,
     max_files_per_upload: 500,
     allowed_file_types: 'jpg,jpeg,png,gif,webp',
     max_upload_batch_size_mb: 95,
@@ -139,7 +192,19 @@ export function useSettingsState() {
     lockout_duration_minutes: 30,
     enable_recaptcha: false,
     recaptcha_site_key: '',
-    recaptcha_secret_key: ''
+    recaptcha_secret_key: '',
+    gallery_password_recoverable: false
+  });
+
+  // Rate limiter state. The fallbacks mirror the backend's defaults, but the
+  // settings read fills every key, so they only matter before the first load.
+  const [rateLimitSettings, setRateLimitSettings] = useState<RateLimitSettings>({
+    rate_limit_enabled: true,
+    rate_limit_window_minutes: 15,
+    rate_limit_max_requests: 300,
+    rate_limit_auth_max_requests: 5,
+    rate_limit_skip_authenticated: true,
+    rate_limit_public_endpoints_only: false
   });
 
   // Analytics settings state
@@ -165,6 +230,13 @@ export function useSettingsState() {
     event_require_expiration: true,
     event_default_require_password: true,
     event_default_feedback_enabled: false,
+    event_default_allow_ratings: true,
+    event_default_allow_likes: true,
+    event_default_allow_favorites: true,
+    event_default_allow_comments: true,
+    event_default_allow_reactions: true,
+    event_default_allow_color_labels: false,
+    event_default_keybind_mode: 'colors',
     gallery_show_filter_bar: true,
     event_phone_field_enabled: false
   });
@@ -200,9 +272,14 @@ export function useSettingsState() {
   useEffect(() => {
     if (settings) {
       setGeneralSettings({
-        site_url: settings.general_site_url || '',
+        site_url: settings.general_site_url_env_pinned
+          ? (settings.general_site_url_effective || '')
+          : (settings.general_site_url || ''),
+        site_url_env_pinned: Boolean(settings.general_site_url_env_pinned),
+        site_url_stored: settings.general_site_url || '',
         default_expiration_days: toNumber(settings.general_default_expiration_days, 30),
         max_file_size_mb: toNumber(settings.general_max_file_size_mb, 50),
+        max_video_size_mb: toNumber(settings.general_max_video_size_mb, 500),
         max_files_per_upload: Math.min(
           MAX_FILES_PER_UPLOAD_LIMIT,
           Math.max(1, toNumber(settings.general_max_files_per_upload, 500))
@@ -235,7 +312,17 @@ export function useSettingsState() {
         lockout_duration_minutes: toNumber(settings.security_lockout_duration_minutes, 30),
         enable_recaptcha: toBoolean(settings.security_enable_recaptcha, false),
         recaptcha_site_key: settings.security_recaptcha_site_key ?? '',
-        recaptcha_secret_key: settings.security_recaptcha_secret_key ?? ''
+        recaptcha_secret_key: settings.security_recaptcha_secret_key ?? '',
+        gallery_password_recoverable: toBoolean(settings.security_gallery_password_recoverable, false)
+      });
+
+      setRateLimitSettings({
+        rate_limit_enabled: toBoolean(settings.rate_limit_enabled, true),
+        rate_limit_window_minutes: toNumber(settings.rate_limit_window_minutes, 15),
+        rate_limit_max_requests: toNumber(settings.rate_limit_max_requests, 300),
+        rate_limit_auth_max_requests: toNumber(settings.rate_limit_auth_max_requests, 5),
+        rate_limit_skip_authenticated: toBoolean(settings.rate_limit_skip_authenticated, true),
+        rate_limit_public_endpoints_only: toBoolean(settings.rate_limit_public_endpoints_only, false)
       });
 
       // Tracker provider: prefer explicit setting; fall back to legacy
@@ -269,6 +356,15 @@ export function useSettingsState() {
         event_require_expiration: toBoolean(settings.event_require_expiration, true),
         event_default_require_password: toBoolean(settings.event_default_require_password, true),
         event_default_feedback_enabled: toBoolean(settings.event_default_feedback_enabled, false),
+        // Fallbacks mirror FEEDBACK_TOGGLES in backend
+        // services/feedbackDefaults.js — keep the two in step.
+        event_default_allow_ratings: toBoolean(settings.event_default_allow_ratings, true),
+        event_default_allow_likes: toBoolean(settings.event_default_allow_likes, true),
+        event_default_allow_favorites: toBoolean(settings.event_default_allow_favorites, true),
+        event_default_allow_comments: toBoolean(settings.event_default_allow_comments, true),
+        event_default_allow_reactions: toBoolean(settings.event_default_allow_reactions, true),
+        event_default_allow_color_labels: toBoolean(settings.event_default_allow_color_labels, false),
+        event_default_keybind_mode: settings.event_default_keybind_mode === 'lightroom' ? 'lightroom' : 'colors',
         gallery_show_filter_bar: toBoolean(settings.gallery_show_filter_bar, true),
         event_phone_field_enabled: toBoolean(settings.event_phone_field_enabled, false)
       });
@@ -320,6 +416,22 @@ export function useSettingsState() {
     mutationFn: async () => {
       const settingsData: Record<string, unknown> = {};
       Object.entries(generalSettings).forEach(([key, value]) => {
+        // `site_url_env_pinned` is derived server-side and stripped there, and
+        // while it IS pinned the field shows the *effective* env value rather
+        // than the stored setting — reposting that would look like a genuine
+        // change to a protected key and 403 an admin who holds settings.edit
+        // but not settings.domains, even though they changed nothing. The
+        // backend's no-op round-trip allowance only covers the stored value,
+        // so don't send the key at all while it's read-only (#1104).
+        if (key === 'site_url_env_pinned' || key === 'site_url_stored') return;
+        if (key === 'site_url' && generalSettings.site_url_env_pinned) return;
+        // Unchanged is a no-op, so don't send it. The backend allows a no-op
+        // round-trip of a protected key precisely so a settings.edit admin
+        // without settings.domains can save unrelated General settings — but
+        // that only helps if the request gets made, and an untouched value
+        // that predates the #1104 validation would otherwise be blocked in
+        // the tab before it ever left the browser.
+        if (key === 'site_url' && value === generalSettings.site_url_stored) return;
         settingsData[`general_${key}`] = value;
       });
       return settingsService.updateSettings(settingsData);
@@ -339,14 +451,24 @@ export function useSettingsState() {
       Object.entries(securitySettings).forEach(([key, value]) => {
         settingsData[`security_${key}`] = value;
       });
-      return settingsService.updateSettings(settingsData);
+      // Nothing is written until the limiter values pass the same ranges the
+      // route enforces, and the limiter goes first: a 400 from its route
+      // would otherwise land after the password/session settings were
+      // already persisted, a half-applied save reported as failed (#1337).
+      if (validateRateLimitSettings(rateLimitSettings)) throw new Error('RATE_LIMIT_INVALID');
+      await settingsService.updateRateLimit(rateLimitSettings);
+      await settingsService.updateSettings(settingsData);
     },
     onSuccess: () => {
       toast.success(t('toast.settingsSaved'));
       queryClient.invalidateQueries({ queryKey: ['admin-settings'] });
+      // the event page's "Show password" availability follows this tab (#1271)
+      queryClient.invalidateQueries({ queryKey: ['admin-event-password-status'] });
     },
-    onError: () => {
-      toast.error(t('toast.saveError'));
+    onError: (error: unknown) => {
+      toast.error(t(error instanceof Error && error.message === 'RATE_LIMIT_INVALID'
+        ? 'settings.security.rateLimitInvalid'
+        : 'toast.saveError'));
     }
   });
 
@@ -591,6 +713,8 @@ export function useSettingsState() {
     setGeneralSettings,
     securitySettings,
     setSecuritySettings,
+    rateLimitSettings,
+    setRateLimitSettings,
     analyticsSettings,
     setAnalyticsSettings,
     eventSettings,

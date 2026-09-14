@@ -1,221 +1,9 @@
-// Extracted verbatim from the original routes/adminEvents.js (see ./index.js).
-// Shared helpers + module-level caches used across the adminEvents sub-routers.
-
 const { db, logActivity } = require('../../database/db');
 const fs = require('fs').promises;
 const path = require('path');
 const logger = require('../../utils/logger');
-const { parseStringInput } = require('../../utils/parsers');
+const settings = require('../../services/eventSettings');
 
-// Shared validator for hero_image_anchor – accepts legacy keywords or "X% Y%" focal point
-const validateHeroImageAnchor = (value) => {
-  if (['top', 'center', 'bottom'].includes(value)) return true;
-  if (typeof value === 'string' && /^\d{1,3}%\s+\d{1,3}%$/.test(value)) {
-    const [x, y] = value.split(/\s+/).map(v => parseInt(v));
-    if (x >= 0 && x <= 100 && y >= 0 && y <= 100) return true;
-  }
-  throw new Error('Must be top, center, bottom, or "X% Y%" (0-100)');
-};
-
-// Get storage path from environment or default
-const getStoragePath = () => process.env.STORAGE_PATH || path.join(__dirname, '../../../../storage');
-
-// Helper to get event field requirements from settings
-const getEventFieldRequirements = async () => {
-  try {
-    const settings = await db('app_settings')
-      .whereIn('setting_key', [
-        'event_require_customer_name',
-        'event_require_customer_email',
-        'event_require_admin_email',
-        'event_require_event_date',
-        'event_require_expiration'
-      ])
-      .select('setting_key', 'setting_value');
-
-    const requirements = {
-      require_customer_name: true,
-      require_customer_email: true,
-      require_admin_email: true,
-      require_event_date: true,
-      require_expiration: true
-    };
-
-    settings.forEach(s => {
-      let value = s.setting_value;
-      if (typeof value === 'string') {
-        try {
-          value = JSON.parse(value);
-        } catch (e) {
-          value = value === 'true';
-        }
-      }
-      if (s.setting_key === 'event_require_customer_name') requirements.require_customer_name = value;
-      if (s.setting_key === 'event_require_customer_email') requirements.require_customer_email = value;
-      if (s.setting_key === 'event_require_admin_email') requirements.require_admin_email = value;
-      if (s.setting_key === 'event_require_event_date') requirements.require_event_date = value;
-      if (s.setting_key === 'event_require_expiration') requirements.require_expiration = value;
-    });
-
-    return requirements;
-  } catch (error) {
-    logger.error('Failed to get event field requirements', { error: error.message });
-    return {
-      require_customer_name: true,
-      require_customer_email: true,
-      require_admin_email: true,
-      require_event_date: true,
-      require_expiration: true
-    };
-  }
-};
-
-// Helper to read app_settings booleans by key, used to inherit per-setting
-// defaults onto new events. Returns `undefined` for missing/non-boolean rows
-// so callers can fall back to a legacy default.
-const readBooleanSetting = async (key) => {
-  try {
-    const setting = await db('app_settings').where('setting_key', key).first();
-    if (!setting) return undefined;
-    let value = setting.setting_value;
-    if (typeof value === 'string') {
-      try { value = JSON.parse(value); } catch { /* keep raw */ }
-    }
-    return typeof value === 'boolean' ? value : undefined;
-  } catch (error) {
-    logger.error('Failed to read app setting', { key, error: error.message });
-    return undefined;
-  }
-};
-
-// Helper to read the global "enable_devtools_protection" admin setting so
-// new events inherit it instead of always falling back to the DB column default
-// (#317 — admin disabled it globally but new events still got it ON).
-const getDownloadProtectionDefaults = async () => {
-  return { enable_devtools_protection: await readBooleanSetting('enable_devtools_protection') };
-};
-
-// Helper to get branding defaults for new events (Feature 7: Branding Inheritance).
-//
-// Note: `branding_logo_position` (header bar — left/center/right) is a
-// different concept from `hero_logo_position` (hero block — top/center/
-// bottom) and must NOT be mapped here. A previous version copied the
-// branding value over, which wrote 'left'/'right' into per-event
-// hero_logo_position columns and broke any subsequent PUT validation
-// (#357). Migration 084 heals existing rows.
-const getBrandingDefaults = async () => {
-  try {
-    const settings = await db('app_settings')
-      .whereIn('setting_key', [
-        'branding_logo_display_hero',
-        'branding_logo_size'
-      ])
-      .select('setting_key', 'setting_value');
-
-    const defaults = {
-      hero_logo_visible: true,
-      hero_logo_size: 'medium',
-      hero_logo_position: 'top'
-    };
-
-    settings.forEach(s => {
-      let value = s.setting_value;
-      if (typeof value === 'string') {
-        try { value = JSON.parse(value); } catch (e) { /* use as-is */ }
-      }
-      if (s.setting_key === 'branding_logo_display_hero') {
-        defaults.hero_logo_visible = value !== false;
-      }
-      if (s.setting_key === 'branding_logo_size' && value) {
-        defaults.hero_logo_size = value;
-      }
-    });
-
-    return defaults;
-  } catch (error) {
-    logger.error('Failed to get branding defaults', { error: error.message });
-    return {
-      hero_logo_visible: true,
-      hero_logo_size: 'medium',
-      hero_logo_position: 'top'
-    };
-  }
-};
-
-// Use parseStringInput from shared parsers for customer data extraction
-const getCustomerNameFromPayload = (payload = {}) => parseStringInput(payload.customer_name);
-const getCustomerEmailFromPayload = (payload = {}) => parseStringInput(payload.customer_email);
-const getCustomerPhoneFromPayload = (payload = {}) => parseStringInput(payload.customer_phone);
-
-// Whether the global "phone field" toggle (#322) is enabled. Cached for
-// the request via a module-level read; drift is acceptable since this
-// only governs whether to persist the field, not security boundaries.
-const isPhoneFieldEnabled = async () => {
-  try {
-    const row = await db('app_settings').where('setting_key', 'event_phone_field_enabled').first();
-    if (!row) return false;
-    let value = row.setting_value;
-    if (typeof value === 'string') {
-      try { value = JSON.parse(value); } catch { /* keep raw */ }
-    }
-    return value === true;
-  } catch (error) {
-    logger.debug('Failed to read event_phone_field_enabled', { error: error.message });
-    return false;
-  }
-};
-
-const mapEventForApi = (event) => {
-  if (!event || typeof event !== 'object') {
-    return event;
-  }
-
-  const {
-    host_name,
-    host_email,
-    customer_name,
-    customer_email,
-    customer_phone,
-    password_hash: _ph,
-    client_password_hash: _cph,
-    ...rest
-  } = event;
-
-  return {
-    ...rest,
-    customer_name: customer_name ?? host_name ?? null,
-    customer_email: customer_email ?? host_email ?? null,
-    customer_phone: customer_phone ?? null
-  };
-};
-
-let customerColumnCache = null;
-const hasCustomerContactColumns = async () => {
-  if (customerColumnCache === true) {
-    return true;
-  }
-
-  try {
-    const hasColumn = await db.schema.hasColumn('events', 'customer_email');
-    if (hasColumn) {
-      customerColumnCache = true;
-    }
-    return hasColumn;
-  } catch (error) {
-    logger.debug('Failed to detect customer_email column', { error: error.message });
-    return false;
-  }
-};
-
-// Cascade-delete a single event: photos, audit/access logs, queued emails,
-// the event row itself (in one transaction), then the on-disk folder /
-// archive zip / hero logo (best-effort — file failures don't unwind the DB
-// changes since the source of truth is the database). Used by both the
-// per-event DELETE /:id route and the bulk-delete route to avoid drift.
-//
-// Throws { code: 'EVENT_NOT_FOUND' } if the event id doesn't exist so the
-// bulk-delete loop can report it as a per-id failure without aborting the
-// whole batch. Any other error propagates and is the caller's problem.
 async function deleteEventCascade(eventId, adminContext) {
   const event = await db('events').where('id', eventId).first();
   if (!event) {
@@ -224,16 +12,24 @@ async function deleteEventCascade(eventId, adminContext) {
     throw err;
   }
 
-  // Collect this event's storage keys BEFORE the transaction removes the
-  // photo rows. Afterwards nothing records which objects belonged to this
-  // event — the DB was the only place that knew, and on an S3/R2 backend the
-  // objects are still sitting in the bucket, unreferenced and billable.
+  // Responsive tiers (#1095 / #492) live in the top-level thumbnails/ and
+  // previews/ directories, not under the event folder the filesystem sweep
+  // below removes, and their keys are derived from the photo rows — which the
+  // transaction is about to delete. So they are read here, while the rows
+  // still exist, and swept after the commit; miss that window and every tier
+  // this event generated is orphaned with nothing left to derive its key from.
   //
-  // The filesystem cleanup below (#608) only ever touched local disk: in S3
-  // mode those paths don't exist, `fs.rm` succeeds against nothing, and the
-  // real objects are never touched. Measured on a 403-photo event: bucket
-  // object count unchanged, 679 referenced rows gone.
-  //
+  // The managed objects themselves need exactly the same window (#1051), so
+  // one query serves both. On an S3/R2 backend the filesystem sweep below
+  // removes nothing at all — those paths don't exist locally, `fs.rm` happily
+  // succeeds against them, and every originally-uploaded photo stays in the
+  // bucket unreferenced and billable. Measured on a 403-photo event: object
+  // count unchanged, 679 rows gone.
+  const tieredPhotos = await db('photos')
+    .where('event_id', eventId)
+    .select('id', 'path', 'filename', 'source_origin', 'external_relpath',
+      'thumbnail_path', 'hero_path', 'preview_path', 'watermark_path');
+
   // A Set because a photo can carry the same key in two columns (an unresized
   // gallery's hero and preview can resolve to one object) and deleting it
   // twice would log a spurious failure for the second attempt.
@@ -243,11 +39,7 @@ async function deleteEventCascade(eventId, adminContext) {
   const derivedKeys = new Set();
   try {
     const { resolvePhotoStorageKey } = require('../../services/photoResolver');
-    const photos = await db('photos')
-      .where('event_id', eventId)
-      .select('id', 'path', 'thumbnail_path', 'hero_path', 'preview_path', 'watermark_path', 'source_origin');
-
-    for (const photo of photos) {
+    for (const photo of tieredPhotos) {
       try {
         // Returns null for reference/external photos, which live on a mount
         // outside the managed backend and must NOT be deleted — PicPeak does
@@ -259,10 +51,8 @@ async function deleteEventCascade(eventId, adminContext) {
           eventId, photoId: photo.id, error: keyErr.message
         });
       }
-      // Derived tiers are stored as canonical keys and pass through verbatim.
-      // watermark_path included: it is storage-backed on the single-photo
-      // path (watermarkService.deleteWatermarkFile) and leaked here the same
-      // way the originals did.
+      // Derived tiers are stored as canonical keys and pass through verbatim,
+      // the same list adminPhotoDimensions.js:801 sweeps on a re-render.
       for (const derived of [photo.thumbnail_path, photo.hero_path, photo.preview_path, photo.watermark_path]) {
         if (derived) {
           storageKeys.add(derived);
@@ -314,26 +104,45 @@ async function deleteEventCascade(eventId, adminContext) {
   }
 
   // The archive zip is typically the largest single object an event owns, and
-  // archiveService writes it through the backend (`storage.putFromFile`) — so
-  // the `fs.unlink` below is a no-op on S3 and the zip outlives its event.
+  // archiveService writes it through the backend (`storage.putFromFile`, see
+  // archiveService.js:160) — so the `fs.unlink` below is a no-op on S3 and the
+  // zip outlives the event it belongs to.
   if (event.archive_path) storageKeys.add(event.archive_path);
 
-  // The pre-built "Download All" zip is the subtle one: it lives UNDER
-  // events/active/{slug}/.download-cache/ (downloadZipService.js:42), so the
-  // recursive fs.rm below covers it on local disk and nothing covers it on
-  // S3, where that prefix is not a directory. It is gallery-sized.
-  // downloadZipService exposes a cleanup() documented as "used on event
-  // deletion" that this cascade never called.
+  // The download caches are the subtle ones: they live UNDER
+  // events/active/{slug}/.download-cache/, so the recursive fs.rm below covers
+  // them on local disk and nothing covers them on S3, where the prefix is not
+  // a directory. Both are gallery-sized.
+  //
+  //   - the pre-built "Download All" zip (downloadZipService.js:44)
+  //   - one zip per custom-resolution download job (downloadJobService.js:77)
+  //
+  // The job rows must be read BEFORE the transaction for the same reason the
+  // photo rows are: download_jobs.event_id is ON DELETE CASCADE, so on
+  // Postgres the rows vanish with the event and their keys with them.
   // NOTE: an in-flight "Download All" build that started before this delete
   // can still upload its zip after the sweep and write the path onto a row
   // that no longer exists, orphaning it. downloadZipService.cleanup() is the
-  // service's cancel primitive, but calling it here made the backend CI job
-  // exceed its 10-minute budget on this branch — its _cleanup() reaches
-  // getStorage() and, in a suite where the S3 backend is configured but
-  // unreachable, every cascade delete then pays the adapter's retry backoff.
-  // Left as a follow-up rather than shipped as a timeout: the race is narrow
-  // and costs one orphaned object, the regression cost the whole suite.
+  // service's cancel primitive, but calling it here made the stable twin's
+  // backend CI job exceed its 10-minute budget: _cleanup() reaches
+  // getStorage(), and where the S3 backend is configured but unreachable
+  // every cascade delete pays the adapter's retry backoff — in the request
+  // path, not just in tests. Left as a follow-up rather than shipped behind a
+  // timeout: the race costs one orphaned object, this cost the whole suite.
   if (event.download_zip_path) storageKeys.add(event.download_zip_path);
+  try {
+    if (await db.schema.hasTable('download_jobs')) {
+      const jobs = await db('download_jobs')
+        .where('event_id', eventId)
+        .whereNotNull('zip_path')
+        .select('zip_path');
+      for (const job of jobs) storageKeys.add(job.zip_path);
+    }
+  } catch (jobErr) {
+    logger.warn('Could not enumerate download job archives before cascade delete', {
+      eventId, error: jobErr.message
+    });
+  }
 
   await db.transaction(async (trx) => {
     // 1. Delete activity logs (audit trail)
@@ -343,6 +152,22 @@ async function deleteEventCascade(eventId, adminContext) {
     // 3. Delete email queue entries
     await trx('email_queue').where('event_id', eventId).del();
     // 4. Delete photos (also handles hero_photo_id foreign key)
+    // Face data (#1074). The FK declares ON DELETE CASCADE, but SQLite only
+    // honours that when `PRAGMA foreign_keys = ON`, which PicPeak does not set
+    // — so on the SQLite path the cascade is inert and biometric embeddings
+    // would outlive the gallery they belong to. Delete explicitly, before the
+    // photos, so the guarantee holds on both engines.
+    await trx('photo_faces').where('event_id', eventId).del();
+    await trx('event_people').where('event_id', eventId).del();
+    // Separations carry a COPY of each side's centroid since #1132, so this
+    // table holds biometric data too — and it deliberately has no event FK, so
+    // nothing else would ever reach it. hasTable rather than a catch: a failed
+    // statement aborts the surrounding transaction on Postgres, which would
+    // take the whole delete down on a pre-migration install.
+    if (await trx.schema.hasTable('event_people_merge_dismissals')) {
+      await trx('event_people_merge_dismissals').where('event_id', eventId).del();
+    }
+
     await trx('photos').where('event_id', eventId).del();
     // 5. Finally delete the event row
     await trx('events').where('id', eventId).del();
@@ -395,11 +220,25 @@ async function deleteEventCascade(eventId, adminContext) {
     }
   });
 
-  // Managed objects, deleted AFTER the commit: a rolled-back transaction must
-  // never leave files destroyed for an event that still exists. Failures are
-  // logged rather than thrown, matching the philosophy of the filesystem
-  // cleanup above — the database is the source of truth, an orphaned object
-  // is recoverable noise, a half-deleted event is not.
+  // Tier sweep, post-commit and best-effort for the same reason as the folder
+  // removal above: an orphaned derivative is recoverable noise, a rolled-back
+  // delete is not.
+  try {
+    const { deleteThumbnailTiers, deletePreviewTiers } = require('../../services/imageProcessor');
+    for (const photo of tieredPhotos) {
+      await deleteThumbnailTiers(photo);
+      await deletePreviewTiers(photo);
+    }
+  } catch (tierErr) {
+    logger.warn('Failed to delete responsive tiers during cascade delete', { eventId, error: tierErr.message });
+  }
+
+  // Managed objects, post-commit for the same reason: a rolled-back
+  // transaction must never leave files destroyed for an event that still
+  // exists. Every key here goes through the backend on both engines — on
+  // local disk the folder sweep above already covers the originals, but the
+  // tiers, watermarks and the archive live outside the event folder and would
+  // otherwise leak there too.
   if (storageKeys.size > 0) {
     const { getStorage } = require('../../services/storage');
     let removed = 0;
@@ -408,16 +247,15 @@ async function deleteEventCascade(eventId, adminContext) {
       const keys = Array.from(storageKeys);
 
       // Bounded concurrency rather than one await per key. A 400-photo gallery
-      // owns well over a thousand objects once the derived tiers are counted,
-      // and on S3 that many sequential DeleteObject round trips runs to
-      // minutes — long enough for a proxy to time the request out AFTER the
-      // commit, leaving the event deleted and the sweep half-finished.
-      // Deleting is idempotent and order-independent, so there is nothing to
-      // serialise for.
+      // owns ~1600 objects once the derived tiers are counted, and on S3 that
+      // many sequential DeleteObject round trips runs to minutes — long enough
+      // for a proxy to time the request out AFTER the commit, leaving the
+      // event deleted and the sweep half-finished. Deleting is idempotent and
+      // order-independent, so there is nothing to serialise for.
       //
       // A pool, not Promise.all over every key: an unbounded fan-out would
       // open one socket per object and exhaust the S3 client's connection
-      // pool.
+      // pool, which is what #1049 just finished making failures survivable.
       const CONCURRENCY = 16;
       let cursor = 0;
       const worker = async () => {
@@ -457,32 +295,4 @@ async function deleteEventCascade(eventId, adminContext) {
   return { id: event.id, name: event.event_name };
 }
 
-// ---------------------------------------------------------------------------
-// Live Slideshow ("Diashow") — a token-only fullscreen kiosk link for live
-// events that auto-picks-up new uploads (migration 138). Mirrors the
-// client-access second-token pattern: the link is minted on demand, rotatable
-// and disable-able, independent of the gallery password / share link.
-// ---------------------------------------------------------------------------
-
-// Allowed slide transition styles (kept in sync with the SlideshowPage).
-// dipwhite/dipblack = fade through highlights / lowlights between images.
-const SLIDESHOW_TRANSITIONS = ['crossfade', 'cut', 'slide', 'kenburns', 'dipwhite', 'dipblack'];
-// Allowed per-slide color filters.
-const SLIDESHOW_COLORFILTERS = ['none', 'bw', 'sepia', 'warm', 'cool', 'vignette'];
-module.exports = {
-  validateHeroImageAnchor,
-  getStoragePath,
-  getEventFieldRequirements,
-  readBooleanSetting,
-  getDownloadProtectionDefaults,
-  getBrandingDefaults,
-  getCustomerNameFromPayload,
-  getCustomerEmailFromPayload,
-  getCustomerPhoneFromPayload,
-  isPhoneFieldEnabled,
-  mapEventForApi,
-  hasCustomerContactColumns,
-  deleteEventCascade,
-  SLIDESHOW_TRANSITIONS,
-  SLIDESHOW_COLORFILTERS,
-};
+module.exports = { ...settings, deleteEventCascade };

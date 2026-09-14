@@ -16,11 +16,13 @@
  * POST .../slideshow/{generate,disable}.
  */
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import { MonitorPlay, Copy, CheckCircle, RotateCw, Trash2, Save } from 'lucide-react';
 import { Button, Card } from '../common';
 import { eventsService } from '../../services/events.service';
+import { categoriesService } from '../../services/categories.service';
 import { DEFAULT_SLIDESHOW_STYLE, type SlideshowStyle } from '../../services/slideshow.service';
 import { SlideshowStyleFields } from './SlideshowStyleFields';
 
@@ -34,7 +36,10 @@ export interface SlideshowSettingsCardProps {
     show_transition?: string;
     show_transition_ms?: number;
     show_watermark?: boolean | null;
+    show_qr?: boolean | null;
     show_colorfilter?: string;
+    show_order?: string;
+    show_category_id?: number | null;
   };
   onChanged?: () => void;
 }
@@ -51,7 +56,10 @@ function styleFromInitial(initial: SlideshowSettingsCardProps['initial']): Slide
     transition: (initial.show_transition as SlideshowStyle['transition']) ?? DEFAULT_SLIDESHOW_STYLE.transition,
     transition_ms: initial.show_transition_ms ?? DEFAULT_SLIDESHOW_STYLE.transition_ms,
     watermark: watermarkMode(initial.show_watermark),
+    qr: watermarkMode(initial.show_qr),
     colorfilter: (initial.show_colorfilter as SlideshowStyle['colorfilter']) ?? DEFAULT_SLIDESHOW_STYLE.colorfilter,
+    order: (initial.show_order as SlideshowStyle['order']) ?? DEFAULT_SLIDESHOW_STYLE.order,
+    category_id: initial.show_category_id ?? null,
   };
 }
 
@@ -67,6 +75,14 @@ export const SlideshowSettingsCard: React.FC<SlideshowSettingsCardProps> = ({
   const [saving, setSaving] = useState(false);
 
   const link = token ? `${window.location.origin}/gallery/${slug}/show/${token}` : '';
+
+  // Event categories for the slideshow content filter (#202). Global + this
+  // event's own categories; empty for events without any → picker hides.
+  const { data: categories = [] } = useQuery({
+    queryKey: ['event-categories', eventId],
+    queryFn: () => categoriesService.getEventCategories(eventId),
+    staleTime: 60_000,
+  });
 
   const generate = async () => {
     setBusy(true);
@@ -128,7 +144,10 @@ export const SlideshowSettingsCard: React.FC<SlideshowSettingsCardProps> = ({
         // Tri-state → null (inherit global) / true / false. The watermark LOOK
         // is global-only (Settings → Slideshow); we only send the mode here.
         show_watermark: style.watermark === 'inherit' ? null : style.watermark === 'on',
+        show_qr: style.qr === 'inherit' ? null : style.qr === 'on',
         show_colorfilter: style.colorfilter,
+        show_order: style.order,
+        show_category_id: style.category_id,
       });
       toast.success(t('slideshow.settingsSaved', 'Slideshow settings saved'));
       onChanged?.();
@@ -208,7 +227,7 @@ export const SlideshowSettingsCard: React.FC<SlideshowSettingsCardProps> = ({
 
             {/* Live style settings */}
             <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700">
-              <SlideshowStyleFields value={style} onChange={setStyle} />
+              <SlideshowStyleFields value={style} onChange={setStyle} categories={categories} />
             </div>
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
               {t('slideshow.liveHint', 'Changes apply to a running slideshow within a few seconds — no need to regenerate the link.')}

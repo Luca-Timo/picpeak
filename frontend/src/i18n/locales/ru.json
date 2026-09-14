@@ -124,14 +124,15 @@
     "saveChanges": "Сохранить изменения",
     "resetChanges": "Сбросить изменения",
     "dismiss": "Закрыть",
-    "discard": "Отменить"
+    "discard": "Отменить",
+    "poweredBy": "Работает на"
   },
   "upload": {
     "photoCategory": "Категория фото",
     "noCategory": "Без категории",
     "eventSpecific": "(Для конкретного события)",
     "clickToUpload": "Нажмите для загрузки или перетащите файлы",
-    "fileRequirements": "JPEG, PNG или WebP (макс. 50 МБ на файл, {{limit}} файлов за загрузку)",
+    "fileRequirements": "{{formats}} (макс. {{sizeLimit}} МБ на файл, {{limit}} файлов за загрузку)",
     "selectedFiles": "Выбранные файлы",
     "uploading": "Загрузка...",
     "uploadComplete": "Загрузка завершена!",
@@ -227,6 +228,10 @@
     "passwordHint": "Пароль предоставлен организатором события. Свяжитесь с ним, если у вас его нет."
   },
   "gallery": {
+    "revealPendingTitle": "Фотографии пока остаются сюрпризом",
+    "revealPendingMessage": "Организатор откроет галерею позже — загляните ещё раз!",
+    "revealScheduledFor": "Открытие запланировано на {{date}}",
+    "revealUploadHint": "Вы уже можете добавить свои фотографии в коллекцию:",
     "expires": "Истекает",
     "expired": "Истекла",
     "contactOrganizer": "Свяжитесь с организатором события, если вам нужен доступ к этим фотографиям",
@@ -281,18 +286,6 @@
     "searchMemories": "Поиск воспоминаний...",
     "thankYou": "Спасибо",
     "thankYouMessage": "За то, что были частью нашей истории и сделали этот особый день незабываемым.",
-    "feedback": {
-      "title": "Отзыв",
-      "shareThoughts": "Поделитесь мнением о «{{name}}»",
-      "rateThisMoment": "Оцените этот момент",
-      "comments": "Комментарии",
-      "noComments": "Комментариев пока нет. Будьте первым!",
-      "yourName": "Ваше имя",
-      "yourEmail": "Ваш email",
-      "writeLovelyNote": "Напишите тёплые слова...",
-      "postComment": "Оставить комментарий",
-      "anonymous": "Аноним"
-    },
     "rated": "Оценено",
     "commented": "Прокомментировано",
     "expiresIn_few": "Галерея истекает через {{count}} дня",
@@ -339,7 +332,8 @@
       "emailLabel": "Электронная почта (необязательно)",
       "emailPlaceholder": "вы@пример.рф",
       "submit": "Продолжить",
-      "alreadyHere": "Я уже был здесь раньше"
+      "returningHint": "Уже были здесь? Ваш прежний выбор сохранён.",
+      "recoverPicks": "Вернуть выбор"
     },
     "footer": {
       "forgetMeConfirm": "Ваше имя и выборки будут удалены из этой галереи.",
@@ -350,7 +344,15 @@
     "photosCount_many": "{{count}} фото",
     "photosCount_one": "{{count}} фото",
     "photosCount_other": "{{count}} фото",
-    "poweredBy": "Работает на PicPeak",
+    "colorFilter": "Цвет",
+    "filterByColor": "Показать только «{{color}}»",
+    "folders": "Папки",
+    "openFolder": "Открыть папку {{name}}",
+    "folderPhotoCount": "{{count}} фото",
+    "backToGallery": "Все фото",
+    "downloadFolder": "Скачать папку ({{count}})",
+    "downloadFolderCapped": "Скачать первые {{limit}} из {{total}}",
+    "downloadEverything": "Скачать все фото",
     "videoFormatUnsupported": "Этот формат видео не воспроизводится в этом браузере. Скачайте файл, чтобы посмотреть его.",
     "videoLoadFailed": "Не удалось загрузить это видео."
   },
@@ -376,6 +378,17 @@
     "categoryHeroHint": "Если обложка для категории не задана, будет использоваться стандартное главное фото."
   },
   "events": {
+    "revealMode": "Режим сюрприза (скрыть галерею до открытия)",
+    "revealModeHelp": "Гости могут загружать фото, но не видят их, пока вы не откроете галерею — вручную или в запланированное время. Слайд-шоу и клиентский доступ продолжают работать.",
+    "revealAt": "Запланированное открытие (необязательно)",
+    "revealAtHelp": "Оставьте пустым, чтобы открыть вручную кнопкой «Открыть сейчас».",
+    "revealModeStatus": "Режим сюрприза",
+    "revealed": "Открыта",
+    "hiddenUntilReveal": "Скрыта от гостей",
+    "revealScheduled": "Запланировано: {{date}}",
+    "revealNow": "Открыть сейчас",
+    "revealedToast": "Галерея открыта — гости теперь видят фотографии",
+    "revealError": "Не удалось открыть галерею",
     "title": "События",
     "create": "Создать",
     "createEvent": "Создать событие",
@@ -405,6 +418,9 @@
     "archived": "В архиве",
     "totalSize": "Общий размер",
     "shareLink": "Ссылка для доступа",
+    "qrCode": "QR-код",
+    "qrTableCard": "Карточка на стол (A6)",
+    "qrPoster": "Постер (A4)",
     "copyLink": "Копировать ссылку",
     "linkCopied": "Ссылка скопирована!",
     "viewGallery": "Просмотреть галерею",
@@ -895,7 +911,17 @@
       "showGalleryFilterBar": "Показывать панель фильтров в галереях",
       "showGalleryFilterBarHelp": "Отображает поиск по имени файла и элементы управления сортировкой над галереями с сеткой. Отключите для более чистого интерфейса.",
       "enablePhoneField": "Включить поле номера телефона",
-      "enablePhoneFieldHelp": "Добавляет необязательное поле ввода номера телефона в форму события. Полезно для автоматизаций, таких как доставка в WhatsApp через n8n. Всегда необязательно, даже если включено."
+      "enablePhoneFieldHelp": "Добавляет необязательное поле ввода номера телефона в форму события. Полезно для автоматизаций, таких как доставка в WhatsApp через n8n. Всегда необязательно, даже если включено.",
+      "feedbackTypeDefaultsHelp": "С какими типами отзывов создаются новые галереи. Существующие галереи не меняются — каждую можно настроить отдельно.",
+      "defaultAllowRatings": "Оценка звёздами",
+      "defaultAllowLikes": "Лайки",
+      "defaultAllowFavorites": "Избранное",
+      "defaultAllowComments": "Комментарии",
+      "defaultAllowReactions": "Эмодзи-реакции",
+      "defaultAllowColorLabels": "Цветовые метки",
+      "defaultKeybindMode": "Горячие клавиши просмотра по умолчанию",
+      "keybindColors": "Только цвета — 1 зелёный, 2 жёлтый, 3 красный",
+      "keybindLightroom": "Lightroom — 1–5 звёзды, 6–9 цвета"
     },
     "imageSecurity": {
       "title": "Защита изображений",
@@ -906,7 +932,6 @@
       "defaultProtectionHelp": "Эти настройки применяются ко всем новым событиям. Отдельные события могут их переопределить.",
       "protectionLevel": "Уровень защиты по умолчанию",
       "imageQuality": "Качество изображений по умолчанию",
-      "fragmentationLevel": "Уровень фрагментации",
       "enableDevtools": "Включить обнаружение DevTools по умолчанию",
       "enableCanvas": "Включить рендеринг Canvas по умолчанию (расширенная защита)",
       "rateLimiting": "Ограничение скорости",
@@ -925,7 +950,6 @@
     },
     "moderation": {
       "title": "Модерация",
-      "wordFilters": "Фильтры слов",
       "description": "Управление словами, которые должны быть отфильтрованы в комментариях",
       "addFilter": "Добавить фильтр",
       "enterWord": "Введите слово для фильтрации",
@@ -1227,7 +1251,10 @@
     "totalPhotos": "Всего фото",
     "activeEvents": "Активных событий",
     "notConfigured": "Umami Analytics не настроен",
-    "configureInstructions": "Для отображения данных аналитики настройте Umami в переменных среды и настройках панели администратора."
+    "configureInstructions": "Для отображения данных аналитики настройте Umami в переменных среды и настройках панели администратора.",
+    "catalogedMedia": "Каталогизированные медиа",
+    "storageUnavailable": "недоступно",
+    "storageNoMeasurement": "измерение недоступно"
   },
   "branding": {
     "title": "Брендинг и темы",
@@ -1589,6 +1616,10 @@
       "archiveDownloaded": "Скачан архив для «{{eventName}}»",
       "archiveDeleted": "Архив удалён для «{{eventName}}»",
       "archiveRestored": "Архив восстановлен для «{{eventName}}»",
+      "galleryOpened": "Гость открыл галерею «{{eventName}}»",
+      "galleryDownloaded": "Гость скачал фотографии из «{{eventName}}»",
+      "galleryDownloadedCustomer": "Клиент скачал фотографии из «{{eventName}}»",
+      "photoFavorite": "Фото из «{{eventName}}» добавлено в избранное",
       "systemActivity": "Системная активность: {{type}}",
       "adminProfileUpdated": "Профиль администратора обновлён пользователем {{actorName}}",
       "photosUploaded_few": "{{count}} фото загружено в «{{eventName}}»",
@@ -1670,7 +1701,15 @@
       "visibleSuccess": "Фотографии теперь видны гостям",
       "processingStatus": "Обработка…",
       "processingFailed": "Ошибка",
-      "retryQueued": "Повтор в очереди"
+      "retryQueued": "Повтор в очереди",
+      "myMarks": "Ваши отметки",
+      "myMarksHelp": "Видны только вам. Они никогда не появляются в клиентской галерее и экспортируются в Lightroom через XMP.",
+      "myRating": "Ваша оценка",
+      "clearRating": "Убрать вашу оценку",
+      "rateStars": "Оценить на {{count}}",
+      "markError": "Не удалось сохранить отметку",
+      "yourMarkColor": "Ваша отметка: {{color}}",
+      "yourMarkRating": "Ваша оценка: {{count}}"
     },
     "events": {
       "tabs": {
@@ -1733,7 +1772,9 @@
         "favorites": "Избранное",
         "comments": "Комментарии",
         "ratings": "Оценки",
-        "lastSeen": "Последний визит"
+        "reactions": "Реакции",
+        "lastSeen": "Последний визит",
+        "colorLabels": "Цветовые метки"
       },
       "view": "Подробнее",
       "export": "Экспортировать",
@@ -1746,17 +1787,30 @@
         "liked": "Понравилось",
         "favorited": "В избранном",
         "rated": "Оценено",
-        "commented": "Прокомментировано"
+        "reacted": "Отреагировал",
+        "commented": "Прокомментировано",
+        "labeled": "Цветовые метки"
       },
       "inviteStatus": {
         "pending": "Ожидает",
         "redeemed": "Использовано",
         "revoked": "Отозвано"
-      }
+      },
+      "duplicatesFound": "{{guests}} записей гостей похожи на {{groups}} вернувшихся посетителей — тот же e-mail, регистрация несколько раз. Их выбор останется разделённым, пока записи не объединят.",
+      "reviewDuplicates": "Проверить",
+      "duplicateBadge": "дубликат?",
+      "duplicateHint": "Другая запись в этой галерее использует тот же e-mail — вероятно, тот же человек зарегистрировался дважды.",
+      "mergePickKeep": "Выберите, какую запись сохранить",
+      "mergePickKeepHint": "Выберите запись для сохранения",
+      "mergeKeepColumn": "Сохранить",
+      "mergeKeepRow": "Сохранить {{name}}",
+      "mergeInclude": "Включить {{name}} в объединение"
     },
     "analytics": "Аналитика",
     "activities": {
       "event_created": "Новое событие создано: {{eventName}}",
+      "gallery_opened": "Галерея «{{eventName}}» была открыта",
+      "gallery_downloaded": "Фотографии из «{{eventName}}» были скачаны",
       "photos_uploaded": "{{count}} фото загружено в {{eventName}}",
       "event_archived": "Событие архивировано: {{eventName}}",
       "archive_restored": "Архив восстановлен: {{eventName}}",
@@ -1799,7 +1853,9 @@
       "event_renamed": "Событие переименовано: {{eventName}}",
       "photo_rating": "Фото оценено в {{eventName}}",
       "photo_comment": "Фото прокомментировано в {{eventName}}",
+      "photo_reaction": "Реакция на фото в {{eventName}}",
       "guest_feedback_like": "Гость поставил лайк фото в {{eventName}}",
+      "guest_feedback_reaction": "Гость отреагировал на фото в {{eventName}}",
       "guest_feedback_favorite": "Гость добавил фото в избранное в {{eventName}}",
       "guest_feedback_rating": "Гость оценил фото в {{eventName}}",
       "guest_feedback_comment": "Гость прокомментировал фото в {{eventName}}",
@@ -1847,7 +1903,10 @@
       "category_hero_updated": "Главное фото категории обновлено",
       "public_site_reset_to_default": "Публичный сайт сброшен к значениям по умолчанию",
       "cms_page_logo_uploaded": "Логотип CMS-страницы загружен: {{slug}}"
-    }
+    },
+    "catalogedMedia": "{{size}} в каталоге",
+    "storageUnavailable": "недоступно",
+    "catalogedMediaOnly": "в каталоге — объекты хранятся в S3"
   },
   "acceptInvitation": {
     "title": "Принять приглашение",
@@ -1901,6 +1960,7 @@
     }
   },
   "errors": {
+    "downloadFailed": "Ошибка загрузки",
     "galleryNotFound": "Галерея не найдена",
     "galleryNotFoundMessage": "Эта галерея не существует или была удалена.",
     "somethingWentWrong": "Что-то пошло не так",
@@ -2442,7 +2502,6 @@
     }
   },
   "cssTemplates": {
-    "title": "Пользовательские CSS-шаблоны",
     "template": "Шаблон",
     "templateName": "Название шаблона",
     "enableTemplate": "Включить этот шаблон",
@@ -2527,6 +2586,12 @@
     "patternDescription": "Пароли генерируются на основе названия и даты события. Пример: «Место2024$Август» для лучшей запоминаемости и безопасности."
   },
   "feedback": {
+    "reaction": "реакция",
+    "reactions": "Реакции",
+    "reactWith": "Отреагировать {{emoji}}",
+    "removeReaction": "Убрать реакцию {{emoji}}",
+    "reactionError": "Не удалось обновить реакцию",
+    "totalReactions": "Всего реакций",
     "comments": "Комментарии",
     "addComment": "Добавить комментарий",
     "yourName": "Ваше имя",
@@ -2555,12 +2620,17 @@
       "comments": "Комментарии",
       "commentsDesc": "Текстовые комментарии к фото",
       "favorites": "Избранное",
+      "reactions": "Эмодзи-реакции",
+      "reactionsDesc": "Один эмодзи на гостя для каждого фото (❤️ 😂 😍 👏 🎉)",
       "favoritesDesc": "Отмечать фото как избранные",
       "identityMode": "Режим идентификации",
       "identityModeSimple": "Простые отзывы",
       "identityModeSimpleDesc": "Анонимно, на основе устройства. Все посетители на одном устройстве используют общее состояние.",
       "identityModeGuest": "Выборки по гостям",
       "identityModeGuestDesc": "Каждый посетитель вводит своё имя. Включает отслеживание по гостям и аналитику для администратора.",
+      "identityModeShared": "Один общий цветовой тег",
+      "identityModeSharedDesc": "Один цвет на фото, который видят все и может изменить любой — чтобы договориться об общем решении. Лайки, оценки и комментарии остаются индивидуальными.",
+      "identityModeSharedNote": "У цветовых тегов в этом режиме нет автора, поэтому в админ-панели не видно, кто его поставил. Существующие цветовые метки отдельных посетителей сохраняются, но не отображаются, пока включён этот режим, и возвращаются при его смене.",
       "privacyModeration": "Конфиденциальность и модерация",
       "requireInfo": "Требовать имя и email",
       "requireInfoDesc": "Гости должны указать имя и email для оставления отзывов",
@@ -2571,7 +2641,14 @@
       "enableRateLimiting": "Включить ограничение частоты",
       "rateLimitingDesc": "Предотвращает спам, ограничивая частоту отзывов",
       "timeWindow": "Временное окно (минуты)",
-      "maxRequests": "Макс. запросов"
+      "maxRequests": "Макс. запросов",
+      "colorLabels": "Цветовые метки",
+      "colorLabelsDesc": "Одна метка на гостя и фотографию, в цветовой схеме Lightroom — выбор переносится через XMP",
+      "keybindMode": "Горячие клавиши",
+      "keybindColors": "Только цвета (самый простой вариант)",
+      "keybindColorsDesc": "1 — зелёный (1-й выбор), 2 — жёлтый (2-й выбор), 3 — красный (отклонено)",
+      "keybindLightroom": "Как в Lightroom",
+      "keybindLightroomDesc": "1–5 ставят звёзды, 6–9 — красный / жёлтый / зелёный / синий"
     },
     "settingsUpdated": "Настройки отзывов обновлены",
     "settingsUpdateError": "Не удалось обновить настройки",
@@ -2593,7 +2670,8 @@
       "rating": "Оценки",
       "like": "Лайки",
       "comment": "Комментарии",
-      "favorite": "Избранное"
+      "favorite": "Избранное",
+      "reaction": "Реакции"
     },
     "allStatuses": "Все статусы",
     "status": {
@@ -2655,7 +2733,21 @@
     "showAll_many": "Показать все {{count}} ожидающих комментариев",
     "showAll_one": "Показать {{count}} ожидающий комментарий",
     "showAll_other": "Показать все {{count}} ожидающих комментариев",
-    "viewAllFeedback": "Просмотреть все отзывы и настройки"
+    "viewAllFeedback": "Просмотреть все отзывы и настройки",
+    "colorLabels": {
+      "red": "Красный",
+      "yellow": "Жёлтый",
+      "green": "Зелёный",
+      "blue": "Синий",
+      "purple": "Фиолетовый"
+    },
+    "colorLabel": "цветовая метка",
+    "colorLabelsTitle": "Цветовые метки",
+    "colorLabelError": "Не удалось обновить цветовую метку",
+    "removeColorLabel": "Убрать метку «{{color}}»",
+    "setColorLabel": "Отметить как «{{color}}»",
+    "markedAs": "Отмечено как «{{color}}»",
+    "alsoMarkedBy": "Также отмечено другими: {{colors}}"
   },
   "filter": {
     "feedbackFilters": "Фильтры отзывов",
@@ -2673,7 +2765,11 @@
     "twoStarsPlus": "2+ звезды",
     "threeStarsPlus": "3+ звезды",
     "fourStarsPlus": "4+ звезды",
-    "fiveStarsOnly": "Только 5 звёзд"
+    "fiveStarsOnly": "Только 5 звёзд",
+    "colorLabels": "Цветовые метки",
+    "showOnlyColor": "Показать только «{{color}}»",
+    "myColorLabels": "Ваши отметки",
+    "showOnlyMyColor": "Показать только мои отметки «{{color}}»"
   },
   "adminLogin": {
     "title": "Вход для администратора",
@@ -2695,7 +2791,6 @@
     "invalidCredentials": "Неверный email или пароль",
     "generalError": "Произошла ошибка. Попробуйте снова.",
     "needHelp": "Нужна помощь? Свяжитесь",
-    "poweredBy": "Работает на PicPeak",
     "devModeHint": "Режим разработки: используйте email: admin@example.com, пароль: admin123"
   },
   "clientAccess": {
@@ -2732,7 +2827,10 @@
     "exportSelected_few": "Экспортировать {{count}} выбранных",
     "exportSelected_many": "Экспортировать {{count}} выбранных",
     "exportSelected_one": "Экспортировать {{count}} выбранный",
-    "exportSelected_other": "Экспортировать {{count}} выбранных"
+    "exportSelected_other": "Экспортировать {{count}} выбранных",
+    "markSource": "Звёзды и цвет для XMP из",
+    "markSourceClient": "Выбор клиента",
+    "markSourceMine": "Ваши отметки"
   },
   "photoSort": {
     "defaultSort": "Сортировка фото по умолчанию",
@@ -2781,8 +2879,7 @@
       "adminHint": "Ищете админ-панель? Перейдите на /admin/login.",
       "emailPlaceholder": "you@example.com",
       "passwordPlaceholder": "Ваш пароль",
-      "needHelp": "Нужна помощь?",
-      "poweredBy": "Работает на PicPeak"
+      "needHelp": "Нужна помощь?"
     },
     "acceptInvite": {
       "title": "Создайте учётную запись",
