@@ -806,11 +806,12 @@ function drawLineItems(doc, ctx) {
       groups.push(currentGroup);
     }
     currentGroup.push(buildItemRow(li));
-    // Add-ons (#1451) carry a note right under them: booked, or not in the total.
-    if (li.addOn) currentGroup.push(buildDetailsRow(t(locale, li.addOn === 'booked' ? 'addon_booked' : 'addon_not_booked')));
     if (li.detailsText && String(li.detailsText).trim().length > 0) {
       currentGroup.push(buildDetailsRow(String(li.detailsText).trim()));
     }
+    // An add-on (#1451) ends with its status: title, description, then booked
+    // or not booked.
+    if (li.addOn) currentGroup.push(buildDetailsRow(t(locale, li.addOn === 'booked' ? 'addon_booked' : 'addon_not_booked')));
   }
   // Apply the bottom border to the last row of each group.
   for (const group of groups) {
