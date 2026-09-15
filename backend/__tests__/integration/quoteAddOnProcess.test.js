@@ -105,6 +105,29 @@ test('the PDF lists every add-on, marked booked or not in the total', async () =
   expect(drawn.some((t) => /gebucht$|booked$/.test(t) && !t.includes('nicht') && !t.includes('not'))).toBe(true);
 });
 
+test('the PDF preview of unsaved lines marks each add-on as the editor shows it', async () => {
+  // Unsaved lines have no ids; the booked / not booked marks must still follow each line.
+  const texts = jest.spyOn(PDFKit.prototype, 'text');
+  const res = await request(adminApp).post('/api/admin/quotes/preview').set(auth).send({
+    customerAccountId: customerId, currency: 'CHF', vatRate: 0, language: 'de',
+    lineItems: [
+      { position: 1, quantity: 1, description: 'Wedding day', unitPriceMinor: 100000 },
+      { position: 2, quantity: 1, description: 'Drone', unitPriceMinor: 25000, isOptional: true, selected: true },
+      { position: 3, quantity: 1, description: 'Photo book', unitPriceMinor: 39000, isOptional: true, selected: false },
+    ],
+  });
+  const drawn = texts.mock.calls.map((c) => String(c[0]));
+  texts.mockRestore();
+  expect(res.status).toBe(200);
+  const marks = drawn.filter((t) => /^(Zusatzleistung|Add-on) ·/.test(t));
+  expect(marks).toEqual([
+    expect.stringMatching(/^(Zusatzleistung · gebucht|Add-on · booked)$/),
+    expect.stringMatching(/^(Zusatzleistung · nicht gebucht|Add-on · not booked)$/),
+  ]);
+  // The not-booked amount is in parentheses, outside the total.
+  expect(drawn.some((t) => t.startsWith('(') && t.includes('390.00'))).toBe(true);
+});
+
 test('the customer\'s message comes with the acceptance and reaches the business', async () => {
   const { quoteId, link } = await sentQuote();
   const res = await request(publicApp).post(`/api/public/quotes/${link}/respond`).send({

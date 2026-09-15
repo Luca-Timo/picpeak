@@ -909,7 +909,8 @@ async function buildRenderContext(quote, lineItems) {
   // Unselected optional add-ons (and their sub-items) are left off the PDF
   // body and out of the displayed net (#1451).
   const visibleLineItems = countedLineItems(lineItems);
-  const visibleIds = new Set(visibleLineItems.map((li) => li.id));
+  // By object, not by id: a preview of unsaved lines has no ids yet.
+  const visibleLines = new Set(visibleLineItems);
   const displayedNetMinor = visibleLineItems.reduce(
     (s, li) => (li.parent_line_item_id == null && (li.parent_position == null || li.parent_position === '')
       ? s + ensureInt(li.line_total_minor) : s),
@@ -968,9 +969,9 @@ async function buildRenderContext(quote, lineItems) {
       detailsText: li.details_text || null,
       addOn: li.line_kind !== 'discount' && isTruthyFlag(li.is_optional)
         && li.parent_line_item_id == null && (li.parent_position == null || li.parent_position === '')
-        ? (visibleIds.has(li.id) ? 'booked' : 'not_booked')
+        ? (visibleLines.has(li) ? 'booked' : 'not_booked')
         : null,
-      excluded: !visibleIds.has(li.id),
+      excluded: !visibleLines.has(li),
     })),
     totals: {
       netAmountMinor: displayedNetMinor,
