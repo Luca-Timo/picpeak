@@ -14,7 +14,8 @@
  * first time the catalogue is opened, in the business's language (German
  * unless it is English). Nothing here runs again: an update never adds a
  * second set, never overwrites an edited example and never brings back a
- * deleted one. The payment terms are an example, not advice.
+ * deleted one. There is no payment-terms text block: payment conditions come
+ * from the payment terms.
  */
 
 const { db } = require('../database/db');
@@ -62,10 +63,6 @@ const EXAMPLES = {
       name: 'Beispiel: Schluss',
       body: 'Das Angebot ist gültig bis {{valid_until}}. Wir freuen uns auf Ihre Rückmeldung.\n\nHerzliche Grüsse\n{{business_name}}',
     },
-    terms: {
-      name: 'Beispiel: Zahlungsbedingungen',
-      body: '50 % bei Auftragserteilung, der Rest innert 30 Tagen nach dem Anlass.\n(Beispieltext — bitte an Ihre Bedingungen anpassen.)',
-    },
     template: {
       name: 'Beispiel: Hochzeitsreportage',
       description: 'Stundensatz nach den Stunden des Angebots, Bildbearbeitung, Anfahrt, zwei Zusatzoptionen und Texte. Passen Sie Preise und Texte an und veröffentlichen Sie die Vorlage.',
@@ -107,10 +104,6 @@ const EXAMPLES = {
     closing: {
       name: 'Example: Closing',
       body: 'This quote is valid until {{valid_until}}. We look forward to hearing from you.\n\nKind regards\n{{business_name}}',
-    },
-    terms: {
-      name: 'Example: Payment terms',
-      body: '50 % on booking, the rest within 30 days after the event.\n(Example text — adapt it to your own terms.)',
     },
     template: {
       name: 'Example: Wedding coverage',
@@ -156,14 +149,14 @@ async function seed() {
   });
   const intro = await catalog.createTextBlock({ ...x.intro, kind: 'intro', language });
   const closing = await catalog.createTextBlock({ ...x.closing, kind: 'closing', language });
-  const terms = await catalog.createTextBlock({ ...x.terms, kind: 'terms', language });
+  // No payment-terms example: payment conditions come from the payment terms.
 
   // Archived: out of the quote editor's pickers until someone restores them.
   const off = { is_active: formatBoolean(false), updated_at: new Date() };
   await db('quote_line_item_presets').whereIn('id', Object.values(presets)).update(off);
   await db('quote_packages').where({ id: pkg.id }).update(off);
   await db('quote_promotions').whereIn('id', [club.id, early.id]).update(off);
-  await db('quote_text_blocks').whereIn('id', [intro.id, closing.id, terms.id]).update(off);
+  await db('quote_text_blocks').whereIn('id', [intro.id, closing.id]).update(off);
 
   // The template carries its own lines and texts, so it can be published and
   // used straight away; it doesn't depend on the archived entries above.

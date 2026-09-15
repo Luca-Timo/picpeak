@@ -81,7 +81,7 @@ export const DiscountsPanel: React.FC<Props> = ({ promotions, items, currency, o
         <Tag className="w-4 h-4" aria-hidden />
         {t('quotes.promotions.panelTitle', 'Discounts')}
       </div>
-      <div className="flex flex-wrap gap-x-6 gap-y-2">
+      <div className="flex flex-col items-start gap-2">
         {offered.map((p) => (
           <label key={p.id} className="inline-flex items-center gap-2 text-sm text-neutral-800 dark:text-neutral-200">
             <input

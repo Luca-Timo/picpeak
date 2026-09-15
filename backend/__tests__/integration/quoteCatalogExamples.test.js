@@ -51,6 +51,9 @@ test('opening the catalogue seeds the examples once, archived', async () => {
   await examples.ensureCatalogExamples();
   expect(await db('quote_promotions').where('name', 'like', 'Beispiel:%')).toHaveLength(2);
   expect(await db('quote_line_item_presets').where('name', 'like', 'Beispiel:%')).toHaveLength(5);
+  // No payment-terms example: payment conditions come from the payment terms.
+  const blocks = await db('quote_text_blocks').where('name', 'like', 'Beispiel:%');
+  expect(blocks.map((b) => b.kind).sort()).toEqual(['closing', 'intro']);
 
   for (const table of ['quote_line_item_presets', 'quote_packages', 'quote_promotions', 'quote_text_blocks']) {
     const rows = await db(table).where('name', 'like', 'Beispiel:%');
