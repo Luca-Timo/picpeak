@@ -6725,6 +6725,7 @@
       "title": "Catalogue & templates",
       "promotionAmountHint": "The amount to subtract, e.g. 300 for −300.",
       "promotionPercentHint": "The percentage to subtract, e.g. 10 for −10 %.",
+      "promotionDescriptionHint": "Shown on the quote under the discount.",
       "noEndDateHint": "Leave empty for no end date.",
       "noEndDate": "No end date",
       "validFromNoEnd": "From {{date}}, no end date",

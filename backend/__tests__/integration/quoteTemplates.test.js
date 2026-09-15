@@ -91,6 +91,7 @@ beforeAll(async () => {
   }))).package.id;
   ids.verein = (await ok(request(catalogApp).post('/api/admin/quote-catalog/promotions').set(auth).send({
     name: 'Vereinsrabatt', type: 'fixed', valueMinor: 30000, currency: 'CHF',
+    description: 'Sonderkondition für gemeinnützige Vereine',
   }))).promotion.id;
   ids.intro = (await ok(request(catalogApp).post('/api/admin/quote-catalog/text-blocks').set(auth).send({
     kind: 'intro', name: 'Wedding intro',
@@ -141,6 +142,9 @@ test('publishing creates version 1 and the quote is built from it', async () => 
   const [photo] = byDescription('Photography on location');
   expect(photo).toEqual(expect.objectContaining({ quantity: 8, unitPriceMinor: 15000, rateSource: 'default', parentPosition: gold.position }));
   expect(gold.lineTotalMinor).toBe(8 * 15000 + 30000 + 50000);
+  // A promotion's description is its line's comment, printed under the name.
+  const [verein] = byDescription('Vereinsrabatt');
+  expect(verein).toEqual(expect.objectContaining({ lineKind: 'discount', detailsText: 'Sonderkondition für gemeinnützige Vereine' }));
   // One item: the package line carries the price, the item is listed unpriced.
   const [portrait] = byDescription('Portrait add-on');
   expect(portrait).toEqual(expect.objectContaining({ unitPriceMinor: 50000, isOptional: true, selected: false }));

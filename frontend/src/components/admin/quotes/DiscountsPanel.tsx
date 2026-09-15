@@ -52,6 +52,8 @@ export const DiscountsPanel: React.FC<Props> = ({ promotions, items, currency, o
       position,
       quantity: 1,
       description: promotion.name,
+      // The description becomes the line's comment; the PDF prints it under the name.
+      detailsText: promotion.description || '',
       unitPrice: 0,
       discountPercent: 0,
       parentPosition: null,

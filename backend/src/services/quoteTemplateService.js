@@ -557,9 +557,10 @@ async function createQuoteFromTemplate(templateId, payload, adminId) {
         continue;
       }
       position += 1;
+      // The promotion's description is the line's comment, as in the editor.
       lineItems.push({
         position, quantity: 1, description: promotion.name, unit_price_minor: 0, discount_percent: 0,
-        line_kind: 'discount', promotion_id: promotion.id,
+        details_text: promotion.description || null, line_kind: 'discount', promotion_id: promotion.id,
       });
     }
   }

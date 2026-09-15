@@ -52,7 +52,7 @@ const EXAMPLES = {
       name: 'Beispiel: Hochzeit Basic',
       description: 'Fotografie nach Stunden, Bildbearbeitung und Anfahrt. Die Stunden kommen aus dem Angebot.',
     },
-    club: { name: 'Beispiel: Vereinsrabatt', description: 'Für Mitglieder unseres Partnervereins. Ohne Enddatum.' },
+    club: { name: 'Beispiel: Vereinsrabatt', description: 'Sonderkondition für Mitglieder unseres Partnervereins.' },
     early: { name: 'Beispiel: Frühbucherrabatt', description: 'Gilt für Buchungen bis Ende nächsten Jahres.' },
     intro: {
       name: 'Beispiel: Einleitung Hochzeit',
@@ -98,7 +98,7 @@ const EXAMPLES = {
       name: 'Example: Wedding basic',
       description: 'Photography by the hour, image editing and travel. The hours come from the quote.',
     },
-    club: { name: 'Example: Club discount', description: 'For members of our partner club. No end date.' },
+    club: { name: 'Example: Club discount', description: 'Special terms for members of our partner club.' },
     early: { name: 'Example: Early booking', description: 'For bookings until the end of next year.' },
     intro: {
       name: 'Example: Wedding introduction',

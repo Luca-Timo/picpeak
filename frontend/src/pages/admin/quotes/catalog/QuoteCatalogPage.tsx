@@ -623,7 +623,11 @@ const PromotionsTab: React.FC = () => {
             <div className="md:col-span-2">
               <label htmlFor="promotion-description" className={labelCls}>{t('quotes.catalog.field.description', 'Description')}</label>
               <textarea id="promotion-description" rows={2} className={inputCls} value={form.description}
+                aria-describedby="promotion-description-hint"
                 onChange={(e) => setForm({ ...form, description: e.target.value })} />
+              <p id="promotion-description-hint" className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                {t('quotes.catalog.promotionDescriptionHint', 'Shown on the quote under the discount.')}
+              </p>
             </div>
           </div>
           <div className="mt-4 flex justify-end gap-2">

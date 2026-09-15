@@ -519,6 +519,7 @@ export const LineItemsTable: React.FC<Props> = ({
               const dim = excluded ? 'opacity-60' : '';
 
               if (discountRow) {
+                const hasComment = !!li.detailsText && li.detailsText.trim().length > 0;
                 return (
                   <tr key={li.position} className="border-t border-neutral-200 dark:border-neutral-700 bg-emerald-50/50 dark:bg-emerald-900/10">
                     <td className="px-2 py-2 align-top text-neutral-500 dark:text-neutral-400"><Tag className="w-3.5 h-3.5" aria-hidden /></td>
@@ -530,6 +531,35 @@ export const LineItemsTable: React.FC<Props> = ({
                           ? t('crm.lineItems.discountPercentHint', '{{percent}} % of the subtotal', { percent: li.promotionSnapshot.percent })
                           : t('crm.lineItems.discountLine', 'Discount')}
                       </div>
+                      {/* The comment starts as the promotion's description; the
+                          PDF prints it in italics under the name. */}
+                      {open ? (
+                        <textarea
+                          rows={2}
+                          maxLength={2000}
+                          aria-label={t('crm.lineItems.detailsFilled', 'Details') as string}
+                          className="mt-2 w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 py-1 text-xs italic"
+                          value={li.detailsText || ''}
+                          onChange={(e) => setItem(idx, { detailsText: e.target.value })}
+                          placeholder={t('crm.lineItems.detailsPlaceholder', 'Optional notes — fine print, package inclusions, conditions…') as string}
+                        />
+                      ) : hasComment && (
+                        <div className="mt-1 text-xs italic text-neutral-600 dark:text-neutral-300 whitespace-pre-line">{li.detailsText}</div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => toggleDetails(li.position)}
+                        className="mt-1 inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+                      >
+                        {open
+                          ? <ChevronDown className="w-3.5 h-3.5" aria-hidden />
+                          : <ChevronRight className="w-3.5 h-3.5" aria-hidden />}
+                        <span>
+                          {hasComment
+                            ? t('crm.lineItems.detailsFilled', 'Details')
+                            : t('crm.lineItems.detailsAdd', '+ Add details / notes')}
+                        </span>
+                      </button>
                     </td>
                     <td className="px-2 py-2"></td>
                     {showDiscount && <td className="px-2 py-2"></td>}
