@@ -27,7 +27,7 @@ const PAGE_NUMBERS: PdfPageNumbers[] = ['bottom-right', 'bottom-center', 'none']
 const FOLDING_MARKS: PdfFoldingMarks[] = ['none', 'half', 'third', 'both'];
 const HEX = /^#[0-9a-f]{6}$/i;
 
-const fieldClass = 'w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 '
+const fieldClass = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 '
   + 'bg-white dark:bg-neutral-800 text-sm text-neutral-900 dark:text-neutral-100';
 const labelClass = 'block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1';
 

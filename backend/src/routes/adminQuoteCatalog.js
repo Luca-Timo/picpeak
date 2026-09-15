@@ -206,11 +206,13 @@ router.delete(
 const PROMOTION_VALIDATORS = [
   body('description').optional({ nullable: true }).isString().isLength({ max: 5000 }),
   body('type').optional().isIn(catalog.PROMOTION_TYPES),
-  body('valueMinor').optional({ nullable: true }).isInt({ min: 0 }),
+  body('valueMinor').optional({ nullable: true }).isInt({ min: 0 })
+    .withMessage('Enter the discount as a positive amount (300 for −300)'),
   body('currency').optional({ nullable: true }).isString().isLength({ min: 3, max: 3 }),
-  body('percent').optional({ nullable: true }).isFloat({ min: 0, max: 100 }),
-  body('validFrom').optional({ nullable: true }).isISO8601(),
-  body('validUntil').optional({ nullable: true }).isISO8601(),
+  body('percent').optional({ nullable: true }).isFloat({ min: 0, max: 100 })
+    .withMessage('Enter a percentage between 0 and 100'),
+  body('validFrom').optional({ nullable: true }).isISO8601().withMessage('Valid from is not a date'),
+  body('validUntil').optional({ nullable: true }).isISO8601().withMessage('Valid until is not a date'),
   body('displayOrder').optional({ values: 'falsy' }).isInt({ min: 0, max: 9999 }),
 ];
 

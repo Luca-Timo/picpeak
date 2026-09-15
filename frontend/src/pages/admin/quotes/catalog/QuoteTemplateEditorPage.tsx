@@ -28,9 +28,20 @@ import type { BoundTo, LineUnit } from '../../../../utils/lineItemTotals';
 const UNITS: LineUnit[] = ['hour', 'day', 'piece', 'km', 'flat'];
 const CURRENCIES = ['CHF', 'EUR', 'USD', 'GBP'];
 const LANGUAGES = ['de', 'en', 'fr', 'nl', 'pt', 'ru'];
-const inputCls = 'w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm';
+const inputCls = 'w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900';
+// Native selects ignore vertical padding in Safari; a fixed height keeps them level with the inputs.
+const selectCls = `${inputCls} h-10`;
 const labelCls = 'block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1';
-const errorText = (err: any) => err?.response?.data?.error || err?.message || 'Failed';
+// The API's message, plus what each rejected field says (a 400 lists them in `details`).
+const errorText = (err: any): string => {
+  const data = err?.response?.data;
+  const details: Array<{ field?: string; message?: string }> = Array.isArray(data?.details) ? data.details : [];
+  const reasons = details
+    .map((d) => (d.message && d.message !== 'Invalid value' ? d.message : d.field ? `${d.field}: ${d.message || 'invalid'}` : null))
+    .filter(Boolean);
+  if (reasons.length) return reasons.join(' · ');
+  return data?.error || err?.message || 'Failed';
+};
 
 const newLine = (): TemplateLine => ({
   description: '', quantity: 1, unitPriceMinor: 0, discountPercent: 0, unit: null, priceMode: null,
@@ -59,7 +70,7 @@ const LineFields: React.FC<{ line: TemplateLine; onChange: (line: TemplateLine) 
       <DecimalInput id={`${idPrefix}-price`} aria-label={t('crm.lineItems.unitPrice', 'Unit') as string} className={inputCls}
         value={line.unitPriceMinor / 100} fractionDigits={2}
         onChange={(n) => onChange({ ...line, unitPriceMinor: Math.round((Number.isFinite(n) ? n : 0) * 100) })} />
-      <select aria-label={t('crm.lineItems.unitLabel', 'Unit') as string} className={inputCls} value={line.unit || ''}
+      <select aria-label={t('crm.lineItems.unitLabel', 'Unit') as string} className={selectCls} value={line.unit || ''}
         onChange={(e) => onChange({ ...line, unit: (e.target.value || null) as LineUnit | null })}>
         <option value="">{t('crm.lineItems.unitNone', '—')}</option>
         {UNITS.map((u) => <option key={u} value={u}>{t(`crm.lineItems.unitOption.${u}`, u)}</option>)}
@@ -235,7 +246,7 @@ export const QuoteTemplateEditorPage: React.FC = () => {
             onChange={(e) => setMeta({ ...meta, name: e.target.value })} />
           <div>
             <label htmlFor="template-event-type" className={labelCls}>{t('quotes.field.eventType', 'Event type')}</label>
-            <select id="template-event-type" className={inputCls} value={meta.eventType}
+            <select id="template-event-type" className={selectCls} value={meta.eventType}
               onChange={(e) => setMeta({ ...meta, eventType: e.target.value })}>
               <option value="">{t('quotes.field.eventTypeNone', '— Use default —')}</option>
               {eventTypes.map((et) => <option key={et.id} value={et.slug_prefix}>{et.name}</option>)}
@@ -243,14 +254,14 @@ export const QuoteTemplateEditorPage: React.FC = () => {
           </div>
           <div>
             <label htmlFor="template-language" className={labelCls}>{t('quotes.catalog.field.language', 'Language')}</label>
-            <select id="template-language" className={inputCls} value={meta.language}
+            <select id="template-language" className={selectCls} value={meta.language}
               onChange={(e) => setMeta({ ...meta, language: e.target.value })}>
               {LANGUAGES.map((l) => <option key={l} value={l}>{l.toUpperCase()}</option>)}
             </select>
           </div>
           <div>
             <label htmlFor="template-currency" className={labelCls}>{t('quotes.field.currency', 'Currency')}</label>
-            <select id="template-currency" className={inputCls} value={meta.currency}
+            <select id="template-currency" className={selectCls} value={meta.currency}
               onChange={(e) => setMeta({ ...meta, currency: e.target.value })}>
               {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
             </select>
@@ -288,7 +299,7 @@ export const QuoteTemplateEditorPage: React.FC = () => {
                 const rateBased = preset?.priceMode === 'hour' || preset?.priceMode === 'day';
                 return (
                   <div className="flex flex-wrap gap-2">
-                    <select aria-label={t('quotes.templates.section.item', 'Catalogue item') as string} className={`${inputCls} flex-1 min-w-[12rem]`}
+                    <select aria-label={t('quotes.templates.section.item', 'Catalogue item') as string} className={`${selectCls} flex-1 min-w-[12rem]`}
                       value={section.presetId}
                       onChange={(e) => updateSection(idx, { ...section, presetId: Number(e.target.value), boundTo: null })}>
                       {!preset && <option value={section.presetId}>#{section.presetId}</option>}
@@ -298,7 +309,7 @@ export const QuoteTemplateEditorPage: React.FC = () => {
                       value={section.quantity ?? NaN} placeholder={preset ? String(preset.quantityDefault) : ''}
                       onChange={(n) => updateSection(idx, { ...section, quantity: Number.isFinite(n) ? n : null })} />
                     {rateBased && (
-                      <select aria-label={t('quotes.catalog.boundTo', 'Quantity') as string} className={`${inputCls} w-auto`} value={section.boundTo || ''}
+                      <select aria-label={t('quotes.catalog.boundTo', 'Quantity') as string} className={`${selectCls} w-auto`} value={section.boundTo || ''}
                         onChange={(e) => updateSection(idx, { ...section, boundTo: (e.target.value || null) as BoundTo | null })}>
                         <option value="">{t('quotes.catalog.boundToNone', 'Fixed quantity')}</option>
                         <option value="hours">{t('crm.lineItems.followsHours', 'Follows the quote hours')}</option>
@@ -310,7 +321,7 @@ export const QuoteTemplateEditorPage: React.FC = () => {
               })()}
 
               {section.type === 'package' && (
-                <select aria-label={t('quotes.templates.section.package', 'Package') as string} className={inputCls} value={section.packageId}
+                <select aria-label={t('quotes.templates.section.package', 'Package') as string} className={selectCls} value={section.packageId}
                   onChange={(e) => updateSection(idx, { ...section, packageId: Number(e.target.value) })}>
                   {!packages.some((p) => p.id === section.packageId) && <option value={section.packageId}>#{section.packageId}</option>}
                   {packages.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -372,7 +383,7 @@ export const QuoteTemplateEditorPage: React.FC = () => {
               <label htmlFor={`template-${which}-source`} className={labelCls}>
                 {which === 'intro' ? t('quotes.field.introText', 'Intro text') : t('quotes.field.outroText', 'Outro text')}
               </label>
-              <select id={`template-${which}-source`} className={`${inputCls} mb-2`} value={source}
+              <select id={`template-${which}-source`} className={`${selectCls} mb-2`} value={source}
                 onChange={(e) => {
                   const next = e.target.value;
                   if (next === 'block') setDraft({ ...draft, [blockKey]: textBlocks[0]?.id ?? null, [textKey]: null });
@@ -384,7 +395,7 @@ export const QuoteTemplateEditorPage: React.FC = () => {
                 <option value="text">{t('quotes.templates.textOwn', 'Own text')}</option>
               </select>
               {source === 'block' && (
-                <select aria-label={t('quotes.textBlocks.insert', 'Insert text block…') as string} className={inputCls}
+                <select aria-label={t('quotes.textBlocks.insert', 'Insert text block…') as string} className={selectCls}
                   value={draft[blockKey] ?? ''}
                   onChange={(e) => setDraft({ ...draft, [blockKey]: Number(e.target.value) })}>
                   {textBlocks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -434,7 +445,7 @@ export const QuoteTemplateEditorPage: React.FC = () => {
           </div>
           <div>
             <label htmlFor="template-net-days" className={labelCls}>{t('quotes.field.paymentNetDays', 'Net days')}</label>
-            <select id="template-net-days" className={inputCls} value={draft.paymentNetDaysTemplateId ?? ''}
+            <select id="template-net-days" className={selectCls} value={draft.paymentNetDaysTemplateId ?? ''}
               onChange={(e) => setDraft({ ...draft, paymentNetDaysTemplateId: e.target.value ? Number(e.target.value) : null })}>
               <option value="">{t('quotes.field.selectNetDays', '— Select net days —')}</option>
               {netDays?.templates.map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.name}</option>)}
@@ -442,7 +453,7 @@ export const QuoteTemplateEditorPage: React.FC = () => {
           </div>
           <div>
             <label htmlFor="template-timing" className={labelCls}>{t('quotes.field.paymentTiming', 'Payment schedule')}</label>
-            <select id="template-timing" className={inputCls} value={draft.paymentTimingTemplateId ?? ''}
+            <select id="template-timing" className={selectCls} value={draft.paymentTimingTemplateId ?? ''}
               onChange={(e) => setDraft({ ...draft, paymentTimingTemplateId: e.target.value ? Number(e.target.value) : null })}>
               <option value="">{t('quotes.field.selectTiming', '— Select schedule —')}</option>
               {timing?.templates.map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.name}</option>)}
@@ -451,7 +462,7 @@ export const QuoteTemplateEditorPage: React.FC = () => {
           {flags.workflows && (
             <div>
               <label htmlFor="template-workflow" className={labelCls}>{t('quotes.field.bookingWorkflow', 'Booking workflow (on acceptance)')}</label>
-              <select id="template-workflow" className={inputCls} value={draft.bookingWorkflowId ?? ''}
+              <select id="template-workflow" className={selectCls} value={draft.bookingWorkflowId ?? ''}
                 onChange={(e) => setDraft({ ...draft, bookingWorkflowId: e.target.value ? Number(e.target.value) : null })}>
                 <option value="">{t('quotes.field.bookingWorkflowNone', '— None —')}</option>
                 {bookingWorkflows.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}

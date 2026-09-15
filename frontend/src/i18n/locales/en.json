@@ -6721,7 +6721,13 @@
         "terms": "Terms"
       },
       "textBlocksIntro": "Reusable texts for the quote intro and outro. Placeholders are filled in when the quote is saved.",
-      "title": "Catalogue & templates"
+      "title": "Catalogue & templates",
+      "promotionAmountHint": "The amount to subtract, e.g. 300 for −300.",
+      "promotionPercentHint": "The percentage to subtract, e.g. 10 for −10 %.",
+      "noEndDateHint": "Leave empty for no end date.",
+      "noEndDate": "No end date",
+      "validFromNoEnd": "From {{date}}, no end date",
+      "validUntilOnly": "Until"
     },
     "promotions": {
       "panelHint": "Percentages apply first, then fixed amounts — never more than the subtotal.",

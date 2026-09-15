@@ -6721,7 +6721,13 @@
         "terms": "Bedingungen"
       },
       "textBlocksIntro": "Wiederverwendbare Texte für Einleitung und Schluss des Angebots. Platzhalter werden beim Speichern des Angebots ausgefüllt.",
-      "title": "Katalog & Vorlagen"
+      "title": "Katalog & Vorlagen",
+      "promotionAmountHint": "Der Betrag, der abgezogen wird, z. B. 300 für −300.",
+      "promotionPercentHint": "Der Prozentsatz, der abgezogen wird, z. B. 10 für −10 %.",
+      "noEndDateHint": "Leer lassen für unbegrenzte Gültigkeit.",
+      "noEndDate": "Unbegrenzt gültig",
+      "validFromNoEnd": "Ab {{date}}, unbegrenzt",
+      "validUntilOnly": "Bis"
     },
     "promotions": {
       "panelHint": "Prozente gelten zuerst, dann feste Beträge – nie mehr als die Zwischensumme.",

@@ -50,10 +50,10 @@ const nextKey = () => {
   return `clause-${keyCounter}`;
 };
 
-const fieldClass = 'w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 '
+const fieldClass = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 '
   + 'bg-white dark:bg-neutral-800 text-sm text-neutral-900 dark:text-neutral-100';
 const labelClass = 'block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1';
-const iconButton = 'p-1 rounded border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-200 '
+const iconButton = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 p-1 rounded border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-200 '
   + 'disabled:opacity-40 hover:bg-neutral-50 dark:hover:bg-neutral-700';
 
 function libraryBodies(block: ContractBlock): LocaleText {

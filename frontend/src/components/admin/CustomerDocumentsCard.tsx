@@ -37,7 +37,7 @@ const STATUS_STYLE: Record<AdminCustomerDocument['status'], string> = {
   rejected: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
 };
 
-const selectClass = 'h-9 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 text-sm text-neutral-900 dark:text-neutral-100';
+const selectClass = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 h-9 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-2 text-sm text-neutral-900 dark:text-neutral-100';
 
 interface Props {
   customerId: number;

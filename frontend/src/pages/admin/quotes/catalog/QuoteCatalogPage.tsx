@@ -37,10 +37,21 @@ const PLACEHOLDERS = [
   'business_name', 'hours', 'days', 'hourly_rate', 'day_rate',
 ];
 
-const inputCls = 'w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm';
+const inputCls = 'w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900';
+// Native selects ignore vertical padding in Safari; a fixed height keeps them level with the inputs.
+const selectCls = `${inputCls} h-10`;
 const labelCls = 'block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1';
 const toMinor = (major: number) => Math.round((Number.isFinite(major) ? major : 0) * 100);
-const errorText = (err: any) => err?.response?.data?.error || err?.message || 'Failed';
+// The API's message, plus what each rejected field says (a 400 lists them in `details`).
+const errorText = (err: any): string => {
+  const data = err?.response?.data;
+  const details: Array<{ field?: string; message?: string }> = Array.isArray(data?.details) ? data.details : [];
+  const reasons = details
+    .map((d) => (d.message && d.message !== 'Invalid value' ? d.message : d.field ? `${d.field}: ${d.message || 'invalid'}` : null))
+    .filter(Boolean);
+  if (reasons.length) return reasons.join(' · ');
+  return data?.error || err?.message || 'Failed';
+};
 
 const ArchivedBadge: React.FC = () => {
   const { t } = useTranslation();
@@ -186,7 +197,7 @@ const ServicesTab: React.FC = () => {
               onChange={(e) => setForm({ ...form, category: e.target.value })} />
             <div>
               <label htmlFor="service-price-mode" className={labelCls}>{t('quotes.catalog.field.priceMode', 'Price')}</label>
-              <select id="service-price-mode" className={inputCls} value={form.priceMode}
+              <select id="service-price-mode" className={selectCls} value={form.priceMode}
                 onChange={(e) => {
                   const priceMode = e.target.value as PriceMode;
                   setForm({ ...form, priceMode, unit: priceMode === 'fixed' ? form.unit : priceMode });
@@ -214,7 +225,7 @@ const ServicesTab: React.FC = () => {
             )}
             <div>
               <label htmlFor="service-currency" className={labelCls}>{t('quotes.field.currency', 'Currency')}</label>
-              <select id="service-currency" className={inputCls} value={form.currency}
+              <select id="service-currency" className={selectCls} value={form.currency}
                 onChange={(e) => setForm({ ...form, currency: e.target.value })}>
                 {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
               </select>
@@ -227,7 +238,7 @@ const ServicesTab: React.FC = () => {
               </div>
               <div>
                 <label htmlFor="service-unit" className={labelCls}>{t('crm.lineItems.unitLabel', 'Unit')}</label>
-                <select id="service-unit" className={inputCls} value={form.unit}
+                <select id="service-unit" className={selectCls} value={form.unit}
                   onChange={(e) => setForm({ ...form, unit: e.target.value as LineUnit | '' })}>
                   <option value="">{t('crm.lineItems.unitNone', '—')}</option>
                   {UNITS.map((u) => <option key={u} value={u}>{t(`crm.lineItems.unitOption.${u}`, u)}</option>)}
@@ -382,7 +393,7 @@ const PackagesTab: React.FC = () => {
               onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <div>
               <label htmlFor="package-currency" className={labelCls}>{t('quotes.field.currency', 'Currency')}</label>
-              <select id="package-currency" className={inputCls} value={form.currency}
+              <select id="package-currency" className={selectCls} value={form.currency}
                 onChange={(e) => setForm({ ...form, currency: e.target.value })}>
                 {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
               </select>
@@ -401,7 +412,7 @@ const PackagesTab: React.FC = () => {
               const rateBased = preset?.priceMode === 'hour' || preset?.priceMode === 'day';
               return (
                 <div key={idx} className="flex flex-wrap items-center gap-2">
-                  <select aria-label={t('quotes.catalog.packageItem', 'Item') as string} className={`${inputCls} flex-1 min-w-[12rem]`} value={it.presetId}
+                  <select aria-label={t('quotes.catalog.packageItem', 'Item') as string} className={`${selectCls} flex-1 min-w-[12rem]`} value={it.presetId}
                     onChange={(e) => setItems(form.items.map((x, i) => (i === idx ? { ...x, presetId: Number(e.target.value), boundTo: '' } : x)))}>
                     {!preset && <option value={it.presetId}>#{it.presetId}</option>}
                     {presets.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -410,7 +421,7 @@ const PackagesTab: React.FC = () => {
                     placeholder={preset ? String(preset.quantityDefault) : ''}
                     onChange={(n) => setItems(form.items.map((x, i) => (i === idx ? { ...x, quantity: n } : x)))} />
                   {rateBased && (
-                    <select aria-label={t('quotes.catalog.boundTo', 'Quantity') as string} className={`${inputCls} w-auto`} value={it.boundTo}
+                    <select aria-label={t('quotes.catalog.boundTo', 'Quantity') as string} className={`${selectCls} w-auto`} value={it.boundTo}
                       onChange={(e) => setItems(form.items.map((x, i) => (i === idx ? { ...x, boundTo: e.target.value as BoundTo | '' } : x)))}>
                       <option value="">{t('quotes.catalog.boundToNone', 'Fixed quantity')}</option>
                       <option value="hours">{t('crm.lineItems.followsHours', 'Follows the quote hours')}</option>
@@ -510,8 +521,9 @@ const PromotionsTab: React.FC = () => {
       name: form.name.trim(),
       description: form.description || null,
       type: form.type,
-      percent: form.type === 'percent' && Number.isFinite(form.percent) ? form.percent : null,
-      valueMinor: form.type === 'fixed' && Number.isFinite(form.value) ? toMinor(form.value) : null,
+      // A promotion always subtracts, so "-300" and "300" both mean a 300 discount.
+      percent: form.type === 'percent' && Number.isFinite(form.percent) ? Math.abs(form.percent) : null,
+      valueMinor: form.type === 'fixed' && Number.isFinite(form.value) ? Math.abs(toMinor(form.value)) : null,
       currency: form.type === 'fixed' ? form.currency : null,
       validFrom: form.validFrom || null,
       validUntil: form.validUntil || null,
@@ -563,7 +575,7 @@ const PromotionsTab: React.FC = () => {
               onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <div>
               <label htmlFor="promotion-type" className={labelCls}>{t('quotes.catalog.field.promotionType', 'Type')}</label>
-              <select id="promotion-type" className={inputCls} value={form.type}
+              <select id="promotion-type" className={selectCls} value={form.type}
                 onChange={(e) => setForm({ ...form, type: e.target.value as PromotionForm['type'] })}>
                 <option value="fixed">{t('quotes.catalog.promotionType.fixed', 'Fixed amount')}</option>
                 <option value="percent">{t('quotes.catalog.promotionType.percent', 'Percentage')}</option>
@@ -573,18 +585,24 @@ const PromotionsTab: React.FC = () => {
               <div>
                 <label htmlFor="promotion-percent" className={labelCls}>{t('quotes.catalog.field.percent', 'Percent')}</label>
                 <DecimalInput id="promotion-percent" className={inputCls} value={form.percent}
-                  onChange={(n) => setForm({ ...form, percent: n })} />
+                  aria-describedby="promotion-percent-hint" onChange={(n) => setForm({ ...form, percent: n })} />
+                <p id="promotion-percent-hint" className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                  {t('quotes.catalog.promotionPercentHint', 'The percentage to subtract, e.g. 10 for −10 %.')}
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="promotion-value" className={labelCls}>{t('quotes.catalog.field.amount', 'Amount')}</label>
                   <DecimalInput id="promotion-value" className={inputCls} value={form.value} fractionDigits={2}
-                    onChange={(n) => setForm({ ...form, value: n })} />
+                    aria-describedby="promotion-value-hint" onChange={(n) => setForm({ ...form, value: n })} />
+                  <p id="promotion-value-hint" className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                    {t('quotes.catalog.promotionAmountHint', 'The amount to subtract, e.g. 300 for −300.')}
+                  </p>
                 </div>
                 <div>
                   <label htmlFor="promotion-currency" className={labelCls}>{t('quotes.field.currency', 'Currency')}</label>
-                  <select id="promotion-currency" className={inputCls} value={form.currency}
+                  <select id="promotion-currency" className={selectCls} value={form.currency}
                     onChange={(e) => setForm({ ...form, currency: e.target.value })}>
                     {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
                   </select>
@@ -594,8 +612,13 @@ const PromotionsTab: React.FC = () => {
             <div className="grid grid-cols-2 gap-3">
               <LocalizedDateInput label={t('quotes.catalog.field.validFrom', 'Valid from') as string} value={form.validFrom}
                 onChange={(iso) => setForm({ ...form, validFrom: iso })} />
-              <LocalizedDateInput label={t('quotes.catalog.field.validUntil', 'Valid until') as string} value={form.validUntil}
-                onChange={(iso) => setForm({ ...form, validUntil: iso })} />
+              <div>
+                <LocalizedDateInput label={t('quotes.catalog.field.validUntil', 'Valid until') as string} value={form.validUntil}
+                  onChange={(iso) => setForm({ ...form, validUntil: iso })} />
+                <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                  {t('quotes.catalog.noEndDateHint', 'Leave empty for no end date.')}
+                </p>
+              </div>
             </div>
             <div className="md:col-span-2">
               <label htmlFor="promotion-description" className={labelCls}>{t('quotes.catalog.field.description', 'Description')}</label>
@@ -621,11 +644,13 @@ const PromotionsTab: React.FC = () => {
                   <td className="py-2">
                     <span className="font-medium">{p.name}</span>
                     {!p.isActive && <ArchivedBadge />}
-                    {(p.validFrom || p.validUntil) && (
-                      <div className="text-xs text-neutral-500 dark:text-neutral-400">
-                        {p.validFrom ? fmtDate(p.validFrom) : '…'} – {p.validUntil ? fmtDate(p.validUntil) : '…'}
-                      </div>
-                    )}
+                    <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                      {p.validUntil
+                        ? `${p.validFrom ? `${fmtDate(p.validFrom)} – ` : `${t('quotes.catalog.validUntilOnly', 'Until')} `}${fmtDate(p.validUntil)}`
+                        : p.validFrom
+                          ? t('quotes.catalog.validFromNoEnd', 'From {{date}}, no end date', { date: fmtDate(p.validFrom) })
+                          : t('quotes.catalog.noEndDate', 'No end date')}
+                    </div>
                   </td>
                   <td className="py-2 text-right tabular-nums">{valueLabel(p)}</td>
                   <td className="py-2">
@@ -710,14 +735,14 @@ const TextBlocksTab: React.FC = () => {
               onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <div>
               <label htmlFor="text-block-kind" className={labelCls}>{t('quotes.catalog.field.kind', 'Kind')}</label>
-              <select id="text-block-kind" className={inputCls} value={form.kind}
+              <select id="text-block-kind" className={selectCls} value={form.kind}
                 onChange={(e) => setForm({ ...form, kind: e.target.value as TextBlockKind })}>
                 {TEXT_BLOCK_KINDS.map((k) => <option key={k} value={k}>{t(`quotes.catalog.textBlockKind.${k}`, k)}</option>)}
               </select>
             </div>
             <div>
               <label htmlFor="text-block-language" className={labelCls}>{t('quotes.catalog.field.language', 'Language')}</label>
-              <select id="text-block-language" className={inputCls} value={form.language}
+              <select id="text-block-language" className={selectCls} value={form.language}
                 onChange={(e) => setForm({ ...form, language: e.target.value })}>
                 {LANGUAGES.map((l) => <option key={l} value={l}>{l.toUpperCase()}</option>)}
               </select>
@@ -878,7 +903,7 @@ export const QuoteCatalogPage: React.FC = () => {
             aria-selected={tab === key}
             onClick={() => setSearchParams({ tab: key })}
             className={`px-3 py-2 text-sm -mb-px border-b-2 ${tab === key
-              ? 'border-accent text-neutral-900 dark:text-neutral-100 font-medium'
+              ? 'border-primary-600 dark:border-primary-400 text-neutral-900 dark:text-neutral-100 font-medium'
               : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'}`}
           >
             {tabLabel(key)}
