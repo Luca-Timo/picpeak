@@ -150,6 +150,19 @@ const ALLOWED_MEDIA_TYPES = {
   ...ALLOWED_VIDEO_TYPES
 };
 
+// Document types, kept out of ALLOWED_MEDIA_TYPES: the archive restore reads
+// that map as "what counts as media". validateFileType only reaches this
+// table for a caller whose own list names the type, so a photo upload still
+// refuses a PDF.
+const ALLOWED_DOCUMENT_TYPES = {
+  'application/pdf': {
+    extensions: ['.pdf'],
+    magicNumbers: [
+      { offset: 0, bytes: [0x25, 0x50, 0x44, 0x46, 0x2D] } // "%PDF-"
+    ]
+  }
+};
+
 /**
  * Validate file type by MIME type and extension
  * @param {string} filename - The filename
@@ -167,7 +180,7 @@ function validateFileType(filename, mimetype, allowedTypes) {
   const ext = path.extname(filename).toLowerCase();
 
   // Check if extension matches the MIME type
-  const typeConfig = ALLOWED_MEDIA_TYPES[mimetype];
+  const typeConfig = ALLOWED_MEDIA_TYPES[mimetype] || ALLOWED_DOCUMENT_TYPES[mimetype];
   if (!typeConfig || !typeConfig.extensions.includes(ext)) {
     return false;
   }
@@ -183,7 +196,7 @@ function validateFileType(filename, mimetype, allowedTypes) {
  */
 async function validateFileContent(filePath, expectedMimeType) {
   try {
-    const typeConfig = ALLOWED_MEDIA_TYPES[expectedMimeType];
+    const typeConfig = ALLOWED_MEDIA_TYPES[expectedMimeType] || ALLOWED_DOCUMENT_TYPES[expectedMimeType];
     if (!typeConfig) {
       return false;
     }
