@@ -3,7 +3,7 @@
  * contracts all draw their line items through drawLineItems; these tests
  * capture the rows it hands to swissqrbill's Table and pin:
  *   - units in the quantity cell ("8 Std.", "pauschal") and the widened column;
- *   - discount lines as labelled minus rows without position/qty/unit price;
+ *   - discount lines as numbered minus rows without qty/unit price;
  *   - comment rows in the theme's italic face (Helvetica-Oblique fallback);
  *   - data rows naming the body font;
  *   - a contract following the quote's discount-column rule.
@@ -62,7 +62,7 @@ describe('units', () => {
 });
 
 describe('discount lines', () => {
-  it('render as a labelled minus row without position, quantity or unit price', () => {
+  it('render as a numbered minus row without quantity or unit price', () => {
     const { data, cellTexts } = draw([
       item({ description: 'Coverage', lineTotalMinor: 100000, unitPriceMinor: 100000 }),
       item({
@@ -72,13 +72,13 @@ describe('discount lines', () => {
       item({ description: 'Album' }),
     ]);
     const [pos, desc, qty, unit, total] = cellTexts(data[1]);
-    expect(pos).toBe('');
+    expect(pos).toBe('2');
     expect(desc).toBe('Early booking (10 %)');
     expect(qty).toBe('');
     expect(unit).toBe('');
     expect(total).toMatch(/-.*100\.00/);
-    // The next regular line keeps counting from 2.
-    expect(cellTexts(data[2])[0]).toBe('2');
+    // The next line counts on from the discount.
+    expect(cellTexts(data[2])[0]).toBe('3');
   });
 
   it('never opens the discount column on their own', () => {

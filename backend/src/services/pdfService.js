@@ -662,10 +662,10 @@ function drawLineItems(doc, ctx) {
   let topLevelCount = 0;
   const buildItemRow = (li) => {
     const isSubItem = li.parentLineItemId != null || li.parentPosition != null;
-    // A discount line (migration 215) is a labelled minus row: no position
-    // number, no quantity or unit price — just its amount.
+    // A discount line (migration 215) is numbered like any other line, but
+    // shows no quantity or unit price — just its amount.
     const isDiscount = li.lineKind === 'discount';
-    const posLabel = isSubItem || isDiscount ? '' : String(++topLevelCount);
+    const posLabel = isSubItem ? '' : String(++topLevelCount);
     // Bullet (U+2022) is part of the WinAnsi character set that
     // PDFKit's built-in Helvetica supports, unlike the earlier "↳"
     // (U+21B3) which rendered as the font's .notdef glyph ("!3").

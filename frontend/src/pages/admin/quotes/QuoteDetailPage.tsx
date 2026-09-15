@@ -297,11 +297,11 @@ export const QuoteDetailPage: React.FC = () => {
                 const isSubItem = li.parentPosition != null;
                 const isDiscountLine = li.lineKind === 'discount';
                 const notIncluded = !!li.isOptional && li.selected === false;
-                if (!isSubItem && !isDiscountLine) number += 1;
+                if (!isSubItem) number += 1;
                 const unitLabel = li.unit ? t(`crm.lineItems.unitShort.${li.unit}`, li.unit) : '';
                 return (
                   <tr key={li.id} className={`border-b border-neutral-100 dark:border-neutral-800 ${notIncluded ? 'opacity-60' : ''}`}>
-                    <td className="py-2">{isSubItem || isDiscountLine ? '' : number}</td>
+                    <td className="py-2">{isSubItem ? '' : number}</td>
                     <td className="py-2">{isDiscountLine ? '' : `${Number(li.quantity)}${unitLabel ? ` ${unitLabel}` : ''}`}</td>
                     <td className={`py-2 whitespace-pre-line ${isSubItem ? 'pl-6' : ''}`}>
                       {isSubItem ? '• ' : ''}{li.description}

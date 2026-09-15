@@ -3,7 +3,7 @@
  * with the promotion's description as the line's comment, which the PDF
  * prints under the name.
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import { DiscountsPanel } from '../DiscountsPanel';
@@ -66,6 +66,9 @@ test('the editor shows a discount line\'s comment, ready to edit', () => {
     },
   ]} />);
   expect(screen.getByDisplayValue('Sonderkondition für gemeinnützige Vereine')).toBeTruthy();
+  // Numbered like any other line, as on the PDF.
+  const row = screen.getByText('Vereinskondition').closest('tr') as HTMLElement;
+  expect(within(row).getByText('2')).toBeTruthy();
 });
 
 test('a promotion without a description adds a line without a comment', async () => {

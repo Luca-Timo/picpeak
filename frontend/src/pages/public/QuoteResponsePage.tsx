@@ -311,9 +311,9 @@ export const QuoteResponsePage: React.FC = () => {
                 const rows: React.ReactNode[] = [];
                 for (const li of quote.lineItems) {
                   const isSub = li.parentLineItemId != null || li.parentPosition != null;
-                  // Discount lines (#1451) carry no number, quantity or unit price.
+                  // Discount lines (#1451) are numbered, but carry no quantity or unit price.
                   const isDiscount = li.lineKind === 'discount';
-                  if (!isSub && !isDiscount) topCount += 1;
+                  if (!isSub) topCount += 1;
                   const priceless = isSub && (!li.unitPriceMinor || Number(li.unitPriceMinor) === 0);
                   const unitLabel = li.unit ? t(`crm.lineItems.unitShort.${li.unit}`, li.unit) : '';
                   const quantityText = isDiscount
@@ -335,7 +335,7 @@ export const QuoteResponsePage: React.FC = () => {
                     <tr key={`row-${li.position}`} className={`${hasDetails || hasStatus ? '' : itemBorder} ${
                       isSub ? 'text-neutral-600 dark:text-neutral-400' : ''
                     }`}>
-                      <td className={`py-2 ${dim}`}>{isSub || isDiscount ? '' : topCount}</td>
+                      <td className={`py-2 ${dim}`}>{isSub ? '' : topCount}</td>
                       <td className={`py-2 whitespace-pre-line ${isSub ? 'pl-6' : ''} ${dim}`}>
                         {isSub ? '• ' : ''}{li.description}
                         {hasStatus && canChoose && (

@@ -70,9 +70,9 @@ export const BillDetailPage: React.FC = () => {
     const currency = data.invoice.currency;
     for (const li of data.lineItems) {
       const isSub = li.parentLineItemId != null || li.parentPosition != null;
-      // Discount lines (#1451) carry no number, quantity or unit price.
+      // Discount lines (#1451) are numbered, but carry no quantity or unit price.
       const isDiscount = li.lineKind === 'discount';
-      if (isDiscount) { /* no number */ } else if (!isSub) { topCount += 1; subCount = 0; } else { subCount += 1; }
+      if (!isSub) { topCount += 1; subCount = 0; } else { subCount += 1; }
       const priceless = isSub && (!li.unitPriceMinor || Number(li.unitPriceMinor) === 0);
       const unitLabel = li.unit ? t(`crm.lineItems.unitShort.${li.unit}`, li.unit) : '';
       const quantityText = isDiscount

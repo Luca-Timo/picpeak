@@ -443,15 +443,13 @@ export const LineItemsTable: React.FC<Props> = ({
 
   // Display numbering: top-level items get 1, 2, 3...; sub-items
   // render as N.1, N.2 under the parent for clarity. Discount lines
-  // carry no number, like on the PDF.
+  // are numbered like any other line, as on the PDF.
   const displayNumbers = (() => {
     const out: string[] = [];
     let topCount = 0;
     let subCount = 0;
     for (const li of items) {
-      if (isDiscount(li)) {
-        out.push('');
-      } else if (!isSub(li)) {
+      if (!isSub(li)) {
         topCount += 1;
         subCount = 0;
         out.push(String(topCount));
@@ -522,7 +520,12 @@ export const LineItemsTable: React.FC<Props> = ({
                 const hasComment = !!li.detailsText && li.detailsText.trim().length > 0;
                 return (
                   <tr key={li.position} className="border-t border-neutral-200 dark:border-neutral-700 bg-emerald-50/50 dark:bg-emerald-900/10">
-                    <td className="px-2 py-2 align-top text-neutral-500 dark:text-neutral-400"><Tag className="w-3.5 h-3.5" aria-hidden /></td>
+                    <td className="px-2 py-2 align-top text-neutral-600 dark:text-neutral-400">
+                      <div className="flex items-center gap-1">
+                        <Tag className="w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400" aria-hidden />
+                        <span>{displayNumbers[idx]}</span>
+                      </div>
+                    </td>
                     <td className="px-2 py-2 align-top"></td>
                     <td className="px-2 py-2 align-top text-neutral-800 dark:text-neutral-200">
                       <div className="font-medium">{li.description || li.promotionSnapshot?.name}</div>
