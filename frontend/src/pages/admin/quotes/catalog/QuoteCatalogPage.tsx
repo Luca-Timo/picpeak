@@ -911,6 +911,10 @@ export const QuoteCatalogPage: React.FC = () => {
         ))}
       </div>
 
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+        {t('quotes.catalog.examplesHint', 'Archived entries named "Example: …" show how each part works. Edit one and restore it to use it.')}
+      </p>
+
       {tab === 'services' && <ServicesTab />}
       {tab === 'packages' && <PackagesTab />}
       {tab === 'promotions' && <PromotionsTab />}

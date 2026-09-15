@@ -667,6 +667,11 @@ router.get(
   [query('includeInactive').optional().isIn(['true', 'false'])],
   handleAsync(async (req, res) => {
     validateRequest(req);
+    // The catalogue page (includeInactive) adds the archived examples on its
+    // first visit; the editor's picker never shows them.
+    if (req.query.includeInactive === 'true') {
+      await require('../services/quoteCatalogExamples').ensureCatalogExamples();
+    }
     const rows = await quoteService.listLineItemPresets({ includeInactive: req.query.includeInactive === 'true' });
     return successResponse(res, { presets: rows.map(transformLineItemPreset) });
   })

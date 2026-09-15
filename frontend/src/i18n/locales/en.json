@@ -6727,7 +6727,8 @@
       "noEndDateHint": "Leave empty for no end date.",
       "noEndDate": "No end date",
       "validFromNoEnd": "From {{date}}, no end date",
-      "validUntilOnly": "Until"
+      "validUntilOnly": "Until",
+      "examplesHint": "Archived entries named \"Example: …\" show how each part works. Edit one and restore it to use it."
     },
     "promotions": {
       "panelHint": "Percentages apply first, then fixed amounts — never more than the subtotal.",

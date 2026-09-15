@@ -34,6 +34,12 @@ const router = express.Router();
 
 router.use(adminAuth);
 router.use(requireFeatureFlag('quotes', 'QUOTES_DISABLED'));
+// The example entries (archived, editable) are added the first time the
+// catalogue is opened; once per install.
+router.use((req, res, next) => {
+  if (req.method !== 'GET') return next();
+  return require('../services/quoteCatalogExamples').ensureCatalogExamples().then(() => next(), next);
+});
 
 // ---------------------------------------------------------------------
 // Transforms (snake_case DB → camelCase API)

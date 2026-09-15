@@ -6727,7 +6727,8 @@
       "noEndDateHint": "Leer lassen für unbegrenzte Gültigkeit.",
       "noEndDate": "Unbegrenzt gültig",
       "validFromNoEnd": "Ab {{date}}, unbegrenzt",
-      "validUntilOnly": "Bis"
+      "validUntilOnly": "Bis",
+      "examplesHint": "Archivierte Einträge mit „Beispiel: …“ zeigen, wie jeder Teil funktioniert. Bearbeiten Sie einen und stellen Sie ihn wieder her, um ihn zu verwenden."
     },
     "promotions": {
       "panelHint": "Prozente gelten zuerst, dann feste Beträge – nie mehr als die Zwischensumme.",
