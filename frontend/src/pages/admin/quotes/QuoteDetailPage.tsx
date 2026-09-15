@@ -7,7 +7,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Eye, Send, Copy, ArrowRightCircle, Edit2, Receipt, CheckCircle2, ScrollText, XCircle } from 'lucide-react';
+import { ArrowLeft, Eye, Send, Copy, ArrowRightCircle, Edit2, Receipt, CheckCircle2, ScrollText, XCircle, FilePlus } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
 import { DocumentLineageCard } from '../../../components/admin/DocumentLineageCard';
 import { QuoteAddOnsCard } from './QuoteAddOnsCard';
@@ -19,6 +19,10 @@ import { formatMoneyMinor } from '../../../utils/money';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import { toast } from 'react-toastify';
+import { quoteErrorText } from '../../../utils/quoteErrors';
+
+// The statuses the server refuses to edit (quoteService.updateQuote).
+const LOCKED_STATUSES = ['accepted', 'declined', 'converted'];
 
 export const QuoteDetailPage: React.FC = () => {
   const { t } = useTranslation();
@@ -39,6 +43,8 @@ export const QuoteDetailPage: React.FC = () => {
 
   if (isLoading || !data) return <Loading />;
   const q = data.quote;
+  // Accepted, and no contract, event or invoice yet: a new version can replace it.
+  const canNewVersion = q.status === 'accepted' && !q.convertedEventId && !q.convertedContractId;
 
   const handlePreview = async () => {
     // Open the placeholder window synchronously so the browser sees a
@@ -156,6 +162,44 @@ export const QuoteDetailPage: React.FC = () => {
     }
   };
 
+  // A locked quote can't be saved, so say why and what to do instead of
+  // opening an editor that can't save.
+  const handleEdit = () => {
+    if (!LOCKED_STATUSES.includes(q.status)) {
+      navigate(`/admin/clients/quotes/${q.id}/edit`);
+      return;
+    }
+    if (q.status === 'accepted' && canNewVersion) {
+      toast.info(t('quotes.lockedNotice.accepted',
+        'This quote was already accepted and can\'t be edited. To change it, create a new version: the quote is declined and copied as a new draft.'));
+    } else if (q.status === 'accepted') {
+      toast.info(t('quotes.lockedNotice.acceptedConverted',
+        'This quote was already accepted, and a contract, event or invoice exists for it. It can\'t be changed any more.'));
+    } else if (q.status === 'declined') {
+      toast.info(t('quotes.lockedNotice.declined', 'This quote was declined and can\'t be edited. Duplicate it to start a new quote.'));
+    } else {
+      toast.info(t('quotes.lockedNotice.converted',
+        'This quote was already converted into an event or invoice and can\'t be changed any more.'));
+    }
+  };
+
+  // A new version of an accepted quote, like a Storno and its replacement
+  // invoice: this quote is declined and a draft copy replaces it.
+  const handleNewVersion = async () => {
+    const reason = window.prompt(t('quotes.newVersionPrompt',
+      'Create a new version? This quote is declined (the customer\'s link stops working) and copied as a new draft to change and send. Optionally note why (leave blank to skip).'));
+    // prompt returns null on Cancel; '' (empty) means "no reason".
+    if (reason === null) return;
+    try {
+      const result = await quotesService.newVersion(q.id, reason.trim() || undefined);
+      toast.success(t('quotes.newVersionCreated', 'New version created. Change it and send it to the customer.'));
+      qc.invalidateQueries({ queryKey: ['quotes'] });
+      navigate(`/admin/clients/quotes/${result.quoteId}/edit`);
+    } catch (err: unknown) {
+      toast.error(quoteErrorText(err, t, 'Failed'));
+    }
+  };
+
   // Save this quote's lines, texts and defaults as a new draft template (#1451).
   const handleSaveAsTemplate = async () => {
     const name = window.prompt(
@@ -173,7 +217,8 @@ export const QuoteDetailPage: React.FC = () => {
   };
 
   const responseLocked = q.responseLockedAt && new Date(q.responseLockedAt).getTime() < Date.now();
-  const canSend = ['draft', 'declined', 'expired'].includes(q.status);
+  // A quote a new version replaced is never sent again: the new version is.
+  const canSend = ['draft', 'declined', 'expired'].includes(q.status) && !q.replacedByQuoteId;
 
   return (
     <div className="space-y-4">
@@ -192,10 +237,15 @@ export const QuoteDetailPage: React.FC = () => {
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={handlePreview}><Eye className="w-4 h-4 mr-1" />{t('common.preview', 'Preview')}</Button>
-          <Button variant="outline" onClick={() => navigate(`/admin/clients/quotes/${q.id}/edit`)}>
+          <Button variant="outline" onClick={handleEdit}>
             <Edit2 className="w-4 h-4 mr-1" />{t('common.edit', 'Edit')}
           </Button>
           <Button variant="outline" onClick={handleDuplicate}><Copy className="w-4 h-4 mr-1" />{t('common.duplicate', 'Duplicate')}</Button>
+          {canNewVersion && (
+            <PermissionGate permission="quotes.manage">
+              <Button variant="outline" onClick={handleNewVersion}><FilePlus className="w-4 h-4 mr-1" />{t('quotes.newVersion', 'New version')}</Button>
+            </PermissionGate>
+          )}
           <PermissionGate permission="quotes.manage">
             <Button variant="outline" onClick={handleSaveAsTemplate}>{t('quotes.templates.saveAsTemplate', 'Save as template')}</Button>
           </PermissionGate>
@@ -257,6 +307,16 @@ export const QuoteDetailPage: React.FC = () => {
           {q.sentAt && <div><div className="text-neutral-600 dark:text-neutral-300">{t('quotes.field.sentAt', 'Sent at')}</div><div>{fmtDateTime(q.sentAt)}</div></div>}
           {q.acceptedAt && <div><div className="text-neutral-600 dark:text-neutral-300">{t('quotes.field.acceptedAt', 'Accepted at')}</div><div>{fmtDateTime(q.acceptedAt)}</div></div>}
           {q.declinedAt && <div><div className="text-neutral-600 dark:text-neutral-300">{t('quotes.field.declinedAt', 'Declined at')}</div><div>{fmtDateTime(q.declinedAt)}</div></div>}
+          {q.replacesQuoteId && q.replacesQuoteNumber && (
+            <div><div className="text-neutral-600 dark:text-neutral-300">{t('quotes.replacesQuote', 'Replaces')}</div>
+              <button type="button" className="text-primary-600 dark:text-primary-400 hover:underline"
+                onClick={() => navigate(`/admin/clients/quotes/${q.replacesQuoteId}`)}>{q.replacesQuoteNumber}</button></div>
+          )}
+          {q.replacedByQuoteId && q.replacedByQuoteNumber && (
+            <div><div className="text-neutral-600 dark:text-neutral-300">{t('quotes.replacedByQuote', 'Replaced by')}</div>
+              <button type="button" className="text-primary-600 dark:text-primary-400 hover:underline"
+                onClick={() => navigate(`/admin/clients/quotes/${q.replacedByQuoteId}`)}>{q.replacedByQuoteNumber}</button></div>
+          )}
           {q.declineReason && <div className="col-span-2 md:col-span-4"><div className="text-neutral-600 dark:text-neutral-300">{t('quotes.field.declineReason', 'Decline reason')}</div><div className="whitespace-pre-line">{q.declineReason}</div></div>}
           {q.respondedAt && !responseLocked && (
             <div><div className="text-neutral-600 dark:text-neutral-300">{t('quotes.field.responseWindow', 'Response window')}</div>

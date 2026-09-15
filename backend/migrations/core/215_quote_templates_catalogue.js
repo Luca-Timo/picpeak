@@ -83,6 +83,8 @@ exports.up = async function (knex) {
   // the add-ons (who, when, what, the totals before and after).
   await addColumn(knex, 'quotes', 'customer_message', (t) => t.text('customer_message'));
   await addColumn(knex, 'quotes', 'selection_changes', (t) => t.text('selection_changes'));
+  // A new version of an accepted quote points to the quote it replaces.
+  await addColumn(knex, 'quotes', 'replaces_quote_id', (t) => t.integer('replaces_quote_id'));
 
   if (!(await knex.schema.hasTable('quote_packages'))) {
     await knex.schema.createTable('quote_packages', (t) => {
@@ -194,7 +196,7 @@ exports.down = async function (knex) {
   await knex.schema.dropTableIfExists('quote_package_items');
   await knex.schema.dropTableIfExists('quote_packages');
 
-  for (const column of ['selection_changes', 'customer_message', 'selection_accepted_at', 'optional_selection_snapshot', 'days', 'hours',
+  for (const column of ['replaces_quote_id', 'selection_changes', 'customer_message', 'selection_accepted_at', 'optional_selection_snapshot', 'days', 'hours',
     'source_template_version', 'source_template_id']) {
     await dropColumn(knex, 'quotes', column);
   }

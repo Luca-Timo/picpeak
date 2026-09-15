@@ -6556,6 +6556,17 @@
     "convert": "In Anlass umwandeln",
     "declineOnBehalf": "Im Namen ablehnen",
     "declineReasonPrompt": "Dieses Angebot im Namen des Kunden als abgelehnt markieren? Optional einen Grund angeben (leer lassen zum Überspringen).",
+    "newVersion": "Neue Version",
+    "newVersionPrompt": "Neue Version erstellen? Dieses Angebot wird abgelehnt (der Link des Kunden funktioniert dann nicht mehr) und als neuer Entwurf kopiert, den Sie anpassen und senden. Optional einen Grund angeben (leer lassen zum Überspringen).",
+    "newVersionCreated": "Neue Version erstellt. Passen Sie sie an und senden Sie sie dem Kunden.",
+    "replacesQuote": "Ersetzt",
+    "replacedByQuote": "Ersetzt durch",
+    "lockedNotice": {
+      "accepted": "Dieses Angebot wurde bereits angenommen und kann nicht mehr bearbeitet werden. Um es zu ändern, erstellen Sie eine neue Version: Das Angebot wird abgelehnt und als neuer Entwurf kopiert.",
+      "acceptedConverted": "Dieses Angebot wurde bereits angenommen, und es gibt dazu schon einen Vertrag, einen Anlass oder eine Rechnung. Es kann nicht mehr geändert werden.",
+      "declined": "Dieses Angebot wurde abgelehnt und kann nicht mehr bearbeitet werden. Duplizieren Sie es, um ein neues Angebot zu erstellen.",
+      "converted": "Dieses Angebot wurde bereits in einen Anlass oder eine Rechnung umgewandelt und kann nicht mehr geändert werden."
+    },
     "declinedOnBehalfToast": "Angebot als abgelehnt markiert.",
     "field": {
       "issueDate": "Ausgestellt am",

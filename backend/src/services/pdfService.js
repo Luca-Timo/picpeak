@@ -1653,6 +1653,19 @@ function renderDocument(type, context) {
           y = doc.y + 6;
           doc.fillColor(themeColor(doc, 'text'));
         }
+        // A new version of an accepted quote (#1451) names the quote it
+        // replaces the same way: "Bezug: Ersetzt Angebot Q-XXXX vom DATE".
+        if (type === 'quote' && ctx.doc.replacesQuote) {
+          const { number, issueDate } = ctx.doc.replacesQuote;
+          doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor(themeColor(doc, 'muted'));
+          const datePart = issueDate ? ` ${t(ctx.locale, 'reference_dated', { date: formatDate(issueDate, ctx.dateFormat) })}` : '';
+          doc.text(
+            `${t(ctx.locale, 'reference_label')}: ${t(ctx.locale, 'reference_replaces')} ${t(ctx.locale, 'quote_title')} ${number}${datePart}`,
+            leftX, y, { width: PAGE.contentWidth }
+          );
+          y = doc.y + 6;
+          doc.fillColor(themeColor(doc, 'text'));
+        }
 
         // ---- salutation + lead-in ------------------------------------
         // Personalised greeting when the customer record has an

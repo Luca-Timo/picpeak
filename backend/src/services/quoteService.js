@@ -484,6 +484,8 @@ async function getQuoteById(id) {
       // shows "Linked contract LBM-C-2026-0010" instead of just "#10".
       // LEFT join — most quotes never get converted to a contract.
       .leftJoin('contracts as conv_contract', 'quotes.converted_contract_id', 'conv_contract.id')
+      // A new version (#1451): the number and date of the quote it replaces.
+      .leftJoin('quotes as replaced', 'quotes.replaces_quote_id', 'replaced.id')
       .where('quotes.id', id)
       .select(
         'quotes.*',
@@ -495,9 +497,15 @@ async function getQuoteById(id) {
         // For transformQuote.customer.isPassive — never leaves the API.
         'customer_accounts.password_hash as customer_password_hash',
         'conv_contract.contract_number as converted_contract_number',
+        'replaced.quote_number as replaces_quote_number',
+        'replaced.issue_date as replaces_issue_date',
       )
       .first();
     if (!quote) return null;
+    // …and the new version that replaced this quote, if there is one.
+    const next = await db('quotes').where({ replaces_quote_id: id }).orderBy('id', 'desc').first('id', 'quote_number');
+    quote.replaced_by_quote_id = next ? next.id : null;
+    quote.replaced_by_quote_number = next ? next.quote_number : null;
     // Self-join so the response carries parent_position alongside
     // parent_line_item_id. The editor uses position (1-based, stable
     // within the payload) to thread sub-items; the DB id is just for
@@ -617,10 +625,12 @@ async function createQuote(payload, adminId) {
       cc_pdf_email: payload.ccPdfEmail || null,
       business_bank_account_id: bank?.id || null,
       // Migration 140 — cross-document lineage UUID. A freshly-created
-      // quote is always the root of its deal chain; mint a new one
-      // here and let convertQuoteToContract / convertQuoteToInvoices
-      // propagate it down.
-      deal_uuid: crypto.randomUUID(),
+      // quote is the root of its deal chain; mint a new one here and let
+      // convertQuoteToContract / convertQuoteToInvoices propagate it down.
+      // A new version of an accepted quote (#1451) stays in the deal of
+      // the quote it replaces.
+      deal_uuid: payload.dealUuid || crypto.randomUUID(),
+      replaces_quote_id: payload.replacesQuoteId || null,
       created_by_admin_id: adminId,
       created_at: new Date(),
       updated_at: new Date(),
@@ -700,7 +710,9 @@ async function updateQuote(id, payload, adminId) {
   // `expired` is left editable — quote can be revised and re-sent.
   if (['accepted', 'declined', 'converted'].includes(existing.status)) {
     throw new AppError(
-      `Cannot edit quote with status '${existing.status}'. Duplicate the quote and start fresh if changes are needed.`,
+      existing.status === 'accepted'
+        ? 'This quote was accepted and can\'t be edited. Create a new version of it to make changes.'
+        : `Cannot edit quote with status '${existing.status}'. Duplicate the quote and start fresh if changes are needed.`,
       409,
       'QUOTE_LOCKED',
     );
@@ -994,6 +1006,10 @@ async function buildRenderContext(quote, lineItems) {
       quoteNumber: quote.quote_number,
       issueDate: quote.issue_date,
       validUntil: quote.valid_until,
+      // A new version names the quote it replaces, like a reissued invoice.
+      replacesQuote: quote.replaces_quote_number
+        ? { number: quote.replaces_quote_number, issueDate: quote.replaces_issue_date || null }
+        : null,
       introText: texts.introText,
       outroText: texts.outroText,
       totalAmountMinor: quote.total_amount_minor,
@@ -1100,6 +1116,10 @@ async function sendQuote(id, adminId) {
 
   if (!['draft', 'declined', 'expired'].includes(quote.status)) {
     throw new AppError(`Cannot send a quote with status '${quote.status}'`, 409);
+  }
+  // A quote a new version replaced (#1451) is never sent again: the new version is.
+  if (await db('quotes').where({ replaces_quote_id: quote.id }).first('id')) {
+    throw new AppError('This quote was replaced by a new version; send that one instead', 409, 'QUOTE_REPLACED');
   }
   assertQuoteTransition(quote.status, 'sent');
 
@@ -1639,6 +1659,11 @@ async function recordResponse({ token, action, ip, tosAccepted, selectedOptional
   if (!['sent', 'accepted', 'declined'].includes(quote.status)) {
     throw new AppError(`Quote cannot be responded to in status '${quote.status}'`, 409);
   }
+  // A quote a new version replaces (#1451) is closed for good, whatever its
+  // response window says: the customer answers the new version.
+  if (await db('quotes').where({ replaces_quote_id: quote.id }).first('id')) {
+    throw new AppError('This quote was replaced by a new version', 410, 'QUOTE_REPLACED');
+  }
 
   // Terms of Service handling on accept:
   //   - Setting OFF: ignored.
@@ -1903,7 +1928,7 @@ async function adminDeclineQuote(id, adminId, reason = null) {
     throw new AppError('Quote already declined', 409, 'QUOTE_ALREADY_DECLINED');
   }
   if (quote.status === 'accepted') {
-    throw new AppError('Quote already accepted; duplicate it to start a fresh round.', 409, 'QUOTE_ALREADY_ACCEPTED');
+    throw new AppError('Quote already accepted; create a new version of it to change it.', 409, 'QUOTE_ALREADY_ACCEPTED');
   }
   if (quote.status === 'converted') {
     throw new AppError('Quote already converted to an event/invoice', 409, 'QUOTE_CONVERTED');
@@ -1946,6 +1971,55 @@ async function adminDeclineQuote(id, adminId, reason = null) {
   await maybeEmitQuoteResponse(quote, 'declined', now);
 
   return { status: 'declined', declinedAt: now };
+}
+
+/**
+ * A new version of an accepted quote (#1451), like a Storno and its
+ * replacement invoice: the admin declines the accepted quote — its customer
+ * link stops working, the reason is kept, its acceptance stays on record —
+ * and a draft copy that replaces it ("Ersetzt Angebot …") is created in the
+ * same deal. Only until a contract, event or invoice exists. The customer
+ * isn't emailed and no "declined" workflow event fires: the new version's
+ * email tells them what changed.
+ *
+ * The copy is made after the decline commits (createQuote runs its own
+ * transaction). Should it fail, the quote stays declined and "Duplicate"
+ * still makes the copy.
+ *
+ * @returns {Promise<{ quoteId: number }>} the new draft
+ */
+async function replaceAcceptedQuote(id, adminId, reason = null) {
+  const quote = await db('quotes').where({ id }).first();
+  if (!quote) throw new AppError('Quote not found', 404);
+  if (quote.status !== 'accepted') {
+    throw new AppError('Only an accepted quote gets a new version', 409, 'QUOTE_NOT_ACCEPTED');
+  }
+  if (quote.converted_event_id || quote.converted_contract_id) {
+    throw new AppError('A contract, event or invoice already exists for this quote', 409, 'QUOTE_CONVERTED');
+  }
+  assertQuoteTransition(quote.status, 'declined');
+
+  const now = new Date();
+  const cleanReason = typeof reason === 'string' && reason.trim() ? reason.trim().slice(0, 5000) : null;
+  const hasReasonColumn = await hasColumnCached('quotes', 'decline_reason');
+
+  await db.transaction(async (trx) => {
+    const updates = { status: 'declined', response_locked_at: now, declined_at: now, updated_at: now };
+    if (hasReasonColumn) updates.decline_reason = cleanReason;
+    await trx('quotes').where({ id }).update(updates);
+    await trx('quote_action_tokens')
+      .where({ quote_id: id })
+      .whereNull('used_at')
+      .update({ used_at: now, used_action: 'declined' });
+  });
+
+  const newId = await duplicateQuote(id, adminId, { replacesQuoteId: id, dealUuid: quote.deal_uuid });
+
+  try {
+    await logActivity('quote_replaced', { quoteId: id, newQuoteId: newId, reason: cleanReason }, null, `admin:${adminId}`);
+  } catch (_) { /* non-fatal */ }
+
+  return { quoteId: newId };
 }
 
 /**
@@ -2310,7 +2384,7 @@ async function recalculateRates(id, adminId) {
   await updateQuote(id, { lineItems }, adminId);
 }
 
-async function duplicateQuote(id, adminId) {
+async function duplicateQuote(id, adminId, { replacesQuoteId = null, dealUuid = null } = {}) {
   const { quote, lineItems } = (await getQuoteById(id)) || {};
   if (!quote) throw new AppError('Quote not found', 404);
 
@@ -2355,6 +2429,9 @@ async function duplicateQuote(id, adminId) {
       bound_to: li.bound_to,
       promotion_snapshot: li.promotion_snapshot,
     })),
+    // Set only by replaceAcceptedQuote: the new version keeps the deal.
+    replacesQuoteId,
+    dealUuid,
   }, adminId);
 }
 
@@ -2692,6 +2769,7 @@ module.exports = {
   adminAcceptQuote,
   adminChangeAddOns,
   adminDeclineQuote,
+  replaceAcceptedQuote,
   finalizeQuoteResponses,
   convertToEvent,
   convertToInvoiceOnly,

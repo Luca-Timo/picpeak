@@ -37,10 +37,12 @@ vi.mock('react-i18next', async () => {
 
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
+const toastInfo = vi.fn();
 vi.mock('react-toastify', () => ({
   toast: {
     success: (...args: unknown[]) => toastSuccess(...args),
     error: (...args: unknown[]) => toastError(...args),
+    info: (...args: unknown[]) => toastInfo(...args),
   },
 }));
 vi.mock('../../../../components/admin/PermissionGate', () => ({
@@ -61,10 +63,12 @@ vi.mock('../../../../services/quoteCatalog.service', () => ({ quoteCatalogServic
 
 const get = vi.fn();
 const changeAddOns = vi.fn();
+const newVersion = vi.fn();
 vi.mock('../../../../services/quotes.service', () => ({
   quotesService: {
     get: (...args: unknown[]) => get(...args),
     changeAddOns: (...args: unknown[]) => changeAddOns(...args),
+    newVersion: (...args: unknown[]) => newVersion(...args),
   },
 }));
 
@@ -107,7 +111,10 @@ function renderPage() {
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={['/admin/clients/quotes/7']}>
-        <Routes><Route path="/admin/clients/quotes/:id" element={<QuoteDetailPage />} /></Routes>
+        <Routes>
+          <Route path="/admin/clients/quotes/:id" element={<QuoteDetailPage />} />
+          <Route path="/admin/clients/quotes/:id/edit" element={<div>Quote editor</div>} />
+        </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -127,6 +134,38 @@ beforeEach(() => {
   vi.clearAllMocks();
   get.mockResolvedValue({ quote, lineItems });
   changeAddOns.mockResolvedValue({ changed: true, totalAmountMinor: 150000, quote, lineItems });
+});
+
+it('says why an accepted quote can\'t be edited and how to change it, instead of opening the editor', async () => {
+  const user = userEvent.setup();
+  renderPage();
+  await findAddOnsCard();
+  await user.click(screen.getByRole('button', { name: 'Edit' }));
+  expect(toastInfo).toHaveBeenCalledWith(expect.stringContaining('create a new version'));
+  expect(screen.queryByText('Quote editor')).toBeNull();
+});
+
+it('opens the editor for a draft', async () => {
+  const user = userEvent.setup();
+  get.mockResolvedValue({
+    quote: { ...quote, status: 'draft', acceptedAt: null, optionalSelection: null, addOnsEditable: false },
+    lineItems,
+  });
+  renderPage();
+  await user.click(await screen.findByRole('button', { name: 'Edit' }));
+  expect(await screen.findByText('Quote editor')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'New version' })).toBeNull();
+});
+
+it('creates a new version of an accepted quote and opens it in the editor', async () => {
+  const user = userEvent.setup();
+  vi.spyOn(window, 'prompt').mockReturnValue('Kunde möchte ein grösseres Album');
+  newVersion.mockResolvedValue({ quoteId: 8 });
+  renderPage();
+  await findAddOnsCard();
+  await user.click(screen.getByRole('button', { name: 'New version' }));
+  expect(newVersion).toHaveBeenCalledWith(7, 'Kunde möchte ein grösseres Album');
+  expect(await screen.findByText('Quote editor')).toBeInTheDocument();
 });
 
 it('books an add-on and saves it after the confirm', async () => {

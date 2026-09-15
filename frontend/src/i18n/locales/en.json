@@ -6548,6 +6548,17 @@
     "convert": "Convert to event",
     "declineOnBehalf": "Decline on behalf",
     "declineReasonPrompt": "Mark this quote as declined on behalf of the customer? Optionally note why (leave blank to skip).",
+    "newVersion": "New version",
+    "newVersionPrompt": "Create a new version? This quote is declined (the customer's link stops working) and copied as a new draft to change and send. Optionally note why (leave blank to skip).",
+    "newVersionCreated": "New version created. Change it and send it to the customer.",
+    "replacesQuote": "Replaces",
+    "replacedByQuote": "Replaced by",
+    "lockedNotice": {
+      "accepted": "This quote was already accepted and can't be edited. To change it, create a new version: the quote is declined and copied as a new draft.",
+      "acceptedConverted": "This quote was already accepted, and a contract, event or invoice exists for it. It can't be changed any more.",
+      "declined": "This quote was declined and can't be edited. Duplicate it to start a new quote.",
+      "converted": "This quote was already converted into an event or invoice and can't be changed any more."
+    },
     "declinedOnBehalfToast": "Quote marked as declined.",
     "field": {
       "issueDate": "Issued",
