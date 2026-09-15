@@ -6595,7 +6595,8 @@
       "customer": "Customer",
       "event": "Event details",
       "payment": "Payment conditions",
-      "extras": "Intro / outro / extras"
+      "extras": "Intro / outro / extras",
+      "customerMessage": "Message from the customer"
     },
     "savedToast": "Quote saved as draft.",
     "edit": "Edit quote",
@@ -6789,6 +6790,26 @@
       "none": "No add-ons chosen",
       "chosen": "Booked",
       "notChosen": "Not booked"
+    },
+    "addOns": {
+      "editHint": "Book or remove add-ons, then save. The customer is emailed the updated quote.",
+      "save": "Save add-on changes",
+      "confirmSave": "The customer will be emailed the updated quote.",
+      "savedToast": "Add-ons updated. The customer has been emailed the updated quote.",
+      "unchangedToast": "The add-ons were already booked like this.",
+      "convertedHint": "Change the add-ons on the contract or invoice.",
+      "historyTitle": "Changes",
+      "byCustomer": "by the customer",
+      "byYou": "by you",
+      "booked": "Booked: {{items}}",
+      "removed": "Removed: {{items}}",
+      "totalChange": "Total {{before}} → {{after}}",
+      "errors": {
+        "converted": "This quote already has a contract, event or invoice. Change the add-ons there.",
+        "notAccepted": "Add-ons can be changed here once the quote is accepted.",
+        "noAddOns": "This quote has no add-ons.",
+        "failed": "The add-on changes could not be saved."
+      }
     }
   },
   "crm": {
@@ -6848,10 +6869,10 @@
       "useDayRate": "Use day rate",
       "useHourlyRate": "Use hourly rate",
       "offered": "Offered",
-      "offeredNotInTotal": "not booked · not in total",
+      "offeredNotInTotal": "Not booked",
       "book": "Book",
       "removeBooking": "Remove booking",
-      "bookedInTotal": "booked · in total"
+      "bookedInTotal": "Booked"
     },
     "customerPicker": {
       "search": "Search customer by email or company…"
@@ -7327,13 +7348,19 @@
     "preselectAcceptHint": "You followed the \"Accept\" link from the email — click the button below to confirm.",
     "preselectDeclineHint": "You followed the \"Decline\" link from the email — click the button below to confirm.",
     "addons": {
-      "hint": "Tick the optional add-ons you would like. The total updates as you choose.",
+      "hint": "Book the add-ons you would like. The total updates as you choose.",
       "optional": "Optional",
       "included": "Booked",
       "notChosen": "Not booked",
       "updating": "Updating the total…",
       "totalChanged": "The total is now {{total}}. Please check it and accept again.",
-      "locked": "The add-ons were fixed when you accepted. Please contact us for a revised quote."
+      "locked": "The add-ons were fixed when you accepted. Please contact us for a revised quote.",
+      "changeUntil": "You can change your add-ons until {{time}}. Accept again to confirm a change."
+    },
+    "message": {
+      "label": "Your message to us (optional)",
+      "placeholder": "Anything we should know? It is sent with your acceptance.",
+      "yours": "Your message"
     }
   },
   "reminderTemplates": {

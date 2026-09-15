@@ -134,6 +134,29 @@ export interface QuoteDetail extends QuoteSummary {
   declineReason: string | null;
   pdfPath: string | null;
   businessBankAccountId: number | null;
+  /** #1451 — what the customer wrote with their acceptance. */
+  customerMessage?: string | null;
+  /** #1451 — every add-on change after the first acceptance, oldest first. */
+  selectionChanges?: QuoteSelectionChange[];
+  /** #1451 — accepted and no contract / event yet: the add-ons can still be changed here. */
+  addOnsEditable?: boolean;
+}
+
+/** One change of an accepted quote's add-ons (#1451). */
+export interface QuoteSelectionChange {
+  at: string;
+  by: 'customer' | 'admin';
+  adminId: number | null;
+  /** Descriptions of the add-ons booked / removed by this change. */
+  booked: string[];
+  removed: string[];
+  totalBeforeMinor: number;
+  totalAfterMinor: number;
+}
+
+export interface QuoteAddOnsChangeResult extends QuoteWithLineItems {
+  changed: boolean;
+  totalAmountMinor: number;
 }
 
 export interface QuoteWithLineItems {
@@ -312,6 +335,13 @@ export const quotesService = {
     return data.data || data;
   },
 
+  /** Change the add-ons of an accepted quote (#1451): the top-level positions
+   *  to have booked. The server stores a new PDF and emails the customer. */
+  async changeAddOns(id: number, selectedOptional: number[]): Promise<QuoteAddOnsChangeResult> {
+    const { data } = await api.post(`/admin/quotes/${id}/add-ons`, { selectedOptional });
+    return data.data || data;
+  },
+
   async convert(id: number): Promise<{ eventId: number; alreadyConverted: boolean }> {
     const { data } = await api.post(`/admin/quotes/${id}/convert`);
     return data.data || data;
@@ -450,8 +480,10 @@ export interface PublicQuoteView {
     isOptional?: boolean;
     selected?: boolean;
   }>;
-  /** The add-on choice was fixed by the first acceptance. */
+  /** The add-ons can no longer be changed: accepted and the response window has closed. */
   selectionLocked?: boolean;
+  /** #1451 — the message the customer sent with their acceptance. */
+  customerMessage?: string | null;
   /** Terms of Service block driven by the global `crm_quotes_tos_*`
    *  settings. When `required` is true, the public page must show a
    *  checkbox the customer ticks before Accept can fire. The text +
@@ -490,13 +522,20 @@ export const publicQuotesService = {
   async respond(
     token: string,
     action: 'accept' | 'decline',
-    options: { tosAccepted?: boolean; selectedOptional?: number[]; expectedTotalMinor?: number } = {},
+    options: {
+      tosAccepted?: boolean;
+      selectedOptional?: number[];
+      expectedTotalMinor?: number;
+      /** A message to the business with the acceptance (max 2000 chars). */
+      customerMessage?: string;
+    } = {},
   ): Promise<{ status: QuoteStatus; lockedAt: string }> {
     const { data } = await api.post(`/public/quotes/${token}/respond`, {
       action,
       tosAccepted: options.tosAccepted,
       selectedOptional: options.selectedOptional,
       expectedTotalMinor: options.expectedTotalMinor,
+      customerMessage: options.customerMessage,
     });
     return data.data || data;
   },

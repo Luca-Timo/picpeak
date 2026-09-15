@@ -37,6 +37,7 @@ import { useTranslation } from 'react-i18next';
 import { Plus, X, ArrowUp, ArrowDown, Save as SaveIcon, ChevronDown, ChevronRight, CornerDownRight, Tag } from 'lucide-react';
 import { Button } from '../common';
 import { DecimalInput } from '../common/DecimalInput';
+import { AddOnBookButton, AddOnBookingState } from '../common/AddOnBookButton';
 import { formatMoney } from '../../utils/money';
 import {
   countedLines, isUnselectedOptional, resolveDiscountAmounts,
@@ -649,25 +650,6 @@ export const LineItemsTable: React.FC<Props> = ({
                             <span>{t('crm.lineItems.optional', 'Offer as add-on')}</span>
                           </label>
                         )}
-                        {/* The button says what it does; the state is under the price
-                            ("booked · in total" / "not booked · not in total"). A
-                            booked add-on counts in the total — the customer can still
-                            take it out before accepting. */}
-                        {isQuote && !sub && li.isOptional && (
-                          <button
-                            type="button"
-                            onClick={() => setItem(idx, { selected: li.selected === false })}
-                            // Book is the call to action (filled, brand colour); Remove booking
-                            // stays a quiet outline.
-                            className={`rounded-md border px-2 py-0.5 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-neutral-900 ${li.selected === false
-                              ? 'border-primary-600 bg-primary-600 text-white hover:bg-primary-700 hover:border-primary-700'
-                              : 'border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'}`}
-                          >
-                            {li.selected === false
-                              ? t('crm.lineItems.book', 'Book')
-                              : t('crm.lineItems.removeBooking', 'Remove booking')}
-                          </button>
-                        )}
                       </div>
                       <button
                         type="button"
@@ -692,6 +674,21 @@ export const LineItemsTable: React.FC<Props> = ({
                           onChange={(e) => setItem(idx, { detailsText: e.target.value })}
                           placeholder={t('crm.lineItems.detailsPlaceholder', 'Optional notes — fine print, package inclusions, conditions…') as string}
                         />
+                      )}
+                      {/* An add-on's status is the last line of its item: the state,
+                          with the button that changes it. A booked add-on counts in
+                          the total — the customer can still take it out before
+                          accepting. */}
+                      {isQuote && !sub && li.isOptional && (
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                          <span className={`italic text-neutral-500 dark:text-neutral-400 ${dim}`}>
+                            <AddOnBookingState booked={li.selected !== false} />
+                          </span>
+                          <AddOnBookButton
+                            booked={li.selected !== false}
+                            onToggle={() => setItem(idx, { selected: li.selected === false })}
+                          />
+                        </div>
                       )}
                     </td>
                     <td className={`px-2 py-2 align-top ${dim}`}>
@@ -734,13 +731,6 @@ export const LineItemsTable: React.FC<Props> = ({
                       {parentAutoTotaled && (
                         <div className="text-[10px] font-normal text-neutral-500 dark:text-neutral-400 italic mt-0.5">
                           {t('crm.lineItems.autoTotaledNote', '= Σ Unterpositionen') as string}
-                        </div>
-                      )}
-                      {!sub && isQuote && li.isOptional && (
-                        <div className="text-[10px] font-normal text-neutral-500 dark:text-neutral-400 italic mt-0.5">
-                          {excluded
-                            ? t('crm.lineItems.offeredNotInTotal', 'not booked · not in total')
-                            : t('crm.lineItems.bookedInTotal', 'booked · in total')}
                         </div>
                       )}
                     </td>

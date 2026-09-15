@@ -6603,7 +6603,8 @@
       "customer": "Kunde",
       "event": "Anlassdetails",
       "payment": "Zahlungsbedingungen",
-      "extras": "Einleitung / Schluss / Extras"
+      "extras": "Einleitung / Schluss / Extras",
+      "customerMessage": "Nachricht des Kunden"
     },
     "savedToast": "Angebot als Entwurf gespeichert.",
     "edit": "Angebot bearbeiten",
@@ -6789,6 +6790,26 @@
       "none": "Keine Zusatzleistungen gewählt",
       "chosen": "Gebucht",
       "notChosen": "Nicht gebucht"
+    },
+    "addOns": {
+      "editHint": "Buchen oder entfernen Sie Zusatzleistungen und speichern Sie danach. Der Kunde erhält das aktualisierte Angebot per E-Mail.",
+      "save": "Änderungen an Zusatzleistungen speichern",
+      "confirmSave": "Der Kunde erhält das aktualisierte Angebot per E-Mail.",
+      "savedToast": "Zusatzleistungen aktualisiert. Der Kunde hat das aktualisierte Angebot per E-Mail erhalten.",
+      "unchangedToast": "Die Zusatzleistungen waren bereits so gebucht.",
+      "convertedHint": "Ändern Sie die Zusatzleistungen im Vertrag oder in der Rechnung.",
+      "historyTitle": "Änderungen",
+      "byCustomer": "durch den Kunden",
+      "byYou": "durch Sie",
+      "booked": "Gebucht: {{items}}",
+      "removed": "Entfernt: {{items}}",
+      "totalChange": "Gesamt {{before}} → {{after}}",
+      "errors": {
+        "converted": "Zu diesem Angebot gibt es bereits einen Vertrag, einen Anlass oder eine Rechnung. Ändern Sie die Zusatzleistungen dort.",
+        "notAccepted": "Zusatzleistungen können hier erst geändert werden, wenn das Angebot angenommen ist.",
+        "noAddOns": "Dieses Angebot enthält keine Zusatzleistungen.",
+        "failed": "Die Änderungen an den Zusatzleistungen konnten nicht gespeichert werden."
+      }
     }
   },
   "crm": {
@@ -6848,10 +6869,10 @@
       "useDayRate": "Tagessatz verwenden",
       "useHourlyRate": "Stundensatz verwenden",
       "offered": "Angeboten",
-      "offeredNotInTotal": "nicht gebucht · nicht in der Summe",
+      "offeredNotInTotal": "Nicht gebucht",
       "book": "Buchen",
       "removeBooking": "Buchung aufheben",
-      "bookedInTotal": "gebucht · in der Summe"
+      "bookedInTotal": "Gebucht"
     },
     "customerPicker": {
       "search": "Kunde nach E-Mail oder Firma suchen…"
@@ -7328,13 +7349,19 @@
     "preselectAcceptHint": "Sie sind dem Link „Annehmen“ aus der E-Mail gefolgt — klicken Sie zur Bestätigung auf die Schaltfläche unten.",
     "preselectDeclineHint": "Sie sind dem Link „Ablehnen“ aus der E-Mail gefolgt — klicken Sie zur Bestätigung auf die Schaltfläche unten.",
     "addons": {
-      "hint": "Wählen Sie die gewünschten Zusatzleistungen aus. Der Gesamtbetrag passt sich dabei an.",
+      "hint": "Buchen Sie die gewünschten Zusatzleistungen. Der Gesamtbetrag passt sich dabei an.",
       "optional": "Optional",
       "included": "Gebucht",
       "notChosen": "Nicht gebucht",
       "updating": "Gesamtbetrag wird aktualisiert…",
       "totalChanged": "Der Gesamtbetrag beträgt jetzt {{total}}. Bitte prüfen Sie ihn und nehmen Sie das Angebot erneut an.",
-      "locked": "Die Zusatzleistungen wurden bei der Annahme festgelegt. Bitte kontaktieren Sie uns für ein angepasstes Angebot."
+      "locked": "Die Zusatzleistungen wurden bei der Annahme festgelegt. Bitte kontaktieren Sie uns für ein angepasstes Angebot.",
+      "changeUntil": "Sie können Ihre Zusatzleistungen bis {{time}} ändern. Nehmen Sie das Angebot erneut an, um eine Änderung zu bestätigen."
+    },
+    "message": {
+      "label": "Ihre Nachricht an uns (optional)",
+      "placeholder": "Gibt es etwas, das wir wissen sollten? Die Nachricht wird mit Ihrer Annahme gesendet.",
+      "yours": "Ihre Nachricht"
     }
   },
   "reminderTemplates": {

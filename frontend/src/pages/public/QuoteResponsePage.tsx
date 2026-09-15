@@ -20,6 +20,7 @@ import { publicQuotesService, type PublicSelectionTotals } from '../../services/
 import { usePublicDarkMode } from '../../hooks/usePublicDarkMode';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { Loading } from '../../components/common';
+import { AddOnBookButton, AddOnBookingState } from '../../components/common/AddOnBookButton';
 import { formatMoneyMinor } from '../../utils/money';
 
 /**
@@ -29,6 +30,9 @@ import { formatMoneyMinor } from '../../utils/money';
  */
 import { formatShortDate } from '../../utils/dateShort';
 
+/** The longest message the server accepts with an acceptance. */
+const MESSAGE_MAX_LENGTH = 2000;
+
 export const QuoteResponsePage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { formatDateTime: fmtDateTime, formatTime: fmtTime } = useLocalizedDate();
@@ -36,6 +40,8 @@ export const QuoteResponsePage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Optional message to the business, sent with the acceptance (#1451).
+  const [message, setMessage] = useState('');
   // Apply dark mode per the branding settings (forced dark/light)
   // or fall back to the OS preference. Without this the public
   // quote page renders in light mode regardless of admin settings.
@@ -65,10 +71,11 @@ export const QuoteResponsePage: React.FC = () => {
     if (q?.tos?.acceptedAt) setTosAccepted(true);
   }, [q?.tos?.acceptedAt]);
 
-  // Optional add-ons (#1451 phase 2). The customer ticks the ones they want
-  // and the server returns the totals for that choice. Accepting sends the
-  // choice with the total shown here; the server recalculates and refuses a
-  // total that doesn't match. The choice is fixed from the first acceptance.
+  // Optional add-ons (#1451). The customer books the ones they want and the
+  // server returns the totals for that choice. Accepting sends the choice
+  // with the total shown here; the server recalculates and refuses a total
+  // that doesn't match. While the response window is open an accepted quote
+  // stays choosable: accepting again sends the changed choice.
   const offeredAddOns = React.useMemo(
     () => (q?.lineItems || []).filter((li) => li.isOptional && li.lineKind !== 'discount'
       && li.parentLineItemId == null && li.parentPosition == null),
@@ -98,13 +105,17 @@ export const QuoteResponsePage: React.FC = () => {
   const handleRespond = React.useCallback(async (action: 'accept' | 'decline') => {
     setBusy(true);
     setError(null);
+    const customerMessage = message.trim();
     try {
       await publicQuotesService.respond(token!, action, {
         tosAccepted,
         ...(action === 'accept' && canChoose && shownTotals
           ? { selectedOptional: shownTotals.selectedOptional, expectedTotalMinor: shownTotals.totalAmountMinor }
           : {}),
+        ...(action === 'accept' && customerMessage ? { customerMessage } : {}),
       });
+      // The sent message is shown back from the server ("Your message").
+      if (action === 'accept') setMessage('');
       await refetch();
     } catch (err: any) {
       const code = err?.response?.data?.code;
@@ -118,15 +129,11 @@ export const QuoteResponsePage: React.FC = () => {
           total: formatMoneyMinor(Number(err.response.data.totalAmountMinor || 0), q?.currency || 'CHF'),
         }));
         await totalsQuery.refetch();
-      } else if (code === 'SELECTION_LOCKED') {
-        setError(t('quoteResponse.addons.locked',
-          'The add-ons were fixed when you accepted. Please contact us for a revised quote.'));
-        await refetch();
       } else {
         setError(err?.response?.data?.error || err.message || 'Something went wrong');
       }
     } finally { setBusy(false); }
-  }, [token, refetch, t, tosAccepted, canChoose, shownTotals, totalsQuery, q?.currency]);
+  }, [token, refetch, t, tosAccepted, canChoose, shownTotals, totalsQuery, q?.currency, message]);
 
   // PRE-SELECTED ACTION FROM EMAIL LINK
   //
@@ -189,6 +196,10 @@ export const QuoteResponsePage: React.FC = () => {
   const responseStatus = quote.respondedAt
     ? (quote.status === 'accepted' ? 'accepted' : quote.status === 'declined' ? 'declined' : 'pending')
     : 'pending';
+  // Accepted, window still open: the add-ons can still be changed.
+  const changeAddOnsUntil = canChoose && quote.status === 'accepted' && quote.responseLockedAt
+    ? fmtTime(quote.responseLockedAt)
+    : null;
 
   // While the customer chooses, lines and totals follow the server's numbers
   // for the current choice; otherwise they are the stored ones.
@@ -271,7 +282,9 @@ export const QuoteResponsePage: React.FC = () => {
 
           {canChoose && (
             <p className="text-sm text-neutral-600 dark:text-neutral-400">
-              {t('quoteResponse.addons.hint', 'Tick the optional add-ons you would like. The total updates as you choose.')}
+              {changeAddOnsUntil
+                ? t('quoteResponse.addons.changeUntil', 'You can change your add-ons until {{time}}. Accept again to confirm a change.', { time: changeAddOnsUntil })
+                : t('quoteResponse.addons.hint', 'Book the add-ons you would like. The total updates as you choose.')}
             </p>
           )}
 
@@ -306,46 +319,36 @@ export const QuoteResponsePage: React.FC = () => {
                   const quantityText = isDiscount
                     ? ''
                     : li.unit === 'flat' ? unitLabel : `${Number(li.quantity)}${unitLabel ? ` ${unitLabel}` : ''}`;
-                  // Optional add-ons (#1451 phase 2): sub-items follow their parent.
+                  // Optional add-ons (#1451): sub-items follow their parent.
                   const addOnPosition = isSub ? li.parentPosition : li.position;
                   const isAddOn = !!li.isOptional && !isDiscount;
                   const addOnChosen = isAddOn && addOnPosition != null ? isChosen(addOnPosition, li.selected) : true;
+                  // A not-booked add-on is dimmed — except its Book button.
+                  const dim = addOnChosen ? '' : 'opacity-60';
                   const lineTotalMinor = lineTotalOverrides.get(li.position) ?? Number(li.lineTotalMinor);
+                  const hasDetails = !!li.detailsText && String(li.detailsText).trim().length > 0;
+                  // An add-on's status (with its Book / Remove booking button)
+                  // is the last line of the item: title, details, status.
+                  const hasStatus = isAddOn && !isSub;
+                  const itemBorder = 'border-b border-neutral-100 dark:border-neutral-700/70';
                   rows.push(
-                    <tr key={`row-${li.position}`} className={`border-b border-neutral-100 dark:border-neutral-700/70 ${
+                    <tr key={`row-${li.position}`} className={`${hasDetails || hasStatus ? '' : itemBorder} ${
                       isSub ? 'text-neutral-600 dark:text-neutral-400' : ''
-                    } ${addOnChosen ? '' : 'opacity-60'}`}>
-                      <td className="py-2">{isSub || isDiscount ? '' : topCount}</td>
-                      <td className={`py-2 whitespace-pre-line ${isSub ? 'pl-6' : ''}`}>
-                        {isAddOn && !isSub && canChoose ? (
-                          <label className="inline-flex items-start gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              className="mt-1"
-                              checked={addOnChosen}
-                              disabled={busy}
-                              onChange={(e) => toggleAddOn(li.position, e.target.checked)}
-                            />
-                            <span>{li.description}</span>
-                          </label>
-                        ) : (
-                          <>{isSub ? '• ' : ''}{li.description}</>
-                        )}
-                        {isAddOn && !isSub && (
+                    }`}>
+                      <td className={`py-2 ${dim}`}>{isSub || isDiscount ? '' : topCount}</td>
+                      <td className={`py-2 whitespace-pre-line ${isSub ? 'pl-6' : ''} ${dim}`}>
+                        {isSub ? '• ' : ''}{li.description}
+                        {hasStatus && canChoose && (
                           <span className="ml-2 inline-block rounded px-1.5 py-0.5 text-xs bg-neutral-100 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200">
-                            {canChoose
-                              ? t('quoteResponse.addons.optional', 'Optional')
-                              : addOnChosen
-                                ? t('quoteResponse.addons.included', 'Booked')
-                                : t('quoteResponse.addons.notChosen', 'Not booked')}
+                            {t('quoteResponse.addons.optional', 'Optional')}
                           </span>
                         )}
                       </td>
-                      <td className="py-2 text-right">{quantityText}</td>
-                      <td className="py-2 text-right tabular-nums">
+                      <td className={`py-2 text-right ${dim}`}>{quantityText}</td>
+                      <td className={`py-2 text-right tabular-nums ${dim}`}>
                         {priceless || isDiscount ? '' : formatMoneyMinor(Number(li.unitPriceMinor), quote.currency)}
                       </td>
-                      <td className={`py-2 text-right tabular-nums ${isSub ? 'italic' : ''}`}>
+                      <td className={`py-2 text-right tabular-nums ${isSub ? 'italic' : ''} ${dim}`}>
                         {priceless
                           ? ''
                           : isSub
@@ -354,13 +357,40 @@ export const QuoteResponsePage: React.FC = () => {
                       </td>
                     </tr>
                   );
-                  if (li.detailsText && String(li.detailsText).trim().length > 0) {
+                  if (hasDetails) {
                     rows.push(
-                      <tr key={`details-${li.position}`} className="border-b border-neutral-100 dark:border-neutral-700/70">
+                      <tr key={`details-${li.position}`} className={hasStatus ? '' : itemBorder}>
                         <td className="py-1"></td>
-                        <td className={`py-1 text-xs italic text-neutral-500 dark:text-neutral-400 whitespace-pre-line ${isSub ? 'pl-10' : 'pl-4'}`}
+                        <td className={`py-1 text-xs italic text-neutral-500 dark:text-neutral-400 whitespace-pre-line ${isSub ? 'pl-10' : 'pl-4'} ${dim}`}
                           colSpan={4}>
                           {li.detailsText}
+                        </td>
+                      </tr>
+                    );
+                  }
+                  if (hasStatus) {
+                    rows.push(
+                      <tr key={`status-${li.position}`} className={itemBorder}>
+                        <td className="pb-2"></td>
+                        <td className="pb-2" colSpan={4}>
+                          {canChoose ? (
+                            <div className="flex items-center gap-2 flex-wrap text-xs">
+                              <span className={`italic text-neutral-500 dark:text-neutral-400 ${dim}`}>
+                                <AddOnBookingState booked={addOnChosen} />
+                              </span>
+                              <AddOnBookButton
+                                booked={addOnChosen}
+                                disabled={busy}
+                                onToggle={() => toggleAddOn(li.position, !addOnChosen)}
+                              />
+                            </div>
+                          ) : (
+                            <span className={`inline-block rounded px-1.5 py-0.5 text-xs bg-neutral-100 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200 ${dim}`}>
+                              {addOnChosen
+                                ? t('quoteResponse.addons.included', 'Booked')
+                                : t('quoteResponse.addons.notChosen', 'Not booked')}
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -398,6 +428,15 @@ export const QuoteResponsePage: React.FC = () => {
               <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
                 {t('quoteResponse.submitting', 'Recording your response…')}
               </p>
+            )}
+            {/* What the customer wrote with their acceptance, shown back. */}
+            {quote.customerMessage && quote.status !== 'declined' && (
+              <div className="text-left max-w-prose mx-auto mb-4 rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 p-4">
+                <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                  {t('quoteResponse.message.yours', 'Your message')}
+                </p>
+                <p className="text-sm whitespace-pre-wrap break-words text-neutral-800 dark:text-neutral-200">{quote.customerMessage}</p>
+              </div>
             )}
             {locked ? (
               <p className="text-sm text-neutral-600 dark:text-neutral-400">
@@ -465,6 +504,24 @@ export const QuoteResponsePage: React.FC = () => {
                     </label>
                   </div>
                 )}
+
+                {/* Optional message to the business, sent with Accept. */}
+                <div className="text-left max-w-prose mx-auto mb-4">
+                  <label htmlFor="quote-customer-message"
+                    className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                    {t('quoteResponse.message.label', 'Your message to us (optional)')}
+                  </label>
+                  <textarea
+                    id="quote-customer-message"
+                    rows={3}
+                    maxLength={MESSAGE_MAX_LENGTH}
+                    value={message}
+                    disabled={busy}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder={t('quoteResponse.message.placeholder', 'Anything we should know? It is sent with your acceptance.')}
+                    className="w-full rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-primary-600"
+                  />
+                </div>
 
                 {/* Pre-selected from email link: gentle highlight on
                     the matching CTA via a glowing focus ring, plus a

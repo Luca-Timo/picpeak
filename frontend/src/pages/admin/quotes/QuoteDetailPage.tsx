@@ -10,6 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Eye, Send, Copy, ArrowRightCircle, Edit2, Receipt, CheckCircle2, ScrollText, XCircle } from 'lucide-react';
 import { Button, Card, Loading } from '../../../components/common';
 import { DocumentLineageCard } from '../../../components/admin/DocumentLineageCard';
+import { QuoteAddOnsCard } from './QuoteAddOnsCard';
 import { quotesService } from '../../../services/quotes.service';
 import { quoteCatalogService } from '../../../services/quoteCatalog.service';
 import { PermissionGate } from '../../../components/admin/PermissionGate';
@@ -264,31 +265,17 @@ export const QuoteDetailPage: React.FC = () => {
         </div>
       </Card>
 
-      {q.optionalSelection && (
+      {/* What the customer wrote with their acceptance (#1451) — plain text. */}
+      {q.customerMessage && (
         <Card>
-          <h3 className="font-semibold mb-2">{t('quotes.selection.title', 'Add-ons at acceptance')}</h3>
-          {q.selectionAcceptedAt && (
-            <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-2">
-              {q.optionalSelection.by === 'customer'
-                ? t('quotes.selection.byCustomer', 'Chosen by the customer on {{date}}', { date: fmtDateTime(q.selectionAcceptedAt) })
-                : t('quotes.selection.byAdmin', 'Recorded when you accepted on {{date}}', { date: fmtDateTime(q.selectionAcceptedAt) })}
-            </p>
-          )}
-          {q.optionalSelection.addOns.every((a) => !a.selected) && (
-            <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-2">{t('quotes.selection.none', 'No add-ons chosen')}</p>
-          )}
-          <ul className="text-sm space-y-1">
-            {q.optionalSelection.addOns.map((a) => (
-              <li key={a.position} className="flex justify-between gap-4">
-                <span className="text-neutral-900 dark:text-neutral-100">{a.description}</span>
-                <span className={a.selected ? 'text-green-700 dark:text-green-400' : 'text-neutral-500 dark:text-neutral-400'}>
-                  {a.selected ? t('quotes.selection.chosen', 'Booked') : t('quotes.selection.notChosen', 'Not booked')}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <h3 className="font-semibold mb-2 text-neutral-900 dark:text-neutral-100">
+            {t('quotes.section.customerMessage', 'Message from the customer')}
+          </h3>
+          <p className="text-sm whitespace-pre-wrap break-words text-neutral-700 dark:text-neutral-300">{q.customerMessage}</p>
         </Card>
       )}
+
+      <QuoteAddOnsCard quote={q} lineItems={data.lineItems} />
 
       <Card>
         <h3 className="font-semibold mb-3">{t('quotes.section.lineItems', 'Line items')}</h3>
@@ -318,12 +305,13 @@ export const QuoteDetailPage: React.FC = () => {
                     <td className="py-2">{isDiscountLine ? '' : `${Number(li.quantity)}${unitLabel ? ` ${unitLabel}` : ''}`}</td>
                     <td className={`py-2 whitespace-pre-line ${isSubItem ? 'pl-6' : ''}`}>
                       {isSubItem ? '• ' : ''}{li.description}
+                      {/* An add-on's status is the last line of its item. */}
                       {li.isOptional && (
-                        <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">
+                        <div className="text-xs text-neutral-500 dark:text-neutral-400">
                           {notIncluded
                             ? t('crm.lineItems.optionalNotIncluded', '(add-on, not booked)')
                             : t('crm.lineItems.optionalIncluded', '(add-on, booked)')}
-                        </span>
+                        </div>
                       )}
                     </td>
                     <td className="py-2 text-right tabular-nums">{isDiscountLine ? '' : formatMoneyMinor(Number(li.unitPriceMinor || 0), q.currency)}</td>

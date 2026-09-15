@@ -1,9 +1,11 @@
 /**
- * Public quote page — optional add-ons (#1451 phase 2).
+ * Public quote page — optional add-ons (#1451).
  *
- * The customer ticks add-ons, the page shows the server's totals for that
- * choice, and accepting sends the choice with the total that was shown.
- * Once accepted the choice is shown read-only.
+ * The customer books or removes add-ons, the page shows the server's totals
+ * for that choice, and accepting sends the choice with the total that was
+ * shown, plus an optional message. While the response window is open an
+ * accepted quote's add-ons can still be changed by accepting again; once it
+ * has closed the choice is shown read-only.
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -67,16 +69,19 @@ const quote = {
   issueDate: '2026-09-01', validUntil: null, eventName: null, eventDate: null,
   eventTimeStart: null, eventTimeEnd: null, introText: null, outroText: null,
   netAmountMinor: 120000, vatRate: 0, vatAmountMinor: 0, shippingAmountMinor: 0, totalAmountMinor: 120000,
-  respondedAt: null, responseLockedAt: null, canRespond: true, selectionLocked: false,
+  respondedAt: null, responseLockedAt: null, canRespond: true, selectionLocked: false, customerMessage: null,
   lineItems: [
     line(1, 'Wedding day', 100000),
-    line(2, 'Album', 30000, { isOptional: true, selected: false }),
+    line(2, 'Album', 30000, { isOptional: true, selected: false, detailsText: '30 pages, linen cover' }),
     line(3, 'Drone', 20000, { isOptional: true, selected: true }),
   ],
   tos: { required: false, text: '', url: '', acceptedAt: null },
   recipient: null,
   issuer: null,
 };
+
+// The Book / Remove booking buttons in line order: [Album, Drone].
+const addOnButtons = () => screen.getAllByRole('button', { name: /^(Book|Remove booking)$/ });
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -102,37 +107,76 @@ beforeEach(() => {
   respond.mockResolvedValue({ status: 'accepted', lockedAt: '2026-09-01T10:15:00Z' });
 });
 
-it('recalculates as add-ons are ticked and accepts with the total shown', async () => {
+it('books and removes add-ons, recalculates, and accepts with the total shown and the message', async () => {
   const user = userEvent.setup();
   renderPage();
 
-  const album = await screen.findByRole('checkbox', { name: 'Album' });
-  expect(album).not.toBeChecked();
-  expect(screen.getByRole('checkbox', { name: 'Drone' })).toBeChecked();
+  await screen.findByText('Album');
+  expect(addOnButtons().map((b) => b.textContent)).toEqual(['Book', 'Remove booking']);
   await waitFor(() => expect(totals).toHaveBeenCalledWith('abc', [3]));
+  // Title, then details, then the status with the button as the last line.
+  const details = screen.getByText('30 pages, linen cover').closest('tr');
+  expect(details?.nextElementSibling).toContainElement(addOnButtons()[0]);
 
-  await user.click(album);
+  await user.click(addOnButtons()[0]);
   await waitFor(() => expect(totals).toHaveBeenCalledWith('abc', [2, 3]));
+  expect(addOnButtons()[0]).toHaveTextContent('Remove booking');
+
+  await user.click(addOnButtons()[1]);
+  await waitFor(() => expect(totals).toHaveBeenCalledWith('abc', [2]));
+  expect(addOnButtons()[1]).toHaveTextContent('Book');
+
+  await user.type(screen.getByLabelText('Your message to us (optional)'), 'See you there');
 
   const accept = screen.getByRole('button', { name: /^accept/i });
   await waitFor(() => expect(accept).toBeEnabled());
   await user.click(accept);
   await waitFor(() => expect(respond).toHaveBeenCalledWith('abc', 'accept', expect.objectContaining({
-    selectedOptional: [2, 3], expectedTotalMinor: 150000,
+    selectedOptional: [2], expectedTotalMinor: 130000, customerMessage: 'See you there',
   })));
 });
 
-it('shows the fixed choice read-only once accepted', async () => {
+it('lets the customer change the add-ons after accepting while the window is open', async () => {
+  get.mockResolvedValue({
+    quote: {
+      ...quote, status: 'accepted', canRespond: true, selectionLocked: false,
+      respondedAt: '2026-09-01T10:00:00Z', responseLockedAt: '2026-09-01T10:15:00Z',
+      customerMessage: 'See you there',
+    },
+  });
+  const user = userEvent.setup();
+  renderPage();
+
+  expect(await screen.findByText('Your message')).toBeInTheDocument();
+  expect(screen.getByText('See you there')).toBeInTheDocument();
+  expect(screen.getByText(/You can change your add-ons until 2026-09-01T10:15:00Z/)).toBeInTheDocument();
+  await waitFor(() => expect(totals).toHaveBeenCalledWith('abc', [3]));
+
+  await user.click(addOnButtons()[1]);
+  await waitFor(() => expect(totals).toHaveBeenCalledWith('abc', []));
+
+  const accept = screen.getByRole('button', { name: /^accept/i });
+  await waitFor(() => expect(accept).toBeEnabled());
+  await user.click(accept);
+  await waitFor(() => expect(respond).toHaveBeenCalledWith('abc', 'accept', expect.objectContaining({
+    selectedOptional: [], expectedTotalMinor: 100000,
+  })));
+  // No new message typed: the earlier one is kept, nothing is re-sent.
+  expect(respond.mock.calls[0][2]).not.toHaveProperty('customerMessage');
+});
+
+it('shows the final choice read-only once the window has closed', async () => {
   get.mockResolvedValue({
     quote: {
       ...quote, status: 'accepted', canRespond: false, selectionLocked: true,
-      respondedAt: '2026-09-01T10:00:00Z',
+      respondedAt: '2026-09-01T10:00:00Z', responseLockedAt: '2026-09-01T10:15:00Z',
     },
   });
   renderPage();
 
   expect(await screen.findByText('Not booked')).toBeInTheDocument();
   expect(screen.getByText('Booked')).toBeInTheDocument();
-  expect(screen.queryByRole('checkbox')).toBeNull();
+  expect(screen.queryByRole('button', { name: /^(Book|Remove booking)$/ })).toBeNull();
+  expect(screen.queryByLabelText('Your message to us (optional)')).toBeNull();
   expect(totals).not.toHaveBeenCalled();
 });
