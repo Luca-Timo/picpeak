@@ -388,7 +388,9 @@ export const BillEditorPage: React.FC = () => {
     vatRate,
     vatCode,
     shippingAmountMinor: toMinor(shipping),
-    ccPdfEmail: ccPdfEmail || undefined,
+    // A cleared field is sent as null so the save clears it (see the event
+    // snapshot below).
+    ccPdfEmail: ccPdfEmail || null,
     // Payment-term template id (migration 113). null = no template
     // selected; backend falls back to source-quote snapshot or the
     // global crm_invoices_* defaults.
@@ -413,15 +415,15 @@ export const BillEditorPage: React.FC = () => {
     // spawns N invoices via spawnInstallmentInvoices and returns
     // { invoiceIds: [...] }; single-row or null → single invoice.
     installments: installments || undefined,
-    // Inline event snapshot (migration 123). Empty string → undefined
-    // so the backend can distinguish "not provided" from a deliberate
-    // clear (which the route's `optional({ values: 'falsy' })` already
-    // treats identically — falsy values bypass validation entirely).
+    // Inline event snapshot (migration 123). A cleared field is sent as
+    // null so the save clears it: undefined drops the key from the request,
+    // and the PUT handler kept the old value. The route's
+    // `optional({ values: 'falsy' })` lets null through unvalidated.
     eventId: eventId ?? undefined,
-    eventName: eventName || undefined,
-    eventDate: eventDate || undefined,
-    eventTimeStart: eventTimeStart || undefined,
-    eventTimeEnd: eventTimeEnd || undefined,
+    eventName: eventName || null,
+    eventDate: eventDate || null,
+    eventTimeStart: eventTimeStart || null,
+    eventTimeEnd: eventTimeEnd || null,
     // Sub-items, details, units and discount lines survive save → reload.
     lineItems: lineItems.map(toPayloadLineItem),
   });
