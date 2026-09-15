@@ -6848,10 +6848,10 @@
       "useDayRate": "Tagessatz verwenden",
       "useHourlyRate": "Stundensatz verwenden",
       "offered": "Angeboten",
-      "booked": "Gebucht",
-      "addOnStatus": "Buchung der Zusatzleistung",
       "offeredNotInTotal": "nicht gebucht · nicht in der Summe",
-      "notBooked": "Nicht gebucht"
+      "book": "Buchen",
+      "removeBooking": "Buchung aufheben",
+      "bookedInTotal": "gebucht · in der Summe"
     },
     "customerPicker": {
       "search": "Kunde nach E-Mail oder Firma suchen…"

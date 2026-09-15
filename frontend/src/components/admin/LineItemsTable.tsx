@@ -647,34 +647,20 @@ export const LineItemsTable: React.FC<Props> = ({
                             <span>{t('crm.lineItems.optional', 'Offer as add-on')}</span>
                           </label>
                         )}
-                        {/* An add-on is offered by ticking "Offer as add-on"; this
-                            switch says whether it is booked: Booked counts in the
-                            total (the customer can still take it out before
-                            accepting), Not booked stays out of it. One control
-                            shows the state and changes it. */}
+                        {/* The button says what it does; the state is under the price
+                            ("booked · in total" / "not booked · not in total"). A
+                            booked add-on counts in the total — the customer can still
+                            take it out before accepting. */}
                         {isQuote && !sub && li.isOptional && (
-                          <span
-                            role="group"
-                            aria-label={t('crm.lineItems.addOnStatus', 'Booking of this add-on') as string}
-                            className="inline-flex overflow-hidden rounded-md border border-neutral-300 dark:border-neutral-600"
+                          <button
+                            type="button"
+                            onClick={() => setItem(idx, { selected: li.selected === false })}
+                            className="rounded-md border border-primary-600 dark:border-primary-400 px-2 py-0.5 font-medium text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-neutral-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600"
                           >
-                            {([false, true] as const).map((booked) => {
-                              const active = (li.selected !== false) === booked;
-                              return (
-                                <button
-                                  key={booked ? 'booked' : 'not-booked'}
-                                  type="button"
-                                  aria-pressed={active}
-                                  onClick={() => setItem(idx, { selected: booked })}
-                                  className={`px-2 py-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-600 ${active
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'}`}
-                                >
-                                  {booked ? t('crm.lineItems.booked', 'Booked') : t('crm.lineItems.notBooked', 'Not booked')}
-                                </button>
-                              );
-                            })}
-                          </span>
+                            {li.selected === false
+                              ? t('crm.lineItems.book', 'Book')
+                              : t('crm.lineItems.removeBooking', 'Remove booking')}
+                          </button>
                         )}
                       </div>
                       <button
@@ -744,9 +730,11 @@ export const LineItemsTable: React.FC<Props> = ({
                           {t('crm.lineItems.autoTotaledNote', '= Σ Unterpositionen') as string}
                         </div>
                       )}
-                      {!sub && excluded && (
+                      {!sub && isQuote && li.isOptional && (
                         <div className="text-[10px] font-normal text-neutral-500 dark:text-neutral-400 italic mt-0.5">
-                          {t('crm.lineItems.offeredNotInTotal', 'not booked · not in total')}
+                          {excluded
+                            ? t('crm.lineItems.offeredNotInTotal', 'not booked · not in total')
+                            : t('crm.lineItems.bookedInTotal', 'booked · in total')}
                         </div>
                       )}
                     </td>

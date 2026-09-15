@@ -6848,10 +6848,10 @@
       "useDayRate": "Use day rate",
       "useHourlyRate": "Use hourly rate",
       "offered": "Offered",
-      "booked": "Booked",
-      "addOnStatus": "Booking of this add-on",
       "offeredNotInTotal": "not booked · not in total",
-      "notBooked": "Not booked"
+      "book": "Book",
+      "removeBooking": "Remove booking",
+      "bookedInTotal": "booked · in total"
     },
     "customerPicker": {
       "search": "Search customer by email or company…"
