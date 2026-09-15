@@ -285,7 +285,7 @@ export const QuoteTemplateEditorPage: React.FC = () => {
                   <label className="mr-2 inline-flex items-center gap-1 text-xs text-neutral-600 dark:text-neutral-400">
                     <input type="checkbox" checked={section.isOptional}
                       onChange={(e) => updateSection(idx, { ...section, isOptional: e.target.checked })} />
-                    {t('crm.lineItems.optional', 'Optional add-on')}
+                    {t('crm.lineItems.optional', 'Offer as add-on')}
                   </label>
                   <button type="button" onClick={() => moveSection(idx, -1)} aria-label="Move up" className="p-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-700"><ArrowUp className="w-4 h-4" /></button>
                   <button type="button" onClick={() => moveSection(idx, 1)} aria-label="Move down" className="p-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-700"><ArrowDown className="w-4 h-4" /></button>

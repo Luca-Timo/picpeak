@@ -282,7 +282,7 @@ export const QuoteDetailPage: React.FC = () => {
               <li key={a.position} className="flex justify-between gap-4">
                 <span className="text-neutral-900 dark:text-neutral-100">{a.description}</span>
                 <span className={a.selected ? 'text-green-700 dark:text-green-400' : 'text-neutral-500 dark:text-neutral-400'}>
-                  {a.selected ? t('quotes.selection.chosen', 'Chosen') : t('quotes.selection.notChosen', 'Not chosen')}
+                  {a.selected ? t('quotes.selection.chosen', 'Booked') : t('quotes.selection.notChosen', 'Not booked')}
                 </span>
               </li>
             ))}
@@ -321,8 +321,8 @@ export const QuoteDetailPage: React.FC = () => {
                       {li.isOptional && (
                         <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">
                           {notIncluded
-                            ? t('crm.lineItems.optionalNotIncluded', '(optional, not included)')
-                            : t('crm.lineItems.optionalIncluded', '(optional, included)')}
+                            ? t('crm.lineItems.optionalNotIncluded', '(add-on, not booked)')
+                            : t('crm.lineItems.optionalIncluded', '(add-on, booked)')}
                         </span>
                       )}
                     </td>

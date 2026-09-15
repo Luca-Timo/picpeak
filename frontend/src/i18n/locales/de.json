@@ -6787,8 +6787,8 @@
       "byCustomer": "Vom Kunden gewählt am {{date}}",
       "byAdmin": "Bei Ihrer Annahme festgehalten am {{date}}",
       "none": "Keine Zusatzleistungen gewählt",
-      "chosen": "Gewählt",
-      "notChosen": "Nicht gewählt"
+      "chosen": "Gebucht",
+      "notChosen": "Nicht gebucht"
     }
   },
   "crm": {
@@ -6818,12 +6818,10 @@
       "discountPercentHint": "{{percent}} % der Zwischensumme",
       "followsDays": "Folgt den Tagen des Angebots",
       "followsHours": "Folgt den Stunden des Angebots",
-      "included": "Enthalten",
       "insertPackage": "Paket einfügen…",
-      "notIncluded": "nicht enthalten",
-      "optional": "Optionale Zusatzleistung",
-      "optionalIncluded": "(optional, enthalten)",
-      "optionalNotIncluded": "(optional, nicht enthalten)",
+      "optional": "Als Zusatzleistung anbieten",
+      "optionalIncluded": "(Zusatzleistung, gebucht)",
+      "optionalNotIncluded": "(Zusatzleistung, nicht gebucht)",
       "rateSource": {
         "auto": "Satz wird beim Speichern übernommen",
         "customer": "Kundensatz",
@@ -6848,7 +6846,12 @@
         "piece": "Stk."
       },
       "useDayRate": "Tagessatz verwenden",
-      "useHourlyRate": "Stundensatz verwenden"
+      "useHourlyRate": "Stundensatz verwenden",
+      "offered": "Angeboten",
+      "booked": "Gebucht",
+      "addOnStatus": "Buchung der Zusatzleistung",
+      "offeredNotInTotal": "nicht gebucht · nicht in der Summe",
+      "notBooked": "Nicht gebucht"
     },
     "customerPicker": {
       "search": "Kunde nach E-Mail oder Firma suchen…"
@@ -7327,8 +7330,8 @@
     "addons": {
       "hint": "Wählen Sie die gewünschten Zusatzleistungen aus. Der Gesamtbetrag passt sich dabei an.",
       "optional": "Optional",
-      "included": "Enthalten",
-      "notChosen": "Nicht gewählt",
+      "included": "Gebucht",
+      "notChosen": "Nicht gebucht",
       "updating": "Gesamtbetrag wird aktualisiert…",
       "totalChanged": "Der Gesamtbetrag beträgt jetzt {{total}}. Bitte prüfen Sie ihn und nehmen Sie das Angebot erneut an.",
       "locked": "Die Zusatzleistungen wurden bei der Annahme festgelegt. Bitte kontaktieren Sie uns für ein angepasstes Angebot."

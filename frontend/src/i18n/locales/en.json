@@ -6787,8 +6787,8 @@
       "byCustomer": "Chosen by the customer on {{date}}",
       "byAdmin": "Recorded when you accepted on {{date}}",
       "none": "No add-ons chosen",
-      "chosen": "Chosen",
-      "notChosen": "Not chosen"
+      "chosen": "Booked",
+      "notChosen": "Not booked"
     }
   },
   "crm": {
@@ -6818,12 +6818,10 @@
       "discountPercentHint": "{{percent}} % of the subtotal",
       "followsDays": "Follows the quote days",
       "followsHours": "Follows the quote hours",
-      "included": "Included",
       "insertPackage": "Insert package…",
-      "notIncluded": "not included",
-      "optional": "Optional add-on",
-      "optionalIncluded": "(optional, included)",
-      "optionalNotIncluded": "(optional, not included)",
+      "optional": "Offer as add-on",
+      "optionalIncluded": "(add-on, booked)",
+      "optionalNotIncluded": "(add-on, not booked)",
       "rateSource": {
         "auto": "Rate applied on save",
         "customer": "Customer rate",
@@ -6848,7 +6846,12 @@
         "piece": "pcs"
       },
       "useDayRate": "Use day rate",
-      "useHourlyRate": "Use hourly rate"
+      "useHourlyRate": "Use hourly rate",
+      "offered": "Offered",
+      "booked": "Booked",
+      "addOnStatus": "Booking of this add-on",
+      "offeredNotInTotal": "not booked · not in total",
+      "notBooked": "Not booked"
     },
     "customerPicker": {
       "search": "Search customer by email or company…"
@@ -7326,8 +7329,8 @@
     "addons": {
       "hint": "Tick the optional add-ons you would like. The total updates as you choose.",
       "optional": "Optional",
-      "included": "Included",
-      "notChosen": "Not chosen",
+      "included": "Booked",
+      "notChosen": "Not booked",
       "updating": "Updating the total…",
       "totalChanged": "The total is now {{total}}. Please check it and accept again.",
       "locked": "The add-ons were fixed when you accepted. Please contact us for a revised quote."

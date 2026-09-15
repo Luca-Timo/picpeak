@@ -644,18 +644,37 @@ export const LineItemsTable: React.FC<Props> = ({
                               checked={!!li.isOptional}
                               onChange={(e) => setItem(idx, { isOptional: e.target.checked, selected: e.target.checked ? false : true })}
                             />
-                            <span>{t('crm.lineItems.optional', 'Optional add-on')}</span>
+                            <span>{t('crm.lineItems.optional', 'Offer as add-on')}</span>
                           </label>
                         )}
+                        {/* An add-on is offered by ticking "Offer as add-on"; this
+                            switch says whether it is booked: Booked counts in the
+                            total (the customer can still take it out before
+                            accepting), Not booked stays out of it. One control
+                            shows the state and changes it. */}
                         {isQuote && !sub && li.isOptional && (
-                          <label className="inline-flex items-center gap-1">
-                            <input
-                              type="checkbox"
-                              checked={li.selected !== false}
-                              onChange={(e) => setItem(idx, { selected: e.target.checked })}
-                            />
-                            <span>{t('crm.lineItems.included', 'Included')}</span>
-                          </label>
+                          <span
+                            role="group"
+                            aria-label={t('crm.lineItems.addOnStatus', 'Booking of this add-on') as string}
+                            className="inline-flex overflow-hidden rounded-md border border-neutral-300 dark:border-neutral-600"
+                          >
+                            {([false, true] as const).map((booked) => {
+                              const active = (li.selected !== false) === booked;
+                              return (
+                                <button
+                                  key={booked ? 'booked' : 'not-booked'}
+                                  type="button"
+                                  aria-pressed={active}
+                                  onClick={() => setItem(idx, { selected: booked })}
+                                  className={`px-2 py-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-600 ${active
+                                    ? 'bg-primary-600 text-white'
+                                    : 'bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'}`}
+                                >
+                                  {booked ? t('crm.lineItems.booked', 'Booked') : t('crm.lineItems.notBooked', 'Not booked')}
+                                </button>
+                              );
+                            })}
+                          </span>
                         )}
                       </div>
                       <button
@@ -727,7 +746,7 @@ export const LineItemsTable: React.FC<Props> = ({
                       )}
                       {!sub && excluded && (
                         <div className="text-[10px] font-normal text-neutral-500 dark:text-neutral-400 italic mt-0.5">
-                          {t('crm.lineItems.notIncluded', 'not included')}
+                          {t('crm.lineItems.offeredNotInTotal', 'not booked · not in total')}
                         </div>
                       )}
                     </td>

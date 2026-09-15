@@ -336,8 +336,8 @@ export const QuoteResponsePage: React.FC = () => {
                             {canChoose
                               ? t('quoteResponse.addons.optional', 'Optional')
                               : addOnChosen
-                                ? t('quoteResponse.addons.included', 'Included')
-                                : t('quoteResponse.addons.notChosen', 'Not chosen')}
+                                ? t('quoteResponse.addons.included', 'Booked')
+                                : t('quoteResponse.addons.notChosen', 'Not booked')}
                           </span>
                         )}
                       </td>

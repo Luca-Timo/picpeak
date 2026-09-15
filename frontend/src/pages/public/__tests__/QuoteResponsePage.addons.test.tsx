@@ -131,8 +131,8 @@ it('shows the fixed choice read-only once accepted', async () => {
   });
   renderPage();
 
-  expect(await screen.findByText('Not chosen')).toBeInTheDocument();
-  expect(screen.getByText('Included')).toBeInTheDocument();
+  expect(await screen.findByText('Not booked')).toBeInTheDocument();
+  expect(screen.getByText('Booked')).toBeInTheDocument();
   expect(screen.queryByRole('checkbox')).toBeNull();
   expect(totals).not.toHaveBeenCalled();
 });
