@@ -69,6 +69,16 @@ function parseJsonColumn(value) {
   try { return JSON.parse(value); } catch (_) { return null; }
 }
 
+function parseSelectionChanges(raw) {
+  if (!raw) return [];
+  try {
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch (_) {
+    return [];
+  }
+}
+
 function transformQuote(q) {
   if (!q) return null;
   return {
@@ -122,6 +132,11 @@ function transformQuote(q) {
     acceptedAt: q.accepted_at,
     declinedAt: q.declined_at,
     declineReason: q.decline_reason ?? null,
+    // The add-on process (#1451): what the customer wrote, every later change,
+    // and whether the add-ons can still be changed here.
+    customerMessage: q.customer_message || null,
+    selectionChanges: parseSelectionChanges(q.selection_changes),
+    addOnsEditable: q.status === 'accepted' && !q.converted_event_id && !q.converted_contract_id,
     convertedEventId: q.converted_event_id,
     // Migration 130 lineage. Null until quoteService.createFromQuote
     // sets it. Surfaced so QuoteDetailPage can render a "Linked
@@ -531,6 +546,30 @@ router.post(
     const id = parseInt(req.params.id, 10);
     const result = await quoteService.adminAcceptQuote(id, req.admin.id);
     return successResponse(res, result, 200, 'Quote accepted');
+  })
+);
+
+// Change the add-ons of an accepted quote (#1451), e.g. after a phone call —
+// until a contract, event or invoice exists. Recorded, re-rendered, and the
+// customer is emailed the updated quote.
+router.post(
+  '/:id/add-ons',
+  requirePermission('quotes.manage'),
+  [
+    param('id').isInt({ min: 1 }),
+    body('selectedOptional').isArray({ max: 200 }),
+    body('selectedOptional.*').isInt({ min: 1 }).toInt(),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const id = parseInt(req.params.id, 10);
+    const result = await quoteService.adminChangeAddOns(id, { selectedOptional: req.body.selectedOptional }, req.admin.id);
+    const data = await quoteService.getQuoteById(id);
+    return successResponse(res, {
+      ...result,
+      quote: transformQuote(data.quote),
+      lineItems: data.lineItems.map(transformLineItem),
+    });
   })
 );
 

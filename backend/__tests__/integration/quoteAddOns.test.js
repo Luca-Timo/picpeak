@@ -158,23 +158,38 @@ test('accepting stores the choice, the recalculated totals and the accepted PDF'
   expect(Number(line('Verein').line_total_minor)).toBe(-13000);
 });
 
-test('the choice is fixed after the first acceptance', async () => {
+test('the customer can change the add-ons while the response window is open, not after', async () => {
   const { quoteId, token } = await withAddOns();
   expect((await respond(token, { action: 'accept', selectedOptional: [4], expectedTotalMinor: 116748 })).status).toBe(200);
-  expect((await respond(token, { action: 'decline' })).status).toBe(200);
+  // Under Jest a Date written to SQLite can read back as "[object Object]"
+  // (see helpers/crmDb createPublicToken); store the lock time as ISO text so
+  // the window checks read a real time.
+  const lockIn = (ms) => db('quotes').where({ id: quoteId }).update({ response_locked_at: new Date(Date.now() + ms).toISOString() });
+  await lockIn(10 * 60 * 1000);
+  let view = await request(app).get(`/api/public/quotes/${token}`);
+  expect(view.body.quote.selectionLocked).toBe(false);
 
-  const changed = await respond(token, { action: 'accept', selectedOptional: [2, 4], expectedTotalMinor: 145935 });
-  expect(changed.status).toBe(409);
-  expect(changed.body.code).toBe('SELECTION_LOCKED');
-
-  // Accepting again inside the window keeps the first choice.
+  // Accepting again with the same choice changes nothing.
   expect((await respond(token, { action: 'accept', selectedOptional: [4] })).status).toBe(200);
-  const quote = await db('quotes').where({ id: quoteId }).first();
-  expect(quote.status).toBe('accepted');
-  expect(JSON.parse(quote.optional_selection_snapshot).selectedOptional).toEqual([4]);
+  let quote = await db('quotes').where({ id: quoteId }).first();
+  expect(quote.selection_changes).toBeNull();
 
-  const view = await request(app).get(`/api/public/quotes/${token}`);
+  // Another choice inside the window is recorded as a change by the customer.
+  const changed = await respond(token, { action: 'accept', selectedOptional: [2, 4], expectedTotalMinor: 145935 });
+  expect(changed.status).toBe(200);
+  quote = await db('quotes').where({ id: quoteId }).first();
+  expect(Number(quote.total_amount_minor)).toBe(145935);
+  expect(JSON.parse(quote.optional_selection_snapshot)).toEqual(expect.objectContaining({ by: 'customer', selectedOptional: [2, 4] }));
+  expect(JSON.parse(quote.selection_changes)).toEqual([expect.objectContaining({
+    by: 'customer', booked: ['Album'], removed: [], totalBeforeMinor: 116748, totalAfterMinor: 145935,
+  })]);
+
+  // Once the window has closed, the choice is fixed for the customer.
+  await lockIn(-1000);
+  view = await request(app).get(`/api/public/quotes/${token}`);
   expect(view.body.quote.selectionLocked).toBe(true);
+  const late = await respond(token, { action: 'accept', selectedOptional: [4], expectedTotalMinor: 116748 });
+  expect(late.status).toBe(423);
 });
 
 test('an admin acceptance records the choice set in the editor', async () => {

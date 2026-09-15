@@ -92,8 +92,11 @@ function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosTe
       isOptional: isTruthyFlag(li.is_optional),
       selected: !isUnselectedOptional(li),
     })),
-    // Once accepted, the add-on choice is fixed.
-    selectionLocked: Boolean(quote.selection_accepted_at),
+    // The customer changes the add-ons by accepting again while the response
+    // window is open; after it closes only the business can (#1451).
+    selectionLocked: Boolean(quote.selection_accepted_at) && !(quote.response_locked_at
+      && new Date(quote.response_locked_at).getTime() > Date.now()),
+    customerMessage: quote.customer_message || null,
     recipient: customer ? {
       displayName: customer.display_name || [customer.first_name, customer.last_name].filter(Boolean).join(' '),
       email: customer.email,
@@ -213,6 +216,8 @@ router.post(
     body('selectedOptional').optional().isArray({ max: 200 }),
     body('selectedOptional.*').isInt({ min: 1 }).toInt(),
     body('expectedTotalMinor').optional().isInt().toInt(),
+    // A message to the business with the acceptance (#1451).
+    body('customerMessage').optional({ nullable: true }).isString().isLength({ max: 2000 }),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -227,6 +232,7 @@ router.post(
         tosAccepted: req.body.tosAccepted === true,
         selectedOptional: req.body.selectedOptional,
         expectedTotalMinor: req.body.expectedTotalMinor,
+        customerMessage: req.body.customerMessage,
       });
       return successResponse(res, { status: result.status, lockedAt: result.lockedAt });
     } catch (err) {

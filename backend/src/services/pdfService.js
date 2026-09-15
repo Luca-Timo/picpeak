@@ -682,10 +682,12 @@ function drawLineItems(doc, ctx) {
     const displayLineTotal = lineTotalSign * Number(li.lineTotalMinor || 0);
     const lineTotalText = subItemPriceless
       ? ''
-      : isSubItem
+      : isSubItem || li.excluded
         ? `(${formatMinor(displayLineTotal, currency, intlLocale)})`
         : formatMinor(displayLineTotal, currency, intlLocale);
-    const numericColor = isSubItem ? themeColor(doc, 'muted') : themeColor(doc, 'text');
+    // A not-booked add-on (#1451) is muted, its amount in parentheses like a
+    // sub-item's: it is not part of the total.
+    const numericColor = isSubItem || li.excluded ? themeColor(doc, 'muted') : themeColor(doc, 'text');
 
     return {
       padding: ROW_PADDING,
@@ -804,6 +806,8 @@ function drawLineItems(doc, ctx) {
       groups.push(currentGroup);
     }
     currentGroup.push(buildItemRow(li));
+    // Add-ons (#1451) carry a note right under them: booked, or not in the total.
+    if (li.addOn) currentGroup.push(buildDetailsRow(t(locale, li.addOn === 'booked' ? 'addon_booked' : 'addon_not_booked')));
     if (li.detailsText && String(li.detailsText).trim().length > 0) {
       currentGroup.push(buildDetailsRow(String(li.detailsText).trim()));
     }

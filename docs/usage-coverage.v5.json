@@ -1067,6 +1067,7 @@
         "POST /:id/duplicate",
         "POST /:id/recalculate-rates",
         "POST /:id/accept",
+        "POST /:id/add-ons",
         "POST /:id/decline",
         "POST /:id/convert",
         "POST /:id/convert-to-invoice",
