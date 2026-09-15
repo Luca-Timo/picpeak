@@ -44,6 +44,7 @@ const pdfService = require('./pdfService');
 const emailProcessor = require('./emailProcessor');
 const { getFrontendBaseUrl } = require('../utils/frontendUrl');
 const { hasColumnCached } = require('../utils/schemaCache');
+const { getVatRegisteredSetting } = require('../utils/vatRegistration');
 const {
   normalizeLineItems, countedLineItems, resolveDiscountLines, extendedLineColumns, parsePromotionSnapshot,
   isTruthyFlag, isUnselectedOptional,
@@ -938,10 +939,19 @@ async function buildRenderContext(quote, lineItems) {
   );
   const roundingAdjustmentMinor = ensureInt(quote.net_amount_minor) - displayedNetMinor;
 
+  // Not VAT-registered (Settings → Accounting): a quote without VAT shows no
+  // MwSt. row, and the invoices' VAT note stands in its place. A registered
+  // business's quotes stay as they were (no note).
+  const vatRegistered = await getVatRegisteredSetting();
+  const vatNoteRaw = vatRegistered === false ? await getAppSetting('crm_invoices_vat_note_text') : null;
+  const vatNote = typeof vatNoteRaw === 'string' && vatNoteRaw.trim() ? vatNoteRaw.trim() : null;
+
   return {
     locale: quote.language || profile?.default_locale || 'de',
     currency: quote.currency,
     qrFormat: 'none', // quotes never carry a Swiss QR-bill
+    vatRegistered,
+    vatNote,
     dateFormat,
     // PDF theme (#1445): font family, colours, footer, page numbers.
     theme: await pdfThemeService.resolveTheme('quote'),

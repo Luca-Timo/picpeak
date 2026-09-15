@@ -3019,7 +3019,7 @@
       "vat": {
         "title": "MwSt.",
         "registered": "MwSt-pflichtig (Umsatzsteuer berechnen + Vorsteuer abziehen)",
-        "registeredHint": "Aus = Kleinunternehmen / unter der Schwelle: keine MwSt berechnet, Vorsteuer ist Aufwand (nicht abziehbar).",
+        "registeredHint": "Aus = Kleinunternehmen / unter der Schwelle: keine MwSt berechnet, Vorsteuer ist Aufwand (nicht abziehbar). Rechnungen und Angebote ohne MwSt zeigen dann keine MwSt.-Zeile; der MwSt.-Hinweis aus den CRM-Einstellungen steht an ihrer Stelle.",
         "reclaimCountries": "Länder mit abziehbarer Vorsteuer",
         "reclaimCountriesHint": "Üblicherweise Ihr Inland (CH / LI). Kosten aus anderen Ländern gelten als nicht abziehbare ausländische MwSt. Cmd/Ctrl-Klick für Mehrfachauswahl.",
         "defaultOutputCode": "Standard-MwSt-Code für neue Rechnungen",
@@ -7253,7 +7253,7 @@
     "crm_invoices_vat_note_text": {
       "label": "MwSt.- / Freitext-Hinweis auf Rechnungen",
       "placeholder": "z. B. Gemäß § 6 Abs. 1 Z 27 UStG 1994 wird keine Umsatzsteuer berechnet (Kleinunternehmer).",
-      "help": "Wird direkt unter der MwSt.-Zeile auf jeder Rechnungs-PDF gedruckt. Leer lassen zum Ausblenden. Bitte den genauen Wortlaut mit Ihrem Steuerberater abstimmen."
+      "help": "Wird direkt unter der MwSt.-Zeile auf jeder Rechnungs-PDF gedruckt. Ist das Unternehmen nicht MwSt-pflichtig (Einstellungen → Buchhaltung), steht der Hinweis auf Rechnungen und Angeboten ohne MwSt an Stelle dieser Zeile. Leer lassen zum Ausblenden. Bitte den genauen Wortlaut mit Ihrem Steuerberater abstimmen."
     },
     "crm_invoices_skonto_percent_default": {
       "label": "Standard-Skonto %"

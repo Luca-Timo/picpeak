@@ -183,6 +183,9 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
   // is hardcoded. Empty/whitespace → null (row omitted).
   const vatNoteRaw = await getAppSetting('crm_invoices_vat_note_text');
   const vatNote = typeof vatNoteRaw === 'string' && vatNoteRaw.trim() ? vatNoteRaw.trim() : null;
+  // Not VAT-registered (Settings → Accounting): an invoice without VAT shows
+  // no MwSt. row, and the VAT note stands in its place. Null = never set.
+  const vatRegistered = await require('../../utils/vatRegistration').getVatRegisteredSetting();
 
   return {
     locale: invoice.language || profile?.default_locale || 'de',
@@ -203,6 +206,7 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
     paymentTerm,
     // Free-text VAT/legal note (#794) — rendered under the MwSt. line by drawTotals.
     vatNote,
+    vatRegistered,
     lineItems: lineItems.map((li) => ({
       quantity: li.quantity,
       description: li.description,
@@ -244,6 +248,11 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       invoiceNumber: invoice.invoice_number,
       issueDate: invoice.issue_date,
       dueDate: invoice.due_date,
+      // The date or period of the service (MWSTG Art. 26): a monthly
+      // invoice's period, else the event date. Null → no row.
+      servicePeriod: invoice.monthly_period_start && invoice.monthly_period_end
+        ? { from: invoice.monthly_period_start, to: invoice.monthly_period_end }
+        : (invoice.event_date ? { from: invoice.event_date, to: null } : null),
       totalAmountMinor: invoice.total_amount_minor,
       lateFeeMinor: 0,
       // Reminder level — drives Skonto suppression on second

@@ -2517,7 +2517,7 @@
       "vat": {
         "title": "VAT",
         "registered": "VAT-registered (charge output VAT + reclaim input VAT)",
-        "registeredHint": "Off = small business / under threshold: no VAT charged, input VAT is a cost (not reclaimable).",
+        "registeredHint": "Off = small business / under threshold: no VAT charged, input VAT is a cost (not reclaimable). Invoices and quotes without VAT then show no VAT line; the VAT note from the CRM settings stands in its place.",
         "reclaimCountries": "Countries where input VAT is reclaimable",
         "reclaimCountriesHint": "Typically your domestic country (CH / LI). Costs from other countries are treated as non-reclaimable foreign VAT. Cmd/Ctrl-click to multi-select.",
         "defaultOutputCode": "Default VAT code for new invoices",
@@ -7252,7 +7252,7 @@
     "crm_invoices_vat_note_text": {
       "label": "VAT / free-text note on invoices",
       "placeholder": "e.g. Gemäß § 6 Abs. 1 Z 27 UStG 1994 wird keine Umsatzsteuer berechnet (Kleinunternehmer).",
-      "help": "Printed directly under the MwSt. line on every invoice PDF. Leave empty to hide. Please confirm the exact wording with your tax advisor."
+      "help": "Printed directly under the MwSt. line on every invoice PDF. If the business isn't VAT-registered (Settings → Accounting), it replaces that line on invoices and quotes without VAT. Leave empty to hide. Please confirm the exact wording with your tax advisor."
     },
     "crm_invoices_skonto_percent_default": {
       "label": "Skonto rate (default %)"

@@ -407,21 +407,23 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
   y += 6;
 
   // ---- contact rows (label / value, two columns) ----------------
-  const labelCol = 38;
+  // Wide enough for the document language's labels ("USt-IdNr.:", "Steuer-Nr.:").
+  const labelCol = 50;
   const gap = 4;
   const valueCol = width - labelCol - gap;
   const labelX = x;
   const valueX = x + labelCol + gap;
 
   const contactRows = [
-    issuer.phone   ? ['Phone:',  issuer.phone]   : null,
-    issuer.mobile  ? ['Mobile:', issuer.mobile]  : null,
-    issuer.email   ? ['Email:',  issuer.email]   : null,
-    issuer.website ? ['Web:',    issuer.website] : null,
-    issuer.vatId   ? ['VAT:',    issuer.vatId]   : null,
+    issuer.phone   ? [`${t(locale, 'contact_phone')}:`,  issuer.phone]   : null,
+    issuer.mobile  ? [`${t(locale, 'contact_mobile')}:`, issuer.mobile]  : null,
+    issuer.email   ? [`${t(locale, 'contact_email')}:`,  issuer.email]   : null,
+    issuer.website ? [`${t(locale, 'contact_web')}:`,    issuer.website] : null,
+    // Only when set: a business that isn't VAT-registered has no number.
+    issuer.vatId   ? [`${vatIdLabel(locale, issuer.countryCode)}:`, issuer.vatId] : null,
     // Migration 139 — Steuernummer (DE/AT local tax number). Distinct
     // from VAT-ID; both can appear simultaneously.
-    issuer.taxId   ? ['Tax:',    issuer.taxId]   : null,
+    issuer.taxId   ? [`${t(locale, 'tax_id_label')}:`, issuer.taxId] : null,
   ].filter(Boolean);
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8.5);
   for (const [label, value] of contactRows) {
@@ -431,6 +433,19 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
     y = rowY + 11;
   }
   return Math.max(y, startY + 60);
+}
+
+/**
+ * What the business's VAT number is called on its documents, by the
+ * business's country: MWST-Nr. in Switzerland and Liechtenstein, UID-Nr. in
+ * Austria, USt-IdNr. in Germany (German documents; other languages have one
+ * name).
+ */
+function vatIdLabel(locale, countryCode) {
+  const cc = String(countryCode || '').toUpperCase();
+  if (cc === 'CH' || cc === 'LI') return t(locale, 'vat_id_label_ch');
+  if (cc === 'AT') return t(locale, 'vat_id_label_at');
+  return t(locale, 'vat_id_label');
 }
 
 /**
@@ -884,12 +899,16 @@ function drawTotals(doc, ctx, x, y, width) {
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).text(formatMinor(totals.shippingAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
   y = doc.y + 4;
 
-  // Custom VAT label (Settings → Accounting) overrides the per-locale default.
-  const vatLabel = (ctx.issuer && ctx.issuer.vatLabel) || t(locale, 'totals_vat');
-  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).text(vatLabel, labelX, y, { width: labelCol });
-  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).text(`${stripTrailingZeros(totals.vatRate)}%`, rateX, y, { width: rateCol, align: 'right' });
-  doc.text(formatMinor(totals.vatAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
-  y = doc.y + 4;
+  // Not VAT-registered and no VAT on this document: no MwSt. row (see
+  // vatRowHidden); the VAT note below stands in its place.
+  if (!vatRowHidden(ctx)) {
+    // Custom VAT label (Settings → Accounting) overrides the per-locale default.
+    const vatLabel = (ctx.issuer && ctx.issuer.vatLabel) || t(locale, 'totals_vat');
+    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).text(vatLabel, labelX, y, { width: labelCol });
+    doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).text(`${stripTrailingZeros(totals.vatRate)}%`, rateX, y, { width: rateCol, align: 'right' });
+    doc.text(formatMinor(totals.vatAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
+    y = doc.y + 4;
+  }
 
   // Free-text VAT / legal note (#794) — printed directly under the MwSt. line
   // (Benedikt's requested spot). The admin sets the exact wording in
@@ -1581,13 +1600,32 @@ function renderDocument(type, context) {
         // drawDate() call, which lived below the title and used a
         // tighter column spec.
         doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor(themeColor(doc, 'text'));
-        doc.text(`${t(ctx.locale, 'date')}:`,
-          metaRight - metaValueW - metaLabelW, y,
-          { width: metaLabelW, align: 'right', lineBreak: false });
-        doc.text(formatDate(ctx.doc.issueDate, ctx.dateFormat),
-          metaRight - metaValueW, y,
-          { width: metaValueW, align: 'right', lineBreak: false });
-        y += 18; // line height + cushion before the title
+        const metaRow = (label, value) => {
+          // A longer value (a service period) widens its own column so it
+          // stays on one line, right-aligned with the rows above.
+          const valueW = Math.max(metaValueW, doc.widthOfString(value) + 2);
+          doc.text(`${label}:`, metaRight - valueW - metaLabelW, y,
+            { width: metaLabelW, align: 'right', lineBreak: false });
+          doc.text(value, metaRight - valueW, y, { width: valueW, align: 'right', lineBreak: false });
+          y += 14;
+        };
+        metaRow(t(ctx.locale, 'date'), formatDate(ctx.doc.issueDate, ctx.dateFormat));
+        if (type === 'invoice') {
+          // The date or period of the service (MWSTG Art. 26): the event
+          // date, or a monthly invoice's period. Nothing when neither exists.
+          const period = ctx.doc.servicePeriod;
+          if (period && period.from) {
+            const from = formatDate(period.from, ctx.dateFormat);
+            const to = period.to ? formatDate(period.to, ctx.dateFormat) : null;
+            if (to && to !== from) metaRow(t(ctx.locale, 'service_period'), `${from} – ${to}`);
+            else metaRow(t(ctx.locale, 'service_date'), from);
+          }
+          // The due date, on the invoice itself (not on a Storno or a Mahnung).
+          if (!isStorno && !isMahnung && ctx.doc.dueDate) {
+            metaRow(t(ctx.locale, 'due_date'), formatDate(ctx.doc.dueDate, ctx.dateFormat));
+          }
+        }
+        y += 4; // cushion before the title
 
         // ---- title ----------------------------------------------------
         const title = type === 'quote'
@@ -1748,6 +1786,8 @@ function renderDocument(type, context) {
           TOTALS_BLOCK_HEIGHT += doc.heightOfString(ctx.vatNote, { width: noteWidth }) + 4;
           doc.fontSize(10);
         }
+        // No MwSt. row for a business that isn't VAT-registered: one row less.
+        if (vatRowHidden(ctx)) TOTALS_BLOCK_HEIGHT -= 16;
         const desiredPaymentY = PAGE.height - PAGE.marginBottom - FOOTER_RESERVE - PAYMENT_BLOCK_HEIGHT;
         const desiredTotalsY  = desiredPaymentY - 12 - TOTALS_BLOCK_HEIGHT;
 
@@ -1851,6 +1891,8 @@ function normaliseContext(type, ctx) {
     qrFormat: ctx.qrFormat || 'none',
     // Free-text VAT/legal note printed under the MwSt. line on invoices (#794).
     vatNote: (typeof ctx.vatNote === 'string' && ctx.vatNote.trim()) ? ctx.vatNote.trim() : null,
+    // Is the business VAT-registered (Settings → Accounting)? Null = never set.
+    vatRegistered: typeof ctx.vatRegistered === 'boolean' ? ctx.vatRegistered : null,
     // Date-format config from the `general_date_format` app setting.
     // Shape: `{ format: 'DD.MM.YYYY' | 'DD/MM/YYYY' | 'MM/DD/YYYY' |
     // 'YYYY-MM-DD', locale?: string }`. The service layer hydrates
@@ -1860,6 +1902,17 @@ function normaliseContext(type, ctx) {
     theme: ctx.theme || builtInTheme(type),
     generatedAt: ctx.generatedAt || null,
   };
+}
+
+/**
+ * A business that isn't VAT-registered (Settings → Accounting) shows no VAT
+ * on its documents (MWSTG Art. 27): no MwSt. row when the document carries
+ * none, and the VAT note stands in its place. Never set → the row stays; a
+ * document that does carry VAT keeps its row, so the totals add up.
+ */
+function vatRowHidden(ctx) {
+  const totals = ctx.totals || {};
+  return ctx.vatRegistered === false && !Number(totals.vatRate) && !Number(totals.vatAmountMinor);
 }
 
 async function renderQuoteToBuffer(context) {

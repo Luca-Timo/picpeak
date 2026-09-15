@@ -159,7 +159,7 @@ export const AccountingTab: React.FC = () => {
           <span>
             {t('settings.accounting.vat.registered', 'VAT-registered (charge output VAT + reclaim input VAT)')}
             <span className="block text-xs text-neutral-500 dark:text-neutral-400">
-              {t('settings.accounting.vat.registeredHint', 'Off = small business / under threshold: no VAT charged, input VAT is a cost (not reclaimable).')}
+              {t('settings.accounting.vat.registeredHint', 'Off = small business / under threshold: no VAT charged, input VAT is a cost (not reclaimable). Invoices and quotes without VAT then show no VAT line; the VAT note from the CRM settings stands in its place.')}
             </span>
           </span>
         </label>
