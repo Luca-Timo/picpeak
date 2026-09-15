@@ -125,20 +125,24 @@ function toMinor(amount: number) {
   return Math.round((Number(amount) || 0) * 100);
 }
 
-function buildPayload(f: FormState): QuoteCreatePayload {
+// A field the admin cleared is sent as null so the save clears it: undefined
+// drops the key from the request, and the server kept the old value.
+// validUntil, the payment-term pickers and the bank account stay undefined
+// when empty — there "empty" means "use the default".
+export function buildPayload(f: FormState): QuoteCreatePayload {
   return {
     customerAccountId: f.customerAccountId || 0,
     language: f.language,
     currency: f.currency,
     issueDate: f.issueDate,
     validUntil: f.validUntil || undefined,
-    eventName: f.eventName || undefined,
-    eventDate: f.eventDate || undefined,
+    eventName: f.eventName || null,
+    eventDate: f.eventDate || null,
     eventType: f.eventType || null,
     bookingWorkflowId: f.bookingWorkflowId,
-    eventTimeStart: f.eventTimeStart || undefined,
-    eventTimeEnd: f.eventTimeEnd || undefined,
-    expectedDurationHours: f.expectedDurationHours ? Number(f.expectedDurationHours) : undefined,
+    eventTimeStart: f.eventTimeStart || null,
+    eventTimeEnd: f.eventTimeEnd || null,
+    expectedDurationHours: f.expectedDurationHours ? Number(f.expectedDurationHours) : null,
     paymentTermTemplateId: f.paymentTermTemplateId || undefined,
     // Migration 124 — split picker. Send both; backend ignores either
     // half unless both are set (legacy single FK still works).
@@ -150,10 +154,10 @@ function buildPayload(f: FormState): QuoteCreatePayload {
     vatRate: f.vatRate,
     vatCode: f.vatCode,
     shippingAmountMinor: toMinor(f.shippingAmount),
-    introText: f.introText || undefined,
-    outroText: f.outroText || undefined,
-    internalNotes: f.internalNotes || undefined,
-    ccPdfEmail: f.ccPdfEmail || undefined,
+    introText: f.introText || null,
+    outroText: f.outroText || null,
+    internalNotes: f.internalNotes || null,
+    ccPdfEmail: f.ccPdfEmail || null,
     businessBankAccountId: f.businessBankAccountId || undefined,
     // Migration 121 — Project Overview link. Send null to clear.
     projectId: f.projectId ?? null,

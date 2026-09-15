@@ -217,6 +217,24 @@ test('saving a quote books and removes its add-ons, right after a restart too', 
   expect(Number(quote.total_amount_minor)).toBe(130000);
 });
 
+test('a save that clears the intro, closing, notes and event name clears them', async () => {
+  // The editor sends a cleared field as null; left out, the old text came back.
+  const quoteId = await quoteService.createQuote({
+    customerAccountId: customerId, currency: 'CHF', vatRate: 0,
+    introText: 'Hallo', outroText: 'Freundliche Grüsse', internalNotes: 'intern', eventName: 'Hochzeit',
+    lineItems: [{ position: 1, quantity: 1, description: 'Wedding day', unit_price_minor: 100000 }],
+  }, adminId);
+  const res = await request(adminApp).put(`/api/admin/quotes/${quoteId}`).set(auth).send({
+    introText: null, outroText: null, internalNotes: null, eventName: null,
+    lineItems: [{ position: 1, quantity: 1, description: 'Wedding day', unitPriceMinor: 100000 }],
+  });
+  expect(res.status).toBe(200);
+  const quote = await db('quotes').where({ id: quoteId }).first();
+  expect(quote).toEqual(expect.objectContaining({
+    intro_text: null, outro_text: null, internal_notes: null, event_name: null,
+  }));
+});
+
 test('a default email template is brought up to date; an edited one is left alone', async () => {
   const templates = require('../../src/services/crmEmailTemplates');
   const row = await db('email_templates').where({ template_key: 'quote_sent' }).first();

@@ -240,13 +240,14 @@ export interface QuoteCreatePayload {
   currency?: string;
   issueDate?: string;
   validUntil?: string;
-  eventName?: string;
-  eventDate?: string;
+  // null clears the field on save (the editor sends a cleared field as null).
+  eventName?: string | null;
+  eventDate?: string | null;
   eventType?: string | null;
   bookingWorkflowId?: number | null;
-  eventTimeStart?: string;
-  eventTimeEnd?: string;
-  expectedDurationHours?: number;
+  eventTimeStart?: string | null;
+  eventTimeEnd?: string | null;
+  expectedDurationHours?: number | null;
   paymentTermTemplateId?: number;
   /** Migration 124 — split payment-term picker. Both must be set
    *  together for the new path to engage on the backend. */
@@ -260,10 +261,10 @@ export interface QuoteCreatePayload {
   /** Migration 130 — snapshot of the chosen output VAT code (null = custom rate). */
   vatCode?: string | null;
   shippingAmountMinor?: number;
-  introText?: string;
-  outroText?: string;
-  internalNotes?: string;
-  ccPdfEmail?: string;
+  introText?: string | null;
+  outroText?: string | null;
+  internalNotes?: string | null;
+  ccPdfEmail?: string | null;
   businessBankAccountId?: number;
   /** Migration 121 — optional link to a Project Overview project.
    *  null clears the link; undefined leaves it unchanged. */
