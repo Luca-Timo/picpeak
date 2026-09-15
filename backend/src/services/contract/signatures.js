@@ -23,6 +23,19 @@ const { getContractById } = require('./crud');
  * PNG, re-renders the PDF with the signature stamped, flips status
  * to `signed_by_customer`, and queues the admin notification email.
  */
+/**
+ * Narrow a contracts update to the row as it was when a signed PDF was built
+ * from it: the same signed_pdf_path and the same signature images. A PDF built
+ * from older inputs must not be recorded over one built from newer inputs, or
+ * the PDF on record shows a signature the row no longer references.
+ */
+function whereSignedPdfInputsUnchanged(query, row) {
+  for (const column of ['signed_pdf_path', 'signed_customer_signature_path', 'signed_admin_signature_path']) {
+    query = row[column] ? query.where(column, row[column]) : query.whereNull(column);
+  }
+  return query;
+}
+
 async function recordCustomerSignature({ token, name, ip, signatureDataUrl, accepted }) {
   // Self-heal contract email templates. The contract_signed_admin_notification
   // email fires from this function — if its row is missing, the admin
@@ -49,7 +62,10 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
   }
   const tokenRow = await db('contract_action_tokens').where({ token }).first();
   if (!tokenRow) throw new AppError('Token not found', 404);
-  if (tokenRow.expires_at && new Date(tokenRow.expires_at).getTime() < Date.now()) {
+  // A token without an expiry is refused, not treated as permanent: the
+  // column is NOT NULL and the route guard already refuses one, so this only
+  // matters for a caller that reaches the service another way.
+  if (!tokenRow.expires_at || new Date(tokenRow.expires_at).getTime() < Date.now()) {
     throw new AppError('This signing link has expired', 410);
   }
   if (tokenRow.used_at) {
@@ -74,7 +90,12 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
   const persistedIp = await maybeStoreIp(ip);
   try {
     await db.transaction(async (trx) => {
-      await trx('contracts').where({ id: contract.id }).update({
+      // Compare-and-set on the state the checks above read. Two requests
+      // with the same link can both get past those checks, and the later
+      // unconditional write replaced the first signer's name, IP and
+      // signature image on a contract that was already signed. The loser
+      // throws, the transaction rolls back and its PNG is removed below.
+      const signed = await trx('contracts').where({ id: contract.id, status: 'sent' }).update({
         status: 'signed_by_customer',
         signed_by_customer_at: now,
         signed_customer_name: String(name).trim(),
@@ -82,11 +103,16 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
         signed_customer_signature_path: signaturePath,
         updated_at: now,
       });
-      await trx('contract_action_tokens').where({ id: tokenRow.id }).update({
-        used_at: now,
-        used_action: 'signed_by_customer',
-        used_ip: persistedIp,
-      });
+      const consumed = signed
+        ? await trx('contract_action_tokens').where({ id: tokenRow.id }).whereNull('used_at').update({
+          used_at: now,
+          used_action: 'signed_by_customer',
+          used_ip: persistedIp,
+        })
+        : 0;
+      if (!signed || !consumed) {
+        throw new AppError('This contract has already been signed', 410, 'TOKEN_ALREADY_USED');
+      }
     });
   } catch (txErr) {
     // C.7 — clean up the orphan signature PNG we wrote before the
@@ -146,7 +172,20 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
       updates.signed_pdf_render_failed_at = null;
       updates.signed_pdf_render_error = null;
     }
-    await db('contracts').where({ id: contract.id }).update(updates);
+    // Recorded only if nothing newer landed while the stamp rendered: a
+    // countersignature, a wet-signed upload or a re-stamp in that window is
+    // the authoritative PDF, and this write used to replace it with the
+    // customer-only stamp. The stamped file stays on disk either way.
+    // Compared against the image this stamp used, not the one read back:
+    // a re-stamp replacing it before that read would otherwise have this
+    // PDF, showing the replaced image, recorded over its own.
+    const stampApplied = await whereSignedPdfInputsUnchanged(
+      db('contracts').where({ id: contract.id, status: 'signed_by_customer' }),
+      { ...refreshed.contract, signed_customer_signature_path: signaturePath },
+    ).update(updates);
+    if (!stampApplied) {
+      logger.info('Customer-signed PDF superseded before it was recorded', { contractId: contract.id });
+    }
   } catch (err) {
     // Signature recorded; PDF re-render is best-effort. The admin can
     // re-render manually from the detail page if this fails. Logged as
@@ -195,7 +234,9 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
   }
 
   try {
-    await logActivity('contract_signed_by_customer', { contractId: contract.id, token }, null, customerPublicActor());
+    // The token row id, never the token: activity metadata is served to the
+    // notifications feed and the audit trail, and the token opens the link.
+    await logActivity('contract_signed_by_customer', { contractId: contract.id, tokenId: tokenRow.id }, null, customerPublicActor());
   } catch (_) { /* logging is best-effort */ }
 
   return { status: 'signed_by_customer', signedAt: now };
@@ -230,7 +271,10 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
   const newStatus = contract.status === 'signed_by_customer' ? 'fully_signed' : 'signed_by_admin';
   const persistedAdminIp = await maybeStoreIp(ip);
   try {
-    await db('contracts').where({ id: contract.id }).update({
+    // Compare-and-set on the status read above: two countersignatures, or a
+    // countersignature racing an upload, used to both write and the later
+    // one replaced the evidence. The loser throws and its PNG is removed.
+    const applied = await db('contracts').where({ id: contract.id, status: contract.status }).update({
       status: newStatus,
       signed_by_admin_at: now,
       signed_admin_name: String(name).trim(),
@@ -238,6 +282,9 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
       signed_admin_signature_path: signaturePath,
       updated_at: now,
     });
+    if (!applied) {
+      throw new AppError('The contract changed while it was being counter-signed. Reload and try again.', 409, 'CONTRACT_STATE_CHANGED');
+    }
   } catch (updateErr) {
     // C.7 — clean up the orphan signature PNG if the contract row
     // update threw. Best-effort; log on cleanup failure and re-throw
@@ -254,33 +301,31 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
     throw updateErr;
   }
 
-  // Stamp the admin's signature ON TOP of whatever signed_pdf_path
-  // currently holds (the customer-stamped PDF, in the normal flow)
-  // — or directly onto the unsigned pdf_path if the admin is the
-  // first to sign (edge case). Byte-immutable: each prior PDF stays
-  // on disk; the new file is a fresh timestamped version.
+  // Stamp every signature on record onto the unsigned pdf_path, as the
+  // repair actions do. This used to stamp the admin ON TOP of
+  // signed_pdf_path, which lost the customer's signature whenever their
+  // stamp was not on record yet: it can still be rendering, and it is
+  // discarded once this countersignature moves the status on.
+  // Byte-immutable: each prior PDF stays on disk; the new file is a fresh
+  // timestamped version.
   const refreshed = await getContractById(contract.id);
   let signedPath = null;
   let signedSha256 = null;
+  let stampSuperseded = false;
   try {
-    const baseFile = (refreshed.contract.signed_pdf_path && fs.existsSync(refreshed.contract.signed_pdf_path))
-      ? refreshed.contract.signed_pdf_path
-      : refreshed.contract.pdf_path;
-    if (!baseFile || !fs.existsSync(baseFile)) {
-      throw new Error(`Contract base PDF missing on disk for stamping (signed_pdf_path=${refreshed.contract.signed_pdf_path}, pdf_path=${refreshed.contract.pdf_path})`);
+    if (!signaturePath) {
+      throw new Error('Admin signature image missing; cannot stamp the counter-signed PDF');
     }
-    const baseBuffer = fs.readFileSync(baseFile);
-    const stampedBuffer = await pdfStampService.stampSignature({
-      pdfBuffer: baseBuffer,
-      signaturePngPath: signaturePath,
-      role: 'admin',
-      caption: {
-        name: String(name).trim(),
-        signedAt: now,
-        nameLabel: refreshed.contract.language === 'de' ? 'Name' : 'Name',
-        dateLabel: refreshed.contract.language === 'de' ? 'Datum' : 'Date',
-      },
-    });
+    if (!refreshed.contract.pdf_path || !fs.existsSync(refreshed.contract.pdf_path)) {
+      throw new Error(`Unsigned PDF missing on disk at ${refreshed.contract.pdf_path}`);
+    }
+    // One stamp at a time rather than stampSignatures, which skips a stamp
+    // that fails: a counter-signed PDF missing a signature must fail the
+    // render and leave the recovery marker, not be recorded as done.
+    let stampedBuffer = fs.readFileSync(refreshed.contract.pdf_path);
+    for (const stamp of buildSignatureStamps(refreshed.contract)) {
+      stampedBuffer = await pdfStampService.stampSignature({ pdfBuffer: stampedBuffer, ...stamp });
+    }
     const suffix = newStatus === 'fully_signed' ? 'fully-signed' : 'signed-by-admin';
     const persisted = await persistContractPdf(refreshed.contract, stampedBuffer, suffix);
     signedPath = persisted.filePath;
@@ -295,7 +340,25 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
       updates.signed_pdf_render_failed_at = null;
       updates.signed_pdf_render_error = null;
     }
-    await db('contracts').where({ id: contract.id }).update(updates);
+    // Recorded only if the row still holds what this stamp was built from; a
+    // wet-signed upload or a re-stamp in the meantime stays authoritative.
+    let stampQuery = whereSignedPdfInputsUnchanged(
+      db('contracts').where({ id: contract.id, status: newStatus }),
+      refreshed.contract,
+    );
+    // An upload that landed between the status update and the read above is
+    // already in refreshed, so the PDF check alone would let this stamp,
+    // rebuilt from the unsigned PDF, replace the uploaded document.
+    if (await hasColumnCached('contracts', 'signed_pdf_is_wet_upload')) {
+      stampQuery = stampQuery.where((q) => q.whereNull('signed_pdf_is_wet_upload').orWhere('signed_pdf_is_wet_upload', false));
+    }
+    const stampApplied = await stampQuery.update(updates);
+    if (!stampApplied) {
+      logger.info('Counter-signed PDF superseded before it was recorded', { contractId: contract.id });
+      signedPath = null;
+      signedSha256 = null;
+      stampSuperseded = true;
+    }
   } catch (err) {
     logger.error('Failed to stamp contract PDF after admin signature', {
       contractId: contract.id,
@@ -327,19 +390,46 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
   // greeting + name. The admin BCC is delivered as "to the issuer"
   // so it lands in the same inbox the contract_sent email originated
   // from.
-  if (newStatus === 'fully_signed') {
+  //
+  // The emails only ever carry a PDF with both signatures: this stamp once it
+  // is recorded, or a newer authoritative PDF that superseded it (a
+  // wet-signed upload, or a re-stamp or re-send recorded after the read
+  // above, both built from a row that already holds this countersignature).
+  // They used to fall back to whatever PDF was on record, which can be the
+  // customer-only copy while a re-stamp is still rendering. Otherwise the
+  // emails wait: the recovery marker sends the admin to "Re-send signed
+  // PDF", which re-stamps and sends them. A stamp that failed outright has
+  // set that marker already.
+  let fullySignedAttachment = signedPath;
+  if (newStatus === 'fully_signed' && stampSuperseded) {
+    const current = await db('contracts').where({ id: contract.id }).first();
+    const currentIsWetUpload = current?.signed_pdf_is_wet_upload === true || current?.signed_pdf_is_wet_upload === 1;
+    if (current?.status === 'fully_signed' && current.signed_pdf_path
+      && (currentIsWetUpload || current.signed_pdf_path !== refreshed.contract.signed_pdf_path)) {
+      fullySignedAttachment = current.signed_pdf_path;
+    } else {
+      try {
+        if (await hasColumnCached('contracts', 'signed_pdf_render_failed_at')) {
+          await db('contracts').where({ id: contract.id }).update({
+            signed_pdf_render_failed_at: new Date(),
+            signed_pdf_render_error: 'The counter-signed PDF was replaced by a concurrent change before it was recorded, so the fully-signed emails were not sent. Re-send the signed PDF once that change has finished.',
+            updated_at: new Date(),
+          });
+        }
+      } catch (markErr) {
+        logger.error('Failed to record signed_pdf_render_failed marker (admin sign superseded)', {
+          contractId: contract.id, message: markErr.message,
+        });
+      }
+    }
+  }
+  if (newStatus === 'fully_signed' && !fullySignedAttachment) {
+    logger.warn('Fully-signed emails not sent: no recorded PDF carries both signatures yet', { contractId: contract.id });
+  }
+  if (newStatus === 'fully_signed' && fullySignedAttachment) {
     try {
-      // Pick the best available PDF as the attachment, in priority
-      // order: this counter-sign's freshly-rendered signed copy →
-      // the customer-only signed copy we wrote earlier → the
-      // original unsigned PDF. Falling all the way through to no
-      // attachment is acceptable; the email still goes out with the
-      // contract number so the customer knows it's binding.
       const refetched = await db('contracts').where({ id: contract.id }).first();
-      const attachmentPath = signedPath
-        || refetched?.signed_pdf_path
-        || refetched?.pdf_path
-        || null;
+      const attachmentPath = fullySignedAttachment;
 
       const customer = await db('customer_accounts').where({ id: contract.customer_account_id }).first();
       const profile = (await businessProfileService.getProfile()).profile || {};
@@ -460,7 +550,17 @@ async function attachSignedPdfUpload(contractId, filePath, uploaderRole) {
   if (uploaderRole === 'admin' && !contract.signed_by_admin_at) {
     updates.signed_by_admin_at = now;
   }
-  await db('contracts').where({ id: contractId }).update(updates);
+  // Compare-and-set on the status read above: a signature or another upload
+  // landing in between must not have its evidence replaced by this file.
+  const applied = await db('contracts').where({ id: contractId, status: contract.status }).update(updates);
+  if (!applied) {
+    try {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch (cleanupErr) {
+      logger.warn('Orphan signed PDF upload cleanup failed', { path: filePath, message: cleanupErr.message });
+    }
+    throw new AppError('The contract changed while the signed PDF was uploading. Reload and try again.', 409, 'CONTRACT_STATE_CHANGED');
+  }
 
   // attachSignedPdfUpload always transitions to fully_signed (see
   // updates.status above), so the dual-party send fires here too —
@@ -586,8 +686,16 @@ async function rerenderAndResend(contractId, adminId) {
     }
     const originalBuffer = fs.readFileSync(refreshed.contract.pdf_path);
     const stamps = buildSignatureStamps(refreshed.contract);
-    const { buffer: stampedBuffer, sha256: signedSha256 } =
+    const { buffer: stampedBuffer, sha256: signedSha256, failed: failedStamps } =
       await pdfStampService.stampSignatures(originalBuffer, stamps);
+    // A PDF missing a signature must not be recorded, or mailed to both
+    // parties, as the fully signed contract.
+    if (failedStamps && failedStamps.length) {
+      throw new AppError(
+        `The ${failedStamps.join(' and ')} signature could not be stamped onto the PDF, so nothing was sent. Re-stamp the signatures and try again.`,
+        422, 'SIGNATURE_STAMP_FAILED',
+      );
+    }
     const persisted = await persistContractPdf(refreshed.contract, stampedBuffer, 'fully-signed');
     attachmentPath = persisted.filePath;
     const hasSignedPdfSha = await hasColumnCached('contracts', 'signed_pdf_sha256');
@@ -602,7 +710,19 @@ async function rerenderAndResend(contractId, adminId) {
       updates.signed_pdf_render_failed_at = null;
       updates.signed_pdf_render_error = null;
     }
-    await db('contracts').where({ id: contract.id }).update(updates);
+    // Compare-and-set on the PDF this run read. A re-stamp or a wet-signed
+    // upload landing while the stamp rendered is the newer authoritative
+    // copy; overwriting it would also mail both parties the stale file.
+    // Refuse before any email is queued so the admin can retry.
+    // The PDF is the one the wet-upload check above read; the images are
+    // the ones this stamp used.
+    const rerenderApplied = await whereSignedPdfInputsUnchanged(
+      db('contracts').where({ id: contract.id, status: 'fully_signed' }),
+      { ...refreshed.contract, signed_pdf_path: contract.signed_pdf_path },
+    ).update(updates);
+    if (!rerenderApplied) {
+      throw new AppError('The contract changed while the signed PDF was being rebuilt. Reload and try again.', 409, 'CONTRACT_STATE_CHANGED');
+    }
   }
 
   // Resend the dual-party email with the now-guaranteed attachment.
@@ -694,7 +814,29 @@ async function restampSignatures(contractId, { customerSignatureDataUrl, adminSi
   if (adminSignatureDataUrl) {
     updates.signed_admin_signature_path = await persistSignatureImage(contract, 'admin', adminSignatureDataUrl);
   }
-  await db('contracts').where({ id: contract.id }).update(updates);
+  // Compare-and-set on the status, the PDF and the images this run read.
+  // Two admins re-stamping at once, or a countersignature landing in
+  // between, used to both write and the later image silently replaced the
+  // earlier one. A PDF recorded since the read was built from the images
+  // this run would replace, and this run's own PDF could not be recorded
+  // over it, so the images and the PDF on record would disagree. The loser
+  // removes the images it just saved.
+  const restampApplied = await whereSignedPdfInputsUnchanged(
+    db('contracts').where({ id: contract.id, status: contract.status }),
+    contract,
+  ).update(updates);
+  if (!restampApplied) {
+    for (const column of ['signed_customer_signature_path', 'signed_admin_signature_path']) {
+      const saved = updates[column];
+      if (!saved) continue;
+      try {
+        if (fs.existsSync(saved)) fs.unlinkSync(saved);
+      } catch (cleanupErr) {
+        logger.warn('Orphan re-stamp signature cleanup failed', { path: saved, message: cleanupErr.message });
+      }
+    }
+    throw new AppError('The contract changed while the signatures were being re-stamped. Reload and try again.', 409, 'CONTRACT_STATE_CHANGED');
+  }
 
   // Re-stamp signature images onto the immutable unsigned pdf_path
   // using pdf-lib (NOT a full re-render). This is the recovery path
@@ -716,8 +858,35 @@ async function restampSignatures(contractId, { customerSignatureDataUrl, adminSi
   }
   const originalBuffer = fs.readFileSync(refreshed.contract.pdf_path);
   const stamps = buildSignatureStamps(refreshed.contract);
-  const { buffer: stampedBuffer, sha256: signedSha256 } =
+  const { buffer: stampedBuffer, sha256: signedSha256, failed: failedStamps } =
     await pdfStampService.stampSignatures(originalBuffer, stamps);
+  // A PDF missing a signature is not recorded. A countersignature takes a
+  // PDF a re-stamp recorded after it as the fully signed copy to mail, so
+  // recording an incomplete one would send it to both parties. The images
+  // were already replaced above: keep the recovery marker and the audit
+  // entry so the admin sees it and re-stamps with a usable image.
+  if (failedStamps && failedStamps.length) {
+    const message = `The ${failedStamps.join(' and ')} signature could not be stamped onto the PDF.`;
+    try {
+      if (await hasColumnCached('contracts', 'signed_pdf_render_failed_at')) {
+        await db('contracts').where({ id: contract.id }).update({
+          signed_pdf_render_failed_at: new Date(),
+          signed_pdf_render_error: message,
+          updated_at: new Date(),
+        });
+      }
+    } catch (markErr) {
+      logger.error('Failed to record signed_pdf_render_failed marker (re-stamp)', { contractId: contract.id, message: markErr.message });
+    }
+    try {
+      await logActivity('contract_signatures_restamped', {
+        contractId,
+        stamped: { customer: !!customerSignatureDataUrl, admin: !!adminSignatureDataUrl },
+        stampFailed: failedStamps,
+      }, null, await adminActor(adminId));
+    } catch (_) { /* logging is best-effort */ }
+    throw new AppError(`${message} Nothing was recorded; re-stamp with a valid image.`, 422, 'SIGNATURE_STAMP_FAILED');
+  }
   const { filePath: signedPath } = await persistContractPdf(refreshed.contract, stampedBuffer,
     contract.status === 'fully_signed' ? 'fully-signed' : 'partially-signed');
 
@@ -729,6 +898,7 @@ async function restampSignatures(contractId, { customerSignatureDataUrl, adminSi
     ? (contract.signed_pdf_is_wet_upload === true || contract.signed_pdf_is_wet_upload === 1)
     : !!(contract.signed_pdf_path
       && contract.signed_pdf_path.includes('uploads/contracts/signed'));
+  let superseded = false;
   if (!isWetSignedUpload) {
     const hasSignedPdfSha = await hasColumnCached('contracts', 'signed_pdf_sha256');
     const updates = {
@@ -736,14 +906,31 @@ async function restampSignatures(contractId, { customerSignatureDataUrl, adminSi
       updated_at: new Date(),
     };
     if (hasSignedPdfSha) updates.signed_pdf_sha256 = signedSha256;
-    // Migration 136 — restamp is a recovery path; clear the marker.
-    if (await hasColumnCached('contracts', 'signed_pdf_render_failed_at')) {
+    // Migration 136 — restamp is a recovery path; clear the marker. Not on a
+    // fully-signed contract: there the marker can also stand for
+    // fully-signed emails never sent, which only "Re-send signed PDF" sends,
+    // and that clears it.
+    if (contract.status !== 'fully_signed' && await hasColumnCached('contracts', 'signed_pdf_render_failed_at')) {
       updates.signed_pdf_render_failed_at = null;
       updates.signed_pdf_render_error = null;
     }
-    await db('contracts').where({ id: contract.id }).update(updates);
+    // Recorded only if the row still holds what this stamp was built from:
+    // the PDF the wet-upload check read and the images it stamped. A
+    // wet-signed upload, or another re-stamp that replaced an image while
+    // this one rendered, stays authoritative. The stamped file stays on disk
+    // for the audit trail.
+    const pdfApplied = await whereSignedPdfInputsUnchanged(
+      db('contracts').where({ id: contract.id, status: contract.status }),
+      { ...refreshed.contract, signed_pdf_path: contract.signed_pdf_path },
+    ).update(updates);
+    if (!pdfApplied) {
+      logger.info('Re-stamped PDF superseded before it was recorded', { contractId: contract.id });
+      superseded = true;
+    }
   }
 
+  // The signature images were replaced above whether or not the PDF was, so
+  // the audit trail records the re-stamp either way.
   try {
     await logActivity('contract_signatures_restamped', {
       contractId,
@@ -751,8 +938,18 @@ async function restampSignatures(contractId, { customerSignatureDataUrl, adminSi
         customer: !!customerSignatureDataUrl,
         admin: !!adminSignatureDataUrl,
       },
+      ...(superseded ? { superseded: true } : {}),
     }, null, await adminActor(adminId));
   } catch (_) { /* logging is best-effort */ }
+
+  if (superseded) {
+    const current = await db('contracts').where({ id: contract.id }).first();
+    return {
+      signedPdfPath: current?.signed_pdf_path || null,
+      stamped: { customer: !!customerSignatureDataUrl, admin: !!adminSignatureDataUrl },
+      superseded: true,
+    };
+  }
 
   return {
     signedPdfPath: isWetSignedUpload ? contract.signed_pdf_path : signedPath,
