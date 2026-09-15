@@ -513,7 +513,6 @@ export const LineItemsTable: React.FC<Props> = ({
               const enabledInputClass = 'bg-white dark:bg-neutral-800';
               const qtyDisabled = parentAutoTotaled || qtyBound;
               const priceDisabled = parentAutoTotaled || priceFromChain;
-              const rowTone = excluded ? 'opacity-60' : '';
 
               if (discountRow) {
                 return (
@@ -549,7 +548,7 @@ export const LineItemsTable: React.FC<Props> = ({
                 <React.Fragment key={li.position}>
                   <tr className={`border-t border-neutral-200 dark:border-neutral-700 ${
                     sub ? 'bg-neutral-50/60 dark:bg-neutral-900/40' : ''
-                  } ${rowTone}`}>
+                  }`}>
                     <td className="px-2 py-2 text-neutral-600 dark:text-neutral-400 align-top">
                       <div className="flex items-center gap-1">
                         {sub && <CornerDownRight className="w-3.5 h-3.5 text-neutral-400" aria-hidden />}
@@ -722,7 +721,7 @@ export const LineItemsTable: React.FC<Props> = ({
                     <td className={`px-2 py-2 text-right tabular-nums align-top ${
                       sub
                         ? 'text-neutral-500 dark:text-neutral-400 italic'
-                        : 'font-medium'
+                        : excluded ? 'font-medium text-neutral-400 dark:text-neutral-500' : 'font-medium'
                     }`}>
                       {sub
                         ? li.unitPrice > 0
