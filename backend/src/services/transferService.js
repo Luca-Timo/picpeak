@@ -542,8 +542,23 @@ function assertDownloadable(transfer) {
   return { ok: true };
 }
 
-/** Record one download and, if it hit the cap, flip the link inactive. */
-async function recordDownload(transfer, { kind = 'all', photoId = null, ip = null } = {}) {
+/**
+ * Claim one download before anything is streamed. The count and the cap are
+ * compared in the same UPDATE, so concurrent requests cannot all pass a cap
+ * they read from the same snapshot. Returns false when the link is disabled or
+ * its cap is used up; the caller answers 410 without streaming. A claimed
+ * download counts even if the client disconnects mid-stream, which is the
+ * "disable after N downloads" intent.
+ */
+async function claimDownload(transfer, { kind = 'all', photoId = null, ip = null } = {}) {
+  const claimed = await db('transfers')
+    .where({ id: transfer.id, is_active: formatBoolean(true) })
+    .whereNull('deleted_at')
+    .andWhere((q) => q.whereNull('max_downloads')
+      .orWhere('max_downloads', '<=', 0)
+      .orWhere('download_count', '<', db.ref('max_downloads')))
+    .increment('download_count', 1);
+  if (!claimed) return false;
   await db('transfer_downloads').insert({
     transfer_id: transfer.id,
     kind,
@@ -551,7 +566,6 @@ async function recordDownload(transfer, { kind = 'all', photoId = null, ip = nul
     ip,
     downloaded_at: new Date(),
   });
-  await db('transfers').where({ id: transfer.id }).increment('download_count', 1);
 
   const cap = Number(transfer.max_downloads) || 0;
   if (cap > 0) {
@@ -573,6 +587,7 @@ async function recordDownload(transfer, { kind = 'all', photoId = null, ip = nul
       });
     }
   }
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -702,7 +717,28 @@ async function loadTransferExtraFiles(transferId) {
  * Stream a single ORIGINAL file from a transfer to `res`. Returns false when
  * the file id isn't part of this transfer or the bytes are missing.
  */
-async function streamTransferFile(transfer, rawFileId, res) {
+/**
+ * Run the caller's pre-stream check (the download claim) for a source that is
+ * already open. A refused claim or a claim that throws (a failed DB write)
+ * closes the source, so it never holds a file descriptor or S3 connection.
+ */
+async function allowStream(beforeStream, openStream) {
+  if (!beforeStream) return true;
+  const close = () => {
+    if (openStream && typeof openStream.destroy === 'function') openStream.destroy();
+  };
+  let allowed;
+  try {
+    allowed = await beforeStream();
+  } catch (err) {
+    close();
+    throw err;
+  }
+  if (!allowed) close();
+  return Boolean(allowed);
+}
+
+async function streamTransferFile(transfer, rawFileId, res, { beforeStream = null } = {}) {
   // Public file ids are prefixed (see getPublicView): `p<id>` = referenced
   // gallery photo, `x<id>` = admin-uploaded file. Tolerate a bare number as a
   // photo id for safety.
@@ -712,7 +748,7 @@ async function streamTransferFile(transfer, rawFileId, res) {
   if (!Number.isFinite(numId) || numId <= 0) return false;
 
   if (prefix === 'x') {
-    return streamTransferExtraFile(transfer, numId, res);
+    return streamTransferExtraFile(transfer, numId, res, { beforeStream });
   }
 
   const row = await db('transfer_files')
@@ -757,6 +793,9 @@ async function streamTransferFile(transfer, rawFileId, res) {
     if (!fs.existsSync(abs)) return false;
     source = { type: 'file', value: abs };
   }
+  // The file exists: let the caller claim the download before any byte goes
+  // out. A refused claim leaves the response untouched.
+  if (!(await allowStream(beforeStream, source.type === 'stream' ? source.value : null))) return false;
 
   res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
   res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
@@ -769,7 +808,7 @@ async function streamTransferFile(transfer, rawFileId, res) {
 }
 
 /** Stream a single admin-uploaded deliverable file from storage to `res`. */
-async function streamTransferExtraFile(transfer, extraId, res) {
+async function streamTransferExtraFile(transfer, extraId, res, { beforeStream = null } = {}) {
   const row = await db('transfer_extra_files')
     .where({ id: extraId, transfer_id: transfer.id })
     .first();
@@ -781,6 +820,7 @@ async function streamTransferExtraFile(transfer, extraId, res) {
     if (!srcStat) return false;
   }
   const stream = await storage.get(row.stored_path);
+  if (!(await allowStream(beforeStream, stream))) return false;
   res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
   res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(row.original_filename)}"`);
   stream.pipe(res);
@@ -1003,7 +1043,7 @@ module.exports = {
   getTransferByUploadToken,
   getPublicView,
   assertDownloadable,
-  recordDownload,
+  claimDownload,
   streamTransferArchive,
   streamTransferFile,
   streamTransferExtraFile,
