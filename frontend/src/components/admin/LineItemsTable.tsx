@@ -655,7 +655,11 @@ export const LineItemsTable: React.FC<Props> = ({
                           <button
                             type="button"
                             onClick={() => setItem(idx, { selected: li.selected === false })}
-                            className="rounded-md border border-primary-600 dark:border-primary-400 px-2 py-0.5 font-medium text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-neutral-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600"
+                            // Book is the call to action (filled, brand colour); Remove booking
+                            // stays a quiet outline.
+                            className={`rounded-md border px-2 py-0.5 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-neutral-900 ${li.selected === false
+                              ? 'border-primary-600 bg-primary-600 text-white hover:bg-primary-700 hover:border-primary-700'
+                              : 'border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'}`}
                           >
                             {li.selected === false
                               ? t('crm.lineItems.book', 'Book')
