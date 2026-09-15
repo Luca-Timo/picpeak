@@ -194,6 +194,29 @@ test('add-ons can only be changed on an accepted quote without a contract, event
   expect(view.body.quote.addOnsEditable).toBe(false);
 });
 
+test('saving a quote books and removes its add-ons, right after a restart too', async () => {
+  // After a restart the column checks are uncached; run inside the save
+  // transaction they waited on the one SQLite connection and failed the save.
+  const quoteId = await quoteWithAddOns();
+  require('../../src/utils/schemaCache').invalidateSchemaCache();
+  const res = await request(adminApp).put(`/api/admin/quotes/${quoteId}`).set(auth).send({
+    projectId: null, eventType: 'wedding', vatRate: 0,
+    lineItems: [
+      { position: 1, quantity: 1, description: 'Wedding day', unitPriceMinor: 100000 },
+      { position: 2, quantity: 1, description: 'Album', unitPriceMinor: 30000, isOptional: true, selected: true },
+      { position: 3, quantity: 1, description: 'Drone', unitPriceMinor: 20000, isOptional: true, selected: false },
+    ],
+  });
+  expect(res.status).toBe(200);
+  const { isTruthyFlag } = require('../../src/utils/lineItemTotals');
+  const rows = await db('quote_line_items').where({ quote_id: quoteId });
+  const line = (d) => rows.find((r) => r.description === d);
+  expect(isTruthyFlag(line('Album').selected)).toBe(true);
+  expect(isTruthyFlag(line('Drone').selected)).toBe(false);
+  const quote = await db('quotes').where({ id: quoteId }).first();
+  expect(Number(quote.total_amount_minor)).toBe(130000);
+});
+
 test('a default email template is brought up to date; an edited one is left alone', async () => {
   const templates = require('../../src/services/crmEmailTemplates');
   const row = await db('email_templates').where({ template_key: 'quote_sent' }).first();

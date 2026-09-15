@@ -730,6 +730,15 @@ async function updateQuote(id, payload, adminId) {
     );
   }
 
+  // Resolve the schema-drift column checks before the transaction, as
+  // createQuote does: a cold hasColumnCached lookup goes through the global
+  // db, which waits on the single-connection SQLite pool for the connection
+  // this transaction holds, and the save fails after the acquire timeout.
+  const hasProjectId = await hasColumnCached('quotes', 'project_id');
+  const hasVatCode = await hasColumnCached('quotes', 'vat_code');
+  const hasEventType = await hasColumnCached('quotes', 'event_type');
+  const hasBookingWorkflowId = await hasColumnCached('quotes', 'booking_workflow_id');
+
   return await db.transaction(async (trx) => {
     const updates = {
       updated_at: new Date(),
@@ -786,19 +795,19 @@ async function updateQuote(id, payload, adminId) {
           : null;
     }
     // Migration 121 — optional Project Overview link.
-    if (Object.prototype.hasOwnProperty.call(payload, 'projectId') && await hasColumnCached('quotes', 'project_id')) {
+    if (Object.prototype.hasOwnProperty.call(payload, 'projectId') && hasProjectId) {
       updates.project_id = payload.projectId || null;
     }
     // Migration 130 — VAT code snapshot.
-    if (Object.prototype.hasOwnProperty.call(payload, 'vatCode') && await hasColumnCached('quotes', 'vat_code')) {
+    if (Object.prototype.hasOwnProperty.call(payload, 'vatCode') && hasVatCode) {
       updates.vat_code = payload.vatCode ? String(payload.vatCode).slice(0, 16) : null;
     }
     // Migration 146 — event type.
-    if (Object.prototype.hasOwnProperty.call(payload, 'eventType') && await hasColumnCached('quotes', 'event_type')) {
+    if (Object.prototype.hasOwnProperty.call(payload, 'eventType') && hasEventType) {
       updates.event_type = payload.eventType ? String(payload.eventType).slice(0, 64) : null;
     }
     // Migration 147 — selected booking workflow.
-    if (Object.prototype.hasOwnProperty.call(payload, 'bookingWorkflowId') && await hasColumnCached('quotes', 'booking_workflow_id')) {
+    if (Object.prototype.hasOwnProperty.call(payload, 'bookingWorkflowId') && hasBookingWorkflowId) {
       updates.booking_workflow_id = payload.bookingWorkflowId || null;
     }
     await trx('quotes').where({ id }).update(updates);
