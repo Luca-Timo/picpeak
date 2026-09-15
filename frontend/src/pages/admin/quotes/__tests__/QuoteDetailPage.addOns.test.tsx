@@ -63,12 +63,12 @@ vi.mock('../../../../services/quoteCatalog.service', () => ({ quoteCatalogServic
 
 const get = vi.fn();
 const changeAddOns = vi.fn();
-const newVersion = vi.fn();
+const reissue = vi.fn();
 vi.mock('../../../../services/quotes.service', () => ({
   quotesService: {
     get: (...args: unknown[]) => get(...args),
     changeAddOns: (...args: unknown[]) => changeAddOns(...args),
-    newVersion: (...args: unknown[]) => newVersion(...args),
+    reissue: (...args: unknown[]) => reissue(...args),
   },
 }));
 
@@ -141,8 +141,11 @@ it('says why an accepted quote can\'t be edited and how to change it, instead of
   renderPage();
   await findAddOnsCard();
   await user.click(screen.getByRole('button', { name: 'Edit' }));
-  expect(toastInfo).toHaveBeenCalledWith(expect.stringContaining('create a new version'));
+  expect(toastInfo).toHaveBeenCalledWith(expect.stringContaining('reissue it'));
   expect(screen.queryByText('Quote editor')).toBeNull();
+  // Both ways out are on the page: reissuing it, or declining it.
+  expect(screen.getByRole('button', { name: 'Reissue' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Decline on behalf' })).toBeInTheDocument();
 });
 
 it('opens the editor for a draft', async () => {
@@ -154,17 +157,17 @@ it('opens the editor for a draft', async () => {
   renderPage();
   await user.click(await screen.findByRole('button', { name: 'Edit' }));
   expect(await screen.findByText('Quote editor')).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'New version' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Reissue' })).toBeNull();
 });
 
-it('creates a new version of an accepted quote and opens it in the editor', async () => {
+it('reissues an accepted quote and opens the new draft in the editor', async () => {
   const user = userEvent.setup();
   vi.spyOn(window, 'prompt').mockReturnValue('Kunde möchte ein grösseres Album');
-  newVersion.mockResolvedValue({ quoteId: 8 });
+  reissue.mockResolvedValue({ quoteId: 8 });
   renderPage();
   await findAddOnsCard();
-  await user.click(screen.getByRole('button', { name: 'New version' }));
-  expect(newVersion).toHaveBeenCalledWith(7, 'Kunde möchte ein grösseres Album');
+  await user.click(screen.getByRole('button', { name: 'Reissue' }));
+  expect(reissue).toHaveBeenCalledWith(7, 'Kunde möchte ein grösseres Album');
   expect(await screen.findByText('Quote editor')).toBeInTheDocument();
 });
 

@@ -1653,8 +1653,8 @@ function renderDocument(type, context) {
           y = doc.y + 6;
           doc.fillColor(themeColor(doc, 'text'));
         }
-        // A new version of an accepted quote (#1451) names the quote it
-        // replaces the same way: "Bezug: Ersetzt Angebot Q-XXXX vom DATE".
+        // A reissued quote (#1451) names the quote it replaces the same
+        // way: "Bezug: Ersetzt Angebot Q-XXXX vom DATE".
         if (type === 'quote' && ctx.doc.replacesQuote) {
           const { number, issueDate } = ctx.doc.replacesQuote;
           doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor(themeColor(doc, 'muted'));

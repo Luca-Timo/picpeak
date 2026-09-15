@@ -83,7 +83,7 @@ exports.up = async function (knex) {
   // the add-ons (who, when, what, the totals before and after).
   await addColumn(knex, 'quotes', 'customer_message', (t) => t.text('customer_message'));
   await addColumn(knex, 'quotes', 'selection_changes', (t) => t.text('selection_changes'));
-  // A new version of an accepted quote points to the quote it replaces.
+  // A reissued quote points to the quote it replaces.
   await addColumn(knex, 'quotes', 'replaces_quote_id', (t) => t.integer('replaces_quote_id'));
 
   if (!(await knex.schema.hasTable('quote_packages'))) {

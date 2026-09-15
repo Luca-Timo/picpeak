@@ -1,6 +1,5 @@
 /**
- * A new version of an accepted quote (#1451), like a Storno and its
- * replacement invoice.
+ * Reissuing an accepted quote (#1451), like an invoice with its Storno.
  *
  * Real admin + public routes → quoteService → SQLite with the full
  * core-migration run (helpers/crmDb). Pins:
@@ -9,9 +8,11 @@
  *     out;
  *   - a draft copy with the same lines and add-on choice replaces it, in the
  *     same deal, and both quotes name each other;
- *   - the new version's PDF says which quote it replaces;
- *   - only an accepted quote without a contract, event or invoice gets one;
- *   - editing an accepted quote says to create a new version.
+ *   - the reissued quote's PDF says which quote it replaces;
+ *   - a reissued quote isn't sent again;
+ *   - only an accepted quote without a contract, event or invoice can be
+ *     reissued, or declined by the admin;
+ *   - editing an accepted quote says to reissue it.
  */
 
 const request = require('supertest');
@@ -78,12 +79,12 @@ async function acceptedQuote() {
   return { quoteId, link };
 }
 
-test('a new version declines the accepted quote and replaces it with a draft copy', async () => {
+test('reissuing declines the accepted quote and replaces it with a draft copy', async () => {
   const { quoteId, link } = await acceptedQuote();
   const before = await db('quotes').where({ id: quoteId }).first();
   const mails = (await db('email_queue')).length;
 
-  const res = await request(adminApp).post(`/api/admin/quotes/${quoteId}/new-version`).set(auth)
+  const res = await request(adminApp).post(`/api/admin/quotes/${quoteId}/reissue`).set(auth)
     .send({ reason: 'Grösseres Album gewünscht' });
   expect(res.status).toBe(201);
 
@@ -120,17 +121,17 @@ test('a new version declines the accepted quote and replaces it with a draft cop
   }));
 });
 
-test('a replaced quote isn\'t sent again: the new version is', async () => {
+test('a reissued quote isn\'t sent again: the quote that replaced it is', async () => {
   const { quoteId } = await acceptedQuote();
-  await quoteService.replaceAcceptedQuote(quoteId, adminId);
+  await quoteService.reissueQuote(quoteId, adminId);
   await expect(quoteService.sendQuote(quoteId, adminId))
     .rejects.toMatchObject({ statusCode: 409, code: 'QUOTE_REPLACED' });
 });
 
-test('the new version\'s PDF says which quote it replaces', async () => {
+test('the reissued quote\'s PDF says which quote it replaces', async () => {
   const { quoteId } = await acceptedQuote();
   const old = await db('quotes').where({ id: quoteId }).first();
-  const { quoteId: newId } = await quoteService.replaceAcceptedQuote(quoteId, adminId);
+  const { quoteId: newId } = await quoteService.reissueQuote(quoteId, adminId);
 
   const texts = jest.spyOn(PDFKit.prototype, 'text');
   await quoteService.getQuotePdfBuffer(newId);
@@ -139,28 +140,48 @@ test('the new version\'s PDF says which quote it replaces', async () => {
   expect(drawn.some((t) => new RegExp(`(Ersetzt|Replaces) \\S+ ${old.quote_number}`).test(t))).toBe(true);
 });
 
-test('only an accepted quote without a contract, event or invoice gets a new version', async () => {
+test('only an accepted quote without a contract, event or invoice can be reissued', async () => {
   const draftId = await quoteService.createQuote({
     customerAccountId: customerId, currency: 'CHF', vatRate: 0,
     lineItems: [{ position: 1, quantity: 1, description: 'Portrait', unit_price_minor: 50000 }],
   }, adminId);
-  const early = await request(adminApp).post(`/api/admin/quotes/${draftId}/new-version`).set(auth).send({});
+  const early = await request(adminApp).post(`/api/admin/quotes/${draftId}/reissue`).set(auth).send({});
   expect(early.status).toBe(409);
   expect(early.body.code).toBe('QUOTE_NOT_ACCEPTED');
 
   const { quoteId } = await acceptedQuote();
   await db('quotes').where({ id: quoteId }).update({ converted_event_id: 999999 });
-  const late = await request(adminApp).post(`/api/admin/quotes/${quoteId}/new-version`).set(auth).send({});
+  const late = await request(adminApp).post(`/api/admin/quotes/${quoteId}/reissue`).set(auth).send({});
   expect(late.status).toBe(409);
   expect(late.body.code).toBe('QUOTE_CONVERTED');
   expect((await db('quotes').where({ id: quoteId }).first()).status).toBe('accepted');
   expect(await db('quotes').where({ replaces_quote_id: quoteId })).toHaveLength(0);
 });
 
-test('editing an accepted quote says to create a new version', async () => {
+test('the admin can decline an accepted quote until a contract, event or invoice exists', async () => {
+  const { quoteId } = await acceptedQuote();
+  const res = await request(adminApp).post(`/api/admin/quotes/${quoteId}/decline`).set(auth)
+    .send({ reason: 'Kunde hat abgesagt' });
+  expect(res.status).toBe(200);
+  const quote = await db('quotes').where({ id: quoteId }).first();
+  expect(quote.status).toBe('declined');
+  expect(quote.decline_reason).toBe('Kunde hat abgesagt');
+  // The acceptance stays on record; no copy is made.
+  expect(quote.accepted_at).toBeTruthy();
+  expect(await db('quotes').where({ replaces_quote_id: quoteId })).toHaveLength(0);
+
+  const { quoteId: madeId } = await acceptedQuote();
+  await db('quotes').where({ id: madeId }).update({ converted_contract_id: 999999 });
+  const late = await request(adminApp).post(`/api/admin/quotes/${madeId}/decline`).set(auth).send({});
+  expect(late.status).toBe(409);
+  expect(late.body.code).toBe('QUOTE_CONVERTED');
+  expect((await db('quotes').where({ id: madeId }).first()).status).toBe('accepted');
+});
+
+test('editing an accepted quote says to reissue it', async () => {
   const { quoteId } = await acceptedQuote();
   const res = await request(adminApp).put(`/api/admin/quotes/${quoteId}`).set(auth).send({ eventName: 'Changed' });
   expect(res.status).toBe(409);
   expect(res.body.code).toBe('QUOTE_LOCKED');
-  expect(res.body.error).toMatch(/new version/);
+  expect(res.body.error).toMatch(/Reissue it/);
 });

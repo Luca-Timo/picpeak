@@ -43,8 +43,8 @@ export const QuoteDetailPage: React.FC = () => {
 
   if (isLoading || !data) return <Loading />;
   const q = data.quote;
-  // Accepted, and no contract, event or invoice yet: a new version can replace it.
-  const canNewVersion = q.status === 'accepted' && !q.convertedEventId && !q.convertedContractId;
+  // Accepted, and no contract, event or invoice yet: it can be reissued or declined.
+  const canReissue = q.status === 'accepted' && !q.convertedEventId && !q.convertedContractId;
 
   const handlePreview = async () => {
     // Open the placeholder window synchronously so the browser sees a
@@ -169,9 +169,9 @@ export const QuoteDetailPage: React.FC = () => {
       navigate(`/admin/clients/quotes/${q.id}/edit`);
       return;
     }
-    if (q.status === 'accepted' && canNewVersion) {
+    if (q.status === 'accepted' && canReissue) {
       toast.info(t('quotes.lockedNotice.accepted',
-        'This quote was already accepted and can\'t be edited. To change it, create a new version: the quote is declined and copied as a new draft.'));
+        'This quote was already accepted and can\'t be edited. To change it, reissue it: the quote is declined and copied as a new draft. If it no longer applies, decline it.'));
     } else if (q.status === 'accepted') {
       toast.info(t('quotes.lockedNotice.acceptedConverted',
         'This quote was already accepted, and a contract, event or invoice exists for it. It can\'t be changed any more.'));
@@ -183,16 +183,16 @@ export const QuoteDetailPage: React.FC = () => {
     }
   };
 
-  // A new version of an accepted quote, like a Storno and its replacement
-  // invoice: this quote is declined and a draft copy replaces it.
-  const handleNewVersion = async () => {
-    const reason = window.prompt(t('quotes.newVersionPrompt',
-      'Create a new version? This quote is declined (the customer\'s link stops working) and copied as a new draft to change and send. Optionally note why (leave blank to skip).'));
+  // Reissue an accepted quote, like an invoice with its Storno: this quote
+  // is declined and a draft copy replaces it.
+  const handleReissue = async () => {
+    const reason = window.prompt(t('quotes.reissuePrompt',
+      'Reissue this quote? It is declined (the customer\'s link stops working) and copied as a new draft that refers to it as "Replaces …". Optionally note why (leave blank to skip).'));
     // prompt returns null on Cancel; '' (empty) means "no reason".
     if (reason === null) return;
     try {
-      const result = await quotesService.newVersion(q.id, reason.trim() || undefined);
-      toast.success(t('quotes.newVersionCreated', 'New version created. Change it and send it to the customer.'));
+      const result = await quotesService.reissue(q.id, reason.trim() || undefined);
+      toast.success(t('quotes.reissuedToast', 'Quote reissued — opening the new draft.'));
       qc.invalidateQueries({ queryKey: ['quotes'] });
       navigate(`/admin/clients/quotes/${result.quoteId}/edit`);
     } catch (err: unknown) {
@@ -217,7 +217,7 @@ export const QuoteDetailPage: React.FC = () => {
   };
 
   const responseLocked = q.responseLockedAt && new Date(q.responseLockedAt).getTime() < Date.now();
-  // A quote a new version replaced is never sent again: the new version is.
+  // A reissued quote is never sent again: the quote that replaced it is.
   const canSend = ['draft', 'declined', 'expired'].includes(q.status) && !q.replacedByQuoteId;
 
   return (
@@ -241,9 +241,9 @@ export const QuoteDetailPage: React.FC = () => {
             <Edit2 className="w-4 h-4 mr-1" />{t('common.edit', 'Edit')}
           </Button>
           <Button variant="outline" onClick={handleDuplicate}><Copy className="w-4 h-4 mr-1" />{t('common.duplicate', 'Duplicate')}</Button>
-          {canNewVersion && (
+          {canReissue && (
             <PermissionGate permission="quotes.manage">
-              <Button variant="outline" onClick={handleNewVersion}><FilePlus className="w-4 h-4 mr-1" />{t('quotes.newVersion', 'New version')}</Button>
+              <Button variant="outline" onClick={handleReissue}><FilePlus className="w-4 h-4 mr-1" />{t('quotes.reissue', 'Reissue')}</Button>
             </PermissionGate>
           )}
           <PermissionGate permission="quotes.manage">
@@ -259,10 +259,11 @@ export const QuoteDetailPage: React.FC = () => {
               {t('quotes.acceptOnBehalf', 'Accept on behalf')}
             </Button>
           )}
-          {/* Decline-on-behalf — same states as accept-on-behalf. Flips
-              the quote to declined for "customer said no by phone"
-              cases; hidden once accepted / declined / converted. */}
-          {['draft', 'sent', 'expired'].includes(q.status) && (
+          {/* Decline-on-behalf — the accept-on-behalf states, plus an
+              accepted quote nothing was made from yet (the customer
+              withdrew). Flips the quote to declined for "customer said no
+              by phone" cases; hidden once declined / converted. */}
+          {(['draft', 'sent', 'expired'].includes(q.status) || canReissue) && (
             <Button variant="outline" onClick={handleDeclineOnBehalf}>
               <XCircle className="w-4 h-4 mr-1" />
               {t('quotes.declineOnBehalf', 'Decline on behalf')}

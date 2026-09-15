@@ -1069,7 +1069,7 @@
         "POST /:id/accept",
         "POST /:id/add-ons",
         "POST /:id/decline",
-        "POST /:id/new-version",
+        "POST /:id/reissue",
         "POST /:id/convert",
         "POST /:id/convert-to-invoice",
         "POST /:id/convert-to-contract",

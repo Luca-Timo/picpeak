@@ -140,7 +140,7 @@ export interface QuoteDetail extends QuoteSummary {
   selectionChanges?: QuoteSelectionChange[];
   /** #1451 — accepted and no contract / event yet: the add-ons can still be changed here. */
   addOnsEditable?: boolean;
-  /** #1451 — a new version names the quote it replaces; a replaced quote its new version. */
+  /** #1451 — a reissued quote names the quote it replaces, and the other way round. */
   replacesQuoteId?: number | null;
   replacesQuoteNumber?: string | null;
   replacedByQuoteId?: number | null;
@@ -340,10 +340,10 @@ export const quotesService = {
     return data.data || data;
   },
 
-  /** A new version of an accepted quote (#1451): the server declines it (the
-   *  customer's link stops working) and returns the draft copy that replaces it. */
-  async newVersion(id: number, reason?: string): Promise<{ quoteId: number }> {
-    const { data } = await api.post(`/admin/quotes/${id}/new-version`, reason ? { reason } : {});
+  /** Reissue an accepted quote (#1451): the server declines it (the customer's
+   *  link stops working) and returns the draft copy that replaces it. */
+  async reissue(id: number, reason?: string): Promise<{ quoteId: number }> {
+    const { data } = await api.post(`/admin/quotes/${id}/reissue`, reason ? { reason } : {});
     return data.data || data;
   },
 

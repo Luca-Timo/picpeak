@@ -137,7 +137,7 @@ function transformQuote(q) {
     customerMessage: q.customer_message || null,
     selectionChanges: parseSelectionChanges(q.selection_changes),
     addOnsEditable: q.status === 'accepted' && !q.converted_event_id && !q.converted_contract_id,
-    // A new version (#1451): the quote this one replaces, and the one that replaced it.
+    // A reissue (#1451): the quote this one replaces, and the one that replaced it.
     replacesQuoteId: q.replaces_quote_id ?? null,
     replacesQuoteNumber: q.replaces_quote_number ?? null,
     replacedByQuoteId: q.replaced_by_quote_id ?? null,
@@ -596,11 +596,11 @@ router.post(
   })
 );
 
-// A new version of an accepted quote (#1451), like a Storno and its
-// replacement invoice: declines it (the customer's link stops working, the
-// reason is kept) and creates the draft copy that replaces it.
+// Reissue an accepted quote (#1451), like an invoice with its Storno:
+// declines it (the customer's link stops working, the reason is kept) and
+// creates the draft copy that replaces it.
 router.post(
-  '/:id/new-version',
+  '/:id/reissue',
   requirePermission('quotes.manage'),
   [
     param('id').isInt({ min: 1 }),
@@ -609,8 +609,8 @@ router.post(
   handleAsync(async (req, res) => {
     validateRequest(req);
     const id = parseInt(req.params.id, 10);
-    const result = await quoteService.replaceAcceptedQuote(id, req.admin.id, req.body.reason);
-    return successResponse(res, result, 201, 'New version created');
+    const result = await quoteService.reissueQuote(id, req.admin.id, req.body.reason);
+    return successResponse(res, result, 201, 'Quote reissued');
   })
 );
 

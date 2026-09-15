@@ -19,7 +19,7 @@ function makeChain() {
     then: function (onResolve, onReject) {
       return Promise.resolve(this._selectResult).then(onResolve, onReject);
     },
-    // Looking up a newer version that replaces a quote (#1451) finds none:
+    // Looking up the quote that reissued a quote (#1451) finds none:
     // `first` after `where({ replaces_quote_id })` resolves to undefined.
     where: jest.fn(function (arg) {
       this._replacesLookup = !!(arg && typeof arg === 'object' && 'replaces_quote_id' in arg);
