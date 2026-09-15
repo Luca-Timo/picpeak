@@ -14,6 +14,7 @@ import { DecimalInput } from '../../common/DecimalInput';
 import { CustomerPicker } from '../CustomerPicker';
 import { PermissionGate } from '../PermissionGate';
 import { quoteCatalogService } from '../../../services/quoteCatalog.service';
+import { quoteErrorText } from '../../../utils/quoteErrors';
 
 interface Props {
   open: boolean;
@@ -58,7 +59,7 @@ export const TemplatePickerModal: React.FC<Props> = ({ open, onClose }) => {
       onClose();
       navigate(`/admin/clients/quotes/${result.quoteId}/edit`);
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || err.message || 'Failed');
+      toast.error(quoteErrorText(err, t, 'Failed'));
     } finally {
       setBusy(false);
     }

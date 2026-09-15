@@ -119,7 +119,7 @@ export const AccountingTab: React.FC = () => {
         <div>
           <label className={labelCls}>{t('settings.accounting.profileFields.hourlyRate', 'Default hourly rate')}</label>
           <DecimalInput value={hourlyMajor} onChange={setHourlyMajor} fractionDigits={2} className={inputCls} placeholder={t('settings.accounting.profileFields.hourlyRatePlaceholder', 'e.g. 120.00') as string} />
-          <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{t('settings.accounting.profileFields.hourlyRateHint', 'Billing fallback used when a customer has no own rate (hours logging). In {{currency}}, major units. Leave blank to require a per-customer or per-entry rate.', { currency })}</p>
+          <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{t('settings.accounting.profileFields.hourlyRateHint', 'Billing fallback used when a customer has no own rate (hours logging and quote lines priced per hour). In {{currency}}, major units. Leave blank to require a per-customer or per-entry rate.', { currency })}</p>
         </div>
         <div>
           <label className={labelCls}>{t('settings.accounting.profileFields.dayRate', 'Default day rate')}</label>

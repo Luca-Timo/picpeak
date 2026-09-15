@@ -361,8 +361,8 @@ async function prepareQuoteLineItems(items, { customerId, currency, hours, days 
         if (!rate) {
           throw new AppError(
             out.price_mode === 'hour'
-              ? 'No hourly rate is set for this customer or in the business profile'
-              : 'No day rate is set for this customer or in the business profile',
+              ? 'No hourly rate for this customer and no default hourly rate. Set one under Settings → Accounting, or on the customer.'
+              : 'No day rate for this customer and no default day rate. Set one under Settings → Accounting, or on the customer.',
             400,
             'RATE_REQUIRED',
           );

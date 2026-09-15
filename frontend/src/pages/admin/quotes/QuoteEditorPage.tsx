@@ -43,6 +43,7 @@ import { userManagementService } from '../../../services/userManagement.service'
 import { settingsService } from '../../../services/settings.service';
 import { useAdminAuth } from '../../../contexts/AdminAuthContext';
 import { toast } from 'react-toastify';
+import { quoteErrorText } from '../../../utils/quoteErrors';
 
 interface FormState {
   customerAccountId: number | null;
@@ -454,7 +455,6 @@ export const QuoteEditorPage: React.FC = () => {
       // Close the placeholder window if the save failed so it doesn't
       // sit there showing "about:blank".
       if (previewWindow) previewWindow.close();
-      const msg = err?.response?.data?.error || err.message || 'Save failed';
       // Server returns a friendly code for the "customer feature off"
       // case — surface a clearer message so admins know to flip the
       // toggle on the customer detail page.
@@ -470,7 +470,7 @@ export const QuoteEditorPage: React.FC = () => {
         const first = err.response.data.details[0];
         toast.error(`${first.field}: ${first.message}`);
       } else {
-        toast.error(msg);
+        toast.error(quoteErrorText(err, t, 'Save failed'));
       }
     } finally {
       setBusy(false);
@@ -496,7 +496,7 @@ export const QuoteEditorPage: React.FC = () => {
       previewWindow.location.href = url;
     } catch (err: any) {
       previewWindow.close();
-      toast.error(err?.response?.data?.error || err.message || 'Preview failed');
+      toast.error(quoteErrorText(err, t, 'Preview failed'));
     }
   };
 
@@ -513,7 +513,7 @@ export const QuoteEditorPage: React.FC = () => {
       await queryClient.invalidateQueries({ queryKey: ['quote', id] });
       toast.success(t('quotes.ratesRecalculatedToast', 'Rates updated to today\'s values.'));
     } catch (err: any) {
-      toast.error(err?.response?.data?.error || err.message || 'Failed');
+      toast.error(quoteErrorText(err, t, 'Failed'));
     } finally {
       setBusy(false);
     }

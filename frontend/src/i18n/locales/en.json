@@ -2531,7 +2531,7 @@
         "vatLabelHint": "Printed as the VAT-line label on invoice / quote PDFs. Leave blank to use the document language default.",
         "hourlyRate": "Default hourly rate",
         "hourlyRatePlaceholder": "e.g. 120.00",
-        "hourlyRateHint": "Billing fallback used when a customer has no own rate (hours logging). In {{currency}}, major units. Leave blank to require a per-customer or per-entry rate.",
+        "hourlyRateHint": "Billing fallback used when a customer has no own rate (hours logging and quote lines priced per hour). In {{currency}}, major units. Leave blank to require a per-customer or per-entry rate.",
         "dayRate": "Default day rate",
         "dayRateHint": "Used by per-day quote lines when a customer has no own day rate. In {{currency}}, major units.",
         "dayRatePlaceholder": "e.g. 1200.00"
@@ -6536,6 +6536,7 @@
     "errors": {
       "popupBlocked": "Allow pop-ups for this site to preview the PDF.",
       "customerRequired": "Pick a customer first.",
+      "rateRequired": "No rate for this customer and no default rate. Set a default hourly or day rate under Settings → Accounting, or a rate on the customer.",
       "customerFeatureDisabled": "This customer has Quotes disabled. Enable Quotes on the customer detail page first."
     },
     "confirmSend": "Send this quote to the customer now?",

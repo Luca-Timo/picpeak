@@ -3033,7 +3033,7 @@
         "vatLabelHint": "Wird als Bezeichnung der MwSt-Zeile auf Rechnungs-/Angebots-PDFs gedruckt. Leer lassen, um die Standardbezeichnung der Dokumentsprache zu verwenden.",
         "hourlyRate": "Standard-Stundensatz",
         "hourlyRatePlaceholder": "z. B. 120.00",
-        "hourlyRateHint": "Verrechnungs-Fallback, wenn ein Kunde keinen eigenen Satz hat (Stundenerfassung). In {{currency}}, in Hauptwährungseinheiten. Leer lassen, um einen Satz pro Kunde oder pro Eintrag zu verlangen.",
+        "hourlyRateHint": "Verrechnungs-Fallback, wenn ein Kunde keinen eigenen Satz hat (Stundenerfassung und Angebotspositionen pro Stunde). In {{currency}}, in Hauptwährungseinheiten. Leer lassen, um einen Satz pro Kunde oder pro Eintrag zu verlangen.",
         "dayRate": "Standard-Tagessatz",
         "dayRateHint": "Für Angebotspositionen pro Tag, wenn der Kunde keinen eigenen Tagessatz hat. In {{currency}}.",
         "dayRatePlaceholder": "z. B. 1200.00"
@@ -6544,6 +6544,7 @@
     "errors": {
       "popupBlocked": "Erlauben Sie Pop-ups für diese Seite, um die PDF-Vorschau anzuzeigen.",
       "customerRequired": "Bitte zuerst einen Kunden auswählen.",
+      "rateRequired": "Für diesen Kunden ist kein Satz hinterlegt, und es gibt keinen Standardsatz. Legen Sie unter Einstellungen → Buchhaltung einen Standard-Stunden- oder -Tagessatz fest oder hinterlegen Sie einen Satz beim Kunden.",
       "customerFeatureDisabled": "Bei diesem Kunden sind Angebote deaktiviert. Aktivieren Sie Angebote zuerst in den Kundendetails."
     },
     "confirmSend": "Dieses Angebot jetzt an den Kunden senden?",
