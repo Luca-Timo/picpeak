@@ -51,10 +51,8 @@ async function createInvoice(payload, adminId, trx = db) {
   // (e.g. the accumulator itself, or future test fixtures).
   if ((customer.billing_cadence === 'monthly' || customer.billing_cadence === 'manual')
       && !payload._skipMonthlyRouting) {
+    // appendToMonthlyDraft returns the draft id itself, not a row.
     const draftId = await appendToMonthlyDraft(payload, customer, adminId, trx);
-    // appendToMonthlyDraft returns the draft's id itself (not a row). Reading
-    // `.id` off it always produced an empty list, so the admin route 500'd
-    // on invoiceIds[0] for every monthly / manual customer.
     return { invoiceIds: draftId ? [draftId] : [] };
   }
 
@@ -363,9 +361,6 @@ async function spawnInstallmentInvoices({ trx, eventId, quoteId, customer, curre
       })),
       vatRate: totals?.vatRate,
     }, customer, adminId, trx);
-    // appendToMonthlyDraft returns the draft's id itself (not a row). Reading
-    // `.id` off it always produced an empty list, so the admin route 500'd
-    // on invoiceIds[0] for every monthly / manual customer.
     return { invoiceIds: draftId ? [draftId] : [] };
   }
 

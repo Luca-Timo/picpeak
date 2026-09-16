@@ -1,5 +1,5 @@
 /**
- * Line-item order persistence — integration tests.
+ * Line-item order persistence — integration tests (#1452).
  *
  * `LineItemsTable` keeps `position` as a stable row id ("once assigned at row
  * creation we never renumber it") and `move()` only reorders the array, so the
@@ -18,6 +18,7 @@
  */
 
 const request = require('supertest');
+const { formatBoolean } = require('../../src/utils/dbCompat');
 const {
   bootCrmDb, seedMinimal, assignAdminRole, mintAdminToken, buildRouteApp,
 } = require('./helpers/crmDb');
@@ -43,8 +44,9 @@ const descriptionsOf = (body) => body.lineItems.map((li) => li.description);
 const positionsOf = (body) => body.lineItems.map((li) => li.position);
 
 async function enableFlag(key) {
-  const updated = await db('feature_flags').where({ key }).update({ value: true });
-  if (!updated) await db('feature_flags').insert({ key, value: true });
+  const value = formatBoolean(true);
+  const updated = await db('feature_flags').where({ key }).update({ value });
+  if (!updated) await db('feature_flags').insert({ key, value });
 }
 
 /**
@@ -194,10 +196,10 @@ describe('PUT /api/admin/quotes/:id — line-item order', () => {
     expect(reloaded.body.lineItems[1].parentLineItemId).toBe(reloaded.body.lineItems[0].id);
   });
 
-  test('an ambiguous payload is still refused instead of renumbered', async () => {
+  test('an ambiguous payload is refused at the route, not renumbered', async () => {
     // Renumbering makes positions unique and can move a parent number onto a
-    // different row, so it must not run on a payload the hierarchy validation
-    // would reject: these three stay 400.
+    // different row, so validateLineItemHierarchy runs on the payload's own
+    // numbers first: these three stay 400.
     const quoteId = await createQuote([
       { position: 1, quantity: 1, description: 'A', unitPriceMinor: 10000, discountPercent: 0 },
     ]);
@@ -211,8 +213,8 @@ describe('PUT /api/admin/quotes/:id — line-item order', () => {
     expect(duplicate.status).toBe(400);
     expect(duplicate.body.code).toBe('LINE_ITEM_POSITION_DUPLICATE');
 
-    // The missing parent number (2) is inside 1..n, so renumbering would have
-    // handed the sub-item to whichever row landed on 2.
+    // The missing parent number (2) is inside 1..n, so renumbering first would
+    // have handed the sub-item to whichever row landed on 2.
     const missingParent = await put([
       { position: 10, quantity: 1, description: 'A', unitPriceMinor: 10000, discountPercent: 0 },
       { position: 20, quantity: 1, description: 'B', unitPriceMinor: 10000, discountPercent: 0 },
@@ -229,28 +231,21 @@ describe('PUT /api/admin/quotes/:id — line-item order', () => {
     expect(tooDeep.status).toBe(400);
     expect(tooDeep.body.code).toBe('LINE_ITEM_NESTING_TOO_DEEP');
   });
+
+  test('a new quote keeps the order chosen before its first save', async () => {
+    const quoteId = await createQuote([
+      { position: 3, quantity: 1, description: 'Third', unitPriceMinor: 30000, discountPercent: 0 },
+      { position: 1, quantity: 1, description: 'First', unitPriceMinor: 10000, discountPercent: 0 },
+      { position: 2, quantity: 1, description: 'Second', unitPriceMinor: 20000, discountPercent: 0 },
+    ]);
+    const reloaded = await request(quoteApp).get(`/api/admin/quotes/${quoteId}`).set(auth);
+    expect(reloaded.status).toBe(200);
+    expect(descriptionsOf(reloaded.body)).toEqual(['Third', 'First', 'Second']);
+  });
 });
 
 describe('PUT /api/admin/invoices/:id — line-item order', () => {
-  test('an out-of-order payload is stored in array order at create time', async () => {
-    const created = await request(invoiceApp).post('/api/admin/invoices').set(auth).send({
-      customerAccountId: customerId,
-      currency: 'CHF',
-      vatRate: 0,
-      lineItems: [
-        { position: 3, quantity: 1, description: 'Album', unitPriceMinor: 60000, discountPercent: 0 },
-        { position: 1, quantity: 1, description: 'Wedding coverage', unitPriceMinor: 200000, discountPercent: 0 },
-      ],
-    });
-    expect(created.status).toBe(201);
-
-    const reloaded = await request(invoiceApp).get(`/api/admin/invoices/${created.body.invoice.id}`).set(auth);
-    expect(reloaded.status).toBe(200);
-    expect(descriptionsOf(reloaded.body)).toEqual(['Album', 'Wedding coverage']);
-    expect(positionsOf(reloaded.body)).toEqual([1, 2]);
-  });
-
-  test('a reordered invoice keeps the new order after a reload', async () => {
+  test('a reordered scheduled invoice keeps the new order after a reload', async () => {
     const created = await request(invoiceApp).post('/api/admin/invoices').set(auth).send({
       customerAccountId: customerId,
       currency: 'CHF',
@@ -278,5 +273,109 @@ describe('PUT /api/admin/invoices/:id — line-item order', () => {
     expect(reloaded.status).toBe(200);
     expect(descriptionsOf(reloaded.body)).toEqual(['Album', 'Wedding coverage']);
     expect(positionsOf(reloaded.body)).toEqual([1, 2]);
+  });
+});
+
+describe.each(['quotes', 'invoices'])('%s — hierarchy validation before renumbering', (resource) => {
+  const line = (position, description, extra = {}) => ({
+    position, description, quantity: 1, unitPriceMinor: 10000, discountPercent: 0, ...extra,
+  });
+  const invalidCases = [
+    ['missing parent colliding with a new position', [
+      line(10, 'Unrelated'),
+      line(20, 'Orphan', { parentPosition: 1 }),
+    ], 'LINE_ITEM_PARENT_NOT_FOUND'],
+    ['duplicate original positions', [
+      line(10, 'First'),
+      line(10, 'Second'),
+      line(20, 'Child', { parentPosition: 10 }),
+    ], 'LINE_ITEM_POSITION_DUPLICATE'],
+  ];
+
+  test.each(invalidCases)('POST rejects %s without creating a document', async (_name, lineItems, code) => {
+    const app = resource === 'quotes' ? quoteApp : invoiceApp;
+    const before = await db(resource).select('id');
+    const res = await request(app).post(`/api/admin/${resource}`).set(auth).send({
+      customerAccountId: customerId, currency: 'CHF', vatRate: 0, lineItems,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe(code);
+    expect(await db(resource).select('id')).toEqual(before);
+  });
+
+  test.each(invalidCases)('PUT rejects %s without changing saved lines or totals', async (_name, lineItems, code) => {
+    const app = resource === 'quotes' ? quoteApp : invoiceApp;
+    const created = await request(app).post(`/api/admin/${resource}`).set(auth).send({
+      customerAccountId: customerId, currency: 'CHF', vatRate: 0,
+      lineItems: [line(1, 'Original')],
+    });
+    expect(created.status).toBe(201);
+    const id = (created.body.quote || created.body.invoice).id;
+    const url = `/api/admin/${resource}/${id}`;
+    const before = await request(app).get(url).set(auth).expect(200);
+    const rejected = await request(app).put(url).set(auth).send({ lineItems });
+    expect(rejected.status).toBe(400);
+    expect(rejected.body.code).toBe(code);
+    const after = await request(app).get(url).set(auth).expect(200);
+    expect(after.body.lineItems).toEqual(before.body.lineItems);
+    const key = resource === 'quotes' ? 'quote' : 'invoice';
+    expect(after.body[key].totalAmountMinor).toBe(before.body[key].totalAmountMinor);
+  });
+
+  test('POST preserves a moved parent and reordered children on first save', async () => {
+    const app = resource === 'quotes' ? quoteApp : invoiceApp;
+    const created = await request(app).post(`/api/admin/${resource}`).set(auth).send({
+      customerAccountId: customerId, currency: 'CHF', vatRate: 0,
+      lineItems: [line(4, 'Travel'), line(1, 'Package'),
+        line(3, 'Lens', { parentPosition: 1 }), line(2, 'Camera', { parentPosition: 1 })],
+    });
+    expect(created.status).toBe(201);
+    const id = (created.body.quote || created.body.invoice).id;
+    const reloaded = await request(app).get(`/api/admin/${resource}/${id}`).set(auth).expect(200);
+    expect(descriptionsOf(reloaded.body)).toEqual(['Travel', 'Package', 'Lens', 'Camera']);
+    expect(positionsOf(reloaded.body)).toEqual([1, 2, 3, 4]);
+    expect(reloaded.body.lineItems.slice(2).map((li) => li.parentLineItemId))
+      .toEqual([reloaded.body.lineItems[1].id, reloaded.body.lineItems[1].id]);
+  });
+});
+
+describe('appendToMonthlyDraft — sub-items appended to a draft that already has lines', () => {
+  const line = (position, description, extra = {}) => ({
+    position, description, quantity: 1, unit_price_minor: 10000, discount_percent: 0, ...extra,
+  });
+
+  // The route hands the service line items renumbered to 1..n, so their
+  // positions collide with the draft's existing lines and the append has to
+  // shift each parent reference along with its parent. The aligned case pins
+  // that row ids already matching the shifted slots keep working.
+  test.each([
+    ['row ids colliding with the existing line', 'colliding',
+      [line(1, 'A'), line(2, 'B'), line(3, 'Child', { parent_position: 2 })]],
+    ['row ids matching the shifted positions', 'aligned',
+      [line(2, 'A'), line(3, 'B'), line(4, 'Child', { parent_position: 3 })]],
+  ])('a sub-item keeps its parent with %s', async (_name, key, lineItems) => {
+    // Required here, not at the top: the service binds to the database that
+    // bootCrmDb configured in beforeAll.
+    const invoiceService = require('../../src/services/invoiceService');
+    const inserted = await db('customer_accounts').insert({
+      email: `monthly-${key}@example.com`,
+      display_name: 'Monthly Customer',
+      password_hash: 'unused',
+      preferred_language: 'de',
+      is_active: 1,
+      billing_cadence: 'monthly',
+      created_at: new Date().toISOString(),
+    }).returning('id');
+    const customer = await db('customer_accounts').where({ id: inserted[0]?.id ?? inserted[0] }).first();
+
+    const draftId = await invoiceService.appendToMonthlyDraft(
+      { lineItems: [line(1, 'Existing')] }, customer, adminId, db);
+    expect(await invoiceService.appendToMonthlyDraft({ lineItems }, customer, adminId, db)).toBe(draftId);
+
+    const rows = await db('invoice_line_items').where({ invoice_id: draftId }).orderBy('position', 'asc');
+    expect(rows.map((r) => r.description)).toEqual(['Existing', 'A', 'B', 'Child']);
+    expect(rows.map((r) => r.position)).toEqual([1, 2, 3, 4]);
+    const byDescription = Object.fromEntries(rows.map((r) => [r.description, r]));
+    expect(byDescription.Child.parent_line_item_id).toBe(byDescription.B.id);
   });
 });

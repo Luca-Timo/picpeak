@@ -341,7 +341,7 @@ function mapPayloadToService(body) {
   if (Array.isArray(body.lineItems)) {
     // Same contract as the quotes route: the editor's `position` is a stable
     // row id, so the payload's array order is the display order and is what
-    // gets stored.
+    // gets stored (#1452).
     out.lineItems = renumberLineItemPositions(body.lineItems.map((li, idx) => ({
       position: li.position == null ? idx + 1 : li.position,
       quantity: li.quantity,

@@ -1,52 +1,71 @@
-/**
- * Line-item display order, shared by the quote and invoice editors.
- *
- * `LineItemsTable` treats `position` as a stable row id and only reorders the
- * array, so the payload's array order is the order the user arranged: store
- * that order by renumbering `position` 1..n and rewriting every
- * `parent_position` through the same old -> new map, so a moved parent keeps
- * its sub-items.
- *
- * Renumbering happens only when the payload's own numbers are unambiguous.
- * Duplicate positions, or a `parent_position` naming a position the payload
- * doesn't contain, come back untouched so `validateLineItemHierarchy` still
- * rejects them instead of this helper attaching a sub-item to whichever row
- * ends up on that number.
- *
- * @param {Array<object>} items line items in display order
- * @returns {Array<object>} new items, `position` 1..n and `parent_position`
- *   remapped; unambiguous input only, and the input array is never mutated
- */
+const { AppError } = require('./errors');
 const { ensureInt } = require('./numericHelpers');
 
-/** A row without a position takes the one its array order implies. */
-const positionsOf = (items) => items.map((item, index) => (
-  item.position == null || item.position === '' ? index + 1 : ensureInt(item.position)
-));
+/**
+ * Validate the hierarchy of a line-item payload BEFORE insert. Throws
+ * AppError on:
+ *   - duplicate positions
+ *   - sub-item's parent_position not found in the payload
+ *   - sub-item's parent is itself a sub-item (max 1 level deep)
+ *   - circular reference (item references itself)
+ *
+ * Used by both quote + invoice services so the rules stay identical
+ * across both flows (and so the quote→invoice cloner doesn't have to
+ * re-validate).
+ */
+function validateLineItemHierarchy(lineItems) {
+  if (!Array.isArray(lineItems) || lineItems.length === 0) return;
+  const positions = new Set();
+  const parentPositions = new Map(); // position → parent_position (or null)
+  for (const li of lineItems) {
+    const pos = ensureInt(li.position);
+    if (!pos) {
+      throw new AppError('Every line item must have a positive position', 400, 'LINE_ITEM_POSITION_REQUIRED');
+    }
+    if (positions.has(pos)) {
+      throw new AppError(`Duplicate line item position: ${pos}`, 400, 'LINE_ITEM_POSITION_DUPLICATE');
+    }
+    positions.add(pos);
+    const pp = li.parent_position == null || li.parent_position === '' ? null : ensureInt(li.parent_position);
+    parentPositions.set(pos, pp);
+  }
+  for (const [pos, pp] of parentPositions) {
+    if (pp == null) continue;
+    if (pp === pos) {
+      throw new AppError(`Line item ${pos} cannot be its own parent`, 400, 'LINE_ITEM_SELF_PARENT');
+    }
+    if (!parentPositions.has(pp)) {
+      throw new AppError(`Sub-item ${pos} references missing parent position ${pp}`, 400, 'LINE_ITEM_PARENT_NOT_FOUND');
+    }
+    if (parentPositions.get(pp) != null) {
+      throw new AppError(`Sub-item ${pos} cannot nest under another sub-item (max one level deep)`, 400, 'LINE_ITEM_NESTING_TOO_DEEP');
+    }
+  }
+}
 
-const parentOf = (item) => (
-  item.parent_position == null || item.parent_position === '' ? null : ensureInt(item.parent_position)
-);
-
+/**
+ * Persist the editor's array order while preserving its stable row references.
+ * Validate the original positions BEFORE replacing them: renumbering would hide
+ * duplicates and can turn a missing parent into an unrelated, newly numbered row.
+ * The same validator remains available to quote/invoice service callers.
+ */
 function renumberLineItemPositions(items) {
   if (!Array.isArray(items)) return items;
 
-  // ensureInt everywhere, so the helper and validateLineItemHierarchy read
-  // the same numbers out of a payload.
-  const oldPositions = positionsOf(items);
-  const unambiguous = new Set(oldPositions).size === oldPositions.length
-    && items.every((item) => {
-      const parent = parentOf(item);
-      return parent == null || oldPositions.includes(parent);
-    });
-  if (!unambiguous) return items;
+  const normalized = items.map((item, index) => ({
+    ...item,
+    position: ensureInt(item.position == null ? index + 1 : item.position),
+    parent_position: item.parent_position == null || item.parent_position === ''
+      ? null : ensureInt(item.parent_position),
+  }));
+  validateLineItemHierarchy(normalized);
 
-  const renumberedByOldPosition = new Map(oldPositions.map((old, index) => [old, index + 1]));
-  return items.map((item, index) => ({
+  const newPositions = new Map(normalized.map((item, index) => [item.position, index + 1]));
+  return normalized.map((item, index) => ({
     ...item,
     position: index + 1,
-    parent_position: renumberedByOldPosition.get(parentOf(item)) ?? null,
+    parent_position: item.parent_position == null ? null : newPositions.get(item.parent_position),
   }));
 }
 
-module.exports = { renumberLineItemPositions };
+module.exports = { renumberLineItemPositions, validateLineItemHierarchy };

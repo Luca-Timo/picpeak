@@ -79,11 +79,13 @@ async function getOrCreateMonthlyDraft(customer, adminId, trx) {
 
   // None yet — mint one with zero line items + zero totals. The
   // caller appends items + recomputes immediately after.
-  const profile = (await businessProfileService.getProfile()).profile;
+  // Reuse the caller's connection: conversions and re-bills can already
+  // hold SQLite's only connection inside their transaction.
+  const profile = (await businessProfileService.getProfile(trx)).profile;
   const currency = (customer.preferred_currency || profile?.default_currency || 'CHF').toUpperCase();
   const language = customer.preferred_language || profile?.default_locale || 'de';
   const invoiceNumber = await nextInvoiceNumber(trx);
-  const bank = await businessProfileService.resolveBankAccountForCurrency(currency, null);
+  const bank = await businessProfileService.resolveBankAccountForCurrency(currency, null, trx);
 
   const row = {
     invoice_number: invoiceNumber,
@@ -172,10 +174,10 @@ async function appendToMonthlyDraft(payload, customer, adminId, trx) {
     ? Math.max(...existing.map((li) => ensureInt(li.position))) + 1
     : 1;
 
-  // Renumber the incoming items 1..n in array order, then shift them past
-  // the draft's existing lines. Parent pointers go through the same mapping —
-  // shifting only `position` used to leave a sub-item pointing at its old
-  // parent number, i.e. at the wrong line or at none.
+  // Incoming positions are the caller's row ids, not slots in this draft.
+  // Renumber them to 1..n (validating the parent references against the
+  // original ids first), then shift the whole block past the draft's existing
+  // lines, so every sub-item keeps pointing at its own parent (#1452).
   const incoming = renumberLineItemPositions(Array.isArray(payload.lineItems) ? payload.lineItems : []);
   const offset = nextPosition - 1;
   const newItems = incoming.map((li) => {
@@ -183,7 +185,6 @@ async function appendToMonthlyDraft(payload, customer, adminId, trx) {
     const unit = ensureInt(li.unit_price_minor);
     const discount = ensureNumber(li.discount_percent, 0);
     const lineTotal = Math.round(Math.round(qty * unit) * (1 - discount / 100));
-    const isSubItem = li.parent_position != null && li.parent_position !== '';
     return {
       position: li.position + offset,
       quantity: qty,
@@ -191,7 +192,7 @@ async function appendToMonthlyDraft(payload, customer, adminId, trx) {
       unit_price_minor: unit,
       discount_percent: discount,
       line_total_minor: lineTotal,
-      parent_position: isSubItem ? ensureInt(li.parent_position) + offset : null,
+      parent_position: li.parent_position == null ? null : li.parent_position + offset,
       details_text: li.details_text || null,
       ...extendedLineColumns(li, { invoice: true }),
     };
@@ -228,7 +229,7 @@ async function appendToMonthlyDraft(payload, customer, adminId, trx) {
   try {
     await logActivity('monthly_billing_items_queued',
       { invoiceId: draft.id, customerId: customer.id, itemsAdded: newItems.length },
-      null, `admin:${adminId}`);
+      null, `admin:${adminId}`, trx);
   } catch (_) { /* non-fatal */ }
 
   return draft.id;

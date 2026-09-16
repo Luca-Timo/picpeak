@@ -288,7 +288,7 @@ function mapPayloadToService(body) {
   if (Array.isArray(body.lineItems)) {
     // The editor keeps `position` as a stable row id, so the array order is
     // the order the user arranged. Renumber it before the service stores it,
-    // or a reorder is lost on save.
+    // or a reorder is lost on save (#1452).
     out.lineItems = renumberLineItemPositions(body.lineItems.map((li, idx) => ({
       position: li.position == null ? idx + 1 : li.position,
       quantity: li.quantity,

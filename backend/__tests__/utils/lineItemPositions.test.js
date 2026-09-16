@@ -1,5 +1,5 @@
 /**
- * Unit tests for renumberLineItemPositions.
+ * Unit tests for renumberLineItemPositions (#1452).
  *
  * The editors keep `position` as a stable row id (`LineItemsTable` never
  * renumbers a row), so the payload's array order is the display order. These
@@ -86,42 +86,47 @@ describe('renumberLineItemPositions', () => {
     expect(out.map((li) => li.parent_position)).toEqual([null, null, null]);
   });
 
-  it('leaves a parent_position that is not in the payload to the hierarchy validation', () => {
-    // An unknown parent must still be reported as a missing parent by
-    // validateLineItemHierarchy, not silently re-parented onto whichever
-    // item happens to end up on that number.
-    const out = renumberLineItemPositions([
-      { position: 1, description: 'A' },
-      { position: 9, description: 'Orphan', parent_position: 42 },
-    ]);
-    expect(out[1].parent_position).toBe(42);
-  });
-
-  it('returns a payload whose missing parent number is between 1 and n untouched', () => {
-    // Renumbering would make position 2 belong to 'B', so the validator
-    // would find a parent and save 'C' under the wrong row.
-    const items = [
+  it.each([1, 42])('rejects a missing parent %i before it can alias a new position', (parent) => {
+    expect(() => renumberLineItemPositions([
       { position: 10, description: 'A' },
-      { position: 20, description: 'B' },
-      { position: 30, description: 'C', parent_position: 2 },
-    ];
-    expect(renumberLineItemPositions(items)).toEqual(items);
+      { position: 20, description: 'Orphan', parent_position: parent },
+    ])).toThrow(expect.objectContaining({ code: 'LINE_ITEM_PARENT_NOT_FOUND' }));
   });
 
-  it('returns a payload with duplicate positions untouched', () => {
-    // Renumbering makes positions unique, so the validator's duplicate check
-    // could no longer fire and the sub-item would land under the duplicate.
+  it.each([
+    [{ position: 10 }, { position: 10 }],
+    [{ position: '10' }, { position: 10 }],
+    [{ position: 2 }, {}],
+  ])('rejects duplicate original or defaulted positions in %j', (...items) => {
+    expect(() => renumberLineItemPositions(items))
+      .toThrow(expect.objectContaining({ code: 'LINE_ITEM_POSITION_DUPLICATE' }));
+  });
+
+  it('preserves numeric string parent references and does not mutate the input', () => {
     const items = [
-      { position: 1, description: 'P1' },
-      { position: 2, description: 'S', parent_position: 1 },
-      { position: 1, description: 'P1dup' },
+      Object.freeze({ position: '10', description: 'Parent' }),
+      Object.freeze({ position: '20', parent_position: '10', details_text: 'Keep me' }),
     ];
-    expect(renumberLineItemPositions(items)).toEqual(items);
+    const out = renumberLineItemPositions(Object.freeze(items));
+    expect(out[1]).toEqual({ position: 2, parent_position: 1, details_text: 'Keep me' });
+    expect(items[1].parent_position).toBe('10');
+  });
+
+  it('rejects self-parenting', () => {
+    expect(() => renumberLineItemPositions([{ position: 10, parent_position: 10 }]))
+      .toThrow(expect.objectContaining({ code: 'LINE_ITEM_SELF_PARENT' }));
+  });
+
+  it('rejects nesting under a child', () => {
+    expect(() => renumberLineItemPositions([
+      { position: 10 }, { position: 20, parent_position: 10 }, { position: 30, parent_position: 20 },
+    ])).toThrow(expect.objectContaining({ code: 'LINE_ITEM_NESTING_TOO_DEEP' }));
   });
 
   it('reads positions the way the hierarchy validation does', () => {
-    // ensureInt on both sides: 2.7 is the parent the validator matches too,
-    // so the sub-item follows it instead of failing as its own parent.
+    // ensureInt on both sides: 2.7 is the position 2 the validator matches
+    // too, so the sub-item follows its parent instead of failing as an
+    // orphan on a number nothing carries.
     const out = renumberLineItemPositions([
       { position: 2.7, description: 'Package' },
       { position: 3, description: 'Camera', parent_position: 2 },
