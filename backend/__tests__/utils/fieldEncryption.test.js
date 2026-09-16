@@ -67,6 +67,38 @@ test('a changed value is refused, and so is one from another key', () => {
   expect(fieldEncryption.tryDecrypt(stored)).toBeNull();
 });
 
+test('a key with a character missing is refused, a passphrase is not', () => {
+  // Deriving from a near-miss would quietly produce a DIFFERENT key: the
+  // evidence already on disk stops opening, and new evidence is written under
+  // a key nobody meant to use. A passphrase is not a near-miss — `openssl
+  // rand -base64 48` is 64 base64 characters, nowhere near the 43 that decode
+  // to 32 bytes.
+  const crypto = require('crypto');
+  for (const near of ['a'.repeat(63), 'a'.repeat(65), crypto.randomBytes(32).toString('base64').slice(0, 42)]) {
+    process.env.PICPEAK_EVIDENCE_KEY = near;
+    fieldEncryption._resetForTests();
+    expect(() => fieldEncryption.encrypt('x')).toThrow(/character missing/);
+    expect(fieldEncryption.keyProblemAtBoot()).toMatch(/character missing/);
+  }
+  for (const fine of ['a'.repeat(64), crypto.randomBytes(32).toString('base64'),
+    crypto.randomBytes(48).toString('base64'), 'a long passphrase nobody would mistake for a key']) {
+    process.env.PICPEAK_EVIDENCE_KEY = fine;
+    fieldEncryption._resetForTests();
+    expect(fieldEncryption.decrypt(fieldEncryption.encrypt('Anna'))).toBe('Anna');
+    expect(fieldEncryption.keyProblemAtBoot()).toBeNull();
+  }
+  delete process.env.PICPEAK_EVIDENCE_KEY;
+});
+
+test('a stored value names the key it was written under', () => {
+  // System Health compares this with the key in use, so a rotated or restored
+  // key shows up as a mismatch instead of as blank names on contracts.
+  const stored = fieldEncryption.encrypt('Anna Muster');
+  expect(fieldEncryption.keyIdOf(stored)).toBe(fieldEncryption.keyInfo().keyId);
+  expect(fieldEncryption.keyIdOf('not encrypted')).toBeNull();
+  expect(fieldEncryption.keyIdOf(null)).toBeNull();
+});
+
 test('emails hash the same whatever the case or spacing', () => {
   expect(fieldEncryption.hashEmail(' Anna@Example.com ')).toBe(fieldEncryption.hashEmail('anna@example.com'));
 });

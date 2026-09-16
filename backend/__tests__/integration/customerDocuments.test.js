@@ -323,6 +323,28 @@ describe('with the documents flag on', () => {
       .update({ setting_value: JSON.stringify(250) });
   });
 
+  it('counts the quota where the row is written, so parallel uploads can\'t both fit', async () => {
+    // The route's own check runs before the body arrives, so two uploads
+    // landing together both measured the same "before" and both fitted.
+    const used = await require('../../src/services/customerDocumentsService').getUsageBytes(customerA);
+    const quotaMb = (used + PDF.length * 1.5) / (1024 * 1024);
+    await db('app_settings').where({ setting_key: 'customer_documents_quota_mb' })
+      .update({ setting_value: JSON.stringify(quotaMb) });
+
+    const both = await Promise.all([
+      uploadAs(customerA, PDF, 'race-1.pdf'),
+      uploadAs(customerA, PDF, 'race-2.pdf'),
+    ]);
+    const statuses = both.map((r) => r.status).sort();
+    expect(statuses[0]).toBe(201);
+    expect(statuses[1]).toBe(413);
+    expect(await require('../../src/services/customerDocumentsService').getUsageBytes(customerA))
+      .toBeLessThanOrEqual(Math.ceil(quotaMb * 1024 * 1024));
+
+    await db('app_settings').where({ setting_key: 'customer_documents_quota_mb' })
+      .update({ setting_value: JSON.stringify(250) });
+  });
+
   it('removes the bytes of a deleted document once retention has passed', async () => {
     const { runCustomerDocumentRetention } = require('../../src/services/customerDocumentRetentionService');
     const row = await db('customer_documents').where({ id: sharedId }).first();
@@ -383,5 +405,34 @@ describe('customer erasure', () => {
     expect(after.purged_at).toBeTruthy();
     expect(after.original_name).toBe('erased.pdf');
     expect(fs.existsSync(path.join(process.env.STORAGE_PATH, row.storage_key))).toBe(false);
+  });
+
+  it('keeps a contract-linked document as evidence, without the customer\'s file name', async () => {
+    // The bytes and the storage key are what the contractual record needs.
+    // The name the customer chose ("Scan_Anna_Muster_Pass.pdf") is their data
+    // too, so erasure has to reach it even on the rows that are kept.
+    const customerC = idOf(await db('customer_accounts').insert({
+      email: 'erase-c@example.com', display_name: 'Carla', password_hash: 'x',
+      preferred_language: 'de', is_active: 1, created_at: new Date().toISOString(),
+    }).returning('id'));
+    await db('customer_accounts').where({ id: customerC }).update({ feature_documents: true });
+    const contractId = idOf(await db('contracts').insert({
+      contract_number: 'K-ERASE-1', customer_account_id: customerC, status: 'sent', issue_date: '2026-09-01',
+    }).returning('id'));
+    const res = await asAdmin(request(adminApp).post(`/api/admin/customers/${customerC}/documents`))
+      .field('contractId', String(contractId))
+      .attach('file', PDF, { filename: 'Scan_Pass.pdf', contentType: 'application/pdf' });
+    expect(res.status).toBe(201);
+    const row = await db('customer_documents').where({ id: res.body.document.id }).first();
+    expect(row.contract_id).toBe(contractId);
+    await db('customer_documents').where({ id: row.id }).update({ shared_at: new Date().toISOString() });
+
+    await require('../../src/services/customerAccountsService').eraseCustomer(customerC, null);
+
+    const after = await db('customer_documents').where({ id: row.id }).first();
+    expect(after.original_name).toBe('erased.pdf');
+    expect(after.purged_at).toBeFalsy();
+    expect(after.unshared_at).toBeTruthy();
+    expect(fs.existsSync(path.join(process.env.STORAGE_PATH, row.storage_key))).toBe(true);
   });
 });

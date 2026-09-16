@@ -388,7 +388,10 @@ test('a code expires, and only five an hour are sent', async () => {
   await ok(asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/code`)));
   const { code } = await lastMail('contract_signing_code', customerEmail);
   const row = await db('contract_signing_otps').where({ signer_id: signer.id }).orderBy('id', 'desc').first();
-  expect(String(row.expires_at)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  // Whatever the engine hands back — a string on SQLite, a Date on Postgres —
+  // it has to be a time this process can read. The bug was a value that
+  // wasn't: "[object Object]", which parses as NaN and never expires.
+  expect(Number.isFinite(new Date(row.expires_at).getTime())).toBe(true);
   await db('contract_signing_otps').where({ id: row.id })
     .update({ expires_at: new Date(Date.now() - 60 * 1000).toISOString() });
   const expired = await asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/verify`)).send({ code });
@@ -402,6 +405,90 @@ test('a code expires, and only five an hour are sent', async () => {
   const capped = await asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/code`));
   expect(capped.status).toBe(429);
   expect(capped.body.code).toBe('OTP_RATE_LIMITED');
+});
+
+test('a resend can\'t reopen a signer who already answered, and drops their session', async () => {
+  const id = await newContract();
+  await ok(request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth));
+  const first = linkToken(await lastMail('contract_sent', customerEmail));
+  const session = await verifiedSession(first, customerEmail);
+  const signer = await db('contract_signers').where({ contract_id: id, role: 'customer' }).first();
+
+  // The replaced link's session stops working with the link itself.
+  await ok(request(contractsApp).post(`/api/admin/contracts/${id}/signers/${signer.id}/resend`).set(auth));
+  expect((await request(signingApp).get('/api/public/contract-signing/session')
+    .set('X-Signing-Session', session)).status).toBe(401);
+
+  // Once they have signed, a resend can't put them back to `invited`.
+  const second = await verifiedSession(linkToken(await lastMail('contract_sent', customerEmail)), customerEmail);
+  await ok(sign(second, { name: 'Anna Muster', mode: 'typed' }));
+  const resent = await request(contractsApp).post(`/api/admin/contracts/${id}/signers/${signer.id}/resend`).set(auth);
+  expect(resent.status).toBe(409);
+  expect((await db('contract_signers').where({ id: signer.id }).first()).status).toBe('signed');
+});
+
+test('a step that fails after the signature is recorded on the contract, and cleared by the re-send', async () => {
+  const id = await newContract();
+  await ok(request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth));
+  const session = await verifiedSession(linkToken(await lastMail('contract_sent', customerEmail)), customerEmail);
+  await ok(sign(session, { name: 'Anna Muster', mode: 'typed' }));
+
+  // The completion emails fail; the signature and the seal stand, and the
+  // admin is told which step is outstanding instead of it being a log line.
+  const emailProcessor = require('../../src/services/emailProcessor');
+  const real = emailProcessor.queueEmail;
+  const queue = jest.spyOn(emailProcessor, 'queueEmail').mockImplementation((...args) => (
+    args[2] === 'contract_fully_signed' ? Promise.reject(new Error('smtp down')) : real(...args)
+  ));
+  await ok(request(contractsApp).post(`/api/admin/contracts/${id}/countersign`).set(auth)
+    .send({ name: 'Studio Admin', mode: 'typed' }));
+  queue.mockRestore();
+
+  const sealed = await db('contracts').where({ id }).first();
+  expect(sealed.status).toBe('fully_signed');
+  expect(sealed.follow_up_failed_at).toBeTruthy();
+  expect(sealed.follow_up_error).toMatch(/completion/);
+  const overview = await ok(request(contractsApp).get(`/api/admin/contracts/${id}/signers`).set(auth));
+  expect(overview.followUp).toEqual(expect.objectContaining({ error: expect.stringMatching(/completion/) }));
+
+  // Re-sending runs the step again and clears the marker.
+  expect((await request(contractsApp).post(`/api/admin/contracts/${id}/resend-signed`).set(auth)).status).toBe(200);
+  expect((await db('contracts').where({ id }).first()).follow_up_failed_at).toBeNull();
+});
+
+test('the send claims the draft it rendered', async () => {
+  // Two overlapping sends both pass the draft check; only one can write the
+  // frozen text and the PDF, or the loser's freeze lands on a contract the
+  // winner has already sent.
+  const id = await newContract();
+  const [a, b] = await Promise.allSettled([
+    request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth),
+    request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth),
+  ]);
+  const statuses = [a, b].map((r) => (r.status === 'fulfilled' ? r.value.status : 500)).sort();
+  expect(statuses[0]).toBe(200);
+  expect(statuses[1]).toBeGreaterThanOrEqual(400);
+  const contract = await db('contracts').where({ id }).first();
+  expect(contract.status).toBe('sent');
+  expect(contract.rendered_content_sha256).toBeTruthy();
+  // One send, one set of invitations.
+  const invitations = await db('contract_signer_invitations')
+    .whereIn('signer_id', (await db('contract_signers').where({ contract_id: id })).map((r) => r.id))
+    .whereNull('revoked_at');
+  expect(invitations).toHaveLength(1);
+});
+
+test('signers can\'t be rewritten once the contract is out', async () => {
+  const id = await newContract();
+  await ok(request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth));
+  const before = await db('contract_signers').where({ contract_id: id }).orderBy('position');
+
+  const res = await request(contractsApp).put(`/api/admin/contracts/${id}/signers`).set(auth).send({
+    signers: [{ name: 'Someone Else', email: 'else@example.com' }],
+  });
+  expect(res.status).toBe(409);
+  const after = await db('contract_signers').where({ contract_id: id }).orderBy('position');
+  expect(after.map((r) => r.id)).toEqual(before.map((r) => r.id));
 });
 
 test('signing sits behind the contracts flag', async () => {

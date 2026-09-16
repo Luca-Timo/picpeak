@@ -27,6 +27,7 @@
  */
 
 const crypto = require('crypto');
+const zlib = require('zlib');
 const {
   PDFDocument, PDFDict, PDFName, PDFArray, EncryptedPDFError,
 } = require('pdf-lib');
@@ -34,6 +35,11 @@ const { AppError } = require('./errors');
 
 const DEFAULT_MAX_BYTES = 20 * 1024 * 1024;
 const DEFAULT_MAX_PAGES = 200;
+// How much a file may expand to in total. pdf-lib inflates every stream it
+// touches into typed arrays, and the upload cap is on the COMPRESSED bytes:
+// zlib reaches about 1000:1 on zeros, so 20 MB of upload is ~20 GB of
+// inflate. A real 200-page document with images stays far below this.
+const DEFAULT_MAX_INFLATE_BYTES = 256 * 1024 * 1024;
 
 // Keys whose presence alone means active or embedded content.
 const FORBIDDEN_KEYS = new Set([
@@ -100,6 +106,64 @@ function findActiveContent(pdf) {
 }
 
 /**
+ * Refuse a file whose streams expand past `budget` bytes in total.
+ *
+ * This runs on the raw bytes, before pdf-lib sees them, because pdf-lib
+ * inflates as it parses and its output lives outside the JS heap a worker's
+ * `resourceLimits` can cap — a heap limit never fires on this, the process
+ * simply grows until the kernel kills it. `zlib.inflateSync` with
+ * `maxOutputLength` stops at the budget instead, and the budget shrinks as it
+ * goes, so the peak is bounded by the budget rather than by the file.
+ *
+ * Streams that aren't zlib data cost at most their own compressed size and
+ * are charged as such; anything pdf-lib can't read afterwards is refused by
+ * the parse itself.
+ */
+function assertInflateWithinBudget(buffer, budget) {
+  let remaining = budget;
+  let index = 0;
+  for (;;) {
+    const keyword = buffer.indexOf('stream', index, 'latin1');
+    if (keyword === -1) return;
+    const end = buffer.indexOf('endstream', keyword, 'latin1');
+    if (end === -1) return;
+    let from = keyword + 'stream'.length;
+    if (buffer[from] === 0x0d) from += 1;
+    if (buffer[from] === 0x0a) from += 1;
+    const data = buffer.subarray(from, end);
+    index = end + 'endstream'.length;
+    if (data.length === 0) continue;
+    // A zlib stream starts 0x78; everything else can't expand meaningfully.
+    if (data[0] !== 0x78) {
+      remaining -= data.length;
+    } else {
+      try {
+        remaining -= zlib.inflateSync(data, { maxOutputLength: Math.max(1, remaining) }).length;
+      } catch (err) {
+        const tooBig = err && (err.code === 'ERR_BUFFER_TOO_LARGE'
+          || /maxOutputLength|memory/i.test(String(err.message)));
+        if (tooBig) {
+          throw refuse(
+            'This PDF expands to far more than it looks like — it can\'t be checked. '
+            + 'Please save it again from your PDF program (print to PDF) and upload that file.',
+            'PDF_TOO_COMPLEX',
+          );
+        }
+        // Not zlib after all, or damaged: the parse below is the judge.
+        remaining -= data.length;
+      }
+    }
+    if (remaining <= 0) {
+      throw refuse(
+        'This PDF expands to far more than it looks like — it can\'t be checked. '
+        + 'Please save it again from your PDF program (print to PDF) and upload that file.',
+        'PDF_TOO_COMPLEX',
+      );
+    }
+  }
+}
+
+/**
  * Parse, scan and re-serialise one PDF. Throws a 400 AppError with a stable
  * code: PDF_TOO_LARGE, PDF_NOT_A_PDF, PDF_ENCRYPTED, PDF_MALFORMED,
  * PDF_ACTIVE_CONTENT, PDF_EMPTY, PDF_TOO_MANY_PAGES.
@@ -113,12 +177,18 @@ function findActiveContent(pdf) {
  *
  * @returns {Promise<{ pages: number, bytes: number, sha256: string, normalised: Buffer }>}
  */
-async function inspectPdf(buffer, { maxBytes = DEFAULT_MAX_BYTES, maxPages = DEFAULT_MAX_PAGES } = {}) {
+async function inspectPdf(buffer, {
+  maxBytes = DEFAULT_MAX_BYTES,
+  maxPages = DEFAULT_MAX_PAGES,
+  maxInflateBytes = DEFAULT_MAX_INFLATE_BYTES,
+} = {}) {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) throw refuse('The file is empty', 'PDF_NOT_A_PDF');
   if (buffer.length > maxBytes) {
     throw refuse(`The PDF is larger than ${Math.round(maxBytes / (1024 * 1024))} MB`, 'PDF_TOO_LARGE');
   }
   if (!hasPdfSignature(buffer)) throw refuse('The file is not a PDF', 'PDF_NOT_A_PDF');
+  // Before the parser, and before any of it reaches memory it doesn't own.
+  assertInflateWithinBudget(buffer, maxInflateBytes);
 
   let pdf;
   try {
@@ -163,6 +233,7 @@ async function inspectPdf(buffer, { maxBytes = DEFAULT_MAX_BYTES, maxPages = DEF
 module.exports = {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_PAGES,
+  DEFAULT_MAX_INFLATE_BYTES,
   inspectPdf,
-  _internal: { hasPdfSignature, findActiveContent },
+  _internal: { hasPdfSignature, findActiveContent, assertInflateWithinBudget },
 };

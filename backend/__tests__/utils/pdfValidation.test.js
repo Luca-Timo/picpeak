@@ -25,6 +25,7 @@ const addAnnotation = (doc, action) => {
 };
 
 const crypto = require('crypto');
+const zlib = require('zlib');
 
 test('a plain PDF passes and is described', async () => {
   const buffer = await makePdf({ pages: 3 });
@@ -34,6 +35,45 @@ test('a plain PDF passes and is described', async () => {
   // was checked, not the upload.
   expect(info.bytes).toBe(info.normalised.length);
   expect(info.sha256).toBe(crypto.createHash('sha256').update(info.normalised).digest('hex'));
+});
+
+// One page whose single FlateDecode stream inflates to `mb` megabytes of
+// zeros — the shape a decompression bomb actually has. A few hundred KB of
+// upload; the damage is all on the other side of the inflate.
+function bomb(mb) {
+  const payload = zlib.deflateSync(Buffer.alloc(mb * 1024 * 1024), { level: 9 });
+  const head = Buffer.from([
+    '%PDF-1.4',
+    '1 0 obj <</Type/Catalog/Pages 2 0 R>> endobj',
+    '2 0 obj <</Type/Pages/Kids[3 0 R]/Count 1>> endobj',
+    '3 0 obj <</Type/Page/Parent 2 0 R/MediaBox[0 0 10 10]/Contents 4 0 R>> endobj',
+    `4 0 obj <</Length ${payload.length}/Filter/FlateDecode>>`,
+    'stream\n',
+  ].join('\n'), 'latin1');
+  const tail = Buffer.from('\nendstream endobj\ntrailer <</Size 5/Root 1 0 R>>\n%%EOF', 'latin1');
+  return Buffer.concat([head, payload, tail]);
+}
+
+test('a file that expands far past its size is refused before it is parsed', async () => {
+  // 64 MB of inflate from ~64 KB of upload. The real budget is 256 MB, so
+  // the same file passes with the default and is refused against a small one:
+  // what is pinned is that the cap is on the EXPANDED size, and that it is
+  // applied before pdf-lib inflates anything into memory a heap limit can't
+  // reach.
+  const file = bomb(64);
+  expect(file.length).toBeLessThan(1024 * 1024);
+
+  expect(await codeOf(validatePdf(file, { maxInflateBytes: 8 * 1024 * 1024 })))
+    .toBe('PDF_TOO_COMPLEX');
+  // The refusal costs no more than the budget: the check stops inflating at
+  // it rather than after the file's own expansion.
+  const before = process.memoryUsage().rss;
+  await codeOf(validatePdf(file, { maxInflateBytes: 8 * 1024 * 1024 }));
+  expect(process.memoryUsage().rss - before).toBeLessThan(64 * 1024 * 1024);
+
+  // An ordinary document is nowhere near the budget.
+  await expect(validatePdf(await makePdf({ pages: 3 }))).resolves.toEqual(
+    expect.objectContaining({ pages: 3 }));
 });
 
 test('a parse that outgrows its heap is a refusal, not a dead process', async () => {

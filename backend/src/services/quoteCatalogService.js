@@ -18,7 +18,7 @@ const { AppError } = require('../utils/errors');
 const { ensureInt, ensureNumber } = require('../utils/numericHelpers');
 const { formatBoolean } = require('../utils/dbCompat');
 const { isTruthyFlag, BOUND_TO } = require('../utils/lineItemTotals');
-const { unknownPlaceholders } = require('../utils/placeholders');
+const { unknownPlaceholders, hasConditional } = require('../utils/placeholders');
 const rateResolver = require('./rateResolver');
 
 const TEXT_BLOCK_KINDS = ['intro', 'scope', 'note', 'closing', 'terms'];
@@ -235,6 +235,12 @@ async function listTextBlocks({ activeOnly = false, kind = null, language = null
 
 /** Refuse placeholders a quote can't fill, so a typo never reaches a customer. */
 function assertKnownPlaceholders(body) {
+  if (hasConditional(body)) {
+    throw new AppError(
+      'Quote texts don\'t support {{#if …}} blocks — they would be printed as they are. Use a separate text block instead.',
+      400, 'TEXT_BLOCK_UNKNOWN_PLACEHOLDERS',
+    );
+  }
   const unknown = unknownPlaceholders(body);
   if (unknown.length) {
     throw new AppError(

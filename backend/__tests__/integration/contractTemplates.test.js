@@ -257,6 +257,30 @@ test('sending freezes the resolved content, and the signing page shows it', asyn
   await db('customer_accounts').where({ id: customerId }).update({ first_name: 'Anna' });
 });
 
+test('a contract frozen before the other languages existed still renders in its own', async () => {
+  // Migration 221 added the fr/nl/pt/ru snapshot columns empty. Taking the
+  // frozen map whole would then leave a Russian contract with only EN and DE
+  // frozen, and pickLocale would fall back to English on the signing page and
+  // on every later render.
+  const contractService = require('../../src/services/contractService');
+  const { contract } = await ok(request(contractsApp).post('/api/admin/contracts').set(auth)
+    .send({ customerAccountId: customerId, language: 'ru', title: 'Договор' }));
+  const inclusion = await db('contract_block_inclusions').where({ contract_id: contract.id }).first();
+  const block = await db('contract_blocks').where({ id: inclusion.block_id }).first();
+  await db('contract_blocks').where({ id: block.id }).update({ body_text_ru: 'Русский текст' });
+  // Frozen the way a contract sent before this PR is: EN and DE only.
+  await db('contract_block_inclusions').where({ id: inclusion.id }).update({
+    body_text_snapshot: 'English text', body_text_de_snapshot: 'Deutscher Text', body_text_ru_snapshot: null,
+  });
+
+  const data = await contractService.getContractById(contract.id);
+  const rendered = await require('../../src/services/contract/renderContext')
+    .buildRenderContext(data.contract, data.inclusions, data.textSections);
+  const bodies = rendered.sections.flatMap((section) => section.blocks.map((b) => b.body));
+  expect(bodies).toContain('Русский текст');
+  expect(bodies).not.toContain('English text');
+});
+
 test('a preview renders the draft through the real pipeline', async () => {
   const res = await request(templatesApp).post(templatesUrl(`/${ids.wedding}/preview`)).set(auth).send({})
     .buffer(true)

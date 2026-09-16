@@ -18,7 +18,9 @@
 const path = require('path');
 const { Worker } = require('worker_threads');
 const { AppError } = require('./errors');
-const { DEFAULT_MAX_BYTES, DEFAULT_MAX_PAGES, inspectPdf, _internal } = require('./pdfInspect');
+const {
+  DEFAULT_MAX_BYTES, DEFAULT_MAX_PAGES, DEFAULT_MAX_INFLATE_BYTES, inspectPdf, _internal,
+} = require('./pdfInspect');
 
 // Enough for a legitimate 20 MB document (pdf-lib holds the parsed objects
 // and the re-serialised copy), far below what a decompression bomb wants.
@@ -27,6 +29,25 @@ const WORKER_HEAP_MB = 512;
 // spends longer than this is not one we want to keep working on.
 const WORKER_TIMEOUT_MS = 30000;
 const WORKER_FILE = path.join(__dirname, 'pdfInspectWorker.js');
+// Each check may hold its inflate budget in memory, so they queue rather than
+// run together: two admins uploading at once must not multiply the ceiling.
+const MAX_CONCURRENT = 2;
+let running = 0;
+const waiting = [];
+
+function acquire() {
+  if (running < MAX_CONCURRENT) {
+    running += 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => waiting.push(resolve));
+}
+
+function release() {
+  const next = waiting.shift();
+  if (next) next();
+  else running -= 1;
+}
 
 const tooComplex = () => new AppError(
   'This PDF is too complex to check. Please save it again from your PDF program (print to PDF) and upload that file.',
@@ -41,7 +62,8 @@ function rethrow(error) {
 /**
  * Check a PDF and describe it: `{ pages, bytes, sha256, normalised }`.
  * Throws a 400 AppError with a stable code (see pdfInspect, plus
- * PDF_TOO_COMPLEX when the parse outgrows the worker's heap or its time).
+ * PDF_TOO_COMPLEX when a file expands past the inflate budget, or the parse
+ * outgrows the worker's heap or its time).
  *
  * `isolate: false` runs the checks in this process — for callers that
  * already hold bytes this gate accepted.
@@ -60,6 +82,15 @@ async function validatePdf(buffer, options = {}) {
     throw new AppError(`The PDF is larger than ${Math.round(maxBytes / (1024 * 1024))} MB`, 400, 'PDF_TOO_LARGE');
   }
 
+  await acquire();
+  try {
+    return await runInWorker(buffer, limits, heapMb);
+  } finally {
+    release();
+  }
+}
+
+function runInWorker(buffer, limits, heapMb) {
   const bytes = new Uint8Array(buffer);
   return new Promise((resolve, reject) => {
     let worker;
@@ -107,6 +138,7 @@ async function validatePdf(buffer, options = {}) {
 module.exports = {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_PAGES,
+  DEFAULT_MAX_INFLATE_BYTES,
   validatePdf,
   _internal,
 };

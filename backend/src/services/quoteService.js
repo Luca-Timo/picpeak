@@ -1100,6 +1100,9 @@ async function sendQuote(id, adminId) {
 
   const customer = await db('customer_accounts').where({ id: quote.customer_account_id }).first();
   ensureCustomerFeatureEnabled(customer, 'quotes');
+  // Read before the transaction opens — a schema lookup inside it waits on
+  // the one SQLite connection the transaction holds.
+  const hasNotifiedColumn = await hasColumnCached('quotes', 'acceptance_notified_at');
 
   // Render PDF + persist snapshot.
   const ctx = await buildRenderContext(quote, lineItems);
@@ -1138,11 +1141,14 @@ async function sendQuote(id, adminId) {
       sent_at: new Date(),
       pdf_path: pdfPath,
       payment_term_snapshot: paymentTermSnapshot ? JSON.stringify(paymentTermSnapshot) : null,
-      // A (re)sent quote is a new offer: the customer chooses add-ons afresh.
+      // A (re)sent quote is a new offer: the customer chooses add-ons afresh,
+      // and the acceptance that follows is news again — without clearing the
+      // marker the notice would claim it had already been sent.
       optional_selection_snapshot: null,
       selection_accepted_at: null,
       selection_changes: null,
       customer_message: null,
+      ...(hasNotifiedColumn ? { acceptance_notified_at: null } : {}),
       updated_at: new Date(),
     });
   });
@@ -1373,11 +1379,16 @@ function selectionSnapshot(lineItems, chosen, totals, by) {
  * until storeAcceptedQuotePdf writes the accepted version.
  */
 async function writeAcceptedSelection(trx, quote, lineItems, { chosen, totals }, by, at, { previousChosen = null, adminId = null } = {}) {
-  // The history and the first-chosen snapshot are read inside the
-  // transaction: two changes landing together both read the row before
-  // either wrote, so one entry replaced the other and the totals it recorded
-  // as "before" were already stale.
+  // The history, the first-chosen snapshot and what the choice was BEFORE
+  // this change are read inside the transaction: two changes landing together
+  // both read the row before either wrote, so one entry replaced the other
+  // and both recorded the same stale "before".
   const current = (await trx('quotes').where({ id: quote.id }).forUpdate().first()) || quote;
+  const locked = await trx('quote_line_items as li')
+    .leftJoin('quote_line_items as parent', 'parent.id', 'li.parent_line_item_id')
+    .where('li.quote_id', quote.id)
+    .orderBy('li.position', 'asc')
+    .select('li.*', 'parent.position as parent_position');
   const offered = new Set(offeredOptionalPositions(lineItems));
   const chosenSet = new Set(chosen);
   const on = [];
@@ -1398,7 +1409,10 @@ async function writeAcceptedSelection(trx, quote, lineItems, { chosen, totals },
   }
   // A change after the first acceptance (#1451) keeps when and by whom the
   // add-ons were first chosen, and adds an entry to the change history.
+  // `previousChosen` says only *that* this is a change; what it changed from
+  // is read here, under the lock.
   const isChange = Array.isArray(previousChosen);
+  const before = isChange ? currentOptionalSelection(locked) : null;
   const firstBy = isChange ? (storedJson(current.optional_selection_snapshot, {}).by || by) : by;
   await trx('quotes').where({ id: quote.id }).update({
     net_amount_minor: totals.netAmountMinor,
@@ -1409,7 +1423,7 @@ async function writeAcceptedSelection(trx, quote, lineItems, { chosen, totals },
     ...(isChange ? {
       selection_changes: JSON.stringify([
         ...storedJson(current.selection_changes, []),
-        selectionChange(lineItems, previousChosen, chosen, current.total_amount_minor, totals, by, adminId, at),
+        selectionChange(lineItems, before, chosen, current.total_amount_minor, totals, by, adminId, at),
       ]),
     } : {}),
     pdf_path: null,
@@ -1743,7 +1757,13 @@ async function recordResponse({ token, action, ip, tosAccepted, selectedOptional
     // without a message keeps the earlier one.
     const message = isAccept && customerMessage ? String(customerMessage).trim().slice(0, 2000) : '';
     if (message) updates.customer_message = message;
-    await trx('quotes').where({ id: quote.id }).update(updates);
+    // Conditional on the status this request read: a conversion committing
+    // between the checks above and here would otherwise be flipped back to
+    // accepted or declined by an answer that never saw it.
+    const applied = await trx('quotes').where({ id: quote.id, status: quote.status }).update(updates);
+    if (!applied) {
+      throw new AppError('This quote changed while you were answering it. Reload the page.', 409, 'QUOTE_CHANGED');
+    }
     if (selection) {
       await writeAcceptedSelection(trx, quote, selection.lineItems, selection, 'customer', now,
         { previousChosen: selection.previousChosen });

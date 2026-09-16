@@ -180,6 +180,68 @@ test('the business hears about an acceptance once, and again when the choice cha
   expect((await db('quotes').where({ id: quoteId }).first()).acceptance_notified_at).toBeTruthy();
 });
 
+test('the public quote page shows the customer\'s name, not the placeholder', async () => {
+  // The row keeps the raw text; every surface that shows it resolves the
+  // placeholders. The PDF and the portal did; the public page printed
+  // "Hallo {{customer_name}}".
+  const { quoteId, link } = await sentQuote();
+  await db('customer_accounts').where({ id: customerId }).update({ display_name: 'Anna Muster' });
+  await db('quotes').where({ id: quoteId }).update({
+    intro_text: 'Hallo {{customer_name}}', outro_text: 'Bis bald, {{business_name}}',
+  });
+
+  const res = await request(publicApp).get(`/api/public/quotes/${link}`)
+    .set('X-Document-Access', await quoteGrant(link));
+  expect(res.status).toBe(200);
+  expect(res.body.quote.introText).toBe('Hallo Anna Muster');
+  expect(res.body.quote.outroText).toBe('Bis bald, Studio Test');
+  expect(JSON.stringify(res.body)).not.toContain('{{');
+});
+
+test('a re-sent quote is news again when it is accepted', async () => {
+  const { quoteId, link } = await sentQuote();
+  const notices = async () => (await db('email_queue').where({ email_type: 'quote_accepted_admin' })).length;
+  const accept = async (tok) => request(publicApp).post(`/api/public/quotes/${tok}/respond`)
+    .set('X-Document-Access', await quoteGrant(tok))
+    .send({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000 });
+
+  expect((await accept(link)).status).toBe(200);
+  const first = await notices();
+
+  // Declined, then sent again: the next acceptance is a new decision, so the
+  // business has to hear about it even though it was told once before.
+  await quoteService.adminDeclineQuote(quoteId, adminId, 'Kunde überlegt noch');
+  await quoteService.sendQuote(quoteId, adminId);
+  expect((await db('quotes').where({ id: quoteId }).first()).acceptance_notified_at).toBeNull();
+
+  const fresh = await db('quote_action_tokens').where({ quote_id: quoteId }).orderBy('id', 'desc').first();
+  expect((await accept(fresh.token)).status).toBe(200);
+  expect(await notices()).toBe(first + 1);
+});
+
+test('two add-on changes at once each record what they changed', async () => {
+  // The "before" of the second change is what the first one left, not what
+  // both of them read before either wrote.
+  const { quoteId, link } = await sentQuote();
+  await request(publicApp).post(`/api/public/quotes/${link}/respond`).set('X-Document-Access', await quoteGrant(link))
+    .send({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000 });
+
+  const change = (selectedOptional) => request(adminApp).post(`/api/admin/quotes/${quoteId}/add-ons`)
+    .set(auth).send({ selectedOptional });
+  const results = await Promise.allSettled([change([2]), change([2, 3])]);
+  expect(results.filter((r) => r.status === 'fulfilled' && r.value.status === 200).length).toBeGreaterThan(0);
+
+  const history = JSON.parse((await db('quotes').where({ id: quoteId }).first()).selection_changes);
+  expect(history.length).toBeGreaterThan(0);
+  // Every entry starts where the one before it ended.
+  let previous = 120000;
+  for (const entry of history) {
+    expect(entry.totalBeforeMinor).toBe(previous);
+    previous = entry.totalAfterMinor;
+  }
+  expect(Number((await db('quotes').where({ id: quoteId }).first()).total_amount_minor)).toBe(previous);
+});
+
 test('the business changes the add-ons of an accepted quote: recorded, re-rendered, emailed', async () => {
   const { quoteId, link } = await sentQuote();
   await request(publicApp).post(`/api/public/quotes/${link}/respond`).set('X-Document-Access', await quoteGrant(link)).send({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000 });

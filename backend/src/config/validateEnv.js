@@ -44,6 +44,12 @@ function validateEnvironment() {
     }
   });
 
+  // The evidence key (#1446) is read here rather than at the first contract
+  // send: a value that is a character short of a key would otherwise fail in
+  // the middle of signing, hours after anyone touched the configuration.
+  const keyProblem = require('../utils/fieldEncryption').keyProblemAtBoot();
+  if (keyProblem) errors.push(keyProblem);
+
   // Log warnings
   warnings.forEach(warning => logger.warn(warning));
 

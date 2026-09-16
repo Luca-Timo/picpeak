@@ -72,29 +72,34 @@ async function sendContract(id, adminId) {
   const attachments = require('./attachments');
   const sendable = await attachments.buildSendable(refreshed.contract, rendered, { slots });
 
-  // Freeze what was just rendered: every included block's body in every
-  // language (#1445; only EN and DE were frozen before), plus the resolved
-  // content — clauses, title, intro, outro and this moment's placeholder
-  // values — with its sha256. The PDF, the signing page and later
-  // re-renders read this.
+  // What the render just resolved, ready to be frozen with the send: every
+  // included block's body in every language (#1445; only EN and DE were
+  // frozen before), plus the content — clauses, title, intro, outro and this
+  // moment's placeholder values — with its sha256. The PDF, the signing page
+  // and later re-renders read this.
+  //
+  // It is written inside completeSend's transaction, against the draft's
+  // lock_version, so it lands only if this send is the one that goes out: two
+  // overlapping sends both pass the draft check above, and the loser's freeze
+  // would otherwise be written over the winner's sent contract. The same
+  // condition catches an edit saved between the render and the send, which
+  // passed its own lock check but never reached the rendered PDF.
   const content = require('./content');
   const { snapshot, sha256: contentSha256 } = await require('./renderContext')
     .buildContentSnapshot(refreshed.contract, refreshed.inclusions, refreshed.textSections);
-  await db.transaction(async (trx) => {
-    for (const inc of refreshed.inclusions) {
-      if (!(inc.included === true || inc.included === 1 || inc.included === '1')) continue;
-      const frozen = content.inclusionSnapshot(inc);
-      await trx('contract_block_inclusions').where({ id: inc.id }).update({
-        ...content.snapshotColumns({ ...content.blockBodies(inc, 'block_'), ...frozen }),
-        updated_at: new Date(),
-      });
-    }
-    await trx('contracts').where({ id }).update({
-      rendered_content: JSON.stringify(snapshot),
-      rendered_content_sha256: contentSha256,
-      updated_at: new Date(),
-    });
-  });
+  const freeze = {
+    renderedContent: JSON.stringify(snapshot),
+    contentSha256,
+    inclusions: refreshed.inclusions
+      .filter((inc) => inc.included === true || inc.included === 1 || inc.included === '1')
+      .map((inc) => ({
+        id: inc.id,
+        columns: content.snapshotColumns({
+          ...content.blockBodies(inc, 'block_'),
+          ...content.inclusionSnapshot(inc),
+        }),
+      })),
+  };
 
   const { filePath: pdfPath, sha256: pdfSha256 } = await persistContractPdf(refreshed.contract, sendable.buffer, '', {
     kind: 'unsigned',
@@ -106,7 +111,9 @@ async function sendContract(id, adminId) {
 
   // Marks the contract sent, starts the event log and emails each signer
   // who may sign now their own link.
-  const invited = await signingV2.completeSend(id, { pdfPath, pdfSha256, adminId });
+  const invited = await signingV2.completeSend(id, {
+    pdfPath, pdfSha256, adminId, freeze, lockVersion: refreshed.contract.lock_version,
+  });
 
   try {
     await logActivity('contract_sent', { contractId: id, signersInvited: invited }, null, await adminActor(adminId));

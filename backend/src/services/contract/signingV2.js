@@ -284,24 +284,49 @@ async function prepareSend(contract) {
 }
 
 /** After the send stored the PDF: mark it sent, log it, invite the signers. */
-async function completeSend(contractId, { pdfPath, pdfSha256, adminId }) {
+async function completeSend(contractId, { pdfPath, pdfSha256, adminId, freeze = null, lockVersion = null }) {
   const actor = await adminActor(adminId);
   await db.transaction(async (trx) => {
     const now = new Date();
-    // Only a draft is sent, and the lock moves with it: an editor holding
-    // the draft's lock_version can no longer save over a sent contract.
-    const draft = await trx('contracts').where({ id: contractId, status: 'draft' }).first();
-    if (!draft) throw new AppError('This contract is no longer a draft', 409, 'CONTRACT_NOT_DRAFT');
-    const sent = await trx('contracts').where({ id: contractId, status: 'draft' }).update({
+    // One claim for the whole send: the contract must still be the draft that
+    // was rendered — same status, same lock_version — or this send is not the
+    // one going out. Two overlapping sends, or an edit saved between the
+    // render and here, lose it, and nothing they carry is written.
+    const claim = trx('contracts').where({ id: contractId, status: 'draft' });
+    if (lockVersion != null) claim.where('lock_version', lockVersion);
+    const draft = await claim.clone().first();
+    if (!draft) {
+      throw new AppError(
+        'This contract changed while it was being sent. Reload it and send again.',
+        409, 'CONTRACT_CHANGED',
+      );
+    }
+    // The text the rendered PDF shows, frozen with it (see sending.js).
+    if (freeze) {
+      for (const inc of freeze.inclusions) {
+        await trx('contract_block_inclusions').where({ id: inc.id })
+          .update({ ...inc.columns, updated_at: now });
+      }
+    }
+    const sent = await claim.update({
       status: 'sent',
       sent_at: now,
       pdf_path: pdfPath,
       pdf_sha256: pdfSha256,
       signing_version: VERSION,
       lock_version: (Number(draft.lock_version) || 1) + 1,
+      ...(freeze ? {
+        rendered_content: freeze.renderedContent,
+        rendered_content_sha256: freeze.contentSha256,
+      } : {}),
       updated_at: now,
     });
-    if (!sent) throw new AppError('This contract is no longer a draft', 409, 'CONTRACT_NOT_DRAFT');
+    if (!sent) {
+      throw new AppError(
+        'This contract changed while it was being sent. Reload it and send again.',
+        409, 'CONTRACT_CHANGED',
+      );
+    }
     const contract = await trx('contracts').where({ id: contractId }).first();
     await signingEvents.appendEvent(trx, contractId, {
       type: 'sent',
@@ -414,11 +439,29 @@ async function verifyCode(token, code) {
   const { signer, contract } = await signers.findInvitation(token);
   assertInvitable(contract, signer);
   await signers.verifyOtp(signer.id, code);
-  const session = await signers.createSession(signer.id, 'otp');
-  await signingEvents.appendEvent(db, contract.id, {
-    type: 'verified', actorType: 'signer', actorLabel: signerName(signer), signerId: signer.id, payload: { via: 'otp' },
-  });
+  const session = await openSession(contract.id, signer, 'otp');
   return { sessionToken: session.token, expiresAt: session.expiresAt };
+}
+
+/**
+ * Mint a session and record the verification, under the contract's lock and
+ * only while it is still out for signature. The status was checked before the
+ * code was sent; a countersignature committing in between would otherwise
+ * leave a `verified` event past the chain head the certificate printed —
+ * which is the thing sealing exists to prevent.
+ */
+async function openSession(contractId, signer, via) {
+  return db.transaction(async (trx) => {
+    const current = await trx('contracts').where({ id: contractId }).forUpdate().first();
+    if (!current || current.status !== 'sent') {
+      throw new AppError('This contract is no longer waiting for signatures', 410, 'CONTRACT_NOT_SIGNABLE');
+    }
+    const session = await signers.createSession(signer.id, via, trx);
+    await signingEvents.appendEvent(trx, contractId, {
+      type: 'verified', actorType: 'signer', actorLabel: signerName(signer), signerId: signer.id, payload: { via },
+    });
+    return session;
+  });
 }
 
 async function sessionContext(sessionToken) {
@@ -833,8 +876,13 @@ async function issueCertificate(contractId, signedSha) {
   }
 }
 
+/**
+ * Both parties get the signed contract and its certificate. Failures are the
+ * caller's to record (recordFollowUpFailure): swallowing them here left the
+ * admin with a sealed contract, no email, and nothing on screen to say so.
+ */
 async function sendCompletedEmails(contractId, certificatePath) {
-  try {
+  {
     const contract = await db('contracts').where({ id: contractId }).first();
     const attachments = [{
       filename: `${contract.contract_number}-signed.pdf`, contentPath: contract.signed_pdf_path, contentType: 'application/pdf',
@@ -855,8 +903,6 @@ async function sendCompletedEmails(contractId, certificatePath) {
     if (profile && profile.email && !sent.has(profile.email.toLowerCase())) {
       await emailProcessor.queueEmail(null, profile.email, 'contract_fully_signed', { ...data, customer_name: profile.company_name || 'Team' });
     }
-  } catch (err) {
-    logger.error('Failed to send the contract_fully_signed emails', { contractId, message: err.message });
   }
 }
 
@@ -889,10 +935,7 @@ async function portalSigningAccess(customer, contractId) {
   if (!row) {
     throw new AppError('You are not a signer of this contract. Use the link from the signing email.', 403, 'SIGNER_NOT_FOUND');
   }
-  const session = await signers.createSession(row.id, 'portal');
-  await signingEvents.appendEvent(db, contract.id, {
-    type: 'verified', actorType: 'signer', actorLabel: signerName(row), signerId: row.id, payload: { via: 'portal' },
-  });
+  const session = await openSession(contract.id, row, 'portal');
   return { mode: 'session', sessionToken: session.token, expiresAt: session.expiresAt };
 }
 

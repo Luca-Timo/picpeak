@@ -151,13 +151,18 @@ async function setSigners(contractId, { signers, order }) {
   const customers = sanitizeSigners(signers);
   if (order !== undefined && !ORDERS.includes(order)) throw new AppError('Unknown signing order', 400, 'SIGNERS_INVALID');
   await db.transaction(async (trx) => {
+    // The status check above ran outside this transaction. Re-read the row
+    // under a lock before deleting anything: a send committing in between
+    // would otherwise lose the signers it had just invited, and the rewritten
+    // rows would belong to a contract that is already out.
+    const current = await trx('contracts').where({ id: contractId }).forUpdate().first();
+    if (!current || current.status !== 'draft') {
+      throw new AppError('Signers can only be changed on a draft', 409, 'CONTRACT_NOT_DRAFT');
+    }
     await trx('contract_signers').where({ contract_id: contractId }).del();
-    await insertSigners(trx, contract, customers, await issuerName(trx));
-    // Conditional on the status read above: a send landing in between would
-    // otherwise have its signing order changed underneath it.
+    await insertSigners(trx, current, customers, await issuerName(trx));
     if (order) {
-      await trx('contracts').where({ id: contractId, status: 'draft' })
-        .update({ signing_order: order, updated_at: stamp() });
+      await trx('contracts').where({ id: contractId }).update({ signing_order: order, updated_at: stamp() });
     }
   });
   return listSigners(contractId);
@@ -273,15 +278,18 @@ async function issueOtp(signerId) {
   const ttl = await otpTtlMinutes();
   const now = new Date();
   const codeHash = await bcrypt.hash(code, 10);
-  // Count and insert inside one transaction that locks the signer's rows, so
-  // parallel requests can't all read the same count and each insert a code:
-  // the hourly cap is also what stops a held link mail-bombing the signer.
+  // Count and insert inside one transaction, with the SIGNER's row locked
+  // rather than their code rows: locking the codes locks nothing when there
+  // are none yet, and Postgres doesn't re-scan for rows a parallel request
+  // inserted meanwhile — so the first few requests could all pass the cap.
+  // The hourly cap is also what stops a held link mail-bombing the signer.
   await db.transaction(async (trx) => {
+    const signer = await trx('contract_signers').where({ id: signerId }).forUpdate().first('id');
+    if (!signer) throw new AppError('Signing link not found', 404, 'SIGNING_LINK_INVALID');
     const latest = await trx('contract_signing_otps')
       .where({ signer_id: signerId })
       .orderBy('id', 'desc')
-      .limit(OTP_PER_HOUR)
-      .forUpdate();
+      .limit(OTP_PER_HOUR);
     const recent = latest.filter((row) => new Date(row.created_at).getTime() > hourAgo).length;
     if (recent >= OTP_PER_HOUR) {
       throw new AppError('Too many codes requested. Try again in an hour.', 429, 'OTP_RATE_LIMITED');
@@ -346,18 +354,18 @@ async function verifyOtp(signerId, submitted) {
 // Sessions
 // ---------------------------------------------------------------------
 
-async function createSession(signerId, verifiedVia) {
+async function createSession(signerId, verifiedVia, conn = db) {
   const token = newToken();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
-  await db('contract_signing_sessions').insert({
+  await conn('contract_signing_sessions').insert({
     signer_id: signerId,
     session_hash: sha256(token),
     verified_via: verifiedVia,
     expires_at: stamp(expiresAt),
     created_at: stamp(now),
   });
-  await db('contract_signers').where({ id: signerId })
+  await conn('contract_signers').where({ id: signerId })
     .update({ verified_at: stamp(now), verified_via: verifiedVia, updated_at: stamp(now) });
   return { token, expiresAt };
 }

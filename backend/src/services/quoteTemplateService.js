@@ -34,7 +34,7 @@ const { ensureInt, ensureNumber } = require('../utils/numericHelpers');
 const {
   isTruthyFlag, parsePromotionSnapshot, UNITS, PRICE_MODES, BOUND_TO,
 } = require('../utils/lineItemTotals');
-const { unknownPlaceholders, renderPlaceholders } = require('../utils/placeholders');
+const { unknownPlaceholders, renderPlaceholders, hasConditional } = require('../utils/placeholders');
 const { formatShortDate } = require('../utils/dateFormatter');
 const { buildIssuerBlock } = require('./_renderContext');
 const businessProfileService = require('./businessProfileService');
@@ -313,6 +313,12 @@ function packageLine(pkg, isOptional) {
 }
 
 function assertKnownPlaceholders(texts) {
+  if (texts.some((text) => hasConditional(text))) {
+    throw new AppError(
+      'Quote texts don\'t support {{#if …}} blocks — they would be printed as they are. Use a separate text block instead.',
+      400, 'TEMPLATE_UNKNOWN_PLACEHOLDERS',
+    );
+  }
   const unknown = [...new Set(texts.flatMap((text) => unknownPlaceholders(text)))];
   if (unknown.length) {
     throw new AppError(

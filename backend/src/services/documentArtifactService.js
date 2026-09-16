@@ -68,12 +68,31 @@ function writeWithoutOverwriting(root, fileName, buffer) {
   const ext = path.extname(fileName);
   const base = path.basename(fileName, ext);
   let filePath = path.join(root, fileName);
-  while (fs.existsSync(filePath)) {
-    filePath = path.join(root, `${base}-${crypto.randomBytes(3).toString('hex')}${ext}`);
+  let handle = null;
+  for (let attempt = 0; handle === null; attempt += 1) {
+    try {
+      // Exclusive create, not existsSync-then-write: two replicas writing the
+      // same document number at the same moment would both find the name free.
+      handle = fs.openSync(filePath, 'wx');
+    } catch (err) {
+      if (err.code !== 'EEXIST' || attempt > 8) throw err;
+      filePath = path.join(root, `${base}-${crypto.randomBytes(3).toString('hex')}${ext}`);
+    }
   }
+  // Into the claimed name through a temp file, so a crash mid-write leaves a
+  // stray temp rather than a truncated PDF at the name the row points at.
   const temp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(temp, buffer);
-  fs.renameSync(temp, filePath);
+  try {
+    fs.writeFileSync(temp, buffer);
+    fs.renameSync(temp, filePath);
+  } catch (err) {
+    for (const stray of [temp, filePath]) {
+      try { if (fs.existsSync(stray)) fs.unlinkSync(stray); } catch (_) { /* nothing left to do */ }
+    }
+    throw err;
+  } finally {
+    try { fs.closeSync(handle); } catch (_) { /* already gone with the rename */ }
+  }
   return filePath;
 }
 
@@ -153,5 +172,5 @@ module.exports = {
   RENDERER_VERSION,
   persist,
   listForDocument,
-  _internal: { sha256, themeSnapshot, countPages },
+  _internal: { sha256, themeSnapshot, countPages, writeWithoutOverwriting },
 };

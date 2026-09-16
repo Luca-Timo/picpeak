@@ -58,8 +58,8 @@ async function getRetentionDays() {
 }
 
 /** Bytes the customer has uploaded themselves and not deleted. Admin uploads don't count. */
-async function getUsageBytes(customerId) {
-  const row = await db('customer_documents')
+async function getUsageBytes(customerId, conn = db) {
+  const row = await conn('customer_documents')
     .where({ customer_account_id: customerId, uploader_type: 'customer' })
     .whereNull('deleted_at')
     .sum({ total: 'size_bytes' })
@@ -323,7 +323,9 @@ async function getReviewCounts() {
  * Store an uploaded file. `file` is the multer temp file; the caller removes
  * it afterwards. `actor` is the activity-log actor.
  */
-async function createDocument({ customerId, uploaderType, uploaderId, file, links, share = false, admin = null, actor }) {
+async function createDocument({
+  customerId, uploaderType, uploaderId, file, links, share = false, admin = null, actor, quotaBytes = null,
+}) {
   const resolved = await resolveLinks(customerId, links || {}, { admin });
   const size = await assertPdf(file.path);
   const sha256 = await sha256OfFile(file.path);
@@ -343,25 +345,37 @@ async function createDocument({ customerId, uploaderType, uploaderId, file, link
 
   let id;
   try {
-    const inserted = await db('customer_documents').insert({
-      customer_account_id: customerId,
-      event_id: resolved.eventId,
-      project_id: resolved.projectId,
-      contract_id: resolved.contractId,
-      uploader_type: uploaderType,
-      uploader_id: uploaderId || null,
-      original_name: cleanDisplayName(file.originalname),
-      storage_key: key,
-      mime_type: 'application/pdf',
-      size_bytes: size,
-      sha256,
-      status,
-      reviewed_at: status === 'clean' ? now : null,
-      reviewed_by_admin_id: status === 'clean' && uploaderType === 'admin' ? uploaderId : null,
-      shared_at: uploaderType === 'admin' && share ? now : null,
-      created_at: now,
-      updated_at: now,
-    }).returning('id');
+    // The quota is counted and the row written in one transaction, with the
+    // customer's row locked: the route's own check runs before the body has
+    // arrived, so uploads landing together all measured the same "before"
+    // and every one of them fitted.
+    const inserted = await db.transaction(async (trx) => {
+      if (quotaBytes != null && uploaderType === 'customer') {
+        await trx('customer_accounts').where({ id: customerId }).forUpdate().first('id');
+        if ((await getUsageBytes(customerId, trx)) + size > quotaBytes) {
+          throw new AppError('This file would exceed your document storage.', 413, 'QUOTA_EXCEEDED');
+        }
+      }
+      return trx('customer_documents').insert({
+        customer_account_id: customerId,
+        event_id: resolved.eventId,
+        project_id: resolved.projectId,
+        contract_id: resolved.contractId,
+        uploader_type: uploaderType,
+        uploader_id: uploaderId || null,
+        original_name: cleanDisplayName(file.originalname),
+        storage_key: key,
+        mime_type: 'application/pdf',
+        size_bytes: size,
+        sha256,
+        status,
+        reviewed_at: status === 'clean' ? now : null,
+        reviewed_by_admin_id: status === 'clean' && uploaderType === 'admin' ? uploaderId : null,
+        shared_at: uploaderType === 'admin' && share ? now : null,
+        created_at: now,
+        updated_at: now,
+      }).returning('id');
+    });
     id = typeof inserted[0] === 'object' && inserted[0] !== null ? inserted[0].id : inserted[0];
   } catch (err) {
     await storage.delete(key).catch(() => {});

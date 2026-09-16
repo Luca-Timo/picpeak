@@ -37,14 +37,22 @@ const KEY_FILE = path.join('business-docs', 'keys', 'evidence.key');
 let cache = null;
 
 /**
- * A near-miss: text that was plainly meant to be a 32-byte key but isn't one
- * — hex or base64 characters only, and about the right length. Refused, so a
- * copy-and-paste that dropped a character is an error at startup instead of
- * silently switching key.
+ * A near-miss: text that was plainly meant to be one of the two key forms and
+ * is a character or two off — 60-68 hex digits where 64 were meant, or 41-45
+ * base64 characters where 43 were meant. Refused, so a copy-and-paste that
+ * dropped a character is an error instead of a silently different key.
+ *
+ * A passphrase is not a near-miss: `openssl rand -base64 48` is 64 base64
+ * characters and goes through scrypt as intended, because it is nowhere near
+ * the 43 that decode to 32 bytes.
  */
 function looksLikeABrokenKey(value) {
-  if (value.length < 40 || value.length > 70) return false;
-  return /^[0-9a-f]+$/i.test(value) || /^[A-Za-z0-9+/_-]+={0,2}$/.test(value);
+  if (/^[0-9a-f]+$/i.test(value)) return value.length >= 60 && value.length <= 68 && value.length !== 64;
+  if (/^[A-Za-z0-9+/_-]+={0,2}$/.test(value)) {
+    const body = value.replace(/=+$/, '');
+    return body.length >= 41 && body.length <= 45 && body.length !== 43;
+  }
+  return false;
 }
 
 function keyFromEnv(raw) {
@@ -56,9 +64,9 @@ function keyFromEnv(raw) {
   }
   if (looksLikeABrokenKey(value)) {
     throw new Error(
-      'PICPEAK_EVIDENCE_KEY looks like a 32-byte key but is not one '
-      + `(${value.length} characters). Use 64 hex digits or 32 bytes of base64, `
-      + 'or a passphrase that could not be mistaken for a key.',
+      'PICPEAK_EVIDENCE_KEY looks like a 32-byte key with a character missing '
+      + `(${value.length} characters). Use 64 hex digits or 43 characters of base64, `
+      + 'or a passphrase long enough that it could not be mistaken for a key.',
     );
   }
   return crypto.scryptSync(value, 'picpeak-evidence-key-v1', 32);
@@ -158,6 +166,22 @@ function keyIdOf(value) {
   return match ? match[1] : null;
 }
 
+/**
+ * Read the key once at boot, so a broken PICPEAK_EVIDENCE_KEY is a startup
+ * error rather than a failed contract send hours later. Returns the problem
+ * as a string, or null when the key is fine (or not created yet, which is
+ * normal until the first signature).
+ */
+function keyProblemAtBoot() {
+  if (!process.env.PICPEAK_EVIDENCE_KEY) return null;
+  try {
+    loadKey();
+    return null;
+  } catch (err) {
+    return err.message;
+  }
+}
+
 /** The lookup hash of an email address. */
 function hashEmail(email) {
   return crypto.createHash('sha256').update(String(email || '').trim().toLowerCase()).digest('hex');
@@ -170,6 +194,7 @@ module.exports = {
   keyInfo,
   keyStatus,
   keyIdOf,
+  keyProblemAtBoot,
   hashEmail,
   _resetForTests: () => { cache = null; },
 };

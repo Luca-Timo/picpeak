@@ -270,6 +270,23 @@ test('an archived attachment blocks publishing', async () => {
   await ok(request(attachmentsApp).post(`/api/admin/document-attachments/${ids.terms}/restore`).set(auth));
 });
 
+test('re-uploading a file that is gone from disk writes it back', async () => {
+  // A database-only restore leaves the row and loses the file. The library
+  // entry then can't be downloaded or merged, and uploading the same PDF
+  // again used to return that entry without ever writing the bytes.
+  const row = await db('document_attachments').where({ id: ids.privacy }).first();
+  const absolute = path.join(process.env.STORAGE_PATH, row.storage_key);
+  fs.unlinkSync(absolute);
+  expect(fs.existsSync(absolute)).toBe(false);
+
+  const again = await upload(files.privacy, { name: 'Datenschutz' });
+  expect(again.status).toBe(200);
+  expect(again.body).toEqual(expect.objectContaining({ existing: true }));
+  expect(again.body.attachment.id).toBe(ids.privacy);
+  expect(fs.existsSync(absolute)).toBe(true);
+  expect(crypto.createHash('sha256').update(fs.readFileSync(absolute)).digest('hex')).toBe(row.sha256);
+});
+
 test('attachments sit behind the contracts flag', async () => {
   await setFlag('contracts', false);
   const res = await request(attachmentsApp).get('/api/admin/document-attachments').set(auth);

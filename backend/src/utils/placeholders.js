@@ -75,6 +75,17 @@ function findPlaceholders(text) {
 }
 
 /**
+ * Does `text` use a `{{#if …}}` block? Quote texts are rendered by
+ * renderPlaceholders, which resolves plain placeholders only, so a
+ * conditional there would publish cleanly and then print its markup on the
+ * quote. Contract bodies go through renderTemplatedBody and do support them.
+ */
+function hasConditional(text) {
+  if (typeof text !== 'string' || !text) return false;
+  return new RegExp(CONDITIONAL_PATTERN.source).test(text);
+}
+
+/**
  * Resolve `{{#if key}}…{{/if}}` against `values`: a key with no value — a
  * missing one included — drops the block. A plain `{{key}}` stays visible
  * when it is unknown, but leaving `{{#if …}}` markup in a contract body
@@ -124,6 +135,7 @@ module.exports = {
   PLACEHOLDER_PATTERN,
   CONDITIONAL_PATTERN,
   findPlaceholders,
+  hasConditional,
   renderConditionals,
   unknownPlaceholders,
   renderPlaceholders,
