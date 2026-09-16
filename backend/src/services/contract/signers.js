@@ -91,8 +91,17 @@ function sanitizeSigners(list) {
   });
 }
 
+/**
+ * Every timestamp this module writes goes through here. A bare Date is
+ * stored by node-sqlite3 as "[object Object]" when it comes from another
+ * realm (which is what Jest gives a service), and an expiry that can't be
+ * read is treated as past — so a session or a code would die immediately.
+ * ISO strings read back the same on both engines.
+ */
+const stamp = (date = new Date()) => date.toISOString();
+
 async function insertSigners(trx, contract, customers, issuerName) {
-  const now = new Date();
+  const now = stamp();
   const rows = customers.map((signer, index) => ({
     contract_id: contract.id,
     position: index + 1,
@@ -135,7 +144,7 @@ async function setSigners(contractId, { signers, order }) {
   await db.transaction(async (trx) => {
     await trx('contract_signers').where({ contract_id: contractId }).del();
     await insertSigners(trx, contract, customers, await issuerName(trx));
-    if (order) await trx('contracts').where({ id: contractId }).update({ signing_order: order, updated_at: new Date() });
+    if (order) await trx('contracts').where({ id: contractId }).update({ signing_order: order, updated_at: stamp() });
   });
   return listSigners(contractId);
 }
@@ -163,11 +172,14 @@ function signersDue(contract, signers) {
 
 /** A new link for the signer; earlier links stop working. Returns the token (shown once). */
 async function createInvitation(trx, signerId, expiresAt) {
-  const now = new Date();
+  const now = stamp();
   await trx('contract_signer_invitations').where({ signer_id: signerId }).whereNull('revoked_at').update({ revoked_at: now });
   const token = newToken();
   await trx('contract_signer_invitations').insert({
-    signer_id: signerId, token_hash: sha256(token), expires_at: expiresAt, created_at: now,
+    signer_id: signerId,
+    token_hash: sha256(token),
+    expires_at: expiresAt instanceof Date ? stamp(expiresAt) : expiresAt,
+    created_at: now,
   });
   await trx('contract_signers').where({ id: signerId }).update({ status: 'invited', invited_at: now, updated_at: now });
   return token;
@@ -179,7 +191,7 @@ async function createInvitation(trx, signerId, expiresAt) {
  * reaches them instead of leaving a signer nobody can invite again.
  */
 async function undoInvitation(signerId) {
-  const now = new Date();
+  const now = stamp();
   await db.transaction(async (trx) => {
     await trx('contract_signer_invitations').where({ signer_id: signerId }).whereNull('revoked_at').update({ revoked_at: now });
     await trx('contract_signers').where({ id: signerId, status: 'invited' })
@@ -188,7 +200,7 @@ async function undoInvitation(signerId) {
 }
 
 async function revokeAccess(trx, contractId) {
-  const now = new Date();
+  const now = stamp();
   const ids = (await trx('contract_signers').where({ contract_id: contractId }).select('id')).map((r) => r.id);
   if (!ids.length) return;
   await trx('contract_signer_invitations').whereIn('signer_id', ids).whereNull('revoked_at').update({ revoked_at: now });
@@ -227,25 +239,41 @@ async function otpTtlMinutes() {
 /** A new code for the signer; earlier unused codes stop working. */
 // Times are compared here rather than in SQL: SQLite keeps the dates knex
 // writes in more than one form, so a SQL comparison can misread a fresh row.
-const isPast = (value) => new Date(value).getTime() <= Date.now();
+// A value that isn't a date at all counts as past, so a row written in a
+// shape this process can't read is expired rather than valid forever.
+const isPast = (value) => {
+  const time = new Date(value).getTime();
+  return !Number.isFinite(time) || time <= Date.now();
+};
 
 async function issueOtp(signerId) {
   const hourAgo = Date.now() - 60 * 60 * 1000;
-  const latest = await db('contract_signing_otps').where({ signer_id: signerId }).orderBy('id', 'desc').limit(OTP_PER_HOUR);
-  const recent = latest.filter((row) => new Date(row.created_at).getTime() > hourAgo).length;
-  if (recent >= OTP_PER_HOUR) {
-    throw new AppError('Too many codes requested. Try again in an hour.', 429, 'OTP_RATE_LIMITED');
-  }
   const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
   const ttl = await otpTtlMinutes();
   const now = new Date();
-  await db('contract_signing_otps').where({ signer_id: signerId }).whereNull('consumed_at').update({ consumed_at: now });
-  await db('contract_signing_otps').insert({
-    signer_id: signerId,
-    code_hash: await bcrypt.hash(code, 10),
-    expires_at: new Date(now.getTime() + ttl * 60 * 1000),
-    attempts: 0,
-    created_at: now,
+  const codeHash = await bcrypt.hash(code, 10);
+  // Count and insert inside one transaction that locks the signer's rows, so
+  // parallel requests can't all read the same count and each insert a code:
+  // the hourly cap is also what stops a held link mail-bombing the signer.
+  await db.transaction(async (trx) => {
+    const latest = await trx('contract_signing_otps')
+      .where({ signer_id: signerId })
+      .orderBy('id', 'desc')
+      .limit(OTP_PER_HOUR)
+      .forUpdate();
+    const recent = latest.filter((row) => new Date(row.created_at).getTime() > hourAgo).length;
+    if (recent >= OTP_PER_HOUR) {
+      throw new AppError('Too many codes requested. Try again in an hour.', 429, 'OTP_RATE_LIMITED');
+    }
+    await trx('contract_signing_otps').where({ signer_id: signerId }).whereNull('consumed_at')
+      .update({ consumed_at: stamp(now) });
+    await trx('contract_signing_otps').insert({
+      signer_id: signerId,
+      code_hash: codeHash,
+      expires_at: stamp(new Date(now.getTime() + ttl * 60 * 1000)),
+      attempts: 0,
+      created_at: stamp(now),
+    });
   });
   return { code, ttlMinutes: ttl };
 }
@@ -260,21 +288,35 @@ async function verifyOtp(signerId, submitted) {
     .orderBy('id', 'desc')
     .first();
   if (!row || isPast(row.expires_at)) throw new AppError('The code has expired. Request a new one.', 410, 'OTP_EXPIRED');
-  if (Number(row.attempts) >= OTP_MAX_ATTEMPTS) {
-    await db('contract_signing_otps').where({ id: row.id }).update({ consumed_at: new Date() });
+  const consume = () => db('contract_signing_otps').where({ id: row.id }).update({ consumed_at: stamp() });
+  // Claim the attempt before comparing, the same shape the emailed document
+  // code uses (publicDocumentVerificationService.confirmCode). Reading the
+  // count and writing it back after the compare let parallel guesses all see
+  // the same count, so a burst was not capped at five: the conditional
+  // increment lets at most five requests through per code.
+  const claimed = await db('contract_signing_otps')
+    .where({ id: row.id })
+    .whereNull('consumed_at')
+    .where('attempts', '<', OTP_MAX_ATTEMPTS)
+    .increment('attempts', 1);
+  if (!claimed) {
+    await consume();
     throw new AppError('Too many wrong codes. Request a new one.', 429, 'OTP_LOCKED');
   }
   if (!(await bcrypt.compare(code, row.code_hash))) {
-    const attempts = Number(row.attempts) + 1;
-    await db('contract_signing_otps').where({ id: row.id }).update({
-      attempts, ...(attempts >= OTP_MAX_ATTEMPTS ? { consumed_at: new Date() } : {}),
-    });
+    const current = await db('contract_signing_otps').where({ id: row.id }).first();
+    const attempts = Number(current && current.attempts) || OTP_MAX_ATTEMPTS;
+    if (attempts >= OTP_MAX_ATTEMPTS) {
+      await consume();
+      throw new AppError('Too many wrong codes. Request a new one.', 429, 'OTP_LOCKED');
+    }
     const err = new AppError('That code isn\'t right.', 400, 'OTP_WRONG');
     err.details = { remaining: Math.max(0, OTP_MAX_ATTEMPTS - attempts) };
     throw err;
   }
   // Single use: only the request that flips consumed_at gets through.
-  const used = await db('contract_signing_otps').where({ id: row.id }).whereNull('consumed_at').update({ consumed_at: new Date() });
+  const used = await db('contract_signing_otps').where({ id: row.id }).whereNull('consumed_at')
+    .update({ consumed_at: stamp() });
   if (!used) throw new AppError('The code has already been used. Request a new one.', 410, 'OTP_EXPIRED');
   return true;
 }
@@ -286,15 +328,17 @@ async function verifyOtp(signerId, submitted) {
 async function createSession(signerId, verifiedVia) {
   const token = newToken();
   const now = new Date();
+  const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
   await db('contract_signing_sessions').insert({
     signer_id: signerId,
     session_hash: sha256(token),
     verified_via: verifiedVia,
-    expires_at: new Date(now.getTime() + SESSION_TTL_MS),
-    created_at: now,
+    expires_at: stamp(expiresAt),
+    created_at: stamp(now),
   });
-  await db('contract_signers').where({ id: signerId }).update({ verified_at: now, verified_via: verifiedVia, updated_at: now });
-  return { token, expiresAt: new Date(now.getTime() + SESSION_TTL_MS) };
+  await db('contract_signers').where({ id: signerId })
+    .update({ verified_at: stamp(now), verified_via: verifiedVia, updated_at: stamp(now) });
+  return { token, expiresAt };
 }
 
 /** The signer and contract behind a signing session. */

@@ -83,8 +83,27 @@ exports.up = async function (knex) {
   // the add-ons (who, when, what, the totals before and after).
   await addColumn(knex, 'quotes', 'customer_message', (t) => t.text('customer_message'));
   await addColumn(knex, 'quotes', 'selection_changes', (t) => t.text('selection_changes'));
-  // A reissued quote points to the quote it replaces.
+  // A reissued quote points to the quote it replaces. At most one
+  // replacement per quote: the reissue claims the accepted status inside its
+  // transaction, and this index is the second line of defence, so a double
+  // click can't leave two drafts pointing at the same quote. Partial, since
+  // almost every quote replaces nothing — supported on both engines.
   await addColumn(knex, 'quotes', 'replaces_quote_id', (t) => t.integer('replaces_quote_id'));
+  // Sweep first: the pointer is only ever set by the reissue, but an install
+  // that ran an earlier build of it could hold two drafts for one quote. The
+  // oldest keeps the link; the others stay as ordinary drafts the admin can
+  // delete, rather than being removed here.
+  const duplicated = await knex('quotes')
+    .whereNotNull('replaces_quote_id')
+    .groupBy('replaces_quote_id')
+    .havingRaw('count(*) > 1')
+    .pluck('replaces_quote_id');
+  for (const replaced of duplicated) {
+    const rows = await knex('quotes').where({ replaces_quote_id: replaced }).orderBy('id', 'asc').pluck('id');
+    await knex('quotes').whereIn('id', rows.slice(1)).update({ replaces_quote_id: null });
+    console.log(`219_quote_templates_catalogue: quote ${replaced} had ${rows.length} replacements; kept ${rows[0]}`);
+  }
+  await knex.raw('CREATE UNIQUE INDEX IF NOT EXISTS quotes_one_replacement ON quotes (replaces_quote_id) WHERE replaces_quote_id IS NOT NULL');
 
   if (!(await knex.schema.hasTable('quote_packages'))) {
     await knex.schema.createTable('quote_packages', (t) => {
@@ -189,6 +208,7 @@ exports.up = async function (knex) {
 };
 
 exports.down = async function (knex) {
+  await knex.raw('DROP INDEX IF EXISTS quotes_one_replacement');
   await knex.schema.dropTableIfExists('quote_template_versions');
   await knex.schema.dropTableIfExists('quote_templates');
   await knex.schema.dropTableIfExists('quote_text_blocks');

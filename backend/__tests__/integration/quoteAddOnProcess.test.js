@@ -197,7 +197,12 @@ test('add-ons can only be changed on an accepted quote without a contract, event
   expect(early.body.code).toBe('QUOTE_NOT_ACCEPTED');
 
   await request(publicApp).post(`/api/public/quotes/${link}/respond`).set('X-Document-Access', await quoteGrant(link)).send({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000 });
-  await db('quotes').where({ id: quoteId }).update({ converted_event_id: 999999 });
+  // An invoice made from the quote, rather than a fake foreign key a real
+  // database would refuse.
+  await db('invoices').insert({
+    invoice_number: `I-ADDON-${quoteId}`, customer_account_id: customerId, status: 'sent',
+    issue_date: '2026-09-01', due_date: '2026-09-15', source_quote_id: quoteId,
+  });
   const late = await request(adminApp).post(`/api/admin/quotes/${quoteId}/add-ons`).set(auth).send({ selectedOptional: [2] });
   expect(late.status).toBe(409);
   expect(late.body.code).toBe('QUOTE_CONVERTED');

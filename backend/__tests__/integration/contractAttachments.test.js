@@ -17,6 +17,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const request = require('supertest');
 const { PDFDocument } = require('pdf-lib');
 const {
@@ -117,9 +118,15 @@ test('uploads are checked by content and stored once per file', async () => {
   expect(bogus.status).toBe(400);
   expect(['PDF_NOT_A_PDF', 'PDF_MALFORMED']).toContain(bogus.body.code);
 
+  // What is stored is what was checked: pdf-lib's re-serialisation of the
+  // document the scan walked, not the uploaded bytes, so a file that defines
+  // an object twice can't offer a viewer something the scan never saw. The
+  // row's sha256 is the hash of those bytes.
   const row = await db('document_attachments').where({ id: ids.terms }).first();
   expect(row.storage_key).toBe(path.join('business-docs', 'attachments', `${row.sha256}.pdf`));
-  expect(fs.readFileSync(path.join(process.env.STORAGE_PATH, row.storage_key)).equals(files.terms)).toBe(true);
+  const stored = fs.readFileSync(path.join(process.env.STORAGE_PATH, row.storage_key));
+  expect(crypto.createHash('sha256').update(stored).digest('hex')).toBe(row.sha256);
+  expect((await PDFDocument.load(stored)).getPageCount()).toBe(2);
 });
 
 test('a template version carries its attachments into new contracts', async () => {
@@ -223,7 +230,9 @@ test('the signing page lists the attachments and downloads only this contract\'s
   const download = await signing(`/attachments/${ids.privacy}`).buffer(true).parse(binary);
   expect(download.status).toBe(200);
   expect(download.headers['content-type']).toMatch(/application\/pdf/);
-  expect(download.body.equals(files.privacy)).toBe(true);
+  // The stored (checked) bytes, whose hash the inclusion carries.
+  const privacyRow = await db('document_attachments').where({ id: ids.privacy }).first();
+  expect(crypto.createHash('sha256').update(download.body).digest('hex')).toBe(privacyRow.sha256);
 
   const notOnContract = await signing(`/attachments/${ids.other}`);
   expect(notOnContract.status).toBe(404);

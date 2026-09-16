@@ -155,8 +155,13 @@ export const QuoteResponseView: React.FC<{ adapter: QuoteDocumentAdapter }> = ({
     try {
       await adapter.respond(action, {
         tosAccepted,
-        ...(action === 'accept' && canChoose && shownTotals
-          ? { selectedOptional: shownTotals.selectedOptional, expectedTotalMinor: shownTotals.totalAmountMinor }
+        // Booking sends the choice and its total. Where booking isn't offered
+        // (the portal), the quote is accepted as it stands — with the total
+        // this page showed, which the server still checks.
+        ...(action === 'accept'
+          ? (canChoose && shownTotals
+            ? { selectedOptional: shownTotals.selectedOptional, expectedTotalMinor: shownTotals.totalAmountMinor }
+            : { expectedTotalMinor: q?.totalAmountMinor })
           : {}),
         ...(action === 'accept' && customerMessage ? { customerMessage } : {}),
       });

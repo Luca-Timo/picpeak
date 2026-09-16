@@ -323,10 +323,23 @@ function assertReachable(contract, signer) {
   }
 }
 
+/**
+ * The invitation path — the emailed link, its code and the session it mints —
+ * only works while the contract is still out for signature. A completed or
+ * declined contract has an audit certificate naming the chain head it was
+ * issued at, and a code request or a verification appends events past it.
+ */
+function assertInvitable(contract, signer) {
+  assertReachable(contract, signer);
+  if (contract.status !== 'sent') {
+    throw new AppError('This contract is no longer waiting for signatures', 410, 'CONTRACT_NOT_SIGNABLE');
+  }
+}
+
 /** What an unverified link shows: enough to recognise it, nothing about the customer. */
 async function invitationSummary(token) {
   const { signer, contract } = await signers.findInvitation(token);
-  assertReachable(contract, signer);
+  assertInvitable(contract, signer);
   const publicView = require('./publicView');
   const profile = await db('business_profile').where({ id: 1 }).first();
   return {
@@ -340,7 +353,7 @@ async function invitationSummary(token) {
 
 async function requestCode(token) {
   const { signer, contract } = await signers.findInvitation(token);
-  assertReachable(contract, signer);
+  assertInvitable(contract, signer);
   await ensureContractEmailTemplatesSeeded(db, logger);
   const { code, ttlMinutes } = await signers.issueOtp(signer.id);
   const email = signerEmail(signer);
@@ -356,7 +369,7 @@ async function requestCode(token) {
 
 async function verifyCode(token, code) {
   const { signer, contract } = await signers.findInvitation(token);
-  assertReachable(contract, signer);
+  assertInvitable(contract, signer);
   await signers.verifyOtp(signer.id, code);
   const session = await signers.createSession(signer.id, 'otp');
   await signingEvents.appendEvent(db, contract.id, {
@@ -389,6 +402,9 @@ async function sessionView(sessionToken) {
   const due = signers.signersDue(contract, rows).some((r) => r.id === signer.id);
   const canSign = contract.status === 'sent' && signer.status === 'invited' && due;
   view.canSign = canSign;
+  // Several signers can't be represented by one uploaded paper copy, so the
+  // panel isn't offered where wetUploadContext would refuse it.
+  view.allowPdfUpload = view.allowPdfUpload && rows.filter((r) => r.role === 'customer').length === 1;
   view.signing = {
     name: signerName(signer),
     email: signerEmail(signer),
@@ -401,6 +417,34 @@ async function sessionView(sessionToken) {
     signers: progress(rows),
   };
   return view;
+}
+
+/**
+ * A wet-signed PDF replaces the whole document and completes the contract, so
+ * it is accepted only from the signer whose turn it is, only while the
+ * contract is still out for signature, and only when they are the single
+ * customer signer. With several signers the server cannot tell whether the
+ * paper carries the others' signatures, and accepting it would complete the
+ * contract for all of them (or skip the countersignature) — those upload in
+ * the browser, or the admin uploads the countersigned paper themselves.
+ */
+async function wetUploadContext(sessionToken) {
+  const context = await sessionContext(sessionToken);
+  const { contract, signer } = context;
+  if (contract.status !== 'sent') {
+    throw new AppError('This contract is not waiting for a signature', 409, 'CONTRACT_NOT_SIGNABLE');
+  }
+  const rows = await signers.listSigners(contract.id);
+  if (signer.status !== 'invited' || !signers.signersDue(contract, rows).some((r) => r.id === signer.id)) {
+    throw new AppError('It is not your turn to sign this contract.', 409, 'NOT_YOUR_TURN');
+  }
+  if (rows.filter((r) => r.role === 'customer').length > 1) {
+    throw new AppError(
+      'This contract has several signers, so an uploaded PDF cannot stand in for all of them. Please sign in your browser instead.',
+      409, 'MULTIPLE_SIGNERS',
+    );
+  }
+  return context;
 }
 
 async function sessionPdf(sessionToken) {
@@ -675,6 +719,9 @@ async function countersign(contractId, input, { ip = null, userAgent = null, adm
       await signingEvents.appendEvent(trx, contractId, {
         type: 'completed', actorType: 'system', artifactSha256: stored.sha256, payload: { signedPdfSha256: stored.sha256 },
       });
+      // Sealed: the certificate names this chain head, so no held link may
+      // append to the chain afterwards.
+      await signers.revokeAccess(trx, contractId);
       return stored.sha256;
     });
   } catch (err) {
@@ -853,6 +900,7 @@ module.exports = {
   verifyCode,
   sessionView,
   sessionPdf,
+  wetUploadContext,
   sessionAttachment,
   sessionContext,
   sign,

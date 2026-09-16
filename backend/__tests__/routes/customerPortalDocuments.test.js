@@ -215,4 +215,41 @@ describe('customer portal contracts and quotes', () => {
     expect(res.body.status).toBe('accepted');
     expect((await db('quote_action_tokens').where({ token: quoteToken }).first()).used_at).not.toBeNull();
   });
+
+  it('accepts a quote that offers add-ons, with the admin\'s choice and the total shown', async () => {
+    // The portal has no add-on picker, so accepting means "as it stands":
+    // the quote's stored choice, confirmed against the total the page shows.
+    const withAddOns = await quoteRow(customerId, 'sent', 'Q-P-3');
+    await createPublicToken(db, 'quote_action_tokens', { quote_id: withAddOns });
+    await db('quote_line_items').insert([
+      {
+        quote_id: withAddOns, position: 1, quantity: 1, description: 'Wedding day',
+        unit_price_minor: 10000, line_total_minor: 10000, is_optional: false, selected: true,
+      },
+      {
+        quote_id: withAddOns, position: 2, quantity: 1, description: 'Album',
+        unit_price_minor: 3000, line_total_minor: 3000, is_optional: true, selected: false,
+      },
+    ]);
+
+    const detail = await get(`/api/customer/quotes/${withAddOns}`);
+    expect(detail.status).toBe(200);
+    const shown = detail.body.quote.totalAmountMinor;
+
+    // Without the total the server has nothing to check the choice against.
+    const unconfirmed = await post(`/api/customer/quotes/${withAddOns}/respond`).send({ action: 'accept' });
+    expect(unconfirmed.status).toBe(400);
+    expect(unconfirmed.body.code).toBe('TOTAL_REQUIRED');
+
+    const res = await post(`/api/customer/quotes/${withAddOns}/respond`)
+      .send({ action: 'accept', expectedTotalMinor: shown });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('accepted');
+    const stored = await db('quotes').where({ id: withAddOns }).first();
+    expect(stored.status).toBe('accepted');
+    expect(stored.selection_accepted_at).toBeTruthy();
+    // The album stays unbooked: the portal accepted what it displayed.
+    const album = await db('quote_line_items').where({ quote_id: withAddOns, position: 2 }).first();
+    expect([false, 0, '0', null]).toContain(album.selected);
+  });
 });

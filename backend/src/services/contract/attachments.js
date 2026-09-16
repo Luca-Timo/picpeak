@@ -113,6 +113,21 @@ async function storeAttachment(buffer, { name, description, originalName } = {},
   const label = String(name || originalName || '').trim().replace(/\.pdf$/i, '').slice(0, 255);
   if (!label) throw new AppError('An attachment needs a name', 400, 'ATTACHMENT_INVALID');
   const info = await validatePdf(buffer, { maxBytes: MAX_BYTES, maxPages: MAX_PAGES });
+  // What is stored is what was checked, not the upload: see pdfValidation.js.
+  const checked = info.normalised;
+
+  const storageKey = path.join(FOLDER, `${info.sha256}.pdf`);
+  const absolute = path.join(getStoragePath(), storageKey);
+  fs.mkdirSync(path.dirname(absolute), { recursive: true });
+  // Named by content: a file already at this name holds exactly these bytes.
+  // Written whenever it is absent, so re-uploading the same PDF repairs a
+  // row whose file is gone (a database-only restore, say) instead of
+  // returning a library entry that can't be downloaded or merged.
+  if (!fs.existsSync(absolute)) {
+    const temp = `${absolute}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(temp, checked);
+    fs.renameSync(temp, absolute);
+  }
 
   const existing = await db('document_attachments').where({ sha256: info.sha256 }).first();
   if (existing) {
@@ -120,16 +135,6 @@ async function storeAttachment(buffer, { name, description, originalName } = {},
       await db('document_attachments').where({ id: existing.id }).update({ is_active: true, updated_at: new Date() });
     }
     return { attachment: toApi({ ...existing, is_active: true }), existing: true };
-  }
-
-  const storageKey = path.join(FOLDER, `${info.sha256}.pdf`);
-  const absolute = path.join(getStoragePath(), storageKey);
-  fs.mkdirSync(path.dirname(absolute), { recursive: true });
-  // Named by content: a file already at this name holds exactly these bytes.
-  if (!fs.existsSync(absolute)) {
-    const temp = `${absolute}.${process.pid}.${Date.now()}.tmp`;
-    fs.writeFileSync(temp, buffer);
-    fs.renameSync(temp, absolute);
   }
 
   const now = new Date();

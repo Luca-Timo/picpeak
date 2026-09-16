@@ -24,12 +24,40 @@ const addAnnotation = (doc, action) => {
   page.node.set(PDFName.of('Annots'), doc.context.obj([annot]));
 };
 
+const crypto = require('crypto');
+
 test('a plain PDF passes and is described', async () => {
   const buffer = await makePdf({ pages: 3 });
   const info = await validatePdf(buffer);
   expect(info.pages).toBe(3);
-  expect(info.bytes).toBe(buffer.length);
-  expect(info.sha256).toMatch(/^[0-9a-f]{64}$/);
+  // bytes and sha256 describe the bytes the caller is meant to store: what
+  // was checked, not the upload.
+  expect(info.bytes).toBe(info.normalised.length);
+  expect(info.sha256).toBe(crypto.createHash('sha256').update(info.normalised).digest('hex'));
+});
+
+test('an object defined twice cannot smuggle an action past the scan', async () => {
+  // pdf-lib keeps the LAST definition of an object number; a viewer resolves
+  // through the xref table, which can point at the first. So the scan sees
+  // the harmless /GoTo while the file on disk would have offered the viewer
+  // /JavaScript. What is stored is what was checked, so the JavaScript
+  // object is not in it.
+  const body = [
+    '%PDF-1.4',
+    '1 0 obj <</Type/Catalog/Pages 2 0 R/OpenAction 5 0 R>> endobj',
+    '2 0 obj <</Type/Pages/Kids[3 0 R]/Count 1>> endobj',
+    '3 0 obj <</Type/Page/Parent 2 0 R/MediaBox[0 0 10 10]>> endobj',
+    '5 0 obj <</S/JavaScript/JS(app.alert\\(1\\))>> endobj',
+    '5 0 obj <</S/GoTo/D[3 0 R /Fit]>> endobj',
+    'trailer <</Size 6/Root 1 0 R>>',
+    '%%EOF',
+  ].join('\n');
+  const info = await validatePdf(Buffer.from(body, 'latin1'));
+  const stored = info.normalised.toString('latin1');
+  expect(stored).not.toContain('/JavaScript');
+  expect(stored).not.toContain('app.alert');
+  // And the stored file passes the scan on its own terms.
+  await expect(validatePdf(info.normalised)).resolves.toEqual(expect.objectContaining({ pages: 1 }));
 });
 
 test('a web link is not active content', async () => {

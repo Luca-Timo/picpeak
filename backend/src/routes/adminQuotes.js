@@ -136,7 +136,8 @@ function transformQuote(q) {
     // and whether the add-ons can still be changed here.
     customerMessage: q.customer_message || null,
     selectionChanges: parseSelectionChanges(q.selection_changes),
-    addOnsEditable: q.status === 'accepted' && !q.converted_event_id && !q.converted_contract_id,
+    addOnsEditable: q.status === 'accepted' && !q.converted_event_id && !q.converted_contract_id
+      && !q.has_source_invoice,
     // A reissue (#1451): the quote this one replaces, and the one that replaced it.
     replacesQuoteId: q.replaces_quote_id ?? null,
     replacesQuoteNumber: q.replaces_quote_number ?? null,

@@ -427,9 +427,16 @@ export const customerService = {
   async respondToQuote(
     id: number,
     action: 'accept' | 'decline',
-    options: { tosAccepted?: boolean } = {},
+    // `expectedTotalMinor` is the total the page showed. A quote that offers
+    // add-ons is accepted with its stored choice, and the server refuses a
+    // total that no longer matches.
+    options: { tosAccepted?: boolean; expectedTotalMinor?: number } = {},
   ): Promise<{ status: QuoteStatus; lockedAt: string }> {
-    const { data } = await api.post(`/customer/quotes/${id}/respond`, { action, tosAccepted: options.tosAccepted });
+    const { data } = await api.post(`/customer/quotes/${id}/respond`, {
+      action,
+      tosAccepted: options.tosAccepted,
+      ...(options.expectedTotalMinor == null ? {} : { expectedTotalMinor: options.expectedTotalMinor }),
+    });
     return data.data || data;
   },
 

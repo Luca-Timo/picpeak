@@ -17,6 +17,13 @@
  *
  * pdf-lib decompresses object streams on load, so the scan also sees
  * dictionaries that sit inside compressed streams.
+ *
+ * What is stored is what was checked: the caller writes the bytes pdf-lib
+ * wrote back (`normalised`), not the upload. A file can define the same
+ * object number twice — pdf-lib keeps the last definition, while a viewer
+ * resolves through the xref table, which can point at the first. Storing the
+ * re-serialised document drops everything the scan didn't see, so the two
+ * can't disagree.
  */
 
 const crypto = require('crypto');
@@ -97,7 +104,11 @@ function findActiveContent(pdf) {
  * PDF_TOO_LARGE, PDF_NOT_A_PDF, PDF_ENCRYPTED, PDF_MALFORMED,
  * PDF_ACTIVE_CONTENT, PDF_EMPTY, PDF_TOO_MANY_PAGES.
  *
- * @returns {Promise<{ pages: number, bytes: number, sha256: string }>}
+ * `normalised` is the document pdf-lib re-serialised from what this scan
+ * saw, and `bytes` / `sha256` describe those bytes: store them, never the
+ * upload.
+ *
+ * @returns {Promise<{ pages: number, bytes: number, sha256: string, normalised: Buffer }>}
  */
 async function validatePdf(buffer, { maxBytes = DEFAULT_MAX_BYTES, maxPages = DEFAULT_MAX_PAGES } = {}) {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) throw refuse('The file is empty', 'PDF_NOT_A_PDF');
@@ -126,10 +137,23 @@ async function validatePdf(buffer, { maxBytes = DEFAULT_MAX_BYTES, maxPages = DE
   if (pages === 0) throw refuse('The PDF has no pages', 'PDF_EMPTY');
   if (pages > maxPages) throw refuse(`The PDF has more than ${maxPages} pages`, 'PDF_TOO_MANY_PAGES');
 
+  // Only the objects this scan walked reach the stored file. Object streams
+  // stay off so a re-read of the stored file scans the same flat objects.
+  let normalised;
+  try {
+    normalised = Buffer.from(await pdf.save({ useObjectStreams: false }));
+  } catch (err) {
+    throw refuse('The PDF could not be read', 'PDF_MALFORMED');
+  }
+  if (normalised.length > maxBytes) {
+    throw refuse(`The PDF is larger than ${Math.round(maxBytes / (1024 * 1024))} MB`, 'PDF_TOO_LARGE');
+  }
+
   return {
     pages,
-    bytes: buffer.length,
-    sha256: crypto.createHash('sha256').update(buffer).digest('hex'),
+    bytes: normalised.length,
+    sha256: crypto.createHash('sha256').update(normalised).digest('hex'),
+    normalised,
   };
 }
 

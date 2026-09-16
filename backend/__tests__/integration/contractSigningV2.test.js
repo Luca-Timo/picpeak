@@ -61,7 +61,16 @@ async function lastMail(type, to) {
 }
 
 const linkToken = (mail) => mail.response_url.split('/').pop();
-const sign = (session, body) => request(signingApp).post('/api/public/contract-signing/session/sign')
+
+// The public signing routes rate-limit per client address, and this suite
+// asks for more codes and signatures than one address may in a minute.
+let ipCounter = 0;
+const nextIp = () => {
+  ipCounter += 1;
+  return `198.51.100.${ipCounter % 250}`;
+};
+const asSigner = (req) => req.set('X-Forwarded-For', nextIp());
+const sign = (session, body) => asSigner(request(signingApp).post('/api/public/contract-signing/session/sign'))
   .set('X-Signing-Session', session).send({ accepted: true, ...body });
 
 async function newContract() {
@@ -71,9 +80,9 @@ async function newContract() {
 
 /** Link → code → session, the way a signer gets in. */
 async function verifiedSession(linkTok, email) {
-  await ok(request(signingApp).post(`/api/public/contract-signing/invite/${linkTok}/code`));
+  await ok(asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${linkTok}/code`)));
   const { code } = await lastMail('contract_signing_code', email);
-  const verified = await ok(request(signingApp).post(`/api/public/contract-signing/invite/${linkTok}/verify`).send({ code }));
+  const verified = await ok(asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${linkTok}/verify`)).send({ code }));
   return verified.sessionToken;
 }
 
@@ -257,6 +266,113 @@ test('the portal opens a session for the signer with the customer\'s email', asy
   expect(contract.signing.verifiedVia).toBe('portal');
 
   await expect(signingV2.portalSigningAccess({ ...customer, id: customer.id + 999 }, id)).rejects.toThrow(/not found/i);
+});
+
+test('re-sending a signed v2 contract keeps the signed PDF it has', async () => {
+  // The legacy re-stamp builds its stamps from signed_customer_signature_path,
+  // which v2 never writes: it would replace the signed record with the
+  // unsigned PDF carrying the issuer image alone, and mail that to both
+  // parties. A v2 contract re-sends the stored file instead.
+  const contract = await db('contracts').where({ id: ids.contract }).first();
+  expect(contract.status).toBe('fully_signed');
+  const before = { path: contract.signed_pdf_path, sha: contract.signed_pdf_sha256 };
+  const bytes = fs.readFileSync(before.path);
+
+  const res = await request(contractsApp).post(`/api/admin/contracts/${ids.contract}/resend-signed`).set(auth);
+  expect(res.status).toBe(200);
+
+  const after = await db('contracts').where({ id: ids.contract }).first();
+  expect(after.signed_pdf_path).toBe(before.path);
+  expect(after.signed_pdf_sha256).toBe(before.sha);
+  expect(sha256(fs.readFileSync(after.signed_pdf_path))).toBe(before.sha);
+  expect(fs.readFileSync(after.signed_pdf_path).equals(bytes)).toBe(true);
+});
+
+test('a wet-signed upload is refused unless its bytes are a PDF and the signer is the only one', async () => {
+  const uploadDir = `${process.env.STORAGE_PATH}/uploads/contracts/signed`;
+  const count = () => (fs.existsSync(uploadDir) ? fs.readdirSync(uploadDir).length : 0);
+  const upload = (session, body, filename = 'signed.pdf') => request(signingApp)
+    .post('/api/public/contract-signing/session/upload-signed-pdf')
+    .set('X-Signing-Session', session)
+    .attach('file', body, { filename, contentType: 'application/pdf' });
+
+  // Two signers: one paper copy can't stand in for both, and accepting it
+  // would complete the contract for the other signer too.
+  const shared = await newContract();
+  await ok(request(contractsApp).put(`/api/admin/contracts/${shared}/signers`).set(auth).send({
+    order: 'parallel',
+    signers: [{ name: 'Anna Muster', email: customerEmail }, { name: 'Ben Muster', email: 'ben@example.com' }],
+  }));
+  await ok(request(contractsApp).post(`/api/admin/contracts/${shared}/send`).set(auth));
+  const sharedSession = await verifiedSession(linkToken(await lastMail('contract_sent', customerEmail)), customerEmail);
+  const before = count();
+  const many = await upload(sharedSession, Buffer.from('%PDF-1.4 signed'));
+  expect(many.status).toBe(409);
+  expect(many.body.code).toBe('MULTIPLE_SIGNERS');
+  expect((await db('contracts').where({ id: shared }).first()).status).toBe('sent');
+  // The session view doesn't offer the panel either.
+  const sharedView = await ok(request(signingApp).get('/api/public/contract-signing/session').set('X-Signing-Session', sharedSession));
+  expect(sharedView.contract.allowPdfUpload).toBe(false);
+
+  // One signer, but the bytes are a PNG: refused before it becomes the
+  // authoritative signed contract, and nothing is left on disk.
+  const single = await newContract();
+  await ok(request(contractsApp).post(`/api/admin/contracts/${single}/send`).set(auth));
+  const singleSession = await verifiedSession(linkToken(await lastMail('contract_sent', customerEmail)), customerEmail);
+  const notPdf = await upload(singleSession, Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]));
+  expect(notPdf.status).toBe(400);
+  expect(notPdf.body.code).toBe('INVALID_PDF');
+  expect((await db('contracts').where({ id: single }).first()).status).toBe('sent');
+  expect(count()).toBe(before);
+
+  // A real PDF from the only signer completes it.
+  const good = await upload(singleSession, Buffer.from('%PDF-1.4\n%%EOF\n'));
+  expect(good.status).toBe(200);
+  expect((await db('contracts').where({ id: single }).first()).status).toBe('fully_signed');
+});
+
+test('a held link stops requesting codes once the contract is no longer out for signature', async () => {
+  // A code request or a verification appends events past the chain head the
+  // issued certificate names.
+  const id = await newContract();
+  await ok(request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth));
+  const link = linkToken(await lastMail('contract_sent', customerEmail));
+  const session = await verifiedSession(link, customerEmail);
+  await ok(sign(session, { name: 'Anna Muster', mode: 'typed' }));
+  await ok(request(contractsApp).post(`/api/admin/contracts/${id}/countersign`).set(auth).send({ name: 'Studio Admin', mode: 'typed' }));
+  const sealed = await db('contracts').where({ id }).first();
+  const head = sealed.audit_chain_head;
+
+  const summary = await request(signingApp).get(`/api/public/contract-signing/invite/${link}`);
+  expect(summary.status).toBe(410);
+  const code = await asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/code`));
+  expect(code.status).toBe(410);
+  expect((await db('contracts').where({ id }).first()).audit_chain_head).toBe(head);
+});
+
+test('parallel wrong codes are still capped at five tries', async () => {
+  // Reading the attempt count and writing it back after the compare let every
+  // request see the same count, so a burst was not capped at all.
+  const id = await newContract();
+  await ok(request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth));
+  const link = linkToken(await lastMail('contract_sent', customerEmail));
+  await ok(asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/code`)));
+  const { code } = await lastMail('contract_signing_code', customerEmail);
+  const wrong = code === '000000' ? '111111' : '000000';
+
+  // Each guess from its own address, so the per-IP limiter doesn't stand in
+  // for the per-code cap this test is about.
+  const guesses = await Promise.all(Array.from({ length: 8 }, () => asSigner(request(signingApp)
+    .post(`/api/public/contract-signing/invite/${link}/verify`)).send({ code: wrong })));
+  expect(guesses.every((r) => [400, 429].includes(r.status))).toBe(true);
+  const row = await db('contract_signing_otps')
+    .where({ signer_id: (await db('contract_signers').where({ contract_id: id, role: 'customer' }).first()).id })
+    .orderBy('id', 'desc').first();
+  expect(Number(row.attempts)).toBeLessThanOrEqual(5);
+
+  // The code is spent, so the right one no longer opens a session.
+  const late = await asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/verify`)).send({ code });
+  expect(late.status).toBe(410);
 });
 
 test('signing sits behind the contracts flag', async () => {

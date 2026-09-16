@@ -654,7 +654,9 @@ async function attachSignedPdfUpload(contractId, filePath, uploaderRole) {
  * is preserved: when signed_pdf_path already points at an uploaded
  * file (not a re-render path) we DO NOT overwrite — the uploaded PDF
  * is the authoritative copy. We still resend the email with that
- * uploaded PDF as the attachment.
+ * uploaded PDF as the attachment. A signatures-v2 contract is never
+ * re-stamped either: its stored signed PDF already carries every
+ * signature, and the legacy stamp columns are empty.
  */
 async function rerenderAndResend(contractId, adminId) {
   // Self-heal contract email templates. This is the most likely
@@ -677,6 +679,20 @@ async function rerenderAndResend(contractId, adminId) {
     );
   }
 
+  // Signatures v2 stamps every slot from the signing record when the last
+  // signer completes, so there is nothing to re-stamp: the stored signed PDF
+  // is the authoritative document. The re-stamp branch below builds its
+  // stamps from `signed_customer_signature_path`, which v2 never writes, so
+  // it would replace the record with the unsigned PDF carrying the issuer
+  // image alone — and mail that to both parties. Re-send the stored file.
+  const isV2Contract = Number(contract.signing_version) === 2;
+  if (isV2Contract && !(contract.signed_pdf_path && fs.existsSync(contract.signed_pdf_path))) {
+    throw new AppError(
+      'The signed PDF for this contract is missing on disk, so there is nothing to re-send. Restore it from a backup before trying again.',
+      409, 'SIGNED_PDF_MISSING',
+    );
+  }
+
   let attachmentPath = contract.signed_pdf_path || null;
   // Migration 135 — `signed_pdf_is_wet_upload` is the durable
   // authoritative-source discriminator. It's set TRUE only by
@@ -690,7 +706,7 @@ async function rerenderAndResend(contractId, adminId) {
     // preserve the historical substring rule so we don't accidentally
     // overwrite uploads on an un-migrated DB.
     : !!(attachmentPath && attachmentPath.includes('uploads/contracts/signed'));
-  if (!attachmentPath || !isWetSignedUpload) {
+  if (!isV2Contract && (!attachmentPath || !isWetSignedUpload)) {
     // Stamp signatures onto the immutable unsigned pdf_path using
     // pdf-lib (NOT a full re-render). This preserves the exact bytes
     // the customer originally agreed to and side-steps the silent re-

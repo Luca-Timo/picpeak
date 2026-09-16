@@ -865,7 +865,13 @@ router.get('/contracts/:id', customerAuth, async (req, res) => {
     const view = await publicDocumentViews.buildContractView(contract.id);
     if (!view) return res.status(404).json({ error: CONTRACT.notFound });
     const liveTokens = await publicDocumentViews.liveContractTokens([contract.id]);
-    res.json({ contract: view, canSign: contract.status === 'sent' && liveTokens.has(contract.id) });
+    // Same rule as the list: a signatures-v2 contract signs through a signer
+    // session and has no action token to look for.
+    res.json({
+      contract: view,
+      canSign: contract.status === 'sent'
+        && (Number(contract.signing_version) === 2 || liveTokens.has(contract.id)),
+    });
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to load contract');
   }
@@ -958,6 +964,9 @@ router.post(
   [
     body('action').isIn(['accept', 'decline']),
     body('tosAccepted').optional().isBoolean(),
+    // The total the page showed. A quote offering add-ons is accepted with
+    // its stored choice, and the service refuses a stale total.
+    body('expectedTotalMinor').optional({ nullable: true }).isInt({ min: 0 }).toInt(),
   ],
   async (req, res) => {
     try {
@@ -974,6 +983,7 @@ router.post(
         action: req.body.action,
         ip: clientIpForAudit(req),
         tosAccepted: req.body.tosAccepted === true,
+        expectedTotalMinor: req.body.expectedTotalMinor,
       });
       res.json({ status: result.status, lockedAt: result.lockedAt });
     } catch (error) {

@@ -466,6 +466,10 @@ async function getQuoteById(id) {
     const next = await db('quotes').where({ replaces_quote_id: id }).orderBy('id', 'desc').first('id', 'quote_number');
     quote.replaced_by_quote_id = next ? next.id : null;
     quote.replaced_by_quote_number = next ? next.quote_number : null;
+    // Whether anything was invoiced from this quote — part of the same
+    // conversion lock the write paths use (assertQuoteNotConverted), so the
+    // detail view doesn't offer an add-on change the service will refuse.
+    quote.has_source_invoice = !!(await db('invoices').where({ source_quote_id: id }).first('id'));
     // Self-join so the response carries parent_position alongside
     // parent_line_item_id. The editor uses position (1-based, stable
     // within the payload) to thread sub-items; the DB id is just for
@@ -1281,6 +1285,16 @@ async function totalsForSelection(quote, lineItems, selectedPositions) {
   const { chosen, lines } = applyOptionalSelection(lineItems, selectedPositions);
   const roundTotal = (await getAppSetting('crm_invoice_round_total', false)) === true;
   const totals = computeTotals(lines, quote.vat_rate, quote.shipping_amount_minor, { roundTotal });
+  // Same rule as create and update: a quote is an offer, never a credit
+  // note. Removing an add-on shrinks the subtotal a manual negative line is
+  // taken from, so a choice the customer is free to make could otherwise
+  // store an accepted quote with a total below zero.
+  if (totals.totalAmountMinor < 0) {
+    throw new AppError(
+      'That choice would make the quote total negative. Please contact us instead.',
+      409, 'QUOTE_TOTAL_NEGATIVE',
+    );
+  }
   return { chosen, totals };
 }
 
@@ -1640,6 +1654,14 @@ async function recordResponse({ token, action, ip, tosAccepted, selectedOptional
   if (await db('quotes').where({ replaces_quote_id: quote.id }).first('id')) {
     throw new AppError('This quote was reissued; the new quote replaces it', 410, 'QUOTE_REPLACED');
   }
+  // Converting leaves the quote `accepted`, so without this an accepted
+  // quote could still be re-accepted with other add-ons inside the response
+  // window — changing the lines the contract's own line table reads. Only a
+  // second response is locked: a quote can carry a manual invoice before the
+  // customer has answered it at all.
+  if (quote.status === 'accepted') {
+    await assertQuoteNotConverted(quote, 'This quote already has a contract, event or invoice, so it can no longer be changed here.');
+  }
 
   // Terms of Service handling on accept:
   //   - Setting OFF: ignored.
@@ -1845,6 +1867,30 @@ async function adminAcceptQuote(id, adminId) {
 }
 
 /**
+ * Refuse a change to a quote that something was already made from. The
+ * contract's line table, the event and the invoices all read the quote's
+ * lines live, so a later change to its content would silently change theirs.
+ *
+ * One helper for every caller that changes a quote after acceptance — the
+ * admin's add-on change, the reissue, the admin decline and the customer's
+ * re-accept inside the response window — so the four can't drift apart. A
+ * manual invoice can carry `source_quote_id` without the quote ever reaching
+ * `converted`, which is why the invoice lookup is part of the rule.
+ *
+ * @param {object} quote the quotes row
+ * @param {string} [message] what the caller should say instead
+ */
+async function assertQuoteNotConverted(quote, message) {
+  const invoice = await db('invoices').where({ source_quote_id: quote.id }).first('id');
+  if (quote.status === 'converted' || quote.converted_contract_id || quote.converted_event_id || invoice) {
+    throw new AppError(
+      message || 'This quote already has a contract, event or invoice. Change the add-ons there.',
+      409, 'QUOTE_CONVERTED',
+    );
+  }
+}
+
+/**
  * Change the add-ons of an accepted quote (#1451) — e.g. after the customer
  * called — until a contract, event or invoice exists; from then on the change
  * belongs on that document. Recorded in the change history and the activity
@@ -1853,10 +1899,7 @@ async function adminAcceptQuote(id, adminId) {
 async function adminChangeAddOns(id, { selectedOptional }, adminId) {
   const quote = await db('quotes').where({ id }).first();
   if (!quote) throw new AppError('Quote not found', 404);
-  const invoice = await db('invoices').where({ source_quote_id: id }).first('id');
-  if (quote.status === 'converted' || quote.converted_contract_id || quote.converted_event_id || invoice) {
-    throw new AppError('This quote already has a contract, event or invoice. Change the add-ons there.', 409, 'QUOTE_CONVERTED');
-  }
+  await assertQuoteNotConverted(quote);
   if (quote.status !== 'accepted') {
     throw new AppError('Add-ons can be changed here once the quote is accepted. Before that, edit the quote.', 409, 'QUOTE_NOT_ACCEPTED');
   }
@@ -1906,9 +1949,7 @@ async function adminDeclineQuote(id, adminId, reason = null) {
   }
   // An accepted quote can be declined while nothing was made from it yet
   // (#1451): the customer withdrew, or it no longer applies.
-  if (quote.status === 'converted' || quote.converted_event_id || quote.converted_contract_id) {
-    throw new AppError('Quote already converted to an event/invoice', 409, 'QUOTE_CONVERTED');
-  }
+  await assertQuoteNotConverted(quote, 'Quote already converted to an event/invoice');
   assertQuoteTransition(quote.status, 'declined');
 
   const now = new Date();
@@ -1971,9 +2012,7 @@ async function reissueQuote(id, adminId, reason = null) {
   if (quote.status !== 'accepted') {
     throw new AppError('Only an accepted quote can be reissued', 409, 'QUOTE_NOT_ACCEPTED');
   }
-  if (quote.converted_event_id || quote.converted_contract_id) {
-    throw new AppError('A contract, event or invoice already exists for this quote', 409, 'QUOTE_CONVERTED');
-  }
+  await assertQuoteNotConverted(quote, 'A contract, event or invoice already exists for this quote');
   assertQuoteTransition(quote.status, 'declined');
 
   const now = new Date();
@@ -1983,7 +2022,14 @@ async function reissueQuote(id, adminId, reason = null) {
   await db.transaction(async (trx) => {
     const updates = { status: 'declined', response_locked_at: now, declined_at: now, updated_at: now };
     if (hasReasonColumn) updates.decline_reason = cleanReason;
-    await trx('quotes').where({ id }).update(updates);
+    // Only the request that takes the quote out of `accepted` reissues it.
+    // The status check above runs outside the transaction, so two clicks
+    // both passed it and each made a replacement draft; the unique index on
+    // replaces_quote_id (migration 219) is the second line of defence.
+    const claimed = await trx('quotes').where({ id, status: 'accepted' }).update(updates);
+    if (!claimed) {
+      throw new AppError('This quote is no longer accepted, so it can\'t be reissued', 409, 'QUOTE_NOT_ACCEPTED');
+    }
     await trx('quote_action_tokens')
       .where({ quote_id: id })
       .whereNull('used_at')
