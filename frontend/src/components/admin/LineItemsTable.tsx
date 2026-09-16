@@ -552,7 +552,7 @@ export const LineItemsTable: React.FC<Props> = ({
                       <button
                         type="button"
                         onClick={() => toggleDetails(li.position)}
-                        className="mt-1 inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+                        className="mt-1 inline-flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300"
                       >
                         {open
                           ? <ChevronDown className="w-3.5 h-3.5" aria-hidden />
@@ -687,7 +687,7 @@ export const LineItemsTable: React.FC<Props> = ({
                       <button
                         type="button"
                         onClick={() => toggleDetails(li.position)}
-                        className={`mt-1 inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 ${dim}`}
+                        className={`mt-1 inline-flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 ${dim}`}
                       >
                         {open
                           ? <ChevronDown className="w-3.5 h-3.5" aria-hidden />

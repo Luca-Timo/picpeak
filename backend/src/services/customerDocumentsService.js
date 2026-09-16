@@ -302,6 +302,8 @@ async function getForAdmin(customerId, documentId) {
 
 /** Pending / rejected counts for System Health. */
 async function getReviewCounts() {
+  // System Health is opened during upgrades too, before migration 220 ran.
+  if (!(await db.schema.hasTable('customer_documents'))) return { pending: 0, rejected: 0 };
   const rows = await db('customer_documents')
     .whereNull('deleted_at')
     .whereIn('status', ['pending', 'rejected'])

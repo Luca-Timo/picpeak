@@ -565,8 +565,10 @@ async function createQuoteFromTemplate(templateId, payload, adminId) {
     }
   }
 
+  // Local date parts: toISOString() gives the previous day east of UTC, which
+  // would close the customer's window a day early (quoteCatalogService.dateOnly).
   const validUntil = snapshot.validityDays
-    ? new Date(Date.now() + snapshot.validityDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    ? quoteCatalogService.dateOnly(new Date(Date.now() + snapshot.validityDays * 24 * 60 * 60 * 1000))
     : undefined;
 
   const quoteId = await quoteService().createQuote({

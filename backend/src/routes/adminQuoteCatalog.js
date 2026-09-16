@@ -35,11 +35,11 @@ const router = express.Router();
 router.use(adminAuth);
 router.use(requireFeatureFlag('quotes', 'QUOTES_DISABLED'));
 // The example entries (archived, editable) are added the first time the
-// catalogue is opened; once per install.
-router.use((req, res, next) => {
-  if (req.method !== 'GET') return next();
-  return require('../services/quoteCatalogExamples').ensureCatalogExamples().then(() => next(), next);
-});
+// catalogue is read; once per install. It runs after the permission check on
+// each list route, so an admin who may not read the catalogue can't seed it.
+const seedExamples = (req, res, next) => (
+  require('../services/quoteCatalogExamples').ensureCatalogExamples().then(() => next(), next)
+);
 
 // ---------------------------------------------------------------------
 // Transforms (snake_case DB → camelCase API)
@@ -159,6 +159,7 @@ function packagePayload(reqBody) {
 router.get(
   '/packages',
   requirePermission('quotes.view'),
+  seedExamples,
   [activeOnlyQuery],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -240,6 +241,7 @@ function promotionPayload(reqBody) {
 router.get(
   '/promotions',
   requirePermission('quotes.view'),
+  seedExamples,
   [activeOnlyQuery],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -313,6 +315,7 @@ function textBlockPayload(reqBody) {
 router.get(
   '/text-blocks',
   requirePermission('quotes.view'),
+  seedExamples,
   [
     activeOnlyQuery,
     query('kind').optional().isIn(catalog.TEXT_BLOCK_KINDS),
@@ -399,6 +402,7 @@ function templatePayload(reqBody) {
 router.get(
   '/templates',
   requirePermission('quotes.view'),
+  seedExamples,
   // Admin pages list drafts and archived templates too; the "new quote"
   // picker asks for published ones only.
   [query('publishedOnly').optional().isIn(['true', 'false'])],

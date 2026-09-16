@@ -102,7 +102,7 @@ const CRM_EMAIL_TEMPLATES = {
   // an accepted quote; the updated quote PDF is attached.
   quote_addons_updated: {
     category: 'quotes', feature_flag: 'quotes',
-    variables: ['quote_number', 'customer_name', 'event_name', 'total_amount', 'booked_list', 'removed_list'],
+    variables: ['quote_number', 'customer_name', 'event_name', 'total_amount', 'booked_list', 'removed_list', 'has_pdf'],
     en: {
       subject: 'Your quote {{quote_number}} has been updated',
       body_html: `<h2>Quote {{quote_number}} updated</h2>
@@ -110,8 +110,8 @@ const CRM_EMAIL_TEMPLATES = {
 <p>we have updated the add-ons of your accepted quote {{quote_number}}{{#if event_name}} for "{{event_name}}"{{/if}}.</p>
 {{#if booked_list}}<p>Now booked: {{booked_list}}</p>{{/if}}
 {{#if removed_list}}<p>No longer booked: {{removed_list}}</p>{{/if}}
-<p>New total: <strong>{{total_amount}}</strong>. The updated quote is attached.</p>`,
-      body_text: 'Quote {{quote_number}} updated\n\nDear {{customer_name}},\n\nwe have updated the add-ons of your accepted quote {{quote_number}}.\n{{#if booked_list}}Now booked: {{booked_list}}\n{{/if}}{{#if removed_list}}No longer booked: {{removed_list}}\n{{/if}}\nNew total: {{total_amount}}. The updated quote is attached.',
+<p>New total: <strong>{{total_amount}}</strong>.{{#if has_pdf}} The updated quote is attached.{{/if}}</p>`,
+      body_text: 'Quote {{quote_number}} updated\n\nDear {{customer_name}},\n\nwe have updated the add-ons of your accepted quote {{quote_number}}.\n{{#if booked_list}}Now booked: {{booked_list}}\n{{/if}}{{#if removed_list}}No longer booked: {{removed_list}}\n{{/if}}\nNew total: {{total_amount}}.{{#if has_pdf}} The updated quote is attached.{{/if}}',
     },
     de: {
       subject: 'Ihr Angebot {{quote_number}} wurde angepasst',
@@ -120,8 +120,8 @@ const CRM_EMAIL_TEMPLATES = {
 <p>wir haben die Zusatzleistungen Ihres angenommenen Angebots {{quote_number}}{{#if event_name}} für "{{event_name}}"{{/if}} angepasst.</p>
 {{#if booked_list}}<p>Neu gebucht: {{booked_list}}</p>{{/if}}
 {{#if removed_list}}<p>Nicht mehr gebucht: {{removed_list}}</p>{{/if}}
-<p>Neuer Gesamtbetrag: <strong>{{total_amount}}</strong>. Das angepasste Angebot finden Sie im Anhang.</p>`,
-      body_text: 'Angebot {{quote_number}} angepasst\n\nSehr geehrte/r {{customer_name}},\n\nwir haben die Zusatzleistungen Ihres angenommenen Angebots {{quote_number}} angepasst.\n{{#if booked_list}}Neu gebucht: {{booked_list}}\n{{/if}}{{#if removed_list}}Nicht mehr gebucht: {{removed_list}}\n{{/if}}\nNeuer Gesamtbetrag: {{total_amount}}. Das angepasste Angebot finden Sie im Anhang.',
+<p>Neuer Gesamtbetrag: <strong>{{total_amount}}</strong>.{{#if has_pdf}} Das angepasste Angebot finden Sie im Anhang.{{/if}}</p>`,
+      body_text: 'Angebot {{quote_number}} angepasst\n\nSehr geehrte/r {{customer_name}},\n\nwir haben die Zusatzleistungen Ihres angenommenen Angebots {{quote_number}} angepasst.\n{{#if booked_list}}Neu gebucht: {{booked_list}}\n{{/if}}{{#if removed_list}}Nicht mehr gebucht: {{removed_list}}\n{{/if}}\nNeuer Gesamtbetrag: {{total_amount}}.{{#if has_pdf}} Das angepasste Angebot finden Sie im Anhang.{{/if}}',
     },
   },
   invoice_sent: {
@@ -522,6 +522,30 @@ let _seeded = false;
 // its previous default is brought up to date; one an admin has edited is left
 // as it is (the new variables are available to add).
 const PREVIOUS_DEFAULTS = {
+  // The attachment sentence was unconditional; an install that stored the
+  // first version gets the conditional one as long as nobody edited it.
+  'quote_addons_updated': {
+    'en': {
+      'subject': 'Your quote {{quote_number}} has been updated',
+      'body_html': `<h2>Quote {{quote_number}} updated</h2>
+<p>Dear {{customer_name}},</p>
+<p>we have updated the add-ons of your accepted quote {{quote_number}}{{#if event_name}} for "{{event_name}}"{{/if}}.</p>
+{{#if booked_list}}<p>Now booked: {{booked_list}}</p>{{/if}}
+{{#if removed_list}}<p>No longer booked: {{removed_list}}</p>{{/if}}
+<p>New total: <strong>{{total_amount}}</strong>. The updated quote is attached.</p>`,
+      'body_text': 'Quote {{quote_number}} updated\n\nDear {{customer_name}},\n\nwe have updated the add-ons of your accepted quote {{quote_number}}.\n{{#if booked_list}}Now booked: {{booked_list}}\n{{/if}}{{#if removed_list}}No longer booked: {{removed_list}}\n{{/if}}\nNew total: {{total_amount}}. The updated quote is attached.'
+    },
+    'de': {
+      'subject': 'Ihr Angebot {{quote_number}} wurde angepasst',
+      'body_html': `<h2>Angebot {{quote_number}} angepasst</h2>
+<p>Sehr geehrte/r {{customer_name}},</p>
+<p>wir haben die Zusatzleistungen Ihres angenommenen Angebots {{quote_number}}{{#if event_name}} für "{{event_name}}"{{/if}} angepasst.</p>
+{{#if booked_list}}<p>Neu gebucht: {{booked_list}}</p>{{/if}}
+{{#if removed_list}}<p>Nicht mehr gebucht: {{removed_list}}</p>{{/if}}
+<p>Neuer Gesamtbetrag: <strong>{{total_amount}}</strong>. Das angepasste Angebot finden Sie im Anhang.</p>`,
+      'body_text': 'Angebot {{quote_number}} angepasst\n\nSehr geehrte/r {{customer_name}},\n\nwir haben die Zusatzleistungen Ihres angenommenen Angebots {{quote_number}} angepasst.\n{{#if booked_list}}Neu gebucht: {{booked_list}}\n{{/if}}{{#if removed_list}}Nicht mehr gebucht: {{removed_list}}\n{{/if}}\nNeuer Gesamtbetrag: {{total_amount}}. Das angepasste Angebot finden Sie im Anhang.'
+    }
+  },
   'quote_sent': {
     'en': {
       'subject': 'Your quote {{quote_number}} is ready',

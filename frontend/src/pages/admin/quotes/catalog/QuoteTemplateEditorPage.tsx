@@ -22,6 +22,7 @@ import {
 import { eventTypesService } from '../../../../services/eventTypes.service';
 import { workflowsService } from '../../../../services/workflows.service';
 import { useFeatureFlags } from '../../../../contexts/FeatureFlagsContext';
+import { usePermissions } from '../../../../contexts/PermissionsContext';
 import { useLocalizedDate } from '../../../../hooks/useLocalizedDate';
 import type { BoundTo, LineUnit } from '../../../../utils/lineItemTotals';
 
@@ -86,6 +87,10 @@ export const QuoteTemplateEditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const templateId = parseInt(id || '0', 10);
   const { flags } = useFeatureFlags();
+  const { hasPermission, isSuperAdmin } = usePermissions();
+  // GET /admin/workflows checks workflows.view: without it the query is a
+  // guaranteed 403 and the picker would render empty with no explanation.
+  const canSeeWorkflows = !!flags.workflows && (isSuperAdmin || hasPermission('workflows.view'));
   const { formatDateTime } = useLocalizedDate();
 
   const { data, isLoading } = useQuery({
@@ -109,7 +114,7 @@ export const QuoteTemplateEditorPage: React.FC = () => {
   const { data: eventTypes = [] } = useQuery({ queryKey: ['event-types-active'], queryFn: () => eventTypesService.getActiveEventTypes() });
   const { data: netDays } = useQuery({ queryKey: ['payment-net-days-templates'], queryFn: () => quotesService.listPaymentNetDaysTemplates() });
   const { data: timing } = useQuery({ queryKey: ['payment-timing-templates'], queryFn: () => quotesService.listPaymentTimingTemplates() });
-  const { data: workflows = [] } = useQuery({ queryKey: ['workflows'], queryFn: () => workflowsService.list(), enabled: !!flags.workflows });
+  const { data: workflows = [] } = useQuery({ queryKey: ['workflows'], queryFn: () => workflowsService.list(), enabled: canSeeWorkflows });
   const bookingWorkflows = useMemo(() => workflows.filter((w) => w.trigger_type === 'quote.accepted'), [workflows]);
   const presets = presetData?.presets || [];
 
@@ -459,7 +464,7 @@ export const QuoteTemplateEditorPage: React.FC = () => {
               {timing?.templates.map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.name}</option>)}
             </select>
           </div>
-          {flags.workflows && (
+          {canSeeWorkflows && (
             <div>
               <label htmlFor="template-workflow" className={labelCls}>{t('quotes.field.bookingWorkflow', 'Booking workflow (on acceptance)')}</label>
               <select id="template-workflow" className={selectCls} value={draft.bookingWorkflowId ?? ''}

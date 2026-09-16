@@ -465,7 +465,7 @@ export const ContractEditorPage: React.FC = () => {
         return (
           <p className="mt-1">
             {view.code === 'PROJECT_CUSTOMER_MISMATCH'
-              ? t('projects.error.customerMismatch', 'That project belongs to a different customer than this entry.')
+              ? t('projects.error.customerMismatch', 'That belongs to a different customer than this project.')
               : (view.message || t('contracts.editor.saveError', 'Save failed'))}
           </p>
         );

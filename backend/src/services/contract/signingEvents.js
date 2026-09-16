@@ -120,7 +120,7 @@ async function verifyChain(contractId, conn = db) {
     prev = event.eventHash;
   }
   const contract = await conn('contracts').where({ id: contractId }).first('audit_chain_head');
-  if (events.length && contract && contract.audit_chain_head && contract.audit_chain_head !== prev) {
+  if (events.length && contract && contract.audit_chain_head !== prev) {
     return { ok: false, count: events.length, head: prev, brokenAt: events.length, reason: 'head_mismatch' };
   }
   return { ok: true, count: events.length, head: events.length ? prev : null, brokenAt: null, reason: null };

@@ -20,6 +20,7 @@ const express = require('express');
 const { query } = require('express-validator');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
+const { isFeatureEnabled } = require('../middleware/requireFeatureFlag');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const { verifyDocumentArtefacts } = require('../services/backupIntegrityService');
 const { getCoverageReport } = require('../services/backupCoverageService');
@@ -234,7 +235,12 @@ router.get(
     // Customer documents waiting for a review, or rejected (#1444). Uploads
     // stay pending until an admin marks them clean, so a growing pending
     // count is the thing to notice here.
-    const customerDocuments = await require('../services/customerDocumentsService').getReviewCounts();
+    // The counts belong to the documents feature: with it off, no route
+    // answers for it, this one included. Ops admins (settings.view /
+    // system.view) see the aggregate, as they do for the rest of this page.
+    const customerDocuments = await isFeatureEnabled('documents')
+      ? await require('../services/customerDocumentsService').getReviewCounts()
+      : null;
     // Where the key for signing evidence comes from (#1446): the env var, the
     // file in business-docs (backed up), or not created yet. Never the key.
     const evidenceKey = require('../utils/fieldEncryption').keyStatus();

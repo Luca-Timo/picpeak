@@ -173,6 +173,20 @@ async function createInvitation(trx, signerId, expiresAt) {
   return token;
 }
 
+/**
+ * Undo an invitation whose email never went out: the link is revoked and the
+ * signer goes back to `pending`, so the next send — or the admin's resend —
+ * reaches them instead of leaving a signer nobody can invite again.
+ */
+async function undoInvitation(signerId) {
+  const now = new Date();
+  await db.transaction(async (trx) => {
+    await trx('contract_signer_invitations').where({ signer_id: signerId }).whereNull('revoked_at').update({ revoked_at: now });
+    await trx('contract_signers').where({ id: signerId, status: 'invited' })
+      .update({ status: 'pending', invited_at: null, updated_at: now });
+  });
+}
+
 async function revokeAccess(trx, contractId) {
   const now = new Date();
   const ids = (await trx('contract_signers').where({ contract_id: contractId }).select('id')).map((r) => r.id);
@@ -304,6 +318,7 @@ module.exports = {
   ensureSigners,
   signersDue,
   createInvitation,
+  undoInvitation,
   revokeAccess,
   findInvitation,
   issueOtp,

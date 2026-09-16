@@ -1506,6 +1506,8 @@ async function emailAddOnChange(quoteId, change) {
       total_amount: formatMajor(quote.total_amount_minor, quote.currency, quote.language || 'de', (profile && profile.country_code) || null),
       booked_list: change.booked.join(', '),
       removed_list: change.removed.join(', '),
+      // Storing the PDF is best effort; only claim it when it is there.
+      has_pdf: Boolean(quote.pdf_path),
       cc: quote.cc_pdf_email || undefined,
       attachments: quote.pdf_path ? [{
         filename: `${quote.quote_number}.pdf`,

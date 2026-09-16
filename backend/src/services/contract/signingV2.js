@@ -232,7 +232,15 @@ async function inviteDue(contractId, actor = { type: 'system' }) {
       });
       return created;
     });
-    await sendInvitation(contract, row, token);
+    // The invitation is committed before the mail goes out; undo it when the
+    // send fails, or the signer sits at `invited` with a link nobody received
+    // and every later inviteDue skips them.
+    try {
+      await sendInvitation(contract, row, token);
+    } catch (err) {
+      await signers.undoInvitation(row.id);
+      throw err;
+    }
   }
   return due.length;
 }
@@ -284,7 +292,12 @@ async function resendInvitation(contractId, signerId, adminId) {
     });
     return created;
   });
-  await sendInvitation(contract, row, token);
+  try {
+    await sendInvitation(contract, row, token);
+  } catch (err) {
+    await signers.undoInvitation(row.id);
+    throw err;
+  }
   return { resent: true };
 }
 
@@ -428,8 +441,9 @@ async function sign(sessionToken, input, { ip = null, userAgent = null } = {}) {
   const via = session.verified_via;
   let written = null;
 
+  let outcome;
   try {
-    const outcome = await db.transaction(async (trx) => {
+    outcome = await db.transaction(async (trx) => {
       const current = await trx('contracts').where({ id: contract.id }).forUpdate().first();
       const row = await trx('contract_signers').where({ id: signer.id }).first();
       if (current.status !== 'sent') {
@@ -496,7 +510,17 @@ async function sign(sessionToken, input, { ip = null, userAgent = null } = {}) {
       });
       return { customersDone };
     });
+  } catch (err) {
+    // Nothing committed, so the files this attempt wrote are orphans.
+    removeQuietly(signaturePath);
+    removeQuietly(written);
+    throw err;
+  }
 
+  // Committed: contract_signers.signature_path and contracts.signed_pdf_path
+  // point at those files now, so nothing below may delete them — a failed
+  // notice would otherwise take the signature and the signed PDF with it.
+  try {
     if (outcome.customersDone) {
       await notifyAdmin('contract_signed_admin_notification', {
         contract_number: contract.contract_number,
@@ -507,13 +531,13 @@ async function sign(sessionToken, input, { ip = null, userAgent = null } = {}) {
     } else {
       await inviteDue(contract.id);
     }
-    await bestEffortLog('contract_signed_by_customer', { contractId: contract.id, signerId: signer.id }, customerPublicActor());
-    return { status: outcome.customersDone ? 'signed_by_customer' : 'sent', signedAt };
   } catch (err) {
-    removeQuietly(signaturePath);
-    removeQuietly(written);
-    throw err;
+    logger.error('Signed, but the notice or the next invitation failed', {
+      contractId: contract.id, message: err.message,
+    });
   }
+  await bestEffortLog('contract_signed_by_customer', { contractId: contract.id, signerId: signer.id }, customerPublicActor());
+  return { status: outcome.customersDone ? 'signed_by_customer' : 'sent', signedAt };
 }
 
 async function decline(sessionToken, { reason } = {}) {
@@ -580,8 +604,9 @@ async function countersign(contractId, input, { ip = null, userAgent = null, adm
   const signedAt = new Date();
   let written = null;
 
+  let finalSha;
   try {
-    const finalSha = await db.transaction(async (trx) => {
+    finalSha = await db.transaction(async (trx) => {
       const current = await trx('contracts').where({ id: contractId }).forUpdate().first();
       if (current.status !== 'signed_by_customer') {
         throw new AppError('Every customer has to sign before you counter-sign.', 409, 'CUSTOMERS_PENDING');
@@ -652,17 +677,24 @@ async function countersign(contractId, input, { ip = null, userAgent = null, adm
       });
       return stored.sha256;
     });
-
-    const certificatePath = await issueCertificate(contractId, finalSha);
-    await sendCompletedEmails(contractId, certificatePath);
-    await bestEffortLog('contract_fully_signed', { contractId }, actor);
-    await emitContractEvent(contract, 'signed');
-    return { status: 'fully_signed', signedAt };
   } catch (err) {
+    // Nothing committed, so the files this attempt wrote are orphans.
     removeQuietly(signaturePath);
     removeQuietly(written);
     throw err;
   }
+
+  // Sealed: the contract row points at the signed PDF and the admin's
+  // signature, so nothing below may delete them.
+  try {
+    const certificatePath = await issueCertificate(contractId, finalSha);
+    await sendCompletedEmails(contractId, certificatePath);
+    await emitContractEvent(contract, 'signed');
+  } catch (err) {
+    logger.error('Sealed, but a follow-up step failed', { contractId, message: err.message });
+  }
+  await bestEffortLog('contract_fully_signed', { contractId }, actor);
+  return { status: 'fully_signed', signedAt };
 }
 
 /** The signing certificate, stored with its record. Returns its path (null on failure). */
@@ -757,8 +789,11 @@ async function portalSigningAccess(customer, contractId) {
     });
     return { mode: 'link', token };
   }
-  if (['cancelled', 'declined'].includes(contract.status)) {
-    throw new AppError('This contract is no longer open', 409, 'CONTRACT_NOT_SIGNABLE');
+  // Only a contract still out for signature opens a session. A sealed one
+  // would append a `verified` event and move the audit chain past the head
+  // its already-issued certificate prints.
+  if (contract.status !== 'sent') {
+    throw new AppError('This contract is no longer waiting for your signature', 409, 'CONTRACT_NOT_SIGNABLE');
   }
   const emailHash = fieldEncryption.hashEmail(customer.email);
   const row = (await signers.listSigners(contract.id)).find((r) => r.role === 'customer' && r.email_hash === emailHash);

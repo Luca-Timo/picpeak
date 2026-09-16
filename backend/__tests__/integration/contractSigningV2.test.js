@@ -266,3 +266,29 @@ test('signing sits behind the contracts flag', async () => {
   expect(res.body.code).toBe('CONTRACTS_DISABLED');
   await setFlag('contracts', true);
 });
+
+test('an invitation whose email fails leaves the signer invitable', async () => {
+  // The invitation commits before the mail goes out. When the send fails the
+  // signer has to go back to `pending`: left at `invited` with a link nobody
+  // received, every later invite skips them and nobody can sign at all.
+  const id = await newContract();
+  const emailProcessor = require('../../src/services/emailProcessor');
+  const real = emailProcessor.queueEmail;
+  const queue = jest.spyOn(emailProcessor, 'queueEmail').mockImplementation((...args) => (
+    args[2] === 'contract_sent' ? Promise.reject(new Error('smtp down')) : real(...args)
+  ));
+  const res = await request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth);
+  queue.mockRestore();
+  expect(res.status).toBeGreaterThanOrEqual(400);
+
+  const rows = await db('contract_signers').where({ contract_id: id }).orderBy('position');
+  expect(rows.map((r) => r.status)).toEqual(['pending', 'pending']);
+  const invitations = await db('contract_signer_invitations').whereIn('signer_id', rows.map((r) => r.id));
+  expect(invitations.length).toBeGreaterThan(0);
+  expect(invitations.every((row) => row.revoked_at)).toBeTruthy();
+
+  // …so the admin's resend reaches them.
+  const resent = await request(contractsApp).post(`/api/admin/contracts/${id}/signers/${rows[0].id}/resend`).set(auth);
+  expect(resent.status).toBe(200);
+  expect((await db('contract_signers').where({ id: rows[0].id }).first()).status).toBe('invited');
+});
