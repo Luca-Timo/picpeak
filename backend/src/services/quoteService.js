@@ -1996,7 +1996,12 @@ async function adminDeclineQuote(id, adminId, reason = null) {
     // A declined acceptance stays on record; anything else never had one.
     if (quote.status !== 'accepted') updates.accepted_at = null;
     if (hasReasonColumn) updates.decline_reason = cleanReason;
-    await trx('quotes').where({ id }).update(updates);
+    // Conditional on the status this call read, like the reissue: two
+    // requests that both passed the checks above must not both write.
+    const declined = await trx('quotes').where({ id, status: quote.status }).update(updates);
+    if (!declined) {
+      throw new AppError('This quote changed while it was being declined. Reload and try again.', 409, 'QUOTE_CONFLICT');
+    }
 
     // Burn any unused tokens for this quote — defense in depth alongside
     // the closed response window above.

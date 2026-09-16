@@ -100,6 +100,15 @@ function sanitizeSigners(list) {
  */
 const stamp = (date = new Date()) => date.toISOString();
 
+// Times are compared here rather than in SQL: SQLite keeps the dates knex
+// writes in more than one form, so a SQL comparison can misread a fresh row.
+// A value that isn't a date at all counts as past, so a row written in a
+// shape this process can't read is expired rather than valid forever.
+const isPast = (value) => {
+  const time = new Date(value).getTime();
+  return !Number.isFinite(time) || time <= Date.now();
+};
+
 async function insertSigners(trx, contract, customers, issuerName) {
   const now = stamp();
   const rows = customers.map((signer, index) => ({
@@ -144,7 +153,12 @@ async function setSigners(contractId, { signers, order }) {
   await db.transaction(async (trx) => {
     await trx('contract_signers').where({ contract_id: contractId }).del();
     await insertSigners(trx, contract, customers, await issuerName(trx));
-    if (order) await trx('contracts').where({ id: contractId }).update({ signing_order: order, updated_at: stamp() });
+    // Conditional on the status read above: a send landing in between would
+    // otherwise have its signing order changed underneath it.
+    if (order) {
+      await trx('contracts').where({ id: contractId, status: 'draft' })
+        .update({ signing_order: order, updated_at: stamp() });
+    }
   });
   return listSigners(contractId);
 }
@@ -236,7 +250,7 @@ async function findInvitation(token) {
   const invitation = await db('contract_signer_invitations').where({ token_hash: sha256(token) }).first();
   if (!invitation) throw new AppError('Signing link not found', 404, 'SIGNING_LINK_INVALID');
   if (invitation.revoked_at) throw new AppError('This signing link has been replaced or withdrawn', 410, 'SIGNING_LINK_REVOKED');
-  if (invitation.expires_at && new Date(invitation.expires_at).getTime() < Date.now()) {
+  if (invitation.expires_at && isPast(invitation.expires_at)) {
     throw new AppError('This signing link has expired', 410, 'SIGNING_LINK_EXPIRED');
   }
   return { invitation, ...(await loadSignerContext(invitation.signer_id)) };
@@ -252,14 +266,6 @@ async function otpTtlMinutes() {
 }
 
 /** A new code for the signer; earlier unused codes stop working. */
-// Times are compared here rather than in SQL: SQLite keeps the dates knex
-// writes in more than one form, so a SQL comparison can misread a fresh row.
-// A value that isn't a date at all counts as past, so a row written in a
-// shape this process can't read is expired rather than valid forever.
-const isPast = (value) => {
-  const time = new Date(value).getTime();
-  return !Number.isFinite(time) || time <= Date.now();
-};
 
 async function issueOtp(signerId) {
   const hourAgo = Date.now() - 60 * 60 * 1000;
