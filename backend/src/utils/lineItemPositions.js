@@ -1,46 +1,52 @@
 /**
- * Line-item display order, shared by the quote and invoice editors (#1452).
+ * Line-item display order, shared by the quote and invoice editors.
  *
- * `LineItemsTable` in the frontend treats `position` as a stable row
- * identifier: its header promises "once assigned at row creation we never
- * renumber it", and `move()` only reorders the array. Both editors therefore
- * post each row's original `position` back on save, the service stores it
- * verbatim, and the detail endpoints read the items back
- * `ORDER BY position` — which is how a reorder could look right in the editor
- * and come back in the original order after a reload.
+ * `LineItemsTable` treats `position` as a stable row id and only reorders the
+ * array, so the payload's array order is the order the user arranged: store
+ * that order by renumbering `position` 1..n and rewriting every
+ * `parent_position` through the same old -> new map, so a moved parent keeps
+ * its sub-items.
  *
- * The payload's array order is the order the user arranged, so that is the
- * order that gets stored: `position` is renumbered 1..n, and every
- * `parent_position` is rewritten through the same old -> new map so a moved
- * parent keeps its sub-items attached.
+ * Renumbering happens only when the payload's own numbers are unambiguous.
+ * Duplicate positions, or a `parent_position` naming a position the payload
+ * doesn't contain, come back untouched so `validateLineItemHierarchy` still
+ * rejects them instead of this helper attaching a sub-item to whichever row
+ * ends up on that number.
  *
- * A `parent_position` that names a position absent from the payload is left
- * untouched, so the service's `validateLineItemHierarchy` still reports it as
- * a missing parent instead of this helper silently re-parenting the row onto
- * whatever item happens to end up on that number.
- *
- * @param {Array<object>} items line items in display order, carrying
- *   `position` and optionally `parent_position`
+ * @param {Array<object>} items line items in display order
  * @returns {Array<object>} new items, `position` 1..n and `parent_position`
- *   remapped; the input array is not mutated
+ *   remapped; unambiguous input only, and the input array is never mutated
  */
+const { ensureInt } = require('./numericHelpers');
+
+/** A row without a position takes the one its array order implies. */
+const positionsOf = (items) => items.map((item, index) => (
+  item.position == null || item.position === '' ? index + 1 : ensureInt(item.position)
+));
+
+const parentOf = (item) => (
+  item.parent_position == null || item.parent_position === '' ? null : ensureInt(item.parent_position)
+);
+
 function renumberLineItemPositions(items) {
   if (!Array.isArray(items)) return items;
 
-  const renumberedByOldPosition = new Map();
-  items.forEach((item, index) => {
-    renumberedByOldPosition.set(Number(item.position), index + 1);
-  });
+  // ensureInt everywhere, so the helper and validateLineItemHierarchy read
+  // the same numbers out of a payload.
+  const oldPositions = positionsOf(items);
+  const unambiguous = new Set(oldPositions).size === oldPositions.length
+    && items.every((item) => {
+      const parent = parentOf(item);
+      return parent == null || oldPositions.includes(parent);
+    });
+  if (!unambiguous) return items;
 
-  return items.map((item, index) => {
-    const parentPosition = item.parent_position == null || item.parent_position === ''
-      ? null
-      : Number(item.parent_position);
-    const renumberedParent = parentPosition == null || !renumberedByOldPosition.has(parentPosition)
-      ? parentPosition
-      : renumberedByOldPosition.get(parentPosition);
-    return { ...item, position: index + 1, parent_position: renumberedParent };
-  });
+  const renumberedByOldPosition = new Map(oldPositions.map((old, index) => [old, index + 1]));
+  return items.map((item, index) => ({
+    ...item,
+    position: index + 1,
+    parent_position: renumberedByOldPosition.get(parentOf(item)) ?? null,
+  }));
 }
 
 module.exports = { renumberLineItemPositions };

@@ -1,5 +1,5 @@
 /**
- * Unit tests for renumberLineItemPositions (#1452).
+ * Unit tests for renumberLineItemPositions.
  *
  * The editors keep `position` as a stable row id (`LineItemsTable` never
  * renumbers a row), so the payload's array order is the display order. These
@@ -95,6 +95,39 @@ describe('renumberLineItemPositions', () => {
       { position: 9, description: 'Orphan', parent_position: 42 },
     ]);
     expect(out[1].parent_position).toBe(42);
+  });
+
+  it('returns a payload whose missing parent number is between 1 and n untouched', () => {
+    // Renumbering would make position 2 belong to 'B', so the validator
+    // would find a parent and save 'C' under the wrong row.
+    const items = [
+      { position: 10, description: 'A' },
+      { position: 20, description: 'B' },
+      { position: 30, description: 'C', parent_position: 2 },
+    ];
+    expect(renumberLineItemPositions(items)).toEqual(items);
+  });
+
+  it('returns a payload with duplicate positions untouched', () => {
+    // Renumbering makes positions unique, so the validator's duplicate check
+    // could no longer fire and the sub-item would land under the duplicate.
+    const items = [
+      { position: 1, description: 'P1' },
+      { position: 2, description: 'S', parent_position: 1 },
+      { position: 1, description: 'P1dup' },
+    ];
+    expect(renumberLineItemPositions(items)).toEqual(items);
+  });
+
+  it('reads positions the way the hierarchy validation does', () => {
+    // ensureInt on both sides: 2.7 is the parent the validator matches too,
+    // so the sub-item follows it instead of failing as its own parent.
+    const out = renumberLineItemPositions([
+      { position: 2.7, description: 'Package' },
+      { position: 3, description: 'Camera', parent_position: 2 },
+    ]);
+    expect(out.map((li) => li.position)).toEqual([1, 2]);
+    expect(out[1].parent_position).toBe(1);
   });
 
   it('gives a row with no position the position its array order implies', () => {
