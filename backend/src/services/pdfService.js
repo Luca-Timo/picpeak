@@ -1520,7 +1520,11 @@ function renderDocument(type, context) {
               return recipient ? `${docNumber}_${recipient}` : String(docNumber);
             })(),
             Author: ctx.issuer.companyName || 'picpeak',
-            // A fixed creation date makes the same inputs give the same bytes.
+            // A fixed creation date makes the same inputs give the same bytes:
+            // PDFKit's /ID is derived from this dictionary, so without it two
+            // renders of one document differ. Callers that compare renders
+            // (the tests, the theme preview) pass it; a send does not, because
+            // each sent file is recorded with its own sha256.
             ...(ctx.generatedAt ? { CreationDate: new Date(ctx.generatedAt) } : {}),
           },
         });

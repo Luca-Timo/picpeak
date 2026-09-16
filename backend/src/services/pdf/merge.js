@@ -6,6 +6,12 @@
  * order give the same bytes, and the page range each inserted part occupies
  * is returned.
  *
+ * The same holds for the *inputs* only when their own renderer was given a
+ * fixed date: PDFKit derives the document's /ID from the info dictionary, so
+ * a render without `ctx.generatedAt` carries a random one. The merge output
+ * is then stable for identical input bytes but not across two renders of the
+ * same document.
+ *
  * Inputs are expected to have passed utils/pdfValidation.validatePdf.
  */
 
