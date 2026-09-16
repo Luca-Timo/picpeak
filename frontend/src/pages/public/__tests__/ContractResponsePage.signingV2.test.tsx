@@ -261,7 +261,8 @@ it('runs the single-link flow for a contract sent before signatures v2', async (
   renderAt(`/contract/${TOKEN}`);
 
   expect(await screen.findByRole('heading', { name: 'Wedding contract' })).toBeInTheDocument();
-  expect(legacyGet).toHaveBeenCalledWith(TOKEN);
+  // No grant yet: the legacy page asks for the shell and gates on the code (#1465).
+  expect(legacyGet).toHaveBeenCalledWith(TOKEN, null);
   expect(screen.getByText('Draw your signature (optional)')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Sign contract' })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Send code' })).toBeNull();

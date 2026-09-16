@@ -6,6 +6,7 @@ import { api } from '../config/api';
 import type {
   BoundTo, LineKind, LineUnit, PriceMode, PromotionSnapshot, RateSource,
 } from '../utils/lineItemTotals';
+import { documentAccessHeaders, type DocumentAccessGrant, type DocumentVerificationSent } from '../utils/documentAccess';
 
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'declined' | 'expired' | 'converted';
 export type QuoteSort =
@@ -36,7 +37,7 @@ export interface QuoteLineItem {
    * PDF and customer view. Smaller, italic. Max 2000 chars.
    */
   detailsText?: string | null;
-  // Migration 215 (#1451).
+  // Migration 219 (#1451).
   lineKind?: LineKind;
   unit?: LineUnit | null;
   /** Optional add-on; unselected ones stay out of totals, PDF and conversion. */
@@ -62,7 +63,7 @@ export interface QuoteSummary {
   customerAccountId: number;
   /** Migration 121 — Project Overview link (null when unlinked). */
   projectId: number | null;
-  /** Migration 215 — quote-wide hours / days that bound lines follow. */
+  /** Migration 219 — quote-wide hours / days that bound lines follow. */
   hours?: number | null;
   days?: number | null;
   /** The template (and version) this quote was created from, if any. */
@@ -224,7 +225,7 @@ export interface LineItemPreset {
   quantityDefault: number;
   displayOrder: number;
   isActive: boolean;
-  // Migration 215 — the presets are the service catalogue.
+  // Migration 219 — the presets are the service catalogue.
   unit?: LineUnit | null;
   detailsText?: string | null;
   category?: string | null;
@@ -269,7 +270,7 @@ export interface QuoteCreatePayload {
   /** Migration 121 — optional link to a Project Overview project.
    *  null clears the link; undefined leaves it unchanged. */
   projectId?: number | null;
-  /** Migration 215 — quote-wide hours / days that bound lines follow. */
+  /** Migration 219 — quote-wide hours / days that bound lines follow. */
   hours?: number | null;
   days?: number | null;
   lineItems: QuoteLineItem[];
@@ -454,6 +455,8 @@ export const quotesService = {
 // -------------------------------------------------------------------
 
 export interface PublicQuoteView {
+  /** The full view is only served to a verified visitor (or the portal). */
+  verificationRequired?: false;
   quoteNumber: string;
   status: QuoteStatus;
   language: string;
@@ -485,7 +488,7 @@ export interface PublicQuoteView {
     parentLineItemId: number | null;
     parentPosition: number | null;
     detailsText: string | null;
-    /** Migration 215 — discount lines and units, as on the PDF. */
+    /** Migration 219 — discount lines and units, as on the PDF. */
     lineKind?: LineKind;
     unit?: LineUnit | null;
     promotionName?: string | null;
@@ -520,15 +523,46 @@ export interface PublicQuoteView {
   } | null;
 }
 
+/**
+ * What the emailed link returns before the visitor has confirmed the one-time
+ * code: the issuer's branding and a masked recipient address, nothing about
+ * the customer or the quote.
+ */
+export interface PublicQuoteShell {
+  verificationRequired: true;
+  language: string;
+  emailHint: string | null;
+  issuer: {
+    companyName: string | null;
+    logoUrl?: string | null;
+    logoUrlDark?: string | null;
+  } | null;
+}
+
+/**
+ * Public response link. Every request after verification carries the access
+ * grant from confirmVerification as the X-Document-Access header.
+ */
 export const publicQuotesService = {
-  async get(token: string): Promise<{ quote: PublicQuoteView }> {
-    const { data } = await api.get(`/public/quotes/${token}`);
+  async get(token: string, grant?: string | null): Promise<{ quote: PublicQuoteView | PublicQuoteShell }> {
+    const { data } = await api.get(`/public/quotes/${token}`, { headers: documentAccessHeaders(grant) });
+    return data.data || data;
+  },
+  /** Email a one-time code to the customer's address on file. */
+  async requestVerification(token: string): Promise<DocumentVerificationSent> {
+    const { data } = await api.post(`/public/quotes/${token}/verification`);
+    return data.data || data;
+  },
+  /** Exchange the emailed code for a short-lived access grant. */
+  async confirmVerification(token: string, code: string): Promise<DocumentAccessGrant> {
+    const { data } = await api.post(`/public/quotes/${token}/verification/confirm`, { code });
     return data.data || data;
   },
   /** Totals for a choice of optional add-ons (positions), computed server-side. */
-  async totals(token: string, selected: number[]): Promise<PublicSelectionTotals> {
+  async totals(token: string, selected: number[], grant?: string | null): Promise<PublicSelectionTotals> {
     const { data } = await api.get(`/public/quotes/${token}/totals`, {
       params: selected.length ? { selected: selected.join(',') } : {},
+      headers: documentAccessHeaders(grant),
     });
     return data.data || data;
   },
@@ -542,6 +576,7 @@ export const publicQuotesService = {
       /** A message to the business with the acceptance (max 2000 chars). */
       customerMessage?: string;
     } = {},
+    grant?: string | null,
   ): Promise<{ status: QuoteStatus; lockedAt: string }> {
     const { data } = await api.post(`/public/quotes/${token}/respond`, {
       action,
@@ -549,7 +584,7 @@ export const publicQuotesService = {
       selectedOptional: options.selectedOptional,
       expectedTotalMinor: options.expectedTotalMinor,
       customerMessage: options.customerMessage,
-    });
+    }, { headers: documentAccessHeaders(grant) });
     return data.data || data;
   },
 };

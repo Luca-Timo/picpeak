@@ -20,6 +20,17 @@ const {
 } = require('./helpers/crmDb');
 const { isTruthyFlag } = require('../../src/utils/lineItemTotals');
 
+
+// The public quote page now needs the grant issued after the emailed code
+// (upstream #1465); the code step itself is covered in its own suite. The
+// service is required lazily: at module load it would initialise the db
+// module before bootCrmDb points it at the temp database.
+async function quoteGrant(token) {
+  const verification = require('../../src/services/publicDocumentVerificationService');
+  const row = await db('quote_action_tokens').where({ token }).first();
+  return verification.issueGrant('quote', row, token);
+}
+
 jest.setTimeout(120000);
 
 let db;
@@ -82,7 +93,7 @@ const withAddOns = () => sentQuote([
   { position: 5, quantity: 1, description: 'Verein', unit_price_minor: 0, line_kind: 'discount', promotion_id: promotionId },
 ]);
 
-const respond = (token, body) => request(app).post(`/api/public/quotes/${token}/respond`).send(body);
+const respond = async (token, body) => request(app).post(`/api/public/quotes/${token}/respond`).set('X-Document-Access', await quoteGrant(token)).send(body);
 
 async function linesByDescription(quoteId) {
   const rows = await db('quote_line_items').where({ quote_id: quoteId });
@@ -91,7 +102,7 @@ async function linesByDescription(quoteId) {
 
 test('the public view lists add-ons with their selection', async () => {
   const { token } = await withAddOns();
-  const res = await request(app).get(`/api/public/quotes/${token}`);
+  const res = await request(app).get(`/api/public/quotes/${token}`).set('X-Document-Access', await quoteGrant(token));
   expect(res.status).toBe(200);
   const line = (d) => res.body.quote.lineItems.find((li) => li.description === d);
   expect(line('Album')).toEqual(expect.objectContaining({ isOptional: true, selected: false }));
@@ -104,7 +115,7 @@ test('the public view lists add-ons with their selection', async () => {
 
 test('live totals follow the choice, the percentage promotion included', async () => {
   const { token } = await withAddOns();
-  const res = await request(app).get(`/api/public/quotes/${token}/totals?selected=2,4`);
+  const res = await request(app).get(`/api/public/quotes/${token}/totals?selected=2,4`).set('X-Document-Access', await quoteGrant(token));
   expect(res.status).toBe(200);
   expect(res.body).toEqual(expect.objectContaining({
     selectedOptional: [2, 4], netAmountMinor: 135000, vatAmountMinor: 10935, totalAmountMinor: 145935,
@@ -114,7 +125,7 @@ test('live totals follow the choice, the percentage promotion included', async (
 
 test('only offered add-ons can be chosen', async () => {
   const { token } = await withAddOns();
-  const res = await request(app).get(`/api/public/quotes/${token}/totals?selected=1`);
+  const res = await request(app).get(`/api/public/quotes/${token}/totals?selected=1`).set('X-Document-Access', await quoteGrant(token));
   expect(res.status).toBe(400);
   expect(res.body.code).toBe('INVALID_SELECTION');
 });
@@ -166,7 +177,7 @@ test('the customer can change the add-ons while the response window is open, not
   // the window checks read a real time.
   const lockIn = (ms) => db('quotes').where({ id: quoteId }).update({ response_locked_at: new Date(Date.now() + ms).toISOString() });
   await lockIn(10 * 60 * 1000);
-  let view = await request(app).get(`/api/public/quotes/${token}`);
+  let view = await request(app).get(`/api/public/quotes/${token}`).set('X-Document-Access', await quoteGrant(token));
   expect(view.body.quote.selectionLocked).toBe(false);
 
   // Accepting again with the same choice changes nothing.
@@ -186,7 +197,7 @@ test('the customer can change the add-ons while the response window is open, not
 
   // Once the window has closed, the choice is fixed for the customer.
   await lockIn(-1000);
-  view = await request(app).get(`/api/public/quotes/${token}`);
+  view = await request(app).get(`/api/public/quotes/${token}`).set('X-Document-Access', await quoteGrant(token));
   expect(view.body.quote.selectionLocked).toBe(true);
   const late = await respond(token, { action: 'accept', selectedOptional: [4], expectedTotalMinor: 116748 });
   expect(late.status).toBe(423);

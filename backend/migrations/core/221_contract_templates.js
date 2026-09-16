@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Migration 217 — contract templates (#1445).
+ * Migration 221 — contract templates (#1445).
  *
  * contract_templates            a named template (name, description, use case,
  *                               system flag, status, optimistic lock).

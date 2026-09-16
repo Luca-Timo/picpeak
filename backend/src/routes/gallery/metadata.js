@@ -48,7 +48,24 @@ async function resolveDraftForAdminPreview(req, identifier) {
   // verifyAdminPreview re-reads the event with SELECT * off the slug, so give
   // it the slug rather than the partial row selected above.
   req.requestedSlug = result.event.slug;
-  return await verifyAdminPreview(req) ? result : null;
+  if (await verifyAdminPreview(req)) return result;
+  throwIfPasswordChangeRequired(req);
+  return null;
+}
+
+// verifyAdminPreview answers a refused preview with `false`, and the routes in
+// this file turn that into "not found". Right for everything else, wrong for
+// an admin whose only problem is a pending password rotation: they landed on
+// the gallery-not-found page with no hint that the admin area was waiting for
+// them. That refusal is about the account, not the gallery, so it is reported
+// as the 403 MUST_CHANGE_PASSWORD adminAuth would answer. An admin session
+// that idled out is the same kind of refusal (401 SESSION_TIMEOUT), and the
+// preview offers to sign in again. Every other refusal (FORBIDDEN, a revoked
+// session) still reads as not found, so a scoped admin learns nothing new
+// about a draft they cannot open.
+const ACCOUNT_REFUSAL_CODES = new Set(['MUST_CHANGE_PASSWORD', 'SESSION_TIMEOUT']);
+function throwIfPasswordChangeRequired(req) {
+  if (ACCOUNT_REFUSAL_CODES.has(req.adminPreviewDenied?.code)) throw req.adminPreviewDenied;
 }
 
 router.get('/resolve/:identifier', handleAsync(async (req, res) => {
@@ -118,6 +135,7 @@ router.get('/:slug/verify-token/:token', noStoreCache, handleAsync(async (req, r
   if (event.is_draft) {
     req.requestedSlug = slug;
     if (!await verifyAdminPreview(req)) {
+      throwIfPasswordChangeRequired(req);
       throw new NotFoundError('Gallery');
     }
   }
@@ -202,6 +220,12 @@ router.get('/:slug/info', async (req, res) => {
     // Admin preview (#868) bypasses both the draft gate and — below — the
     // password gate. Computed once and reused.
     const adminPreview = await verifyAdminPreview(req, event);
+    // See throwIfPasswordChangeRequired. This route answers its refusals inline
+    // rather than through the error handler, so it does the same here.
+    if (ACCOUNT_REFUSAL_CODES.has(req.adminPreviewDenied?.code)) {
+      return res.status(req.adminPreviewDenied.statusCode)
+        .json({ error: req.adminPreviewDenied.message, code: req.adminPreviewDenied.code });
+    }
     // Check if event is a draft (allow admin preview)
     if (event.is_draft && !adminPreview) {
       return res.status(404).json({ error: 'Gallery is not yet published' });

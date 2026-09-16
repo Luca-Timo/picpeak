@@ -7,6 +7,8 @@ export { CustomerCalendarPage } from './CustomerCalendarPage';
 export { CustomerQuotesPage } from './CustomerQuotesPage';
 export { CustomerBillsPage } from './CustomerBillsPage';
 export { CustomerContractsPage } from './CustomerContractsPage';
+export { CustomerContractSignPage } from './CustomerContractSignPage';
+export { CustomerQuoteRespondPage } from './CustomerQuoteRespondPage';
 export { CustomerResetPasswordPage } from './CustomerResetPasswordPage';
 export { CustomerDocumentsPage } from './CustomerDocumentsPage';
 export { CustomerEventPage } from './CustomerEventPage';

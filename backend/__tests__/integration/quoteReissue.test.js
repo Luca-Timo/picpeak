@@ -22,6 +22,17 @@ const {
 } = require('./helpers/crmDb');
 const { isTruthyFlag } = require('../../src/utils/lineItemTotals');
 
+
+// The public quote page now needs the grant issued after the emailed code
+// (upstream #1465); the code step itself is covered in its own suite. The
+// service is required lazily: at module load it would initialise the db
+// module before bootCrmDb points it at the temp database.
+async function quoteGrant(token) {
+  const verification = require('../../src/services/publicDocumentVerificationService');
+  const row = await db('quote_action_tokens').where({ token }).first();
+  return verification.issueGrant('quote', row, token);
+}
+
 jest.setTimeout(120000);
 
 let db;
@@ -73,7 +84,7 @@ async function acceptedQuote() {
   }, adminId);
   await db('quotes').where({ id: quoteId }).update({ status: 'sent', sent_at: new Date().toISOString() });
   const link = await createPublicToken(db, 'quote_action_tokens', { quote_id: quoteId });
-  const res = await request(publicApp).post(`/api/public/quotes/${link}/respond`)
+  const res = await request(publicApp).post(`/api/public/quotes/${link}/respond`).set('X-Document-Access', await quoteGrant(link))
     .send({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000 });
   expect(res.status).toBe(200);
   return { quoteId, link };
@@ -95,7 +106,7 @@ test('reissuing declines the accepted quote and replaces it with a draft copy', 
   expect(old.accepted_at).toBeTruthy();
   expect(old.selection_accepted_at).toBeTruthy();
   // The customer's link no longer works, and nobody was emailed.
-  const late = await request(publicApp).post(`/api/public/quotes/${link}/respond`)
+  const late = await request(publicApp).post(`/api/public/quotes/${link}/respond`).set('X-Document-Access', await quoteGrant(link))
     .send({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000 });
   expect(late.status).toBe(410);
   expect(late.body.code).toBe('QUOTE_REPLACED');

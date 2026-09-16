@@ -230,7 +230,13 @@ test('the signing page lists the attachments and downloads only this contract\'s
 
   // A contract sent before signatures v2 serves them from its link as well.
   const legacyToken = await require('./helpers/crmDb').createPublicToken(db, 'contract_action_tokens', { contract_id: ids.contract.id });
-  const legacy = await request(publicApp).get(`/api/public/contracts/${legacyToken}/attachments/${ids.privacy}`).buffer(true).parse(binary);
+  // The legacy link shows nothing before the emailed code is confirmed
+  // (upstream #1465), so the download carries that grant.
+  const verification = require('../../src/services/publicDocumentVerificationService');
+  const legacyRow = await db('contract_action_tokens').where({ token: legacyToken }).first();
+  const legacy = await request(publicApp).get(`/api/public/contracts/${legacyToken}/attachments/${ids.privacy}`)
+    .set('X-Document-Access', verification.issueGrant('contract', legacyRow, legacyToken))
+    .buffer(true).parse(binary);
   expect(legacy.status).toBe(200);
 
   // A stored file that no longer matches its recorded sha256 isn't served.

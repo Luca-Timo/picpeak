@@ -25,6 +25,7 @@
 const express = require('express');
 const { capabilityEvidence } = require('../usage/capabilityEvidence');
 const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 const multer = require('multer');
 const { assertContractPdfPath } = require('../utils/safePath');
@@ -32,7 +33,7 @@ const { body, header, param, query } = require('express-validator');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
-const { validateFileType } = require('../utils/fileSecurityUtils');
+const { validateFileType, validateFileContent } = require('../utils/fileSecurityUtils');
 const contractService = require('../services/contractService');
 const contractBlocksService = require('../services/contractBlocksService');
 const contractContent = require('../services/contract/content');
@@ -74,7 +75,10 @@ const signedPdfStorage = multer.diskStorage({
       return cb(new Error('Invalid contract id'));
     }
     const ext = path.extname(file.originalname) || '.pdf';
-    cb(null, `contract-${contractId}-${Date.now()}${ext}`);
+    // The random part keeps two uploads in the same millisecond apart. They
+    // shared one file, and the request that lost the compare-and-set in
+    // attachSignedPdfUpload then deleted the winner's PDF with its cleanup.
+    cb(null, `contract-${contractId}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`);
   },
 });
 
@@ -663,6 +667,12 @@ router.post(
     validateRequest(req);
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded', code: 'NO_FILE' });
+    }
+    // The filter above only saw the reported type and the file name. The upload
+    // becomes the authoritative signed contract, so its bytes must be a PDF.
+    if (!(await validateFileContent(req.file.path, 'application/pdf'))) {
+      await fs.promises.unlink(req.file.path).catch(() => {});
+      return res.status(400).json({ error: 'The uploaded file is not a PDF.', code: 'INVALID_PDF' });
     }
     const result = await contractService.attachSignedPdfUpload(
       parseInt(req.params.id, 10),

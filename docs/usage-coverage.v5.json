@@ -1421,6 +1421,11 @@
         "GET /contracts",
         "POST /contracts/:id/signing-access",
         "GET /contracts/:id/pdf",
+        "GET /contracts/:id",
+        "POST /contracts/:id/sign",
+        "POST /contracts/:id/upload-signed-pdf",
+        "GET /quotes/:id",
+        "POST /quotes/:id/respond",
         "GET /dashboard",
         "GET /events/:slug/overview",
         "GET /documents",
@@ -1502,6 +1507,15 @@
         "POST /:token/sign",
         "POST /:token/upload-signed-pdf",
         "GET /:token/pdf"
+      ]
+    },
+    "publicDocumentVerification.js": {
+      "decision": "excluded",
+      "signals": [],
+      "reason": "Public/customer/gallery/visitor surface or existing optional third-party analytics proxy: no product-usage middleware, callbacks, counters or report triggers.",
+      "route_signatures": [
+        "POST /:token/verification",
+        "POST /:token/verification/confirm"
       ]
     },
     "publicFonts.js": {

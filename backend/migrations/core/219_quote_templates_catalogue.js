@@ -1,5 +1,5 @@
 /**
- * Migration 215: quote templates, service catalogue, hour/day pricing and
+ * Migration 219: quote templates, service catalogue, hour/day pricing and
  * discount promotions (#1451).
  *
  * Line items (quote_line_items AND invoice_line_items, so a quote line

@@ -830,6 +830,7 @@
     "tooManyFiles": "Maximal {{limit}} Dateien können gleichzeitig hochgeladen werden",
     "limitInfo": "{{selected}} von {{limit}} Dateien ausgewählt ({{remaining}} verbleibend)",
     "limitReached": "Upload-Limit erreicht ({{limit}} Dateien pro Vorgang)",
+    "photoCapReached": "Diese Galerie hat ihr Fotolimit erreicht ({{limit}} Fotos). Es können keine weiteren Fotos hochgeladen werden.",
     "replacedFiles_one": "{{count}} Foto ersetzt",
     "replacedFiles_other": "{{count}} Fotos ersetzt",
     "uploadingChunks_one": "{{count}} Teil wird hochgeladen",
@@ -1377,6 +1378,7 @@
       "testingConnection": "Teste Verbindung...",
       "saveSettings": "Konfiguration speichern",
       "savingSettings": "Speichern...",
+      "destinationSuperAdminOnly": "Nur ein Super Admin kann ändern, wo Backups gespeichert werden und ob sie die Datenbank enthalten.",
       "enableBackupHelp": "Automatisch Backups nach dem konfigurierten Zeitplan erstellen"
     },
     "history": {
@@ -1407,6 +1409,7 @@
       }
     },
     "restore": {
+      "superAdminOnly": "Das Wiederherstellen eines Backups ersetzt alle Daten dieser Instanz, einschließlich Benutzerkonten und Rollen, und ist daher nur einem Super Admin möglich.",
       "steps": {
         "selectSource": "Quelle auswählen",
         "chooseBackup": "Backup auswählen",
@@ -1645,6 +1648,10 @@
     "noPhotosFound": "Keine Fotos gefunden",
     "failedToLoad": "Fotos konnten nicht geladen werden",
     "tryAgain": "Erneut versuchen",
+    "passwordChangeRequired": "Ändern Sie Ihr Passwort im Admin-Bereich, bevor Sie diese Galerie in der Vorschau ansehen.",
+    "goToAdminArea": "Zum Admin-Bereich",
+    "adminSessionExpired": "Ihre Admin-Sitzung ist abgelaufen. Melden Sie sich erneut an, um diese Galerie in der Vorschau anzusehen.",
+    "signInAgain": "Erneut anmelden",
     "loading": "Galerie wird geladen...",
     "expiredOn": "Diese Galerie ist am {{date}} abgelaufen.",
     "downloadBefore": "Laden Sie Ihre Fotos herunter, bevor sie nicht mehr verfügbar sind.",
@@ -1872,6 +1879,7 @@
     "archived": "Archiviert",
     "totalSize": "Gesamtgröße",
     "shareLink": "Freigabelink",
+    "shareLinkOwnerOnly": "Nur der Besitzer der Galerie kann diesen Link sehen und teilen.",
     "qrCode": "QR-Code",
     "qrTableCard": "Tischkarte (A6)",
     "qrPoster": "Poster (A4)",
@@ -2534,6 +2542,8 @@
       "regenerateButton": "Alle Vorschaubilder neu generieren",
       "regenerateStarted": "Neugenerierung der Vorschaubilder gestartet",
       "regenerateError": "Neugenerierung der Vorschaubilder konnte nicht gestartet werden",
+      "regenerateRunning": "Es läuft bereits eine Neugenerierung. Versuchen Sie es erneut, wenn sie abgeschlossen ist.",
+      "readOnly": "Nur Admins, die Einstellungen bearbeiten dürfen, können diese Werte ändern oder die ganze Bibliothek neu generieren.",
       "lightboxTitle": "Lightbox-Vorschau-Stufe",
       "lightboxHelp": "Die Lightbox zeigt ein seitenverhältnis-erhaltendes JPEG mit ~1920 px (typischerweise 200–500 KB) statt des vollen Originals (oft 5–12 MB). Beim Download durch Gäste wird weiterhin das Original ausgeliefert. Vorschauen kosten pro Foto etwa eine zusätzliche Datei auf der Festplatte und liegen unter /previews.",
       "lightboxToggle": "Vorab-Erzeugung von Vorschauen aktivieren",
@@ -4785,17 +4795,17 @@
       "moderateCommentsDesc": "Kommentare benötigen eine Genehmigung, bevor sie sichtbar sind",
       "showToGuests": "Feedback für Gäste anzeigen",
       "showToGuestsDesc": "Andere Gäste können Bewertungen, Likes und genehmigte Kommentare sehen",
-      "enableRateLimiting": "Ratenbegrenzung aktivieren",
-      "rateLimitingDesc": "Spam durch Begrenzung der Feedback-Häufigkeit verhindern",
-      "timeWindow": "Zeitfenster (Minuten)",
-      "maxRequests": "Maximale Anfragen",
       "colorLabels": "Farbmarkierungen",
       "colorLabelsDesc": "Eine Farbe pro Gast und Foto – im Farbschema von Lightroom, damit die Auswahl per XMP übernommen werden kann",
       "keybindMode": "Tastenkürzel",
       "keybindColors": "Nur Farben (am einfachsten)",
       "keybindColorsDesc": "1 = Grün (1. Wahl), 2 = Gelb (2. Wahl), 3 = Rot (aussortiert)",
       "keybindLightroom": "Lightroom-Standard",
-      "keybindLightroomDesc": "1–5 vergeben Sterne, 6–9 setzen Rot / Gelb / Grün / Blau"
+      "keybindLightroomDesc": "1–5 vergeben Sterne, 6–9 setzen Rot / Gelb / Grün / Blau",
+      "enableRateLimiting": "Ratenbegrenzung aktivieren",
+      "rateLimitingDesc": "Spam durch Begrenzung der Feedback-Häufigkeit verhindern",
+      "timeWindow": "Zeitfenster (Minuten)",
+      "maxRequests": "Maximale Anfragen"
     },
     "settingsUpdated": "Feedback-Einstellungen aktualisiert",
     "settingsUpdateError": "Einstellungen konnten nicht aktualisiert werden",
@@ -5393,7 +5403,8 @@
       "noEventName": "—",
       "openToRespond": "Öffnen zum Antworten",
       "viewPdf": "PDF anzeigen",
-      "popupBlocked": "Erlaube Pop-ups für diese Seite, um das Angebots-PDF anzuzeigen."
+      "popupBlocked": "Erlaube Pop-ups für diese Seite, um das Angebots-PDF anzuzeigen.",
+      "backToList": "Zurück zu den Angeboten"
     },
     "bills": {
       "title": "Rechnungen",
@@ -5513,6 +5524,7 @@
       "openSign": "Öffnen & unterschreiben",
       "downloadSigned": "Unterschriebenes PDF herunterladen",
       "download": "PDF herunterladen",
+      "backToList": "Zurück zu den Verträgen",
       "notSigner": "Sie sind nicht als unterzeichnende Person dieses Vertrags eingetragen. Verwenden Sie stattdessen den Link aus der E-Mail zum Unterschreiben.",
       "notSignable": "Dieser Vertrag wartet nicht mehr auf Ihre Unterschrift. Laden Sie die Seite neu, um den aktuellen Stand zu sehen.",
       "signError": "Der Vertrag konnte nicht zum Unterschreiben geöffnet werden. Versuchen Sie es gleich noch einmal.",
@@ -6544,8 +6556,8 @@
     "errors": {
       "popupBlocked": "Erlauben Sie Pop-ups für diese Seite, um die PDF-Vorschau anzuzeigen.",
       "customerRequired": "Bitte zuerst einen Kunden auswählen.",
-      "rateRequired": "Für diesen Kunden ist kein Satz hinterlegt, und es gibt keinen Standardsatz. Legen Sie unter Einstellungen → Buchhaltung einen Standard-Stunden- oder -Tagessatz fest oder hinterlegen Sie einen Satz beim Kunden.",
-      "customerFeatureDisabled": "Bei diesem Kunden sind Angebote deaktiviert. Aktivieren Sie Angebote zuerst in den Kundendetails."
+      "customerFeatureDisabled": "Bei diesem Kunden sind Angebote deaktiviert. Aktivieren Sie Angebote zuerst in den Kundendetails.",
+      "rateRequired": "Für diesen Kunden ist kein Satz hinterlegt, und es gibt keinen Standardsatz. Legen Sie unter Einstellungen → Buchhaltung einen Standard-Stunden- oder -Tagessatz fest oder hinterlegen Sie einen Satz beim Kunden."
     },
     "confirmSend": "Dieses Angebot jetzt an den Kunden senden?",
     "sentToast": "Angebot an Kunden gesendet.",
@@ -6556,17 +6568,6 @@
     "convert": "In Anlass umwandeln",
     "declineOnBehalf": "Im Namen ablehnen",
     "declineReasonPrompt": "Dieses Angebot im Namen des Kunden als abgelehnt markieren? Optional einen Grund angeben (leer lassen zum Überspringen).",
-    "reissue": "Neu ausstellen",
-    "reissuePrompt": "Angebot neu ausstellen? Es wird abgelehnt (der Link des Kunden funktioniert dann nicht mehr) und als neuer Entwurf kopiert, der darauf als „Ersetzt …“ verweist. Optional einen Grund angeben (leer lassen zum Überspringen).",
-    "reissuedToast": "Angebot neu ausgestellt — Entwurf wird geöffnet.",
-    "replacesQuote": "Ersetzt",
-    "replacedByQuote": "Ersetzt durch",
-    "lockedNotice": {
-      "accepted": "Dieses Angebot wurde bereits angenommen und kann nicht mehr bearbeitet werden. Um es zu ändern, stellen Sie es neu aus: Das Angebot wird abgelehnt und als neuer Entwurf kopiert. Gilt es nicht mehr, lehnen Sie es im Namen des Kunden ab.",
-      "acceptedConverted": "Dieses Angebot wurde bereits angenommen, und es gibt dazu schon einen Vertrag, einen Anlass oder eine Rechnung. Es kann nicht mehr geändert werden.",
-      "declined": "Dieses Angebot wurde abgelehnt und kann nicht mehr bearbeitet werden. Duplizieren Sie es, um ein neues Angebot zu erstellen.",
-      "converted": "Dieses Angebot wurde bereits in einen Anlass oder eine Rechnung umgewandelt und kann nicht mehr geändert werden."
-    },
     "declinedOnBehalfToast": "Angebot als abgelehnt markiert.",
     "field": {
       "issueDate": "Ausgestellt am",
@@ -6664,6 +6665,17 @@
     "pagination_other": "Seite {{page}} von {{total}} · {{count}} Angebote",
     "convertedToInvoiceToast_one": "{{count}} Rechnung aus diesem Angebot erstellt",
     "convertedToInvoiceToast_other": "{{count}} Rechnungen aus diesem Angebot erstellt",
+    "reissue": "Neu ausstellen",
+    "reissuePrompt": "Angebot neu ausstellen? Es wird abgelehnt (der Link des Kunden funktioniert dann nicht mehr) und als neuer Entwurf kopiert, der darauf als „Ersetzt …“ verweist. Optional einen Grund angeben (leer lassen zum Überspringen).",
+    "reissuedToast": "Angebot neu ausgestellt — Entwurf wird geöffnet.",
+    "replacesQuote": "Ersetzt",
+    "replacedByQuote": "Ersetzt durch",
+    "lockedNotice": {
+      "accepted": "Dieses Angebot wurde bereits angenommen und kann nicht mehr bearbeitet werden. Um es zu ändern, stellen Sie es neu aus: Das Angebot wird abgelehnt und als neuer Entwurf kopiert. Gilt es nicht mehr, lehnen Sie es im Namen des Kunden ab.",
+      "acceptedConverted": "Dieses Angebot wurde bereits angenommen, und es gibt dazu schon einen Vertrag, einen Anlass oder eine Rechnung. Es kann nicht mehr geändert werden.",
+      "declined": "Dieses Angebot wurde abgelehnt und kann nicht mehr bearbeitet werden. Duplizieren Sie es, um ein neues Angebot zu erstellen.",
+      "converted": "Dieses Angebot wurde bereits in einen Anlass oder eine Rechnung umgewandelt und kann nicht mehr geändert werden."
+    },
     "catalog": {
       "addItem": "Leistung hinzufügen",
       "archive": "Archivieren",
@@ -7619,6 +7631,7 @@
         "updateNotSaved": "Ihre Änderungen wurden nicht gespeichert.",
         "createUnconfirmed": "Wir konnten nicht bestätigen, ob der Entwurf gespeichert wurde. Erneutes Speichern ist sicher — es wird kein zweiter Entwurf angelegt.",
         "createdChangesNotSaved": "Der Entwurf wurde gespeichert, Ihre letzten Änderungen jedoch nicht. Speichern Sie erneut, um sie zu übernehmen.",
+        "createdChangesUnconfirmed": "Der Entwurf wurde gespeichert, wir konnten aber nicht bestätigen, ob Ihre letzten Änderungen übernommen wurden. Erneutes Speichern ist sicher.",
         "updateUnconfirmed": "Wir konnten nicht bestätigen, ob Ihre Änderungen gespeichert wurden. Erneutes Speichern ist sicher.",
         "fieldsHeading": "Bitte prüfen Sie folgende Angaben:",
         "unexpected": "Auf dem Server ist ein unerwarteter Fehler aufgetreten.",
@@ -8170,6 +8183,9 @@
     "uploadAlternative": "Oder ein handschriftlich unterschriebenes PDF hochladen",
     "uploadHint": "Unterschreiben Sie den ausgedruckten Vertrag von Hand, scannen Sie ihn ein und laden Sie das PDF hier hoch.",
     "uploadButton": "Unterschriebenes PDF hochladen",
+    "downloadError": "Download fehlgeschlagen",
+    "popupBlocked": "Bitte erlauben Sie Pop-ups für diese Seite, um das PDF herunterzuladen.",
+    "notSignable": "Dieser Vertrag kann nicht mehr online unterschrieben werden. Bitte wenden Sie sich an den Absender.",
     "attachments": {
       "title": "Anhänge",
       "download": "Herunterladen",
@@ -8297,6 +8313,32 @@
       "body": "{{count}} Personen auf einmal von einer Domain anzuschreiben, die sonst nur Transaktionsmails versendet, lässt Spamfilter aufmerksam werden. Anbieter können den gesamten Versand drosseln, als Spam einstufen oder blockieren — und ein schlechter Lauf beeinträchtigt auch die Zustellung Ihrer Galerie-E-Mails.",
       "advice": "Stellen Sie sicher, dass SPF, DKIM und DMARC für Ihre Versanddomain eingerichtet sind, senden Sie sich zuerst einen Test, und teilen Sie eine erste Kampagne nach Möglichkeit in mehrere kleinere Sendungen auf.",
       "duration": "Bei {{rate}}/Minute dauert dies etwa {{minutes}} Minuten. Die Versand-Warteschlange wird geteilt: Während der Kampagne können andere E-Mails — Galerie-Einladungen, Passwort-Zurücksetzungen — dahinter verzögert werden."
+    }
+  },
+  "documentVerification": {
+    "title": "Bestätigen Sie, dass Sie es sind",
+    "explanation": "Zum Schutz Ihrer persönlichen Daten bestätigen Sie bitte, dass Sie es sind. Wir senden einen 6-stelligen Code an {{email}}.",
+    "explanationNoHint": "Zum Schutz Ihrer persönlichen Daten bestätigen Sie bitte, dass Sie es sind. Wir senden einen 6-stelligen Code an die Adresse, an die dieser Link geschickt wurde.",
+    "sendCode": "Code senden",
+    "sending": "Wird gesendet…",
+    "codeSent": "Wir haben einen Code an {{email}} gesendet.",
+    "codeSentNoHint": "Wir haben Ihnen einen Code per E-Mail gesendet.",
+    "codeLabel": "6-stelliger Code",
+    "confirm": "Bestätigen",
+    "confirming": "Wird geprüft…",
+    "resend": "Neuen Code senden",
+    "resendIn": "Neuen Code senden in {{seconds}} s",
+    "sessionExpired": "Zu Ihrer Sicherheit bestätigen Sie bitte erneut, dass Sie es sind.",
+    "errors": {
+      "invalid": "Dieser Code ist nicht korrekt. Noch {{count}} Versuche.",
+      "invalidNoCount": "Dieser Code ist nicht korrekt.",
+      "expired": "Dieser Code ist abgelaufen. Bitte fordern Sie einen neuen Code an.",
+      "tooManyAttempts": "Zu viele falsche Versuche. Bitte fordern Sie einen neuen Code an.",
+      "rateLimited": "Bitte warten Sie {{seconds}} Sekunden, bevor Sie einen neuen Code anfordern.",
+      "noRecipientEmail": "Es ist keine E-Mail-Adresse hinterlegt, an die ein Code gesendet werden kann. Bitte wenden Sie sich an den Absender.",
+      "emailUnavailable": "Der Code konnte gerade nicht gesendet werden. Bitte versuchen Sie es später erneut oder wenden Sie sich an den Absender.",
+      "codeFormat": "Geben Sie den 6-stelligen Code aus der E-Mail ein.",
+      "generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut."
     }
   },
   "contractSigning": {

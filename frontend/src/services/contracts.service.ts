@@ -6,6 +6,12 @@
  */
 import { api } from '../config/api';
 import type { AttachmentSelection, IncludedAttachment } from './documentAttachments.service';
+import {
+  decodeBlobErrorBody,
+  documentAccessHeaders,
+  type DocumentAccessGrant,
+  type DocumentVerificationSent,
+} from '../utils/documentAccess';
 
 /** One leg of the integrity-check response (unsigned or signed PDF).
  *  `expected` is the stored SHA-256 column value; `actual` is freshly
@@ -557,6 +563,8 @@ export const contractsService = {
 // ===================================================================
 
 export interface PublicContractView {
+  /** The full view is only served to a verified visitor (or the portal). */
+  verificationRequired?: false;
   contractNumber: string;
   status: ContractStatus;
   language: string;
@@ -616,23 +624,74 @@ export interface PublicContractView {
   attachments?: Array<{ id: number; name: string; delivery: 'merged' | 'separate'; pages: number }>;
 }
 
+/**
+ * What the emailed link returns before the visitor has confirmed the one-time
+ * code: the issuer's branding and a masked recipient address, nothing about
+ * the customer or the contract.
+ */
+export interface PublicContractShell {
+  verificationRequired: true;
+  language: string;
+  emailHint: string | null;
+  issuer: {
+    companyName: string | null;
+    logoUrl?: string | null;
+    logoUrlDark?: string | null;
+  } | null;
+}
+
+/**
+ * Public signing link. Every request after verification carries the access
+ * grant from confirmVerification as the X-Document-Access header.
+ */
 export const publicContractsService = {
-  async get(token: string): Promise<{ contract: PublicContractView }> {
-    const { data } = await api.get(`/public/contracts/${token}`);
+  async get(token: string, grant?: string | null): Promise<{ contract: PublicContractView | PublicContractShell }> {
+    const { data } = await api.get(`/public/contracts/${token}`, { headers: documentAccessHeaders(grant) });
     return data.data || data;
   },
 
-  async sign(token: string, payload: { name: string; signatureDataUrl?: string | null; accepted: true }): Promise<{ status: ContractStatus; signedAt: string }> {
-    const { data } = await api.post(`/public/contracts/${token}/sign`, payload);
+  /** Email a one-time code to the customer's address on file. */
+  async requestVerification(token: string): Promise<DocumentVerificationSent> {
+    const { data } = await api.post(`/public/contracts/${token}/verification`);
     return data.data || data;
   },
 
-  async uploadSignedPdf(token: string, file: File): Promise<{ status: 'fully_signed'; signedPdfPath: string }> {
+  /** Exchange the emailed code for a short-lived access grant. */
+  async confirmVerification(token: string, code: string): Promise<DocumentAccessGrant> {
+    const { data } = await api.post(`/public/contracts/${token}/verification/confirm`, { code });
+    return data.data || data;
+  },
+
+  async sign(
+    token: string,
+    payload: { name: string; signatureDataUrl?: string | null; accepted: true },
+    grant?: string | null,
+  ): Promise<{ status: ContractStatus; signedAt: string }> {
+    const { data } = await api.post(`/public/contracts/${token}/sign`, payload, { headers: documentAccessHeaders(grant) });
+    return data.data || data;
+  },
+
+  async uploadSignedPdf(token: string, file: File, grant?: string | null): Promise<{ status: 'fully_signed'; signedPdfPath: string }> {
     const form = new FormData();
     form.append('file', file);
     const { data } = await api.post(`/public/contracts/${token}/upload-signed-pdf`, form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: { 'Content-Type': 'multipart/form-data', ...documentAccessHeaders(grant) },
     });
     return data.data || data;
+  },
+
+  /** Blob URL of the PDF; it needs the grant header, so it can't be a plain link. */
+  async pdfUrl(token: string, grant?: string | null): Promise<string> {
+    try {
+      const res = await api.get(`/public/contracts/${token}/pdf`, {
+        responseType: 'blob',
+        headers: documentAccessHeaders(grant),
+      });
+      return URL.createObjectURL(res.data);
+    } catch (err) {
+      // So the page can tell a grant that ran out from any other failure.
+      await decodeBlobErrorBody(err);
+      throw err;
+    }
   },
 };

@@ -1,34 +1,50 @@
 /**
  * Public → Contracts Routes
  *
- * Mounted at /api/public/contracts. NO authentication — the link in
- * the customer's signing email is the only secret.
+ * Mounted at /api/public/contracts. No login: the link in the signing
+ * email identifies the contract, and an emailed one-time code proves the
+ * visitor can read the customer's mailbox before anything personal is
+ * shown or any action is taken. The link alone used to be enough to see
+ * the customer's name, email address and the whole contract, and to sign
+ * it — so a forwarded email or a logged URL was a signature.
  *
  * Surface:
- *   GET  /:token                  read-only contract view + included blocks
- *   POST /:token/sign             body: { name, signatureDataUrl?, accepted: true }
- *   POST /:token/upload-signed-pdf   multer single — customer uploads their wet-signed PDF
+ *   GET  /:token                         issuer-only shell; full view with a grant
+ *   POST /:token/verification            email a code to the customer on file
+ *   POST /:token/verification/confirm   body: { code } → { grant, expiresInSeconds }
+ *   POST /:token/sign                    grant; body: { name, signatureDataUrl?, accepted: true }
+ *   POST /:token/upload-signed-pdf       grant; multer single — wet-signed PDF
+ *   GET  /:token/pdf                     grant; download the contract PDF
  *
- * No state mutation flows from /:token (GET) — only the two POST routes
- * affect the contract. IP is captured for the signature evidence /
- * upload audit row.
+ * The grant travels in the X-Document-Access header (see
+ * routes/publicDocumentVerification.js). IP is captured for the signature
+ * evidence / upload audit row.
  */
 
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const multer = require('multer');
 const rateLimit = require('express-rate-limit');
 const { body, param } = require('express-validator');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
-const { validateFileType } = require('../utils/fileSecurityUtils');
 const contractService = require('../services/contractService');
-const { getAppSetting } = require('../utils/appSettings');
-const { buildPublicView } = require('../services/contract/publicView');
-
+const publicDocumentViews = require('../services/publicDocumentViews');
+const verification = require('../services/publicDocumentVerificationService');
 const { clientIpForAudit } = require('../utils/clientIp');
 const { loadActionToken, preMulterTokenGuard } = require('../utils/publicTokenGuards');
+const {
+  signedPdfUpload,
+  uploadSignedPdfSettingGuard,
+  finishSignedPdfUpload,
+} = require('../utils/contractSignedPdfUpload');
+const {
+  mountVerification,
+  requireGrant,
+  sendVerificationRequired,
+  tokenParam,
+} = require('./publicDocumentVerification');
 const { db } = require('../database/db');
+
+const KIND = 'contract';
+const TABLE = 'contract_action_tokens';
 
 const router = express.Router();
 
@@ -39,65 +55,58 @@ const respondLimiter = rateLimit({
   windowMs: 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false,
 });
 
-const getStoragePath = () => process.env.STORAGE_PATH || path.join(__dirname, '../../../storage');
-
-const signedPdfStorage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    const uploadDir = path.join(getStoragePath(), 'uploads/contracts/signed');
-    fs.mkdirSync(uploadDir, { recursive: true });
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.pdf';
-    cb(null, `contract-token-${req.params.token.slice(0, 12)}-${Date.now()}${ext}`);
-  },
-});
-
-const signedPdfUpload = multer({
-  storage: signedPdfStorage,
-  // CVE-2026-82333: single unnamed `file` field only, and this route is
-  // unauthenticated (token-only) — no legitimate array-indexed field
-  // names, so reject any bracket-index field name.
-  limits: { fileSize: 10 * 1024 * 1024, fieldArrayIndexLimit: 0 }, // 10 MB
-  fileFilter: (req, file, cb) => {
-    if (validateFileType(file.originalname, file.mimetype, ['application/pdf'])) return cb(null, true);
-    return cb(new Error('Only PDF files are allowed'));
-  },
+mountVerification(router, {
+  kind: KIND,
+  tableName: TABLE,
+  loadTarget: publicDocumentViews.contractVerificationTarget,
 });
 
 router.get(
   '/:token',
   previewLimiter,
-  [param('token').isString().isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i)],
+  [tokenParam()],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const tokenRow = await loadActionToken(req, res, {
-      tableName: 'contract_action_tokens',
-      token: req.params.token,
-    });
-    if (!tokenRow) return;
-    const view = await buildPublicView(tokenRow.contract_id);
-    return successResponse(res, { contract: view });
+    const tokenRow = await loadActionToken(req, res, { tableName: TABLE, token: req.params.token });
+    if (!tokenRow) return undefined;
+
+    if (!verification.hasValidGrant(req, KIND, tokenRow, req.params.token)) {
+      const target = await publicDocumentViews.contractVerificationTarget(tokenRow);
+      if (!target) return res.status(404).json({ error: 'Contract not found' });
+      // Before the code is confirmed the link says who sent it and where the
+      // code will go, and nothing else: no number, title or status, no
+      // customer name or address, no contract text, no IPs.
+      return successResponse(res, {
+        contract: {
+          verificationRequired: true,
+          language: target.language,
+          emailHint: verification.maskEmail(target.recipientEmail),
+          issuer: target.issuer,
+        },
+      });
+    }
+
+    const view = await publicDocumentViews.buildContractView(tokenRow.contract_id);
+    if (!view) return res.status(404).json({ error: 'Contract not found' });
+    return successResponse(res, { contract: { ...view, verificationRequired: false } });
   }),
 );
 
 // One of the contract's attachments (#1445), for the customer holding the
-// signing link. The attachment must belong to this contract, and its bytes
-// must still match what the contract recorded.
+// signing link. The attachment must belong to this contract, its bytes must
+// still match what the contract recorded, and the visitor must have
+// confirmed the emailed code — the same grant the view above needs.
 router.get(
   '/:token/attachments/:attachmentId',
   previewLimiter,
-  [
-    param('token').isString().isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i),
-    param('attachmentId').isInt({ min: 1 }).toInt(),
-  ],
+  [tokenParam(), param('attachmentId').isInt({ min: 1 }).toInt()],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const tokenRow = await loadActionToken(req, res, {
-      tableName: 'contract_action_tokens',
-      token: req.params.token,
-    });
-    if (!tokenRow) return;
+    const tokenRow = await loadActionToken(req, res, { tableName: TABLE, token: req.params.token });
+    if (!tokenRow) return undefined;
+    if (!verification.hasValidGrant(req, KIND, tokenRow, req.params.token)) {
+      return sendVerificationRequired(res);
+    }
     const attachments = require('../services/contract/attachments');
     const file = await attachments.openContractAttachment(tokenRow.contract_id, req.params.attachmentId);
     const { buildContentDisposition } = require('../utils/filenameSanitizer');
@@ -108,130 +117,80 @@ router.get(
   }),
 );
 
+
 router.post(
   '/:token/sign',
   respondLimiter,
   [
-    param('token').isString().isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i),
+    tokenParam(),
     body('name').isString().isLength({ min: 1, max: 255 }),
     body('accepted').isBoolean(),
     body('signatureDataUrl').optional({ nullable: true }).isString(),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
+    const tokenRow = await loadActionToken(req, res, { tableName: TABLE, token: req.params.token });
+    if (!tokenRow) return undefined;
+    if (!verification.hasValidGrant(req, KIND, tokenRow, req.params.token)) {
+      return sendVerificationRequired(res);
+    }
     // Audit IP source: req.ip ONLY. See utils/clientIp.js for the
     // full rationale — reading X-Forwarded-For directly bypassed
     // Express's trust-proxy safety net and let direct (non-proxied)
     // POSTs spoof the audit IP, defeating the legal-evidence promise
     // of the contract signing flow. Operators whose nginx topology
     // needs different trust rules adjust `TRUST_PROXY` in server.js.
-    const ip = clientIpForAudit(req);
-    try {
-      const result = await contractService.recordCustomerSignature({
-        token: req.params.token,
-        name: req.body.name,
-        signatureDataUrl: req.body.signatureDataUrl,
-        accepted: req.body.accepted === true,
-        ip,
-      });
-      return successResponse(res, result);
-    } catch (err) {
-      if (err.status) {
-        return res.status(err.status).json({ error: err.message, code: err.code });
-      }
-      throw err;
-    }
-  }),
-);
-
-// Server-side guard for the "allow PDF upload" toggle. When the admin
-// turns it off in Settings → CRM behaviour → Contracts the public sign
-// page hides the upload section, but a hand-crafted POST would still
-// hit this route — refuse here too BEFORE multer reads the body so a
-// disabled-toggle install never writes attacker bytes to disk.
-async function uploadSignedPdfSettingGuard(req, res, next) {
-  const allowPdfUpload = (await getAppSetting('crm_contracts_allow_pdf_upload')) !== false;
-  if (!allowPdfUpload) {
-    return res.status(403).json({
-      error: 'Uploading a wet-signed PDF is disabled for this installation. Please sign in your browser instead.',
-      code: 'UPLOAD_DISABLED',
-    });
-  }
-  next();
-}
-
-router.post(
-  '/:token/upload-signed-pdf',
-  respondLimiter,
-  [param('token').isString().isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i)],
-  // CRITICAL ORDERING: setting guard + token guard run BEFORE multer.
-  // Previously these checks lived after multer.single, which meant a
-  // disabled-toggle install OR an expired/invalid token still cost a
-  // disk write — captured tokens could be replayed to spam the disk
-  // up to multer's 10 MB cap per request. Pre-multer rejection costs
-  // a DB lookup and nothing more.
-  uploadSignedPdfSettingGuard,
-  preMulterTokenGuard('contract_action_tokens'),
-  signedPdfUpload.single('file'),
-  handleAsync(async (req, res) => {
-    validateRequest(req);
-    const tokenRow = req.publicTokenRow; // attached by preMulterTokenGuard
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded', code: 'NO_FILE' });
-    }
-    const result = await contractService.attachSignedPdfUpload(
-      tokenRow.contract_id,
-      req.file.path,
-      'customer',
-    );
-    // Mark the token as used so the link can't be re-played.
-    // IP storage is gated by the crm_contracts_store_ip setting so
-    // privacy-strict operators can opt out — same toggle that gates
-    // the in-browser-sign IP captures. See utils/clientIp.js for
-    // why we trust req.ip only.
-    const rawIp = clientIpForAudit(req);
-    const storeIpEnabled = (await getAppSetting('crm_contracts_store_ip')) !== false;
-    await db('contract_action_tokens').where({ id: tokenRow.id }).update({
-      used_at: new Date(),
-      used_action: 'uploaded_signed_pdf',
-      used_ip: storeIpEnabled ? rawIp : null,
+    const result = await contractService.recordCustomerSignature({
+      token: req.params.token,
+      name: req.body.name,
+      signatureDataUrl: req.body.signatureDataUrl,
+      accepted: req.body.accepted === true,
+      ip: clientIpForAudit(req),
     });
     return successResponse(res, result);
   }),
 );
 
+router.post(
+  '/:token/upload-signed-pdf',
+  respondLimiter,
+  // CRITICAL ORDERING: setting guard, token guard and the verification
+  // grant all run BEFORE multer. A disabled-toggle install, an
+  // expired/invalid token or an unverified visitor must not cost a disk
+  // write — otherwise a captured link could be replayed to spam the disk
+  // up to multer's 10 MB cap per request.
+  uploadSignedPdfSettingGuard,
+  preMulterTokenGuard(TABLE),
+  requireGrant(KIND),
+  signedPdfUpload.single('file'),
+  handleAsync(async (req, res) => finishSignedPdfUpload(req, res)),
+);
+
 /**
- * Public PDF download — token-scoped. Once the customer has signed,
- * they can re-fetch the signed copy from the same link rather than
- * waiting for the contract_fully_signed email (which only arrives
+ * PDF download — token-scoped and grant-gated. Once the customer has
+ * signed, they can re-fetch the signed copy from the same link rather
+ * than waiting for the contract_fully_signed email (which only arrives
  * after admin counter-sign). Streams signed_pdf_path when present,
  * falls back to pdf_path. Returns 410 once the link has expired.
  *
- * Security note: this route deliberately honours `expires_at` now —
- * previous behaviour was "expired tokens still allow downloads, the
- * customer may need their signed copy after the window closes" but
- * that turned the token into a permanent unauthenticated download
- * URL once leaked (referer headers, browser history, email forward).
- * Customers needing a post-expiry copy receive the signed PDF in the
- * `contract_fully_signed` email, OR the admin can issue a fresh
- * download link via the admin detail page.
- *
- * Future enhancement (audit: "public token model rework"): swap the
- * long-lived contract token for a short-lived download sub-token
- * (~5 min) generated after sign, so the download URL itself never
- * embeds the long-lived secret. Tracked in the CRM backlog.
+ * Security note: this route honours `expires_at` — expired tokens used to
+ * keep allowing downloads, which turned the token into a permanent
+ * unauthenticated download URL once leaked (referer headers, browser
+ * history, email forward). Customers needing a post-expiry copy receive
+ * the signed PDF in the `contract_fully_signed` email, OR the admin can
+ * issue a fresh link via the admin detail page.
  */
 router.get(
   '/:token/pdf',
   previewLimiter,
-  [param('token').isString().isLength({ min: 64, max: 64 }).matches(/^[a-f0-9]+$/i)],
+  [tokenParam()],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const tokenRow = await loadActionToken(req, res, {
-      tableName: 'contract_action_tokens',
-      token: req.params.token,
-    });
-    if (!tokenRow) return;
+    const tokenRow = await loadActionToken(req, res, { tableName: TABLE, token: req.params.token });
+    if (!tokenRow) return undefined;
+    if (!verification.hasValidGrant(req, KIND, tokenRow, req.params.token)) {
+      return sendVerificationRequired(res);
+    }
     const contract = await db('contracts').where({ id: tokenRow.contract_id }).first();
     if (!contract) return res.status(404).json({ error: 'Contract not found' });
 
@@ -247,22 +206,18 @@ router.get(
     if (!filePath || !fs.existsSync(filePath)) {
       // Render on-demand so the link works even if the on-disk
       // file was wiped (cleanup, S3 sync, etc.).
-      const contractService = require('../services/contractService');
       const buf = await contractService.renderContractPdfBuffer(contract.id);
       res.set('Content-Type', 'application/pdf');
       res.set('Content-Disposition', `attachment; filename="${contract.contract_number}.pdf"`);
       return res.send(buf);
     }
-    // C.7 — defence-in-depth: reject if filePath resolves outside the
-    // contract storage roots. The customer signing token is far less
-    // privileged than an admin, so getting this wrong has higher blast
-    // radius (a forged token could otherwise read any file the node
-    // process has access to). assertContractPdfPath throws AppError
-    // which the error middleware converts to a clean 403/404.
+    // Defence-in-depth: reject if filePath resolves outside the contract
+    // storage roots. assertContractPdfPath throws AppError which the error
+    // middleware converts to a clean 403/404.
     const safePath = assertContractPdfPath(filePath);
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Disposition', `attachment; filename="${path.basename(safePath)}"`);
-    fs.createReadStream(safePath).pipe(res);
+    return fs.createReadStream(safePath).pipe(res);
   }),
 );
 

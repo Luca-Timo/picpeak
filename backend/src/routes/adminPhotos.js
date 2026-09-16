@@ -34,7 +34,7 @@ const chunkedUpload = require('../services/chunkedUploadService');
 const watermarkGeneratorService = require('../services/watermarkGeneratorService');
 const downloadZipService = require('../services/downloadZipService');
 const { findReplacementCandidate, replacePhoto } = require('../services/photoReplacementService');
-const { requireEventOwnership } = require('../middleware/ownership');
+const { requireEventOwnership, canAccessEvent } = require('../middleware/ownership');
 const { getStorage } = require('../services/storage');
 const { errorResponse } = require('../utils/routeHelpers');
 const logger = require('../utils/logger');
@@ -43,21 +43,10 @@ const router = express.Router();
 // Get storage path from environment or default
 const getStoragePath = () => process.env.STORAGE_PATH || path.join(__dirname, '../../../storage');
 
-// Resolve a numeric category id within the scope of one event: it must belong
-// to that event or be a global category (#500 / #525 — the same contract the
-// public v1 upload route enforces). Returns undefined for an out-of-scope id,
-// which every caller turns into a 400 rather than silently filing the photo
-// under another event's category.
-const findScopedCategory = (eventId, categoryId) => db('photo_categories')
-  .where({ id: categoryId })
-  .andWhere(function () {
-    this.where({ event_id: eventId }).orWhere('is_global', true);
-  })
-  .first();
-
-const outOfScopeCategoryError = (categoryId) => ({
-  error: `Unknown or out-of-scope category_id ${categoryId}`
-});
+// Category ids are resolved within one event's scope (#500 / #525); shared
+// with the gallery upload route.
+const { findScopedCategory, outOfScopeCategoryError } = require('../utils/categoryScope');
+const { photoCapOf, countEventPhotos } = require('../services/photoCap');
 
 // Configure multer for file uploads
 // IMPORTANT: Using synchronous functions to prevent file corruption
@@ -93,7 +82,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const { validateFileType, createFileUploadValidator } = require('../utils/fileSecurityUtils');
+const { validateFileType, createFileUploadValidator, normalizeUploadMimeType } = require('../utils/fileSecurityUtils');
 
 // Create a multer instance that uses dynamically resolved allowed MIME types.
 // The allowed types are fetched from the database once per request (before multer
@@ -122,6 +111,9 @@ const createUpload = (maxFileSizeBytes) => multer({
   fileFilter: (req, file, cb) => {
     // req.allowedMimeTypes is populated by the middleware that runs before multer
     const allowedMimeTypes = req.allowedMimeTypes || ['image/jpeg', 'image/png', 'image/webp'];
+    // Assigned, not just compared: multer copies this object into req.files,
+    // so the content validator and the stored mime_type see the canonical type.
+    file.mimetype = normalizeUploadMimeType(file.originalname, file.mimetype);
 
     if (validateFileType(file.originalname, file.mimetype, allowedMimeTypes)) {
       return cb(null, true);
@@ -577,12 +569,10 @@ async function loadUploadGroup(req, res) {
   }
 
   const eventId = photos[0].event_id;
-  let eventQuery = db('events').where('id', eventId);
-  if (req.admin.roleName === 'editor') {
-    eventQuery = eventQuery.where('created_by', req.admin.id);
-  }
-  const event = await eventQuery.first();
-  if (!event) {
+  // Upload status lists the event's photo filenames, so it follows the same
+  // rule as the photo routes: 404 unless the admin can act on the event.
+  const event = await db('events').where('id', eventId).first();
+  if (!event || !canAccessEvent(req.admin, event)) {
     res.status(404).json({ error: 'Event not found' });
     return null;
   }
@@ -1742,6 +1732,29 @@ router.post('/:eventId/chunked-upload/:uploadId/complete', adminAuth, requirePer
   try {
     const { eventId, uploadId } = req.params;
     const { category_id } = req.body;
+
+    // Same rules as the batch upload route: the photo cap and the category
+    // scope. Checked before the merge, so a refused upload writes nothing.
+    const event = await db('events').where({ id: eventId }).first();
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    const rawParsed = category_id ? parseInt(category_id, 10) : NaN;
+    const parsedCategoryId = rawParsed > 0 ? rawParsed : null;
+    if (parsedCategoryId && !(await findScopedCategory(event.id, parsedCategoryId))) {
+      await chunkedUpload.abortUpload(uploadId).catch(() => {});
+      return res.status(400).json(outOfScopeCategoryError(parsedCategoryId));
+    }
+    const photoCap = photoCapOf(event);
+    if (photoCap) {
+      const currentCount = await countEventPhotos(event.id);
+      if (currentCount + 1 > photoCap) {
+        await chunkedUpload.abortUpload(uploadId).catch(() => {});
+        return res.status(400).json({
+          error: `Photo cap exceeded. This event allows a maximum of ${photoCap} photos. Currently ${currentCount} photos exist, and you are trying to upload 1 more.`
+        });
+      }
+    }
 
     // Complete the chunked upload (merge chunks)
     const mergedFile = await chunkedUpload.completeUpload(uploadId);

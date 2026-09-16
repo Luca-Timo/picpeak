@@ -20,6 +20,17 @@ const {
   bootCrmDb, seedMinimal, assignAdminRole, mintAdminToken, createPublicToken, buildRouteApp,
 } = require('./helpers/crmDb');
 
+
+// The public quote page now needs the grant issued after the emailed code
+// (upstream #1465); the code step itself is covered in its own suite. The
+// service is required lazily: at module load it would initialise the db
+// module before bootCrmDb points it at the temp database.
+async function quoteGrant(token) {
+  const verification = require('../../src/services/publicDocumentVerificationService');
+  const row = await db('quote_action_tokens').where({ token }).first();
+  return verification.issueGrant('quote', row, token);
+}
+
 jest.setTimeout(120000);
 
 let db;
@@ -130,7 +141,7 @@ test('the PDF preview of unsaved lines marks each add-on as the editor shows it'
 
 test('the customer\'s message comes with the acceptance and reaches the business', async () => {
   const { quoteId, link } = await sentQuote();
-  const res = await request(publicApp).post(`/api/public/quotes/${link}/respond`).send({
+  const res = await request(publicApp).post(`/api/public/quotes/${link}/respond`).set('X-Document-Access', await quoteGrant(link)).send({
     action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000, customerMessage: 'Kein Album, aber gerne <b>zwei</b> Drohnenflüge?',
   });
   expect(res.status).toBe(200);
@@ -147,7 +158,7 @@ test('the customer\'s message comes with the acceptance and reaches the business
 
 test('the business changes the add-ons of an accepted quote: recorded, re-rendered, emailed', async () => {
   const { quoteId, link } = await sentQuote();
-  await request(publicApp).post(`/api/public/quotes/${link}/respond`).send({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000 });
+  await request(publicApp).post(`/api/public/quotes/${link}/respond`).set('X-Document-Access', await quoteGrant(link)).send({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000 });
   const before = await db('quotes').where({ id: quoteId }).first();
 
   const res = await request(adminApp).post(`/api/admin/quotes/${quoteId}/add-ons`).set(auth).send({ selectedOptional: [2] });
@@ -185,7 +196,7 @@ test('add-ons can only be changed on an accepted quote without a contract, event
   expect(early.status).toBe(409);
   expect(early.body.code).toBe('QUOTE_NOT_ACCEPTED');
 
-  await request(publicApp).post(`/api/public/quotes/${link}/respond`).send({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000 });
+  await request(publicApp).post(`/api/public/quotes/${link}/respond`).set('X-Document-Access', await quoteGrant(link)).send({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000 });
   await db('quotes').where({ id: quoteId }).update({ converted_event_id: 999999 });
   const late = await request(adminApp).post(`/api/admin/quotes/${quoteId}/add-ons`).set(auth).send({ selectedOptional: [2] });
   expect(late.status).toBe(409);

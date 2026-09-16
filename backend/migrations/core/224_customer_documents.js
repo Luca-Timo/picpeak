@@ -1,5 +1,5 @@
 /**
- * Migration 220: customer documents in the portal (#1444).
+ * Migration 224: customer documents in the portal (#1444).
  *
  * Two tables:
  *

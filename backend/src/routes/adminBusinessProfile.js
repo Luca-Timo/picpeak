@@ -169,7 +169,7 @@ function transformProfile(p) {
     // null = no global default; the hours page then requires a per-
     // customer or per-entry rate.
     defaultHourlyRateMinor: p.default_hourly_rate_minor == null ? null : Number(p.default_hourly_rate_minor),
-    // Install-wide fallback day rate (migration 215), minor units.
+    // Install-wide fallback day rate (migration 219), minor units.
     defaultDayRateMinor: p.default_day_rate_minor == null ? null : Number(p.default_day_rate_minor),
     defaultCurrency: p.default_currency || 'CHF',
     defaultLocale: p.default_locale || 'de',
@@ -478,7 +478,9 @@ router.put(
     // cleanup path already trusts to name a file this route wrote.
     body('logoPath').optional({ values: 'falsy' }).isString().isLength({ max: 512 })
       .custom((value) => {
-        if (!uploadedPdfLogoPath(value, getStoragePath())) {
+        // Image extensions only: a pdf-logo-* file with any other extension
+        // can only predate the MIME-derived extension, and is not a logo.
+        if (!uploadedPdfLogoPath(value, getStoragePath(), { imageOnly: true })) {
           throw new Error('logoPath must be a path produced by the logo upload endpoint');
         }
         return true;

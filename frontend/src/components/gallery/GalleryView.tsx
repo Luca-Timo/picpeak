@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '../common';
 import { GallerySkeleton } from './GallerySkeleton';
+import { PasswordChangeRequiredNotice } from './PasswordChangeRequiredNotice';
+import { isAdminSessionExpired, isPasswordChangeRequired } from '../../utils/passwordChangeRequired';
 import { useGalleryAuth, useTheme } from '../../contexts';
 import { useGalleryPhotos, useDownloadAllPhotos } from '../../hooks/useGallery';
 import { PhotoGridWithLayouts } from './PhotoGridWithLayouts';
@@ -905,13 +907,23 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
   if (error || !data) {
     // Check if it's an authentication error (401)
     const is401Error = (error as any)?.response?.status === 401;
-    
+
+    // An admin preview whose admin session idled out: offer to sign in again.
+    // Logging a guest session out would leave the preview blank.
+    if (isAdminSessionExpired(error)) {
+      return <PasswordChangeRequiredNotice reason="session" />;
+    }
+
     if (is401Error) {
       // Authentication failed - logout and let the parent component handle re-authentication
       logout();
       return null;
     }
-    
+
+    if (isPasswordChangeRequired(error)) {
+      return <PasswordChangeRequiredNotice />;
+    }
+
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center">
         <div className="text-center">

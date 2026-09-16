@@ -7,6 +7,8 @@
  */
 import type { AxiosProgressEvent } from 'axios';
 import { api } from '../config/api';
+import type { ContractStatus, PublicContractView } from './contracts.service';
+import type { PublicQuoteView, QuoteStatus } from './quotes.service';
 
 export interface CustomerProfile {
   id: number;
@@ -415,6 +417,22 @@ export const customerService = {
     return URL.createObjectURL(res.data);
   },
 
+  /** Full quote view for the portal response page. Session-authenticated:
+   *  the portal never handles the emailed response token. */
+  async getQuote(id: number): Promise<{ quote: PublicQuoteView; canRespond: boolean }> {
+    const { data } = await api.get(`/customer/quotes/${id}`);
+    return data.data || data;
+  },
+
+  async respondToQuote(
+    id: number,
+    action: 'accept' | 'decline',
+    options: { tosAccepted?: boolean } = {},
+  ): Promise<{ status: QuoteStatus; lockedAt: string }> {
+    const { data } = await api.post(`/customer/quotes/${id}/respond`, { action, tosAccepted: options.tosAccepted });
+    return data.data || data;
+  },
+
   // ---- Contracts (customer-side) ----
   async listContracts(): Promise<CustomerContract[]> {
     const response = await api.get<{ contracts: CustomerContract[] }>('/customer/contracts');
@@ -436,11 +454,36 @@ export const customerService = {
     const response = await api.post<CustomerContractSigningAccess>(`/customer/contracts/${id}/signing-access`);
     return response.data;
   },
+
+  /** Full contract view for the portal signing page. Session-authenticated:
+   *  the portal never handles the emailed signing token. */
+  async getContract(id: number): Promise<{ contract: PublicContractView; canSign: boolean }> {
+    const { data } = await api.get(`/customer/contracts/${id}`);
+    return data.data || data;
+  },
+
+  async signContract(
+    id: number,
+    payload: { name: string; signatureDataUrl?: string | null; accepted: true },
+  ): Promise<{ status: ContractStatus; signedAt: string }> {
+    const { data } = await api.post(`/customer/contracts/${id}/sign`, payload);
+    return data.data || data;
+  },
+
+  async uploadSignedContractPdf(id: number, file: File): Promise<{ status: 'fully_signed'; signedPdfPath: string }> {
+    const form = new FormData();
+    form.append('file', file);
+    const { data } = await api.post(`/customer/contracts/${id}/upload-signed-pdf`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data.data || data;
+  },
 };
 
 export type CustomerContractSigningAccess =
   | { mode: 'session'; sessionToken: string; expiresAt: string }
-  | { mode: 'link'; token: string };
+  /** Sent before signatures v2: sign on the portal's own page, no token. */
+  | { mode: 'portal' };
 
 export interface CustomerQuote {
   id: number;
@@ -463,9 +506,8 @@ export interface CustomerQuote {
   responseLockedAt: string | null;
   acceptedAt: string | null;
   declinedAt: string | null;
-  /** Token to open the public response page from the customer
-   *  dashboard. null when expired/used. */
-  responseToken: string | null;
+  /** Whether the quote can still be accepted or declined from the portal. */
+  canRespond: boolean;
 }
 
 export interface CustomerInvoice {
@@ -527,4 +569,6 @@ export interface CustomerContract {
   signedAdminName: string | null;
   hasPdf: boolean;
   hasSignedPdf: boolean;
+  /** Whether the customer can sign this contract from the portal. */
+  canSign: boolean;
 }

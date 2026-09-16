@@ -24,9 +24,10 @@ const { parseBooleanInput } = require('../../utils/parsers');
 const eventTypeService = require('../../services/eventTypeService');
 const { normaliseEventTimeTriple } = require('../../services/eventService');
 const { hasColumnCached } = require('../../utils/schemaCache');
-const { requireEventOwnership } = require('../../middleware/ownership');
+const { requireEventOwnership, scopeEventsListQuery, withoutForeignEventSecrets } = require('../../middleware/ownership');
 
 const { galleryPasswordColumns, dropCopiesIfStorageOff } = require('../../utils/galleryPasswordVault');
+const { credentialChangeColumns, sameAsStored } = require('../../utils/galleryCredentialCutoff');
 
 const { getFrontendBaseUrl, getAbsoluteFrontendUrl } = require('../../utils/frontendUrl');
 const downloadZipService = require('../../services/downloadZipService');
@@ -325,10 +326,9 @@ module.exports = (router) => {
       // Build query
       let query = db('events');
 
-      // Editor role can only see their own events
-      if (req.admin.roleName === 'editor') {
-        query = query.where('created_by', req.admin.id);
-      }
+      // Roles other than super_admin and admin see their own events plus
+      // ownerless ones, the rule requireEventOwnership applies per event.
+      query = scopeEventsListQuery(query, req.admin);
 
       // Apply search filter
       if (search) {
@@ -392,7 +392,7 @@ module.exports = (router) => {
         created_at: event.created_at ? new Date(event.created_at).toISOString() : null,
         expires_at: event.expires_at ? new Date(event.expires_at).toISOString() : null,
         archived_at: event.archived_at ? new Date(event.archived_at).toISOString() : null
-      })).map(mapEventForApi);
+      })).map((event) => withoutForeignEventSecrets(mapEventForApi(event), req.admin));
 
       res.json({
         events: eventsWithCounts,
@@ -413,14 +413,9 @@ module.exports = (router) => {
     try {
       const { id } = req.params;
 
-      let query = db('events').where('id', id);
-
-      // Editor role can only see their own events
-      if (req.admin.roleName === 'editor') {
-        query = query.where('created_by', req.admin.id);
-      }
-
-      const event = await query.first();
+      // Same visibility as the list: a role limited to its own events gets a
+      // 404 for anyone else's, not a 403 that confirms the event exists.
+      const event = await scopeEventsListQuery(db('events').where('id', id), req.admin).first();
 
       if (!event) {
         return res.status(404).json({ error: 'Event not found' });
@@ -471,7 +466,7 @@ module.exports = (router) => {
         logger.warn('Failed to load customer assignments for event', { eventId: id, error: e.message });
       }
 
-      res.json(mapEventForApi({
+      res.json(withoutForeignEventSecrets(mapEventForApi({
         ...event,
         photo_count: parseInt(photoCount) || 0,
         total_size: parseInt(totalSize) || 0,
@@ -493,7 +488,7 @@ module.exports = (router) => {
           is_active: c.is_active,
           can_sign_in: c.can_sign_in,
         })),
-      }));
+      }), req.admin));
     } catch (error) {
       errorResponse(res, error, 500, 'Failed to fetch event details');
     }
@@ -561,10 +556,22 @@ module.exports = (router) => {
         const policyError = await checkGalleryPasswordPolicy(password, event.event_name);
         if (policyError) return res.status(400).json(policyError);
 
-        await db('events').where('id', id).update({
-          password_hash: await bcrypt.hash(password, getBcryptRounds()),
-          ...(await galleryPasswordColumns({ password })),
-        });
+        // Re-entering the current password is not a change: keep the hash and
+        // the sessions opened with it. A new password ends those sessions.
+        const copyColumns = await galleryPasswordColumns({ password });
+        // Kept only while the stored hash is still the one compared: a reset
+        // landing in between must not leave this request's copy (and email)
+        // disagreeing with the hash. Otherwise it is written as a change.
+        const keptHash = await sameAsStored(password, event.password_hash)
+          && await db('events').where({ id, password_hash: event.password_hash })
+            .update(Object.keys(copyColumns).length ? copyColumns : { updated_at: new Date().toISOString() });
+        if (!keptHash) {
+          await db('events').where('id', id).update({
+            password_hash: await bcrypt.hash(password, getBcryptRounds()),
+            ...(await credentialChangeColumns('gallery')),
+            ...copyColumns,
+          });
+        }
         await dropCopiesIfStorageOff(id);
       }
 
@@ -655,6 +662,8 @@ module.exports = (router) => {
 
       const requirePassword = parseBooleanInput(event.require_password, true);
       const publishUpdates = { is_draft: formatBoolean(false) };
+      let publishKeepsHash = false;
+      let publishWritesPassword = false;
       if (requirePassword && password) {
       // Re-hash so the stored hash matches what the email carries — even if
       // the admin mistypes vs. what was set at draft creation, the gallery
@@ -662,11 +671,24 @@ module.exports = (router) => {
         const policyError = await checkGalleryPasswordPolicy(password, event.event_name);
         if (policyError) return res.status(400).json(policyError);
 
-        publishUpdates.password_hash = await bcrypt.hash(password, getBcryptRounds());
         Object.assign(publishUpdates, await galleryPasswordColumns({ password }));
+        publishKeepsHash = await sameAsStored(password, event.password_hash);
+        publishWritesPassword = true;
       }
-      await db('events').where('id', id).update(publishUpdates);
-      if (publishUpdates.password_hash) await dropCopiesIfStorageOff(id);
+      // An unchanged password keeps the hash only while it is still the one
+      // compared; a password change landing in between makes this a change.
+      const published = publishKeepsHash
+        ? await db('events').where({ id, password_hash: event.password_hash }).update(publishUpdates)
+        : 0;
+      if (!published) {
+        if (publishWritesPassword) {
+          publishUpdates.password_hash = await bcrypt.hash(password, getBcryptRounds());
+          Object.assign(publishUpdates, await credentialChangeColumns('gallery'));
+        }
+        await db('events').where('id', id).update(publishUpdates);
+      }
+      // Whenever a recoverable copy was written, not only when the hash changed.
+      if (publishWritesPassword) await dropCopiesIfStorageOff(id);
 
       // Notify the customer — unless the admin asked to publish quietly
       // (#1235). Everything else about publishing still happens: the gallery
@@ -1159,6 +1181,9 @@ module.exports = (router) => {
         'archive_size',
         // Server-managed timestamps
         'download_zip_generated_at', 'archived_at', 'revealed_at', 'event_reminder_sent_at',
+        // Credential-change cutoffs: clearing one would revive the sessions
+        // the password change ended.
+        'gallery_password_changed_at', 'client_password_changed_at',
         // Lifecycle — governed by dedicated permission-gated routes
         // (events.archive/restore, publish, activate/deactivate), not events.edit.
         'is_archived', 'is_draft', 'is_active',
@@ -1308,6 +1333,12 @@ module.exports = (router) => {
       // Plaintexts to remember after the row is written (#1271); each key is
       // only set when this request changed that password.
       const recoverable = {};
+      // Credentials this request changed; sessions opened with the old one end.
+      const credentialChanges = new Set();
+      // Hashes left alone because the submitted password matched; the write is
+      // conditional on them so a concurrent change cannot slip underneath.
+      let keptGalleryHash = false;
+      let keptClientHash = false;
       if (Object.prototype.hasOwnProperty.call(updates, 'client_password') && updates.client_password) {
         updates.client_password_hash = await bcrypt.hash(updates.client_password, getBcryptRounds());
         recoverable.clientPassword = updates.client_password;
@@ -1317,6 +1348,7 @@ module.exports = (router) => {
       }
       if (updates.regenerate_client_token) {
         updates.client_share_token = crypto.randomBytes(32).toString('hex');
+        credentialChanges.add('client');
       }
       delete updates.regenerate_client_token;
 
@@ -1379,13 +1411,29 @@ module.exports = (router) => {
 
       const currentRequirePassword = parseBooleanInput(event.require_password, true);
 
+      // Resubmitting the current client password is not a change: keep the hash
+      // and the client sessions opened with it.
+      if (updates.client_password_hash) {
+        if (await sameAsStored(recoverable.clientPassword, event.client_password_hash)) {
+          delete updates.client_password_hash;
+          keptClientHash = true;
+        } else {
+          credentialChanges.add('client');
+        }
+      }
+
       if (hasRequirePasswordUpdate && requirePasswordUpdate === true && !currentRequirePassword && !newPasswordPlain) {
         return res.status(400).json({ error: 'Password must be provided when enabling password requirement.' });
       }
 
       if (newPasswordPlain) {
-        updates.password_hash = await bcrypt.hash(newPasswordPlain, getBcryptRounds());
         recoverable.password = newPasswordPlain;
+        if (!(await sameAsStored(newPasswordPlain, event.password_hash))) {
+          updates.password_hash = await bcrypt.hash(newPasswordPlain, getBcryptRounds());
+          credentialChanges.add('gallery');
+        } else {
+          keptGalleryHash = true;
+        }
       } else if (hasRequirePasswordUpdate && requirePasswordUpdate === false && currentRequirePassword) {
         updates.password_hash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), getBcryptRounds());
         recoverable.password = null;
@@ -1524,6 +1572,9 @@ module.exports = (router) => {
       // Handle client access fields (#172)
       if (Object.prototype.hasOwnProperty.call(updates, 'client_access_enabled')) {
         updates.client_access_enabled = formatBoolean(updates.client_access_enabled);
+        if (!parseBooleanInput(updates.client_access_enabled, false) && parseBooleanInput(event.client_access_enabled, false)) {
+          credentialChanges.add('client');
+        }
         // Auto-generate client share token when first enabling
         if (parseBooleanInput(updates.client_access_enabled, false) && !event.client_share_token && !updates.client_share_token) {
           updates.client_share_token = crypto.randomBytes(32).toString('hex');
@@ -1535,10 +1586,25 @@ module.exports = (router) => {
       // which would surface as a 500 for an otherwise-valid no-op request
       // (e.g. a body of only protected fields). (codex review.)
       if (Object.keys(recoverable).length > 0) Object.assign(updates, await galleryPasswordColumns(recoverable));
+      if (credentialChanges.size > 0) Object.assign(updates, await credentialChangeColumns(...credentialChanges));
       if (Object.keys(updates).length > 0) {
-        await db('events')
-          .where('id', id)
-          .update(updates);
+        let eventUpdate = db('events').where('id', id);
+        if (keptGalleryHash) eventUpdate = eventUpdate.where('password_hash', event.password_hash);
+        if (keptClientHash) eventUpdate = eventUpdate.where('client_password_hash', event.client_password_hash);
+        const updated = await eventUpdate.update(updates);
+        if (!updated && (keptGalleryHash || keptClientHash)) {
+          // A password changed underneath: write the submitted ones as changes.
+          if (keptGalleryHash) {
+            updates.password_hash = await bcrypt.hash(newPasswordPlain, getBcryptRounds());
+            credentialChanges.add('gallery');
+          }
+          if (keptClientHash) {
+            updates.client_password_hash = await bcrypt.hash(recoverable.clientPassword, getBcryptRounds());
+            credentialChanges.add('client');
+          }
+          Object.assign(updates, await credentialChangeColumns(...credentialChanges));
+          await db('events').where('id', id).update(updates);
+        }
       }
       if (Object.keys(recoverable).length > 0) await dropCopiesIfStorageOff(id);
 

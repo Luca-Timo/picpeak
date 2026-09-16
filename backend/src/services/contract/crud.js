@@ -258,6 +258,35 @@ async function createContract(payload, adminId, { idempotencyKey = null } = {}) 
     } else if (version) {
       // The version's clauses, with their frozen texts and overrides.
       await require('./templates').seedContractFromVersion(trx, contractId, version);
+    } else {
+      // Seed with every active system block, toggled on. Per-section
+      // position = display_order from the source block.
+      //
+      // D.3 — batched insert. Previously this loop fired one INSERT per
+      // block (12+ round-trips inside the transaction on a fresh contract).
+      // Batched into a single `.insert(rows)` since the row count is
+      // bounded (system block count) and the inserts are independent.
+      const systemBlocks = await trx('contract_blocks')
+        .where({ is_system: true, is_active: true })
+        .orderBy(['section', 'display_order']);
+      const sectionCounters = {};
+      const inclusionRows = systemBlocks.map((block) => {
+        sectionCounters[block.section] = (sectionCounters[block.section] || 0) + 1;
+        return {
+          contract_id: contractId,
+          block_id: block.id,
+          section: block.section,
+          position: sectionCounters[block.section],
+          body_text_snapshot: null,
+          body_text_de_snapshot: null,
+          included: true,
+          created_at: new Date(),
+          updated_at: new Date(),
+        };
+      });
+      if (inclusionRows.length > 0) {
+        await trx('contract_block_inclusions').insert(inclusionRows);
+      }
     }
 
     try {
@@ -288,10 +317,14 @@ async function createContractIdempotent(payload, adminId, idempotencyKey) {
   const findEarlier = async () => {
     const existing = await db('contracts')
       .where({ create_idempotency_key: idempotencyKey })
-      .select('id', 'created_by_admin_id')
+      .select('id', 'created_by_admin_id', 'customer_account_id')
       .first();
     if (!existing) return null;
-    if (Number(existing.created_by_admin_id) !== Number(adminId)) {
+    // A replay answers with the earlier draft as-is, and an update cannot move
+    // a contract to another customer. A key reused for a different customer
+    // would have the caller write that customer's contract into this draft.
+    if (Number(existing.created_by_admin_id) !== Number(adminId)
+      || Number(existing.customer_account_id) !== Number(payload.customerAccountId)) {
       throw new AppError('This request key was already used for a different draft.', 409, 'IDEMPOTENCY_KEY_CONFLICT');
     }
     return { id: existing.id, replayed: true };

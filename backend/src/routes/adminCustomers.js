@@ -91,10 +91,10 @@ function transformCustomer(c) {
     // Contracts override (migration 131). Opt-out: absent column (older row /
     // un-selected) reads as ON so existing customers keep the Contracts tab.
     featureContracts: c.feature_contracts === undefined ? true : (c.feature_contracts === true || c.feature_contracts === 1),
-    // Documents override (migration 220). Same opt-out reading as contracts.
+    // Documents override (migration 224). Same opt-out reading as contracts.
     featureDocuments: c.feature_documents === undefined ? true : (c.feature_documents === true || c.feature_documents === 1),
     hourlyRateMinor: c.hourly_rate_minor != null ? Number(c.hourly_rate_minor) : null,
-    // Migration 215 — the customer's own day rate for per-day quote lines.
+    // Migration 219 — the customer's own day rate for per-day quote lines.
     dayRateMinor: c.day_rate_minor != null ? Number(c.day_rate_minor) : null,
     // Per-customer Skonto opt-out (migration 112). When true, none of
     // this customer's invoices qualify for an early-payment discount,
@@ -423,7 +423,7 @@ router.put('/:id', [
   body('feature_quotes').optional().isBoolean(),
   body('feature_bills').optional().isBoolean(),
   body('feature_contracts').optional().isBoolean(),
-  // Customer documents (migration 220).
+  // Customer documents (migration 224).
   body('feature_documents').optional().isBoolean(),
   // Hours logging (migration 129).
   body('feature_hours_logging').optional().isBoolean(),

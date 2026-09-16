@@ -781,13 +781,11 @@ async function sendCompletedEmails(contractId, certificatePath) {
 async function portalSigningAccess(customer, contractId) {
   const contract = await db('contracts').where({ id: contractId, customer_account_id: customer.id }).first();
   if (!contract || contract.status === 'draft') throw new AppError('Contract not found', 404);
+  // A contract sent before signatures v2 signs on the portal's own page with
+  // the customer's session (upstream #1465): no token reaches the browser.
   if (!isV2(contract)) {
     if (contract.status !== 'sent') throw new AppError('This contract is not waiting for your signature', 409, 'CONTRACT_NOT_SIGNABLE');
-    const token = crypto.randomBytes(32).toString('hex');
-    await db('contract_action_tokens').insert({
-      contract_id: contract.id, token, expires_at: new Date(Date.now() + 60 * 60 * 1000), created_at: new Date(),
-    });
-    return { mode: 'link', token };
+    return { mode: 'portal' };
   }
   // Only a contract still out for signature opens a session. A sealed one
   // would append a `verified` event and move the audit chain past the head

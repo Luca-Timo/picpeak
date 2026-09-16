@@ -155,6 +155,24 @@ describe('contract draft save (issue 1447)', () => {
     expect(await countRows('contract_block_inclusions')).toBe(inclusionsBefore);
   }, WITHIN);
 
+  it('adds the unique key index when migration 214 re-runs after stopping once the column existed', async () => {
+    // SQLite runs migrations without a transaction, so the column can exist
+    // without its index. Without the index two concurrent retries with one
+    // key could each create a draft.
+    const migration = require('../../migrations/core/214_contracts_create_idempotency_key');
+    await db.raw('DROP INDEX IF EXISTS contracts_create_idempotency_key_unique');
+    await migration.up(db);
+
+    const a = await auth(request(app).post('/api/admin/contracts')).send(editorCreatePayload([]));
+    const b = await auth(request(app).post('/api/admin/contracts')).send(editorCreatePayload([]));
+    const sharedKey = `rerun-${Date.now()}`;
+    await db('contracts').where({ id: a.body.contract.id }).update({ create_idempotency_key: sharedKey });
+
+    await expect(
+      db('contracts').where({ id: b.body.contract.id }).update({ create_idempotency_key: sharedKey }),
+    ).rejects.toThrow();
+  }, WITHIN);
+
   describe('retries and duplicate submits', () => {
     const key = () => `edit-${Math.random().toString(36).slice(2)}-${Date.now()}`;
     const createWithKey = (idempotencyKey, bearer = token) => request(app)
@@ -202,6 +220,26 @@ describe('contract draft save (issue 1447)', () => {
 
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('IDEMPOTENCY_KEY_CONFLICT');
+    }, WITHIN);
+
+    it('refuses a key reused for a different customer instead of returning the first draft', async () => {
+      // The editor would otherwise apply the second customer's contract to the
+      // first customer's draft, and an update cannot move it back.
+      const idempotencyKey = key();
+      expect((await createWithKey(idempotencyKey)).status).toBe(201);
+      const [otherCustomerId] = await db('customer_accounts').insert({
+        email: 'other-customer@example.com', display_name: 'Other Customer', password_hash: 'x',
+        preferred_language: 'de', is_active: 1, created_at: new Date().toISOString(),
+      }).returning('id').then((r) => [r[0]?.id ?? r[0]]);
+      const before = await countRows('contracts');
+
+      const res = await auth(request(app).post('/api/admin/contracts'))
+        .set('Idempotency-Key', idempotencyKey)
+        .send({ ...editorCreatePayload([]), customerAccountId: otherCustomerId });
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('IDEMPOTENCY_KEY_CONFLICT');
+      expect(await countRows('contracts')).toBe(before);
     }, WITHIN);
 
     it('rejects a malformed key as a validation error', async () => {

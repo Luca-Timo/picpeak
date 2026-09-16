@@ -587,7 +587,7 @@ async function updateCustomer(id, updates, updatedByAdminId) {
     // Per-customer contracts override (migration 131). Defaults TRUE so
     // existing customers keep their Contracts tab.
     'feature_contracts',
-    // Per-customer documents override (migration 220). Defaults TRUE.
+    // Per-customer documents override (migration 224). Defaults TRUE.
     'feature_documents',
     // CRM billing cadence (migration 102). 'per_event' (default) keeps
     // each invoice firing on its own schedule; monthly/quarterly snap
@@ -596,7 +596,7 @@ async function updateCustomer(id, updates, updatedByAdminId) {
     // Hour-logging default rate (migration 129). Minor units; null
     // means admin must enter a per-entry override on every entry.
     'hourly_rate_minor',
-    // Default day rate for per-day quote lines (migration 215). Minor
+    // Default day rate for per-day quote lines (migration 219). Minor
     // units; null falls back to the business default.
     'day_rate_minor',
     // Per-customer Skonto opt-out (migration 112). Boolean, coerced
@@ -1398,7 +1398,7 @@ async function getEffectiveFeaturesForCustomer(customerOrId) {
   // keep their Contracts tab; an admin can hide it per customer.
   const contractsMaster = await db('feature_flags').where({ key: 'contracts' }).first();
   const contractsEnabled = contractsMaster ? Boolean(contractsMaster.value) : false;
-  // Documents (migration 220): global `documents` flag AND the per-customer
+  // Documents (migration 224): global `documents` flag AND the per-customer
   // override, which defaults TRUE like feature_contracts. A missing flag row
   // reads as off.
   const documentsMaster = await db('feature_flags').where({ key: 'documents' }).first();

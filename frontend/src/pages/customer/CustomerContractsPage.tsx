@@ -2,9 +2,10 @@
  * Customer-side Contracts list. Read-only view of every contract the
  * photographer has sent. Mirrors CustomerQuotesPage in shape:
  *   - status filter + sort
- *   - "Sign" on `sent` rows: asks the server for signing access — a
- *     signing session for a signatures-v2 contract (opens /contract/signing,
- *     no code needed), or a short-lived link for an older contract
+ *   - "Sign" on signable rows: asks the server for signing access — a signing
+ *     session for a signatures-v2 contract (opens /contract/signing, no code
+ *     needed), or the portal's own signing page for a contract sent before.
+ *     Either way the emailed signing token never reaches the browser.
  *   - "Download PDF" on any non-cancelled row — prefers the signed PDF
  *     when present, otherwise the system-rendered copy
  */
@@ -172,7 +173,8 @@ const ContractRow: React.FC<{ c: CustomerContract }> = ({ c }) => {
         });
         navigate('/contract/signing');
       } else {
-        navigate(`/contract/${access.token}`);
+        // Sent before signatures v2: the portal signs it with the session.
+        navigate(`/customer/contracts/${c.id}/sign`);
       }
     } catch (err: any) {
       const code = err?.response?.data?.code;
@@ -245,7 +247,7 @@ const ContractRow: React.FC<{ c: CustomerContract }> = ({ c }) => {
         )}
       </div>
       <div className="flex items-center gap-2">
-        {c.status === 'sent' && (
+        {c.canSign && (
           <button
             type="button"
             onClick={handleSign}

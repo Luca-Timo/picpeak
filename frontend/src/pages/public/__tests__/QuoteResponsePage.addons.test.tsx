@@ -113,17 +113,17 @@ it('books and removes add-ons, recalculates, and accepts with the total shown an
 
   await screen.findByText('Album');
   expect(addOnButtons().map((b) => b.textContent)).toEqual(['Book', 'Remove booking']);
-  await waitFor(() => expect(totals).toHaveBeenCalledWith('abc', [3]));
+  await waitFor(() => expect(totals).toHaveBeenCalledWith('abc', [3], null));
   // Title, then details, then the status with the button as the last line.
   const details = screen.getByText('30 pages, linen cover').closest('tr');
   expect(details?.nextElementSibling).toContainElement(addOnButtons()[0]);
 
   await user.click(addOnButtons()[0]);
-  await waitFor(() => expect(totals).toHaveBeenCalledWith('abc', [2, 3]));
+  await waitFor(() => expect(totals).toHaveBeenCalledWith('abc', [2, 3], null));
   expect(addOnButtons()[0]).toHaveTextContent('Remove booking');
 
   await user.click(addOnButtons()[1]);
-  await waitFor(() => expect(totals).toHaveBeenCalledWith('abc', [2]));
+  await waitFor(() => expect(totals).toHaveBeenCalledWith('abc', [2], null));
   expect(addOnButtons()[1]).toHaveTextContent('Book');
 
   await user.type(screen.getByLabelText('Your message to us (optional)'), 'See you there');
@@ -133,7 +133,7 @@ it('books and removes add-ons, recalculates, and accepts with the total shown an
   await user.click(accept);
   await waitFor(() => expect(respond).toHaveBeenCalledWith('abc', 'accept', expect.objectContaining({
     selectedOptional: [2], expectedTotalMinor: 130000, customerMessage: 'See you there',
-  })));
+  }), null));
 });
 
 it('lets the customer change the add-ons after accepting while the window is open', async () => {
@@ -150,17 +150,17 @@ it('lets the customer change the add-ons after accepting while the window is ope
   expect(await screen.findByText('Your message')).toBeInTheDocument();
   expect(screen.getByText('See you there')).toBeInTheDocument();
   expect(screen.getByText(/You can change your add-ons until 2026-09-01T10:15:00Z/)).toBeInTheDocument();
-  await waitFor(() => expect(totals).toHaveBeenCalledWith('abc', [3]));
+  await waitFor(() => expect(totals).toHaveBeenCalledWith('abc', [3], null));
 
   await user.click(addOnButtons()[1]);
-  await waitFor(() => expect(totals).toHaveBeenCalledWith('abc', []));
+  await waitFor(() => expect(totals).toHaveBeenCalledWith('abc', [], null));
 
   const accept = screen.getByRole('button', { name: /^accept/i });
   await waitFor(() => expect(accept).toBeEnabled());
   await user.click(accept);
   await waitFor(() => expect(respond).toHaveBeenCalledWith('abc', 'accept', expect.objectContaining({
     selectedOptional: [], expectedTotalMinor: 100000,
-  })));
+  }), null));
   // No new message typed: the earlier one is kept, nothing is re-sent.
   expect(respond.mock.calls[0][2]).not.toHaveProperty('customerMessage');
 });

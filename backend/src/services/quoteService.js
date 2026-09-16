@@ -595,7 +595,7 @@ async function createQuote(payload, adminId) {
       event_time_start: payload.eventTimeStart || null,
       event_time_end: payload.eventTimeEnd || null,
       expected_duration_hours: payload.expectedDurationHours == null ? null : ensureNumber(payload.expectedDurationHours),
-      // Migration 215 — quote-wide hours / days that bound lines follow,
+      // Migration 219 — quote-wide hours / days that bound lines follow,
       // and the template this quote was created from (reporting only).
       hours: payload.hours == null || payload.hours === '' ? null : ensureNumber(payload.hours),
       days: payload.days == null || payload.days === '' ? null : ensureNumber(payload.days),
@@ -742,14 +742,17 @@ async function updateQuote(id, payload, adminId) {
     );
   }
 
-  // Resolve the schema-drift column checks before the transaction, as
-  // createQuote does: a cold hasColumnCached lookup goes through the global
-  // db, which waits on the single-connection SQLite pool for the connection
-  // this transaction holds, and the save fails after the acquire timeout.
-  const hasProjectId = await hasColumnCached('quotes', 'project_id');
-  const hasVatCode = await hasColumnCached('quotes', 'vat_code');
-  const hasEventType = await hasColumnCached('quotes', 'event_type');
-  const hasBookingWorkflowId = await hasColumnCached('quotes', 'booking_workflow_id');
+  // Resolve schema-drift column checks BEFORE the transaction, as createQuote
+  // does: a cold hasColumnCached lookup goes through the global db, and inside
+  // the trx it waits on the single-connection SQLite pool for the connection
+  // the trx holds. The quote editor sends projectId, so the save stalled for
+  // the 60s acquire timeout and failed.
+  const has = (field, column) => Object.prototype.hasOwnProperty.call(payload, field)
+    && hasColumnCached('quotes', column);
+  const hasProjectId = await has('projectId', 'project_id');
+  const hasVatCode = await has('vatCode', 'vat_code');
+  const hasEventType = await has('eventType', 'event_type');
+  const hasBookingWorkflowId = await has('bookingWorkflowId', 'booking_workflow_id');
 
   return await db.transaction(async (trx) => {
     const updates = {
@@ -788,7 +791,7 @@ async function updateQuote(id, payload, adminId) {
       businessBankAccountId: 'business_bank_account_id',
       validUntil: 'valid_until',
       language: 'language',
-      // Migration 215 — quote-wide hours / days.
+      // Migration 219 — quote-wide hours / days.
       hours: 'hours',
       days: 'days',
     };
@@ -807,19 +810,19 @@ async function updateQuote(id, payload, adminId) {
           : null;
     }
     // Migration 121 — optional Project Overview link.
-    if (Object.prototype.hasOwnProperty.call(payload, 'projectId') && hasProjectId) {
+    if (hasProjectId) {
       updates.project_id = payload.projectId || null;
     }
     // Migration 130 — VAT code snapshot.
-    if (Object.prototype.hasOwnProperty.call(payload, 'vatCode') && hasVatCode) {
+    if (hasVatCode) {
       updates.vat_code = payload.vatCode ? String(payload.vatCode).slice(0, 16) : null;
     }
     // Migration 146 — event type.
-    if (Object.prototype.hasOwnProperty.call(payload, 'eventType') && hasEventType) {
+    if (hasEventType) {
       updates.event_type = payload.eventType ? String(payload.eventType).slice(0, 64) : null;
     }
     // Migration 147 — selected booking workflow.
-    if (Object.prototype.hasOwnProperty.call(payload, 'bookingWorkflowId') && hasBookingWorkflowId) {
+    if (hasBookingWorkflowId) {
       updates.booking_workflow_id = payload.bookingWorkflowId || null;
     }
     await trx('quotes').where({ id }).update(updates);
@@ -986,7 +989,7 @@ async function buildRenderContext(quote, lineItems) {
       unitPriceMinor: li.unit_price_minor,
       discountPercent: li.discount_percent,
       lineTotalMinor: li.line_total_minor,
-      // Migration 215 — discount lines render as a labelled minus row;
+      // Migration 219 — discount lines render as a labelled minus row;
       // `unit` fills the unit column.
       lineKind: li.line_kind || 'item',
       unit: li.unit || null,
@@ -1659,7 +1662,10 @@ async function recordResponse({ token, action, ip, tosAccepted, selectedOptional
   if (!tokenRow) {
     throw new AppError('Token not found', 404);
   }
-  if (tokenRow.expires_at && new Date(tokenRow.expires_at).getTime() < Date.now()) {
+  // A token without an expiry is refused, not treated as permanent: the
+  // column is NOT NULL and the route guard already refuses one, so this only
+  // matters for a caller that reaches the service another way.
+  if (!tokenRow.expires_at || new Date(tokenRow.expires_at).getTime() < Date.now()) {
     throw new AppError('Token expired', 410);
   }
 
@@ -2461,7 +2467,7 @@ async function listLineItemPresets({ includeInactive = false } = {}) {
 
 const PRESET_PRICE_MODES = ['fixed', 'hour', 'day'];
 
-// Migration 215 — service-catalogue columns on the presets table.
+// Migration 219 — service-catalogue columns on the presets table.
 function presetCatalogueColumns(payload) {
   const out = {};
   if (payload.unit !== undefined) out.unit = payload.unit || null;

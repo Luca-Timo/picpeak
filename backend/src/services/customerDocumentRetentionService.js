@@ -1,6 +1,6 @@
 /**
  * customerDocumentRetentionService — retention sweep for customer documents
- * (#1444, migration 220).
+ * (#1444, migration 224).
  *
  * Runs hourly and drives two transitions, both measured against
  * `customer_documents_retention_days` (default 30):

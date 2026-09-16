@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Migration 218 — contract attachments (#1445).
+ * Migration 222 — contract attachments (#1445).
  *
  * document_attachments                    a library of immutable PDFs (terms,
  *                                         privacy notice, appendices). Stored

@@ -1,9 +1,14 @@
 /**
- * Public quote accept/decline page. Mounted at /quote/:token (outside
- * any auth gate). The customer arrives here from the email button.
+ * Quote accept/decline page. Mounted at /quote/:token (outside any auth
+ * gate) for the customer's email button, and inside the customer portal at
+ * /customer/quotes/:id/respond.
  *
  * Behaviour:
- *   - Reads the quote via /api/public/quotes/:token (no auth)
+ *   - The emailed link alone does not reveal the quote or the customer's
+ *     personal data: the page first asks for a one-time code emailed to the
+ *     customer (DocumentVerificationStep) and sends the resulting grant with
+ *     every request. The portal uses its own session-authenticated routes
+ *     (CustomerQuoteRespondPage), so no link token reaches the portal.
  *   - Shows the line items + totals (read-only)
  *   - Two big buttons: Accept / Decline
  *   - Within the response window (default 15 min) the customer can
@@ -12,16 +17,30 @@
  *   - Localised based on the quote's stored language; falls back to
  *     browser language.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { publicQuotesService, type PublicSelectionTotals } from '../../services/quotes.service';
+import {
+  publicQuotesService,
+  type PublicQuoteShell,
+  type PublicQuoteView,
+  type PublicSelectionTotals,
+} from '../../services/quotes.service';
+import { DocumentVerificationStep } from '../../components/public/DocumentVerificationStep';
 import { usePublicDarkMode } from '../../hooks/usePublicDarkMode';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { Loading } from '../../components/common';
 import { AddOnBookButton, AddOnBookingState } from '../../components/common/AddOnBookButton';
 import { formatMoneyMinor } from '../../utils/money';
+import {
+  clearDocumentGrant,
+  isVerificationRequired,
+  readDocumentGrant,
+  storeDocumentGrant,
+  type DocumentAccessGrant,
+  type DocumentVerificationSent,
+} from '../../utils/documentAccess';
 
 /**
  * Format a date string as DD.MM.YYYY (the customer-facing format used
@@ -33,13 +52,40 @@ import { formatShortDate } from '../../utils/dateShort';
 /** The longest message the server accepts with an acceptance. */
 const MESSAGE_MAX_LENGTH = 2000;
 
-export const QuoteResponsePage: React.FC = () => {
+/** Where the view reads and answers its quote: a public link or the portal. */
+export interface QuoteDocumentAdapter {
+  /** Query key for the quote; must change when access changes. */
+  queryKey: readonly unknown[];
+  load: () => Promise<{ quote: PublicQuoteView | PublicQuoteShell }>;
+  respond: (action: 'accept' | 'decline', options: {
+    tosAccepted?: boolean;
+    /** The add-ons the customer booked, with the total the page showed (#1451). */
+    selectedOptional?: number[];
+    expectedTotalMinor?: number;
+    /** A message to the business, sent with the acceptance. */
+    customerMessage?: string;
+  }) => Promise<unknown>;
+  /** Live totals for a set of add-ons. Absent where booking isn't offered. */
+  totals?: (selected: number[]) => Promise<PublicSelectionTotals>;
+  /** Public links only: email a code, exchange it for a grant, drop the grant. */
+  verification?: {
+    requestCode: () => Promise<DocumentVerificationSent>;
+    confirmCode: (code: string) => Promise<DocumentAccessGrant>;
+    onVerified: (access: DocumentAccessGrant) => void;
+    onAccessLost: () => void;
+  };
+}
+
+const isShell = (q: PublicQuoteView | PublicQuoteShell): q is PublicQuoteShell =>
+  q.verificationRequired === true;
+
+export const QuoteResponseView: React.FC<{ adapter: QuoteDocumentAdapter }> = ({ adapter }) => {
   const { t, i18n } = useTranslation();
   const { formatDateTime: fmtDateTime, formatTime: fmtTime } = useLocalizedDate();
-  const { token } = useParams<{ token: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
   // Optional message to the business, sent with the acceptance (#1451).
   const [message, setMessage] = useState('');
   // Apply dark mode per the branding settings (forced dark/light)
@@ -49,9 +95,8 @@ export const QuoteResponsePage: React.FC = () => {
   const { isDark } = usePublicDarkMode();
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['public-quote', token],
-    queryFn: () => publicQuotesService.get(token!),
-    enabled: !!token,
+    queryKey: adapter.queryKey,
+    queryFn: adapter.load,
     retry: false,
   });
 
@@ -63,7 +108,7 @@ export const QuoteResponsePage: React.FC = () => {
     }
   }, [data, i18n]);
 
-  const q = data?.quote;
+  const q = data && !isShell(data.quote) ? data.quote : undefined;
   // Tick state for the optional Terms of Service step. Pre-ticked if
   // the quote was already accepted (so re-displays don't lose state).
   const [tosAccepted, setTosAccepted] = useState(false);
@@ -87,11 +132,12 @@ export const QuoteResponsePage: React.FC = () => {
       setSelection(offeredAddOns.filter((li) => li.selected !== false).map((li) => li.position));
     }
   }, [q, offeredAddOns, selection]);
-  const canChoose = !!q && offeredAddOns.length > 0 && q.canRespond && !q.selectionLocked;
+  // Booking needs live totals; the portal adapter doesn't offer them.
+  const canChoose = !!q && !!adapter.totals && offeredAddOns.length > 0 && q.canRespond && !q.selectionLocked;
   const selectionKey = (selection || []).join(',');
   const totalsQuery = useQuery({
-    queryKey: ['public-quote-totals', token, selectionKey],
-    queryFn: () => publicQuotesService.totals(token!, selection || []),
+    queryKey: [...adapter.queryKey, 'totals', selectionKey],
+    queryFn: () => adapter.totals!(selection || []),
     enabled: canChoose && selection !== null,
     retry: false,
   });
@@ -107,7 +153,7 @@ export const QuoteResponsePage: React.FC = () => {
     setError(null);
     const customerMessage = message.trim();
     try {
-      await publicQuotesService.respond(token!, action, {
+      await adapter.respond(action, {
         tosAccepted,
         ...(action === 'accept' && canChoose && shownTotals
           ? { selectedOptional: shownTotals.selectedOptional, expectedTotalMinor: shownTotals.totalAmountMinor }
@@ -119,7 +165,13 @@ export const QuoteResponsePage: React.FC = () => {
       await refetch();
     } catch (err: any) {
       const code = err?.response?.data?.code;
-      if (code === 'RESPONSE_LOCKED') {
+      if (adapter.verification && isVerificationRequired(err)) {
+        // The grant ran out: back to the code step, keeping the chosen
+        // action highlighted and the ToS tick.
+        setVerificationNotice(t('documentVerification.sessionExpired',
+          "For your security, please confirm it's you again.") as string);
+        adapter.verification.onAccessLost();
+      } else if (code === 'RESPONSE_LOCKED') {
         setError(t('quoteResponse.locked', 'Your response window has closed and the decision is now final.'));
       } else if (code === 'TOS_REQUIRED') {
         setError(t('quoteResponse.tosRequiredError',
@@ -133,7 +185,7 @@ export const QuoteResponsePage: React.FC = () => {
         setError(err?.response?.data?.error || err.message || 'Something went wrong');
       }
     } finally { setBusy(false); }
-  }, [token, refetch, t, tosAccepted, canChoose, shownTotals, totalsQuery, q?.currency, message]);
+  }, [adapter, refetch, t, tosAccepted, canChoose, shownTotals, totalsQuery, q?.currency, message]);
 
   // PRE-SELECTED ACTION FROM EMAIL LINK
   //
@@ -150,10 +202,13 @@ export const QuoteResponsePage: React.FC = () => {
   // matching CTA is visually highlighted on the page; the customer
   // confirms by clicking the on-page button. One human click is
   // required regardless of how they arrived.
-  const preselectedAction = (() => {
+  //
+  // Read once into state: the query string is stripped right away (below),
+  // while the verification step may still be in front of the quote.
+  const [preselectedAction] = useState<'accept' | 'decline' | null>(() => {
     const raw = searchParams.get('action');
     return raw === 'accept' || raw === 'decline' ? raw : null;
-  })();
+  });
 
   // Strip ?action= from the URL once the page is loaded so a refresh
   // doesn't keep the highlight (and so the URL in the browser bar /
@@ -171,26 +226,44 @@ export const QuoteResponsePage: React.FC = () => {
     </div>
   );
 
-  if (isError || !data) {
-    return (
-      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center p-6">
-        <div className="max-w-md text-center">
-          <h1 className="text-2xl font-bold mb-2 text-neutral-900 dark:text-neutral-100">
-            {t('quoteResponse.notFound', 'Quote not found')}
-          </h1>
-          <p className="text-neutral-600 dark:text-neutral-400">
-            {t('quoteResponse.notFoundBody', 'This link may have expired or been revoked. Please contact the photographer for a new quote.')}
-          </p>
-        </div>
+  const notFound = (
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center p-6">
+      <div className="max-w-md text-center">
+        <h1 className="text-2xl font-bold mb-2 text-neutral-900 dark:text-neutral-100">
+          {t('quoteResponse.notFound', 'Quote not found')}
+        </h1>
+        <p className="text-neutral-600 dark:text-neutral-400">
+          {t('quoteResponse.notFoundBody', 'This link may have expired or been revoked. Please contact the photographer for a new quote.')}
+        </p>
       </div>
+    </div>
+  );
+
+  if (isError || !data) return notFound;
+
+  if (isShell(data.quote)) {
+    if (!adapter.verification) return notFound;
+    const { verification } = adapter;
+    return (
+      <DocumentVerificationStep
+        issuer={data.quote.issuer}
+        emailHint={data.quote.emailHint}
+        isDark={isDark}
+        notice={verificationNotice}
+        requestCode={verification.requestCode}
+        confirmCode={verification.confirmCode}
+        onVerified={(access) => {
+          setVerificationNotice(null);
+          verification.onVerified(access);
+        }}
+      />
     );
   }
 
-  // Past the `if (isError || !data)` guard above, `data` is non-null —
-  // so `data.quote` is the concrete Quote shape we render below. Hoist
-  // it to a narrowed local instead of asserting `q!` on every property
-  // access in the JSX. The original `q` stays around for the React
-  // hooks declared above the guard (they MUST run on every render).
+  // Past the guards above, `data.quote` is the concrete full quote shape we
+  // render below. Hoist it to a narrowed local instead of asserting on every
+  // property access in the JSX. `q` stays around for the React hooks declared
+  // above the guards (they MUST run on every render).
   const quote = data.quote;
   const locked = !quote.canRespond;
   const responseStatus = quote.respondedAt
@@ -563,4 +636,42 @@ export const QuoteResponsePage: React.FC = () => {
       </div>
     </div>
   );
+};
+
+/** Public route `/quote/:token`: the emailed link, gated by the one-time code. */
+export const QuoteResponsePage: React.FC = () => {
+  const { token = '' } = useParams<{ token: string }>();
+  const [grant, setGrant] = useState<string | null>(() => (token ? readDocumentGrant('quote', token) : null));
+  // Bumped whenever access changes so the quote is fetched again with (or
+  // without) the grant. The grant itself stays out of the query cache key.
+  const [accessVersion, setAccessVersion] = useState(0);
+
+  const adapter = useMemo<QuoteDocumentAdapter>(() => ({
+    queryKey: ['public-quote', token, accessVersion],
+    load: async () => {
+      const result = await publicQuotesService.get(token, grant);
+      // The server answered with the verification shell although we sent a
+      // grant: it expired or was revoked, so don't offer it again.
+      if (grant && isShell(result.quote)) clearDocumentGrant('quote', token);
+      return result;
+    },
+    respond: (action, options) => publicQuotesService.respond(token, action, options, grant),
+    totals: (selected) => publicQuotesService.totals(token, selected, grant),
+    verification: {
+      requestCode: () => publicQuotesService.requestVerification(token),
+      confirmCode: (code) => publicQuotesService.confirmVerification(token, code),
+      onVerified: (access) => {
+        storeDocumentGrant('quote', token, access);
+        setGrant(access.grant);
+        setAccessVersion((v) => v + 1);
+      },
+      onAccessLost: () => {
+        clearDocumentGrant('quote', token);
+        setGrant(null);
+        setAccessVersion((v) => v + 1);
+      },
+    },
+  }), [token, grant, accessVersion]);
+
+  return <QuoteResponseView adapter={adapter} />;
 };

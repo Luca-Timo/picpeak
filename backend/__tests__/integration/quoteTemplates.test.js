@@ -1,5 +1,5 @@
 /**
- * Quote catalogue + templates — integration tests (#1451, migration 215).
+ * Quote catalogue + templates — integration tests (#1451, migration 219).
  *
  * Real admin routes → services → SQLite with the full core-migration run
  * (helpers/crmDb). Pins:
