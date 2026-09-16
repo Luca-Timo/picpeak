@@ -284,6 +284,17 @@ async function writeContractAttachments(trx, contractId, list) {
  * Returns the bytes, the manifest stored with the generated document, and
  * the separate files.
  */
+/**
+ * How many pages the merged attachments add before the signature page.
+ * Known before the render, so the page numbers can count them (the footer is
+ * drawn by PDFKit, which never sees the merged document).
+ */
+async function mergedPageCount(contractId) {
+  const rows = await loadContractAttachments(contractId);
+  return rows.filter((row) => row.delivery === 'merged')
+    .reduce((sum, row) => sum + Number(row.page_count || 0), 0);
+}
+
 async function buildSendable(contract, contractBuffer, { slots = [] } = {}) {
   const rows = await loadContractAttachments(contract.id);
   // Signature slots (#1445) sit on the contract's last page; merged
@@ -309,6 +320,9 @@ async function buildSendable(contract, contractBuffer, { slots = [] } = {}) {
   const merged = files.filter((file) => file.row.delivery === 'merged');
   const result = await insertBeforeLastPage(contractBuffer, merged.map((file) => file.buffer), {
     title: contract.contract_number,
+    // Fixed, not "now": the same contract and the same attachments have to
+    // merge into the same bytes, or the recorded sha256 depends on the clock.
+    createdAt: contract.issue_date || contract.created_at || 0,
   });
   const manifest = {
     attachments: files.map((file) => {
@@ -355,6 +369,7 @@ function downloadName(name) {
 }
 
 module.exports = {
+  mergedPageCount,
   DELIVERIES,
   MAX_BYTES,
   listAttachments,

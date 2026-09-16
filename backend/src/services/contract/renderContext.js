@@ -26,18 +26,16 @@ const content = require('./content');
  */
 function renderTemplatedBody(template, variables) {
   if (typeof template !== 'string' || template.length === 0) return template;
-  const conditionalsResolved = template.replace(
-    /\{\{#if\s+(\w+)\s*\}\}([\s\S]*?)\{\{\/if\}\}/g,
-    (_match, key, inner) => {
-      const v = variables ? variables[key] : undefined;
-      const truthy = v !== undefined && v !== null && v !== '' && v !== false && v !== 0;
-      return truthy ? inner : '';
-    }
-  );
-  return conditionalsResolved.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-    if (!variables || !Object.prototype.hasOwnProperty.call(variables, key)) return match;
-    return String(variables[key]);
-  });
+  // One grammar, owned by utils/placeholders: the publish check accepted
+  // `{{ customer_name }}` with spaces while this substituted only the tight
+  // form, so a template could be published with a placeholder that printed
+  // literally on every contract.
+  const { PLACEHOLDER_PATTERN, renderConditionals } = require('../../utils/placeholders');
+  return renderConditionals(template, variables || {})
+    .replace(PLACEHOLDER_PATTERN, (match, key) => {
+      if (!variables || !Object.prototype.hasOwnProperty.call(variables, key)) return match;
+      return String(variables[key]);
+    });
 }
 
 /**
@@ -117,15 +115,18 @@ const isIncluded = (row) => row.included === true || row.included === 1 || row.i
  *     positions run 1..n across the whole contract;
  *   - a contract from before templates keeps the fixed section order, then
  *     each block's position within its section.
- * A block reads its frozen text when it has any (a template's snapshot, or
- * what was frozen at send), else the live library text; a per-contract
- * override wins over either, language by language.
+ * A block reads its frozen text where it has any (a template's snapshot, or
+ * what was frozen at send) and the live library text for a language the
+ * snapshot doesn't carry; a per-contract override wins over either, language
+ * by language. That per-language fallback matters for contracts sent before
+ * migration 221 added the fr/nl/pt/ru snapshot columns: those are empty, and
+ * taking the frozen map whole would render an RU contract in English.
  */
 function orderedClauses(contract, inclusions, textSections = []) {
   const clauses = [
     ...inclusions.filter(isIncluded).map((row) => {
       const frozen = content.inclusionSnapshot(row);
-      const base = Object.keys(frozen).length ? frozen : content.blockBodies(row, 'block_');
+      const base = { ...content.blockBodies(row, 'block_'), ...frozen };
       return {
         kind: 'block',
         blockId: row.block_id || null,

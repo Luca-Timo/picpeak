@@ -144,9 +144,11 @@ async function getDashboard(customerId) {
 
 /**
  * Everything the customer has for one event: gallery state, quotes,
- * contracts, invoices and shared documents. Documents are tied to the event
- * directly or through the deal lineage (deal_uuid) of a quote / contract /
- * invoice that points at the event. Returns null when the event is unknown,
+ * contracts, invoices and shared documents. Quotes, contracts and invoices
+ * are matched on the event itself or through the deal lineage (deal_uuid) of
+ * another document that points at it; a document is listed here only when it
+ * names the event (`event_id`) — one attached to a contract shows on the
+ * documents page. Returns null when the event is unknown,
  * archived or not assigned to this customer — the route answers 404 for all
  * three so the endpoint can't be used to probe for other customers' events.
  */

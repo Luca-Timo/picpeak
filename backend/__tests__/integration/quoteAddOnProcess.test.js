@@ -156,6 +156,30 @@ test('the customer\'s message comes with the acceptance and reaches the business
   expect(view.body.quote).toEqual(expect.objectContaining({ customerMessage: expect.stringContaining('Kein Album'), addOnsEditable: true }));
 });
 
+test('the business hears about an acceptance once, and again when the choice changes', async () => {
+  const { quoteId, link } = await sentQuote();
+  const grant = await quoteGrant(link);
+  const respond = (body) => request(publicApp).post(`/api/public/quotes/${link}/respond`)
+    .set('X-Document-Access', grant).set('X-Forwarded-For', `198.51.100.${quoteId % 250}`).send(body);
+  const notices = async () => (await db('email_queue').where({ email_type: 'quote_accepted_admin' })).length;
+
+  expect((await respond({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000 })).status).toBe(200);
+  const first = await notices();
+  expect(first).toBeGreaterThan(0);
+
+  // The same choice again, and a decline followed by the same acceptance:
+  // nothing new to tell.
+  expect((await respond({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000 })).status).toBe(200);
+  expect((await respond({ action: 'decline' })).status).toBe(200);
+  expect((await respond({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000 })).status).toBe(200);
+  expect(await notices()).toBe(first);
+
+  // A different choice is worth a notice.
+  expect((await respond({ action: 'accept', selectedOptional: [2], expectedTotalMinor: 130000 })).status).toBe(200);
+  expect(await notices()).toBe(first + 1);
+  expect((await db('quotes').where({ id: quoteId }).first()).acceptance_notified_at).toBeTruthy();
+});
+
 test('the business changes the add-ons of an accepted quote: recorded, re-rendered, emailed', async () => {
   const { quoteId, link } = await sentQuote();
   await request(publicApp).post(`/api/public/quotes/${link}/respond`).set('X-Document-Access', await quoteGrant(link)).send({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000 });

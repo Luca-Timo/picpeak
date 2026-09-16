@@ -375,6 +375,35 @@ test('parallel wrong codes are still capped at five tries', async () => {
   expect(late.status).toBe(410);
 });
 
+test('a code expires, and only five an hour are sent', async () => {
+  // The expiry and the hourly cap are read back from the row, so this also
+  // pins that the timestamps are stored in a shape SQLite reads back (a bare
+  // Date lands as "[object Object]", and an unreadable expiry used to count
+  // as valid forever).
+  const id = await newContract();
+  await ok(request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth));
+  const link = linkToken(await lastMail('contract_sent', customerEmail));
+  const signer = await db('contract_signers').where({ contract_id: id, role: 'customer' }).first();
+
+  await ok(asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/code`)));
+  const { code } = await lastMail('contract_signing_code', customerEmail);
+  const row = await db('contract_signing_otps').where({ signer_id: signer.id }).orderBy('id', 'desc').first();
+  expect(String(row.expires_at)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  await db('contract_signing_otps').where({ id: row.id })
+    .update({ expires_at: new Date(Date.now() - 60 * 1000).toISOString() });
+  const expired = await asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/verify`)).send({ code });
+  expect(expired.status).toBe(410);
+  expect(expired.body.code).toBe('OTP_EXPIRED');
+
+  // Five codes an hour, counting the one above.
+  for (let i = 0; i < 4; i += 1) {
+    await ok(asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/code`)));
+  }
+  const capped = await asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/code`));
+  expect(capped.status).toBe(429);
+  expect(capped.body.code).toBe('OTP_RATE_LIMITED');
+});
+
 test('signing sits behind the contracts flag', async () => {
   await setFlag('contracts', false);
   const res = await request(signingApp).get(`/api/public/contract-signing/invite/${'a'.repeat(64)}`);

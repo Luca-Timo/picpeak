@@ -485,6 +485,15 @@ async function markErasedForCustomer(customerId, trx) {
       updated_at: now,
     });
   }
+  // A document linked to a contract is kept as part of the contractual
+  // record, but the name the customer gave the file is their data too
+  // ("Scan_Anna_Muster_Pass.pdf") and erasure has to reach it as well. The
+  // bytes and the storage key are what the record needs.
+  await trx('customer_documents')
+    .where({ customer_account_id: customerId })
+    .whereNotNull('contract_id')
+    .whereNull('purged_at')
+    .update({ original_name: 'erased.pdf', updated_at: now });
   await trx('customer_documents')
     .where({ customer_account_id: customerId })
     .whereNotNull('contract_id')

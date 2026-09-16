@@ -21,6 +21,13 @@ describe('findPlaceholders / unknownPlaceholders', () => {
     expect(findPlaceholders('{{customer.name}} {{ a + b }} {{#if x}}')).toEqual([]);
   });
 
+  it('reports the key of a conditional, so a typo in one is caught at publish', () => {
+    // The renderer drops a conditional whose key it doesn't know, so an
+    // unreported typo meant a clause that never appeared on any document.
+    expect(findPlaceholders('{{#if event_date}}on {{event_date}}{{/if}}')).toEqual(['event_date']);
+    expect(unknownPlaceholders('{{#if evnt_date}}x{{/if}}')).toEqual(['evnt_date']);
+  });
+
   it('allows every declared quote key', () => {
     expect(unknownPlaceholders(QUOTE_PLACEHOLDERS.map((k) => `{{${k}}}`).join(' '))).toEqual([]);
   });
@@ -49,5 +56,23 @@ describe('renderPlaceholders', () => {
 
   it('passes non-strings through', () => {
     expect(renderPlaceholders(null, {})).toBeNull();
+  });
+
+  it('substitutes a placeholder written with spaces, like the check accepts', () => {
+    // The contract renderer used to substitute only the tight form, so
+    // `{{ customer_name }}` passed the publish check and then printed
+    // literally on every contract.
+    expect(renderPlaceholders('Hallo {{ customer_name }}', { customer_name: 'Anna' })).toBe('Hallo Anna');
+  });
+});
+
+describe('renderConditionals', () => {
+  const { renderConditionals } = require('../../src/utils/placeholders');
+
+  it('keeps the block for a value and drops it for none, spaces and all', () => {
+    expect(renderConditionals('A{{#if k}}B{{/if}}C', { k: 'x' })).toBe('ABC');
+    expect(renderConditionals('A{{ #if k }}B{{ /if }}C', { k: 'x' })).toBe('ABC');
+    expect(renderConditionals('A{{#if k}}B{{/if}}C', { k: '' })).toBe('AC');
+    expect(renderConditionals('A{{#if missing}}B{{/if}}C', {})).toBe('AC');
   });
 });

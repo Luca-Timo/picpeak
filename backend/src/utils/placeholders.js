@@ -17,6 +17,11 @@
 const { escapeHtml } = require('./formatters');
 
 const PLACEHOLDER_PATTERN = /\{\{\s*(\w+)\s*\}\}/g;
+// `{{#if key}}…{{/if}}` — contract bodies use it to leave a clause out when
+// a value is missing. Same tolerance for spaces as the plain placeholder, and
+// the same module owns both so the check and the renderer can't disagree
+// about what a placeholder looks like.
+const CONDITIONAL_PATTERN = /\{\{\s*#if\s+(\w+)\s*\}\}([\s\S]*?)\{\{\s*\/if\s*\}\}/g;
 
 // Keys a quote text (intro/outro, text blocks) may use.
 const QUOTE_PLACEHOLDERS = Object.freeze([
@@ -57,10 +62,33 @@ const CONTRACT_PLACEHOLDERS = Object.freeze([
 function findPlaceholders(text) {
   if (typeof text !== 'string' || !text) return [];
   const keys = [];
+  // Conditionals first: `{{#if event_date}}` names a key too, and a typo in
+  // one used to publish without a word — the clause then simply never
+  // appeared on any document.
+  for (const match of text.matchAll(CONDITIONAL_PATTERN)) {
+    if (!keys.includes(match[1])) keys.push(match[1]);
+  }
   for (const match of text.matchAll(PLACEHOLDER_PATTERN)) {
     if (!keys.includes(match[1])) keys.push(match[1]);
   }
   return keys;
+}
+
+/**
+ * Resolve `{{#if key}}…{{/if}}` against `values`: a key with no value — a
+ * missing one included — drops the block. A plain `{{key}}` stays visible
+ * when it is unknown, but leaving `{{#if …}}` markup in a contract body
+ * would print it on the document, so a typo is caught earlier instead:
+ * findPlaceholders reports conditional keys too, and publishing a template
+ * with an unknown one is refused.
+ */
+function renderConditionals(text, values = {}) {
+  if (typeof text !== 'string' || !text) return text;
+  return text.replace(CONDITIONAL_PATTERN, (match, key, inner) => {
+    const value = values && Object.prototype.hasOwnProperty.call(values, key) ? values[key] : undefined;
+    const present = value !== undefined && value !== null && value !== '' && value !== false && value !== 0;
+    return present ? inner : '';
+  });
 }
 
 /** Placeholder keys in `text` that are not in `allowlist`. */
@@ -93,7 +121,10 @@ function renderPlaceholders(text, values = {}, { allowlist = QUOTE_PLACEHOLDERS,
 module.exports = {
   QUOTE_PLACEHOLDERS,
   CONTRACT_PLACEHOLDERS,
+  PLACEHOLDER_PATTERN,
+  CONDITIONAL_PATTERN,
   findPlaceholders,
+  renderConditionals,
   unknownPlaceholders,
   renderPlaceholders,
 };

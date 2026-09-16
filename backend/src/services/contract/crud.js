@@ -487,8 +487,14 @@ async function updateContract(id, payload, adminId) {
     if (hasProjectCol) {
       updates.project_id = payload.projectId || null;
     }
-    // Conditional on the lock we read: a save that landed in between wins.
-    const updatedRows = await trx('contracts').where({ id, lock_version: lockVersion }).update(updates);
+    // Conditional on the lock and the status we read: a save that landed in
+    // between wins, and a send that landed in between wins too — the status
+    // check above runs before the transaction, and sending bumps the lock,
+    // so without `status: 'draft'` here an edit could still land on a
+    // contract that had already gone out.
+    const updatedRows = await trx('contracts')
+      .where({ id, lock_version: lockVersion, status: 'draft' })
+      .update(updates);
     if (!updatedRows) throw staleEdit();
 
     // Cascade across the deal lineage (linked quote / event / invoices).

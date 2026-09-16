@@ -12,7 +12,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle2, Eye, EyeOff, Send, ShieldCheck, Users, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Eye, EyeOff, Send, ShieldCheck, Users, XCircle } from 'lucide-react';
 import { Button, Card } from '../../../components/common';
 import { PermissionGate } from '../../../components/admin/PermissionGate';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
@@ -98,6 +98,25 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
           <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
             {t('contracts.signers.countersignLater', 'You counter-sign here once every customer signer has signed.')}
           </p>
+        )}
+        {overview.followUp && (
+          <div
+            role="alert"
+            className="mb-3 p-3 rounded-md text-sm border border-amber-300 bg-amber-50 text-amber-900
+              dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+          >
+            <p className="font-medium flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              {t('contracts.signers.followUpFailed', 'A step after the signature didn\'t go through')}
+            </p>
+            <p className="mt-1">
+              {t(
+                'contracts.signers.followUpFailedBody',
+                'The signature itself is on record. Since {{date}} one step is still outstanding: {{error}}. Use "Re-send the signed contract" to run it again, or send the next signer their link.',
+                { date: formatDateTime(overview.followUp.failedAt), error: overview.followUp.error || '—' },
+              )}
+            </p>
+          </div>
         )}
         <ol className="divide-y divide-neutral-200 dark:divide-neutral-700">
           {signers.map((s) => {

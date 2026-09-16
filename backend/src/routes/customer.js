@@ -1108,7 +1108,11 @@ router.post('/documents', customerAuth, requireDocumentsFeature, documentUploadL
     }
     file = await receivePdfUpload(req, res, { maxBytes: limits.maxUploadBytes });
     if (!file) return res.status(400).json({ error: 'No file was uploaded.', code: 'NO_FILE' });
-    if (usedBytes + file.size > limits.quotaBytes) {
+    // Re-read the usage: the first read happened before the body arrived, so
+    // uploads running together all measured the same "before" and every one
+    // of them fitted.
+    const usedNow = Math.max(usedBytes, await customerDocumentsService.getUsageBytes(req.customer.id));
+    if (usedNow + file.size > limits.quotaBytes) {
       return res.status(413).json({ error: 'This file would exceed your document storage.', code: 'QUOTA_EXCEEDED' });
     }
     const row = await customerDocumentsService.createDocument({

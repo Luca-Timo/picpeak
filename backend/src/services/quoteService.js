@@ -1373,6 +1373,11 @@ function selectionSnapshot(lineItems, chosen, totals, by) {
  * until storeAcceptedQuotePdf writes the accepted version.
  */
 async function writeAcceptedSelection(trx, quote, lineItems, { chosen, totals }, by, at, { previousChosen = null, adminId = null } = {}) {
+  // The history and the first-chosen snapshot are read inside the
+  // transaction: two changes landing together both read the row before
+  // either wrote, so one entry replaced the other and the totals it recorded
+  // as "before" were already stale.
+  const current = (await trx('quotes').where({ id: quote.id }).forUpdate().first()) || quote;
   const offered = new Set(offeredOptionalPositions(lineItems));
   const chosenSet = new Set(chosen);
   const on = [];
@@ -1394,17 +1399,17 @@ async function writeAcceptedSelection(trx, quote, lineItems, { chosen, totals },
   // A change after the first acceptance (#1451) keeps when and by whom the
   // add-ons were first chosen, and adds an entry to the change history.
   const isChange = Array.isArray(previousChosen);
-  const firstBy = isChange ? (storedJson(quote.optional_selection_snapshot, {}).by || by) : by;
+  const firstBy = isChange ? (storedJson(current.optional_selection_snapshot, {}).by || by) : by;
   await trx('quotes').where({ id: quote.id }).update({
     net_amount_minor: totals.netAmountMinor,
     vat_amount_minor: totals.vatAmountMinor,
     total_amount_minor: totals.totalAmountMinor,
     optional_selection_snapshot: JSON.stringify(selectionSnapshot(lineItems, chosen, totals, firstBy)),
-    selection_accepted_at: isChange ? quote.selection_accepted_at : at,
+    selection_accepted_at: isChange ? current.selection_accepted_at : at,
     ...(isChange ? {
       selection_changes: JSON.stringify([
-        ...storedJson(quote.selection_changes, []),
-        selectionChange(lineItems, previousChosen, chosen, quote.total_amount_minor, totals, by, adminId, at),
+        ...storedJson(current.selection_changes, []),
+        selectionChange(lineItems, previousChosen, chosen, current.total_amount_minor, totals, by, adminId, at),
       ]),
     } : {}),
     pdf_path: null,
@@ -1412,12 +1417,19 @@ async function writeAcceptedSelection(trx, quote, lineItems, { chosen, totals },
 }
 
 // Each version of the accepted quote keeps its own file (#1451): the first
-// acceptance is "-accepted", every later add-on change "-accepted-2",
-// "-accepted-3", … so no earlier version is overwritten.
-const acceptedSuffix = (quote) => {
-  const changes = storedJson(quote.selection_changes, []).length;
-  return changes ? `-accepted-${changes + 1}` : '-accepted';
-};
+// acceptance is "-accepted", every later one "-accepted-2", "-accepted-3", …
+// Counted from the documents already stored, not from the change history: a
+// decline and a re-send clear the history, and two changes at once read the
+// same array, so both pointed at one name. persist() also refuses to
+// overwrite, so an earlier version's recorded sha256 stays true either way.
+async function acceptedSuffix(quoteId) {
+  const stored = await db('generated_documents')
+    .where({ doc_type: 'quote', doc_id: quoteId, kind: 'accepted' })
+    .count({ count: '*' })
+    .first();
+  const version = ensureInt(stored && stored.count) + 1;
+  return version > 1 ? `-accepted-${version}` : '-accepted';
+}
 
 /** Render and keep the accepted version of a quote; the sent file stays as it was. */
 async function storeAcceptedQuotePdf(quoteId) {
@@ -1425,7 +1437,7 @@ async function storeAcceptedQuotePdf(quoteId) {
     const data = await getQuoteById(quoteId);
     const ctx = await buildRenderContext(data.quote, data.lineItems);
     const buffer = await pdfService.renderQuoteToBuffer(ctx);
-    const pdfPath = await persistDocPdf('quote', data.quote, buffer, acceptedSuffix(data.quote),
+    const pdfPath = await persistDocPdf('quote', data.quote, buffer, await acceptedSuffix(quoteId),
       { kind: 'accepted', theme: ctx.theme, issuer: ctx.issuer });
     await db('quotes').where({ id: quoteId }).update({ pdf_path: pdfPath });
   } catch (err) {
@@ -1444,8 +1456,16 @@ const customerDisplayName = (customer) => customer.display_name
  * booked add-ons and the customer's message. Sent to the business profile's
  * email; never fails the acceptance.
  */
-async function notifyBusinessOfAcceptance(quoteId) {
+async function notifyBusinessOfAcceptance(quoteId, { onlyOnce = false } = {}) {
   try {
+    // Claimed before the mail is built, so two acceptances arriving together
+    // send one notice.
+    if (await hasColumnCached('quotes', 'acceptance_notified_at')) {
+      const claim = db('quotes').where({ id: quoteId });
+      if (onlyOnce) claim.whereNull('acceptance_notified_at');
+      const claimed = await claim.update({ acceptance_notified_at: new Date().toISOString() });
+      if (!claimed) return;
+    }
     const { profile } = await businessProfileService.getProfile();
     if (!profile || !profile.email) return;
     const quote = await db('quotes').where({ id: quoteId }).first();
@@ -1736,7 +1756,13 @@ async function recordResponse({ token, action, ip, tosAccepted, selectedOptional
   });
 
   if (selection) await storeAcceptedQuotePdf(quote.id);
-  if (isAccept) await notifyBusinessOfAcceptance(quote.id);
+  // The business hears about an acceptance once, and again only when the
+  // add-on choice actually changed. Inside the response window the customer
+  // can accept, decline and accept again, and each of those used to send
+  // another "quote accepted" mail saying the same thing.
+  if (isAccept) {
+    await notifyBusinessOfAcceptance(quote.id, { onlyOnce: !(selection && Array.isArray(selection.previousChosen)) });
+  }
 
   try {
     // Raw bearer token must not reach the activity log (GHSA-prch).

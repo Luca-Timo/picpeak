@@ -35,6 +35,7 @@ const documentArtifactService = require('../documentArtifactService');
 const { ensureContractEmailTemplatesSeeded } = require('../contractEmailTemplates');
 const signers = require('./signers');
 const signingEvents = require('./signingEvents');
+const { hasColumnCached } = require('../../utils/schemaCache');
 const { adminActor, customerPublicActor, emitContractEvent, maybeStoreIp } = require('./helpers');
 const { persistContractPdf, persistSignatureImage } = require('./signatureAssets');
 
@@ -178,6 +179,37 @@ async function notifyAdmin(templateKey, data) {
   }
 }
 
+/**
+ * A step after the committed signature failed — the next signer's
+ * invitation, the certificate, the completion emails. The signature itself
+ * stands, so this can't throw; it records what failed on the contract, where
+ * the signing overview shows it and the admin can run the step again
+ * ("Re-send the signed contract" re-issues a missing certificate).
+ */
+async function recordFollowUpFailure(contractId, step, err) {
+  logger.error('A step after the signature failed', { contractId, step, message: err && err.message });
+  try {
+    if (!(await hasColumnCached('contracts', 'follow_up_failed_at'))) return;
+    await db('contracts').where({ id: contractId }).update({
+      follow_up_failed_at: new Date().toISOString(),
+      follow_up_error: `${step}: ${String((err && err.message) || 'unknown').slice(0, 500)}`,
+    });
+  } catch (markErr) {
+    logger.warn('Could not record the failed follow-up step', { contractId, message: markErr.message });
+  }
+}
+
+/** Every follow-up step went through: clear the marker. */
+async function clearFollowUpFailure(contractId) {
+  try {
+    if (!(await hasColumnCached('contracts', 'follow_up_failed_at'))) return;
+    await db('contracts').where({ id: contractId }).whereNotNull('follow_up_failed_at')
+      .update({ follow_up_failed_at: null, follow_up_error: null });
+  } catch (err) {
+    logger.warn('Could not clear the failed follow-up marker', { contractId, message: err.message });
+  }
+}
+
 async function bestEffortLog(type, meta, actor) {
   try {
     await logActivity(type, meta, null, actor);
@@ -256,9 +288,20 @@ async function completeSend(contractId, { pdfPath, pdfSha256, adminId }) {
   const actor = await adminActor(adminId);
   await db.transaction(async (trx) => {
     const now = new Date();
-    await trx('contracts').where({ id: contractId }).update({
-      status: 'sent', sent_at: now, pdf_path: pdfPath, pdf_sha256: pdfSha256, signing_version: VERSION, updated_at: now,
+    // Only a draft is sent, and the lock moves with it: an editor holding
+    // the draft's lock_version can no longer save over a sent contract.
+    const draft = await trx('contracts').where({ id: contractId, status: 'draft' }).first();
+    if (!draft) throw new AppError('This contract is no longer a draft', 409, 'CONTRACT_NOT_DRAFT');
+    const sent = await trx('contracts').where({ id: contractId, status: 'draft' }).update({
+      status: 'sent',
+      sent_at: now,
+      pdf_path: pdfPath,
+      pdf_sha256: pdfSha256,
+      signing_version: VERSION,
+      lock_version: (Number(draft.lock_version) || 1) + 1,
+      updated_at: now,
     });
+    if (!sent) throw new AppError('This contract is no longer a draft', 409, 'CONTRACT_NOT_DRAFT');
     const contract = await trx('contracts').where({ id: contractId }).first();
     await signingEvents.appendEvent(trx, contractId, {
       type: 'sent',
@@ -575,10 +618,9 @@ async function sign(sessionToken, input, { ip = null, userAgent = null } = {}) {
     } else {
       await inviteDue(contract.id);
     }
+    await clearFollowUpFailure(contract.id);
   } catch (err) {
-    logger.error('Signed, but the notice or the next invitation failed', {
-      contractId: contract.id, message: err.message,
-    });
+    await recordFollowUpFailure(contract.id, outcome.customersDone ? 'admin_notice' : 'next_invitation', err);
   }
   await bestEffortLog('contract_signed_by_customer', { contractId: contract.id, signerId: signer.id }, customerPublicActor());
   return { status: outcome.customersDone ? 'signed_by_customer' : 'sent', signedAt };
@@ -735,10 +777,12 @@ async function countersign(contractId, input, { ip = null, userAgent = null, adm
   // signature, so nothing below may delete them.
   try {
     const certificatePath = await issueCertificate(contractId, finalSha);
+    if (!certificatePath) throw new Error('the signing certificate could not be built');
     await sendCompletedEmails(contractId, certificatePath);
     await emitContractEvent(contract, 'signed');
+    await clearFollowUpFailure(contractId);
   } catch (err) {
-    logger.error('Sealed, but a follow-up step failed', { contractId, message: err.message });
+    await recordFollowUpFailure(contractId, 'completion', err);
   }
   await bestEffortLog('contract_fully_signed', { contractId }, actor);
   return { status: 'fully_signed', signedAt };
@@ -860,6 +904,10 @@ async function adminOverview(contractId) {
   return {
     version: contract.signing_version == null ? null : Number(contract.signing_version),
     order: contract.signing_order || 'parallel',
+    // A step after a signature that failed and is worth an admin's attention.
+    followUp: contract.follow_up_failed_at
+      ? { failedAt: contract.follow_up_failed_at, error: contract.follow_up_error || null }
+      : null,
     signers: rows.map(signers.signerToApi),
     events: events.map((e) => ({
       seq: e.seq, type: e.type, actorType: e.actorType, actorLabel: e.actorLabel, signerId: e.signerId,
@@ -907,6 +955,8 @@ module.exports = {
   decline,
   recordWetUpload,
   countersign,
+  issueCertificate,
+  clearFollowUpFailure,
   portalSigningAccess,
   adminOverview,
   revealEvidence,

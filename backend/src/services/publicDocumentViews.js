@@ -115,7 +115,7 @@ function publicContractView(contract, inclusions, customer, profile, locale, bra
   };
 }
 
-function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosText, tosUrl, brandingLogoUrl, brandingLogoUrlDark) {
+function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosText, tosUrl, brandingLogoUrl, brandingLogoUrlDark, texts) {
   return {
     quoteNumber: quote.quote_number,
     status: quote.status,
@@ -127,8 +127,10 @@ function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosTe
     eventDate: quote.event_date,
     eventTimeStart: quote.event_time_start,
     eventTimeEnd: quote.event_time_end,
-    introText: quote.intro_text,
-    outroText: quote.outro_text,
+    // The row keeps the raw text; {{placeholders}} resolve wherever it is
+    // shown, so the customer reads "Hallo Anna", not "Hallo {{customer_name}}".
+    introText: texts ? texts.introText : quote.intro_text,
+    outroText: texts ? texts.outroText : quote.outro_text,
     // Money — public surface.
     netAmountMinor: quote.net_amount_minor,
     vatRate: quote.vat_rate == null ? null : Number(quote.vat_rate),
@@ -259,10 +261,13 @@ async function buildQuoteView(quoteId) {
   const tosRequired = await getAppSetting('crm_quotes_tos_required', false);
   const tosText = await getAppSetting('crm_quotes_tos_text', '');
   const tosUrl = await getAppSetting('crm_quotes_tos_url', '');
+  const texts = await require('./quoteTemplateService')
+    .resolveQuoteTexts(data.quote, { customer: customer || null, profile });
   return publicQuoteView(
     data.quote, data.lineItems, customer, profile, tosRequired, tosText, tosUrl,
     await getAppSetting('branding_logo_url', null),
     await getAppSetting('branding_logo_url_dark', null),
+    texts,
   );
 }
 

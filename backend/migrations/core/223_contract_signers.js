@@ -32,6 +32,12 @@ const CONTRACT_COLUMNS = [
   ['sealed_at', (t) => t.timestamp('sealed_at')],
   ['audit_chain_head', (t) => t.string('audit_chain_head', 64)],
   ['declined_at', (t) => t.timestamp('declined_at')],
+  // A step after the committed signature failed: the next signer's
+  // invitation, the certificate or the completion emails. Signing itself
+  // stands; these say so on the contract so the admin sees it and can run
+  // the step again, instead of the failure living only in the log.
+  ['follow_up_failed_at', (t) => t.timestamp('follow_up_failed_at')],
+  ['follow_up_error', (t) => t.text('follow_up_error')],
 ];
 
 exports.up = async function up(knex) {

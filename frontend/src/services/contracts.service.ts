@@ -98,6 +98,12 @@ export interface ContractSigningChain {
   reason: string | null;
 }
 
+/** A step after a signature that failed: the invitation, certificate or emails. */
+export interface ContractSigningFollowUp {
+  failedAt: string;
+  error: string | null;
+}
+
 export interface ContractSignersOverview {
   /** 2 for signatures v2; null for a contract sent before (single link). */
   version: 2 | null;
@@ -105,6 +111,8 @@ export interface ContractSignersOverview {
   signers: ContractSigner[];
   events: ContractSigningEvent[];
   chain: ContractSigningChain | null;
+  /** Set while a step after a signature is still outstanding. */
+  followUp?: ContractSigningFollowUp | null;
 }
 
 export interface ContractSignersPayload {

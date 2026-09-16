@@ -83,6 +83,10 @@ exports.up = async function (knex) {
   // the add-ons (who, when, what, the totals before and after).
   await addColumn(knex, 'quotes', 'customer_message', (t) => t.text('customer_message'));
   await addColumn(knex, 'quotes', 'selection_changes', (t) => t.text('selection_changes'));
+  // When the business was told the quote was accepted. Inside the response
+  // window the customer may accept, decline and accept again; the notice
+  // goes out once, and again only when the add-on choice changed.
+  await addColumn(knex, 'quotes', 'acceptance_notified_at', (t) => t.timestamp('acceptance_notified_at'));
   // A reissued quote points to the quote it replaces. At most one
   // replacement per quote: the reissue claims the accepted status inside its
   // transaction, and this index is the second line of defence, so a double
@@ -216,7 +220,7 @@ exports.down = async function (knex) {
   await knex.schema.dropTableIfExists('quote_package_items');
   await knex.schema.dropTableIfExists('quote_packages');
 
-  for (const column of ['replaces_quote_id', 'selection_changes', 'customer_message', 'selection_accepted_at', 'optional_selection_snapshot', 'days', 'hours',
+  for (const column of ['replaces_quote_id', 'acceptance_notified_at', 'selection_changes', 'customer_message', 'selection_accepted_at', 'optional_selection_snapshot', 'days', 'hours',
     'source_template_version', 'source_template_id']) {
     await dropColumn(knex, 'quotes', column);
   }

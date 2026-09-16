@@ -37,7 +37,7 @@ async function sendContract(id, adminId) {
 
   const data = await getContractById(id);
   if (!data) throw new AppError('Contract not found', 404);
-  const { contract, inclusions } = data;
+  const { contract } = data;
 
   if (!['draft'].includes(contract.status)) {
     throw new AppError(`Cannot send a contract with status '${contract.status}'`, 409);
@@ -46,44 +46,24 @@ async function sendContract(id, adminId) {
   const customer = await db('customer_accounts').where({ id: contract.customer_account_id }).first();
   ensureCustomerActive(customer);
 
-  // Snapshot every included block's body into the inclusion row so
-  // future block edits don't mutate the sent contract — in every language
-  // (#1445; only EN and DE were frozen). Text a template already froze into
-  // the contract stays as it is.
-  const content = require('./content');
-  await db.transaction(async (trx) => {
-    for (const inc of inclusions) {
-      if (!(inc.included === true || inc.included === 1 || inc.included === '1')) continue;
-      const frozen = content.inclusionSnapshot(inc);
-      await trx('contract_block_inclusions').where({ id: inc.id }).update({
-        ...content.snapshotColumns(Object.keys(frozen).length ? frozen : content.blockBodies(inc, 'block_')),
-        updated_at: new Date(),
-      });
-    }
-  });
-
-  // Freeze the resolved content — clauses in every language, title, intro,
-  // outro and the placeholder values of this moment — with its sha256
-  // (#1445). The PDF, the signing page and later re-renders read this.
-  const frozenDraft = await getContractById(id);
-  const { snapshot, sha256: contentSha256 } = await require('./renderContext')
-    .buildContentSnapshot(frozenDraft.contract, frozenDraft.inclusions, frozenDraft.textSections);
-  await db('contracts').where({ id }).update({
-    rendered_content: JSON.stringify(snapshot),
-    rendered_content_sha256: contentSha256,
-    updated_at: new Date(),
-  });
-
   // The signers (#1446): the ones set on the draft, or the contract's
   // customer; each gets a slot on the signature page, the issuer last.
   const signingV2 = require('./signingV2');
-  const refreshed = await getContractById(id);
-  const { slots: signatureSlots } = await signingV2.prepareSend(refreshed.contract);
+  const { slots: signatureSlots } = await signingV2.prepareSend(contract);
 
-  // Re-fetched with snapshots populated so the renderer uses the frozen
-  // bodies (matches post-send reads).
+  // Render from the draft as it stands. A block reads its frozen text where
+  // it has any and the live library text otherwise (renderContext), which is
+  // exactly what the freeze below writes — so the PDF and the snapshot say
+  // the same thing, and nothing is frozen until the send is certain to go
+  // through. A send that fails at the attachment check used to leave the
+  // snapshot on the draft, and the renderer prefers a snapshot: later edits
+  // then never showed in the preview.
+  const refreshed = await getContractById(id);
   const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions, refreshed.textSections);
   ctx.signatureSlots = signatureSlots;
+  // The footers are drawn now, the attachments are merged after, so the page
+  // numbers have to be told how many pages will land in between.
+  ctx.mergedAttachmentPages = await require('./attachments').mergedPageCount(id);
   // Where each signature slot landed goes into the record (#1445).
   const { buffer: rendered, slots } = await pdfService.renderContractWithSlots(ctx);
   // Attachments (#1445): merged ones go between the body and the signature
@@ -91,6 +71,31 @@ async function sendContract(id, adminId) {
   // against the sha256 the contract recorded for it.
   const attachments = require('./attachments');
   const sendable = await attachments.buildSendable(refreshed.contract, rendered, { slots });
+
+  // Freeze what was just rendered: every included block's body in every
+  // language (#1445; only EN and DE were frozen before), plus the resolved
+  // content — clauses, title, intro, outro and this moment's placeholder
+  // values — with its sha256. The PDF, the signing page and later
+  // re-renders read this.
+  const content = require('./content');
+  const { snapshot, sha256: contentSha256 } = await require('./renderContext')
+    .buildContentSnapshot(refreshed.contract, refreshed.inclusions, refreshed.textSections);
+  await db.transaction(async (trx) => {
+    for (const inc of refreshed.inclusions) {
+      if (!(inc.included === true || inc.included === 1 || inc.included === '1')) continue;
+      const frozen = content.inclusionSnapshot(inc);
+      await trx('contract_block_inclusions').where({ id: inc.id }).update({
+        ...content.snapshotColumns({ ...content.blockBodies(inc, 'block_'), ...frozen }),
+        updated_at: new Date(),
+      });
+    }
+    await trx('contracts').where({ id }).update({
+      rendered_content: JSON.stringify(snapshot),
+      rendered_content_sha256: contentSha256,
+      updated_at: new Date(),
+    });
+  });
+
   const { filePath: pdfPath, sha256: pdfSha256 } = await persistContractPdf(refreshed.contract, sendable.buffer, '', {
     kind: 'unsigned',
     theme: ctx.theme,

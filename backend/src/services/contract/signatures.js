@@ -771,7 +771,23 @@ async function rerenderAndResend(contractId, adminId) {
   // Sibling audit certificate (timestamps + IPs + hashes). Best-effort:
   // missing certificate doesn't block the email — the stamped contract
   // alone is the primary attachment.
-  const auditCertPath = await persistAuditCertificate(refetched);
+  //
+  // For a v2 contract this is also the re-issue path: when the certificate
+  // failed right after sealing, `issueCertificate` builds it from the event
+  // chain now, so re-sending repairs the record instead of mailing a signed
+  // contract with no certificate.
+  const signingV2 = require('./signingV2');
+  let auditCertPath;
+  if (isV2Contract) {
+    const existing = await db('generated_documents')
+      .where({ doc_type: 'contract', doc_id: contract.id, kind: 'audit' }).orderBy('id', 'desc').first();
+    auditCertPath = existing && existing.path && fs.existsSync(existing.path)
+      ? existing.path
+      : await signingV2.issueCertificate(contract.id, refetched.signed_pdf_sha256);
+    if (auditCertPath) await signingV2.clearFollowUpFailure(contract.id);
+  } else {
+    auditCertPath = await persistAuditCertificate(refetched);
+  }
 
   const attachments = [{
     filename: `${refetched.contract_number}-signed.pdf`,

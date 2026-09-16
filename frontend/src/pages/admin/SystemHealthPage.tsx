@@ -240,6 +240,13 @@ export const SystemHealthPage: React.FC = () => {
                   <span className="font-mono"> · {t('systemHealth.evidenceKey.id', 'Key ID {{id}}', { id: data.evidenceKey.keyId })}</span>
                 )}
               </p>
+              {data.evidenceKey.matchesStored === false && (
+                <p role="alert" className="text-sm mt-1 text-red-700 dark:text-red-300">
+                  {t('systemHealth.evidenceKey.mismatch',
+                    'The evidence already stored was written under key {{stored}}, so it can no longer be read — and signer names and email addresses come back empty. Put the earlier key back, or expect blank names on contracts signed before.',
+                    { stored: data.evidenceKey.storedKeyId || '—' })}
+                </p>
+              )}
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                 {t('systemHealth.evidenceKey.hint',
                   'Signers\' IP addresses and browsers are stored encrypted with this key. Without it that evidence can\'t be read; the signatures and PDFs stay valid.')}

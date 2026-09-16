@@ -12,7 +12,11 @@
  *
  * The key (the "evidence key"):
  *   - PICPEAK_EVIDENCE_KEY, when set: 64 hex digits or 32 bytes of base64 are
- *     used as they are; any other text goes through scrypt;
+ *     used as they are; a passphrase goes through scrypt. A value that looks
+ *     like a key but isn't one — 63 hex digits, a truncated base64 key — is
+ *     refused rather than quietly derived, because deriving would produce a
+ *     different key and the evidence already on disk would stop opening
+ *     (and new evidence would be written under a key nobody meant to use);
  *   - otherwise a random key created on first use at
  *     <storage>/business-docs/keys/evidence.key (mode 0600). business-docs
  *     is part of the backup export, so a restored install can still read
@@ -32,12 +36,30 @@ const KEY_FILE = path.join('business-docs', 'keys', 'evidence.key');
 
 let cache = null;
 
+/**
+ * A near-miss: text that was plainly meant to be a 32-byte key but isn't one
+ * — hex or base64 characters only, and about the right length. Refused, so a
+ * copy-and-paste that dropped a character is an error at startup instead of
+ * silently switching key.
+ */
+function looksLikeABrokenKey(value) {
+  if (value.length < 40 || value.length > 70) return false;
+  return /^[0-9a-f]+$/i.test(value) || /^[A-Za-z0-9+/_-]+={0,2}$/.test(value);
+}
+
 function keyFromEnv(raw) {
   const value = String(raw).trim();
   if (/^[0-9a-f]{64}$/i.test(value)) return Buffer.from(value, 'hex');
   if (/^[A-Za-z0-9+/_-]{43}=?$/.test(value)) {
     const decoded = Buffer.from(value.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
     if (decoded.length === 32) return decoded;
+  }
+  if (looksLikeABrokenKey(value)) {
+    throw new Error(
+      'PICPEAK_EVIDENCE_KEY looks like a 32-byte key but is not one '
+      + `(${value.length} characters). Use 64 hex digits or 32 bytes of base64, `
+      + 'or a passphrase that could not be mistaken for a key.',
+    );
   }
   return crypto.scryptSync(value, 'picpeak-evidence-key-v1', 32);
 }
@@ -130,6 +152,12 @@ function keyStatus() {
   }
 }
 
+/** The key a stored value was encrypted under, or null if it isn't one. */
+function keyIdOf(value) {
+  const match = /^v1:([0-9a-f]{8}):/.exec(String(value || ''));
+  return match ? match[1] : null;
+}
+
 /** The lookup hash of an email address. */
 function hashEmail(email) {
   return crypto.createHash('sha256').update(String(email || '').trim().toLowerCase()).digest('hex');
@@ -141,6 +169,7 @@ module.exports = {
   tryDecrypt,
   keyInfo,
   keyStatus,
+  keyIdOf,
   hashEmail,
   _resetForTests: () => { cache = null; },
 };

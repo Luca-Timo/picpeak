@@ -12,7 +12,9 @@
 const { PDFDocument } = require('pdf-lib');
 
 function applyInfo(doc, info) {
-  const at = info.createdAt ? new Date(info.createdAt) : new Date();
+  // No date from the caller means a fixed one, never the clock: "same inputs,
+  // same bytes" is what makes the recorded sha256 worth comparing.
+  const at = info.createdAt ? new Date(info.createdAt) : new Date(0);
   doc.setCreationDate(at);
   doc.setModificationDate(at);
   doc.setProducer('picpeak');

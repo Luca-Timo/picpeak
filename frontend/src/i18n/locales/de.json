@@ -712,7 +712,8 @@
       "none": "Noch nicht erstellt. Er wird bei der ersten Unterschrift erstellt.",
       "unreadable": "Die Schlüsseldatei kann nicht gelesen werden. Stellen Sie sie aus einem Backup wieder her, sonst lassen sich gespeicherte Signaturnachweise nicht entschlüsseln.",
       "id": "Schlüssel-ID {{id}}",
-      "hint": "IP-Adressen und Browser der Unterzeichnenden werden mit diesem Schlüssel verschlüsselt gespeichert. Ohne ihn lassen sich diese Nachweise nicht lesen; Unterschriften und PDFs bleiben gültig."
+      "hint": "IP-Adressen und Browser der Unterzeichnenden werden mit diesem Schlüssel verschlüsselt gespeichert. Ohne ihn lassen sich diese Nachweise nicht lesen; Unterschriften und PDFs bleiben gültig.",
+      "mismatch": "Die bereits gespeicherten Nachweise wurden mit dem Schlüssel {{stored}} verschlüsselt und können damit nicht mehr gelesen werden – Namen und E-Mail-Adressen der Unterzeichnenden kommen leer zurück. Setzen Sie den früheren Schlüssel wieder ein, sonst bleiben diese Felder bei älteren Verträgen leer."
     }
   },
   "common": {
@@ -7944,7 +7945,9 @@
         "declineReason": "Ablehnungsgrund",
         "signatureSha": "SHA-256 des Unterschriftsbilds",
         "documentSha": "SHA-256 des unterschriebenen Dokuments"
-      }
+      },
+      "followUpFailed": "Ein Schritt nach der Unterschrift ist fehlgeschlagen",
+      "followUpFailedBody": "Die Unterschrift selbst ist erfasst. Seit {{date}} ist ein Schritt offen: {{error}}. Mit «Signierten Vertrag erneut senden» wird er nochmals ausgeführt, oder Sie senden der nächsten Person ihren Link."
     }
   },
   "messages": {

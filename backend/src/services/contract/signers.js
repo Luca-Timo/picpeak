@@ -170,10 +170,26 @@ function signersDue(contract, signers) {
 // Invitations
 // ---------------------------------------------------------------------
 
-/** A new link for the signer; earlier links stop working. Returns the token (shown once). */
+/**
+ * A new link for the signer; earlier links and sessions stop working.
+ * Returns the token (shown once).
+ *
+ * Only a signer who hasn't finished can be invited: a resend racing a
+ * signature used to set the status back to `invited`, re-opening a slot that
+ * was already signed. The old session is revoked with the old link, or the
+ * replaced link's session would keep working for up to an hour.
+ */
 async function createInvitation(trx, signerId, expiresAt) {
   const now = stamp();
+  const reopened = await trx('contract_signers')
+    .where({ id: signerId })
+    .whereIn('status', ['pending', 'invited'])
+    .update({ status: 'invited', invited_at: now, updated_at: now });
+  if (!reopened) {
+    throw new AppError('This signer has already answered this contract', 409, 'SIGNER_NOT_DUE');
+  }
   await trx('contract_signer_invitations').where({ signer_id: signerId }).whereNull('revoked_at').update({ revoked_at: now });
+  await trx('contract_signing_sessions').where({ signer_id: signerId }).whereNull('revoked_at').update({ revoked_at: now });
   const token = newToken();
   await trx('contract_signer_invitations').insert({
     signer_id: signerId,
@@ -181,7 +197,6 @@ async function createInvitation(trx, signerId, expiresAt) {
     expires_at: expiresAt instanceof Date ? stamp(expiresAt) : expiresAt,
     created_at: now,
   });
-  await trx('contract_signers').where({ id: signerId }).update({ status: 'invited', invited_at: now, updated_at: now });
   return token;
 }
 

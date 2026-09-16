@@ -52,6 +52,32 @@ function themeSnapshot(theme, issuer) {
 }
 
 /**
+ * A free path for `fileName` in `root`, and the bytes written there.
+ *
+ * Two rules, both about the record staying true:
+ *   - nothing is overwritten. An invoice can be re-sent, and an accepted
+ *     quote re-rendered after every add-on change, so the same name comes
+ *     round again; the earlier generated_documents row still names its
+ *     sha256, and overwriting the file made that row a lie. A second
+ *     generation gets `<name>-<6 hex>.pdf` next to the first.
+ *   - the bytes go to a temp file in the same directory and are renamed
+ *     into place, so a crash mid-write can't leave a truncated PDF as the
+ *     only copy of a document that was already mailed out.
+ */
+function writeWithoutOverwriting(root, fileName, buffer) {
+  const ext = path.extname(fileName);
+  const base = path.basename(fileName, ext);
+  let filePath = path.join(root, fileName);
+  while (fs.existsSync(filePath)) {
+    filePath = path.join(root, `${base}-${crypto.randomBytes(3).toString('hex')}${ext}`);
+  }
+  const temp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(temp, buffer);
+  fs.renameSync(temp, filePath);
+  return filePath;
+}
+
+/**
  * Write a generated PDF and record it.
  *
  * @param {object} opts
@@ -80,8 +106,7 @@ async function persist(opts) {
   const year = opts.year || new Date().getFullYear();
   const root = path.join(getStoragePath(), 'business-docs', folder, String(year));
   fs.mkdirSync(root, { recursive: true });
-  const filePath = path.join(root, fileName);
-  fs.writeFileSync(filePath, buffer);
+  const filePath = writeWithoutOverwriting(root, fileName, buffer);
 
   const digest = sha256(buffer);
   const conn = opts.conn || db;

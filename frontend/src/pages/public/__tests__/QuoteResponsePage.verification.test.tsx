@@ -124,9 +124,11 @@ describe('QuoteResponsePage verification gate', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Accept quote' }));
 
+    // The total the page showed rides along even where there are no add-ons
+    // to choose, so the server can refuse a stale one.
     await waitFor(() => expect(post).toHaveBeenCalledWith(
       `/public/quotes/${TOKEN}/respond`,
-      { action: 'accept', tosAccepted: false },
+      { action: 'accept', tosAccepted: false, expectedTotalMinor: 100000 },
       { headers: { 'X-Document-Access': 'grant-q' } },
     ));
   });

@@ -36,6 +36,17 @@ test('a plain PDF passes and is described', async () => {
   expect(info.sha256).toBe(crypto.createHash('sha256').update(info.normalised).digest('hex'));
 });
 
+test('a parse that outgrows its heap is a refusal, not a dead process', async () => {
+  // pdf-lib inflates object streams on load and the upload cap is on the
+  // compressed bytes, so a small crafted file can expand into gigabytes. The
+  // parse runs in a worker with a heap limit; here the limit is tiny so the
+  // same path is exercised by an ordinary file.
+  const buffer = await makePdf({ pages: 40 });
+  expect(await codeOf(validatePdf(buffer, { heapMb: 4 }))).toBe('PDF_TOO_COMPLEX');
+  // …and the process is fine: the next check still answers.
+  await expect(validatePdf(buffer)).resolves.toEqual(expect.objectContaining({ pages: 40 }));
+});
+
 test('an object defined twice cannot smuggle an action past the scan', async () => {
   // pdf-lib keeps the LAST definition of an object number; a viewer resolves
   // through the xref table, which can point at the first. So the scan sees

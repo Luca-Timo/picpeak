@@ -1370,7 +1370,13 @@ function markPaymentSlipPage(doc) {
  * part). `beforeStamp` runs on every numbered page first (the contract
  * footer).
  */
-function stampPageNumbers(doc, locale, { beforeStamp } = {}) {
+/**
+ * `insertedBeforeLast` is how many pages will be merged in before the last
+ * page (a contract's merged attachments). The footers are drawn here, before
+ * that merge, so without it a signature page sitting after 20 attachment
+ * pages read "3 of 3".
+ */
+function stampPageNumbers(doc, locale, { beforeStamp, insertedBeforeLast = 0 } = {}) {
   const position = (doc._theme && doc._theme.pageNumbers) || 'bottom-right';
   const range = doc.bufferedPageRange();
   const slips = doc._paymentSlipPages || new Set();
@@ -1386,7 +1392,10 @@ function stampPageNumbers(doc, locale, { beforeStamp } = {}) {
     if (beforeStamp) beforeStamp(pageIndex);
     if (position === 'none') return;
     doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8).fillColor(themeColor(doc, 'subtle'));
-    const label = t(locale, 'page_of', { current: n + 1, total: pages.length });
+    const inserted = Math.max(0, Number(insertedBeforeLast) || 0);
+    const total = pages.length + inserted;
+    const isLast = n === pages.length - 1;
+    const label = t(locale, 'page_of', { current: isLast ? total : n + 1, total });
     const centred = position === 'bottom-center';
     const labelW = centred ? PAGE.contentWidth : 120;
     const labelX = centred ? PAGE.marginLeft : doc.page.width - PAGE.marginRight - labelW;
@@ -2239,7 +2248,10 @@ function renderContractWithSlots(context) {
           // The footer (when the theme has one) and the page numbers go into
           // each page's bottom margin, clear of the body text (#1445; the
           // numbers used to sit inside the content area and could overlap it).
-          stampPageNumbers(doc, locale, { beforeStamp: () => drawFooter(doc, ctx.issuer || {}, locale) });
+          stampPageNumbers(doc, locale, {
+            beforeStamp: () => drawFooter(doc, ctx.issuer || {}, locale),
+            insertedBeforeLast: ctx.mergedAttachmentPages,
+          });
         } catch (err) {
           const logger = require('../utils/logger');
           logger.warn('Failed to stamp page numbers on contract PDF', { err: err.message });

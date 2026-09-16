@@ -222,7 +222,11 @@ describe('customer portal contract and quote links', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Accept quote' }));
 
-    await waitFor(() => expect(customer.respondToQuote).toHaveBeenCalledWith(9, 'accept', { tosAccepted: false }));
+    // The portal accepts the quote as it stands, confirming the total it
+    // showed — a quote that offers add-ons is otherwise refused with
+    // TOTAL_REQUIRED.
+    await waitFor(() => expect(customer.respondToQuote)
+      .toHaveBeenCalledWith(9, 'accept', { tosAccepted: false, expectedTotalMinor: 100000 }));
     expect(publicRespond).not.toHaveBeenCalled();
   });
 });
