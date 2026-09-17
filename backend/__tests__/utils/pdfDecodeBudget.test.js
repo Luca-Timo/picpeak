@@ -51,6 +51,25 @@ test('a filter chain is metered too — the encoding it arrives in makes no diff
   expect(error).toBeInstanceOf(budget.DecodeBudgetExceeded);
 });
 
+test('two overlapping meters restore the original method, whatever the order', () => {
+  // The fallback path in pdfValidation runs the checks in this process, so
+  // two can overlap. Restoring in the wrong order used to leave ensureBuffer
+  // metered for every later pdf-lib call — pdf/merge.js included.
+  const DecodeStream = require('pdf-lib/cjs/core/streams/DecodeStream').default;
+  const pristine = DecodeStream.prototype.ensureBuffer;
+
+  const outer = budget.patch(MB);
+  const inner = budget.patch(MB);
+  outer.restore();
+  expect(DecodeStream.prototype.ensureBuffer).not.toBe(pristine);
+  inner.restore();
+  expect(DecodeStream.prototype.ensureBuffer).toBe(pristine);
+
+  // A second restore of the same patch is a no-op rather than a leak.
+  inner.restore();
+  expect(DecodeStream.prototype.ensureBuffer).toBe(pristine);
+});
+
 test('an ordinary stream decodes, and the meter comes off again', () => {
   const small = deflated(64 * 1024);
   const { error, spent } = decodeWith(new FlateStream(streamOf(small)), MB);

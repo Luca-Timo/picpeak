@@ -239,6 +239,15 @@ async function inspectPdf(buffer, {
     }
     throw refuse('The PDF could not be read', 'PDF_MALFORMED');
   }
+  // The throw alone isn't a refusal: pdf-lib's parser runs with
+  // `throwOnInvalidObject: false`, so a budget throw from inside its object
+  // loop is logged and that object skipped — the load then "succeeds" with
+  // the bomb quietly dropped, having already cost the budget in memory.
+  // Checked outside the catch above so the refusal keeps its own code.
+  if (meter.tripped()) {
+    meter.restore();
+    throw tooComplex();
+  }
 
   let pages;
   let normalised;
@@ -260,6 +269,9 @@ async function inspectPdf(buffer, {
       if (err instanceof decodeBudget.DecodeBudgetExceeded) throw tooComplex();
       throw refuse('The PDF could not be read', 'PDF_MALFORMED');
     }
+    // Saving decodes whatever the load left lazy, and swallows a throw the
+    // same way.
+    if (meter.tripped()) throw tooComplex();
   } catch (err) {
     if (err instanceof decodeBudget.DecodeBudgetExceeded) throw tooComplex();
     throw err;

@@ -26,6 +26,7 @@ const addAnnotation = (doc, action) => {
 
 const crypto = require('crypto');
 const zlib = require('zlib');
+const MB = 1024 * 1024;
 
 test('a plain PDF passes and is described', async () => {
   const buffer = await makePdf({ pages: 3 });
@@ -113,6 +114,46 @@ test('a stream that carries the endstream keyword is still charged in full', asy
   // stream is inflated from its start and zlib stops at the end of the
   // deflate data, so the budget sees at least what the parser will.
   expect(await codeOf(validatePdf(file, { maxInflateBytes: 8 * 1024 * 1024 }))).toBe('PDF_TOO_COMPLEX');
+});
+
+// The maintainer's own fixture (#1464 round 5): 40 MB of zeros behind
+// `/Filter [/ASCIIHexDecode /FlateDecode]` in an object stream, with a real
+// xref so pdf-lib reaches the object. The raw-bytes pass can't see the
+// expansion — the bytes it looks at are hex text, which only shrinks — so
+// this is the case the decode meter exists for.
+function hexFlateObjStm(mb) {
+  const plain = Buffer.concat([Buffer.from('4 0 <<>>\n'), Buffer.alloc(mb * 1024 * 1024)]);
+  const data = Buffer.from(`${zlib.deflateSync(plain, { level: 9 }).toString('hex')}>`);
+  const parts = [];
+  const offsets = [];
+  const push = (part) => parts.push(Buffer.isBuffer(part) ? part : Buffer.from(part, 'latin1'));
+  const len = () => parts.reduce((n, part) => n + part.length, 0);
+  push('%PDF-1.7\n');
+  offsets[1] = len(); push('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+  offsets[2] = len(); push('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n');
+  offsets[3] = len(); push('3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 10 10] >>\nendobj\n');
+  offsets[5] = len();
+  push(`5 0 obj\n<< /Type /ObjStm /N 1 /First 4 /Filter [/ASCIIHexDecode /FlateDecode] /Length ${data.length} >>\nstream\n`);
+  push(data);
+  push('\nendstream\nendobj\n');
+  const xref = len();
+  let table = 'xref\n0 6\n0000000000 65535 f \n';
+  for (let i = 1; i <= 5; i += 1) {
+    table += i === 4 ? '0000000000 65535 f \n' : `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  }
+  push(`${table}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return Buffer.concat(parts);
+}
+
+test('a filter chain the raw scan cannot read is refused, not silently skipped', async () => {
+  const file = hexFlateObjStm(40);
+  expect(file.length).toBeLessThan(200 * 1024);
+
+  // pdf-lib parses with `throwOnInvalidObject: false`, so the budget's throw
+  // from inside its object loop is logged and the object skipped — the load
+  // "succeeds" with the bomb dropped, after paying for it. The meter
+  // remembers, and the check refuses.
+  expect(await codeOf(validatePdf(file, { maxInflateBytes: 16 * MB }))).toBe('PDF_TOO_COMPLEX');
 });
 
 test('a parse that outgrows its heap is a refusal, not a dead process', async () => {

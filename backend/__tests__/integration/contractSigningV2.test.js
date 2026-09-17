@@ -228,6 +228,24 @@ test('the issuer counter-signs last; completion seals it and the chain verifies'
 
   expect(await lastMail('contract_fully_signed', customerEmail)).toEqual(expect.objectContaining({ contract_number: contract.contract_number }));
   expect(await lastMail('contract_fully_signed', 'ben@example.com')).toBeTruthy();
+
+  // Every v2 write that touches the contract is in the accounting change
+  // history, with who did it and which step it was (#1529). The coverage
+  // test proves these go through the recorder; this is what they record.
+  const history = await require('../../src/services/accountingHistory')
+    .listHistory('contract', ids.contract);
+  const steps = history.filter((entry) => entry.entity_type === 'contract')
+    .map((entry) => [entry.source, entry.actor.type]);
+  expect(steps).toEqual(expect.arrayContaining([
+    ['contract.create', 'admin'],
+    ['contract.send', 'admin'],
+    ['contract.sign.customer', 'customer'],
+    ['contract.sign.admin', 'admin'],
+  ]));
+  // The signature entries name the signer, and carry no evidence.
+  const signature = history.find((entry) => entry.source === 'contract.sign.customer');
+  expect(signature.actor.name).toBe('Anna Muster');
+  expect(JSON.stringify(history)).not.toMatch(/ip_enc|user_agent_enc|198\.51/);
 });
 
 test('a signer can decline, and every link stops working', async () => {

@@ -21,6 +21,11 @@ const {
 
 jest.setTimeout(120000);
 
+// A bigint column reaches the API as a string on PostgreSQL and a number on
+// SQLite (the same serializer behaviour as on main), so the amounts are
+// compared as numbers.
+const minor = (value) => (value == null ? value : Number(value));
+
 let db;
 let cleanup;
 let tmpDir;
@@ -141,7 +146,7 @@ test('publishing creates version 1 and the quote is built from it', async () => 
   const [gold] = byDescription('Wedding Gold');
   const [photo] = byDescription('Photography on location');
   expect(photo).toEqual(expect.objectContaining({ quantity: 8, unitPriceMinor: 15000, rateSource: 'default', parentPosition: gold.position }));
-  expect(gold.lineTotalMinor).toBe(8 * 15000 + 30000 + 50000);
+  expect(minor(gold.lineTotalMinor)).toBe(8 * 15000 + 30000 + 50000);
   // A promotion's description is its line's comment, printed under the name.
   const [verein] = byDescription('Vereinsrabatt');
   expect(verein).toEqual(expect.objectContaining({ lineKind: 'discount', detailsText: 'Sonderkondition für gemeinnützige Vereine' }));
@@ -155,7 +160,7 @@ test('publishing creates version 1 and the quote is built from it', async () => 
   // Pre-ticked promotion.
   expect(byDescription('Vereinsrabatt')[0]).toEqual(expect.objectContaining({ lineKind: 'discount', lineTotalMinor: -30000 }));
   // The unticked optional add-on isn't in the net.
-  expect(quote.netAmountMinor).toBe(200000 + 18000 - 30000);
+  expect(minor(quote.netAmountMinor)).toBe(200000 + 18000 - 30000);
   // The quote keeps the raw text; placeholders resolve where it is shown.
   expect(quote.introText).toContain('{{');
   const row = await db('quotes').where({ id: quote.id }).first();
@@ -169,15 +174,15 @@ test('catalogue edits never change a published version, only the next one', asyn
   await ok(request(quoteApp).put(`/api/admin/quotes/presets/line-items/${ids.makeup}`).set(auth).send({ unitPriceMinor: 99900 }));
 
   const v1 = await quoteFromTemplate(ids.template);
-  expect(v1.lineItems.find((li) => li.description === 'Make-up').unitPriceMinor).toBe(30000);
+  expect(minor(v1.lineItems.find((li) => li.description === 'Make-up').unitPriceMinor)).toBe(30000);
 
   const published = await ok(request(catalogApp).post(`/api/admin/quote-catalog/templates/${ids.template}/publish`).set(auth));
   expect(published.version).toBe(2);
   const v2 = await quoteFromTemplate(ids.template);
-  expect(v2.lineItems.find((li) => li.description === 'Make-up').unitPriceMinor).toBe(99900);
+  expect(minor(v2.lineItems.find((li) => li.description === 'Make-up').unitPriceMinor)).toBe(99900);
 
   const pinned = await quoteFromTemplate(ids.template, { version: 1 });
-  expect(pinned.lineItems.find((li) => li.description === 'Make-up').unitPriceMinor).toBe(30000);
+  expect(minor(pinned.lineItems.find((li) => li.description === 'Make-up').unitPriceMinor)).toBe(30000);
 });
 
 test('publishing refuses unknown placeholders and archived items', async () => {

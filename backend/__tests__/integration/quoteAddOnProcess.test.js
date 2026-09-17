@@ -19,6 +19,8 @@ const PDFKit = require('pdfkit');
 const {
   bootCrmDb, seedMinimal, assignAdminRole, mintAdminToken, createPublicToken, buildRouteApp,
 } = require('./helpers/crmDb');
+// Reads a stored timestamp in whatever shape the engine returns it.
+const { toMillis } = require('../../src/utils/queueTimestamps');
 
 
 // The public quote page now needs the grant issued after the emailed code
@@ -214,48 +216,54 @@ test('a re-sent quote is a new offer: answerable, news again, fresh consent, and
     const updated = await db('app_settings').where({ setting_key: key }).update({ setting_value: value });
     if (!updated) await db('app_settings').insert({ setting_key: key, setting_value: value });
   };
+  // In a finally, so a failure here can't leave the requirement on and take
+  // the next tests down with it.
   await setSetting('crm_quotes_tos_required', JSON.stringify(true));
   await setSetting('crm_quotes_tos_text', JSON.stringify('Terms A'));
+  try {
+    const { quoteId, link } = await sentQuote();
+    const notices = async () => (await db('email_queue').where({ email_type: 'quote_accepted_admin' })).length;
+    const accept = async (tok) => request(publicApp).post(`/api/public/quotes/${tok}/respond`)
+      .set('X-Document-Access', await quoteGrant(tok))
+      .send({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000, tosAccepted: true });
 
-  const { quoteId, link } = await sentQuote();
-  const notices = async () => (await db('email_queue').where({ email_type: 'quote_accepted_admin' })).length;
-  const accept = async (tok) => request(publicApp).post(`/api/public/quotes/${tok}/respond`)
-    .set('X-Document-Access', await quoteGrant(tok))
-    .send({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000, tosAccepted: true });
+    expect((await accept(link)).status).toBe(200);
+    const first = await notices();
+    const firstAnswer = await db('quotes').where({ id: quoteId }).first();
+    expect(firstAnswer.tos_text_snapshot).toBe('Terms A');
 
-  expect((await accept(link)).status).toBe(200);
-  const first = await notices();
-  const firstAnswer = await db('quotes').where({ id: quoteId }).first();
-  expect(firstAnswer.tos_text_snapshot).toBe('Terms A');
+    // Declined, the terms changed, then sent again.
+    await quoteService.adminDeclineQuote(quoteId, adminId, 'Kunde überlegt noch');
+    await setSetting('crm_quotes_tos_text', JSON.stringify('Terms B'));
+    await quoteService.sendQuote(quoteId, adminId);
+    const resent = await db('quotes').where({ id: quoteId }).first();
+    expect(resent.acceptance_notified_at).toBeNull();
+    expect(resent.workflow_response_emitted_at).toBeNull();
+    expect(resent.tos_accepted_at).toBeNull();
+    expect(resent.tos_text_snapshot).toBeNull();
 
-  // Declined, the terms changed, then sent again.
-  await quoteService.adminDeclineQuote(quoteId, adminId, 'Kunde überlegt noch');
-  await setSetting('crm_quotes_tos_text', JSON.stringify('Terms B'));
-  await quoteService.sendQuote(quoteId, adminId);
-  const resent = await db('quotes').where({ id: quoteId }).first();
-  expect(resent.acceptance_notified_at).toBeNull();
-  expect(resent.workflow_response_emitted_at).toBeNull();
-  expect(resent.tos_accepted_at).toBeNull();
-  expect(resent.tos_text_snapshot).toBeNull();
+    const fresh = await db('quote_action_tokens').where({ quote_id: quoteId }).orderBy('id', 'desc').first();
+    expect((await accept(fresh.token)).status).toBe(200);
+    expect(await notices()).toBe(first + 1);
+    const second = await db('quotes').where({ id: quoteId }).first();
+    // The consent is this offer's, against the terms that were shown now.
+    expect(second.tos_text_snapshot).toBe('Terms B');
+    // Through toMillis on both sides: PostgreSQL hands back a Date, whose
+    // String() stops at the second, and two acceptances can land inside one.
+    expect(toMillis(second.tos_accepted_at)).not.toBe(toMillis(firstAnswer.tos_accepted_at));
 
-  const fresh = await db('quote_action_tokens').where({ quote_id: quoteId }).orderBy('id', 'desc').first();
-  expect((await accept(fresh.token)).status).toBe(200);
-  expect(await notices()).toBe(first + 1);
-  const second = await db('quotes').where({ id: quoteId }).first();
-  // The consent is this offer's, against the terms that were shown now.
-  expect(second.tos_text_snapshot).toBe('Terms B');
-  expect(String(second.tos_accepted_at)).not.toBe(String(firstAnswer.tos_accepted_at));
-
-  // …and the acceptance reaches the workflow engine: the sweep can claim it
-  // again once the window locks.
-  await db('quotes').where({ id: quoteId })
-    .update({ response_locked_at: new Date(Date.now() - 60 * 1000).toISOString() });
-  expect(await quoteService.finalizeQuoteResponses()).toBeGreaterThan(0);
-  expect((await db('quotes').where({ id: quoteId }).first()).workflow_response_emitted_at).toBeTruthy();
-
-  // The terms requirement is this test's; the rest of the suite answers
-  // without ticking a box.
-  await setSetting('crm_quotes_tos_required', JSON.stringify(false));
+    // …and the acceptance reaches the workflow engine: the sweep can claim it
+    // again once the window locks.
+    await db('quotes').where({ id: quoteId })
+      .update({ response_locked_at: new Date(Date.now() - 60 * 1000).toISOString() });
+    expect(await quoteService.finalizeQuoteResponses()).toBeGreaterThan(0);
+    expect((await db('quotes').where({ id: quoteId }).first()).workflow_response_emitted_at).toBeTruthy();
+  } finally {
+    // The terms requirement is this test's; the rest of the suite answers
+    // without ticking a box.
+    await setSetting('crm_quotes_tos_required', JSON.stringify(false));
+    await setSetting('crm_quotes_tos_text', JSON.stringify(''));
+  }
 });
 
 test('two add-on changes at once each record what they changed', async () => {

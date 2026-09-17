@@ -27,6 +27,12 @@ const {
 // under CI load; match the other CRM integration suites.
 jest.setTimeout(120000);
 
+// A json/text column and a bigint, read the same way on both engines:
+// PostgreSQL hands back an object for json and a string for bigint, SQLite
+// text and a number.
+const parsed = (value) => (typeof value === 'string' ? JSON.parse(value) : value);
+const minor = (value) => (value == null ? value : Number(value));
+
 const CUSTOMER_EMAIL = 'customer@example.com';
 
 // 1x1 transparent PNG — smallest valid signature pad output.
@@ -252,7 +258,7 @@ describe('POST /api/admin/quotes/:id/send', () => {
     const emails = await db('email_queue').where({ email_type: 'quote_sent' });
     expect(emails).toHaveLength(1);
     expect(emails[0].recipient_email).toBe(CUSTOMER_EMAIL);
-    const emailData = JSON.parse(emails[0].email_data);
+    const emailData = parsed(emails[0].email_data);
     expect(emailData.quote_number).toBe(quote.quote_number);
   });
 
@@ -288,9 +294,9 @@ describe('POST /api/admin/invoices/:id/cancel (Storno mint)', () => {
     expect(storno.deal_uuid).toBe(original.deal_uuid);
 
     // Negated amounts
-    expect(storno.net_amount_minor).toBe(-original.net_amount_minor);
-    expect(storno.vat_amount_minor).toBe(-original.vat_amount_minor);
-    expect(storno.total_amount_minor).toBe(-original.total_amount_minor);
+    expect(minor(storno.net_amount_minor)).toBe(-minor(original.net_amount_minor));
+    expect(minor(storno.vat_amount_minor)).toBe(-minor(original.vat_amount_minor));
+    expect(minor(storno.total_amount_minor)).toBe(-minor(original.total_amount_minor));
 
     // Freshly sequenced number from the same series
     expect(typeof storno.invoice_number).toBe('string');
@@ -395,7 +401,7 @@ describe('POST /api/admin/contracts/:id/countersign', () => {
     const emails = await db('email_queue').where({ email_type: 'contract_fully_signed' });
     const customerCopy = emails.find((e) => e.recipient_email === CUSTOMER_EMAIL);
     expect(customerCopy).toBeTruthy();
-    const emailData = JSON.parse(customerCopy.email_data);
+    const emailData = parsed(customerCopy.email_data);
     expect(emailData.contract_number).toBe(contract.contract_number);
     expect(Array.isArray(emailData.attachments)).toBe(true);
     const pdfAttachment = emailData.attachments.find(

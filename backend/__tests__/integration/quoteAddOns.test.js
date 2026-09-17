@@ -33,6 +33,11 @@ async function quoteGrant(token) {
 
 jest.setTimeout(120000);
 
+// A json/text column read the same way on both engines: PostgreSQL hands
+// back an object, SQLite the text. The amounts here already go through
+// Number().
+const parsed = (value) => (typeof value === 'string' ? JSON.parse(value) : value);
+
 let db;
 let cleanup;
 let tmpDir;
@@ -157,7 +162,7 @@ test('accepting stores the choice, the recalculated totals and the accepted PDF'
   expect(Number(quote.net_amount_minor)).toBe(117000);
   expect(Number(quote.total_amount_minor)).toBe(126477);
   expect(quote.selection_accepted_at).toBeTruthy();
-  expect(JSON.parse(quote.optional_selection_snapshot)).toEqual(expect.objectContaining({
+  expect(parsed(quote.optional_selection_snapshot)).toEqual(expect.objectContaining({
     by: 'customer', selectedOptional: [2], totalAmountMinor: 126477,
   }));
   expect(quote.pdf_path).toMatch(/-accepted\.pdf$/);
@@ -190,8 +195,8 @@ test('the customer can change the add-ons while the response window is open, not
   expect(changed.status).toBe(200);
   quote = await db('quotes').where({ id: quoteId }).first();
   expect(Number(quote.total_amount_minor)).toBe(145935);
-  expect(JSON.parse(quote.optional_selection_snapshot)).toEqual(expect.objectContaining({ by: 'customer', selectedOptional: [2, 4] }));
-  expect(JSON.parse(quote.selection_changes)).toEqual([expect.objectContaining({
+  expect(parsed(quote.optional_selection_snapshot)).toEqual(expect.objectContaining({ by: 'customer', selectedOptional: [2, 4] }));
+  expect(parsed(quote.selection_changes)).toEqual([expect.objectContaining({
     by: 'customer', booked: ['Album'], removed: [], totalBeforeMinor: 116748, totalAfterMinor: 145935,
   })]);
 
@@ -208,7 +213,7 @@ test('an admin acceptance records the choice set in the editor', async () => {
   await quoteService.adminAcceptQuote(quoteId, adminId);
   const quote = await db('quotes').where({ id: quoteId }).first();
   expect(quote.status).toBe('accepted');
-  expect(JSON.parse(quote.optional_selection_snapshot)).toEqual(expect.objectContaining({
+  expect(parsed(quote.optional_selection_snapshot)).toEqual(expect.objectContaining({
     by: 'admin', selectedOptional: [4], totalAmountMinor: 116748,
   }));
 });

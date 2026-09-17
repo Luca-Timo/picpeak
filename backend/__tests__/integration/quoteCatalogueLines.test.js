@@ -21,6 +21,11 @@ const {
 
 jest.setTimeout(120000);
 
+// A bigint column reaches the API as a string on PostgreSQL and a number on
+// SQLite (the same serializer behaviour as on main), so the amounts are
+// compared as numbers.
+const minor = (value) => (value == null ? value : Number(value));
+
 let db;
 let cleanup;
 let tmpDir;
@@ -88,10 +93,10 @@ describe('discount promotions', () => {
     });
 
     const discount = lineItems.filter((li) => li.lineKind === 'discount');
-    expect(discount.map((li) => li.lineTotalMinor)).toEqual([-30000, -20000]);
+    expect(discount.map((li) => minor(li.lineTotalMinor))).toEqual([-30000, -20000]);
     expect(discount[0].description).toBe('Vereinsrabatt');
     expect(discount[0].promotionSnapshot).toEqual(expect.objectContaining({ type: 'fixed', valueMinor: 30000 }));
-    expect(quote.netAmountMinor).toBe(150000);
+    expect(minor(quote.netAmountMinor)).toBe(150000);
   });
 
   test('the discount is capped at the subtotal', async () => {
@@ -102,8 +107,8 @@ describe('discount promotions', () => {
         { position: 2, lineKind: 'discount', promotionId: big },
       ],
     });
-    expect(lineItems[1].lineTotalMinor).toBe(-40000);
-    expect(quote.totalAmountMinor).toBe(0);
+    expect(minor(lineItems[1].lineTotalMinor)).toBe(-40000);
+    expect(minor(quote.totalAmountMinor)).toBe(0);
   });
 
   test('an inactive or foreign-currency promotion is refused', async () => {
@@ -137,7 +142,7 @@ describe('hour and day rates', () => {
     expect(quote.hours).toBe(8);
     expect(lineItems[0]).toEqual(expect.objectContaining({ quantity: 8, unitPriceMinor: 15000, rateSource: 'default', unit: 'hour' }));
     expect(lineItems[1]).toEqual(expect.objectContaining({ quantity: 2, unitPriceMinor: 120000, rateSource: 'default' }));
-    expect(quote.netAmountMinor).toBe(8 * 15000 + 2 * 120000);
+    expect(minor(quote.netAmountMinor)).toBe(8 * 15000 + 2 * 120000);
   });
 
   test('the customer rate wins over the default, and a later change does not touch the quote', async () => {
@@ -175,7 +180,7 @@ describe('optional add-ons', () => {
     });
     expect(lineItems).toHaveLength(3);
     expect(lineItems[1]).toEqual(expect.objectContaining({ isOptional: true, selected: false }));
-    expect(quote.netAmountMinor).toBe(120000);
+    expect(minor(quote.netAmountMinor)).toBe(120000);
   });
 });
 
@@ -196,7 +201,7 @@ describe('duplicate', () => {
     expect(copy.body.quote.hours).toBe(6);
     expect(copy.body.lineItems.map((li) => li.parentPosition)).toEqual([null, 1, 1]);
     expect(copy.body.lineItems[1]).toEqual(expect.objectContaining({ detailsText: 'On location', unit: 'hour', boundTo: 'hours' }));
-    expect(copy.body.quote.netAmountMinor).toBe(quote.netAmountMinor);
+    expect(minor(copy.body.quote.netAmountMinor)).toBe(quote.netAmountMinor);
   });
 });
 

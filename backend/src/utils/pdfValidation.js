@@ -29,16 +29,24 @@ const WORKER_HEAP_MB = 512;
 // spends longer than this is not one we want to keep working on.
 const WORKER_TIMEOUT_MS = 30000;
 // Last line of defence, and the only one that doesn't depend on reading the
-// file the way pdf-lib does: while a check runs, the process must not grow
+// file the way pdf-lib does: while a check runs, the PROCESS must not grow
 // past this much above where it started. Typed arrays live outside the heap
 // `resourceLimits` caps, so this is what catches anything the inflate budget
-// and the decode meter didn't see. Generous enough that a legitimate 20 MB
-// document never reaches it.
+// and the decode meter didn't see.
+//
+// Process-wide is deliberate but blunt: it is what the kernel would kill, so
+// it is what has to be bounded — and it means a second concurrent check, or
+// any unrelated allocation in this process (a photo or video upload being
+// processed), counts against whichever check is running. At 1 GB that makes
+// a false refusal possible, never a false pass, and a legitimate 20 MB
+// document is nowhere near it.
 const RSS_CEILING_BYTES = 1024 * 1024 * 1024;
 const RSS_SAMPLE_MS = 100;
 const WORKER_FILE = path.join(__dirname, 'pdfInspectWorker.js');
-// Each check may hold its inflate budget in memory, so they queue rather than
-// run together: two admins uploading at once must not multiply the ceiling.
+// Each check may hold its inflate budget in memory, so at most two run at
+// once: two admins uploading together must not multiply the ceiling. Each
+// runs in its own worker, which is also what keeps the decode meter's
+// prototype patch from being shared (see pdfDecodeBudget).
 const MAX_CONCURRENT = 2;
 let running = 0;
 const waiting = [];
@@ -110,7 +118,8 @@ function runInWorker(buffer, limits, heapMb) {
       });
     } catch (err) {
       // No worker available (an unusual runtime): fall back to this process
-      // rather than refusing every upload.
+      // rather than refusing every upload. The decode meter nests, so two
+      // overlapping checks here still leave `ensureBuffer` as it found it.
       inspectPdf(buffer, limits).then(resolve, reject);
       return;
     }
