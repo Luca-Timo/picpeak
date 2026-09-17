@@ -142,7 +142,7 @@ async function persist(opts) {
     template_version_id: opts.templateVersionId || null,
     renderer_version: RENDERER_VERSION,
     parent_id: opts.parentId || null,
-    generated_at: new Date(),
+    generated_at: new Date().toISOString(),
   }).returning('id');
   const id = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
   return { path: filePath, sha256: digest, bytes: buffer.length, id };

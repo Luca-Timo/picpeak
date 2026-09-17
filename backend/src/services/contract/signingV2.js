@@ -710,7 +710,7 @@ async function decline(sessionToken, { reason } = {}) {
 async function recordWetUpload(contractId, { by, sha256: fileSha }) {
   await db.transaction(async (trx) => {
     await signers.revokeAccess(trx, contractId);
-    await auditedUpdate(trx, 'contracts', { id: contractId }, { sealed_at: new Date() },
+    await auditedUpdate(trx, 'contracts', { id: contractId }, { sealed_at: new Date().toISOString() },
       { actor: by === 'admin' ? { type: 'admin' } : { type: 'customer' }, source: 'contract.upload.signed_pdf' });
     await signingEvents.appendEvent(trx, contractId, {
       type: 'wet_upload', actorType: by === 'admin' ? 'admin' : 'signer', artifactSha256: fileSha || null, payload: { by },

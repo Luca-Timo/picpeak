@@ -410,7 +410,7 @@ async function publishTemplate(id, adminId) {
         template_id: id,
         version: next,
         snapshot: JSON.stringify(snapshot),
-        published_at: new Date(),
+        published_at: new Date().toISOString(),
         published_by_admin_id: adminId || null,
       });
       await trx('quote_templates').where({ id }).update({ status: 'published', current_version: next, updated_at: new Date() });
