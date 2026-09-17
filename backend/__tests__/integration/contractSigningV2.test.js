@@ -478,6 +478,33 @@ test('the send claims the draft it rendered', async () => {
   expect(invitations).toHaveLength(1);
 });
 
+test('an edit saved while the contract is rendering doesn\'t go missing', async () => {
+  // The edit passes its own lock check, but the PDF was already rendered from
+  // the text before it. The send claims the lock_version it rendered, so it is
+  // refused and the admin sends again — rather than mailing a contract whose
+  // stored text and stored PDF disagree.
+  const id = await newContract();
+  const pdfService = require('../../src/services/pdfService');
+  const real = pdfService.renderContractWithSlots;
+  const render = jest.spyOn(pdfService, 'renderContractWithSlots').mockImplementation(async (ctx) => {
+    const out = await real.call(pdfService, ctx);
+    await db('contracts').where({ id }).increment('lock_version', 1).update({ title: 'Edited mid-render' });
+    return out;
+  });
+  const res = await request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth);
+  render.mockRestore();
+
+  expect(res.status).toBe(409);
+  expect(res.body.code).toBe('CONTRACT_CHANGED');
+  const contract = await db('contracts').where({ id }).first();
+  expect(contract.status).toBe('draft');
+  expect(contract.rendered_content).toBeNull();
+
+  // Sending again works, and carries the edit.
+  expect((await request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth)).status).toBe(200);
+  expect(JSON.parse((await db('contracts').where({ id }).first()).rendered_content).title).toBe('Edited mid-render');
+});
+
 test('signers can\'t be rewritten once the contract is out', async () => {
   const id = await newContract();
   await ok(request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth));

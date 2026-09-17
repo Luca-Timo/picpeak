@@ -100,6 +100,10 @@ function assertQuoteTransition(from, to) {
 
 // `ensureInt` + `ensureNumber` moved to utils/numericHelpers (D.2 cleanup).
 const { ensureInt, ensureNumber } = require('../utils/numericHelpers');
+// Reading a stored timestamp back whatever shape the engine kept it in, and
+// `null` when it can't be read at all — the difference between "the window is
+// open" and "nobody can tell" (see utils/queueTimestamps).
+const { toMillis } = require('../utils/queueTimestamps');
 
 /**
  * Compute line totals + document totals authoritatively from the
@@ -1133,8 +1137,11 @@ async function sendQuote(id, adminId) {
     await trx('quote_action_tokens').insert({
       quote_id: id,
       token,
-      expires_at: expiresAt,
-      created_at: new Date(),
+      // ISO, like every other value a later check reads back: a bare Date
+      // from another realm is stored as "[object Object]", and an expiry
+      // nobody can read is one no check can enforce.
+      expires_at: stamp(expiresAt),
+      created_at: stamp(new Date()),
     });
     await trx('quotes').where({ id }).update({
       status: 'sent',
@@ -1142,12 +1149,19 @@ async function sendQuote(id, adminId) {
       pdf_path: pdfPath,
       payment_term_snapshot: paymentTermSnapshot ? JSON.stringify(paymentTermSnapshot) : null,
       // A (re)sent quote is a new offer: the customer chooses add-ons afresh,
-      // and the acceptance that follows is news again — without clearing the
-      // marker the notice would claim it had already been sent.
+      // answers afresh, and the acceptance that follows is news again. The
+      // response window has to go with the rest — a quote sent again after a
+      // decline still carried the closed window from that decline, so the
+      // customer's acceptance came back 423 RESPONSE_LOCKED and the new offer
+      // could never be accepted at all.
       optional_selection_snapshot: null,
       selection_accepted_at: null,
       selection_changes: null,
       customer_message: null,
+      responded_at: null,
+      response_locked_at: null,
+      accepted_at: null,
+      declined_at: null,
       ...(hasNotifiedColumn ? { acceptance_notified_at: null } : {}),
       updated_at: new Date(),
     });
@@ -1243,6 +1257,16 @@ async function loadQuoteLinesWithParentPosition(quoteId) {
     .orderBy('li.position', 'asc')
     .select('li.*', 'parent.position as parent_position');
 }
+
+/**
+ * Timestamps that are compared again later — the response window, the
+ * acceptance — are written as ISO strings. A bare Date from another realm
+ * (which is what Jest hands a service) is stored by node-sqlite3 as
+ * "[object Object]", and a window that can't be read is a window no check can
+ * enforce: the lock silently stopped working under test, and hid a re-sent
+ * quote that could never be accepted.
+ */
+const stamp = (date) => (date instanceof Date ? date.toISOString() : date);
 
 const isTopLevelRow = (li) => li.parent_position == null || li.parent_position === '';
 const topPositionOf = (li) => ensureInt(isTopLevelRow(li) ? li.position : li.parent_position);
@@ -1616,7 +1640,8 @@ async function emitQuoteEvent(quote, status) {
  * Returns true if it emitted, false if deferred / already emitted.
  */
 async function maybeEmitQuoteResponse(quote, status, responseLockedAt) {
-  const locked = !responseLockedAt || new Date(responseLockedAt).getTime() <= Date.now();
+  const lockedAtMs = toMillis(responseLockedAt);
+  const locked = !responseLockedAt || lockedAtMs == null || lockedAtMs <= Date.now();
   if (!locked) return false; // deferred to the finalize sweep
   const hasCol = await hasColumnCached('quotes', 'workflow_response_emitted_at');
   if (hasCol) {
@@ -1648,7 +1673,12 @@ async function finalizeQuoteResponses(limit = 200) {
     .whereNull('workflow_response_emitted_at')
     .whereNotNull('response_locked_at')
     .limit(limit);
-  const rows = candidates.filter((q) => new Date(q.response_locked_at).getTime() <= now);
+  // An unreadable lock time counts as past: the alternative is a row this
+  // sweep skips on every run, so the workflow event never fires at all.
+  const rows = candidates.filter((q) => {
+    const at = toMillis(q.response_locked_at);
+    return at == null || at <= now;
+  });
   let emitted = 0;
   for (const q of rows) {
     const claimed = await db('quotes').where({ id: q.id })
@@ -1672,7 +1702,8 @@ async function recordResponse({ token, action, ip, tosAccepted, selectedOptional
   // A token without an expiry is refused, not treated as permanent: the
   // column is NOT NULL and the route guard already refuses one, so this only
   // matters for a caller that reaches the service another way.
-  if (!tokenRow.expires_at || new Date(tokenRow.expires_at).getTime() < Date.now()) {
+  const tokenExpires = toMillis(tokenRow.expires_at);
+  if (tokenExpires == null || tokenExpires < Date.now()) {
     throw new AppError('Token expired', 410);
   }
 
@@ -1717,8 +1748,13 @@ async function recordResponse({ token, action, ip, tosAccepted, selectedOptional
   const now = new Date();
   const windowMinutes = ensureInt(await getAppSetting('crm_quotes_accept_window_minutes')) || 15;
   // If there's already a response, check if we're inside the toggle window.
+  // A lock time this process can't read counts as closed: `NaN > now` is
+  // false, so an unreadable value used to wave every answer through — the
+  // same fail-open shape as an unreadable expiry, and it hid the bug above
+  // from the SQLite test run.
   if (quote.responded_at && quote.response_locked_at) {
-    if (now.getTime() > new Date(quote.response_locked_at).getTime()) {
+    const lockedAt = toMillis(quote.response_locked_at);
+    if (lockedAt == null || now.getTime() > lockedAt) {
       const err = new AppError('Response window has closed', 423, 'RESPONSE_LOCKED');
       err.lockedAt = quote.response_locked_at;
       err.currentStatus = quote.status;
@@ -1739,10 +1775,10 @@ async function recordResponse({ token, action, ip, tosAccepted, selectedOptional
   await db.transaction(async (trx) => {
     const updates = {
       status: newStatus,
-      responded_at: respondedAt,
-      response_locked_at: responseLockedAt,
-      accepted_at: isAccept ? now : null,
-      declined_at: !isAccept ? now : null,
+      responded_at: stamp(respondedAt),
+      response_locked_at: stamp(responseLockedAt),
+      accepted_at: isAccept ? stamp(now) : null,
+      declined_at: !isAccept ? stamp(now) : null,
       updated_at: now,
     };
     // Snapshot the ToS text the customer agreed to. Only set on the
@@ -1835,8 +1871,8 @@ async function adminAcceptQuote(id, adminId) {
 
   await db('quotes').where({ id }).update({
     status: 'accepted',
-    responded_at: now,
-    response_locked_at: responseLockedAt,
+    responded_at: stamp(now),
+    response_locked_at: stamp(responseLockedAt),
     accepted_at: now,
     // accept_on_behalf flag intentionally NOT stored as a separate
     // column — the audit log entry below captures who accepted and
@@ -2005,12 +2041,12 @@ async function adminDeclineQuote(id, adminId, reason = null) {
   await db.transaction(async (trx) => {
     const updates = {
       status: 'declined',
-      responded_at: quote.responded_at || now,
+      responded_at: quote.responded_at || stamp(now),
       // Close the public response window immediately so a customer link
       // can't toggle the quote afterwards (recordResponse rejects once
       // now > response_locked_at).
-      response_locked_at: now,
-      declined_at: now,
+      response_locked_at: stamp(now),
+      declined_at: stamp(now),
       updated_at: now,
     };
     // A declined acceptance stays on record; anything else never had one.
@@ -2071,7 +2107,9 @@ async function reissueQuote(id, adminId, reason = null) {
   const hasReasonColumn = await hasColumnCached('quotes', 'decline_reason');
 
   await db.transaction(async (trx) => {
-    const updates = { status: 'declined', response_locked_at: now, declined_at: now, updated_at: now };
+    const updates = {
+      status: 'declined', response_locked_at: stamp(now), declined_at: stamp(now), updated_at: now,
+    };
     if (hasReasonColumn) updates.decline_reason = cleanReason;
     // Only the request that takes the quote out of `accepted` reissues it.
     // The status check above runs outside the transaction, so two clicks

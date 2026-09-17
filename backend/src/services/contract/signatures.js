@@ -65,7 +65,10 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
   // A token without an expiry is refused, not treated as permanent: the
   // column is NOT NULL and the route guard already refuses one, so this only
   // matters for a caller that reaches the service another way.
-  if (!tokenRow.expires_at || new Date(tokenRow.expires_at).getTime() < Date.now()) {
+  // An expiry this process can't read counts as expired: `NaN < now` is false,
+  // so an unreadable value used to make the link valid forever.
+  const linkExpires = require('../../utils/queueTimestamps').toMillis(tokenRow.expires_at);
+  if (linkExpires == null || linkExpires < Date.now()) {
     throw new AppError('This signing link has expired', 410);
   }
   if (tokenRow.used_at) {

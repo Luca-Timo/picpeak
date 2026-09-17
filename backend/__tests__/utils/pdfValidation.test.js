@@ -76,6 +76,45 @@ test('a file that expands far past its size is refused before it is parsed', asy
     expect.objectContaining({ pages: 3 }));
 });
 
+// One deflate stream whose COMPRESSED bytes carry the literal `endstream`
+// keyword — a stored block, then the compressed payload, in a single stream.
+// A guard that cuts at the keyword inflates a truncated prefix, charges it as
+// damaged, and lets the rest through to the parser, which reads /Length and
+// inflates all of it.
+function poisonedStream(mb) {
+  return new Promise((resolve) => {
+    const chunks = [];
+    const deflate = zlib.createDeflate({ level: 0 });
+    deflate.on('data', (chunk) => chunks.push(chunk));
+    deflate.on('end', () => resolve(Buffer.concat(chunks)));
+    deflate.write(Buffer.from('\nendstream endobj\n'));
+    deflate.flush(zlib.constants.Z_FULL_FLUSH, () => {
+      deflate.params(9, zlib.constants.Z_DEFAULT_STRATEGY, () => {
+        deflate.end(Buffer.alloc(mb * 1024 * 1024));
+      });
+    });
+  });
+}
+
+test('a stream that carries the endstream keyword is still charged in full', async () => {
+  const body = await poisonedStream(64);
+  expect(body.includes(Buffer.from('endstream'))).toBe(true);
+  const head = Buffer.from([
+    '%PDF-1.4',
+    '1 0 obj <</Type/Catalog/Pages 2 0 R>> endobj',
+    '2 0 obj <</Type/Pages/Kids[3 0 R]/Count 1>> endobj',
+    '3 0 obj <</Type/Page/Parent 2 0 R/MediaBox[0 0 10 10]/Contents 4 0 R>> endobj',
+    `4 0 obj <</Length ${body.length}/Filter/FlateDecode>>`,
+    'stream\n',
+  ].join('\n'), 'latin1');
+  const file = Buffer.concat([head, body, Buffer.from('\nendstream endobj\ntrailer <</Size 5/Root 1 0 R>>\n%%EOF', 'latin1')]);
+
+  // Where the stream ends is the parser's business, not the guard's: each
+  // stream is inflated from its start and zlib stops at the end of the
+  // deflate data, so the budget sees at least what the parser will.
+  expect(await codeOf(validatePdf(file, { maxInflateBytes: 8 * 1024 * 1024 }))).toBe('PDF_TOO_COMPLEX');
+});
+
 test('a parse that outgrows its heap is a refusal, not a dead process', async () => {
   // pdf-lib inflates object streams on load and the upload cap is on the
   // compressed bytes, so a small crafted file can expand into gigabytes. The

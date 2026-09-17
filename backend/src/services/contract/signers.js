@@ -105,8 +105,8 @@ const stamp = (date = new Date()) => date.toISOString();
 // A value that isn't a date at all counts as past, so a row written in a
 // shape this process can't read is expired rather than valid forever.
 const isPast = (value) => {
-  const time = new Date(value).getTime();
-  return !Number.isFinite(time) || time <= Date.now();
+  const time = require('../../utils/queueTimestamps').toMillis(value);
+  return time == null || time <= Date.now();
 };
 
 async function insertSigners(trx, contract, customers, issuerName) {
@@ -290,7 +290,12 @@ async function issueOtp(signerId) {
       .where({ signer_id: signerId })
       .orderBy('id', 'desc')
       .limit(OTP_PER_HOUR);
-    const recent = latest.filter((row) => new Date(row.created_at).getTime() > hourAgo).length;
+    // A timestamp that can't be read counts towards the cap rather than
+    // against it: an unreadable row must not buy another code.
+    const recent = latest.filter((row) => {
+      const at = require('../../utils/queueTimestamps').toMillis(row.created_at);
+      return at == null || at > hourAgo;
+    }).length;
     if (recent >= OTP_PER_HOUR) {
       throw new AppError('Too many codes requested. Try again in an hour.', 429, 'OTP_RATE_LIMITED');
     }

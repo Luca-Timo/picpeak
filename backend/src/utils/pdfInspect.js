@@ -105,19 +105,32 @@ function findActiveContent(pdf) {
   return null;
 }
 
+const tooComplex = () => refuse(
+  'This PDF expands to far more than it looks like — it can\'t be checked. '
+  + 'Please save it again from your PDF program (print to PDF) and upload that file.',
+  'PDF_TOO_COMPLEX',
+);
+
 /**
  * Refuse a file whose streams expand past `budget` bytes in total.
  *
  * This runs on the raw bytes, before pdf-lib sees them, because pdf-lib
  * inflates as it parses and its output lives outside the JS heap a worker's
- * `resourceLimits` can cap — a heap limit never fires on this, the process
+ * `resourceLimits` can cap — a heap limit never fires on that, the process
  * simply grows until the kernel kills it. `zlib.inflateSync` with
  * `maxOutputLength` stops at the budget instead, and the budget shrinks as it
  * goes, so the peak is bounded by the budget rather than by the file.
  *
- * Streams that aren't zlib data cost at most their own compressed size and
- * are charged as such; anything pdf-lib can't read afterwards is refused by
- * the parse itself.
+ * Where a stream ENDS is deliberately not decided here. The `endstream`
+ * keyword can appear inside a deflate payload (a stored block makes that
+ * trivial), and a guard that cut there inflated a truncated prefix, charged
+ * it as damaged, and let the real stream through to pdf-lib — which reads the
+ * dictionary's `/Length` and inflates all of it. So each stream is inflated
+ * from its start to the end of the file: zlib stops at the end of the deflate
+ * data on its own and ignores what follows, so whatever boundary the parser
+ * later picks, this has already accounted for at least as much. A damaged or
+ * truncated stream is charged with what it actually decoded (Z_SYNC_FLUSH),
+ * not with its compressed size.
  */
 function assertInflateWithinBudget(buffer, budget) {
   let remaining = budget;
@@ -125,41 +138,35 @@ function assertInflateWithinBudget(buffer, budget) {
   for (;;) {
     const keyword = buffer.indexOf('stream', index, 'latin1');
     if (keyword === -1) return;
-    const end = buffer.indexOf('endstream', keyword, 'latin1');
-    if (end === -1) return;
     let from = keyword + 'stream'.length;
     if (buffer[from] === 0x0d) from += 1;
     if (buffer[from] === 0x0a) from += 1;
-    const data = buffer.subarray(from, end);
-    index = end + 'endstream'.length;
-    if (data.length === 0) continue;
-    // A zlib stream starts 0x78; everything else can't expand meaningfully.
+    // Advance past the first `endstream` so the next stream is found; the
+    // data below deliberately runs past it.
+    const firstEnd = buffer.indexOf('endstream', keyword, 'latin1');
+    index = firstEnd === -1 ? buffer.length : firstEnd + 'endstream'.length;
+    if (from >= buffer.length) return;
+    const data = buffer.subarray(from);
+    // A zlib stream starts 0x78; everything else can't expand meaningfully,
+    // and is charged with the bytes between the keywords.
     if (data[0] !== 0x78) {
-      remaining -= data.length;
+      remaining -= Math.max(0, (firstEnd === -1 ? buffer.length : firstEnd) - from);
     } else {
       try {
-        remaining -= zlib.inflateSync(data, { maxOutputLength: Math.max(1, remaining) }).length;
+        remaining -= zlib.inflateSync(data, {
+          maxOutputLength: Math.max(1, remaining),
+          finishFlush: zlib.constants.Z_SYNC_FLUSH,
+        }).length;
       } catch (err) {
         const tooBig = err && (err.code === 'ERR_BUFFER_TOO_LARGE'
           || /maxOutputLength|memory/i.test(String(err.message)));
-        if (tooBig) {
-          throw refuse(
-            'This PDF expands to far more than it looks like — it can\'t be checked. '
-            + 'Please save it again from your PDF program (print to PDF) and upload that file.',
-            'PDF_TOO_COMPLEX',
-          );
-        }
-        // Not zlib after all, or damaged: the parse below is the judge.
-        remaining -= data.length;
+        if (tooBig) throw tooComplex();
+        // Not zlib after all: charge the compressed bytes and let the parse
+        // below judge the file.
+        remaining -= Math.max(0, (firstEnd === -1 ? buffer.length : firstEnd) - from);
       }
     }
-    if (remaining <= 0) {
-      throw refuse(
-        'This PDF expands to far more than it looks like — it can\'t be checked. '
-        + 'Please save it again from your PDF program (print to PDF) and upload that file.',
-        'PDF_TOO_COMPLEX',
-      );
-    }
+    if (remaining <= 0) throw tooComplex();
   }
 }
 

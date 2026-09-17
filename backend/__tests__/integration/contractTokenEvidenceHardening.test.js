@@ -70,7 +70,13 @@ async function sentContract(title = 'Hochzeit') {
   await db('contracts').where({ id }).update({ signing_version: null });
   const token = crypto.randomBytes(32).toString('hex');
   await db('contract_action_tokens').insert({
-    contract_id: id, token, expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), created_at: new Date(),
+    contract_id: id,
+    token,
+    // ISO, like the services write: a bare Date reads back as
+    // "[object Object]" here, and an expiry nothing can read would make the
+    // link's expiry check meaningless in this suite.
+    expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    created_at: new Date().toISOString(),
   });
   return { id, token };
 }

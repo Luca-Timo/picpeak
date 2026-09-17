@@ -17,6 +17,26 @@
 
 const request = require('supertest');
 const PDFKit = require('pdfkit');
+
+// Lets one test convert the quote in the MIDDLE of a response — between the
+// checks at the top of recordResponse and its write. The factory is hoisted
+// above the requires, so quoteService gets this module; armed through
+// globalThis (a factory may not close over a test variable), it runs the hook
+// once, on the first setting the response reads.
+jest.mock('../../src/utils/appSettings', () => {
+  const actual = jest.requireActual('../../src/utils/appSettings');
+  return {
+    ...actual,
+    getAppSetting: async (key, ...rest) => {
+      if (globalThis.__duringResponse && key === 'crm_quotes_accept_window_minutes') {
+        const hook = globalThis.__duringResponse;
+        globalThis.__duringResponse = null;
+        await hook();
+      }
+      return actual.getAppSetting(key, ...rest);
+    },
+  };
+});
 const {
   bootCrmDb, seedMinimal, assignAdminRole, mintAdminToken, createPublicToken, buildRouteApp,
 } = require('./helpers/crmDb');
@@ -268,6 +288,22 @@ test('a choice that would make the total negative is refused', async () => {
   expect(accept.status).toBe(409);
   expect(accept.body.code).toBe('QUOTE_TOTAL_NEGATIVE');
   expect((await db('quotes').where({ id: quoteId }).first()).status).toBe('sent');
+});
+
+test('an answer that read the quote before it was converted doesn\'t land', async () => {
+  // The conversion commits between the checks at the top of recordResponse
+  // and its write. Without the status in the WHERE, a decline that read
+  // `accepted` would flip a quote a contract was already made from.
+  const { quoteId, link } = await acceptedQuote();
+  globalThis.__duringResponse = () => db('quotes').where({ id: quoteId }).update({ status: 'converted' });
+  const late = await request(publicApp).post(`/api/public/quotes/${link}/respond`)
+    .set('X-Document-Access', await quoteGrant(link)).set('X-Forwarded-For', nextIp())
+    .send({ action: 'decline' });
+  globalThis.__duringResponse = null;
+
+  expect(late.status).toBe(409);
+  expect(late.body.code).toBe('QUOTE_CHANGED');
+  expect((await db('quotes').where({ id: quoteId }).first()).status).toBe('converted');
 });
 
 test('editing an accepted quote says to reissue it', async () => {
