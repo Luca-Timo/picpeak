@@ -2,7 +2,7 @@
 
 /**
  * Line kinds, optional add-ons and discount promotions on CRM line items
- * (#1451, migration 219). Shared by quotes and invoices so both documents
+ * (#1451, migration 220). Shared by quotes and invoices so both documents
  * agree on what counts toward the net.
  *
  * - `line_kind = 'discount'` is a promotion line ("Vereinsrabatt −300 CHF",

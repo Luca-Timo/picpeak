@@ -34,6 +34,7 @@ const {
 } = require('../utils/lineItemTotals');
 const { getStoragePath } = require('../config/storage');
 const invoiceService = require('../services/invoiceService');
+const accountingHistory = require('../services/accountingHistory');
 const expenseService = require('../services/expenseService');
 const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
 const { db } = require('../database/db');
@@ -223,7 +224,7 @@ function transformLineItem(li) {
     parentLineItemId: li.parent_line_item_id || null,
     parentPosition: li.parent_position == null ? null : Number(li.parent_position),
     detailsText: li.details_text || null,
-    // Migration 219 — line kind, unit, rate + promotion.
+    // Migration 220 — line kind, unit, rate + promotion.
     ...lineItemFieldsToApi(li),
   };
 }
@@ -296,7 +297,7 @@ const INVOICE_BODY_VALIDATORS = [
   // (validateLineItemHierarchy).
   body('lineItems.*.parentPosition').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('lineItems.*.detailsText').optional({ values: 'falsy' }).isString().isLength({ max: 2000 }),
-  // Migration 219 (#1451). Invoices carry a quote's discount lines and units
+  // Migration 220 (#1451). Invoices carry a quote's discount lines and units
   // over; optional add-ons don't exist on invoices.
   body('lineItems.*.lineKind').optional({ values: 'falsy' }).isIn(LINE_KINDS),
   body('lineItems.*.unit').optional({ values: 'falsy' }).isIn(UNITS),
@@ -399,6 +400,19 @@ router.get(
       pagination: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) || 1 },
     });
   })
+);
+
+// Change history (migration 219): every change to this invoice, its line
+// items and payments, with old and new values, oldest first.
+router.get(
+  '/:id/history',
+  requirePermission('bills.view'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const entries = await accountingHistory.listHistory('invoice', parseInt(req.params.id, 10));
+    return successResponse(res, { entries });
+  }),
 );
 
 router.get(
@@ -583,7 +597,9 @@ router.post(
       updated_at: new Date(),
     };
 
-    const inserted = await db('invoices').insert(row).returning('id');
+    const inserted = await accountingHistory.auditedInsert(db, 'invoices', row, {
+      actor: req.admin.id, source: 'invoice.import',
+    });
     const invoiceId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
     capabilityEvidence(res, 'crm_invoice_import');
 
@@ -618,6 +634,8 @@ router.put(
       });
     }
     const payload = mapPayloadToService(req.body);
+
+    const history = { actor: req.admin.id, source: 'invoice.update' };
 
     // Recompute totals if line items are present.
     let updates = { updated_at: new Date() };
@@ -729,7 +747,7 @@ router.put(
           line_total_minor: lineTotal,
           parent_position: isSubItem ? parseInt(li.parent_position, 10) : null,
           details_text: li.details_text || null,
-          // Migration 219 — keep line kind, unit, rate + promotion on edit.
+          // Migration 220 — keep line kind, unit, rate + promotion on edit.
           ...extendedLineColumns(li, { invoice: true }),
         };
       });
@@ -761,15 +779,15 @@ router.put(
       const quoteService = require('../services/quoteService');
       const { validateLineItemHierarchy, insertLineItemsHierarchical } = quoteService._internal;
       await db.transaction(async (trx) => {
-        await trx('invoice_line_items').where({ invoice_id: id }).del();
+        await accountingHistory.auditedDelete(trx, 'invoice_line_items', { invoice_id: id }, history);
         if (items.length > 0) {
           validateLineItemHierarchy(items);
-          await insertLineItemsHierarchical(trx, 'invoice_line_items', 'invoice_id', id, items);
+          await insertLineItemsHierarchical(trx, 'invoice_line_items', 'invoice_id', id, items, history);
         }
-        await trx('invoices').where({ id }).update(updates);
+        await accountingHistory.auditedUpdate(trx, 'invoices', { id }, updates, history);
       });
     } else {
-      await db('invoices').where({ id }).update(updates);
+      await accountingHistory.auditedUpdate(db, 'invoices', { id }, updates, history);
     }
 
     const data = await invoiceService.getInvoiceById(id);
@@ -873,7 +891,7 @@ router.post(
     validateRequest(req);
     const result = await invoiceService.queuePaymentCheckEmail(
       parseInt(req.params.id, 10),
-      { skipThrottle: true }
+      { skipThrottle: true, actor: req.admin.id }
     );
     if (!result.sent) {
       return res.status(409).json({

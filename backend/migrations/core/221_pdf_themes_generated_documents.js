@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Migration 220 — one PDF theme for quotes, invoices and contracts, and a
+ * Migration 221 — one PDF theme for quotes, invoices and contracts, and a
  * record for every generated PDF (#1445, PDF pass 2).
  *
  * pdf_themes: one row per scope — `default`, plus optional `quote`,

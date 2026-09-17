@@ -28,6 +28,14 @@ const WORKER_HEAP_MB = 512;
 // A legitimate 200-page file parses in well under a second; a file that
 // spends longer than this is not one we want to keep working on.
 const WORKER_TIMEOUT_MS = 30000;
+// Last line of defence, and the only one that doesn't depend on reading the
+// file the way pdf-lib does: while a check runs, the process must not grow
+// past this much above where it started. Typed arrays live outside the heap
+// `resourceLimits` caps, so this is what catches anything the inflate budget
+// and the decode meter didn't see. Generous enough that a legitimate 20 MB
+// document never reaches it.
+const RSS_CEILING_BYTES = 1024 * 1024 * 1024;
+const RSS_SAMPLE_MS = 100;
 const WORKER_FILE = path.join(__dirname, 'pdfInspectWorker.js');
 // Each check may hold its inflate budget in memory, so they queue rather than
 // run together: two admins uploading at once must not multiply the ceiling.
@@ -111,10 +119,17 @@ function runInWorker(buffer, limits, heapMb) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      clearInterval(watchdog);
       worker.terminate().catch(() => {});
       fn(value);
     };
     const timer = setTimeout(() => finish(reject, tooComplex()), WORKER_TIMEOUT_MS);
+    // The worker shares this process's memory, so growth is measurable from
+    // here — and terminating the thread frees it.
+    const startedAt = process.memoryUsage().rss;
+    const watchdog = setInterval(() => {
+      if (process.memoryUsage().rss - startedAt > RSS_CEILING_BYTES) finish(reject, tooComplex());
+    }, RSS_SAMPLE_MS);
     worker.on('message', (msg) => {
       if (msg && msg.ok) {
         finish(resolve, { ...msg.info, normalised: Buffer.from(msg.info.normalised) });

@@ -36,6 +36,7 @@ const { ensureContractEmailTemplatesSeeded } = require('../contractEmailTemplate
 const signers = require('./signers');
 const signingEvents = require('./signingEvents');
 const { hasColumnCached } = require('../../utils/schemaCache');
+const { auditedUpdate } = require('../accountingHistory');
 const { adminActor, customerPublicActor, emitContractEvent, maybeStoreIp } = require('./helpers');
 const { persistContractPdf, persistSignatureImage } = require('./signatureAssets');
 
@@ -190,10 +191,10 @@ async function recordFollowUpFailure(contractId, step, err) {
   logger.error('A step after the signature failed', { contractId, step, message: err && err.message });
   try {
     if (!(await hasColumnCached('contracts', 'follow_up_failed_at'))) return;
-    await db('contracts').where({ id: contractId }).update({
+    await auditedUpdate(db, 'contracts', { id: contractId }, {
       follow_up_failed_at: new Date().toISOString(),
       follow_up_error: `${step}: ${String((err && err.message) || 'unknown').slice(0, 500)}`,
-    });
+    }, { source: `contract.follow_up.${step}` });
   } catch (markErr) {
     logger.warn('Could not record the failed follow-up step', { contractId, message: markErr.message });
   }
@@ -203,8 +204,8 @@ async function recordFollowUpFailure(contractId, step, err) {
 async function clearFollowUpFailure(contractId) {
   try {
     if (!(await hasColumnCached('contracts', 'follow_up_failed_at'))) return;
-    await db('contracts').where({ id: contractId }).whereNotNull('follow_up_failed_at')
-      .update({ follow_up_failed_at: null, follow_up_error: null });
+    await auditedUpdate(db, 'contracts', (q) => q.where({ id: contractId }).whereNotNull('follow_up_failed_at'),
+      { follow_up_failed_at: null, follow_up_error: null }, { source: 'contract.follow_up.cleared' });
   } catch (err) {
     logger.warn('Could not clear the failed follow-up marker', { contractId, message: err.message });
   }
@@ -292,9 +293,13 @@ async function completeSend(contractId, { pdfPath, pdfSha256, adminId, freeze = 
     // was rendered — same status, same lock_version — or this send is not the
     // one going out. Two overlapping sends, or an edit saved between the
     // render and here, lose it, and nothing they carry is written.
-    const claim = trx('contracts').where({ id: contractId, status: 'draft' });
-    if (lockVersion != null) claim.where('lock_version', lockVersion);
-    const draft = await claim.clone().first();
+    const history = { actor: adminId, source: 'contract.send' };
+    // The claim: still the draft that was rendered, same lock_version.
+    const claim = (query) => {
+      query.where({ id: contractId, status: 'draft' });
+      if (lockVersion != null) query.where('lock_version', lockVersion);
+    };
+    const draft = await trx('contracts').modify(claim).first();
     if (!draft) {
       throw new AppError(
         'This contract changed while it was being sent. Reload it and send again.',
@@ -304,11 +309,11 @@ async function completeSend(contractId, { pdfPath, pdfSha256, adminId, freeze = 
     // The text the rendered PDF shows, frozen with it (see sending.js).
     if (freeze) {
       for (const inc of freeze.inclusions) {
-        await trx('contract_block_inclusions').where({ id: inc.id })
-          .update({ ...inc.columns, updated_at: now });
+        await auditedUpdate(trx, 'contract_block_inclusions', { id: inc.id },
+          { ...inc.columns, updated_at: now }, history);
       }
     }
-    const sent = await claim.update({
+    const sent = await auditedUpdate(trx, 'contracts', claim, {
       status: 'sent',
       sent_at: now,
       pdf_path: pdfPath,
@@ -320,7 +325,7 @@ async function completeSend(contractId, { pdfPath, pdfSha256, adminId, freeze = 
         rendered_content_sha256: freeze.contentSha256,
       } : {}),
       updated_at: now,
-    });
+    }, history);
     if (!sent) {
       throw new AppError(
         'This contract changed while it was being sent. Reload it and send again.',
@@ -626,7 +631,8 @@ async function sign(sessionToken, input, { ip = null, userAgent = null } = {}) {
         contractUpdate.signed_by_customer_at = signedAt;
         contractUpdate.signed_customer_name = customers.map((r) => (r.id === row.id ? name : signerName(r))).join(', ').slice(0, 255);
       }
-      await trx('contracts').where({ id: contract.id }).update(contractUpdate);
+      await auditedUpdate(trx, 'contracts', { id: contract.id }, contractUpdate,
+        { actor: { type: 'customer', name }, source: 'contract.sign.customer' });
       await signingEvents.appendEvent(trx, contract.id, {
         type: 'signed',
         actorType: 'signer',
@@ -683,7 +689,8 @@ async function decline(sessionToken, { reason } = {}) {
     await trx('contract_signers').where({ id: signer.id }).update({
       status: 'declined', declined_at: now, decline_reason_enc: fieldEncryption.encrypt(text), updated_at: now,
     });
-    await trx('contracts').where({ id: contract.id }).update({ status: 'declined', declined_at: now, updated_at: now });
+    await auditedUpdate(trx, 'contracts', { id: contract.id }, { status: 'declined', declined_at: now, updated_at: now },
+      { actor: { type: 'customer', name: signerName(signer) }, source: 'contract.decline' });
     await signers.revokeAccess(trx, contract.id);
     await signingEvents.appendEvent(trx, contract.id, {
       type: 'declined', actorType: 'signer', actorLabel: signerName(signer), signerId: signer.id, payload: { withReason: !!text },
@@ -703,7 +710,8 @@ async function decline(sessionToken, { reason } = {}) {
 async function recordWetUpload(contractId, { by, sha256: fileSha }) {
   await db.transaction(async (trx) => {
     await signers.revokeAccess(trx, contractId);
-    await trx('contracts').where({ id: contractId }).update({ sealed_at: new Date() });
+    await auditedUpdate(trx, 'contracts', { id: contractId }, { sealed_at: new Date() },
+      { actor: by === 'admin' ? { type: 'admin' } : { type: 'customer' }, source: 'contract.upload.signed_pdf' });
     await signingEvents.appendEvent(trx, contractId, {
       type: 'wet_upload', actorType: by === 'admin' ? 'admin' : 'signer', artifactSha256: fileSha || null, payload: { by },
     });
@@ -787,7 +795,7 @@ async function countersign(contractId, input, { ip = null, userAgent = null, adm
         user_agent_enc: storedIp !== null && userAgent ? fieldEncryption.encrypt(String(userAgent).slice(0, 512)) : null,
         updated_at: signedAt,
       });
-      await trx('contracts').where({ id: contractId }).update({
+      await auditedUpdate(trx, 'contracts', { id: contractId }, {
         status: 'fully_signed',
         signed_by_admin_at: signedAt,
         signed_admin_name: name,
@@ -796,7 +804,7 @@ async function countersign(contractId, input, { ip = null, userAgent = null, adm
         signed_pdf_sha256: stored.sha256,
         sealed_at: signedAt,
         updated_at: signedAt,
-      });
+      }, { actor: adminId, source: 'contract.sign.admin' });
       await signingEvents.appendEvent(trx, contractId, {
         type: 'countersigned', actorType: 'admin', actorLabel: actor.name || name, signerId: issuer.id,
         artifactSha256: stored.sha256, payload: { mode, slot: issuer.slot_key, documentSha256: sha256(base) },

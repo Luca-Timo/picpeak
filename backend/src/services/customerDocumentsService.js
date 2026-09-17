@@ -1,6 +1,6 @@
 /**
  * customerDocumentsService — PDFs exchanged between the studio and a customer
- * in the portal (#1444, migration 224).
+ * in the portal (#1444, migration 225).
  *
  * Rules the routes rely on (every read here is scoped by customer_account_id;
  * the routes never look a document up by id alone):
@@ -302,7 +302,7 @@ async function getForAdmin(customerId, documentId) {
 
 /** Pending / rejected counts for System Health. */
 async function getReviewCounts() {
-  // System Health is opened during upgrades too, before migration 224 ran.
+  // System Health is opened during upgrades too, before migration 225 ran.
   if (!(await db.schema.hasTable('customer_documents'))) return { pending: 0, rejected: 0 };
   const rows = await db('customer_documents')
     .whereNull('deleted_at')

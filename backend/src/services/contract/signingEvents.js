@@ -12,6 +12,7 @@
  */
 
 const { db } = require('../../database/db');
+const { auditedUpdate } = require('../accountingHistory');
 const { canonicalJson, canonicalSha256 } = require('../../utils/canonicalJson');
 
 const GENESIS = '0'.repeat(64);
@@ -94,7 +95,11 @@ async function appendEvent(conn, contractId, {
       occurred_at: event.occurredAt,
       created_at: new Date(),
     });
-    await trx('contracts').where({ id: contractId }).update({ audit_chain_head: event.eventHash });
+    // The head moves with every event. It is bookkeeping rather than a field
+    // anyone reads off the contract, but it is a column on an audited table,
+    // so it goes through the recorder like the rest.
+    await auditedUpdate(trx, 'contracts', { id: contractId }, { audit_chain_head: event.eventHash },
+      { actor: { type: actorType === 'admin' ? 'admin' : 'system', name: actorLabel || null }, source: `contract.event.${type}` });
     return event;
   };
   return conn && conn.isTransaction ? run(conn) : db.transaction(run);

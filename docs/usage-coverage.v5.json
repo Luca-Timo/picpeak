@@ -309,6 +309,7 @@
       "reason": "Business identity/bank/tax-address configuration and VAT-code helper surface are not separate usage signals. Billing/accounting capabilities are covered without profiling the business.",
       "route_signatures": [
         "GET /",
+        "GET /history",
         "GET /logo-diagnostic",
         "POST /logo",
         "DELETE /logo",
@@ -406,6 +407,7 @@
         "POST /:id/upload-signed-pdf",
         "GET /:id/pdf",
         "GET /:id/signed-pdf",
+        "GET /:id/history",
         "GET /:id/audit-trail",
         "GET /:id/verify-integrity",
         "GET /:id/preview"
@@ -443,6 +445,7 @@
         "DELETE /invitations/:id",
         "POST /",
         "POST /:id/send-invite",
+        "GET /:id/history",
         "GET /:id",
         "PUT /:id",
         "POST /:id/deactivate",
@@ -749,6 +752,7 @@
       "reason": "Admin expense/inbound-invoice operations; no financial values, suppliers, mileage/location, dates, receipt files or OCR text.",
       "route_signatures": [
         "GET /categories",
+        "GET /categories/:id/history",
         "POST /categories",
         "PATCH /categories/:id",
         "DELETE /categories/:id",
@@ -759,6 +763,7 @@
         "GET /inbound/by-customer/:customerAccountId",
         "GET /inbound/:id/file",
         "GET /inbound/:id/page/:n",
+        "GET /inbound/:id/history",
         "GET /inbound/:id",
         "PATCH /inbound/:id",
         "POST /inbound/:id/categorize",
@@ -767,6 +772,7 @@
         "GET /",
         "POST /",
         "GET /:id/proof",
+        "GET /:id/history",
         "GET /:id",
         "PATCH /:id",
         "POST /:id/invoice",
@@ -890,6 +896,7 @@
       "reason": "Admin invoice operations only; no amounts, VAT/customer/payment values or payment-check responses. v3 adds only: crm_invoice_import. Exact definitions are in features.v4.json; configuration-only signals never observe the public surface.",
       "route_signatures": [
         "GET /",
+        "GET /:id/history",
         "GET /:id",
         "POST /",
         "POST /import",
@@ -916,10 +923,12 @@
       "reason": "Admin ledger-account/VAT/mapping edits and ledger export initiation only; no account/currency/VAT identifiers or exported records.",
       "route_signatures": [
         "GET /accounts",
+        "GET /accounts/:id/history",
         "POST /accounts",
         "PATCH /accounts/:id",
         "DELETE /accounts/:id",
         "GET /vat-codes",
+        "GET /vat-codes/:id/history",
         "POST /vat-codes",
         "PATCH /vat-codes/:id",
         "DELETE /vat-codes/:id",
@@ -1060,6 +1069,7 @@
       "reason": "Admin quote/preset operations only; no quote content, prices, customer acceptance or signatures. v3 adds only: crm_document_conversion. Exact definitions are in features.v4.json; configuration-only signals never observe the public surface.",
       "route_signatures": [
         "GET /",
+        "GET /:id/history",
         "GET /:id",
         "POST /",
         "PUT /:id",

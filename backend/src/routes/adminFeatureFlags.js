@@ -115,7 +115,7 @@ const KNOWN_FLAGS = [
   // unsubscribe link on every send. Strictly opt-in: an install that never
   // turns this on never gains a route, a nav entry or a way to mass-mail.
   'newsletters',
-  // Customer documents (migration 224, #1444) — PDF exchange in the customer
+  // Customer documents (migration 225, #1444) — PDF exchange in the customer
   // portal plus the Documents card on the customer record. Strictly opt-in:
   // while off, every documents route (portal and admin) answers 403.
   'documents',

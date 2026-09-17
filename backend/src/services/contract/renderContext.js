@@ -119,7 +119,7 @@ const isIncluded = (row) => row.included === true || row.included === 1 || row.i
  * what was frozen at send) and the live library text for a language the
  * snapshot doesn't carry; a per-contract override wins over either, language
  * by language. That per-language fallback matters for contracts sent before
- * migration 221 added the fr/nl/pt/ru snapshot columns: those are empty, and
+ * migration 222 added the fr/nl/pt/ru snapshot columns: those are empty, and
  * taking the frozen map whole would render an RU contract in English.
  */
 function orderedClauses(contract, inclusions, textSections = []) {

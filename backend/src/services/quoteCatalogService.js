@@ -6,7 +6,7 @@
  * before the quote service computes totals.
  *
  * The service items themselves are the existing quote_line_item_presets
- * (extended in migration 219) and keep their CRUD in quoteService.
+ * (extended in migration 220) and keep their CRUD in quoteService.
  *
  * Nothing here is ever hard-deleted: "delete" archives (is_active = false),
  * because quotes, templates and packages copy from these rows and a removed

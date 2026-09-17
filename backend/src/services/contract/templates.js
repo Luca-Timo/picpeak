@@ -20,6 +20,7 @@
 
 const { db, logActivity } = require('../../database/db');
 const { AppError } = require('../../utils/errors');
+const { auditedInsert, deleteWithAccountingHistory } = require('../accountingHistory');
 const { ensureInt } = require('../../utils/numericHelpers');
 const { upsertAppSetting } = require('../../utils/appSettings');
 const { unknownPlaceholders, CONTRACT_PLACEHOLDERS } = require('../../utils/placeholders');
@@ -472,7 +473,11 @@ async function draftFromVersion(id, versionNumber, { lockVersion }, adminId) {
       .whereNot({ status: 'draft' })
       .first();
     if (!source) throw new AppError('Template version not found', 404, 'TEMPLATE_VERSION_NOT_FOUND');
-    await trx('contract_template_versions').where({ template_id: id, status: 'draft' }).del();
+    // Through the recorder: a version can be referenced by contracts
+    // (contracts.template_version_id, ON DELETE SET NULL), and nulling that
+    // reference is a change to an audited row.
+    await deleteWithAccountingHistory(trx, 'contract_template_versions',
+      { template_id: id, status: 'draft' }, { actor: adminId, source: 'contract.template.discard_draft' });
     await ensureDraft(trx, template, source);
   });
   await audit('contract_template_draft_from_version', { templateId: id, version: versionNumber }, adminId);
@@ -566,7 +571,7 @@ async function resolveVersionForNewContract(templateVersionId = null) {
  * the library block changes later; free text becomes contract text
  * sections. Positions run 1..n across the whole contract.
  */
-async function seedContractFromVersion(trx, contractId, version) {
+async function seedContractFromVersion(trx, contractId, version, history = { source: 'contract.template.seed' }) {
   const now = new Date();
   const inclusions = [];
   const texts = [];
@@ -595,7 +600,7 @@ async function seedContractFromVersion(trx, contractId, version) {
       });
     }
   }
-  if (inclusions.length) await trx('contract_block_inclusions').insert(inclusions);
+  if (inclusions.length) await auditedInsert(trx, 'contract_block_inclusions', inclusions, history);
   if (texts.length) await trx('contract_text_sections').insert(texts);
   await attachments.seedContractAttachments(trx, contractId, version.id);
 }

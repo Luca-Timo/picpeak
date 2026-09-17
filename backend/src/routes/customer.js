@@ -33,6 +33,7 @@ const customerPortalService = require('../services/customerPortalService');
 const publicDocumentViews = require('../services/publicDocumentViews');
 const { clientIpForAudit } = require('../utils/clientIp');
 const contractSignedPdfUpload = require('../utils/contractSignedPdfUpload');
+const { auditedUpdate } = require('../services/accountingHistory');
 
 // Gate a customer-facing route on BOTH the global master flag AND the
 // per-customer override — getEffectiveFeaturesForCustomer combines them, so an
@@ -323,7 +324,10 @@ router.put('/profile', [
     }
     updates.updated_at = new Date();
 
-    await db('customer_accounts').where('id', req.customer.id).update(updates);
+    await auditedUpdate(db, 'customer_accounts', { id: req.customer.id }, updates, {
+      actor: { type: 'customer', id: req.customer.id, name: req.customer.displayName || null },
+      source: 'customer.portal.profile',
+    });
 
     const row = await db('customer_accounts').where('id', req.customer.id).first();
 
@@ -434,11 +438,12 @@ router.post('/profile/password', [
     }
 
     const newHash = await bcrypt.hash(newPassword, getBcryptRounds());
-    await db('customer_accounts').where('id', req.customer.id).update({
+    // Not a billing field, so this leaves no history entry.
+    await auditedUpdate(db, 'customer_accounts', { id: req.customer.id }, {
       password_hash: newHash,
       password_changed_at: new Date(),
       updated_at: new Date(),
-    });
+    }, { actor: { type: 'customer', id: req.customer.id }, source: 'customer.portal.password' });
 
     await logActivity('customer_password_change',
       { customerId: req.customer.id },
@@ -839,6 +844,12 @@ async function ownedDocument(req, res, { table, featureKey, label, notFound }) {
 const CONTRACT = { table: 'contracts', featureKey: 'contracts', label: 'Contracts', notFound: 'Contract not found' };
 const QUOTE = { table: 'quotes', featureKey: 'quotes', label: 'Quotes', notFound: 'Quote not found' };
 
+// The signed-in customer, as the actor the accounting change history records
+// for a portal signature, upload or response.
+function portalActor(req) {
+  return { type: 'customer', id: req.customer.id, name: req.customer.displayName || null };
+}
+
 function sendValidationErrors(req, res) {
   const errors = validationResult(req);
   if (errors.isEmpty()) return false;
@@ -902,6 +913,7 @@ router.post(
         accepted: req.body.accepted === true,
         // See utils/clientIp.js — the trusted req.ip only.
         ip: clientIpForAudit(req),
+        actor: portalActor(req),
       });
       res.json(result);
     } catch (error) {
@@ -934,7 +946,7 @@ router.post(
   contractSignedPdfUpload.signedPdfUpload.single('file'),
   async (req, res) => {
     try {
-      await contractSignedPdfUpload.finishSignedPdfUpload(req, res);
+      await contractSignedPdfUpload.finishSignedPdfUpload(req, res, { actor: portalActor(req) });
     } catch (error) {
       if (sendServiceRefusal(res, error)) return;
       errorResponse(res, error, 500, 'Failed to upload the signed contract');
@@ -984,6 +996,7 @@ router.post(
         ip: clientIpForAudit(req),
         tosAccepted: req.body.tosAccepted === true,
         expectedTotalMinor: req.body.expectedTotalMinor,
+        actor: portalActor(req),
       });
       res.json({ status: result.status, lockedAt: result.lockedAt });
     } catch (error) {

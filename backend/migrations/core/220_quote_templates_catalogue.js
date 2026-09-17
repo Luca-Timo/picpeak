@@ -1,5 +1,5 @@
 /**
- * Migration 219: quote templates, service catalogue, hour/day pricing and
+ * Migration 220: quote templates, service catalogue, hour/day pricing and
  * discount promotions (#1451).
  *
  * Line items (quote_line_items AND invoice_line_items, so a quote line
@@ -105,7 +105,7 @@ exports.up = async function (knex) {
   for (const replaced of duplicated) {
     const rows = await knex('quotes').where({ replaces_quote_id: replaced }).orderBy('id', 'asc').pluck('id');
     await knex('quotes').whereIn('id', rows.slice(1)).update({ replaces_quote_id: null });
-    console.log(`219_quote_templates_catalogue: quote ${replaced} had ${rows.length} replacements; kept ${rows[0]}`);
+    console.log(`220_quote_templates_catalogue: quote ${replaced} had ${rows.length} replacements; kept ${rows[0]}`);
   }
   await knex.raw('CREATE UNIQUE INDEX IF NOT EXISTS quotes_one_replacement ON quotes (replaces_quote_id) WHERE replaces_quote_id IS NOT NULL');
 

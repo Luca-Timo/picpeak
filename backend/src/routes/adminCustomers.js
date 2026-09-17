@@ -11,7 +11,7 @@ const { capabilityEvidence } = require('../usage/capabilityEvidence');
 const { body, param, query } = require('express-validator');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
-const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
+const { requireFeatureFlag, isFeatureEnabled } = require('../middleware/requireFeatureFlag');
 const { filterOwnedEventIds } = require('../middleware/ownership');
 const { db, logActivity } = require('../database/db');
 
@@ -25,6 +25,7 @@ const requireHoursLogging = requireFeatureFlag('hoursLogging', 'HOURS_LOGGING_DI
 const requireIncoming = requireFeatureFlag('incomingInvoices', 'INCOMING_INVOICES_DISABLED');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const customerAccountsService = require('../services/customerAccountsService');
+const accountingHistory = require('../services/accountingHistory');
 const customerHoursService = require('../services/customerHoursService');
 const combinedBillingService = require('../services/combinedBillingService');
 const invoiceService = require('../services/invoiceService');
@@ -91,10 +92,10 @@ function transformCustomer(c) {
     // Contracts override (migration 131). Opt-out: absent column (older row /
     // un-selected) reads as ON so existing customers keep the Contracts tab.
     featureContracts: c.feature_contracts === undefined ? true : (c.feature_contracts === true || c.feature_contracts === 1),
-    // Documents override (migration 224). Same opt-out reading as contracts.
+    // Documents override (migration 225). Same opt-out reading as contracts.
     featureDocuments: c.feature_documents === undefined ? true : (c.feature_documents === true || c.feature_documents === 1),
     hourlyRateMinor: c.hourly_rate_minor != null ? Number(c.hourly_rate_minor) : null,
-    // Migration 219 — the customer's own day rate for per-day quote lines.
+    // Migration 220 — the customer's own day rate for per-day quote lines.
     dayRateMinor: c.day_rate_minor != null ? Number(c.day_rate_minor) : null,
     // Per-customer Skonto opt-out (migration 112). When true, none of
     // this customer's invoices qualify for an early-payment discount,
@@ -373,6 +374,22 @@ router.post('/:id/send-invite', [
 
 // ---- customer record ----------------------------------------------------
 
+// Change history (migration 219) of the customer's billing fields and hour
+// entries, oldest first. Personal values are blanked once a customer is erased.
+router.get('/:id/history', [
+  adminAuth,
+  requirePermission('customers.view'),
+  param('id').isInt({ min: 1 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  let entries = await accountingHistory.listHistory('customer', parseInt(req.params.id, 10));
+  // Hour entries stay behind the same gate as /:id/hour-entries.
+  if (!(await isFeatureEnabled('hoursLogging'))) {
+    entries = entries.filter((entry) => entry.entity_type !== 'hour_entry');
+  }
+  return successResponse(res, { entries });
+}));
+
 router.get('/:id', [
   adminAuth,
   requirePermission('customers.view'),
@@ -423,7 +440,7 @@ router.put('/:id', [
   body('feature_quotes').optional().isBoolean(),
   body('feature_bills').optional().isBoolean(),
   body('feature_contracts').optional().isBoolean(),
-  // Customer documents (migration 224).
+  // Customer documents (migration 225).
   body('feature_documents').optional().isBoolean(),
   // Hours logging (migration 129).
   body('feature_hours_logging').optional().isBoolean(),

@@ -24,6 +24,7 @@ const { AppError } = require('../../utils/errors');
 const { getAppSetting } = require('../../utils/appSettings');
 const { ensureInt } = require('../../utils/numericHelpers');
 const fieldEncryption = require('../../utils/fieldEncryption');
+const { auditedUpdate } = require('../accountingHistory');
 
 const MAX_CUSTOMER_SIGNERS = 5;
 const ORDERS = ['parallel', 'sequential'];
@@ -162,7 +163,8 @@ async function setSigners(contractId, { signers, order }) {
     await trx('contract_signers').where({ contract_id: contractId }).del();
     await insertSigners(trx, current, customers, await issuerName(trx));
     if (order) {
-      await trx('contracts').where({ id: contractId }).update({ signing_order: order, updated_at: stamp() });
+      await auditedUpdate(trx, 'contracts', { id: contractId },
+        { signing_order: order, updated_at: stamp() }, { source: 'contract.signers' });
     }
   });
   return listSigners(contractId);

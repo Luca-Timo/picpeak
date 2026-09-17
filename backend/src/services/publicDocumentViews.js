@@ -158,7 +158,7 @@ function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosTe
       parentLineItemId: li.parent_line_item_id || null,
       parentPosition: li.parent_position == null ? null : Number(li.parent_position),
       detailsText: li.details_text || null,
-      // Migration 219 — discount lines and units, as on the PDF, plus the
+      // Migration 220 — discount lines and units, as on the PDF, plus the
       // add-ons the customer books (#1451): an unbooked one stays out of the
       // totals, here as on the server.
       lineKind: li.line_kind || 'item',

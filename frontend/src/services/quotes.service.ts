@@ -37,7 +37,7 @@ export interface QuoteLineItem {
    * PDF and customer view. Smaller, italic. Max 2000 chars.
    */
   detailsText?: string | null;
-  // Migration 219 (#1451).
+  // Migration 220 (#1451).
   lineKind?: LineKind;
   unit?: LineUnit | null;
   /** Optional add-on; unselected ones stay out of totals, PDF and conversion. */
@@ -63,7 +63,7 @@ export interface QuoteSummary {
   customerAccountId: number;
   /** Migration 121 — Project Overview link (null when unlinked). */
   projectId: number | null;
-  /** Migration 219 — quote-wide hours / days that bound lines follow. */
+  /** Migration 220 — quote-wide hours / days that bound lines follow. */
   hours?: number | null;
   days?: number | null;
   /** The template (and version) this quote was created from, if any. */
@@ -225,7 +225,7 @@ export interface LineItemPreset {
   quantityDefault: number;
   displayOrder: number;
   isActive: boolean;
-  // Migration 219 — the presets are the service catalogue.
+  // Migration 220 — the presets are the service catalogue.
   unit?: LineUnit | null;
   detailsText?: string | null;
   category?: string | null;
@@ -270,7 +270,7 @@ export interface QuoteCreatePayload {
   /** Migration 121 — optional link to a Project Overview project.
    *  null clears the link; undefined leaves it unchanged. */
   projectId?: number | null;
-  /** Migration 219 — quote-wide hours / days that bound lines follow. */
+  /** Migration 220 — quote-wide hours / days that bound lines follow. */
   hours?: number | null;
   days?: number | null;
   lineItems: QuoteLineItem[];
@@ -488,7 +488,7 @@ export interface PublicQuoteView {
     parentLineItemId: number | null;
     parentPosition: number | null;
     detailsText: string | null;
-    /** Migration 219 — discount lines and units, as on the PDF. */
+    /** Migration 220 — discount lines and units, as on the PDF. */
     lineKind?: LineKind;
     unit?: LineUnit | null;
     promotionName?: string | null;

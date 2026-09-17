@@ -195,7 +195,7 @@ test('sending merges attachments before the signature page and mails the separat
 
   const document = await db('generated_documents')
     .where({ doc_type: 'contract', doc_id: ids.contract.id, kind: 'unsigned' }).orderBy('id', 'desc').first();
-  const manifest = JSON.parse(document.manifest);
+  const manifest = typeof document.manifest === 'string' ? JSON.parse(document.manifest) : document.manifest;
   const stored = await PDFDocument.load(fs.readFileSync(document.path.startsWith('/')
     ? document.path : path.join(process.env.STORAGE_PATH, document.path)));
   expect(stored.getPageCount()).toBe(Number(document.pages));
@@ -212,7 +212,9 @@ test('sending merges attachments before the signature page and mails the separat
   );
 
   const mail = await db('email_queue').where({ email_type: 'contract_sent' }).orderBy('id', 'desc').first();
-  const names = JSON.parse(mail.email_data).attachments.map((a) => a.filename);
+  // PostgreSQL hands a json column back already parsed; SQLite hands text.
+  const mailData = typeof mail.email_data === 'string' ? JSON.parse(mail.email_data) : mail.email_data;
+  const names = mailData.attachments.map((a) => a.filename);
   expect(names).toContain('Datenschutz.pdf');
   expect(names).not.toContain('AGB.pdf');
 });

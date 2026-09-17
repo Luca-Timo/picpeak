@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Migration 223: signatures v2 (#1446).
+ * Migration 224: signatures v2 (#1446).
  *
  * - contract_signers: who signs a contract, in order — any number of
  *   customer signers and the issuer, each with its own signature slot.

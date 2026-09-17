@@ -37,6 +37,7 @@ const {
   LINE_KINDS, UNITS, PRICE_MODES, BOUND_TO, RATE_SOURCES, lineItemFieldsFromApi, lineItemFieldsToApi,
 } = require('../utils/lineItemTotals');
 const quoteService = require('../services/quoteService');
+const accountingHistory = require('../services/accountingHistory');
 const { db } = require('../database/db');
 
 const router = express.Router();
@@ -154,7 +155,7 @@ function transformQuote(q) {
     convertedContractNumber: q.converted_contract_number || null,
     pdfPath: q.pdf_path,
     businessBankAccountId: q.business_bank_account_id,
-    // Migration 219.
+    // Migration 220.
     hours: q.hours == null ? null : Number(q.hours),
     days: q.days == null ? null : Number(q.days),
     sourceTemplateId: q.source_template_id || null,
@@ -183,7 +184,7 @@ function transformLineItem(li) {
     parentLineItemId: li.parent_line_item_id || null,
     parentPosition: li.parent_position == null ? null : Number(li.parent_position),
     detailsText: li.details_text || null,
-    // Migration 219 — line kind, unit, optional add-on, rate + promotion.
+    // Migration 220 — line kind, unit, optional add-on, rate + promotion.
     ...lineItemFieldsToApi(li),
   };
 }
@@ -246,7 +247,7 @@ function transformLineItemPreset(p) {
     quantityDefault: Number(p.quantity_default),
     displayOrder: p.display_order,
     isActive: p.is_active === 1 || p.is_active === true,
-    // Migration 219 — service catalogue fields.
+    // Migration 220 — service catalogue fields.
     unit: p.unit || null,
     detailsText: p.details_text || null,
     category: p.category || null,
@@ -280,7 +281,7 @@ function mapPayloadToService(body) {
     businessBankAccountId: 'businessBankAccountId',
     // Migration 121 — optional Project Overview link.
     projectId: 'projectId',
-    // Migration 219 — quote-wide hours / days that bound lines follow.
+    // Migration 220 — quote-wide hours / days that bound lines follow.
     hours: 'hours', days: 'days',
   };
   for (const [api, svc] of Object.entries(map)) {
@@ -347,6 +348,19 @@ router.get(
   })
 );
 
+// Change history (migration 219): every change to this quote and its line
+// items, with old and new values, oldest first.
+router.get(
+  '/:id/history',
+  requirePermission('quotes.view'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const entries = await accountingHistory.listHistory('quote', parseInt(req.params.id, 10));
+    return successResponse(res, { entries });
+  }),
+);
+
 router.get(
   '/:id',
   requirePermission('quotes.view'),
@@ -384,7 +398,7 @@ const QUOTE_LINE_VALIDATORS = [
   // bad data from reaching it.
   body('lineItems.*.parentPosition').optional({ values: 'falsy' }).isInt({ min: 1 }),
   body('lineItems.*.detailsText').optional({ values: 'falsy' }).isString().isLength({ max: 2000 }),
-  // Migration 219 (#1451). Cross-row rules (a discount line is never a
+  // Migration 220 (#1451). Cross-row rules (a discount line is never a
   // sub-item, sub-items follow their parent's add-on flags) live in
   // utils/lineItemTotals.normalizeLineItems.
   body('lineItems.*.lineKind').optional({ values: 'falsy' }).isIn(LINE_KINDS),
@@ -740,7 +754,7 @@ router.get(
   })
 );
 
-// Migration 219 — service-catalogue fields, shared by POST and PUT.
+// Migration 220 — service-catalogue fields, shared by POST and PUT.
 const PRESET_CATALOGUE_VALIDATORS = [
   body('unit').optional({ values: 'falsy' }).isIn(UNITS),
   body('detailsText').optional({ values: 'falsy' }).isString().isLength({ max: 2000 }),

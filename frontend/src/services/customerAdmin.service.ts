@@ -33,7 +33,7 @@ export interface CustomerAccountSummary {
   /** Per-customer contracts override (migration 131). Defaults true —
    *  existing customers keep their Contracts tab. */
   featureContracts?: boolean;
-  /** Per-customer documents override (migration 224). Defaults true — the
+  /** Per-customer documents override (migration 225). Defaults true — the
    *  global `documents` flag is the master switch. */
   featureDocuments?: boolean;
   /** Default hourly rate in minor units (e.g. CHF 150.00 = 15000).
@@ -177,11 +177,11 @@ export const customerAdminService = {
       featureBills:    'feature_bills',
       featureHoursLogging: 'feature_hours_logging',
       featureContracts: 'feature_contracts',
-      // Per-customer documents override (migration 224).
+      // Per-customer documents override (migration 225).
       featureDocuments: 'feature_documents',
       // Hour-logging default rate (migration 129).
       hourlyRateMinor: 'hourly_rate_minor',
-      // Quote day rate (migration 219).
+      // Quote day rate (migration 220).
       dayRateMinor: 'day_rate_minor',
       // CRM billing cadence (migration 102 + 128).
       billingCadence: 'billing_cadence',

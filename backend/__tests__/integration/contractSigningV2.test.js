@@ -27,6 +27,10 @@ const {
 
 jest.setTimeout(120000);
 
+// A json/text column, read the same way on both engines: PostgreSQL hands
+// back an object, SQLite the text.
+const parsed = (value) => (typeof value === 'string' ? JSON.parse(value) : value);
+
 let db;
 let cleanup;
 let tmpDir;
@@ -57,7 +61,9 @@ async function ok(req, status = [200, 201]) {
 
 async function lastMail(type, to) {
   const row = await db('email_queue').where({ email_type: type, recipient_email: to }).orderBy('id', 'desc').first();
-  return row ? JSON.parse(row.email_data) : null;
+  // PostgreSQL hands a json column back already parsed; SQLite hands text.
+  if (!row) return null;
+  return typeof row.email_data === 'string' ? JSON.parse(row.email_data) : row.email_data;
 }
 
 const linkToken = (mail) => mail.response_url.split('/').pop();
@@ -135,7 +141,7 @@ test('sending invites each signer with their own link, stored only as a hash', a
   expect(await db('contract_action_tokens').where({ contract_id: ids.contract })).toHaveLength(0);
 
   const doc = await db('generated_documents').where({ doc_type: 'contract', doc_id: ids.contract, kind: 'unsigned' }).first();
-  expect(JSON.parse(doc.manifest).slots.map((s) => s.key)).toEqual(['customer-1', 'customer-2', 'issuer']);
+  expect(parsed(doc.manifest).slots.map((s) => s.key)).toEqual(['customer-1', 'customer-2', 'issuer']);
 });
 
 test('a link shows nothing about the customer until the emailed code is entered', async () => {
@@ -208,7 +214,7 @@ test('the issuer counter-signs last; completion seals it and the chain verifies'
   expect(sha256(final)).toBe(contract.signed_pdf_sha256);
   expect((await PDFDocument.load(final)).getPageCount()).toBe(Number(unsigned.pages));
   const certificate = await db('generated_documents').where({ doc_type: 'contract', doc_id: ids.contract, kind: 'audit' }).first();
-  expect(JSON.parse(certificate.manifest).chainHead).toBe(contract.audit_chain_head);
+  expect(parsed(certificate.manifest).chainHead).toBe(contract.audit_chain_head);
 
   const overview = await ok(request(contractsApp).get(`/api/admin/contracts/${ids.contract}/signers`).set(auth));
   expect(overview.chain).toEqual(expect.objectContaining({ ok: true }));

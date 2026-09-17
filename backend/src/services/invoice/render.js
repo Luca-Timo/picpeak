@@ -217,7 +217,7 @@ async function buildInvoiceRenderContext(invoice, lineItems) {
       parentLineItemId: li.parent_line_item_id || null,
       parentPosition: li.parent_position == null ? null : Number(li.parent_position),
       detailsText: li.details_text || null,
-      // Migration 219 — discount lines render as a labelled minus row;
+      // Migration 220 — discount lines render as a labelled minus row;
       // `unit` fills the unit column.
       lineKind: li.line_kind || 'item',
       unit: li.unit || null,

@@ -9,7 +9,7 @@
  *   - Per-item `detailsText` is an optional free-form notes block
  *     rendered below the description on the PDF + customer view.
  *
- * Migration 219 (#1451) adds, per line:
+ * Migration 220 (#1451) adds, per line:
  *   - a unit (hour / day / piece / km / flat) shown in the quantity cell;
  *   - quotes only: a price from the customer's or the default hour / day
  *     rate (resolved on save), a quantity that follows the quote-wide
@@ -57,7 +57,7 @@ export interface EditableLineItem {
   parentPosition?: number | null;
   /** Optional free-form notes rendered below the description. */
   detailsText?: string;
-  // Migration 219 (#1451).
+  // Migration 220 (#1451).
   lineKind?: LineKind;
   unit?: LineUnit | null;
   isOptional?: boolean;
@@ -619,7 +619,7 @@ export const LineItemsTable: React.FC<Props> = ({
                         onChange={(e) => setItem(idx, { description: e.target.value })}
                         placeholder={t('crm.lineItems.descriptionPlaceholder', 'Description (multi-line OK)') as string}
                       />
-                      {/* Migration 219 — unit, rate and add-on controls. */}
+                      {/* Migration 220 — unit, rate and add-on controls. */}
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-600 dark:text-neutral-400">
                         <label className={`inline-flex items-center gap-1 ${dim}`}>
                           <span>{t('crm.lineItems.unitLabel', 'Unit')}</span>

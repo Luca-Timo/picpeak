@@ -33,6 +33,10 @@ async function quoteGrant(token) {
 
 jest.setTimeout(120000);
 
+// A json/text column, read the same way on both engines: PostgreSQL hands
+// back an object, SQLite the text.
+const parsed = (value) => (typeof value === 'string' ? JSON.parse(value) : value);
+
 let db;
 let cleanup;
 let tmpDir;
@@ -54,7 +58,9 @@ async function setFlag(key, value) {
 
 async function lastMail(type, to) {
   const row = await db('email_queue').where({ email_type: type, recipient_email: to }).orderBy('id', 'desc').first();
-  return row ? JSON.parse(row.email_data) : null;
+  // PostgreSQL hands a json column back already parsed; SQLite hands text.
+  if (!row) return null;
+  return typeof row.email_data === 'string' ? JSON.parse(row.email_data) : row.email_data;
 }
 
 beforeAll(async () => {
@@ -198,25 +204,58 @@ test('the public quote page shows the customer\'s name, not the placeholder', as
   expect(JSON.stringify(res.body)).not.toContain('{{');
 });
 
-test('a re-sent quote is news again when it is accepted', async () => {
+test('a re-sent quote is a new offer: answerable, news again, fresh consent, and it converts', async () => {
+  // Nothing of the previous answer may carry over. Each field left behind
+  // broke the new offer in its own way: the response window made the
+  // acceptance 423 for good, the workflow marker stopped `quote.accepted`
+  // from firing again, and the consent stamp made the record claim the
+  // customer had agreed to terms they were never shown.
+  const setSetting = async (key, value) => {
+    const updated = await db('app_settings').where({ setting_key: key }).update({ setting_value: value });
+    if (!updated) await db('app_settings').insert({ setting_key: key, setting_value: value });
+  };
+  await setSetting('crm_quotes_tos_required', JSON.stringify(true));
+  await setSetting('crm_quotes_tos_text', JSON.stringify('Terms A'));
+
   const { quoteId, link } = await sentQuote();
   const notices = async () => (await db('email_queue').where({ email_type: 'quote_accepted_admin' })).length;
   const accept = async (tok) => request(publicApp).post(`/api/public/quotes/${tok}/respond`)
     .set('X-Document-Access', await quoteGrant(tok))
-    .send({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000 });
+    .send({ action: 'accept', selectedOptional: [3], expectedTotalMinor: 120000, tosAccepted: true });
 
   expect((await accept(link)).status).toBe(200);
   const first = await notices();
+  const firstAnswer = await db('quotes').where({ id: quoteId }).first();
+  expect(firstAnswer.tos_text_snapshot).toBe('Terms A');
 
-  // Declined, then sent again: the next acceptance is a new decision, so the
-  // business has to hear about it even though it was told once before.
+  // Declined, the terms changed, then sent again.
   await quoteService.adminDeclineQuote(quoteId, adminId, 'Kunde überlegt noch');
+  await setSetting('crm_quotes_tos_text', JSON.stringify('Terms B'));
   await quoteService.sendQuote(quoteId, adminId);
-  expect((await db('quotes').where({ id: quoteId }).first()).acceptance_notified_at).toBeNull();
+  const resent = await db('quotes').where({ id: quoteId }).first();
+  expect(resent.acceptance_notified_at).toBeNull();
+  expect(resent.workflow_response_emitted_at).toBeNull();
+  expect(resent.tos_accepted_at).toBeNull();
+  expect(resent.tos_text_snapshot).toBeNull();
 
   const fresh = await db('quote_action_tokens').where({ quote_id: quoteId }).orderBy('id', 'desc').first();
   expect((await accept(fresh.token)).status).toBe(200);
   expect(await notices()).toBe(first + 1);
+  const second = await db('quotes').where({ id: quoteId }).first();
+  // The consent is this offer's, against the terms that were shown now.
+  expect(second.tos_text_snapshot).toBe('Terms B');
+  expect(String(second.tos_accepted_at)).not.toBe(String(firstAnswer.tos_accepted_at));
+
+  // …and the acceptance reaches the workflow engine: the sweep can claim it
+  // again once the window locks.
+  await db('quotes').where({ id: quoteId })
+    .update({ response_locked_at: new Date(Date.now() - 60 * 1000).toISOString() });
+  expect(await quoteService.finalizeQuoteResponses()).toBeGreaterThan(0);
+  expect((await db('quotes').where({ id: quoteId }).first()).workflow_response_emitted_at).toBeTruthy();
+
+  // The terms requirement is this test's; the rest of the suite answers
+  // without ticking a box.
+  await setSetting('crm_quotes_tos_required', JSON.stringify(false));
 });
 
 test('two add-on changes at once each record what they changed', async () => {
@@ -231,7 +270,7 @@ test('two add-on changes at once each record what they changed', async () => {
   const results = await Promise.allSettled([change([2]), change([2, 3])]);
   expect(results.filter((r) => r.status === 'fulfilled' && r.value.status === 200).length).toBeGreaterThan(0);
 
-  const history = JSON.parse((await db('quotes').where({ id: quoteId }).first()).selection_changes);
+  const history = parsed((await db('quotes').where({ id: quoteId }).first()).selection_changes);
   expect(history.length).toBeGreaterThan(0);
   // Every entry starts where the one before it ended.
   let previous = 120000;
@@ -257,7 +296,7 @@ test('the business changes the add-ons of an accepted quote: recorded, re-render
   const quote = await db('quotes').where({ id: quoteId }).first();
   expect(Number(quote.total_amount_minor)).toBe(130000);
   // First chosen by the customer, then changed by the business.
-  expect(JSON.parse(quote.optional_selection_snapshot)).toEqual(expect.objectContaining({ by: 'customer', selectedOptional: [2] }));
+  expect(parsed(quote.optional_selection_snapshot)).toEqual(expect.objectContaining({ by: 'customer', selectedOptional: [2] }));
   expect(String(quote.selection_accepted_at)).toBe(String(before.selection_accepted_at));
   // Each version keeps its own file: the first acceptance stays on disk.
   expect(before.pdf_path).toMatch(/-accepted\.pdf$/);

@@ -25,6 +25,7 @@ const { getStoragePath } = require('../config/storage');
 const { uploadedPdfLogoPath } = require('../utils/safePath');
 const { validateFileType, validateFileContent, ALLOWED_MEDIA_TYPES } = require('../utils/fileSecurityUtils');
 const businessProfileService = require('../services/businessProfileService');
+const accountingHistory = require('../services/accountingHistory');
 const { db } = require('../database/db');
 const { validateIban } = require('../utils/iban');
 const { validationResult } = require('express-validator');
@@ -169,7 +170,7 @@ function transformProfile(p) {
     // null = no global default; the hours page then requires a per-
     // customer or per-entry rate.
     defaultHourlyRateMinor: p.default_hourly_rate_minor == null ? null : Number(p.default_hourly_rate_minor),
-    // Install-wide fallback day rate (migration 219), minor units.
+    // Install-wide fallback day rate (migration 220), minor units.
     defaultDayRateMinor: p.default_day_rate_minor == null ? null : Number(p.default_day_rate_minor),
     defaultCurrency: p.default_currency || 'CHF',
     defaultLocale: p.default_locale || 'de',
@@ -255,6 +256,17 @@ router.get(
       bankAccounts: bankAccounts.map(transformBank),
     });
   })
+);
+
+// ---- GET /history -----------------------------------------------------
+// Change history (migration 219) of the profile and its bank accounts,
+// oldest first. Same gate as the profile itself.
+router.get(
+  '/history',
+  requirePermission(['settings.view', 'settings.banking']),
+  handleAsync(async (_req, res) => successResponse(res, {
+    entries: await accountingHistory.listHistory('business_profile', 1),
+  }))
 );
 
 // ---- GET /logo-diagnostic ---------------------------------------------

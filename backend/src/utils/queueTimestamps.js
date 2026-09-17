@@ -25,7 +25,10 @@ const SQLITE_NAIVE_TIMESTAMP = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?$
  */
 function toMillis(value) {
   if (value == null) return null;
-  if (value instanceof Date) return value.getTime();
+  // An Invalid Date is as unreadable as "[object Object]": callers treat null
+  // as "can't be read" and decide what that means (for a validity window it
+  // means closed), so it must not come back as NaN.
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : null;
   if (typeof value === 'number') return value;
   const text = String(value).trim();
   if (text === '') return null;

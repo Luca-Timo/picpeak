@@ -52,6 +52,7 @@ const {
 } = require('../utils/lineItemTotals');
 const { prepareQuoteLineItems } = require('./quoteCatalogService');
 const { readStoredDocumentPdf } = require('../utils/storedDocumentPdf');
+const { auditedInsert, auditedUpdate, auditedDelete } = require('./accountingHistory');
 
 // Every write to `quotes.status` goes through assertQuoteTransition below.
 //
@@ -269,8 +270,11 @@ function resolveParentTotalsFromSubItems(items) {
  *
  * Caller must have already run `validateLineItemHierarchy` on the
  * items, so this function trusts the hierarchy is sound.
+ *
+ *   context      — { actor, source } recorded in the accounting change
+ *                  history for every inserted row
  */
-async function insertLineItemsHierarchical(trx, tableName, ownerColumn, ownerId, items) {
+async function insertLineItemsHierarchical(trx, tableName, ownerColumn, ownerId, items, context = {}) {
   if (!Array.isArray(items) || items.length === 0) return;
   // Phase 1: top-level items, captured into a position→id map for
   // phase 2.
@@ -288,7 +292,7 @@ async function insertLineItemsHierarchical(trx, tableName, ownerColumn, ownerId,
       created_at: new Date(),
       updated_at: new Date(),
     };
-    const inserted = await trx(tableName).insert(row).returning('id');
+    const inserted = await auditedInsert(trx, tableName, row, context);
     const newId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
     positionToId.set(ensureInt(li.position), newId);
   }
@@ -307,7 +311,7 @@ async function insertLineItemsHierarchical(trx, tableName, ownerColumn, ownerId,
       created_at: new Date(),
       updated_at: new Date(),
     };
-    await trx(tableName).insert(row);
+    await auditedInsert(trx, tableName, row, context);
   }
 }
 
@@ -562,7 +566,7 @@ async function createQuote(payload, adminId) {
       event_time_start: payload.eventTimeStart || null,
       event_time_end: payload.eventTimeEnd || null,
       expected_duration_hours: payload.expectedDurationHours == null ? null : ensureNumber(payload.expectedDurationHours),
-      // Migration 219 — quote-wide hours / days that bound lines follow,
+      // Migration 220 — quote-wide hours / days that bound lines follow,
       // and the template this quote was created from (reporting only).
       hours: payload.hours == null || payload.hours === '' ? null : ensureNumber(payload.hours),
       days: payload.days == null || payload.days === '' ? null : ensureNumber(payload.days),
@@ -620,7 +624,8 @@ async function createQuote(payload, adminId) {
     if (payload.bookingWorkflowId !== undefined && hasBookingWorkflowId) {
       row.booking_workflow_id = payload.bookingWorkflowId || null;
     }
-    const inserted = await trx('quotes').insert(row).returning('id');
+    const history = { actor: adminId, source: 'quote.create' };
+    const inserted = await auditedInsert(trx, 'quotes', row, history);
     const quoteId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
     // Cascade the project link across the deal lineage (no-op for a brand-new
@@ -646,7 +651,7 @@ async function createQuote(payload, adminId) {
         ...extendedLineColumns(li),
       }));
       validateLineItemHierarchy(rows);
-      await insertLineItemsHierarchical(trx, 'quote_line_items', 'quote_id', quoteId, rows);
+      await insertLineItemsHierarchical(trx, 'quote_line_items', 'quote_id', quoteId, rows, history);
     }
 
     try {
@@ -758,7 +763,7 @@ async function updateQuote(id, payload, adminId) {
       businessBankAccountId: 'business_bank_account_id',
       validUntil: 'valid_until',
       language: 'language',
-      // Migration 219 — quote-wide hours / days.
+      // Migration 220 — quote-wide hours / days.
       hours: 'hours',
       days: 'days',
     };
@@ -792,7 +797,8 @@ async function updateQuote(id, payload, adminId) {
     if (hasBookingWorkflowId) {
       updates.booking_workflow_id = payload.bookingWorkflowId || null;
     }
-    await trx('quotes').where({ id }).update(updates);
+    const history = { actor: adminId, source: 'quote.update' };
+    await auditedUpdate(trx, 'quotes', { id }, updates, history);
 
     // When linked to a project, cascade across the deal lineage so the linked
     // contract / event / invoices roll up into the same project automatically.
@@ -806,7 +812,7 @@ async function updateQuote(id, payload, adminId) {
     // old rows and rebuild from scratch. CASCADE on parent_line_item_id
     // means deleting parents sweeps their sub-items too, so there's
     // no orphan risk here.
-    await trx('quote_line_items').where({ quote_id: id }).del();
+    await auditedDelete(trx, 'quote_line_items', { quote_id: id }, history);
     if (totals.lineItems.length > 0) {
       const rows = totals.lineItems.map((li, idx) => ({
         position: ensureInt(li.position) || (idx + 1),
@@ -820,7 +826,7 @@ async function updateQuote(id, payload, adminId) {
         ...extendedLineColumns(li),
       }));
       validateLineItemHierarchy(rows);
-      await insertLineItemsHierarchical(trx, 'quote_line_items', 'quote_id', id, rows);
+      await insertLineItemsHierarchical(trx, 'quote_line_items', 'quote_id', id, rows, history);
     }
 
     try {
@@ -956,7 +962,7 @@ async function buildRenderContext(quote, lineItems) {
       unitPriceMinor: li.unit_price_minor,
       discountPercent: li.discount_percent,
       lineTotalMinor: li.line_total_minor,
-      // Migration 219 — discount lines render as a labelled minus row;
+      // Migration 220 — discount lines render as a labelled minus row;
       // `unit` fills the unit column.
       lineKind: li.line_kind || 'item',
       unit: li.unit || null,
@@ -1107,6 +1113,7 @@ async function sendQuote(id, adminId) {
   // Read before the transaction opens — a schema lookup inside it waits on
   // the one SQLite connection the transaction holds.
   const hasNotifiedColumn = await hasColumnCached('quotes', 'acceptance_notified_at');
+  const hasEmittedColumn = await hasColumnCached('quotes', 'workflow_response_emitted_at');
 
   // Render PDF + persist snapshot.
   const ctx = await buildRenderContext(quote, lineItems);
@@ -1143,17 +1150,20 @@ async function sendQuote(id, adminId) {
       expires_at: stamp(expiresAt),
       created_at: stamp(new Date()),
     });
-    await trx('quotes').where({ id }).update({
+    await auditedUpdate(trx, 'quotes', { id }, {
       status: 'sent',
       sent_at: new Date(),
       pdf_path: pdfPath,
       payment_term_snapshot: paymentTermSnapshot ? JSON.stringify(paymentTermSnapshot) : null,
-      // A (re)sent quote is a new offer: the customer chooses add-ons afresh,
-      // answers afresh, and the acceptance that follows is news again. The
-      // response window has to go with the rest — a quote sent again after a
-      // decline still carried the closed window from that decline, so the
-      // customer's acceptance came back 423 RESPONSE_LOCKED and the new offer
-      // could never be accepted at all.
+      // A (re)sent quote is a new offer, so nothing of the previous answer
+      // carries over: the add-on choice, the answer itself, the response
+      // window, the consent to the terms that were shown then, and both
+      // "already dealt with" markers. Each one left behind broke the new
+      // offer in its own way — the window made the acceptance 423
+      // RESPONSE_LOCKED for good, the workflow marker stopped
+      // `quote.accepted` from ever firing again, and the consent stamp made
+      // the record say the customer had agreed to terms they were not shown
+      // this time.
       optional_selection_snapshot: null,
       selection_accepted_at: null,
       selection_changes: null,
@@ -1162,9 +1172,12 @@ async function sendQuote(id, adminId) {
       response_locked_at: null,
       accepted_at: null,
       declined_at: null,
+      tos_accepted_at: null,
+      tos_text_snapshot: null,
       ...(hasNotifiedColumn ? { acceptance_notified_at: null } : {}),
+      ...(hasEmittedColumn ? { workflow_response_emitted_at: null } : {}),
       updated_at: new Date(),
-    });
+    }, { actor: adminId, source: 'quote.send' });
   });
 
   // Queue customer email (with PDF + cc) — honour the global
@@ -1402,7 +1415,11 @@ function selectionSnapshot(lineItems, chosen, totals, by) {
  * PDF pointer is cleared — the sent file shows the offer, not the choice —
  * until storeAcceptedQuotePdf writes the accepted version.
  */
-async function writeAcceptedSelection(trx, quote, lineItems, { chosen, totals }, by, at, { previousChosen = null, adminId = null } = {}) {
+async function writeAcceptedSelection(
+  trx, quote, lineItems, { chosen, totals }, by, at,
+  { previousChosen = null, adminId = null, history = null } = {},
+) {
+  const record = history || { actor: adminId, source: `quote.addons.${by}` };
   // The history, the first-chosen snapshot and what the choice was BEFORE
   // this change are read inside the transaction: two changes landing together
   // both read the row before either wrote, so one entry replaced the other
@@ -1422,14 +1439,20 @@ async function writeAcceptedSelection(trx, quote, lineItems, { chosen, totals },
     if (!offered.has(top)) continue;
     (chosenSet.has(top) ? on : off).push(li.id);
   }
-  if (on.length) await trx('quote_line_items').whereIn('id', on).update({ selected: formatBoolean(true) });
-  if (off.length) await trx('quote_line_items').whereIn('id', off).update({ selected: formatBoolean(false) });
+  if (on.length) {
+    await auditedUpdate(trx, 'quote_line_items', (q) => q.whereIn('id', on),
+      { selected: formatBoolean(true) }, record);
+  }
+  if (off.length) {
+    await auditedUpdate(trx, 'quote_line_items', (q) => q.whereIn('id', off),
+      { selected: formatBoolean(false) }, record);
+  }
   for (const li of totals.lineItems) {
     if (li.line_kind !== 'discount' || li.id == null) continue;
-    await trx('quote_line_items').where({ id: li.id }).update({
+    await auditedUpdate(trx, 'quote_line_items', { id: li.id }, {
       unit_price_minor: ensureInt(li.unit_price_minor),
       line_total_minor: ensureInt(li.line_total_minor),
-    });
+    }, record);
   }
   // A change after the first acceptance (#1451) keeps when and by whom the
   // add-ons were first chosen, and adds an entry to the change history.
@@ -1438,7 +1461,7 @@ async function writeAcceptedSelection(trx, quote, lineItems, { chosen, totals },
   const isChange = Array.isArray(previousChosen);
   const before = isChange ? currentOptionalSelection(locked) : null;
   const firstBy = isChange ? (storedJson(current.optional_selection_snapshot, {}).by || by) : by;
-  await trx('quotes').where({ id: quote.id }).update({
+  await auditedUpdate(trx, 'quotes', { id: quote.id }, {
     net_amount_minor: totals.netAmountMinor,
     vat_amount_minor: totals.vatAmountMinor,
     total_amount_minor: totals.totalAmountMinor,
@@ -1451,7 +1474,7 @@ async function writeAcceptedSelection(trx, quote, lineItems, { chosen, totals },
       ]),
     } : {}),
     pdf_path: null,
-  });
+  }, record);
 }
 
 // Each version of the accepted quote keeps its own file (#1451): the first
@@ -1477,7 +1500,8 @@ async function storeAcceptedQuotePdf(quoteId) {
     const buffer = await pdfService.renderQuoteToBuffer(ctx);
     const pdfPath = await persistDocPdf('quote', data.quote, buffer, await acceptedSuffix(quoteId),
       { kind: 'accepted', theme: ctx.theme, issuer: ctx.issuer });
-    await db('quotes').where({ id: quoteId }).update({ pdf_path: pdfPath });
+    await auditedUpdate(db, 'quotes', { id: quoteId }, { pdf_path: pdfPath },
+      { source: 'quote.accepted.pdf' });
   } catch (err) {
     // pdf_path is already cleared, so the quote renders live — with the
     // chosen add-ons — until a file is stored.
@@ -1638,17 +1662,18 @@ async function emitQuoteEvent(quote, status) {
  *   - window still open → defer; `finalizeQuoteResponses` (scheduler) fires the
  *     FINAL status once it locks, so toggling inside the window never converts.
  * Returns true if it emitted, false if deferred / already emitted.
+ * `history` is the { actor, source } of the response being emitted.
  */
-async function maybeEmitQuoteResponse(quote, status, responseLockedAt) {
+async function maybeEmitQuoteResponse(quote, status, responseLockedAt, history = {}) {
   const lockedAtMs = toMillis(responseLockedAt);
   const locked = !responseLockedAt || lockedAtMs == null || lockedAtMs <= Date.now();
   if (!locked) return false; // deferred to the finalize sweep
   const hasCol = await hasColumnCached('quotes', 'workflow_response_emitted_at');
   if (hasCol) {
     // Atomically claim the emit so a concurrent finalize sweep can't double-fire.
-    const claimed = await db('quotes').where({ id: quote.id })
-      .whereNull('workflow_response_emitted_at')
-      .update({ workflow_response_emitted_at: new Date() });
+    const claimed = await auditedUpdate(db, 'quotes',
+      (q) => q.where({ id: quote.id }).whereNull('workflow_response_emitted_at'),
+      { workflow_response_emitted_at: stamp(new Date()) }, history);
     if (!claimed) return false; // already emitted elsewhere
   }
   await emitQuoteEvent(quote, status);
@@ -1681,9 +1706,10 @@ async function finalizeQuoteResponses(limit = 200) {
   });
   let emitted = 0;
   for (const q of rows) {
-    const claimed = await db('quotes').where({ id: q.id })
-      .whereNull('workflow_response_emitted_at')
-      .update({ workflow_response_emitted_at: new Date() });
+    const claimed = await auditedUpdate(db, 'quotes',
+      (query) => query.where({ id: q.id }).whereNull('workflow_response_emitted_at'),
+      { workflow_response_emitted_at: stamp(new Date()) },
+      { actor: 'scheduler', source: 'quote.response.finalize' });
     if (!claimed) continue; // raced with another tick / the inline emit
     await emitQuoteEvent(q, q.status);
     emitted += 1;
@@ -1691,7 +1717,18 @@ async function finalizeQuoteResponses(limit = 200) {
   return emitted;
 }
 
-async function recordResponse({ token, action, ip, tosAccepted, selectedOptional, expectedTotalMinor, customerMessage }) {
+// The change history's actor for a response through the emailed link. The
+// token row names only the quote, not who holds the link.
+const QUOTE_LINK_ACTOR = { type: 'public', id: null, name: 'quote-link' };
+
+/**
+ * `actor` names the responder in the accounting change history: the customer
+ * portal passes the signed-in customer; the public link leaves the default.
+ */
+async function recordResponse({
+  token, action, ip, tosAccepted, selectedOptional, expectedTotalMinor, customerMessage,
+  actor = QUOTE_LINK_ACTOR,
+}) {
   if (!['accept', 'decline'].includes(action)) {
     throw new AppError('Invalid action', 400);
   }
@@ -1767,6 +1804,7 @@ async function recordResponse({ token, action, ip, tosAccepted, selectedOptional
   const respondedAt = quote.responded_at || now;
   const responseLockedAt = new Date(new Date(respondedAt).getTime() + windowMinutes * 60 * 1000);
   assertQuoteTransition(quote.status, newStatus);
+  const history = { actor, source: 'quote.respond' };
   // Optional add-ons (#1451 phase 2), checked before anything is written.
   const selection = isAccept
     ? await resolveCustomerSelection(quote, { selectedOptional, expectedTotalMinor })
@@ -1786,7 +1824,7 @@ async function recordResponse({ token, action, ip, tosAccepted, selectedOptional
     // don't overwrite, so the audit trail captures the original
     // agreement moment.
     if (isAccept && tosAccepted && !quote.tos_accepted_at) {
-      updates.tos_accepted_at = now;
+      updates.tos_accepted_at = stamp(now);
       updates.tos_text_snapshot = tosText || null;
     }
     // What the customer wrote with the acceptance (#1451); accepting again
@@ -1796,13 +1834,13 @@ async function recordResponse({ token, action, ip, tosAccepted, selectedOptional
     // Conditional on the status this request read: a conversion committing
     // between the checks above and here would otherwise be flipped back to
     // accepted or declined by an answer that never saw it.
-    const applied = await trx('quotes').where({ id: quote.id, status: quote.status }).update(updates);
+    const applied = await auditedUpdate(trx, 'quotes', { id: quote.id, status: quote.status }, updates, history);
     if (!applied) {
       throw new AppError('This quote changed while you were answering it. Reload the page.', 409, 'QUOTE_CHANGED');
     }
     if (selection) {
       await writeAcceptedSelection(trx, quote, selection.lineItems, selection, 'customer', now,
-        { previousChosen: selection.previousChosen });
+        { previousChosen: selection.previousChosen, history });
     }
     await trx('quote_action_tokens').where({ id: tokenRow.id }).update({
       used_at: now,
@@ -1828,7 +1866,7 @@ async function recordResponse({ token, action, ip, tosAccepted, selectedOptional
   // Defer the workflow emit until the 15-min toggle window locks — so accepting
   // (then converting) can't strip the customer's ability to decline. The
   // scheduler's finalize sweep fires the final status once it locks.
-  await maybeEmitQuoteResponse(quote, newStatus, responseLockedAt);
+  await maybeEmitQuoteResponse(quote, newStatus, responseLockedAt, history);
 
   return { status: newStatus, lockedAt: responseLockedAt };
 }
@@ -1869,16 +1907,17 @@ async function adminAcceptQuote(id, adminId) {
   const windowMinutes = ensureInt(await getAppSetting('crm_quotes_accept_window_minutes')) || 15;
   const responseLockedAt = new Date(now.getTime() + windowMinutes * 60 * 1000);
 
-  await db('quotes').where({ id }).update({
+  const history = { actor: adminId, source: 'quote.accept.admin' };
+  await auditedUpdate(db, 'quotes', { id }, {
     status: 'accepted',
     responded_at: stamp(now),
     response_locked_at: stamp(responseLockedAt),
-    accepted_at: now,
+    accepted_at: stamp(now),
     // accept_on_behalf flag intentionally NOT stored as a separate
     // column — the audit log entry below captures who accepted and
     // when, which is the legally relevant breadcrumb.
     updated_at: now,
-  });
+  }, history);
 
   // Record which add-ons the acceptance covers (#1451 phase 2): the choice
   // as the admin set it in the editor.
@@ -1912,7 +1951,8 @@ async function adminAcceptQuote(id, adminId) {
         { kind: 'accepted', theme: ctx.theme, issuer: ctx.issuer });
       // Record it like sendQuote does: the accepted quote opens as this
       // file from now on instead of re-rendering (#1451).
-      await db('quotes').where({ id }).update({ pdf_path: pdfPath });
+      await auditedUpdate(db, 'quotes', { id }, { pdf_path: pdfPath },
+        { actor: adminId, source: 'quote.accept.admin' });
 
       const formatMoney = (minor, currency, locale) =>
         new Intl.NumberFormat(locale === 'de' ? 'de-CH' : 'en-GB', {
@@ -1943,7 +1983,7 @@ async function adminAcceptQuote(id, adminId) {
 
   // Same deferral as the public path — an admin "accept on behalf" also opens
   // the toggle window, so don't convert until it locks.
-  await maybeEmitQuoteResponse(quote, 'accepted', responseLockedAt);
+  await maybeEmitQuoteResponse(quote, 'accepted', responseLockedAt, history);
 
   return { status: 'accepted', lockedAt: responseLockedAt };
 }
@@ -2037,6 +2077,7 @@ async function adminDeclineQuote(id, adminId, reason = null) {
   const now = new Date();
   const cleanReason = typeof reason === 'string' && reason.trim() ? reason.trim().slice(0, 5000) : null;
   const hasReasonColumn = await hasColumnCached('quotes', 'decline_reason');
+  const history = { actor: adminId, source: 'quote.decline.admin' };
 
   await db.transaction(async (trx) => {
     const updates = {
@@ -2054,7 +2095,7 @@ async function adminDeclineQuote(id, adminId, reason = null) {
     if (hasReasonColumn) updates.decline_reason = cleanReason;
     // Conditional on the status this call read, like the reissue: two
     // requests that both passed the checks above must not both write.
-    const declined = await trx('quotes').where({ id, status: quote.status }).update(updates);
+    const declined = await auditedUpdate(trx, 'quotes', { id, status: quote.status }, updates, history);
     if (!declined) {
       throw new AppError('This quote changed while it was being declined. Reload and try again.', 409, 'QUOTE_CONFLICT');
     }
@@ -2073,7 +2114,7 @@ async function adminDeclineQuote(id, adminId, reason = null) {
 
   // Admin decline locks the window immediately (response_locked_at = now), so
   // this emits straight away (and stamps emitted) rather than deferring.
-  await maybeEmitQuoteResponse(quote, 'declined', now);
+  await maybeEmitQuoteResponse(quote, 'declined', now, history);
 
   return { status: 'declined', declinedAt: now };
 }
@@ -2114,8 +2155,9 @@ async function reissueQuote(id, adminId, reason = null) {
     // Only the request that takes the quote out of `accepted` reissues it.
     // The status check above runs outside the transaction, so two clicks
     // both passed it and each made a replacement draft; the unique index on
-    // replaces_quote_id (migration 219) is the second line of defence.
-    const claimed = await trx('quotes').where({ id, status: 'accepted' }).update(updates);
+    // replaces_quote_id (migration 220) is the second line of defence.
+    const claimed = await auditedUpdate(trx, 'quotes', { id, status: 'accepted' }, updates,
+      { actor: adminId, source: 'quote.reissue' });
     if (!claimed) {
       throw new AppError('This quote is no longer accepted, so it can\'t be reissued', 409, 'QUOTE_NOT_ACCEPTED');
     }
@@ -2253,10 +2295,10 @@ async function convertToInvoiceOnly(quoteId, adminId, options = {}) {
     // existing transition rules still apply (can't be edited / sent
     // again). The list view's status badge says "converted"; admin
     // sees the linked invoices in the customer detail panel.
-    await trx('quotes').where({ id: quote.id }).update({
+    await auditedUpdate(trx, 'quotes', { id: quote.id }, {
       status: 'converted',
       updated_at: new Date(),
-    });
+    }, { actor: adminId, source: 'quote.convert.invoices' });
 
     return { installmentsCreated: installments.length, invoiceIds: spawnResult?.invoiceIds || [] };
   });
@@ -2444,11 +2486,11 @@ async function convertToEvent(quoteId, adminId, options = {}) {
         hold: options.hold === true,
       });
 
-    await trx('quotes').where({ id: quote.id }).update({
+    await auditedUpdate(trx, 'quotes', { id: quote.id }, {
       status: 'converted',
       converted_event_id: eventId,
       updated_at: new Date(),
-    });
+    }, { actor: adminId, source: 'quote.convert.event' });
 
     return { eventId, alreadyConverted: false, invoiceIds: spawnResult?.invoiceIds || [] };
   });
@@ -2561,7 +2603,7 @@ async function listLineItemPresets({ includeInactive = false } = {}) {
 
 const PRESET_PRICE_MODES = ['fixed', 'hour', 'day'];
 
-// Migration 219 — service-catalogue columns on the presets table.
+// Migration 220 — service-catalogue columns on the presets table.
 function presetCatalogueColumns(payload) {
   const out = {};
   if (payload.unit !== undefined) out.unit = payload.unit || null;

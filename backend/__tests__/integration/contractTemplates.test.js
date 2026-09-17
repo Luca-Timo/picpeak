@@ -258,7 +258,7 @@ test('sending freezes the resolved content, and the signing page shows it', asyn
 });
 
 test('a contract frozen before the other languages existed still renders in its own', async () => {
-  // Migration 221 added the fr/nl/pt/ru snapshot columns empty. Taking the
+  // Migration 222 added the fr/nl/pt/ru snapshot columns empty. Taking the
   // frozen map whole would then leave a Russian contract with only EN and DE
   // frozen, and pickLocale would fall back to English on the signing page and
   // on every later render.

@@ -90,7 +90,7 @@ export type FeatureKey =
   // mass marketing mail to customer accounts, with per-customer opt-out
   // and an unsubscribe link on every send. Strictly opt-in.
   | 'newsletters'
-  // Customer documents (migration 224, #1444) — PDF exchange in the customer
+  // Customer documents (migration 225, #1444) — PDF exchange in the customer
   // portal and the Documents card on the customer record. Strictly opt-in;
   // the backend refuses every documents route while it is off.
   | 'documents';
