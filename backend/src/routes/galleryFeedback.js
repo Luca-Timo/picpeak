@@ -100,6 +100,9 @@ router.get('/:slug/photos/:photoId/feedback',
       
       // Get guest's own feedback separately
       const guestFeedback = await feedbackService.getPhotoFeedback(photoId, {
+        // Older merges updated guest_id without rewriting guest_identifier.
+        // Use the verified identity, as /my-feedback and submissions do.
+        guest_id: req.guest?.id,
         guest_identifier: guestIdentifier,
         identity_mode: settings.identity_mode,
       });
@@ -344,6 +347,15 @@ router.post('/:slug/photos/:photoId/feedback',
         feedbackData,
         guestIdentifier
       );
+
+      // The guest was merged away or deleted while this request was running.
+      // Same answer resolveGuest gives the next request from that token.
+      if (result && result.guest_missing) {
+        return res.status(401).json({
+          error: 'Guest identity required',
+          code: 'GUEST_IDENTITY_REQUIRED'
+        });
+      }
 
       // Per-guest cap reached (#655). Surface as a structured 403 so the
       // frontend can show an explicit popup with the actual cap value and
