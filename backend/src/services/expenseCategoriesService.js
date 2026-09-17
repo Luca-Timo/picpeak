@@ -7,7 +7,7 @@
  */
 const { db } = require('../database/db');
 const { AppError } = require('../utils/errors');
-const { deleteWithAccountingHistory } = require('./accountingHistory');
+const { auditedDelete, auditedInsert, auditedUpdate } = require('./accountingHistory');
 
 async function list() {
   return db('expense_categories')
@@ -21,7 +21,7 @@ async function getById(id) {
   return row;
 }
 
-async function create({ name, color, displayOrder }, _adminId) {
+async function create({ name, color, displayOrder }, adminId = null) {
   if (!name || !String(name).trim()) {
     throw new AppError('Category name is required', 400, 'NAME_REQUIRED');
   }
@@ -34,12 +34,12 @@ async function create({ name, color, displayOrder }, _adminId) {
     created_at: now,
     updated_at: now,
   };
-  const inserted = await db('expense_categories').insert(row).returning('id');
+  const inserted = await auditedInsert(db, 'expense_categories', row, { actor: adminId, source: 'expense_category.create' });
   const id = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
   return getById(id);
 }
 
-async function update(id, { name, color, displayOrder }) {
+async function update(id, { name, color, displayOrder }, adminId = null) {
   const existing = await getById(id);
   const patch = { updated_at: new Date() };
   if (name !== undefined) {
@@ -48,7 +48,7 @@ async function update(id, { name, color, displayOrder }) {
   }
   if (color !== undefined) patch.color = color || null;
   if (displayOrder !== undefined && Number.isInteger(displayOrder)) patch.display_order = displayOrder;
-  await db('expense_categories').where({ id: existing.id }).update(patch);
+  await auditedUpdate(db, 'expense_categories', { id: existing.id }, patch, { actor: adminId, source: 'expense_category.update' });
   return getById(id);
 }
 
@@ -58,8 +58,7 @@ async function remove(id, adminId = null) {
     throw new AppError('Seed categories cannot be deleted', 409, 'SEED_CATEGORY_PROTECTED');
   }
   // FK on expenses.category_id is ON DELETE SET NULL — orphaned expenses keep working.
-  await deleteWithAccountingHistory(db, 'expense_categories', { id: existing.id },
-    { actor: adminId, source: 'expense_category.delete' });
+  await auditedDelete(db, 'expense_categories', { id: existing.id }, { actor: adminId, source: 'expense_category.delete' });
   return { deleted: true };
 }
 

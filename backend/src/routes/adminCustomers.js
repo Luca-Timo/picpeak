@@ -11,7 +11,7 @@ const { capabilityEvidence } = require('../usage/capabilityEvidence');
 const { body, param, query } = require('express-validator');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
-const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
+const { requireFeatureFlag, isFeatureEnabled } = require('../middleware/requireFeatureFlag');
 const { filterOwnedEventIds } = require('../middleware/ownership');
 const { db } = require('../database/db');
 
@@ -25,6 +25,7 @@ const requireHoursLogging = requireFeatureFlag('hoursLogging', 'HOURS_LOGGING_DI
 const requireIncoming = requireFeatureFlag('incomingInvoices', 'INCOMING_INVOICES_DISABLED');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const customerAccountsService = require('../services/customerAccountsService');
+const accountingHistory = require('../services/accountingHistory');
 const customerHoursService = require('../services/customerHoursService');
 const combinedBillingService = require('../services/combinedBillingService');
 const invoiceService = require('../services/invoiceService');
@@ -365,6 +366,22 @@ router.post('/:id/send-invite', [
 }));
 
 // ---- customer record ----------------------------------------------------
+
+// Change history (migration 219) of the customer's billing fields and hour
+// entries, oldest first. Personal values are blanked once a customer is erased.
+router.get('/:id/history', [
+  adminAuth,
+  requirePermission('customers.view'),
+  param('id').isInt({ min: 1 }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  let entries = await accountingHistory.listHistory('customer', parseInt(req.params.id, 10));
+  // Hour entries stay behind the same gate as /:id/hour-entries.
+  if (!(await isFeatureEnabled('hoursLogging'))) {
+    entries = entries.filter((entry) => entry.entity_type !== 'hour_entry');
+  }
+  return successResponse(res, { entries });
+}));
 
 router.get('/:id', [
   adminAuth,
