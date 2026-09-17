@@ -35,6 +35,7 @@ const { requirePermission } = require('../middleware/permissions');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const { validateFileType, validateFileContent } = require('../utils/fileSecurityUtils');
 const contractService = require('../services/contractService');
+const accountingHistory = require('../services/accountingHistory');
 const contractBlocksService = require('../services/contractBlocksService');
 const { db } = require('../database/db');
 
@@ -555,6 +556,7 @@ router.post(
       parseInt(req.params.id, 10),
       req.file.path,
       'admin',
+      req.admin.id,
     );
     return successResponse(res, result);
   }),
@@ -610,6 +612,19 @@ router.get(
       `inline; filename="${data.contract.contract_number}-signed.pdf"`,
     );
     fs.createReadStream(safePath).pipe(res);
+  }),
+);
+
+// Change history (migration 219): every change to this contract, and its
+// included blocks, with old and new values, oldest first.
+router.get(
+  '/:id/history',
+  requirePermission('contracts.view'),
+  [param('id').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const entries = await accountingHistory.listHistory('contract', parseInt(req.params.id, 10));
+    return successResponse(res, { entries });
   }),
 );
 
