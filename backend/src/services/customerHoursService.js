@@ -26,7 +26,7 @@ const { db, logActivity } = require('../database/db');
 const { AppError } = require('../utils/errors');
 const { hasColumnCached } = require('../utils/schemaCache');
 const invoiceService = require('./invoiceService');
-const { auditedUpdate, auditedDelete } = require('./accountingHistory');
+const { auditedDelete, auditedInsert, auditedUpdate } = require('./accountingHistory');
 
 // ---------------------------------------------------------------------
 // Pure helpers — exported under `_internal` for direct unit testing.
@@ -86,7 +86,12 @@ function resolveEffectiveRate(entry, customer, installDefaultMinor = null) {
  */
 async function getInstallDefaultRateMinor(trx) {
   const conn = trx || db;
-  if (!(await hasColumnCached('business_profile', 'default_hourly_rate_minor'))) {
+  // A cold global schema-cache lookup would acquire a second connection
+  // while SQLite's only connection is held by the caller's transaction.
+  const hasRate = trx
+    ? await trx.schema.hasColumn('business_profile', 'default_hourly_rate_minor')
+    : await hasColumnCached('business_profile', 'default_hourly_rate_minor');
+  if (!hasRate) {
     return null;
   }
   const row = await conn('business_profile').where({ id: 1 })
@@ -265,7 +270,7 @@ async function createEntry(customerId, payload, adminId) {
       }
       row.project_id = projectId;
     }
-    const inserted = await trx('customer_hour_entries').insert(row).returning('id');
+    const inserted = await auditedInsert(trx, 'customer_hour_entries', row, { actor: adminId || null, source: 'hours.createEntry' });
     const entryId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
 
     // Accumulator-mode customers (monthly + manual) get the auto-append
@@ -278,13 +283,13 @@ async function createEntry(customerId, payload, adminId) {
       const { invoiceId, lineItemId } = await invoiceService.appendOneLineItemToMonthlyDraft(
         customer, lineItem, adminId, trx,
       );
-      await trx('customer_hour_entries').where({ id: entryId }).update({
+      await auditedUpdate(trx, 'customer_hour_entries', { id: entryId }, {
         status: 'billed',
         invoice_id: invoiceId,
         invoice_line_item_id: lineItemId,
         billed_at: new Date(),
         updated_at: new Date(),
-      });
+      }, { actor: adminId || null, source: 'hours.createEntry' });
       logInfo = { type: 'hour_entry_logged_to_monthly_draft', meta: { entryId, customerId: customer.id, invoiceId } };
       return { id: entryId, status: 'billed', invoiceId };
     }
@@ -378,7 +383,7 @@ async function updateEntry(entryId, payload, adminId) {
       }, audit);
     }
 
-    await trx('customer_hour_entries').where({ id: entryId }).update({
+    await auditedUpdate(trx, 'customer_hour_entries', { id: entryId }, {
       entry_date: next.entry_date,
       start_time: next.start_time,
       end_time: next.end_time,
@@ -386,7 +391,7 @@ async function updateEntry(entryId, payload, adminId) {
       hourly_rate_minor_override: next.hourly_rate_minor_override,
       description: next.description,
       updated_at: next.updated_at,
-    });
+    }, { actor: adminId || null, source: 'hours.updateEntry' });
 
     logInfo = { type: 'hour_entry_updated', meta: { entryId, customerId: entry.customer_account_id } };
     return { id: entryId };
@@ -438,7 +443,7 @@ async function deleteEntry(entryId, adminId) {
       }, audit);
     }
 
-    await trx('customer_hour_entries').where({ id: entryId }).del();
+    await auditedDelete(trx, 'customer_hour_entries', { id: entryId }, audit);
 
     logInfo = { type: 'hour_entry_deleted', meta: { entryId, customerId: entry.customer_account_id, hadInvoice: !!entry.invoice_id } };
     return { deleted: true };
@@ -472,17 +477,17 @@ async function buildUnbilledHourLineItems(trx, customer) {
 
 // Stamp each hour entry with the invoice + its specific line-item id. `lineIds`
 // is aligned to `entries` order.
-async function stampBilledEntries(trx, entries, invoiceId, lineIds) {
+async function stampBilledEntries(trx, entries, invoiceId, lineIds, adminId = null) {
   const now = new Date();
   for (let i = 0; i < entries.length; i += 1) {
     // eslint-disable-next-line no-await-in-loop
-    await trx('customer_hour_entries').where({ id: entries[i].id }).update({
+    await auditedUpdate(trx, 'customer_hour_entries', { id: entries[i].id }, {
       status: 'billed',
       invoice_id: invoiceId,
       invoice_line_item_id: lineIds[i] || null,
       billed_at: now,
       updated_at: now,
-    });
+    }, { actor: adminId, source: 'hours.bill' });
   }
 }
 
@@ -523,7 +528,7 @@ async function billUnbilledEntries(customerId, adminId) {
       .orderBy('position', 'asc');
     const lineByPos = new Map(insertedLines.map((li) => [li.position, li.id]));
     const lineIds = unbilled.map((_, i) => lineByPos.get(i + 1) || null);
-    await stampBilledEntries(trx, unbilled, invoiceId, lineIds);
+    await stampBilledEntries(trx, unbilled, invoiceId, lineIds, adminId);
 
     logInfo = { type: 'hour_entries_billed', meta: { customerId: customer.id, invoiceId, entryCount: unbilled.length } };
     return { invoiceId, entriesBilled: unbilled.length };
