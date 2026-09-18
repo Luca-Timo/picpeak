@@ -504,27 +504,30 @@ test('a code whose email fails is not a code: the page says so, and the earlier 
   expect(failed.body.code).toBe('EMAIL_UNAVAILABLE');
   // No row for the code nobody received, and it didn't retire the one that
   // did arrive — nor count against the throttle.
-  expect(await db('contract_signing_otps').where({ signer_id: signer.id })).toHaveLength(before.length);
+  const rows = await db('contract_signing_otps').where({ signer_id: signer.id }).orderBy('id');
+  expect(rows).toHaveLength(before.length);
+  expect(rows.map((r) => !!r.consumed_at)).toEqual([false]);
   const verified = await ok(asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/verify`)).send({ code: first }));
   expect(verified.sessionToken).toEqual(expect.any(String));
 });
 
-test('a new code retires the earlier one only once it has gone out', async () => {
+test('a new code retires the earlier one once it has gone out', async () => {
+  // Pinned on the rows, not on a verify response: verifyOtp only ever reads
+  // the newest unconsumed code, so an earlier code fails to verify whether or
+  // not it was retired, and a response check can't see the retirement.
   const id = await newContract();
   await ok(request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth));
   const link = linkToken(await lastMail('contract_sent', customerEmail));
+  const signer = await db('contract_signers').where({ contract_id: id, role: 'customer' }).first();
   const codeUrl = `/api/public/contract-signing/invite/${link}/code`;
 
   await ok(asSigner(request(signingApp).post(codeUrl)));
-  const { code: first } = await lastMail('contract_signing_code', customerEmail);
   await minuteLater();
   await ok(asSigner(request(signingApp).post(codeUrl)));
   const { code: second } = await lastMail('contract_signing_code', customerEmail);
 
-  if (first !== second) {
-    const stale = await asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/verify`)).send({ code: first });
-    expect(stale.status).not.toBe(200);
-  }
+  const rows = await db('contract_signing_otps').where({ signer_id: signer.id }).orderBy('id');
+  expect(rows.map((r) => !!r.consumed_at)).toEqual([true, false]); // earlier retired, newest live
   await ok(asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/verify`)).send({ code: second }));
 });
 

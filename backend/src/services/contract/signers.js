@@ -323,7 +323,15 @@ function secondsUntilNextCode(sentAt, now) {
   return 0;
 }
 
-/** The email for a reserved code failed: the code never existed. */
+/**
+ * The email for a reserved code failed: the code never existed.
+ *
+ * Deleting it also means a failed send doesn't count against the five an
+ * hour — deliberately, the same as #1465: a mail server that is down must
+ * not lock the signer out once it is back. Repeated attempts while it is
+ * down are bounded by the route's `codeLimiter`: five per ten minutes per
+ * client address (routes/publicContractSigning).
+ */
 async function discardOtp(otpId) {
   await db('contract_signing_otps').where({ id: otpId }).del();
 }
