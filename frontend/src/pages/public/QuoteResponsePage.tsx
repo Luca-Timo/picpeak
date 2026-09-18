@@ -190,7 +190,7 @@ export const QuoteResponseView: React.FC<{ adapter: QuoteDocumentAdapter }> = ({
         setError(err?.response?.data?.error || err.message || 'Something went wrong');
       }
     } finally { setBusy(false); }
-  }, [adapter, refetch, t, tosAccepted, canChoose, shownTotals, totalsQuery, q?.currency, message]);
+  }, [adapter, refetch, t, tosAccepted, canChoose, shownTotals, totalsQuery, q?.currency, q?.totalAmountMinor, message]);
 
   // PRE-SELECTED ACTION FROM EMAIL LINK
   //
@@ -387,12 +387,21 @@ export const QuoteResponseView: React.FC<{ adapter: QuoteDocumentAdapter }> = ({
                 // price columns empty (transparency list only).
                 let topCount = 0;
                 const rows: React.ReactNode[] = [];
+                // A package whose price is the sum of its sub-items has no
+                // unit price of its own — the same rule as the PDF.
+                const parents = new Set<string>();
+                for (const item of quote.lineItems) {
+                  if (item.parentLineItemId != null) parents.add(`id:${item.parentLineItemId}`);
+                  if (item.parentPosition != null) parents.add(`pos:${item.parentPosition}`);
+                }
                 for (const li of quote.lineItems) {
                   const isSub = li.parentLineItemId != null || li.parentPosition != null;
                   // Discount lines (#1451) are numbered, but carry no quantity or unit price.
                   const isDiscount = li.lineKind === 'discount';
                   if (!isSub) topCount += 1;
                   const priceless = isSub && (!li.unitPriceMinor || Number(li.unitPriceMinor) === 0);
+                  const packageSum = !isSub && !Number(li.unitPriceMinor)
+                    && (parents.has(`id:${li.id}`) || parents.has(`pos:${li.position}`));
                   const unitLabel = li.unit ? t(`crm.lineItems.unitShort.${li.unit}`, li.unit) : '';
                   const quantityText = isDiscount
                     ? ''
@@ -424,7 +433,7 @@ export const QuoteResponseView: React.FC<{ adapter: QuoteDocumentAdapter }> = ({
                       </td>
                       <td className={`py-2 text-right ${dim}`}>{quantityText}</td>
                       <td className={`py-2 text-right tabular-nums ${dim}`}>
-                        {priceless || isDiscount ? '' : formatMoneyMinor(Number(li.unitPriceMinor), quote.currency)}
+                        {priceless || isDiscount || packageSum ? '' : formatMoneyMinor(Number(li.unitPriceMinor), quote.currency)}
                       </td>
                       <td className={`py-2 text-right tabular-nums ${isSub ? 'italic' : ''} ${dim}`}>
                         {priceless

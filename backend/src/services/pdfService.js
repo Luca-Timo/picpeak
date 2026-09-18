@@ -675,6 +675,15 @@ function drawLineItems(doc, ctx) {
   // column stays 1..N regardless of how many sub-items sit between
   // parents in the array.
   let topLevelCount = 0;
+  // A package whose price is the sum of its sub-items has no unit price of
+  // its own: an empty cell, not "0.00" next to the sum it shows.
+  const parents = new Set();
+  for (const item of lineItems) {
+    if (item.parentLineItemId != null) parents.add(`id:${item.parentLineItemId}`);
+    if (item.parentPosition != null) parents.add(`pos:${item.parentPosition}`);
+  }
+  const isPackageSum = (li) => !Number(li.unitPriceMinor)
+    && (parents.has(`id:${li.id}`) || parents.has(`pos:${li.position}`));
   const buildItemRow = (li) => {
     const isSubItem = li.parentLineItemId != null || li.parentPosition != null;
     // A discount line (migration 220) is numbered like any other line, but
@@ -692,7 +701,9 @@ function drawLineItems(doc, ctx) {
       descText = `${descText} (${stripTrailingZeros(li.promotion.percent)} %)`;
     }
     const subItemPriceless = isSubItem && (!li.unitPriceMinor || Number(li.unitPriceMinor) === 0);
-    const unitText = subItemPriceless || isDiscount ? '' : formatMinor(li.unitPriceMinor, currency, intlLocale);
+    const unitText = subItemPriceless || isDiscount || (!isSubItem && isPackageSum(li))
+      ? ''
+      : formatMinor(li.unitPriceMinor, currency, intlLocale);
     const qtyText = isDiscount ? '' : quantityText(li);
     const displayLineTotal = lineTotalSign * Number(li.lineTotalMinor || 0);
     const lineTotalText = subItemPriceless

@@ -90,6 +90,32 @@ describe('discount lines', () => {
   });
 });
 
+describe('packages', () => {
+  it('leave the unit price empty when the package line is the sum of its items', () => {
+    const { data, cellTexts } = draw([
+      item({ position: 1, description: 'Wedding Basic', unitPriceMinor: 0, lineTotalMinor: 340200 }),
+      item({ position: 2, parentPosition: 1, description: 'Photography', quantity: 8, unitPriceMinor: 12000, lineTotalMinor: 96000 }),
+      item({ position: 3, description: 'Album', unitPriceMinor: 39000, lineTotalMinor: 39000 }),
+    ]);
+    const [, desc, qty, unit, total] = cellTexts(data[0]);
+    expect(desc).toBe('Wedding Basic');
+    expect(qty).toBe('1');
+    expect(unit).toBe('');
+    expect(total).toMatch(/3.402\.00/);
+    // An item inside the package, and a plain line, keep their prices.
+    expect(cellTexts(data[1])[3]).toMatch(/120\.00/);
+    expect(cellTexts(data[2])[3]).toMatch(/390\.00/);
+  });
+
+  it('keep a package line price that was set on the line itself', () => {
+    const { data, cellTexts } = draw([
+      item({ position: 1, description: 'Portrait package', unitPriceMinor: 50000, lineTotalMinor: 50000 }),
+      item({ position: 2, parentPosition: 1, description: 'Editing', unitPriceMinor: 0, lineTotalMinor: 0 }),
+    ]);
+    expect(cellTexts(data[0])[3]).toMatch(/500\.00/);
+  });
+});
+
 describe('fonts', () => {
   it('draws comment rows in the theme italic and data rows in the body font', () => {
     const { data } = draw([item({ detailsText: 'On location' })], {

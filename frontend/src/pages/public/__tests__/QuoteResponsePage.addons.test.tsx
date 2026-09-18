@@ -7,7 +7,7 @@
  * accepted quote's add-ons can still be changed by accepting again; once it
  * has closed the choice is shown read-only.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -179,4 +179,27 @@ it('shows the final choice read-only once the window has closed', async () => {
   expect(screen.queryByRole('button', { name: /^(Book|Remove booking)$/ })).toBeNull();
   expect(screen.queryByLabelText('Your message to us (optional)')).toBeNull();
   expect(totals).not.toHaveBeenCalled();
+});
+
+it('leaves the unit price empty on a package line that is the sum of its items', async () => {
+  get.mockResolvedValue({
+    quote: {
+      ...quote,
+      lineItems: [
+        { ...line(1, 'Wedding Basic', 0), lineTotalMinor: 340200 },
+        line(2, 'Photography', 12000, { parentPosition: 1, quantity: 8, lineTotalMinor: 96000 }),
+        line(3, 'Album', 39000),
+      ],
+    },
+  });
+  renderPage();
+
+  const row = (await screen.findByText('Wedding Basic')).closest('tr') as HTMLElement;
+  const cells = within(row).getAllByRole('cell').map((c) => c.textContent?.trim());
+  // [#, description, quantity, unit price, total]
+  expect(cells[3]).toBe('');
+  expect(cells[4]).toMatch(/3.402\.00/);
+  // A plain line keeps its unit price.
+  const album = screen.getByText('Album').closest('tr') as HTMLElement;
+  expect(within(album).getAllByRole('cell')[3].textContent).toMatch(/390\.00/);
 });
