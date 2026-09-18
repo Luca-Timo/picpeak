@@ -57,7 +57,7 @@ const EXAMPLES = {
     early: { name: 'Beispiel: Frühbucherrabatt', description: 'Gilt für Buchungen bis Ende nächsten Jahres.' },
     intro: {
       name: 'Beispiel: Einleitung Hochzeit',
-      body: 'Liebe/r {{customer_name}}\n\nvielen Dank für Ihre Anfrage für {{event_name}} am {{event_date}}. Gerne unterbreiten wir Ihnen folgendes Angebot.',
+      body: 'Liebe/r {{customer_name}}\n\nvielen Dank für Ihre Anfrage für {{event_name}}. Gerne unterbreiten wir Ihnen folgendes Angebot.',
     },
     closing: {
       name: 'Beispiel: Schluss',
@@ -99,7 +99,7 @@ const EXAMPLES = {
     early: { name: 'Example: Early booking', description: 'For bookings until the end of next year.' },
     intro: {
       name: 'Example: Wedding introduction',
-      body: 'Dear {{customer_name}}\n\nthank you for your enquiry about {{event_name}} on {{event_date}}. We are happy to offer the following.',
+      body: 'Dear {{customer_name}}\n\nthank you for your enquiry about {{event_name}}. We are happy to offer the following.',
     },
     closing: {
       name: 'Example: Closing',
