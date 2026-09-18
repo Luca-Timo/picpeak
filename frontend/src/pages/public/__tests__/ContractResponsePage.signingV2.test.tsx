@@ -188,7 +188,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   window.sessionStorage.clear();
   invite.mockResolvedValue(inviteSummary);
-  requestCode.mockResolvedValue({ maskedEmail: 'an***@ex***.com', ttlMinutes: 10 });
+  requestCode.mockResolvedValue({ maskedEmail: 'an***@ex***.com', ttlMinutes: 15, resendAfterSeconds: 60 });
   verify.mockResolvedValue({ sessionToken: SESSION_TOKEN, expiresAt: '2099-01-01T00:00:00.000Z' });
 });
 

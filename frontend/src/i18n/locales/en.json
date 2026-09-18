@@ -8429,7 +8429,6 @@
         "wrong": "That code isn't right. Check the latest email and enter the six digits again.",
         "expired": "This code has expired or was already used. Send a new code.",
         "locked": "Too many wrong tries for this code. Send a new code.",
-        "rateLimited": "You have asked for several codes in the last hour. Use the latest code from your email, or try again in an hour.",
         "tooManyRequests": "Too many attempts from this connection. Wait a few minutes, then try again.",
         "generic": "Something went wrong. Try again; if it keeps happening, contact the sender."
       }

@@ -428,16 +428,29 @@ async function requestCode(token) {
   const { signer, contract } = await signers.findInvitation(token);
   assertInvitable(contract, signer);
   await ensureContractEmailTemplatesSeeded(db, logger);
-  const { code, ttlMinutes } = await signers.issueOtp(signer.id);
+  const { code, otpId, ttlMinutes, resendAfterSeconds } = await signers.issueOtp(signer.id);
   const email = signerEmail(signer);
-  await emailProcessor.queueEmail(null, email, 'contract_signing_code', {
-    contract_number: contract.contract_number,
-    customer_name: signerName(signer),
-    code,
-    ttl_minutes: ttlMinutes,
-  });
+  // Sent now, not queued — the way the quote and contract verification code
+  // goes out (#1465). A queued code was "sent" as far as the page could
+  // tell even when no mail server would ever deliver it, and the signer
+  // waited for an email that didn't come. A code that fails to send is
+  // removed again and the page says so.
+  try {
+    await emailProcessor.sendTemplateEmail(email, 'contract_signing_code', {
+      contract_number: contract.contract_number,
+      customer_name: signerName(signer),
+      code,
+      ttl_minutes: ttlMinutes,
+    });
+  } catch (err) {
+    await signers.discardOtp(otpId);
+    // No address and no code in the log line.
+    logger.warn('Contract signing code email failed', { contractId: contract.id, signerId: signer.id, err: err.message });
+    throw new AppError('The code could not be sent right now. Please try again later.', 503, 'EMAIL_UNAVAILABLE');
+  }
+  await signers.retireEarlierOtps(signer.id, otpId);
   await signingEvents.appendEvent(db, contract.id, { type: 'code_sent', actorType: 'system', signerId: signer.id });
-  return { maskedEmail: signers.maskEmail(email), ttlMinutes };
+  return { maskedEmail: signers.maskEmail(email), ttlMinutes, resendAfterSeconds };
 }
 
 async function verifyCode(token, code) {

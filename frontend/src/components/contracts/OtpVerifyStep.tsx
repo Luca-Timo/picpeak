@@ -57,6 +57,9 @@ export const OtpVerifyStep: React.FC<OtpVerifyStepProps> = ({
     const errCode = signingErrorCode(err);
     // Handed to the page, which replaces this step: nothing to show here.
     if (errCode && LINK_ERROR_CODES.has(errCode)) return '';
+    // The throttle and a failed send answer exactly as the quote's code
+    // does (#1465), so the shared step words them — and counts down.
+    if (errCode === 'VERIFICATION_RATE_LIMITED' || errCode === 'EMAIL_UNAVAILABLE') return null;
     switch (errCode) {
       case 'OTP_WRONG':
         return t('contractSigning.otp.errors.wrong', 'That code isn\'t right. Check the latest email and enter the six digits again.');
@@ -64,8 +67,6 @@ export const OtpVerifyStep: React.FC<OtpVerifyStepProps> = ({
         return t('contractSigning.otp.errors.expired', 'This code has expired or was already used. Send a new code.');
       case 'OTP_LOCKED':
         return t('contractSigning.otp.errors.locked', 'Too many wrong tries for this code. Send a new code.');
-      case 'OTP_RATE_LIMITED':
-        return t('contractSigning.otp.errors.rateLimited', 'You have asked for several codes in the last hour. Use the latest code from your email, or try again in an hour.');
       default:
         break;
     }
@@ -85,7 +86,7 @@ export const OtpVerifyStep: React.FC<OtpVerifyStepProps> = ({
       isDark={isDark}
       notice={notice}
       requestCode={() => publicContractSigningService.requestCode(token).then(
-        (sent) => ({ sent: true, emailHint: sent.maskedEmail, resendAfterSeconds: 0 }),
+        (sent) => ({ sent: true, emailHint: sent.maskedEmail, resendAfterSeconds: sent.resendAfterSeconds ?? 0 }),
         passLinkProblem,
       )}
       confirmCode={(code) => publicContractSigningService.verify(token, code).catch(passLinkProblem)}

@@ -59,7 +59,16 @@ async function ok(req, status = [200, 201]) {
   return res.body;
 }
 
+// Signing codes go out at once rather than through the queue (the way the
+// #1465 verification code does), so they are captured here.
+const sentCodes = [];
+let failNextCode = false;
+
 async function lastMail(type, to) {
+  if (type === 'contract_signing_code') {
+    const mail = [...sentCodes].reverse().find((m) => m.to === to);
+    return mail ? mail.variables : null;
+  }
   const row = await db('email_queue').where({ email_type: type, recipient_email: to }).orderBy('id', 'desc').first();
   // PostgreSQL hands a json column back already parsed; SQLite hands text.
   if (!row) return null;
@@ -84,8 +93,22 @@ async function newContract() {
   return contract.id;
 }
 
+// A signer waits a minute between codes. The suite moves faster than that,
+// so it moves the earlier codes back — only the gap, never the hourly cap.
+async function minuteLater() {
+  const rows = await db('contract_signing_otps').select('id', 'created_at');
+  for (const row of rows) {
+    const at = new Date(row.created_at).getTime();
+    if (Number.isFinite(at)) {
+      await db('contract_signing_otps').where({ id: row.id })
+        .update({ created_at: new Date(at - 61 * 1000).toISOString() });
+    }
+  }
+}
+
 /** Link → code → session, the way a signer gets in. */
 async function verifiedSession(linkTok, email) {
+  await minuteLater();
   await ok(asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${linkTok}/code`)));
   const { code } = await lastMail('contract_signing_code', email);
   const verified = await ok(asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${linkTok}/verify`)).send({ code }));
@@ -94,6 +117,16 @@ async function verifiedSession(linkTok, email) {
 
 beforeAll(async () => {
   ({ db, cleanup, tmpDir } = await bootCrmDb());
+  const emailProcessor = require('../../src/services/emailProcessor');
+  jest.spyOn(emailProcessor, 'sendTemplateEmail').mockImplementation(async (to, templateKey, variables) => {
+    if (templateKey !== 'contract_signing_code') throw new Error(`unexpected immediate email ${templateKey}`);
+    if (failNextCode) {
+      failNextCode = false;
+      throw new Error('Email service not configured');
+    }
+    sentCodes.push({ to, variables });
+    return { success: true };
+  });
   process.chdir(tmpDir);
   db.client.pool.acquireTimeoutMillis = 2000;
   ({ adminId, customerId } = await seedMinimal(db));
@@ -399,23 +432,38 @@ test('parallel wrong codes are still capped at five tries', async () => {
   expect(late.status).toBe(410);
 });
 
-test('a code expires, and only five an hour are sent', async () => {
-  // The expiry and the hourly cap are read back from the row, so this also
-  // pins that the timestamps are stored in a shape SQLite reads back (a bare
-  // Date lands as "[object Object]", and an unreadable expiry used to count
-  // as valid forever).
+test('a code expires, a minute passes between codes, and only five an hour are sent', async () => {
+  // The same numbers as the #1465 verification code: 15 minutes, a minute
+  // between codes, five an hour. The expiry and the throttle are read back
+  // from the row, so this also pins that the timestamps are stored in a
+  // shape SQLite reads back (a bare Date lands as "[object Object]", and an
+  // unreadable expiry used to count as valid forever).
   const id = await newContract();
   await ok(request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth));
   const link = linkToken(await lastMail('contract_sent', customerEmail));
   const signer = await db('contract_signers').where({ contract_id: id, role: 'customer' }).first();
+  const codeUrl = `/api/public/contract-signing/invite/${link}/code`;
 
-  await ok(asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/code`)));
-  const { code } = await lastMail('contract_signing_code', customerEmail);
+  const sent = await ok(asSigner(request(signingApp).post(codeUrl)));
+  expect(sent).toEqual(expect.objectContaining({ ttlMinutes: 15, resendAfterSeconds: 60 }));
+  const { code, ttl_minutes: ttlMinutes } = await lastMail('contract_signing_code', customerEmail);
+  expect(ttlMinutes).toBe(15);
   const row = await db('contract_signing_otps').where({ signer_id: signer.id }).orderBy('id', 'desc').first();
   // Whatever the engine hands back — a string on SQLite, a Date on Postgres —
-  // it has to be a time this process can read. The bug was a value that
-  // wasn't: "[object Object]", which parses as NaN and never expires.
-  expect(Number.isFinite(new Date(row.expires_at).getTime())).toBe(true);
+  // it has to be a time this process can read.
+  const expiresIn = new Date(row.expires_at).getTime() - Date.now();
+  expect(expiresIn).toBeGreaterThan(14 * 60 * 1000);
+  expect(expiresIn).toBeLessThanOrEqual(15 * 60 * 1000);
+
+  // A second code inside the minute is refused, with how long to wait, in
+  // the shape the shared verification step counts down from.
+  const tooSoon = await asSigner(request(signingApp).post(codeUrl));
+  expect(tooSoon.status).toBe(429);
+  expect(tooSoon.body).toEqual(expect.objectContaining({ code: 'VERIFICATION_RATE_LIMITED' }));
+  expect(tooSoon.body.retryAfterSeconds).toBeGreaterThan(0);
+  expect(tooSoon.body.retryAfterSeconds).toBeLessThanOrEqual(60);
+  expect(tooSoon.headers['retry-after']).toBe(String(tooSoon.body.retryAfterSeconds));
+
   await db('contract_signing_otps').where({ id: row.id })
     .update({ expires_at: new Date(Date.now() - 60 * 1000).toISOString() });
   const expired = await asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/verify`)).send({ code });
@@ -424,11 +472,60 @@ test('a code expires, and only five an hour are sent', async () => {
 
   // Five codes an hour, counting the one above.
   for (let i = 0; i < 4; i += 1) {
-    await ok(asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/code`)));
+    await minuteLater();
+    await ok(asSigner(request(signingApp).post(codeUrl)));
   }
-  const capped = await asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/code`));
+  await minuteLater();
+  const capped = await asSigner(request(signingApp).post(codeUrl));
   expect(capped.status).toBe(429);
-  expect(capped.body.code).toBe('OTP_RATE_LIMITED');
+  expect(capped.body.code).toBe('VERIFICATION_RATE_LIMITED');
+  // Until the oldest of the five is an hour old — minutes, not a minute.
+  expect(capped.body.retryAfterSeconds).toBeGreaterThan(60);
+});
+
+test('a code whose email fails is not a code: the page says so, and the earlier one still works', async () => {
+  // Sent at once, the way #1465 sends its code. Queued, a code was "sent"
+  // as far as the page could tell even when no mail server would deliver
+  // it, and the signer waited for an email that never came.
+  const id = await newContract();
+  await ok(request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth));
+  const link = linkToken(await lastMail('contract_sent', customerEmail));
+  const signer = await db('contract_signers').where({ contract_id: id, role: 'customer' }).first();
+  const codeUrl = `/api/public/contract-signing/invite/${link}/code`;
+
+  await ok(asSigner(request(signingApp).post(codeUrl)));
+  const { code: first } = await lastMail('contract_signing_code', customerEmail);
+  const before = await db('contract_signing_otps').where({ signer_id: signer.id });
+
+  await minuteLater();
+  failNextCode = true;
+  const failed = await asSigner(request(signingApp).post(codeUrl));
+  expect(failed.status).toBe(503);
+  expect(failed.body.code).toBe('EMAIL_UNAVAILABLE');
+  // No row for the code nobody received, and it didn't retire the one that
+  // did arrive — nor count against the throttle.
+  expect(await db('contract_signing_otps').where({ signer_id: signer.id })).toHaveLength(before.length);
+  const verified = await ok(asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/verify`)).send({ code: first }));
+  expect(verified.sessionToken).toEqual(expect.any(String));
+});
+
+test('a new code retires the earlier one only once it has gone out', async () => {
+  const id = await newContract();
+  await ok(request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth));
+  const link = linkToken(await lastMail('contract_sent', customerEmail));
+  const codeUrl = `/api/public/contract-signing/invite/${link}/code`;
+
+  await ok(asSigner(request(signingApp).post(codeUrl)));
+  const { code: first } = await lastMail('contract_signing_code', customerEmail);
+  await minuteLater();
+  await ok(asSigner(request(signingApp).post(codeUrl)));
+  const { code: second } = await lastMail('contract_signing_code', customerEmail);
+
+  if (first !== second) {
+    const stale = await asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/verify`)).send({ code: first });
+    expect(stale.status).not.toBe(200);
+  }
+  await ok(asSigner(request(signingApp).post(`/api/public/contract-signing/invite/${link}/verify`)).send({ code: second }));
 });
 
 test('a resend can\'t reopen a signer who already answered, and drops their session', async () => {

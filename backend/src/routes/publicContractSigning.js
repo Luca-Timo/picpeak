@@ -63,7 +63,17 @@ router.get('/invite/:token', viewLimiter, [tokenParam], handleAsync(async (req, 
 
 router.post('/invite/:token/code', codeLimiter, [tokenParam], handleAsync(async (req, res) => {
   validateRequest(req);
-  return successResponse(res, await signingV2.requestCode(req.params.token));
+  try {
+    return successResponse(res, await signingV2.requestCode(req.params.token));
+  } catch (err) {
+    // The same answer as the quote/contract verification route (#1465), so
+    // the shared step can count down to the next code.
+    if (err.code === 'VERIFICATION_RATE_LIMITED') {
+      res.set('Retry-After', String(err.retryAfterSeconds));
+      return res.status(429).json({ error: err.message, code: err.code, retryAfterSeconds: err.retryAfterSeconds });
+    }
+    throw err;
+  }
 }));
 
 router.post(

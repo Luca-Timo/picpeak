@@ -85,7 +85,7 @@ export const publicContractSigningService = {
   },
 
   /** The email goes out through the queue and can take up to a minute. */
-  async requestCode(token: string): Promise<{ maskedEmail: string; ttlMinutes: number }> {
+  async requestCode(token: string): Promise<{ maskedEmail: string; ttlMinutes: number; resendAfterSeconds: number }> {
     const { data } = await api.post(`${BASE}/invite/${token}/code`);
     return data.data || data;
   },

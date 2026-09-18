@@ -60,7 +60,7 @@ const httpError = (status: number, data: Record<string, unknown>) => Object.assi
 
 beforeEach(() => {
   vi.clearAllMocks();
-  requestCode.mockResolvedValue({ maskedEmail: 'an***@ex***.com', ttlMinutes: 10 });
+  requestCode.mockResolvedValue({ maskedEmail: 'an***@ex***.com', ttlMinutes: 15, resendAfterSeconds: 0 });
 });
 
 it('sends a code, says when it is wrong, and hands the session on once it is right', async () => {
@@ -97,7 +97,7 @@ it('sends a code, says when it is wrong, and hands the session on once it is rig
   expect(verify).toHaveBeenLastCalledWith(TOKEN, '654321');
 });
 
-it('explains an expired code, a locked code and too many code requests', async () => {
+it('explains an expired code, a locked code and a code asked for too soon', async () => {
   const user = userEvent.setup();
   verify
     .mockRejectedValueOnce(httpError(410, { code: 'OTP_EXPIRED' }))
@@ -113,9 +113,28 @@ it('explains an expired code, a locked code and too many code requests', async (
   await user.click(screen.getByRole('button', { name: 'Confirm' }));
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Too many wrong tries for this code. Send a new code.'));
 
-  requestCode.mockRejectedValueOnce(httpError(429, { code: 'OTP_RATE_LIMITED' }));
+  // The throttle answers as the quote's code does, and the shared step
+  // counts down rather than showing a message of this flow's own.
+  requestCode.mockRejectedValueOnce(httpError(429, { code: 'VERIFICATION_RATE_LIMITED', retryAfterSeconds: 42 }));
   await user.click(screen.getByRole('button', { name: 'Send a new code' }));
-  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('You have asked for several codes in the last hour.'));
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Please wait 42 seconds before requesting another code.'));
+  expect(screen.getByRole('button', { name: 'Send a new code in 42 s' })).toBeDisabled();
+});
+
+it('says so when the code could not be sent, and counts down after one that was', async () => {
+  const user = userEvent.setup();
+  requestCode
+    .mockRejectedValueOnce(httpError(503, { code: 'EMAIL_UNAVAILABLE' }))
+    .mockResolvedValueOnce({ maskedEmail: 'an***@ex***.com', ttlMinutes: 15, resendAfterSeconds: 60 });
+  render(<OtpVerifyStep token={TOKEN} maskedEmail="an***@ex***.com" issuer={ISSUER} isDark={false} onVerified={vi.fn()} />);
+
+  await user.click(screen.getByRole('button', { name: 'Send code' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('The code could not be sent right now.');
+  expect(screen.queryByLabelText('6-digit code')).toBeNull();
+
+  await user.click(screen.getByRole('button', { name: 'Send code' }));
+  expect(await screen.findByLabelText('6-digit code')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Send a new code in 60 s' })).toBeDisabled();
 });
 
 it('hands a withdrawn or replaced link to the page instead of showing a code error', async () => {

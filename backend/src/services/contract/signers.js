@@ -21,8 +21,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const { db } = require('../../database/db');
 const { AppError } = require('../../utils/errors');
-const { getAppSetting } = require('../../utils/appSettings');
-const { ensureInt } = require('../../utils/numericHelpers');
+const { toMillis } = require('../../utils/queueTimestamps');
 const fieldEncryption = require('../../utils/fieldEncryption');
 const { auditedUpdate } = require('../accountingHistory');
 const { maskEmail } = require('../../utils/maskEmail');
@@ -31,7 +30,11 @@ const MAX_CUSTOMER_SIGNERS = 5;
 const ORDERS = ['parallel', 'sequential'];
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_PER_HOUR = 5;
-const OTP_DEFAULT_TTL_MINUTES = 10;
+// The same numbers as the quote and contract verification code (#1465,
+// publicDocumentVerificationService), so a customer meets one set of rules:
+// valid for 15 minutes, a minute between codes, five an hour.
+const OTP_TTL_MINUTES = 15;
+const OTP_RESEND_INTERVAL_MS = 60 * 1000;
 const SESSION_TTL_MS = 60 * 60 * 1000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const TOKEN_RE = /^[a-f0-9]{64}$/i;
@@ -100,7 +103,7 @@ const stamp = (date = new Date()) => date.toISOString();
 // A value that isn't a date at all counts as past, so a row written in a
 // shape this process can't read is expired rather than valid forever.
 const isPast = (value) => {
-  const time = require('../../utils/queueTimestamps').toMillis(value);
+  const time = toMillis(value);
   return time == null || time <= Date.now();
 };
 
@@ -261,17 +264,18 @@ async function findInvitation(token) {
 // Email codes
 // ---------------------------------------------------------------------
 
-async function otpTtlMinutes() {
-  const value = ensureInt(await getAppSetting('crm_contracts_signing_otp_ttl_minutes'));
-  return value && value >= 2 && value <= 60 ? value : OTP_DEFAULT_TTL_MINUTES;
-}
-
-/** A new code for the signer; earlier unused codes stop working. */
-
+/**
+ * Reserve a new code for the signer, or refuse with how long to wait.
+ *
+ * Reserve, send, then retire — the order publicDocumentVerificationService
+ * uses: the row is written before the email so a burst can't all pass the
+ * throttle, the caller deletes it again with `discardOtp` if the email
+ * fails (no live code nobody received, and a failed send doesn't count
+ * against the cap), and only after a successful send do earlier codes stop
+ * working (`retireEarlierOtps`).
+ */
 async function issueOtp(signerId) {
-  const hourAgo = Date.now() - 60 * 60 * 1000;
   const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
-  const ttl = await otpTtlMinutes();
   const now = new Date();
   const codeHash = await bcrypt.hash(code, 10);
   // Count and insert inside one transaction, with the SIGNER's row locked
@@ -279,33 +283,62 @@ async function issueOtp(signerId) {
   // are none yet, and Postgres doesn't re-scan for rows a parallel request
   // inserted meanwhile — so the first few requests could all pass the cap.
   // The hourly cap is also what stops a held link mail-bombing the signer.
-  await db.transaction(async (trx) => {
+  const otpId = await db.transaction(async (trx) => {
     const signer = await trx('contract_signers').where({ id: signerId }).forUpdate().first('id');
     if (!signer) throw new AppError('Signing link not found', 404, 'SIGNING_LINK_INVALID');
     const latest = await trx('contract_signing_otps')
       .where({ signer_id: signerId })
       .orderBy('id', 'desc')
       .limit(OTP_PER_HOUR);
-    // A timestamp that can't be read counts towards the cap rather than
-    // against it: an unreadable row must not buy another code.
-    const recent = latest.filter((row) => {
-      const at = require('../../utils/queueTimestamps').toMillis(row.created_at);
-      return at == null || at > hourAgo;
-    }).length;
-    if (recent >= OTP_PER_HOUR) {
-      throw new AppError('Too many codes requested. Try again in an hour.', 429, 'OTP_RATE_LIMITED');
+    // A timestamp that can't be read counts as just now rather than as long
+    // ago: an unreadable row must not buy another code.
+    const sentAt = latest.map((row) => toMillis(row.created_at) ?? now.getTime());
+    const retryAfterSeconds = secondsUntilNextCode(sentAt, now.getTime());
+    if (retryAfterSeconds > 0) {
+      throw Object.assign(
+        new AppError('A code was sent recently. Please wait before requesting another one.', 429, 'VERIFICATION_RATE_LIMITED'),
+        { retryAfterSeconds },
+      );
     }
-    await trx('contract_signing_otps').where({ signer_id: signerId }).whereNull('consumed_at')
-      .update({ consumed_at: stamp(now) });
-    await trx('contract_signing_otps').insert({
+    const [inserted] = await trx('contract_signing_otps').insert({
       signer_id: signerId,
       code_hash: codeHash,
-      expires_at: stamp(new Date(now.getTime() + ttl * 60 * 1000)),
+      expires_at: stamp(new Date(now.getTime() + OTP_TTL_MINUTES * 60 * 1000)),
       attempts: 0,
       created_at: stamp(now),
-    });
+    }).returning('id');
+    return typeof inserted === 'object' ? inserted.id : inserted;
   });
-  return { code, ttlMinutes: ttl };
+  return { code, otpId, ttlMinutes: OTP_TTL_MINUTES, resendAfterSeconds: OTP_RESEND_INTERVAL_MS / 1000 };
+}
+
+/** Seconds until the next code may go out: a minute between codes, five an hour. */
+function secondsUntilNextCode(sentAt, now) {
+  if (!sentAt.length) return 0;
+  const latest = Math.max(...sentAt);
+  if (now - latest < OTP_RESEND_INTERVAL_MS) return Math.ceil((latest + OTP_RESEND_INTERVAL_MS - now) / 1000);
+  const hour = 60 * 60 * 1000;
+  const inWindow = sentAt.filter((at) => now - at < hour);
+  if (inWindow.length >= OTP_PER_HOUR) return Math.ceil((Math.min(...inWindow) + hour - now) / 1000);
+  return 0;
+}
+
+/** The email for a reserved code failed: the code never existed. */
+async function discardOtp(otpId) {
+  await db('contract_signing_otps').where({ id: otpId }).del();
+}
+
+/**
+ * The code went out: earlier unused codes stop working. Only codes reserved
+ * before this one, so a slow send can't retire a newer code that went out
+ * in the meantime.
+ */
+async function retireEarlierOtps(signerId, otpId) {
+  await db('contract_signing_otps')
+    .where({ signer_id: signerId })
+    .where('id', '<', otpId)
+    .whereNull('consumed_at')
+    .update({ consumed_at: stamp() });
 }
 
 /** Check a code. Single use; five wrong tries use it up. */
@@ -396,6 +429,8 @@ module.exports = {
   revokeAccess,
   findInvitation,
   issueOtp,
+  discardOtp,
+  retireEarlierOtps,
   verifyOtp,
   createSession,
   findSession,

@@ -8430,7 +8430,6 @@
         "wrong": "Dieser Code ist nicht korrekt. Prüfen Sie die neueste E-Mail und geben Sie die sechs Ziffern erneut ein.",
         "expired": "Dieser Code ist abgelaufen oder wurde bereits verwendet. Fordern Sie einen neuen Code an.",
         "locked": "Zu viele falsche Versuche für diesen Code. Fordern Sie einen neuen Code an.",
-        "rateLimited": "Sie haben in der letzten Stunde mehrere Codes angefordert. Verwenden Sie den neuesten Code aus Ihrer E-Mail, oder versuchen Sie es in einer Stunde erneut.",
         "tooManyRequests": "Zu viele Versuche von dieser Verbindung. Warten Sie einige Minuten und versuchen Sie es dann erneut.",
         "generic": "Etwas ist schiefgelaufen. Versuchen Sie es erneut; falls es weiterhin auftritt, wenden Sie sich an den Absender."
       }
