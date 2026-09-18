@@ -2,17 +2,20 @@
  * Customer-side Contracts list. Read-only view of every contract the
  * photographer has sent. Mirrors CustomerQuotesPage in shape:
  *   - status filter + sort
- *   - "Open & sign" link on signable rows, to the portal signing page (the
- *     portal never handles the emailed signing token)
+ *   - "Sign" on signable rows: asks the server for signing access — a signing
+ *     session for a signatures-v2 contract (opens /contract/signing, no code
+ *     needed), or the portal's own signing page for a contract sent before.
+ *     Either way the emailed signing token never reaches the browser.
  *   - "Download PDF" on any non-cancelled row — prefers the signed PDF
  *     when present, otherwise the system-rendered copy
  */
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ScrollText, PenLine, Download } from 'lucide-react';
 import { customerService, type CustomerContract } from '../../services/customer.service';
+import { PORTAL_SIGNING_SCOPE, signingSessionStore } from '../../services/publicContractSigning.service';
 import { Card, Loading } from '../../components/common';
 import { toast } from 'react-toastify';
 
@@ -25,6 +28,7 @@ type StatusFilter =
   | 'signed_by_customer'
   | 'signed_by_admin'
   | 'fully_signed'
+  | 'declined'
   | 'cancelled';
 
 const STATUS_OPTIONS: { value: StatusFilter; key: string; fallback: string }[] = [
@@ -33,6 +37,7 @@ const STATUS_OPTIONS: { value: StatusFilter; key: string; fallback: string }[] =
   { value: 'signed_by_customer',  key: 'contracts.status.signed_by_customer',   fallback: 'Signed by customer' },
   { value: 'signed_by_admin',     key: 'contracts.status.signed_by_admin',      fallback: 'Counter-signed' },
   { value: 'fully_signed',        key: 'contracts.status.fully_signed',         fallback: 'Fully signed' },
+  { value: 'declined',            key: 'contracts.status.declined',             fallback: 'Declined' },
   { value: 'cancelled',           key: 'contracts.status.cancelled',            fallback: 'Cancelled' },
 ];
 
@@ -154,6 +159,33 @@ export const CustomerContractsPage: React.FC = () => {
 
 const ContractRow: React.FC<{ c: CustomerContract }> = ({ c }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [opening, setOpening] = useState(false);
+
+  async function handleSign() {
+    setOpening(true);
+    try {
+      const access = await customerService.contractSigningAccess(c.id);
+      if (access.mode === 'session') {
+        signingSessionStore.write(PORTAL_SIGNING_SCOPE, {
+          sessionToken: access.sessionToken,
+          expiresAt: access.expiresAt,
+        });
+        navigate('/contract/signing');
+      } else {
+        // Sent before signatures v2: the portal signs it with the session.
+        navigate(`/customer/contracts/${c.id}/sign`);
+      }
+    } catch (err: any) {
+      const code = err?.response?.data?.code;
+      toast.error(code === 'SIGNER_NOT_FOUND'
+        ? t('customer.contracts.notSigner', 'You\'re not listed as a signer of this contract. Use the link in the signing email instead.') as string
+        : code === 'CONTRACT_NOT_SIGNABLE'
+          ? t('customer.contracts.notSignable', 'This contract is no longer waiting for your signature. Reload the page to see its current status.') as string
+          : t('customer.contracts.signError', 'The contract couldn\'t be opened for signing. Try again in a moment.') as string);
+      setOpening(false);
+    }
+  }
 
   async function handleDownload() {
     // Sync-open BEFORE await so the popup-blocker accepts the gesture
@@ -177,6 +209,7 @@ const ContractRow: React.FC<{ c: CustomerContract }> = ({ c }) => {
     c.status === 'fully_signed' ? 'bg-green-100 text-green-800'
       : c.status === 'signed_by_customer' || c.status === 'signed_by_admin' ? 'bg-blue-100 text-blue-800'
       : c.status === 'sent' ? 'bg-amber-100 text-amber-800'
+      : c.status === 'declined' ? 'bg-red-100 text-red-800'
       : c.status === 'cancelled' ? 'bg-neutral-200 text-neutral-600'
       : 'bg-neutral-100 text-neutral-700';
 
@@ -207,16 +240,25 @@ const ContractRow: React.FC<{ c: CustomerContract }> = ({ c }) => {
             </>
           )}
         </p>
+        {c.status === 'declined' && (
+          <p className="text-xs text-muted-theme mt-0.5">
+            {t('customer.contracts.declinedHint', 'This contract was declined and can no longer be signed.')}
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-2">
         {c.canSign && (
-          <Link
-            to={`/customer/contracts/${c.id}/sign`}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-sm bg-accent-dark text-white hover:opacity-90"
+          <button
+            type="button"
+            onClick={handleSign}
+            disabled={opening}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-sm bg-accent-dark text-white hover:opacity-90 disabled:opacity-50"
           >
             <PenLine className="w-4 h-4" />
-            {t('customer.contracts.openSign', 'Open & sign')}
-          </Link>
+            {opening
+              ? t('customer.contracts.opening', 'Opening…')
+              : t('customer.contracts.sign', 'Sign')}
+          </button>
         )}
         {(c.hasPdf || c.hasSignedPdf) && (
           <button

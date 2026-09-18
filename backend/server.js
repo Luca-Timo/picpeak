@@ -884,9 +884,19 @@ app.use('/api/customer', noStoreCache, require('./src/routes/customer'));
 // permission rather than a CRM-specific one. The public endpoints
 // host the customer-side accept/decline / sign / payment-check pages.
 app.use('/api/admin/business-profile', require('./src/routes/adminBusinessProfile'));
+// PDF theme for quotes, invoices and contracts (#1445) — same settings
+// permissions as the business profile's PDF settings.
+app.use('/api/admin/pdf-themes', require('./src/routes/adminPdfThemes'));
 app.use('/api/admin/quotes',     require('./src/routes/adminQuotes'));
+// Quote catalogue + templates (#1451). Own prefix so its collection paths
+// never collide with /api/admin/quotes/:id.
+app.use('/api/admin/quote-catalog', require('./src/routes/adminQuoteCatalog'));
 app.use('/api/admin/invoices',   require('./src/routes/adminInvoices'));
 app.use('/api/admin/contracts',  require('./src/routes/adminContracts'));
+// Contract templates (#1445) — own prefix, behind the contracts flag.
+app.use('/api/admin/contract-templates', require('./src/routes/adminContractTemplates'));
+// The attachment library for contract templates and contracts (#1445).
+app.use('/api/admin/document-attachments', require('./src/routes/adminDocumentAttachments'));
 app.use('/api/admin/projects',   require('./src/routes/adminProjects'));
 app.use('/api/admin/calendar',   require('./src/routes/adminCalendar'));
 app.use('/api/admin/deals',      require('./src/routes/adminDeals'));
@@ -904,6 +914,8 @@ app.use('/api/admin/transfers',  require('./src/routes/adminTransfers'));
 app.use('/api/admin/newsletters', require('./src/routes/adminNewsletters'));
 app.use('/api/public/quotes',  require('./src/routes/publicQuotes'));
 app.use('/api/public/contracts', require('./src/routes/publicContracts'));
+// Signing with a link per signer and an emailed code (#1446).
+app.use('/api/public/contract-signing', require('./src/routes/publicContractSigning'));
 // PicTransfer (#997): recipient download + client upload, token-authenticated.
 app.use('/api/public/transfer', require('./src/routes/publicTransfer'));
 app.use('/api/public/transfer-upload', require('./src/routes/publicTransferUpload'));
@@ -1142,6 +1154,9 @@ async function startServer() {
     // PicTransfer retention sweep (#997): expire links, notify admins, and
     // hard-delete client uploads once the grace window elapses.
     startTransferCleanup();
+    // Customer documents retention (#1444): delete long-rejected files and
+    // remove the bytes of deleted ones once the retention window elapses.
+    require('./src/services/customerDocumentRetentionService').startCustomerDocumentRetention();
     // Custom-resolution download archives (#858) are disposable renditions —
     // sweep them once their TTL passes so .download-cache doesn't grow forever.
     // Best-effort, as before the scheduler refactor: a transient DB error on

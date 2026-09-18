@@ -9,7 +9,10 @@
  *
  * Only the issuer's branding is known at this point, so that is all the step
  * shows. The data calls come in as props so the step stays independent of the
- * document type.
+ * document type — including the multi-signer contract flow (#1446), whose code
+ * opens a signing session rather than an access grant and whose errors carry
+ * their own codes (see components/contracts/OtpVerifyStep). One gate, so a
+ * customer sees the same "confirm it's you" screen on every document.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,16 +25,29 @@ export interface DocumentVerificationIssuer {
   logoUrlDark?: string | null;
 }
 
-interface DocumentVerificationStepProps {
+interface DocumentVerificationStepProps<Result> {
   issuer: DocumentVerificationIssuer | null;
-  /** Masked recipient address from the server, e.g. `k***@example.com`. */
+  /** Masked recipient address from the server, e.g. `ku***@ex***.com`. */
   emailHint: string | null;
   isDark: boolean;
   /** Shown above the explanation, e.g. when the grant ran out mid-visit. */
   notice?: string | null;
   requestCode: () => Promise<DocumentVerificationSent>;
-  confirmCode: (code: string) => Promise<DocumentAccessGrant>;
-  onVerified: (access: DocumentAccessGrant) => void;
+  confirmCode: (code: string) => Promise<Result>;
+  onVerified: (result: Result) => void;
+  /**
+   * Message for an error this step doesn't know, consulted before its own
+   * mapping; return null to fall through to it, or an empty string when the
+   * caller has dealt with the error itself and nothing should show here. For
+   * flows with their own error codes.
+   */
+  describeError?: (err: unknown) => string | null;
+  /**
+   * Optional line above the heading, e.g. the document number. Off unless a
+   * caller passes it: before the code is confirmed the step shows nothing
+   * about the document by default.
+   */
+  documentLabel?: React.ReactNode;
 }
 
 interface VerificationErrorBody {
@@ -43,9 +59,9 @@ interface VerificationErrorBody {
 const errorBody = (err: unknown): VerificationErrorBody =>
   (err as { response?: { data?: VerificationErrorBody } } | null)?.response?.data || {};
 
-export const DocumentVerificationStep: React.FC<DocumentVerificationStepProps> = ({
-  issuer, emailHint, isDark, notice, requestCode, confirmCode, onVerified,
-}) => {
+export function DocumentVerificationStep<Result = DocumentAccessGrant>({
+  issuer, emailHint, isDark, notice, requestCode, confirmCode, onVerified, describeError, documentLabel,
+}: DocumentVerificationStepProps<Result>) {
   const { t } = useTranslation();
   const [sent, setSent] = useState(false);
   const [hint, setHint] = useState<string | null>(emailHint);
@@ -85,6 +101,11 @@ export const DocumentVerificationStep: React.FC<DocumentVerificationStepProps> =
       if (sent) codeInputRef.current?.focus();
       setSent(true);
     } catch (err) {
+      const own = describeError?.(err);
+      if (own != null) {
+        setError(own || null);
+        return;
+      }
       const body = errorBody(err);
       switch (body.code) {
         case 'VERIFICATION_RATE_LIMITED': {
@@ -123,9 +144,15 @@ export const DocumentVerificationStep: React.FC<DocumentVerificationStepProps> =
     setBusy(true);
     setError(null);
     try {
-      const access = await confirmCode(normalized);
-      onVerified(access);
+      const result = await confirmCode(normalized);
+      onVerified(result);
     } catch (err) {
+      const own = describeError?.(err);
+      if (own != null) {
+        setError(own || null);
+        codeInputRef.current?.focus();
+        return;
+      }
       const body = errorBody(err);
       switch (body.code) {
         case 'VERIFICATION_CODE_INVALID':
@@ -176,6 +203,11 @@ export const DocumentVerificationStep: React.FC<DocumentVerificationStepProps> =
         </div>
 
         <div className="bg-white dark:bg-neutral-800 rounded-xl shadow-sm border border-neutral-200 dark:border-neutral-700 p-6">
+          {documentLabel && (
+            <p className="text-xs font-mono inline-block mb-3 px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300">
+              {documentLabel}
+            </p>
+          )}
           <div className="flex items-center gap-2 mb-3">
             <ShieldCheck className="w-5 h-5" />
             <h1 className="text-lg font-semibold">{t('documentVerification.title', "Confirm it's you")}</h1>
@@ -253,4 +285,4 @@ export const DocumentVerificationStep: React.FC<DocumentVerificationStepProps> =
       </div>
     </div>
   );
-};
+}

@@ -50,7 +50,7 @@ const AUDITED_TABLES = {
       'salutation', 'first_name', 'last_name', 'display_name', 'company_name', 'email',
       'billing_email', 'vat_id', 'address_line1', 'address_line2', 'postal_code', 'city',
       'state', 'country_code', 'country_name', 'preferred_language', 'billing_cadence',
-      'billing_cycle_day', 'hourly_rate_minor', 'skonto_disabled', 'rebill_attach_proof',
+      'billing_cycle_day', 'hourly_rate_minor', 'day_rate_minor', 'skonto_disabled', 'rebill_attach_proof',
     ],
   },
   customer_hour_entries: { entity: 'hour_entry', document: (row) => ['customer', row.customer_account_id] },
@@ -58,8 +58,17 @@ const AUDITED_TABLES = {
 
 // Bookkeeping columns: a change to only these is not a change to the record.
 // raw_parsed is the parser's full output for an incoming invoice.
+// Bookkeeping and derived columns:
+//   audit_chain_head moves with every entry in a contract's own signing event
+//     log (#1446), which is itself the append-only record of those events;
+//   rendered_content is the contract's whole frozen text (#1445), copied in
+//     full on both sides of every change that touches it. Its sha256 IS
+//     recorded and changes with it, so the history still shows that the
+//     frozen text changed, and the text itself lives on the contract and in
+//     the stored PDF.
 const IGNORED_COLUMNS = new Set([
   'updated_at', 'raw_parsed', 'create_idempotency_key', 'workflow_response_emitted_at',
+  'audit_chain_head', 'rendered_content',
 ]);
 // Never copy anything shaped like a credential into the history.
 const SECRET_COLUMN = /token|secret|password/i;

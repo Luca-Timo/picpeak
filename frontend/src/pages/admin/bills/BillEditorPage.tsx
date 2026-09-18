@@ -17,7 +17,10 @@ import { CustomerPicker } from '../../../components/admin/CustomerPicker';
 import { VatRateSelect } from '../../../components/admin/VatRateSelect';
 import { accountingService } from '../../../services/accounting.service';
 import { vatCodesService } from '../../../services/vatCodes.service';
-import { LineItemsTable, type EditableLineItem } from '../../../components/admin/LineItemsTable';
+import {
+  LineItemsTable, toEditableLineItem, toPayloadLineItem, type EditableLineItem,
+} from '../../../components/admin/LineItemsTable';
+import { countedLines } from '../../../utils/lineItemTotals';
 import { InstallmentsPanel } from '../../../components/admin/InstallmentsPanel';
 import { customerAdminService } from '../../../services/customerAdmin.service';
 import { userManagementService } from '../../../services/userManagement.service';
@@ -156,16 +159,7 @@ export const BillEditorPage: React.FC = () => {
       setEventDate(inv.eventDate || '');
       setEventTimeStart(inv.eventTimeStart || '');
       setEventTimeEnd(inv.eventTimeEnd || '');
-      setLineItems(existing.lineItems.map((li) => ({
-        id: li.id,
-        position: li.position,
-        quantity: Number(li.quantity),
-        description: li.description,
-        unitPrice: Number(li.unitPriceMinor || 0) / 100,
-        discountPercent: Number(li.discountPercent || 0),
-        parentPosition: li.parentPosition ?? null,
-        detailsText: li.detailsText || '',
-      })));
+      setLineItems(existing.lineItems.map(toEditableLineItem));
     }
   }, [existing]);
 
@@ -312,15 +306,9 @@ export const BillEditorPage: React.FC = () => {
           // shape. ids drop (this is a brand-new invoice; line items
           // get fresh ids on save) but position + parent linkage are
           // preserved so the hierarchy carries through.
-          setLineItems((quoteLineItems || []).map((li: any) => ({
-            position: li.position,
-            quantity: Number(li.quantity),
-            description: li.description,
-            unitPrice: Number(li.unitPriceMinor || 0) / 100,
-            discountPercent: Number(li.discountPercent || 0),
-            parentPosition: li.parentPosition ?? null,
-            detailsText: li.detailsText || '',
-          })));
+          // Unselected optional add-ons were never part of the deal (#1451);
+          // discount lines and units carry over as they are.
+          setLineItems(countedLines(quoteLineItems || []).map((li) => ({ ...toEditableLineItem(li), id: undefined })));
         }
       } catch {
         // Silent fail — admin can still author the invoice manually.
@@ -400,7 +388,9 @@ export const BillEditorPage: React.FC = () => {
     vatRate,
     vatCode,
     shippingAmountMinor: toMinor(shipping),
-    ccPdfEmail: ccPdfEmail || undefined,
+    // A cleared field is sent as null so the save clears it (see the event
+    // snapshot below).
+    ccPdfEmail: ccPdfEmail || null,
     // Payment-term template id (migration 113). null = no template
     // selected; backend falls back to source-quote snapshot or the
     // global crm_invoices_* defaults.
@@ -425,25 +415,17 @@ export const BillEditorPage: React.FC = () => {
     // spawns N invoices via spawnInstallmentInvoices and returns
     // { invoiceIds: [...] }; single-row or null → single invoice.
     installments: installments || undefined,
-    // Inline event snapshot (migration 123). Empty string → undefined
-    // so the backend can distinguish "not provided" from a deliberate
-    // clear (which the route's `optional({ values: 'falsy' })` already
-    // treats identically — falsy values bypass validation entirely).
+    // Inline event snapshot (migration 123). A cleared field is sent as
+    // null so the save clears it: undefined drops the key from the request,
+    // and the PUT handler kept the old value. The route's
+    // `optional({ values: 'falsy' })` lets null through unvalidated.
     eventId: eventId ?? undefined,
-    eventName: eventName || undefined,
-    eventDate: eventDate || undefined,
-    eventTimeStart: eventTimeStart || undefined,
-    eventTimeEnd: eventTimeEnd || undefined,
-    lineItems: lineItems.map((li) => ({
-      position: li.position,
-      quantity: li.quantity,
-      description: li.description,
-      unitPriceMinor: toMinor(li.unitPrice),
-      discountPercent: li.discountPercent,
-      // Migration 119 — sub-items + details survive save → reload.
-      parentPosition: li.parentPosition ?? null,
-      detailsText: li.detailsText || null,
-    })),
+    eventName: eventName || null,
+    eventDate: eventDate || null,
+    eventTimeStart: eventTimeStart || null,
+    eventTimeEnd: eventTimeEnd || null,
+    // Sub-items, details, units and discount lines survive save → reload.
+    lineItems: lineItems.map(toPayloadLineItem),
   });
 
   const handleSave = async (then?: 'preview') => {

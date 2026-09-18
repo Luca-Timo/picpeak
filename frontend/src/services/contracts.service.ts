@@ -5,6 +5,7 @@
  * responses for PDFs via URL.createObjectURL.
  */
 import { api } from '../config/api';
+import type { AttachmentSelection, IncludedAttachment } from './documentAttachments.service';
 import {
   decodeBlobErrorBody,
   documentAccessHeaders,
@@ -47,7 +48,89 @@ export type ContractStatus =
   | 'signed_by_customer'
   | 'signed_by_admin'
   | 'fully_signed'
+  | 'declined'
   | 'cancelled';
+
+// ----- Signatures v2 (#1446): signers and the signing log -------------
+
+export type ContractSigningOrder = 'parallel' | 'sequential';
+export type ContractSignerRole = 'customer' | 'issuer';
+export type ContractSignerStatus = 'pending' | 'invited' | 'signed' | 'declined';
+
+export interface ContractSigner {
+  id: number;
+  position: number;
+  role: ContractSignerRole;
+  slotKey: string;
+  name: string | null;
+  email: string | null;
+  status: ContractSignerStatus;
+  invitedAt: string | null;
+  verifiedAt: string | null;
+  verifiedVia: 'otp' | 'portal' | 'admin' | null;
+  signedAt: string | null;
+  declinedAt: string | null;
+  signatureMode: 'drawn' | 'typed' | null;
+}
+
+export type ContractSigningEventType =
+  | 'sent' | 'invited' | 'invitation_resent' | 'code_sent' | 'verified' | 'signed'
+  | 'declined' | 'countersigned' | 'completed' | 'wet_upload' | 'revoked';
+
+export interface ContractSigningEvent {
+  seq: number;
+  /** One of ContractSigningEventType; unknown types render their raw name. */
+  type: string;
+  actorType: 'admin' | 'signer' | 'system' | string;
+  actorLabel: string | null;
+  signerId: number | null;
+  occurredAt: string;
+  eventHash: string;
+  artifactSha256: string | null;
+}
+
+/** Result of re-checking the hash chain of the signing log. */
+export interface ContractSigningChain {
+  ok: boolean;
+  count: number;
+  head: string | null;
+  brokenAt: number | null;
+  reason: string | null;
+}
+
+/** A step after a signature that failed: the invitation, certificate or emails. */
+export interface ContractSigningFollowUp {
+  failedAt: string;
+  error: string | null;
+}
+
+export interface ContractSignersOverview {
+  /** 2 for signatures v2; null for a contract sent before (single link). */
+  version: 2 | null;
+  order: ContractSigningOrder;
+  signers: ContractSigner[];
+  events: ContractSigningEvent[];
+  chain: ContractSigningChain | null;
+  /** Set while a step after a signature is still outstanding. */
+  followUp?: ContractSigningFollowUp | null;
+}
+
+export interface ContractSignersPayload {
+  order?: ContractSigningOrder;
+  /** 1–5 customer signers; the issuer is added automatically. */
+  signers: Array<{ name: string; email: string }>;
+}
+
+/** Decrypted evidence for one signer — every opening is logged. */
+export interface ContractSignerEvidence {
+  signerId: number;
+  name: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  declineReason: string | null;
+  signatureSha256: string | null;
+  documentSha256: string | null;
+}
 
 export type ContractSort =
   | 'newest' | 'oldest'
@@ -68,6 +151,31 @@ export type ContractBlockSection =
 export const CONTRACT_SECTIONS: ContractBlockSection[] = [
   'basics', 'scope', 'privacy', 'commercial', 'nda', 'closing',
 ];
+
+/** A text per language (#1445): clause overrides and free-text sections. */
+export type ContractLocaleText = Partial<Record<'de' | 'en' | 'fr' | 'nl' | 'pt' | 'ru', string>>;
+
+/** A free-text section on a contract (from its template). */
+export interface ContractTextSection {
+  id: number;
+  section: ContractBlockSection;
+  position: number;
+  heading: string | null;
+  body: ContractLocaleText;
+}
+
+/** A PDF generated for a contract: unsigned, signed, audit certificate… */
+export interface ContractGeneratedDocument {
+  id: number;
+  kind: 'unsigned' | 'signed' | 'audit' | 'wet_upload' | string;
+  sha256: string;
+  bytes: number;
+  pages: number | null;
+  templateVersionId: number | null;
+  rendererVersion: string | null;
+  parentId: number | null;
+  generatedAt: string;
+}
 
 export interface ContractBlock {
   id: number;
@@ -107,6 +215,9 @@ export interface ContractBlockInclusion {
   };
   bodyTextSnapshot: string | null;
   bodyTextDeSnapshot: string | null;
+  /** Every frozen language, and this contract's own text (#1445). */
+  snapshot?: ContractLocaleText;
+  bodyOverride?: ContractLocaleText;
 }
 
 export interface ContractSummary {
@@ -173,6 +284,17 @@ export interface ContractSummary {
    *  haven't migrated yet. */
   sourceQuoteId?: number | null;
   convertedEventId?: number | null;
+  /** The template and version the contract was made from (#1445). */
+  templateId?: number | null;
+  templateVersionId?: number | null;
+  templateName?: string | null;
+  templateVersion?: number | null;
+  /** Optimistic lock: send it back on update. */
+  lockVersion?: number;
+  /** sha256 of the content frozen at send. */
+  renderedContentSha256?: string | null;
+  /** PDFs sent with the contract (#1445), in order. */
+  attachments?: IncludedAttachment[];
   createdAt: string;
   updatedAt: string;
   inclusions?: ContractBlockInclusion[];
@@ -180,6 +302,7 @@ export interface ContractSummary {
 
 export type ContractDetail = ContractSummary & {
   inclusions: ContractBlockInclusion[];
+  textSections?: ContractTextSection[];
 };
 
 export interface ContractListResponse {
@@ -205,8 +328,11 @@ export interface ContractCreatePayload {
   /** Migration 121 — optional link to a Project Overview project. */
   projectId?: number | null;
   /** Initial inclusions, written in the same transaction as the contract.
-   *  Omit to seed every active system block toggled on. */
+   *  Omit to start from a template version (the default one when
+   *  templateVersionId is omitted too). */
   blocks?: Array<{ blockId: number; included?: boolean; position?: number }>;
+  /** A published template version to start from (#1445). */
+  templateVersionId?: number;
 }
 
 export interface ContractUpdatePayload {
@@ -226,6 +352,10 @@ export interface ContractUpdatePayload {
   blocks?: Array<{ blockId: number; included?: boolean; position?: number }>;
   /** Migration 121 — optional Project Overview link. null clears it. */
   projectId?: number | null;
+  /** The lockVersion the editor loaded; a newer save gets 409 (#1445). */
+  lockVersion?: number;
+  /** The full attachment list; omit to leave it unchanged (#1445). */
+  attachments?: AttachmentSelection[];
 }
 
 export interface ContractBlockCreatePayload {
@@ -332,11 +462,36 @@ export const contractsService = {
     return data.data || data;
   },
 
+  /** `mode` is read for signatures-v2 contracts (drawn or typed). */
   async countersign(
     id: number,
-    payload: { name: string; signatureDataUrl?: string | null },
+    payload: { name: string; signatureDataUrl?: string | null; mode?: 'drawn' | 'typed' },
   ): Promise<{ status: ContractStatus; signedAt: string }> {
     const { data } = await api.post(`/admin/contracts/${id}/countersign`, payload);
+    return data.data || data;
+  },
+
+  /** Signers, the signing log and its chain check (#1446). */
+  async signers(id: number): Promise<ContractSignersOverview> {
+    const { data } = await api.get(`/admin/contracts/${id}/signers`);
+    return data.data || data;
+  },
+
+  /** Replace a draft's customer signers and signing order. */
+  async setSigners(id: number, payload: ContractSignersPayload): Promise<ContractSignersOverview> {
+    const { data } = await api.put(`/admin/contracts/${id}/signers`, payload);
+    return data.data || data;
+  },
+
+  /** A new link for one signer; the previous link stops working. */
+  async resendSignerLink(id: number, signerId: number): Promise<{ resent: true }> {
+    const { data } = await api.post(`/admin/contracts/${id}/signers/${signerId}/resend`);
+    return data.data || data;
+  },
+
+  /** IP address, user agent and decline reasons, decrypted. Logged on every call. */
+  async signingEvidence(id: number): Promise<{ evidence: ContractSignerEvidence[] }> {
+    const { data } = await api.get(`/admin/contracts/${id}/signing-evidence`);
     return data.data || data;
   },
 
@@ -384,6 +539,12 @@ export const contractsService = {
   },
 
   // ----- Block library -------------------------------------------------
+  /** The PDFs generated for a contract (#1445): kind, checksum, size, pages. */
+  async documents(id: number): Promise<{ documents: ContractGeneratedDocument[] }> {
+    const { data } = await api.get(`/admin/contracts/${id}/documents`);
+    return data.data || data;
+  },
+
   async listBlocks(params: { section?: ContractBlockSection; includeInactive?: boolean } = {}): Promise<{ blocks: ContractBlock[] }> {
     const { data } = await api.get('/admin/contracts/blocks', { params });
     return data.data || data;
@@ -466,6 +627,9 @@ export interface PublicContractView {
    *  Server re-enforces both — these only drive the UI. */
   allowPdfUpload?: boolean;
   requireDrawnSignature?: boolean;
+  /** Attachments (#1445): merged ones are inside the PDF, separate ones
+   *  download on their own. */
+  attachments?: Array<{ id: number; name: string; delivery: 'merged' | 'separate'; pages: number }>;
 }
 
 /**

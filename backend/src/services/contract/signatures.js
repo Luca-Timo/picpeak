@@ -75,7 +75,10 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
   // A token without an expiry is refused, not treated as permanent: the
   // column is NOT NULL and the route guard already refuses one, so this only
   // matters for a caller that reaches the service another way.
-  if (!tokenRow.expires_at || new Date(tokenRow.expires_at).getTime() < Date.now()) {
+  // An expiry this process can't read counts as expired: `NaN < now` is false,
+  // so an unreadable value used to make the link valid forever.
+  const linkExpires = require('../../utils/queueTimestamps').toMillis(tokenRow.expires_at);
+  if (linkExpires == null || linkExpires < Date.now()) {
     throw new AppError('This signing link has expired', 410);
   }
   if (tokenRow.used_at) {
@@ -227,11 +230,15 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
     }
   }
 
-  // Notify admin.
+  // Notify admin, at the business address (Settings → business profile).
+  // This was queued without a recipient, which the email queue refuses, so
+  // the notice never went out.
   const customer = await db('customer_accounts').where({ id: contract.customer_account_id }).first();
   const frontendUrl = (await getFrontendBaseUrl()) || 'http://localhost:3000';
+  const businessProfile = await db('business_profile').where({ id: 1 }).first();
   try {
-    await emailProcessor.queueEmail(null, null, 'contract_signed_admin_notification', {
+    if (!businessProfile || !businessProfile.email) throw new Error('No business email address is set');
+    await emailProcessor.queueEmail(null, businessProfile.email, 'contract_signed_admin_notification', {
       contract_number: contract.contract_number,
       customer_email: customer?.email || '',
       signed_customer_name: String(name).trim(),
@@ -257,7 +264,7 @@ async function recordCustomerSignature({ token, name, ip, signatureDataUrl, acce
  * `signed_by_admin` if the customer hasn't signed yet — edge case
  * where admin signs first, e.g. issuer-side framework agreement).
  */
-async function recordAdminCountersignature(contractId, { name, ip, signatureDataUrl }, adminId) {
+async function recordAdminCountersignature(contractId, { name, ip, userAgent, signatureDataUrl, mode }, adminId) {
   // Self-heal: ensure the contract_fully_signed template exists
   // before we counter-sign. The dual-party send fires from this
   // function on the fully_signed transition; without the template
@@ -269,6 +276,13 @@ async function recordAdminCountersignature(contractId, { name, ip, signatureData
   }
   const contract = await db('contracts').where({ id: contractId }).first();
   if (!contract) throw new AppError('Contract not found', 404);
+  // Signatures v2 (#1446): only after every customer signer, into the
+  // issuer's slot, and completion issues the signing certificate.
+  if (Number(contract.signing_version) === 2) {
+    return require('./signingV2').countersign(contractId, {
+      name, signatureDataUrl, mode: mode || (signatureDataUrl ? 'drawn' : 'typed'),
+    }, { ip, userAgent, adminId });
+  }
   if (!['signed_by_customer', 'sent'].includes(contract.status)) {
     throw new AppError(`Cannot counter-sign a contract with status '${contract.status}'`, 409);
   }
@@ -578,6 +592,13 @@ async function attachSignedPdfUpload(contractId, filePath, uploaderRole, actor =
     }
     throw new AppError('The contract changed while the signed PDF was uploading. Reload and try again.', 409, 'CONTRACT_STATE_CHANGED');
   }
+  // Signatures v2 (#1446): the upload goes into the event log, and every
+  // signer's link stops working.
+  if (Number(contract.signing_version) === 2) {
+    await require('./signingV2').recordWetUpload(contractId, {
+      by: uploaderRole, sha256: updates.signed_pdf_sha256 || sha256OfFile(filePath),
+    });
+  }
 
   // attachSignedPdfUpload always transitions to fully_signed (see
   // updates.status above), so the dual-party send fires here too —
@@ -653,7 +674,9 @@ async function attachSignedPdfUpload(contractId, filePath, uploaderRole, actor =
  * is preserved: when signed_pdf_path already points at an uploaded
  * file (not a re-render path) we DO NOT overwrite — the uploaded PDF
  * is the authoritative copy. We still resend the email with that
- * uploaded PDF as the attachment.
+ * uploaded PDF as the attachment. A signatures-v2 contract is never
+ * re-stamped either: its stored signed PDF already carries every
+ * signature, and the legacy stamp columns are empty.
  */
 async function rerenderAndResend(contractId, adminId) {
   // Self-heal contract email templates. This is the most likely
@@ -676,6 +699,20 @@ async function rerenderAndResend(contractId, adminId) {
     );
   }
 
+  // Signatures v2 stamps every slot from the signing record when the last
+  // signer completes, so there is nothing to re-stamp: the stored signed PDF
+  // is the authoritative document. The re-stamp branch below builds its
+  // stamps from `signed_customer_signature_path`, which v2 never writes, so
+  // it would replace the record with the unsigned PDF carrying the issuer
+  // image alone — and mail that to both parties. Re-send the stored file.
+  const isV2Contract = Number(contract.signing_version) === 2;
+  if (isV2Contract && !(contract.signed_pdf_path && fs.existsSync(contract.signed_pdf_path))) {
+    throw new AppError(
+      'The signed PDF for this contract is missing on disk, so there is nothing to re-send. Restore it from a backup before trying again.',
+      409, 'SIGNED_PDF_MISSING',
+    );
+  }
+
   let attachmentPath = contract.signed_pdf_path || null;
   // Migration 135 — `signed_pdf_is_wet_upload` is the durable
   // authoritative-source discriminator. It's set TRUE only by
@@ -689,7 +726,7 @@ async function rerenderAndResend(contractId, adminId) {
     // preserve the historical substring rule so we don't accidentally
     // overwrite uploads on an un-migrated DB.
     : !!(attachmentPath && attachmentPath.includes('uploads/contracts/signed'));
-  if (!attachmentPath || !isWetSignedUpload) {
+  if (!isV2Contract && (!attachmentPath || !isWetSignedUpload)) {
     // Stamp signatures onto the immutable unsigned pdf_path using
     // pdf-lib (NOT a full re-render). This preserves the exact bytes
     // the customer originally agreed to and side-steps the silent re-
@@ -754,7 +791,23 @@ async function rerenderAndResend(contractId, adminId) {
   // Sibling audit certificate (timestamps + IPs + hashes). Best-effort:
   // missing certificate doesn't block the email — the stamped contract
   // alone is the primary attachment.
-  const auditCertPath = await persistAuditCertificate(refetched);
+  //
+  // For a v2 contract this is also the re-issue path: when the certificate
+  // failed right after sealing, `issueCertificate` builds it from the event
+  // chain now, so re-sending repairs the record instead of mailing a signed
+  // contract with no certificate.
+  const signingV2 = require('./signingV2');
+  let auditCertPath;
+  if (isV2Contract) {
+    const existing = await db('generated_documents')
+      .where({ doc_type: 'contract', doc_id: contract.id, kind: 'audit' }).orderBy('id', 'desc').first();
+    auditCertPath = existing && existing.path && fs.existsSync(existing.path)
+      ? existing.path
+      : await signingV2.issueCertificate(contract.id, refetched.signed_pdf_sha256);
+    if (auditCertPath) await signingV2.clearFollowUpFailure(contract.id);
+  } else {
+    auditCertPath = await persistAuditCertificate(refetched);
+  }
 
   const attachments = [{
     filename: `${refetched.contract_number}-signed.pdf`,
@@ -814,6 +867,11 @@ async function rerenderAndResend(contractId, adminId) {
 async function restampSignatures(contractId, { customerSignatureDataUrl, adminSignatureDataUrl }, adminId) {
   const contract = await db('contracts').where({ id: contractId }).first();
   if (!contract) throw new AppError('Contract not found', 404);
+  // Signatures v2 stamp each slot from the document's record; re-stamping is
+  // only for contracts signed before (#1446, decision #21).
+  if (Number(contract.signing_version) === 2) {
+    throw new AppError('Re-stamping is only available for contracts signed before signatures v2.', 409, 'WRONG_STATUS');
+  }
   if (!['signed_by_customer', 'signed_by_admin', 'fully_signed'].includes(contract.status)) {
     throw new AppError(
       `Cannot re-stamp signatures on a contract in status '${contract.status}'.`,

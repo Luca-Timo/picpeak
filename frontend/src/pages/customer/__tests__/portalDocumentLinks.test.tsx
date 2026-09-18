@@ -7,7 +7,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('react-i18next', async () => {
@@ -42,6 +42,7 @@ const { customer, publicSign, publicRespond } = vi.hoisted(() => ({
     listContracts: vi.fn(),
     listQuotes: vi.fn(),
     getContract: vi.fn(),
+    contractSigningAccess: vi.fn(),
     signContract: vi.fn(),
     uploadSignedContractPdf: vi.fn(),
     contractPdfUrl: vi.fn(),
@@ -68,13 +69,19 @@ import { CustomerQuotesPage } from '../CustomerQuotesPage';
 import { CustomerContractSignPage } from '../CustomerContractSignPage';
 import { CustomerQuoteRespondPage } from '../CustomerQuoteRespondPage';
 
+// Shows where the page navigated to, so a signing button can be checked the
+// same way a link's href was.
+const Here: React.FC = () => <span data-testid="here">{useLocation().pathname}</span>;
+
 function renderAt(path: string, routePath: string, element: React.ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const view = render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
+        <Here />
         <Routes>
           <Route path={routePath} element={element} />
+          <Route path="*" element={<div />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -127,16 +134,36 @@ describe('customer portal contract and quote links', () => {
     publicRespond.mockReset();
   });
 
-  it('links a signable contract to the portal signing page and never to a token URL', async () => {
+  // Signing a contract is a button, not a link: the portal asks the server for
+  // signing access and gets a signing session (signatures v2, #1446) or, for a
+  // contract sent before it, its own signing page. No token reaches the browser.
+  it('opens a signable contract in a signing session and never through a token URL', async () => {
     customer.listContracts.mockResolvedValue([
       contractRow({}),
       contractRow({ id: 6, contractNumber: 'C-2026-0006', status: 'fully_signed', canSign: false, hasSignedPdf: true }),
     ]);
+    customer.contractSigningAccess.mockResolvedValue({
+      mode: 'session', sessionToken: 'sess-1', expiresAt: '2026-09-20T10:00:00Z',
+    });
     const { container } = renderAt('/customer/contracts', '/customer/contracts', <CustomerContractsPage />);
 
-    const link = await screen.findByRole('link', { name: /open & sign/i });
-    expect(link).toHaveAttribute('href', '/customer/contracts/5/sign');
-    expect(screen.getAllByRole('link', { name: /open & sign/i })).toHaveLength(1);
+    const sign = await screen.findAllByRole('button', { name: 'Sign' });
+    expect(sign).toHaveLength(1);
+    fireEvent.click(sign[0]);
+
+    await waitFor(() => expect(customer.contractSigningAccess).toHaveBeenCalledWith(5));
+    await waitFor(() => expect(screen.getByTestId('here')).toHaveTextContent('/contract/signing'));
+    expect(tokenLinks(container)).toEqual([]);
+  });
+
+  it('opens a contract sent before signatures v2 on the portal signing page', async () => {
+    customer.listContracts.mockResolvedValue([contractRow({})]);
+    customer.contractSigningAccess.mockResolvedValue({ mode: 'portal' });
+    const { container } = renderAt('/customer/contracts', '/customer/contracts', <CustomerContractsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign' }));
+
+    await waitFor(() => expect(screen.getByTestId('here')).toHaveTextContent('/customer/contracts/5/sign'));
     expect(tokenLinks(container)).toEqual([]);
   });
 
@@ -195,7 +222,11 @@ describe('customer portal contract and quote links', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Accept quote' }));
 
-    await waitFor(() => expect(customer.respondToQuote).toHaveBeenCalledWith(9, 'accept', { tosAccepted: false }));
+    // The portal accepts the quote as it stands, confirming the total it
+    // showed — a quote that offers add-ons is otherwise refused with
+    // TOTAL_REQUIRED.
+    await waitFor(() => expect(customer.respondToQuote)
+      .toHaveBeenCalledWith(9, 'accept', { tosAccepted: false, expectedTotalMinor: 100000 }));
     expect(publicRespond).not.toHaveBeenCalled();
   });
 });

@@ -23,7 +23,7 @@
 
 const express = require('express');
 const rateLimit = require('express-rate-limit');
-const { body } = require('express-validator');
+const { body, param } = require('express-validator');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const contractService = require('../services/contractService');
 const publicDocumentViews = require('../services/publicDocumentViews');
@@ -91,6 +91,32 @@ router.get(
     return successResponse(res, { contract: { ...view, verificationRequired: false } });
   }),
 );
+
+// One of the contract's attachments (#1445), for the customer holding the
+// signing link. The attachment must belong to this contract, its bytes must
+// still match what the contract recorded, and the visitor must have
+// confirmed the emailed code — the same grant the view above needs.
+router.get(
+  '/:token/attachments/:attachmentId',
+  previewLimiter,
+  [tokenParam(), param('attachmentId').isInt({ min: 1 }).toInt()],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const tokenRow = await loadActionToken(req, res, { tableName: TABLE, token: req.params.token });
+    if (!tokenRow) return undefined;
+    if (!verification.hasValidGrant(req, KIND, tokenRow, req.params.token)) {
+      return sendVerificationRequired(res);
+    }
+    const attachments = require('../services/contract/attachments');
+    const file = await attachments.openContractAttachment(tokenRow.contract_id, req.params.attachmentId);
+    const { buildContentDisposition } = require('../utils/filenameSanitizer');
+    res.set('Referrer-Policy', 'no-referrer');
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', buildContentDisposition(attachments.downloadName(file.name), 'attachment'));
+    return res.send(file.buffer);
+  }),
+);
+
 
 router.post(
   '/:token/sign',

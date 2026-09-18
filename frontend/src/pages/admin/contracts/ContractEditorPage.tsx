@@ -27,6 +27,9 @@ import { CustomerPicker } from '../../../components/admin/CustomerPicker';
 import { ProjectSelect } from '../../../components/admin/ProjectSelect';
 import { customerAdminService } from '../../../services/customerAdmin.service';
 import { describeSaveError, newIdempotencyKey, type SaveErrorView } from './contractSaveError';
+import { contractTemplatesService } from '../../../services/contractTemplates.service';
+import { AttachmentListEditor, type AttachmentRow } from '../../../components/admin/AttachmentListEditor';
+import { SignersEditorCard } from './SignersEditorCard';
 
 const CRM_DISCLAIMER_URL = 'https://docs.picpeak.app/features/crm/disclaimers';
 
@@ -71,6 +74,15 @@ export const ContractEditorPage: React.FC = () => {
   const [validUntil, setValidUntil] = useState('');
   const [projectId, setProjectId] = useState<number | null>(null);
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
+  // Contract templates (#1445): a new contract starts from a published
+  // template (the default one preselected) or, with "none", from the blocks
+  // picked below. `null` until the template list has loaded.
+  const [templateChoice, setTemplateChoice] = useState<number | 'none' | null>(null);
+  // Optimistic lock for edits: the version this page loaded.
+  const [lockVersion, setLockVersion] = useState<number | null>(null);
+  // Attachments (#1445), in delivery order. Edits only: a new contract gets
+  // its template version's attachments.
+  const [attachments, setAttachments] = useState<AttachmentRow[]>([]);
 
   // Why the last save failed, shown inline instead of a toast that vanished
   // before the admin could read which field was wrong or whether a draft now
@@ -144,6 +156,30 @@ export const ContractEditorPage: React.FC = () => {
     queryFn: () => contractsService.listBlocks({ includeInactive: false }),
   });
 
+  const { data: templateList, isError: templatesFailed } = useQuery({
+    queryKey: ['contract-templates'],
+    queryFn: () => contractTemplatesService.list(),
+    enabled: !isEdit,
+  });
+  const usableTemplates = useMemo(
+    () => (templateList?.templates || []).filter((tpl) => tpl.status !== 'archived' && tpl.currentVersionId),
+    [templateList],
+  );
+  useEffect(() => {
+    if (isEdit || templateChoice !== null) return;
+    // Without the list (it failed to load) the block picker below still works.
+    if (templatesFailed) {
+      setTemplateChoice('none');
+      return;
+    }
+    if (!templateList) return;
+    const preferred = usableTemplates.find((tpl) => tpl.isDefault) || usableTemplates[0];
+    setTemplateChoice(preferred ? preferred.id : 'none');
+  }, [isEdit, templateChoice, templateList, templatesFailed, usableTemplates]);
+  const chosenTemplate = typeof templateChoice === 'number'
+    ? usableTemplates.find((tpl) => tpl.id === templateChoice) || null
+    : null;
+
   // Customer search moved into <CustomerPicker> (C.5).
 
   // Hydrate state from server when the existing contract loads.
@@ -174,6 +210,10 @@ export const ContractEditorPage: React.FC = () => {
     setIssueDate(c.issueDate);
     setValidUntil(c.validUntil || '');
     setProjectId(c.projectId ?? null);
+    setLockVersion(c.lockVersion ?? null);
+    setAttachments((c.attachments || []).map((a) => ({
+      attachmentId: a.attachmentId, delivery: a.delivery, name: a.name, pages: a.pages, bytes: a.bytes, isActive: a.isActive,
+    })));
     setBlocks((c.inclusions || []).map((inc) => ({
       blockId: inc.blockId,
       section: inc.section,
@@ -210,7 +250,7 @@ export const ContractEditorPage: React.FC = () => {
   // re-set to the same content in the background (the block library seeding
   // `blocks` after a load) must not wipe the summary before anyone read it.
   const formSnapshot = JSON.stringify([customerAccountId, title, eventName, eventDate, eventTimeStart,
-    eventTimeEnd, introText, outroText, language, issueDate, validUntil, projectId, blocks]);
+    eventTimeEnd, introText, outroText, language, issueDate, validUntil, projectId, blocks, attachments]);
   const errorFormSnapshotRef = useRef<string | null>(null);
   useEffect(() => {
     if (!saveError) {
@@ -283,12 +323,18 @@ export const ContractEditorPage: React.FC = () => {
         issueDate,
         validUntil: validUntil || undefined,
         projectId: projectId ?? null,
-        // Sent with the create so the draft and its block selection commit
-        // together. A follow-up update could fail after the draft existed,
-        // and saving again then created a second one (issue 1447).
-        blocks: blocks.map((b) => ({
-          blockId: b.blockId, included: b.included, position: b.position,
-        })),
+        // From a template, the server writes the version's clauses (#1445).
+        // Otherwise the block selection is sent with the create so the draft
+        // and its blocks commit together: a follow-up update could fail after
+        // the draft existed, and saving again then created a second one
+        // (issue 1447).
+        ...(chosenTemplate
+          ? { templateVersionId: chosenTemplate.currentVersionId as number }
+          : {
+            blocks: blocks.map((b) => ({
+              blockId: b.blockId, included: b.included, position: b.position,
+            })),
+          }),
       };
       let draftId = replayedDraftIdRef.current;
       if (draftId === null) {
@@ -345,6 +391,8 @@ export const ContractEditorPage: React.FC = () => {
         blocks: blocks.map((b) => ({
           blockId: b.blockId, included: b.included, position: b.position,
         })),
+        lockVersion: lockVersion ?? undefined,
+        attachments: attachments.map((a) => ({ attachmentId: a.attachmentId, delivery: a.delivery })),
       });
     },
     onSuccess: () => {
@@ -456,7 +504,7 @@ export const ContractEditorPage: React.FC = () => {
         return (
           <p className="mt-1">
             {view.code === 'PROJECT_CUSTOMER_MISMATCH'
-              ? t('projects.error.customerMismatch', 'That project belongs to a different customer than this entry.')
+              ? t('projects.error.customerMismatch', 'That belongs to a different customer than this project.')
               : (view.message || t('contracts.editor.saveError', 'Save failed'))}
           </p>
         );
@@ -602,6 +650,33 @@ export const ContractEditorPage: React.FC = () => {
             {fieldError('customerAccountId') && (
               <p className={fieldErrorClass}>{fieldError('customerAccountId')}</p>
             )}
+          </div>
+        )}
+
+        {!isEdit && (
+          <div className="mb-4">
+            <label htmlFor="contract-template-choice" className="block text-sm font-medium mb-1">
+              {t('contracts.editor.template', 'Start from template')}
+            </label>
+            <select
+              id="contract-template-choice"
+              value={templateChoice ?? ''}
+              onChange={(e) => setTemplateChoice(e.target.value === 'none' ? 'none' : Number(e.target.value))}
+              className={textareaClass(false)}
+            >
+              {templateChoice === null && <option value="">…</option>}
+              {usableTemplates.map((tpl) => (
+                <option key={tpl.id} value={tpl.id}>
+                  {tpl.name}{tpl.isDefault ? ` (${t('contracts.templates.default', 'Default')})` : ''}
+                </option>
+              ))}
+              <option value="none">{t('contracts.editor.templateNone', 'No template — pick the clauses below')}</option>
+            </select>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+              {chosenTemplate
+                ? t('contracts.editor.templateHint', 'The contract starts with this template\'s clauses and texts. You can adjust them once it\'s created.')
+                : t('contracts.editor.templateNoneHint', 'Pick the clauses yourself below.')}
+            </p>
           </div>
         )}
 
@@ -776,8 +851,7 @@ export const ContractEditorPage: React.FC = () => {
         <p className={`${fieldErrorClass} mb-3`}>{fieldError('blocks')}</p>
       )}
 
-      {/* Block accordions */}
-      {CONTRACT_SECTIONS.map((section) => (
+      {(isEdit || templateChoice === 'none') && CONTRACT_SECTIONS.map((section) => (
         <Card key={section} padding="lg" className="mb-3">
           <h2 className="text-lg font-semibold mb-2">
             {t(`contracts.sections.${section}`, section)}
@@ -830,6 +904,36 @@ export const ContractEditorPage: React.FC = () => {
           )}
         </Card>
       ))}
+
+      {isEdit && (
+        <Card padding="lg" className="mb-3">
+          <h2 className="text-lg font-semibold mb-2">{t('contracts.attachments.heading', 'Attachments')}</h2>
+          <AttachmentListEditor idPrefix="contract-attachment" value={attachments} onChange={setAttachments} />
+        </Card>
+      )}
+
+      {isEdit && numericId !== null && (
+        <SignersEditorCard contractId={numericId} customerName={customerLabel || null} />
+      )}
+
+      {isEdit && (existing?.contract.textSections || []).length > 0 && (
+        <Card padding="lg" className="mb-3">
+          <h2 className="text-lg font-semibold mb-2">{t('contracts.editor.textSections', 'Free-text sections')}</h2>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
+            {t('contracts.editor.textSectionsHint', 'These come from the template and stay as they are when you save.')}
+          </p>
+          <ul className="space-y-2">
+            {(existing?.contract.textSections || []).map((s) => (
+              <li key={s.id} className="p-2 rounded border border-neutral-200 dark:border-neutral-700">
+                <p className="text-sm font-medium">{s.heading || t(`contracts.sections.${s.section}`, s.section)}</p>
+                <p className="text-xs text-neutral-600 dark:text-neutral-400 whitespace-pre-line line-clamp-3">
+                  {s.body[language as keyof typeof s.body] || s.body.en || s.body.de || ''}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
     </div>
   );
 };

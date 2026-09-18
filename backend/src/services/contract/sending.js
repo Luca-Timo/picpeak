@@ -1,22 +1,15 @@
 // Extracted verbatim from contractService.js — see ../contractService.js for the
 // module-level overview. Do not add behavior here without updating the entry re-exports.
 
-const crypto = require('crypto');
 const { db, logActivity } = require('../../database/db');
 const logger = require('../../utils/logger');
-const { getAppSetting } = require('../../utils/appSettings');
 const { AppError } = require('../../utils/errors');
-const { hasColumnCached } = require('../../utils/schemaCache');
-const { formatShortDate } = require('../../utils/dateFormatter');
 const pdfService = require('../pdfService');
-const emailProcessor = require('../emailProcessor');
 const { ensureContractEmailTemplatesSeeded } = require('../contractEmailTemplates');
-const { getFrontendBaseUrl } = require('../../utils/frontendUrl');
 const { adminActor, emitContractEvent, ensureCustomerActive } = require('./helpers');
 const { buildRenderContext } = require('./renderContext');
 const { persistContractPdf } = require('./signatureAssets');
 const { getContractById } = require('./crud');
-const { auditedUpdate } = require('../accountingHistory');
 
 
 /**
@@ -26,13 +19,14 @@ const { auditedUpdate } = require('../accountingHistory');
 async function renderContractPdfBuffer(contractId) {
   const data = await getContractById(contractId);
   if (!data) throw new AppError('Contract not found', 404);
-  const ctx = await buildRenderContext(data.contract, data.inclusions);
+  const ctx = await buildRenderContext(data.contract, data.inclusions, data.textSections);
   return await pdfService.renderContractToBuffer(ctx);
 }
 
 /**
- * Send the contract: snapshot every included block's body, render PDF,
- * persist, mint a signing token, queue the customer email.
+ * Send the contract: snapshot every included block's body, render the PDF
+ * with a signature slot per signer, persist it, and invite the signers
+ * (signatures v2, #1446 — each signer gets their own link).
  */
 async function sendContract(id, adminId) {
   // Self-heal: dev installs that ran migration 130 BEFORE we added
@@ -43,7 +37,7 @@ async function sendContract(id, adminId) {
 
   const data = await getContractById(id);
   if (!data) throw new AppError('Contract not found', 404);
-  const { contract, inclusions } = data;
+  const { contract } = data;
 
   if (!['draft'].includes(contract.status)) {
     throw new AppError(`Cannot send a contract with status '${contract.status}'`, 409);
@@ -52,87 +46,83 @@ async function sendContract(id, adminId) {
   const customer = await db('customer_accounts').where({ id: contract.customer_account_id }).first();
   ensureCustomerActive(customer);
 
-  // Snapshot every included block's body into the inclusion row so
-  // future block edits don't mutate the sent contract.
-  await db.transaction(async (trx) => {
-    for (const inc of inclusions) {
-      if (!(inc.included === true || inc.included === 1 || inc.included === '1')) continue;
-      await auditedUpdate(trx, 'contract_block_inclusions', { id: inc.id }, {
-        body_text_snapshot: inc.block_body_text || null,
-        body_text_de_snapshot: inc.block_body_text_de || null,
-        updated_at: new Date(),
-      }, { actor: adminId, source: 'contract.send' });
-    }
-  });
+  // The signers (#1446): the ones set on the draft, or the contract's
+  // customer; each gets a slot on the signature page, the issuer last.
+  const signingV2 = require('./signingV2');
+  const { slots: signatureSlots } = await signingV2.prepareSend(contract);
 
-  // Re-fetch with snapshots populated so the renderer uses the frozen
-  // bodies (matches post-send reads).
+  // Render from the draft as it stands. A block reads its frozen text where
+  // it has any and the live library text otherwise (renderContext), which is
+  // exactly what the freeze below writes — so the PDF and the snapshot say
+  // the same thing, and nothing is frozen until the send is certain to go
+  // through. A send that fails at the attachment check used to leave the
+  // snapshot on the draft, and the renderer prefers a snapshot: later edits
+  // then never showed in the preview.
   const refreshed = await getContractById(id);
-  const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions);
-  const buffer = await pdfService.renderContractToBuffer(ctx);
-  const { filePath: pdfPath, sha256: pdfSha256 } = await persistContractPdf(refreshed.contract, buffer);
+  const ctx = await buildRenderContext(refreshed.contract, refreshed.inclusions, refreshed.textSections);
+  ctx.signatureSlots = signatureSlots;
+  // The footers are drawn now, the attachments are merged after, so the page
+  // numbers have to be told how many pages will land in between.
+  ctx.mergedAttachmentPages = await require('./attachments').mergedPageCount(id);
+  // Where each signature slot landed goes into the record (#1445).
+  const { buffer: rendered, slots } = await pdfService.renderContractWithSlots(ctx);
+  // Attachments (#1445): merged ones go between the body and the signature
+  // page, separate ones are delivered next to the PDF; each is checked
+  // against the sha256 the contract recorded for it.
+  const attachments = require('./attachments');
+  const sendable = await attachments.buildSendable(refreshed.contract, rendered, { slots });
 
-  const token = crypto.randomBytes(32).toString('hex');
-  const expiresAt = contract.valid_until
-    ? new Date(new Date(contract.valid_until).getTime() + 14 * 24 * 60 * 60 * 1000)
-    : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+  // What the render just resolved, ready to be frozen with the send: every
+  // included block's body in every language (#1445; only EN and DE were
+  // frozen before), plus the content — clauses, title, intro, outro and this
+  // moment's placeholder values — with its sha256. The PDF, the signing page
+  // and later re-renders read this.
+  //
+  // It is written inside completeSend's transaction, against the draft's
+  // lock_version, so it lands only if this send is the one that goes out: two
+  // overlapping sends both pass the draft check above, and the loser's freeze
+  // would otherwise be written over the winner's sent contract. The same
+  // condition catches an edit saved between the render and the send, which
+  // passed its own lock check but never reached the rendered PDF.
+  const content = require('./content');
+  const { snapshot, sha256: contentSha256 } = await require('./renderContext')
+    .buildContentSnapshot(refreshed.contract, refreshed.inclusions, refreshed.textSections);
+  const freeze = {
+    renderedContent: JSON.stringify(snapshot),
+    contentSha256,
+    inclusions: refreshed.inclusions
+      .filter((inc) => inc.included === true || inc.included === 1 || inc.included === '1')
+      .map((inc) => ({
+        id: inc.id,
+        columns: content.snapshotColumns({
+          ...content.blockBodies(inc, 'block_'),
+          ...content.inclusionSnapshot(inc),
+        }),
+      })),
+  };
 
-  // Schema-drift guard for the new pdf_sha256 column (migration 130
-  // in-place edit). Dev installs that haven't re-migrated skip the
-  // hash write; the send still succeeds.
-  const hasPdfSha = await hasColumnCached('contracts', 'pdf_sha256');
-
-  let tokenId = null;
-  await db.transaction(async (trx) => {
-    const insertedToken = await trx('contract_action_tokens').insert({
-      contract_id: id,
-      token,
-      expires_at: expiresAt,
-      created_at: new Date(),
-    }).returning('id');
-    tokenId = typeof insertedToken[0] === 'object' ? insertedToken[0].id : insertedToken[0];
-    const updates = {
-      status: 'sent',
-      sent_at: new Date(),
-      pdf_path: pdfPath,
-      updated_at: new Date(),
-    };
-    if (hasPdfSha) updates.pdf_sha256 = pdfSha256;
-    await auditedUpdate(trx, 'contracts', { id }, updates, { actor: adminId, source: 'contract.send' });
+  const { filePath: pdfPath, sha256: pdfSha256 } = await persistContractPdf(refreshed.contract, sendable.buffer, '', {
+    kind: 'unsigned',
+    theme: ctx.theme,
+    issuer: ctx.issuer,
+    templateVersionId: refreshed.contract.template_version_id,
+    manifest: sendable.manifest,
   });
 
-  const frontendUrl = (await getFrontendBaseUrl()) || 'http://localhost:3000';
-  const responseUrl = `${frontendUrl}/contract/${token}`;
-  // Honour the admin's "Attach contract PDF to email" toggle. Default
-  // ON; an admin who prefers a link-only email turns it off and the
-  // customer reaches the PDF via the public sign page instead.
-  const attachPdf = await getAppSetting('crm_contracts_pdf_attachment_enabled');
-  await emailProcessor.queueEmail(null, customer.email, 'contract_sent', {
-    contract_number: contract.contract_number,
-    customer_name: customer.display_name
-      || [customer.first_name, customer.last_name].filter(Boolean).join(' ')
-      || customer.email.split('@')[0],
-    response_url: responseUrl,
-    title: contract.title || '',
-    event_name: contract.event_name || '',
-    valid_until: formatShortDate(contract.valid_until),
-    attachments: (attachPdf !== false && pdfPath) ? [{
-      filename: `${contract.contract_number}.pdf`,
-      contentPath: pdfPath,
-      contentType: 'application/pdf',
-    }] : undefined,
+  // Marks the contract sent, starts the event log and emails each signer
+  // who may sign now their own link.
+  const invited = await signingV2.completeSend(id, {
+    pdfPath, pdfSha256, adminId, freeze, lockVersion: refreshed.contract.lock_version,
   });
 
   try {
-    // The token row id, never the token: activity metadata is served to the
-    // notifications feed and the audit trail, and the token opens the link.
-    await logActivity('contract_sent', { contractId: id, tokenId }, null, await adminActor(adminId));
+    await logActivity('contract_sent', { contractId: id, signersInvited: invited }, null, await adminActor(adminId));
   } catch (_) { /* logging is best-effort */ }
 
   await emitContractEvent(contract, 'sent');
 
   logger.info('Contract sent', { adminId, contractId: id });
-  return { token, pdfPath };
+  return { pdfPath, invited };
 }
 module.exports = {
   renderContractPdfBuffer,

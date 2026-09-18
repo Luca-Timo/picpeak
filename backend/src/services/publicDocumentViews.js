@@ -10,6 +10,7 @@
 
 const { db } = require('../database/db');
 const { getAppSetting } = require('../utils/appSettings');
+const { isTruthyFlag, isUnselectedOptional, parsePromotionSnapshot } = require('../utils/lineItemTotals');
 const { toTimestamp } = require('../utils/dateNormalize');
 
 // Normalise a Settings → Branding logo value (absolute URL, /-rooted path,
@@ -114,7 +115,7 @@ function publicContractView(contract, inclusions, customer, profile, locale, bra
   };
 }
 
-function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosText, tosUrl, brandingLogoUrl, brandingLogoUrlDark) {
+function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosText, tosUrl, brandingLogoUrl, brandingLogoUrlDark, texts) {
   return {
     quoteNumber: quote.quote_number,
     status: quote.status,
@@ -126,8 +127,10 @@ function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosTe
     eventDate: quote.event_date,
     eventTimeStart: quote.event_time_start,
     eventTimeEnd: quote.event_time_end,
-    introText: quote.intro_text,
-    outroText: quote.outro_text,
+    // The row keeps the raw text; {{placeholders}} resolve wherever it is
+    // shown, so the customer reads "Hallo Anna", not "Hallo {{customer_name}}".
+    introText: texts ? texts.introText : quote.intro_text,
+    outroText: texts ? texts.outroText : quote.outro_text,
     // Money — public surface.
     netAmountMinor: quote.net_amount_minor,
     vatRate: quote.vat_rate == null ? null : Number(quote.vat_rate),
@@ -155,7 +158,20 @@ function publicQuoteView(quote, lineItems, customer, profile, tosRequired, tosTe
       parentLineItemId: li.parent_line_item_id || null,
       parentPosition: li.parent_position == null ? null : Number(li.parent_position),
       detailsText: li.details_text || null,
+      // Migration 220 — discount lines and units, as on the PDF, plus the
+      // add-ons the customer books (#1451): an unbooked one stays out of the
+      // totals, here as on the server.
+      lineKind: li.line_kind || 'item',
+      unit: li.unit || null,
+      promotionName: li.line_kind === 'discount' ? (parsePromotionSnapshot(li.promotion_snapshot)?.name || null) : null,
+      isOptional: isTruthyFlag(li.is_optional),
+      selected: !isUnselectedOptional(li),
     })),
+    // The customer changes the add-ons by accepting again while the response
+    // window is open; after it closes only the business can (#1451).
+    selectionLocked: Boolean(quote.selection_accepted_at) && !(quote.response_locked_at
+      && new Date(quote.response_locked_at).getTime() > Date.now()),
+    customerMessage: quote.customer_message || null,
     recipient: customer ? {
       displayName: customer.display_name || [customer.first_name, customer.last_name].filter(Boolean).join(' '),
       email: customer.email,
@@ -245,10 +261,13 @@ async function buildQuoteView(quoteId) {
   const tosRequired = await getAppSetting('crm_quotes_tos_required', false);
   const tosText = await getAppSetting('crm_quotes_tos_text', '');
   const tosUrl = await getAppSetting('crm_quotes_tos_url', '');
+  const texts = await require('./quoteTemplateService')
+    .resolveQuoteTexts(data.quote, { customer: customer || null, profile });
   return publicQuoteView(
     data.quote, data.lineItems, customer, profile, tosRequired, tosText, tosUrl,
     await getAppSetting('branding_logo_url', null),
     await getAppSetting('branding_logo_url_dark', null),
+    texts,
   );
 }
 

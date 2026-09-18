@@ -19,7 +19,12 @@ function makeChain() {
     then: function (onResolve, onReject) {
       return Promise.resolve(this._selectResult).then(onResolve, onReject);
     },
-    where: jest.fn(function () { return this; }),
+    // Looking up the quote that reissued a quote (#1451) finds none:
+    // `first` after `where({ replaces_quote_id })` resolves to undefined.
+    where: jest.fn(function (arg) {
+      this._replacesLookup = !!(arg && typeof arg === 'object' && 'replaces_quote_id' in arg);
+      return this;
+    }),
     whereNotIn: jest.fn(function () { return this; }),
     whereIn: jest.fn(function () { return this; }),
     whereNull: jest.fn(function () { return this; }),
@@ -27,7 +32,13 @@ function makeChain() {
     orderBy: jest.fn(function () { return this; }),
     limit: jest.fn(function () { return this; }),
     select: jest.fn(function () { return Promise.resolve(this._selectResult); }),
-    first: jest.fn(function () { return Promise.resolve(this._firstValue); }),
+    first: jest.fn(function () {
+      if (this._replacesLookup) {
+        this._replacesLookup = false;
+        return Promise.resolve(undefined);
+      }
+      return Promise.resolve(this._firstValue);
+    }),
     update: jest.fn(function () { return Promise.resolve(this._updateResult); }),
     insert: jest.fn(function () { return this; }),
     returning: jest.fn(function () { return Promise.resolve(this._insertResult); }),

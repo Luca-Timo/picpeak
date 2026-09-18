@@ -123,6 +123,18 @@ describe('renumberLineItemPositions', () => {
     ])).toThrow(expect.objectContaining({ code: 'LINE_ITEM_NESTING_TOO_DEEP' }));
   });
 
+  it('reads positions the way the hierarchy validation does', () => {
+    // ensureInt on both sides: 2.7 is the position 2 the validator matches
+    // too, so the sub-item follows its parent instead of failing as an
+    // orphan on a number nothing carries.
+    const out = renumberLineItemPositions([
+      { position: 2.7, description: 'Package' },
+      { position: 3, description: 'Camera', parent_position: 2 },
+    ]);
+    expect(out.map((li) => li.position)).toEqual([1, 2]);
+    expect(out[1].parent_position).toBe(1);
+  });
+
   it('gives a row with no position the position its array order implies', () => {
     const out = renumberLineItemPositions([
       { description: 'A' },

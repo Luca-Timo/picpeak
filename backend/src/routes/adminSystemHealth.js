@@ -20,6 +20,7 @@ const express = require('express');
 const { query } = require('express-validator');
 const { adminAuth } = require('../middleware/auth');
 const { requirePermission } = require('../middleware/permissions');
+const { isFeatureEnabled } = require('../middleware/requireFeatureFlag');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const { verifyDocumentArtefacts } = require('../services/backupIntegrityService');
 const { getCoverageReport } = require('../services/backupCoverageService');
@@ -231,10 +232,37 @@ router.get(
       if (offset + WAITING_PAGE_SIZE >= WAITING_SCAN_MAX) scanTruncated = true;
     }
 
+    // Customer documents waiting for a review, or rejected (#1444). Uploads
+    // stay pending until an admin marks them clean, so a growing pending
+    // count is the thing to notice here.
+    // The counts belong to the documents feature: with it off, no route
+    // answers for it, this one included. Ops admins (settings.view /
+    // system.view) see the aggregate, as they do for the rest of this page.
+    const customerDocuments = await isFeatureEnabled('documents')
+      ? await require('../services/customerDocumentsService').getReviewCounts()
+      : null;
+    // Where the key for signing evidence comes from (#1446): the env var, the
+    // file in business-docs (backed up), or not created yet. Never the key.
+    const fieldEncryption = require('../utils/fieldEncryption');
+    const evidenceKey = fieldEncryption.keyStatus();
+    // Stored evidence names the key it was written under. A key that changed
+    // — a rotated env var, a restore that brought back another key file —
+    // leaves names, emails and addresses unreadable and invitations going out
+    // to '', so say so here rather than letting it surface as blank data.
+    if (evidenceKey.keyId && await db.schema.hasTable('contract_signers')) {
+      const stored = await db('contract_signers').whereNotNull('name_enc')
+        .orderBy('id', 'desc').first('name_enc');
+      const storedKeyId = stored ? fieldEncryption.keyIdOf(stored.name_enc) : null;
+      evidenceKey.storedKeyId = storedKeyId;
+      evidenceKey.matchesStored = storedKeyId == null ? null : storedKeyId === evidenceKey.keyId;
+    }
+
     return successResponse(res, {
       stuckEmails: stuckEmails.map(mapEmailRow),
       waitingEmails: waitingEmails.map(mapEmailRow),
       processor: getQueueProcessorStatus(),
+      customerDocuments,
+      evidenceKey,
       counts: {
         stuckEmails: stuckEmails.length,
         waitingEmails: waitingEmails.length,

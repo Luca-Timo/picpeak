@@ -7,6 +7,7 @@ const { AppError } = require('../../utils/errors');
 const businessProfileService = require('../businessProfileService');
 const { ensureInt, ensureNumber } = require('../../utils/numericHelpers');
 const { renumberLineItemPositions } = require('../../utils/lineItemPositions');
+const { extendedLineColumns, lineItemFieldsToApi } = require('../../utils/lineItemTotals');
 const { computeMonthlyCadenceDate, getHierarchyHelpers, nextInvoiceNumber } = require('./helpers');
 const { auditedInsert, auditedUpdate } = require('../accountingHistory');
 
@@ -194,6 +195,7 @@ async function appendToMonthlyDraft(payload, customer, adminId, trx) {
       line_total_minor: lineTotal,
       parent_position: li.parent_position == null ? null : li.parent_position + offset,
       details_text: li.details_text || null,
+      ...extendedLineColumns(li, { invoice: true }),
     };
   });
 
@@ -332,6 +334,7 @@ async function getMonthlyDraft(customerId) {
       lineTotalMinor: ensureInt(li.line_total_minor),
       parentPosition: li.parent_position == null ? null : ensureInt(li.parent_position),
       detailsText: li.details_text || '',
+      ...lineItemFieldsToApi(li),
     })),
   };
 }

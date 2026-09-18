@@ -46,7 +46,7 @@ const STORAGE_KEY = `docAccess:contract:${TOKEN}`;
 const shell = {
   verificationRequired: true,
   language: 'en',
-  emailHint: 'k***@example.com',
+  emailHint: 'ku***@ex***.com',
   issuer: { companyName: 'Studio Nord', logoUrl: null, logoUrlDark: null },
 };
 const fullContract = {
@@ -74,6 +74,13 @@ const fullContract = {
 };
 
 const headersOf = (config: unknown) => (config as { headers?: Record<string, string> } | undefined)?.headers;
+
+// This suite covers the single-link flow of a contract sent before signatures
+// v2 (#1446): it has no signer invitation, and the invite call answers 404.
+const notInvited = () => Object.assign(new Error('Request failed with status code 404'), {
+  response: { status: 404, data: { error: 'Not found' } },
+});
+const isInvite = (url: unknown) => String(url).includes('/contract-signing/invite/');
 
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -107,14 +114,15 @@ describe('ContractResponsePage verification gate', () => {
     post.mockReset();
     window.sessionStorage.clear();
     // The server answers with the full view only when a grant rides along.
-    get.mockImplementation(async (_url, config) => ({
-      data: { contract: headersOf(config)?.['X-Document-Access'] ? fullContract : shell },
-    }));
+    get.mockImplementation(async (url, config) => {
+      if (isInvite(url)) throw notInvited();
+      return { data: { contract: headersOf(config)?.['X-Document-Access'] ? fullContract : shell } };
+    });
   });
 
   it('shows only the verification step for the bare link, then the contract once the code is confirmed', async () => {
     post.mockImplementation(async (url) => {
-      if (String(url).endsWith('/verification')) return { data: { sent: true, emailHint: 'k***@example.com', resendAfterSeconds: 30 } };
+      if (String(url).endsWith('/verification')) return { data: { sent: true, emailHint: 'ku***@ex***.com', resendAfterSeconds: 30 } };
       if (String(url).endsWith('/verification/confirm')) return { data: { grant: 'grant-abc', expiresInSeconds: 900 } };
       throw new Error(`unexpected POST ${url}`);
     });
@@ -171,6 +179,7 @@ describe('ContractResponsePage verification gate', () => {
     const signed = { ...fullContract, status: 'fully_signed', canSign: false };
     // A blob request gets its JSON error body as a Blob.
     get.mockImplementation(async (url, config) => {
+      if (isInvite(url)) throw notInvited();
       if (String(url).endsWith('/pdf')) {
         throw Object.assign(new Error('Request failed with status code 401'), {
           response: {

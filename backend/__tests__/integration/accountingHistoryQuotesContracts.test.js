@@ -32,6 +32,11 @@ const prevCwd = process.cwd();
 const historyOf = (type, id) => history.listHistory(type, id);
 const entriesFor = (entries, entity, action) => entries.filter((e) => e.entity_type === entity && e.action === action);
 const lastUpdate = (entries, entity) => entriesFor(entries, entity, 'updated').pop();
+// The last entry that changed a given column. An accepted quote is also
+// re-rendered and its stored file recorded (#1451), so the status change is
+// not always the last entry any more.
+const lastChangeTo = (entries, entity, column) => entriesFor(entries, entity, 'updated')
+  .filter((entry) => entry.changes && entry.changes[column]).pop();
 
 async function withHistoryTableOffline(work) {
   await db.schema.renameTable('accounting_change_history', 'accounting_change_history_offline');
@@ -73,7 +78,18 @@ async function acceptedQuote() {
 
 async function sentContract() {
   const id = await contractService.createContract({ customerAccountId: customerId, title: 'History contract' }, adminId);
-  const { token } = await contractService.sendContract(id, adminId);
+  await contractService.sendContract(id, adminId);
+  // Sending invites the signers (signatures v2, #1446) instead of minting an
+  // action token. The public-link cases below are the flow a contract sent
+  // before v2 still uses, so mark this one legacy and give it a link.
+  await db('contracts').where({ id }).update({ signing_version: null });
+  const token = require('crypto').randomBytes(32).toString('hex');
+  await db('contract_action_tokens').insert({
+    contract_id: id,
+    token,
+    expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    created_at: new Date().toISOString(),
+  });
   return { id, token };
 }
 
@@ -194,7 +210,7 @@ describe('quotes', () => {
   it('admin accept and decline record the admin', async () => {
     const { id: accepted } = await sentQuote();
     await quoteService.adminAcceptQuote(accepted, adminId);
-    expect(lastUpdate(await historyOf('quote', accepted), 'quote')).toMatchObject({
+    expect(lastChangeTo(await historyOf('quote', accepted), 'quote', 'status')).toMatchObject({
       source: 'quote.accept.admin',
       actor: { type: 'admin', id: adminId },
       changes: { status: { from: 'sent', to: 'accepted' } },

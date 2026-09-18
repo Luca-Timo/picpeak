@@ -8,6 +8,7 @@ const { cleanNetMinor } = require('../../utils/invoiceRounding');
 const { AppError } = require('../../utils/errors');
 const businessProfileService = require('../businessProfileService');
 const { ensureInt, ensureNumber } = require('../../utils/numericHelpers');
+const { extendedLineColumns } = require('../../utils/lineItemTotals');
 const { hasColumnCached } = require('../../utils/schemaCache');
 const { computeDueDate, computeScheduledSendAt, ensureCustomerCanBill, getHierarchyHelpers, nextInvoiceNumber, resolveDealUuid, resolveNetDays, snapToNextBillingCycle } = require('./helpers');
 const { appendToMonthlyDraft } = require('./drafts');
@@ -102,6 +103,8 @@ async function createInvoice(payload, adminId, trx = db) {
       line_total_minor: lineTotal,
       parent_position: isSubItem ? ensureInt(li.parent_position) : null,
       details_text: li.details_text || null,
+      // Migration 220 — line kind, unit, rate + promotion carry over.
+      ...extendedLineColumns(li, { invoice: true }),
     };
   });
   // Apply the migration-119 hierarchy resolver: rewrites parent
@@ -356,6 +359,7 @@ async function spawnInstallmentInvoices({ trx, eventId, quoteId, customer, curre
         description: li.description,
         parent_position: li.parent_position,
         details_text: li.details_text,
+        ...extendedLineColumns(li, { invoice: true }),
       })),
       vatRate: totals?.vatRate,
     }, customer, adminId, trx);
@@ -525,6 +529,7 @@ async function spawnInstallmentInvoices({ trx, eventId, quoteId, customer, curre
         line_total_minor: ensureInt(li.line_total_minor),
         parent_position: li.parent_position == null ? null : ensureInt(li.parent_position),
         details_text: li.details_text || null,
+        ...extendedLineColumns(li, { invoice: true }),
       }));
       const { validateLineItemHierarchy, insertLineItemsHierarchical } = getHierarchyHelpers();
       validateLineItemHierarchy(cloned);

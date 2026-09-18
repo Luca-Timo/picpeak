@@ -15,11 +15,12 @@
  *   GET  /:token                         issuer-only shell; full view with a grant
  *   POST /:token/verification            email a code to the customer on file
  *   POST /:token/verification/confirm   body: { code } → { grant, expiresInSeconds }
+ *   GET  /:token/totals                  grant; the totals for a set of add-ons
  *   POST /:token/respond                 grant; body: { action: 'accept' | 'decline' }
  */
 
 const express = require('express');
-const { body } = require('express-validator');
+const { body, query } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const { handleAsync, validateRequest, successResponse } = require('../utils/routeHelpers');
 const quoteService = require('../services/quoteService');
@@ -79,6 +80,29 @@ router.get(
   }),
 );
 
+// Live totals for a set of add-ons (#1451): the page shows what the customer's
+// choice costs, and the accept call sends the total back for the server to
+// re-check. Behind the grant, like the view itself.
+router.get(
+  '/:token/totals',
+  previewLimiter,
+  [
+    tokenParam(),
+    query('selected').optional().isString().isLength({ max: 1000 }).matches(/^(\d{1,6}(,\d{1,6}){0,199})?$/),
+  ],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const tokenRow = await loadActionToken(req, res, { tableName: TABLE, token: req.params.token });
+    if (!tokenRow) return undefined;
+    if (!verification.hasValidGrant(req, KIND, tokenRow, req.params.token)) {
+      return sendVerificationRequired(res);
+    }
+    const selected = req.query.selected ? String(req.query.selected).split(',').map(Number) : [];
+    const totals = await quoteService.previewOptionalSelection(tokenRow.quote_id, selected);
+    return successResponse(res, totals);
+  }),
+);
+
 router.post(
   '/:token/respond',
   respondLimiter,
@@ -88,6 +112,13 @@ router.post(
     // ToS box: optional flag, only meaningful when the global
     // `crm_quotes_tos_required` setting is on. Service enforces.
     body('tosAccepted').optional().isBoolean(),
+    // Optional add-ons (#1451): the chosen positions and the total the page
+    // showed. The service recomputes and refuses a mismatch.
+    body('selectedOptional').optional().isArray({ max: 200 }),
+    body('selectedOptional.*').isInt({ min: 1 }).toInt(),
+    body('expectedTotalMinor').optional().isInt().toInt(),
+    // A message to the business, sent with the acceptance.
+    body('customerMessage').optional({ nullable: true }).isString().isLength({ max: 2000 }),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);
@@ -104,9 +135,19 @@ router.post(
         action: req.body.action,
         ip: clientIpForAudit(req),
         tosAccepted: req.body.tosAccepted === true,
+        selectedOptional: req.body.selectedOptional,
+        expectedTotalMinor: req.body.expectedTotalMinor,
+        customerMessage: req.body.customerMessage,
       });
       return successResponse(res, { status: result.status, lockedAt: result.lockedAt });
     } catch (err) {
+      // The add-on choice was priced against a total that has since changed:
+      // the page shows the new one and asks the customer to accept again.
+      if (err.code === 'TOTAL_MISMATCH') {
+        return res.status(err.statusCode || 409).json({
+          error: err.message, code: err.code, totalAmountMinor: err.totalAmountMinor,
+        });
+      }
       if (err.code === 'RESPONSE_LOCKED') {
         return res.status(423).json({
           error: err.message,

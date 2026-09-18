@@ -113,6 +113,10 @@ export const LocalizedDateInput: React.FC<LocalizedDateInputProps> = ({
     const el = nativeRef.current;
     if (!el) return;
     try {
+      // The native input takes focus while its calendar is open: browsers
+      // (Safari especially) close the calendar when that input loses focus,
+      // so without this it stayed open after moving to another field.
+      el.focus({ preventScroll: true });
       el.showPicker();
     } catch {
       // showPicker throws on unsupported browsers / outside a user
@@ -183,7 +187,12 @@ export const LocalizedDateInput: React.FC<LocalizedDateInputProps> = ({
           min={min}
           max={max}
           disabled={disabled}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            onChange(e.target.value);
+            // Back to the visible field once a date is picked, so the next
+            // Tab or click behaves as usual.
+            document.getElementById(inputId)?.focus({ preventScroll: true });
+          }}
           tabIndex={-1}
           aria-hidden="true"
           className="sr-only"

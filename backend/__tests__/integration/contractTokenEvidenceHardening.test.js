@@ -63,7 +63,21 @@ async function enableFlag(key) {
 
 async function sentContract(title = 'Hochzeit') {
   const id = await contractService.createContract({ customerAccountId: customerId, title }, adminId);
-  const { token } = await contractService.sendContract(id, adminId);
+  await contractService.sendContract(id, adminId);
+  // Sending now invites signers (signatures v2, #1446) instead of minting an
+  // action token. These guards cover the single-link path a contract sent
+  // before v2 still uses, so mark this one legacy and give it a link.
+  await db('contracts').where({ id }).update({ signing_version: null });
+  const token = crypto.randomBytes(32).toString('hex');
+  await db('contract_action_tokens').insert({
+    contract_id: id,
+    token,
+    // ISO, like the services write: a bare Date reads back as
+    // "[object Object]" here, and an expiry nothing can read would make the
+    // link's expiry check meaningless in this suite.
+    expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    created_at: new Date().toISOString(),
+  });
   return { id, token };
 }
 
@@ -166,10 +180,14 @@ describe('signing tokens in the activity log', () => {
 
     expect(forContract).toHaveLength(2);
     for (const meta of forContract) {
-      expect(meta.tokenId).toBe(tokenRow.id);
       expect(meta).not.toHaveProperty('token');
       expect(JSON.stringify(meta)).not.toMatch(HEX_TOKEN);
     }
+    // Sending invites signers (signatures v2) and mints no token, so only the
+    // signature — which arrives through the legacy link — carries a token id.
+    const withToken = forContract.filter((meta) => meta.tokenId !== undefined);
+    expect(withToken).toHaveLength(1);
+    expect(withToken[0].tokenId).toBe(tokenRow.id);
   });
 
   it('migration 216 scrubs legacy rows and is idempotent', async () => {

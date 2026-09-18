@@ -51,4 +51,9 @@ module.exports = {
     nullRef('quotes', 'payment_timing_template_id'), nullRef('invoices', 'payment_timing_template_id'),
   ],
   business_profile: [cascade('business_bank_accounts', 'business_profile_id')],
+  // Contract templates (#1445): a deleted template or version leaves the
+  // contracts made from it, with the reference nulled — which is a change to
+  // an audited row, so it goes through the recorder.
+  contract_templates: [nullRef('contracts', 'template_id')],
+  contract_template_versions: [nullRef('contracts', 'template_version_id')],
 };

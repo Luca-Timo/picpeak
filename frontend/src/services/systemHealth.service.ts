@@ -35,6 +35,17 @@ export interface SystemHealthFailures {
    *  `waitingEmails` then means "nothing found yet", not "nothing". */
   scanTruncated?: boolean;
   counts: { stuckEmails: number; waitingEmails: number; pendingScanned?: number };
+  /** Customer documents (#1444): uploads waiting for a review, and rejected ones. */
+  customerDocuments?: { pending: number; rejected: number };
+  /** Where the key for signing evidence comes from (#1446) — never the key itself. */
+  evidenceKey?: {
+    source: 'env' | 'file' | 'none' | 'unreadable';
+    keyId: string | null;
+    /** The key stored evidence was written under, when there is any. */
+    storedKeyId?: string | null;
+    /** null when nothing is stored yet. */
+    matchesStored?: boolean | null;
+  };
 }
 
 export const systemHealthService = {
