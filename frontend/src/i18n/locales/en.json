@@ -8362,10 +8362,6 @@
       "endedBody": "Open the contract again from your customer portal to continue.",
       "backToContracts": "Go to your contracts"
     },
-    "verify": {
-      "heading": "Contract {{number}}",
-      "from": "{{company}} has asked you to sign this contract."
-    },
     "sessionEnded": "Your signing session has ended. Confirm your email again to continue.",
     "documents": {
       "downloadError": "The file couldn't be downloaded. Try again in a moment.",
@@ -8435,18 +8431,8 @@
         "locked": "Too many wrong tries for this code. Send a new code.",
         "rateLimited": "You have asked for several codes in the last hour. Use the latest code from your email, or try again in an hour.",
         "tooManyRequests": "Too many attempts from this connection. Wait a few minutes, then try again.",
-        "generic": "Something went wrong. Try again; if it keeps happening, contact the sender.",
-        "format": "Enter the six-digit code from the email."
-      },
-      "title": "Confirm your email address",
-      "intro": "Before you can read and sign the contract, we send a six-digit code to {{email}}.",
-      "sending": "Sending…",
-      "send": "Send code",
-      "sent": "We sent a code to {{email}}. It can take up to a minute to arrive and is valid for {{minutes}} minutes.",
-      "codeLabel": "Six-digit code",
-      "verifying": "Checking…",
-      "verify": "Confirm code",
-      "resend": "Send a new code"
+        "generic": "Something went wrong. Try again; if it keeps happening, contact the sender."
+      }
     },
     "decline": {
       "error": "The contract couldn't be declined. Try again; if it keeps failing, contact the sender.",

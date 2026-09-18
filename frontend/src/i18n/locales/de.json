@@ -8363,10 +8363,6 @@
       "endedBody": "Öffnen Sie den Vertrag erneut über Ihr Kundenportal, um fortzufahren.",
       "backToContracts": "Zu Ihren Verträgen"
     },
-    "verify": {
-      "heading": "Vertrag {{number}}",
-      "from": "{{company}} bittet Sie, diesen Vertrag zu unterschreiben."
-    },
     "sessionEnded": "Ihre Sitzung zum Unterschreiben ist abgelaufen. Bestätigen Sie Ihre E-Mail-Adresse erneut, um fortzufahren.",
     "documents": {
       "downloadError": "Die Datei konnte nicht heruntergeladen werden. Versuchen Sie es gleich noch einmal.",
@@ -8436,18 +8432,8 @@
         "locked": "Zu viele falsche Versuche für diesen Code. Fordern Sie einen neuen Code an.",
         "rateLimited": "Sie haben in der letzten Stunde mehrere Codes angefordert. Verwenden Sie den neuesten Code aus Ihrer E-Mail, oder versuchen Sie es in einer Stunde erneut.",
         "tooManyRequests": "Zu viele Versuche von dieser Verbindung. Warten Sie einige Minuten und versuchen Sie es dann erneut.",
-        "generic": "Etwas ist schiefgelaufen. Versuchen Sie es erneut; falls es weiterhin auftritt, wenden Sie sich an den Absender.",
-        "format": "Geben Sie den sechsstelligen Code aus der E-Mail ein."
-      },
-      "title": "E-Mail-Adresse bestätigen",
-      "intro": "Bevor Sie den Vertrag lesen und unterschreiben können, senden wir einen sechsstelligen Code an {{email}}.",
-      "sending": "Wird gesendet…",
-      "send": "Code senden",
-      "sent": "Wir haben einen Code an {{email}} gesendet. Die Zustellung kann bis zu einer Minute dauern; der Code ist {{minutes}} Minuten gültig.",
-      "codeLabel": "Sechsstelliger Code",
-      "verifying": "Wird geprüft…",
-      "verify": "Code bestätigen",
-      "resend": "Neuen Code senden"
+        "generic": "Etwas ist schiefgelaufen. Versuchen Sie es erneut; falls es weiterhin auftritt, wenden Sie sich an den Absender."
+      }
     },
     "decline": {
       "error": "Der Vertrag konnte nicht abgelehnt werden. Versuchen Sie es erneut; falls es weiterhin nicht klappt, wenden Sie sich an den Absender.",

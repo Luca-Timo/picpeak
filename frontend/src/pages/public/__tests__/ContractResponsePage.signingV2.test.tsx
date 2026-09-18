@@ -209,15 +209,17 @@ it('confirms the email, shows the contract, signs with the typed name and thanks
   sign.mockResolvedValue({ status: 'sent', signedAt: '2026-09-14T10:00:00Z' });
   renderAt(`/contract/${TOKEN}`);
 
-  // Verify step: issuer, contract number, masked email.
-  expect(await screen.findByText('Contract V-2026-0007')).toBeInTheDocument();
-  expect(screen.getByText('Studio Licht has asked you to sign this contract.')).toBeInTheDocument();
+  // Verify step: the same "confirm it's you" screen as a quote — the issuer
+  // and the masked email, nothing about the contract until the code is in.
+  expect(await screen.findByText("Confirm it's you")).toBeInTheDocument();
+  expect(screen.getByText('Studio Licht')).toBeInTheDocument();
+  expect(screen.queryByText(/V-2026-0007/)).toBeNull();
   expect(invite).toHaveBeenCalledWith(TOKEN);
   expect(session).not.toHaveBeenCalled();
 
   await user.click(screen.getByRole('button', { name: 'Send code' }));
-  await user.type(await screen.findByLabelText('Six-digit code'), '123456');
-  await user.click(screen.getByRole('button', { name: 'Confirm code' }));
+  await user.type(await screen.findByLabelText('6-digit code'), '123456');
+  await user.click(screen.getByRole('button', { name: 'Confirm' }));
 
   // Review: the contract, who signs, in which order.
   expect(await screen.findByRole('heading', { name: 'Wedding contract' })).toBeInTheDocument();

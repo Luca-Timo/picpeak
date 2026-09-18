@@ -298,6 +298,7 @@ const SigningFlow: React.FC<SigningFlowProps> = ({ scope, token, invite, onLinkE
   const { t } = useTranslation();
   const [session, setSession] = useState<SigningSession | null>(() => signingSessionStore.read(scope));
   const [sessionEnded, setSessionEnded] = useState(false);
+  const { isDark } = usePublicDarkMode();
 
   const dropSession = useCallback(() => {
     signingSessionStore.clear(scope);
@@ -344,31 +345,17 @@ const SigningFlow: React.FC<SigningFlowProps> = ({ scope, token, invite, onLinkE
       );
     }
     return (
-      <PageShell issuer={invite.issuer}>
-        <div className={CARD}>
-          <div className="mb-4">
-            <p className="text-xs font-mono inline-block px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300">
-              {t('contractSigning.verify.heading', 'Contract {{number}}', { number: invite.contractNumber })}
-            </p>
-            {invite.issuer?.companyName && (
-              <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-2">
-                {t('contractSigning.verify.from', '{{company}} has asked you to sign this contract.', { company: invite.issuer.companyName })}
-              </p>
-            )}
-          </div>
-          {sessionEnded && (
-            <p role="status" className="mb-4 text-sm p-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200">
-              {t('contractSigning.sessionEnded', 'Your signing session has ended. Confirm your email again to continue.')}
-            </p>
-          )}
-          <OtpVerifyStep
-            token={token}
-            maskedEmail={invite.signer.maskedEmail}
-            onVerified={handleVerified}
-            onLinkError={onLinkError}
-          />
-        </div>
-      </PageShell>
+      <OtpVerifyStep
+        token={token}
+        maskedEmail={invite.signer.maskedEmail}
+        issuer={invite.issuer}
+        isDark={isDark}
+        notice={sessionEnded
+          ? t('contractSigning.sessionEnded', 'Your signing session has ended. Confirm your email again to continue.')
+          : null}
+        onVerified={handleVerified}
+        onLinkError={onLinkError}
+      />
     );
   }
 

@@ -123,4 +123,41 @@ describe('DocumentVerificationStep', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/contact the sender/);
   });
+
+  it('shows nothing about the document unless the caller asks for a label', () => {
+    renderStep();
+    expect(screen.queryByText('Contract C-2026-0001')).toBeNull();
+  });
+
+  it('shows the optional document label when one is passed', () => {
+    renderStep({ documentLabel: 'Contract C-2026-0001' });
+    expect(screen.getByText('Contract C-2026-0001')).toBeInTheDocument();
+  });
+
+  it("asks the caller first for an error it doesn't know, and says nothing when the caller has dealt with it", async () => {
+    const describeError = vi.fn((err: unknown) => {
+      const code = (err as { response?: { data?: { code?: string } } }).response?.data?.code;
+      if (code === 'OTP_WRONG') return 'That code isn\'t right.';
+      if (code === 'LINK_GONE') return '';
+      return null;
+    });
+    const confirmCode = vi.fn()
+      .mockRejectedValueOnce(refusal(400, { code: 'OTP_WRONG' }))
+      .mockRejectedValueOnce(refusal(410, { code: 'LINK_GONE' }))
+      .mockRejectedValueOnce(refusal(400, { code: 'VERIFICATION_CODE_EXPIRED' }));
+    renderStep({ describeError, confirmCode });
+    await sendAndType('123456');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent("That code isn't right.");
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+
+    // null falls through to the step's own messages.
+    fireEvent.change(screen.getByLabelText('6-digit code'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('This code has expired. Please send a new code.');
+    expect(describeError).toHaveBeenCalledTimes(3);
+  });
 });
