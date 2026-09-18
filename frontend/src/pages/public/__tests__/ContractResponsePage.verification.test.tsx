@@ -46,7 +46,7 @@ const STORAGE_KEY = `docAccess:contract:${TOKEN}`;
 const shell = {
   verificationRequired: true,
   language: 'en',
-  emailHint: 'k***@example.com',
+  emailHint: 'ku***@ex***.com',
   issuer: { companyName: 'Studio Nord', logoUrl: null, logoUrlDark: null },
 };
 const fullContract = {
@@ -122,7 +122,7 @@ describe('ContractResponsePage verification gate', () => {
 
   it('shows only the verification step for the bare link, then the contract once the code is confirmed', async () => {
     post.mockImplementation(async (url) => {
-      if (String(url).endsWith('/verification')) return { data: { sent: true, emailHint: 'k***@example.com', resendAfterSeconds: 30 } };
+      if (String(url).endsWith('/verification')) return { data: { sent: true, emailHint: 'ku***@ex***.com', resendAfterSeconds: 30 } };
       if (String(url).endsWith('/verification/confirm')) return { data: { grant: 'grant-abc', expiresInSeconds: 900 } };
       throw new Error(`unexpected POST ${url}`);
     });

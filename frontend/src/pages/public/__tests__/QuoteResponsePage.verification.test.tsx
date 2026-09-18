@@ -41,7 +41,7 @@ const STORAGE_KEY = `docAccess:quote:${TOKEN}`;
 const shell = {
   verificationRequired: true,
   language: 'en',
-  emailHint: 'k***@example.com',
+  emailHint: 'ku***@ex***.com',
   issuer: { companyName: 'Studio Nord', logoUrl: null, logoUrlDark: null },
 };
 const fullQuote = {
@@ -98,7 +98,7 @@ describe('QuoteResponsePage verification gate', () => {
 
   it('shows only the verification step for the bare link, and keeps the email link hint after verifying', async () => {
     post.mockImplementation(async (url) => {
-      if (String(url).endsWith('/verification')) return { data: { sent: true, emailHint: 'k***@example.com', resendAfterSeconds: 30 } };
+      if (String(url).endsWith('/verification')) return { data: { sent: true, emailHint: 'ku***@ex***.com', resendAfterSeconds: 30 } };
       if (String(url).endsWith('/verification/confirm')) return { data: { grant: 'grant-q', expiresInSeconds: 900 } };
       throw new Error(`unexpected POST ${url}`);
     });

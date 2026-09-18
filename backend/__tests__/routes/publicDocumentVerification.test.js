@@ -107,7 +107,7 @@ describe('public document verification', () => {
       expect(res.status).toBe(200);
       expect(Object.keys(res.body.contract).sort()).toEqual(['emailHint', 'issuer', 'language', 'verificationRequired']);
       expect(res.body.contract.verificationRequired).toBe(true);
-      expect(res.body.contract.emailHint).toBe('c***@example.com');
+      expect(res.body.contract.emailHint).toBe('cu***@ex***.com');
       const body = JSON.stringify(res.body);
       for (const secret of ['customer@example.com', 'Maria Meier', 'K-VER-0001', 'Hochzeit', CUSTOMER_IP]) {
         expect(body).not.toContain(secret);
@@ -165,7 +165,7 @@ describe('public document verification', () => {
 
       const sendRes = await send(token);
       expect(sendRes.status).toBe(202);
-      expect(sendRes.body).toEqual({ sent: true, emailHint: 'c***@example.com', resendAfterSeconds: 60 });
+      expect(sendRes.body).toEqual({ sent: true, emailHint: 'cu***@ex***.com', resendAfterSeconds: 60 });
       expect(sent).toHaveLength(1);
       expect(sent[0]).toEqual(expect.objectContaining({
         to: 'customer@example.com', kind: 'contract', documentNumber: 'K-VER-0001', language: 'de',

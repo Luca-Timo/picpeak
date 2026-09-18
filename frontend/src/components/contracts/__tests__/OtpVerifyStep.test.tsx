@@ -60,7 +60,7 @@ const httpError = (status: number, data: Record<string, unknown>) => Object.assi
 
 beforeEach(() => {
   vi.clearAllMocks();
-  requestCode.mockResolvedValue({ maskedEmail: 'an***@example.com', ttlMinutes: 10 });
+  requestCode.mockResolvedValue({ maskedEmail: 'an***@ex***.com', ttlMinutes: 10 });
 });
 
 it('sends a code, says when it is wrong, and hands the session on once it is right', async () => {
@@ -69,14 +69,14 @@ it('sends a code, says when it is wrong, and hands the session on once it is rig
   verify
     .mockRejectedValueOnce(httpError(400, { error: 'That code isn\'t right.', code: 'OTP_WRONG' }))
     .mockResolvedValueOnce(SESSION);
-  render(<OtpVerifyStep token={TOKEN} maskedEmail="an***@example.com" issuer={ISSUER} isDark={false} onVerified={onVerified} />);
+  render(<OtpVerifyStep token={TOKEN} maskedEmail="an***@ex***.com" issuer={ISSUER} isDark={false} onVerified={onVerified} />);
 
-  expect(screen.getByText(/We'll email a 6-digit code to an\*\*\*@example\.com/)).toBeInTheDocument();
+  expect(screen.getByText(/We'll email a 6-digit code to an\*\*\*@ex\*\*\*\.com/)).toBeInTheDocument();
   // The same screen as a quote: the document itself stays out of view.
   expect(screen.queryByText(/Contract/)).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Send code' }));
 
-  expect(await screen.findByText('We sent a code to an***@example.com.')).toBeInTheDocument();
+  expect(await screen.findByText('We sent a code to an***@ex***.com.')).toBeInTheDocument();
   expect(requestCode).toHaveBeenCalledWith(TOKEN);
 
   const input = screen.getByLabelText('6-digit code');
@@ -102,7 +102,7 @@ it('explains an expired code, a locked code and too many code requests', async (
   verify
     .mockRejectedValueOnce(httpError(410, { code: 'OTP_EXPIRED' }))
     .mockRejectedValueOnce(httpError(429, { code: 'OTP_LOCKED' }));
-  render(<OtpVerifyStep token={TOKEN} maskedEmail="an***@example.com" issuer={ISSUER} isDark={false} onVerified={vi.fn()} />);
+  render(<OtpVerifyStep token={TOKEN} maskedEmail="an***@ex***.com" issuer={ISSUER} isDark={false} onVerified={vi.fn()} />);
   await user.click(screen.getByRole('button', { name: 'Send code' }));
   const input = await screen.findByLabelText('6-digit code');
 
@@ -122,7 +122,7 @@ it('hands a withdrawn or replaced link to the page instead of showing a code err
   const user = userEvent.setup();
   const onLinkError = vi.fn();
   requestCode.mockRejectedValueOnce(httpError(410, { code: 'SIGNING_LINK_REVOKED' }));
-  render(<OtpVerifyStep token={TOKEN} maskedEmail="an***@example.com" issuer={ISSUER} isDark={false} onVerified={vi.fn()} onLinkError={onLinkError} />);
+  render(<OtpVerifyStep token={TOKEN} maskedEmail="an***@ex***.com" issuer={ISSUER} isDark={false} onVerified={vi.fn()} onLinkError={onLinkError} />);
 
   await user.click(screen.getByRole('button', { name: 'Send code' }));
 

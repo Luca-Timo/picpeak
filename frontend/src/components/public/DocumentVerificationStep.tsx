@@ -27,7 +27,7 @@ export interface DocumentVerificationIssuer {
 
 interface DocumentVerificationStepProps<Result> {
   issuer: DocumentVerificationIssuer | null;
-  /** Masked recipient address from the server, e.g. `k***@example.com`. */
+  /** Masked recipient address from the server, e.g. `ku***@ex***.com`. */
   emailHint: string | null;
   isDark: boolean;
   /** Shown above the explanation, e.g. when the grant ran out mid-visit. */

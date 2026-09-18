@@ -25,6 +25,7 @@ const { getAppSetting } = require('../../utils/appSettings');
 const { ensureInt } = require('../../utils/numericHelpers');
 const fieldEncryption = require('../../utils/fieldEncryption');
 const { auditedUpdate } = require('../accountingHistory');
+const { maskEmail } = require('../../utils/maskEmail');
 
 const MAX_CUSTOMER_SIGNERS = 5;
 const ORDERS = ['parallel', 'sequential'];
@@ -44,13 +45,6 @@ function customerName(customer) {
     || [customer.first_name, customer.last_name].filter(Boolean).join(' ')
     || customer.company_name
     || String(customer.email || '').split('@')[0];
-}
-
-/** "an***@example.com" */
-function maskEmail(email) {
-  const [local, domain] = String(email || '').split('@');
-  if (!domain) return '';
-  return `${local.slice(0, 2)}${'*'.repeat(Math.max(3, local.length - 2))}@${domain}`;
 }
 
 /** A signer for the admin: decrypted name and email, never the evidence. */

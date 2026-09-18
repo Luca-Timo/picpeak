@@ -27,9 +27,9 @@ const refusal = (status: number, data: Record<string, unknown>) =>
 function renderStep(overrides: Partial<React.ComponentProps<typeof DocumentVerificationStep>> = {}) {
   const props = {
     issuer: { companyName: 'Studio Nord' },
-    emailHint: 'k***@example.com',
+    emailHint: 'ku***@ex***.com',
     isDark: false,
-    requestCode: vi.fn().mockResolvedValue({ sent: true, emailHint: 'k***@example.com', resendAfterSeconds: 30 }),
+    requestCode: vi.fn().mockResolvedValue({ sent: true, emailHint: 'ku***@ex***.com', resendAfterSeconds: 30 }),
     confirmCode: vi.fn().mockResolvedValue({ grant: 'grant-1', expiresInSeconds: 900 }),
     onVerified: vi.fn(),
     ...overrides,
@@ -48,7 +48,7 @@ async function sendAndType(code: string) {
 describe('DocumentVerificationStep', () => {
   it('explains why, shows no personal data beyond the masked address, and focuses the code input after sending', async () => {
     const props = renderStep();
-    expect(screen.getByText(/k\*\*\*@example\.com/)).toBeInTheDocument();
+    expect(screen.getByText(/ku\*\*\*@ex\*\*\*\.com/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /send code/i }));
 

@@ -22,6 +22,7 @@ const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errors');
 const { toTimestamp } = require('../utils/dateNormalize');
+const { maskEmail } = require('../utils/maskEmail');
 
 const TABLE = 'public_document_verification_codes';
 const CODE_TTL_MS = 15 * 60 * 1000;
@@ -39,14 +40,6 @@ const GRANT_HEADER = 'x-document-access';
  */
 function tokenFingerprint(token) {
   return crypto.createHash('sha256').update(String(token)).digest('hex').slice(0, 16);
-}
-
-/** `kunde@example.com` → `k***@example.com`; null when there is nothing to hint. */
-function maskEmail(email) {
-  if (typeof email !== 'string') return null;
-  const at = email.lastIndexOf('@');
-  if (at < 1 || at === email.length - 1) return null;
-  return `${email[0]}***${email.slice(at)}`;
 }
 
 function issueGrant(kind, tokenRow, token) {

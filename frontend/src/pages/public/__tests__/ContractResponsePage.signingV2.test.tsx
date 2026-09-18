@@ -110,7 +110,7 @@ const inviteSummary = {
   status: 'sent',
   language: 'en',
   issuer: { companyName: 'Studio Licht', logoUrl: null, logoUrlDark: null },
-  signer: { status: 'invited', maskedEmail: 'an***@example.com' },
+  signer: { status: 'invited', maskedEmail: 'an***@ex***.com' },
 };
 
 const baseContract = {
@@ -188,7 +188,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   window.sessionStorage.clear();
   invite.mockResolvedValue(inviteSummary);
-  requestCode.mockResolvedValue({ maskedEmail: 'an***@example.com', ttlMinutes: 10 });
+  requestCode.mockResolvedValue({ maskedEmail: 'an***@ex***.com', ttlMinutes: 10 });
   verify.mockResolvedValue({ sessionToken: SESSION_TOKEN, expiresAt: '2099-01-01T00:00:00.000Z' });
 });
 
