@@ -25,6 +25,11 @@ jest.setTimeout(120000);
 // SQLite (the same serializer behaviour as on main), so the amounts are
 // compared as numbers.
 const minor = (value) => (value == null ? value : Number(value));
+// PostgreSQL returns bigint amounts and decimal quantities as strings; the
+// assertions are about the numbers, so compare those.
+const NUMERIC = ['quantity', 'unitPriceMinor', 'unit_price_minor', 'lineTotalMinor'];
+const numbers = (row) => row && Object.fromEntries(Object.entries(row)
+  .map(([key, value]) => [key, NUMERIC.includes(key) && value != null ? Number(value) : value]));
 
 let db;
 let cleanup;
@@ -145,20 +150,20 @@ test('publishing creates version 1 and the quote is built from it', async () => 
   // Several items: each priced, the package line is their sum.
   const [gold] = byDescription('Wedding Gold');
   const [photo] = byDescription('Photography on location');
-  expect(photo).toEqual(expect.objectContaining({ quantity: 8, unitPriceMinor: 15000, rateSource: 'default', parentPosition: gold.position }));
+  expect(numbers(photo)).toEqual(expect.objectContaining({ quantity: 8, unitPriceMinor: 15000, rateSource: 'default', parentPosition: gold.position }));
   expect(minor(gold.lineTotalMinor)).toBe(8 * 15000 + 30000 + 50000);
   // A promotion's description is its line's comment, printed under the name.
   const [verein] = byDescription('Vereinsrabatt');
   expect(verein).toEqual(expect.objectContaining({ lineKind: 'discount', detailsText: 'Sonderkondition für gemeinnützige Vereine' }));
   // One item: the package line carries the price, the item is listed unpriced.
   const [portrait] = byDescription('Portrait add-on');
-  expect(portrait).toEqual(expect.objectContaining({ unitPriceMinor: 50000, isOptional: true, selected: false }));
+  expect(numbers(portrait)).toEqual(expect.objectContaining({ unitPriceMinor: 50000, isOptional: true, selected: false }));
   const portraitChild = lineItems.find((li) => li.parentPosition === portrait.position);
-  expect(portraitChild).toEqual(expect.objectContaining({ description: 'Editing', unitPriceMinor: 0 }));
+  expect(numbers(portraitChild)).toEqual(expect.objectContaining({ description: 'Editing', unitPriceMinor: 0 }));
   // Pinned rate.
-  expect(byDescription('Second shooter')[0]).toEqual(expect.objectContaining({ quantity: 2, unitPriceMinor: 9000, rateSource: 'item' }));
+  expect(numbers(byDescription('Second shooter')[0])).toEqual(expect.objectContaining({ quantity: 2, unitPriceMinor: 9000, rateSource: 'item' }));
   // Pre-ticked promotion.
-  expect(byDescription('Vereinsrabatt')[0]).toEqual(expect.objectContaining({ lineKind: 'discount', lineTotalMinor: -30000 }));
+  expect(numbers(byDescription('Vereinsrabatt')[0])).toEqual(expect.objectContaining({ lineKind: 'discount', lineTotalMinor: -30000 }));
   // The unticked optional add-on isn't in the net.
   expect(minor(quote.netAmountMinor)).toBe(200000 + 18000 - 30000);
   // The quote keeps the raw text; placeholders resolve where it is shown.
@@ -224,7 +229,7 @@ test('save as template keeps the lines and stays customer-neutral', async () => 
   expect(sections.map((s) => s.line.description)).toEqual(['Wedding Gold', 'Portrait add-on', 'Second shooter']);
   // A rate taken from the business default goes back to "use the rate".
   const photo = sections[0].children.find((c) => c.description === 'Photography on location');
-  expect(photo).toEqual(expect.objectContaining({ rateSource: 'auto', unitPriceMinor: 0 }));
+  expect(numbers(photo)).toEqual(expect.objectContaining({ rateSource: 'auto', unitPriceMinor: 0 }));
   expect(sections[1].isOptional).toBe(true);
   // The intro comes over with its placeholders, not this customer's details.
   expect(template.draft.introText).toContain('{{customer_name}}');

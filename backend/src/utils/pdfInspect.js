@@ -270,7 +270,11 @@ async function inspectPdf(buffer, {
       throw refuse('The PDF could not be read', 'PDF_MALFORMED');
     }
     // Saving decodes whatever the load left lazy, and swallows a throw the
-    // same way.
+    // same way. Belt and braces, and untested on its own: pdf-lib decodes
+    // object streams on load, and `useObjectStreams: false` copies the other
+    // streams raw, so on every fixture we have the after-load check above
+    // trips first. It stays for a stream pdf-lib decodes lazily in a future
+    // version.
     if (meter.tripped()) throw tooComplex();
   } catch (err) {
     if (err instanceof decodeBudget.DecodeBudgetExceeded) throw tooComplex();

@@ -451,7 +451,7 @@ async function publishTemplate(id, { lockVersion }, adminId) {
     await trx('contract_template_versions').where({ template_id: id, status: 'published' })
       .update({ status: 'superseded', updated_at: now });
     await trx('contract_template_versions').where({ id: draft.id }).update({
-      status: 'published', content_sha256: contentSha256, published_at: now,
+      status: 'published', content_sha256: contentSha256, published_at: now.toISOString(),
       published_by_admin_id: adminId || null, updated_at: now,
     });
     await trx('contract_templates').where({ id }).update({

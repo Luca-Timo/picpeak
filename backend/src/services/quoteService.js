@@ -2164,7 +2164,7 @@ async function reissueQuote(id, adminId, reason = null) {
     await trx('quote_action_tokens')
       .where({ quote_id: id })
       .whereNull('used_at')
-      .update({ used_at: now, used_action: 'declined' });
+      .update({ used_at: stamp(now), used_action: 'declined' });
   });
 
   const newId = await duplicateQuote(id, adminId, { replacesQuoteId: id, dealUuid: quote.deal_uuid });

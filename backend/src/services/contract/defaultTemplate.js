@@ -66,7 +66,7 @@ async function createSystemTemplate() {
       version_number: 1,
       status: 'published',
       content_sha256: contentSha256,
-      published_at: now,
+      published_at: now.toISOString(),
       created_at: now,
       updated_at: now,
     }).returning('id'));

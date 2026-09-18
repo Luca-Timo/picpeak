@@ -19,6 +19,8 @@ let quotesApp;
 
 const auth = { get Authorization() { return `Bearer ${token}`; } };
 const off = (v) => v === false || v === 0 || v === '0';
+// PostgreSQL returns bigint amounts and decimal quantities as strings.
+const numbers = (row) => ({ ...row, quantity: Number(row.quantity), unit_price_minor: Number(row.unit_price_minor) });
 
 async function setFlag(key, value) {
   const updated = await db('feature_flags').where({ key }).update({ value });
@@ -102,7 +104,7 @@ test('the example template can be published and used as it is', async () => {
   const lines = await db('quote_line_items').where({ quote_id: quoteId }).orderBy('position');
   expect(lines).toHaveLength(5);
   // The hourly line follows the template's 8 hours at the example price.
-  expect(lines[0]).toEqual(expect.objectContaining({ quantity: 8, unit_price_minor: 18000 }));
+  expect(numbers(lines[0])).toEqual(expect.objectContaining({ quantity: 8, unit_price_minor: 18000 }));
   expect(lines.filter((l) => l.is_optional === true || l.is_optional === 1)).toHaveLength(2);
 });
 

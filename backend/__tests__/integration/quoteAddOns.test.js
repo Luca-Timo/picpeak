@@ -115,7 +115,7 @@ test('the public view lists add-ons with their selection', async () => {
   expect(line('Drone')).toEqual(expect.objectContaining({ isOptional: true, selected: true }));
   expect(line('Wedding day').isOptional).toBe(false);
   expect(res.body.quote.selectionLocked).toBe(false);
-  expect(res.body.quote.totalAmountMinor).toBe(116748);
+  expect(Number(res.body.quote.totalAmountMinor)).toBe(116748);
 });
 
 test('live totals follow the choice, the percentage promotion included', async () => {
@@ -125,7 +125,7 @@ test('live totals follow the choice, the percentage promotion included', async (
   expect(res.body).toEqual(expect.objectContaining({
     selectedOptional: [2, 4], netAmountMinor: 135000, vatAmountMinor: 10935, totalAmountMinor: 145935,
   }));
-  expect(res.body.lines.find((l) => l.position === 5).lineTotalMinor).toBe(-15000);
+  expect(Number(res.body.lines.find((l) => l.position === 5).lineTotalMinor)).toBe(-15000);
 });
 
 test('only offered add-ons can be chosen', async () => {

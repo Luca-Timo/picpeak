@@ -315,7 +315,7 @@ async function completeSend(contractId, { pdfPath, pdfSha256, adminId, freeze = 
     }
     const sent = await auditedUpdate(trx, 'contracts', claim, {
       status: 'sent',
-      sent_at: now,
+      sent_at: now.toISOString(),
       pdf_path: pdfPath,
       pdf_sha256: pdfSha256,
       signing_version: VERSION,

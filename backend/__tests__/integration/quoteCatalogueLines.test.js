@@ -25,6 +25,11 @@ jest.setTimeout(120000);
 // SQLite (the same serializer behaviour as on main), so the amounts are
 // compared as numbers.
 const minor = (value) => (value == null ? value : Number(value));
+// PostgreSQL returns bigint amounts and decimal quantities as strings; the
+// assertions are about the numbers, so compare those.
+const NUMERIC = ['quantity', 'unitPriceMinor', 'unit_price_minor', 'lineTotalMinor'];
+const numbers = (row) => row && Object.fromEntries(Object.entries(row)
+  .map(([key, value]) => [key, NUMERIC.includes(key) && value != null ? Number(value) : value]));
 
 let db;
 let cleanup;
@@ -140,8 +145,8 @@ describe('hour and day rates', () => {
     });
 
     expect(quote.hours).toBe(8);
-    expect(lineItems[0]).toEqual(expect.objectContaining({ quantity: 8, unitPriceMinor: 15000, rateSource: 'default', unit: 'hour' }));
-    expect(lineItems[1]).toEqual(expect.objectContaining({ quantity: 2, unitPriceMinor: 120000, rateSource: 'default' }));
+    expect(numbers(lineItems[0])).toEqual(expect.objectContaining({ quantity: 8, unitPriceMinor: 15000, rateSource: 'default', unit: 'hour' }));
+    expect(numbers(lineItems[1])).toEqual(expect.objectContaining({ quantity: 2, unitPriceMinor: 120000, rateSource: 'default' }));
     expect(minor(quote.netAmountMinor)).toBe(8 * 15000 + 2 * 120000);
   });
 
@@ -153,7 +158,7 @@ describe('hour and day rates', () => {
     await db('customer_accounts').where({ id: customerId }).update({ hourly_rate_minor: 99000 });
 
     const reloaded = await request(quoteApp).get(`/api/admin/quotes/${quote.id}`).set(auth);
-    expect(reloaded.body.lineItems[0]).toEqual(expect.objectContaining({ unitPriceMinor: 18000, rateSource: 'customer' }));
+    expect(numbers(reloaded.body.lineItems[0])).toEqual(expect.objectContaining({ unitPriceMinor: 18000, rateSource: 'customer' }));
     await db('customer_accounts').where({ id: customerId }).update({ hourly_rate_minor: null });
   });
 
@@ -201,7 +206,7 @@ describe('duplicate', () => {
     expect(copy.body.quote.hours).toBe(6);
     expect(copy.body.lineItems.map((li) => li.parentPosition)).toEqual([null, 1, 1]);
     expect(copy.body.lineItems[1]).toEqual(expect.objectContaining({ detailsText: 'On location', unit: 'hour', boundTo: 'hours' }));
-    expect(minor(copy.body.quote.netAmountMinor)).toBe(quote.netAmountMinor);
+    expect(minor(copy.body.quote.netAmountMinor)).toBe(minor(quote.netAmountMinor));
   });
 });
 
