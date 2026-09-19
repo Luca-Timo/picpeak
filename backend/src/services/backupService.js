@@ -1043,8 +1043,8 @@ async function saveManifestToLocal(manifest, manifestFileName, config) {
   const manifestDir = config.backup_manifest_path
     || path.join(config.backup_destination_path || path.join(getStoragePath(), 'backups'), 'manifests');
   await fs.mkdir(manifestDir, { recursive: true });
-  const manifestPath = path.join(manifestDir, manifestFileName);
-  await backupManifest.saveManifest(manifest, manifestPath, config.backup_manifest_format || 'json');
+  const manifestPath = path.join(manifestDir, path.basename(manifestFileName));
+  await backupManifest.saveManifest(manifest, manifestPath, config.backup_manifest_format === 'yaml' ? 'yaml' : 'json');
   logger.info(`Backup manifest saved to ${manifestPath}`);
   return manifestPath;
 }
@@ -1159,7 +1159,9 @@ async function runBackupInternal(isManual = false) {
         files: manifestFiles,
         databaseInfo,
         parentBackupId: previousBackup ? previousBackup.manifest_id : null,
-        format: config.backup_manifest_format || 'json',
+        // The format becomes the manifest file extension, so only the two
+        // known values may reach the file name.
+        format: config.backup_manifest_format === 'yaml' ? 'yaml' : 'json',
         customMetadata: {
           backup_run_id: runId,
           destination_type: destinationType,
