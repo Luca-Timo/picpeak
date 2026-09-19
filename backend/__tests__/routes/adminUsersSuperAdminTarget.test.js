@@ -31,6 +31,7 @@ describe('PUT /api/admin/users/:id — super_admin targets', () => {
   let db; let cleanup; let app;
   let superId; let superTok;
   let clerkId; let clerkTok;
+  let removerTok;
   let otherId;
 
   const auth = (req, tok) => req.set('Authorization', `Bearer ${tok}`);
@@ -55,6 +56,14 @@ describe('PUT /api/admin/users/:id — super_admin targets', () => {
     );
     clerkId = await insertAdmin({ username: 'clerk', email: 'clerk@example.com', role_id: clerkRole.id });
     clerkTok = mintAdminToken(clerkId);
+
+    // A delegated account manager for the lifecycle routes: users.delete only.
+    const removerRole = await svc.createRole(
+      { name: 'user_remover', permissions: ['users.view', 'users.delete'] },
+      superId,
+    );
+    const removerId = await insertAdmin({ username: 'remover', email: 'remover@example.com', role_id: removerRole.id });
+    removerTok = mintAdminToken(removerId);
 
     const viewer = await db('roles').where({ name: 'viewer' }).first();
     otherId = await insertAdmin({ username: 'other', email: 'other@example.com', role_id: viewer && viewer.id });
@@ -101,4 +110,50 @@ describe('PUT /api/admin/users/:id — super_admin targets', () => {
     expect(res.status).toBe(200);
     expect(Boolean((await row(otherId)).email_link_eligible)).toBe(true);
   });
+
+  it('lets a super_admin confirm an email by saving it unchanged', async () => {
+    await db('admin_users').where({ id: otherId }).update({ email_link_eligible: false });
+    const { email } = await row(otherId);
+    const res = await auth(request(app).put(`/api/admin/users/${otherId}`), superTok).send({ email });
+    expect(res.status).toBe(200);
+    expect(Boolean((await row(otherId)).email_link_eligible)).toBe(true);
+  });
+
+  describe('deactivate, activate and delete of a super_admin', () => {
+    let targetId;
+    beforeAll(async () => {
+      targetId = await insertAdmin({ username: 'third-super', email: 'third@example.com' });
+      await assignAdminRole(db, targetId, 'super_admin');
+    });
+
+    it('refuses a users.delete holder deactivating, activating or deleting a super_admin', async () => {
+      let res = await auth(request(app).post(`/api/admin/users/${targetId}/deactivate`), removerTok);
+      expect(res.status).toBe(403);
+      expect(Boolean((await row(targetId)).is_active)).toBe(true);
+
+      await db('admin_users').where({ id: targetId }).update({ is_active: false });
+      res = await auth(request(app).post(`/api/admin/users/${targetId}/activate`), removerTok);
+      expect(res.status).toBe(403);
+      expect(Boolean((await row(targetId)).is_active)).toBe(false);
+      await db('admin_users').where({ id: targetId }).update({ is_active: true });
+
+      res = await auth(request(app).delete(`/api/admin/users/${targetId}`), removerTok);
+      expect(res.status).toBe(403);
+      expect(await row(targetId)).toBeTruthy();
+    });
+
+    it('still lets a users.delete holder deactivate an account that is not a super_admin', async () => {
+      const res = await auth(request(app).post(`/api/admin/users/${otherId}/deactivate`), removerTok);
+      expect(res.status).toBe(200);
+      expect(Boolean((await row(otherId)).is_active)).toBe(false);
+      await db('admin_users').where({ id: otherId }).update({ is_active: true });
+    });
+
+    it('lets a super_admin deactivate another super_admin', async () => {
+      const res = await auth(request(app).post(`/api/admin/users/${targetId}/deactivate`), superTok);
+      expect(res.status).toBe(200);
+      expect(Boolean((await row(targetId)).is_active)).toBe(false);
+    });
+  });
+
 });

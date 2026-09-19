@@ -285,9 +285,14 @@ async function updateAdminUser(id, updates, updatedById, requestingAdmin = {}) {
     allowedUpdates.email = updates.email;
     // Whether a later SSO login may link to this account by email
     // (oidcService, migration 227): an address set by a super_admin is
-    // trusted, one set by anyone else is not proof of ownership.
-    if (updates.email !== user.email && await hasColumnCached('admin_users', 'email_link_eligible')) {
-      allowedUpdates.email_link_eligible = formatBoolean(actorIsSuperAdmin);
+    // trusted — saving it unchanged is how a super_admin confirms one — while
+    // a change by anyone else is not proof of ownership.
+    if (await hasColumnCached('admin_users', 'email_link_eligible')) {
+      if (actorIsSuperAdmin) {
+        allowedUpdates.email_link_eligible = formatBoolean(true);
+      } else if (String(updates.email).toLowerCase() !== String(user.email || '').toLowerCase()) {
+        allowedUpdates.email_link_eligible = formatBoolean(false);
+      }
     }
   }
 
@@ -347,6 +352,23 @@ async function updateAdminUser(id, updates, updatedById, requestingAdmin = {}) {
 }
 
 /**
+ * Only a super_admin may change a super_admin account (deactivate, activate,
+ * delete). users.delete is delegable; the dedicated routes for invitations,
+ * role assignment and password resets already hold the same line.
+ */
+async function assertMayManageSuperAdminTarget(target, actorId) {
+  const superAdminRole = await db('roles').where('name', 'super_admin').first();
+  if (!superAdminRole || target.role_id !== superAdminRole.id) return;
+  const actor = await db('admin_users')
+    .leftJoin('roles', 'roles.id', 'admin_users.role_id')
+    .where('admin_users.id', actorId)
+    .first('roles.name as role_name');
+  if (!actor || actor.role_name !== 'super_admin') {
+    throw new ForbiddenError('Only Super Admins can modify a Super Admin account');
+  }
+}
+
+/**
  * Deactivate admin user
  * @param {number} id - User ID to deactivate
  * @param {number} deactivatedById - ID of user performing deactivation
@@ -375,6 +397,10 @@ async function deactivateAdminUser(id, deactivatedById) {
       throw new ValidationError('Cannot deactivate the last Super Admin');
     }
   }
+
+  // After the invariants above, which hold for every caller including a
+  // super_admin, so their specific message survives.
+  await assertMayManageSuperAdminTarget(user, deactivatedById);
 
   await db('admin_users').where('id', id).update({
     is_active: formatBoolean(false),
@@ -407,6 +433,7 @@ async function activateAdminUser(id, activatedById) {
   if (!user) {
     throw new NotFoundError('Admin user', id);
   }
+  await assertMayManageSuperAdminTarget(user, activatedById);
 
   // No "last super admin" guard needed — activate only ever ADDS an
   // active super_admin, never removes one. No "can't activate
@@ -474,6 +501,10 @@ async function deleteAdminUser(id, deletedById) {
       throw new ValidationError('Cannot delete the last Super Admin');
     }
   }
+
+  // After the invariants above, which hold for every caller including a
+  // super_admin, so their specific message survives.
+  await assertMayManageSuperAdminTarget(user, deletedById);
 
   // Hard delete. FK ON DELETE rules in core migrations handle cascade:
   //   SET NULL on created_by_admin_id everywhere (events, photos,
