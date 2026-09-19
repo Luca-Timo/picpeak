@@ -73,7 +73,7 @@ router.put('/profile', [
   // a later SSO login link to this account by email (oidcService,
   // migration 227). A super_admin's own change stays trusted.
   const current = await db('admin_users').where('id', adminId).select('email').first();
-  if (current && current.email !== email && req.admin.roleName !== 'super_admin'
+  if (current && String(current.email || '').toLowerCase() !== email && req.admin.roleName !== 'super_admin'
       && await hasColumnCached('admin_users', 'email_link_eligible')) {
     updates.email_link_eligible = formatBoolean(false);
   }

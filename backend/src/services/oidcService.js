@@ -655,6 +655,18 @@ async function resolveAdminFromClaims(claims) {
       });
       return syncAdminRole({ ...byEmail, external_issuer: iss, external_subject: sub }, mappedRole);
     }
+    // An unlinked admin with this email exists but its email was not set by a
+    // trusted flow. Refuse clearly instead of falling through to JIT
+    // provisioning, which would collide on the unique email.
+    const unconfirmed = await db('admin_users')
+      .where('email', email)
+      .whereNull('external_subject')
+      .first('id');
+    if (unconfirmed) {
+      const err = new Error('An admin with this email exists but its email was not confirmed by a Super Admin');
+      err.code = 'OIDC_EMAIL_UNVERIFIED';
+      throw err;
+    }
   }
 
   // 3. JIT provisioning.

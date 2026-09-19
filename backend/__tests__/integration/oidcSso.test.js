@@ -195,7 +195,8 @@ describe('OIDC SSO (#798)', () => {
 
     idp.setNextUser({ sub: 'sub-real-owner', email: 'claimed@example.com', email_verified: true });
     const res = await ssoRoundTrip();
-    expect(res.headers.location).toMatch(/sso_error=/);
+    // A clear, specific refusal — not a JIT insert colliding on the email.
+    expect(res.headers.location).toMatch(/sso_error=email_unverified/);
 
     const row = await db('admin_users').where({ email: 'claimed@example.com' }).first();
     expect(row.external_subject).toBeNull();
