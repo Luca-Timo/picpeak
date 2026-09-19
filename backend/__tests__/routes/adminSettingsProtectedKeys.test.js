@@ -92,4 +92,55 @@ describe('settings protected-key boundary (/general)', () => {
     expect(res.status).toBe(200);
     expect(await readSiteUrl()).toBe('https://new.example');
   });
+
+  const readSetting = async (key) => {
+    const row = await db('app_settings').where({ setting_key: key }).first();
+    return row ? JSON.parse(row.setting_value) : undefined;
+  };
+
+  // The tracker proxy re-serves the configured tracker's script from the app
+  // origin, so choosing the tracker host is choosing what JavaScript runs in
+  // every admin's session. settings.edit alone must not reach it.
+  it('settings.edit role is 403d when it changes the tracker URL, on every generic writer', async () => {
+    for (const endpoint of ['analytics', 'general', 'seo']) {
+      const res = await auth(request(app).put(`/api/admin/settings/${endpoint}`), mgrTok)
+        .send({ analytics_tracker_provider: 'umami', analytics_umami_url: 'https://tracker.evil.example' });
+      expect(res.status).toBe(403);
+      expect(res.body.keys.map((k) => k.key)).toEqual(
+        expect.arrayContaining(['analytics_tracker_provider', 'analytics_umami_url']),
+      );
+    }
+    expect(await readSetting('analytics_umami_url')).toBeUndefined();
+  });
+
+  it('settings.edit role can still save other analytics settings', async () => {
+    const res = await auth(request(app).put('/api/admin/settings/analytics'), mgrTok)
+      .send({ analytics_umami_website_id: 'site-1' });
+    expect(res.status).toBe(200);
+    expect(await readSetting('analytics_umami_website_id')).toBe('site-1');
+  });
+
+  it('super_admin can change the tracker URL', async () => {
+    const res = await auth(request(app).put('/api/admin/settings/analytics'), superTok)
+      .send({ analytics_tracker_provider: 'umami', analytics_umami_url: 'https://tracker.example' });
+    expect(res.status).toBe(200);
+    expect(await readSetting('analytics_umami_url')).toBe('https://tracker.example');
+  });
+
+  // Backup destinations and the manifest location are owned by
+  // /admin/backup/config, which keeps them super_admin-only. The generic
+  // writers drop them, whoever calls.
+  it('generic writers never store backup_* keys', async () => {
+    const manifestBefore = await readSetting('backup_manifest_path');
+    const destinationBefore = await readSetting('backup_destination_type');
+    for (const tok of [mgrTok, superTok]) {
+      const res = await auth(request(app).put('/api/admin/settings/general'), tok)
+        .send({ backup_manifest_path: '/data/db', backup_destination_type: 's3', general_max_file_size_mb: 60 });
+      expect(res.status).toBe(200);
+    }
+    expect(await readSetting('backup_manifest_path')).toBe(manifestBefore);
+    expect(await readSetting('backup_destination_type')).toBe(destinationBefore);
+    expect(manifestBefore).not.toBe('/data/db');
+    expect(destinationBefore).not.toBe('s3');
+  });
 });
