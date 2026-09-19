@@ -80,17 +80,22 @@ const stripReservedSettingKeys = (settings) => {
   return settings;
 };
 // Keys owned by the dedicated backup routes (PUT /admin/backup/config and
-// /admin/database-backup/config). Those routes decide who may change where
-// backups and their manifests are written (super_admin for destinations) and
-// validate the values; a generic upsert would skip all of that. Writers only —
-// the generic reads still return these rows.
+// /admin/database-backup/config). Those routes apply their own permission
+// rules (super_admin for file-backup destinations and the manifest location)
+// and validate the values; a generic upsert would skip all of that. Writers
+// only — the generic reads still return these rows.
 const isBackupRouteOwnedKey = (key) => key.startsWith('backup_') || key.startsWith('database_backup_');
-const stripSettingsForGenericWrite = (settings) => {
-  stripReservedSettingKeys(settings);
-  for (const key of Object.keys(settings)) {
-    if (isBackupRouteOwnedKey(key)) delete settings[key];
-  }
-  return settings;
+// 400 (naming the keys) when a generic write carries backup-owned keys, rather
+// than dropping them silently; returns true if the request was rejected.
+const rejectBackupRouteOwnedKeys = (settings, res) => {
+  const keys = Object.keys(settings).filter(isBackupRouteOwnedKey);
+  if (keys.length === 0) return false;
+  res.status(400).json({
+    error: 'Backup settings are saved through the backup configuration, not the general settings',
+    code: 'BACKUP_SETTINGS_ELSEWHERE',
+    keys,
+  });
+  return true;
 };
 
 // Migration 174 hardening — per-key permission boundary for the GENERIC settings
@@ -102,14 +107,29 @@ const stripSettingsForGenericWrite = (settings) => {
 // the caller isn't permitted to write is stripped before the upsert. The
 // dedicated routes still work because their caller holds the matching perm
 // (e.g. PUT /accounting is gated by settings.banking, so accounting_* survives).
+// analytics_umami_enabled is left out on purpose: it only selects between
+// tracker URLs someone with settings.integrations already set, and the
+// Analytics tab re-derives it on every save.
 const TRACKER_CODE_KEYS = new Set([
   'analytics_tracker_provider',
-  'analytics_umami_enabled',
   'analytics_umami_url',
-  'analytics_rybbit_enabled',
   'analytics_rybbit_url',
   'analytics_custom_head_html',
 ]);
+const parseStoredSetting = (row) => {
+  if (!row) return undefined;
+  try { return JSON.parse(row.setting_value); } catch (_) { return row.setting_value; }
+};
+// What a protected key reads as when it has no row yet, so a save that sends
+// the effective value back unchanged is not treated as a change. The provider
+// falls back to the legacy umami flag exactly like the Analytics tab does.
+const effectiveMissingSetting = async (key) => {
+  if (key === 'analytics_tracker_provider') {
+    const umami = parseStoredSetting(await db('app_settings').where({ setting_key: 'analytics_umami_enabled' }).first());
+    return umami === true || umami === 'true' ? 'umami' : 'none';
+  }
+  return null;
+};
 const PROTECTED_SETTING_KEY_PERMS = [
   { match: (k) => k === 'general_site_url', perm: 'settings.domains' },
   { match: (k) => k.startsWith('security_'), perm: 'settings.security' },
@@ -134,10 +154,7 @@ const collectUnauthorizedProtectedKeys = async (settings, adminId) => {
     if (!rule) continue;
     if (await userHasAnyPermission(adminId, [rule.perm])) continue;
     const row = await db('app_settings').where({ setting_key: key }).first();
-    let stored = null;
-    if (row) {
-      try { stored = JSON.parse(row.setting_value); } catch (_) { stored = row.setting_value; }
-    }
+    const stored = row ? parseStoredSetting(row) : await effectiveMissingSetting(key);
     if (String(stored ?? '') === String(settings[key] ?? '')) {
       delete settings[key]; // unchanged — let the rest of the save through
       continue;
@@ -1512,7 +1529,8 @@ router.put('/theme', adminAuth, requirePermission('settings.edit'), async (req, 
 // Update general settings
 router.put('/general', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
-    const settings = stripSettingsForGenericWrite({ ...req.body });
+    const settings = stripReservedSettingKeys({ ...req.body });
+    if (rejectBackupRouteOwnedKeys(settings, res)) return;
     let uploadLimitTouched = false;
 
     // Migration 174: drop any protected key (site URL / security / accounting)
@@ -1708,7 +1726,8 @@ router.put('/general', adminAuth, requirePermission('settings.edit'), async (req
 // Update security settings
 router.put('/security', adminAuth, requirePermission('settings.security'), async (req, res) => {
   try {
-    const settings = stripSettingsForGenericWrite({ ...req.body });
+    const settings = stripReservedSettingKeys({ ...req.body });
+    if (rejectBackupRouteOwnedKeys(settings, res)) return;
     // A settings.security holder still can't write domain/accounting keys here.
     if (await rejectUnauthorizedProtectedKeys(settings, req, res)) return;
 
@@ -1751,7 +1770,8 @@ router.put('/security', adminAuth, requirePermission('settings.security'), async
 // Update analytics settings
 router.put('/analytics', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
-    const settings = stripSettingsForGenericWrite({ ...req.body });
+    const settings = stripReservedSettingKeys({ ...req.body });
+    if (rejectBackupRouteOwnedKeys(settings, res)) return;
     if (await rejectUnauthorizedProtectedKeys(settings, req, res)) return;
 
     // Validate the provider switch (#663 Phase 1). Reject unknown values
@@ -1811,7 +1831,8 @@ router.put('/analytics', adminAuth, requirePermission('settings.edit'), async (r
 // Update SEO settings
 router.put('/seo', adminAuth, requirePermission('settings.edit'), async (req, res) => {
   try {
-    const settings = stripSettingsForGenericWrite({ ...req.body });
+    const settings = stripReservedSettingKeys({ ...req.body });
+    if (rejectBackupRouteOwnedKeys(settings, res)) return;
     if (await rejectUnauthorizedProtectedKeys(settings, req, res)) return;
 
     // Validate seo_blocked_ai_agents is an array of strings
