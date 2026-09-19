@@ -114,8 +114,11 @@ describe('tracker script and the admin UI', () => {
 
     service.handleRouteChange('/admin/events');
     expect(scripts()).toBe(0);
+    // Nothing ran yet, so staying in the admin UI must not reload.
+    expect(service.reloadPage).not.toHaveBeenCalled();
 
     service.handleRouteChange('/gallery/summer-party');
+    service.handleRouteChange('/gallery/summer-party/photo/3');
     expect(scripts()).toBe(1);
   });
 
