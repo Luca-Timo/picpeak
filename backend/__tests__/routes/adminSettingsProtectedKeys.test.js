@@ -98,6 +98,23 @@ describe('settings protected-key boundary (/general)', () => {
     return row ? JSON.parse(row.setting_value) : undefined;
   };
 
+  it('settings.edit role can save the Analytics tab unchanged on an install with no tracker settings yet', async () => {
+    // The exact payload the tab sends on first save: every analytics_* key,
+    // the provider derived client-side ('none') and the legacy umami flag.
+    const res = await auth(request(app).put('/api/admin/settings/analytics'), mgrTok)
+      .send({
+        analytics_tracker_provider: 'none',
+        analytics_umami_enabled: false,
+        analytics_umami_url: '',
+        analytics_umami_website_id: '',
+        analytics_umami_share_url: '',
+        analytics_rybbit_url: '',
+        analytics_rybbit_website_id: '',
+        analytics_custom_head_html: '',
+      });
+    expect(res.status).toBe(200);
+  });
+
   // The tracker proxy re-serves the configured tracker's script from the app
   // origin, so choosing the tracker host is choosing what JavaScript runs in
   // every admin's session. settings.edit alone must not reach it.
@@ -129,18 +146,18 @@ describe('settings protected-key boundary (/general)', () => {
 
   // Backup destinations and the manifest location are owned by
   // /admin/backup/config, which keeps them super_admin-only. The generic
-  // writers drop them, whoever calls.
-  it('generic writers never store backup_* keys', async () => {
+  // writers refuse them loudly, whoever calls, and store nothing.
+  it('generic writers refuse backup_* keys with a 400 that names them', async () => {
     const manifestBefore = await readSetting('backup_manifest_path');
     const destinationBefore = await readSetting('backup_destination_type');
     for (const tok of [mgrTok, superTok]) {
       const res = await auth(request(app).put('/api/admin/settings/general'), tok)
         .send({ backup_manifest_path: '/data/db', backup_destination_type: 's3', general_max_file_size_mb: 60 });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('BACKUP_SETTINGS_ELSEWHERE');
+      expect(res.body.keys).toEqual(expect.arrayContaining(['backup_manifest_path', 'backup_destination_type']));
     }
     expect(await readSetting('backup_manifest_path')).toBe(manifestBefore);
     expect(await readSetting('backup_destination_type')).toBe(destinationBefore);
-    expect(manifestBefore).not.toBe('/data/db');
-    expect(destinationBefore).not.toBe('s3');
   });
 });
