@@ -107,11 +107,14 @@ const rejectBackupRouteOwnedKeys = (settings, res) => {
 // the caller isn't permitted to write is stripped before the upsert. The
 // dedicated routes still work because their caller holds the matching perm
 // (e.g. PUT /accounting is gated by settings.banking, so accounting_* survives).
-// analytics_umami_enabled is left out on purpose: it only selects between
-// tracker URLs someone with settings.integrations already set, and the
-// Analytics tab re-derives it on every save.
+// analytics_umami_enabled belongs here too: publicSettings gates umami_url and
+// umami_website_id on it and App.tsx ORs it into the provider check, so it is
+// the on/off switch for the whole Umami path, not a selector. The Analytics
+// tab derives it from the provider dropdown, which is protected by the same
+// permission, so a legitimate save never newly 403s on it.
 const TRACKER_CODE_KEYS = new Set([
   'analytics_tracker_provider',
+  'analytics_umami_enabled',
   'analytics_umami_url',
   'analytics_rybbit_url',
   'analytics_custom_head_html',
@@ -128,6 +131,7 @@ const effectiveMissingSetting = async (key) => {
     const umami = parseStoredSetting(await db('app_settings').where({ setting_key: 'analytics_umami_enabled' }).first());
     return umami === true || umami === 'true' ? 'umami' : 'none';
   }
+  if (key === 'analytics_umami_enabled') return false;
   return null;
 };
 const PROTECTED_SETTING_KEY_PERMS = [

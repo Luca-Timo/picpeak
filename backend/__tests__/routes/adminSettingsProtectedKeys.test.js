@@ -130,6 +130,21 @@ describe('settings protected-key boundary (/general)', () => {
     expect(await readSetting('analytics_umami_url')).toBeUndefined();
   });
 
+  // The flag is the on/off switch for the whole Umami path (publicSettings
+  // gates the URL and website id on it), so it needs the same permission as
+  // the provider — including for a direct API call that never touches the tab.
+  it('settings.edit role is 403d when it re-enables the tracker through the legacy flag', async () => {
+    await db('app_settings').insert({
+      setting_key: 'analytics_umami_enabled', setting_value: JSON.stringify(false), setting_type: 'analytics',
+    });
+    const res = await auth(request(app).put('/api/admin/settings/analytics'), mgrTok)
+      .send({ analytics_umami_enabled: true });
+    expect(res.status).toBe(403);
+    expect(res.body.keys.map((k) => k.key)).toContain('analytics_umami_enabled');
+    expect(await readSetting('analytics_umami_enabled')).toBe(false);
+    await db('app_settings').where({ setting_key: 'analytics_umami_enabled' }).del();
+  });
+
   it('settings.edit role can still save other analytics settings', async () => {
     const res = await auth(request(app).put('/api/admin/settings/analytics'), mgrTok)
       .send({ analytics_umami_website_id: 'site-1' });
