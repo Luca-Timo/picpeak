@@ -475,6 +475,20 @@ sudo -u picpeak node scripts/reset-admin-password.js
 
 > **Note:** The new password will be displayed in the console output and saved to `ADMIN_PASSWORD_RESET.txt`. Save it immediately!
 
+#### SSO Sign-in Refused: "email was not confirmed by a Super Admin"
+
+SSO links an existing admin account by email only when that address was set by
+a Super Admin. An admin who changed their own email address on their profile
+page has to have it confirmed again before SSO will link to their account:
+
+- **Normal case:** any Super Admin opens **Settings → Users**, edits that admin
+  and saves the email (changing nothing is enough). SSO linking works again on
+  the next sign-in.
+- **The refused account is the only Super Admin, and local login is disabled:**
+  start the backend with `OIDC_BREAK_GLASS=true` to re-open the password login,
+  sign in with the local password, save your own email under **Settings →
+  Users**, then remove the variable and restart. No database edit is needed.
+
 ### Getting Help
 
 1. **Check logs:**
