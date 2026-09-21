@@ -1052,11 +1052,12 @@ async function saveManifestToLocal(manifest, manifestFileName, config) {
 async function saveManifestToS3(manifest, manifestFileName, config, result) {
   const tempDir = path.join(getStoragePath(), 'temp');
   await fs.mkdir(tempDir, { recursive: true });
-  const tempManifestPath = path.join(tempDir, path.basename(manifestFileName));
+  const safeName = path.basename(manifestFileName);
+  const tempManifestPath = path.join(tempDir, safeName);
   const format = config.backup_manifest_format === 'yaml' ? 'yaml' : 'json';
   await backupManifest.saveManifest(manifest, tempManifestPath, format);
 
-  const manifestKey = path.posix.join(result.s3Prefix, 'manifests', manifestFileName);
+  const manifestKey = path.posix.join(result.s3Prefix, 'manifests', safeName);
   await result.s3Client.upload(tempManifestPath, manifestKey, {
     contentType: format === 'yaml' ? 'application/yaml' : 'application/json',
     metadata: {
