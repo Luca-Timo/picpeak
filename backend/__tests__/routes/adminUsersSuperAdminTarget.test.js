@@ -119,6 +119,69 @@ describe('PUT /api/admin/users/:id — super_admin targets', () => {
     expect(Boolean((await row(otherId)).email_link_eligible)).toBe(true);
   });
 
+  it('exposes the SSO eligibility on the list, and a super_admin confirmation flips it back', async () => {
+    // What the Users page does: it reads the flag off the list and, on the
+    // "Confirm email for SSO" action, PUTs the address back unchanged.
+    const viewer = await db('roles').where({ name: 'viewer' }).first();
+    const target = await insertAdmin({ username: 'sso-target', email: 'sso-target@example.com', role_id: viewer && viewer.id });
+
+    await auth(request(app).put(`/api/admin/users/${target}`), clerkTok)
+      .send({ email: 'sso-target-moved@example.com' }).expect(200);
+
+    let list = await auth(request(app).get('/api/admin/users'), superTok);
+    expect(list.status).toBe(200);
+    expect(list.body.users.find((u) => u.id === target).emailLinkEligible).toBe(false);
+
+    const { email } = await row(target);
+    await auth(request(app).put(`/api/admin/users/${target}`), superTok).send({ email }).expect(200);
+
+    list = await auth(request(app).get('/api/admin/users'), superTok);
+    expect(list.body.users.find((u) => u.id === target).emailLinkEligible).toBe(true);
+  });
+
+  it('keeps the eligibility to itself on a list read by anyone else', async () => {
+    // Only a super_admin can confirm an address, so only a super_admin is told
+    // which rows an IdP assertion could link onto.
+    const list = await auth(request(app).get('/api/admin/users'), clerkTok);
+    expect(list.status).toBe(200);
+    expect(list.body.users.every((u) => u.emailLinkEligible === undefined)).toBe(true);
+  });
+
+  it('leaves a non-eligible row alone when a users.edit holder re-saves the address', async () => {
+    // The UI action rests on this: only a super_admin lifts the flag, and
+    // re-saving the same address must not lift it for anyone else.
+    const viewer = await db('roles').where({ name: 'viewer' }).first();
+    const target = await insertAdmin({ username: 'stays-false', email: 'stays-false@example.com', role_id: viewer && viewer.id });
+    await db('admin_users').where({ id: target }).update({ email_link_eligible: false });
+
+    const { email } = await row(target);
+    await auth(request(app).put(`/api/admin/users/${target}`), clerkTok).send({ email }).expect(200);
+
+    expect(Boolean((await row(target)).email_link_eligible)).toBe(false);
+  });
+
+  it('does not rewrite the stored address when it is only re-confirmed', async () => {
+    // normalizeEmail lowercases; confirming must not edit a mixed-case address.
+    const viewer = await db('roles').where({ name: 'viewer' }).first();
+    const target = await insertAdmin({ username: 'mixed-case', email: 'Mixed.Case@Example.com', role_id: viewer && viewer.id });
+    await db('admin_users').where({ id: target }).update({ email_link_eligible: false });
+
+    await auth(request(app).put(`/api/admin/users/${target}`), superTok)
+      .send({ email: 'Mixed.Case@Example.com' }).expect(200);
+
+    const after = await row(target);
+    expect(after.email).toBe('Mixed.Case@Example.com');
+    expect(Boolean(after.email_link_eligible)).toBe(true);
+  });
+
+  it('sends no eligibility at all from a schema without the column', () => {
+    // migration 227 may not have run yet; the key is then absent, which the
+    // Users page reads as eligible and offers nothing on.
+    const { transformUser } = require('../../src/routes/adminUsers').__test;
+    const shaped = transformUser({ id: 1, username: 'old', email: 'old@example.com' }, { ssoEligibility: true });
+    expect(shaped.emailLinkEligible).toBeUndefined();
+  });
+
   describe('deactivate, activate and delete of a super_admin', () => {
     let targetId;
     beforeAll(async () => {

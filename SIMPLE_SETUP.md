@@ -481,13 +481,17 @@ SSO links an existing admin account by email only when that address was set by
 a Super Admin. An admin who changed their own email address on their profile
 page has to have it confirmed again before SSO will link to their account:
 
-- **Normal case:** any Super Admin opens **Settings → Users**, edits that admin
-  and saves the email (changing nothing is enough). SSO linking works again on
-  the next sign-in.
+- **Normal case:** any Super Admin opens **Users** in the admin sidebar. The
+  affected row is marked *Email not confirmed for SSO*; the envelope button on
+  that row, **Confirm email for SSO**, confirms the address as it stands. SSO
+  linking works again on the next sign-in.
 - **The refused account is the only Super Admin, and local login is disabled:**
   start the backend with `OIDC_BREAK_GLASS=true` to re-open the password login,
-  sign in with the local password, save your own email under **Settings →
-  Users**, then remove the variable and restart. No database edit is needed.
+  sign in with the local password, confirm your own email on **Users**, then
+  remove the variable and restart. No database edit is needed.
+
+Only a Super Admin sees the marker and the button — confirming an address is
+what allows an SSO identity to take over that account on its next login.
 
 ### Getting Help
 

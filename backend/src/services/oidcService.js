@@ -658,8 +658,9 @@ async function resolveAdminFromClaims(claims) {
     // An unlinked admin with this email exists but its email was not set by a
     // trusted flow. Refuse clearly instead of falling through to JIT
     // provisioning, which would collide on the unique email.
-    // Way back in: a super_admin saves that address in user management. If the
-    // refused account IS the only super_admin and local login is disabled,
+    // Way back in: a super_admin uses "Confirm email for SSO" on the Users
+    // page, which re-saves the address unchanged through PUT /admin/users/:id.
+    // If the refused account IS the only super_admin and local login is disabled,
     // OIDC_BREAK_GLASS=true re-opens the password route (see
     // isLocalLoginDisabled) so they can confirm their own email — no SQL.
     // SIMPLE_SETUP.md documents both cases.

@@ -180,23 +180,29 @@ async function acceptInvitation({ token, username, password }) {
  * @returns {Promise<object[]>}
  */
 async function getAllAdminUsers() {
+  const columns = [
+    'admin_users.id',
+    'admin_users.username',
+    'admin_users.email',
+    'admin_users.is_active',
+    'admin_users.last_login',
+    'admin_users.last_login_ip',
+    'admin_users.created_at',
+    'admin_users.updated_at',
+    'roles.id as role_id',
+    'roles.name as role_name',
+    'roles.display_name as role_display_name',
+    'creator.username as created_by_username'
+  ];
+  // The Users page offers "confirm this email for SSO" on the rows this is
+  // false for, so it has to travel with the list (migration 227).
+  if (await hasColumnCached('admin_users', 'email_link_eligible')) {
+    columns.push('admin_users.email_link_eligible');
+  }
   return db('admin_users')
     .leftJoin('roles', 'roles.id', 'admin_users.role_id')
     .leftJoin('admin_users as creator', 'creator.id', 'admin_users.created_by')
-    .select(
-      'admin_users.id',
-      'admin_users.username',
-      'admin_users.email',
-      'admin_users.is_active',
-      'admin_users.last_login',
-      'admin_users.last_login_ip',
-      'admin_users.created_at',
-      'admin_users.updated_at',
-      'roles.id as role_id',
-      'roles.name as role_name',
-      'roles.display_name as role_display_name',
-      'creator.username as created_by_username'
-    )
+    .select(columns)
     .orderBy('admin_users.created_at', 'desc');
 }
 
@@ -206,22 +212,26 @@ async function getAllAdminUsers() {
  * @returns {Promise<object>}
  */
 async function getAdminUserById(id) {
+  const columns = [
+    'admin_users.id',
+    'admin_users.username',
+    'admin_users.email',
+    'admin_users.is_active',
+    'admin_users.last_login',
+    'admin_users.last_login_ip',
+    'admin_users.created_at',
+    'admin_users.updated_at',
+    'roles.id as role_id',
+    'roles.name as role_name',
+    'roles.display_name as role_display_name'
+  ];
+  if (await hasColumnCached('admin_users', 'email_link_eligible')) {
+    columns.push('admin_users.email_link_eligible');
+  }
   const user = await db('admin_users')
     .leftJoin('roles', 'roles.id', 'admin_users.role_id')
     .where('admin_users.id', id)
-    .select(
-      'admin_users.id',
-      'admin_users.username',
-      'admin_users.email',
-      'admin_users.is_active',
-      'admin_users.last_login',
-      'admin_users.last_login_ip',
-      'admin_users.created_at',
-      'admin_users.updated_at',
-      'roles.id as role_id',
-      'roles.name as role_name',
-      'roles.display_name as role_display_name'
-    )
+    .select(columns)
     .first();
 
   if (!user) {
@@ -254,8 +264,8 @@ async function updateAdminUser(id, updates, updatedById, requestingAdmin = {}) {
 
   // Only a super_admin may change a super_admin account. users.edit is a
   // delegable permission; without this a holder could rewrite a super_admin's
-  // email or deactivate them, which the dedicated routes (reset-password,
-  // role assignment, invitations) already refuse.
+  // username or email, which the dedicated routes (reset-password, role
+  // assignment, invitations) already refuse.
   const superAdminRole = await db('roles').where('name', 'super_admin').first();
   const actorIsSuperAdmin = requestingAdmin.roleName === 'super_admin';
   const targetIsSuperAdmin = Boolean(superAdminRole && user.role_id === superAdminRole.id);
@@ -282,7 +292,14 @@ async function updateAdminUser(id, updates, updatedById, requestingAdmin = {}) {
     if (existing) {
       throw new ConflictError('Email already in use', 'email');
     }
-    allowedUpdates.email = updates.email;
+    // The route lowercases what it receives (normalizeEmail keeps
+    // all_lowercase), so re-saving a mixed-case address would rewrite the
+    // stored one. Confirming an address must not edit it — compare without
+    // case and leave the column alone when it is the same address.
+    const sameAddress = String(updates.email).toLowerCase() === String(user.email || '').toLowerCase();
+    if (!sameAddress) {
+      allowedUpdates.email = updates.email;
+    }
     // Whether a later SSO login may link to this account by email
     // (oidcService, migration 227): an address set by a super_admin is
     // trusted — saving it unchanged is how a super_admin confirms one — while
@@ -290,7 +307,7 @@ async function updateAdminUser(id, updates, updatedById, requestingAdmin = {}) {
     if (await hasColumnCached('admin_users', 'email_link_eligible')) {
       if (actorIsSuperAdmin) {
         allowedUpdates.email_link_eligible = formatBoolean(true);
-      } else if (String(updates.email).toLowerCase() !== String(user.email || '').toLowerCase()) {
+      } else if (!sameAddress) {
         allowedUpdates.email_link_eligible = formatBoolean(false);
       }
     }
