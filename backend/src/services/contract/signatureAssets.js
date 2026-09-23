@@ -9,6 +9,20 @@ const logger = require('../../utils/logger');
 const { AppError } = require('../../utils/errors');
 const pdfStampService = require('../pdfStampService');
 const documentArtifactService = require('../documentArtifactService');
+const { resolveStoredPathStrict, contractPdfRoots } = require('../../utils/safePath');
+
+/**
+ * A signature image to stamp, symlinks followed. A missing or refused image
+ * comes back as null with `unavailable` set, so the stamp fails and is
+ * reported as failed instead of being skipped as "no signature".
+ */
+function signatureImage(stored) {
+  let file = null;
+  try { file = resolveStoredPathStrict(stored, contractPdfRoots()); } catch (err) {
+    logger.warn('Signature image refused', { code: err.code || err.name });
+  }
+  return { signaturePngPath: file, unavailable: !file };
+}
 
 
 /**
@@ -42,7 +56,7 @@ function sha256OfFile(filePath) {
  * comparison.
  */
 async function persistContractPdf(contract, buffer, suffix = '', meta = {}) {
-  if (!contract.contract_number) return { filePath: null, sha256: null };
+  if (!contract.contract_number) return { filePath: null, storedPath: null, sha256: null };
   const year = (contract.issue_date ? new Date(contract.issue_date) : new Date()).getFullYear();
   // Always append a millisecond timestamp to the filename so writes
   // never overwrite an earlier version on disk. Forensic preservation.
@@ -78,7 +92,8 @@ async function persistContractPdf(contract, buffer, suffix = '', meta = {}) {
   // template version behind it. The `generated_documents` row is the record;
   // this is what makes it visible on the contract's audit trail.
   await logArtifact(contract, stored, meta);
-  return { filePath: stored.path, sha256: stored.sha256 };
+  // filePath to use the file now; storedPath is what the contract row records.
+  return { filePath: stored.path, storedPath: stored.storedPath, sha256: stored.sha256 };
 }
 
 /** Best-effort: a failed log line must never cost a contract its PDF. */
@@ -172,7 +187,7 @@ function buildSignatureStamps(contract) {
   const stamps = [];
   if (contract.signed_customer_signature_path) {
     stamps.push({
-      signaturePngPath: contract.signed_customer_signature_path,
+      ...signatureImage(contract.signed_customer_signature_path),
       role: 'customer',
       caption: {
         name: contract.signed_customer_name || '',
@@ -184,7 +199,7 @@ function buildSignatureStamps(contract) {
   }
   if (contract.signed_admin_signature_path) {
     stamps.push({
-      signaturePngPath: contract.signed_admin_signature_path,
+      ...signatureImage(contract.signed_admin_signature_path),
       role: 'admin',
       caption: {
         name: contract.signed_admin_name || '',
