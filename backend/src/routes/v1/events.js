@@ -32,7 +32,13 @@ const { requireEventOwnership, scopeEventsQuery } = require('../../middleware/ow
 const { requirePermission } = require('../../middleware/permissions');
 
 const { buildShareLinkVariants } = require('../../services/shareLinkService');
-const { generateThumbnail } = require('../../services/imageProcessor');
+const {
+  generateThumbnail,
+  ensurePreviewImage,
+  ensurePreviewImageAtWidth,
+  normalizeTierWidth,
+  PREVIEW_WIDTHS
+} = require('../../services/imageProcessor');
 const logger = require('../../utils/logger');
 
 const { formatBoolean } = require('../../utils/dbCompat');
@@ -54,6 +60,8 @@ const { resolvePhotoContentType } = require('../../utils/photoContentType');
 const { pipeStreamToResponse } = require('../../utils/streamResponse');
 const { createArchiveStreamGuard } = require('../../utils/archiveStreamGuard');
 const { recordSingleDownload } = require('../../services/apiDownloadNotifications');
+const { parseResolution } = require('../../utils/downloadResolutions');
+const { renderPhotoForDownload } = require('../../services/downloadRendition');
 
 const router = express.Router();
 
@@ -798,6 +806,20 @@ function buildPhotoFilters(req) {
  *                         type: integer
  *                         nullable: true
  *                         description: Merged 0-5 rating for `mark_source`.
+ *                       size_bytes:
+ *                         type: integer
+ *                         nullable: true
+ *                         description: Recorded size of the stored original; null when none was recorded.
+ *                       media_type:
+ *                         type: string
+ *                         description: '`image` or `video`. A video is never resized by `resolution`.'
+ *                       mime_type: { type: string, nullable: true }
+ *                       processing_status:
+ *                         type: string
+ *                         description: >
+ *                           `complete` unless the async worker is still on this photo.
+ *                           The preview and download routes answer 503 or 422 for the
+ *                           other states, so a client can poll instead of failing.
  *                 pagination:
  *                   type: object
  *                   properties:
@@ -866,6 +888,18 @@ router.get(
         ? await photoExportService.getPhotosWithFeedback(eventId, pageIds, req.admin.id)
         : [];
 
+      // What a client needs to decide HOW to fetch each row: whether it is a
+      // video (never resized), what the bytes will be labelled as, how big
+      // the original is, and whether the async worker has finished with it.
+      // Queried here rather than widened into getPhotosWithFeedback, which is
+      // shared with the CSV/JSON photo exports and shouldn't grow columns for
+      // one caller. Bounded by the page size, on the primary key.
+      const mediaRows = pageIds.length
+        ? await db('photos').whereIn('id', pageIds)
+          .select('id', 'media_type', 'mime_type', 'processing_status')
+        : [];
+      const mediaById = new Map(mediaRows.map((r) => [r.id, r]));
+
       const filtered = parseInt(countResult[0]?.count, 10) || 0;
 
       res.json({
@@ -895,6 +929,12 @@ router.get(
             rating: merged.rating,
             width: photo.width || null,
             height: photo.height || null,
+            size_bytes: Number(photo.size_bytes) > 0 ? Number(photo.size_bytes) : null,
+            media_type: mediaById.get(photo.id)?.media_type || 'image',
+            mime_type: mediaById.get(photo.id)?.mime_type || null,
+            // 'complete' unless the async worker is still on it. The preview
+            // and download routes answer 503/422 for the other states.
+            processing_status: mediaById.get(photo.id)?.processing_status || 'complete',
             uploaded_at: photo.uploaded_at || null
           };
         }),
@@ -1077,17 +1117,57 @@ function zipEntryNames(rawNames) {
 
 function setOriginalHeaders(res, photo, size) {
   res.set({
+    // A resize re-encodes in the SOURCE format (resizeToBox), so the stored
+    // row's type still describes the bytes that go out.
     'Content-Type': resolvePhotoContentType(photo),
     // Always the original upload name, whatever the gallery's
     // "use original filenames" setting says: an integration wants the name
     // the photographer's files carry, not the renamed storage name.
     'Content-Disposition': buildContentDisposition(pickRawDownloadName(photo, true)),
-    'Content-Length': size,
     'X-Content-Type-Options': 'nosniff'
   });
+  // Omitted rather than guessed on a HEAD that asked for a rendition: the
+  // rendered length is only known once the resize has run, and answering the
+  // ORIGINAL's length there would have clients size a buffer wrongly.
+  if (Number.isFinite(size)) res.set('Content-Length', size);
 }
 
 const downloadActor = (req) => ({ type: 'admin', id: req.admin.id, name: req.admin.username });
+
+// ?resolution= — `original` (the default) streams the stored bytes; `WxH`
+// resizes INTO that box, keeping the aspect ratio, never enlarging, and
+// re-encoding in the source format. Deliberately the gallery's own resolution
+// vocabulary (#858, `3000x2000`) rather than a second one invented for v1, so
+// an integration can offer the same choices a gallery does.
+//
+// Watermarks stay out. The gallery's watermark is a guest-facing setting, and
+// these routes serve an integration that already holds photos.download on the
+// originals — so renderPhotoForDownload is always called with null settings.
+// A watermarked rendition would be a separate, explicit opt-in.
+const RESOLUTION_PATTERN = /^(original|[1-9]\d{0,4}x[1-9]\d{0,4})$/;
+const resolutionValidator = query('resolution').optional().matches(RESOLUTION_PATTERN)
+  .withMessage('resolution must be `original` or WxH, e.g. 2048x2048');
+
+// Box for this request, or null to serve the stored bytes. Validation has
+// already rejected anything malformed, so parseResolution only ever returns
+// null here for the literal `original`.
+const requestedBox = (req) => parseResolution(req.query.resolution);
+
+// The rendition for one photo, or null when the stored bytes should go out
+// unchanged — no box asked for, or a video, which is never resized.
+// A storage-level "the file is gone" also comes back as null rather than
+// throwing: both callers fall through to the stored-bytes path, which already
+// answers 404 (single) or lists the id in the manifest (zip) for a file that
+// isn't there, so the two cases converge on the same correct answer.
+async function renderPhotoAtBox(event, photo, box) {
+  if (!box) return null;
+  try {
+    return await renderPhotoForDownload(event, photo, box, null);
+  } catch (err) {
+    if (isGoneError(err) || isUnsafeKeyError(err)) return null;
+    throw err;
+  }
+}
 
 const zipTooLarge = (res, photoCount, totalBytes) => res.status(400).json({
   error: `Archive too large (at most ${MAX_ZIP_PHOTOS} photos and ${zipLimits.maxBytes / (1024 ** 3)} GiB per request); split it with ids=`,
@@ -1102,8 +1182,9 @@ const zipTooLarge = (res, photoCount, totalBytes) => res.status(400).json({
  *   get:
  *     summary: Download an event's originals as a ZIP
  *     description: >
- *       Streams a ZIP of the stored originals (photos and videos) — not the
- *       gallery's download rendition, so no resize and no watermark. Entries
+ *       Streams a ZIP of the stored originals (photos and videos), or of
+ *       resized renditions of them with `resolution`. Never watermarked,
+ *       whatever the gallery's watermark setting says. Entries
  *       are stored uncompressed and always named by the original upload
  *       filename, independent of the "use original filenames" setting; `:`
  *       becomes `_`, and duplicates (compared case-insensitively) get `_1`,
@@ -1144,6 +1225,20 @@ const zipTooLarge = (res, photoCount, totalBytes) => res.status(400).json({
  *         name: id
  *         required: true
  *         schema: { type: integer }
+ *       - in: query
+ *         name: resolution
+ *         schema: { type: string, default: original }
+ *         description: >
+ *           `original` (the default) packs the stored bytes. `WxH` — for
+ *           example `2048x2048` — packs renditions resized into that box
+ *           instead, keeping the aspect ratio and never enlarging, and names
+ *           the archive after the box rather than `-originals`. Videos and
+ *           HEIC/HEIF are always packed at original size. Renditions are
+ *           rendered one at a time as the archive streams, so a large resized
+ *           archive takes noticeably longer to produce than the same archive
+ *           of originals. The size caps are measured against the ORIGINALS,
+ *           which for a resized archive is an upper bound — a request can be
+ *           refused as too large although its renditions would have fitted.
  *       - in: query
  *         name: ids
  *         schema: { type: string }
@@ -1192,6 +1287,7 @@ router.get(
   requireEventOwnership,
   [
     query('ids').optional().isString(),
+    resolutionValidator,
     ...photoFilterValidators
   ],
   async (req, res) => {
@@ -1218,6 +1314,13 @@ router.get(
 
       const event = await loadDownloadableEvent(req, res);
       if (!event) return;
+
+      const box = requestedBox(req);
+      // The name says what is inside: `-originals` only when it really is the
+      // stored bytes.
+      const archiveName = box
+        ? `${event.slug}-${box.width}x${box.height}.zip`
+        : `${event.slug}-originals.zip`;
 
       let ids = null;
       if (req.query.ids !== undefined) {
@@ -1257,6 +1360,14 @@ router.get(
       // cheap COUNT/SUM check can even run, on top of what the unsized rows
       // below already cost. A stale size is instead caught while streaming:
       // the archive's output is counted and aborted once it passes the cap.
+      //
+      // With ?resolution= the recorded sizes are an UPPER bound: a rendition
+      // is smaller than its original in every case that matters (resizeToBox
+      // hands back the original bytes when the photo already fits the box, so
+      // it never re-encodes something larger). The cap can therefore refuse a
+      // resized archive that would in fact have fitted — conservative in the
+      // safe direction — and the streamed-bytes check below stays the real
+      // guard either way.
       const totals = await selection().getQuery()
         .count('photos.id as count')
         .sum('photos.size_bytes as bytes')
@@ -1275,7 +1386,7 @@ router.get(
       // nothing logged. Unsized rows are only sized on GET, below.
       if (req.method === 'HEAD') {
         res.setHeader('Content-Type', 'application/zip');
-        res.setHeader('Content-Disposition', buildContentDisposition(`${event.slug}-originals.zip`));
+        res.setHeader('Content-Disposition', buildContentDisposition(archiveName));
         res.setHeader('X-Content-Type-Options', 'nosniff');
         return res.end();
       }
@@ -1331,7 +1442,7 @@ router.get(
       const manifestName = entryNames.pop();
 
       res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', buildContentDisposition(`${event.slug}-originals.zip`));
+      res.setHeader('Content-Disposition', buildContentDisposition(archiveName));
       res.setHeader('X-Content-Type-Options', 'nosniff');
       if (cancelled || res.destroyed) return;
 
@@ -1381,6 +1492,28 @@ router.get(
       let appended = 0;
       for (let i = 0; i < photos.length; i += 1) {
         if (!await guard.acquire()) break;
+        // Rendered entries are buffers, appended whole — the same shape the
+        // gallery's own cached zip builder uses. Only the stored-bytes path
+        // needs a tracked stream. A render that fails on a photo is treated
+        // as a missing file so one unreadable row can't kill the archive.
+        let rendered = null;
+        if (box) {
+          try {
+            rendered = await renderPhotoAtBox(event, photos[i], box);
+          } catch (err) {
+            logger.warn('v1 zip rendition failed, skipping photo', {
+              eventId: event.id, photoId: photos[i].id, error: errorClass(err)
+            });
+            missingIds.push(photos[i].id);
+            continue;
+          }
+        }
+        if (rendered) {
+          archive.append(rendered, { name: entryNames[i] });
+          appended += 1;
+          continue;
+        }
+
         const source = await openOriginal(event, photos[i], { needSize: false });
         if (!source) {
           missingIds.push(photos[i].id);
@@ -1448,12 +1581,15 @@ router.get(
  *   get:
  *     summary: Download one original photo or video
  *     description: >
- *       Streams the stored original exactly as uploaded — not the gallery's
- *       download rendition, so no resize and no watermark. The filename in
+ *       Streams the stored original exactly as uploaded, or a resized
+ *       rendition of it with `resolution`. Never watermarked, whatever the
+ *       gallery's watermark setting says. The filename in
  *       Content-Disposition is always the original upload name (RFC 5987
  *       encoded), independent of the "use original filenames" setting. HEAD
- *       answers the same headers, Content-Length included, without reading
- *       the file. Range requests are not supported. Not counted as a gallery
+ *       answers the same headers without reading the file — including
+ *       Content-Length, except when `resolution` asks for a rendition, whose
+ *       length is only known once it has been rendered. Range requests are
+ *       not supported. Not counted as a gallery
  *       download. Requires the `read` scope and the owner's `photos.view` and
  *       `photos.download` permissions.
  *
@@ -1473,6 +1609,17 @@ router.get(
  *         name: photoId
  *         required: true
  *         schema: { type: integer }
+ *       - in: query
+ *         name: resolution
+ *         schema: { type: string, default: original }
+ *         description: >
+ *           `original` (the default) serves the stored bytes. `WxH` — for
+ *           example `2048x2048` — resizes into that box instead, keeping the
+ *           aspect ratio, never enlarging, and re-encoding in the source
+ *           format. These are the same resolution ids the gallery's own
+ *           download menu uses. Videos and HEIC/HEIF are always served at
+ *           original size. A rendition is never watermarked, whatever the
+ *           gallery's watermark setting says.
  *     responses:
  *       200:
  *         description: The original file
@@ -1494,8 +1641,14 @@ router.get(
   requirePermission(['photos.view', 'photos.download'], { requireAll: true }),
   requireNumericEventId,
   requireEventOwnership,
+  [resolutionValidator],
   async (req, res) => {
     try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: safeValidationErrors(errors) });
+      }
+
       const event = await loadDownloadableEvent(req, res);
       if (!event) return;
 
@@ -1508,25 +1661,19 @@ router.get(
       const fileMissing = () => res.status(404)
         .json({ error: 'The photo file is missing from storage', code: 'PHOTO_FILE_MISSING' });
 
+      const box = requestedBox(req);
+
       // HEAD is answered from the row and a stat: no read is opened, which
-      // on S3 would start transferring the whole object.
+      // on S3 would start transferring the whole object. A HEAD that asked
+      // for a rendition therefore reports no Content-Length — rendering one
+      // just to measure it is exactly the work HEAD exists to avoid.
       if (req.method === 'HEAD') {
         const location = locateOriginal(event, photo);
         const size = location ? await statOriginal(location) : null;
         if (size === null) return fileMissing();
-        setOriginalHeaders(res, photo, size);
+        setOriginalHeaders(res, photo, box ? null : size);
         return res.end();
       }
-
-      const source = await openOriginal(event, photo);
-      if (!source) return fileMissing();
-      // A client that left while the read was opening has already closed,
-      // so pipeStreamToResponse's cleanup would never run for this stream.
-      if (res.destroyed) {
-        source.stream.destroy();
-        return;
-      }
-      setOriginalHeaders(res, photo, source.size);
 
       // Logged once the whole file is out. 'finish' alone misses a client
       // that hangs up the moment it has Content-Length bytes: its socket can
@@ -1552,6 +1699,28 @@ router.get(
           actor: downloadActor(req)
         });
       };
+      // A rendition is buffered and written in one go, so 'finish' is the
+      // only completion signal there is — none of the partial-transfer
+      // accounting below applies. null means nothing was resized (no box, or
+      // a video, which is never resized) and the stored bytes go out instead.
+      const rendered = await renderPhotoAtBox(event, photo, box);
+      if (rendered) {
+        if (res.destroyed) return;
+        setOriginalHeaders(res, photo, rendered.length);
+        res.on('finish', recordDownload);
+        return res.end(rendered);
+      }
+
+      const source = await openOriginal(event, photo);
+      if (!source) return fileMissing();
+      // A client that left while the read was opening has already closed,
+      // so pipeStreamToResponse's cleanup would never run for this stream.
+      if (res.destroyed) {
+        source.stream.destroy();
+        return;
+      }
+      setOriginalHeaders(res, photo, source.size);
+
       res.on('finish', recordDownload);
       res.on('close', () => {
         if (Number.isFinite(source.size) && streamedBytes >= source.size) recordDownload();
@@ -1565,6 +1734,140 @@ router.get(
         error: errorClass(error)
       });
       if (!res.headersSent) res.status(500).json({ error: 'Failed to download photo' });
+    }
+  }
+);
+
+/**
+ * @openapi
+ * /events/{id}/photos/{photoId}/preview:
+ *   get:
+ *     summary: A photo's web-sized preview image
+ *     description: >
+ *       The same JPEG preview tier the admin gallery grid renders, for
+ *       building a picker without pulling originals. Generated on first
+ *       request and cached in storage afterwards.
+ *
+ *
+ *       Not a download: it is never the stored original, it carries no
+ *       Content-Disposition, and it is left out of the download audit log and
+ *       the notification bell — browsing a gallery is not delivering it.
+ *       Requires the `read` scope and the owner's `photos.view` permission.
+ *
+ *
+ *       `w` is snapped to the nearest generated tier (640, 1280 or 1920);
+ *       anything else falls back to the default preview. A photo still being
+ *       processed answers 503 with `Retry-After`, and one whose processing
+ *       failed answers 422 — poll rather than treating either as fatal.
+ *     tags: [Photos]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *       - in: path
+ *         name: photoId
+ *         required: true
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: w
+ *         schema: { type: integer, enum: [640, 1280, 1920] }
+ *     responses:
+ *       200:
+ *         description: The preview image
+ *         content:
+ *           image/jpeg:
+ *             schema: { type: string, format: binary }
+ *       403: { description: Token lacks scope or permission }
+ *       404: { description: Event or photo not found, or no preview could be produced }
+ *       409: { description: The event is archived }
+ *       422: { description: Processing this photo failed }
+ *       503: { description: Still processing; retry after the given delay }
+ */
+router.get(
+  '/events/:id/photos/:photoId/preview',
+  apiTokenAuth,
+  requireApiScope('read'),
+  requirePermission('photos.view'),
+  requireNumericEventId,
+  requireEventOwnership,
+  [query('w').optional().isInt({ min: 1, max: 10000 }).toInt()],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: safeValidationErrors(errors) });
+      }
+
+      // Archived the same way the download routes are: once an event's photos
+      // live inside its archive there is nothing on disk left to preview.
+      const event = await loadDownloadableEvent(req, res);
+      if (!event) return;
+
+      const photo = isRowId(req.params.photoId)
+        ? await db('photos').where({ id: Number(req.params.photoId), event_id: event.id }).first()
+        : null;
+      if (!photo) return res.status(404).json({ error: 'Photo not found' });
+
+      // The async worker has not reached this photo yet, or gave up on it.
+      // Same two answers the admin grid already polls on.
+      if (photo.processing_status === 'pending' || photo.processing_status === 'processing') {
+        res.setHeader('Retry-After', '2');
+        return res.status(503).json({
+          error: 'Preview not ready', code: 'PHOTO_PROCESSING', status: photo.processing_status
+        });
+      }
+      if (photo.processing_status === 'failed') {
+        return res.status(422).json({
+          error: 'Photo processing failed', code: 'PHOTO_PROCESSING_FAILED'
+        });
+      }
+
+      const tierWidth = normalizeTierWidth(req.query.w, PREVIEW_WIDTHS);
+      let previewPath = null;
+      try {
+        previewPath = tierWidth
+          ? (await ensurePreviewImageAtWidth(photo, tierWidth)) || (await ensurePreviewImage(photo))
+          : await ensurePreviewImage(photo);
+      } catch (err) {
+        // A row naming a file that is gone is a 404 below, not a 500.
+        if (!isGoneError(err) && !isUnsafeKeyError(err)) throw err;
+      }
+
+      const unavailable = () => res.status(404).json({
+        error: 'No preview available for this photo', code: 'PREVIEW_UNAVAILABLE'
+      });
+      // Nothing to serve and no way to make it: a missing original, or a
+      // media type nothing can render a still from.
+      if (!previewPath) return unavailable();
+
+      const stat = await getStorage().stat(previewPath);
+      if (!stat) return unavailable();
+
+      const stream = await getStorage().get(previewPath);
+      // Left while the read was opening: pipeStreamToResponse's cleanup would
+      // never run for this stream.
+      if (res.destroyed) {
+        stream.destroy();
+        return;
+      }
+      res.set({
+        'Content-Type': 'image/jpeg',
+        'Content-Length': stat.size,
+        // Private: a preview is exactly as access-controlled as the gallery it
+        // belongs to, and must never be held by a shared cache.
+        'Cache-Control': 'private, max-age=3600',
+        'X-Content-Type-Options': 'nosniff'
+      });
+      pipeStreamToResponse(stream, res, { context: `v1 preview ${photo.id}` });
+    } catch (error) {
+      logger.error('v1 GET /events/:id/photos/:photoId/preview failed', {
+        eventId: req.params.id,
+        photoId: req.params.photoId,
+        error: errorClass(error)
+      });
+      if (!res.headersSent) res.status(500).json({ error: 'Failed to serve preview' });
     }
   }
 );
