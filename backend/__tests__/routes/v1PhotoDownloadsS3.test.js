@@ -29,6 +29,9 @@ const mockSlow = new Set();
 const mockStatSizes = new Map();
 // Keys whose stat takes a while, like a HEAD against a slow bucket.
 const mockSlowStats = new Set();
+const noSuchKey = () => Object.assign(
+  new Error('The specified key does not exist.'), { name: 'NoSuchKey' },
+);
 const mockStorage = {
   kind: () => 's3',
   stat: jest.fn(async (key) => {
@@ -37,11 +40,7 @@ const mockStorage = {
     return mockObjects.has(key) ? { size: mockObjects.get(key).length, mtime: new Date() } : null;
   }),
   get: jest.fn(async (key) => {
-    if (!mockObjects.has(key)) {
-      const err = new Error('The specified key does not exist.');
-      err.name = 'NoSuchKey';
-      throw err;
-    }
+    if (!mockObjects.has(key)) throw noSuchKey();
     const body = mockObjects.get(key);
     const failure = mockFailures.get(key);
     const slow = mockSlow.has(key);
@@ -64,11 +63,7 @@ const mockStorage = {
   // Without it the mock answers undefined and a resized download would fail
   // in a way no local-backend test can see.
   getToFile: jest.fn(async (key, localPath) => {
-    if (!mockObjects.has(key)) {
-      const err = new Error('The specified key does not exist.');
-      err.name = 'NoSuchKey';
-      throw err;
-    }
+    if (!mockObjects.has(key)) throw noSuchKey();
     fs.writeFileSync(localPath, mockObjects.get(key));
   }),
   resolveLocalPath: () => { throw new Error('resolveLocalPath must not be used on an s3 backend'); },
@@ -223,6 +218,9 @@ describe('v1 original downloads through an S3 backend (issue 1473)', () => {
   beforeEach(() => {
     mockStorage.stat.mockClear();
     mockStorage.get.mockClear();
+    // Cleared with the others, so the rendition tests' toHaveBeenCalled()
+    // proves THEIR read and not one left over from an earlier test.
+    mockStorage.getToFile.mockClear();
   });
 
   const get = (url) => request(app).get(url).set('Authorization', `Bearer ${token}`)
@@ -352,6 +350,18 @@ describe('v1 original downloads through an S3 backend (issue 1473)', () => {
       const res = await get(`/api/v1/events/${renderEventId}/photos/download?resolution=400x400&ids=${renderId}`);
       expect(res.status).toBe(200);
       expect(res.headers['content-disposition']).toContain('filename="s3-render-400x400.zip"');
+
+      // Opened, not just counted: a rendition that fails on the ZIP path is
+      // swallowed into MISSING_FILES.txt and the archive still ends 200, so
+      // status and filename alone would stay green with the read broken.
+      const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'picpeak-v1rends3-')), 'out.zip');
+      fs.writeFileSync(file, res.body);
+      const zip = new StreamZip.async({ file });
+      const names = Object.keys(await zip.entries());
+      expect(names).toEqual(['render.jpg']);
+      const meta = await sharp(await zip.entryData('render.jpg')).metadata();
+      expect([meta.width, meta.height]).toEqual([400, 267]);
+      await zip.close();
     });
 
     it('answers a missing object with 404 rather than a 500', async () => {

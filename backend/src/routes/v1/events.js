@@ -37,7 +37,8 @@ const {
   ensurePreviewImage,
   ensurePreviewImageAtWidth,
   normalizeTierWidth,
-  PREVIEW_WIDTHS
+  PREVIEW_WIDTHS,
+  RESIZE_PRESERVES_FORMAT
 } = require('../../services/imageProcessor');
 const logger = require('../../utils/logger');
 
@@ -1158,14 +1159,6 @@ const downloadActor = (req) => ({ type: 'admin', id: req.admin.id, name: req.adm
 // these routes serve an integration that already holds photos.download on the
 // originals — so renderPhotoForDownload is always called with null settings.
 // A watermarked rendition would be a separate, explicit opt-in.
-// resizeToBox re-encodes in the SOURCE format for exactly these four, and
-// falls to a JPEG else-branch for everything else. A .dng (an accepted upload
-// type, served as image/x-adobe-dng) would therefore come back as JPEG bytes
-// under a RAW name and content type — the precise mislabelling resizeToBox
-// already refuses to do for HEIC. So a rendition is only ever offered for the
-// types it can round-trip; everything else is served at original size.
-const RESIZABLE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-
 const RESOLUTION_PATTERN = /^(original|[1-9]\d{0,4}x[1-9]\d{0,4})$/;
 const resolutionValidator = query('resolution').optional().matches(RESOLUTION_PATTERN)
   .withMessage('resolution must be `original` or WxH, e.g. 2048x2048');
@@ -1190,7 +1183,12 @@ async function renderPhotoAtBox(event, photo, box) {
   if (!locateOriginal(event, photo)) return null;
   // Gated on the type that will be SENT, so the bytes can never disagree with
   // the Content-Type header. Videos fall out here too.
-  if (!RESIZABLE_TYPES.has(resolvePhotoContentType(photo))) return null;
+  // These routes keep the original filename and Content-Type, so a rendition
+  // is only offered for the types resizeToBox round-trips. A .dng (an accepted
+  // upload type, served as image/x-adobe-dng) would otherwise come back as
+  // JPEG bytes under a RAW name — the mislabelling resizeToBox already refuses
+  // to do for HEIC.
+  if (!RESIZE_PRESERVES_FORMAT.has(resolvePhotoContentType(photo))) return null;
   try {
     return await renderPhotoForDownload(event, photo, box, null);
   } catch (err) {
