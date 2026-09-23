@@ -556,7 +556,12 @@ async function replaceAllTables(tables, dataDir, currentAdmin, roleSnapshot, { c
     // skipping the clear would leave stale local rows colliding with the
     // reinserted ones on unique constraints (e.g. ledger_accounts.number).
     const manifestTableSet = new Set(tables);
-    for (const table of (allTables || tables)) {
+    const tablesToClear = new Set(allTables || tables);
+    // Download limit grants (issue 1560) too: an archive made before they
+    // existed would leave local grants on restored photos whose ids happen
+    // to match, using up those galleries' quotas.
+    if (await trx.schema.hasTable('event_download_grants')) tablesToClear.add('event_download_grants');
+    for (const table of tablesToClear) {
       if (SEED_ONLY_TABLES.has(table) && !manifestTableSet.has(table)) continue;
       await trx(table).del();
     }
