@@ -480,7 +480,9 @@ export const UserManagementPage: React.FC = () => {
       userManagementService.updateUser(id, { email }),
     invalidateKeys: [['admin-users']],
     successMessage: t('userManagement.emailConfirmed', 'Email confirmed for single sign-on'),
-    errorMessage: () => t('userManagement.confirmEmailError', 'Failed to confirm the email'),
+    // A 409 here means the address changed under the dialog — that message is
+    // more useful than the generic one, so pass it through like the invite.
+    errorMessage: (error: Error) => error.message || t('userManagement.confirmEmailError', 'Failed to confirm the email'),
     onSuccess: () => {
       setConfirmDialog(null);
     },

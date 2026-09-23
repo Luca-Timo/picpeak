@@ -612,8 +612,12 @@ async function resolveAdminFromClaims(claims) {
   //    account, is not proof of ownership and must not let an IdP identity
   //    — and its mapped role — land on that row.
   if (email && emailVerified) {
+    // The claim is lowercased above; the stored address may not be (the
+    // bootstrap admin keeps ADMIN_EMAIL verbatim, 001_init.js). Compare
+    // without case, or a mixed-case row is never matched here and the login
+    // is JIT-provisioned as a second admin beside it.
     const byEmailQuery = db('admin_users')
-      .where('email', email)
+      .whereRaw('LOWER(email) = ?', [email])
       .whereNull('external_subject');
     if (await hasColumnCached('admin_users', 'email_link_eligible')) {
       byEmailQuery.where('email_link_eligible', formatBoolean(true));
@@ -665,7 +669,7 @@ async function resolveAdminFromClaims(claims) {
     // isLocalLoginDisabled) so they can confirm their own email — no SQL.
     // SIMPLE_SETUP.md documents both cases.
     const unconfirmed = await db('admin_users')
-      .where('email', email)
+      .whereRaw('LOWER(email) = ?', [email])
       .whereNull('external_subject')
       .first('id');
     if (unconfirmed) {

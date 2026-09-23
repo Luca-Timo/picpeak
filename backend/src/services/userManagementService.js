@@ -22,8 +22,11 @@ const { hasColumnCached } = require('../utils/schemaCache');
  * @returns {Promise<object>} Created invitation details
  */
 async function createInvitation({ email, roleId, invitedById, inviterRoleName }) {
-  // Check if email already exists
-  const existingUser = await db('admin_users').where('email', email).first();
+  // Check if email already exists — without case, so an invite cannot create
+  // a second row that a lowercased IdP claim would also match.
+  const existingUser = await db('admin_users')
+    .whereRaw('LOWER(email) = ?', [String(email).toLowerCase()])
+    .first();
   if (existingUser) {
     throw new ConflictError('User with this email already exists', 'email');
   }
@@ -123,8 +126,10 @@ async function acceptInvitation({ token, username, password }) {
     throw new ConflictError('Username already taken', 'username');
   }
 
-  // Check email not taken (race condition protection)
-  const existingEmail = await db('admin_users').where('email', invitation.email).first();
+  // Check email not taken (race condition protection), without case
+  const existingEmail = await db('admin_users')
+    .whereRaw('LOWER(email) = ?', [String(invitation.email).toLowerCase()])
+    .first();
   if (existingEmail) {
     throw new ConflictError('Email already registered', 'email');
   }
@@ -261,6 +266,7 @@ async function updateAdminUser(id, updates, updatedById, requestingAdmin = {}) {
   }
 
   const allowedUpdates = {};
+  let confirmedAddress = null;
 
   // Only a super_admin may change a super_admin account. users.edit is a
   // delegable permission; without this a holder could rewrite a super_admin's
@@ -285,8 +291,10 @@ async function updateAdminUser(id, updates, updatedById, requestingAdmin = {}) {
   }
 
   if (updates.email !== undefined) {
+    // Without case, like the OIDC lookup: an existing Mara@Example.com must
+    // not let a second admin take mara@example.com.
     const existing = await db('admin_users')
-      .where('email', updates.email)
+      .whereRaw('LOWER(email) = ?', [String(updates.email).toLowerCase()])
       .whereNot('id', id)
       .first();
     if (existing) {
@@ -299,6 +307,13 @@ async function updateAdminUser(id, updates, updatedById, requestingAdmin = {}) {
     const sameAddress = String(updates.email).toLowerCase() === String(user.email || '').toLowerCase();
     if (!sameAddress) {
       allowedUpdates.email = updates.email;
+    } else {
+      // Confirming trusts the address as it was read at the top of this
+      // function, and writes no address of its own. The target can change
+      // their own email through PUT /admin/profile in between (which sets
+      // eligibility false); the write below must then not land on that new,
+      // unapproved address.
+      confirmedAddress = user.email;
     }
     // Whether a later SSO login may link to this account by email
     // (oidcService, migration 227): an address set by a super_admin is
@@ -357,7 +372,12 @@ async function updateAdminUser(id, updates, updatedById, requestingAdmin = {}) {
 
   allowedUpdates.updated_at = new Date();
 
-  await db('admin_users').where('id', id).update(allowedUpdates);
+  const write = db('admin_users').where('id', id);
+  if (confirmedAddress !== null) write.where('email', confirmedAddress);
+  const written = await write.update(allowedUpdates);
+  if (confirmedAddress !== null && written !== 1) {
+    throw new ConflictError('The email address changed while this was open — reload and try again', 'email');
+  }
 
   await logActivity('admin_user_updated',
     { userId: id, changes: Object.keys(allowedUpdates) },

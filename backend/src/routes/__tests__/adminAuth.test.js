@@ -4,6 +4,7 @@ const express = require('express');
 const buildChain = ({ firstResult, updateResult } = {}) => {
   const chain = {
     where: jest.fn().mockReturnThis(),
+    whereRaw: jest.fn().mockReturnThis(),
     whereNot: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
     update: jest.fn().mockResolvedValue(updateResult ?? 1),

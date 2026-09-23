@@ -58,9 +58,11 @@ router.put('/profile', [
     throw new ConflictError('Username is already in use', 'username');
   }
 
-  // Check for email conflict
+  // Check for email conflict, without case — a rule that only holds on the
+  // user-management route is not a rule, and two rows differing only in case
+  // would both answer to one lowercased IdP claim.
   const existingEmail = await db('admin_users')
-    .where('email', email)
+    .whereRaw('LOWER(email) = ?', [String(email).toLowerCase()])
     .whereNot('id', adminId)
     .first();
 

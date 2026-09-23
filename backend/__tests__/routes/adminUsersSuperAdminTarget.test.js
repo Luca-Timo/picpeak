@@ -174,6 +174,55 @@ describe('PUT /api/admin/users/:id — super_admin targets', () => {
     expect(Boolean(after.email_link_eligible)).toBe(true);
   });
 
+  it('refuses a second admin the same address in different case', async () => {
+    // Same class as the OIDC lookup: two rows differing only in case would
+    // both answer to one IdP claim.
+    const viewer = await db('roles').where({ name: 'viewer' }).first();
+    await insertAdmin({ username: 'case-owner', email: 'Case.Owner@Example.com', role_id: viewer && viewer.id });
+    const other = await insertAdmin({ username: 'case-taker', email: 'case-taker@example.com', role_id: viewer && viewer.id });
+
+    const res = await auth(request(app).put(`/api/admin/users/${other}`), superTok)
+      .send({ email: 'case.owner@example.com' });
+
+    expect(res.status).toBe(409);
+    expect((await row(other)).email).toBe('case-taker@example.com');
+  });
+
+  it('refuses the confirmation when the address changes under it', async () => {
+    // updateAdminUser reads the row, then writes only the flag. If the target
+    // changes their own email in between (PUT /admin/auth/profile, which sets
+    // eligibility false), the confirmation must not land on that new address.
+    const viewer = await db('roles').where({ name: 'viewer' }).first();
+    const target = await insertAdmin({ username: 'racer', email: 'racer@example.com', role_id: viewer && viewer.id });
+    await db('admin_users').where({ id: target }).update({ email_link_eligible: false });
+
+    // Same shape as the retention race test: a knex builder is lazy, so
+    // .then() queues the competing write on SQLite's single connection the
+    // moment the service issues its first read of this row.
+    let raced = null;
+    const onQuery = (q) => {
+      if (!raced && /^select/i.test(q.sql) && q.sql.includes('admin_users')
+        && (q.bindings || []).includes(target)) {
+        raced = db('admin_users').where({ id: target })
+          .update({ email: 'typed-by-the-owner@example.com' }).then(() => {});
+      }
+    };
+    db.on('query', onQuery);
+    let res;
+    try {
+      res = await auth(request(app).put(`/api/admin/users/${target}`), superTok)
+        .send({ email: 'racer@example.com' });
+    } finally {
+      db.removeListener('query', onQuery);
+    }
+    await raced;
+
+    expect(res.status).toBe(409);
+    const after = await row(target);
+    expect(after.email).toBe('typed-by-the-owner@example.com');
+    expect(Boolean(after.email_link_eligible)).toBe(false);
+  });
+
   it('sends no eligibility at all from a schema without the column', () => {
     // migration 227 may not have run yet; the key is then absent, which the
     // Users page reads as eligible and offers nothing on.
