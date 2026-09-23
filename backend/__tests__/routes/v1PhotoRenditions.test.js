@@ -176,6 +176,31 @@ describe('v1 photo renditions and previews', () => {
       await makeImage(400, 300), { processing_status: 'pending' });
     await mkPhoto('failed', eventId, 'rend-main', 'rend_0007.jpg',
       await makeImage(400, 300), { processing_status: 'failed' });
+    // Declared as RAW: resizeToBox's else-branch would re-encode it as JPEG,
+    // which must never go out under a .dng name and image/x-adobe-dng.
+    await mkPhoto('dng', eventId, 'rend-main', 'rend_0008.dng',
+      await makeImage(1200, 800), {
+        mime_type: 'image/x-adobe-dng', original_filename: 'RAW_0001.dng',
+      });
+    // Alpha channel: generatePreviewImage writes WebP for this, not JPEG.
+    await mkPhoto('alpha', eventId, 'rend-main', 'rend_0009.png',
+      await sharp({
+        create: {
+          width: 800, height: 600, channels: 4,
+          background: { r: 10, g: 120, b: 200, alpha: 0.5 },
+        },
+      }).png().toBuffer(), {
+        mime_type: 'image/png', width: 800, height: 600, original_filename: 'alpha.png',
+      });
+    // A row whose key climbs out of the storage root. The stored-bytes path
+    // already answers 404; the rendition path must agree.
+    const escapeRow = await db('photos').insert({
+      event_id: eventId, filename: 'escape.jpg', path: '../../../escape.jpg',
+      type: 'individual', source_origin: 'managed', mime_type: 'image/jpeg',
+      size_bytes: 10, uploaded_at: new Date().toISOString(),
+    }).returning('id');
+    photos.escape = escapeRow[0]?.id ?? escapeRow[0];
+
     await mkPhoto('foreign', otherEventId, 'rend-other', 'rend-other_0001.jpg',
       await makeImage(300, 200));
     await mkPhoto('archived', archivedEventId, 'rend-archived', 'rend-arch_0001.jpg',
@@ -242,6 +267,29 @@ describe('v1 photo renditions and previews', () => {
       expect(res.status).toBe(200);
       expect(sha256(res.body)).toBe(sha256(bytes.video));
       expect(res.headers['content-type']).toBe('video/mp4');
+    });
+
+    it('never re-encodes a RAW source into a format its name contradicts', async () => {
+      const res = await get(`/api/v1/events/${eventId}/photos/${photos.dng}/download?resolution=400x400`);
+      expect(res.status).toBe(200);
+      // Untouched bytes under the RAW content type, rather than a JPEG
+      // shipped as image/x-adobe-dng.
+      expect(sha256(res.body)).toBe(sha256(bytes.dng));
+      expect(res.headers['content-type']).toBe('image/x-adobe-dng');
+    });
+
+    // Convergence only. On a LOCAL backend this passes with or without the
+    // events/active/ containment check in renderPhotoAtBox, because
+    // LocalFsStorage refuses the traversing key by itself and the rendition
+    // falls through to the stored-bytes path. The check is there so the
+    // rendition branch does not depend on a different component enforcing a
+    // rule the original branch enforces itself — which matters on S3, where
+    // the key is not a filesystem path. That is not covered here; see the PR.
+    it('answers a path-traversing row with 404 on both branches', async () => {
+      const rendition = await get(`/api/v1/events/${eventId}/photos/${photos.escape}/download?resolution=400x400`);
+      const original = await get(`/api/v1/events/${eventId}/photos/${photos.escape}/download`);
+      expect(original.status).toBe(404);
+      expect(rendition.status).toBe(404);
     });
 
     it('rejects a malformed resolution instead of silently serving the original', async () => {
@@ -330,6 +378,14 @@ describe('v1 photo renditions and previews', () => {
       expect((await sharp(res.body).metadata()).format).toBe('jpeg');
     });
 
+    it('labels an alpha-channel preview as WebP, which is what it writes', async () => {
+      const res = await get(`/api/v1/events/${eventId}/photos/${photos.alpha}/preview`);
+      expect(res.status).toBe(200);
+      const meta = await sharp(res.body).metadata();
+      // nosniff is set, so the label has to match the bytes or nothing renders.
+      expect(res.headers['content-type']).toBe(`image/${meta.format}`);
+    });
+
     it('serves a narrower tier for ?w', async () => {
       const res = await get(`/api/v1/events/${eventId}/photos/${photos.large}/preview?w=640`);
       expect(res.status).toBe(200);
@@ -381,7 +437,10 @@ describe('v1 photo renditions and previews', () => {
 
     it('refuses an event the token owner does not own', async () => {
       const res = await get(`/api/v1/events/${eventId}/photos/${photos.large}/preview`, otherAdminToken);
-      expect([403, 404]).toContain(res.status);
+      // created_by is set on the fixture, so requireEventOwnership refuses it
+      // deterministically. Pinned so the guard cannot silently degrade into a
+      // 404 that happens to come from somewhere else.
+      expect(res.status).toBe(403);
     });
   });
 
