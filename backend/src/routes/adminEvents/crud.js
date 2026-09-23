@@ -7,7 +7,7 @@ const { db, logActivity } = require('../../database/db');
 const { formatBoolean } = require('../../utils/dbCompat');
 
 const { adminAuth } = require('../../middleware/auth');
-const { requirePermission, userHasAllPermissions } = require('../../middleware/permissions');
+const { requirePermission, userHasAllPermissions, userHasAnyPermission } = require('../../middleware/permissions');
 const { IDENTITY_PRESERVING_NORMALIZE_EMAIL } = require('../../utils/emailNormalization');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
@@ -469,6 +469,18 @@ module.exports = (router) => {
       } catch (e) {
         logger.warn('Failed to load customer assignments for event', { eventId: id, error: e.message });
       }
+      // Their customer groups (#1443) — only for an admin who may read
+      // customers; this route is guarded by events.view alone. Decoration:
+      // a failure here leaves the groups out rather than failing the page.
+      let groupsByCustomer = null;
+      try {
+        if (customerAccounts.length > 0 && await userHasAnyPermission(req.admin.id, ['customers.view'])) {
+          groupsByCustomer = await require('../../services/customerGroupsService')
+            .groupsForCustomers(customerAccounts.map((c) => c.id));
+        }
+      } catch (e) {
+        logger.warn('Failed to load customer groups for event', { eventId: id, error: e.message });
+      }
 
       res.json(withoutForeignEventSecrets(mapEventForApi({
         ...event,
@@ -491,6 +503,7 @@ module.exports = (router) => {
           // button that then 400'd — or worse, reported success.
           is_active: c.is_active,
           can_sign_in: c.can_sign_in,
+          ...(groupsByCustomer ? { groups: groupsByCustomer.get(Number(c.id)) || [] } : {}),
         })),
       }), req.admin));
     } catch (error) {

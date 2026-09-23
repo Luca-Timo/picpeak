@@ -10,7 +10,7 @@ const express = require('express');
 const { capabilityEvidence } = require('../usage/capabilityEvidence');
 const { body, param, query } = require('express-validator');
 const { adminAuth } = require('../middleware/auth');
-const { requirePermission } = require('../middleware/permissions');
+const { requirePermission, userHasAnyPermission } = require('../middleware/permissions');
 const { requireFeatureFlag, isFeatureEnabled } = require('../middleware/requireFeatureFlag');
 const { filterOwnedEventIds } = require('../middleware/ownership');
 const { db, logActivity } = require('../database/db');
@@ -30,7 +30,7 @@ const customerHoursService = require('../services/customerHoursService');
 const combinedBillingService = require('../services/combinedBillingService');
 const invoiceService = require('../services/invoiceService');
 const { IDENTITY_PRESERVING_NORMALIZE_EMAIL } = require('../utils/emailNormalization');
-const { NotFoundError } = require('../utils/errors');
+const { NotFoundError, AppError } = require('../utils/errors');
 const customerDocumentsService = require('../services/customerDocumentsService');
 const customerGroupsService = require('../services/customerGroupsService');
 const { receivePdfUpload, discardTempFile, sendPdfAttachment } = require('../middleware/customerDocumentUpload');
@@ -139,21 +139,32 @@ function transformInvitation(inv) {
 }
 
 // Far more groups than a catalogue holds, and well under what an IN list or
-// a reorder loop should be handed from a request.
-const MAX_GROUP_IDS = 100;
+// a reorder loop should be handed from a request. The same number bounds how
+// many groups one customer carries, so the detail editor can always save.
+const MAX_GROUP_IDS = customerGroupsService.MAX_GROUPS_PER_CUSTOMER;
 const MAX_REORDER_IDS = 500;
+// One bulk change covers at most this many customers.
+const MAX_BULK_CUSTOMERS = 500;
 
 /**
  * `?groupIds=1,2` or `?groupIds=1&groupIds=2` → [1, 2]. Anything that isn't a
  * positive integer is dropped rather than refused, so a stale bookmark shows
- * the unfiltered list instead of an error. Capped at MAX_GROUP_IDS.
+ * the unfiltered list instead of an error. More than MAX_GROUP_IDS groups is
+ * refused: cutting the list short would quietly answer a different filter
+ * ("all of them" over the first 100 is not "all of them").
  */
 function parseGroupIds(value) {
   if (value === undefined || value === null || value === '') return [];
   const raw = Array.isArray(value) ? value : String(value).split(',');
-  return [...new Set(raw
+  const ids = [...new Set(raw
     .map((id) => Number(String(id).trim()))
-    .filter((id) => Number.isInteger(id) && id > 0))].slice(0, MAX_GROUP_IDS);
+    .filter((id) => Number.isInteger(id) && id > 0))];
+  if (ids.length > MAX_GROUP_IDS) {
+    const err = new AppError(`Filter by at most ${MAX_GROUP_IDS} groups at once`, 400, 'GROUP_FILTER_TOO_MANY');
+    err.details = { limit: MAX_GROUP_IDS };
+    throw err;
+  }
+  return ids;
 }
 
 // ---- customer groups (#1443) --------------------------------------------
@@ -170,7 +181,10 @@ router.get('/groups', [
 ], handleAsync(async (req, res) => {
   validateRequest(req);
   const includeArchived = req.query.includeArchived === 'true' || req.query.includeArchived === '1';
-  return successResponse(res, { groups: await customerGroupsService.list({ includeArchived }) });
+  return successResponse(res, {
+    groups: await customerGroupsService.list({ includeArchived }),
+    ungroupedCount: await customerGroupsService.countUngrouped(),
+  });
 }));
 
 router.post('/groups', [
@@ -195,6 +209,29 @@ router.post('/groups/reorder', [
   validateRequest(req);
   const groups = await customerGroupsService.reorder(req.body.orderedIds, req.admin);
   return successResponse(res, { groups });
+}));
+
+// All or nothing, before /groups/:groupId like reorder. `dryRun` answers the
+// same numbers without writing — the preview the admin confirms.
+router.post('/groups/bulk-assign', [
+  adminAuth,
+  requireGroupManage,
+  body('customerIds').isArray({ min: 1, max: MAX_BULK_CUSTOMERS }),
+  body('customerIds.*').isInt({ min: 1 }).toInt(),
+  body('addGroupIds').optional().isArray({ max: MAX_GROUP_IDS }),
+  body('addGroupIds.*').isInt({ min: 1 }).toInt(),
+  body('removeGroupIds').optional().isArray({ max: MAX_GROUP_IDS }),
+  body('removeGroupIds.*').isInt({ min: 1 }).toInt(),
+  body('dryRun').optional().isBoolean().toBoolean(),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const result = await customerGroupsService.bulkAssign({
+    customerIds: req.body.customerIds,
+    addGroupIds: req.body.addGroupIds,
+    removeGroupIds: req.body.removeGroupIds,
+    dryRun: req.body.dryRun === true,
+  }, req.admin);
+  return successResponse(res, result);
 }));
 
 router.put('/groups/:groupId', [
@@ -242,11 +279,19 @@ router.get('/', [
   query('search').optional().isString(),
   // Repeatable (?groupIds=1&groupIds=2) or comma-separated (?groupIds=1,2).
   query('groupIds').optional(),
+  query('groupMatch').optional().isIn(['any', 'all']),
+  query('ungrouped').optional().isBoolean(),
+  query('status').optional().isIn(['active', 'inactive', 'all']),
 ], handleAsync(async (req, res) => {
   validateRequest(req);
+  // Ungrouped wins over any group ids, so they are not even read then.
+  const ungrouped = req.query.ungrouped === 'true' || req.query.ungrouped === '1';
   const customers = await customerAccountsService.listCustomers({
     search: req.query.search,
-    groupIds: parseGroupIds(req.query.groupIds),
+    groupIds: ungrouped ? [] : parseGroupIds(req.query.groupIds),
+    groupMatch: req.query.groupMatch || 'any',
+    ungrouped,
+    status: req.query.status || 'all',
   });
   const groupsByCustomer = await customerGroupsService.groupsForCustomers(customers.map((c) => c.id));
   res.json({
@@ -271,7 +316,11 @@ router.get('/search', [
   validateRequest(req);
   const term = req.query.email || req.query.q || '';
   const results = await customerAccountsService.searchCustomers(term);
-  res.json({ customers: results.map(transformCustomer) });
+  // Groups (#1443), so a picker shows the segment without opening the record.
+  const groupsByCustomer = await customerGroupsService.groupsForCustomers(results.map((c) => c.id));
+  res.json({
+    customers: results.map((c) => transformCustomer({ ...c, groups: groupsByCustomer.get(Number(c.id)) || [] })),
+  });
 }));
 
 // ---- invitations --------------------------------------------------------
@@ -401,15 +450,40 @@ router.post('/', [
     }
     return true;
   }),
+  // Groups for the new customer (#1443). Placing a customer in a group is
+  // customers.groups.manage, checked in the handler because the field is
+  // optional on a route guarded by customers.create.
+  body('groupIds').optional().isArray({ max: MAX_GROUP_IDS }),
+  body('groupIds.*').isInt({ min: 1 }).toInt(),
 ], handleAsync(async (req, res) => {
   validateRequest(req);
+  const groupIds = [...new Set(req.body.groupIds || [])];
+  // The permission is checked before anything is written. The friendly group
+  // check runs first too, but what holds is the transaction below: the
+  // customer and its memberships are inserted together, so a group archived
+  // or deleted in between refuses both and leaves no customer behind — a
+  // retry doesn't then trip over "email exists".
+  if (groupIds.length > 0) {
+    if (!await userHasAnyPermission(req.admin.id, ['customers.groups.manage'])) {
+      throw new AppError('Placing a customer in a group needs the customers.groups.manage permission', 403, 'GROUPS_PERMISSION_REQUIRED');
+    }
+    await customerGroupsService.assertAssignable(groupIds);
+  }
+  // createDirect emits customer.created after its transaction commits, with
+  // the memberships already in place.
+  let change = null;
   const { id } = await customerAccountsService.createDirect({
     email: req.body.email,
     prefill: req.body.prefill,
     createdByAdminId: req.admin.id,
+    withinTransaction: groupIds.length > 0
+      ? async (trx, customerId) => { change = await customerGroupsService.replaceCustomerGroups(trx, customerId, groupIds); }
+      : null,
   });
+  if (change) await customerGroupsService.logCustomerGroupsAssigned(id, change, req.admin);
+  const groups = groupIds.length > 0 ? await customerGroupsService.groupsForCustomer(id) : [];
   const customer = await customerAccountsService.getCustomerById(id);
-  successResponse(res, { customer: transformCustomer(customer) }, 201);
+  successResponse(res, { customer: transformCustomer({ ...customer, groups }) }, 201);
 }));
 
 // ---- promote a passive customer to active (send portal invitation) ------

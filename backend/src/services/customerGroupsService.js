@@ -29,6 +29,12 @@ const DESCRIPTION_MAX = 500;
 const DEFAULT_COLOR = '#6B7280';
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const LOOKUP_CHUNK = 500;
+// Three bound parameters a row; well under the engines' limits.
+const INSERT_CHUNK = 100;
+// The most groups one customer carries. The detail editor saves the full
+// list in one request capped at this size, so nothing may push a customer
+// past it; the bulk change refuses to.
+const MAX_GROUPS_PER_CUSTOMER = 100;
 
 /** A colour the chip can show in both themes; anything else is refused. */
 function normalizeColor(value) {
@@ -104,6 +110,20 @@ async function list({ includeArchived = false } = {}) {
     .orderBy('customer_groups.name', 'asc');
   if (!includeArchived) query.where('customer_groups.is_archived', formatBoolean(false));
   return (await query).map(toApi);
+}
+
+/**
+ * Customers in no group at all, for the overview's "Ungrouped" filter. Same
+ * basis as `memberCount`: every customer, whatever their status, and not
+ * narrowed by the overview's search or status filter.
+ */
+async function countUngrouped() {
+  const [{ count }] = await db('customer_accounts')
+    .whereNotExists(db('customer_group_members')
+      .whereRaw('customer_group_members.customer_account_id = customer_accounts.id')
+      .select(db.raw('1')))
+    .count({ count: '*' });
+  return Number(count) || 0;
 }
 
 async function getById(id) {
@@ -230,6 +250,21 @@ async function reorder(ids, admin = null) {
   return list({ includeArchived: true });
 }
 
+/**
+ * Refuse ids a new customer can't be put in — unknown or archived — before
+ * anything is written, so the caller never creates a customer and then drops
+ * the groups it was asked for.
+ */
+async function assertAssignable(groupIds) {
+  const wanted = [...new Set(groupIds.map((id) => Number(id)))];
+  const groups = wanted.length ? await db('customer_groups').whereIn('id', wanted) : [];
+  if (groups.length !== wanted.length) throw new AppError('Customer group not found', 404, 'GROUP_NOT_FOUND');
+  const archived = groups.find((g) => g.is_archived);
+  if (archived) {
+    throw new AppError(`"${archived.name}" is archived and can't be assigned. Restore it first.`, 400, 'GROUP_ARCHIVED');
+  }
+}
+
 /** The groups on one customer, archived ones included — they are history. */
 async function groupsForCustomer(customerId, conn = db) {
   const rows = await conn('customer_group_members')
@@ -262,6 +297,58 @@ async function groupsForCustomers(customerIds, conn = db) {
 }
 
 /**
+ * The write half of setCustomerGroups, in the caller's transaction: reads the
+ * current memberships and the groups through `trx`, refuses an unknown or
+ * newly-added archived group, and replaces the rows. Resolves to what changed.
+ * Logs nothing — the caller does that once the transaction has committed.
+ */
+async function replaceCustomerGroups(trx, customerId, groupIds) {
+  // The customer row is the lock every membership write takes first
+  // (bulkAssign too), so the per-customer cap holds across replicas.
+  await lockCustomers(trx, [customerId]);
+  const wanted = [...new Set((Array.isArray(groupIds) ? groupIds : [])
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0))];
+  const groups = wanted.length ? await trx('customer_groups').whereIn('id', wanted) : [];
+  if (groups.length !== wanted.length) throw new AppError('Customer group not found', 404, 'GROUP_NOT_FOUND');
+
+  const current = await trx('customer_group_members').where({ customer_account_id: customerId }).pluck('group_id');
+  const currentIds = current.map((id) => Number(id));
+  const added = wanted.filter((id) => !currentIds.includes(id));
+  const removed = currentIds.filter((id) => !wanted.includes(id));
+
+  const archivedAdded = groups.filter((g) => g.is_archived && added.includes(Number(g.id)));
+  if (archivedAdded.length > 0) {
+    throw new AppError(
+      `"${archivedAdded[0].name}" is archived and can't be assigned. Restore it first.`,
+      400,
+      'GROUP_ARCHIVED',
+    );
+  }
+
+  if (removed.length > 0) {
+    await trx('customer_group_members')
+      .where({ customer_account_id: customerId })
+      .whereIn('group_id', removed)
+      .del();
+  }
+  if (added.length > 0) {
+    await trx('customer_group_members').insert(added.map((groupId) => ({
+      group_id: groupId,
+      customer_account_id: customerId,
+      assigned_at: new Date().toISOString(),
+    })));
+  }
+  return { added, removed };
+}
+
+/** The activity entry for a membership change; nothing when nothing changed. */
+async function logCustomerGroupsAssigned(customerId, { added, removed }, admin = null) {
+  if (added.length === 0 && removed.length === 0) return;
+  await logActivity('customer_groups_assigned', { customerId, added, removed }, null, adminActor(admin));
+}
+
+/**
  * Replace a customer's groups with exactly `groupIds`.
  *
  * An archived group can stay where it already is but can't be added, so a
@@ -269,9 +356,6 @@ async function groupsForCustomers(customerIds, conn = db) {
  * sends the ids it was shown, including the archived one.
  */
 async function setCustomerGroups(customerId, groupIds, admin = null) {
-  const wanted = [...new Set((Array.isArray(groupIds) ? groupIds : [])
-    .map((id) => Number(id))
-    .filter((id) => Number.isInteger(id) && id > 0))];
   const customer = await db('customer_accounts').where({ id: customerId }).first('id');
   if (!customer) throw new AppError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
 
@@ -279,54 +363,176 @@ async function setCustomerGroups(customerId, groupIds, admin = null) {
   // transaction that writes them. Two admins saving the same customer at once
   // can still both try to insert one membership on PostgreSQL; the unique
   // index refuses the second, and that is a 409 to reload on, not a 500.
-  let added = [];
-  let removed = [];
+  let change;
   try {
-    await db.transaction(async (trx) => {
-      const groups = wanted.length ? await trx('customer_groups').whereIn('id', wanted) : [];
-      if (groups.length !== wanted.length) throw new AppError('Customer group not found', 404, 'GROUP_NOT_FOUND');
-
-      const current = await trx('customer_group_members').where({ customer_account_id: customerId }).pluck('group_id');
-      const currentIds = current.map((id) => Number(id));
-      added = wanted.filter((id) => !currentIds.includes(id));
-      removed = currentIds.filter((id) => !wanted.includes(id));
-
-      const archivedAdded = groups.filter((g) => g.is_archived && added.includes(Number(g.id)));
-      if (archivedAdded.length > 0) {
-        throw new AppError(
-          `"${archivedAdded[0].name}" is archived and can't be assigned. Restore it first.`,
-          400,
-          'GROUP_ARCHIVED',
-        );
-      }
-
-      if (removed.length > 0) {
-        await trx('customer_group_members')
-          .where({ customer_account_id: customerId })
-          .whereIn('group_id', removed)
-          .del();
-      }
-      if (added.length > 0) {
-        await trx('customer_group_members').insert(added.map((groupId) => ({
-          group_id: groupId,
-          customer_account_id: customerId,
-          assigned_at: new Date().toISOString(),
-        })));
-      }
-    });
+    change = await db.transaction((trx) => replaceCustomerGroups(trx, customerId, groupIds));
   } catch (err) {
     if (!isUniqueViolation(err)) throw err;
     throw new AppError('This customer\'s groups were changed by someone else just now. Reload and try again.', 409, 'GROUP_ASSIGNMENT_CONFLICT');
   }
 
-  if (added.length === 0 && removed.length === 0) return groupsForCustomer(customerId);
-  await logActivity('customer_groups_assigned', { customerId, added, removed }, null, adminActor(admin));
+  await logCustomerGroupsAssigned(customerId, change, admin);
   return groupsForCustomer(customerId);
+}
+
+/**
+ * Lock the customer rows a membership change touches, in id order so two
+ * changes never wait on each other. PostgreSQL only: SQLite runs one writer
+ * at a time already.
+ */
+async function lockCustomers(trx, customerIds) {
+  if (trx.client.config.client !== 'pg' || customerIds.length === 0) return;
+  const ordered = [...customerIds].sort((x, y) => x - y);
+  for (let start = 0; start < ordered.length; start += LOOKUP_CHUNK) {
+    await trx('customer_accounts').whereIn('id', ordered.slice(start, start + LOOKUP_CHUNK))
+      .orderBy('id').forUpdate().select('id');
+  }
+}
+
+const chunks = (list, size) => {
+  const out = [];
+  for (let start = 0; start < list.length; start += size) out.push(list.slice(start, start + size));
+  return out;
+};
+
+const positiveIds = (value) => [...new Set((Array.isArray(value) ? value : [])
+  .map((id) => Number(id))
+  .filter((id) => Number.isInteger(id) && id > 0))];
+
+/**
+ * Add a set of customers to some groups and take them out of others, all or
+ * nothing. The numbers are the effective change, worked out from the rows
+ * read inside the transaction: a customer already in a group isn't added
+ * twice or counted, and taking someone out of a group they aren't in is a
+ * no-op. With `dryRun` the same numbers come back and nothing is written or
+ * logged — that is the preview the admin confirms.
+ *
+ * One activity entry for the whole change, with ids only: no customer names
+ * or addresses in the log.
+ */
+async function bulkAssign({ customerIds, addGroupIds, removeGroupIds, dryRun = false }, admin = null) {
+  const customers = positiveIds(customerIds);
+  const add = positiveIds(addGroupIds);
+  const remove = positiveIds(removeGroupIds);
+  if (customers.length === 0) throw new AppError('Select at least one customer', 400, 'BULK_NO_CUSTOMERS');
+  if (add.length === 0 && remove.length === 0) {
+    throw new AppError('Pick a group to add the customers to or to remove them from', 400, 'BULK_NOTHING_TO_DO');
+  }
+  if (add.some((id) => remove.includes(id))) {
+    throw new AppError('A group can\'t be added and removed in the same change', 400, 'BULK_GROUP_IN_BOTH');
+  }
+
+  const perGroup = new Map([...add, ...remove].map((groupId) => [groupId, { groupId, added: 0, removed: 0 }]));
+  let added = 0;
+  let removed = 0;
+  try {
+    await db.transaction(async (trx) => {
+      const groups = await trx('customer_groups').whereIn('id', [...add, ...remove]);
+      if (groups.length !== add.length + remove.length) {
+        throw new AppError('Customer group not found', 404, 'GROUP_NOT_FOUND');
+      }
+      const archived = groups.find((g) => g.is_archived && add.includes(Number(g.id)));
+      if (archived) {
+        throw new AppError(`"${archived.name}" is archived and can't be assigned. Restore it first.`, 400, 'GROUP_ARCHIVED');
+      }
+
+      // Before any membership is read: two bulk changes (or a bulk change
+      // and a detail save) reading the same customer's count at once would
+      // both pass the cap.
+      await lockCustomers(trx, customers);
+      const current = new Set();
+      const carried = new Map();
+      let found = 0;
+      for (const slice of chunks(customers, LOOKUP_CHUNK)) {
+        found += (await trx('customer_accounts').whereIn('id', slice).pluck('id')).length;
+        const rows = await trx('customer_group_members')
+          .whereIn('customer_account_id', slice)
+          .whereIn('group_id', [...add, ...remove])
+          .select('customer_account_id', 'group_id');
+        for (const row of rows) current.add(`${Number(row.customer_account_id)}:${Number(row.group_id)}`);
+        if (add.length > 0) {
+          const counts = await trx('customer_group_members')
+            .whereIn('customer_account_id', slice)
+            .groupBy('customer_account_id')
+            .select('customer_account_id')
+            .count({ total: '*' });
+          for (const row of counts) carried.set(Number(row.customer_account_id), Number(row.total));
+        }
+      }
+      if (found !== customers.length) throw new AppError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
+
+      const toInsert = [];
+      for (const groupId of add) {
+        for (const customerId of customers) {
+          if (current.has(`${customerId}:${groupId}`)) continue;
+          toInsert.push({ group_id: groupId, customer_account_id: customerId, assigned_at: new Date().toISOString() });
+          perGroup.get(groupId).added += 1;
+        }
+      }
+      const toRemove = new Map();
+      for (const groupId of remove) {
+        const members = customers.filter((customerId) => current.has(`${customerId}:${groupId}`));
+        perGroup.get(groupId).removed = members.length;
+        if (members.length > 0) toRemove.set(groupId, members);
+      }
+      added = toInsert.length;
+      removed = [...toRemove.values()].reduce((sum, members) => sum + members.length, 0);
+
+      // Only a customer the change gives a new group can be pushed over the
+      // cap; one already over it may still be taken out of groups.
+      if (toInsert.length > 0) {
+        const delta = new Map();
+        for (const row of toInsert) {
+          delta.set(row.customer_account_id, (delta.get(row.customer_account_id) || 0) + 1);
+        }
+        for (const members of toRemove.values()) {
+          for (const customerId of members) {
+            if (delta.has(customerId)) delta.set(customerId, delta.get(customerId) - 1);
+          }
+        }
+        let over = 0;
+        for (const [customerId, change] of delta) {
+          if ((carried.get(customerId) || 0) + change > MAX_GROUPS_PER_CUSTOMER) over += 1;
+        }
+        if (over > 0) {
+          const err = new AppError(
+            `${over} of the selected customers would be in more than ${MAX_GROUPS_PER_CUSTOMER} groups. Remove them from the selection or take them out of other groups first.`,
+            400,
+            'BULK_GROUP_LIMIT',
+          );
+          err.details = { customers: over, limit: MAX_GROUPS_PER_CUSTOMER };
+          throw err;
+        }
+      }
+      if (dryRun) return;
+
+      for (const [groupId, members] of toRemove) {
+        for (const slice of chunks(members, LOOKUP_CHUNK)) {
+          await trx('customer_group_members').where({ group_id: groupId }).whereIn('customer_account_id', slice).del();
+        }
+      }
+      for (const slice of chunks(toInsert, INSERT_CHUNK)) {
+        await trx('customer_group_members').insert(slice);
+      }
+    });
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    throw new AppError('These customers\' groups were changed by someone else just now. Reload and try again.', 409, 'GROUP_ASSIGNMENT_CONFLICT');
+  }
+
+  if (!dryRun && added + removed > 0) {
+    await logActivity('customer_groups_bulk_assigned', {
+      addGroupIds: add, removeGroupIds: remove, customerIds: customers, added, removed,
+    }, null, adminActor(admin));
+  }
+  return { customers: customers.length, added, removed, perGroup: [...perGroup.values()], dryRun: !!dryRun };
 }
 
 module.exports = {
   DEFAULT_COLOR,
+  MAX_GROUPS_PER_CUSTOMER,
   list,
+  countUngrouped,
   create,
   update,
   remove,
@@ -334,5 +540,9 @@ module.exports = {
   groupsForCustomer,
   groupsForCustomers,
   setCustomerGroups,
+  replaceCustomerGroups,
+  logCustomerGroupsAssigned,
+  assertAssignable,
+  bulkAssign,
   _internal: { normalizeColor, normalizeName, normalizeDescription, nameKey },
 };

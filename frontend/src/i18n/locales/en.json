@@ -1074,7 +1074,10 @@
       "gatePrompt": "Question for the admin",
       "gatePromptPh": "e.g. No payment received — send a reminder?",
       "gateTimeout": "Auto-expire after (days, optional)",
-      "gateHint": "Emails the admin a confirm/deny link; routes to the “confirm” or “deny” edge."
+      "gateHint": "Emails the admin a confirm/deny link; routes to the “confirm” or “deny” edge.",
+      "groups": "Customer groups",
+      "groupsNoPermission": "Listing customer groups needs the customers.view permission.",
+      "groupsHint": "Checked when this step runs. Needs a customer on the run: customer, quote, contract and invoice triggers have one; on gallery and event triggers this is always “no”."
     }
   },
   "archives": {
@@ -5844,7 +5847,8 @@
       "title": "Deactivate customer?",
       "body": "They will no longer be able to log in. You can re-invite them later.",
       "success": "Customer deactivated",
-      "error": "Could not deactivate customer"
+      "error": "Could not deactivate customer",
+      "buttonLabel": "Deactivate {{email}}"
     },
     "cancelInvitation": {
       "title": "Cancel invitation?",
@@ -6036,7 +6040,7 @@
       "customColor": "Custom colour",
       "empty": "No groups yet. Create one to organise your customers.",
       "emptyCatalogue": "No groups yet. Create one under Customers → Groups.",
-      "emptyFiltered": "No customers in the selected groups.",
+      "deletedGroup": "Deleted group",
       "palette": {
         "blue": "Blue",
         "green": "Green",
@@ -6064,12 +6068,65 @@
       "nameRequired": "A group needs a name",
       "loadError": "The groups could not be loaded. Reload the page to try again.",
       "filterLabel": "Filter by group",
+      "filterLimit": "Filter by at most {{max}} groups at once.",
       "clearFilter": "Clear",
       "none": "—",
       "more": "+{{count}}",
       "change": "Change groups",
       "noneAssigned": "This customer is in no group.",
-      "assignSaved": "Groups saved"
+      "assignSaved": "Groups saved",
+      "ungrouped": "Ungrouped",
+      "matchLabel": "Customers in",
+      "matchAny": "Any of them",
+      "matchAll": "All of them",
+      "moreLabel_one": "Show {{count}} more group",
+      "moreLabel_other": "Show {{count}} more groups",
+      "less": "Less",
+      "lessLabel": "Show fewer groups",
+      "lowContrastLight": "This colour is hard to see in light mode.",
+      "lowContrastDark": "This colour is hard to see in dark mode.",
+      "bulk": {
+        "barLabel": "Selected customers",
+        "selected_one": "{{count}} selected",
+        "selected_other": "{{count}} selected",
+        "add": "Add to groups…",
+        "remove": "Remove from groups…",
+        "clearSelection": "Clear selection",
+        "selectAll": "Select all shown customers",
+        "selectOne": "Select {{email}}",
+        "addTitle_one": "Add {{count}} customer to groups",
+        "addTitle_other": "Add {{count}} customers to groups",
+        "removeTitle_one": "Remove {{count}} customer from groups",
+        "removeTitle_other": "Remove {{count}} customers from groups",
+        "noneCarried": "None of the selected customers is in a group.",
+        "previewing": "Working out the change…",
+        "previewError": "The change could not be previewed. Close this and try again.",
+        "addsSummary_one": "Adds {{count}} membership.",
+        "addsSummary_other": "Adds {{count}} memberships.",
+        "removesSummary_one": "Removes {{count}} membership.",
+        "removesSummary_other": "Removes {{count}} memberships.",
+        "alreadyIn_one": "{{count}} customer is already in {{name}}.",
+        "alreadyIn_other": "{{count}} customers are already in {{name}}.",
+        "notIn_one": "{{count}} customer is not in {{name}}.",
+        "notIn_other": "{{count}} customers are not in {{name}}.",
+        "confirmAdd_one": "Add {{count}} membership",
+        "confirmAdd_other": "Add {{count}} memberships",
+        "confirmRemove_one": "Remove {{count}} membership",
+        "confirmRemove_other": "Remove {{count}} memberships",
+        "addedToast_one": "Added {{count}} membership",
+        "addedToast_other": "Added {{count}} memberships",
+        "removedToast_one": "Removed {{count}} membership",
+        "removedToast_other": "Removed {{count}} memberships",
+        "overCap": "At most {{max}} customers can be changed at once. Narrow the filter or clear some of the selection.",
+        "overGroupLimit_one": "{{count}} selected customer would be in more than {{max}} groups. Take them out of the selection, or out of other groups first.",
+        "overGroupLimit_other": "{{count}} selected customers would be in more than {{max}} groups. Take them out of the selection, or out of other groups first."
+      }
+    },
+    "emptyFiltered": "No customers match these filters.",
+    "clearFilters": "Clear filters",
+    "statusFilter": {
+      "label": "Status",
+      "all": "All statuses"
     }
   },
   "clients": {
@@ -8459,7 +8516,8 @@
     },
     "mode": {
       "allActive": "All active customers",
-      "manual": "Pick customers"
+      "manual": "Pick customers",
+      "groups": "Customers in groups"
     },
     "showCss": "Custom CSS (optional)",
     "hideCss": "Hide custom CSS",
@@ -8501,7 +8559,8 @@
       "body": "Mailing {{count}} people at once from a domain that usually sends only transactional email is what makes spam filters take notice. Providers may throttle, junk or block the whole batch, and a bad run damages delivery of your gallery emails too.",
       "advice": "Confirm SPF, DKIM and DMARC are set up for your sending domain, send yourself a test first, and consider splitting a first campaign across several smaller sends.",
       "duration": "At {{rate}}/minute this takes about {{minutes}} minutes. The send queue is shared, so while it runs other email — gallery invitations, password resets — can be delayed behind it."
-    }
+    },
+    "groupsHint": "Who is in the groups is read when the campaign is sent, not now. Deactivated and unsubscribed customers are left out."
   },
   "documentVerification": {
     "title": "Confirm it's you",

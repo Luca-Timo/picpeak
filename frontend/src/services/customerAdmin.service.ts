@@ -33,6 +33,50 @@ export interface CustomerGroupPayload {
   isArchived?: boolean;
 }
 
+export interface CustomerGroupCatalogue {
+  groups: CustomerGroup[];
+  /** Customers in no group, over every status — same basis as memberCount. */
+  ungroupedCount: number;
+}
+
+/**
+ * The most customers one bulk group change may cover. Mirrors
+ * MAX_BULK_CUSTOMERS in backend/src/routes/adminCustomers.js, which refuses
+ * more with a 400.
+ */
+export const BULK_GROUP_MAX_CUSTOMERS = 500;
+/** The most groups one filter, or one customer, carries (MAX_GROUP_IDS on the server). */
+export const MAX_GROUPS_PER_CUSTOMER = 100;
+
+export interface CustomerGroupBulkPayload {
+  customerIds: number[];
+  addGroupIds?: number[];
+  removeGroupIds?: number[];
+  dryRun?: boolean;
+}
+
+/** The effective change: memberships that exist already aren't counted. */
+export interface CustomerGroupBulkResult {
+  customers: number;
+  added: number;
+  removed: number;
+  perGroup: { groupId: number; added: number; removed: number }[];
+  dryRun: boolean;
+}
+
+export type CustomerStatusFilter = 'all' | 'active' | 'inactive';
+export type CustomerGroupMatch = 'any' | 'all';
+
+export interface CustomerListOptions {
+  search?: string;
+  groupIds?: number[];
+  /** Only sent with two or more groups; `any` is the server default. */
+  groupMatch?: CustomerGroupMatch;
+  /** Customers in no group. Wins over `groupIds`. */
+  ungrouped?: boolean;
+  status?: CustomerStatusFilter;
+}
+
 export interface CustomerAccountSummary {
   id: number;
   email: string;
@@ -162,12 +206,18 @@ export interface CustomerInvitationSummary {
 const unwrap = (payload: any): any => (payload && payload.data !== undefined ? payload.data : payload);
 
 export const customerAdminService = {
-  async list(search?: string, groupIds?: number[]): Promise<CustomerAccountSummary[]> {
-    // The group filter is server-side (#1443): the overview asks for the
-    // selected groups and keeps filtering the answer by the search box.
+  async list(options: CustomerListOptions = {}): Promise<CustomerAccountSummary[]> {
+    // The filters are server-side (#1443); the overview keeps filtering the
+    // answer by its search box. Defaults are left out of the request.
+    const { search, groupIds, groupMatch, ungrouped, status } = options;
     const params: Record<string, string> = {};
     if (search) params.search = search;
-    if (groupIds && groupIds.length > 0) params.groupIds = groupIds.join(',');
+    if (ungrouped) params.ungrouped = 'true';
+    else if (groupIds && groupIds.length > 0) {
+      params.groupIds = groupIds.join(',');
+      if (groupMatch === 'all') params.groupMatch = 'all';
+    }
+    if (status && status !== 'all') params.status = status;
     const response = await api.get<{ customers: CustomerAccountSummary[] }>(
       '/admin/customers',
       { params: Object.keys(params).length > 0 ? params : undefined }
@@ -183,6 +233,15 @@ export const customerAdminService = {
       { params: includeArchived ? { includeArchived: 'true' } : undefined }
     );
     return unwrap(response.data).groups;
+  },
+
+  /** The catalogue plus the number of customers in no group at all. */
+  async listGroupCatalogue(includeArchived = false): Promise<CustomerGroupCatalogue> {
+    const response = await api.get('/admin/customers/groups', {
+      params: includeArchived ? { includeArchived: 'true' } : undefined,
+    });
+    const data = unwrap(response.data);
+    return { groups: data.groups, ungroupedCount: Number(data.ungroupedCount) || 0 };
   },
 
   async createGroup(payload: CustomerGroupPayload): Promise<CustomerGroup> {
@@ -202,6 +261,15 @@ export const customerAdminService = {
   async reorderGroups(orderedIds: number[]): Promise<CustomerGroup[]> {
     const response = await api.post('/admin/customers/groups/reorder', { orderedIds });
     return unwrap(response.data).groups;
+  },
+
+  /**
+   * Add customers to groups and take them out of others, all or nothing.
+   * With `dryRun` nothing is written; the answer is the preview.
+   */
+  async bulkAssignGroups(payload: CustomerGroupBulkPayload): Promise<CustomerGroupBulkResult> {
+    const response = await api.post('/admin/customers/groups/bulk-assign', payload);
+    return unwrap(response.data);
   },
 
   /** Replace a customer's groups with exactly these ids. */
@@ -368,10 +436,12 @@ export const customerAdminService = {
   async createDirect(
     email: string,
     prefill?: CustomerInvitePrefill,
+    /** Needs customers.groups.manage; the server refuses the whole create without it. */
+    groupIds?: number[],
   ): Promise<CustomerAccountDetail> {
     const response = await api.post<{ data: { customer: CustomerAccountDetail } } | { customer: CustomerAccountDetail }>(
       '/admin/customers',
-      { email, prefill },
+      groupIds && groupIds.length > 0 ? { email, prefill, groupIds } : { email, prefill },
     );
     return ((response.data as any).data ?? response.data).customer;
   },

@@ -1074,7 +1074,10 @@
       "gatePrompt": "Frage an den Admin",
       "gatePromptPh": "z. B. Keine Zahlung erhalten – Mahnung senden?",
       "gateTimeout": "Automatisch ablaufen nach (Tagen, optional)",
-      "gateHint": "Sendet dem Admin einen Bestätigen/Ablehnen-Link; führt zur „confirm“- oder „deny“-Kante."
+      "gateHint": "Sendet dem Admin einen Bestätigen/Ablehnen-Link; führt zur „confirm“- oder „deny“-Kante.",
+      "groups": "Kundengruppen",
+      "groupsNoPermission": "Zum Auflisten der Kundengruppen ist die Berechtigung customers.view nötig.",
+      "groupsHint": "Wird geprüft, wenn dieser Schritt läuft. Braucht einen Kunden im Ablauf: Kunden-, Angebots-, Vertrags- und Rechnungs-Auslöser haben einen; bei Galerie- und Event-Auslösern ist das Ergebnis immer „nein“."
     }
   },
   "eventTypes": {
@@ -5844,7 +5847,8 @@
       "title": "Kunde deaktivieren?",
       "body": "Der Kunde kann sich nicht mehr anmelden. Sie können ihn später erneut einladen.",
       "success": "Kunde deaktiviert",
-      "error": "Kunde konnte nicht deaktiviert werden"
+      "error": "Kunde konnte nicht deaktiviert werden",
+      "buttonLabel": "{{email}} deaktivieren"
     },
     "cancelInvitation": {
       "title": "Einladung stornieren?",
@@ -6036,7 +6040,7 @@
       "customColor": "Eigene Farbe",
       "empty": "Noch keine Gruppen. Lege eine an, um deine Kunden zu ordnen.",
       "emptyCatalogue": "Noch keine Gruppen. Lege eine unter Kunden → Gruppen an.",
-      "emptyFiltered": "Keine Kunden in den gewählten Gruppen.",
+      "deletedGroup": "Gelöschte Gruppe",
       "palette": {
         "blue": "Blau",
         "green": "Grün",
@@ -6064,12 +6068,65 @@
       "nameRequired": "Eine Gruppe braucht einen Namen",
       "loadError": "Die Gruppen konnten nicht geladen werden. Lade die Seite neu.",
       "filterLabel": "Nach Gruppe filtern",
+      "filterLimit": "Filtern Sie nach höchstens {{max}} Gruppen auf einmal.",
       "clearFilter": "Zurücksetzen",
       "none": "—",
       "more": "+{{count}}",
       "change": "Gruppen ändern",
       "noneAssigned": "Dieser Kunde ist in keiner Gruppe.",
-      "assignSaved": "Gruppen gespeichert"
+      "assignSaved": "Gruppen gespeichert",
+      "ungrouped": "Ohne Gruppe",
+      "matchLabel": "Kunden in",
+      "matchAny": "Einer davon",
+      "matchAll": "Allen davon",
+      "moreLabel_one": "{{count}} weitere Gruppe anzeigen",
+      "moreLabel_other": "{{count}} weitere Gruppen anzeigen",
+      "less": "Weniger",
+      "lessLabel": "Weniger Gruppen anzeigen",
+      "lowContrastLight": "Diese Farbe ist im hellen Modus schwer zu erkennen.",
+      "lowContrastDark": "Diese Farbe ist im dunklen Modus schwer zu erkennen.",
+      "bulk": {
+        "barLabel": "Ausgewählte Kunden",
+        "selected_one": "{{count}} ausgewählt",
+        "selected_other": "{{count}} ausgewählt",
+        "add": "Zu Gruppen hinzufügen…",
+        "remove": "Aus Gruppen entfernen…",
+        "clearSelection": "Auswahl aufheben",
+        "selectAll": "Alle angezeigten Kunden auswählen",
+        "selectOne": "{{email}} auswählen",
+        "addTitle_one": "{{count}} Kunden zu Gruppen hinzufügen",
+        "addTitle_other": "{{count}} Kunden zu Gruppen hinzufügen",
+        "removeTitle_one": "{{count}} Kunden aus Gruppen entfernen",
+        "removeTitle_other": "{{count}} Kunden aus Gruppen entfernen",
+        "noneCarried": "Keiner der ausgewählten Kunden ist in einer Gruppe.",
+        "previewing": "Änderung wird berechnet…",
+        "previewError": "Die Änderung konnte nicht berechnet werden. Schließen Sie den Dialog und versuchen Sie es erneut.",
+        "addsSummary_one": "Fügt {{count}} Zuordnung hinzu.",
+        "addsSummary_other": "Fügt {{count}} Zuordnungen hinzu.",
+        "removesSummary_one": "Entfernt {{count}} Zuordnung.",
+        "removesSummary_other": "Entfernt {{count}} Zuordnungen.",
+        "alreadyIn_one": "{{count}} Kunde ist bereits in {{name}}.",
+        "alreadyIn_other": "{{count}} Kunden sind bereits in {{name}}.",
+        "notIn_one": "{{count}} Kunde ist nicht in {{name}}.",
+        "notIn_other": "{{count}} Kunden sind nicht in {{name}}.",
+        "confirmAdd_one": "{{count}} Zuordnung hinzufügen",
+        "confirmAdd_other": "{{count}} Zuordnungen hinzufügen",
+        "confirmRemove_one": "{{count}} Zuordnung entfernen",
+        "confirmRemove_other": "{{count}} Zuordnungen entfernen",
+        "addedToast_one": "{{count}} Zuordnung hinzugefügt",
+        "addedToast_other": "{{count}} Zuordnungen hinzugefügt",
+        "removedToast_one": "{{count}} Zuordnung entfernt",
+        "removedToast_other": "{{count}} Zuordnungen entfernt",
+        "overCap": "Höchstens {{max}} Kunden können auf einmal geändert werden. Schränken Sie den Filter ein oder heben Sie einen Teil der Auswahl auf.",
+        "overGroupLimit_one": "{{count}} ausgewählter Kunde wäre in mehr als {{max}} Gruppen. Nehmen Sie ihn aus der Auswahl oder zuerst aus anderen Gruppen heraus.",
+        "overGroupLimit_other": "{{count}} ausgewählte Kunden wären in mehr als {{max}} Gruppen. Nehmen Sie sie aus der Auswahl oder zuerst aus anderen Gruppen heraus."
+      }
+    },
+    "emptyFiltered": "Keine Kunden entsprechen diesen Filtern.",
+    "clearFilters": "Filter zurücksetzen",
+    "statusFilter": {
+      "label": "Status",
+      "all": "Alle Status"
     }
   },
   "clients": {
@@ -8460,7 +8517,8 @@
     },
     "mode": {
       "allActive": "Alle aktiven Kunden",
-      "manual": "Kunden auswählen"
+      "manual": "Kunden auswählen",
+      "groups": "Kunden in Gruppen"
     },
     "showCss": "Eigenes CSS (optional)",
     "hideCss": "Eigenes CSS ausblenden",
@@ -8502,7 +8560,8 @@
       "body": "{{count}} Personen auf einmal von einer Domain anzuschreiben, die sonst nur Transaktionsmails versendet, lässt Spamfilter aufmerksam werden. Anbieter können den gesamten Versand drosseln, als Spam einstufen oder blockieren — und ein schlechter Lauf beeinträchtigt auch die Zustellung Ihrer Galerie-E-Mails.",
       "advice": "Stellen Sie sicher, dass SPF, DKIM und DMARC für Ihre Versanddomain eingerichtet sind, senden Sie sich zuerst einen Test, und teilen Sie eine erste Kampagne nach Möglichkeit in mehrere kleinere Sendungen auf.",
       "duration": "Bei {{rate}}/Minute dauert dies etwa {{minutes}} Minuten. Die Versand-Warteschlange wird geteilt: Während der Kampagne können andere E-Mails — Galerie-Einladungen, Passwort-Zurücksetzungen — dahinter verzögert werden."
-    }
+    },
+    "groupsHint": "Wer in den Gruppen ist, wird beim Versand ermittelt, nicht jetzt. Deaktivierte und abgemeldete Kunden werden ausgelassen."
   },
   "documentVerification": {
     "title": "Bestätigen Sie, dass Sie es sind",

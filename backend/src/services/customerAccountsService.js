@@ -220,10 +220,15 @@ async function createInvitation({ email, invitedById, prefill }) {
  * Race-guarded against duplicate emails the same way createInvitation
  * is — a real duplicate throws ConflictError.
  *
- * @param {{ email, prefill, createdByAdminId }} args
+ * `withinTransaction(trx, id)` runs in the transaction that inserts the
+ * customer, so a caller can attach more to the new row atomically — if it
+ * throws, the customer is not created either. It must use `trx` only: on
+ * SQLite the global connection is held by the transaction.
+ *
+ * @param {{ email, prefill, createdByAdminId, withinTransaction? }} args
  * @returns {Promise<{ id }>} The new customer's id.
  */
-async function createDirect({ email, prefill, createdByAdminId }) {
+async function createDirect({ email, prefill, createdByAdminId, withinTransaction = null }) {
   const normalisedEmail = String(email || '').trim().toLowerCase();
   if (!normalisedEmail) throw new ValidationError('Email is required');
 
@@ -247,32 +252,36 @@ async function createDirect({ email, prefill, createdByAdminId }) {
   const sanitised = sanitisePrefill(prefill) || {};
   const preferredLanguage = sanitised.preferred_language || defaultPreferredLanguage;
 
-  const [inserted] = await auditedInsert(db, 'customer_accounts', {
-    email: normalisedEmail,
-    salutation: sanitised.salutation || null,
-    first_name: sanitised.first_name || null,
-    last_name: sanitised.last_name || null,
-    display_name: sanitised.display_name || null,
-    phone: sanitised.phone || null,
-    company_name: sanitised.company_name || null,
-    vat_id: sanitised.vat_id || null,
-    address_line1: sanitised.address_line1 || null,
-    address_line2: sanitised.address_line2 || null,
-    postal_code: sanitised.postal_code || null,
-    city: sanitised.city || null,
-    state: sanitised.state || null,
-    country_code: sanitised.country_code || null,
-    country_name: sanitised.country_name || null,
-    preferred_language: preferredLanguage,
-    password_hash: null,
-    is_active: formatBoolean(true),
-    must_change_password: formatBoolean(false),
-    password_changed_at: null,
-    created_by_admin_id: createdByAdminId || null,
-    created_at: new Date(),
-    updated_at: new Date(),
-  }, { actor: createdByAdminId || null, source: 'customer.create' });
-  const id = inserted?.id || inserted;
+  let id;
+  await db.transaction(async (trx) => {
+    const [inserted] = await auditedInsert(trx, 'customer_accounts', {
+      email: normalisedEmail,
+      salutation: sanitised.salutation || null,
+      first_name: sanitised.first_name || null,
+      last_name: sanitised.last_name || null,
+      display_name: sanitised.display_name || null,
+      phone: sanitised.phone || null,
+      company_name: sanitised.company_name || null,
+      vat_id: sanitised.vat_id || null,
+      address_line1: sanitised.address_line1 || null,
+      address_line2: sanitised.address_line2 || null,
+      postal_code: sanitised.postal_code || null,
+      city: sanitised.city || null,
+      state: sanitised.state || null,
+      country_code: sanitised.country_code || null,
+      country_name: sanitised.country_name || null,
+      preferred_language: preferredLanguage,
+      password_hash: null,
+      is_active: formatBoolean(true),
+      must_change_password: formatBoolean(false),
+      password_changed_at: null,
+      created_by_admin_id: createdByAdminId || null,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }, { actor: createdByAdminId || null, source: 'customer.create' });
+    id = inserted?.id || inserted;
+    if (withinTransaction) await withinTransaction(trx, id);
+  });
 
   await logActivity('customer_created_passive',
     { customerId: id, email: normalisedEmail },
@@ -485,7 +494,9 @@ async function validateInvitationToken(token) {
  * many events each customer has access to, so the admin can spot orphaned
  * accounts at a glance.
  */
-async function listCustomers({ search, groupIds } = {}) {
+async function listCustomers({
+  search, groupIds, groupMatch = 'any', ungrouped = false, status = 'all',
+} = {}) {
   let q = db('customer_accounts')
     .leftJoin('event_customer_assignments', 'event_customer_assignments.customer_account_id', 'customer_accounts.id')
     .groupBy('customer_accounts.id')
@@ -533,14 +544,37 @@ async function listCustomers({ search, groupIds } = {}) {
     });
   }
 
-  // Group filter (#1443): a customer matches when they are in ANY of the
-  // selected groups, which is what "show me these groups" means in the
-  // overview. A subquery rather than a join, so the event COUNT above stays
-  // the number of events and not the number of (event × group) pairs.
+  if (status === 'active' || status === 'inactive') {
+    q = q.where('customer_accounts.is_active', formatBoolean(status === 'active'));
+  }
+
+  // Group filter (#1443). Subqueries rather than joins, so the event COUNT
+  // above stays the number of events and not the number of (event × group)
+  // pairs.
+  //  - `ungrouped`: customers with no membership at all. It wins over
+  //    `groupIds` when both are sent, so a stale bookmark shows a list rather
+  //    than an error.
+  //  - `groupMatch: 'any'` (default): in at least one of the selected groups.
+  //  - `groupMatch: 'all'`: in every one of them.
+  // Archived groups are deliberately NOT excluded here: this is a view, and
+  // an archived group still describes who was in it. Actions exclude them
+  // instead (newsletter recipients, workflow group conditions); the
+  // Customers page simply doesn't offer archived groups as a filter.
   const groups = (Array.isArray(groupIds) ? groupIds : [])
     .map((id) => Number(id))
     .filter((id) => Number.isInteger(id) && id > 0);
-  if (groups.length > 0) {
+  if (ungrouped) {
+    q = q.whereNotExists(db('customer_group_members')
+      .whereRaw('customer_group_members.customer_account_id = customer_accounts.id')
+      .select(db.raw('1')));
+  } else if (groups.length > 0 && groupMatch === 'all') {
+    const distinct = [...new Set(groups)];
+    q = q.whereIn('customer_accounts.id', db('customer_group_members')
+      .whereIn('group_id', distinct)
+      .groupBy('customer_account_id')
+      .havingRaw('COUNT(DISTINCT group_id) = ?', [distinct.length])
+      .select('customer_account_id'));
+  } else if (groups.length > 0) {
     q = q.whereIn('customer_accounts.id', db('customer_group_members')
       .whereIn('group_id', groups)
       .select('customer_account_id'));

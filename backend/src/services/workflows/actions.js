@@ -15,6 +15,7 @@
  * is observable rather than silent. Wiring is a follow-up commit.
  */
 const registry = require('./registry');
+const { formatBoolean } = require('../../utils/dbCompat');
 
 // --- Conditions ---
 
@@ -30,6 +31,34 @@ registry.registerCondition('invoice_paid', async (ctx) => {
   const paid = Number(inv.paid_amount_minor) || 0;
   const total = Number(inv.total_amount_minor);
   return Number.isFinite(total) && total > 0 && paid >= total;
+});
+
+// True when the run's customer is in the configured customer groups (#1443):
+// `match: 'any'` (default) in at least one, `'all'` in every one. Membership
+// is read here, when the node is evaluated — a delayed node sees the groups as
+// they are then, not as they were when the run started. The customer comes
+// from `customerAccountId` in the run's vars, which the customer.created,
+// quote.*, contract.* and invoice.* triggers set; on any other trigger (the
+// gallery and event ones) there is no customer and the condition is false.
+// As with a newsletter group rule, a group archived (or deleted) since the
+// node was configured contributes nobody — so with `all` it can no longer be
+// matched and the condition is false. Read-only, so a dry run evaluates it
+// like a real one.
+registry.registerCondition('customer_in_group', async (ctx) => {
+  const customerId = Number(ctx.vars?.customerAccountId);
+  if (!Number.isInteger(customerId) || customerId <= 0) return false;
+  const cfg = ctx.node?.config || {};
+  const groupIds = [...new Set((Array.isArray(cfg.groupIds) ? cfg.groupIds : [])
+    .map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+  if (groupIds.length === 0) return false;
+  const found = await ctx.db('customer_group_members')
+    .join('customer_groups', 'customer_groups.id', 'customer_group_members.group_id')
+    .where('customer_groups.is_archived', formatBoolean(false))
+    .where('customer_group_members.customer_account_id', customerId)
+    .whereIn('customer_group_members.group_id', groupIds)
+    .pluck('customer_group_members.group_id');
+  const distinct = new Set(found.map(Number)).size;
+  return cfg.match === 'all' ? distinct === groupIds.length : distinct > 0;
 });
 
 // --- Actions ---
