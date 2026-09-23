@@ -31,7 +31,10 @@ async function createInvitation({ email, roleId, invitedById, inviterRoleName })
     throw new ConflictError('User with this email already exists', 'email');
   }
 
-  // Check for pending invitation
+  // Check for pending invitation. Exact-case on purpose: two case-variant
+  // invitations may both be pending, and whichever is accepted second is
+  // refused by the LOWER(email) check in acceptInvitation, so no second
+  // admin row can come out of it.
   const pendingInvite = await db('admin_invitations')
     .where('email', email)
     .whereNull('accepted_at')

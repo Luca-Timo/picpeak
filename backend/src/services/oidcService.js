@@ -622,7 +622,18 @@ async function resolveAdminFromClaims(claims) {
     if (await hasColumnCached('admin_users', 'email_link_eligible')) {
       byEmailQuery.where('email_link_eligible', formatBoolean(true));
     }
-    const byEmail = await byEmailQuery.first();
+    // More than one row can share an address once case is ignored (no
+    // case-insensitive unique index exists, and older installs may already
+    // hold a pair). Picking one would hand the IdP identity — and its mapped
+    // role — to whichever row the engine returned first, so refuse and let a
+    // Super Admin resolve the pair. The uniqueness checks stop new ones.
+    const byEmailRows = await byEmailQuery.limit(2);
+    if (byEmailRows.length > 1) {
+      const err = new Error('More than one admin account has this email address');
+      err.code = 'OIDC_EMAIL_AMBIGUOUS';
+      throw err;
+    }
+    const byEmail = byEmailRows[0];
     if (byEmail) {
       if (!byEmail.is_active) {
         const err = new Error('Admin account is deactivated');
@@ -671,8 +682,14 @@ async function resolveAdminFromClaims(claims) {
     const unconfirmed = await db('admin_users')
       .whereRaw('LOWER(email) = ?', [email])
       .whereNull('external_subject')
-      .first('id');
-    if (unconfirmed) {
+      .limit(2)
+      .select('id');
+    if (unconfirmed.length > 1) {
+      const err = new Error('More than one admin account has this email address');
+      err.code = 'OIDC_EMAIL_AMBIGUOUS';
+      throw err;
+    }
+    if (unconfirmed.length === 1) {
       const err = new Error('An admin with this email exists but its email was not confirmed by a Super Admin');
       err.code = 'OIDC_EMAIL_UNVERIFIED';
       throw err;

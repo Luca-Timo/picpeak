@@ -1113,6 +1113,7 @@ router.get('/admin/sso/callback', async (req, res) => {
       OIDC_NO_EMAIL: 'no_email',
       OIDC_NO_ROLE: 'no_role',
       OIDC_EMAIL_UNVERIFIED: 'email_unverified',
+      OIDC_EMAIL_AMBIGUOUS: 'email_ambiguous',
       OIDC_BAD_CLAIMS: 'idp',
     };
     const key = codeMap[error.code] || 'idp';

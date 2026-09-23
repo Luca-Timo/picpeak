@@ -422,7 +422,9 @@ export const UserManagementPage: React.FC = () => {
       userManagementService.createInvitation({ email, role_id: roleId }),
     invalidateKeys: [['admin-invitations']],
     successMessage: t('userManagement.invitationSent'),
-    errorMessage: (error: Error) => error.message || t('userManagement.invitationError'),
+    // Same here: the function form would show axios's own "Request failed with
+    // status code 409" instead of the server's reason for refusing the invite.
+    errorMessage: t('userManagement.invitationError'),
     onSuccess: () => {
       createInvitationModal.close();
     },
@@ -480,9 +482,10 @@ export const UserManagementPage: React.FC = () => {
       userManagementService.updateUser(id, { email }),
     invalidateKeys: [['admin-users']],
     successMessage: t('userManagement.emailConfirmed', 'Email confirmed for single sign-on'),
-    // A 409 here means the address changed under the dialog — that message is
-    // more useful than the generic one, so pass it through like the invite.
-    errorMessage: (error: Error) => error.message || t('userManagement.confirmEmailError', 'Failed to confirm the email'),
+    // The string form, not a function: useMutationWithToast reads the server's
+    // own message first for that one and falls back to this. A 409 here means
+    // the address changed under the dialog, and saying so is the whole point.
+    errorMessage: t('userManagement.confirmEmailError', 'Failed to confirm the email'),
     onSuccess: () => {
       setConfirmDialog(null);
     },

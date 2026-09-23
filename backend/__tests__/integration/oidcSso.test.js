@@ -255,6 +255,34 @@ describe('OIDC SSO (#798)', () => {
     expect(rows[0].external_subject).toBeNull();
   });
 
+  it('refuses to pick between two accounts whose addresses differ only in case', async () => {
+    // No case-insensitive unique index exists, so an older install can already
+    // hold such a pair. Matching without case must not hand the identity — and
+    // its mapped role — to whichever row the engine returns first.
+    const role = await db('roles').where({ name: 'admin' }).first();
+    for (const email of ['Twin@Example.com', 'twin@example.com']) {
+      await db('admin_users').insert({
+        username: `twin-${email}`,
+        email,
+        password_hash: await bcrypt.hash('TwinPass123', 4),
+        role_id: role.id,
+        is_active: 1,
+        auth_provider: 'local',
+        email_link_eligible: 1,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+    }
+
+    idp.setNextUser({ sub: 'sub-twin', email: 'twin@example.com', email_verified: true });
+    const res = await ssoRoundTrip();
+    expect(res.headers.location).toMatch(/sso_error=email_ambiguous/);
+
+    const rows = await db('admin_users').whereRaw('LOWER(email) = ?', ['twin@example.com']);
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.external_subject === null)).toBe(true);
+  });
+
   it('refuses a deactivated admin with sso_error=inactive', async () => {
     await db('admin_users').where({ id: agentCookies.jitAdminId }).update({ is_active: 0 });
     idp.setNextUser({ sub: 'sub-jit-1', email: 'renamed@example.com', email_verified: true });

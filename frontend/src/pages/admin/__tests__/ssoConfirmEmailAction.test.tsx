@@ -127,6 +127,36 @@ describe('Users page — confirm an email for SSO linking', () => {
     expect(screen.getByRole('button', { name: 'Confirm email' })).toBeTruthy();
   });
 
+  it('shows the server\'s reason when the address changed under the dialog', async () => {
+    // The 409 from the conditional confirm write. useMutationWithToast only
+    // reads response.data.error when errorMessage is a string — a function
+    // would show axios's own "Request failed with status code 409".
+    const serverMessage = 'The email address changed while this was open — reload and try again';
+    getUsers.mockResolvedValue([adminUser({ emailLinkEligible: false })]);
+    updateUser.mockRejectedValue(Object.assign(new Error('Request failed with status code 409'), {
+      response: { status: 409, data: { error: serverMessage } },
+    }));
+
+    renderPage();
+
+    await userEvent.click(await screen.findByTitle('Confirm email for SSO'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirm email' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(serverMessage));
+  });
+
+  it('falls back to the translated message when the server sends none', async () => {
+    getUsers.mockResolvedValue([adminUser({ emailLinkEligible: false })]);
+    updateUser.mockRejectedValue(new Error('Network Error'));
+
+    renderPage();
+
+    await userEvent.click(await screen.findByTitle('Confirm email for SSO'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirm email' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to confirm the email'));
+  });
+
   it('offers nothing on a row whose email is already confirmed', async () => {
     getUsers.mockResolvedValue([adminUser({ emailLinkEligible: true })]);
 
