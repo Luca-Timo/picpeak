@@ -1189,15 +1189,18 @@ async function renderPhotoAtBox(event, photo, box) {
   // JPEG bytes under a RAW name — the mislabelling resizeToBox already refuses
   // to do for HEIC.
   if (!RESIZE_PRESERVES_FORMAT.has(resolvePhotoContentType(photo))) return null;
-  // Already inside the box: resizeToBox would hand back its input untouched,
-  // but renderPhotoForDownload has to readFile the whole original to give it
-  // that input. So ?resolution=99999x99999 would buffer a 40 MB file where
-  // plain download streams it, on a route with no per-token concurrency cap.
-  // Decided from the recorded dimensions, which is why an unsized row (both
-  // null) still takes the slow path rather than being guessed at.
-  const width = Number(photo.width);
-  const height = Number(photo.height);
-  if (width > 0 && height > 0 && width <= box.width && height <= box.height) return null;
+  // No short-circuit on the recorded dimensions here, deliberately. Skipping
+  // the render when photos.width/height say the photo already fits saves
+  // reading the file — but those columns are not guaranteed to describe the
+  // bytes on disk, and when they understate it the caller silently receives an
+  // image LARGER than the box it asked for. Measured against a row recorded as
+  // 256x171 whose file is 1200x800: ?resolution=800x800 returned 1200x800.
+  //
+  // resizeToBox makes the same decision from the image's real metadata and
+  // returns the input untouched when it genuinely fits, so correctness costs
+  // only the read. Delivering more pixels than were asked for is the worse
+  // failure: it is silent, and the caller's reason for asking (a bandwidth or
+  // storage budget) is exactly what it breaks.
   try {
     return await renderPhotoForDownload(event, photo, box, null);
   } catch (err) {

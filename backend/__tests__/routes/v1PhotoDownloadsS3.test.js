@@ -93,7 +93,7 @@ describe('v1 original downloads through an S3 backend (issue 1473)', () => {
   let db; let cleanup; let app; let token; let eventId; let presentId; let missingId;
   let midEventId; let earlyEventId; let unsizedEventId; let slowSizeEventId;
   let renderId; let renderBody; let renderEventId;
-  let escapeId; let videoId; let smallId; let smallBodyBytes;
+  let escapeId; let videoId;
   const body = Buffer.from('S3-ONLY-ORIGINAL-not-on-local-disk');
 
   beforeAll(async () => {
@@ -182,20 +182,6 @@ describe('v1 original downloads through an S3 backend (issue 1473)', () => {
     videoId = vid[0]?.id ?? vid[0];
     mockObjects.set('events/active/s3-render/individual/s3-render_0002.mp4', Buffer.alloc(1024, 7));
 
-    // Smaller than any box a caller would ask for.
-    const smallBody = await sharp({
-      create: { width: 200, height: 150, channels: 3, background: { r: 1, g: 2, b: 3 } },
-    }).jpeg().toBuffer();
-    const sm = await db('photos').insert({
-      event_id: renderEventId, filename: 's3-render_0003.jpg',
-      path: 's3-render/individual/s3-render_0003.jpg', type: 'individual',
-      source_origin: 'managed', mime_type: 'image/jpeg', original_filename: 'small.jpg',
-      width: 200, height: 150, size_bytes: smallBody.length,
-      uploaded_at: new Date().toISOString(),
-    }).returning('id');
-    smallId = sm[0]?.id ?? sm[0];
-    smallBodyBytes = smallBody;
-    mockObjects.set('events/active/s3-render/individual/s3-render_0003.jpg', smallBody);
 
     // Two events whose ZIP hits a failing read: one mid-copy, one while the
     // failing entry is still queued behind a slow first entry.
@@ -417,15 +403,23 @@ describe('v1 original downloads through an S3 backend (issue 1473)', () => {
       expect(res.body.equals(renderBody)).toBe(true);
     });
 
-    it('streams rather than buffers a photo that already fits the box', async () => {
-      const res = await get(`/api/v1/events/${renderEventId}/photos/${smallId}/download?resolution=99999x99999`);
-      expect(res.status).toBe(200);
-      expect(res.body.equals(smallBodyBytes)).toBe(true);
-      // The whole point: staging through getToFile would read the entire
-      // original into memory to hand resizeToBox something it gives straight
-      // back. A box bigger than the library must stay on the streaming path.
-      expect(mockStorage.getToFile).not.toHaveBeenCalled();
-      expect(mockStorage.get).toHaveBeenCalled();
+    it('never delivers more pixels than the box, even when the recorded dimensions are wrong', async () => {
+      // photos.width/height are not guaranteed to describe the bytes on disk.
+      // An earlier version skipped the render when they said the photo already
+      // fitted, so a row understating its size silently returned the full-size
+      // original — the caller asked for at most 400px and got 1200. The
+      // fixture's row deliberately disagrees with its file for that reason.
+      await db('photos').where({ id: renderId }).update({ width: 40, height: 27 });
+      try {
+        const res = await get(`/api/v1/events/${renderEventId}/photos/${renderId}/download?resolution=400x400`);
+        expect(res.status).toBe(200);
+        const meta = await sharp(res.body).metadata();
+        expect(meta.width).toBeLessThanOrEqual(400);
+        expect(meta.height).toBeLessThanOrEqual(400);
+        expect([meta.width, meta.height]).toEqual([400, 267]);
+      } finally {
+        await db('photos').where({ id: renderId }).update({ width: 1200, height: 800 });
+      }
     });
 
     it('refuses a key outside events/active/ on the rendition path', async () => {
