@@ -152,6 +152,9 @@ describe('v1 original downloads through an S3 backend (issue 1473)', () => {
       event_id: renderEventId, filename: 's3-render_0001.jpg',
       path: 's3-render/individual/s3-render_0001.jpg', type: 'individual',
       source_origin: 'managed', mime_type: 'image/jpeg', original_filename: 'render.jpg',
+      // Recorded dimensions that match the file, so a test which mutates them
+      // restores to what the row actually held rather than inventing a value.
+      width: 1200, height: 800,
       size_bytes: renderBody.length, uploaded_at: new Date().toISOString(),
     }).returning('id');
     renderId = rr[0]?.id ?? rr[0];
@@ -181,7 +184,6 @@ describe('v1 original downloads through an S3 backend (issue 1473)', () => {
     }).returning('id');
     videoId = vid[0]?.id ?? vid[0];
     mockObjects.set('events/active/s3-render/individual/s3-render_0002.mp4', Buffer.alloc(1024, 7));
-
 
     // Two events whose ZIP hits a failing read: one mid-copy, one while the
     // failing entry is still queued behind a slow first entry.

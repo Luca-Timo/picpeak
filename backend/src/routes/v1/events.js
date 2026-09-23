@@ -1201,6 +1201,13 @@ async function renderPhotoAtBox(event, photo, box) {
   // only the read. Delivering more pixels than were asked for is the worse
   // failure: it is silent, and the caller's reason for asking (a bandwidth or
   // storage budget) is exactly what it breaks.
+  //
+  // This gate keeps the SAME weakness one level down, and knowingly: it reads
+  // the row's type, while resizeToBox refuses HEIC from the bytes. A row
+  // claiming image/jpeg over HEIC bytes passes here and is served at full size.
+  // Closing it means letting resizeToBox report that it declined, which is a
+  // shared helper with its own callers — documented on the route instead, and
+  // raised in review rather than reshaped inside this change.
   try {
     return await renderPhotoForDownload(event, photo, box, null);
   } catch (err) {
@@ -1274,7 +1281,9 @@ const zipTooLarge = (res, photoCount, totalBytes) => res.status(400).json({
  *           instead, keeping the aspect ratio and never enlarging, and names
  *           the archive after the box rather than `-originals`. Only JPEG,
  *           PNG, WebP and GIF are resized — videos, RAW and HEIC/HEIF are
- *           always packed at original size. Renditions are
+ *           always packed at original size, and the same "box is a maximum,
+ *           not a guarantee" caveat as the single-photo route applies to every
+ *           entry. Renditions are
  *           rendered one at a time as the archive streams, so a large resized
  *           archive takes noticeably longer to produce than the same archive
  *           of originals. The size caps are measured against the ORIGINALS,
@@ -1686,9 +1695,18 @@ router.get(
  *           videos, RAW (e.g. DNG) and HEIC/HEIF are always served at original
  *           size, because re-encoding them would ship bytes that disagree with
  *           their filename and Content-Type. A photo already inside the box is
- *           streamed as stored rather than buffered and re-encoded, so asking
- *           for a box larger than the library costs nothing. A rendition is
- *           never watermarked, whatever the gallery's watermark setting says.
+ *           streamed as stored rather than buffered and re-encoded. A rendition
+ *           is never watermarked, whatever the gallery's watermark setting says.
+ *
+ *
+ *           The box is a maximum, not a guarantee. A rendition is skipped and
+ *           the stored bytes are served unchanged when the image cannot be
+ *           re-encoded safely: HEIC/HEIF detected from the BYTES (the stored
+ *           type is not always right about that), a source sharp cannot decode,
+ *           and — see issue #1639 — an EXIF-rotated image whose unrotated
+ *           dimensions fit a non-square box. In each case the response is the
+ *           correct bytes under the correct type, but larger than asked for, so
+ *           a client that must not exceed a size should check what it received.
  *     responses:
  *       200:
  *         description: The original file
