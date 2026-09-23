@@ -20,6 +20,7 @@ import { Card, Loading } from '../../components/common';
 import { toast } from 'react-toastify';
 
 import { formatShortDate } from '../../utils/dateShort';
+import { contractStatusLabel } from '../../utils/contractStatus';
 
 type SortKey = 'newest' | 'oldest';
 type StatusFilter =
@@ -29,16 +30,20 @@ type StatusFilter =
   | 'signed_by_admin'
   | 'fully_signed'
   | 'declined'
-  | 'cancelled';
+  | 'cancelled'
+  | 'expired'
+  | 'awaiting_data';
 
 const STATUS_OPTIONS: { value: StatusFilter; key: string; fallback: string }[] = [
   { value: 'all',                 key: 'customer.filter.all',                    fallback: 'All' },
+  { value: 'awaiting_data',       key: 'contracts.status.awaiting_data',         fallback: 'Waiting for your details' },
   { value: 'sent',                key: 'contracts.status.sent',                  fallback: 'Awaiting signature' },
-  { value: 'signed_by_customer',  key: 'contracts.status.signed_by_customer',   fallback: 'Signed by customer' },
+  { value: 'signed_by_customer',  key: 'contracts.status.signed_by_customer',   fallback: 'Signed by customer · awaiting countersignature' },
   { value: 'signed_by_admin',     key: 'contracts.status.signed_by_admin',      fallback: 'Counter-signed' },
-  { value: 'fully_signed',        key: 'contracts.status.fully_signed',         fallback: 'Fully signed' },
+  { value: 'fully_signed',        key: 'contracts.status.fully_signed',         fallback: 'Completed' },
   { value: 'declined',            key: 'contracts.status.declined',             fallback: 'Declined' },
-  { value: 'cancelled',           key: 'contracts.status.cancelled',            fallback: 'Cancelled' },
+  { value: 'cancelled',           key: 'contracts.status.cancelled',            fallback: 'Withdrawn' },
+  { value: 'expired',             key: 'contracts.status.expired',              fallback: 'Expired' },
 ];
 
 export const CustomerContractsPage: React.FC = () => {
@@ -182,7 +187,9 @@ const ContractRow: React.FC<{ c: CustomerContract }> = ({ c }) => {
         ? t('customer.contracts.notSigner', 'You\'re not listed as a signer of this contract. Use the link in the signing email instead.') as string
         : code === 'CONTRACT_NOT_SIGNABLE'
           ? t('customer.contracts.notSignable', 'This contract is no longer waiting for your signature. Reload the page to see its current status.') as string
-          : t('customer.contracts.signError', 'The contract couldn\'t be opened for signing. Try again in a moment.') as string);
+          : code === 'CONTRACT_EXPIRED'
+            ? t('customer.contracts.expired', 'The time to sign this contract has run out. Ask the sender for a new one.') as string
+            : t('customer.contracts.signError', 'The contract couldn\'t be opened for signing. Try again in a moment.') as string);
       setOpening(false);
     }
   }
@@ -216,7 +223,7 @@ const ContractRow: React.FC<{ c: CustomerContract }> = ({ c }) => {
   const statusBadge =
     c.status === 'fully_signed' ? 'status-chip hue-success'
       : c.status === 'signed_by_customer' || c.status === 'signed_by_admin' ? 'status-chip hue-info'
-      : c.status === 'sent' ? 'status-chip hue-warning'
+      : c.status === 'sent' || c.status === 'awaiting_data' ? 'status-chip hue-warning'
       : c.status === 'declined' ? 'status-chip hue-danger'
       : 'status-chip hue-neutral';
 
@@ -226,7 +233,7 @@ const ContractRow: React.FC<{ c: CustomerContract }> = ({ c }) => {
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-mono text-sm">{c.contractNumber}</span>
           <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadge}`}>
-            {t(`contracts.status.${c.status}`, c.status)}
+            {contractStatusLabel(t, c.status, c.signerProgress)}
           </span>
         </div>
         {c.title && (
@@ -252,6 +259,23 @@ const ContractRow: React.FC<{ c: CustomerContract }> = ({ c }) => {
             {t('customer.contracts.declinedHint', 'This contract was declined and can no longer be signed.')}
           </p>
         )}
+        {c.status === 'sent' && c.signerState === 'signed' && (
+          <p className="text-xs text-muted-theme mt-0.5">
+            {t('customer.contracts.signedWaiting', 'You\'ve signed — waiting for the others.')}
+          </p>
+        )}
+        {c.status === 'sent' && c.signerState === 'waiting' && (
+          <p className="text-xs text-muted-theme mt-0.5">
+            {c.waitingFor
+              ? t('customer.contracts.turnAfter', 'Your turn comes after {{name}}.', { name: c.waitingFor })
+              : t('contractSigning.waiting.title', 'It isn\'t your turn yet')}
+          </p>
+        )}
+        {c.status === 'expired' && (
+          <p className="text-xs text-muted-theme mt-0.5">
+            {t('customer.contracts.expiredHint', 'The time to sign ran out before every signature was in, so it can no longer be signed.')}
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-2">
         {c.canSign && (
@@ -265,6 +289,19 @@ const ContractRow: React.FC<{ c: CustomerContract }> = ({ c }) => {
             {opening
               ? t('customer.contracts.opening', 'Opening…')
               : t('customer.contracts.sign', 'Sign')}
+          </button>
+        )}
+        {c.canCompleteDetails && (
+          <button
+            type="button"
+            onClick={handleSign}
+            disabled={opening}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-sm bg-accent-dark text-white hover:opacity-90 disabled:opacity-50"
+          >
+            <PenLine className="w-4 h-4" />
+            {opening
+              ? t('customer.contracts.opening', 'Opening…')
+              : t('customer.contracts.completeDetails', 'Complete my details')}
           </button>
         )}
         {(c.hasPdf || c.hasSignedPdf) && (

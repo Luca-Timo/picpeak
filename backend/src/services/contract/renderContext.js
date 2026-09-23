@@ -288,6 +288,10 @@ async function buildContentSnapshot(contract, inclusions, textSections = []) {
     placeholders: await buildPlaceholderContext(contract, customer),
     clauses: orderedClauses(contract, inclusions, textSections),
     ...(quote ? { quote } : {}),
+    // The declarations a signer confirms, wording included (#1446).
+    consents: await require('./consents').forContract(contract),
+    // And the legal notice it is signed under (#1446).
+    legalNotice: await require('./legalNotice').currentLegalNotice(),
   };
   return { snapshot, sha256: canonicalSha256(snapshot) };
 }

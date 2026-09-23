@@ -9,7 +9,8 @@
  *   GET  /session                       the contract, for the verified signer
  *   GET  /session/pdf                   the PDF as it stands
  *   GET  /session/attachments/:id       one of the contract's attachments
- *   POST /session/sign                  { name, mode, signatureDataUrl?, accepted, idempotencyKey? }
+ *   POST /session/sign                  { name, mode, signatureDataUrl?, consents | accepted, idempotencyKey? }
+ *   POST /session/details               { values } — the customer's details, before the freeze
  *   POST /session/decline               { reason? }
  *   POST /session/upload-signed-pdf     a wet-signed PDF, when uploads are allowed
  *
@@ -35,12 +36,25 @@ const { getAppSetting } = require('../utils/appSettings');
 const { getStoragePath } = require('../config/storage');
 const { requireFeatureFlag } = require('../middleware/requireFeatureFlag');
 const signingV2 = require('../services/contract/signingV2');
+const signingSignals = require('../services/contract/signingSignals');
 
 const router = express.Router();
 // With contracts switched off, signing is off too — same code as the admin routes.
 router.use(requireFeatureFlag('contracts', 'CONTRACTS_DISABLED'));
 
-const limiter = (windowMs, max) => rateLimit({ windowMs, max, standardHeaders: true, legacyHeaders: false, keyGenerator: rateLimitKey });
+// A refused request is also counted as a signal (#1446), then answered the
+// way the limiter always has.
+const limiter = (windowMs, max) => rateLimit({
+  windowMs,
+  max,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: rateLimitKey,
+  handler: (req, res, next, options) => {
+    signingSignals.record('rate_limited', { clientKey: rateLimitKey(req) });
+    res.status(options.statusCode).send(options.message);
+  },
+});
 const viewLimiter = limiter(60 * 1000, 30);
 const codeLimiter = limiter(10 * 60 * 1000, 5);
 const verifyLimiter = limiter(10 * 60 * 1000, 20);
@@ -117,7 +131,12 @@ router.post(
   signLimiter,
   [
     body('name').isString().isLength({ min: 1, max: 255 }),
-    body('accepted').isBoolean(),
+    // The single confirmation of contracts sent before declarations were
+    // frozen; newer ones answer each declaration in `consents` (#1446).
+    body('accepted').optional().isBoolean(),
+    body('consents').optional().isArray({ max: 8 }),
+    body('consents.*.key').optional().isString().isLength({ max: 40 }),
+    body('consents.*.accepted').optional().isBoolean(),
     body('mode').optional().isIn(['drawn', 'typed']),
     body('signatureDataUrl').optional({ nullable: true }).isString(),
     body('idempotencyKey').optional({ nullable: true }).isString().isLength({ max: 64 }),
@@ -130,6 +149,19 @@ router.post(
       { ip: clientIpForAudit(req), userAgent: req.get('user-agent') || null },
     );
     return successResponse(res, result);
+  }),
+);
+
+// Collect-then-freeze (#1446): the first signer's details, before the
+// contract is rendered and frozen with them.
+router.post(
+  '/session/details',
+  signLimiter,
+  [body('values').isObject()],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const dataCollection = require('../services/contract/dataCollection');
+    return successResponse(res, await dataCollection.submitDetails(sessionOf(req), req.body.values));
   }),
 );
 
@@ -192,5 +224,13 @@ router.post('/session/upload-signed-pdf', signLimiter, uploadGuards, signedPdfUp
   const result = await contractService.attachSignedPdfUpload(req.signing.contract.id, req.file.path, 'customer');
   return successResponse(res, { status: result.status });
 }));
+
+// Unknown and dead links, wrong codes, a replayed key, a session reaching for
+// another contract's file: counted for the enumeration and replay alerts
+// (#1446), then answered as before.
+router.use((err, req, res, next) => {
+  signingSignals.observe(err, req);
+  next(err);
+});
 
 module.exports = router;

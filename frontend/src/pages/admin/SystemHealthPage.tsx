@@ -13,7 +13,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, RefreshCw, Trash2, CheckCircle, Clock, FileCheck, KeyRound, Mail, MailX } from 'lucide-react';
+import { AlertCircle, RefreshCw, Trash2, CheckCircle, Clock, FileCheck, KeyRound, Mail, MailX, ShieldAlert } from 'lucide-react';
 import { Button, Card, Loading } from '../../components/common';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { useMutationWithToast } from '../../hooks';
@@ -281,20 +281,68 @@ export const SystemHealthPage: React.FC = () => {
                   <span className="font-mono"> · {t('systemHealth.evidenceKey.id', 'Key ID {{id}}', { id: data.evidenceKey.keyId })}</span>
                 )}
               </p>
-              {data.evidenceKey.matchesStored === false && (
+              {data.evidenceKey.matchesStored === false && (data.evidenceKey.unreadableValues ?? 1) > 0 && (
                 <p role="alert" className="text-sm mt-1 text-red-700 dark:text-red-300">
                   {t('systemHealth.evidenceKey.mismatch',
                     'Evidence already stored was written under key {{stored}}, so it can no longer be read — and those signer names and email addresses come back empty. {{unreadable}} of {{total}} stored values are affected. Put the earlier key back, or expect blank names on contracts signed before.',
                     {
                       stored: data.evidenceKey.storedKeyId || '—',
-                      unreadable: (data.evidenceKey.storedValues ?? 0) - (data.evidenceKey.storedValuesUnderCurrentKey ?? 0),
+                      unreadable: data.evidenceKey.unreadableValues
+                        ?? (data.evidenceKey.storedValues ?? 0) - (data.evidenceKey.storedValuesUnderCurrentKey ?? 0),
                       total: data.evidenceKey.storedValues ?? 0,
                     })}
+                </p>
+              )}
+              {(data.evidenceKey.valuesUnderOlderKeys ?? 0) > 0 && (
+                <p className="text-sm mt-1 text-amber-700 dark:text-amber-300">
+                  {t('systemHealth.evidenceKey.olderKeys',
+                    '{{count}} of {{total}} stored values are still under an older key that can be read. Run scripts/rotate-evidence-key.js to move them to the current key, and keep the older key until it reports none left.',
+                    { count: data.evidenceKey.valuesUnderOlderKeys, total: data.evidenceKey.storedValues ?? 0 })}
                 </p>
               )}
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
                 {t('systemHealth.evidenceKey.hint',
                   'Signers\' IP addresses and browsers are stored encrypted with this key. Without it that evidence can\'t be read; the signatures and PDFs stay valid.')}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Probing of the signing links, last 24 hours (#1446): unknown and dead
+          links, wrong codes, rate-limit hits, replayed keys, sessions reaching
+          for another contract's file. Counts only — no addresses. */}
+      {!isLoading && flags.contracts && data?.signingSignals && (
+        <Card padding="lg" className="mb-4">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className={`w-5 h-5 mt-0.5 shrink-0 ${data.signingSignals.alerts.length
+              ? 'text-red-600 dark:text-red-400' : 'text-neutral-500 dark:text-neutral-400'}`} />
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+                {t('systemHealth.signingSignals.title', 'Signing links: unusual activity (24 h)')}
+              </h2>
+              <ul className="text-sm mt-1 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-0.5 text-neutral-700 dark:text-neutral-300">
+                {Object.entries(data.signingSignals.byKind).map(([kind, count]) => (
+                  <li key={kind} className="flex justify-between gap-3">
+                    <span>{t(`systemHealth.signingSignals.kind.${kind}`, kind)}</span>
+                    <span className="tabular-nums">{count}</span>
+                  </li>
+                ))}
+              </ul>
+              {data.signingSignals.alerts.length > 0 && (
+                <p role="alert" className="text-sm mt-2 text-red-700 dark:text-red-300">
+                  {t('systemHealth.signingSignals.alerts', '{{count}} alert(s) sent to the business email in the last 24 hours.', { count: data.signingSignals.alerts.length })}
+                </p>
+              )}
+              {data.signingSignals.mode && (
+                <p className="text-sm mt-1 text-neutral-600 dark:text-neutral-400">
+                  {data.signingSignals.mode === 'global'
+                    ? t('systemHealth.signingSignals.modeGlobal', 'IP addresses are not stored, so unknown links are counted across all visitors together.')
+                    : t('systemHealth.signingSignals.modePerClient', 'Unknown links are counted per visitor (as a keyed hash of the address) and across all visitors together.')}
+                </p>
+              )}
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                {t('systemHealth.signingSignals.hint', 'Counted per hour without storing any address, token or code. A threshold crossed mails you once per kind and hour; thresholds are in Settings → CRM.')}
               </p>
             </div>
           </div>

@@ -66,6 +66,9 @@ function signerToApi(row) {
     signedAt: row.signed_at || null,
     declinedAt: row.declined_at || null,
     signatureMode: row.signature_mode || null,
+    // Reminders sent so far (#1446), and when the last one went out.
+    reminderCount: Number(row.reminder_count) || 0,
+    remindedAt: row.reminded_at || null,
   };
 }
 
@@ -255,12 +258,17 @@ function signersDue(contract, signers) {
  * signature used to set the status back to `invited`, re-opening a slot that
  * was already signed. The old session is revoked with the old link, or the
  * replaced link's session would keep working for up to an hour.
+ *
+ * `fromStatuses: ['pending']` makes it a first invitation only: two runs
+ * inviting the same signer at once (replicas sweeping together) can't both
+ * pass, and the loser gets SIGNER_NOT_DUE instead of revoking the winner's
+ * link.
  */
-async function createInvitation(trx, signerId, expiresAt) {
+async function createInvitation(trx, signerId, expiresAt, { fromStatuses = ['pending', 'invited'] } = {}) {
   const now = stamp();
   const reopened = await trx('contract_signers')
     .where({ id: signerId })
-    .whereIn('status', ['pending', 'invited'])
+    .whereIn('status', fromStatuses)
     .update({ status: 'invited', invited_at: now, updated_at: now });
   if (!reopened) {
     throw new AppError('This signer has already answered this contract', 409, 'SIGNER_NOT_DUE');
@@ -307,16 +315,110 @@ async function loadSignerContext(signerId) {
   return { signer, contract };
 }
 
+const contractExpired = () => new AppError(
+  'The time to sign this contract has run out. Ask the sender for a new one.', 410, 'CONTRACT_EXPIRED',
+);
+
 /** The signer and contract behind an invitation link. */
 async function findInvitation(token) {
   if (!TOKEN_RE.test(String(token || ''))) throw new AppError('Signing link not found', 404, 'SIGNING_LINK_INVALID');
   const invitation = await db('contract_signer_invitations').where({ token_hash: sha256(token) }).first();
   if (!invitation) throw new AppError('Signing link not found', 404, 'SIGNING_LINK_INVALID');
-  if (invitation.revoked_at) throw new AppError('This signing link has been replaced or withdrawn', 410, 'SIGNING_LINK_REVOKED');
-  if (invitation.expires_at && isPast(invitation.expires_at)) {
-    throw new AppError('This signing link has expired', 410, 'SIGNING_LINK_EXPIRED');
+  const expired = invitation.expires_at && isPast(invitation.expires_at);
+  if (invitation.revoked_at || expired) {
+    // Expiry revokes every link of the contract; the signer holding one
+    // should hear that the signing period ended, not that it was replaced.
+    const context = await loadSignerContext(invitation.signer_id).catch(() => null);
+    if (context && context.contract.status === 'expired') throw contractExpired();
   }
+  if (invitation.revoked_at) throw new AppError('This signing link has been replaced or withdrawn', 410, 'SIGNING_LINK_REVOKED');
+  if (expired) throw new AppError('This signing link has expired', 410, 'SIGNING_LINK_EXPIRED');
   return { invitation, ...(await loadSignerContext(invitation.signer_id)) };
+}
+
+/**
+ * When the time to sign a contract runs out, in epoch ms: the invitation
+ * rule (signingV2's `invitationExpiry`) applied to the whole contract —
+ * `valid_until` plus 14 days, or, with no `valid_until`, the expiry of the
+ * newest link it sent (a sequential signer invited late gets their full
+ * window), falling back to 60 days after it was sent. Null when none of
+ * those can be read.
+ */
+async function signingDeadline(contract, conn = db) {
+  if (contract.valid_until) {
+    const until = new Date(contract.valid_until).getTime();
+    if (Number.isFinite(until)) return until + 14 * 24 * 60 * 60 * 1000;
+  }
+  const latest = await conn('contract_signer_invitations as i')
+    .join('contract_signers as s', 's.id', 'i.signer_id')
+    .where('s.contract_id', contract.id)
+    .orderBy('i.id', 'desc')
+    .first('i.expires_at');
+  const linkExpiry = latest ? toMillis(latest.expires_at) : null;
+  if (linkExpiry != null) return linkExpiry;
+  const sent = toMillis(contract.sent_at);
+  return sent == null ? null : sent + 60 * 24 * 60 * 60 * 1000;
+}
+
+/**
+ * How far the customer signers have got, per contract: `{ signed, total }`.
+ * One grouped read for a list, so a "partly signed (1 of 2)" label needs no
+ * query per row. Contracts without signers are absent from the map.
+ */
+async function customerSignerProgress(contractIds, conn = db) {
+  const map = new Map();
+  if (!contractIds.length) return map;
+  const rows = await conn('contract_signers')
+    .whereIn('contract_id', contractIds)
+    .where({ role: 'customer' })
+    .select('contract_id', 'status');
+  for (const row of rows) {
+    const id = Number(row.contract_id);
+    const entry = map.get(id) || { signed: 0, total: 0 };
+    entry.total += 1;
+    if (row.status === 'signed') entry.signed += 1;
+    map.set(id, entry);
+  }
+  return map;
+}
+
+/**
+ * Is the signer on the page right now? A session that is still open, or
+ * one that opened the contract within the last day. A reminder mints a new
+ * link and so ends every session — it must not cut off someone signing.
+ */
+async function hasActiveSession(signerId, now = Date.now()) {
+  const rows = await db('contract_signing_sessions').where({ signer_id: signerId }).whereNull('revoked_at')
+    .select('expires_at', 'viewed_at');
+  return rows.some((row) => {
+    const expires = toMillis(row.expires_at);
+    const viewed = toMillis(row.viewed_at);
+    return (expires != null && expires > now) || (viewed != null && now - viewed < 24 * 60 * 60 * 1000);
+  });
+}
+
+/**
+ * Codes and sessions that ended more than `olderThanMs` ago are removed:
+ * nothing reads them once they are past, and the signing log keeps the
+ * record of every code sent and every verification. Compared in JS — SQLite
+ * keeps knex-written dates in more than one form. A row whose expiry can't
+ * be read is kept. Returns the counts removed.
+ */
+async function purgeEndedAccess(olderThanMs, now = Date.now()) {
+  const cutoff = now - olderThanMs;
+  const removed = {};
+  for (const table of ['contract_signing_otps', 'contract_signing_sessions']) {
+    const rows = await db(table).select('id', 'expires_at');
+    const ids = rows.filter((row) => {
+      const at = toMillis(row.expires_at);
+      return at != null && at <= cutoff;
+    }).map((row) => row.id);
+    removed[table] = 0;
+    for (let i = 0; i < ids.length; i += 500) {
+      removed[table] += await db(table).whereIn('id', ids.slice(i, i + 500)).del();
+    }
+  }
+  return removed;
 }
 
 // ---------------------------------------------------------------------
@@ -474,9 +576,13 @@ async function createSession(signerId, verifiedVia, conn = db) {
 /** The signer and contract behind a signing session. */
 async function findSession(token) {
   const invalid = () => new AppError('Your signing session has ended. Open the link from your email again.', 401, 'SIGNING_SESSION_INVALID');
-  if (!TOKEN_RE.test(String(token || ''))) throw invalid();
+  // Same answer either way; the signals count a token that matches nothing
+  // as a probe, not as a session that ended (signingSignals.js).
+  const unknown = () => Object.assign(invalid(), { signalKind: 'unknown_token' });
+  if (!TOKEN_RE.test(String(token || ''))) throw unknown();
   const session = await db('contract_signing_sessions').where({ session_hash: sha256(token) }).first();
-  if (!session || session.revoked_at || isPast(session.expires_at)) throw invalid();
+  if (!session) throw unknown();
+  if (session.revoked_at || isPast(session.expires_at)) throw invalid();
   return { session, ...(await loadSignerContext(session.signer_id)) };
 }
 
@@ -497,6 +603,10 @@ module.exports = {
   undoInvitation,
   revokeAccess,
   findInvitation,
+  signingDeadline,
+  customerSignerProgress,
+  purgeEndedAccess,
+  hasActiveSession,
   issueOtp,
   discardOtp,
   retireEarlierOtps,

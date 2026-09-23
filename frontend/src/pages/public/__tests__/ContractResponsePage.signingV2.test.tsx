@@ -61,6 +61,7 @@ const requestCode = vi.fn();
 const verify = vi.fn();
 const session = vi.fn();
 const sign = vi.fn();
+const submitDetails = vi.fn();
 vi.mock('../../../services/publicContractSigning.service', async () => {
   const actual = await vi.importActual<typeof import('../../../services/publicContractSigning.service')>(
     '../../../services/publicContractSigning.service',
@@ -73,6 +74,7 @@ vi.mock('../../../services/publicContractSigning.service', async () => {
       verify: (...args: unknown[]) => verify(...args),
       session: (...args: unknown[]) => session(...args),
       sign: (...args: unknown[]) => sign(...args),
+      submitDetails: (...args: unknown[]) => submitDetails(...args),
       pdf: vi.fn(),
       attachment: vi.fn(),
       decline: vi.fn(),
@@ -99,6 +101,8 @@ vi.mock('../../../services/contracts.service', async () => {
 import { ContractResponsePage, ContractSigningSessionPage } from '../ContractResponsePage';
 
 const TOKEN = 'a'.repeat(64);
+// The final button states the consequence (#1446).
+const SIGN_BUTTON = 'Sign contract no. V-2026-0007 bindingly';
 const SESSION_TOKEN = 'b'.repeat(64);
 const httpError = (status: number, data: Record<string, unknown>) => Object.assign(
   new Error(`Request failed with status code ${status}`),
@@ -106,7 +110,6 @@ const httpError = (status: number, data: Record<string, unknown>) => Object.assi
 );
 
 const inviteSummary = {
-  contractNumber: 'V-2026-0007',
   status: 'sent',
   language: 'en',
   issuer: { companyName: 'Studio Licht', logoUrl: null, logoUrlDark: null },
@@ -229,18 +232,22 @@ it('confirms the email, shows the contract, signs with the typed name and thanks
   expect(screen.getByText('Between the studio and the couple.')).toBeInTheDocument();
   expect(screen.getByText('Ben Muster')).toBeInTheDocument();
   expect(screen.getByText('Signers sign one after the other, in this order.')).toBeInTheDocument();
+  // Reading has no input fields: signing is the next step.
+  expect(screen.queryByLabelText('Your full name')).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Continue to signing' }));
+  expect(await screen.findByRole('heading', { name: 'Sign contract no. V-2026-0007' })).toHaveFocus();
 
   // Sign: name prefilled, consent not pre-ticked.
   expect(screen.getByLabelText('Your full name')).toHaveValue('Anna Muster');
   const consent = screen.getByRole('checkbox', { name: /I have read this contract/ });
   expect(consent).not.toBeChecked();
   await user.click(screen.getByRole('radio', { name: 'Type my name' }));
-  await user.click(screen.getByRole('button', { name: 'Sign contract' }));
+  await user.click(screen.getByRole('button', { name: SIGN_BUTTON }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Please tick the acceptance box.');
   expect(sign).not.toHaveBeenCalled();
 
   await user.click(consent);
-  await user.click(screen.getByRole('button', { name: 'Sign contract' }));
+  await user.click(screen.getByRole('button', { name: SIGN_BUTTON }));
 
   // Result: thank you, when, and that others still sign.
   expect(await screen.findByText('Thank you — you have signed the contract.')).toBeInTheDocument();
@@ -280,6 +287,14 @@ it('says a link has expired', async () => {
   expect(legacyGet).not.toHaveBeenCalled();
 });
 
+it('says the time to sign has run out once the contract expired', async () => {
+  invite.mockRejectedValue(httpError(410, { code: 'CONTRACT_EXPIRED' }));
+  renderAt(`/contract/${TOKEN}`);
+
+  expect(await screen.findByText('The time to sign has run out')).toBeInTheDocument();
+  expect(screen.queryByText('This link no longer works')).toBeNull();
+});
+
 it('stays verified after a reload, and goes back to the code step once the session ends', async () => {
   window.sessionStorage.setItem(
     `picpeak.contractSigning.session.${TOKEN}`,
@@ -305,7 +320,7 @@ it('opens a session from the customer portal without a link or code', async () =
   expect(await screen.findByRole('heading', { name: 'Wedding contract' })).toBeInTheDocument();
   expect(invite).not.toHaveBeenCalled();
   expect(screen.getByText('It isn\'t your turn yet')).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Sign contract' })).toBeNull();
+  expect(screen.queryByRole('button', { name: SIGN_BUTTON })).toBeNull();
 });
 
 // ---------------------------------------------------------------------
@@ -320,6 +335,7 @@ async function readyToSign(user: ReturnType<typeof userEvent.setup>) {
   await user.type(await screen.findByLabelText('6-digit code'), '123456');
   await user.click(screen.getByRole('button', { name: 'Confirm' }));
   await screen.findByRole('heading', { name: 'Wedding contract' });
+  await user.click(screen.getByRole('button', { name: 'Continue to signing' }));
   await user.click(screen.getByRole('radio', { name: 'Type my name' }));
   await user.click(screen.getByRole('checkbox', { name: /I have read this contract/ }));
 }
@@ -334,7 +350,7 @@ it('shows the signature that did land when the response was lost', async () => {
   sign.mockRejectedValue(Object.assign(new Error('Network Error'), { isAxiosError: true }));
 
   await readyToSign(user);
-  await user.click(screen.getByRole('button', { name: 'Sign contract' }));
+  await user.click(screen.getByRole('button', { name: SIGN_BUTTON }));
 
   expect(await screen.findByText('Thank you — you have signed the contract.')).toBeInTheDocument();
   // No "check your connection and try again" over a signature that arrived.
@@ -348,12 +364,12 @@ it('offers a re-check and a deliberate resend when the signature did not land', 
   sign.mockRejectedValue(Object.assign(new Error('Network Error'), { isAxiosError: true }));
 
   await readyToSign(user);
-  await user.click(screen.getByRole('button', { name: 'Sign contract' }));
+  await user.click(screen.getByRole('button', { name: SIGN_BUTTON }));
 
   expect(await screen.findByText("We couldn't confirm whether your signature arrived")).toBeInTheDocument();
   expect(screen.queryByText(/Check your connection/)).toBeNull();
   // The plain submit button is gone: the two deliberate paths replace it.
-  expect(screen.queryByRole('button', { name: 'Sign contract' })).toBeNull();
+  expect(screen.queryByRole('button', { name: SIGN_BUTTON })).toBeNull();
   await user.click(screen.getByRole('button', { name: 'Check again' }));
   expect(sign).toHaveBeenCalledTimes(1);
 
@@ -372,6 +388,7 @@ it('keeps the typed name for the tab, and never the drawn signature', async () =
   await user.type(await screen.findByLabelText('6-digit code'), '123456');
   await user.click(screen.getByRole('button', { name: 'Confirm' }));
   await screen.findByRole('heading', { name: 'Wedding contract' });
+  await user.click(screen.getByRole('button', { name: 'Continue to signing' }));
 
   await user.click(screen.getByRole('radio', { name: 'Type my name' }));
   await user.clear(screen.getByLabelText('Your full name'));
@@ -394,7 +411,7 @@ it('shows the recorded signature when a resent key carried different details', a
   sign.mockRejectedValue(httpError(409, { code: 'IDEMPOTENCY_KEY_REUSED' }));
 
   await readyToSign(user);
-  await user.click(screen.getByRole('button', { name: 'Sign contract' }));
+  await user.click(screen.getByRole('button', { name: SIGN_BUTTON }));
 
   expect(await screen.findByText('Thank you — you have signed the contract.')).toBeInTheDocument();
 });
@@ -423,4 +440,215 @@ it('shows the frozen totals even when no line item was counted', async () => {
   expect(screen.getByText('Shipping')).toBeInTheDocument();
   // No lines, so no line table header.
   expect(screen.queryByRole('columnheader', { name: 'Description' })).toBeNull();
+});
+
+// ---------------------------------------------------------------------
+// Slice 5 of the #1446 plan — the declarations frozen at send, each on
+// its own, never pre-ticked.
+// ---------------------------------------------------------------------
+
+it('asks for each frozen declaration, unticked, and sends every answer', async () => {
+  const user = userEvent.setup();
+  window.sessionStorage.setItem(
+    'picpeak.contractSigning.session.portal',
+    JSON.stringify({ sessionToken: SESSION_TOKEN, expiresAt: '2099-01-01T00:00:00.000Z' }),
+  );
+  const view = sessionView({ verifiedVia: 'portal' });
+  session.mockResolvedValue({
+    contract: {
+      ...view.contract,
+      consents: [
+        { key: 'acceptance', required: true, version: 1, text: 'I agree to be bound.' },
+        { key: 'terms', required: true, version: 2, text: 'I accept the general terms.' },
+        { key: 'image_rights', required: false, version: 1, text: 'You may show my photos.' },
+      ],
+    },
+  });
+  sign.mockResolvedValue({ status: 'sent', signedAt: '2026-09-14T10:00:00Z' });
+  renderAt('/contract/signing');
+
+  await screen.findByRole('heading', { name: 'Wedding contract' });
+  await user.click(screen.getByRole('button', { name: 'Continue to signing' }));
+  const boxes = ['I agree to be bound.', 'I accept the general terms.', 'You may show my photos.']
+    .map((text) => screen.getByRole('checkbox', { name: new RegExp(text) }));
+  for (const box of boxes) expect(box).not.toBeChecked();
+  // The single old confirmation is gone.
+  expect(screen.queryByRole('checkbox', { name: /I have read this contract/ })).toBeNull();
+
+  await user.click(screen.getByRole('radio', { name: 'Type my name' }));
+  const submit = screen.getByRole('button', { name: SIGN_BUTTON });
+  expect(submit).toBeDisabled();
+  expect(submit).toHaveAccessibleDescription('Tick every required declaration to sign.');
+
+  await user.click(boxes[0]);
+  expect(submit).toBeDisabled();
+  await user.click(boxes[1]);
+  expect(submit).toBeEnabled();
+  await user.click(submit);
+
+  expect(await screen.findByText('Thank you — you have signed the contract.')).toBeInTheDocument();
+  const [, payload] = sign.mock.calls[0];
+  expect(payload.accepted).toBeUndefined();
+  expect(payload.consents).toEqual([
+    { key: 'acceptance', accepted: true },
+    { key: 'terms', accepted: true },
+    { key: 'image_rights', accepted: false },
+  ]);
+});
+
+// ---------------------------------------------------------------------
+// Slice 6 of the #1446 plan — review, then sign; success evidence.
+// ---------------------------------------------------------------------
+
+it('keeps declining behind "Other options" on the sign step, and summarises what is signed', async () => {
+  const user = userEvent.setup();
+  window.sessionStorage.setItem(
+    'picpeak.contractSigning.session.portal',
+    JSON.stringify({ sessionToken: SESSION_TOKEN, expiresAt: '2099-01-01T00:00:00.000Z' }),
+  );
+  const view = sessionView({ verifiedVia: 'portal' });
+  session.mockResolvedValue({
+    contract: {
+      ...view.contract,
+      contentSha256: 'c'.repeat(64),
+      manifest: { sha256: 'd'.repeat(64), attachments: [] },
+      commercial: {
+        sourceQuoteNumber: null, currency: 'CHF', lineItems: [],
+        totals: { netMinor: 100000, vatRatePercent: 0, vatMinor: 0, shippingMinor: 0, grossMinor: 100000 },
+      },
+    },
+  });
+  renderAt('/contract/signing');
+
+  await screen.findByRole('heading', { name: 'Wedding contract' });
+  // Nothing to decline or sign while reading.
+  expect(screen.queryByRole('button', { name: 'Decline the contract' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Continue to signing' }));
+
+  expect(screen.getByText('Studio Licht · Anna Muster · Ben Muster')).toBeInTheDocument();
+  expect(screen.getByText(/^cccccccccccccccc…$/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Decline the contract' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: 'Other options' }));
+  expect(screen.getByRole('button', { name: 'Decline the contract' })).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: 'Back to the contract' }));
+  expect(screen.getByText('Step 1 of 2 — read the contract')).toHaveFocus();
+});
+
+it('says what happens next after the last customer signature', async () => {
+  const user = userEvent.setup();
+  session
+    .mockResolvedValueOnce(sessionView())
+    .mockResolvedValue({
+      contract: {
+        ...sessionView({ status: 'signed', canSign: false, canDecline: false }).contract,
+        status: 'signed_by_customer',
+      },
+    });
+  sign.mockResolvedValue({ status: 'signed_by_customer', signedAt: '2026-09-14T10:00:00Z' });
+
+  await readyToSign(user);
+  await user.click(screen.getByRole('button', { name: SIGN_BUTTON }));
+
+  expect(await screen.findByText('Studio Licht will countersign; you\'ll get the final copy and its signing certificate by email.')).toBeInTheDocument();
+  expect(screen.getByText('We have sent you a confirmation by email.')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Thank you — you have signed the contract.' })).toHaveFocus();
+});
+
+// ---------------------------------------------------------------------
+// Slice 11 of the #1446 plan — the customer's details before the freeze.
+// ---------------------------------------------------------------------
+
+it('asks for the details first, shows nothing of the contract, then opens it', async () => {
+  const user = userEvent.setup();
+  window.sessionStorage.setItem(
+    'picpeak.contractSigning.session.portal',
+    JSON.stringify({ sessionToken: SESSION_TOKEN, expiresAt: '2099-01-01T00:00:00.000Z' }),
+  );
+  session
+    .mockResolvedValueOnce({
+      contract: {
+        contractNumber: 'V-2026-0007',
+        status: 'awaiting_data',
+        language: 'en',
+        issuer: { companyName: 'Studio Licht', logoUrl: null, logoUrlDark: null },
+        dataRequest: {
+          fields: ['address_line1', 'postal_code', 'city', 'country_code', 'phone'],
+          required: ['address_line1', 'postal_code', 'city', 'country_code'],
+          values: { address_line1: '', postal_code: '', city: '', country_code: '', phone: '+41 44 000 00 00' },
+          submitted: false,
+        },
+        signing: { status: 'invited', verifiedVia: 'portal', canSign: false, canDecline: false, waitingForOthers: false },
+      },
+    })
+    .mockResolvedValue(sessionView({ verifiedVia: 'portal' }));
+  submitDetails
+    .mockRejectedValueOnce(httpError(400, { code: 'DETAILS_INVALID', details: { fields: ['city'] } }))
+    .mockResolvedValue({ status: 'sent', frozen: true });
+  renderAt('/contract/signing');
+
+  expect(await screen.findByRole('heading', { name: 'Your details for contract V-2026-0007' })).toBeInTheDocument();
+  expect(screen.queryByText('Between the studio and the couple.')).toBeNull();
+  expect(screen.getByLabelText(/Phone/)).toHaveValue('+41 44 000 00 00');
+
+  await user.type(screen.getByLabelText(/Street and number/), 'Seestrasse 12');
+  await user.type(screen.getByLabelText(/Postal code/), '8001');
+  await user.type(screen.getByLabelText(/Country/), 'CH');
+  await user.click(screen.getByRole('button', { name: 'Save my details and prepare the contract' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Check the highlighted details.');
+  expect(screen.getByLabelText(/City/)).toHaveAttribute('aria-invalid', 'true');
+
+  await user.type(screen.getByLabelText(/City/), 'Zürich');
+  await user.click(screen.getByRole('button', { name: 'Save my details and prepare the contract' }));
+  expect(await screen.findByRole('heading', { name: 'Wedding contract' })).toBeInTheDocument();
+  expect(submitDetails).toHaveBeenLastCalledWith(SESSION_TOKEN, expect.objectContaining({
+    address_line1: 'Seestrasse 12', postal_code: '8001', city: 'Zürich', country_code: 'CH',
+  }));
+});
+
+it('shows the details as saved when a refresh after a lost response says they arrived', async () => {
+  const user = userEvent.setup();
+  window.sessionStorage.setItem(
+    'picpeak.contractSigning.session.portal',
+    JSON.stringify({ sessionToken: SESSION_TOKEN, expiresAt: '2099-01-01T00:00:00.000Z' }),
+  );
+  const awaiting = (submitted: boolean) => ({
+    contract: {
+      contractNumber: 'V-2026-0007',
+      status: 'awaiting_data',
+      language: 'en',
+      issuer: { companyName: 'Studio Licht', logoUrl: null, logoUrlDark: null },
+      dataRequest: {
+        fields: ['address_line1', 'postal_code', 'city', 'country_code'],
+        required: ['address_line1', 'postal_code', 'city', 'country_code'],
+        values: { address_line1: 'Seestrasse 12', postal_code: '8001', city: 'Zürich', country_code: 'CH' },
+        submitted,
+      },
+      signing: { status: 'invited', verifiedVia: 'portal', canSign: false, canDecline: false, waitingForOthers: false },
+    },
+  });
+  session.mockResolvedValueOnce(awaiting(false)).mockResolvedValue(awaiting(true));
+  // No status: the request may or may not have arrived.
+  submitDetails.mockRejectedValueOnce(new Error('Network Error'));
+  renderAt('/contract/signing');
+
+  await user.click(await screen.findByRole('button', { name: 'Save my details and prepare the contract' }));
+  expect(await screen.findByRole('heading', { name: 'Your details are saved' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Save my details and prepare the contract' })).toBeNull();
+});
+
+it('prints the frozen legal notice under the contract and on the sign step (#1446 slice 12)', async () => {
+  const user = userEvent.setup();
+  window.sessionStorage.setItem(
+    'picpeak.contractSigning.session.portal',
+    JSON.stringify({ sessionToken: SESSION_TOKEN, expiresAt: '2099-01-01T00:00:00.000Z' }),
+  );
+  const view = sessionView({ verifiedVia: 'portal' });
+  session.mockResolvedValue({ contract: { ...view.contract, legalNotice: 'Simple electronic signature — not for written form.' } });
+  renderAt('/contract/signing');
+
+  await screen.findByRole('heading', { name: 'Wedding contract' });
+  expect(screen.getByText('Simple electronic signature — not for written form.')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Continue to signing' }));
+  expect(screen.getByText('Simple electronic signature — not for written form.')).toBeInTheDocument();
 });

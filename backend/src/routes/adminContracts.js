@@ -177,6 +177,8 @@ function transformContract(c, inclusions, textSections, attachmentRows) {
     templateVersion: c.template_version_number == null ? null : Number(c.template_version_number),
     lockVersion: c.lock_version == null ? 1 : Number(c.lock_version),
     renderedContentSha256: c.rendered_content_sha256 || null,
+    // Collect-then-freeze (#1446): when the customer's details came in.
+    dataCollectedAt: c.data_collected_at || null,
     textSections: Array.isArray(textSections)
       ? textSections.map((s) => ({
         id: s.id,
@@ -351,8 +353,15 @@ router.get(
       page,
       pageSize,
     });
+    // How far the customer signers have got, for the derived "partly signed
+    // (1 of 2)" label (#1446) — derived here, never stored as a status.
+    const progress = await require('../services/contract/signers')
+      .customerSignerProgress(result.rows.map((row) => row.id));
     return successResponse(res, {
-      contracts: result.rows.map((row) => transformContract(row)),
+      contracts: result.rows.map((row) => ({
+        ...transformContract(row),
+        signerProgress: progress.get(Number(row.id)) || null,
+      })),
       total: result.total,
       page: result.page,
       pageSize: result.pageSize,
@@ -425,7 +434,15 @@ router.get(
     validateRequest(req);
     const data = await contractService.getContractById(parseInt(req.params.id, 10));
     if (!data) return res.status(404).json({ error: 'Contract not found' });
-    return successResponse(res, { contract: transformContract(data.contract, data.inclusions, data.textSections, data.attachments) });
+    const contract = transformContract(data.contract, data.inclusions, data.textSections, data.attachments);
+    // Whether {{customer_address}} would print empty — the Send path then
+    // offers to ask the customer for their details first (#1446).
+    if (data.contract.status === 'draft') {
+      const customer = await db('customer_accounts').where({ id: data.contract.customer_account_id })
+        .first('address_line1', 'address_line2', 'postal_code', 'city');
+      contract.customerAddressMissing = require('../services/contract/dataCollection').addressMissing(customer);
+    }
+    return successResponse(res, { contract });
   }),
 );
 
@@ -499,11 +516,19 @@ router.get(
 router.post(
   '/:id/send',
   requirePermission('contracts.manage'),
-  [param('id').isInt({ min: 1 }), body('reviewToken').optional({ nullable: true }).isString().isLength({ min: 64, max: 64 })],
+  // collectData (#1446): ask the customer to complete their details first;
+  // the contract is frozen and sent once they have.
+  [
+    param('id').isInt({ min: 1 }),
+    body('reviewToken').optional({ nullable: true }).isString().isLength({ min: 64, max: 64 }),
+    body('collectData').optional().isBoolean(),
+  ],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const result = await contractService.sendContract(parseInt(req.params.id, 10), req.admin?.id,
-      { reviewToken: req.body && req.body.reviewToken ? req.body.reviewToken : null });
+    const result = await contractService.sendContract(parseInt(req.params.id, 10), req.admin?.id, {
+      reviewToken: req.body && req.body.reviewToken ? req.body.reviewToken : null,
+      collectData: req.body && req.body.collectData === true,
+    });
     return successResponse(res, result);
   }),
 );
@@ -634,6 +659,21 @@ router.post(
     const signingV2 = require('../services/contract/signingV2');
     return successResponse(res, await signingV2.resendInvitation(
       parseInt(req.params.id, 10), parseInt(req.params.signerId, 10), req.admin?.id,
+    ));
+  }),
+);
+
+// A reminder for one signer (#1446): a new link in the reminder mail — the
+// same function the hourly reminder ladder uses.
+router.post(
+  '/:id/signers/:signerId/remind',
+  requirePermission('contracts.manage'),
+  [param('id').isInt({ min: 1 }), param('signerId').isInt({ min: 1 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const signingV2 = require('../services/contract/signingV2');
+    return successResponse(res, await signingV2.sendReminder(
+      parseInt(req.params.id, 10), parseInt(req.params.signerId, 10), { adminId: req.admin?.id },
     ));
   }),
 );
@@ -848,14 +888,31 @@ router.get(
 // 131). Lets the admin confirm a contract PDF on disk still matches
 // what was issued, catching backup-corruption / manual-edit cases
 // without needing to drop to a shell.
+// The itemised integrity report (#1446): every artefact re-hashed against
+// what was recorded, the event chain, the manifest. `?format=pdf` renders it
+// as a one-page report. Each run is logged with its overall result.
 router.get(
   '/:id/verify-integrity',
   requirePermission('contracts.view'),
-  [param('id').isInt({ min: 1 })],
+  [param('id').isInt({ min: 1 }), query('format').optional().isIn(['json', 'pdf'])],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const result = await contractService.verifyIntegrity(parseInt(req.params.id, 10));
-    return successResponse(res, result);
+    const report = await require('../services/contract/integrity')
+      .integrityReport(parseInt(req.params.id, 10), { adminId: req.admin?.id });
+    if (req.query.format !== 'pdf') return successResponse(res, report);
+    const contract = await db('contracts').where({ id: report.contractId }).first('language');
+    const profile = (await db('business_profile').where({ id: 1 }).first()) || {};
+    const theme = await require('../services/pdfThemeService').resolveTheme('contract');
+    const buffer = await require('../services/pdf/integrityReport').renderIntegrityReport({
+      report,
+      locale: (contract && contract.language) || 'de',
+      theme,
+      issuer: { pdfFontTtfPath: profile.pdf_font_ttf_path || null, pdfFontFamily: profile.pdf_font_family || null, companyName: profile.company_name || null },
+    });
+    res.set('Content-Type', 'application/pdf');
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Content-Disposition', buildContentDisposition(`${report.contractNumber}-integrity.pdf`, 'attachment'));
+    return res.send(buffer);
   }),
 );
 

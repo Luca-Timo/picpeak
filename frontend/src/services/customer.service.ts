@@ -174,6 +174,11 @@ export interface CustomerDashboard {
       id: number; contractNumber: string; title: string | null; eventName: string | null;
       validUntil: string | null; sentAt: string | null;
     }>;
+    /** Signing-v2 contracts waiting on the customer's own details (#1446, issue 1590). */
+    contractDetails?: Array<{
+      id: number; contractNumber: string; title: string | null; eventName: string | null;
+      validUntil: string | null; sentAt: string | null;
+    }>;
     invoices: Array<{
       id: number; invoiceNumber: string; status: string; dueDate: string | null; overdue: boolean;
       eventName: string | null; totalAmountMinor: number; openAmountMinor: number; currency: string;
@@ -631,7 +636,7 @@ export interface CustomerInvoice {
 export interface CustomerContract {
   id: number;
   contractNumber: string;
-  status: 'sent' | 'signed_by_customer' | 'signed_by_admin' | 'fully_signed' | 'declined' | 'cancelled';
+  status: 'sent' | 'signed_by_customer' | 'signed_by_admin' | 'fully_signed' | 'declined' | 'cancelled' | 'expired' | 'awaiting_data';
   language: string;
   issueDate: string;
   validUntil: string | null;
@@ -647,4 +652,12 @@ export interface CustomerContract {
   hasCertificate?: boolean;
   /** Whether the customer can sign this contract from the portal. */
   canSign: boolean;
+  /** How far the customer signers have got (#1446). */
+  signerProgress?: { signed: number; total: number } | null;
+  /** The contract waits for the customer's details before it is prepared (#1446). */
+  canCompleteDetails?: boolean;
+  /** Where this customer stands as a signer (#1446): signed, not their turn yet… */
+  signerState?: 'signed' | 'declined' | 'waiting' | 'not_signer' | null;
+  /** Who signs before them in a sequential contract. */
+  waitingFor?: string | null;
 }

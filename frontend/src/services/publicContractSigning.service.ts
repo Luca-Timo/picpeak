@@ -26,9 +26,8 @@ export interface SigningIssuerSummary {
   logoUrlDark: string | null;
 }
 
-/** What an unverified link shows: enough to recognise it, nothing about the customer. */
+/** What an unverified link shows: enough to recognise it, nothing about the customer (nor the contract number). */
 export interface SigningInvite {
-  contractNumber: string;
   status: ContractStatus;
   language: string;
   issuer: SigningIssuerSummary | null;
@@ -59,18 +58,50 @@ export interface SigningState {
   signers: SigningProgressEntry[];
 }
 
+/** A declaration frozen into the contract at send, in its language (#1446). */
+export interface SigningConsent {
+  key: string;
+  required: boolean;
+  version: number;
+  text: string;
+}
+
 export interface SigningSessionContract extends PublicContractView {
   attachments: Array<{ id: number; name: string; delivery: 'merged' | 'separate'; pages: number }>;
   allowPdfUpload: boolean;
   requireDrawnSignature: boolean;
   signing: SigningState;
+  /** sha256 of the content frozen at send (#1446). */
+  contentSha256?: string | null;
+  /** Every attachment as recorded at send, with its own hash (#1446). */
+  manifest?: {
+    sha256: string | null;
+    attachments: Array<{ attachmentId: number; name: string; delivery: 'merged' | 'separate'; pages: number; sha256: string }>;
+  };
+  /** The declarations to confirm; null for a contract sent before they were frozen. */
+  consents?: SigningConsent[] | null;
+  /** The legal notice frozen with the contract; null for one sent before (#1446). */
+  legalNotice?: string | null;
+  /** Only while the contract collects the customer's details first (#1446). */
+  dataRequest?: SigningDataRequest;
+}
+
+/** The details asked for before the contract is prepared (#1446). */
+export interface SigningDataRequest {
+  fields: string[];
+  required: string[];
+  values: Record<string, string>;
+  submitted: boolean;
 }
 
 export interface SignPayload {
   name: string;
   mode: SignatureMode;
   signatureDataUrl?: string | null;
-  accepted: true;
+  /** Contracts sent before declarations were frozen: the single confirmation. */
+  accepted?: true;
+  /** Each frozen declaration and whether it was confirmed (#1446). */
+  consents?: Array<{ key: string; accepted: boolean }>;
   idempotencyKey: string;
 }
 
@@ -116,6 +147,12 @@ export const publicContractSigningService = {
 
   async sign(sessionToken: string, payload: SignPayload): Promise<{ status: 'sent' | 'signed_by_customer'; signedAt: string }> {
     const { data } = await api.post(`${BASE}/session/sign`, payload, sessionHeaders(sessionToken));
+    return data.data || data;
+  },
+
+  /** The customer's details; the contract is prepared with them (#1446). */
+  async submitDetails(sessionToken: string, values: Record<string, string>): Promise<{ status: 'sent' | 'awaiting_data'; frozen: boolean }> {
+    const { data } = await api.post(`${BASE}/session/details`, { values }, sessionHeaders(sessionToken));
     return data.data || data;
   },
 

@@ -125,15 +125,20 @@ function ensureCustomerActive(customer) {
     throw new AppError('Customer is deactivated', 409);
   }
 }
+/**
+ * A contract that asked for the customer's details and was never sent with
+ * them (#1446): still waiting, or expired or cancelled while it waited.
+ * Nothing of it but its number is shown to the customer.
+ */
+function neverFrozen(contract) {
+  return contract.status === 'awaiting_data' || (!!contract.data_request && !contract.sent_at);
+}
 
 // Statuses a contract can die into without ever being signed, that should
 // release the source quote's converted_contract_id back-pointer so a
-// replacement contract can be created from it. Scoped to what main can
-// actually produce today (verified via
-// `git grep -n "'expired'" backend/src/services/contract` — empty for
-// contract status). PR 1577 will add an 'expired' status later — when it
-// lands, add it to this list so the same release path covers it.
-const QUOTE_RELEASING_CONTRACT_STATUSES = ['cancelled', 'declined'];
+// replacement contract can be created from it. 'expired' is the signing
+// lifecycle's end for a contract nobody signed in time (issue 1446).
+const QUOTE_RELEASING_CONTRACT_STATUSES = ['cancelled', 'declined', 'expired'];
 
 /**
  * Release a quote's converted_contract_id back-pointer when the contract
@@ -173,6 +178,7 @@ async function releaseQuoteOnDeadContract(trx, contractId, sourceQuoteId, hasBac
 
 module.exports = {
   SECTIONS_ORDER,
+  neverFrozen,
   adminActor,
   customerPublicActor,
   emitContractEvent,

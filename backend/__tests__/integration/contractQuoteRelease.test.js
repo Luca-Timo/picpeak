@@ -6,13 +6,11 @@
  * createFromQuote call just handed back the dead contract
  * (`alreadyConverted: true`) instead of making a replacement.
  *
- * Scoped to the statuses main can actually produce today: 'cancelled'
- * (admin cancel, backend/src/services/contract/crud.js) and 'declined'
- * (customer decline via signatures v2,
- * backend/src/services/contract/signingV2.js). PR 1577 will add an
- * 'expired' status later — see the TODO next to
- * QUOTE_RELEASING_CONTRACT_STATUSES in
- * backend/src/services/contract/helpers.js for where to extend this.
+ * Covers every way a contract dies unsigned: 'cancelled' (admin cancel,
+ * backend/src/services/contract/crud.js), 'declined' (customer decline via
+ * signatures v2, backend/src/services/contract/signingV2.js) and 'expired'
+ * (the signing sweep, backend/src/services/contract/expiry.js, issue 1446) —
+ * the statuses in QUOTE_RELEASING_CONTRACT_STATUSES.
  */
 
 const crypto = require('crypto');
@@ -103,6 +101,24 @@ describe('quote release on dead contract (issue 1588)', () => {
     const afterDecline = await converted(quoteId);
     expect(afterDecline.converted_contract_id).toBeNull();
 
+    const replacement = await contractService.createFromQuote(quoteId, adminId);
+    expect(replacement.alreadyConverted).toBe(false);
+    expect(replacement.contractId).not.toBe(contractId);
+  });
+
+  it('an expired contract (signing sweep) releases the quote the same way', async () => {
+    const { expireContract } = require('../../src/services/contract/expiry');
+    const quoteId = await mkQuote();
+    const { contractId } = await contractService.createFromQuote(quoteId, adminId);
+    await contractService.sendContract(contractId, adminId);
+    const contract = await db('contracts').where({ id: contractId }).first();
+
+    // Far past any signing deadline.
+    const flipped = await expireContract(contract, Date.now() + 10 * 365 * 24 * 60 * 60 * 1000);
+    expect(flipped).toBe(true);
+    expect((await db('contracts').where({ id: contractId }).first('status')).status).toBe('expired');
+
+    expect((await converted(quoteId)).converted_contract_id).toBeNull();
     const replacement = await contractService.createFromQuote(quoteId, adminId);
     expect(replacement.alreadyConverted).toBe(false);
     expect(replacement.contractId).not.toBe(contractId);

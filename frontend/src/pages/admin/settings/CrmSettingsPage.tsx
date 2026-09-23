@@ -66,6 +66,18 @@ const SETTING_KEYS = [
   'crm_contracts_require_drawn_signature',
   'crm_contracts_allow_pdf_upload',
   'crm_contracts_store_ip',
+  // Signatures (#1446): an admin notice for every signature, not only once
+  // every customer has signed. Default on.
+  'crm_contracts_notify_each_signature',
+  // Reminder ladder for unsigned signers (#1446): days after the last link,
+  // comma-separated. Default "3,7"; empty = off.
+  'crm_contracts_reminder_days',
+  // Alert thresholds for probing of the signing links (#1446).
+  'crm_contracts_alert_unknown_tokens_per_ip',
+  'crm_contracts_alert_otp_failures_per_contract',
+  'crm_contracts_alert_unknown_tokens_per_hour',
+  // The legal notice frozen into every contract at send (#1446), { en, de }.
+  'crm_contracts_legal_notice',
   // Dashboard CRM-overview tile visibility (per-tile). Default ON;
   // explicit false hides the tile. Stored as one boolean per tile so
   // admins can mix-and-match — e.g. someone who only bills hourly
@@ -495,11 +507,35 @@ export const CrmSettingsPage: React.FC = () => {
           {t('crmSettings.crm_contracts_store_ip.help',
             "When off, the customer's and admin's IP at signing time is NOT recorded into the contract row or the public sign-page audit confirmation. Per GDPR data-minimisation principle some operators prefer this — but IP is corroborating identity evidence if the contract is challenged, so we recommend keeping it on.")}
         </p>
+        {checkboxDefaultOn('crm_contracts_notify_each_signature', 'Email me every time a signer signs (not only when everyone has)')}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
           <Input type="number" min={1} max={365}
             label={t('crmSettings.crm_contracts_default_valid_days.label', 'Signing window (days)') as string}
             value={values.crm_contracts_default_valid_days ?? 30}
             onChange={(e) => setVal('crm_contracts_default_valid_days', Number(e.target.value))} />
+          <div>
+            <Input
+              label={t('crmSettings.crm_contracts_reminder_days.label', 'Signing reminders (days after the last link)') as string}
+              value={values.crm_contracts_reminder_days ?? '3,7'}
+              onChange={(e) => setVal('crm_contracts_reminder_days', e.target.value)}
+              placeholder="3,7"
+            />
+            <p className="text-xs text-neutral-500 mt-1">
+              {t('crmSettings.crm_contracts_reminder_days.help', 'Comma-separated, e.g. 3,7: a reminder with a new link 3 days after the last one, then 7 days after that. Leave empty for no reminders.')}
+            </p>
+          </div>
+          <Input type="number" min={1} max={10000}
+            label={t('crmSettings.crm_contracts_alert_unknown_tokens_per_ip.label', 'Alert after unknown signing links per client and hour') as string}
+            value={values.crm_contracts_alert_unknown_tokens_per_ip ?? 20}
+            onChange={(e) => setVal('crm_contracts_alert_unknown_tokens_per_ip', Number(e.target.value))} />
+          <Input type="number" min={1} max={100000}
+            label={t('crmSettings.crm_contracts_alert_unknown_tokens_per_hour.label', 'Alert after unknown signing links per hour, all visitors together') as string}
+            value={values.crm_contracts_alert_unknown_tokens_per_hour ?? 200}
+            onChange={(e) => setVal('crm_contracts_alert_unknown_tokens_per_hour', Number(e.target.value))} />
+          <Input type="number" min={1} max={10000}
+            label={t('crmSettings.crm_contracts_alert_otp_failures_per_contract.label', 'Alert after wrong codes per contract and hour') as string}
+            value={values.crm_contracts_alert_otp_failures_per_contract ?? 10}
+            onChange={(e) => setVal('crm_contracts_alert_otp_failures_per_contract', Number(e.target.value))} />
           <Input
             label={t('crmSettings.crm_contracts_number_format.label', 'Contract number format') as string}
             value={values.crm_contracts_number_format ?? ''}
@@ -507,6 +543,29 @@ export const CrmSettingsPage: React.FC = () => {
             placeholder="C-{YEAR}-{SEQ:04d}"
           />
         </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+          {(['de', 'en'] as const).map((locale) => (
+            <div key={locale}>
+              <label htmlFor={`crm-legal-notice-${locale}`} className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                {locale === 'de'
+                  ? t('crmSettings.crm_contracts_legal_notice.labelDe', 'Legal notice on signed contracts (German)')
+                  : t('crmSettings.crm_contracts_legal_notice.labelEn', 'Legal notice on signed contracts (English)')}
+              </label>
+              <textarea
+                id={`crm-legal-notice-${locale}`}
+                rows={4}
+                maxLength={2000}
+                className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                value={(values.crm_contracts_legal_notice && values.crm_contracts_legal_notice[locale]) || ''}
+                placeholder={t('crmSettings.crm_contracts_legal_notice.placeholder', 'Empty: the standard notice (simple electronic signature, not for contracts that need written form).') as string}
+                onChange={(e) => setVal('crm_contracts_legal_notice', { ...(values.crm_contracts_legal_notice || {}), [locale]: e.target.value })}
+              />
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-neutral-500 mt-1">
+          {t('crmSettings.crm_contracts_legal_notice.help', 'Frozen into each contract when it is sent, shown on the signing page and printed on the signing certificate. Changing it affects only contracts sent afterwards.')}
+        </p>
         <p className="text-xs text-neutral-500 mt-2">
           {t('crmSettings.crm_contracts_number_format.help',
             'Supported tokens: {YEAR}, {MONTH}, {SEQ:04d}. Example: LBM-C-{YEAR}-{SEQ:04d} → LBM-C-2026-0001.')}

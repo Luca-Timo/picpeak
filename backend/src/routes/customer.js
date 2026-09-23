@@ -39,6 +39,7 @@ const publicDocumentViews = require('../services/publicDocumentViews');
 const { clientIpForAudit } = require('../utils/clientIp');
 const contractSignedPdfUpload = require('../utils/contractSignedPdfUpload');
 const { auditedUpdate } = require('../services/accountingHistory');
+const { neverFrozen } = require('../services/contract/helpers');
 
 // Gate a customer-facing route on BOTH the global master flag AND the
 // per-customer override — getEffectiveFeaturesForCustomer combines them, so an
@@ -726,7 +727,7 @@ router.get('/contracts', customerAuth, async (req, res) => {
         'issue_date', 'valid_until', 'title',
         'sent_at', 'signed_by_customer_at', 'signed_by_admin_at',
         'signed_customer_name', 'signed_admin_name',
-        'pdf_path', 'signed_pdf_path', 'signing_version',
+        'pdf_path', 'signed_pdf_path', 'signing_version', 'signing_order', 'data_request',
       );
 
     // Whether each contract can still be signed. The list used to carry the
@@ -747,6 +748,13 @@ router.get('/contracts', customerAuth, async (req, res) => {
       for (const row of certificates) certified.add(Number(row.doc_id));
     }
 
+    // For the derived "partly signed (1 of 2)" label (#1446).
+    const progress = await require('../services/contract/signers').customerSignerProgress(rows.map((r) => r.id));
+    // Whether THIS customer may sign a v2 contract now: not once they have
+    // signed, and not before their turn in a sequential one (#1446).
+    const me = await dbi('customer_accounts').where({ id: req.customer.id }).first('email');
+    const mine = await require('../services/contract/signingV2').portalSignerStates(me || {}, rows);
+
     res.json({
       contracts: rows.map((c) => ({
         id: c.id,
@@ -755,7 +763,8 @@ router.get('/contracts', customerAuth, async (req, res) => {
         language: c.language,
         issueDate: c.issue_date,
         validUntil: c.valid_until,
-        title: c.title,
+        // Before the freeze (#1446) the number is all that is shown.
+        title: neverFrozen(c) ? null : c.title,
         sentAt: c.sent_at,
         signedByCustomerAt: c.signed_by_customer_at,
         signedByAdminAt: c.signed_by_admin_at,
@@ -767,7 +776,14 @@ router.get('/contracts', customerAuth, async (req, res) => {
         hasCertificate: certified.has(Number(c.id)),
         // A signatures-v2 contract signs through a signer session, so it has
         // no action token to look for; one sent before still needs a live one.
-        canSign: c.status === 'sent' && (Number(c.signing_version) === 2 || liveTokens.has(c.id)),
+        canSign: c.status === 'sent' && (Number(c.signing_version) === 2
+          ? !!(mine.get(c.id) || {}).canSign
+          : liveTokens.has(c.id)),
+        signerState: (mine.get(c.id) || {}).state || null,
+        waitingFor: (mine.get(c.id) || {}).waitingFor || null,
+        // Collect-then-freeze (#1446): the customer's details come first.
+        canCompleteDetails: c.status === 'awaiting_data' && Number(c.signing_version) === 2,
+        signerProgress: progress.get(Number(c.id)) || null,
       })),
     });
   } catch (error) {
@@ -811,6 +827,9 @@ router.get('/contracts/:id/pdf', customerAuth, async (req, res) => {
     if (contract.status === 'draft') {
       return res.status(404).json({ error: 'Contract not found' });
     }
+    // Collecting the customer's details first (#1446): nothing is frozen, and
+    // rendering on demand would hand out the unfrozen contract.
+    if (neverFrozen(contract)) return sendUnfrozen(res, contract);
     // Prefer the wet-signed PDF when present, otherwise the system-
     // generated PDF (signed in-browser, stamped, or unsigned).
     const path = require('path');
@@ -851,6 +870,7 @@ router.get('/contracts/:id/certificate', customerAuth, async (req, res) => {
       .where({ id: parseInt(req.params.id, 10), customer_account_id: req.customer.id })
       .first();
     if (!contract || contract.status === 'draft') return res.status(404).json({ error: 'Contract not found' });
+    if (neverFrozen(contract)) return sendUnfrozen(res, contract);
     const { readCertificate } = require('../services/contract/signatureAssets');
     const { fileName, buffer } = await readCertificate(contract.id);
     res.set('Content-Type', 'application/pdf');
@@ -882,7 +902,21 @@ async function ownedDocument(req, res, { table, featureKey, label, notFound }) {
     res.status(404).json({ error: notFound });
     return null;
   }
+  // A contract still collecting the customer's details (#1446) has no
+  // frozen content yet: its clauses and price are not shown anywhere.
+  // Nor once it expired or was cancelled before the details came in.
+  if (table === 'contracts' && neverFrozen(row)) {
+    sendUnfrozen(res, row);
+    return null;
+  }
   return row;
+}
+
+function sendUnfrozen(res, contract) {
+  if (contract.status !== 'awaiting_data') return res.status(404).json({ error: 'Contract not found' });
+  return res.status(409).json({
+    error: 'This contract is being prepared. Complete your details first.', code: 'CONTRACT_NOT_READY',
+  });
 }
 
 const CONTRACT = { table: 'contracts', featureKey: 'contracts', label: 'Contracts', notFound: 'Contract not found' };
@@ -921,11 +955,15 @@ router.get('/contracts/:id', customerAuth, async (req, res) => {
     if (!view) return res.status(404).json({ error: CONTRACT.notFound });
     const liveTokens = await publicDocumentViews.liveContractTokens([contract.id]);
     // Same rule as the list: a signatures-v2 contract signs through a signer
-    // session and has no action token to look for.
+    // session — when it is this customer's turn and they haven't answered.
+    const me = await db('customer_accounts').where({ id: req.customer.id }).first('email');
+    const mine = (await require('../services/contract/signingV2').portalSignerStates(me || {}, [contract])).get(contract.id) || {};
     res.json({
       contract: view,
       canSign: contract.status === 'sent'
-        && (Number(contract.signing_version) === 2 || liveTokens.has(contract.id)),
+        && (Number(contract.signing_version) === 2 ? !!mine.canSign : liveTokens.has(contract.id)),
+      signerState: mine.state || null,
+      waitingFor: mine.waitingFor || null,
     });
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to load contract');

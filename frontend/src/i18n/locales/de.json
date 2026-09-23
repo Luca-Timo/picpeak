@@ -729,7 +729,23 @@
       "unreadable": "Die Schlüsseldatei kann nicht gelesen werden. Stellen Sie sie aus einem Backup wieder her, sonst lassen sich gespeicherte Signaturnachweise nicht entschlüsseln.",
       "id": "Schlüssel-ID {{id}}",
       "hint": "IP-Adressen und Browser der Unterzeichnenden werden mit diesem Schlüssel verschlüsselt gespeichert. Ohne ihn lassen sich diese Nachweise nicht lesen; Unterschriften und PDFs bleiben gültig.",
-      "mismatch": "Bereits gespeicherte Nachweise wurden mit dem Schlüssel {{stored}} verschlüsselt und können nicht mehr gelesen werden – die betroffenen Namen und E-Mail-Adressen der Unterzeichner bleiben leer. Betroffen sind {{unreadable}} von {{total}} gespeicherten Werten. Legen Sie den früheren Schlüssel zurück, oder rechnen Sie bei zuvor unterschriebenen Verträgen mit leeren Namen."
+      "mismatch": "Bereits gespeicherte Nachweise wurden mit dem Schlüssel {{stored}} verschlüsselt und können nicht mehr gelesen werden – die betroffenen Namen und E-Mail-Adressen der Unterzeichner bleiben leer. Betroffen sind {{unreadable}} von {{total}} gespeicherten Werten. Legen Sie den früheren Schlüssel zurück, oder rechnen Sie bei zuvor unterschriebenen Verträgen mit leeren Namen.",
+      "olderKeys": "{{count}} von {{total}} gespeicherten Werten liegen noch unter einem älteren, weiterhin lesbaren Schlüssel. Führen Sie scripts/rotate-evidence-key.js aus, um sie auf den aktuellen Schlüssel zu übertragen, und behalten Sie den älteren Schlüssel, bis das Skript keine mehr meldet."
+    },
+    "signingSignals": {
+      "title": "Unterzeichnungslinks: auffällige Aktivität (24 Std.)",
+      "kind": {
+        "unknown_token": "Unbekannte Links oder Sitzungen",
+        "stale_token": "Zurückgezogene, ersetzte oder abgelaufene Links",
+        "otp_failure": "Falsche Codes",
+        "rate_limited": "Durch die Ratenbegrenzung abgewiesene Anfragen",
+        "idempotency_reuse": "Mit anderen Angaben wiederholte Signaturschlüssel",
+        "cross_contract": "Dateien vom falschen Vertrag angefordert"
+      },
+      "alerts": "{{count}} Alarm(e) in den letzten 24 Stunden an die Geschäfts-E-Mail gesendet.",
+      "hint": "Pro Stunde gezählt, ohne Adresse, Link oder Code zu speichern. Eine überschrittene Schwelle meldet sich einmal pro Art und Stunde; die Schwellen finden Sie unter Einstellungen → CRM.",
+      "modeGlobal": "IP-Adressen werden nicht gespeichert, daher werden unbekannte Links über alle Besucher zusammen gezählt.",
+      "modePerClient": "Unbekannte Links werden pro Besucher (als verschlüsselter Hash der Adresse) und über alle Besucher zusammen gezählt."
     }
   },
   "common": {
@@ -5583,6 +5599,8 @@
       "viewQuote": "Angebot ansehen",
       "contractAwaiting": "Vertrag {{number}} wartet auf Ihre Unterschrift",
       "viewContract": "Vertrag ansehen",
+      "contractDetailsNeeded": "Ergänzen Sie Ihre Angaben für Vertrag {{number}}",
+      "completeDetails": "Meine Angaben ergänzen",
       "invoiceOverdue": "Rechnung {{number}} ist überfällig",
       "invoiceDue": "Rechnung {{number}} ist fällig am {{date}}",
       "openAmount": "Offen: {{amount}}",
@@ -5767,7 +5785,12 @@
       "declinedHint": "Dieser Vertrag wurde abgelehnt und kann nicht mehr unterschrieben werden.",
       "opening": "Wird geöffnet…",
       "sign": "Unterschreiben",
-      "downloadCertificate": "Signaturzertifikat"
+      "downloadCertificate": "Signaturzertifikat",
+      "expired": "Die Frist zur Unterzeichnung dieses Vertrags ist abgelaufen. Bitten Sie den Absender um einen neuen.",
+      "expiredHint": "Die Frist lief ab, bevor alle unterzeichnet hatten; der Vertrag kann nicht mehr unterzeichnet werden.",
+      "completeDetails": "Meine Angaben ergänzen",
+      "signedWaiting": "Sie haben unterzeichnet – es fehlen noch die anderen.",
+      "turnAfter": "Sie sind nach {{name}} an der Reihe."
     },
     "documents": {
       "title": "Dokumente",
@@ -7788,6 +7811,28 @@
     "crm_overview_show_invoices": {
       "label": "Rechnungs-Pipeline (nach Status)"
     },
+    "crm_contracts_notify_each_signature": {
+      "label": "Mich bei jeder einzelnen Unterschrift benachrichtigen (nicht erst, wenn alle unterzeichnet haben)"
+    },
+    "crm_contracts_reminder_days": {
+      "label": "Erinnerungen zur Unterzeichnung (Tage nach dem letzten Link)",
+      "help": "Kommagetrennt, z. B. 3,7: eine Erinnerung mit neuem Link 3 Tage nach dem letzten, dann 7 Tage danach. Leer lassen für keine Erinnerungen."
+    },
+    "crm_contracts_alert_unknown_tokens_per_ip": {
+      "label": "Alarm ab unbekannten Unterzeichnungslinks pro Client und Stunde"
+    },
+    "crm_contracts_alert_otp_failures_per_contract": {
+      "label": "Alarm ab falschen Codes pro Vertrag und Stunde"
+    },
+    "crm_contracts_legal_notice": {
+      "labelDe": "Rechtlicher Hinweis zu unterzeichneten Verträgen (Deutsch)",
+      "labelEn": "Rechtlicher Hinweis zu unterzeichneten Verträgen (Englisch)",
+      "placeholder": "Leer: der Standardhinweis (einfache elektronische Signatur, nicht für Verträge mit gesetzlicher Schriftform).",
+      "help": "Wird beim Versand in jeden Vertrag eingefroren, auf der Unterzeichnungsseite angezeigt und im Prüfprotokoll gedruckt. Eine Änderung betrifft nur später versandte Verträge."
+    },
+    "crm_contracts_alert_unknown_tokens_per_hour": {
+      "label": "Alarm ab unbekannten Unterzeichnungslinks pro Stunde, alle Besucher zusammen"
+    },
     "customer_documents_notify_on_share": {
       "label": "Kunden per E-Mail benachrichtigen, wenn ein Dokument freigegeben wird (Voreinstellung für das Kontrollkästchen im Kundendatensatz)"
     },
@@ -7954,12 +7999,15 @@
     },
     "status": {
       "draft": "Entwurf",
-      "sent": "Gesendet",
-      "signed_by_customer": "Kunde unterzeichnet",
+      "sent": "Wartet auf Unterschrift",
+      "signed_by_customer": "Vom Kunden unterzeichnet · Gegenzeichnung ausstehend",
       "signed_by_admin": "Gegengezeichnet",
-      "fully_signed": "Beidseitig unterzeichnet",
-      "cancelled": "Storniert",
-      "declined": "Abgelehnt"
+      "fully_signed": "Abgeschlossen",
+      "cancelled": "Zurückgezogen",
+      "declined": "Abgelehnt",
+      "expired": "Abgelaufen",
+      "partlySigned": "Teilweise unterzeichnet ({{signed}} von {{total}})",
+      "awaiting_data": "Angaben erforderlich"
     },
     "list": {
       "new": "Neuer Vertrag",
@@ -7983,18 +8031,30 @@
       "previewPdf": "PDF-Vorschau",
       "integrity": {
         "title": "PDF-Integritätsprüfung",
-        "help": "Berechnet die SHA-256-Hashes der unsignierten und signierten PDFs neu und vergleicht sie mit den beim Ausstellen gespeicherten Werten. Deckt Backup-Beschädigungen oder nachträgliche Änderungen an der Kundenkopie auf.",
         "verify": "Prüfen",
         "reverify": "Erneut prüfen",
-        "unsignedTitle": "Unsigniertes PDF",
-        "signedTitle": "Signiertes PDF",
         "match": "Hash stimmt überein",
         "mismatch": "Hash weicht ab — Datei verändert",
-        "missing": "Datei auf dem Server nicht gefunden",
-        "notIssued": "Noch nicht ausgestellt",
         "expected": "erwartet",
         "actual": "tatsächlich",
-        "error": "Integritätsprüfung fehlgeschlagen."
+        "error": "Integritätsprüfung fehlgeschlagen.",
+        "notCheckable": "Nicht prüfbar",
+        "downloadPdf": "Bericht als PDF",
+        "helpReport": "Liest jede Datei dieses Vertrags erneut ein – beide PDFs, das Prüfprotokoll, jedes Unterschriftsbild und jede Anlage – und prüft den eingefrorenen Inhalt, das Anlagenverzeichnis und das Protokoll der Unterzeichnung gegen die beim Erstellen erfassten Werte. Eine Abweichung nennt das geänderte Element.",
+        "allOk": "Alle Prüfungen bestanden.",
+        "someFailed": "Mindestens eine Prüfung ist fehlgeschlagen.",
+        "check": {
+          "unsigned_pdf": "Versandtes PDF",
+          "signed_pdf": "Unterzeichnetes PDF",
+          "certificate": "Prüfprotokoll",
+          "signature_image": "Unterschriftsbild",
+          "content": "Eingefrorener Inhalt",
+          "attachment": "Anlage",
+          "manifest": "Anlagenverzeichnis",
+          "event_chain": "Protokoll der Unterzeichnung",
+          "completed_artifact": "Abgeschlossenes Dokument"
+        },
+        "missingArtefact": "Fehlt – die Datei (oder der Eintrag) ist nicht mehr vorhanden"
       },
       "alreadyEventToast": "Bereits mit einem Anlass verknüpft.",
       "auditEmpty": "Noch keine Audit-Log-Einträge.",
@@ -8052,6 +8112,7 @@
       "sendError": "Senden fehlgeschlagen",
       "sentAt": "Gesendet am",
       "sentToast": "Vertrag gesendet.",
+      "sentInvitationFailedToast": "Gesendet, aber die E-Mail an die unterzeichnende Person konnte nicht verschickt werden. Sie wird innerhalb einer Stunde automatisch erneut versucht. Bitte senden Sie nicht noch einmal.",
       "signBy": "Unterzeichnen bis",
       "signatures": "Unterschriften",
       "signedByAdmin": "Gegengezeichnet",
@@ -8085,6 +8146,9 @@
       "countersignUncertain": "Wir konnten den Server nicht erreichen und können daher nicht sagen, ob die Gegenzeichnung gespeichert wurde. Der Vertrag wurde neu geladen – prüfen Sie seinen Status, bevor Sie erneut unterschreiben.",
       "attachmentMerged": "ab Seite {{page}} eingefügt",
       "attachmentSeparate": "als separate Datei versendet",
+      "collectData": "Kundschaft zuerst ihre Angaben ergänzen lassen",
+      "finishSending": "Mit den Angaben der Kundschaft fertig versenden",
+      "waitingForDetails": "Wartet darauf, dass die Kundschaft ihre Angaben ergänzt. Danach wird der Vertrag erstellt und an die übrigen Unterzeichnenden versandt.",
       "review": {
         "title": "Vor dem Senden prüfen",
         "loadFailed": "Die Übersicht konnte nicht geladen werden.",
@@ -8122,7 +8186,10 @@
           "ATTACHMENT_MISSING": "Die Datei eines Anhangs fehlt.",
           "NO_CLAUSES": "Der Vertrag hat keine Klauseln.",
           "PLACEHOLDER_UNRESOLVED": "Diese Platzhalter erscheinen unverändert im Vertrag: {{keys}}"
-        }
+        },
+        "collectHint": "Nur die erste unterzeichnende Person erhält jetzt einen Link, um ihre Angaben zu ergänzen. Vertrag, PDF und Preis werden erst danach erstellt und gehen dann an die übrigen Unterzeichnenden.",
+        "requestDetails": "Angaben anfordern",
+        "afterDetails": "Wird festgelegt, sobald die Kundschaft ihre Angaben ergänzt hat."
       }
     },
     "editor": {
@@ -8312,6 +8379,18 @@
       "draftFromVersion": "Neuer Entwurf aus dieser Version",
       "draftFromVersionConfirm": "Den aktuellen Entwurf durch eine Kopie von Version {{version}} ersetzen?",
       "draftCreated": "Entwurf aus Version {{version}} erstellt",
+      "consents": {
+        "title": "Erklärungen, die unterzeichnende Personen bestätigen",
+        "help": "Jede Erklärung ist ein eigenes Kästchen auf der Unterzeichnungsseite, nie vorausgewählt. Erforderliche müssen angehakt werden, um zu unterzeichnen. Der Wortlaut gehört zum Unterzeichneten: Wird er geändert, erhält die Erklärung beim Speichern des Entwurfs eine neue Version; bereits versandte Verträge behalten den Wortlaut, mit dem sie versandt wurden.",
+        "none": "Fügen Sie vor dem Veröffentlichen mindestens eine erforderliche Erklärung hinzu.",
+        "key": "Schlüssel",
+        "required": "Zum Unterzeichnen erforderlich",
+        "version": "Version {{version}}",
+        "remove": "Erklärung {{number}} entfernen",
+        "textDe": "Wortlaut (Deutsch)",
+        "textEn": "Wortlaut (Englisch)",
+        "add": "Erklärung hinzufügen"
+      },
       "check": {
         "run": "Prüfen",
         "failed": "Die Prüfung konnte nicht ausgeführt werden.",
@@ -8337,7 +8416,8 @@
           "FONT_MISSING": "Die Schrift „{{key}}“ konnte nicht geladen werden; das PDF verwendet Helvetica.",
           "LOGO_MISSING": "Das Logo wurde nicht gefunden; das PDF hat kein Logo.",
           "PAGE_COUNT_HIGH": "Der Vertrag umfasst {{pages}} Seiten.",
-          "RENDER_FAILED": "Der Vertrag konnte nicht als PDF erstellt werden."
+          "RENDER_FAILED": "Der Vertrag konnte nicht als PDF erstellt werden.",
+          "CONSENT_REQUIRED_MISSING": "Fügen Sie vor dem Veröffentlichen mindestens eine erforderliche Erklärung hinzu."
         }
       },
       "placeholdersHint": "Platzhalter werden beim Erstellen eines Vertrags ausgefüllt. Nutzen Sie „Platzhalter einfügen“ neben einem Text; die Vorschau zeigt sie mit Beispieldaten.",
@@ -8378,7 +8458,9 @@
           "moved": "Verschoben",
           "changed": "Geändert"
         },
-        "tooLarge": "Zu gross für einen Vergleich hier"
+        "tooLarge": "Zu gross für einen Vergleich hier",
+        "nowRequired": "jetzt zum Unterzeichnen erforderlich",
+        "noLongerRequired": "nicht mehr erforderlich"
       },
       "undo": "Rückgängig",
       "redo": "Wiederholen",
@@ -8545,7 +8627,12 @@
           "countersigned": "Gegengezeichnet",
           "completed": "Abgeschlossen",
           "wet_upload": "Unterschriebenes PDF hochgeladen",
-          "revoked": "Links zurückgezogen"
+          "revoked": "Links zurückgezogen",
+          "viewed": "Vertrag geöffnet",
+          "expired": "Frist zur Unterzeichnung abgelaufen",
+          "reminded": "Erinnerung gesendet",
+          "data_requested": "Angaben der Kundschaft angefordert",
+          "data_collected": "Angaben der Kundschaft eingegangen"
         },
         "actor": {
           "admin": "Admin",
@@ -8572,7 +8659,28 @@
         "documentSha": "SHA-256 des unterschriebenen Dokuments"
       },
       "followUpFailed": "Ein Schritt nach der Unterschrift ist fehlgeschlagen",
-      "followUpFailedBody": "Die Unterschrift selbst ist erfasst. Seit {{date}} ist ein Schritt offen: {{error}}. Mit «Signierten Vertrag erneut senden» wird er nochmals ausgeführt, oder Sie senden der nächsten Person ihren Link."
+      "followUpFailedBody": "Die Unterschrift selbst ist erfasst. Seit {{date}} ist ein Schritt offen: {{step}}. Mit «Signierten Vertrag erneut senden» wird er nochmals ausgeführt.",
+      "followUp": {
+        "invitationTitle": "Die Einladungs-E-Mail konnte nicht eingereiht werden",
+        "invitationBody": "Seit {{date}}. Sie wird innerhalb einer Stunde automatisch erneut versucht.",
+        "unreadableBody": "Seit {{date}}: Die E-Mail-Adresse der unterzeichnenden Person kann nicht gelesen werden. Prüfen Sie den Schlüssel für Signaturnachweise und senden Sie den Link dann erneut.",
+        "reminderTitle": "Eine Erinnerungs-E-Mail konnte nicht eingereiht werden",
+        "reminderBody": "Seit {{date}}. Die unterzeichnende Person erhält innerhalb einer Stunde automatisch einen neuen Link.",
+        "freezeTitle": "Der Vertrag konnte nicht mit den Angaben des Kunden erstellt werden",
+        "freezeBody": "Seit {{date}}. Die Angaben sind gespeichert; schliessen Sie den Versand ab, um es erneut zu versuchen.",
+        "stepAdminNotice": "die E-Mail, die Sie über die Unterschrift informiert",
+        "stepReceipt": "die Empfangsbestätigung an die unterzeichnende Person",
+        "stepCompletion": "das Signaturzertifikat oder die Abschluss-E-Mails",
+        "invoiceTitle": "Die Rechnung zu diesem Vertrag konnte nicht vorbereitet werden",
+        "genericTitle": "Ein Schritt ist fehlgeschlagen",
+        "genericBody": "Seit {{date}}. Die Einzelheiten stehen im Server-Log."
+      },
+      "reminded": "Eine Erinnerung mit neuem Link wurde an {{email}} gesendet.",
+      "remindNotDue": "Diese Person kann jetzt nicht erinnert werden: Sie ist noch nicht an der Reihe oder hat bereits geantwortet.",
+      "remindError": "Die Erinnerung konnte nicht gesendet werden. Versuchen Sie es erneut.",
+      "remindedAt": "{{count}}× erinnert, zuletzt {{date}}",
+      "remindConfirm": "{{name}} eine Erinnerung senden? Sie enthält einen neuen Link; der bisherige funktioniert dann nicht mehr.",
+      "remind": "Erinnerung senden"
     },
     "paperUpload": {
       "title": "Unterschriebenen Vertrag hochladen",
@@ -9018,7 +9126,9 @@
       "expiredTitle": "Dieser Link ist abgelaufen",
       "expiredBody": "Bitten Sie den Absender, Ihnen einen neuen Link zum Unterschreiben zu senden.",
       "withdrawnTitle": "Dieser Vertrag wurde zurückgezogen",
-      "withdrawnBody": "Der Absender hat diesen Vertrag zurückgezogen, daher kann er nicht mehr unterschrieben werden. Bei Fragen wenden Sie sich bitte an den Absender."
+      "withdrawnBody": "Der Absender hat diesen Vertrag zurückgezogen, daher kann er nicht mehr unterschrieben werden. Bei Fragen wenden Sie sich bitte an den Absender.",
+      "contractExpiredTitle": "Die Frist zur Unterzeichnung ist abgelaufen",
+      "contractExpiredBody": "Dieser Vertrag kann nicht mehr unterzeichnet werden. Bitten Sie den Absender um einen neuen, wenn Sie weiterhin abschließen möchten."
     },
     "loadError": {
       "title": "Diese Seite konnte nicht geladen werden",
@@ -9075,7 +9185,11 @@
       "issuerNext": "Alle haben unterschrieben. Der Vertrag wird jetzt gegengezeichnet, und Sie erhalten das endgültige PDF per E-Mail.",
       "othersPending": "Der Vertrag ist vollständig, sobald alle unterschrieben haben. Wir senden Ihnen dann das endgültige PDF per E-Mail.",
       "title": "Vielen Dank – Sie haben den Vertrag unterschrieben.",
-      "signedAt": "Unterschrieben am {{date}}"
+      "signedAt": "Unterschrieben am {{date}}",
+      "theSender": "Der Absender",
+      "countersignNext": "{{business}} zeichnet gegen; Sie erhalten die endgültige Fassung und das Prüfprotokoll per E-Mail.",
+      "confirmationSent": "Wir haben Ihnen eine Bestätigung per E-Mail gesendet.",
+      "portalCertificate": "Ihre Verträge und Prüfprotokolle"
     },
     "sign": {
       "errors": {
@@ -9083,7 +9197,9 @@
         "notSignable": "Dieser Vertrag kann nicht mehr unterschrieben werden – er wurde möglicherweise zurückgezogen oder abgelehnt. Bei Fragen wenden Sie sich an den Absender.",
         "drawOrType": "Zeichnen Sie Ihre Unterschrift in das Feld, oder geben Sie stattdessen Ihren Namen ein.",
         "tooLarge": "Ihre gezeichnete Unterschrift ist zu groß zum Speichern. Löschen Sie sie und zeichnen Sie sie erneut.",
-        "generic": "Ihre Unterschrift konnte nicht gespeichert werden. Versuchen Sie es erneut; falls es weiterhin nicht klappt, wenden Sie sich an den Absender."
+        "generic": "Ihre Unterschrift konnte nicht gespeichert werden. Versuchen Sie es erneut; falls es weiterhin nicht klappt, wenden Sie sich an den Absender.",
+        "changed": "Dieser Vertrag wurde nach dem Versand verändert und kann deshalb nicht unterzeichnet werden. Wenden Sie sich an den Absender.",
+        "expired": "Die Frist zur Unterzeichnung dieses Vertrags ist abgelaufen. Bitten Sie den Absender um einen neuen."
       },
       "modeLabel": "Wie möchten Sie unterschreiben?",
       "modeDrawn": "Zeichnen",
@@ -9096,7 +9212,12 @@
         "check": "Erneut prüfen",
         "checking": "Wird geprüft …",
         "resend": "Unterschrift erneut senden"
-      }
+      },
+      "stepTitle": "Vertrag Nr. {{number}} unterzeichnen",
+      "stepIntro": "Sie unterzeichnen genau den Vertrag, den Sie eben gelesen haben. Prüfen Sie die Zusammenfassung, bestätigen Sie die Erklärungen und unterzeichnen Sie.",
+      "back": "Zurück zum Vertrag",
+      "otherOptions": "Weitere Möglichkeiten",
+      "submitBinding": "Vertrag Nr. {{number}} verbindlich unterzeichnen"
     },
     "otp": {
       "errors": {
@@ -9119,6 +9240,50 @@
       "declining": "Wird abgelehnt…",
       "confirm": "Vertrag ablehnen",
       "uncertain": "Wir konnten den Server nicht erreichen und können daher nicht sagen, ob Ihre Ablehnung gespeichert wurde. Laden Sie diese Seite neu, um den Stand des Vertrags zu sehen, bevor Sie es erneut versuchen."
+    },
+    "consents": {
+      "legend": "Ihre Erklärungen",
+      "required": "(erforderlich)",
+      "optional": "(freiwillig)",
+      "missing": "Setzen Sie bei jeder erforderlichen Erklärung ein Häkchen, um zu unterzeichnen."
+    },
+    "review": {
+      "step": "Schritt 1 von 2 – Vertrag lesen",
+      "readyTitle": "Alles gelesen?",
+      "readyBody": "Als Nächstes bestätigen Sie die Erklärungen und unterzeichnen. Unterzeichnet ist erst, wenn Sie die letzte Schaltfläche drücken.",
+      "continue": "Weiter zur Unterzeichnung"
+    },
+    "summary": {
+      "number": "Vertrag",
+      "title": "Titel",
+      "parties": "Parteien",
+      "total": "Gesamtbetrag",
+      "attachments": "Anlagen",
+      "hash": "Inhalts-Fingerabdruck (SHA-256)"
+    },
+    "details": {
+      "fields": {
+        "address_line1": "Strasse und Hausnummer",
+        "address_line2": "Adresszusatz",
+        "postal_code": "Postleitzahl",
+        "city": "Ort",
+        "country_code": "Land (zweistelliger Code, z. B. CH)",
+        "company_name": "Firma",
+        "vat_id": "MWST-/USt-Nummer",
+        "phone": "Telefon"
+      },
+      "invalid": "Bitte prüfen Sie die markierten Angaben.",
+      "uncertain": "Wir konnten nicht bestätigen, dass Ihre Angaben angekommen sind. Prüfen Sie die Seite erneut, bevor Sie sie ein zweites Mal senden.",
+      "error": "Ihre Angaben konnten nicht gespeichert werden. Versuchen Sie es gleich noch einmal.",
+      "savedTitle": "Ihre Angaben sind gespeichert",
+      "savedBody": "Sie erhalten eine neue E-Mail, sobald der Vertrag bereit ist.",
+      "title": "Ihre Angaben für Vertrag {{number}}",
+      "intro": "Der Vertrag wird mit diesen Angaben erstellt, sobald Sie sie senden; danach können Sie ihn gleich hier lesen und unterzeichnen.",
+      "sending": "Vertrag wird erstellt …",
+      "submit": "Angaben speichern und Vertrag erstellen"
+    },
+    "legalNotice": {
+      "title": "Rechtlicher Hinweis"
     }
   }
 }

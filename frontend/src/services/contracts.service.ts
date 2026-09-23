@@ -26,9 +26,25 @@ export interface ContractIntegrityLeg {
   match: boolean;
 }
 
+/** One item of the integrity report (#1446). `ok: null` = not checkable. */
+export interface ContractIntegrityCheck {
+  check: 'unsigned_pdf' | 'signed_pdf' | 'certificate' | 'signature_image' | 'content'
+    | 'attachment' | 'manifest' | 'event_chain' | 'completed_artifact';
+  subject: string | null;
+  ok: boolean | null;
+  expected: string | null;
+  actual: string | null;
+  note: string | null;
+  brokenAt?: number | null;
+}
+
 export interface ContractIntegrityResult {
   unsigned: ContractIntegrityLeg;
   signed: ContractIntegrityLeg;
+  /** The itemised report (#1446). */
+  ok?: boolean;
+  generatedAt?: string;
+  checks?: ContractIntegrityCheck[];
 }
 
 /** Shape of one row from /admin/contracts/:id/audit-trail. */
@@ -49,7 +65,9 @@ export type ContractStatus =
   | 'signed_by_admin'
   | 'fully_signed'
   | 'declined'
-  | 'cancelled';
+  | 'cancelled'
+  | 'expired'
+  | 'awaiting_data';
 
 // ----- Signatures v2 (#1446): signers and the signing log -------------
 
@@ -71,6 +89,9 @@ export interface ContractSigner {
   signedAt: string | null;
   declinedAt: string | null;
   signatureMode: 'drawn' | 'typed' | null;
+  /** Reminders sent so far (#1446). */
+  reminderCount?: number;
+  remindedAt?: string | null;
 }
 
 /**
@@ -109,10 +130,12 @@ export interface ContractSigningChain {
   reason: string | null;
 }
 
-/** A step after a signature that failed: the invitation, certificate or emails. */
+/** A follow-up step that failed: an invitation, a reminder, the freeze, or what follows a signature.
+ *  Only the step and a safe code: the error's text stays in the server log. */
 export interface ContractSigningFollowUp {
   failedAt: string;
-  error: string | null;
+  step: string | null;
+  code: string | null;
 }
 
 export interface ContractSignersOverview {
@@ -326,6 +349,12 @@ export interface ContractSummary {
   renderedContentSha256?: string | null;
   /** PDFs sent with the contract (#1445), in order. */
   attachments?: IncludedAttachment[];
+  /** List rows only: how far the customer signers have got (#1446). */
+  signerProgress?: { signed: number; total: number } | null;
+  /** Drafts: whether {{customer_address}} would print empty (#1446). */
+  customerAddressMissing?: boolean;
+  /** When the customer supplied their details (collect-then-freeze, #1446). */
+  dataCollectedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   inclusions?: ContractBlockInclusion[];
@@ -453,9 +482,18 @@ export const contractsService = {
     return data.data || data;
   },
 
-  /** `reviewToken`: the pre-send review's; the send is refused if the contract changed since. */
-  async send(id: number, reviewToken?: string): Promise<{ token: string; pdfPath: string | null }> {
-    const { data } = await api.post(`/admin/contracts/${id}/send`, reviewToken ? { reviewToken } : undefined);
+  /** `reviewToken`: the pre-send review's; the send is refused if the contract changed since.
+   *  `collectData` (#1446): ask the customer for their details first; the
+   *  contract is frozen and sent once they have. */
+  async send(
+    id: number,
+    options: { reviewToken?: string; collectData?: boolean } = {},
+  ): Promise<{ token: string; pdfPath: string | null; invitationFailed?: boolean }> {
+    const payload = {
+      ...(options.reviewToken ? { reviewToken: options.reviewToken } : {}),
+      ...(options.collectData ? { collectData: true } : {}),
+    };
+    const { data } = await api.post(`/admin/contracts/${id}/send`, Object.keys(payload).length ? payload : undefined);
     return data.data || data;
   },
 
@@ -527,6 +565,12 @@ export const contractsService = {
     return data.data || data;
   },
 
+  /** A reminder with a new link (#1446) — the same path the reminder ladder takes. */
+  async remindSigner(id: number, signerId: number): Promise<{ reminded: true; step: number }> {
+    const { data } = await api.post(`/admin/contracts/${id}/signers/${signerId}/remind`);
+    return data.data || data;
+  },
+
   /** IP address, user agent and decline reasons, decrypted. Logged on every call. */
   async signingEvidence(id: number): Promise<{ evidence: ContractSignerEvidence[] }> {
     const { data } = await api.get(`/admin/contracts/${id}/signing-evidence`);
@@ -561,6 +605,12 @@ export const contractsService = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return data.data || data;
+  },
+
+  /** The integrity report as a one-page PDF (#1446). */
+  async integrityReportUrl(id: number): Promise<string> {
+    const res = await api.get(`/admin/contracts/${id}/verify-integrity`, { params: { format: 'pdf' }, responseType: 'blob' });
+    return URL.createObjectURL(res.data);
   },
 
   /** The signing certificate, once the contract has one. */

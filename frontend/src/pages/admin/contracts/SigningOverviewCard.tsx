@@ -12,7 +12,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, Eye, EyeOff, Send, ShieldCheck, Users, XCircle } from 'lucide-react';
+import { AlertTriangle, BellRing, CheckCircle2, Eye, EyeOff, Send, ShieldCheck, Users, XCircle } from 'lucide-react';
 import { Button, Card } from '../../../components/common';
 import { PermissionGate } from '../../../components/admin/PermissionGate';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
@@ -20,6 +20,7 @@ import { useMutationWithToast } from '../../../hooks';
 import {
   contractsService,
   type ContractSigner,
+  type ContractSigningFollowUp,
   type ContractSignersOverview,
   type ContractStatus,
 } from '../../../services/contracts.service';
@@ -40,6 +41,57 @@ interface SigningOverviewCardProps {
 export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contractId, contractStatus, overview }) => {
   const { t } = useTranslation();
   const { formatDateTime } = useLocalizedDate();
+
+  // The failed step in words. Only the step and a safe code come from the
+  // server; the error's own text stays in the server log.
+  const followUpMessage = (followUp: ContractSigningFollowUp, date: string): { title: string; body: string } => {
+    const unreadable = followUp.code === 'SIGNER_EMAIL_UNREADABLE';
+    switch (followUp.step) {
+      case 'invitation':
+      case 'next_invitation':
+        return {
+          title: t('contracts.signers.followUp.invitationTitle', 'The invitation email couldn\'t be queued'),
+          body: unreadable
+            ? t('contracts.signers.followUp.unreadableBody', 'Since {{date}}: the signer\'s email address can\'t be read. Check the evidence key, then send the link again.', { date })
+            : t('contracts.signers.followUp.invitationBody', 'Since {{date}}. It is retried automatically within the hour.', { date }),
+        };
+      case 'reminder':
+        return {
+          title: t('contracts.signers.followUp.reminderTitle', 'A reminder email couldn\'t be queued'),
+          body: t('contracts.signers.followUp.reminderBody', 'Since {{date}}. The signer gets a new link automatically within the hour.', { date }),
+        };
+      case 'data_freeze':
+        return {
+          title: t('contracts.signers.followUp.freezeTitle', 'The contract couldn\'t be prepared with the customer\'s details'),
+          body: t('contracts.signers.followUp.freezeBody', 'Since {{date}}. The details are saved; finish sending to try again.', { date }),
+        };
+      case 'admin_notice':
+      case 'signature_receipt':
+      case 'completion': {
+        const stepLabel = {
+          admin_notice: t('contracts.signers.followUp.stepAdminNotice', 'the email telling you about the signature'),
+          signature_receipt: t('contracts.signers.followUp.stepReceipt', 'the signer\'s receipt email'),
+          completion: t('contracts.signers.followUp.stepCompletion', 'the signing certificate or the completion emails'),
+        }[followUp.step];
+        return {
+          title: t('contracts.signers.followUpFailed', 'A step after the signature didn\'t go through'),
+          body: t('contracts.signers.followUpFailedBody',
+            'The signature itself is on record. Since {{date}} one step is still outstanding: {{step}}. Use "Re-send the signed contract" to run it again.',
+            { date, step: stepLabel }),
+        };
+      }
+      case 'prepare_contract_invoice':
+        return {
+          title: t('contracts.signers.followUp.invoiceTitle', 'The invoice for this contract couldn\'t be prepared'),
+          body: t('contracts.signers.followUp.genericBody', 'Since {{date}}. The details are in the server log.', { date }),
+        };
+      default:
+        return {
+          title: t('contracts.signers.followUp.genericTitle', 'A step didn\'t go through'),
+          body: t('contracts.signers.followUp.genericBody', 'Since {{date}}. The details are in the server log.', { date }),
+        };
+    }
+  };
   const signers = [...overview.signers].sort((a, b) => a.position - b.position);
   const nameOf = (id: number | null) => (id == null ? null : signers.find((s) => s.id === id)?.name || null);
 
@@ -56,6 +108,22 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
         return t('contracts.signers.resendNotSignable', 'Links can only be sent again while the contract is out for signature.') as string;
       }
       return t('contracts.signers.resendError', 'The link couldn\'t be sent again. Try again.') as string;
+    },
+  });
+
+  const remindMutation = useMutationWithToast({
+    mutationFn: (signer: ContractSigner) => contractsService.remindSigner(contractId, signer.id),
+    successMessage: (_data, signer) => t('contracts.signers.reminded', 'A reminder with a new link was sent to {{email}}.', { email: signer.email || '' }) as string,
+    invalidateKeys: [['contract-signers', contractId]],
+    errorMessage: (err: unknown) => {
+      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      if (code === 'SIGNER_NOT_DUE') {
+        return t('contracts.signers.remindNotDue', 'This signer can\'t be reminded now: it isn\'t their turn yet, or they have already answered.') as string;
+      }
+      if (code === 'CONTRACT_NOT_SIGNABLE') {
+        return t('contracts.signers.resendNotSignable', 'Links can only be sent again while the contract is out for signature.') as string;
+      }
+      return t('contracts.signers.remindError', 'The reminder couldn\'t be sent. Try again.') as string;
     },
   });
 
@@ -99,29 +167,28 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
             {t('contracts.signers.countersignLater', 'You counter-sign here once every customer signer has signed.')}
           </p>
         )}
-        {overview.followUp && (
-          <div
-            role="alert"
-            className="mb-3 p-3 rounded-md text-sm border border-amber-300 bg-amber-50 text-amber-900
-              dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-          >
-            <p className="font-medium flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              {t('contracts.signers.followUpFailed', 'A step after the signature didn\'t go through')}
-            </p>
-            <p className="mt-1">
-              {t(
-                'contracts.signers.followUpFailedBody',
-                'The signature itself is on record. Since {{date}} one step is still outstanding: {{error}}. Use "Re-send the signed contract" to run it again, or send the next signer their link.',
-                { date: formatDateTime(overview.followUp.failedAt), error: overview.followUp.error || '—' },
-              )}
-            </p>
-          </div>
-        )}
+        {overview.followUp && (() => {
+          const { title, body } = followUpMessage(overview.followUp, formatDateTime(overview.followUp.failedAt));
+          return (
+            <div
+              role="alert"
+              className="mb-3 p-3 rounded-md text-sm border border-amber-300 bg-amber-50 text-amber-900
+                dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+            >
+              <p className="font-medium flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                {title}
+              </p>
+              <p className="mt-1">{body}</p>
+            </div>
+          );
+        })()}
         <ol className="divide-y divide-neutral-200 dark:divide-neutral-700">
           {signers.map((s) => {
             const via = viaLabel(s.verifiedVia);
-            const canResend = s.role === 'customer' && s.status === 'invited' && contractStatus === 'sent';
+            // While details are collected, the first signer's link is the details link.
+            const canResend = s.role === 'customer' && s.status === 'invited'
+              && (contractStatus === 'sent' || contractStatus === 'awaiting_data');
             return (
               <li key={s.id} className="py-2 flex flex-wrap items-start gap-3 text-sm">
                 <span className="w-5 text-neutral-500 dark:text-neutral-400">{s.position}.</span>
@@ -145,6 +212,9 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
                       s.signatureMode === 'drawn' ? t('contracts.signers.mode.drawn', 'Drawn signature') : null,
                       s.signatureMode === 'typed' ? t('contracts.signers.mode.typed', 'Typed name') : null,
                       s.declinedAt ? t('contracts.signers.declinedAt', 'Declined {{date}}', { date: formatDateTime(s.declinedAt) }) : null,
+                      s.reminderCount && s.remindedAt
+                        ? t('contracts.signers.remindedAt', 'Reminded {{count}}×, last {{date}}', { count: s.reminderCount, date: formatDateTime(s.remindedAt) })
+                        : null,
                     ].filter(Boolean).join(' · ')}
                   </p>
                 </div>
@@ -165,6 +235,19 @@ export const SigningOverviewCard: React.FC<SigningOverviewCardProps> = ({ contra
                     >
                       <Send className="w-4 h-4 mr-1" />
                       {t('contracts.signers.resend', 'Send the link again')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={remindMutation.isPending}
+                      onClick={() => {
+                        if (window.confirm(t('contracts.signers.remindConfirm', 'Send {{name}} a reminder? It carries a new link; the previous one stops working.', { name: s.name || s.email || '' }) as string)) {
+                          remindMutation.mutate(s);
+                        }
+                      }}
+                    >
+                      <BellRing className="w-4 h-4 mr-1" />
+                      {t('contracts.signers.remind', 'Send reminder')}
                     </Button>
                   </PermissionGate>
                 )}

@@ -64,7 +64,7 @@ const money = (v) => Number(v) || 0;
 async function needsActionFor(customerId, features) {
   const today = todayDateOnly();
   const out = {
-    quotes: [], contracts: [], invoices: [], documents: [], documentRequests: [],
+    quotes: [], contracts: [], contractDetails: [], invoices: [], documents: [], documentRequests: [],
   };
 
   if (features.quotes) {
@@ -94,6 +94,23 @@ async function needsActionFor(customerId, features) {
       .orderBy('id', 'desc')
       .select('id', 'contract_number', 'title', 'event_name', 'valid_until', 'sent_at');
     out.contracts = rows.map((c) => ({
+      id: c.id,
+      contractNumber: c.contract_number,
+      title: c.title || null,
+      eventName: c.event_name || null,
+      validUntil: toDateOnly(c.valid_until),
+      sentAt: toIso(c.sent_at) || null,
+    }));
+
+    // Signing v2 contracts waiting on the customer's own details before they
+    // can be rendered and sent for signature (#1446 collect-then-freeze,
+    // issue 1590). Same guard as canCompleteDetails in customer.js:785 — only
+    // a signing-v2 contract has a details-collection step.
+    const detailRows = await db('contracts')
+      .where({ customer_account_id: customerId, status: 'awaiting_data', signing_version: 2 })
+      .orderBy('id', 'desc')
+      .select('id', 'contract_number', 'title', 'event_name', 'valid_until', 'sent_at');
+    out.contractDetails = detailRows.map((c) => ({
       id: c.id,
       contractNumber: c.contract_number,
       title: c.title || null,
@@ -336,12 +353,13 @@ async function getEventOverview(customerId, slug) {
       .whereNot('status', 'draft')
       .andWhere(linkedTo('converted_event_id'))
       .orderBy('id', 'desc')
-      .select('id', 'contract_number', 'status', 'title', 'issue_date', 'pdf_path', 'signed_pdf_path'))
+      .select('id', 'contract_number', 'status', 'title', 'issue_date', 'pdf_path', 'signed_pdf_path', 'sent_at', 'data_request'))
       .map((c) => ({
         id: c.id,
         contractNumber: c.contract_number,
         status: c.status,
-        title: c.title || null,
+        // Nothing of a contract still collecting details (#1446) but its number.
+        title: require('./contract/helpers').neverFrozen(c) ? null : (c.title || null),
         issueDate: toDateOnly(c.issue_date),
         hasPdf: !!c.pdf_path,
         hasSignedPdf: !!c.signed_pdf_path,

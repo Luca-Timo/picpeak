@@ -18,8 +18,8 @@
  *     outcome is not the customer's data, only the details around it are.
  *
  *   - a contract that carries AT LEAST ONE signature is KEPT WHOLE. It is
- *     evidence of a concluded — or partly concluded — agreement and stays
- *     for the retention period; the same stance erasure already takes for
+ *     evidence of a concluded — or partly concluded — agreement and stays,
+ *     every signer's encrypted evidence included, for the retention period; the same stance erasure already takes for
  *     contract-linked customer documents. Its live invitations and sessions
  *     are still revoked: erasure ends the customer's access to the portal,
  *     it does not erase the record.
@@ -93,7 +93,7 @@ async function plan(db, customerId) {
     && (await db.schema.hasColumn('quotes', 'converted_contract_id'));
   const rows = await db('contracts').where({ customer_account_id: customerId })
     .select('id', 'status', 'source_quote_id', 'rendered_content', 'signed_by_customer_at', 'signed_by_admin_at', 'signed_pdf_path');
-  if (!rows.length) return { redact: [], retain: [], hasSigners, hasRedactedColumn, hasQuoteBackPointer };
+  if (!rows.length) return { customerId, redact: [], retain: [], hasSigners, hasRedactedColumn, hasQuoteBackPointer };
 
   const signedIds = hasSigners
     ? new Set((await db('contract_signers')
@@ -115,12 +115,12 @@ async function plan(db, customerId) {
         id: row.id,
         status: row.status,
         sourceQuoteId: row.source_quote_id || null,
-        cancel: ['draft', 'sent'].includes(row.status),
+        cancel: ['draft', 'sent', 'awaiting_data'].includes(row.status),
         redacted: redactSnapshot(row.rendered_content),
       });
     }
   }
-  return { redact, retain, hasSigners, hasRedactedColumn, hasQuoteBackPointer };
+  return { customerId, redact, retain, hasSigners, hasRedactedColumn, hasQuoteBackPointer };
 }
 
 /** Revoke every way into a contract: signer links and sessions, action tokens. */
@@ -142,6 +142,10 @@ async function revokeAllAccess(trx, contractId, hasSigners) {
 async function apply(trx, contractPlan, actor) {
   if (!contractPlan) return { cancelled: [], redacted: [], retained: [] };
   const history = { actor, source: 'customer.erase' };
+  // The customer row first: an invitation or reminder holds it while it
+  // issues a link (signingV2.customerMayReceiveLink), so one in flight
+  // commits before the revocations below, and none starts after them.
+  await trx('customer_accounts').where({ id: contractPlan.customerId }).forUpdate().first('id');
   const cancelled = [];
   const redacted = [];
 

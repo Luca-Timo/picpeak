@@ -30,7 +30,11 @@ async function renderContractPdfBuffer(contractId) {
  */
 const ensureIntOr = (v) => (v == null ? 1 : Number(v));
 
-async function sendContract(id, adminId, { reviewToken = null } = {}) {
+async function sendContract(id, adminId, { reviewToken = null, collectData = false } = {}) {
+  // Ask the customer for their details first; this send runs once they have
+  // (#1446, dataCollection.js).
+  if (collectData) return require('./dataCollection').requestData(id, adminId);
+
   // Self-heal: dev installs that ran migration 130 BEFORE we added
   // contract_fully_signed to the seed list won't have all three
   // contract templates in email_templates. Insert any missing rows
@@ -41,9 +45,16 @@ async function sendContract(id, adminId, { reviewToken = null } = {}) {
   if (!data) throw new AppError('Contract not found', 404);
   const { contract } = data;
 
-  if (!['draft'].includes(contract.status)) {
+  if (!['draft', 'awaiting_data'].includes(contract.status)) {
     throw new AppError(`Cannot send a contract with status '${contract.status}'`, 409);
   }
+  // A contract collecting the customer's details is frozen once they are in:
+  // from the customer's submission, or the admin's retry after a failed one.
+  const fromStatus = contract.status;
+  if (fromStatus === 'awaiting_data' && !contract.data_collected_at) {
+    throw new AppError('The customer hasn\'t completed their details yet.', 409, 'DATA_PENDING');
+  }
+
   const customer = await db('customer_accounts').where({ id: contract.customer_account_id }).first();
   ensureCustomerActive(customer);
 
@@ -123,6 +134,9 @@ async function sendContract(id, adminId, { reviewToken = null } = {}) {
   const freeze = {
     renderedContent,
     contentSha256,
+    // The attachments that go with it — merged or separate — bound into the
+    // signature beside the content (#1446).
+    manifestSha256: attachments.manifestSha256(sendable.manifest),
     inclusions: refreshed.inclusions
       .filter((inc) => inc.included === true || inc.included === 1 || inc.included === '1')
       .map((inc) => ({
@@ -148,10 +162,32 @@ async function sendContract(id, adminId, { reviewToken = null } = {}) {
   });
 
   // Marks the contract sent, starts the event log and emails each signer
-  // who may sign now their own link.
-  const invited = await signingV2.completeSend(id, {
-    pdfPath, pdfSha256, adminId, freeze, lockVersion: refreshed.contract.lock_version, sendInputs,
+  // who may sign now their own link. A failed invitation after the commit
+  // doesn't throw: the contract is out, the failure is recorded, the hourly
+  // sweep invites whoever is left pending, and the send answers with a
+  // warning. (After collected details, the first signer below still hears
+  // the contract is ready.)
+  const { invited, invitationFailed } = await signingV2.completeSend(id, {
+    pdfPath, pdfSha256, adminId, freeze, lockVersion: refreshed.contract.lock_version, sendInputs, fromStatus,
   });
+
+  // A freeze that failed after the customer's details came in is done now.
+  if (fromStatus === 'awaiting_data') await signingV2.clearFollowUpFailure(id, { steps: ['data_freeze'] });
+  // The admin finishing that failed freeze: the first signer was told to
+  // wait for an email, and still holds only the details link — they get a
+  // new one to the contract now. (The customer's own submission freezes
+  // with them on the page; their session opens the contract.)
+  if (fromStatus === 'awaiting_data' && adminId) {
+    const firsts = (await require('./signers').listSigners(id))
+      .filter((row) => row.role === 'customer' && Number(row.position) === 1 && row.status === 'invited');
+    for (const row of firsts) {
+      try {
+        await signingV2.resendInvitation(id, row.id, adminId);
+      } catch (err) {
+        await signingV2.recordFollowUpFailure(id, 'invitation', err);
+      }
+    }
+  }
 
   try {
     await logActivity('contract_sent', { contractId: id, signersInvited: invited }, null, await adminActor(adminId));
@@ -160,7 +196,7 @@ async function sendContract(id, adminId, { reviewToken = null } = {}) {
   await emitContractEvent(contract, 'sent');
 
   logger.info('Contract sent', { adminId, contractId: id });
-  return { pdfPath, invited };
+  return invitationFailed ? { pdfPath, invited, invitationFailed: true } : { pdfPath, invited };
 }
 module.exports = {
   renderContractPdfBuffer,

@@ -21,7 +21,7 @@ function iso(value) {
 }
 
 function renderSigningCertificate({
-  contract, signers = [], events = [], hashes = {}, chainHead = null,
+  contract, signers = [], events = [], hashes = {}, attachments = [], chainHead = null, legalNotice = null,
   locale = 'de', theme = null, issuer = {}, generatedAt = null,
 }) {
   const pdfService = require('../pdfService');
@@ -81,12 +81,26 @@ function renderSigningCertificate({
       doc.strokeColor(colors.rule).lineWidth(0.5).moveTo(left, ruleY).lineTo(left + width, ruleY).stroke();
       doc.y = ruleY + 10;
       doc.font(fonts.body).fontSize(9.5).fillColor(colors.text).text(t(locale, 'cert_intro'), left, doc.y, { width });
+      // The legal notice the contract was signed under, as frozen at send (#1446).
+      if (legalNotice) {
+        doc.moveDown(0.4);
+        doc.font(fonts.bold).fontSize(8.5).fillColor(colors.muted).text(t(locale, 'cert_legal_notice'), left, doc.y, { width });
+        doc.font(fonts.body).fontSize(8.5).fillColor(colors.text).text(legalNotice, left, doc.y, { width });
+      }
 
       heading(t(locale, 'cert_contract_section'));
       row(t(locale, 'audit_contract_number'), contract.contract_number);
       row(t(locale, 'cert_title_label'), contract.title);
       row(t(locale, 'audit_issued_at'), iso(contract.sent_at));
       row(t(locale, 'cert_content_sha'), hashes.content, { mono: true });
+      // The attachments the signature is bound to, each with its own hash,
+      // and the manifest hash over all of them (#1446).
+      attachments.forEach((a, index) => {
+        row(`${t(locale, 'cert_attachment')} ${index + 1}`,
+          `${a.name} · ${t(locale, `cert_delivery_${a.delivery === 'separate' ? 'separate' : 'merged'}`)} · ${Number(a.pages) || 0} ${t(locale, 'cert_pages')}`);
+        row(t(locale, 'cert_attachment_sha'), a.sha256, { mono: true });
+      });
+      row(t(locale, 'cert_manifest_sha'), hashes.manifest, { mono: true });
       row(t(locale, 'cert_unsigned_sha'), hashes.unsigned, { mono: true });
       row(t(locale, 'cert_signed_sha'), hashes.signed, { mono: true });
 
@@ -102,6 +116,12 @@ function renderSigningCertificate({
         row(t(locale, 'cert_method'), signer.signatureMode ? t(locale, `signature_method_${signer.signatureMode}`) : '');
         row(t(locale, 'cert_signed_at'), iso(signer.signedAt));
         row(t(locale, 'cert_document_sha'), signer.documentSha256, { mono: true });
+        // One row per declaration (#1446): key and version, the answer, and
+        // the start of the wording's hash.
+        for (const consent of signer.consents || []) {
+          row(`${t(locale, 'cert_consent')} ${consent.key} · v${consent.version}`,
+            `${t(locale, consent.accepted ? 'cert_consent_accepted' : 'cert_consent_declined')} · ${String(consent.textSha256 || '').slice(0, 16)}`);
+        }
         doc.moveDown(0.4);
       });
 

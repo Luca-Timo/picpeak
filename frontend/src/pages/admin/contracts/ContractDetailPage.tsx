@@ -29,6 +29,7 @@ import { Button, Card, Loading } from '../../../components/common';
 import { DocumentLineageCard } from '../../../components/admin/DocumentLineageCard';
 import {
   contractsService,
+  type ContractIntegrityCheck,
   type ContractStatus,
 } from '../../../services/contracts.service';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
@@ -39,6 +40,14 @@ import { SignaturePadField, type SignaturePadHandle } from '../../../components/
 import { SigningOverviewCard } from './SigningOverviewCard';
 import { PaperSignatureUploadDialog } from './PaperSignatureUploadDialog';
 import { SendReviewModal } from './SendReviewModal';
+import { contractStatusLabel, type SignerProgress } from '../../../utils/contractStatus';
+
+/** How far the customer signers have got, from the signing overview (#1446). */
+function signerProgressOf(signers: { role: string; status: string }[] | undefined): SignerProgress | null {
+  const customers = (signers || []).filter((s) => s.role === 'customer');
+  if (!customers.length) return null;
+  return { signed: customers.filter((s) => s.status === 'signed').length, total: customers.length };
+}
 
 function statusBadgeClass(status: ContractStatus): string {
   return status === 'fully_signed'         ? 'bg-green-100 text-green-800'
@@ -47,6 +56,8 @@ function statusBadgeClass(status: ContractStatus): string {
     : status === 'sent'                    ? 'bg-amber-100 text-amber-800'
     : status === 'declined'                ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'
     : status === 'cancelled'               ? 'bg-neutral-200 text-neutral-600'
+    : status === 'expired'                 ? 'bg-neutral-200 text-neutral-600'
+    : status === 'awaiting_data'           ? 'bg-amber-100 text-amber-800'
     :                                        'bg-neutral-100 text-neutral-700';
 }
 
@@ -120,11 +131,23 @@ export const ContractDetailPage: React.FC = () => {
   const legacySigning = signersQuery.isSuccess ? !isV2 : signersQuery.isError;
 
   // Send goes through the review (#1445): it opens here and sends from there.
+  // Collect-then-freeze (#1446) is chosen in the review, offered when the
+  // customer's address would print empty.
   const [reviewing, setReviewing] = useState(false);
   const sendMutation = useMutationWithToast({
-    mutationFn: (reviewToken?: string) => contractsService.send(numericId as number, reviewToken),
-    onSuccess: () => setReviewing(false),
-    successMessage: t('contracts.detail.sentToast', 'Contract sent.') as string,
+    mutationFn: ({ reviewToken, askForDetails }: { reviewToken?: string; askForDetails?: boolean }) =>
+      contractsService.send(numericId as number, { reviewToken, collectData: askForDetails === true }),
+    onSuccess: (data) => {
+      setReviewing(false);
+      // Sent, but the invitation mail failed: a warning, not an error — the
+      // send went through, and a second one would go out again.
+      if (data?.invitationFailed) {
+        toast.warn(t('contracts.detail.sentInvitationFailedToast',
+          'Sent, but the email to the signer couldn\'t go out. It is retried automatically within the hour, so don\'t send again.'));
+      } else {
+        toast.success(t('contracts.detail.sentToast', 'Contract sent.'));
+      }
+    },
     invalidateKeys: [['contract', numericId], ['contract-signers', numericId]],
     errorMessage: (err: unknown) => {
       const data = (err as { response?: { data?: { code?: string; error?: string } } })?.response?.data;
@@ -334,7 +357,7 @@ export const ContractDetailPage: React.FC = () => {
           )}
         </h1>
         <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${statusBadgeClass(c.status)}`}>
-          {t(`contracts.status.${c.status}`, c.status)}
+          {contractStatusLabel(t, c.status, signerProgressOf(signersQuery.data?.signers))}
         </span>
       </div>
 
@@ -356,7 +379,17 @@ export const ContractDetailPage: React.FC = () => {
             </Button>
           </>
         )}
-        {(c.status === 'draft' || c.status === 'sent') && (
+        {c.status === 'awaiting_data' && (c.dataCollectedAt ? (
+          <Button onClick={() => sendMutation.mutate({})} disabled={sendMutation.isPending}>
+            <Send className="w-4 h-4 mr-1" />
+            {t('contracts.detail.finishSending', 'Finish sending with the customer\'s details')}
+          </Button>
+        ) : (
+          <span className="self-center text-sm text-neutral-600 dark:text-neutral-400">
+            {t('contracts.detail.waitingForDetails', 'Waiting for the customer to complete their details. The contract is prepared and sent to the other signers once they have.')}
+          </span>
+        ))}
+        {(c.status === 'draft' || c.status === 'sent' || c.status === 'awaiting_data') && (
           <Button
             variant="outline"
             onClick={() => {
@@ -756,7 +789,8 @@ export const ContractDetailPage: React.FC = () => {
         <SendReviewModal
           contractId={numericId}
           onClose={() => setReviewing(false)}
-          onSend={(reviewToken) => sendMutation.mutate(reviewToken)}
+          customerAddressMissing={!!c.customerAddressMissing}
+          onSend={(reviewToken, askForDetails) => sendMutation.mutate({ reviewToken, askForDetails })}
           onPreviewPdf={handlePdfPreview}
           sending={sendMutation.isPending}
         />
@@ -766,18 +800,16 @@ export const ContractDetailPage: React.FC = () => {
 };
 
 /**
- * Re-hashes the unsigned + signed PDFs on disk and compares each to
- * the SHA-256 column persisted at write time (migration 131). The
- * customer already has both expected hashes via the audit-certificate
- * attached to their signing emails; this card is the admin-side
- * equivalent so they don't have to drop to a shell to run
- * `shasum -a 256`.
+ * The integrity report (#1446): every artefact re-read and re-hashed — both
+ * PDFs, the certificate, each signature image, the frozen content, every
+ * attachment, the manifest, the signing log, and the completed document —
+ * each against the value recorded when it was made. Itemised, so the check
+ * that fails says which artefact changed; also downloadable as a PDF.
  *
- * The query is lazy: we don't auto-fire on mount because re-hashing
- * does file I/O on the server, and most page views don't need it.
- * Admin clicks "Verify" to trigger the check.
+ * The query is lazy: re-hashing does file I/O on the server, and most page
+ * views don't need it. The admin clicks "Verify".
  */
-const IntegrityCheckCard: React.FC<{ contractId: number }> = ({ contractId }) => {
+export const IntegrityCheckCard: React.FC<{ contractId: number }> = ({ contractId }) => {
   const { t } = useTranslation();
   const { data, isFetching, refetch, isSuccess, error } = useQuery({
     queryKey: ['contract-integrity', contractId],
@@ -787,66 +819,41 @@ const IntegrityCheckCard: React.FC<{ contractId: number }> = ({ contractId }) =>
     gcTime: 0,
   });
 
-  const renderLeg = (legKey: 'unsigned' | 'signed') => {
-    if (!data) return null;
-    const leg = data[legKey];
-    const titleKey = legKey === 'unsigned'
-      ? 'contracts.detail.integrity.unsignedTitle'
-      : 'contracts.detail.integrity.signedTitle';
-    const titleFallback = legKey === 'unsigned' ? 'Unsigned PDF' : 'Signed PDF';
-    let badge: React.ReactNode;
-    if (!leg.path) {
-      badge = (
-        <span className="inline-flex items-center gap-1 text-xs text-neutral-500">
-          {t('contracts.detail.integrity.notIssued', 'Not yet issued')}
-        </span>
-      );
-    } else if (!leg.present) {
-      badge = (
-        <span className="inline-flex items-center gap-1 text-xs text-red-700 dark:text-red-300">
-          <XCircle className="w-3.5 h-3.5" />
-          {t('contracts.detail.integrity.missing', 'File missing from disk')}
-        </span>
-      );
-    } else if (leg.match) {
-      badge = (
-        <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-300">
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          {t('contracts.detail.integrity.match', 'Hash matches')}
-        </span>
-      );
-    } else {
-      badge = (
-        <span className="inline-flex items-center gap-1 text-xs text-red-700 dark:text-red-300">
-          <XCircle className="w-3.5 h-3.5" />
-          {t('contracts.detail.integrity.mismatch', 'Hash mismatch — file altered')}
-        </span>
-      );
+  async function downloadPdf() {
+    const w = window.open('about:blank', '_blank');
+    if (!w) {
+      toast.error(t('contracts.detail.popupBlocked', 'Allow pop-ups for this site to preview the PDF.') as string);
+      return;
     }
-    return (
-      <div className="border border-neutral-200 dark:border-neutral-700 rounded p-3 space-y-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-medium">{t(titleKey, titleFallback)}</span>
-          {badge}
-        </div>
-        {leg.path && (
-          <p className="text-[11px] text-neutral-500 font-mono break-all" title={leg.path}>
-            {leg.path}
-          </p>
-        )}
-        {(leg.expected || leg.actual) && (
-          <dl className="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-0.5 text-[11px] font-mono">
-            <dt className="text-neutral-500">{t('contracts.detail.integrity.expected', 'expected')}</dt>
-            <dd className="break-all">{leg.expected || '—'}</dd>
-            <dt className="text-neutral-500">{t('contracts.detail.integrity.actual', 'actual')}</dt>
-            <dd className={leg.match ? 'break-all' : 'break-all text-red-700 dark:text-red-300'}>
-              {leg.actual || '—'}
-            </dd>
-          </dl>
-        )}
-      </div>
-    );
-  };
+    try {
+      w.location.href = await contractsService.integrityReportUrl(contractId);
+    } catch {
+      w.close();
+      toast.error(t('contracts.detail.integrity.error', 'Integrity check failed.') as string);
+    }
+  }
+
+  // A failed check without both hashes is an artefact that is gone, not
+  // one that was altered.
+  const isMissing = (c: ContractIntegrityCheck) => c.ok === false && !(c.expected && c.actual);
+  const verdict = (c: ContractIntegrityCheck) => (c.ok === true ? (
+    <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-300">
+      <CheckCircle2 className="w-3.5 h-3.5" />
+      {t('contracts.detail.integrity.match', 'Hash matches')}
+    </span>
+  ) : isMissing(c) ? (
+    <span className="inline-flex items-center gap-1 text-xs text-red-700 dark:text-red-300">
+      <XCircle className="w-3.5 h-3.5" />
+      {t('contracts.detail.integrity.missingArtefact', 'Missing — the file (or record) is gone')}
+    </span>
+  ) : c.ok === false ? (
+    <span className="inline-flex items-center gap-1 text-xs text-red-700 dark:text-red-300">
+      <XCircle className="w-3.5 h-3.5" />
+      {t('contracts.detail.integrity.mismatch', 'Hash mismatch — file altered')}
+    </span>
+  ) : (
+    <span className="text-xs text-neutral-500">{t('contracts.detail.integrity.notCheckable', 'Not checkable')}</span>
+  ));
 
   return (
     <Card padding="lg" className="mt-4">
@@ -855,32 +862,63 @@ const IntegrityCheckCard: React.FC<{ contractId: number }> = ({ contractId }) =>
           <ShieldCheck className="w-4 h-4" />
           {t('contracts.detail.integrity.title', 'PDF integrity check')}
         </h2>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-          isLoading={isFetching}
-        >
-          {isSuccess
-            ? t('contracts.detail.integrity.reverify', 'Re-verify')
-            : t('contracts.detail.integrity.verify', 'Verify')}
-        </Button>
+        <div className="flex gap-2">
+          {data && (
+            <Button variant="outline" size="sm" onClick={downloadPdf}>
+              <FileDown className="w-4 h-4 mr-1" />
+              {t('contracts.detail.integrity.downloadPdf', 'Report as PDF')}
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            isLoading={isFetching}
+          >
+            {isSuccess
+              ? t('contracts.detail.integrity.reverify', 'Re-verify')
+              : t('contracts.detail.integrity.verify', 'Verify')}
+          </Button>
+        </div>
       </div>
       <p className="text-xs text-neutral-500 mb-3">
-        {t('contracts.detail.integrity.help',
-          'Re-hashes the unsigned + signed PDFs on disk and compares them to the SHA-256 stored when the document was issued. Catches backup corruption or manual edits since the customer received their copy.')}
+        {t('contracts.detail.integrity.helpReport',
+          'Re-reads every file of this contract — both PDFs, the signing certificate, each signature image and attachment — and re-checks the frozen content, the attachment list and the signing log against what was recorded when each was made. A mismatch names the item that changed.')}
       </p>
       {error && (
         <p className="text-sm text-red-700 dark:text-red-300">
           {t('contracts.detail.integrity.error', 'Integrity check failed.')}
         </p>
       )}
-      {data && (
-        <div className="space-y-2">
-          {renderLeg('unsigned')}
-          {renderLeg('signed')}
-        </div>
+      {data && data.checks && (
+        <>
+          <p className={`text-sm font-medium mb-2 ${data.ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+            {data.ok
+              ? t('contracts.detail.integrity.allOk', 'Every check passed.')
+              : t('contracts.detail.integrity.someFailed', 'At least one check failed.')}
+          </p>
+          <ul className="space-y-2">
+            {data.checks.map((c, index) => (
+              <li key={`${c.check}-${index}`} className="border border-neutral-200 dark:border-neutral-700 rounded p-3 space-y-1">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-sm font-medium">
+                    {t(`contracts.detail.integrity.check.${c.check}`, c.check)}
+                    {c.subject && <span className="ml-1 font-normal text-neutral-500">· {c.subject}</span>}
+                  </span>
+                  {verdict(c)}
+                </div>
+                {c.note && c.note !== 'missing' && <p className="text-[11px] text-neutral-500">{c.note}</p>}
+                <dl className="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-0.5 text-[11px] font-mono">
+                  <dt className="text-neutral-500">{t('contracts.detail.integrity.expected', 'expected')}</dt>
+                  <dd className="break-all">{c.expected || '—'}</dd>
+                  <dt className="text-neutral-500">{t('contracts.detail.integrity.actual', 'actual')}</dt>
+                  <dd className={c.ok === false ? 'break-all text-red-700 dark:text-red-300' : 'break-all'}>{c.actual || '—'}</dd>
+                </dl>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </Card>
   );

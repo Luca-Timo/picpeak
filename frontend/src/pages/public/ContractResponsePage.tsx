@@ -31,6 +31,7 @@ import { usePublicDarkMode } from '../../hooks/usePublicDarkMode';
 import { DocumentVerificationStep } from '../../components/public/DocumentVerificationStep';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { SignaturePadField, type SignaturePadHandle } from '../../components/contracts/SignaturePadField';
+import { formatMoneyMinor } from '../../utils/money';
 import { CONTRACT_CARD as CARD, ContractBody, SECTION_LABELS } from '../../components/contracts/ContractBody';
 import { OtpVerifyStep } from '../../components/contracts/OtpVerifyStep';
 import {
@@ -151,6 +152,14 @@ const LinkGone: React.FC<{ code: string | undefined; issuer?: IssuerHeader | nul
           issuer={issuer}
           title={t('contractSigning.gone.expiredTitle', 'This link has expired')}
           body={t('contractSigning.gone.expiredBody', 'Ask the sender to send you a new signing link.')}
+        />
+      );
+    case 'CONTRACT_EXPIRED':
+      return (
+        <MessagePage
+          issuer={issuer}
+          title={t('contractSigning.gone.contractExpiredTitle', 'The time to sign has run out')}
+          body={t('contractSigning.gone.contractExpiredBody', 'This contract can no longer be signed. Ask the sender for a new one if you still want to go ahead.')}
         />
       );
     case 'CONTRACT_WITHDRAWN':
@@ -308,6 +317,19 @@ const SigningFlow: React.FC<SigningFlowProps> = ({ scope, token, invite, onLinkE
     return <LoadProblem issuer={invite?.issuer} onRetry={() => { viewQuery.refetch(); }} />;
   }
 
+  // The customer's details come first (#1446): a form, and nothing of the
+  // contract until it has been prepared with them.
+  if (viewQuery.data.contract.status === 'awaiting_data' && viewQuery.data.contract.dataRequest) {
+    return (
+      <DetailsForm
+        sessionToken={session.sessionToken}
+        contract={viewQuery.data.contract}
+        onSessionInvalid={dropSession}
+        onRefresh={() => viewQuery.refetch()}
+      />
+    );
+  }
+
   return (
     <SigningContractView
       scope={scope}
@@ -316,6 +338,133 @@ const SigningFlow: React.FC<SigningFlowProps> = ({ scope, token, invite, onLinkE
       onSessionInvalid={dropSession}
       onRefresh={() => viewQuery.refetch()}
     />
+  );
+};
+
+const DETAIL_LABELS: Record<string, { key: string; fallback: string; autoComplete: string }> = {
+  address_line1: { key: 'contractSigning.details.fields.address_line1', fallback: 'Street and number', autoComplete: 'address-line1' },
+  address_line2: { key: 'contractSigning.details.fields.address_line2', fallback: 'Address line 2', autoComplete: 'address-line2' },
+  postal_code: { key: 'contractSigning.details.fields.postal_code', fallback: 'Postal code', autoComplete: 'postal-code' },
+  city: { key: 'contractSigning.details.fields.city', fallback: 'City', autoComplete: 'address-level2' },
+  country_code: { key: 'contractSigning.details.fields.country_code', fallback: 'Country (two-letter code, e.g. CH)', autoComplete: 'country' },
+  company_name: { key: 'contractSigning.details.fields.company_name', fallback: 'Company', autoComplete: 'organization' },
+  vat_id: { key: 'contractSigning.details.fields.vat_id', fallback: 'VAT number', autoComplete: 'off' },
+  phone: { key: 'contractSigning.details.fields.phone', fallback: 'Phone', autoComplete: 'tel' },
+};
+
+/**
+ * Collect-then-freeze (#1446): the first signer completes their details.
+ * The contract is prepared with them on submit, and the same session then
+ * opens it for review. No contract content is shown here.
+ */
+const DetailsForm: React.FC<{
+  sessionToken: string;
+  contract: SigningSessionContract;
+  onSessionInvalid: () => void;
+  onRefresh: () => Promise<unknown>;
+}> = ({ sessionToken, contract: c, onSessionInvalid, onRefresh }) => {
+  const { t } = useTranslation();
+  const request = c.dataRequest as NonNullable<SigningSessionContract['dataRequest']>;
+  const [values, setValues] = useState<Record<string, string>>(() => ({ ...request.values }));
+  const [invalid, setInvalid] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  // The server's word wins: a refresh after a lost response may say the
+  // details already arrived.
+  const [saved, setPending] = useState(false);
+  const pending = saved || request.submitted;
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { heading.current?.focus(); }, [pending]);
+
+  const submit = useMutation({
+    mutationFn: () => publicContractSigningService.submitDetails(sessionToken, values),
+    onSuccess: async (result) => {
+      setError(null);
+      if (result.frozen) await onRefresh();
+      else setPending(true);
+    },
+    onError: async (err: unknown) => {
+      if (isSessionInvalid(err)) {
+        onSessionInvalid();
+        return;
+      }
+      const code = signingErrorCode(err);
+      if (code === 'DETAILS_INVALID') {
+        const fields = ((err as { response?: { data?: { details?: { fields?: string[] } } } })?.response?.data?.details?.fields) || [];
+        setInvalid(fields);
+        setError(t('contractSigning.details.invalid', 'Check the highlighted details.'));
+        return;
+      }
+      if (code === 'DATA_ALREADY_SUBMITTED' || code === 'DATA_NOT_REQUESTED') {
+        await onRefresh();
+        return;
+      }
+      // No status: we can't say whether it arrived — ask the server.
+      if (!signingErrorStatus(err)) {
+        await onRefresh();
+        setError(t('contractSigning.details.uncertain', 'We couldn\'t confirm that your details arrived. Check the page again before sending them a second time.'));
+        return;
+      }
+      setError(t('contractSigning.details.error', 'Your details couldn\'t be saved. Try again in a moment.'));
+    },
+  });
+
+  if (pending) {
+    return (
+      <MessagePage
+        issuer={c.issuer}
+        title={t('contractSigning.details.savedTitle', 'Your details are saved')}
+        body={t('contractSigning.details.savedBody', 'You\'ll receive a new email as soon as the contract is ready.')}
+      />
+    );
+  }
+
+  return (
+    <PageShell issuer={c.issuer}>
+      <div className={CARD}>
+        <h1 ref={heading} tabIndex={-1} className="text-2xl font-bold mb-1 focus:outline-none">
+          {t('contractSigning.details.title', 'Your details for contract {{number}}', { number: c.contractNumber })}
+        </h1>
+        <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+          {t('contractSigning.details.intro', 'The contract is prepared with these details once you send them; then you can read and sign it right here.')}
+        </p>
+        <form
+          noValidate
+          className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+          onSubmit={(e) => { e.preventDefault(); setInvalid([]); submit.mutate(); }}
+        >
+          {request.fields.map((field) => {
+            const label = DETAIL_LABELS[field] || { key: field, fallback: field, autoComplete: 'off' };
+            const required = request.required.includes(field);
+            const bad = invalid.includes(field);
+            return (
+              <div key={field} className={field === 'address_line1' || field === 'address_line2' ? 'sm:col-span-2' : ''}>
+                <label htmlFor={`contract-details-${field}`} className="block text-sm font-medium mb-1">
+                  {t(label.key, label.fallback)}
+                  {required && <span className="text-neutral-500 dark:text-neutral-400"> {t('contractSigning.consents.required', '(required)')}</span>}
+                </label>
+                <input
+                  id={`contract-details-${field}`}
+                  className={`${INPUT} ${bad ? 'border-red-500 dark:border-red-400' : ''}`}
+                  value={values[field] || ''}
+                  autoComplete={label.autoComplete}
+                  required={required}
+                  aria-invalid={bad || undefined}
+                  onChange={(e) => setValues((cur) => ({ ...cur, [field]: e.target.value }))}
+                />
+              </div>
+            );
+          })}
+          {error && <p role="alert" className="sm:col-span-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+          <div className="sm:col-span-2 flex justify-end">
+            <button type="submit" disabled={submit.isPending} className={PRIMARY_BUTTON}>
+              {submit.isPending
+                ? t('contractSigning.details.sending', 'Preparing the contract…')
+                : t('contractSigning.details.submit', 'Save my details and prepare the contract')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </PageShell>
   );
 };
 
@@ -341,7 +490,23 @@ const SigningContractView: React.FC<SigningContractViewProps> = ({
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
+  // Reading and signing are two steps (#1446): the contract first, with no
+  // input fields, then a compact summary and the signature.
+  const [step, setStep] = useState<'review' | 'sign'>('review');
+  const [otherOptions, setOtherOptions] = useState(false);
+  const stepHeading = useRef<HTMLHeadingElement>(null);
+  const stepChanged = useRef(false);
   const signing = c.signing;
+
+  // Keyboard and screen-reader users land on the new step's heading.
+  useEffect(() => {
+    if (!stepChanged.current) return;
+    stepHeading.current?.focus();
+  }, [step]);
+  const goTo = (next: 'review' | 'sign') => {
+    stepChanged.current = true;
+    setStep(next);
+  };
 
   async function download(key: string, fetcher: () => Promise<Blob>, fileName: string) {
     setDownloading(key);
@@ -370,6 +535,68 @@ const SigningContractView: React.FC<SigningContractViewProps> = ({
   const declined = outcome?.kind === 'declined' || signing.status === 'declined';
   const signedByMe = outcome?.kind === 'signed' || signing.status === 'signed';
   const declinedByOther = !declined && c.status === 'declined';
+  const signable = signing.canSign && !outcome;
+
+  if (signable && step === 'sign') {
+    return (
+      <PageShell issuer={c.issuer}>
+        <div className={CARD}>
+          <h1 ref={stepHeading} tabIndex={-1} className="text-2xl font-bold mb-1 focus:outline-none">
+            {t('contractSigning.sign.stepTitle', 'Sign contract no. {{number}}', { number: c.contractNumber })}
+          </h1>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+            {t('contractSigning.sign.stepIntro', 'You are signing exactly the contract you just read. Check the summary, confirm the declarations and sign.')}
+          </p>
+          <SigningSummary contract={c} />
+          <SignForm
+            scope={scope}
+            sessionToken={sessionToken}
+            contract={c}
+            onSigned={(signedAt) => { setOutcome({ kind: 'signed', signedAt }); onRefresh(); }}
+            onAlreadySigned={onRefresh}
+            onSessionInvalid={onSessionInvalid}
+            onRefresh={onRefresh}
+          />
+          <div className="mt-6 pt-4 border-t border-neutral-200 dark:border-neutral-700 flex flex-wrap items-center justify-between gap-2">
+            <button type="button" onClick={() => goTo('review')} className={SECONDARY_BUTTON}>
+              {t('contractSigning.sign.back', 'Back to the contract')}
+            </button>
+            {(c.allowPdfUpload || signing.canDecline) && (
+              <button
+                type="button"
+                aria-expanded={otherOptions}
+                aria-controls="contract-signing-other-options"
+                onClick={() => setOtherOptions((open) => !open)}
+                className="text-sm underline text-neutral-700 dark:text-neutral-300"
+              >
+                {t('contractSigning.sign.otherOptions', 'Other options')}
+              </button>
+            )}
+          </div>
+          {otherOptions && (
+            <div id="contract-signing-other-options">
+              {c.allowPdfUpload && (
+                <WetUpload
+                  sessionToken={sessionToken}
+                  onUploaded={() => setOutcome({ kind: 'uploaded' })}
+                  onSessionInvalid={onSessionInvalid}
+                />
+              )}
+              {signing.canDecline && (
+                <DeclinePanel
+                  sessionToken={sessionToken}
+                  onDeclined={() => setOutcome({ kind: 'declined' })}
+                  onSessionInvalid={onSessionInvalid}
+                  onRefresh={onRefresh}
+                />
+              )}
+            </div>
+          )}
+        </div>
+        <LegalFooter notice={c.legalNotice} />
+      </PageShell>
+    );
+  }
 
   let action: React.ReactNode;
   if (outcome?.kind === 'uploaded') {
@@ -423,34 +650,19 @@ const SigningContractView: React.FC<SigningContractViewProps> = ({
         </div>
       </div>
     );
-  } else if (signing.canSign) {
+  } else if (signable) {
     action = (
-      <>
-        <SignForm
-          scope={scope}
-          sessionToken={sessionToken}
-          contract={c}
-          onSigned={(signedAt) => { setOutcome({ kind: 'signed', signedAt }); onRefresh(); }}
-          onAlreadySigned={onRefresh}
-          onSessionInvalid={onSessionInvalid}
-          onRefresh={onRefresh}
-        />
-        {c.allowPdfUpload && (
-          <WetUpload
-            sessionToken={sessionToken}
-            onUploaded={() => setOutcome({ kind: 'uploaded' })}
-            onSessionInvalid={onSessionInvalid}
-          />
-        )}
-        {signing.canDecline && (
-          <DeclinePanel
-            sessionToken={sessionToken}
-            onDeclined={() => setOutcome({ kind: 'declined' })}
-            onSessionInvalid={onSessionInvalid}
-            onRefresh={onRefresh}
-          />
-        )}
-      </>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">{t('contractSigning.review.readyTitle', 'Read everything?')}</h2>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
+            {t('contractSigning.review.readyBody', 'Next you confirm the declarations and sign. Nothing is signed until you press the final button.')}
+          </p>
+        </div>
+        <button type="button" onClick={() => goTo('sign')} className={PRIMARY_BUTTON}>
+          {t('contractSigning.review.continue', 'Continue to signing')}
+        </button>
+      </div>
     );
   } else {
     action = (
@@ -463,8 +675,15 @@ const SigningContractView: React.FC<SigningContractViewProps> = ({
     );
   }
 
+  const manifestHash = (attachmentId: number) => c.manifest?.attachments.find((m) => m.attachmentId === attachmentId)?.sha256;
+
   return (
     <PageShell issuer={c.issuer}>
+      {signable && (
+        <p ref={stepHeading} tabIndex={-1} className="text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-3 focus:outline-none">
+          {t('contractSigning.review.step', 'Step 1 of 2 — read the contract')}
+        </p>
+      )}
       <ContractBody contract={c} />
 
       <div className={`mt-6 ${CARD}`}>
@@ -486,7 +705,14 @@ const SigningContractView: React.FC<SigningContractViewProps> = ({
             <ul className="space-y-2 text-sm">
               {c.attachments.map((a) => (
                 <li key={a.id} className="flex flex-wrap items-center gap-3">
-                  <span className="font-medium flex-1 min-w-[160px]">{a.name}</span>
+                  <span className="font-medium flex-1 min-w-[160px]">
+                    {a.name}
+                    {manifestHash(a.id) && (
+                      <span className="block text-xs font-normal font-mono text-neutral-500 dark:text-neutral-400" title={manifestHash(a.id)}>
+                        SHA-256 {manifestHash(a.id)?.slice(0, 16)}…
+                      </span>
+                    )}
+                  </span>
                   {a.delivery === 'separate' ? (
                     <button
                       type="button"
@@ -517,7 +743,46 @@ const SigningContractView: React.FC<SigningContractViewProps> = ({
       <SignerProgress contract={c} />
 
       <div className={`mt-6 ${CARD}`}>{action}</div>
+      <LegalFooter notice={c.legalNotice} />
     </PageShell>
+  );
+};
+
+/** The legal notice the contract is signed under, as frozen at send (#1446). */
+const LegalFooter: React.FC<{ notice?: string | null }> = ({ notice }) => {
+  const { t } = useTranslation();
+  if (!notice) return null;
+  return (
+    <footer className="mt-6 text-xs text-neutral-500 dark:text-neutral-400">
+      <p className="font-medium">{t('contractSigning.legalNotice.title', 'Legal notice')}</p>
+      <p className="whitespace-pre-line">{notice}</p>
+    </footer>
+  );
+};
+
+/** What is about to be signed, in one glance (#1446). */
+const SigningSummary: React.FC<{ contract: SigningSessionContract }> = ({ contract: c }) => {
+  const { t } = useTranslation();
+  const customers = c.signing.signers.filter((s) => s.role === 'customer').map((s) => s.name).filter(Boolean);
+  const total = c.commercial ? formatMoneyMinor(c.commercial.totals.grossMinor, c.commercial.currency) : null;
+  const row = (label: string, value: React.ReactNode) => (
+    <>
+      <dt className="text-neutral-500 dark:text-neutral-400">{label}</dt>
+      <dd className="text-neutral-900 dark:text-neutral-100 break-words">{value}</dd>
+    </>
+  );
+  return (
+    <dl className="grid grid-cols-1 sm:grid-cols-[11rem_1fr] gap-x-3 gap-y-1 text-sm mb-6 p-4 rounded-md bg-neutral-50 dark:bg-neutral-900/40 border border-neutral-200 dark:border-neutral-700">
+      {row(t('contractSigning.summary.number', 'Contract'), <span className="font-mono">{c.contractNumber}</span>)}
+      {c.title && row(t('contractSigning.summary.title', 'Title'), c.title)}
+      {row(t('contractSigning.summary.parties', 'Parties'), [c.issuer?.companyName, ...customers].filter(Boolean).join(' · '))}
+      {total && row(t('contractSigning.summary.total', 'Total'), <span className="font-semibold">{total}</span>)}
+      {row(t('contractSigning.summary.attachments', 'Attachments'), String(c.manifest ? c.manifest.attachments.length : c.attachments.length))}
+      {c.contentSha256 && row(
+        t('contractSigning.summary.hash', 'Content fingerprint (SHA-256)'),
+        <span className="font-mono text-xs" title={c.contentSha256}>{c.contentSha256.slice(0, 16)}…</span>,
+      )}
+    </dl>
   );
 };
 
@@ -574,25 +839,45 @@ const SignedResult: React.FC<{
 }> = ({ contract: c, signedAt, onDownload, downloading }) => {
   const { t } = useTranslation();
   const { formatDateTime } = useLocalizedDate();
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { heading.current?.focus(); }, []);
+  const business = c.issuer?.companyName || t('contractSigning.result.theSender', 'The sender');
   const next = c.status === 'fully_signed'
     ? t('contractSigning.result.complete', 'Everyone has signed — the contract is complete.')
     : c.status === 'signed_by_customer'
-      ? t('contractSigning.result.issuerNext', 'Everyone has signed. The contract is now counter-signed, and you\'ll get the final PDF by email.')
+      ? t('contractSigning.result.countersignNext', '{{business}} will countersign; you\'ll get the final copy and its signing certificate by email.', { business })
       : t('contractSigning.result.othersPending', 'The contract is complete once everyone has signed. We\'ll email you the final PDF then.');
+  const viaPortal = c.signing.verifiedVia === 'portal';
   return (
     <div className="text-center py-2">
       <CheckCircle className="w-12 h-12 mx-auto text-green-600 dark:text-green-400 mb-3" />
-      <h2 className="text-lg font-semibold">{t('contractSigning.result.title', 'Thank you — you have signed the contract.')}</h2>
+      <h2 ref={heading} tabIndex={-1} className="text-lg font-semibold focus:outline-none">
+        {t('contractSigning.result.title', 'Thank you — you have signed the contract.')}
+      </h2>
       {signedAt && (
         <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
           {t('contractSigning.result.signedAt', 'Signed on {{date}}', { date: formatDateTime(signedAt) })}
         </p>
       )}
       <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">{next}</p>
-      <button type="button" onClick={onDownload} disabled={downloading} className={`${PRIMARY_BUTTON} mt-4 inline-flex items-center gap-2`}>
-        <Download className="w-4 h-4" />
-        {t('publicContract.download', 'Download PDF')}
-      </button>
+      <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
+        {t('contractSigning.result.confirmationSent', 'We have sent you a confirmation by email.')}
+      </p>
+      <div className="mt-4 flex flex-wrap justify-center gap-2">
+        <button type="button" onClick={onDownload} disabled={downloading} className={`${PRIMARY_BUTTON} inline-flex items-center gap-2`}>
+          <Download className="w-4 h-4" />
+          {t('publicContract.download', 'Download PDF')}
+        </button>
+        {/* The certificate exists once the contract is complete. Completion
+            ends every signing session, so it is downloaded from the portal
+            (or arrives by email) rather than from this page. */}
+        {viaPortal && (
+          <Link to="/customer/contracts" className={`${SECONDARY_BUTTON} inline-flex`}>
+            <ShieldCheck className="w-4 h-4" />
+            {t('contractSigning.result.portalCertificate', 'Your contracts and certificates')}
+          </Link>
+        )}
+      </div>
     </div>
   );
 };
@@ -617,6 +902,12 @@ const SignForm: React.FC<SignFormProps> = ({
   const [name, setName] = useState(draft?.name || c.signing.name || '');
   const [mode, setMode] = useState<SignatureMode>(draft?.mode || 'drawn');
   const [accepted, setAccepted] = useState(false);
+  // The declarations frozen at send (#1446), each ticked on its own and
+  // never pre-ticked. A contract sent before they existed has none and
+  // keeps the single confirmation above.
+  const declarations = c.consents && c.consents.length ? c.consents : null;
+  const [answers, setAnswers] = useState<Record<string, boolean>>({});
+  const missingRequired = declarations ? declarations.filter((d) => d.required && !answers[d.key]) : [];
   const [error, setError] = useState<string | null>(null);
   // A submission whose response never arrived: we cannot say whether it
   // landed, so the page asks the server instead of inviting a blind retry.
@@ -641,6 +932,10 @@ const SignForm: React.FC<SignFormProps> = ({
         return t('contractSigning.sign.errors.notYourTurn', 'Another signer has to sign first. We\'ll email you when it\'s your turn.');
       case 'CONTRACT_NOT_SIGNABLE':
         return t('contractSigning.sign.errors.notSignable', 'This contract can no longer be signed — it may have been withdrawn or declined. Contact the sender if you have questions.');
+      case 'CONTRACT_CHANGED':
+        return t('contractSigning.sign.errors.changed', 'This contract changed after it was sent, so it can\'t be signed. Contact the sender.');
+      case 'CONTRACT_EXPIRED':
+        return t('contractSigning.sign.errors.expired', 'The time to sign this contract has run out. Ask the sender for a new one.');
       case 'SIGNATURE_REQUIRED':
         return requireDrawn
           ? t('publicContract.errorSignatureRequired', 'A drawn signature is required for this contract.')
@@ -649,6 +944,9 @@ const SignForm: React.FC<SignFormProps> = ({
         return t('contractSigning.sign.errors.tooLarge', 'Your drawn signature is too large to save. Clear it and draw it again.');
       case 'TOS_REQUIRED':
         return t('publicContract.errorAccept', 'Please tick the acceptance box.');
+      case 'CONSENT_REQUIRED':
+      case 'CONSENT_UNKNOWN':
+        return t('contractSigning.consents.missing', 'Tick every required declaration to sign.');
       case 'NAME_REQUIRED':
         return t('publicContract.errorName', 'Please enter your name.');
       default:
@@ -665,7 +963,9 @@ const SignForm: React.FC<SignFormProps> = ({
       name: name.trim(),
       mode: effectiveMode,
       signatureDataUrl: effectiveMode === 'drawn' ? signatureDataUrl : null,
-      accepted: true,
+      ...(declarations
+        ? { consents: declarations.map((d) => ({ key: d.key, accepted: answers[d.key] === true })) }
+        : { accepted: true as const }),
       idempotencyKey: signingIdempotencyKey(scope),
     }),
     onSuccess: (result) => {
@@ -731,8 +1031,10 @@ const SignForm: React.FC<SignFormProps> = ({
         : t('contractSigning.sign.errors.drawOrType', 'Draw your signature in the box, or switch to typing your name.'));
       return;
     }
-    if (!accepted) {
-      setError(t('publicContract.errorAccept', 'Please tick the acceptance box.'));
+    if (declarations ? missingRequired.length > 0 : !accepted) {
+      setError(declarations
+        ? t('contractSigning.consents.missing', 'Tick every required declaration to sign.')
+        : t('publicContract.errorAccept', 'Please tick the acceptance box.'));
       return;
     }
     setError(null);
@@ -755,7 +1057,6 @@ const SignForm: React.FC<SignFormProps> = ({
 
   return (
     <>
-      <h2 className="text-lg font-semibold mb-3">{t('publicContract.signTitle', 'Sign this contract')}</h2>
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         <div>
           <label htmlFor="contract-signing-name" className="block text-sm font-medium mb-1">
@@ -801,15 +1102,48 @@ const SignForm: React.FC<SignFormProps> = ({
           </div>
         )}
 
-        <label className="flex items-start gap-2 text-sm text-neutral-700 dark:text-neutral-300">
-          <input
-            type="checkbox"
-            checked={accepted}
-            onChange={(e) => setAccepted(e.target.checked)}
-            className="mt-1"
-          />
-          <span>{t('publicContract.acceptCheckbox', 'I have read this contract and agree to be bound by its terms.')}</span>
-        </label>
+        {declarations ? (
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium mb-1">
+              {t('contractSigning.consents.legend', 'Your declarations')}
+            </legend>
+            {declarations.map((d) => (
+              <label key={d.key} className="flex items-start gap-2 text-sm text-neutral-700 dark:text-neutral-300">
+                <input
+                  type="checkbox"
+                  checked={answers[d.key] === true}
+                  onChange={(e) => setAnswers((cur) => ({ ...cur, [d.key]: e.target.checked }))}
+                  aria-required={d.required}
+                  className="mt-1"
+                />
+                <span>
+                  {d.text}
+                  {' '}
+                  <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                    {d.required
+                      ? t('contractSigning.consents.required', '(required)')
+                      : t('contractSigning.consents.optional', '(optional)')}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        ) : (
+          <label className="flex items-start gap-2 text-sm text-neutral-700 dark:text-neutral-300">
+            <input
+              type="checkbox"
+              checked={accepted}
+              onChange={(e) => setAccepted(e.target.checked)}
+              className="mt-1"
+            />
+            <span>{t('publicContract.acceptCheckbox', 'I have read this contract and agree to be bound by its terms.')}</span>
+          </label>
+        )}
+        {declarations && missingRequired.length > 0 && (
+          <p id="contract-signing-consents-missing" className="text-xs text-neutral-600 dark:text-neutral-400">
+            {t('contractSigning.consents.missing', 'Tick every required declaration to sign.')}
+          </p>
+        )}
 
         {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
@@ -847,10 +1181,15 @@ const SignForm: React.FC<SignFormProps> = ({
           </div>
         ) : (
           <div className="flex justify-end">
-            <button type="submit" disabled={signMutation.isPending} className={PRIMARY_BUTTON}>
+            <button
+              type="submit"
+              disabled={signMutation.isPending || missingRequired.length > 0}
+              aria-describedby={missingRequired.length > 0 ? 'contract-signing-consents-missing' : undefined}
+              className={PRIMARY_BUTTON}
+            >
               {signMutation.isPending
                 ? t('contractSigning.sign.submitting', 'Signing…')
-                : t('publicContract.submit', 'Sign contract')}
+                : t('contractSigning.sign.submitBinding', 'Sign contract no. {{number}} bindingly', { number: c.contractNumber })}
             </button>
           </div>
         )}

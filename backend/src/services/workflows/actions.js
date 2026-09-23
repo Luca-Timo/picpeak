@@ -345,6 +345,63 @@ registry.registerAction('prepare_invoice', async (ctx) => {
   return { invoice_prepared: invoiceIds };
 });
 
+// Prepare DRAFT invoice(s) from a COMPLETED contract (#1446) — the post-sign
+// step of the built-in "Contract completed" flow, which puts an admin
+// approval gate in front of it. Refuses anything but a fully signed contract
+// (convertToInvoiceOnly does), creates the invoices on hold, and adopts the
+// ones an earlier run made instead of making them twice. A failure is on the
+// run AND on the contract (recordFollowUpFailure), where the admin looks.
+/** Link a quote-backed contract's unlinked invoices to it; returns how many. */
+async function linkQuoteInvoices(db, contractId) {
+  const contract = await db('contracts').where({ id: contractId }).first('source_quote_id');
+  if (!contract || !contract.source_quote_id) return 0;
+  const quote = await db('quotes').where({ id: contract.source_quote_id }).first('converted_contract_id');
+  // Only a quote this contract was made from: its invoices came through it.
+  if (!quote || Number(quote.converted_contract_id) !== Number(contractId)) return 0;
+  const { auditedUpdate } = require('../accountingHistory');
+  return auditedUpdate(db, 'invoices',
+    (q) => q.where({ source_quote_id: contract.source_quote_id }).whereNull('source_contract_id'),
+    { source_contract_id: contractId },
+    { actor: null, source: 'contract.convert.invoices' });
+}
+
+registry.registerAction('prepare_contract_invoice', async (ctx) => {
+  const contractId = ctx.run.entity_id;
+  if (ctx.run.entity_type !== 'contract' || !contractId) {
+    return { skipped: true, reason: 'prepare_contract_invoice needs a contract entity' };
+  }
+  if (ctx.vars?.__dryRun) return { dryRun: true, would: 'prepare_contract_invoice', contractId };
+  if (Array.isArray(ctx.vars.preparedInvoiceIds) && ctx.vars.preparedInvoiceIds.length) {
+    return { already: true, invoiceIds: ctx.vars.preparedInvoiceIds };
+  }
+  // Done now: a failure an earlier run recorded is no longer outstanding.
+  const cleared = () => require('../contract/signingV2')
+    .clearFollowUpFailure(contractId, { steps: ['prepare_contract_invoice'] });
+  const existing = await ctx.db('invoices').where({ source_contract_id: contractId }).select('id');
+  if (existing.length) {
+    ctx.vars.preparedInvoiceIds = existing.map((r) => r.id);
+    await cleared();
+    return { already: true, invoiceIds: ctx.vars.preparedInvoiceIds };
+  }
+  try {
+    const adminId = await resolveActor(ctx);
+    await require('../contract/conversions').convertToInvoiceOnly(contractId, adminId, { draft: true });
+  } catch (err) {
+    // Crash-recovery re-run: a quote-backed conversion commits the invoices
+    // (and marks the quote converted) before it links them to the contract.
+    // Link the ones this contract's quote produced, rather than failing on
+    // the converted quote for ever.
+    if (!(await linkQuoteInvoices(ctx.db, contractId))) {
+      await require('../contract/signingV2').recordFollowUpFailure(contractId, 'prepare_contract_invoice', err);
+      throw err;
+    }
+  }
+  const created = await ctx.db('invoices').where({ source_contract_id: contractId }).select('id');
+  ctx.vars.preparedInvoiceIds = created.map((r) => r.id);
+  await cleared();
+  return { invoice_prepared: ctx.vars.preparedInvoiceIds };
+});
+
 // Send a prepared draft document (config.document = 'invoice' | 'contract').
 registry.registerAction('send_document', async (ctx) => {
   const doc = ctx.node.config?.document || 'invoice';
@@ -362,8 +419,10 @@ registry.registerAction('send_document', async (ctx) => {
   if (doc === 'contract') {
     const cid = ctx.vars.preparedContractId;
     if (!cid) return { skipped: true, reason: 'no prepared contract to send' };
-    await require('../contractService').sendContract(cid, adminId);
-    return { contract_sent: cid };
+    const sent = await require('../contractService').sendContract(cid, adminId);
+    // Sent, but the invitation failed: recorded on the contract, retried by
+    // the hourly sweep. The run log says so rather than failing the step.
+    return sent && sent.invitationFailed ? { contract_sent: cid, invitation_failed: true } : { contract_sent: cid };
   }
   return { skipped: true, reason: `send_document for '${doc}' not implemented yet` };
 });

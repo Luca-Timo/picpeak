@@ -86,7 +86,7 @@ const nextIp = () => {
 };
 const asSigner = (req) => req.set('X-Forwarded-For', nextIp());
 const sign = (session, body) => asSigner(request(signingApp).post('/api/public/contract-signing/session/sign'))
-  .set('X-Signing-Session', session).send({ accepted: true, ...body });
+  .set('X-Signing-Session', session).send({ consents: [{ key: 'acceptance', accepted: true }], ...body });
 
 async function newContract() {
   const { contract } = await ok(request(contractsApp).post('/api/admin/contracts').set(auth).send({ customerAccountId: customerId }));
@@ -182,6 +182,10 @@ test('a link shows nothing about the customer until the emailed code is entered'
   expect(summary.signer.maskedEmail).toMatch(/\*\*\*/);
   expect(JSON.stringify(summary)).not.toContain(customerEmail);
   expect(JSON.stringify(summary)).not.toContain('Anna');
+  // Nor the contract number: it is shown after verification.
+  const { contract_number: contractNumber } = await db('contracts').where({ id: ids.contract }).first();
+  expect(JSON.stringify(summary)).not.toContain(contractNumber);
+  expect(Object.keys(summary).sort()).toEqual(['issuer', 'language', 'signer', 'status']);
   expect((await request(signingApp).get('/api/public/contract-signing/session')).status).toBe(401);
 
   await ok(request(signingApp).post(`/api/public/contract-signing/invite/${ids.link1}/code`));
@@ -252,7 +256,7 @@ test('the issuer counter-signs last; completion seals it and the chain verifies'
   const overview = await ok(request(contractsApp).get(`/api/admin/contracts/${ids.contract}/signers`).set(auth));
   expect(overview.chain).toEqual(expect.objectContaining({ ok: true }));
   expect(overview.events.map((e) => e.type)).toEqual([
-    'sent', 'invited', 'code_sent', 'verified', 'signed', 'invited', 'code_sent', 'verified', 'signed', 'countersigned', 'completed',
+    'sent', 'invited', 'code_sent', 'verified', 'viewed', 'signed', 'invited', 'code_sent', 'verified', 'signed', 'countersigned', 'completed',
   ]);
   expect(JSON.stringify(overview.signers)).not.toMatch(/ip|userAgent/i);
 
@@ -573,7 +577,7 @@ test('a step that fails after the signature is recorded on the contract, and cle
   expect(sealed.follow_up_failed_at).toBeTruthy();
   expect(sealed.follow_up_error).toMatch(/completion/);
   const overview = await ok(request(contractsApp).get(`/api/admin/contracts/${id}/signers`).set(auth));
-  expect(overview.followUp).toEqual(expect.objectContaining({ error: expect.stringMatching(/completion/) }));
+  expect(overview.followUp).toEqual(expect.objectContaining({ step: 'completion', code: null }));
 
   // Re-sending runs the step again and clears the marker.
   expect((await request(contractsApp).post(`/api/admin/contracts/${id}/resend-signed`).set(auth)).status).toBe(200);
@@ -662,7 +666,10 @@ test('an invitation whose email fails leaves the signer invitable', async () => 
   ));
   const res = await request(contractsApp).post(`/api/admin/contracts/${id}/send`).set(auth);
   queue.mockRestore();
-  expect(res.status).toBeGreaterThanOrEqual(400);
+  // The send itself committed: it answers with a warning, not an error, so
+  // the admin doesn't send it a second time.
+  expect(res.status).toBe(200);
+  expect(res.body.data || res.body).toEqual(expect.objectContaining({ invitationFailed: true }));
 
   const rows = await db('contract_signers').where({ contract_id: id }).orderBy('position');
   expect(rows.map((r) => r.status)).toEqual(['pending', 'pending']);

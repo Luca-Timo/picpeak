@@ -362,7 +362,13 @@ async function existingContractInvoiceResult(contract, contractId, hasInvoiceCon
  * Convert a fully-signed contract directly into invoice(s) without
  * creating an event row. Same delegation pattern as convertToEvent.
  */
-async function convertToInvoiceOnly(contractId, adminId) {
+/**
+ * `options.draft` (#1446, the workflow action `prepare_contract_invoice`):
+ * the invoices are created on hold — no send is scheduled — so nothing goes
+ * to the customer until an admin sends it. The standalone path's empty
+ * invoice has no send date either way.
+ */
+async function convertToInvoiceOnly(contractId, adminId, options = {}) {
   const contract = await db('contracts').where({ id: contractId }).first();
   if (!contract) throw new AppError('Contract not found', 404);
   if (contract.status !== 'fully_signed') {
@@ -410,7 +416,7 @@ async function convertToInvoiceOnly(contractId, adminId) {
   }
 
   try {
-    return await convertClaimedContractToInvoice(contract, contractId, adminId, hasInvoiceContractBackPointer);
+    return await convertClaimedContractToInvoice(contract, contractId, adminId, hasInvoiceContractBackPointer, options);
   } catch (err) {
     if (claimedAt) await releaseContractInvoiceClaim(contractId, adminId, claimedAt);
     throw err;
@@ -420,7 +426,7 @@ async function convertToInvoiceOnly(contractId, adminId) {
 /** The actual conversion, run only once a claim (if the schema has the
  * column) has been won. Split out of convertToInvoiceOnly so the claim
  * can wrap it in a try/catch without re-indenting both branches. */
-async function convertClaimedContractToInvoice(contract, contractId, adminId, hasInvoiceContractBackPointer) {
+async function convertClaimedContractToInvoice(contract, contractId, adminId, hasInvoiceContractBackPointer, options = {}) {
   // Path A: contract has a source quote → replay its line items +
   // payment plan via quoteService (full installment schedule).
   if (contract.source_quote_id) {
@@ -429,6 +435,7 @@ async function convertClaimedContractToInvoice(contract, contractId, adminId, ha
     // sourceContractId in quoteService.convertToInvoiceOnly.
     const result = await quoteService.convertToInvoiceOnly(contract.source_quote_id, adminId, {
       fromContract: true,
+      ...(options.draft === true ? { draft: true } : {}),
       sourceContractId: hasInvoiceContractBackPointer ? contractId : undefined,
     });
     try {
