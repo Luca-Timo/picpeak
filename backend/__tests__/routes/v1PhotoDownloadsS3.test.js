@@ -93,6 +93,7 @@ describe('v1 original downloads through an S3 backend (issue 1473)', () => {
   let db; let cleanup; let app; let token; let eventId; let presentId; let missingId;
   let midEventId; let earlyEventId; let unsizedEventId; let slowSizeEventId;
   let renderId; let renderBody; let renderEventId;
+  let escapeId; let videoId; let smallId; let smallBodyBytes;
   const body = Buffer.from('S3-ONLY-ORIGINAL-not-on-local-disk');
 
   beforeAll(async () => {
@@ -155,6 +156,46 @@ describe('v1 original downloads through an S3 backend (issue 1473)', () => {
     }).returning('id');
     renderId = rr[0]?.id ?? rr[0];
     mockObjects.set('events/active/s3-render/individual/s3-render_0001.jpg', renderBody);
+
+    // A row whose key climbs out of events/active/. Unlike LocalFsStorage,
+    // this backend has no filesystem to refuse it — which is exactly why the
+    // containment check has to be in the route and why it is testable here.
+    const esc = await db('photos').insert({
+      event_id: renderEventId, filename: 'escape.jpg', path: '../../secret/x.jpg',
+      type: 'individual', source_origin: 'managed', mime_type: 'image/jpeg',
+      width: 1200, height: 800, size_bytes: renderBody.length,
+      uploaded_at: new Date().toISOString(),
+    }).returning('id');
+    escapeId = esc[0]?.id ?? esc[0];
+    mockObjects.set('secret/x.jpg', renderBody);
+    mockObjects.set('events/active/s3-render/individual/../../secret/x.jpg', renderBody);
+
+    // A video: no preview tier exists and none can be made, so generating one
+    // would stage the whole source for nothing.
+    const vid = await db('photos').insert({
+      event_id: renderEventId, filename: 's3-render_0002.mp4',
+      path: 's3-render/individual/s3-render_0002.mp4', type: 'individual',
+      source_origin: 'managed', mime_type: 'video/mp4', media_type: 'video',
+      original_filename: 'clip.mp4', size_bytes: 1024,
+      uploaded_at: new Date().toISOString(),
+    }).returning('id');
+    videoId = vid[0]?.id ?? vid[0];
+    mockObjects.set('events/active/s3-render/individual/s3-render_0002.mp4', Buffer.alloc(1024, 7));
+
+    // Smaller than any box a caller would ask for.
+    const smallBody = await sharp({
+      create: { width: 200, height: 150, channels: 3, background: { r: 1, g: 2, b: 3 } },
+    }).jpeg().toBuffer();
+    const sm = await db('photos').insert({
+      event_id: renderEventId, filename: 's3-render_0003.jpg',
+      path: 's3-render/individual/s3-render_0003.jpg', type: 'individual',
+      source_origin: 'managed', mime_type: 'image/jpeg', original_filename: 'small.jpg',
+      width: 200, height: 150, size_bytes: smallBody.length,
+      uploaded_at: new Date().toISOString(),
+    }).returning('id');
+    smallId = sm[0]?.id ?? sm[0];
+    smallBodyBytes = smallBody;
+    mockObjects.set('events/active/s3-render/individual/s3-render_0003.jpg', smallBody);
 
     // Two events whose ZIP hits a failing read: one mid-copy, one while the
     // failing entry is still queued behind a slow first entry.
@@ -375,5 +416,58 @@ describe('v1 original downloads through an S3 backend (issue 1473)', () => {
       expect(res.status).toBe(200);
       expect(res.body.equals(renderBody)).toBe(true);
     });
+
+    it('streams rather than buffers a photo that already fits the box', async () => {
+      const res = await get(`/api/v1/events/${renderEventId}/photos/${smallId}/download?resolution=99999x99999`);
+      expect(res.status).toBe(200);
+      expect(res.body.equals(smallBodyBytes)).toBe(true);
+      // The whole point: staging through getToFile would read the entire
+      // original into memory to hand resizeToBox something it gives straight
+      // back. A box bigger than the library must stay on the streaming path.
+      expect(mockStorage.getToFile).not.toHaveBeenCalled();
+      expect(mockStorage.get).toHaveBeenCalled();
+    });
+
+    it('refuses a key outside events/active/ on the rendition path', async () => {
+      const res = await get(`/api/v1/events/${renderEventId}/photos/${escapeId}/download?resolution=400x400`);
+      expect(res.status).toBe(404);
+      // Nothing was read. This backend has no filesystem to refuse the key,
+      // so a pass here means the ROUTE refused it.
+      expect(mockStorage.getToFile).not.toHaveBeenCalled();
+      expect(mockStorage.get).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('preview', () => {
+    it('refuses a key outside events/active/ without reading anything', async () => {
+      const res = await get(`/api/v1/events/${renderEventId}/photos/${escapeId}/preview`);
+      expect(res.status).toBe(404);
+      expect(JSON.parse(res.body.toString('utf8')).code).toBe('PREVIEW_UNAVAILABLE');
+      expect(mockStorage.getToFile).not.toHaveBeenCalled();
+      expect(mockStorage.get).not.toHaveBeenCalled();
+    });
+
+    it('answers a video without staging the source', async () => {
+      const res = await get(`/api/v1/events/${renderEventId}/photos/${videoId}/preview`);
+      expect(res.status).toBe(404);
+      expect(JSON.parse(res.body.toString('utf8')).code).toBe('PREVIEW_UNAVAILABLE');
+      // A video has no preview tier and never will, so generating one can only
+      // fail — after downloading the whole video. That must not happen, and it
+      // must not happen per row of a picker either.
+      expect(mockStorage.getToFile).not.toHaveBeenCalled();
+      expect(mockStorage.get).not.toHaveBeenCalled();
+    });
+
+    it('does not stage a video even when ?w misses its tier', async () => {
+      const res = await get(`/api/v1/events/${renderEventId}/photos/${videoId}/preview?w=640`);
+      expect(res.status).toBe(404);
+      // The tier miss used to cost a second full fetch on the fallback.
+      expect(mockStorage.getToFile).not.toHaveBeenCalled();
+    });
+
+    // The happy path is covered on the local backend in v1PhotoRenditions;
+    // this mock implements reads only, so generating a preview through it
+    // would be testing the mock. What belongs here is the cases where nothing
+    // may be read at all.
   });
 });

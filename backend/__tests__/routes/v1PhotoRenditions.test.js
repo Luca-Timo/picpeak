@@ -260,6 +260,28 @@ describe('v1 photo renditions and previews', () => {
       expect(res.status).toBe(200);
       // Byte-identical, so it was not re-encoded at the same dimensions either.
       expect(sha256(res.body)).toBe(sha256(bytes.small));
+      // Content-Length survives: the short-circuit puts this back on the
+      // streaming path, where the size is known.
+      expect(res.headers['content-length']).toBe(String(bytes.small.length));
+    });
+
+    it('keeps Content-Length on a HEAD for a type that is never resized', async () => {
+      const video = await request(app)
+        .head(`/api/v1/events/${eventId}/photos/${photos.video}/download?resolution=400x400`)
+        .set('Authorization', `Bearer ${readToken}`);
+      expect(video.status).toBe(200);
+      // A video is served as stored whatever the box says, so the stored size
+      // is exactly what a GET returns — dropping it would be its own lie.
+      expect(video.headers['content-length']).toBe(String(bytes.video.length));
+    });
+
+    it('records the requested resolution on the audit row', async () => {
+      await get(`/api/v1/events/${eventId}/photos/${photos.large}/download?resolution=400x400`);
+      const row = await db('activity_logs')
+        .where({ activity_type: 'api_photo_downloaded' })
+        .orderBy('id', 'desc').first();
+      const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata;
+      expect(meta.resolution).toBe('400x400');
     });
 
     it('never resizes a video', async () => {
@@ -278,13 +300,10 @@ describe('v1 photo renditions and previews', () => {
       expect(res.headers['content-type']).toBe('image/x-adobe-dng');
     });
 
-    // Convergence only. On a LOCAL backend this passes with or without the
-    // events/active/ containment check in renderPhotoAtBox, because
-    // LocalFsStorage refuses the traversing key by itself and the rendition
-    // falls through to the stored-bytes path. The check is there so the
-    // rendition branch does not depend on a different component enforcing a
-    // rule the original branch enforces itself — which matters on S3, where
-    // the key is not a filesystem path. That is not covered here; see the PR.
+    // Convergence only: on a LOCAL backend this passes with or without the
+    // containment check, because LocalFsStorage refuses the traversing key by
+    // itself. The check itself is pinned in v1PhotoDownloadsS3, whose mock has
+    // no filesystem to refuse anything.
     it('answers a path-traversing row with 404 on both branches', async () => {
       const rendition = await get(`/api/v1/events/${eventId}/photos/${photos.escape}/download?resolution=400x400`);
       const original = await get(`/api/v1/events/${eventId}/photos/${photos.escape}/download`);
@@ -384,6 +403,22 @@ describe('v1 photo renditions and previews', () => {
       const meta = await sharp(res.body).metadata();
       // nosniff is set, so the label has to match the bytes or nothing renders.
       expect(res.headers['content-type']).toBe(`image/${meta.format}`);
+    });
+
+    it('ignores a ?w it cannot serve instead of refusing the request', async () => {
+      // The docs promise this, and the gallery's preview route does it. A 400
+      // here would have made the two disagree.
+      for (const w of ['abc', '777', '-5', '999999']) {
+        const res = await get(`/api/v1/events/${eventId}/photos/${photos.large}/preview?w=${encodeURIComponent(w)}`);
+        expect([w, res.status]).toEqual([w, 200]);
+        expect([w, res.headers['content-type']]).toEqual([w, 'image/jpeg']);
+      }
+    });
+
+    it('has no preview for a video, and does not try to make one', async () => {
+      const res = await get(`/api/v1/events/${eventId}/photos/${photos.video}/preview`);
+      expect(res.status).toBe(404);
+      expect(json(res).code).toBe('PREVIEW_UNAVAILABLE');
     });
 
     it('serves a narrower tier for ?w', async () => {
