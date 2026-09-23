@@ -19,14 +19,18 @@ import {
 
 import { Button, Card, Loading, useConfirm } from '../common';
 import { PermissionGate } from './PermissionGate';
+import { ProjectSelect } from './ProjectSelect';
+import { CustomerDocumentRequests } from './CustomerDocumentRequests';
 import { usePermissions } from '../../contexts/PermissionsContext';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { useLocalizedDate } from '../../hooks/useLocalizedDate';
 import { formatFileSize } from '../../utils/fileSize';
+import { acceptFor, formatList, normaliseFormats } from '../../utils/documentFormats';
 import { contractsService } from '../../services/contracts.service';
 import {
   customerDocumentsAdminService,
   type AdminCustomerDocument,
+  type DocumentNotification,
 } from '../../services/customerDocumentsAdmin.service';
 
 const PERMISSION = 'customers.documents.manage';
@@ -55,8 +59,19 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
   const canManage = isSuperAdmin || hasPermission(PERMISSION);
   // The contract picker reads the contracts list, which checks contracts.view.
   const canListContracts = flags.contracts && (isSuperAdmin || hasPermission('contracts.view'));
+  // The project picker reads the projects list, which checks events.view.
+  // Without it the select would render empty, so it isn't rendered at all.
+  const canListProjects = !!flags.projects && (isSuperAdmin || hasPermission('events.view'));
 
   const queryKey = ['admin-customer-documents', customerId];
+  // Rejecting or deleting the answer to a request opens that request again,
+  // and every change here lands in the activity timeline: both cards refresh
+  // with this one.
+  const refresh = () => Promise.all([
+    qc.invalidateQueries({ queryKey }),
+    qc.invalidateQueries({ queryKey: ['admin-customer-document-requests', customerId] }),
+    qc.invalidateQueries({ queryKey: ['admin-customer-activity', customerId] }),
+  ]);
   const { data, isLoading, isError } = useQuery({
     queryKey,
     queryFn: () => customerDocumentsAdminService.list(customerId),
@@ -71,13 +86,27 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [share, setShare] = useState(true);
+  // null until the admin touches it: then the setting's default applies.
+  const [notifyChoice, setNotifyChoice] = useState<boolean | null>(null);
   const [uploadEventId, setUploadEventId] = useState('');
+  const [uploadProjectId, setUploadProjectId] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [rejecting, setRejecting] = useState<{ id: number; note: string } | null>(null);
-  const [linking, setLinking] = useState<{ id: number; eventId: string; contractId: string } | null>(null);
+  const [linking, setLinking] = useState<{
+    id: number; eventId: string; projectId: number | null; contractId: string;
+  } | null>(null);
 
   if (!canManage) return null;
+
+  const notify = notifyChoice ?? (data?.settings?.notifyOnShare ?? true);
+
+  // Say what happened to the mail, never more: a failed queue still shared.
+  const announce = (notification: DocumentNotification | undefined, done: string) => {
+    if (notification === 'queued') toast.success(`${done} ${t('customers.documents.notified', 'The customer gets an email.')}`);
+    else if (notification === 'failed') toast.warning(`${done} ${t('customers.documents.notifyFailed', 'The email to the customer could not be queued.')}`);
+    else toast.success(done);
+  };
 
   const errorText = (err: any) => err?.response?.data?.error
     || t('customers.documents.actionError', 'That did not work. Please try again.');
@@ -87,7 +116,7 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
     try {
       await action();
       toast.success(success);
-      await qc.invalidateQueries({ queryKey });
+      await refresh();
     } catch (err) {
       toast.error(errorText(err));
     } finally {
@@ -99,14 +128,17 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
     if (!file) return;
     setUploading(true);
     try {
-      await customerDocumentsAdminService.upload(customerId, file, {
+      const { notification } = await customerDocumentsAdminService.upload(customerId, file, {
         share,
+        notify: share ? notify : undefined,
         eventId: uploadEventId ? Number(uploadEventId) : null,
+        projectId: canListProjects ? uploadProjectId : null,
       });
-      toast.success(t('customers.documents.uploaded', '{{name}} uploaded.', { name: file.name }));
+      announce(notification, t('customers.documents.uploaded', '{{name}} uploaded.', { name: file.name }));
       setFile(null);
+      setUploadProjectId(null);
       if (inputRef.current) inputRef.current.value = '';
-      await qc.invalidateQueries({ queryKey });
+      await refresh();
     } catch (err) {
       toast.error(errorText(err));
     } finally {
@@ -114,7 +146,32 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
     }
   };
 
+  // Only the contract link changes; PATCH replaces all three links, so the
+  // event and project go along unchanged.
+  const unlinkContract = (doc: AdminCustomerDocument) => run(doc.id,
+    () => customerDocumentsAdminService.setLinks(customerId, doc.id, {
+      eventId: doc.eventId, projectId: doc.projectId, contractId: null,
+    }),
+    t('customers.documents.unlinked', 'Unlinked from the contract. You can delete it now.'));
+
+  // A contract-linked document is part of the contractual record and the
+  // server refuses to delete it (409 DOCUMENT_CONTRACT_LINKED). Say so up
+  // front and offer the one way forward instead of a delete that fails.
+  const offerUnlink = async (doc: AdminCustomerDocument) => {
+    const ok = await confirm({
+      title: t('customers.documents.linkedTitle', 'Linked to a contract'),
+      message: t('customers.documents.linkedBody', '{{name}} is linked to a contract, so it is kept as part of the contractual record and cannot be deleted. Unlink it from the contract first, then delete it.', { name: doc.name }),
+      confirmLabel: t('customers.documents.unlinkContract', 'Unlink from contract'),
+      variant: 'warning',
+    });
+    if (ok) await unlinkContract(doc);
+  };
+
   const remove = async (doc: AdminCustomerDocument) => {
+    if (doc.contractId) {
+      await offerUnlink(doc);
+      return;
+    }
     const ok = await confirm({
       title: t('customers.documents.deleteTitle', 'Delete document?'),
       message: t('customers.documents.deleteBody', '{{name}} disappears from the customer\'s portal at once. The file itself is removed after the retention period.', { name: doc.name }),
@@ -122,12 +179,28 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
       variant: 'danger',
     });
     if (!ok) return;
-    await run(doc.id, () => customerDocumentsAdminService.remove(customerId, doc.id),
-      t('customers.documents.deleted', 'Document deleted.'));
+    setBusyId(doc.id);
+    try {
+      await customerDocumentsAdminService.remove(customerId, doc.id);
+      toast.success(t('customers.documents.deleted', 'Document deleted.'));
+    } catch (err: any) {
+      // Linked since this list was loaded: show the reason and the way out.
+      if (err?.response?.data?.code === 'DOCUMENT_CONTRACT_LINKED') {
+        await refresh();
+        setBusyId(null);
+        await offerUnlink(doc);
+        return;
+      }
+      toast.error(errorText(err));
+    } finally {
+      setBusyId(null);
+    }
+    await refresh();
   };
 
   const documents = data?.documents ?? [];
   const limits = data?.limits;
+  const formats = normaliseFormats(data?.allowedFormats);
   const contracts = contractsRes?.contracts ?? [];
 
   const statusLabel = (status: AdminCustomerDocument['status']) => (
@@ -145,7 +218,7 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
         {t('customers.documents.title', 'Documents')}
       </h2>
       <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
-        {t('customers.documents.hint', 'PDFs shared with this customer in their portal, and the files they sent you. A customer upload stays unavailable to them until you mark it clean.')}
+        {t('customers.documents.hint', 'Documents shared with this customer in their portal, and the files they sent you ({{formats}}). A customer upload stays unavailable to them until you mark it clean.', { formats: formatList(formats) })}
         {limits && (
           <> {t('customers.documents.usage', 'Customer uploads: {{used}} of {{quota}}.', {
             used: formatFileSize(limits.usedBytes),
@@ -155,30 +228,50 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
       </p>
 
       <PermissionGate permission={PERMISSION}>
-        <div className="flex flex-col md:flex-row md:items-end gap-3 mb-4">
-          <label className="flex-1 min-w-0 text-sm text-neutral-700 dark:text-neutral-300">
-            <span className="block mb-1">{t('customers.documents.fileLabel', 'PDF to share')}</span>
+        {/* Two rows: the file input on a line of its own, then the links,
+            the two options and Upload, wrapping as the card narrows. In one
+            row the file input was squeezed to a sliver once the project
+            picker and the notify option joined it. */}
+        <div className="flex flex-col gap-3 mb-4">
+          <label className="block w-full text-sm text-neutral-700 dark:text-neutral-300">
+            <span className="block mb-1 whitespace-nowrap">{t('customers.documents.fileLabel', 'Document to share')}</span>
             <input
               ref={inputRef}
               type="file"
-              accept="application/pdf,.pdf"
+              accept={acceptFor(formats)}
               disabled={uploading}
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               className="block w-full text-sm text-neutral-700 dark:text-neutral-300"
             />
           </label>
+          <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
           {events.length > 0 && (
             <label className="text-sm text-neutral-700 dark:text-neutral-300">
-              <span className="block mb-1">{t('customers.documents.eventLabel', 'Event')}</span>
+              <span className="block mb-1 whitespace-nowrap">{t('customers.documents.eventLabel', 'Event')}</span>
               <select value={uploadEventId} onChange={(e) => setUploadEventId(e.target.value)} className={selectClass}>
                 <option value="">{t('customers.documents.noLink', 'None')}</option>
                 {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.eventName}</option>)}
               </select>
             </label>
           )}
-          <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300 md:pb-2">
+          {canListProjects && (
+            <ProjectSelect
+              value={uploadProjectId}
+              onChange={setUploadProjectId}
+              label={t('customers.documents.projectLabel', 'Project')}
+              customerAccountId={customerId}
+              strictCustomer
+              disabled={uploading}
+              className="text-sm w-48 max-w-full"
+            />
+          )}
+          <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300 pb-2 whitespace-nowrap">
             <input type="checkbox" checked={share} onChange={(e) => setShare(e.target.checked)} className="h-4 w-4" />
             {t('customers.documents.shareNow', 'Share with the customer')}
+          </label>
+          <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300 pb-2 whitespace-nowrap">
+            <input type="checkbox" checked={notify} onChange={(e) => setNotifyChoice(e.target.checked)} className="h-4 w-4" />
+            {t('customers.documents.notifyCustomer', 'Notify the customer by email')}
           </label>
           <Button
             type="button"
@@ -191,6 +284,7 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
           >
             {t('customers.documents.upload', 'Upload')}
           </Button>
+          </div>
         </div>
       </PermissionGate>
 
@@ -255,10 +349,15 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
                     <PermissionGate permission={PERMISSION}>
                       {doc.status !== 'clean' && (
                         <Button
-                          type="button" variant="ghost" size="sm" disabled={busy}
+                          type="button" variant="ghost" size="sm"
+                          disabled={busy || doc.malwareFlagged}
+                          title={doc.malwareFlagged
+                            ? t('customers.documents.malwareFlaggedTooltip', 'The malware scanner rejected this file. It cannot be marked clean.') as string
+                            : undefined}
                           leftIcon={<CheckCircle2 className="w-4 h-4" />}
-                          onClick={() => run(doc.id, () => customerDocumentsAdminService.review(customerId, doc.id, 'clean'),
-                            t('customers.documents.markedClean', 'Marked clean.'))}
+                          onClick={() => run(doc.id, async () => {
+                            await customerDocumentsAdminService.review(customerId, doc.id, 'clean');
+                          }, t('customers.documents.markedClean', 'Marked clean.'))}
                         >
                           {t('customers.documents.markClean', 'Mark clean')}
                         </Button>
@@ -285,8 +384,18 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
                         <Button
                           type="button" variant="ghost" size="sm" disabled={busy}
                           leftIcon={<Share2 className="w-4 h-4" />}
-                          onClick={() => run(doc.id, () => customerDocumentsAdminService.share(customerId, doc.id),
-                            t('customers.documents.sharedToast', 'Shared with the customer.'))}
+                          onClick={async () => {
+                            setBusyId(doc.id);
+                            try {
+                              announce(await customerDocumentsAdminService.share(customerId, doc.id, notify),
+                                t('customers.documents.sharedToast', 'Shared with the customer.'));
+                              await refresh();
+                            } catch (err) {
+                              toast.error(errorText(err));
+                            } finally {
+                              setBusyId(null);
+                            }
+                          }}
                         >
                           {t('customers.documents.share', 'Share')}
                         </Button>
@@ -297,6 +406,7 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
                         onClick={() => setLinking({
                           id: doc.id,
                           eventId: doc.eventId ? String(doc.eventId) : '',
+                          projectId: doc.projectId,
                           contractId: doc.contractId ? String(doc.contractId) : '',
                         })}
                       >
@@ -328,9 +438,17 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
                       <Button
                         type="button" variant="primary" size="sm" disabled={busy}
                         onClick={async () => {
-                          await run(doc.id, () => customerDocumentsAdminService.review(customerId, doc.id, 'rejected', rejecting.note),
-                            t('customers.documents.rejectedToast', 'Rejected.'));
-                          setRejecting(null);
+                          setBusyId(doc.id);
+                          try {
+                            announce(await customerDocumentsAdminService.review(customerId, doc.id, 'rejected', rejecting.note),
+                              t('customers.documents.rejectedToast', 'Rejected.'));
+                            await refresh();
+                            setRejecting(null);
+                          } catch (err) {
+                            toast.error(errorText(err));
+                          } finally {
+                            setBusyId(null);
+                          }
                         }}
                       >
                         {t('customers.documents.confirmReject', 'Reject file')}
@@ -356,6 +474,16 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
                           {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.eventName}</option>)}
                         </select>
                       </label>
+                      {canListProjects && (
+                        <ProjectSelect
+                          value={linking.projectId}
+                          onChange={(projectId) => setLinking({ ...linking, projectId })}
+                          label={t('customers.documents.projectLabel', 'Project')}
+                          customerAccountId={customerId}
+                          strictCustomer
+                          className="text-xs sm:w-48"
+                        />
+                      )}
                       {canListContracts && (
                         <label className="text-xs text-neutral-600 dark:text-neutral-400">
                           <span className="block mb-1">{t('customers.documents.contractLabel', 'Contract')}</span>
@@ -374,7 +502,9 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
                         onClick={async () => {
                           await run(doc.id, () => customerDocumentsAdminService.setLinks(customerId, doc.id, {
                             eventId: linking.eventId ? Number(linking.eventId) : null,
-                            projectId: doc.projectId,
+                            // PATCH replaces all three links: keep an existing
+                            // project link when the picker isn't available.
+                            projectId: canListProjects ? linking.projectId : doc.projectId,
                             // Keep an existing contract link when the picker isn't available.
                             contractId: canListContracts
                               ? (linking.contractId ? Number(linking.contractId) : null)
@@ -396,6 +526,10 @@ export const CustomerDocumentsCard: React.FC<Props> = ({ customerId, events }) =
           })}
         </ul>
       )}
+
+      <PermissionGate permission={PERMISSION}>
+        <CustomerDocumentRequests customerId={customerId} canManage={canManage} />
+      </PermissionGate>
     </Card>
   );
 };

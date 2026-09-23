@@ -712,7 +712,14 @@
     "customerDocuments": {
       "title": "Customer documents",
       "counts": "{{pending}} awaiting review, {{rejected}} rejected.",
-      "hint": "Customer uploads stay unavailable to them until they are marked clean on the customer record. Rejected files are deleted after the retention period."
+      "hint": "Customer uploads stay unavailable to them until they are marked clean on the customer record. Rejected files are deleted after the retention period.",
+      "abuse": "Last 24 hours: {{forbidden}} attempts on other customers' documents, {{quota}} uploads refused for quota, {{rate}} rate-limit hits.",
+      "abuseAlert": "{{count}} customer(s) passed the alert threshold; the business address was emailed.",
+      "scannerOff": "Malware scanner: not configured. Customer uploads wait for a manual review.",
+      "scannerOk": "Malware scanner (ClamAV): reachable.",
+      "scannerDown": "Malware scanner (ClamAV): not reachable. New uploads stay pending until it is back; the hourly re-scan catches up.",
+      "scannerLastSuccess": "Last successful scan: {{date}}.",
+      "scannerLastError": "Last problem: {{error}} ({{date}})."
     },
     "evidenceKey": {
       "title": "Signing evidence key",
@@ -2556,7 +2563,7 @@
       },
       "documents": {
         "title": "Customer documents",
-        "description": "Share PDFs with a customer in their portal and receive PDFs from them. Customer uploads stay unavailable until you mark them clean on the customer record. PDF only; size and storage limits apply."
+        "description": "Share documents with a customer in their portal and receive documents from them. Customer uploads stay unavailable until you mark them clean on the customer record. PDF by default; more file types, size and storage limits under Settings → CRM."
       }
     },
     "customerSurface": {
@@ -3412,6 +3419,23 @@
       "bulkArchiveCompleted_one": "Bulk archive completed: {{count}} event archived",
       "bulkArchiveCompleted_other": "Bulk archive completed: {{count}} events archived",
       "cssTemplateRemoteUrlsRemoved": "Remote URLs removed from {{count}} CSS template(s) — see the release notes",
+      "customerDocumentUploaded": "Customer document uploaded",
+      "customerDocumentShared": "Document shared with a customer",
+      "customerDocumentUnshared": "Document no longer shared with a customer",
+      "customerDocumentReviewed": "Customer document reviewed",
+      "customerDocumentLinked": "Customer document links changed",
+      "customerDocumentDeleted": "Customer document deleted",
+      "customerDocumentDownloaded": "Customer document downloaded",
+      "customerDocumentScanRejected": "A customer document failed the security check",
+      "customerDocumentForbiddenAccess": "A customer asked for another customer's document",
+      "customerDocumentQuotaExceeded": "A customer upload was refused: storage full",
+      "customerDocumentRateLimited": "A customer hit the document upload limit",
+      "customerDocumentForbiddenAccessAlert": "Repeated attempts on other customers' documents ({{count}} in an hour)",
+      "customerDocumentScanCleared": "A customer document passed the security check",
+      "customerDocumentRequestCreated": "Document requested from a customer",
+      "customerDocumentRequestCancelled": "Document request cancelled",
+      "customerDocumentRequestFulfilled": "Customer answered a document request",
+      "customerDocumentRequestReminded": "Reminder sent for a document request",
       "apiPhotoDownloaded": "Original downloaded from {{eventName}} with API token #{{token_id}}",
       "apiPhotosDownloaded_one": "API token “{{token_name}}” downloaded {{count}} original from {{eventName}}",
       "apiPhotosDownloaded_other": "API token “{{token_name}}” downloaded {{count}} originals from {{eventName}}",
@@ -3746,6 +3770,23 @@
       "newsletter_deleted": "Newsletter campaign deleted",
       "customer_marketing_opt_out": "Customer newsletter consent changed",
       "css_template_remote_urls_removed": "Remote URLs removed from {{count}} CSS template(s) — see the release notes",
+      "customer_document_uploaded": "Customer document uploaded",
+      "customer_document_shared": "Document shared with a customer",
+      "customer_document_unshared": "Document no longer shared with a customer",
+      "customer_document_reviewed": "Customer document reviewed",
+      "customer_document_linked": "Customer document links changed",
+      "customer_document_deleted": "Customer document deleted",
+      "customer_document_downloaded": "Customer document downloaded",
+      "customer_document_scan_rejected": "A customer document failed the security check",
+      "customer_document_forbidden_access": "A customer asked for another customer's document",
+      "customer_document_quota_exceeded": "A customer upload was refused: storage full",
+      "customer_document_rate_limited": "A customer hit the document upload limit",
+      "customer_document_forbidden_access_alert": "Repeated attempts on other customers' documents ({{count}} in an hour)",
+      "customer_document_scan_cleared": "A customer document passed the security check",
+      "customer_document_request_created": "Document requested from a customer",
+      "customer_document_request_cancelled": "Document request cancelled",
+      "customer_document_request_fulfilled": "Customer answered a document request",
+      "customer_document_request_reminded": "Reminder sent for a document request",
       "api_photo_downloaded": "Original downloaded from {{eventName}} with API token #{{token_id}}",
       "api_photos_downloaded_one": "API token “{{token_name}}” downloaded {{count}} original from {{eventName}}",
       "api_photos_downloaded_other": "API token “{{token_name}}” downloaded {{count}} originals from {{eventName}}",
@@ -5470,7 +5511,23 @@
       "detailsAria": "Details for {{name}}",
       "notAvailable": "Not available yet",
       "expiredTitle": "Expired galleries",
-      "expiredHint": "These galleries have expired and can no longer be opened. Contact your photographer if you still need the photos."
+      "expiredHint": "These galleries have expired and can no longer be opened. Contact your photographer if you still need the photos.",
+      "documentRejected": "{{name}} was not accepted — upload a corrected version",
+      "viewDocument": "View document",
+      "recentTitle": "Recent",
+      "recent": {
+        "documentShared": "New document: {{title}}",
+        "documentUploaded": "You uploaded {{title}}",
+        "documentAccepted": "{{title}} was accepted",
+        "documentRejected": "{{title}} was not accepted",
+        "contractSent": "Contract {{title}} was sent to you",
+        "contractSigned": "You signed contract {{title}}",
+        "quoteSent": "Quote {{title}} was sent to you",
+        "invoiceSent": "Invoice {{title}} was sent to you",
+        "galleryAssigned": "Gallery {{title}} is now available to you"
+      },
+      "documentRequested": "Please upload: {{title}}",
+      "uploadDocument": "Upload"
     },
     "layout": {
       "greeting": "Hi, {{name}}"
@@ -5634,13 +5691,13 @@
     },
     "documents": {
       "title": "Documents",
-      "subtitle": "Files your photographer shared with you, and PDFs you sent them.",
+      "subtitle": "Files your photographer shared with you, and documents you sent them.",
       "disabled": "Documents are not available for your account.",
       "loadError": "Could not load your documents.",
       "uploadTitle": "Send a document",
-      "uploadHint": "PDF only, up to {{size}} per file. {{used}} of {{quota}} used.",
-      "uploadHintShort": "PDF only.",
-      "fileLabel": "PDF file",
+      "uploadHint": "Accepted: {{formats}}, up to {{size}} per file. {{used}} of {{quota}} used.",
+      "uploadHintShort": "Accepted: {{formats}}.",
+      "fileLabel": "File",
       "eventLabel": "Event (optional)",
       "noEvent": "No event",
       "cancel": "Cancel",
@@ -5675,7 +5732,31 @@
         "download": "{{name}} could not be downloaded. Please try again.",
         "activeContent": "{{name}} contains active content (a script, an embedded file or a form action) and cannot be uploaded. Open it and print it to PDF, then upload that file.",
         "tooComplex": "{{name}} could not be checked. Open it and print it to PDF, then upload that file.",
-        "tooManyPages": "{{name}} has too many pages to upload."
+        "tooManyPages": "{{name}} has too many pages to upload.",
+        "notFound": "{{name}} could not be found.",
+        "contractLinked": "{{name}} is part of a contract and cannot be deleted. Contact your photographer if it should be removed.",
+        "delete": "{{name}} could not be deleted. Please try again.",
+        "requestGone": "The request for {{name}} is no longer open. Upload it without choosing a request, or ask your photographer.",
+        "formatNotAllowed": "{{name}} is not a file type you can upload here. Accepted: {{formats}}.",
+        "notValid": "{{name}} is not a valid file of its type. Save it again from the program that made it and upload that file.",
+        "officeActiveContent": "{{name}} contains macros, embedded code or links to outside content and cannot be uploaded. Save it as PDF and upload that file.",
+        "documentEncrypted": "{{name}} is password-protected. Remove the password and upload it again.",
+        "documentTooComplex": "{{name}} could not be checked. Save it as PDF and upload that file.",
+        "notText": "{{name}} is not a plain UTF-8 text file. Save it as UTF-8 text and upload it again.",
+        "checkUnavailable": "{{name}} cannot be checked right now. Please try again later."
+      },
+      "deleteTitle": "Delete this document?",
+      "deleteBody": "{{name}} will be removed from your documents. Your photographer may already have downloaded it.",
+      "delete": "Delete",
+      "deleteAria": "Delete {{name}}",
+      "deleted": "{{name}} was deleted.",
+      "requests": {
+        "title": "Requested by your photographer",
+        "due": "Needed by {{date}}",
+        "upload": "Upload for this request",
+        "uploadAria": "Upload a file for {{title}}",
+        "selected": "This upload answers: {{title}}",
+        "clear": "Not for this request"
       }
     },
     "event": {
@@ -5690,6 +5771,28 @@
       "pdf": "PDF",
       "dueOn": "Due {{date}}",
       "nothingElse": "There are no documents for this event yet."
+    },
+    "document": {
+      "back": "All documents",
+      "yourPhotographer": "your photographer",
+      "unsharedTitle": "No longer shared",
+      "unsharedBody": "This document is no longer shared with you. Ask {{studio}} if you still need it.",
+      "removedTitle": "Removed",
+      "removedBody": "This document was removed and can no longer be opened. Ask {{studio}} if you still need it.",
+      "notFoundTitle": "Document not found",
+      "notFoundBody": "There is no document at this address for your account. Check that you are logged in with the right account.",
+      "disabledTitle": "Documents are not available",
+      "errorTitle": "Could not load the document",
+      "errorBody": "Please try again in a moment.",
+      "pendingBody": "This document is waiting for review. Every upload is checked by {{studio}} before it becomes available.",
+      "rejectedBody": "This document was not accepted: {{reason}}",
+      "rejectedNoReason": "This document was not accepted. Contact {{studio}} if you are unsure why.",
+      "uploadedBy": "From",
+      "size": "Size",
+      "uploadedAt": "Uploaded",
+      "sharedAt": "Shared",
+      "reviewedAt": "Reviewed",
+      "event": "Event"
     }
   },
   "customers": {
@@ -5985,9 +6088,9 @@
     },
     "documents": {
       "title": "Documents",
-      "hint": "PDFs shared with this customer in their portal, and the files they sent you. A customer upload stays unavailable to them until you mark it clean.",
+      "hint": "Documents shared with this customer in their portal, and the files they sent you ({{formats}}). A customer upload stays unavailable to them until you mark it clean.",
       "usage": "Customer uploads: {{used}} of {{quota}}.",
-      "fileLabel": "PDF to share",
+      "fileLabel": "Document to share",
       "eventLabel": "Event",
       "contractLabel": "Contract",
       "noLink": "None",
@@ -6016,6 +6119,7 @@
       "downloadStarted": "Download started.",
       "markClean": "Mark clean",
       "markedClean": "Marked clean.",
+      "malwareFlaggedTooltip": "The malware scanner rejected this file. It cannot be marked clean.",
       "reject": "Reject",
       "rejectPlaceholder": "Reason, shown to the customer (optional)",
       "confirmReject": "Reject file",
@@ -6028,7 +6132,34 @@
       "saveLinks": "Save links",
       "linkSaved": "Links saved.",
       "empty": "No documents yet.",
-      "loadError": "Could not load documents."
+      "loadError": "Could not load documents.",
+      "unlinked": "Unlinked from the contract. You can delete it now.",
+      "linkedTitle": "Linked to a contract",
+      "linkedBody": "{{name}} is linked to a contract, so it is kept as part of the contractual record and cannot be deleted. Unlink it from the contract first, then delete it.",
+      "unlinkContract": "Unlink from contract",
+      "projectLabel": "Project",
+      "notified": "The customer gets an email.",
+      "notifyFailed": "The email to the customer could not be queued.",
+      "notifyCustomer": "Notify the customer by email",
+      "requests": {
+        "title": "Requested from the customer",
+        "hint": "Ask the customer for a document. It shows under \"Needs your attention\" in their portal until they upload it, with reminders after the days set in Settings → CRM.",
+        "titleLabel": "What do you need?",
+        "noteLabel": "Note for the customer (optional)",
+        "dueLabel": "Needed by (optional)",
+        "create": "Request document",
+        "created": "Request sent.",
+        "cancel": "Cancel request",
+        "cancelled": "Request cancelled.",
+        "empty": "Nothing requested yet.",
+        "status": {
+          "open": "Waiting",
+          "fulfilled": "Received",
+          "cancelled": "Cancelled"
+        },
+        "meta": "Requested {{date}} · {{reminders}} reminder(s) sent",
+        "due": "Needed by {{date}}"
+      }
     },
     "groups": {
       "title": "Groups",
@@ -6121,6 +6252,16 @@
         "overGroupLimit_one": "{{count}} selected customer would be in more than {{max}} groups. Take them out of the selection, or out of other groups first.",
         "overGroupLimit_other": "{{count}} selected customers would be in more than {{max}} groups. Take them out of the selection, or out of other groups first."
       }
+    },
+    "activity": {
+      "title": "Activity",
+      "hint": "What happened on this customer's account and documents, newest first.",
+      "loadError": "Could not load the activity.",
+      "empty": "No activity yet.",
+      "byCustomer": "By the customer",
+      "byAdmin": "By {{name}}",
+      "bySystem": "Automatic",
+      "more": "Show older"
     },
     "emptyFiltered": "No customers match these filters.",
     "clearFilters": "Clear filters",
@@ -7395,6 +7536,14 @@
     "savedToast": "CRM settings saved.",
     "title": "CRM settings",
     "subtitle": "Fine-tune quote and invoice behaviour.",
+    "subtitleFor": "Settings for {{areas}}.",
+    "areas": {
+      "quotes": "quotes",
+      "invoices": "invoices",
+      "contracts": "contracts",
+      "documents": "customer documents",
+      "and": "and"
+    },
     "emptyState": "No CRM features are currently enabled. Turn on Quotes, Invoices, or Contracts in Settings → Features to see the matching configuration here.",
     "section": {
       "quotes": "Quotes",
@@ -7404,7 +7553,9 @@
       "contracts": "Contracts",
       "quotesTos": "Terms of Service / AGB step",
       "dashboardOverview": "Dashboard CRM overview",
-      "dashboardOverviewHint": "Hide CRM overview tiles on the admin dashboard. All tiles render by default; uncheck to hide."
+      "dashboardOverviewHint": "Hide CRM overview tiles on the admin dashboard. All tiles render by default; uncheck to hide.",
+      "documents": "Customer documents",
+      "documentsHint": "Documents exchanged with customers in their portal. Customer uploads stay unavailable to them until reviewed."
     },
     "paymentDefaults": {
       "help": "Pre-filled on every new quote and invoice. The editor still lets you pick a different combination per document.",
@@ -7548,6 +7699,28 @@
     },
     "crm_overview_show_invoices": {
       "label": "Invoices pipeline (per-status)"
+    },
+    "customer_documents_notify_on_share": {
+      "label": "Email the customer when a document is shared with them (default for the checkbox on the customer record)"
+    },
+    "customer_documents_max_upload_size_mb": {
+      "label": "Largest file (MB)"
+    },
+    "customer_documents_quota_mb": {
+      "label": "Storage per customer (MB)"
+    },
+    "customer_documents_retention_days": {
+      "label": "Keep rejected and deleted files (days)"
+    },
+    "customer_documents_forbidden_alert_threshold": {
+      "label": "Alert after attempts on other customers' documents (per hour)"
+    },
+    "customer_documents_request_reminder_days": {
+      "label": "Remind about requested documents after (days, comma-separated; empty = off)"
+    },
+    "customer_documents_allowed_formats": {
+      "label": "File types customers can upload",
+      "help": "Every file is checked by its content. PDF is the only type on by default. The check of Word, Excel and OpenDocument files is best-effort: it refuses macros, embedded objects and the known ways of linking to outside content (including web links), but it does not detect every active-content mechanism these formats have. Turn them on only for customers you trust, and open such files with care. CSV files are passed on as they are: a formula in one runs when someone opens it in a spreadsheet."
     }
   },
   "quoteResponse": {

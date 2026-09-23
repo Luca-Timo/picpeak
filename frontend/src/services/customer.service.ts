@@ -136,9 +136,26 @@ export interface CustomerDocument {
   rejectionReason: string | null;
   eventId: number | null;
   eventName: string | null;
+  /** For a link to the event page; the page itself re-checks access. */
+  eventSlug?: string | null;
   contractId: number | null;
   createdAt: string | null;
   sharedAt: string | null;
+  /** When the studio reviewed the customer's own upload. */
+  reviewedAt?: string | null;
+  /** Own upload that isn't part of a contract: the customer may delete it. */
+  canDelete?: boolean;
+}
+
+/** A document the studio asked for and is still waiting on (#1444). */
+export interface CustomerDocumentRequest {
+  id: number;
+  title: string;
+  note: string | null;
+  dueAt: string | null;
+  status: 'open';
+  eventId: number | null;
+  createdAt: string | null;
 }
 
 export interface CustomerDocumentLimits {
@@ -161,8 +178,27 @@ export interface CustomerDashboard {
       id: number; invoiceNumber: string; status: string; dueDate: string | null; overdue: boolean;
       eventName: string | null; totalAmountMinor: number; openAmountMinor: number; currency: string;
     }>;
+    /** The customer's own rejected uploads — upload a corrected one, or delete it. */
+    documents?: Array<{ id: number; name: string; reviewNote: string | null }>;
+    /** Documents the studio asked for; `link` preselects the request on the upload. */
+    documentRequests?: Array<{ id: number; title: string; note: string | null; dueAt: string | null; link: string }>;
   };
+  /** Newest first, from the same visibility rules as the lists they link to. */
+  recent?: CustomerRecentItem[];
   galleries: { active: CustomerEvent[]; expired: CustomerEvent[] };
+}
+
+export type CustomerRecentKind =
+  | 'document_shared' | 'document_uploaded' | 'document_accepted' | 'document_rejected'
+  | 'contract_sent' | 'contract_signed' | 'quote_sent' | 'invoice_sent' | 'gallery_assigned';
+
+export interface CustomerRecentItem {
+  kind: CustomerRecentKind;
+  id: number;
+  title: string;
+  at: string;
+  /** A portal path. */
+  link: string;
 }
 
 export interface CustomerEventOverview {
@@ -185,6 +221,8 @@ export interface CustomerEventOverview {
 
 export interface UploadOptions {
   eventId?: number | null;
+  /** Answers a document request; the server marks it fulfilled with the upload. */
+  requestId?: number | null;
   signal?: AbortSignal;
   onProgress?: (fraction: number) => void;
 }
@@ -368,10 +406,12 @@ export const customerService = {
   },
 
   // ---- documents (#1444) ----
-  async listDocuments(): Promise<{ documents: CustomerDocument[]; limits: CustomerDocumentLimits }> {
-    const response = await api.get<{ documents: CustomerDocument[]; limits: CustomerDocumentLimits }>(
-      '/customer/documents'
-    );
+  async listDocuments(): Promise<{
+    documents: CustomerDocument[]; limits: CustomerDocumentLimits; allowedFormats?: string[];
+  }> {
+    const response = await api.get<{
+      documents: CustomerDocument[]; limits: CustomerDocumentLimits; allowedFormats?: string[];
+    }>('/customer/documents');
     return response.data;
   },
 
@@ -379,6 +419,7 @@ export const customerService = {
     const form = new FormData();
     form.append('file', file);
     if (options.eventId) form.append('eventId', String(options.eventId));
+    if (options.requestId) form.append('requestId', String(options.requestId));
     const response = await api.post<{ document: CustomerDocument }>('/customer/documents', form, {
       signal: options.signal,
       onUploadProgress: (e: AxiosProgressEvent) => {
@@ -386,6 +427,26 @@ export const customerService = {
       },
     });
     return response.data.document;
+  },
+
+  /**
+   * One document (the document page / a deep link). A document the customer
+   * can no longer see rejects with 410 and a code — DOCUMENT_UNSHARED or
+   * DOCUMENT_REMOVED — and an unknown one with 404.
+   */
+  async getDocument(id: number): Promise<CustomerDocument> {
+    const response = await api.get<{ document: CustomerDocument }>(`/customer/documents/${id}`);
+    return response.data.document;
+  },
+
+  async listDocumentRequests(): Promise<CustomerDocumentRequest[]> {
+    const response = await api.get<{ requests: CustomerDocumentRequest[] }>('/customer/document-requests');
+    return response.data.requests;
+  },
+
+  /** Deletes one of the customer's own uploads. */
+  async deleteDocument(id: number): Promise<void> {
+    await api.delete(`/customer/documents/${id}`);
   },
 
   /** Downloads the document as an attachment (never opened inline). */

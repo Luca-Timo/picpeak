@@ -9,6 +9,8 @@ const resources = [
   ['./fileWatcher', 'stopFileWatcher'], ['./externalMediaWatcher', 'stopExternalMediaWatcher'],
   ['./expirationChecker', 'stopExpirationChecker'], ['./transferCleanupService', 'stopTransferCleanup'],
   ['./customerDocumentRetentionService', 'stopCustomerDocumentRetention'],
+  ['./customerDocumentRescanService', 'stopCustomerDocumentRescan'],
+  ['./customerDocumentRequestReminderService', 'stopDocumentRequestReminders'],
   ['./downloadJobCleanupService', 'stopDownloadJobCleanup'], ['./revealScheduler', 'stopRevealScheduler'],
   ['./feedbackRateLimitCleanupService', 'stopFeedbackRateLimitCleanup'],
   ['./invoiceSchedulerService', 'stopInvoiceScheduler'], ['./emailProcessor', 'stopEmailQueueProcessor'],

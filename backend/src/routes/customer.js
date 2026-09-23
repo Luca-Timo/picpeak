@@ -27,9 +27,13 @@ const { getClientIp } = require('../utils/requestIp');
 const { customerAuth } = require('../middleware/customerAuth');
 const { setGalleryAuthCookies } = require('../utils/tokenUtils');
 const rateLimit = require('express-rate-limit');
-const { receivePdfUpload, discardTempFile, sendPdfAttachment } = require('../middleware/customerDocumentUpload');
+const { receiveDocumentUpload, discardTempFile, sendDocumentAttachment } = require('../middleware/customerDocumentUpload');
+const documentFormats = require('../services/documentFormats');
 const customerAccountsService = require('../services/customerAccountsService');
 const customerDocumentsService = require('../services/customerDocumentsService');
+const customerDocumentNotifications = require('../services/customerDocumentNotifications');
+const customerDocumentAbuse = require('../services/customerDocumentAbuse');
+const customerDocumentRequestsService = require('../services/customerDocumentRequestsService');
 const customerPortalService = require('../services/customerPortalService');
 const publicDocumentViews = require('../services/publicDocumentViews');
 const { clientIpForAudit } = require('../utils/clientIp');
@@ -1122,6 +1126,11 @@ const documentUploadLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => `customer-documents:${req.customer.id}`,
   message: { error: 'Too many uploads. Please wait a few minutes and try again.', code: 'UPLOAD_RATE_LIMITED' },
+  // Counted as an abuse signal (per customer per hour), then answered as usual.
+  handler: (req, res, _next, options) => {
+    customerDocumentAbuse.record(req.customer.id, 'rate_limited')
+      .finally(() => res.status(options.statusCode).json(options.message));
+  },
 });
 
 // A 4xx AppError carries a message written for the customer; anything else is
@@ -1138,14 +1147,17 @@ router.get('/documents', customerAuth, requireDocumentsFeature, async (req, res)
     const documents = await customerDocumentsService.listForCustomer(req.customer.id);
     const limits = await customerDocumentsService.getLimits();
     const usedBytes = await customerDocumentsService.getUsageBytes(req.customer.id);
-    res.json({ documents, limits: { ...limits, usedBytes } });
+    // Drives the upload control's accept list and copy, so it can't drift
+    // from what the server accepts.
+    const allowedFormats = await documentFormats.getAllowedFormats();
+    res.json({ documents, limits: { ...limits, usedBytes }, allowedFormats });
   } catch (error) {
     errorResponse(res, error, 500, 'Failed to load documents');
   }
 });
 
 /**
- * POST /documents  multipart: file (PDF), eventId?, contractId?
+ * POST /documents  multipart: file (PDF), eventId?, contractId?, requestId?
  *
  * The file stays `pending` — not downloadable — until the studio has
  * reviewed it. Quota is checked before multer (no bytes written when it is
@@ -1157,38 +1169,138 @@ router.post('/documents', customerAuth, requireDocumentsFeature, documentUploadL
     const limits = await customerDocumentsService.getLimits();
     const usedBytes = await customerDocumentsService.getUsageBytes(req.customer.id);
     if (usedBytes >= limits.quotaBytes) {
+      await customerDocumentAbuse.record(req.customer.id, 'quota_exceeded');
       return res.status(413).json({ error: 'Your document storage is full.', code: 'QUOTA_EXCEEDED' });
     }
-    file = await receivePdfUpload(req, res, { maxBytes: limits.maxUploadBytes });
+    file = await receiveDocumentUpload(req, res, {
+      maxBytes: limits.maxUploadBytes,
+      allowedFormats: await documentFormats.getAllowedFormats(),
+    });
     if (!file) return res.status(400).json({ error: 'No file was uploaded.', code: 'NO_FILE' });
     // The quota is counted again where the row is written, in the same
     // transaction: the check above runs before the body arrives, so uploads
     // landing together would otherwise all measure the same "before".
+    // requestId answers a document request (slice 10): anything that isn't
+    // an open request of this customer is the request's 404.
+    let requestId = null;
+    if (req.body.requestId !== undefined && req.body.requestId !== '') {
+      requestId = /^\d{1,10}$/.test(String(req.body.requestId)) ? Number(req.body.requestId) : -1;
+      if (requestId < 1 || requestId > 2147483647) {
+        return res.status(404).json({ error: 'Document request not found', code: 'DOCUMENT_REQUEST_NOT_FOUND' });
+      }
+    }
     const row = await customerDocumentsService.createDocument({
       customerId: req.customer.id,
       uploaderType: 'customer',
       uploaderId: req.customer.id,
       file,
+      requestId,
       links: { eventId: req.body.eventId, contractId: req.body.contractId },
       actor: { type: 'customer', id: req.customer.id, name: req.customer.email },
       quotaBytes: limits.quotaBytes,
       maxUploadBytes: limits.maxUploadBytes,
     });
+    // After the row is written; neither can fail the upload.
+    await customerDocumentNotifications.notifyUploaded(row);
+    await customerDocumentNotifications.emitDocumentWorkflow('document.uploaded', row);
     res.status(201).json({ document: customerDocumentsService.toCustomerDto(row) });
   } catch (error) {
+    if (error && error.code === 'QUOTA_EXCEEDED') await customerDocumentAbuse.record(req.customer.id, 'quota_exceeded');
     sendDocumentError(res, error, 'Failed to upload document');
   } finally {
     discardTempFile(file);
   }
 });
 
+// One answer per state, shared by the document page and the download. A 410
+// is only ever given for a document this customer once saw (see
+// getStateForCustomer); everything else — including another customer's id —
+// is the same 404 body.
+const DOCUMENT_GONE = {
+  unshared: { error: 'This document is no longer shared with you.', code: 'DOCUMENT_UNSHARED' },
+  removed: { error: 'This document has been removed.', code: 'DOCUMENT_REMOVED' },
+};
+
+function documentIdParam(req) {
+  const id = Number(req.params.id);
+  return Number.isInteger(id) && id > 0 && id <= 2147483647 ? id : null;
+}
+
+/** The row when visible; otherwise sends the 404/410 and returns null. */
+async function loadCustomerDocument(req, res) {
+  const id = documentIdParam(req);
+  const found = id ? await customerDocumentsService.getStateForCustomer(req.customer.id, id) : null;
+  if (found && found.state === 'visible') return found.row;
+  if (found) {
+    res.status(410).json(DOCUMENT_GONE[found.state]);
+  } else {
+    res.status(404).json({ error: 'Document not found', code: 'DOCUMENT_NOT_FOUND' });
+    // Counted only when the id exists and is someone else's (never for an
+    // id that doesn't exist). After the answer and not awaited: the extra
+    // queries a foreign id costs must not show in the response time, or the
+    // latency would tell which ids exist.
+    if (id) customerDocumentAbuse.recordIfForeignLater(req.customer.id, id);
+  }
+  return null;
+}
+
+/**
+ * GET /document-requests — what the studio has asked this customer for and
+ * is still waiting on (slice 10).
+ */
+router.get('/document-requests', customerAuth, requireDocumentsFeature, async (req, res) => {
+  try {
+    res.json({ requests: await customerDocumentRequestsService.listOpenForCustomer(req.customer.id) });
+  } catch (error) {
+    errorResponse(res, error, 500, 'Failed to load document requests');
+  }
+});
+
+/**
+ * GET /documents/:id — one document's details, for the document page and
+ * the deep link in a notification. Pending and rejected own uploads answer
+ * 200 with their status (no download); unshared and removed ones a 410 with
+ * their own code, so the page can say which.
+ */
+router.get('/documents/:id', customerAuth, requireDocumentsFeature, async (req, res) => {
+  try {
+    const row = await loadCustomerDocument(req, res);
+    if (!row) return undefined;
+    return res.json({ document: customerDocumentsService.toCustomerDto(row) });
+  } catch (error) {
+    return sendDocumentError(res, error, 'Failed to load document');
+  }
+});
+
+/**
+ * DELETE /documents/:id — the customer deletes their own upload. Only their
+ * own uploads (anything else is the portal's usual 404), and not while it is
+ * linked to a contract (409 DOCUMENT_CONTRACT_LINKED). Shares the upload
+ * rate limit.
+ */
+router.delete('/documents/:id', customerAuth, requireDocumentsFeature, documentUploadLimiter, async (req, res) => {
+  try {
+    const id = documentIdParam(req);
+    if (!id) return res.status(404).json({ error: 'Document not found', code: 'DOCUMENT_NOT_FOUND' });
+    await customerDocumentsService.softDeleteByCustomer(req.customer.id, id,
+      { type: 'customer', id: req.customer.id, name: req.customer.email });
+    return res.json({ deleted: true });
+  } catch (error) {
+    if (error && error.code === 'DOCUMENT_NOT_FOUND') {
+      // Answered first, recorded after (see loadCustomerDocument).
+      sendDocumentError(res, error, 'Failed to delete document');
+      const id = documentIdParam(req);
+      if (id) customerDocumentAbuse.recordIfForeignLater(req.customer.id, id);
+      return undefined;
+    }
+    return sendDocumentError(res, error, 'Failed to delete document');
+  }
+});
+
 router.get('/documents/:id/download', customerAuth, requireDocumentsFeature, async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    const row = Number.isInteger(id) && id > 0
-      ? await customerDocumentsService.getForCustomer(req.customer.id, id)
-      : null;
-    if (!row) return res.status(404).json({ error: 'Document not found', code: 'DOCUMENT_NOT_FOUND' });
+    const row = await loadCustomerDocument(req, res);
+    if (!row) return undefined;
     if (row.status === 'pending') {
       return res.status(409).json({ error: 'This document is still being reviewed.', code: 'DOCUMENT_PENDING_REVIEW' });
     }
@@ -1202,7 +1314,7 @@ router.get('/documents/:id/download', customerAuth, requireDocumentsFeature, asy
       row.event_id || null,
       { type: 'customer', id: req.customer.id, name: req.customer.email }
     );
-    sendPdfAttachment(res, stream, row.original_name);
+    sendDocumentAttachment(res, stream, row);
   } catch (error) {
     sendDocumentError(res, error, 'Failed to download document');
   }

@@ -217,7 +217,9 @@ describe('with the documents flag on', () => {
   it('rejects a file whose name is not .pdf before it is written', async () => {
     const res = await uploadAs(customerA, PDF, 'contract.html');
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe('NOT_A_PDF');
+    // One code for every extension the install doesn't accept, since formats
+    // beyond PDF can be allowed (#1444 slice 7).
+    expect(res.body.code).toBe('FORMAT_NOT_ALLOWED');
   });
 
   it('rejects a password-protected PDF', async () => {
@@ -373,6 +375,47 @@ describe('with the documents flag on', () => {
     expect(dl.body.code).toBe('DOCUMENT_REJECTED');
   });
 
+  it('refuses to mark a malware-flagged row clean, but still allows it for an ordinary rejection', async () => {
+    // A normal content/format rejection an admin makes by hand can still be
+    // reversed — the regression guard for the legit path this bug must not
+    // break.
+    const ordinary = await uploadAs(customerA, PDF, 'ordinary.pdf');
+    const ordinaryId = ordinary.body.document.id;
+    await asAdmin(request(adminApp).post(`/api/admin/customers/${customerA}/documents/${ordinaryId}/review`))
+      .send({ status: 'rejected', note: 'Wrong contract version' });
+    const reversed = await asAdmin(request(adminApp)
+      .post(`/api/admin/customers/${customerA}/documents/${ordinaryId}/review`)).send({ status: 'clean' });
+    expect(reversed.status).toBe(200);
+
+    // A malware-flagged row (what customerDocumentRescanService writes once a
+    // delayed scan finds malware) may not be flipped to clean through the
+    // ordinary review path.
+    const malware = await uploadAs(customerA, PDF, 'malware.pdf');
+    const malwareId = malware.body.document.id;
+    await db('customer_documents').where({ id: malwareId }).update({
+      status: 'rejected',
+      review_note: 'The file did not pass the security check.',
+      malware_flagged: true,
+    });
+    const blocked = await asAdmin(request(adminApp)
+      .post(`/api/admin/customers/${customerA}/documents/${malwareId}/review`)).send({ status: 'clean' });
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.code).toBe('DOCUMENT_MALWARE_FLAGGED');
+    expect((await db('customer_documents').where({ id: malwareId }).first()).status).toBe('rejected');
+
+    // The admin list carries the flag, which the "Mark clean" button reads.
+    const list = await asAdmin(request(adminApp).get(`/api/admin/customers/${customerA}/documents`));
+    expect(list.body.documents.find((d) => d.id === malwareId).malwareFlagged).toBe(true);
+    expect(list.body.documents.find((d) => d.id === ordinaryId).malwareFlagged).toBe(false);
+
+    // Rejecting it again by hand (a different note) is still allowed — the
+    // guard only blocks the flip to clean.
+    const reRejected = await asAdmin(request(adminApp)
+      .post(`/api/admin/customers/${customerA}/documents/${malwareId}/review`))
+      .send({ status: 'rejected', note: 'still rejected' });
+    expect(reRejected.status).toBe(200);
+  });
+
   it('shares an admin upload with customer A only', async () => {
     const res = await asAdmin(request(adminApp).post(`/api/admin/customers/${customerA}/documents`))
       .field('share', 'true')
@@ -393,8 +436,11 @@ describe('with the documents flag on', () => {
     expect(res.status).toBe(200);
     const list = await asCustomer(request(customerApp).get('/api/customer/documents'), customerA);
     expect(list.body.documents.find((d) => d.id === sharedId)).toBeUndefined();
+    // 410 with its own code since the document page (slice 2): the customer
+    // learns it was unshared rather than that it never existed.
     const dl = await asCustomer(request(customerApp).get(`/api/customer/documents/${sharedId}/download`), customerA);
-    expect(dl.status).toBe(404);
+    expect(dl.status).toBe(410);
+    expect(dl.body.code).toBe('DOCUMENT_UNSHARED');
     await asAdmin(request(adminApp).post(`/api/admin/customers/${customerA}/documents/${sharedId}/share`));
   });
 
@@ -415,7 +461,8 @@ describe('with the documents flag on', () => {
     const list = await asCustomer(request(customerApp).get('/api/customer/documents'), customerA);
     expect(list.body.documents.find((d) => d.id === sharedId)).toBeUndefined();
     const dl = await asCustomer(request(customerApp).get(`/api/customer/documents/${sharedId}/download`), customerA);
-    expect(dl.status).toBe(404);
+    expect(dl.status).toBe(410);
+    expect(dl.body.code).toBe('DOCUMENT_REMOVED');
     const row = await db('customer_documents').where({ id: sharedId }).first();
     expect(row.deleted_at).toBeTruthy();
   });
@@ -845,5 +892,43 @@ describe('customer erasure', () => {
     expect(after.purged_at).toBeFalsy();
     expect(after.unshared_at).toBeTruthy();
     expect(fs.existsSync(path.join(process.env.STORAGE_PATH, row.storage_key))).toBe(true);
+  });
+
+  it('clears review notes and file names on every row, purged ones included', async () => {
+    // The studio's review note ("passport expired, Anna Muster") is data about
+    // the customer; so is the file name on a row a retention sweep already
+    // purged. Neither is part of any contractual record.
+    const customerD = idOf(await db('customer_accounts').insert({
+      email: 'erase-d@example.com', display_name: 'Dora', password_hash: 'x',
+      preferred_language: 'de', is_active: 1, created_at: new Date().toISOString(),
+    }).returning('id'));
+    await db('customer_accounts').where({ id: customerD }).update({ feature_documents: true });
+    const contractId = idOf(await db('contracts').insert({
+      contract_number: 'K-ERASE-2', customer_account_id: customerD, status: 'sent', issue_date: '2026-09-01',
+    }).returning('id'));
+    const upload = async (name, fields = {}) => {
+      let req = asAdmin(request(adminApp).post(`/api/admin/customers/${customerD}/documents`));
+      for (const [k, v] of Object.entries(fields)) req = req.field(k, v);
+      const res = await req.attach('file', PDF, { filename: name, contentType: 'application/pdf' });
+      expect(res.status).toBe(201);
+      return res.body.document.id;
+    };
+    const linked = await upload('Pass_Dora.pdf', { contractId: String(contractId) });
+    const loose = await upload('Rechnung_Dora.pdf');
+    const purged = await upload('Alt_Dora.pdf');
+    const now = new Date().toISOString();
+    await db('customer_documents').whereIn('id', [linked, loose, purged])
+      .update({ review_note: 'Passport expired, Dora Muster' });
+    await db('customer_documents').where({ id: purged })
+      .update({ deleted_at: now, purged_at: now, original_name: 'Alt_Dora.pdf' });
+
+    await require('../../src/services/customerAccountsService').eraseCustomer(customerD, null);
+
+    const rows = await db('customer_documents').whereIn('id', [linked, loose, purged]);
+    expect(rows).toHaveLength(3);
+    for (const r of rows) {
+      expect(r.review_note).toBeNull();
+      expect(r.original_name).toBe('erased.pdf');
+    }
   });
 });

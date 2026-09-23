@@ -471,6 +471,7 @@
         "POST /:id/bill-combined",
         "POST /:id/trigger-monthly-bill",
         "GET /:id/monthly-draft",
+        "GET /:id/activity",
         "GET /:id/documents",
         "POST /:id/documents",
         "PATCH /:id/documents/:docId",
@@ -478,7 +479,11 @@
         "POST /:id/documents/:docId/unshare",
         "POST /:id/documents/:docId/review",
         "GET /:id/documents/:docId/download",
-        "DELETE /:id/documents/:docId"
+        "DELETE /:id/documents/:docId",
+        "GET /:id/document-requests",
+        "POST /:id/document-requests",
+        "PATCH /:id/document-requests/:requestId",
+        "DELETE /:id/document-requests/:requestId"
       ]
     },
     "adminDashboard.js": {
@@ -1463,6 +1468,9 @@
         "GET /events/:slug/overview",
         "GET /documents",
         "POST /documents",
+        "GET /document-requests",
+        "GET /documents/:id",
+        "DELETE /documents/:id",
         "GET /documents/:id/download"
       ]
     },

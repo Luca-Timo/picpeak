@@ -16,6 +16,7 @@ import { settingsService } from '../../../services/settings.service';
 import { quotesService } from '../../../services/quotes.service';
 import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import { useMutationWithToast } from '../../../hooks';
+import { ALL_DOCUMENT_FORMATS, normaliseFormats } from '../../../utils/documentFormats';
 
 const SETTING_KEYS = [
   'crm_quotes_pdf_attachment_enabled',
@@ -74,6 +75,14 @@ const SETTING_KEYS = [
   'crm_overview_show_outstanding',
   'crm_overview_show_quotes',
   'crm_overview_show_invoices',
+  // Customer documents in the portal (#1444, migrations 225 + 240).
+  'customer_documents_max_upload_size_mb',
+  'customer_documents_quota_mb',
+  'customer_documents_retention_days',
+  'customer_documents_notify_on_share',
+  'customer_documents_forbidden_alert_threshold',
+  'customer_documents_request_reminder_days',
+  'customer_documents_allowed_formats',
 ];
 
 export const CrmSettingsPage: React.FC = () => {
@@ -92,7 +101,26 @@ export const CrmSettingsPage: React.FC = () => {
   const workflowsLive = !!flags.workflows;
   const showContracts = !!flags.contracts;
   const showDashboardOverview = !!(flags.quotes || flags.bills);
-  const anySection = showQuotes || showInvoices || showContracts || showDashboardOverview;
+  const showDocuments = !!flags.documents;
+  const anySection = showQuotes || showInvoices || showContracts || showDashboardOverview || showDocuments;
+  // The subtitle names what this tab configures on this install: a
+  // documents-only install has no quotes or invoices to fine-tune.
+  const subtitleAreas = [
+    showQuotes && t('crmSettings.areas.quotes', 'quotes'),
+    showInvoices && t('crmSettings.areas.invoices', 'invoices'),
+    showContracts && t('crmSettings.areas.contracts', 'contracts'),
+    showDocuments && t('crmSettings.areas.documents', 'customer documents'),
+  ].filter((a): a is string => !!a);
+  // Joined with a translated "and" rather than Intl.ListFormat: a partial
+  // locale falls back to the English area names, and its own conjunction
+  // would then read "quotes et invoices".
+  const andWord = t('crmSettings.areas.and', 'and');
+  const areaList = subtitleAreas.length > 1
+    ? `${subtitleAreas.slice(0, -1).join(', ')} ${andWord} ${subtitleAreas[subtitleAreas.length - 1]}`
+    : subtitleAreas[0];
+  const subtitle = subtitleAreas.length
+    ? t('crmSettings.subtitleFor', 'Settings for {{areas}}.', { areas: areaList, interpolation: { escapeValue: false } })
+    : t('crmSettings.subtitle', 'Fine-tune quote and invoice behaviour.');
   const { data, isLoading } = useQuery({
     queryKey: ['settings', 'crm'],
     queryFn: async () => {
@@ -178,7 +206,7 @@ export const CrmSettingsPage: React.FC = () => {
           stays. */}
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          {t('crmSettings.subtitle', 'Fine-tune quote and invoice behaviour.')}
+          {subtitle}
         </p>
         <Button onClick={() => saveAll.mutate()} disabled={saveAll.isPending || !anySection}>
           <SaveIcon className="w-4 h-4 mr-1" />{t('common.save', 'Save')}
@@ -483,6 +511,76 @@ export const CrmSettingsPage: React.FC = () => {
           {t('crmSettings.crm_contracts_number_format.help',
             'Supported tokens: {YEAR}, {MONTH}, {SEQ:04d}. Example: LBM-C-{YEAR}-{SEQ:04d} → LBM-C-2026-0001.')}
         </p>
+      </Card>
+      )}
+
+      {showDocuments && (
+      /* Customer documents (#1444). The limits are read by
+         customerDocumentsService.getLimits / getRetentionDays, which fall
+         back to their defaults for an empty or invalid value. */
+      <Card>
+        <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+          {t('crmSettings.section.documents', 'Customer documents')}
+        </h3>
+        <p className="text-xs text-neutral-500 mb-3">
+          {t('crmSettings.section.documentsHint',
+            'Documents exchanged with customers in their portal. Customer uploads stay unavailable to them until reviewed.')}
+        </p>
+        {checkboxDefaultOn('customer_documents_notify_on_share', 'Email the customer when a document is shared with them (default for the checkbox on the customer record)')}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+          <Input type="number" min={1} max={500}
+            label={t('crmSettings.customer_documents_max_upload_size_mb.label', 'Largest file (MB)') as string}
+            value={values.customer_documents_max_upload_size_mb ?? 25}
+            onChange={(e) => setVal('customer_documents_max_upload_size_mb', Number(e.target.value))} />
+          <Input type="number" min={1} max={100000}
+            label={t('crmSettings.customer_documents_quota_mb.label', 'Storage per customer (MB)') as string}
+            value={values.customer_documents_quota_mb ?? 250}
+            onChange={(e) => setVal('customer_documents_quota_mb', Number(e.target.value))} />
+          <Input type="number" min={1} max={3650}
+            label={t('crmSettings.customer_documents_retention_days.label', 'Keep rejected and deleted files (days)') as string}
+            value={values.customer_documents_retention_days ?? 30}
+            onChange={(e) => setVal('customer_documents_retention_days', Number(e.target.value))} />
+          <Input type="number" min={1} max={10000}
+            label={t('crmSettings.customer_documents_forbidden_alert_threshold.label', 'Alert after attempts on other customers\' documents (per hour)') as string}
+            value={values.customer_documents_forbidden_alert_threshold ?? 20}
+            onChange={(e) => setVal('customer_documents_forbidden_alert_threshold', Number(e.target.value))} />
+        </div>
+        {/* The formats are a fixed, inspected allowlist (backend
+            services/documentFormats); this picks which of them the install
+            accepts. PDF is the default. */}
+        <fieldset className="mt-3">
+          <legend className="text-sm font-medium text-neutral-800 dark:text-neutral-200 mb-1">
+            {t('crmSettings.customer_documents_allowed_formats.label', 'File types customers can upload')}
+          </legend>
+          <p className="text-xs text-neutral-500 mb-2">
+            {t('crmSettings.customer_documents_allowed_formats.help',
+              'Every file is checked by its content. PDF is the only type on by default. The check of Word, Excel and OpenDocument files is best-effort: it refuses macros, embedded objects and the known ways of linking to outside content (including web links), but it does not detect every active-content mechanism these formats have. Turn them on only for customers you trust, and open such files with care. CSV files are passed on as they are: a formula in one runs when someone opens it in a spreadsheet.')}
+          </p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {ALL_DOCUMENT_FORMATS.map((f) => {
+              const current = normaliseFormats(values.customer_documents_allowed_formats);
+              return (
+                <label key={f} className="flex items-center gap-2 text-sm text-neutral-800 dark:text-neutral-200">
+                  <input
+                    type="checkbox"
+                    checked={current.includes(f)}
+                    onChange={(e) => {
+                      const next = e.target.checked ? [...current, f] : current.filter((x) => x !== f);
+                      setVal('customer_documents_allowed_formats', normaliseFormats(next));
+                    }}
+                  />
+                  <span>{f.toUpperCase()}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+        <div className="mt-3">
+          <Input
+            label={t('crmSettings.customer_documents_request_reminder_days.label', 'Remind about requested documents after (days, comma-separated; empty = off)') as string}
+            value={values.customer_documents_request_reminder_days ?? '3,7'}
+            onChange={(e) => setVal('customer_documents_request_reminder_days', e.target.value)} />
+        </div>
       </Card>
       )}
 

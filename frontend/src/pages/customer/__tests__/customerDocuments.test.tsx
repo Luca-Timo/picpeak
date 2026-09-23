@@ -6,7 +6,7 @@
  * isn't available must not offer a download, and an upload failure has to
  * name the file and say what to do.
  */
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -56,28 +56,35 @@ const makeDoc = (over: Partial<CustomerDocument>): CustomerDocument => ({
 });
 
 let docs: CustomerDocument[] = [];
+let formats: string[] | undefined;
 const downloadSpy = vi.fn(async () => undefined);
 const uploadSpy = vi.fn(async (): Promise<CustomerDocument> => makeDoc({ id: 99 }));
+const deleteSpy = vi.fn(async () => undefined);
+const listEventsMock = vi.fn(async (): Promise<Array<{ id: number; eventName: string }>> => []);
 
 vi.mock('../../../services/customer.service', () => ({
   customerService: {
     listDocuments: vi.fn(async () => ({
       documents: docs,
       limits: { maxUploadBytes: 25 * 1024 * 1024, quotaBytes: 250 * 1024 * 1024, usedBytes: 4096 },
+      allowedFormats: formats,
     })),
-    listEvents: vi.fn(async () => []),
+    listEvents: (...a: unknown[]) => listEventsMock(...(a as [])),
     uploadDocument: (...a: unknown[]) => uploadSpy(...(a as [])),
+    deleteDocument: (...a: unknown[]) => deleteSpy(...(a as [])),
     downloadDocument: (...a: unknown[]) => downloadSpy(...(a as [])),
   },
 }));
 
+import { ConfirmDialogProvider } from '../../../components/common';
 import { CustomerDocumentsPage } from '../CustomerDocumentsPage';
 
-function renderPage() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderPage(qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter><CustomerDocumentsPage /></MemoryRouter>
+      <ConfirmDialogProvider>
+        <MemoryRouter><CustomerDocumentsPage /></MemoryRouter>
+      </ConfirmDialogProvider>
     </QueryClientProvider>
   );
 }
@@ -106,25 +113,94 @@ describe('CustomerDocumentsPage', () => {
     expect(downloads[0]).toHaveAccessibleName('Download offer.pdf');
   });
 
+  it('links every row to its document page (#1444)', async () => {
+    renderPage();
+    expect(await screen.findByRole('link', { name: 'signed-contract.pdf' })).toHaveAttribute('href', '/customer/documents/1');
+    expect(screen.getByRole('link', { name: 'offer.pdf' })).toHaveAttribute('href', '/customer/documents/2');
+  });
+
+  it('offers Delete only on own uploads the server allows, and confirms first (#1444)', async () => {
+    docs = [
+      makeDoc({ id: 1, name: 'mine.pdf', canDelete: true }),
+      makeDoc({ id: 2, name: 'signed.pdf', canDelete: false, contractId: 4 }),
+      makeDoc({ id: 3, name: 'offer.pdf', uploadedBy: 'studio', status: 'clean', downloadable: true }),
+    ];
+    deleteSpy.mockClear();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(qc, 'invalidateQueries');
+    renderPage(qc);
+    const del = await screen.findByRole('button', { name: 'Delete mine.pdf' });
+    expect(screen.queryByRole('button', { name: 'Delete signed.pdf' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete offer.pdf' })).toBeNull();
+
+    await userEvent.click(del);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Your photographer may already have downloaded it.');
+    expect(deleteSpy).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith(1));
+    // The event page's own overview and the request list refresh too: the
+    // deleted upload may have answered a request, which is open again.
+    await waitFor(() => {
+      const keys = invalidate.mock.calls.map(([filters]) => (filters as { queryKey: unknown[] }).queryKey[0]);
+      expect(keys).toEqual(expect.arrayContaining(['customer-documents', 'customer-event-overview', 'customer-document-requests']));
+    });
+  });
+
   it('downloads through the service', async () => {
     renderPage();
     await userEvent.click(await screen.findByRole('button', { name: 'Download offer.pdf' }));
     expect(downloadSpy).toHaveBeenCalledWith(expect.objectContaining({ id: 2, name: 'offer.pdf' }));
   });
 
-  it('refuses a file that is not a PDF before sending it', async () => {
+  it('refuses a file type the server does not accept before sending it', async () => {
     renderPage();
-    const input = await screen.findByLabelText('PDF file');
+    const input = await screen.findByLabelText('File');
     fireEvent.change(input, { target: { files: [new File(['x'], 'holiday.jpg', { type: 'image/jpeg' })] } });
-    expect(await screen.findByText('holiday.jpg is not a PDF. Only PDF documents can be uploaded.')).toBeInTheDocument();
+    expect(await screen.findByText('holiday.jpg is not a file type you can upload here. Accepted: PDF.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Upload/ })).toBeDisabled();
     expect(uploadSpy).not.toHaveBeenCalled();
+  });
+
+  it('takes the accepted formats from the server: accept list, copy and the first check (#1444)', async () => {
+    formats = ['pdf', 'docx', 'csv'];
+    renderPage();
+    const input = await screen.findByLabelText('File');
+    expect(input.getAttribute('accept')).toBe(
+      '.pdf,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.csv,text/csv',
+    );
+    expect(screen.getByText(/^Accepted: PDF, DOCX, CSV, up to/)).toBeInTheDocument();
+    await userEvent.upload(input, new File(['a,b'], 'list.csv', { type: 'text/csv' }));
+    expect(screen.getByRole('button', { name: /Upload/ })).toBeEnabled();
+    fireEvent.change(input, { target: { files: [new File(['x'], 'old.doc', { type: 'application/msword' })] } });
+    expect(await screen.findByText('old.doc is not a file type you can upload here. Accepted: PDF, DOCX, CSV.')).toBeInTheDocument();
+    formats = undefined;
+  });
+
+  it('names each office refusal with what to do about it (#1444)', async () => {
+    for (const [code, expected] of [
+      ['DOCUMENT_ACTIVE_CONTENT', /macros, embedded code or links[\s\S]*Save it as PDF/],
+      ['DOCUMENT_NOT_VALID', /is not a valid file of its type/],
+      ['DOCUMENT_ENCRYPTED', /is password-protected/],
+      ['DOCUMENT_TOO_COMPLEX', /could not be checked\. Save it as PDF/],
+      ['DOCUMENT_NOT_TEXT', /not a plain UTF-8 text file/],
+    ] as const) {
+      formats = ['pdf', 'docx'];
+      uploadSpy.mockRejectedValueOnce({ response: { status: 400, data: { code } } });
+      const view = renderPage();
+      await userEvent.upload(await screen.findByLabelText('File'), new File(['x'], 'offer.docx', { type: 'application/octet-stream' }));
+      await userEvent.click(screen.getByRole('button', { name: /Upload/ }));
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(expected));
+      expect(screen.getByRole('status')).toHaveTextContent('offer.docx');
+      view.unmount();
+    }
+    formats = undefined;
   });
 
   it('names the file in a server rejection and offers a retry', async () => {
     uploadSpy.mockRejectedValueOnce({ response: { status: 400, data: { code: 'PDF_ENCRYPTED' } } });
     renderPage();
-    const input = await screen.findByLabelText('PDF file');
+    const input = await screen.findByLabelText('File');
     await userEvent.upload(input, new File(['%PDF-1.4'], 'locked.pdf', { type: 'application/pdf' }));
     await userEvent.click(screen.getByRole('button', { name: /Upload/ }));
 
@@ -145,7 +221,7 @@ describe('CustomerDocumentsPage', () => {
     ] as const) {
       uploadSpy.mockRejectedValueOnce({ response: { status: 400, data: { code } } });
       const view = renderPage();
-      const input = await screen.findByLabelText('PDF file');
+      const input = await screen.findByLabelText('File');
       await userEvent.upload(input, new File(['%PDF-1.4'], 'scan.pdf', { type: 'application/pdf' }));
       await userEvent.click(screen.getByRole('button', { name: /Upload/ }));
       await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(expected));
@@ -169,9 +245,49 @@ describe('CustomerDocumentsPage', () => {
     }
   });
 
+  it('fits a 390px phone: controls stack, rows wrap, long names break, nothing is wider than the screen', async () => {
+    // jsdom does no layout, so this pins the classes a 390px viewport relies
+    // on (below Tailwind's `sm` breakpoint, 640px, only unprefixed classes
+    // apply). A screenshot is still the real check; this catches the
+    // regression that makes one necessary — a fixed width, a row that can't
+    // wrap, a filename that pushes the page sideways.
+    window.innerWidth = 390;
+    window.dispatchEvent(new Event('resize'));
+    docs = [makeDoc({
+      id: 5, name: 'Vertrag_Hochzeit_Anna_und_Ben_Mueller_final_unterschrieben_v3.pdf',
+      status: 'clean', downloadable: true, uploadedBy: 'studio', eventName: 'Wedding',
+    })];
+    listEventsMock.mockResolvedValueOnce([{ id: 1, eventName: 'Wedding' }]);
+    const { container } = renderPage();
+
+    const name = await screen.findByText(/^Vertrag_Hochzeit/);
+    expect(name.className).toMatch(/\bbreak-all\b/);
+    const row = name.closest('li')!;
+    expect(row.className).toMatch(/\bflex-wrap\b/);
+    expect(within(row).getByRole('button', { name: /^Download / })).toBeInTheDocument();
+
+    // The upload controls are a column on a phone, a row from `sm` up.
+    const input = screen.getByLabelText('File');
+    const controls = input.closest('label')!.parentElement!;
+    expect(controls.className).toMatch(/(^|\s)flex-col(\s|$)/);
+    expect(controls.className).toMatch(/\bsm:flex-row\b/);
+    // The event select is full width on a phone and only narrows from `sm`.
+    const select = await screen.findByRole('combobox');
+    expect(select.className).toMatch(/(^|\s)w-full(\s|$)/);
+    expect(select.className).not.toMatch(/(^|\s)w-(56|64|72|80|96|\[\d+px\])(\s|$)/);
+
+    // No unprefixed fixed width or min-width anywhere on the page that could
+    // exceed 390px.
+    const tooWide = /(^|\s)(min-w|w)-(\[\d{3,}px\]|screen-\w+|9[0-9]|[1-9]\d{2,})(\s|$)/;
+    const offenders = Array.from(container.querySelectorAll<HTMLElement>('[class]'))
+      .map((el) => el.getAttribute('class') || '')
+      .filter((cls) => tooWide.test(cls));
+    expect(offenders).toEqual([]);
+  });
+
   it('confirms a received upload as awaiting review', async () => {
     renderPage();
-    const input = await screen.findByLabelText('PDF file');
+    const input = await screen.findByLabelText('File');
     await userEvent.upload(input, new File(['%PDF-1.4'], 'scan.pdf', { type: 'application/pdf' }));
     await userEvent.click(screen.getByRole('button', { name: /Upload/ }));
 

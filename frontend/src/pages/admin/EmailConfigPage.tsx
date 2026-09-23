@@ -144,6 +144,12 @@ const TEMPLATE_DISPLAY_NAMES: Record<string, string> = {
   customer_invitation: 'Customer Invitation',
   customer_password_reset: 'Customer Password Reset',
   customer_gallery_assigned: 'Gallery Assigned to Customer',
+  customer_document_shared: 'Document Shared with Customer',
+  customer_document_uploaded_admin: 'Customer Uploaded a Document (Admin)',
+  customer_document_reviewed: 'Customer Document Not Accepted',
+  customer_document_access_alert_admin: 'Unusual Document Access (Admin)',
+  customer_document_requested: 'Document Requested from Customer',
+  customer_document_request_reminder: 'Document Request Reminder',
   // quotes
   quote_sent: 'Quote Sent',
   quote_accepted_customer: 'Quote Accepted (Customer)',

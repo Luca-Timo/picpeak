@@ -31,9 +31,14 @@ const combinedBillingService = require('../services/combinedBillingService');
 const invoiceService = require('../services/invoiceService');
 const { IDENTITY_PRESERVING_NORMALIZE_EMAIL } = require('../utils/emailNormalization');
 const { NotFoundError, AppError } = require('../utils/errors');
+const { getAppSetting } = require('../utils/appSettings');
 const customerDocumentsService = require('../services/customerDocumentsService');
+const customerDocumentNotifications = require('../services/customerDocumentNotifications');
+const customerActivityService = require('../services/customerActivityService');
+const customerDocumentRequestsService = require('../services/customerDocumentRequestsService');
 const customerGroupsService = require('../services/customerGroupsService');
-const { receivePdfUpload, discardTempFile, sendPdfAttachment } = require('../middleware/customerDocumentUpload');
+const { receiveDocumentUpload, discardTempFile, sendDocumentAttachment } = require('../middleware/customerDocumentUpload');
+const documentFormats = require('../services/documentFormats');
 
 const router = express.Router();
 
@@ -1000,6 +1005,37 @@ router.get('/:id/monthly-draft', [
   successResponse(res, { draft });
 }));
 
+// Ids above PostgreSQL's integer range answer 400 here rather than a 500
+// from the database.
+const MAX_ID = 2147483647;
+
+// ---- customer activity (#1444) -------------------------------------------
+// The customer's timeline: document, account and group activity from
+// activity_logs, newest first. ?limit (1-200, default 50) and ?beforeId (the
+// previous page's nextBeforeId). Unknown customer → 404. Document rows are
+// left out unless the `documents` flag is on AND the admin holds
+// customers.documents.manage — the gate every other document route has.
+router.get('/:id/activity', [
+  adminAuth,
+  requirePermission('customers.view'),
+  param('id').isInt({ min: 1, max: MAX_ID }),
+  query('limit').optional().isInt({ min: 1, max: 200 }),
+  query('beforeId').optional().isInt({ min: 1, max: MAX_ID }),
+], handleAsync(async (req, res) => {
+  validateRequest(req);
+  const customerId = parseInt(req.params.id, 10);
+  const customer = await db('customer_accounts').where({ id: customerId }).first('id');
+  if (!customer) throw new NotFoundError('Customer', customerId);
+  const includeDocuments = await isFeatureEnabled('documents')
+    && await userHasAnyPermission(req.admin.id, ['customers.documents.manage']);
+  const result = await customerActivityService.listForCustomer(customerId, {
+    limit: req.query.limit ? parseInt(req.query.limit, 10) : 50,
+    beforeId: req.query.beforeId ? parseInt(req.query.beforeId, 10) : null,
+    includeDocuments,
+  });
+  successResponse(res, result);
+}));
+
 // ---- customer documents (#1444) ------------------------------------------
 // Every route — reads included — sits behind the `documents` flag and
 // `customers.documents.manage`: the list carries customer uploads nobody has
@@ -1012,10 +1048,17 @@ const documentGuards = [
   adminAuth,
   requireDocuments,
   requirePermission('customers.documents.manage'),
-  param('id').isInt({ min: 1 }),
+  param('id').isInt({ min: 1, max: MAX_ID }),
 ];
-const documentItemGuards = [...documentGuards, param('docId').isInt({ min: 1 })];
+const documentItemGuards = [...documentGuards, param('docId').isInt({ min: 1, max: MAX_ID })];
 const adminActor = (admin) => ({ type: 'admin', id: admin.id, name: admin.username || 'admin' });
+
+/** Multipart sends strings; JSON sends booleans. Anything else: no choice made. */
+function parseNotify(value) {
+  if (value === true || value === 'true' || value === '1') return true;
+  if (value === false || value === 'false' || value === '0') return false;
+  return undefined;
+}
 
 async function loadDocumentCustomer(req) {
   validateRequest(req);
@@ -1030,10 +1073,13 @@ router.get('/:id/documents', documentGuards, handleAsync(async (req, res) => {
   const documents = await customerDocumentsService.listForAdmin(customerId);
   const limits = await customerDocumentsService.getLimits();
   const usedBytes = await customerDocumentsService.getUsageBytes(customerId);
-  successResponse(res, { documents, limits: { ...limits, usedBytes } });
+  // The default for the card's "Notify the customer" checkbox.
+  const notifyOnShare = (await getAppSetting('customer_documents_notify_on_share', true)) !== false;
+  const allowedFormats = await documentFormats.getAllowedFormats();
+  successResponse(res, { documents, limits: { ...limits, usedBytes }, settings: { notifyOnShare }, allowedFormats });
 }));
 
-// multipart: file (PDF), share?, eventId?, projectId?, contractId?
+// multipart: file (PDF), share?, notify?, eventId?, projectId?, contractId?
 // Admin uploads are recorded clean by the uploading admin and don't count
 // against the customer's quota; the per-file size cap applies.
 router.post('/:id/documents', documentGuards, handleAsync(async (req, res) => {
@@ -1041,7 +1087,10 @@ router.post('/:id/documents', documentGuards, handleAsync(async (req, res) => {
   const limits = await customerDocumentsService.getLimits();
   let file = null;
   try {
-    file = await receivePdfUpload(req, res, { maxBytes: limits.maxUploadBytes });
+    file = await receiveDocumentUpload(req, res, {
+      maxBytes: limits.maxUploadBytes,
+      allowedFormats: await documentFormats.getAllowedFormats(),
+    });
     if (!file) return res.status(400).json({ error: 'No file was uploaded', code: 'NO_FILE' });
     const share = req.body.share === true || req.body.share === 'true' || req.body.share === '1';
     const row = await customerDocumentsService.createDocument({
@@ -1055,7 +1104,14 @@ router.post('/:id/documents', documentGuards, handleAsync(async (req, res) => {
       actor: adminActor(req.admin),
       maxUploadBytes: limits.maxUploadBytes,
     });
-    return successResponse(res, { document: { id: row.id, status: row.status } }, 201);
+    // Only a share that was recorded is announced: an upload the scanner
+    // left pending is shared (and announced) once it is clean.
+    let notification = 'skipped';
+    if (row.shared_at) {
+      notification = await customerDocumentNotifications.notifyShared(row, { notify: parseNotify(req.body.notify) });
+      await customerDocumentNotifications.emitDocumentWorkflow('document.shared', row, String(row.shared_at));
+    }
+    return successResponse(res, { document: { id: row.id, status: row.status }, notification }, 201);
   } finally {
     discardTempFile(file);
   }
@@ -1064,19 +1120,31 @@ router.post('/:id/documents', documentGuards, handleAsync(async (req, res) => {
 // Replaces all three links; send null to clear one.
 router.patch('/:id/documents/:docId', [
   ...documentItemGuards,
-  body('eventId').optional({ nullable: true }).isInt({ min: 1 }),
-  body('projectId').optional({ nullable: true }).isInt({ min: 1 }),
-  body('contractId').optional({ nullable: true }).isInt({ min: 1 }),
+  body('eventId').optional({ nullable: true }).isInt({ min: 1, max: MAX_ID }),
+  body('projectId').optional({ nullable: true }).isInt({ min: 1, max: MAX_ID }),
+  body('contractId').optional({ nullable: true }).isInt({ min: 1, max: MAX_ID }),
 ], handleAsync(async (req, res) => {
   const customerId = await loadDocumentCustomer(req);
   await customerDocumentsService.updateLinks(customerId, parseInt(req.params.docId, 10), req.body, req.admin);
   successResponse(res, { updated: true });
 }));
 
-router.post('/:id/documents/:docId/share', documentItemGuards, handleAsync(async (req, res) => {
+// notify?: boolean — whether to email the customer; left out, the
+// customer_documents_notify_on_share setting decides. `notification` in the
+// answer says what happened: queued, skipped, or failed (shared anyway).
+router.post('/:id/documents/:docId/share', [
+  ...documentItemGuards,
+  body('notify').optional({ nullable: true }).isBoolean(),
+], handleAsync(async (req, res) => {
   const customerId = await loadDocumentCustomer(req);
-  await customerDocumentsService.setShared(customerId, parseInt(req.params.docId, 10), true, req.admin);
-  successResponse(res, { shared: true });
+  const { row, changed } = await customerDocumentsService.setShared(customerId, parseInt(req.params.docId, 10), true, req.admin);
+  // Already shared: nothing happened, so nothing is announced again.
+  let notification = 'skipped';
+  if (changed) {
+    notification = await customerDocumentNotifications.notifyShared(row, { notify: parseNotify(req.body.notify) });
+    await customerDocumentNotifications.emitDocumentWorkflow('document.shared', row, String(row.shared_at));
+  }
+  successResponse(res, { shared: true, notification });
 }));
 
 router.post('/:id/documents/:docId/unshare', documentItemGuards, handleAsync(async (req, res) => {
@@ -1092,11 +1160,16 @@ router.post('/:id/documents/:docId/review', [
   body('note').optional({ nullable: true }).isString().isLength({ max: 500 }),
 ], handleAsync(async (req, res) => {
   const customerId = await loadDocumentCustomer(req);
-  await customerDocumentsService.review(customerId, parseInt(req.params.docId, 10), {
+  const row = await customerDocumentsService.review(customerId, parseInt(req.params.docId, 10), {
     status: req.body.status,
     note: req.body.note,
   }, req.admin);
-  successResponse(res, { status: req.body.status });
+  // Only a rejection of the customer's own upload is mailed (and reopens a
+  // request it answered); an accepted upload needs no mail.
+  const notification = row.status === 'rejected'
+    ? await customerDocumentsService.afterRejection(row)
+    : 'skipped';
+  successResponse(res, { status: req.body.status, notification });
 }));
 
 // Admins can download any non-deleted document, pending ones included —
@@ -1108,7 +1181,7 @@ router.get('/:id/documents/:docId/download', documentItemGuards, handleAsync(asy
   await customerDocumentsService.recordView(row.id, 'admin', req.admin.id);
   await logActivity('customer_document_downloaded',
     { documentId: row.id, customerId }, row.event_id || null, adminActor(req.admin));
-  sendPdfAttachment(res, stream, row.original_name);
+  sendDocumentAttachment(res, stream, row);
 }));
 
 // Soft delete: hidden from the customer and the list at once; the retention
@@ -1117,6 +1190,51 @@ router.delete('/:id/documents/:docId', documentItemGuards, handleAsync(async (re
   const customerId = await loadDocumentCustomer(req);
   await customerDocumentsService.softDelete(customerId, parseInt(req.params.docId, 10), req.admin);
   successResponse(res, { deleted: true });
+}));
+
+// ---- document requests (#1444 slice 10) -----------------------------------
+// The studio asks the customer for a document. Same guards as the documents.
+// A request of another customer is the same 404 as an unknown one.
+const requestItemGuards = [...documentGuards, param('requestId').isInt({ min: 1, max: MAX_ID })];
+
+router.get('/:id/document-requests', documentGuards, handleAsync(async (req, res) => {
+  const customerId = await loadDocumentCustomer(req);
+  successResponse(res, { requests: await customerDocumentRequestsService.listForAdmin(customerId) });
+}));
+
+// body: title, note?, dueAt?, eventId?, contractId?, notify? (default true)
+router.post('/:id/document-requests', [
+  ...documentGuards,
+  body('title').isString().trim().isLength({ min: 1, max: 200 }),
+  body('note').optional({ nullable: true }).isString().isLength({ max: 1000 }),
+  body('dueAt').optional({ nullable: true }).isISO8601(),
+  body('eventId').optional({ nullable: true }).isInt({ min: 1, max: MAX_ID }),
+  body('contractId').optional({ nullable: true }).isInt({ min: 1, max: MAX_ID }),
+  body('notify').optional({ nullable: true }).isBoolean(),
+], handleAsync(async (req, res) => {
+  const customerId = await loadDocumentCustomer(req);
+  const row = await customerDocumentRequestsService.create(customerId, req.body, req.admin);
+  const notification = await customerDocumentNotifications.notifyRequest(row, { notify: parseNotify(req.body.notify) });
+  await customerDocumentNotifications.emitDocumentWorkflow('document.requested', row);
+  successResponse(res, { request: customerDocumentRequestsService.toAdminDto(row), notification }, 201);
+}));
+
+router.patch('/:id/document-requests/:requestId', [
+  ...requestItemGuards,
+  body('title').optional().isString().trim().isLength({ min: 1, max: 200 }),
+  body('note').optional({ nullable: true }).isString().isLength({ max: 1000 }),
+  body('dueAt').optional({ nullable: true }).isISO8601(),
+], handleAsync(async (req, res) => {
+  const customerId = await loadDocumentCustomer(req);
+  const row = await customerDocumentRequestsService.update(customerId, parseInt(req.params.requestId, 10), req.body);
+  successResponse(res, { request: customerDocumentRequestsService.toAdminDto(row) });
+}));
+
+// Cancel. The row stays, with status cancelled.
+router.delete('/:id/document-requests/:requestId', requestItemGuards, handleAsync(async (req, res) => {
+  const customerId = await loadDocumentCustomer(req);
+  await customerDocumentRequestsService.cancel(customerId, parseInt(req.params.requestId, 10), req.admin);
+  successResponse(res, { cancelled: true });
 }));
 
 module.exports = router;
