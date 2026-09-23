@@ -12,13 +12,44 @@ const { isUniqueViolation } = require('../utils/dbErrors');
 const businessProfileService = require('./businessProfileService');
 const themeModel = require('./pdf/theme');
 const { availableFamilies } = require('./pdf/fonts');
+const uploadedFonts = require('./pdf/uploadedFonts');
+
+/** Bundled families plus the active uploaded ones (`upload-<id>`). */
+async function allFamilies() {
+  return [...availableFamilies(), ...(await uploadedFonts.uploadedFamilies()).map((f) => f.family)];
+}
+
+/**
+ * The families a scope's settings may name: every usable one, plus the one
+ * the scope already stores. A font archived while a theme uses it stays
+ * savable there — the document falls back and reports it — so an unrelated
+ * change to that theme is not refused for it.
+ */
+async function familiesFor(scope) {
+  const { byScope } = await loadRows();
+  const stored = byScope[scope] && byScope[scope].fontFamily;
+  return [...(await allFamilies()), ...(stored ? [String(stored)] : [])];
+}
+
+/**
+ * A resolved theme with its uploaded font's files attached (#1445): the
+ * renderer runs in a worker without a database, so an `upload-<id>` family
+ * reaches it as server-resolved paths. An archived or missing font resolves
+ * to nothing, and the document falls back to Helvetica.
+ */
+async function withFontFiles(theme) {
+  if (!theme || !uploadedFonts.idOfFamily(theme.fontFamily)) return theme;
+  const fontFiles = await uploadedFonts.fontFilesFor(theme.fontFamily);
+  return fontFiles ? Object.freeze({ ...theme, fontFiles: Object.freeze(fontFiles) }) : theme;
+}
 
 async function loadRows() {
   const rows = await db('pdf_themes').select('scope', 'settings', 'updated_at');
   const byScope = {};
   const updatedAt = {};
+  // Stored rows are checked again on read (theme.sanitizeStoredSettings).
   for (const row of rows) {
-    byScope[row.scope] = themeModel.parseSettings(row.settings);
+    byScope[row.scope] = themeModel.sanitizeStoredSettings(row.settings);
     updatedAt[row.scope] = row.updated_at || null;
   }
   return { byScope, updatedAt };
@@ -28,7 +59,7 @@ async function loadRows() {
 async function resolveTheme(scope) {
   const { byScope } = await loadRows();
   const { profile } = await businessProfileService.getProfile();
-  return themeModel.resolveTheme(scope, byScope, profile);
+  return withFontFiles(themeModel.resolveTheme(scope, byScope, profile));
 }
 
 /** Every scope's stored settings and, for document types, the resolved theme. */
@@ -36,13 +67,20 @@ async function listThemes() {
   const { byScope, updatedAt } = await loadRows();
   const { profile } = await businessProfileService.getProfile();
   return {
-    themes: themeModel.SCOPES.map((scope) => ({
-      scope,
-      settings: byScope[scope] || {},
-      updatedAt: updatedAt[scope] || null,
-      resolved: themeModel.resolveTheme(scope, byScope, profile),
-    })),
+    themes: themeModel.SCOPES.map((scope) => {
+      const resolved = themeModel.resolveTheme(scope, byScope, profile);
+      return {
+        scope,
+        settings: byScope[scope] || {},
+        updatedAt: updatedAt[scope] || null,
+        resolved,
+        // Readability warnings (#1445): shown next to the form, never enforced.
+        warnings: themeModel.themeWarnings(resolved),
+      };
+    }),
     fontFamilies: availableFamilies(),
+    // Uploaded fonts a theme may use, `[{ family: 'upload-<id>', name }]`.
+    uploadedFonts: await uploadedFonts.uploadedFamilies(),
   };
 }
 
@@ -55,7 +93,7 @@ function assertScope(scope) {
 /** Replace a scope's settings. An empty object clears the scope. */
 async function saveTheme(scope, settings, adminId) {
   assertScope(scope);
-  const clean = themeModel.sanitizeThemeSettings(settings, { availableFamilies: availableFamilies() });
+  const clean = themeModel.sanitizeThemeSettings(settings, { availableFamilies: await familiesFor(scope) });
   const now = new Date();
   const values = { settings: JSON.stringify(clean), updated_by_admin_id: adminId || null, updated_at: now };
   const updated = await db('pdf_themes').where({ scope }).update(values);
@@ -80,49 +118,20 @@ async function saveTheme(scope, settings, adminId) {
  */
 async function resolveDraftTheme(scope, settings) {
   assertScope(scope);
-  const clean = themeModel.sanitizeThemeSettings(settings, { availableFamilies: availableFamilies() });
+  const clean = themeModel.sanitizeThemeSettings(settings, { availableFamilies: await familiesFor(scope) });
   const { byScope } = await loadRows();
   const { profile } = await businessProfileService.getProfile();
   const rows = { ...byScope, [scope]: clean };
   // Previewing the default scope shows its effect on a quote.
   const docScope = scope === 'default' ? 'quote' : scope;
-  return themeModel.resolveTheme(docScope, rows, profile);
+  return withFontFiles(themeModel.resolveTheme(docScope, rows, profile));
 }
 
 // ---------------------------------------------------------------------
 // Preview: a sample document through the real renderer
 // ---------------------------------------------------------------------
 
-const SAMPLE_CUSTOMER = {
-  first_name: 'Anna', last_name: 'Muster', display_name: 'Anna Muster',
-  address_line1: 'Musterstrasse 1', postal_code: '9490', city: 'Vaduz', country_code: 'LI',
-  email: 'anna@example.com',
-};
-
-const SAMPLE_TEXT = {
-  de: {
-    photography: 'Fotografie vor Ort',
-    photographyNote: 'Vorbereitung, Trauung und Porträts',
-    album: 'Album 30×30',
-    discount: 'Vereinsrabatt',
-    intro: 'Vorschau mit Beispieldaten — kein echtes Dokument.',
-    blockName: 'Leistungsumfang',
-    blockBody: 'Die Fotografin begleitet die Hochzeit am vereinbarten Tag. **Beispieltext** für die Vorschau.',
-    closingName: 'Schlussbestimmungen',
-    closingBody: 'Änderungen bedürfen der Schriftform. Beispieltext für die Vorschau.',
-  },
-  en: {
-    photography: 'Photography on location',
-    photographyNote: 'Getting ready, ceremony and portraits',
-    album: 'Album 30×30',
-    discount: 'Club discount',
-    intro: 'Preview with sample data — not a real document.',
-    blockName: 'Scope of services',
-    blockBody: 'The photographer covers the wedding on the agreed day. **Sample text** for the preview.',
-    closingName: 'Closing provisions',
-    closingBody: 'Changes must be made in writing. Sample text for the preview.',
-  },
-};
+const { SAMPLE_CUSTOMER, SAMPLE_TOTALS, sampleText, sampleLines } = require('./pdf/sampleData');
 
 /**
  * Render a sample quote, invoice or contract with a scope's theme — the
@@ -139,22 +148,14 @@ async function renderPreview(scope, settings) {
   const pdfService = require('./pdfService');
   const logoPath = await resolveLogoFile(profile);
   const locale = profile && profile.default_locale === 'en' ? 'en' : 'de';
-  const text = SAMPLE_TEXT[locale];
+  const text = sampleText(locale);
   const currency = String((profile && profile.default_currency) || 'CHF').toUpperCase();
   const issuer = buildIssuerBlock(profile || {}, logoPath, { quoteToggles: docType === 'quote' });
   const recipient = buildRecipientBlock(profile || {}, SAMPLE_CUSTOMER);
   const issueDate = new Date().toISOString().slice(0, 10);
 
-  const lines = [
-    { quantity: 8, unit: 'hour', description: text.photography, unitPriceMinor: 15000, discountPercent: 0,
-      lineTotalMinor: 120000, detailsText: text.photographyNote },
-    { quantity: 1, description: text.album, unitPriceMinor: 45000, discountPercent: 0, lineTotalMinor: 45000 },
-    { quantity: 1, lineKind: 'discount', description: text.discount, unitPriceMinor: -10000, discountPercent: 0,
-      lineTotalMinor: -10000 },
-  ];
-  const totals = {
-    netAmountMinor: 155000, vatRate: 8.1, vatAmountMinor: 12555, shippingAmountMinor: 0, totalAmountMinor: 167555,
-  };
+  const lines = sampleLines(locale);
+  const totals = { ...SAMPLE_TOTALS };
 
   if (docType === 'contract') {
     return pdfService.renderContractToBuffer({

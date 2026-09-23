@@ -73,6 +73,65 @@ function listSigners(contractId, conn = db) {
   return conn('contract_signers').where({ contract_id: contractId }).orderBy('position', 'asc');
 }
 
+/** The customer's columns a contract prints (recipient block, salutation, signer defaults). */
+const RECIPIENT_FIELD = /name|email|address|postal|city|country|company|phone|vat|salutation|title|attention/i;
+function recipientFields(customer) {
+  return customer ? Object.fromEntries(Object.entries(customer)
+    .filter(([key]) => RECIPIENT_FIELD.test(key) && !/hash/i.test(key))) : null;
+}
+
+/**
+ * What a send depends on that no contract lock covers (#1445): the customer's
+ * printed fields and whether it is active, the signer rows, the issuer
+ * (business profile), the settings the placeholders and dates read and the
+ * contract's PDF theme. None
+ * of them bumps contracts.lock_version, so the send takes this when it
+ * renders and compares it again, rows locked, inside the transaction that
+ * marks the contract sent.
+ */
+const SEND_SETTINGS = [
+  'crm_payment_default_net_days', 'crm_invoices_skonto_percent_default',
+  'crm_invoices_skonto_business_days', 'general_date_format',
+  // The PDF's logo when the business profile names none (resolveLogoFile).
+  'branding_logo_path', 'branding_logo_url',
+];
+
+/**
+ * The inputs' sha256, read through `conn`. `lock` takes row locks on
+ * PostgreSQL (SQLite writes one at a time); `signerRows` stands in for the
+ * signer rows when the caller already holds the ones it renders with;
+ * `withSigners: false` leaves them out (the review, which shows them itself
+ * and runs before a first send creates them).
+ */
+async function readSendInputsSha256(conn, contract, { lock = false, signerRows = null, withSigners = true } = {}) {
+  const locking = lock && conn.client.config.client === 'pg';
+  const locked = (query) => (locking ? query.forUpdate() : query);
+  const customer = await locked(conn('customer_accounts').where({ id: contract.customer_account_id })).first();
+  const rows = !withSigners ? null : signerRows || await locked(listSigners(contract.id, conn));
+  const profile = await locked(conn('business_profile').where({ id: 1 })).first();
+  const settings = await locked(conn('app_settings').whereIn('setting_key', SEND_SETTINGS)
+    .select('setting_key', 'setting_value').orderBy('setting_key', 'asc'));
+  // The PDF themes (a contract's footer text, layout): the render reads them.
+  const themes = (await conn.schema.hasTable('pdf_themes'))
+    ? await locked(conn('pdf_themes').whereIn('scope', ['default', 'contract']).select('scope', 'settings').orderBy('scope', 'asc'))
+    : [];
+  // Whether an uploaded font a theme names is still usable: archiving one
+  // switches the render to the fallback without touching the theme row.
+  const fonts = (await conn.schema.hasTable('pdf_fonts'))
+    ? await locked(conn('pdf_fonts').select('id', 'is_active').orderBy('id', 'asc'))
+    : [];
+  const plain = (value) => JSON.parse(JSON.stringify(value === undefined ? null : value));
+  const { updated_at: _u, ...issuer } = profile || {};
+  return require('../../utils/canonicalJson').canonicalSha256({
+    customer: plain(customer ? { ...recipientFields(customer), is_active: !!customer.is_active } : null),
+    signers: plain(rows),
+    issuer: plain(profile ? issuer : null),
+    settings: plain(settings),
+    themes: plain(themes),
+    fonts: plain(fonts.map((f) => ({ id: Number(f.id), active: !!f.is_active }))),
+  });
+}
+
 function sanitizeSigners(list) {
   if (!Array.isArray(list) || list.length < 1 || list.length > MAX_CUSTOMER_SIGNERS) {
     throw new AppError(`A contract needs between 1 and ${MAX_CUSTOMER_SIGNERS} customer signers`, 400, 'SIGNERS_INVALID');
@@ -429,6 +488,8 @@ module.exports = {
   customerName,
   signerToApi,
   listSigners,
+  recipientFields,
+  readSendInputsSha256,
   setSigners,
   ensureSigners,
   signersDue,

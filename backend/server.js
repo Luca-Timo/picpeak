@@ -1307,6 +1307,25 @@ async function startServer() {
       logger.warn('Install-from-backup hook threw:', err.message);
     }
 
+    // The standard contract template (#1445): seeded once, and given a new
+    // published version when the built-in revision moved on. Never changes
+    // an existing version; safe with two replicas booting at once. After
+    // install-from-backup, which replaces the database it would seed.
+    try {
+      await require('./src/services/contract/defaultTemplate').ensureDefaultTemplate();
+    } catch (err) {
+      logger.warn('standard contract template check failed at boot:', err.message);
+    }
+
+    // The retired free-text PDF font path (#1445) becomes an uploaded font
+    // once; the renderer no longer reads the column. After install-from-backup,
+    // so a restored profile's path is the one moved.
+    try {
+      await require('./src/services/pdf/uploadedFonts').migrateLegacyFont(logger);
+    } catch (err) {
+      logger.warn('moving the earlier custom PDF font failed at boot:', err.message);
+    }
+
     // First-run: surface a one-time setup token while no admin account exists.
     // Runs AFTER install-from-backup so a restored instance (which repopulates
     // admin_users) never prints a throwaway token. Best-effort — never blocks boot.

@@ -778,6 +778,16 @@ async function importFromPicpeak({ picpeakPath, currentAdminId }) {
       externalPathError = err.message;
       logger.error(`picpeakImport: external path conversion FAILED — originals will not resolve until this is retried: ${err.message}`);
     }
+    // The standard contract template was checked against the database this
+    // import replaced (#1445).
+    require('./contract/defaultTemplate').forgetEnsured();
+    // A restored profile may still carry the retired PDF font path (#1445),
+    // which the renderer no longer reads; move it now that its file is back.
+    try {
+      await require('./pdf/uploadedFonts').migrateLegacyFont(logger);
+    } catch (err) {
+      logger.warn(`picpeakImport: moving the restored custom PDF font failed: ${err.message}`);
+    }
     // Face data (#1074): queue ONLY once the files are on disk. The archive
     // carries no face rows and the export blanked photos.face_status, but the
     // event toggles come across enabled, so the "enable" transition that

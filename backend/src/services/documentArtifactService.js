@@ -18,8 +18,11 @@ const { db } = require('../database/db');
 const { getStoragePath } = require('../config/storage');
 const { resolveFontFiles } = require('./pdf/fonts');
 
-// Bumped when the renderer's output for the same inputs changes on purpose.
-const RENDERER_VERSION = '3';
+// Bumped when the renderer's output for the same inputs changes on purpose
+// (4: placeholder values escaped in contract bodies; 5: layout in the theme —
+// margins, address window, logo placement, body size and line height; 6:
+// uploaded fonts, the free-text font path no longer read, #1445).
+const RENDERER_VERSION = '6';
 const DOC_TYPES = ['quote', 'invoice', 'contract'];
 
 const sha256 = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex');
@@ -41,9 +44,14 @@ async function countPages(buffer) {
 /** The resolved theme plus the sha256 of the font and logo files it drew with. */
 function themeSnapshot(theme, issuer) {
   if (!theme) return null;
-  const fonts = resolveFontFiles({ pdfFontTtfPath: issuer && issuer.pdfFontTtfPath, fontFamily: theme.fontFamily });
+  const fonts = resolveFontFiles({ fontFamily: theme.fontFamily, fontFiles: theme.fontFiles });
+  // An uploaded font is recorded by its id and the files' sha256, never by
+  // its path on this server (#1445).
+  const { fontFiles, ...rest } = theme; // eslint-disable-line no-unused-vars
+  const uploaded = /^upload-(\d+)$/.exec(String(theme.fontFamily || ''));
   return JSON.stringify({
-    ...theme,
+    ...rest,
+    ...(uploaded ? { uploadedFontId: Number(uploaded[1]) } : {}),
     fontSha256: fonts
       ? { body: fileSha256(fonts.body), bold: fileSha256(fonts.bold), italic: fileSha256(fonts.italic) }
       : null,

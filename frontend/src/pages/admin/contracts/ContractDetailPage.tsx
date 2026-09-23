@@ -38,6 +38,7 @@ import { PermissionGate } from '../../../components/admin/PermissionGate';
 import { SignaturePadField, type SignaturePadHandle } from '../../../components/contracts/SignaturePadField';
 import { SigningOverviewCard } from './SigningOverviewCard';
 import { PaperSignatureUploadDialog } from './PaperSignatureUploadDialog';
+import { SendReviewModal } from './SendReviewModal';
 
 function statusBadgeClass(status: ContractStatus): string {
   return status === 'fully_signed'         ? 'bg-green-100 text-green-800'
@@ -118,11 +119,26 @@ export const ContractDetailPage: React.FC = () => {
   const isV2 = signersQuery.data?.version === 2;
   const legacySigning = signersQuery.isSuccess ? !isV2 : signersQuery.isError;
 
+  // Send goes through the review (#1445): it opens here and sends from there.
+  const [reviewing, setReviewing] = useState(false);
   const sendMutation = useMutationWithToast({
-    mutationFn: () => contractsService.send(numericId as number),
+    mutationFn: (reviewToken?: string) => contractsService.send(numericId as number, reviewToken),
+    onSuccess: () => setReviewing(false),
     successMessage: t('contracts.detail.sentToast', 'Contract sent.') as string,
     invalidateKeys: [['contract', numericId], ['contract-signers', numericId]],
-    errorMessage: t('contracts.detail.sendError', 'Send failed') as string,
+    errorMessage: (err: unknown) => {
+      const data = (err as { response?: { data?: { code?: string; error?: string } } })?.response?.data;
+      if (data?.code === 'CONTRACT_REVIEW_STALE') {
+        return t('contracts.detail.review.stale', 'The contract changed since this review. Check the updated review, then send.') as string;
+      }
+      return data?.error || (t('contracts.detail.sendError', 'Send failed') as string);
+    },
+    onError: (err: unknown) => {
+      // Changed elsewhere: show the review of what would go out now.
+      if ((err as { response?: { data?: { code?: string } } })?.response?.data?.code === 'CONTRACT_REVIEW_STALE') {
+        void queryClient.invalidateQueries({ queryKey: ['contract-send-preview', numericId] });
+      }
+    },
   });
 
   const cancelMutation = useMutationWithToast({
@@ -334,7 +350,7 @@ export const ContractDetailPage: React.FC = () => {
               <FileDown className="w-4 h-4 mr-1" />
               {t('contracts.detail.previewPdf', 'Preview PDF')}
             </Button>
-            <Button onClick={() => sendMutation.mutate()} disabled={sendMutation.isPending}>
+            <Button onClick={() => setReviewing(true)} disabled={sendMutation.isPending}>
               <Send className="w-4 h-4 mr-1" />
               {t('contracts.detail.send', 'Send to customer')}
             </Button>
@@ -734,6 +750,15 @@ export const ContractDetailPage: React.FC = () => {
           onClose={() => setUploadOpen(false)}
           onUpload={(file, coversSignerIds) => uploadMutation.mutate({ file, coversSignerIds })}
           isUploading={uploadMutation.isPending}
+        />
+      )}
+      {numericId && reviewing && (
+        <SendReviewModal
+          contractId={numericId}
+          onClose={() => setReviewing(false)}
+          onSend={(reviewToken) => sendMutation.mutate(reviewToken)}
+          onPreviewPdf={handlePdfPreview}
+          sending={sendMutation.isPending}
         />
       )}
     </div>

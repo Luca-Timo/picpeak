@@ -29,6 +29,7 @@ const PDFDocument = require('pdfkit');
 const { SwissQRBill, Table } = require('swissqrbill/pdf');
 const { t } = require('./pdf-i18n');
 const { parsePromotionSnapshot } = require('../utils/lineItemTotals');
+const { parseInlineMarkdown } = require('../utils/placeholders');
 const pdfFonts = require('./pdf/fonts');
 const { BUILT_IN: THEME_BUILT_IN, builtInTheme } = require('./pdf/theme');
 
@@ -69,6 +70,73 @@ const PAGE_LANDSCAPE = {
  */
 function getPageMetrics(orientation) {
   return orientation === 'landscape' ? PAGE_LANDSCAPE : PAGE;
+}
+
+/**
+ * The page metrics of a letter drawn with `theme` (#1445 layout): its left,
+ * right and bottom margins in mm, or PAGE's 40 pt where it sets none. The
+ * top margin stays: the address window and the issuer block set it.
+ */
+function pageMetricsFor(theme) {
+  const margins = theme && theme.layout && theme.layout.margins;
+  if (!margins) return PAGE;
+  const left = margins.left != null ? margins.left * MM : PAGE.marginLeft;
+  const right = margins.right != null ? margins.right * MM : PAGE.marginRight;
+  const bottom = margins.bottom != null ? margins.bottom * MM : PAGE.marginBottom;
+  return Object.freeze({
+    ...PAGE, marginLeft: left, marginRight: right, marginBottom: bottom, contentWidth: PAGE.width - left - right,
+  });
+}
+
+/**
+ * A contract's signature page is drawn with these metrics, never the
+ * theme's: pdfStampService stamps signatures at CONTRACT_SIGNATURE_LAYOUT's
+ * coordinates, which are derived from them.
+ */
+const SIGNATURE_PAGE = PAGE;
+
+/** The metrics the document being drawn uses (set by its renderer). */
+const pageOf = (doc) => (doc && doc._page) || PAGE;
+
+/**
+ * Running text in the theme's size and line height (#1445): the size, and
+ * the PDFKit text options that give the line height. A theme without a line
+ * height keeps PDFKit's natural one — no option at all, so the bytes of an
+ * unchanged theme stay what they were.
+ */
+function bodyText(doc) {
+  const theme = (doc && doc._theme) || {};
+  const size = theme.bodySize || 10;
+  // PDFKit's natural line is ~1.15 em; lineGap adds the rest.
+  const options = theme.lineHeight ? { lineGap: Math.max(0, (theme.lineHeight - 1.15) * size) } : {};
+  return { size, options };
+}
+
+const addressWindowOn = (doc) => !(doc && doc._theme && doc._theme.layout && doc._theme.layout.addressWindow === false);
+
+/**
+ * A logo the theme places at the left or the centre of the page top, above
+ * the letter (#1445). With the address window on, it is kept above the
+ * window. Returns the y below it, or null when the logo sits in the issuer
+ * column (the built-in look) or there is none.
+ */
+function drawPageLogo(doc, issuer) {
+  const logo = (doc && doc._theme && doc._theme.logo) || THEME_BUILT_IN.logo;
+  if (!logo || logo.position === 'right') return null;
+  const file = issuer.showLogo !== false && issuer.logoPath ? issuer.logoPath : null;
+  if (!file) return null;
+  const P = pageOf(doc);
+  let height = Math.max(24, Math.min(200, Number(issuer.logoHeight) || 56));
+  if (addressWindowOn(doc)) height = Math.min(height, ADDR_WINDOW.top - 8 - P.marginTop);
+  const width = logo.position === 'center' ? P.contentWidth : 220;
+  try {
+    doc.image(file, P.marginLeft, P.marginTop, { fit: [width, height], align: logo.position === 'center' ? 'center' : 'left' });
+  } catch (err) {
+    require('../utils/logger').warn('PDFKit failed to embed logo image', { path: file, err: err.message });
+    reportFinding(doc, { code: 'LOGO_MISSING', severity: 'warning' });
+    return null;
+  }
+  return P.marginTop + height + 8;
 }
 
 // DIN 5008 Form B address window — the standard window position for
@@ -325,7 +393,10 @@ function localeForIntl(locale, issuerCountryCode) {
  */
 function drawIssuerBlock(doc, issuer, x, y, width, locale) {
   const startY = y;
-  const showLogo = issuer.showLogo !== false; // default true
+  // A logo the theme puts at the left or centre of the page is drawn there
+  // (drawPageLogo), not in this column.
+  const themeLogo = (doc._theme && doc._theme.logo) || THEME_BUILT_IN.logo;
+  const showLogo = issuer.showLogo !== false && themeLogo.position === 'right'; // default true
   const showName = issuer.showCompanyName !== false; // default true
 
   // ---- top banner: logo (left) + company name (right of it) -----
@@ -348,6 +419,7 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
       logger.warn('PDFKit failed to embed logo image', {
         path: file, err: err.message,
       });
+      reportFinding(doc, { code: 'LOGO_MISSING', severity: 'warning' });
       return false;
     }
   };
@@ -361,11 +433,21 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
   // name branch is skipped and the name is rendered as a regular
   // address line right before the street address (handled below).
   let logoDrawn = false;
-  if (logoFound) {
+  // The theme can put the logo beside the name instead of above it (#1445).
+  const besideName = themeLogo.stack === 'inline' && showName && issuer.companyName && !inlineName;
+  if (logoFound && besideName) {
+    const logoW = Math.min(width * 0.45, bannerH * 2);
+    logoDrawn = drawLogoSafely(logoFound, { x, y, w: logoW, h: bannerH });
+    if (logoDrawn) {
+      doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(12).fillColor(themeColor(doc, 'text'))
+        .text(issuer.companyName, x + logoW + 6, y + Math.max(0, bannerH / 2 - 8), { width: width - logoW - 6, align: 'left' });
+      y = Math.max(y + bannerH, doc.y) + 6;
+    }
+  } else if (logoFound) {
     logoDrawn = drawLogoSafely(logoFound, { x, y, w: width, h: bannerH });
     if (logoDrawn) y += bannerH + 4;
   }
-  if (showName && issuer.companyName && !inlineName) {
+  if (showName && issuer.companyName && !inlineName && !(besideName && logoDrawn)) {
     // Bold-title branch — the standard letterhead look. Skipped when
     // the admin opted into the inline-name variant.
     doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(12).fillColor(themeColor(doc, 'text'))
@@ -470,12 +552,16 @@ function vatIdLabel(locale, countryCode) {
  * AFTER the address window (useful when drawing the horizontal
  * divider below).
  */
-function drawRecipientBlock(doc, recipient, locale) {
-  const x = ADDR_WINDOW.left;
+function drawRecipientBlock(doc, recipient, locale, { flowY = null } = {}) {
+  // With the theme's address window off (#1445) the block sits in the flow
+  // at the left margin — a letter handed over digitally needs no envelope
+  // window, and no return-address line for one.
+  const inWindow = flowY == null;
+  const x = inWindow ? ADDR_WINDOW.left : pageOf(doc).marginLeft;
   const w = ADDR_WINDOW.width;
 
   // ---- tiny return address line at top of window ----------------
-  if (recipient.issuerLine) {
+  if (inWindow && recipient.issuerLine) {
     doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(7.5).fillColor('#555');
     doc.text(recipient.issuerLine, x, ADDR_WINDOW.returnLineY, {
       width: w, align: 'left', lineBreak: false,
@@ -483,7 +569,7 @@ function drawRecipientBlock(doc, recipient, locale) {
   }
 
   // ---- recipient address ----------------------------------------
-  let y = ADDR_WINDOW.addressY;
+  let y = inWindow ? ADDR_WINDOW.addressY : flowY;
 
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(11).fillColor(themeColor(doc, 'text'));
   if (recipient.companyName) {
@@ -514,7 +600,7 @@ function drawRecipientBlock(doc, recipient, locale) {
   }
   // Return position just below the address window so the caller
   // can position the date row / title underneath.
-  return Math.max(y, ADDR_WINDOW.top + ADDR_WINDOW.height);
+  return inWindow ? Math.max(y, ADDR_WINDOW.top + ADDR_WINDOW.height) : y;
 }
 
 /**
@@ -629,6 +715,10 @@ function drawLineItems(doc, ctx) {
   const widths = showDiscount
     ? (hasUnits ? [30, 205, 75, 50, 75, 80] : [30, 225, 55, 50, 75, 80])
     : (hasUnits ? [30, 255, 75, 70, 85] : [30, 275, 55, 70, 85]);
+  // Wider theme margins (#1445) narrow the table: the description column
+  // gives up the difference, the numeric columns keep their width.
+  const contentWidth = pageOf(doc).contentWidth;
+  widths[1] += contentWidth - PAGE.contentWidth;
 
   // Per-row padding — tight rows. 3pt top + 3pt bottom keeps each
   // line item compact, with just enough vertical breathing room
@@ -849,7 +939,7 @@ function drawLineItems(doc, ctx) {
   }
 
   const table = new Table({
-    width: PAGE.contentWidth,
+    width: contentWidth,
     rows: [headerRow, ...dataRows],
   });
   table.attachTo(doc);
@@ -1187,7 +1277,8 @@ function drawFooter(doc, issuer, locale) {
   const lineH = 12;
   const hasFooterLine = !!issuer.footerLine;
   const reserved = hasFooterLine ? lineH * 2 + 4 : lineH;
-  const footerY = doc.page.height - PAGE.marginBottom - reserved;
+  const P = pageOf(doc);
+  const footerY = doc.page.height - P.marginBottom - reserved;
 
   const cc = issuer.countryCode ? String(issuer.countryCode).toUpperCase() : '';
   const pc = issuer.postalCode || '';
@@ -1203,12 +1294,12 @@ function drawFooter(doc, issuer, locale) {
     // before falling back to the COUNTRY_NAMES lookup.
     issuer.countryName || countryName(issuer.countryCode, locale),
   ]).filter(Boolean);
-  doc.text(parts.join(', '), PAGE.marginLeft, footerY, {
-    width: PAGE.contentWidth, align: 'center', lineBreak: false,
+  doc.text(parts.join(', '), P.marginLeft, footerY, {
+    width: P.contentWidth, align: 'center', lineBreak: false,
   });
   if (hasFooterLine) {
-    doc.text(issuer.footerLine, PAGE.marginLeft, footerY + lineH, {
-      width: PAGE.contentWidth, align: 'center', lineBreak: false,
+    doc.text(issuer.footerLine, P.marginLeft, footerY + lineH, {
+      width: P.contentWidth, align: 'center', lineBreak: false,
     });
   }
   // Reset fill colour so any code that runs after the footer (e.g.
@@ -1418,10 +1509,25 @@ async function appendEpcQr(doc, ctx) {
 
 /** Register the theme's faces; falls back to the issuer's family, then Helvetica. */
 function registerThemeFonts(doc, issuer = {}, theme = null) {
-  return pdfFonts.registerFonts(doc, {
-    pdfFontTtfPath: issuer.pdfFontTtfPath,
-    fontFamily: (theme && theme.fontFamily) || issuer.pdfFontFamily || null,
-  }) || { body: FONT_BODY, bold: FONT_BOLD, italic: FONT_ITALIC };
+  const fontFamily = (theme && theme.fontFamily) || issuer.pdfFontFamily || null;
+  // An uploaded family arrives as `theme.fontFiles`, resolved by the theme
+  // service before the render (services/pdf/uploadedFonts).
+  const fonts = pdfFonts.registerFonts(doc, { fontFamily, fontFiles: theme && theme.fontFiles });
+  // A configured font that can't be loaded falls back to Helvetica without a
+  // word; a render that collects findings (the template check) hears of it.
+  if (!fonts && fontFamily) {
+    reportFinding(doc, { code: 'FONT_MISSING', severity: 'warning', key: fontFamily || 'custom' });
+  }
+  return fonts || { body: FONT_BODY, bold: FONT_BOLD, italic: FONT_ITALIC };
+}
+
+/**
+ * Note a problem the render worked around (a missing font or logo) on
+ * `doc._findings`, when the caller asked for them (#1445 template check).
+ */
+function reportFinding(doc, finding) {
+  if (!doc || !Array.isArray(doc._findings)) return;
+  if (!doc._findings.some((f) => f.code === finding.code)) doc._findings.push(finding);
 }
 
 /** Remember that the page just added is a payment slip (QR-bill or EPC). */
@@ -1465,9 +1571,10 @@ function stampPageNumbers(doc, locale, { beforeStamp, insertedBeforeLast = 0 } =
     const isLast = n === pages.length - 1;
     const label = t(locale, 'page_of', { current: isLast ? total : n + 1, total });
     const centred = position === 'bottom-center';
-    const labelW = centred ? PAGE.contentWidth : 120;
-    const labelX = centred ? PAGE.marginLeft : doc.page.width - PAGE.marginRight - labelW;
-    doc.text(label, labelX, doc.page.height - PAGE.marginBottom + 8, {
+    const P = pageOf(doc);
+    const labelW = centred ? P.contentWidth : 120;
+    const labelX = centred ? P.marginLeft : doc.page.width - P.marginRight - labelW;
+    doc.text(label, labelX, doc.page.height - P.marginBottom + 8, {
       width: labelW, align: centred ? 'center' : 'right', lineBreak: false,
     });
     doc.fillColor(themeColor(doc, 'text'));
@@ -1544,7 +1651,7 @@ function createBaseDocument(options = {}) {
  */
 function registerCustomFonts(doc, issuer) {
   if (!issuer || typeof issuer !== 'object') return null;
-  return pdfFonts.registerFonts(doc, { pdfFontTtfPath: issuer.pdfFontTtfPath, fontFamily: issuer.pdfFontFamily });
+  return pdfFonts.registerFonts(doc, { fontFamily: issuer.pdfFontFamily });
 }
 
 /**
@@ -1559,6 +1666,8 @@ function renderDocument(type, context) {
     (async () => {
       try {
         const ctx = normaliseContext(type, context);
+        // The theme's margins (#1445); every PAGE below is this letter's.
+        const PAGE = pageMetricsFor(ctx.theme);
         const doc = new PDFDocument({
           size: 'A4',
           // bufferPages: true keeps every page open in memory after
@@ -1611,8 +1720,10 @@ function renderDocument(type, context) {
         // The theme (#1445) adds colours, the title size, the footer and
         // page-number settings, and an italic face for line comments.
         doc._theme = ctx.theme;
+        doc._page = PAGE;
         doc._fonts = registerThemeFonts(doc, ctx.issuer, ctx.theme);
         ctx.fonts = doc._fonts;
+        const body = bodyText(doc);
 
         // ---- header layout (DIN 5008 Form B) -------------------------
         //   - recipient block in the address window (top-left,
@@ -1630,15 +1741,22 @@ function renderDocument(type, context) {
         const issuerX = PAGE.width - PAGE.marginRight - issuerWidth;
         const issuerY = PAGE.marginTop + 16;
 
-        const issuerEndY = drawIssuerBlock(doc, ctx.issuer, issuerX, issuerY, issuerWidth, ctx.locale);
-        const recipientEndY = drawRecipientBlock(doc, ctx.recipient, ctx.locale);
+        // A logo the theme places at the left or centre (#1445) goes first;
+        // the issuer column and a recipient in the flow start below it.
+        const logoBottom = drawPageLogo(doc, ctx.issuer);
+        const centredLogo = logoBottom != null && ctx.theme.logo && ctx.theme.logo.position === 'center';
+        const issuerEndY = drawIssuerBlock(doc, ctx.issuer, issuerX, centredLogo ? Math.max(issuerY, logoBottom) : issuerY,
+          issuerWidth, ctx.locale);
+        const windowOn = addressWindowOn(doc);
+        const recipientEndY = drawRecipientBlock(doc, ctx.recipient, ctx.locale,
+          windowOn ? {} : { flowY: Math.max(issuerY, logoBottom || 0) });
         // Start the body content below the header blocks AND the
         // address-window bottom edge — never let the date/title row
         // cut through the window region. The title position isn't
         // dictated by DIN 5008 (the spec only fixes the address window
         // position), so we pull it tight against the window's bottom
         // edge to give the body more vertical room.
-        let y = Math.max(issuerEndY, recipientEndY, ADDR_WINDOW.top + ADDR_WINDOW.height) + 6;
+        let y = Math.max(issuerEndY, recipientEndY, windowOn ? ADDR_WINDOW.top + ADDR_WINDOW.height : 0) + 6;
 
         // Storno discriminator. Drives:
         //   - page title swap ("Stornorechnung" instead of "Rechnung")
@@ -1793,21 +1911,22 @@ function renderDocument(type, context) {
         // dictionary ("Sehr geehrte Damen und Herren,").
         const greeting = personalSalutation(ctx.locale, ctx.recipient?.salutation, ctx.recipient?.lastName)
         || t(ctx.locale, 'salutation');
-        doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10).fillColor(themeColor(doc, 'text'));
-        doc.text(greeting, leftX, y, { width: PAGE.contentWidth });
+        doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(body.size).fillColor(themeColor(doc, 'text'));
+        doc.text(greeting, leftX, y, { width: PAGE.contentWidth, ...body.options });
         y = doc.y + 4;
         doc.font(doc._fonts ? doc._fonts.body : FONT_BODY);
         const leadIn = type === 'quote'
           ? t(ctx.locale, 'lead_in_quote')
           : t(ctx.locale, 'lead_in_invoice');
-        doc.text(leadIn, leftX, y, { width: PAGE.contentWidth });
+        doc.text(leadIn, leftX, y, { width: PAGE.contentWidth, ...body.options });
         y = doc.y + 16;
 
         // ---- intro text override (admin-customisable) -----------------
         if (ctx.doc.introText) {
-          doc.text(ctx.doc.introText, leftX, y, { width: PAGE.contentWidth });
+          doc.text(ctx.doc.introText, leftX, y, { width: PAGE.contentWidth, ...body.options });
           y = doc.y + 12;
         }
+        doc.fontSize(10);
 
         // ---- line items table ----------------------------------------
         // Small top padding — tight against the lead-in text since the
@@ -1888,9 +2007,10 @@ function renderDocument(type, context) {
 
         // ---- outro text -----------------------------------------------
         if (ctx.doc.outroText) {
-          doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor(themeColor(doc, 'text'));
-          doc.text(ctx.doc.outroText, leftX, y, { width: PAGE.contentWidth });
+          doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(body.size).fillColor(themeColor(doc, 'text'));
+          doc.text(ctx.doc.outroText, leftX, y, { width: PAGE.contentWidth, ...body.options });
           y = doc.y + 12;
+          doc.fontSize(10);
         }
 
         // ---- payment conditions + IBAN block --------------------------
@@ -1996,12 +2116,17 @@ function vatRowHidden(ctx) {
   return ctx.vatRegistered === false && !Number(totals.vatRate) && !Number(totals.vatAmountMinor);
 }
 
+// The public renderers go through services/pdf/renderIsolation (#1445): a
+// worker thread with a heap limit and a timeout, so one pathological document
+// can't stall or exhaust the server. The worker calls the `_raw` functions.
+const isolation = () => require('./pdf/renderIsolation');
+
 async function renderQuoteToBuffer(context) {
-  return renderDocument('quote', context);
+  return (await isolation().renderInWorker('quote', context)).buffer;
 }
 
 async function renderInvoiceToBuffer(context) {
-  return renderDocument('invoice', context);
+  return (await isolation().renderInWorker('invoice', context)).buffer;
 }
 
 /**
@@ -2026,10 +2151,20 @@ async function renderInvoiceToBuffer(context) {
 /**
  * Render a contract. Resolves `{ buffer, slots }`: where each signature slot
  * landed on the signature page (#1445), for the stamp service and the
- * generated document's record.
+ * generated document's record. Runs in the render worker.
  */
-function renderContractWithSlots(context) {
+async function renderContractWithSlots(context) {
+  const { buffer, slots, itemPages, findings } = await isolation().renderInWorker('contract', context);
+  return { buffer, slots, itemPages, findings };
+}
+
+/** renderContractWithSlots in this thread — what the render worker runs. */
+function renderContractInProcess(context) {
   let placedSlots = [];
+  // Where each clause landed (1-based pages), for the template editor's
+  // page-break markers, and what the render had to work around.
+  const itemPages = [];
+  const findings = [];
   return new Promise((resolve, reject) => {
     (async () => {
       try {
@@ -2042,6 +2177,10 @@ function renderContractWithSlots(context) {
         // A footer (theme) sits in the bottom margin, so the margin grows
         // by its height and body text never runs into it.
         const footerReserve = theme.footer.mode === 'none' ? 0 : ((ctx.issuer || {}).footerLine ? 28 : 12);
+        // The theme's margins (#1445) for the letter pages. The signature
+        // page keeps SIGNATURE_PAGE — stamped signatures land at its fixed
+        // coordinates, whatever the margins are.
+        const PAGE = pageMetricsFor(theme);
         const doc = new PDFDocument({
           size: 'A4',
           bufferPages: true,
@@ -2058,20 +2197,31 @@ function renderContractWithSlots(context) {
 
         const chunks = [];
         doc.on('data', (c) => chunks.push(c));
-        doc.on('end', () => resolve({ buffer: Buffer.concat(chunks), slots: placedSlots }));
+        doc.on('end', () => resolve({ buffer: Buffer.concat(chunks), slots: placedSlots, itemPages, findings }));
         doc.on('error', reject);
 
         doc._theme = theme;
+        doc._page = PAGE;
+        doc._findings = findings;
         doc._fonts = registerThemeFonts(doc, ctx.issuer || {}, theme);
+        const currentPage = () => doc.bufferedPageRange().count;
+        const body = bodyText(doc);
 
         // ---- header: issuer + recipient blocks (DIN 5008) ------------
         const issuerWidth = 180;
         const issuerX = PAGE.width - PAGE.marginRight - issuerWidth;
         const issuerY = PAGE.marginTop + 16;
 
-        const issuerEndY = drawIssuerBlock(doc, ctx.issuer || {}, issuerX, issuerY, issuerWidth, locale);
-        const recipientEndY = drawRecipientBlock(doc, ctx.recipient || {}, locale);
-        let y = Math.max(issuerEndY, recipientEndY, ADDR_WINDOW.top + ADDR_WINDOW.height) + 6;
+        // A logo the theme places at the left or centre (#1445) goes first;
+        // the issuer column and a recipient in the flow start below it.
+        const logoBottom = drawPageLogo(doc, ctx.issuer || {});
+        const centredLogo = logoBottom != null && theme.logo && theme.logo.position === 'center';
+        const issuerEndY = drawIssuerBlock(doc, ctx.issuer || {}, issuerX, centredLogo ? Math.max(issuerY, logoBottom) : issuerY,
+          issuerWidth, locale);
+        const windowOn = addressWindowOn(doc);
+        const recipientEndY = drawRecipientBlock(doc, ctx.recipient || {}, locale,
+          windowOn ? {} : { flowY: Math.max(issuerY, logoBottom || 0) });
+        let y = Math.max(issuerEndY, recipientEndY, windowOn ? ADDR_WINDOW.top + ADDR_WINDOW.height : 0) + 6;
         // Folding marks on the letter page, when the contract theme has them.
         drawFoldingMarks(doc, theme.foldingMarks);
 
@@ -2124,35 +2274,32 @@ function renderContractWithSlots(context) {
         };
 
         // ---- helper: render body text with inline **bold** support.
-        // Splits on `**text**` markers, switches the font weight per
-        // chunk via PDFKit's continued: true text continuation. The
-        // first chunk anchors at (PAGE.marginLeft, y); subsequent
-        // chunks continue from PDFKit's cursor so wrapping works
-        // across font switches. After rendering, we read doc.y as
-        // the new cursor.
+        // utils/placeholders.parseInlineMarkdown splits the text into bold
+        // and regular runs (and resolves `\*`-style escapes, which is how a
+        // placeholder value stays literal); each run switches the font via
+        // PDFKit's `continued: true` text continuation. The first run anchors
+        // at (PAGE.marginLeft, y); later runs continue from PDFKit's cursor
+        // so wrapping works across font switches. After rendering, we read
+        // doc.y as the new cursor.
         const renderBodyMarkdown = (text, opts) => {
-          const parts = String(text || '').split(/(\*\*[^*]+\*\*)/g).filter((p) => p.length > 0);
-          if (parts.length === 0) return;
-          const last = parts.length - 1;
-          for (let i = 0; i < parts.length; i++) {
-            const part = parts[i];
-            const isBold = part.length > 4 && part.startsWith('**') && part.endsWith('**');
-            const chunk = isBold ? part.slice(2, -2) : part;
-            if (!chunk) continue;
-            doc.font(isBold ? doc._fonts.bold : doc._fonts.body);
+          const runs = parseInlineMarkdown(text);
+          if (runs.length === 0) return;
+          const last = runs.length - 1;
+          runs.forEach((run, i) => {
+            doc.font(run.bold ? doc._fonts.bold : doc._fonts.body);
             if (i === 0) {
-              doc.text(chunk, PAGE.marginLeft, y, { ...opts, continued: i < last });
+              doc.text(run.text, PAGE.marginLeft, y, { ...opts, continued: i < last });
             } else {
-              doc.text(chunk, { ...opts, continued: i < last });
+              doc.text(run.text, { ...opts, continued: i < last });
             }
-          }
+          });
         };
 
         // ---- intro text ---------------------------------------------
         if (ctx.doc?.introText) {
-          doc.font(doc._fonts.body).fontSize(10).fillColor(themeColor(doc, 'text'));
+          doc.font(doc._fonts.body).fontSize(body.size).fillColor(themeColor(doc, 'text'));
           ensureSpace(40);
-          renderBodyMarkdown(ctx.doc.introText, { width: PAGE.contentWidth, align: 'left' });
+          renderBodyMarkdown(ctx.doc.introText, { width: PAGE.contentWidth, align: 'left', ...body.options });
           y = doc.y + 12;
         }
 
@@ -2176,6 +2323,7 @@ function renderContractWithSlots(context) {
 
           for (const block of sec.blocks) {
             ensureSpace(48);
+            const firstPage = currentPage();
             if (block.name) {
               doc.font(doc._fonts.bold).fontSize(10).fillColor(themeColor(doc, 'text'));
               doc.text(String(block.name), PAGE.marginLeft, y, {
@@ -2183,8 +2331,8 @@ function renderContractWithSlots(context) {
               });
               y = doc.y + 4;
             }
-            doc.font(doc._fonts.body).fontSize(10).fillColor(themeColor(doc, 'text'));
-            renderBodyMarkdown(block.body, { width: PAGE.contentWidth, align: 'left' });
+            doc.font(doc._fonts.body).fontSize(body.size).fillColor(themeColor(doc, 'text'));
+            renderBodyMarkdown(block.body, { width: PAGE.contentWidth, align: 'left', ...body.options });
             y = doc.y + 10;
             // If text rendering pushed past page bottom, PDFKit
             // auto-paginated — sync y to the new doc.y for the next
@@ -2251,6 +2399,9 @@ function renderContractWithSlots(context) {
                 doc.fillColor(themeColor(doc, 'text'));
               }
             }
+            if (block.position != null) {
+              itemPages.push({ position: Number(block.position), firstPage, lastPage: currentPage() });
+            }
           }
 
           y += 6;
@@ -2259,8 +2410,8 @@ function renderContractWithSlots(context) {
         // ---- outro text ---------------------------------------------
         if (ctx.doc?.outroText) {
           ensureSpace(40);
-          doc.font(doc._fonts.body).fontSize(10).fillColor(themeColor(doc, 'text'));
-          renderBodyMarkdown(ctx.doc.outroText, { width: PAGE.contentWidth, align: 'left' });
+          doc.font(doc._fonts.body).fontSize(body.size).fillColor(themeColor(doc, 'text'));
+          renderBodyMarkdown(ctx.doc.outroText, { width: PAGE.contentWidth, align: 'left', ...body.options });
           y = doc.y + 16;
         }
 
@@ -2284,18 +2435,18 @@ function renderContractWithSlots(context) {
 
         // Title row
         doc.font(doc._fonts.bold).fontSize(16).fillColor(themeColor(doc, 'text'));
-        doc.text(t(locale, 'signature_page_title'), PAGE.marginLeft, L.titleY, {
-          width: PAGE.contentWidth, align: 'left',
+        doc.text(t(locale, 'signature_page_title'), SIGNATURE_PAGE.marginLeft, L.titleY, {
+          width: SIGNATURE_PAGE.contentWidth, align: 'left',
         });
         doc.strokeColor(themeColor(doc, 'rule')).lineWidth(0.5)
-          .moveTo(PAGE.marginLeft, L.titleY + 22)
-          .lineTo(PAGE.marginLeft + PAGE.contentWidth, L.titleY + 22)
+          .moveTo(SIGNATURE_PAGE.marginLeft, L.titleY + 22)
+          .lineTo(SIGNATURE_PAGE.marginLeft + SIGNATURE_PAGE.contentWidth, L.titleY + 22)
           .stroke();
 
         // Closing prompt — generic line so unsigned doc reads coherently
         doc.font(doc._fonts.body).fontSize(10).fillColor(themeColor(doc, 'text'));
-        doc.text(t(locale, 'signature_page_prompt'), PAGE.marginLeft, L.promptY, {
-          width: PAGE.contentWidth, align: 'left',
+        doc.text(t(locale, 'signature_page_prompt'), SIGNATURE_PAGE.marginLeft, L.promptY, {
+          width: SIGNATURE_PAGE.contentWidth, align: 'left',
         });
 
         // Signature slots (#1445): one per signer, customers first and the
@@ -2340,7 +2491,18 @@ function renderContractWithSlots(context) {
           // each page's bottom margin, clear of the body text (#1445; the
           // numbers used to sit inside the content area and could overlap it).
           stampPageNumbers(doc, locale, {
-            beforeStamp: () => drawFooter(doc, ctx.issuer || {}, locale),
+            beforeStamp: () => {
+              drawFooter(doc, ctx.issuer || {}, locale);
+              // A template preview names itself on every page (#1445), below
+              // the page number, so a printed preview can't pass for a contract.
+              if (ctx.previewLabel) {
+                doc.font(doc._fonts.body).fontSize(7).fillColor(themeColor(doc, 'subtle'));
+                doc.text(String(ctx.previewLabel), PAGE.marginLeft, doc.page.height - PAGE.marginBottom + 20, {
+                  width: PAGE.contentWidth, align: 'left', lineBreak: false, ellipsis: true,
+                });
+                doc.fillColor(themeColor(doc, 'text'));
+              }
+            },
             insertedBeforeLast: ctx.mergedAttachmentPages,
           });
         } catch (err) {
@@ -2381,6 +2543,8 @@ module.exports = {
   PAGE,
   FONT_BODY,
   FONT_BOLD,
+  // The renderers without the worker, for services/pdf/renderIsolation.
+  _raw: { renderDocument, renderContract: renderContractInProcess },
   // Exposed for unit tests + advanced callers.
   _internal: {
     formatMinor, formatDate, t, registerCustomFonts, registerThemeFonts, drawLineItems, stampPageNumbers, themeColor,

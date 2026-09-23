@@ -28,7 +28,9 @@ async function renderContractPdfBuffer(contractId) {
  * with a signature slot per signer, persist it, and invite the signers
  * (signatures v2, #1446 — each signer gets their own link).
  */
-async function sendContract(id, adminId) {
+const ensureIntOr = (v) => (v == null ? 1 : Number(v));
+
+async function sendContract(id, adminId, { reviewToken = null } = {}) {
   // Self-heal: dev installs that ran migration 130 BEFORE we added
   // contract_fully_signed to the seed list won't have all three
   // contract templates in email_templates. Insert any missing rows
@@ -42,16 +44,37 @@ async function sendContract(id, adminId) {
   if (!['draft'].includes(contract.status)) {
     throw new AppError(`Cannot send a contract with status '${contract.status}'`, 409);
   }
-
   const customer = await db('customer_accounts').where({ id: contract.customer_account_id }).first();
   ensureCustomerActive(customer);
 
   // The signers (#1446): the ones set on the draft, or the contract's
   // customer; each gets a slot on the signature page, the issuer last.
   const signingV2 = require('./signingV2');
-  const { slots: signatureSlots } = await signingV2.prepareSend(contract);
+  const { rows: signerRows, slots: signatureSlots } = await signingV2.prepareSend(contract);
+  // The customer and signers this send renders with: compared again, rows
+  // locked, when the contract is marked sent (completeSend). Taken before the
+  // review check below, so what that check read lies between the two reads.
+  const sendInputs = await require('./signers').readSendInputsSha256(db, contract, { signerRows });
 
   const refreshed = await getContractById(id);
+
+  // Sent from the pre-send review (#1445): only what was reviewed goes out.
+  // Checked after `refreshed` is read, and the token covers the lock version:
+  // a save between the two changes the token, and one after it fails the
+  // lock claim in completeSend, which uses `refreshed`'s lock.
+  if (reviewToken) {
+    const { buildSendPreview } = require('./sendPreview');
+    const current = await buildSendPreview(id);
+    if (current.reviewToken !== reviewToken || current.lockVersion !== ensureIntOr(refreshed.contract.lock_version)) {
+      throw new AppError('The contract changed since the review. Review it again before sending.', 409, 'CONTRACT_REVIEW_STALE');
+    }
+    // A problem that arose since (the customer deactivated) is not in the
+    // token: the review's own errors refuse the send as the dialog would.
+    const blocking = current.problems.filter((p) => p.severity === 'error');
+    if (blocking.length) {
+      throw new AppError(blocking.map((p) => p.message).join(' · '), 409, 'CONTRACT_REVIEW_STALE');
+    }
+  }
 
   // What the send freezes: every included block's body in every language
   // (#1445; only EN and DE were frozen before), plus the content — clauses,
@@ -127,7 +150,7 @@ async function sendContract(id, adminId) {
   // Marks the contract sent, starts the event log and emails each signer
   // who may sign now their own link.
   const invited = await signingV2.completeSend(id, {
-    pdfPath, pdfSha256, adminId, freeze, lockVersion: refreshed.contract.lock_version,
+    pdfPath, pdfSha256, adminId, freeze, lockVersion: refreshed.contract.lock_version, sendInputs,
   });
 
   try {

@@ -6,6 +6,7 @@
  *   POST   /                            create (status=draft, seeded with all active system blocks)
  *   GET    /:id                         detail (contract + included blocks)
  *   PUT    /:id                         update (block toggles + scalars; draft only)
+ *   GET    /:id/send-preview            what a send would freeze and deliver, and its problems (read-only)
  *   POST   /:id/send                    render PDF + mint token + queue email
  *   POST   /:id/cancel                  cancel (draft|sent)
  *   POST   /:id/countersign             admin in-browser counter-signature
@@ -483,13 +484,26 @@ router.put(
   }),
 );
 
-router.post(
-  '/:id/send',
+// The pre-send review (#1445): read-only, nothing is written or logged.
+router.get(
+  '/:id/send-preview',
   requirePermission('contracts.manage'),
   [param('id').isInt({ min: 1 })],
   handleAsync(async (req, res) => {
     validateRequest(req);
-    const result = await contractService.sendContract(parseInt(req.params.id, 10), req.admin?.id);
+    const { buildSendPreview } = require('../services/contract/sendPreview');
+    return successResponse(res, await buildSendPreview(parseInt(req.params.id, 10)));
+  }),
+);
+
+router.post(
+  '/:id/send',
+  requirePermission('contracts.manage'),
+  [param('id').isInt({ min: 1 }), body('reviewToken').optional({ nullable: true }).isString().isLength({ min: 64, max: 64 })],
+  handleAsync(async (req, res) => {
+    validateRequest(req);
+    const result = await contractService.sendContract(parseInt(req.params.id, 10), req.admin?.id,
+      { reviewToken: req.body && req.body.reviewToken ? req.body.reviewToken : null });
     return successResponse(res, result);
   }),
 );

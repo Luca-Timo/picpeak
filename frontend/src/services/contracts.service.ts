@@ -447,8 +447,15 @@ export const contractsService = {
     return data.data || data;
   },
 
-  async send(id: number): Promise<{ token: string; pdfPath: string | null }> {
-    const { data } = await api.post(`/admin/contracts/${id}/send`);
+  /** What a send would freeze and deliver, and what stands in its way (read-only). */
+  async sendPreview(id: number): Promise<ContractSendPreview> {
+    const { data } = await api.get(`/admin/contracts/${id}/send-preview`);
+    return data.data || data;
+  },
+
+  /** `reviewToken`: the pre-send review's; the send is refused if the contract changed since. */
+  async send(id: number, reviewToken?: string): Promise<{ token: string; pdfPath: string | null }> {
+    const { data } = await api.post(`/admin/contracts/${id}/send`, reviewToken ? { reviewToken } : undefined);
     return data.data || data;
   },
 
@@ -723,6 +730,26 @@ export interface PublicContractView {
       grossMinor: number;
     };
   } | null;
+}
+
+/** The parts of a contract the shared ContractBody shows (signing page, review, template preview). */
+export type ContractBodyContent = Pick<PublicContractView,
+  'title' | 'contractNumber' | 'language' | 'recipient' | 'introText' | 'outroText' | 'sections' | 'commercial'>;
+
+/** The pre-send review of a draft (#1445): GET /admin/contracts/:id/send-preview. */
+export interface ContractSendPreview {
+  content: ContractBodyContent;
+  signingOrder: 'parallel' | 'sequential';
+  signers: Array<{ position: number; role: 'customer' | 'issuer'; name: string | null; email: string | null }>;
+  attachments: Array<{
+    attachmentId: number; name: string; delivery: 'merged' | 'separate'; pages: number; sha256: string; ok: boolean;
+  }>;
+  totals: (NonNullable<PublicContractView['commercial']>['totals'] & { currency: string }) | null;
+  template: { id: number; name: string; version: number } | null;
+  problems: Array<{ code: string; severity: 'error' | 'warning'; message: string; attachmentId?: number; keys?: string[] }>;
+  /** What was reviewed; sending with it is refused if the contract changed since. */
+  reviewToken: string;
+  lockVersion: number;
 }
 
 /**

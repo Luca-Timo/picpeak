@@ -20,21 +20,23 @@ const content = require('./content');
  *     placeholders are left literally as `{{var}}` so the admin
  *     notices the unresolved field in preview.
  *
- * Mirrors safeTemplateReplace in emailProcessor.js (lines 424-461) but
- * without HTML escaping — contract bodies are rendered into PDF via
- * pdfService.drawText, which doesn't need HTML safety.
+ * Mirrors safeTemplateReplace in emailProcessor.js. Values are escaped for
+ * `output` (utils/placeholders.escapeValue): a contract body is `markdown` —
+ * the PDF reads `**bold**` in it — so a value can't switch formatting on;
+ * `text` leaves values as they are. Substitution is one pass: a value that
+ * contains `{{…}}` is printed, never expanded.
  */
-function renderTemplatedBody(template, variables) {
+function renderTemplatedBody(template, variables, { output = 'markdown' } = {}) {
   if (typeof template !== 'string' || template.length === 0) return template;
   // One grammar, owned by utils/placeholders: the publish check accepted
   // `{{ customer_name }}` with spaces while this substituted only the tight
   // form, so a template could be published with a placeholder that printed
   // literally on every contract.
-  const { PLACEHOLDER_PATTERN, renderConditionals } = require('../../utils/placeholders');
+  const { PLACEHOLDER_PATTERN, renderConditionals, escapeValue } = require('../../utils/placeholders');
   return renderConditionals(template, variables || {})
     .replace(PLACEHOLDER_PATTERN, (match, key) => {
       if (!variables || !Object.prototype.hasOwnProperty.call(variables, key)) return match;
-      return String(variables[key]);
+      return escapeValue(String(variables[key]), output);
     });
 }
 
@@ -177,8 +179,16 @@ function parseContentSnapshot(value) {
   }
 }
 
-/** The current snapshot format. See buildContentSnapshot. */
-const SNAPSHOT_FORMAT = 2;
+/**
+ * The current snapshot format. See buildContentSnapshot. Format 3 changes no
+ * field: it marks a snapshot whose placeholder values are escaped for the
+ * body's markup (renderTemplatedBody) and whose clauses left empty by a
+ * condition are dropped with their headings. One sent before that rendered
+ * its values as they were — `**ACME**` in a customer name printed bold — and
+ * every clause heading, and its stored PDF says so, so it keeps being read
+ * that way.
+ */
+const SNAPSHOT_FORMAT = 3;
 
 /**
  * The columns of a quote line the contract renderer reads, coerced to the
@@ -287,33 +297,73 @@ async function buildContentSnapshot(contract, inclusions, textSections = []) {
  * placeholders filled in: from the sent snapshot when there is one, else
  * from the live draft. Shared by the PDF and the customer's signing page.
  */
-async function resolveDisplayContent(contract, inclusions, textSections, locale, { customer } = {}) {
+async function resolveDisplayContent(contract, inclusions, textSections, locale, { customer, placeholders: extra } = {}) {
   const snapshot = parseContentSnapshot(contract.rendered_content);
   const placeholders = snapshot
     ? snapshot.placeholders
-    : await buildPlaceholderContext(contract, customer !== undefined
-      ? customer
-      : await db('customer_accounts').where({ id: contract.customer_account_id }).first());
+    : {
+      ...(await buildPlaceholderContext(contract, customer !== undefined
+        ? customer
+        : await db('customer_accounts').where({ id: contract.customer_account_id }).first())),
+      ...(extra || {}),
+    };
   const clauses = snapshot ? snapshot.clauses : orderedClauses(contract, inclusions, textSections || []);
   const intro = snapshot ? snapshot.introText : contract.intro_text;
   const outro = snapshot ? snapshot.outroText : contract.outro_text;
+  // A contract sent before format 3 is read the way its stored PDF was drawn:
+  // values unescaped, and a backslash an ordinary character (the markup then
+  // knew only `**bold**`), so it is doubled for the escape-aware parser. That
+  // includes one sent before snapshots existed at all (no rendered_content).
+  const legacy = snapshot ? ensureInt(snapshot.format) < 3 : !!contract.sent_at;
+  const render = (template) => {
+    const out = renderTemplatedBody(template, placeholders, { output: legacy ? 'text' : 'markdown' });
+    return legacy && typeof out === 'string' ? out.replace(/\\/g, '\\\\') : out;
+  };
+  let priceHidden = false;
   return {
+    get priceHidden() { return priceHidden; },
     title: snapshot ? snapshot.title : (contract.title || ''),
-    introText: intro ? renderTemplatedBody(intro, placeholders) : null,
-    outroText: outro ? renderTemplatedBody(outro, placeholders) : null,
+    introText: intro ? render(intro) : null,
+    outroText: outro ? render(outro) : null,
     // Placeholders filled in, then a leading `**Title**` line dropped: the
     // clause name is already printed as its heading. Inline `**bold**`
     // stays for the PDF (the signing page strips it).
-    sections: groupSections(clauses, (clause) => ({
-      blockId: clause.blockId,
-      position: clause.position,
-      kind: clause.kind,
-      slug: clause.slug,
-      name: clause.name,
-      section: clause.section,
-      body: renderTemplatedBody(content.pickLocale(clause.body, locale), placeholders)
-        .replace(/^\s*\*\*[^*\n]+\*\*\s*\n+/, ''),
-    })),
+    //
+    // A clause whose text comes out empty — hidden by "Show only if"
+    // (#1445) — is left out with its heading, and a section left without
+    // clauses with its section heading. This happens here, after the
+    // snapshot: what is frozen and hashed is the clause templates and the
+    // placeholder values, from which visibility follows; the PDF, the
+    // signing page and every re-render all derive it here, from the same
+    // frozen data, so they cannot disagree. The line-table block prints its
+    // table below its text, so an empty text alone doesn't hide it — only a
+    // "Show only if" rule around that text that doesn't hold.
+    sections: groupSections(clauses
+      .map((clause) => {
+        const text = content.pickLocale(clause.body, locale);
+        return {
+          blockId: clause.blockId,
+          position: clause.position,
+          kind: clause.kind,
+          slug: clause.slug,
+          name: clause.name,
+          section: clause.section,
+          body: String(render(text) || '')
+            .replace(/^\s*\*\*[^*\n]+\*\*\s*\n+/, ''),
+          ruled: /^\s*\{\{\s*#(?:if|unless)\s/.test(String(text || '')),
+        };
+      })
+      // A contract sent before format 3 printed such a clause with its
+      // heading, and is read the way it was sent (see `legacy` above).
+      .filter((clause) => {
+        const shown = legacy || clause.body.trim() !== ''
+          || (clause.slug === 'quote_line_items_table' && !clause.ruled);
+        // The price table and totals go with the clause (see priceHidden).
+        if (!shown && clause.slug === 'quote_line_items_table') priceHidden = true;
+        return shown;
+      })
+      .map(({ ruled, ...clause }) => clause),
+    (clause) => clause),
   };
 }
 
@@ -328,8 +378,12 @@ async function resolveDisplayContent(contract, inclusions, textSections, locale,
  * Before send (preview from editor) the live `contract_blocks.body_text`
  * is used so the admin can iterate on block bodies and see the result.
  */
-async function buildRenderContext(contract, inclusions, textSections = []) {
-  const customer = await db('customer_accounts').where({ id: contract.customer_account_id }).first();
+async function buildRenderContext(contract, inclusions, textSections = [], options = {}) {
+  // `options.customer` / `options.quote` stand in for the customer row and
+  // the frozen quote: the template preview renders with sample data (#1445).
+  const customer = options.customer !== undefined
+    ? options.customer
+    : await db('customer_accounts').where({ id: contract.customer_account_id }).first();
   const profile = (await businessProfileService.getProfile()).profile || {};
 
   // The line items and totals the contract prints. A contract sent with a
@@ -346,7 +400,12 @@ async function buildRenderContext(contract, inclusions, textSections = []) {
   let quoteCurrency = null;
   let quoteNumber = null;
   let quoteTotals = null;
-  if (snapshot && ensureInt(snapshot.format) >= 2 && snapshot.quote) {
+  if (options.quote) {
+    quoteLineItems = options.quote.lineItems || [];
+    quoteCurrency = options.quote.currency || null;
+    quoteNumber = options.quote.number || null;
+    quoteTotals = options.quote.totals || null;
+  } else if (snapshot && ensureInt(snapshot.format) >= 2 && snapshot.quote) {
     quoteLineItems = snapshot.quote.lineItems || [];
     quoteCurrency = snapshot.quote.currency || null;
     quoteNumber = snapshot.quote.number || null;
@@ -371,7 +430,8 @@ async function buildRenderContext(contract, inclusions, textSections = []) {
   // Clauses in reading order with placeholders filled in — from the sent
   // snapshot once there is one (#1445), else live. The locale picks each
   // clause's text in that language, then English, then German.
-  const display = await resolveDisplayContent(contract, inclusions, textSections, locale, { customer });
+  const display = await resolveDisplayContent(contract, inclusions, textSections, locale,
+    { customer, placeholders: options.placeholders });
 
   // Use the same robust logo resolver quote/invoice use — checks
   // business_profile.logo_path → app_settings.branding_logo_path →

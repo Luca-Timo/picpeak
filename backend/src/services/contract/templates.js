@@ -23,13 +23,14 @@ const { AppError } = require('../../utils/errors');
 const { auditedInsert, deleteWithAccountingHistory } = require('../accountingHistory');
 const { ensureInt } = require('../../utils/numericHelpers');
 const { upsertAppSetting } = require('../../utils/appSettings');
-const { unknownPlaceholders, CONTRACT_PLACEHOLDERS } = require('../../utils/placeholders');
+const { unknownPlaceholders, conditionalProblems, CONTRACT_PLACEHOLDERS } = require('../../utils/placeholders');
 const { canonicalSha256 } = require('../../utils/canonicalJson');
 const { ALLOWED_SECTIONS } = require('../contractBlocksService');
 const { DEFAULT_SETTING, ensureDefaultTemplate, getDefaultTemplateId } = require('./defaultTemplate');
 const content = require('./content');
 const attachments = require('./attachments');
 const { insertBeforeLastPage } = require('../pdf/merge');
+const crypto = require('crypto');
 
 const MAX_ITEMS = 200;
 const MAX_DESCRIPTION = 2000;
@@ -110,6 +111,12 @@ function versionToApi(version, items, attachmentRows) {
     outroText: content.parseLocaleMap(version.outro_text),
     contentSha256: version.content_sha256 || null,
     publishedAt: version.published_at || null,
+    createdAt: version.created_at || null,
+    // Who published it (#1445 version history). Null for the seeded system
+    // version, and for a publisher whose account is gone.
+    publishedBy: version.published_by_admin_id && version.publisher_username
+      ? { id: version.published_by_admin_id, username: version.publisher_username }
+      : null,
     ...(items ? { items: items.map(itemToApi) } : {}),
     ...(attachmentRows ? { attachments: attachmentRows.map(attachments.inclusionToApi) } : {}),
   };
@@ -126,6 +133,9 @@ function templateToApi(template, defaultId) {
     currentVersion: template.current_version == null ? null : ensureInt(template.current_version),
     lockVersion: ensureInt(template.lock_version),
     isDefault: defaultId != null && Number(defaultId) === Number(template.id),
+    // Where a copy came from (#1445), and the source version it has taken in.
+    sourceTemplateId: template.source_template_id == null ? null : ensureInt(template.source_template_id),
+    sourceVersion: template.source_version_number == null ? null : ensureInt(template.source_version_number),
     createdAt: template.created_at,
     updatedAt: template.updated_at,
   };
@@ -151,14 +161,42 @@ async function listTemplates() {
   }));
 }
 
+/** A template's versions with their publisher's username. */
+function versionsWithPublisher(conn = db) {
+  return conn('contract_template_versions as v')
+    .leftJoin('admin_users as pub', 'pub.id', 'v.published_by_admin_id')
+    .select('v.*', 'pub.username as publisher_username');
+}
+
+/**
+ * A copy's source and whether it moved on since the copy took it in: shown
+ * as "the system template was updated", never applied by itself.
+ */
+async function lineageOf(template) {
+  if (!template.source_template_id) return null;
+  const source = await db('contract_templates').where({ id: template.source_template_id }).first();
+  if (!source) return null;
+  const seen = template.source_version_number == null ? null : ensureInt(template.source_version_number);
+  const latest = source.current_version == null ? null : ensureInt(source.current_version);
+  return {
+    sourceTemplateId: source.id,
+    sourceName: source.name,
+    sourceIsSystem: truthy(source.is_system),
+    sourceVersion: seen,
+    latestSourceVersion: latest,
+    updateAvailable: latest != null && (seen == null || latest > seen),
+  };
+}
+
 async function getTemplate(id) {
   const template = await db('contract_templates').where({ id }).first();
   if (!template) throw notFound();
-  const versions = await db('contract_template_versions').where({ template_id: id }).orderBy('version_number', 'desc');
+  const versions = await versionsWithPublisher().where('v.template_id', id).orderBy('v.version_number', 'desc');
   const draftRow = versions.find((v) => v.status === 'draft') || null;
   const publishedRow = versions.find((v) => v.status === 'published') || null;
   return {
     template: templateToApi(template, await getDefaultTemplateId()),
+    lineage: await lineageOf(template),
     draft: draftRow
       ? versionToApi(draftRow, await loadItems(draftRow.id), await attachments.loadVersionAttachments(draftRow.id))
       : null,
@@ -170,8 +208,8 @@ async function getTemplate(id) {
 }
 
 async function getVersion(templateId, versionNumber) {
-  const version = await db('contract_template_versions')
-    .where({ template_id: templateId, version_number: versionNumber })
+  const version = await versionsWithPublisher()
+    .where({ 'v.template_id': templateId, 'v.version_number': versionNumber })
     .first();
   if (!version) throw new AppError('Template version not found', 404, 'TEMPLATE_VERSION_NOT_FOUND');
   return versionToApi(version, await loadItems(version.id), await attachments.loadVersionAttachments(version.id));
@@ -330,6 +368,9 @@ async function duplicateTemplate(id, payload, adminId) {
     const templateId = insertedId(await trx('contract_templates').insert({
       name, description: source.description, use_case: source.use_case, is_system: false, status: 'draft',
       lock_version: 1, created_by_admin_id: adminId || null, created_at: now, updated_at: now,
+      // Lineage (#1445): later versions of the source are offered, not applied.
+      source_template_id: source.id,
+      source_version_number: source.current_version == null ? null : ensureInt(source.current_version),
     }).returning('id'));
     const versionId = insertedId(await trx('contract_template_versions').insert({
       template_id: templateId, version_number: 1, status: 'draft',
@@ -364,10 +405,27 @@ async function saveDraft(id, payload, adminId) {
   // clause text: "who changed what" on a template is answerable from the
   // activity log without putting the contract's wording into it (#1445).
   const changed = [];
+  // "Reviewed up to version n" of the source (#1445), checked against the
+  // source before the transaction.
+  let sourceVersion;
+  if (payload.sourceVersionNumber !== undefined) {
+    const own = await db('contract_templates').where({ id }).first();
+    const source = own && own.source_template_id
+      ? await db('contract_templates').where({ id: own.source_template_id }).first() : null;
+    const n = ensureInt(payload.sourceVersionNumber);
+    if (!source || n < 1 || n > ensureInt(source.current_version)) {
+      throw invalid('That version of the source template does not exist');
+    }
+    sourceVersion = n;
+  }
   await db.transaction(async (trx) => {
     const template = await claimLock(trx, id, payload.lockVersion);
     assertEditable(template);
     const now = new Date();
+    if (sourceVersion !== undefined) {
+      await trx('contract_templates').where({ id }).update({ source_version_number: sourceVersion, updated_at: now });
+      changed.push('sourceVersion');
+    }
     if (Object.keys(meta).length) {
       await trx('contract_templates').where({ id }).update({ ...meta, updated_at: now });
       changed.push(...Object.keys(meta));
@@ -400,11 +458,29 @@ async function saveDraft(id, payload, adminId) {
 }
 
 /**
- * Publish the draft. Refuses a draft with no clauses, an archived library
- * block, an empty free-text section or an unknown placeholder, listing every
- * problem at once. Returns `{ version, contentSha256 }`.
+ * Publish the draft. Runs the pre-publication check first (checkTemplate)
+ * and refuses on any error — `400 TEMPLATE_INVALID` with every finding in
+ * `details.findings` — before the transaction, so a refused publish changes
+ * nothing, the draft's lock version included. The check reads the draft as
+ * it stands; a save between the check and the publish bumps the lock, and
+ * the publish then fails its lock claim instead of going out unchecked.
+ * Returns `{ version, contentSha256 }`.
  */
 async function publishTemplate(id, { lockVersion }, adminId) {
+  const template = await db('contract_templates').where({ id }).first();
+  if (!template) throw notFound();
+  if (ensureInt(lockVersion) !== ensureInt(template.lock_version)) throw conflict();
+  assertEditable(template);
+  if (!(await db('contract_template_versions').where({ template_id: id, status: 'draft' }).first())) {
+    throw new AppError('There is no draft to publish', 409, 'TEMPLATE_NO_DRAFT');
+  }
+  const check = await checkTemplate(id);
+  if (!check.ok) {
+    const errors = check.findings.filter((f) => f.severity === 'error');
+    const err = invalid(errors.map((f) => f.message).join(' · '));
+    err.details = { findings: check.findings };
+    throw err;
+  }
   const result = await db.transaction(async (trx) => {
     const template = await claimLock(trx, id, lockVersion);
     assertEditable(template);
@@ -412,25 +488,24 @@ async function publishTemplate(id, { lockVersion }, adminId) {
     if (!draft) throw new AppError('There is no draft to publish', 409, 'TEMPLATE_NO_DRAFT');
     const items = await loadItems(draft.id, trx);
     if (!items.length) throw invalid('Add at least one clause before publishing');
-
-    const problems = [];
-    for (const item of items) {
-      if (item.kind === 'block' && !truthy(item.block_is_active)) {
-        problems.push(`"${item.block_name}" is archived in the clause library`);
-      }
-      if (item.kind === 'text' && !Object.keys(content.parseLocaleMap(item.body_override)).length) {
-        problems.push(`Free-text section "${item.heading || `#${item.position}`}" has no text`);
-      }
-    }
     const versionAttachments = await attachments.loadVersionAttachments(draft.id, trx);
-    for (const attachment of versionAttachments) {
-      if (!truthy(attachment.is_active)) problems.push(`"${attachment.name}" is archived in the attachment library`);
+    // Checked again under the lock: a block or attachment archived in its
+    // library between the check above and this transaction must not be
+    // frozen into a version. Archiving bumps neither the template's lock nor
+    // anything the claim above reads.
+    const archivedNow = [
+      ...items.filter((item) => item.kind === 'block' && !truthy(item.block_is_active))
+        .map((item) => finding('BLOCK_ARCHIVED', 'error',
+          `"${item.block_name}" is archived in the clause library`, { itemPosition: ensureInt(item.position) })),
+      ...versionAttachments.filter((row) => !truthy(row.is_active))
+        .map((row) => finding('ATTACHMENT_ARCHIVED', 'error',
+          `"${row.name}" is archived in the attachment library`, { attachmentId: row.attachment_id })),
+    ];
+    if (archivedNow.length) {
+      const err = invalid(archivedNow.map((f) => f.message).join(' · '));
+      err.details = { findings: archivedNow };
+      throw err;
     }
-    const texts = [draft.intro_text, draft.outro_text, ...items.map((item) => item.body_override)]
-      .flatMap((value) => Object.values(content.parseLocaleMap(value)));
-    const unknown = new Set(texts.flatMap((text) => unknownPlaceholders(text, CONTRACT_PLACEHOLDERS)));
-    if (unknown.size) problems.push(`Unknown placeholders: ${[...unknown].map((k) => `{{${k}}}`).join(', ')}`);
-    if (problems.length) throw invalid(problems.join(' · '));
 
     // Freeze the blocks' bodies and hash the resolved content.
     const now = new Date();
@@ -550,6 +625,21 @@ async function loadPublishedVersion(versionId) {
 }
 
 /**
+ * The published version of a template that may start a contract, or null
+ * (archived, never published, gone).
+ */
+async function usablePublishedVersionId(templateId) {
+  if (!templateId) return null;
+  const row = await db('contract_template_versions as v')
+    .join('contract_templates as t', 't.id', 'v.template_id')
+    .where({ 'v.template_id': templateId, 'v.status': 'published' })
+    .whereNot('t.status', 'archived')
+    .select('v.id')
+    .first();
+  return row ? row.id : null;
+}
+
+/**
  * The version a new contract starts from: the one asked for, else the
  * default template's published version. Resolved outside any transaction
  * (it reads through the global db).
@@ -618,11 +708,8 @@ async function seedContractFromVersion(trx, contractId, version, history = { sou
   await attachments.seedContractAttachments(trx, contractId, version.id, history);
 }
 
-/**
- * A sample PDF of a template's draft (or a given version), rendered by the
- * real contract pipeline with the business profile and no customer.
- */
-async function renderTemplatePreview(id, { version: versionNumber } = {}) {
+/** The version a preview or a check renders: the one asked for, else the draft, else the published one. */
+async function previewVersion(id, versionNumber) {
   const template = await db('contract_templates').where({ id }).first();
   if (!template) throw notFound();
   const version = versionNumber
@@ -630,17 +717,39 @@ async function renderTemplatePreview(id, { version: versionNumber } = {}) {
     : (await db('contract_template_versions').where({ template_id: id, status: 'draft' }).first()
       || await db('contract_template_versions').where({ template_id: id, status: 'published' }).first());
   if (!version) throw new AppError('Template version not found', 404, 'TEMPLATE_VERSION_NOT_FOUND');
-  const items = await loadItems(version.id);
+  return { template, version };
+}
 
+/**
+ * Render a version the way a contract made from it renders: the business
+ * profile's letterhead, and sample data (pdf/sampleData) for the customer,
+ * the event and a three-line quote — or a real customer when
+ * `customer` is given. Every page names what is previewed ("Preview —
+ * <template> v<n|draft>"). `skipUnreadable` leaves out a merged attachment
+ * whose file can't be read (the check reports it) instead of failing.
+ * Returns the PDF, where each clause landed, what the render worked around,
+ * the page count and the render context.
+ */
+/**
+ * A version as a contract made from it right now: a stand-in contract row,
+ * its clauses and texts, and the sample quote and customer (or the real
+ * customer given). Shared by the PDF preview and the layout preview.
+ */
+async function previewInputs(template, version, { customer = null } = {}) {
+  const items = await loadItems(version.id);
   const businessProfileService = require('../businessProfileService');
   const { profile } = await businessProfileService.getProfile();
+  const sample = require('../pdf/sampleData');
   const language = (profile && profile.default_locale) || 'de';
+  const quote = sample.sampleContractQuote(language, profile && profile.default_currency);
   const fakeContract = {
     id: null,
     contract_number: 'PREVIEW',
-    customer_account_id: null,
+    customer_account_id: customer ? customer.id : null,
     language,
     issue_date: new Date().toISOString().slice(0, 10),
+    event_name: sample.sampleText(language).eventName,
+    event_date: '2027-06-12',
     title: version.title || template.name,
     intro_text: content.pickLocale(version.intro_text, language) || null,
     outro_text: content.pickLocale(version.outro_text, language) || null,
@@ -655,15 +764,207 @@ async function renderTemplatePreview(id, { version: versionNumber } = {}) {
   const textSections = items.filter((item) => item.kind === 'text').map((item) => ({
     section: item.section, position: item.position, heading: item.heading, body: item.body_override,
   }));
+  return {
+    profile,
+    language,
+    quote,
+    fakeContract,
+    inclusions,
+    textSections,
+    customer: customer || sample.SAMPLE_CUSTOMER,
+    placeholders: { source_quote_number: quote.number },
+  };
+}
+
+async function renderVersion(template, version, { skipUnreadable = false, customer = null } = {}) {
+  const {
+    profile, language, quote, fakeContract, inclusions, textSections, customer: previewCustomer, placeholders,
+  } = await previewInputs(template, version, { customer });
+  // Merged attachments where a sent contract has them: before the signature page.
+  const merged = [];
+  for (const row of (await attachments.loadVersionAttachments(version.id)).filter((r) => r.delivery === 'merged')) {
+    try {
+      merged.push({ buffer: attachments.readStoredFile(row).buffer, pages: Number(row.page_count) || 0 });
+    } catch (err) {
+      if (!skipUnreadable) throw err;
+    }
+  }
   const { buildRenderContext } = require('./renderContext');
   const pdfService = require('../pdfService');
-  const ctx = await buildRenderContext(fakeContract, inclusions, textSections);
-  const buffer = await pdfService.renderContractToBuffer(ctx);
-  // Merged attachments where a sent contract has them: before the signature page.
-  const merged = (await attachments.loadVersionAttachments(version.id))
-    .filter((row) => row.delivery === 'merged')
-    .map((row) => attachments.readStoredFile(row).buffer);
-  return (await insertBeforeLastPage(buffer, merged, { title: 'PREVIEW' })).buffer;
+  const ctx = await buildRenderContext(fakeContract, inclusions, textSections, { customer: previewCustomer, quote, placeholders });
+  ctx.mergedAttachmentPages = merged.reduce((sum, file) => sum + file.pages, 0);
+  const { t: pdfT } = require('../pdf-i18n');
+  ctx.previewLabel = pdfT(language, 'template_preview_label', {
+    name: template.name,
+    version: version.status === 'draft' ? pdfT(language, 'template_preview_draft') : `v${ensureInt(version.version_number)}`,
+  });
+  const rendered = await pdfService.renderContractWithSlots(ctx);
+  const own = rendered.slots && rendered.slots.length ? rendered.slots[0].pageIndex + 1 : 0;
+  const result = await insertBeforeLastPage(rendered.buffer, merged.map((file) => file.buffer), { title: 'PREVIEW' });
+  return {
+    buffer: result.buffer,
+    itemPages: rendered.itemPages || [],
+    findings: rendered.findings || [],
+    pageCount: own + ctx.mergedAttachmentPages,
+    ctx,
+    profile,
+  };
+}
+
+/**
+ * A template's draft (or a given version) as the signing page would show a
+ * contract made from it, with sample data: the content the shared
+ * ContractBody component renders in the editor's desktop/phone preview.
+ */
+async function previewContent(id, { version: versionNumber } = {}) {
+  const { template, version } = await previewVersion(id, versionNumber);
+  const inputs = await previewInputs(template, version);
+  const { resolveDisplayContent } = require('./renderContext');
+  const publicView = require('./publicView');
+  const display = await resolveDisplayContent(inputs.fakeContract, inputs.inclusions, inputs.textSections, inputs.language,
+    { customer: inputs.customer, placeholders: inputs.placeholders });
+  const view = publicView.publicContractView(
+    { ...inputs.fakeContract, status: 'draft' }, display, inputs.customer, inputs.profile, null, null,
+  );
+  return {
+    contractNumber: view.contractNumber,
+    language: view.language,
+    title: view.title,
+    introText: view.introText,
+    outroText: view.outroText,
+    sections: view.sections,
+    recipient: view.recipient,
+    // None when "Show only if" hides the price clause, as in the PDF.
+    commercial: display.priceHidden ? null : publicView.commercialView(inputs.quote),
+    version: version.status === 'draft' ? null : ensureInt(version.version_number),
+  };
+}
+
+/**
+ * A sample PDF of a template's draft (or a given version), rendered by the
+ * real contract pipeline with sample data, or with a real customer when
+ * `customerId` is given (the route checks customers.view first).
+ */
+async function renderTemplatePreview(id, { version: versionNumber, customerId = null } = {}) {
+  const { template, version } = await previewVersion(id, versionNumber);
+  let customer = null;
+  if (customerId) {
+    customer = await db('customer_accounts').where({ id: customerId }).first();
+    if (!customer) throw new AppError('Customer not found', 404, 'CUSTOMER_NOT_FOUND');
+  }
+  return (await renderVersion(template, version, { customer })).buffer;
+}
+
+// A contract past this many pages is almost always a mistake (a pasted
+// document, a clause repeated); worth a word, not a refusal.
+const PAGE_COUNT_WARNING = 30;
+const LOCALES_CHECKED = ['en', 'de'];
+
+const finding = (code, severity, message, where = {}) => ({ code, severity, ...where, message });
+
+/**
+ * The pre-publication check of a template's draft (#1445): every problem
+ * with a code, a severity and where it is — `itemPosition` (1-based clause),
+ * `locale`, `key`, `field` ('intro' | 'outro'), `attachmentId` — plus a dry
+ * run of the real render with the page each clause lands on. Errors block
+ * publishing; warnings don't. Reads only; the draft is never touched.
+ *
+ * Returns `{ ok, pageCount, itemPages, findings }`.
+ */
+async function checkTemplate(id) {
+  const template = await db('contract_templates').where({ id }).first();
+  if (!template) throw notFound();
+  const draft = await db('contract_template_versions').where({ template_id: id, status: 'draft' }).first();
+  if (!draft) throw new AppError('There is no draft to check', 409, 'TEMPLATE_NO_DRAFT');
+  const items = await loadItems(draft.id);
+  const findings = [];
+
+  if (!items.length) findings.push(finding('NO_CLAUSES', 'error', 'Add at least one clause before publishing'));
+
+  const textChecks = (text, where) => {
+    for (const key of unknownPlaceholders(text, CONTRACT_PLACEHOLDERS)) {
+      findings.push(finding('PLACEHOLDER_UNKNOWN', 'error', `Unknown placeholder {{${key}}}`, { ...where, key }));
+    }
+    for (const code of conditionalProblems(text)) {
+      findings.push(finding(code, 'error', code === 'CONDITIONAL_NESTED'
+        ? 'A "Show only if" block sits inside another one'
+        : 'A "Show only if" block is not closed', where));
+    }
+  };
+  for (const [field, value] of [['intro', draft.intro_text], ['outro', draft.outro_text]]) {
+    for (const [locale, text] of Object.entries(content.parseLocaleMap(value))) textChecks(text, { field, locale });
+  }
+
+  for (const item of items) {
+    const itemPosition = ensureInt(item.position);
+    const label = item.kind === 'block' ? (item.block_name || `#${itemPosition}`) : (item.heading || `#${itemPosition}`);
+    if (item.kind === 'block' && !truthy(item.block_is_active)) {
+      findings.push(finding('BLOCK_ARCHIVED', 'error', `"${label}" is archived in the clause library`, { itemPosition }));
+    }
+    const override = content.parseLocaleMap(item.body_override);
+    if (item.kind === 'text' && !Object.keys(override).length) {
+      findings.push(finding('SECTION_EMPTY', 'error', `Free-text section "${label}" has no text`, { itemPosition }));
+    }
+    for (const [locale, text] of Object.entries(override)) textChecks(text, { itemPosition, locale });
+    // What the clause says in each language: a block's override over its
+    // library text, a section's own text.
+    const effective = item.kind === 'block' ? content.mergeLocaleMaps(content.blockBodies(item, 'block_'), override) : override;
+    const has = (locale) => typeof effective[locale] === 'string' && effective[locale].trim() !== '';
+    const present = LOCALES_CHECKED.filter(has);
+    if (present.length === 1) {
+      const missing = LOCALES_CHECKED.find((locale) => !has(locale));
+      findings.push(finding('LOCALE_INCOMPLETE', 'warning', `"${label}" has no ${missing.toUpperCase()} text`, { itemPosition, locale: missing }));
+    }
+  }
+
+  for (const row of await attachments.loadVersionAttachments(draft.id)) {
+    const where = { attachmentId: row.attachment_id };
+    if (!truthy(row.is_active)) {
+      findings.push(finding('ATTACHMENT_ARCHIVED', 'error', `"${row.name}" is archived in the attachment library`, where));
+    }
+    let buffer = null;
+    try {
+      ({ buffer } = attachments.readStoredFile(row));
+    } catch (_) {
+      findings.push(finding('ATTACHMENT_MISSING', 'error', `The file of "${row.name}" is missing`, where));
+    }
+    if (buffer && crypto.createHash('sha256').update(buffer).digest('hex') !== row.sha256) {
+      findings.push(finding('ATTACHMENT_CHANGED', 'error', `The file of "${row.name}" no longer matches the one uploaded`, where));
+    }
+  }
+
+  // The dry run: the real pipeline, in the render worker.
+  let pageCount = null;
+  let itemPages = [];
+  try {
+    const rendered = await renderVersion(template, draft, { skipUnreadable: true });
+    pageCount = rendered.pageCount;
+    itemPages = rendered.itemPages;
+    for (const f of rendered.findings) {
+      findings.push(finding(f.code, f.severity, f.code === 'FONT_MISSING'
+        ? `The font "${f.key}" could not be loaded; the PDF falls back to Helvetica`
+        : 'The logo could not be drawn', f.key ? { key: f.key } : {}));
+    }
+    const issuer = rendered.ctx.issuer || {};
+    const { getAppSetting } = require('../../utils/appSettings');
+    const logoConfigured = (rendered.profile && rendered.profile.logo_path)
+      || await getAppSetting('branding_logo_path', null) || await getAppSetting('branding_logo_url', null);
+    if (issuer.showLogo !== false && logoConfigured && !issuer.logoPath && !findings.some((f) => f.code === 'LOGO_MISSING')) {
+      findings.push(finding('LOGO_MISSING', 'warning', 'The logo file could not be found; the PDF has no logo'));
+    }
+    if (pageCount > PAGE_COUNT_WARNING) {
+      findings.push(finding('PAGE_COUNT_HIGH', 'warning', `The contract runs to ${pageCount} pages`));
+    }
+  } catch (err) {
+    findings.push(finding('RENDER_FAILED', 'error', 'The contract could not be rendered'));
+  }
+
+  return {
+    ok: !findings.some((f) => f.severity === 'error'),
+    pageCount,
+    itemPages,
+    findings,
+  };
 }
 
 module.exports = {
@@ -679,7 +980,10 @@ module.exports = {
   restoreTemplate,
   setDefaultTemplate,
   loadPublishedVersion,
+  usablePublishedVersionId,
   resolveVersionForNewContract,
   seedContractFromVersion,
   renderTemplatePreview,
+  previewContent,
+  checkTemplate,
 };

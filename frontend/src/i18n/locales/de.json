@@ -3661,13 +3661,93 @@
         "none": "Keine Fußzeile"
       },
       "footerText": "Fußzeilentext",
-      "marginsNote": "Die Ränder folgen dem Briefformat nach DIN 5008 und lassen sich nicht anpassen.",
+      "marginsNote": "Den oberen Rand bestimmen Adressfenster und Briefkopf. Die Unterschriftenseite eines Vertrags behält ihr festes Layout unabhängig von den Rändern, damit Unterschriften immer in ihren Feldern landen.",
       "preview": "PDF-Vorschau",
       "resetScope": "Auf übernommene Werte zurücksetzen",
       "save": "Design speichern",
       "saved": "PDF-Design gespeichert",
       "saveFailed": "Das PDF-Design konnte nicht gespeichert werden",
-      "previewFailed": "Die Vorschau konnte nicht erstellt werden"
+      "previewFailed": "Die Vorschau konnte nicht erstellt werden",
+      "presets": "Mit einer Vorlage beginnen",
+      "presetsHint": "Eine Vorlage füllt das Formular aus; gespeichert wird erst, wenn Sie das Design speichern.",
+      "preset": {
+        "classic": "Klassisch",
+        "modern": "Modern",
+        "compact": "Kompakt",
+        "largePrint": "Grosse Schrift"
+      },
+      "layout": "Layout",
+      "margin": {
+        "left": "Rand links",
+        "right": "Rand rechts",
+        "bottom": "Rand unten"
+      },
+      "marginStandard": "Standard",
+      "addressWindow": "Adressfenster",
+      "addressWindowOption": {
+        "on": "Für Fensterkuverts (DIN 5008)",
+        "off": "Aus — die Adresse folgt dem Briefkopf"
+      },
+      "logoPosition": "Position des Logos",
+      "logoPositionOption": {
+        "right": "Rechts, im Briefkopf",
+        "left": "Oben links",
+        "center": "Oben mittig"
+      },
+      "logoStack": "Logo und Firmenname",
+      "logoStackOption": {
+        "above": "Logo über dem Namen",
+        "inline": "Logo neben dem Namen"
+      },
+      "bodySize": "Schriftgrösse Fliesstext",
+      "lineHeight": "Zeilenhöhe",
+      "lineHeightStandard": "Standard",
+      "warningsTitle": "Lesbarkeit",
+      "warnings": {
+        "CONTRAST_LOW": "{{color}}: Kontrast {{value}}:1 gegenüber Weiss liegt unter {{limit}}:1.",
+        "BODY_SIZE_SMALL": "Fliesstext mit {{value}} pt ist schwer lesbar; empfohlen sind mindestens {{limit}} pt.",
+        "LINE_HEIGHT_TIGHT": "Eine Zeilenhöhe von {{value}} ist eng; ab {{limit}} liest es sich besser.",
+        "LINE_TOO_LONG": "Zeilen umfassen etwa {{value}} Zeichen; über {{limit}} werden sie schwer lesbar. Breitere Ränder oder grössere Schrift helfen."
+      },
+      "uploadedFonts": "Ihre Schriften",
+      "uploadedFont": "Hochgeladene Schrift",
+      "fontUnavailable": "{{name}} (nicht mehr verfügbar)"
+    },
+    "pdfFonts": {
+      "title": "Ihre Schriften für PDFs",
+      "description": "Fügen Sie Ihre Hausschrift als TTF- oder OTF-Dateien hinzu (je bis 5 MB). Danach wählen Sie sie im PDF-Design.",
+      "add": "Schrift hinzufügen",
+      "face": {
+        "regular": "Normal",
+        "bold": "Fett",
+        "italic": "Kursiv"
+      },
+      "name": "Name",
+      "licenceNote": "Lizenz",
+      "licencePlaceholder": "z. B. SIL Open Font License 1.1, oder: Desktop-Lizenz aus dem Brand-Kit, erlaubt Einbettung",
+      "confirm": "Ich darf diese Schrift in die Dokumente einbetten, die ich versende.",
+      "upload": "Schrift hinzufügen",
+      "uploaded": "Schrift hinzugefügt",
+      "uploadFailed": "Die Schrift konnte nicht hinzugefügt werden.",
+      "archive": "Archivieren",
+      "archived": "Archiviert",
+      "archiveConfirm": "Diese Schrift archivieren? Dokumente, deren Design sie nutzt, verwenden dann Helvetica.",
+      "archiveFailed": "Die Schrift konnte nicht archiviert werden.",
+      "errors": {
+        "FONT_FORMAT_UNSUPPORTED": "Laden Sie die Schrift als TTF- oder OTF-Datei hoch; WOFF, WOFF2 und Schriftsammlungen werden nicht unterstützt.",
+        "FONT_NOT_A_FONT": "Diese Datei ist keine TTF- oder OTF-Schrift.",
+        "FONT_MALFORMED": "Die Schriftdatei ist beschädigt oder unvollständig.",
+        "FONT_TOO_LARGE": "Eine Schriftdatei darf höchstens 5 MB gross sein.",
+        "FONT_TOO_COMPLEX": "Diese Schrift ist zu komplex.",
+        "FONT_LICENCE_RESTRICTED": "Die Lizenz dieser Schrift erlaubt keine Einbettung in Dokumente.",
+        "FONT_NAME_TAKEN": "Es gibt bereits eine Schrift mit diesem Namen.",
+        "FONT_LICENCE_NOTE_REQUIRED": "Beschreiben Sie die Lizenz der Schrift.",
+        "FONT_LICENCE_NOT_CONFIRMED": "Bestätigen Sie, dass Sie diese Schrift einbetten dürfen.",
+        "FONT_FILE_NOT_FOUND": "die Datei wurde nicht gefunden.",
+        "FONT_NO_SUBSETTING": "Die Lizenz dieser Schrift erlaubt keine Einbettung einer Teilmenge, die PDFs benötigen.",
+        "FONT_BITMAP_ONLY": "Die Lizenz dieser Schrift erlaubt nur das Einbetten von Bitmaps, nicht der Umrisse, die PDFs benötigen."
+      },
+      "legacyFailed": "Die vor diesem Update eingestellte Schrift konnte nicht übernommen werden: {{reason}}"
     }
   },
   "admin": {
@@ -7149,7 +7229,10 @@
       "textOwn": "Eigener Text",
       "texts": "Einleitung und Schluss",
       "validityDays": "Gültig für (Tage)",
-      "versions": "Veröffentlichte Versionen"
+      "versions": "Veröffentlichte Versionen",
+      "contractTemplate": "Vertragsvorlage",
+      "contractTemplateDefault": "— Die Standard-Vertragsvorlage —",
+      "contractTemplateUnavailable": "{{name}} (nicht mehr verfügbar)"
     },
     "textBlocks": {
       "insert": "Textbaustein einfügen…"
@@ -7181,7 +7264,11 @@
         "noAddOns": "Dieses Angebot enthält keine Zusatzleistungen.",
         "failed": "Die Änderungen an den Zusatzleistungen konnten nicht gespeichert werden."
       }
-    }
+    },
+    "contractTemplate": "Vertragsvorlage",
+    "convertToContractConfirm": "Vertrag entwerfen",
+    "contractTemplateFromQuote": "Vorausgewählt durch die Offertvorlage: {{name}}",
+    "contractTemplateAuto": "Wie in der Offertvorlage festgelegt (sonst die Standardvorlage)"
   },
   "crm": {
     "lineItems": {
@@ -7997,7 +8084,46 @@
       "certificateUnavailable": "Signaturzertifikat nicht verfügbar",
       "countersignUncertain": "Wir konnten den Server nicht erreichen und können daher nicht sagen, ob die Gegenzeichnung gespeichert wurde. Der Vertrag wurde neu geladen – prüfen Sie seinen Status, bevor Sie erneut unterschreiben.",
       "attachmentMerged": "ab Seite {{page}} eingefügt",
-      "attachmentSeparate": "als separate Datei versendet"
+      "attachmentSeparate": "als separate Datei versendet",
+      "review": {
+        "title": "Vor dem Senden prüfen",
+        "loadFailed": "Die Übersicht konnte nicht geladen werden.",
+        "blocked": "Dieser Vertrag kann noch nicht gesendet werden",
+        "warnings": "Bitte prüfen",
+        "ready": "Alles bereit zum Senden.",
+        "customer": "Kunde",
+        "signers": "Unterzeichnende",
+        "sequential": "Nacheinander, in dieser Reihenfolge",
+        "parallel": "Alle gleichzeitig",
+        "issuer": "Ihre Gegenzeichnung",
+        "noAttachments": "Keine",
+        "merged": "im PDF",
+        "separate": "separate Datei",
+        "pages_one": "{{count}} Seite",
+        "pages_other": "{{count}} Seiten",
+        "fileProblem": "Problem mit der Datei",
+        "price": "Preis",
+        "noPrice": "Keine Offerte verknüpft — der Vertrag nennt keinen Preis.",
+        "template": "Vorlage",
+        "templateVersion": "{{name}}, Version {{version}}",
+        "noTemplate": "Keine Vorlage",
+        "showLayout": "Signierseite anzeigen",
+        "hideLayout": "Signierseite ausblenden",
+        "sending": "Wird gesendet…",
+        "sendTo_one": "An {{count}} Unterzeichnende senden",
+        "sendTo_other": "An {{count}} Unterzeichnende senden",
+        "stale": "Der Vertrag wurde seit dieser Prüfung geändert. Prüfen Sie die aktualisierte Übersicht und senden Sie dann.",
+        "problems": {
+          "CONTRACT_NOT_DRAFT": "Nur ein Entwurf kann gesendet werden.",
+          "CUSTOMER_MISSING": "Der Kunde existiert nicht mehr.",
+          "CUSTOMER_INACTIVE": "Der Kunde ist deaktiviert.",
+          "SIGNER_EMAIL_MISSING": "Der Kunde hat keine E-Mail-Adresse zum Unterschreiben.",
+          "ATTACHMENT_CHANGED": "Ein Anhang stimmt nicht mehr mit der hinzugefügten Datei überein. Entfernen Sie ihn und fügen Sie ihn neu hinzu.",
+          "ATTACHMENT_MISSING": "Die Datei eines Anhangs fehlt.",
+          "NO_CLAUSES": "Der Vertrag hat keine Klauseln.",
+          "PLACEHOLDER_UNRESOLVED": "Diese Platzhalter erscheinen unverändert im Vertrag: {{keys}}"
+        }
+      }
     },
     "editor": {
       "back": "Zurück zur Liste",
@@ -8071,7 +8197,11 @@
       "templateHint": "Der Vertrag beginnt mit den Klauseln und Texten dieser Vorlage. Nach dem Erstellen können Sie sie anpassen.",
       "templateNoneHint": "Wählen Sie die Klauseln unten selbst aus.",
       "textSections": "Freitext-Abschnitte",
-      "textSectionsHint": "Diese stammen aus der Vorlage und bleiben beim Speichern unverändert."
+      "textSectionsHint": "Diese stammen aus der Vorlage und bleiben beim Speichern unverändert.",
+      "conflictTitle": "Von jemand anderem geändert.",
+      "conflictBody": "Dieser Vertrag wurde anderswo gespeichert, während Sie ihn bearbeitet haben. Ihre Änderungen sind noch da und wurden nicht gespeichert.",
+      "keepMine": "Meine behalten",
+      "takeTheirs": "Ihre übernehmen"
     },
     "blocks": {
       "back": "Zurück zu den Verträgen",
@@ -8141,8 +8271,6 @@
       "actionFailed": "Das hat nicht geklappt. Bitte versuchen Sie es erneut.",
       "languages": "Sprachen",
       "systemNotice": "Die mitgelieferte Vorlage lässt sich nicht bearbeiten. Duplizieren Sie sie, um eine eigene Fassung anzulegen.",
-      "conflict": "Jemand anderes hat diese Vorlage gespeichert, während Sie sie bearbeitet haben. Laden Sie neu, um diese Fassung zu sehen — Ihre Änderungen seit dem Laden gehen dabei verloren.",
-      "reload": "Neu laden",
       "details": "Angaben",
       "name": "Name",
       "useCase": "Einsatzzweck",
@@ -8150,7 +8278,6 @@
       "docTitle": "Vertragstitel",
       "introText": "Einleitung",
       "outroText": "Schlusstext",
-      "placeholders": "Verfügbare Platzhalter:",
       "clauses": "Klauseln",
       "noClauses": "Noch keine Klauseln. Fügen Sie Klauseln aus der Bibliothek oder freien Text hinzu.",
       "clause": "Klausel",
@@ -8184,7 +8311,123 @@
       "versionEarlier": "Früher",
       "draftFromVersion": "Neuer Entwurf aus dieser Version",
       "draftFromVersionConfirm": "Den aktuellen Entwurf durch eine Kopie von Version {{version}} ersetzen?",
-      "draftCreated": "Entwurf aus Version {{version}} erstellt"
+      "draftCreated": "Entwurf aus Version {{version}} erstellt",
+      "check": {
+        "run": "Prüfen",
+        "failed": "Die Prüfung konnte nicht ausgeführt werden.",
+        "clause": "Klausel {{position}}",
+        "error": "Fehler",
+        "warning": "Hinweis",
+        "goTo": "Anzeigen",
+        "blocked": "Vor dem Veröffentlichen beheben",
+        "passed": "Bereit zum Veröffentlichen",
+        "pageCount": "{{count}} Seiten im Probedruck",
+        "stale": "Seit der Prüfung geändert — bitte erneut prüfen",
+        "codes": {
+          "NO_CLAUSES": "Fügen Sie vor dem Veröffentlichen mindestens eine Klausel hinzu.",
+          "BLOCK_ARCHIVED": "{{where}}: in der Klauselbibliothek archiviert.",
+          "SECTION_EMPTY": "{{where}}: der Freitext-Abschnitt hat keinen Text.",
+          "PLACEHOLDER_UNKNOWN": "{{where}} ({{locale}}): unbekannter Platzhalter {{key}}.",
+          "CONDITIONAL_NESTED": "{{where}} ({{locale}}): ein „Nur anzeigen, wenn“-Block steht in einem anderen.",
+          "CONDITIONAL_UNCLOSED": "{{where}} ({{locale}}): ein „Nur anzeigen, wenn“-Block ist nicht geschlossen.",
+          "LOCALE_INCOMPLETE": "{{where}}: kein {{locale}}-Text.",
+          "ATTACHMENT_ARCHIVED": "Anhang „{{name}}“ ist in der Anhangbibliothek archiviert.",
+          "ATTACHMENT_MISSING": "Die Datei von Anhang „{{name}}“ fehlt.",
+          "ATTACHMENT_CHANGED": "Die Datei von Anhang „{{name}}“ stimmt nicht mehr mit der hochgeladenen überein.",
+          "FONT_MISSING": "Die Schrift „{{key}}“ konnte nicht geladen werden; das PDF verwendet Helvetica.",
+          "LOGO_MISSING": "Das Logo wurde nicht gefunden; das PDF hat kein Logo.",
+          "PAGE_COUNT_HIGH": "Der Vertrag umfasst {{pages}} Seiten.",
+          "RENDER_FAILED": "Der Vertrag konnte nicht als PDF erstellt werden."
+        }
+      },
+      "placeholdersHint": "Platzhalter werden beim Erstellen eines Vertrags ausgefüllt. Nutzen Sie „Platzhalter einfügen“ neben einem Text; die Vorschau zeigt sie mit Beispieldaten.",
+      "picker": {
+        "open": "Platzhalter einfügen",
+        "title": "Platzhalter",
+        "search": "Platzhalter suchen",
+        "none": "Kein Platzhalter gefunden.",
+        "sample": "z. B. {{value}}",
+        "categories": {
+          "customer": "Kunde",
+          "event": "Anlass",
+          "contract": "Vertrag",
+          "pricing": "Preise und Bedingungen",
+          "issuer": "Ihr Unternehmen"
+        }
+      },
+      "condition": {
+        "label": "Nur anzeigen, wenn…",
+        "always": "Immer anzeigen",
+        "kind": "Bedingung",
+        "filled": "ausgefüllt ist",
+        "empty": "leer ist",
+        "mixed": "Dieser Text enthält eigene Bedingungen. Eine Regel hier ersetzt die Bedingung um die ganze Klausel."
+      },
+      "publishedBy": "veröffentlicht von {{name}}",
+      "publishedBySystem": "mitgeliefert",
+      "compare": {
+        "withPrevious": "Mit vorheriger vergleichen",
+        "title": "Änderungen in v{{version}}",
+        "subtitle": "v{{from}} → v{{to}}",
+        "none": "Keine Unterschiede.",
+        "position": "Position {{from}} → {{to}}",
+        "at": "Position {{position}}",
+        "types": {
+          "added": "Neu",
+          "removed": "Entfernt",
+          "moved": "Verschoben",
+          "changed": "Geändert"
+        },
+        "tooLarge": "Zu gross für einen Vergleich hier"
+      },
+      "undo": "Rückgängig",
+      "redo": "Wiederholen",
+      "undoHint": "Rückgängig (Strg+Z)",
+      "redoHint": "Wiederholen (Umschalt+Strg+Z)",
+      "autosave": {
+        "saving": "Wird gespeichert…",
+        "conflict": "Nicht gespeichert — von jemand anderem geändert",
+        "offline": "Offline — Ihre Änderungen bleiben hier erhalten",
+        "error": "Nicht gespeichert",
+        "unsaved": "Ungespeicherte Änderungen",
+        "saved": "Gespeichert {{time}}",
+        "upToDate": "Keine ungespeicherten Änderungen"
+      },
+      "conflictTitle": "Von jemand anderem geändert.",
+      "conflictBody": "Eine andere Person hat diese Vorlage gespeichert, während Sie sie bearbeitet haben. Automatisches Speichern ist angehalten, Ihre Änderungen sind noch da.",
+      "conflictCompare": "Vergleichen",
+      "keepMine": "Meine behalten",
+      "takeTheirs": "Ihre übernehmen",
+      "keptMine": "Ihre Fassung ist gespeichert",
+      "conflictCompareTitle": "Deren Fassung und Ihre",
+      "conflictCompareSubtitle": "Was Sie an der von jemand anderem gespeicherten Fassung ändern würden",
+      "reorderHint": "Umsortieren mit dem Griff, den Pfeiltasten-Schaltflächen oder Alt+↑/↓ auf einer Klausel.",
+      "dragHandle": "„{{name}}“ verschieben (ziehen, oder Leertaste und Pfeiltasten)",
+      "pageBreaks": {
+        "hint": "„Prüfen“ zeigt, wo die Seiten umbrechen.",
+        "page": "Seite {{page}}",
+        "stale": "vor Ihren letzten Änderungen",
+        "spans": "Seiten {{first}}–{{last}}"
+      },
+      "dnd": {
+        "start": "{{name}} aufgenommen, Position {{position}} von {{count}}.",
+        "over": "{{name}} ist jetzt an Position {{position}} von {{count}}.",
+        "end": "{{name}} an Position {{position}} von {{count}} abgelegt.",
+        "cancel": "Verschieben von {{name}} abgebrochen.",
+        "instructions": "Um eine Klausel zu verschieben, drücken Sie Leertaste oder Enter, bewegen Sie sie mit den Pfeiltasten und drücken Sie erneut Leertaste oder Enter zum Ablegen. Escape bricht ab."
+      },
+      "layoutPreview": "Signierseite ansehen",
+      "layoutPreviewTitle": "Signierseite mit Beispieldaten",
+      "lineage": {
+        "systemUpdated": "Die Standardvorlage wurde aktualisiert (v{{from}} → v{{to}}). Ihre Kopie ist unverändert.",
+        "sourceUpdated": "„{{name}}“, aus der diese Vorlage kopiert wurde, hat eine neuere Version (v{{from}} → v{{to}}). Ihre Kopie ist unverändert.",
+        "adopt": "Neue Klauseln in meinen Entwurf übernehmen",
+        "dismiss": "Als geprüft markieren",
+        "compareTitle": "Was sich in „{{name}}“ geändert hat",
+        "adopted_one": "{{count}} neue Klausel am Ende hinzugefügt",
+        "adopted_other": "{{count}} neue Klauseln am Ende hinzugefügt",
+        "nothingNew": "Nichts Neues zu übernehmen — als geprüft markiert"
+      }
     },
     "attachments": {
       "heading": "Anhänge",
@@ -8343,6 +8586,12 @@
       "notCovered": "Bestätigen Sie jede Person, deren Unterschrift das Papierexemplar trägt – der Upload schliesst den Vertrag für alle ab.",
       "refusedTitle": "Bereits im Browser unterschrieben",
       "refusedBody": "Mindestens eine Person hat diesen Vertrag bereits im Browser unterschrieben. Ein Papierexemplar kann eine im Browser geleistete Unterschrift nicht ersetzen, deshalb ist der Upload nicht verfügbar. Lassen Sie die übrigen Personen im Browser unterschreiben und zeichnen Sie anschliessend auf dieser Seite gegen."
+    },
+    "layoutPreview": {
+      "device": "Bildschirmgrösse",
+      "desktop": "Desktop",
+      "phone": "Smartphone",
+      "note": "Layout-Vorschau der Signierseite. Unterschrieben wird das PDF."
     }
   },
   "messages": {
