@@ -201,8 +201,13 @@ const SLIP_BAND_FOOTER_GAP = SLIP_BAND_NUMBER_GAP + 8;
 /** A line of air between the last content and the footer under it. */
 const FOOTER_AIR = 6;
 
-/** One line of the footer, at its 8pt size. */
-const FOOTER_LINE_HEIGHT = 12;
+/**
+ * The document's two smaller steps, derived from the theme's body size so the
+ * whole document moves together when a theme sets a different one (#1546).
+ * `small` is the fine print — the footer, the page number, the VAT note.
+ */
+const smallTextSize = (theme) => Math.max(6, ((theme && theme.bodySize) || 10) - 2);
+const footerLineHeight = (theme) => Math.round(smallTextSize(theme) * 1.5);
 
 const FONT_BODY = 'Helvetica';
 const FONT_BOLD = 'Helvetica-Bold';
@@ -847,8 +852,8 @@ function drawLineItems(doc, ctx, { reserveOnLastPage = 0 } = {}) {
   const ROW_PADDING = [3, 4, 3, 4];
   // Match the totals box font size; the maintainer wants the line
   // items and the billing totals to read at the same weight so the
-  // eye doesn't bounce between two scales.
-  const ROW_FONT_SIZE = 10;
+  // eye doesn't bounce between two scales. Both follow the theme (#1546).
+  const ROW_FONT_SIZE = bodyText(doc).size;
   // Visual divider between items — thin grey rule under every data
   // row. swissqrbill PDFRow supports `borderWidth` as a 4-tuple
   // [top, right, bottom, left] and matching `borderColor`. We only
@@ -964,7 +969,7 @@ function drawLineItems(doc, ctx, { reserveOnLastPage = 0 } = {}) {
    */
   const buildDetailsRow = (text) => ({
     padding: [0, 4, 3, 4],
-    fontSize: 9,
+    fontSize: Math.max(6, ROW_FONT_SIZE - 1),
     borderWidth: [0, 0, 0, 0],
     columns: showDiscount
       ? [
@@ -1236,6 +1241,9 @@ function drawContractTotals(doc, ctx, x, y, width) {
 
 function drawTotals(doc, ctx, x, y, width) {
   const { locale, currency, intlLocale, totals } = ctx;
+  // One scale for the whole document: the theme's body size, with the note
+  // under the VAT row in the fine print step (#1546).
+  const size = bodyText(doc).size;
   // Layout: align the totals labels with the RIGHT column of the
   // payment block beneath (where "Please transfer the amount …",
   // "<Account holder>", and "<IBAN>" appear). Both columns of the
@@ -1259,7 +1267,7 @@ function drawTotals(doc, ctx, x, y, width) {
   doc.moveTo(x, y).lineTo(right, y).strokeColor(themeColor(doc, 'text')).lineWidth(0.8).stroke();
   y += 6;
 
-  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10);
+  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(size);
   doc.text(t(locale, 'totals_net'), labelX, y, { width: labelCol });
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY);
   doc.text(formatMinor(totals.netAmountMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
@@ -1286,9 +1294,9 @@ function drawTotals(doc, ctx, x, y, width) {
   // Optional; wraps across the totals column. Font size is restored to the row
   // scale so the Mahngebühr / Rundung / grand-total rows below are unaffected.
   if (ctx.vatNote) {
-    doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8).fillColor('#555');
+    doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(smallTextSize(doc._theme)).fillColor('#555');
     doc.text(ctx.vatNote, labelX, y, { width: right - labelX });
-    doc.fillColor(themeColor(doc, 'text')).fontSize(10);
+    doc.fillColor(themeColor(doc, 'text')).fontSize(size);
     y = doc.y + 4;
   }
 
@@ -1329,7 +1337,7 @@ function drawTotals(doc, ctx, x, y, width) {
   // visual emphasis. Includes the Mahngebühr when present so the
   // customer's "owed" figure is the single bottom-line number.
   const grandTotalMinor = Number(totals.totalAmountMinor || 0) + lateFeeMinor;
-  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10);
+  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(size);
   doc.text(t(locale, 'totals_grand'), labelX, y, { width: labelCol });
   doc.text(formatCurrencyLabel(currency), rateX, y, { width: rateCol, align: 'right' });
   doc.text(formatMinor(grandTotalMinor, currency, intlLocale), valueX, y, { width: valueCol, align: 'right' });
@@ -1346,6 +1354,7 @@ function drawTotals(doc, ctx, x, y, width) {
  */
 function drawPaymentBlock(doc, ctx, x, y, width) {
   const { type, locale, paymentTerm, bank, intlLocale, totals, currency, issuer, doc: docMeta } = ctx;
+  const size = bodyText(doc).size;
   const colWidth = (width - 20) / 2;
   const leftX = x;
   const rightX = x + colWidth + 20;
@@ -1391,10 +1400,10 @@ function drawPaymentBlock(doc, ctx, x, y, width) {
   if (!hasLeftContent && !showIbanHere) return y;
 
   if (hasLeftContent) {
-    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10).fillColor(themeColor(doc, 'text'));
+    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(size).fillColor(themeColor(doc, 'text'));
     doc.text(t(locale, 'payment_conditions') + ':', leftX, y, { width: colWidth });
     y = doc.y + 2;
-    doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10);
+    doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(size);
     if (paymentTerm?.description) {
       doc.text(paymentTerm.description, leftX, y, { width: colWidth });
       y = doc.y + 4;
@@ -1448,10 +1457,10 @@ function drawPaymentBlock(doc, ctx, x, y, width) {
   // Right column: IBAN (invoices only).
   let ry = startY;
   if (showIbanHere && bank) {
-    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(10);
+    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(size);
     doc.text(t(locale, 'iban_intro'), rightX, ry, { width: colWidth });
     ry = doc.y + 4;
-    doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10);
+    doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(size);
     if (bank.accountHolder) {
       doc.text(bank.accountHolder, rightX, ry, { width: colWidth });
       ry = doc.y;
@@ -1478,7 +1487,8 @@ function drawPaymentBlock(doc, ctx, x, y, width) {
 function footerHeightFor(theme, issuer) {
   const footer = (theme && theme.footer) || { mode: 'address', text: '' };
   if (footer.mode === 'none') return 0;
-  return issuer?.footerLine ? FOOTER_LINE_HEIGHT * 2 + 4 : FOOTER_LINE_HEIGHT;
+  const line = footerLineHeight(theme);
+  return issuer?.footerLine ? line * 2 + 4 : line;
 }
 
 /** footerHeightFor for a document that already carries its theme. */
@@ -1541,7 +1551,7 @@ function drawFooter(doc, issuer, locale, { bottomLimit = null } = {}) {
   const footer = (doc._theme && doc._theme.footer) || { mode: 'address', text: '' };
   const reserved = footerHeight(doc, issuer);
   if (!reserved) return;
-  const lineH = FOOTER_LINE_HEIGHT;
+  const lineH = footerLineHeight(doc._theme);
   const hasFooterLine = !!issuer.footerLine;
   const P = pageOf(doc);
   // Normally the footer sits in the bottom margin band. `bottomLimit` pulls it
@@ -1555,7 +1565,7 @@ function drawFooter(doc, issuer, locale, { bottomLimit = null } = {}) {
   const postalLeft = cc && pc ? `${cc}-${pc}` : (pc || cc);
   const postalSegment = [postalLeft, issuer.city].filter(Boolean).join(' ');
 
-  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8).fillColor(themeColor(doc, 'subtle'));
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(smallTextSize(doc._theme)).fillColor(themeColor(doc, 'subtle'));
   const parts = (footer.mode === 'custom' ? [footer.text] : [
     issuer.companyName,
     issuer.addressLine1,
@@ -1887,7 +1897,7 @@ function stampPageNumbers(doc, locale, { beforeStamp, insertedBeforeLast = 0, do
     doc.page.margins.bottom = 0;
     if (beforeStamp) beforeStamp(pageIndex);
     if (position === 'none') return;
-    doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8).fillColor(themeColor(doc, 'subtle'));
+    doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(smallTextSize(doc._theme)).fillColor(themeColor(doc, 'subtle'));
     const inserted = Math.max(0, Number(insertedBeforeLast) || 0);
     const total = pages.length + inserted;
     const isLast = n === pages.length - 1;

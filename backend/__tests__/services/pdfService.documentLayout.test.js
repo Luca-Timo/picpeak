@@ -80,17 +80,17 @@ afterEach(() => jest.restoreAllMocks());
  * constructed — the header is drawn before anything is measured.
  */
 function recordDrawing() {
-  const spy = jest.spyOn(PDFDocument.prototype, 'text');
-  return () => {
-    const emitted = spy.mock.instances[0];
-    return spy.mock.calls
-      .map(([text, x, y], i) => ({
-        text: String(text),
-        y: typeof y === 'number' ? y : null,
-        doc: spy.mock.instances[i],
-      }))
-      .filter((call) => call.doc === emitted);
-  };
+  const drawn = [];
+  const original = PDFDocument.prototype.text;
+  jest.spyOn(PDFDocument.prototype, 'text').mockImplementation(function record(text, x, y) {
+    // The active size has to be read here: by the time the test looks, the
+    // document has moved on.
+    drawn.push({
+      text: String(text), y: typeof y === 'number' ? y : null, size: this._fontSize, doc: this,
+    });
+    return original.apply(this, arguments);
+  });
+  return () => drawn.filter((call) => call.doc === drawn[0].doc);
 }
 
 const find = (calls, needle) => calls.find((c) => c.text.includes(needle));
@@ -144,6 +144,32 @@ describe('the totals', () => {
     await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)]));
     const calls = drawn();
     expect(find(calls, netLabel).y).toBeGreaterThan(find(calls, 'Position 1').y);
+  });
+});
+
+describe('the type scale', () => {
+  const sizeOf = (calls, needle) => find(calls, needle).size;
+
+  test('follows the theme\'s body size through the whole document', async () => {
+    const drawn = recordDrawing();
+    await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)]));
+    const standard = drawn();
+
+    jest.restoreAllMocks();
+    const drawnLarge = recordDrawing();
+    await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)], {
+      theme: { ...builtInTheme('invoice'), bodySize: 12 },
+    }));
+    const large = drawnLarge();
+
+    // The money blocks sit at the body size, the fine print two steps below.
+    expect(sizeOf(standard, netLabel)).toBe(10);
+    expect(sizeOf(standard, t('de', 'payment_conditions'))).toBe(10);
+    expect(sizeOf(standard, issuer.footerLine)).toBe(8);
+
+    expect(sizeOf(large, netLabel)).toBe(12);
+    expect(sizeOf(large, t('de', 'payment_conditions'))).toBe(12);
+    expect(sizeOf(large, issuer.footerLine)).toBe(10);
   });
 });
 
