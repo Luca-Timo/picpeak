@@ -86,7 +86,11 @@ function recordDrawing() {
     // The active size has to be read here: by the time the test looks, the
     // document has moved on.
     drawn.push({
-      text: String(text), y: typeof y === 'number' ? y : null, size: this._fontSize, doc: this,
+      text: String(text),
+      x: typeof x === 'number' ? x : null,
+      y: typeof y === 'number' ? y : null,
+      size: this._fontSize,
+      doc: this,
     });
     return original.apply(this, arguments);
   });
@@ -127,6 +131,21 @@ describe('the totals', () => {
     expect(await pageCount(long)).toBe(1);
   });
 
+  test('flow instead of pinning when the closing text is taller than the page', async () => {
+    // An outro is accepted up to 5000 characters. Measuring it on an A4 scrap
+    // used to let PDFKit break the text and re-base the cursor, so the height
+    // came back a page short and the blocks were pinned over the footer.
+    const outroText = 'Lorem ipsum dolor sit amet, consetetur sadipscing elitr. '.repeat(90);
+    const drawn = recordDrawing();
+    const buffer = await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)], {}, { outroText }));
+    const calls = drawn();
+
+    expect(await pageCount(buffer)).toBeGreaterThan(1);
+    const footer = find(calls, issuer.footerLine);
+    const lastClosingLine = find(calls, skontoLabel);
+    expect(footer.y - lastClosingLine.y).toBeGreaterThan(6);
+  });
+
   test('clear the footer, whatever the payment block holds', async () => {
     const items = Array.from({ length: 30 }, (_, i) => shortItem(i + 1));
     const drawn = recordDrawing();
@@ -144,6 +163,26 @@ describe('the totals', () => {
     await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)]));
     const calls = drawn();
     expect(find(calls, netLabel).y).toBeGreaterThan(find(calls, 'Position 1').y);
+  });
+});
+
+describe('drawIssuerBlock without a grid', () => {
+  // The contract renderer and the tax report call it on their own, passing a
+  // column but no grid. Its rows have to line up with that column, not with
+  // whatever the invoice's meta block happened to measure.
+  test('puts its contact rows at the column it was given', () => {
+    const doc = new PDFDocument({ size: 'A4' });
+    const drawn = recordDrawing();
+    const left = 300;
+    pdfService.drawIssuerBlock(doc, {
+      companyName: 'Studio Test', addressLine1: 'Weg 1', postalCode: '9490', city: 'Vaduz',
+      countryCode: 'LI', phone: '+423 000 00 00', email: 'me@example.com',
+    }, left, 40, 180, 'de');
+    const calls = drawn();
+
+    expect(find(calls, 'Weg 1').x).toBe(left);
+    expect(find(calls, `${t('de', 'contact_phone')}:`).x).toBe(left);
+    expect(find(calls, `${t('de', 'contact_email')}:`).x).toBe(left);
   });
 });
 

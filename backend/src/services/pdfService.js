@@ -460,7 +460,7 @@ function issuerContactRows(issuer, locale) {
  * own label out of line with the rows above it, and the sender block used a
  * different grid again.
  */
-function measureLabelGrid(doc, rows, right, { gap = 8, leftLimit = null } = {}) {
+function measureLabelGrid(doc, rows, right, { gap = 8, leftLimit = null, anchorLeft = null } = {}) {
   const body = (doc && doc._fonts && doc._fonts.body) || FONT_BODY;
   let labelW = 0;
   let valueW = 40;
@@ -469,7 +469,14 @@ function measureLabelGrid(doc, rows, right, { gap = 8, leftLimit = null } = {}) 
     labelW = Math.max(labelW, doc.widthOfString(`${label}:`) + 2);
     valueW = Math.max(valueW, doc.widthOfString(String(value)) + 2);
   }
-  doc.fontSize(10);
+  doc.fontSize(bodyText(doc).size);
+  // `anchorLeft` pins the label column to a column the caller already owns, so
+  // the labels line up with whatever it drew above them; otherwise the columns
+  // are packed against `right`.
+  if (anchorLeft != null) {
+    const valueX = anchorLeft + labelW + gap;
+    return { gap, labelW, valueW: Math.max(valueW, right - valueX), valueX, labelX: anchorLeft, right };
+  }
   // The column may never reach into the address field: the sender block sits
   // level with it.
   if (leftLimit != null && right - (labelW + gap + valueW) < leftLimit) {
@@ -594,8 +601,13 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale, { grid = null } = {})
   // The caller passes the grid when the document's meta rows share this
   // column; on its own the block measures its own rows the same way.
   const contactRows = issuerContactRows(issuer, locale);
+  // Without a grid from the caller — the contract renderer and the tax report —
+  // the columns start at this block's own left edge, so the contact rows line
+  // up with the address lines above them rather than being packed against the
+  // right margin.
   const rowGrid = grid || measureLabelGrid(
-    doc, contactRows.map(([label, value]) => [label, value, letterhead.size]), x + width);
+    doc, contactRows.map(([label, value]) => [label, value, letterhead.size]),
+    x + width, { anchorLeft: x });
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(letterhead.size);
   for (const [label, value] of contactRows) {
     drawGridRow(doc, rowGrid, label, value, y);
@@ -756,6 +768,10 @@ function drawTitle(doc, title, x, y) {
  * to be planned before it draws (#1546).
  */
 function measureTableRow(doc, row, defaults) {
+  // Mirrors the library for the row shapes this file builds. It does NOT read
+  // `textOptions`, `minHeight`, `maxHeight`, `row.height` or a column without a
+  // width — none of which our rows set. Adding one of those to a row without
+  // teaching this function about it would drift the planner silently.
   let tallest = 0;
   let padTop = 0;
   let padBottom = 0;
@@ -1122,9 +1138,10 @@ function drawLineItems(doc, ctx, { reserveOnLastPage = 0 } = {}) {
       index += 1;
     }
     if (taken.length === 0) {
-      // One line item taller than a whole page. Place it and let the library's
-      // own break carry the overflow, rather than looping forever on a group
-      // that can never fit.
+      // Nothing fits: a line item taller than a whole page, or a first page
+      // whose remaining space can't hold even the first group. Place it and let
+      // the library's own break carry any overflow, rather than looping forever
+      // on a group that can never fit.
       runningNet += groups[index].netMinor;
       taken.push(groups[index]);
       index += 1;
@@ -1149,15 +1166,30 @@ function drawLineItems(doc, ctx, { reserveOnLastPage = 0 } = {}) {
     new Table({ width: contentWidth, rows }).attachTo(doc);
     if (page.carryOut != null) {
       // The row that closes a continuing page is pinned to its foot, like the
-      // totals on the last one: the page breaks early so the last page can
-      // hold the pinned blocks, and a carry-over left floating under the final
-      // item would read as an unfinished total rather than the foot of a page.
-      // Two points clear of the foot: the library starts a page of its own when
-      // a row's bottom reaches `page.height - margins.bottom` exactly.
-      doc.y = pageBottom - carryHeight - 2;
-      doc.x = P.marginLeft;
-      new Table({ width: contentWidth, rows: [carryRow(page.carryOut, 'table_carry_forward')] })
-        .attachTo(doc);
+      // totals on the last one: the page breaks early so the last page can hold
+      // the pinned blocks, and a carry-over left floating under the final item
+      // would read as an unfinished total rather than the foot of a page.
+      //
+      // Drawn directly rather than as a one-row table: the library starts a
+      // page of its own as soon as a row's bottom reaches the bottom margin,
+      // which at the foot of the page is exactly where this row sits. That
+      // would emit a blank page carrying nothing but "Übertrag" — and it would
+      // depend on measureTableRow agreeing with the library to the point.
+      const [padTop, padRight, , padLeft] = ROW_PADDING;
+      const rowTop = pageBottom - carryHeight;
+      const lastX = P.marginLeft + contentWidth - widths[lastColumn];
+      doc.font(ctx.fonts?.bold || FONT_BOLD).fontSize(ROW_FONT_SIZE).fillColor(themeColor(doc, 'text'));
+      doc.text(t(locale, 'table_carry_forward'),
+        P.marginLeft + widths[0] + padLeft, rowTop + padTop, { lineBreak: false });
+      doc.text(formatMinor(page.carryOut, currency, intlLocale),
+        lastX + padLeft, rowTop + padTop,
+        { width: widths[lastColumn] - padLeft - padRight, align: 'right', lineBreak: false });
+      doc.moveTo(P.marginLeft, rowTop + carryHeight)
+        .lineTo(P.marginLeft + contentWidth, rowTop + carryHeight)
+        .strokeColor(ROW_BORDER_BOTTOM_COLOR[2])
+        .lineWidth(ROW_BORDER_BOTTOM_WIDTH[2])
+        .stroke();
+      doc.fillColor(themeColor(doc, 'text'));
     }
   });
   return doc.y;
@@ -1508,11 +1540,27 @@ function footerHeight(doc, issuer = {}) {
  * and the cursor tells us what they need. Estimating from a table of row
  * heights would drift the first time drawPaymentBlock grew a row.
  */
-function measureClosingHeight(ctx, PAGE, { isStorno }) {
+function measureClosingHeight(ctx, PAGE, options) {
+  try {
+    return measureClosingBlocks(ctx, PAGE, options);
+  } catch (err) {
+    // Never fail a document over a measurement. A generous fallback breaks the
+    // table a little early; too small a one would draw the pinned blocks over
+    // the footer.
+    require('../utils/logger').warn('Could not measure the closing blocks; using a fallback height', { err: err.message });
+    return 260;
+  }
+}
+
+function measureClosingBlocks(ctx, PAGE, { isStorno }) {
   const scrap = new PDFDocument({
-    size: 'A4',
+    // Tall enough that nothing drawn here can paginate. An outro is accepted up
+    // to 5000 characters (routes/adminQuotes): on an A4 scrap PDFKit would
+    // break it and reset the cursor to the top margin, and the height would
+    // come back as the tail of the block rather than the whole of it.
+    size: [PAGE.width, 20000],
     margins: {
-      top: PAGE.marginTop, bottom: PAGE.marginBottom,
+      top: PAGE.marginTop, bottom: 0,
       left: PAGE.marginLeft, right: PAGE.marginRight,
     },
   });
@@ -1529,8 +1577,9 @@ function measureClosingHeight(ctx, PAGE, { isStorno }) {
     scrap.fontSize(10);
   }
   if (!isStorno) y = drawPaymentBlock(scrap, ctx, PAGE.marginLeft, y + 12, PAGE.contentWidth);
-  scrap.end();
-  return y - top;
+  // Deliberately not ended: nothing reads the bytes, and ending it would embed
+  // the fonts and serialise a whole document we throw away.
+  return Math.max(0, y - top);
 }
 
 function drawFooter(doc, issuer, locale, { bottomLimit = null } = {}) {
@@ -1639,26 +1688,31 @@ function buildSwissQrBill(ctx) {
 }
 
 /**
+ * Is the QR-bill's band on the current page free for it? Asked before the page
+ * is laid out around the slip, because attachTo() answers the same question
+ * itself and inserts a slip-sized page when it disagrees — one that nothing
+ * marks as a payment slip, so it would be numbered and stamped at A4
+ * coordinates (#1546).
+ */
+function slipBandIsClear(doc) {
+  doc.y = doc.page.height - QR_BILL_BAND_HEIGHT;
+  return SwissQRBill.isSpaceSufficient(doc);
+}
+
+/**
  * Draw a built slip: under the content of the page just finished, or on a
  * page of its own. Returns whether it landed.
  */
 function attachSwissQrBill(doc, qr, { attachToCurrentPage = false } = {}) {
   if (attachToCurrentPage) {
-    // attachTo() measures the free space from `doc.y` and would otherwise
-    // insert a slip-sized page of its own; the band is free by construction
-    // here, so put the cursor at its top edge. isSpaceSufficient is asked
-    // anyway: on an A4 page the two agree exactly, and if a future page size
-    // ever made them disagree the slip belongs on a page of its own rather
-    // than on a 210x105mm page swissqrbill would insert behind our back —
-    // which nothing would mark as a slip page, so it would be numbered and
-    // stamped at A4 coordinates.
+    // The caller confirmed the band with slipBandIsClear before it placed the
+    // footer; attachTo() measures the free space from `doc.y`, so put the
+    // cursor back on the band's top edge.
     doc.y = doc.page.height - QR_BILL_BAND_HEIGHT;
-  }
-  if (!attachToCurrentPage || !SwissQRBill.isSpaceSufficient(doc)) {
+    markSlipBandPage(doc);
+  } else {
     doc.addPage();
     markPaymentSlipPage(doc);
-  } else {
-    markSlipBandPage(doc);
   }
   try {
     qr.attachTo(doc);
@@ -1670,6 +1724,7 @@ function attachSwissQrBill(doc, qr, { attachToCurrentPage = false } = {}) {
     // costs the QR rather than the whole document.
     const logger = require('../utils/logger');
     logger.warn('SwissQRBill render failed; emitting invoice without QR section', { err: err.message });
+    reportFinding(doc, { code: 'QR_MISSING', severity: 'warning' });
     return false;
   }
 }
@@ -2287,8 +2342,15 @@ function renderDocument(type, context) {
         // What the table has to leave free on its last page: the closing blocks,
         // the footer under them, and a line of air between table and totals.
         const TABLE_TO_CLOSING_GAP = 12;
-        const tableReserve = PAGE.height - PAGE.marginBottom
+        const idealReserve = PAGE.height - PAGE.marginBottom
           - (closingTop(false) - TABLE_TO_CLOSING_GAP);
+        // A closing block can only be pinned if it leaves the table a page worth
+        // having. A quote whose outro runs to several thousand characters is
+        // taller than the page on its own, and then the blocks flow from the
+        // table and paginate themselves, as any long body text does.
+        const usable = PAGE.height - PAGE.marginBottom - PAGE.marginTop;
+        const pinned = idealReserve <= usable * 0.6;
+        const tableReserve = pinned ? idealReserve : 0;
 
         drawLineItems(doc, ctx, { reserveOnLastPage: tableReserve });
         const tableEnd = doc.y;
@@ -2305,16 +2367,31 @@ function renderDocument(type, context) {
         // case where it can't, and then they take a page of their own rather
         // than being drawn over the footer.
         let contentTop = tableEnd + TABLE_TO_CLOSING_GAP;
-        if (contentTop > closingTop(false)) {
+        if (pinned && contentTop > closingTop(false)) {
           doc.addPage();
           contentTop = PAGE.marginTop;
         }
         // The slip shares this page only when the closing blocks still clear
-        // its band. With the shipped theme that needs a table of about one row,
-        // so in practice the slip takes a page of its own; the rule is written
-        // once here rather than assumed.
-        const slipSharesPage = !!qrBill && contentTop <= closingTop(true);
-        y = closingTop(slipSharesPage);
+        // its band, and only when they are pinned — a block that flows can end
+        // anywhere. With the shipped theme sharing needs a table of about one
+        // row, so in practice the slip takes a page of its own; the rule is
+        // written once from the geometry rather than assumed.
+        //
+        // The library is asked as well: if it would refuse the space it would
+        // insert a slip-sized page of its own, and the footer has already been
+        // placed for a page that carries the band.
+        const slipSharesPage = !!qrBill && pinned && contentTop <= closingTop(true)
+          && slipBandIsClear(doc);
+        y = pinned ? closingTop(slipSharesPage) : contentTop;
+        if (!pinned) {
+          // Flowing, because the blocks are taller than the page. Raise the
+          // bottom margin for the rest of them so PDFKit's own break happens
+          // above the footer band rather than on it — on this page and on any
+          // it adds. Restored below, so only the closing blocks are affected.
+          const clear = PAGE.marginBottom + footerReserve + FOOTER_AIR;
+          doc.page.margins.bottom = clear;
+          doc.options.margins.bottom = clear;
+        }
 
         // ---- totals box (right-aligned) -------------------------------
         y = drawTotals(doc, ctx, leftX, y, PAGE.contentWidth);
@@ -2334,6 +2411,11 @@ function renderDocument(type, context) {
         // that this is the REVERSAL of an obligation, not a new one.
         if (!isStorno) {
           y = drawPaymentBlock(doc, ctx, leftX, y + 12, PAGE.contentWidth);
+        }
+
+        if (!pinned) {
+          doc.page.margins.bottom = PAGE.marginBottom;
+          doc.options.margins.bottom = PAGE.marginBottom;
         }
 
         // ---- folding marks (left edge) --------------------------------
