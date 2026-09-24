@@ -1507,6 +1507,18 @@ async function extractCaptureDate(imagePath) {
 }
 
 /**
+ * The MIME types resizeToBox re-encodes IN KIND. Everything else either comes
+ * back untouched (heif/heic) or falls to its JPEG else-branch — correct for a
+ * caller that re-labels its output, wrong for one that keeps the original
+ * filename and Content-Type, as the download routes do. Lives here, beside the
+ * branching it describes, so adding a format to one is not a silent no-op in
+ * the other.
+ */
+const RESIZE_PRESERVES_FORMAT = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+]);
+
+/**
  * Downscale to fit inside a box, for the download-resolution feature (#858).
  *
  * `fit: 'inside'` + `withoutEnlargement` is exactly the "up to" semantic the
@@ -1586,6 +1598,7 @@ module.exports = {
   THUMBNAIL_WIDTHS,
   normalizeTierWidth,
   resizeToBox,
+  RESIZE_PRESERVES_FORMAT,
   generateThumbnail,
   isThumbnailValid,
   ensureThumbnail,

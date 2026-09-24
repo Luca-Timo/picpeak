@@ -335,6 +335,10 @@ describe('v1 original downloads (issue 1473)', () => {
       expect(expired.status).toBe(401);
     });
 
+    // "ids only" plus the requested resolution: it is a request parameter
+    // rather than anything about the photo or the caller, and without it the
+    // log cannot answer why an integration's library filled up with a
+    // particular size. Everything else about the row is still ids.
     it('stays out of the guest statistics and logs one ids-only activity row', async () => {
       await db('activity_logs').where({ event_id: eventId }).delete();
       const res = await get(`/api/v1/events/${eventId}/photos/${photos.png}/download`);
@@ -347,7 +351,12 @@ describe('v1 original downloads (issue 1473)', () => {
       });
       expect(rows).toHaveLength(1);
       const metadata = typeof rows[0].metadata === 'string' ? JSON.parse(rows[0].metadata) : rows[0].metadata;
-      expect(metadata).toEqual({ via: 'api_v1', token_id: Number(readTokenId), photo_id: Number(photos.png) });
+      expect(metadata).toEqual({
+        via: 'api_v1',
+        token_id: Number(readTokenId),
+        photo_id: Number(photos.png),
+        resolution: 'original',
+      });
       expect(Number(rows[0].actor_id)).toBe(Number(superId));
 
       const accessRows = await db('access_logs').where({ event_id: eventId });
@@ -538,6 +547,7 @@ describe('v1 original downloads (issue 1473)', () => {
       const metadata = typeof rows[0].metadata === 'string' ? JSON.parse(rows[0].metadata) : rows[0].metadata;
       expect(metadata).toEqual({
         via: 'api_v1', token_id: Number(readTokenId), token_name: readTokenName, photo_count: 4, missing_count: 1,
+        resolution: 'original',
       });
       expect(await db('access_logs').where({ event_id: eventId })).toHaveLength(0);
     });

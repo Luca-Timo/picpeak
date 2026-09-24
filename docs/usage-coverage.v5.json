@@ -1673,7 +1673,8 @@
         "GET /events/:id/share-link",
         "GET /events/:id/photos",
         "GET /events/:id/photos/download",
-        "GET /events/:id/photos/:photoId/download"
+        "GET /events/:id/photos/:photoId/download",
+        "GET /events/:id/photos/:photoId/preview"
       ]
     },
     "gallery/downloads.js": {
