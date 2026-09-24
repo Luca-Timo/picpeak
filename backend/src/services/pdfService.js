@@ -112,6 +112,19 @@ function bodyText(doc) {
   return { size, options };
 }
 
+/**
+ * The letterhead column's scale: the sender's address and contact rows and the
+ * document's meta rows, one step below the theme's body text. The letterhead
+ * stays secondary to the letter without becoming a second scale of its own —
+ * before #1546 the sender half was a hardcoded 8.5pt against the meta half's
+ * hardcoded 10pt, and neither followed a theme that set a different body size.
+ * The row leading is derived too, so a larger size can't crowd the rows.
+ */
+function letterheadText(doc) {
+  const size = Math.max(7, bodyText(doc).size - 1);
+  return { size, leading: Math.round(size * 1.35) };
+}
+
 const addressWindowOn = (doc) => !(doc && doc._theme && doc._theme.layout && doc._theme.layout.addressWindow === false);
 
 /**
@@ -420,9 +433,6 @@ function localeForIntl(locale, issuerCountryCode) {
  *     values aligned underneath each other. Looks like a small
  *     invisible table.
  */
-/** The size the sender's contact rows are set at. */
-const ISSUER_CONTACT_SIZE = 8.5;
-
 /**
  * The sender's contact rows, without their colons. Shared with the caller that
  * measures the letterhead grid, so the rows that are measured are exactly the
@@ -499,6 +509,8 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale, { grid = null } = {})
   // valid-looking PNG/JPEG bytes (mislabelled extension, truncated
   // download, etc.) — we'd rather render the rest of the PDF than
   // crash on a broken logo.
+  const letterhead = letterheadText(doc);
+  const nameSize = bodyText(doc).size + 2;
   const logoFound = showLogo && issuer.logoPath ? issuer.logoPath : null;
   const drawLogoSafely = (file, opts) => {
     try {
@@ -529,7 +541,7 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale, { grid = null } = {})
     const logoW = Math.min(width * 0.45, bannerH * 2);
     logoDrawn = drawLogoSafely(logoFound, { x, y, w: logoW, h: bannerH });
     if (logoDrawn) {
-      doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(12).fillColor(themeColor(doc, 'text'))
+      doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(nameSize).fillColor(themeColor(doc, 'text'))
         .text(issuer.companyName, x + logoW + 6, y + Math.max(0, bannerH / 2 - 8), { width: width - logoW - 6, align: 'left' });
       y = Math.max(y + bannerH, doc.y) + 6;
     }
@@ -540,13 +552,13 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale, { grid = null } = {})
   if (showName && issuer.companyName && !inlineName && !(besideName && logoDrawn)) {
     // Bold-title branch — the standard letterhead look. Skipped when
     // the admin opted into the inline-name variant.
-    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(12).fillColor(themeColor(doc, 'text'))
+    doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(nameSize).fillColor(themeColor(doc, 'text'))
       .text(issuer.companyName, x, y, { width, align: 'left' });
     y = doc.y + 6;
   }
 
   // ---- address block (left-aligned within the column) -----------
-  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8.5).fillColor(themeColor(doc, 'text'));
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(letterhead.size).fillColor(themeColor(doc, 'text'));
   const cityCountry = (() => {
     // Match the screenshot: "FL-9494 Schaan / Liechtenstein" on one
     // line. Fall back gracefully when fields are missing. The
@@ -585,11 +597,11 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale, { grid = null } = {})
   // column; on its own the block measures its own rows the same way.
   const contactRows = issuerContactRows(issuer, locale);
   const rowGrid = grid || measureLabelGrid(
-    doc, contactRows.map(([label, value]) => [label, value, ISSUER_CONTACT_SIZE]), x + width);
-  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(ISSUER_CONTACT_SIZE);
+    doc, contactRows.map(([label, value]) => [label, value, letterhead.size]), x + width);
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(letterhead.size);
   for (const [label, value] of contactRows) {
     drawGridRow(doc, rowGrid, label, value, y);
-    y += 11;
+    y += letterhead.leading;
   }
   return Math.max(y, startY + 60);
 }
@@ -648,12 +660,15 @@ function drawRecipientBlock(doc, recipient, locale, { flowY = null } = {}) {
   // ---- recipient address ----------------------------------------
   let y = inWindow ? ADDR_WINDOW.addressY : flowY;
 
-  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(11).fillColor(themeColor(doc, 'text'));
+  // Body size and one step up for the name, so a theme that sets a larger body
+  // carries the recipient with it (#1546). Identical to the previous 11/10 at
+  // the default body size.
+  doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(bodyText(doc).size + 1).fillColor(themeColor(doc, 'text'));
   if (recipient.companyName) {
     doc.text(recipient.companyName, x, y, { width: w });
     y = doc.y;
   }
-  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10);
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(bodyText(doc).size);
   // Postal line mirrors the issuer block: "<CC>-<postal> <city>"
   // (e.g. "FL-9494 Schaan"). The country code prefix is dropped
   // when the customer has no countryCodeIso so the line still
@@ -1952,10 +1967,11 @@ function renderDocument(type, context) {
         // after the grid is measured and only takes a grid row when it fits
         // one — otherwise it would stretch the value column and drag every
         // label out of line.
+        const letterhead = letterheadText(doc);
         const gridRows = [
           ...issuerContactRows(ctx.issuer, ctx.locale)
-            .map(([label, value]) => [label, value, ISSUER_CONTACT_SIZE]),
-          ...metaRows.map(([label, value]) => [label, value, 10]),
+            .map(([label, value]) => [label, value, letterhead.size]),
+          ...metaRows.map(([label, value]) => [label, value, letterhead.size]),
         ];
         const grid = measureLabelGrid(doc, gridRows, metaRight, {
           leftLimit: windowOn ? ADDR_WINDOW.left + ADDR_WINDOW.width + 12 : leftX,
@@ -2013,7 +2029,7 @@ function renderDocument(type, context) {
         // sets the two level with each other, and ending them together means
         // the title can start immediately under both, with neither a dead band
         // between header and body nor everything crowded against the top.
-        doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor(themeColor(doc, 'text'));
+        doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(letterhead.size).fillColor(themeColor(doc, 'text'));
         const referenceLabel = t(ctx.locale, 'reference_label');
         const besideField = [...metaRows];
         const underField = [];
@@ -2023,11 +2039,11 @@ function renderDocument(type, context) {
         });
 
         let y = windowOn
-          ? Math.max(issuerEndY + 12, windowBottom - besideField.length * 14)
+          ? Math.max(issuerEndY + 12, windowBottom - besideField.length * letterhead.leading)
           : Math.max(issuerEndY, recipientEndY) + 6;
         besideField.forEach(([label, value]) => {
           drawGridRow(doc, grid, label, value, y);
-          y += 14;
+          y += letterhead.leading;
         });
 
         // The body starts below the meta block AND below the address field —
