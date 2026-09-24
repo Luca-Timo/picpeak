@@ -71,13 +71,26 @@ const invoice = (items, extra = {}, docExtra = {}) => ({
 
 afterEach(() => jest.restoreAllMocks());
 
-/** Every string the render drew, with the position it was drawn at. */
+/**
+ * Every string the render drew, with the position it was drawn at.
+ *
+ * The renderer measures its closing blocks by drawing them into a scrap
+ * document first (measureClosingHeight), so the spy sees two documents. Only
+ * the one that is actually emitted matters here, and it is the first one
+ * constructed — the header is drawn before anything is measured.
+ */
 function recordDrawing() {
   const spy = jest.spyOn(PDFDocument.prototype, 'text');
-  return () => spy.mock.calls.map(([text, x, y]) => ({
-    text: String(text),
-    y: typeof y === 'number' ? y : null,
-  }));
+  return () => {
+    const emitted = spy.mock.instances[0];
+    return spy.mock.calls
+      .map(([text, x, y], i) => ({
+        text: String(text),
+        y: typeof y === 'number' ? y : null,
+        doc: spy.mock.instances[i],
+      }))
+      .filter((call) => call.doc === emitted);
+  };
 }
 
 const find = (calls, needle) => calls.find((c) => c.text.includes(needle));
@@ -88,58 +101,104 @@ const pageCount = async (buffer) => (await PdfLib.load(buffer)).getPageCount();
 const netLabel = t('de', 'totals_net');
 const skontoLabel = t('de', 'skonto_amount_label');
 
+const findAll = (calls, needle) => calls.filter((c) => c.text.includes(needle));
+const amount = (text) => Number(String(text).replace(/[^\d.,-]/g, '').replace(/'/g, '').replace(',', '.'));
+/** The figure in a table row: its cells are drawn in column order, empties included. */
+const rowAmount = (calls, row) => {
+  const at = calls.indexOf(row);
+  return amount(calls.slice(at + 1, at + 6).find((c) => /\d/.test(c.text)).text);
+};
+
 describe('the totals', () => {
-  test('follow the line items instead of the page bottom', async () => {
+  test('are pinned to the foot of the last page, wherever the table ended', async () => {
     const drawn = recordDrawing();
-    const buffer = await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)]));
-
-    // The old layout put them at a fixed offset from the bottom edge, around
-    // y=570 on A4 whatever the table did. One short item leaves them far above
-    // that, right under the table.
-    expect(find(drawn(), netLabel).y).toBeLessThan(500);
-    expect(await pageCount(buffer)).toBe(1);
-  });
-
-  test('sit lower when the items reach further down, rather than at a fixed anchor', async () => {
-    const drawn = recordDrawing();
-    await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)]));
-    const short = find(drawn(), netLabel).y;
+    const short = await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)]));
+    const shortY = find(drawn(), netLabel).y;
 
     jest.restoreAllMocks();
     const drawnLong = recordDrawing();
-    await pdfService.renderInvoiceToBuffer(invoice([longItem(1), longItem(2)]));
+    const long = await pdfService.renderInvoiceToBuffer(invoice([longItem(1), longItem(2)]));
 
-    expect(find(drawnLong(), netLabel).y).toBeGreaterThan(short);
+    // One short row or two long ones — the totals sit at the same height,
+    // because they are anchored to the foot of the page rather than following
+    // the table.
+    expect(find(drawnLong(), netLabel).y).toBeCloseTo(shortY, 1);
+    expect(await pageCount(short)).toBe(1);
+    expect(await pageCount(long)).toBe(1);
   });
 
-  test('start at the top of a new page when the table leaves no room for them', async () => {
-    const drawn = recordDrawing();
-    const buffer = await pdfService.renderInvoiceToBuffer(invoice([longItem(1), longItem(2), longItem(3)]));
-
-    expect(await pageCount(buffer)).toBe(2);
-    // Near the top margin of the second page, not pinned above its footer —
-    // where they used to land, under an empty half-page.
-    expect(find(drawn(), netLabel).y).toBeLessThan(150);
-  });
-
-  test('stay with the last row when the table itself runs onto a second page', async () => {
-    const items = Array.from({ length: 30 }, (_, i) => shortItem(i + 1));
-    const drawn = recordDrawing();
-    const buffer = await pdfService.renderInvoiceToBuffer(invoice(items));
-    const calls = drawn();
-
-    expect(await pageCount(buffer)).toBe(2);
-    expect(find(calls, netLabel).y - find(calls, 'Position 30').y).toBeLessThan(60);
-  });
-
-  test('never overlap a two-line footer', async () => {
+  test('clear the footer, whatever the payment block holds', async () => {
     const items = Array.from({ length: 30 }, (_, i) => shortItem(i + 1));
     const drawn = recordDrawing();
     await pdfService.renderInvoiceToBuffer(invoice(items, { qrFormat: 'swiss' }));
 
+    // The closing blocks are pinned, so an underestimate of their height is
+    // drawn straight over the footer rather than merely risking it.
     const lastClosingLine = find(drawn(), skontoLabel);
     const footer = find(drawn(), issuer.footerLine);
-    expect(lastClosingLine.y).toBeLessThan(footer.y);
+    expect(footer.y - lastClosingLine.y).toBeGreaterThan(6);
+  });
+
+  test('keep their distance from the last row rather than crowding it', async () => {
+    const drawn = recordDrawing();
+    await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)]));
+    const calls = drawn();
+    expect(find(calls, netLabel).y).toBeGreaterThan(find(calls, 'Position 1').y);
+  });
+});
+
+describe('the carry-over', () => {
+  const carry = t('de', 'table_carry_forward');
+
+  test('closes a page that continues and opens the one that continues it', async () => {
+    const items = Array.from({ length: 30 }, (_, i) => shortItem(i + 1));
+    const drawn = recordDrawing();
+    const buffer = await pdfService.renderInvoiceToBuffer(invoice(items));
+    const rows = findAll(drawn(), carry);
+
+    expect(await pageCount(buffer)).toBe(2);
+    expect(rows).toHaveLength(2);
+    // Drawn in that order: the row that closes the first page, then the one
+    // that opens the second.
+    expect(rows[0].y).toBeGreaterThan(600);
+    expect(rows[1].y).toBeLessThan(150);
+  });
+
+  test('carries the running net of the rows above it, the same figure on both pages', async () => {
+    const items = Array.from({ length: 30 }, (_, i) => shortItem(i + 1));
+    const drawn = recordDrawing();
+    await pdfService.renderInvoiceToBuffer(invoice(items));
+    const calls = drawn();
+
+    // Each row is 150.00; the carry is a partial sum of them, so a whole
+    // multiple of 150 that falls short of the 4'500.00 net.
+    const rows = findAll(calls, carry);
+    const carried = rows.map((row) => rowAmount(calls, row));
+    expect(carried[0]).toBe(carried[1]);
+    expect(carried[0] % 150).toBe(0);
+    expect(carried[0]).toBeGreaterThan(0);
+    expect(carried[0]).toBeLessThan(4500);
+  });
+
+  test('is absent from a table that fits on one page', async () => {
+    const drawn = recordDrawing();
+    await pdfService.renderInvoiceToBuffer(invoice([shortItem(1), shortItem(2)]));
+    expect(findAll(drawn(), carry)).toHaveLength(0);
+  });
+
+  test('leaves an unbooked add-on out of the figure it carries', async () => {
+    const items = Array.from({ length: 30 }, (_, i) => shortItem(i + 1));
+    items[0] = { ...items[0], excluded: true };
+    const drawn = recordDrawing();
+    await pdfService.renderInvoiceToBuffer(invoice(items));
+    const calls = drawn();
+
+    const rows = findAll(calls, carry);
+    const carried = rowAmount(calls, rows[0]);
+    // The excluded row's 150.00 is shown in parentheses and is not in the
+    // total, so it is not in the carry either.
+    expect(carried % 150).toBe(0);
+    expect(carried).toBeGreaterThan(0);
   });
 });
 

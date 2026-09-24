@@ -201,13 +201,6 @@ const SLIP_BAND_FOOTER_GAP = SLIP_BAND_NUMBER_GAP + 8;
 /** A line of air between the last content and the footer under it. */
 const FOOTER_AIR = 6;
 
-/**
- * What the EPC QR block occupies: title, subtitle, the 180pt code and the
- * five-line human-readable summary under it. Used to decide whether it fits
- * on the last content page (#1546).
- */
-const EPC_BLOCK_HEIGHT = 340;
-
 /** One line of the footer, at its 8pt size. */
 const FOOTER_LINE_HEIGHT = 12;
 
@@ -747,7 +740,41 @@ function drawTitle(doc, title, x, y) {
  * Columns (quotes):   Pos / Anzahl / Beschreibung / Rabatt / Einzelpreis / Summe
  * Columns (invoices): Pos / Anzahl / Beschreibung / Einzelpreis / Summe
  */
-function drawLineItems(doc, ctx) {
+/**
+ * The height swissqrbill's Table gives a row: its tallest cell's text plus that
+ * cell's vertical padding, measured the way the library's own first pass
+ * measures it (lib/pdf/table.cjs, layer 0).
+ *
+ * We need it up front because the table breaks rows against
+ * `doc.page.margins.bottom` and offers no hook at the break — so a running
+ * carry-over row, and room for the closing blocks on the last page, both have
+ * to be planned before it draws (#1546).
+ */
+function measureTableRow(doc, row, defaults) {
+  let tallest = 0;
+  let padTop = 0;
+  let padBottom = 0;
+  for (const column of row.columns) {
+    const [top, right, bottom, left] = column.padding || row.padding || [0, 0, 0, 0];
+    padTop = Math.max(padTop, top);
+    padBottom = Math.max(padBottom, bottom);
+    doc.font(column.fontName || row.fontName || defaults.fontName);
+    doc.fontSize(column.fontSize || row.fontSize || defaults.fontSize);
+    tallest = Math.max(tallest, doc.heightOfString(String(column.text), {
+      align: column.align, baseline: 'middle', lineBreak: true,
+      width: column.width - left - right,
+    }));
+  }
+  return tallest + padTop + padBottom;
+}
+
+/**
+ * `reserveOnLastPage` is how much of the last page the caller needs below the
+ * table — the totals, the payment block and the footer, which are pinned to
+ * the foot of the page. The table stops that far short, so the pinned blocks
+ * never have to push themselves onto a page of their own.
+ */
+function drawLineItems(doc, ctx, { reserveOnLastPage = 0 } = {}) {
   const { type, locale, lineItems, currency, intlLocale } = ctx;
   // On a Stornorechnung the line items were snapshotted from the
   // original at FULL positive amounts (so the DB-level invariant
@@ -997,44 +1024,137 @@ function drawLineItems(doc, ctx) {
   //   - Collect each parent's row + its details row + every sub-item's
   //     row + sub-items' details rows into a single "group" array.
   //   - Apply the bottom border ONLY to the last row of each group.
-  const dataRows = [];
   const groups = [];
   let currentGroup = null;
   for (const li of lineItems) {
     const isSubItem = li.parentLineItemId != null || li.parentPosition != null;
     if (!isSubItem) {
-      // Start a new group at every top-level item.
-      currentGroup = [];
+      // Start a new group at every top-level item. Only a top-level line that
+      // isn't excluded counts towards the carry-over: a sub-item's amount is
+      // shown in parentheses because it is already inside its parent's, and an
+      // unbooked add-on is not in the total at all.
+      currentGroup = { rows: [], netMinor: li.excluded ? 0 : lineTotalSign * Number(li.lineTotalMinor || 0) };
       groups.push(currentGroup);
     } else if (!currentGroup) {
       // Defensive: if the array starts with an orphaned sub-item
       // (shouldn't happen — validateLineItemHierarchy rejects this)
       // give it its own group rather than crashing.
-      currentGroup = [];
+      currentGroup = { rows: [], netMinor: 0 };
       groups.push(currentGroup);
     }
-    currentGroup.push(buildItemRow(li));
+    currentGroup.rows.push(buildItemRow(li));
     if (li.detailsText && String(li.detailsText).trim().length > 0) {
-      currentGroup.push(buildDetailsRow(String(li.detailsText).trim()));
+      currentGroup.rows.push(buildDetailsRow(String(li.detailsText).trim()));
     }
     // An add-on (#1451) ends with its status: title, description, then booked
     // or not booked.
-    if (li.addOn) currentGroup.push(buildDetailsRow(t(locale, li.addOn === 'booked' ? 'addon_booked' : 'addon_not_booked')));
+    if (li.addOn) currentGroup.rows.push(buildDetailsRow(t(locale, li.addOn === 'booked' ? 'addon_booked' : 'addon_not_booked')));
   }
   // Apply the bottom border to the last row of each group.
   for (const group of groups) {
-    if (group.length === 0) continue;
-    const last = group[group.length - 1];
+    if (group.rows.length === 0) continue;
+    const last = group.rows[group.rows.length - 1];
     last.borderWidth = ROW_BORDER_BOTTOM_WIDTH;
     last.borderColor = ROW_BORDER_BOTTOM_COLOR;
-    for (const row of group) dataRows.push(row);
   }
 
-  const table = new Table({
-    width: contentWidth,
-    rows: [headerRow, ...dataRows],
+  /**
+   * The carry-over row: "Übertrag" in the description column and the running
+   * net in the amount column. It closes a page that continues, and opens the
+   * page that continues it, so a reader who separates the sheets can still
+   * follow the arithmetic.
+   */
+  const lastColumn = widths.length - 1;
+  const carryRow = (amountMinor, key) => ({
+    padding: ROW_PADDING,
+    fontSize: ROW_FONT_SIZE,
+    fontName: ctx.fonts?.bold || FONT_BOLD,
+    borderWidth: ROW_BORDER_BOTTOM_WIDTH,
+    borderColor: ROW_BORDER_BOTTOM_COLOR,
+    columns: widths.map((width, i) => ({
+      width,
+      align: i <= 1 ? 'left' : 'right',
+      text: i === 1 ? t(locale, key) : i === lastColumn ? formatMinor(amountMinor, currency, intlLocale) : '',
+    })),
   });
-  table.attachTo(doc);
+
+  // ---- pagination ------------------------------------------------
+  // Planned here rather than left to the library's own row break (#1546): it
+  // breaks against `doc.page.margins.bottom` with no hook at the break, so
+  // neither the carry-over rows nor the reserve for the pinned closing blocks
+  // could be placed. Each page is handed a table that fits it, so the
+  // library never has to break one itself.
+  const P = pageOf(doc);
+  const defaults = { fontName: ctx.fonts?.body || FONT_BODY, fontSize: ROW_FONT_SIZE };
+  const headerHeight = measureTableRow(doc, headerRow, defaults);
+  const carryHeight = measureTableRow(doc, carryRow(0, 'table_carry_forward'), defaults);
+  for (const group of groups) {
+    group.height = group.rows.reduce((sum, row) => sum + measureTableRow(doc, row, defaults), 0);
+  }
+
+  const pageBottom = doc.page.height - doc.page.margins.bottom;
+  const pages = [];
+  let index = 0;
+  let pageTop = doc.y;
+  let carryIn = null;
+  let runningNet = 0;
+  while (index < groups.length) {
+    let y = pageTop + headerHeight + (carryIn != null ? carryHeight : 0);
+    const remaining = groups.slice(index).reduce((sum, group) => sum + group.height, 0);
+    // The last page is the one everything left fits on beside the reserve; any
+    // earlier page has to keep room for the carry-over row that closes it.
+    const isLast = y + remaining <= pageBottom - reserveOnLastPage;
+    const limit = isLast ? pageBottom - reserveOnLastPage : pageBottom - carryHeight;
+    // A page that can't be the last one has to leave a group for the next,
+    // otherwise it becomes the last page after all — with the reserve already
+    // spent on line items and the pinned blocks nowhere to go.
+    const ceiling = isLast ? groups.length : groups.length - 1;
+    const taken = [];
+    while (index < ceiling && y + groups[index].height <= limit) {
+      y += groups[index].height;
+      runningNet += groups[index].netMinor;
+      taken.push(groups[index]);
+      index += 1;
+    }
+    if (taken.length === 0) {
+      // One line item taller than a whole page. Place it and let the library's
+      // own break carry the overflow, rather than looping forever on a group
+      // that can never fit.
+      runningNet += groups[index].netMinor;
+      taken.push(groups[index]);
+      index += 1;
+    }
+    const more = index < groups.length;
+    pages.push({ groups: taken, carryIn, carryOut: more ? runningNet : null });
+    carryIn = more ? runningNet : null;
+    pageTop = P.marginTop;
+  }
+  // No line items at all: the header still renders, as it always did.
+  if (pages.length === 0) pages.push({ groups: [], carryIn: null, carryOut: null });
+
+  pages.forEach((page, n) => {
+    if (n > 0) {
+      doc.addPage();
+      doc.x = P.marginLeft;
+      doc.y = P.marginTop;
+    }
+    const rows = [headerRow];
+    if (page.carryIn != null) rows.push(carryRow(page.carryIn, 'table_carry_brought'));
+    for (const group of page.groups) rows.push(...group.rows);
+    new Table({ width: contentWidth, rows }).attachTo(doc);
+    if (page.carryOut != null) {
+      // The row that closes a continuing page is pinned to its foot, like the
+      // totals on the last one: the page breaks early so the last page can
+      // hold the pinned blocks, and a carry-over left floating under the final
+      // item would read as an unfinished total rather than the foot of a page.
+      // Two points clear of the foot: the library starts a page of its own when
+      // a row's bottom reaches `page.height - margins.bottom` exactly.
+      doc.y = pageBottom - carryHeight - 2;
+      doc.x = P.marginLeft;
+      new Table({ width: contentWidth, rows: [carryRow(page.carryOut, 'table_carry_forward')] })
+        .attachTo(doc);
+    }
+  });
   return doc.y;
 }
 
@@ -1366,6 +1486,43 @@ function footerHeight(doc, issuer = {}) {
   return footerHeightFor(doc && doc._theme, issuer);
 }
 
+/**
+ * How tall the closing blocks come out: the totals box, the outro and the
+ * payment block, together with the gaps between them.
+ *
+ * They are pinned to the foot of the last page (#1546), so the line table has
+ * to stop that far short — and a pinned block that is taller than the room
+ * reserved for it is drawn straight over the footer. The height is therefore
+ * measured rather than estimated: the blocks are drawn once into a document
+ * that is never piped anywhere, with the same theme, fonts and page metrics,
+ * and the cursor tells us what they need. Estimating from a table of row
+ * heights would drift the first time drawPaymentBlock grew a row.
+ */
+function measureClosingHeight(ctx, PAGE, { isStorno }) {
+  const scrap = new PDFDocument({
+    size: 'A4',
+    margins: {
+      top: PAGE.marginTop, bottom: PAGE.marginBottom,
+      left: PAGE.marginLeft, right: PAGE.marginRight,
+    },
+  });
+  scrap._theme = ctx.theme;
+  scrap._page = PAGE;
+  scrap._fonts = registerThemeFonts(scrap, ctx.issuer, ctx.theme);
+  const body = bodyText(scrap);
+  const top = PAGE.marginTop;
+  let y = drawTotals(scrap, ctx, PAGE.marginLeft, top, PAGE.contentWidth);
+  if (ctx.doc.outroText) {
+    scrap.font(scrap._fonts.body).fontSize(body.size);
+    scrap.text(ctx.doc.outroText, PAGE.marginLeft, y, { width: PAGE.contentWidth, ...body.options });
+    y = scrap.y + 12;
+    scrap.fontSize(10);
+  }
+  if (!isStorno) y = drawPaymentBlock(scrap, ctx, PAGE.marginLeft, y + 12, PAGE.contentWidth);
+  scrap.end();
+  return y - top;
+}
+
 function drawFooter(doc, issuer, locale, { bottomLimit = null } = {}) {
   // Footer format (per design review):
   //   "<Company>, <Street>, <CC>-<PostalCode> <City>, <CountryName>"
@@ -1562,7 +1719,7 @@ function buildEpcPayload({ name, iban, amount, currency, reference }) {
  * QR codes in CHF/USD/etc. are silently rejected by every major
  * banking app, so emitting one would be worse than emitting nothing.
  */
-async function appendEpcQr(doc, ctx, { top = null } = {}) {
+async function appendEpcQr(doc, ctx) {
   if (ctx.qrFormat !== 'epc') return;
   const logger = require('../utils/logger');
   const { issuer, bank, doc: docMeta } = ctx;
@@ -1608,16 +1765,14 @@ async function appendEpcQr(doc, ctx, { top = null } = {}) {
     return;
   }
 
-  // A page of its own, unless the caller found room for the block under the
-  // closing blocks of the last content page (#1546). Centred either way,
-  // with a caption explaining what it is.
+  // A page of its own: with the totals and payment block pinned to the foot of
+  // the last content page there is never room for this block above them, and
+  // unlike the Swiss slip it has no reserved band of its own to sit in.
+  // Centred, with a caption explaining what it is.
   const P = pageOf(doc);
-  let captionTop = top;
-  if (captionTop == null) {
-    doc.addPage();
-    markPaymentSlipPage(doc);
-    captionTop = P.marginTop + 20;
-  }
+  doc.addPage();
+  markPaymentSlipPage(doc);
+  const captionTop = P.marginTop + 20;
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(14).fillColor(themeColor(doc, 'text'));
   doc.text(t(ctx.locale, 'epc_qr_title'), P.marginLeft, captionTop, {
     width: P.contentWidth, align: 'center', lineBreak: false,
@@ -2098,74 +2253,58 @@ function renderDocument(type, context) {
         doc.y = y;
         doc.x = leftX;
 
-        // Let the items table paginate with the document's NORMAL
-        // margins so each page fills to the bottom. The header row is
-        // marked `header: true` so it auto-repeats on every
-        // continuation page. Totals/payment placement is handled below:
-        // they follow wherever the table ended, and move to a fresh page
-        // only when what is left of this one can't hold them (#1546).
-        //
-        // We deliberately do NOT inflate the bottom margin here to
-        // "reserve" the totals zone on every page. That older approach
-        // shortened the usable area on EVERY page (not just the last),
-        // so a long invoice broke far too early — only a handful of
-        // line items rendered on page 1 with a large blank gap beneath.
-        // Worse, the inflated margin was set on the page active when the
-        // table started but restored on whichever page the table ended,
-        // leaving page 1 permanently short: the page-number stamp later
-        // landed below that page's phantom bottom margin and spawned a
-        // stray blank trailing page (which then desynced "Seite X von Y").
-        drawLineItems(doc, ctx);
-        // Where the table ended: the closing blocks start here.
-        y = doc.y;
+        // The table plans its own page breaks (drawLineItems), so it can put
+        // a carry-over row at the foot of a page that continues and keep the
+        // last page's foot free for the blocks pinned there. Only the last
+        // page is shortened — an earlier approach inflated the bottom margin
+        // for the whole table, which shortened EVERY page and broke a long
+        // invoice far too early.
+        // ---- what the closing blocks need -----------------------------
+        // Measured before the table draws, by rendering them once into a
+        // document that is thrown away: they are pinned to the foot of the last
+        // page, so the table has to stop exactly that far short (#1546).
+        const closingHeight = measureClosingHeight(ctx, PAGE, { isStorno });
 
-        // ---- totals + payment block, right after the items ------------
-        // The closing blocks follow the table. We measure what they need and
-        // start a new page only when what is left of this one can't hold them
-        // (#1546). They used to be pinned to a fixed distance from the page
-        // bottom, which sent them to an otherwise empty page whenever the
-        // table ended below that anchor — and left a gap above it when the
-        // table ended well short.
-        //   PAYMENT_BLOCK_HEIGHT = 80 with paymentTerm, 50 without
-        //                          (header + 3-4 rows including the
-        //                           skonto + skonto_amount lines)
-        //   TOTALS_BLOCK_HEIGHT  = 90  (top divider + Net + Shipping +
-        //                          VAT + middle divider + Total)
-        const PAYMENT_BLOCK_HEIGHT = ctx.paymentTerm ? 80 : 50;
-        let TOTALS_BLOCK_HEIGHT  = 90;
-        // A free-text VAT note (#794) adds a wrapped row under the MwSt. line —
-        // grow the reserved totals height by its measured height so a long note
-        // can't push the grand total / payment block into the footer.
-        if (ctx.vatNote) {
-          doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8);
-          const noteWidth = PAGE.contentWidth - ((PAGE.contentWidth - 20) / 2 + 20);
-          TOTALS_BLOCK_HEIGHT += doc.heightOfString(ctx.vatNote, { width: noteWidth }) + 4;
-          doc.fontSize(10);
-        }
-        // No MwSt. row for a business that isn't VAT-registered: one row less.
-        if (vatRowHidden(ctx)) TOTALS_BLOCK_HEIGHT -= 16;
-        // The outro sits between the totals and the payment block, so it
-        // counts towards the height the three need together.
-        let outroHeight = 0;
-        if (ctx.doc.outroText) {
-          doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(body.size);
-          outroHeight = doc.heightOfString(ctx.doc.outroText,
-            { width: PAGE.contentWidth, ...body.options }) + 12;
-          doc.fontSize(10);
-        }
-        const closingHeight = TOTALS_BLOCK_HEIGHT + outroHeight
-          + (isStorno ? 0 : 12 + PAYMENT_BLOCK_HEIGHT);
-
-        // The footer sits above the bottom margin, so the content has to stop
-        // short of it.
+        // Where the closing blocks sit: above the footer, or above the QR-bill's
+        // reserved band when the slip shares the page. Both anchors are fixed —
+        // the blocks are pinned to the foot of the page, wherever the table
+        // happened to end.
         const footerReserve = footerHeight(doc, ctx.issuer);
-        const contentBottom = PAGE.height - PAGE.marginBottom - footerReserve - FOOTER_AIR;
         const bandTop = PAGE.height - QR_BILL_BAND_HEIGHT;
-        if (y + closingHeight > contentBottom) {
+        const closingTop = (withSlip) => (withSlip
+          ? bandTop - SLIP_BAND_FOOTER_GAP
+          : PAGE.height - PAGE.marginBottom) - footerReserve - FOOTER_AIR - closingHeight;
+        // What the table has to leave free on its last page: the closing blocks,
+        // the footer under them, and a line of air between table and totals.
+        const TABLE_TO_CLOSING_GAP = 12;
+        const tableReserve = PAGE.height - PAGE.marginBottom
+          - (closingTop(false) - TABLE_TO_CLOSING_GAP);
+
+        drawLineItems(doc, ctx, { reserveOnLastPage: tableReserve });
+        const tableEnd = doc.y;
+
+        // ---- totals + payment block, pinned to the foot ---------------
+        // The QR-bill is built first so the page is only laid out around a slip
+        // that will actually render, and so its band is known before the
+        // closing blocks are placed.
+        const qrBill = type === 'invoice' && !isStorno && !isMahnung
+          ? buildSwissQrBill(ctx)
+          : null;
+        // The table left room for these blocks, so they pin to the foot of the
+        // page it ended on. A single line item taller than that room is the one
+        // case where it can't, and then they take a page of their own rather
+        // than being drawn over the footer.
+        let contentTop = tableEnd + TABLE_TO_CLOSING_GAP;
+        if (contentTop > closingTop(false)) {
           doc.addPage();
-          y = PAGE.marginTop;
+          contentTop = PAGE.marginTop;
         }
-        doc.y = y;
+        // The slip shares this page only when the closing blocks still clear
+        // its band. With the shipped theme that needs a table of about one row,
+        // so in practice the slip takes a page of its own; the rule is written
+        // once here rather than assumed.
+        const slipSharesPage = !!qrBill && contentTop <= closingTop(true);
+        y = closingTop(slipSharesPage);
 
         // ---- totals box (right-aligned) -------------------------------
         y = drawTotals(doc, ctx, leftX, y, PAGE.contentWidth);
@@ -2187,18 +2326,6 @@ function renderDocument(type, context) {
           y = drawPaymentBlock(doc, ctx, leftX, y + 12, PAGE.contentWidth);
         }
 
-        // Whether the QR-bill can share this page is answered here, where the
-        // closing blocks have already been drawn and `y` is where they really
-        // ended — not from the estimate above, which is deliberately generous
-        // and would lay a long payment block over the footer (#1546). The slip
-        // is built first so a page is never laid out around one that then
-        // turns out not to render.
-        const qrBill = type === 'invoice' && !isStorno && !isMahnung
-          ? buildSwissQrBill(ctx)
-          : null;
-        const slipSharesPage = !!qrBill
-          && y + FOOTER_AIR <= bandTop - SLIP_BAND_FOOTER_GAP - footerReserve;
-
         // ---- folding marks (left edge) --------------------------------
         drawFoldingMarks(doc, context.theme ? ctx.theme.foldingMarks : ctx.issuer?.foldingMarks);
 
@@ -2212,19 +2339,16 @@ function renderDocument(type, context) {
         // Two paths, mutually exclusive:
         //   - 'swiss' → SwissQRBill payment slip (CHF / EUR within CH/LI)
         //   - 'epc'   → SEPA EPC069-12 QR code (EUR-only, every SEPA bank)
-        // Each takes a page of its own only when the last content page has
-        // no room for it; 'none' is a no-op.
-        // Suppressed on Stornorechnungen — negative-amount QR codes
-        // aren't a defined construct in either spec.
+        // The slip can share the last page when its band is clear; the EPC
+        // block keeps a page of its own, because with the closing blocks
+        // pinned to the foot there is never room for it above them.
+        // 'none' is a no-op. Suppressed on Stornorechnungen — negative-amount
+        // QR codes aren't a defined construct in either spec.
         if (type === 'invoice' && !isStorno && !isMahnung) {
           if (qrBill) {
             attachSwissQrBill(doc, qrBill, { attachToCurrentPage: slipSharesPage });
           } else if (ctx.qrFormat === 'epc') {
-            // The EPC block has no reserved area of its own: it shares the
-            // page whenever it fits above the footer.
-            const epcTop = y + 24;
-            const sharesPage = epcTop + EPC_BLOCK_HEIGHT <= contentBottom;
-            await appendEpcQr(doc, ctx, sharesPage ? { top: epcTop } : {});
+            await appendEpcQr(doc, ctx);
           }
         }
 
