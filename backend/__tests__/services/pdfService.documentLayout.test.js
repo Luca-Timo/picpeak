@@ -254,8 +254,12 @@ describe('references', () => {
     await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)], {}, { sourceQuoteNumber: 'Q-2026-0044' }));
     const calls = drawn();
 
-    expect(findExact(calls, `${t('de', 'reference_label')}:`)).toBeTruthy();
+    // Either as a row of the grid or, when too long for its value column, as
+    // one full-width row under the address field — both carry the label.
     const value = find(calls, 'Q-2026-0044');
+    expect(value).toBeTruthy();
+    expect(findExact(calls, `${t('de', 'reference_label')}:`) || value.text.includes(t('de', 'reference_label')))
+      .toBeTruthy();
     expect(value.y).toBeLessThan(findExact(calls, t('de', 'invoice_title')).y);
   });
 });

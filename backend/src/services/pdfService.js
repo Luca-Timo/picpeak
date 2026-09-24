@@ -420,7 +420,64 @@ function localeForIntl(locale, issuerCountryCode) {
  *     values aligned underneath each other. Looks like a small
  *     invisible table.
  */
-function drawIssuerBlock(doc, issuer, x, y, width, locale) {
+/** The size the sender's contact rows are set at. */
+const ISSUER_CONTACT_SIZE = 8.5;
+
+/**
+ * The sender's contact rows, without their colons. Shared with the caller that
+ * measures the letterhead grid, so the rows that are measured are exactly the
+ * rows that get drawn.
+ */
+function issuerContactRows(issuer, locale) {
+  return [
+    issuer.phone   ? [t(locale, 'contact_phone'),  issuer.phone]   : null,
+    issuer.mobile  ? [t(locale, 'contact_mobile'), issuer.mobile]  : null,
+    issuer.email   ? [t(locale, 'contact_email'),  issuer.email]   : null,
+    issuer.website ? [t(locale, 'contact_web'),    issuer.website] : null,
+    // Only when set: a business that isn't VAT-registered has no number.
+    issuer.vatId   ? [vatIdLabel(locale, issuer.countryCode), issuer.vatId] : null,
+    // Migration 139 — Steuernummer (DE/AT local tax number). Distinct
+    // from VAT-ID; both can appear simultaneously.
+    issuer.taxId   ? [t(locale, 'tax_id_label'), issuer.taxId] : null,
+  ].filter(Boolean);
+}
+
+/**
+ * The two vertical rules the right-hand letterhead column lines up on: a colon
+ * edge that every label ends at, and `right` — the page's right margin — that
+ * every value ends at. `rows` are [label, value, fontSize]; the label is
+ * measured with the colon the drawing adds.
+ *
+ * Before #1546 each row sized its own value column, so one long row dragged its
+ * own label out of line with the rows above it, and the sender block used a
+ * different grid again.
+ */
+function measureLabelGrid(doc, rows, right, { gap = 8, leftLimit = null } = {}) {
+  const body = (doc && doc._fonts && doc._fonts.body) || FONT_BODY;
+  let labelW = 0;
+  let valueW = 40;
+  for (const [label, value, fontSize] of rows) {
+    doc.font(body).fontSize(fontSize);
+    labelW = Math.max(labelW, doc.widthOfString(`${label}:`) + 2);
+    valueW = Math.max(valueW, doc.widthOfString(String(value)) + 2);
+  }
+  doc.fontSize(10);
+  // The column may never reach into the address field: the sender block sits
+  // level with it.
+  if (leftLimit != null && right - (labelW + gap + valueW) < leftLimit) {
+    labelW = Math.max(40, right - leftLimit - gap - valueW);
+  }
+  const valueX = right - valueW;
+  return { gap, labelW, valueW, valueX, labelX: valueX - gap - labelW, right };
+}
+
+/** One row of the letterhead grid: label to the colon edge, value to the right. */
+function drawGridRow(doc, grid, label, value, y) {
+  doc.text(`${label}:`, grid.labelX, y, { width: grid.labelW, align: 'right', lineBreak: false });
+  doc.text(String(value), grid.valueX, y, { width: grid.valueW, align: 'right', lineBreak: false });
+}
+
+function drawIssuerBlock(doc, issuer, x, y, width, locale, { grid = null } = {}) {
   const startY = y;
   // A logo the theme puts at the left or centre of the page is drawn there
   // (drawPageLogo), not in this column.
@@ -480,7 +537,7 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
     // Bold-title branch — the standard letterhead look. Skipped when
     // the admin opted into the inline-name variant.
     doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(12).fillColor(themeColor(doc, 'text'))
-      .text(issuer.companyName, x, y, { width, align: 'left' });
+      .text(issuer.companyName, x, y, { width, align: 'right' });
     y = doc.y + 6;
   }
 
@@ -511,37 +568,24 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale) {
     issuer.addressLine2,
     cityCountry,
   ].filter(Boolean);
+  // The whole column is flush with the page's right margin — the logo, the
+  // name, these lines and the contact rows' values all end on it (#1546).
   for (const line of addressLines) {
-    doc.text(line, x, y, { width, align: 'left' });
+    doc.text(line, x, y, { width, align: 'right' });
     y = doc.y;
   }
   y += 6;
 
-  // ---- contact rows (label / value, two columns) ----------------
-  // Wide enough for the document language's labels ("USt-IdNr.:", "Steuer-Nr.:").
-  const labelCol = 50;
-  const gap = 4;
-  const valueCol = width - labelCol - gap;
-  const labelX = x;
-  const valueX = x + labelCol + gap;
-
-  const contactRows = [
-    issuer.phone   ? [`${t(locale, 'contact_phone')}:`,  issuer.phone]   : null,
-    issuer.mobile  ? [`${t(locale, 'contact_mobile')}:`, issuer.mobile]  : null,
-    issuer.email   ? [`${t(locale, 'contact_email')}:`,  issuer.email]   : null,
-    issuer.website ? [`${t(locale, 'contact_web')}:`,    issuer.website] : null,
-    // Only when set: a business that isn't VAT-registered has no number.
-    issuer.vatId   ? [`${vatIdLabel(locale, issuer.countryCode)}:`, issuer.vatId] : null,
-    // Migration 139 — Steuernummer (DE/AT local tax number). Distinct
-    // from VAT-ID; both can appear simultaneously.
-    issuer.taxId   ? [`${t(locale, 'tax_id_label')}:`, issuer.taxId] : null,
-  ].filter(Boolean);
-  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(8.5);
+  // ---- contact rows, on the letterhead grid ---------------------
+  // The caller passes the grid when the document's meta rows share this
+  // column; on its own the block measures its own rows the same way.
+  const contactRows = issuerContactRows(issuer, locale);
+  const rowGrid = grid || measureLabelGrid(
+    doc, contactRows.map(([label, value]) => [label, value, ISSUER_CONTACT_SIZE]), x + width);
+  doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(ISSUER_CONTACT_SIZE);
   for (const [label, value] of contactRows) {
-    const rowY = y;
-    doc.text(label, labelX, rowY, { width: labelCol, align: 'left',  lineBreak: false });
-    doc.text(value, valueX, rowY, { width: valueCol, align: 'left',  lineBreak: false });
-    y = rowY + 11;
+    drawGridRow(doc, rowGrid, label, value, y);
+    y += 11;
   }
   return Math.max(y, startY + 60);
 }
@@ -1847,26 +1891,16 @@ function renderDocument(type, context) {
         // The two blocks are positioned absolutely; we keep a `y`
         // cursor for the body content that starts BELOW both blocks.
         const leftX = PAGE.marginLeft;
-        // Sender block: narrower (180pt vs 220pt), further right, and
-        // nudged down by 16pt so it doesn't crowd the very top of the
-        // page. Leaves more breathing room for the logo + name banner.
-        const issuerWidth = 180;
-        const issuerX = PAGE.width - PAGE.marginRight - issuerWidth;
+        const metaRight = leftX + PAGE.contentWidth;
+        // Sender column: nudged down by 16pt so it doesn't crowd the very top
+        // of the page, leaving room for the logo + name banner above it.
         const issuerY = PAGE.marginTop + 16;
-
-        // A logo the theme places at the left or centre (#1445) goes first;
-        // the issuer column and a recipient in the flow start below it.
-        const logoBottom = drawPageLogo(doc, ctx.issuer);
-        const centredLogo = logoBottom != null && ctx.theme.logo && ctx.theme.logo.position === 'center';
-        const issuerEndY = drawIssuerBlock(doc, ctx.issuer, issuerX, centredLogo ? Math.max(issuerY, logoBottom) : issuerY,
-          issuerWidth, ctx.locale);
         const windowOn = addressWindowOn(doc);
-        const recipientEndY = drawRecipientBlock(doc, ctx.recipient, ctx.locale,
-          windowOn ? {} : { flowY: Math.max(issuerY, logoBottom || 0) });
+        const windowBottom = windowOn ? ADDR_WINDOW.top + ADDR_WINDOW.height : 0;
 
         // Storno discriminator. Drives:
         //   - page title swap ("Stornorechnung" instead of "Rechnung")
-        //   - mandatory reference line under the title
+        //   - the mandatory reference row in the meta block
         //   - sign flip on line totals (row-level totals are already
         //     stored negative in the DB, so drawTotals renders them
         //     naturally — see drawLineItems for the per-item flip)
@@ -1880,25 +1914,16 @@ function renderDocument(type, context) {
         // QR (the QR would encode the original amount, not the new total).
         const isMahnung = type === 'invoice' && ctx.doc.kind === 'mahnung';
 
-        // ---- meta block ("Informationsblock") -------------------------
-        // The document number, its dates and every reference it carries,
-        // right-aligned beside the address field. DIN 5008 Form B sets the two
-        // level with each other; the block is bottom-aligned to the field's
-        // lower edge so the title starts immediately under both, with neither
-        // a dead band between header and body nor everything crowded against
-        // the top margin (#1546). The rows are therefore collected and
-        // measured before any of them is drawn.
+        // ---- the right-hand column ------------------------------------
+        // The sender's contact rows and the document's meta block
+        // ("Informationsblock": number, dates, references) are two halves of one
+        // letterhead column. They are built and measured before either is drawn
+        // so both sit on the same grid — one colon edge, one right edge, the
+        // page's right margin (#1546).
         const docNumberForDisplay = ctx.doc.invoiceNumber || ctx.doc.quoteNumber || '';
         const numberLabelKey = type === 'quote' ? 'quote_number_label' : 'invoice_number_label';
-        const metaRight = leftX + PAGE.contentWidth;
-        const metaLabelW = 110; // wider than the date label so "Rechnungsnummer" fits without wrap
-        const metaValueW = 110;
-        const windowBottom = windowOn ? ADDR_WINDOW.top + ADDR_WINDOW.height : 0;
-        // Level with the address field, the block may only use the space to
-        // the right of it.
-        const metaLeft = windowOn ? ADDR_WINDOW.left + ADDR_WINDOW.width + 12 : leftX;
-
         const issueDateText = formatDate(ctx.doc.issueDate, ctx.dateFormat);
+
         const metaRows = [];
         if (docNumberForDisplay) metaRows.push([t(ctx.locale, numberLabelKey), docNumberForDisplay]);
         metaRows.push([t(ctx.locale, 'date'), issueDateText]);
@@ -1918,6 +1943,19 @@ function renderDocument(type, context) {
             metaRows.push([t(ctx.locale, 'due_date'), formatDate(ctx.doc.dueDate, ctx.dateFormat)]);
           }
         }
+        // The dated rows above set the column widths. A reference is prose
+        // rather than a figure and can be half a line long, so it is added
+        // after the grid is measured and only takes a grid row when it fits
+        // one — otherwise it would stretch the value column and drag every
+        // label out of line.
+        const gridRows = [
+          ...issuerContactRows(ctx.issuer, ctx.locale)
+            .map(([label, value]) => [label, value, ISSUER_CONTACT_SIZE]),
+          ...metaRows.map(([label, value]) => [label, value, 10]),
+        ];
+        const grid = measureLabelGrid(doc, gridRows, metaRight, {
+          leftLimit: windowOn ? ADDR_WINDOW.left + ADDR_WINDOW.width + 12 : leftX,
+        });
 
         // Every document this one points at is a row of the same block (#1546).
         // They used to be full-width lines under the title, where they read as
@@ -1941,52 +1979,59 @@ function renderDocument(type, context) {
             : '';
           return `${t(ctx.locale, relationKey)} ${t(ctx.locale, titleKey)} ${ref.number}${datePart}`;
         };
-        const reference = (value) => metaRows.push([t(ctx.locale, 'reference_label'), value]);
+        const references = [];
         if (isStorno && ctx.doc.cancelsInvoice) {
-          reference(datedReference('reference_cancels', 'invoice_title', ctx.doc.cancelsInvoice));
+          references.push(datedReference('reference_cancels', 'invoice_title', ctx.doc.cancelsInvoice));
         }
         if (type === 'invoice' && !isStorno && ctx.doc.sourceQuoteNumber) {
-          reference(`${t(ctx.locale, 'quote_title')} ${ctx.doc.sourceQuoteNumber}`);
+          references.push(`${t(ctx.locale, 'quote_title')} ${ctx.doc.sourceQuoteNumber}`);
         }
         if (type === 'invoice' && !isStorno && ctx.doc.replacesInvoice) {
-          reference(datedReference('reference_replaces', 'invoice_title', ctx.doc.replacesInvoice));
+          references.push(datedReference('reference_replaces', 'invoice_title', ctx.doc.replacesInvoice));
         }
         if (type === 'quote' && ctx.doc.replacesQuote) {
-          reference(datedReference('reference_replaces', 'quote_title', ctx.doc.replacesQuote));
+          references.push(datedReference('reference_replaces', 'quote_title', ctx.doc.replacesQuote));
         }
 
+        // ---- header blocks --------------------------------------------
+        // A logo the theme places at the left or centre (#1445) goes first;
+        // the issuer column and a recipient in the flow start below it.
+        const logoBottom = drawPageLogo(doc, ctx.issuer);
+        const centredLogo = logoBottom != null && ctx.theme.logo && ctx.theme.logo.position === 'center';
+        const issuerEndY = drawIssuerBlock(doc, ctx.issuer, grid.labelX,
+          centredLogo ? Math.max(issuerY, logoBottom) : issuerY,
+          metaRight - grid.labelX, ctx.locale, { grid });
+        const recipientEndY = drawRecipientBlock(doc, ctx.recipient, ctx.locale,
+          windowOn ? {} : { flowY: Math.max(issuerY, logoBottom || 0) });
+
+        // ---- meta block -----------------------------------------------
+        // Bottom-aligned to the address field's lower edge: DIN 5008 Form B
+        // sets the two level with each other, and ending them together means
+        // the title can start immediately under both, with neither a dead band
+        // between header and body nor everything crowded against the top.
         doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor(themeColor(doc, 'text'));
-        // A longer value (a service period) widens its own column so it stays
-        // on one line, right-aligned with the rows above. A row that can't fit
-        // beside the address field at all — a long "Bezug: Storno zu Rechnung
-        // … vom …" — would wrap to two lines in that narrow column, so it goes
-        // full width under the field instead, where it still reads as part of
-        // the block.
-        const columnWidth = metaRight - metaLeft;
-        const beside = [];
-        const under = [];
-        metaRows.forEach(([label, value]) => {
-          const valueW = Math.max(metaValueW, doc.widthOfString(value) + 2);
-          if (valueW + metaLabelW <= columnWidth) beside.push([label, value, valueW]);
-          else under.push([label, value]);
+        const referenceLabel = t(ctx.locale, 'reference_label');
+        const besideField = [...metaRows];
+        const underField = [];
+        references.forEach((value) => {
+          if (doc.widthOfString(value) + 2 <= grid.valueW) besideField.push([referenceLabel, value]);
+          else underField.push([referenceLabel, value]);
         });
 
-        const metaHeight = beside.length * 14;
         let y = windowOn
-          ? Math.max(issuerEndY + 12, windowBottom - metaHeight)
+          ? Math.max(issuerEndY + 12, windowBottom - besideField.length * 14)
           : Math.max(issuerEndY, recipientEndY) + 6;
-        beside.forEach(([label, value, valueW]) => {
-          doc.text(`${label}:`, metaRight - valueW - metaLabelW, y,
-            { width: metaLabelW, align: 'right', lineBreak: false });
-          doc.text(value, metaRight - valueW, y,
-            { width: valueW, align: 'right', lineBreak: false });
+        besideField.forEach(([label, value]) => {
+          drawGridRow(doc, grid, label, value, y);
           y += 14;
         });
 
         // The body starts below the meta block AND below the address field —
         // whichever reaches further down.
         y = Math.max(y, recipientEndY, windowBottom);
-        under.forEach(([label, value]) => {
+        // A reference too long for the grid's value column reads as one
+        // full-width row under the field rather than wrapping in the column.
+        underField.forEach(([label, value]) => {
           doc.text(`${label}: ${value}`, leftX, y, { width: PAGE.contentWidth, align: 'right' });
           y = doc.y + 2;
         });
