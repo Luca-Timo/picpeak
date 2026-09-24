@@ -471,10 +471,14 @@ function measureLabelGrid(doc, rows, right, { gap = 8, leftLimit = null } = {}) 
   return { gap, labelW, valueW, valueX, labelX: valueX - gap - labelW, right };
 }
 
-/** One row of the letterhead grid: label to the colon edge, value to the right. */
+/**
+ * One row of the letterhead grid: the label at the column's left edge, the
+ * value at the value column's. Both left-aligned — the column reads as an
+ * ordinary two-column block, which is what a letterhead looks like.
+ */
 function drawGridRow(doc, grid, label, value, y) {
-  doc.text(`${label}:`, grid.labelX, y, { width: grid.labelW, align: 'right', lineBreak: false });
-  doc.text(String(value), grid.valueX, y, { width: grid.valueW, align: 'right', lineBreak: false });
+  doc.text(`${label}:`, grid.labelX, y, { width: grid.labelW, align: 'left', lineBreak: false });
+  doc.text(String(value), grid.valueX, y, { width: grid.valueW, align: 'left', lineBreak: false });
 }
 
 function drawIssuerBlock(doc, issuer, x, y, width, locale, { grid = null } = {}) {
@@ -537,7 +541,7 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale, { grid = null } = {})
     // Bold-title branch — the standard letterhead look. Skipped when
     // the admin opted into the inline-name variant.
     doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(12).fillColor(themeColor(doc, 'text'))
-      .text(issuer.companyName, x, y, { width, align: 'right' });
+      .text(issuer.companyName, x, y, { width, align: 'left' });
     y = doc.y + 6;
   }
 
@@ -568,10 +572,10 @@ function drawIssuerBlock(doc, issuer, x, y, width, locale, { grid = null } = {})
     issuer.addressLine2,
     cityCountry,
   ].filter(Boolean);
-  // The whole column is flush with the page's right margin — the logo, the
-  // name, these lines and the contact rows' values all end on it (#1546).
+  // The logo, the name and these lines all start at the column's left edge,
+  // which is also where the contact and meta labels below them start (#1546).
   for (const line of addressLines) {
-    doc.text(line, x, y, { width, align: 'right' });
+    doc.text(line, x, y, { width, align: 'left' });
     y = doc.y;
   }
   y += 6;
@@ -2032,7 +2036,7 @@ function renderDocument(type, context) {
         // A reference too long for the grid's value column reads as one
         // full-width row under the field rather than wrapping in the column.
         underField.forEach(([label, value]) => {
-          doc.text(`${label}: ${value}`, leftX, y, { width: PAGE.contentWidth, align: 'right' });
+          doc.text(`${label}: ${value}`, leftX, y, { width: PAGE.contentWidth, align: 'left' });
           y = doc.y + 2;
         });
         y += 4; // cushion before the title
