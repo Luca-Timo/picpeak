@@ -2174,8 +2174,16 @@ function renderDocument(type, context) {
             const from = formatDate(period.from, ctx.dateFormat);
             const to = period.to ? formatDate(period.to, ctx.dateFormat) : null;
             if (to && to !== from) metaRows.push([t(ctx.locale, 'service_period'), `${from} – ${to}`]);
-            // A service date that only repeats the issue date says nothing (#1546).
             else if (from !== issueDateText) metaRows.push([t(ctx.locale, 'service_date'), from]);
+            // A service date that only repeats the issue date reads as a
+            // duplicate, but MWSTG Art. 26 and §14(4) Nr. 6 UStG want the time
+            // of supply on the document. Settings → CRM → Invoices decides
+            // which way that goes (#1546); the default states it in words.
+            else if (ctx.serviceDateMode === 'note') {
+              metaRows.push([t(ctx.locale, 'service_date'), t(ctx.locale, 'service_date_same_as_issue')]);
+            } else if (ctx.serviceDateMode === 'repeat') {
+              metaRows.push([t(ctx.locale, 'service_date'), from]);
+            }
           }
           // The due date, on the invoice itself (not on a Storno or a Mahnung).
           if (!isStorno && !isMahnung && ctx.doc.dueDate) {
@@ -2491,6 +2499,10 @@ function normaliseContext(type, ctx) {
     vatNote: (typeof ctx.vatNote === 'string' && ctx.vatNote.trim()) ? ctx.vatNote.trim() : null,
     // Is the business VAT-registered (Settings → Accounting)? Null = never set.
     vatRegistered: typeof ctx.vatRegistered === 'boolean' ? ctx.vatRegistered : null,
+    // What to print when the service date is the issue date (Settings → CRM →
+    // Invoices): say so in words, repeat the date, or leave the row out.
+    serviceDateMode: ['note', 'repeat', 'omit'].includes(ctx.serviceDateMode)
+      ? ctx.serviceDateMode : 'note',
     // Date-format config from the `general_date_format` app setting.
     // Shape: `{ format: 'DD.MM.YYYY' | 'DD/MM/YYYY' | 'MM/DD/YYYY' |
     // 'YYYY-MM-DD', locale?: string }`. The service layer hydrates

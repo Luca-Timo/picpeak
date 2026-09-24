@@ -389,19 +389,41 @@ describe('references', () => {
 });
 
 describe('the service date', () => {
-  test('is left out when it only repeats the issue date', async () => {
+  const sameDay = { servicePeriod: { from: '2026-09-14' } };
+
+  test('says so in words when it only repeats the issue date', async () => {
     const drawn = recordDrawing();
-    await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)], {}, {
-      servicePeriod: { from: '2026-09-14' },
-    }));
+    await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)], {}, sameDay));
+    const calls = drawn();
+
+    // The row stays — MWSTG Art. 26 and §14(4) Nr. 6 UStG want the time of
+    // supply on the document — but it doesn't print the same date twice.
+    expect(find(calls, t('de', 'service_date'))).toBeTruthy();
+    expect(find(calls, t('de', 'service_date_same_as_issue'))).toBeTruthy();
+  });
+
+  test('can be left out entirely', async () => {
+    const drawn = recordDrawing();
+    await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)], { serviceDateMode: 'omit' }, sameDay));
     expect(find(drawn(), t('de', 'service_date'))).toBeUndefined();
   });
 
-  test('is printed when it differs from the issue date', async () => {
+  test('can repeat the date, as it did before', async () => {
+    const drawn = recordDrawing();
+    await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)], { serviceDateMode: 'repeat' }, sameDay));
+    const calls = drawn();
+    expect(find(calls, t('de', 'service_date'))).toBeTruthy();
+    expect(find(calls, t('de', 'service_date_same_as_issue'))).toBeUndefined();
+  });
+
+  test('is printed as a date when it differs from the issue date', async () => {
     const drawn = recordDrawing();
     await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)], {}, {
       servicePeriod: { from: '2026-09-01' },
     }));
-    expect(find(drawn(), t('de', 'service_date'))).toBeTruthy();
+    const calls = drawn();
+    expect(find(calls, t('de', 'service_date'))).toBeTruthy();
+    expect(find(calls, '01.09.2026')).toBeTruthy();
   });
 });
+
