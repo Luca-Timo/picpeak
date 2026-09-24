@@ -197,6 +197,17 @@ describe('the Swiss QR-bill', () => {
     expect(find(drawn(), issuer.footerLine).y).toBeGreaterThan(height - BAND_HEIGHT);
   });
 
+  test('costs only the QR section when it throws while drawing', async () => {
+    const { SwissQRBill } = require('swissqrbill/pdf');
+    jest.spyOn(SwissQRBill.prototype, 'attachTo').mockImplementation(() => {
+      throw new Error('slip render failed');
+    });
+    // The draw used to sit inside the same try as the construction. It must
+    // stay wrapped: the admin gets an invoice without a QR, not no invoice.
+    const buffer = await pdfService.renderInvoiceToBuffer(swiss([longItem(1), longItem(2), longItem(3)]));
+    expect(await pageCount(buffer)).toBe(2);
+  });
+
   test('is left off a Stornorechnung, which stays a single page', async () => {
     const buffer = await pdfService.renderInvoiceToBuffer(swiss([shortItem(1)], {
       kind: 'storno', invoiceNumber: 'S-2026-0002',
@@ -231,8 +242,9 @@ describe('references', () => {
     const reference = find(calls, t('de', 'reference_cancels'));
     expect(reference.text).toContain('R-2026-0001');
     expect(reference.text).toContain('12.09.2026');
-    // Label and value are the meta block's two columns.
-    expect(findExact(calls, `${t('de', 'reference_label')}:`)).toBeTruthy();
+    // Too long for the column beside the address field, so it reads as one
+    // full-width row under it, label included.
+    expect(reference.text).toContain(t('de', 'reference_label'));
     // Above the title, where the dates are — not under it.
     expect(reference.y).toBeLessThan(findExact(calls, t('de', 'storno_title')).y);
   });

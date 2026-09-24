@@ -1292,10 +1292,15 @@ function drawPaymentBlock(doc, ctx, x, y, width) {
  * off. The placement decisions read this rather than a constant of their own,
  * so a two-line footer can't be laid over (#1546).
  */
-function footerHeight(doc, issuer = {}) {
-  const footer = (doc._theme && doc._theme.footer) || { mode: 'address', text: '' };
+function footerHeightFor(theme, issuer) {
+  const footer = (theme && theme.footer) || { mode: 'address', text: '' };
   if (footer.mode === 'none') return 0;
   return issuer?.footerLine ? FOOTER_LINE_HEIGHT * 2 + 4 : FOOTER_LINE_HEIGHT;
+}
+
+/** footerHeightFor for a document that already carries its theme. */
+function footerHeight(doc, issuer = {}) {
+  return footerHeightFor(doc && doc._theme, issuer);
 }
 
 function drawFooter(doc, issuer, locale, { bottomLimit = null } = {}) {
@@ -1405,20 +1410,38 @@ function buildSwissQrBill(ctx) {
 
 /**
  * Draw a built slip: under the content of the page just finished, or on a
- * page of its own.
+ * page of its own. Returns whether it landed.
  */
 function attachSwissQrBill(doc, qr, { attachToCurrentPage = false } = {}) {
   if (attachToCurrentPage) {
-    markSlipBandPage(doc);
     // attachTo() measures the free space from `doc.y` and would otherwise
     // insert a slip-sized page of its own; the band is free by construction
-    // here, so put the cursor at its top edge.
+    // here, so put the cursor at its top edge. isSpaceSufficient is asked
+    // anyway: on an A4 page the two agree exactly, and if a future page size
+    // ever made them disagree the slip belongs on a page of its own rather
+    // than on a 210x105mm page swissqrbill would insert behind our back —
+    // which nothing would mark as a slip page, so it would be numbered and
+    // stamped at A4 coordinates.
     doc.y = doc.page.height - QR_BILL_BAND_HEIGHT;
-  } else {
+  }
+  if (!attachToCurrentPage || !SwissQRBill.isSpaceSufficient(doc)) {
     doc.addPage();
     markPaymentSlipPage(doc);
+  } else {
+    markSlipBandPage(doc);
   }
-  qr.attachTo(doc);
+  try {
+    qr.attachTo(doc);
+    return true;
+  } catch (err) {
+    // Same contract as a slip that couldn't be built: log it and emit the
+    // invoice without the QR section. Before #1546 the draw sat inside
+    // buildSwissQrBill's try; keeping it wrapped means a throw here still
+    // costs the QR rather than the whole document.
+    const logger = require('../utils/logger');
+    logger.warn('SwissQRBill render failed; emitting invoice without QR section', { err: err.message });
+    return false;
+  }
 }
 
 /**
@@ -1840,13 +1863,6 @@ function renderDocument(type, context) {
         const windowOn = addressWindowOn(doc);
         const recipientEndY = drawRecipientBlock(doc, ctx.recipient, ctx.locale,
           windowOn ? {} : { flowY: Math.max(issuerY, logoBottom || 0) });
-        // Start the body content below the header blocks AND the
-        // address-window bottom edge — never let the date/title row
-        // cut through the window region. The title position isn't
-        // dictated by DIN 5008 (the spec only fixes the address window
-        // position), so we pull it tight against the window's bottom
-        // edge to give the body more vertical room.
-        let y = Math.max(issuerEndY, recipientEndY, windowOn ? ADDR_WINDOW.top + ADDR_WINDOW.height : 0) + 6;
 
         // Storno discriminator. Drives:
         //   - page title swap ("Stornorechnung" instead of "Rechnung")
@@ -1864,49 +1880,28 @@ function renderDocument(type, context) {
         // QR (the QR would encode the original amount, not the new total).
         const isMahnung = type === 'invoice' && ctx.doc.kind === 'mahnung';
 
-        // ---- document number (above) + date (below), both right-aligned
-        // The number sits directly under the sender address block so the
-        // customer + accountant find the invoice/quote/Storno reference
-        // exactly where DACH letter convention puts it. The date follows
-        // on its own row with the same right-anchored column structure so
-        // both label-and-value pairs align to the same right edge.
+        // ---- meta block ("Informationsblock") -------------------------
+        // The document number, its dates and every reference it carries,
+        // right-aligned beside the address field. DIN 5008 Form B sets the two
+        // level with each other; the block is bottom-aligned to the field's
+        // lower edge so the title starts immediately under both, with neither
+        // a dead band between header and body nor everything crowded against
+        // the top margin (#1546). The rows are therefore collected and
+        // measured before any of them is drawn.
         const docNumberForDisplay = ctx.doc.invoiceNumber || ctx.doc.quoteNumber || '';
         const numberLabelKey = type === 'quote' ? 'quote_number_label' : 'invoice_number_label';
         const metaRight = leftX + PAGE.contentWidth;
         const metaLabelW = 110; // wider than the date label so "Rechnungsnummer" fits without wrap
         const metaValueW = 110;
-        if (docNumberForDisplay) {
-          doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor(themeColor(doc, 'text'));
-          doc.text(`${t(ctx.locale, numberLabelKey)}:`,
-            metaRight - metaValueW - metaLabelW, y,
-            { width: metaLabelW, align: 'right', lineBreak: false });
-          doc.text(docNumberForDisplay, metaRight - metaValueW, y,
-            { width: metaValueW, align: 'right', lineBreak: false });
-          y += 14;
-        }
-        // Date row — same right-anchored layout so the two values stack
-        // visually as a single meta block. Replaces the previous
-        // drawDate() call, which lived below the title and used a
-        // tighter column spec.
-        doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor(themeColor(doc, 'text'));
-        const metaRow = (label, value) => {
-          // A longer value (a service period, a reference) widens its own
-          // column so it stays on one line, right-aligned with the rows above.
-          const valueW = Math.max(metaValueW, doc.widthOfString(value) + 2);
-          // A value too long to sit beside its label takes the whole row,
-          // label included, and wraps rather than running off the page.
-          if (valueW + metaLabelW > PAGE.contentWidth) {
-            doc.text(`${label}: ${value}`, leftX, y, { width: PAGE.contentWidth, align: 'right' });
-            y = doc.y + 2;
-            return;
-          }
-          doc.text(`${label}:`, metaRight - valueW - metaLabelW, y,
-            { width: metaLabelW, align: 'right', lineBreak: false });
-          doc.text(value, metaRight - valueW, y, { width: valueW, align: 'right', lineBreak: false });
-          y += 14;
-        };
+        const windowBottom = windowOn ? ADDR_WINDOW.top + ADDR_WINDOW.height : 0;
+        // Level with the address field, the block may only use the space to
+        // the right of it.
+        const metaLeft = windowOn ? ADDR_WINDOW.left + ADDR_WINDOW.width + 12 : leftX;
+
         const issueDateText = formatDate(ctx.doc.issueDate, ctx.dateFormat);
-        metaRow(t(ctx.locale, 'date'), issueDateText);
+        const metaRows = [];
+        if (docNumberForDisplay) metaRows.push([t(ctx.locale, numberLabelKey), docNumberForDisplay]);
+        metaRows.push([t(ctx.locale, 'date'), issueDateText]);
         if (type === 'invoice') {
           // The date or period of the service (MWSTG Art. 26): the event
           // date, or a monthly invoice's period. Nothing when neither exists.
@@ -1914,55 +1909,87 @@ function renderDocument(type, context) {
           if (period && period.from) {
             const from = formatDate(period.from, ctx.dateFormat);
             const to = period.to ? formatDate(period.to, ctx.dateFormat) : null;
-            if (to && to !== from) metaRow(t(ctx.locale, 'service_period'), `${from} – ${to}`);
+            if (to && to !== from) metaRows.push([t(ctx.locale, 'service_period'), `${from} – ${to}`]);
             // A service date that only repeats the issue date says nothing (#1546).
-            else if (from !== issueDateText) metaRow(t(ctx.locale, 'service_date'), from);
+            else if (from !== issueDateText) metaRows.push([t(ctx.locale, 'service_date'), from]);
           }
           // The due date, on the invoice itself (not on a Storno or a Mahnung).
           if (!isStorno && !isMahnung && ctx.doc.dueDate) {
-            metaRow(t(ctx.locale, 'due_date'), formatDate(ctx.doc.dueDate, ctx.dateFormat));
+            metaRows.push([t(ctx.locale, 'due_date'), formatDate(ctx.doc.dueDate, ctx.dateFormat)]);
           }
         }
 
-        // ---- references ("Bezug: …") ----------------------------------
-        // Every document this one points at is a row of the meta block, under
-        // the dates (#1546). They used to be full-width lines under the title,
-        // where they read as the opening of the letter rather than as the
-        // document's metadata, and pushed the body down a line each.
+        // Every document this one points at is a row of the same block (#1546).
+        // They used to be full-width lines under the title, where they read as
+        // the opening of the letter rather than as the document's metadata.
         //
-        // A Storno names the invoice it reverses: the §14c-defensible link
-        // from the cancellation to the original. Readers and Finanzamt
-        // auditors need both numbers and the original issue date to
-        // reconstruct the chain from the documents alone, so it is stamped
-        // first and carries its date.
+        // A Storno names the invoice it reverses: the §14c-defensible link from
+        // the cancellation to the original. Readers and Finanzamt auditors need
+        // both numbers and the original issue date to reconstruct the chain
+        // from the documents alone, so it is stamped first and carries its date.
         //
-        // An invoice names the quote it came from. We keep invoice numbers on
-        // a strict monotonic sequence (R-YYYY-NNNN) because CH/LI/DE/AT
-        // require "lückenlose Rechnungsnummern", so the provenance is a
-        // reference rather than a mirrored number.
+        // An invoice names the quote it came from. We keep invoice numbers on a
+        // strict monotonic sequence (R-YYYY-NNNN) because CH/LI/DE/AT require
+        // "lückenlose Rechnungsnummern", so the provenance is a reference
+        // rather than a mirrored number.
         //
-        // A cancelled-and-reissued invoice (migration 114) and a reissued
-        // quote (#1451) name what they replace, so the chain stays traceable.
+        // A cancelled-and-reissued invoice (migration 114) and a reissued quote
+        // (#1451) name what they replace, so the chain stays traceable.
         const datedReference = (relationKey, titleKey, ref) => {
           const datePart = ref.issueDate
             ? ` ${t(ctx.locale, 'reference_dated', { date: formatDate(ref.issueDate, ctx.dateFormat) })}`
             : '';
           return `${t(ctx.locale, relationKey)} ${t(ctx.locale, titleKey)} ${ref.number}${datePart}`;
         };
-        const references = [];
+        const reference = (value) => metaRows.push([t(ctx.locale, 'reference_label'), value]);
         if (isStorno && ctx.doc.cancelsInvoice) {
-          references.push(datedReference('reference_cancels', 'invoice_title', ctx.doc.cancelsInvoice));
+          reference(datedReference('reference_cancels', 'invoice_title', ctx.doc.cancelsInvoice));
         }
         if (type === 'invoice' && !isStorno && ctx.doc.sourceQuoteNumber) {
-          references.push(`${t(ctx.locale, 'quote_title')} ${ctx.doc.sourceQuoteNumber}`);
+          reference(`${t(ctx.locale, 'quote_title')} ${ctx.doc.sourceQuoteNumber}`);
         }
         if (type === 'invoice' && !isStorno && ctx.doc.replacesInvoice) {
-          references.push(datedReference('reference_replaces', 'invoice_title', ctx.doc.replacesInvoice));
+          reference(datedReference('reference_replaces', 'invoice_title', ctx.doc.replacesInvoice));
         }
         if (type === 'quote' && ctx.doc.replacesQuote) {
-          references.push(datedReference('reference_replaces', 'quote_title', ctx.doc.replacesQuote));
+          reference(datedReference('reference_replaces', 'quote_title', ctx.doc.replacesQuote));
         }
-        references.forEach((value) => metaRow(t(ctx.locale, 'reference_label'), value));
+
+        doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor(themeColor(doc, 'text'));
+        // A longer value (a service period) widens its own column so it stays
+        // on one line, right-aligned with the rows above. A row that can't fit
+        // beside the address field at all — a long "Bezug: Storno zu Rechnung
+        // … vom …" — would wrap to two lines in that narrow column, so it goes
+        // full width under the field instead, where it still reads as part of
+        // the block.
+        const columnWidth = metaRight - metaLeft;
+        const beside = [];
+        const under = [];
+        metaRows.forEach(([label, value]) => {
+          const valueW = Math.max(metaValueW, doc.widthOfString(value) + 2);
+          if (valueW + metaLabelW <= columnWidth) beside.push([label, value, valueW]);
+          else under.push([label, value]);
+        });
+
+        const metaHeight = beside.length * 14;
+        let y = windowOn
+          ? Math.max(issuerEndY + 12, windowBottom - metaHeight)
+          : Math.max(issuerEndY, recipientEndY) + 6;
+        beside.forEach(([label, value, valueW]) => {
+          doc.text(`${label}:`, metaRight - valueW - metaLabelW, y,
+            { width: metaLabelW, align: 'right', lineBreak: false });
+          doc.text(value, metaRight - valueW, y,
+            { width: valueW, align: 'right', lineBreak: false });
+          y += 14;
+        });
+
+        // The body starts below the meta block AND below the address field —
+        // whichever reaches further down.
+        y = Math.max(y, recipientEndY, windowBottom);
+        under.forEach(([label, value]) => {
+          doc.text(`${label}: ${value}`, leftX, y, { width: PAGE.contentWidth, align: 'right' });
+          y = doc.y + 2;
+        });
         y += 4; // cushion before the title
 
         // ---- title ----------------------------------------------------
@@ -2010,9 +2037,8 @@ function renderDocument(type, context) {
         // margins so each page fills to the bottom. The header row is
         // marked `header: true` so it auto-repeats on every
         // continuation page. Totals/payment placement is handled below:
-        // they're pinned to a fixed anchor near the page bottom, and if
-        // the last item row spilled past that anchor we advance to a
-        // fresh page before drawing them (see the desiredTotalsY check).
+        // they follow wherever the table ended, and move to a fresh page
+        // only when what is left of this one can't hold them (#1546).
         //
         // We deliberately do NOT inflate the bottom margin here to
         // "reserve" the totals zone on every page. That older approach
@@ -2025,11 +2051,7 @@ function renderDocument(type, context) {
         // landed below that page's phantom bottom margin and spawned a
         // stray blank trailing page (which then desynced "Seite X von Y").
         drawLineItems(doc, ctx);
-        // y after the table — used only to detect whether the items
-        // overflowed past the totals anchor below. We don't use it as
-        // the totals position directly because the totals block is
-        // pinned to a fixed offset from the page bottom regardless of
-        // how many items rendered.
+        // Where the table ended: the closing blocks start here.
         y = doc.y;
 
         // ---- totals + payment block, right after the items ------------
@@ -2269,7 +2291,7 @@ function renderContractInProcess(context) {
         const dateFormat = ctx.dateFormat || { format: 'DD.MM.YYYY' };
         // A footer (theme) sits in the bottom margin, so the margin grows
         // by its height and body text never runs into it.
-        const footerReserve = theme.footer.mode === 'none' ? 0 : ((ctx.issuer || {}).footerLine ? 28 : 12);
+        const footerReserve = footerHeightFor(theme, ctx.issuer);
         // The theme's margins (#1445) for the letter pages. The signature
         // page keeps SIGNATURE_PAGE — stamped signatures land at its fixed
         // coordinates, whatever the margins are.
