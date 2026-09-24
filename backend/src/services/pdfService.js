@@ -2381,9 +2381,9 @@ function renderDocument(type, context) {
         }
         // The slip shares this page only when the closing blocks still clear
         // its band, and only when they are pinned — a block that flows can end
-        // anywhere. With the shipped theme sharing needs a table of about one
-        // row, so in practice the slip takes a page of its own; the rule is
-        // written once from the geometry rather than assumed.
+        // anywhere. On a first page the address field alone reaches the middle
+        // of the sheet, so a single-page invoice never shares; a continuation
+        // page that carries only a few rows usually does.
         //
         // The library is asked as well: if it would refuse the space it would
         // insert a slip-sized page of its own, and the footer has already been

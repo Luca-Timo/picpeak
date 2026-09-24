@@ -245,6 +245,28 @@ describe('the carry-over', () => {
     expect(carried[0]).toBeLessThan(4500);
   });
 
+  test('repeats for every break, carrying the cumulative net each time', async () => {
+    const items = Array.from({ length: 60 }, (_, i) => shortItem(i + 1));
+    const drawn = recordDrawing();
+    const buffer = await pdfService.renderInvoiceToBuffer(invoice(items));
+    const calls = drawn();
+    const rows = findAll(calls, carry);
+
+    // Three pages of table: two breaks, each printing the figure at the foot
+    // of the page it closes and again at the head of the next.
+    expect(await pageCount(buffer)).toBeGreaterThan(2);
+    expect(rows).toHaveLength(4);
+
+    const carried = rows.map((row) => rowAmount(calls, row));
+    expect(carried[0]).toBe(carried[1]);
+    expect(carried[2]).toBe(carried[3]);
+    // Cumulative from the first row, not a per-page subtotal — which is what
+    // makes "Übertrag" the right word for it.
+    expect(carried[2]).toBeGreaterThan(carried[0]);
+    expect(carried[2]).toBeLessThan(60 * 150);
+    carried.forEach((amount) => expect(amount % 150).toBe(0));
+  });
+
   test('is absent from a table that fits on one page', async () => {
     const drawn = recordDrawing();
     await pdfService.renderInvoiceToBuffer(invoice([shortItem(1), shortItem(2)]));
