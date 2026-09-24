@@ -169,6 +169,35 @@ const ADDR_WINDOW = {
 // `doc.font(doc._fonts ? doc._fonts.body : FONT_BODY)` / `doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD)` call automatically
 // picks it up. If only one weight is available we register it for both
 // — bold falls back gracefully to regular.
+/**
+ * The QR-bill's reserved area: the bottom 105 mm of the page — the 62 mm
+ * receipt plus the 148 mm payment part, flush with the bottom edge. Nothing
+ * of ours may be drawn inside it, so a page that carries the slip under its
+ * content ends 105 mm early.
+ */
+const QR_BILL_BAND_HEIGHT = (105 / 25.4) * 72;
+
+/**
+ * Where the two things that normally live in the bottom margin go on a page
+ * that carries the slip: the page number just above the band, the footer
+ * above the number — the same order as on a page without one.
+ */
+const SLIP_BAND_NUMBER_GAP = 14;
+const SLIP_BAND_FOOTER_GAP = SLIP_BAND_NUMBER_GAP + 8;
+
+/** A line of air between the last content and the footer under it. */
+const FOOTER_AIR = 6;
+
+/**
+ * What the EPC QR block occupies: title, subtitle, the 180pt code and the
+ * five-line human-readable summary under it. Used to decide whether it fits
+ * on the last content page (#1546).
+ */
+const EPC_BLOCK_HEIGHT = 340;
+
+/** One line of the footer, at its 8pt size. */
+const FOOTER_LINE_HEIGHT = 12;
+
 const FONT_BODY = 'Helvetica';
 const FONT_BOLD = 'Helvetica-Bold';
 const FONT_ITALIC = 'Helvetica-Oblique';
@@ -1257,7 +1286,19 @@ function drawPaymentBlock(doc, ctx, x, y, width) {
   return Math.max(y, ry) + 8;
 }
 
-function drawFooter(doc, issuer, locale) {
+/**
+ * What drawFooter occupies above the bottom edge it is given: one line, two
+ * when the issuer set a footer line, nothing when the theme turned the footer
+ * off. The placement decisions read this rather than a constant of their own,
+ * so a two-line footer can't be laid over (#1546).
+ */
+function footerHeight(doc, issuer = {}) {
+  const footer = (doc._theme && doc._theme.footer) || { mode: 'address', text: '' };
+  if (footer.mode === 'none') return 0;
+  return issuer?.footerLine ? FOOTER_LINE_HEIGHT * 2 + 4 : FOOTER_LINE_HEIGHT;
+}
+
+function drawFooter(doc, issuer, locale, { bottomLimit = null } = {}) {
   // Footer format (per design review):
   //   "<Company>, <Street>, <CC>-<PostalCode> <City>, <CountryName>"
   // e.g.
@@ -1273,12 +1314,16 @@ function drawFooter(doc, issuer, locale) {
   // trailing pages).
   // Theme (#1445): the address line, a custom line, or no footer at all.
   const footer = (doc._theme && doc._theme.footer) || { mode: 'address', text: '' };
-  if (footer.mode === 'none') return;
-  const lineH = 12;
+  const reserved = footerHeight(doc, issuer);
+  if (!reserved) return;
+  const lineH = FOOTER_LINE_HEIGHT;
   const hasFooterLine = !!issuer.footerLine;
-  const reserved = hasFooterLine ? lineH * 2 + 4 : lineH;
   const P = pageOf(doc);
-  const footerY = doc.page.height - P.marginBottom - reserved;
+  // Normally the footer sits in the bottom margin band. `bottomLimit` pulls it
+  // up when something else owns the bottom of the page — the QR-bill's
+  // reserved area on a page that carries both content and the slip (#1546).
+  const defaultY = doc.page.height - P.marginBottom - reserved;
+  const footerY = bottomLimit == null ? defaultY : Math.min(defaultY, bottomLimit - reserved);
 
   const cc = issuer.countryCode ? String(issuer.countryCode).toUpperCase() : '';
   const pc = issuer.postalCode || '';
@@ -1308,26 +1353,25 @@ function drawFooter(doc, issuer, locale) {
 }
 
 /**
- * Add the Swiss QR-bill payment slip on a fresh page. This is rendered
- * by the swissqrbill library — we just feed it the issuer/recipient/
- * amount. For non-swiss QR formats this returns without adding a page.
+ * Build the Swiss QR-bill payment slip from the issuer/recipient/amount, or
+ * return null when this document has none and when swissqrbill refuses the
+ * data. Drawing it is attachSwissQrBill's job, so the caller can lay the page
+ * out around a slip it knows will render (#1546).
  *
- * The QR-bill spec REQUIRES the slip on a separate physical page, full
- * width at the bottom — swissqrbill handles all of that.
+ * The spec puts the slip full width at the bottom of a page, in its own
+ * 105 mm band: either under the last invoice page's content, or on a page of
+ * its own as it always was.
  */
-function appendSwissQrBill(doc, ctx) {
-  if (ctx.qrFormat !== 'swiss') return;
+function buildSwissQrBill(ctx) {
+  if (ctx.qrFormat !== 'swiss') return null;
   const { issuer, bank, doc: docMeta, recipient } = ctx;
-  if (!bank?.iban) return;
-
-  doc.addPage();
-  markPaymentSlipPage(doc);
+  if (!bank?.iban) return null;
 
   // swissqrbill expects amounts in major units (CHF, not Rappen).
   const totalMajor = Number(docMeta.totalAmountMinor || 0) / 100;
 
   try {
-    const qr = new SwissQRBill({
+    return new SwissQRBill({
       currency: (ctx.currency || 'CHF').toUpperCase() === 'EUR' ? 'EUR' : 'CHF',
       amount: totalMajor > 0 ? totalMajor : undefined,
       creditor: {
@@ -1347,14 +1391,34 @@ function appendSwissQrBill(doc, ctx) {
       } : undefined,
       message: docMeta.invoiceNumber ? `${docMeta.invoiceNumber}` : undefined,
     });
-    qr.attachTo(doc);
   } catch (err) {
     // Don't kill PDF rendering if QR generation fails — log + carry on.
     // The invoice without QR is still legally valid; admin gets a flag
-    // via the calling service.
+    // via the calling service. Because this runs before the footer is
+    // placed, a slip that can't be built also can't leave the page laid
+    // out around one.
     const logger = require('../utils/logger');
     logger.warn('SwissQRBill render failed; emitting invoice without QR section', { err: err.message });
+    return null;
   }
+}
+
+/**
+ * Draw a built slip: under the content of the page just finished, or on a
+ * page of its own.
+ */
+function attachSwissQrBill(doc, qr, { attachToCurrentPage = false } = {}) {
+  if (attachToCurrentPage) {
+    markSlipBandPage(doc);
+    // attachTo() measures the free space from `doc.y` and would otherwise
+    // insert a slip-sized page of its own; the band is free by construction
+    // here, so put the cursor at its top edge.
+    doc.y = doc.page.height - QR_BILL_BAND_HEIGHT;
+  } else {
+    doc.addPage();
+    markPaymentSlipPage(doc);
+  }
+  qr.attachTo(doc);
 }
 
 /**
@@ -1412,7 +1476,7 @@ function buildEpcPayload({ name, iban, amount, currency, reference }) {
  * QR codes in CHF/USD/etc. are silently rejected by every major
  * banking app, so emitting one would be worse than emitting nothing.
  */
-async function appendEpcQr(doc, ctx) {
+async function appendEpcQr(doc, ctx, { top = null } = {}) {
   if (ctx.qrFormat !== 'epc') return;
   const logger = require('../utils/logger');
   const { issuer, bank, doc: docMeta } = ctx;
@@ -1458,25 +1522,30 @@ async function appendEpcQr(doc, ctx) {
     return;
   }
 
-  // Fresh page so the QR doesn't fight the totals/payment layout on
-  // page 1. Centered, with a caption explaining what it is.
-  doc.addPage();
-  markPaymentSlipPage(doc);
-  const captionTop = PAGE.marginTop + 20;
+  // A page of its own, unless the caller found room for the block under the
+  // closing blocks of the last content page (#1546). Centred either way,
+  // with a caption explaining what it is.
+  const P = pageOf(doc);
+  let captionTop = top;
+  if (captionTop == null) {
+    doc.addPage();
+    markPaymentSlipPage(doc);
+    captionTop = P.marginTop + 20;
+  }
   doc.font(doc._fonts ? doc._fonts.bold : FONT_BOLD).fontSize(14).fillColor(themeColor(doc, 'text'));
-  doc.text(t(ctx.locale, 'epc_qr_title'), PAGE.marginLeft, captionTop, {
-    width: PAGE.contentWidth, align: 'center', lineBreak: false,
+  doc.text(t(ctx.locale, 'epc_qr_title'), P.marginLeft, captionTop, {
+    width: P.contentWidth, align: 'center', lineBreak: false,
   });
   doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor('#444');
-  doc.text(t(ctx.locale, 'epc_qr_subtitle'), PAGE.marginLeft, captionTop + 22, {
-    width: PAGE.contentWidth, align: 'center',
+  doc.text(t(ctx.locale, 'epc_qr_subtitle'), P.marginLeft, captionTop + 22, {
+    width: P.contentWidth, align: 'center',
   });
 
   // QR centred on the page, sized at ~180pt (≈63mm) — comfortably
   // scannable on every phone camera + small enough to leave room
   // for the printed IBAN beneath.
   const qrSize = 180;
-  const qrX = (PAGE.width - qrSize) / 2;
+  const qrX = (P.width - qrSize) / 2;
   const qrY = captionTop + 60;
   try {
     doc.image(pngBuffer, qrX, qrY, { fit: [qrSize, qrSize] });
@@ -1502,7 +1571,7 @@ async function appendEpcQr(doc, ctx) {
   ].filter(Boolean);
   let lineY = summaryY;
   for (const line of summaryLines) {
-    doc.text(line, PAGE.marginLeft, lineY, { width: PAGE.contentWidth, align: 'center' });
+    doc.text(line, P.marginLeft, lineY, { width: P.contentWidth, align: 'center' });
     lineY = doc.y + 2;
   }
 }
@@ -1538,6 +1607,17 @@ function markPaymentSlipPage(doc) {
 }
 
 /**
+ * Remember that the page just drawn carries a QR-bill band at its bottom but
+ * document content above it. Unlike a dedicated slip page it stays numbered
+ * and counted — its footer and page number move above the band (#1546).
+ */
+function markSlipBandPage(doc) {
+  const range = doc.bufferedPageRange();
+  if (!doc._slipBandPages) doc._slipBandPages = new Set();
+  doc._slipBandPages.add(range.start + range.count - 1);
+}
+
+/**
  * "Page x of y" in each page's bottom margin, at the theme's position —
  * except on a payment-slip page, which has its own fixed layout and isn't
  * counted (#1445; the label used to land inside the QR-bill's payment
@@ -1550,10 +1630,11 @@ function markPaymentSlipPage(doc) {
  * that merge, so without it a signature page sitting after 20 attachment
  * pages read "3 of 3".
  */
-function stampPageNumbers(doc, locale, { beforeStamp, insertedBeforeLast = 0 } = {}) {
+function stampPageNumbers(doc, locale, { beforeStamp, insertedBeforeLast = 0, docLabel = null } = {}) {
   const position = (doc._theme && doc._theme.pageNumbers) || 'bottom-right';
   const range = doc.bufferedPageRange();
   const slips = doc._paymentSlipPages || new Set();
+  const bands = doc._slipBandPages || new Set();
   const pages = [];
   for (let i = range.start; i < range.start + range.count; i += 1) {
     if (!slips.has(i)) pages.push(i);
@@ -1569,12 +1650,21 @@ function stampPageNumbers(doc, locale, { beforeStamp, insertedBeforeLast = 0 } =
     const inserted = Math.max(0, Number(insertedBeforeLast) || 0);
     const total = pages.length + inserted;
     const isLast = n === pages.length - 1;
-    const label = t(locale, 'page_of', { current: isLast ? total : n + 1, total });
+    const pageLabel = t(locale, 'page_of', { current: isLast ? total : n + 1, total });
+    // A continuation page separated from the first one still names the
+    // document it belongs to (#1546); the first page carries the number in
+    // full already.
+    const label = n > 0 && docLabel ? `${docLabel} · ${pageLabel}` : pageLabel;
     const centred = position === 'bottom-center';
     const P = pageOf(doc);
-    const labelW = centred ? P.contentWidth : 120;
+    const labelW = centred ? P.contentWidth : 240;
     const labelX = centred ? P.marginLeft : doc.page.width - P.marginRight - labelW;
-    doc.text(label, labelX, doc.page.height - P.marginBottom + 8, {
+    // A page whose bottom 105 mm belong to the QR-bill keeps its number above
+    // the slip, where the footer sits too.
+    const labelY = bands.has(pageIndex)
+      ? doc.page.height - QR_BILL_BAND_HEIGHT - SLIP_BAND_NUMBER_GAP
+      : doc.page.height - P.marginBottom + 8;
+    doc.text(label, labelX, labelY, {
       width: labelW, align: centred ? 'center' : 'right', lineBreak: false,
     });
     doc.fillColor(themeColor(doc, 'text'));
@@ -1800,15 +1890,23 @@ function renderDocument(type, context) {
         // tighter column spec.
         doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor(themeColor(doc, 'text'));
         const metaRow = (label, value) => {
-          // A longer value (a service period) widens its own column so it
-          // stays on one line, right-aligned with the rows above.
+          // A longer value (a service period, a reference) widens its own
+          // column so it stays on one line, right-aligned with the rows above.
           const valueW = Math.max(metaValueW, doc.widthOfString(value) + 2);
+          // A value too long to sit beside its label takes the whole row,
+          // label included, and wraps rather than running off the page.
+          if (valueW + metaLabelW > PAGE.contentWidth) {
+            doc.text(`${label}: ${value}`, leftX, y, { width: PAGE.contentWidth, align: 'right' });
+            y = doc.y + 2;
+            return;
+          }
           doc.text(`${label}:`, metaRight - valueW - metaLabelW, y,
             { width: metaLabelW, align: 'right', lineBreak: false });
           doc.text(value, metaRight - valueW, y, { width: valueW, align: 'right', lineBreak: false });
           y += 14;
         };
-        metaRow(t(ctx.locale, 'date'), formatDate(ctx.doc.issueDate, ctx.dateFormat));
+        const issueDateText = formatDate(ctx.doc.issueDate, ctx.dateFormat);
+        metaRow(t(ctx.locale, 'date'), issueDateText);
         if (type === 'invoice') {
           // The date or period of the service (MWSTG Art. 26): the event
           // date, or a monthly invoice's period. Nothing when neither exists.
@@ -1817,13 +1915,54 @@ function renderDocument(type, context) {
             const from = formatDate(period.from, ctx.dateFormat);
             const to = period.to ? formatDate(period.to, ctx.dateFormat) : null;
             if (to && to !== from) metaRow(t(ctx.locale, 'service_period'), `${from} – ${to}`);
-            else metaRow(t(ctx.locale, 'service_date'), from);
+            // A service date that only repeats the issue date says nothing (#1546).
+            else if (from !== issueDateText) metaRow(t(ctx.locale, 'service_date'), from);
           }
           // The due date, on the invoice itself (not on a Storno or a Mahnung).
           if (!isStorno && !isMahnung && ctx.doc.dueDate) {
             metaRow(t(ctx.locale, 'due_date'), formatDate(ctx.doc.dueDate, ctx.dateFormat));
           }
         }
+
+        // ---- references ("Bezug: …") ----------------------------------
+        // Every document this one points at is a row of the meta block, under
+        // the dates (#1546). They used to be full-width lines under the title,
+        // where they read as the opening of the letter rather than as the
+        // document's metadata, and pushed the body down a line each.
+        //
+        // A Storno names the invoice it reverses: the §14c-defensible link
+        // from the cancellation to the original. Readers and Finanzamt
+        // auditors need both numbers and the original issue date to
+        // reconstruct the chain from the documents alone, so it is stamped
+        // first and carries its date.
+        //
+        // An invoice names the quote it came from. We keep invoice numbers on
+        // a strict monotonic sequence (R-YYYY-NNNN) because CH/LI/DE/AT
+        // require "lückenlose Rechnungsnummern", so the provenance is a
+        // reference rather than a mirrored number.
+        //
+        // A cancelled-and-reissued invoice (migration 114) and a reissued
+        // quote (#1451) name what they replace, so the chain stays traceable.
+        const datedReference = (relationKey, titleKey, ref) => {
+          const datePart = ref.issueDate
+            ? ` ${t(ctx.locale, 'reference_dated', { date: formatDate(ref.issueDate, ctx.dateFormat) })}`
+            : '';
+          return `${t(ctx.locale, relationKey)} ${t(ctx.locale, titleKey)} ${ref.number}${datePart}`;
+        };
+        const references = [];
+        if (isStorno && ctx.doc.cancelsInvoice) {
+          references.push(datedReference('reference_cancels', 'invoice_title', ctx.doc.cancelsInvoice));
+        }
+        if (type === 'invoice' && !isStorno && ctx.doc.sourceQuoteNumber) {
+          references.push(`${t(ctx.locale, 'quote_title')} ${ctx.doc.sourceQuoteNumber}`);
+        }
+        if (type === 'invoice' && !isStorno && ctx.doc.replacesInvoice) {
+          references.push(datedReference('reference_replaces', 'invoice_title', ctx.doc.replacesInvoice));
+        }
+        if (type === 'quote' && ctx.doc.replacesQuote) {
+          references.push(datedReference('reference_replaces', 'quote_title', ctx.doc.replacesQuote));
+        }
+        references.forEach((value) => metaRow(t(ctx.locale, 'reference_label'), value));
         y += 4; // cushion before the title
 
         // ---- title ----------------------------------------------------
@@ -1835,74 +1974,6 @@ function renderDocument(type, context) {
               ? t(ctx.locale, 'mahnung_title')
               : t(ctx.locale, 'invoice_title');
         y = drawTitle(doc, title, leftX, y + 2);
-
-        // Mandatory Storno reference line — "Bezug: Storno zu Rechnung
-        // R-XXXX vom DATE". This is the §14c-defensible link from the
-        // cancellation document to the invoice it reverses; readers
-        // and Finanzamt auditors need both numbers + the original
-        // issue date to reconstruct the chain from the documents
-        // alone. Stamped FIRST (before sourceQuote / replaces) so
-        // it's the prominent reference on a Storno.
-        if (isStorno && ctx.doc.cancelsInvoice) {
-          const { number, issueDate } = ctx.doc.cancelsInvoice;
-          doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor(themeColor(doc, 'muted'));
-          const datePart = issueDate ? ` ${t(ctx.locale, 'reference_dated', { date: formatDate(issueDate, ctx.dateFormat) })}` : '';
-          doc.text(
-            `${t(ctx.locale, 'reference_label')}: ${t(ctx.locale, 'reference_cancels')} ${t(ctx.locale, 'invoice_title')} ${number}${datePart}`,
-            leftX, y, { width: PAGE.contentWidth }
-          );
-          y = doc.y + 6;
-          doc.fillColor(themeColor(doc, 'text'));
-        }
-
-        // Invoice → source quote cross-reference. We deliberately keep
-        // invoice numbers on a strict monotonic sequence (R-YYYY-NNNN)
-        // for tax-compliance reasons (CH/LI/DE/AT require
-        // "lückenlose Rechnungsnummern") — instead of mirroring the
-        // quote number on the invoice, we surface the link as a small
-        // "Bezug: Angebot Q-…" line under the title. Readers see the
-        // provenance without breaking the numbering scheme. Only
-        // rendered for invoices that came from a quote; no-op for
-        // standalone invoices and Storni (which don't reference quotes).
-        if (type === 'invoice' && !isStorno && ctx.doc.sourceQuoteNumber) {
-          doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor(themeColor(doc, 'muted'));
-          doc.text(
-            `${t(ctx.locale, 'reference_label')}: ${t(ctx.locale, 'quote_title')} ${ctx.doc.sourceQuoteNumber}`,
-            leftX, y, { width: PAGE.contentWidth }
-          );
-          y = doc.y + 6;
-          doc.fillColor(themeColor(doc, 'text'));
-        }
-        // Cancel + reissue trail (migration 114) — when this invoice
-        // replaces an earlier (cancelled) one, surface "Bezug: Ersetzt
-        // Rechnung R-XXXX vom DATE" so the customer (and auditors) can
-        // trace the chain. Rendered in the same grey-666 small-print
-        // style as the quote-source reference above. Suppressed on
-        // Storni (which carry their own cancelsInvoice reference).
-        if (type === 'invoice' && !isStorno && ctx.doc.replacesInvoice) {
-          const { number, issueDate } = ctx.doc.replacesInvoice;
-          doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor(themeColor(doc, 'muted'));
-          const datePart = issueDate ? ` ${t(ctx.locale, 'reference_dated', { date: formatDate(issueDate, ctx.dateFormat) })}` : '';
-          doc.text(
-            `${t(ctx.locale, 'reference_label')}: ${t(ctx.locale, 'reference_replaces')} ${t(ctx.locale, 'invoice_title')} ${number}${datePart}`,
-            leftX, y, { width: PAGE.contentWidth }
-          );
-          y = doc.y + 6;
-          doc.fillColor(themeColor(doc, 'text'));
-        }
-        // A reissued quote (#1451) names the quote it replaces the same
-        // way: "Bezug: Ersetzt Angebot Q-XXXX vom DATE".
-        if (type === 'quote' && ctx.doc.replacesQuote) {
-          const { number, issueDate } = ctx.doc.replacesQuote;
-          doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(10).fillColor(themeColor(doc, 'muted'));
-          const datePart = issueDate ? ` ${t(ctx.locale, 'reference_dated', { date: formatDate(issueDate, ctx.dateFormat) })}` : '';
-          doc.text(
-            `${t(ctx.locale, 'reference_label')}: ${t(ctx.locale, 'reference_replaces')} ${t(ctx.locale, 'quote_title')} ${number}${datePart}`,
-            leftX, y, { width: PAGE.contentWidth }
-          );
-          y = doc.y + 6;
-          doc.fillColor(themeColor(doc, 'text'));
-        }
 
         // ---- salutation + lead-in ------------------------------------
         // Personalised greeting when the customer record has an
@@ -1961,20 +2032,18 @@ function renderDocument(type, context) {
         // how many items rendered.
         y = doc.y;
 
-        // ---- pin totals + payment block to footer ---------------------
-        // The totals box + payment block ALWAYS render at the same
-        // distance from the page bottom regardless of how many line
-        // items rendered. Reserves below are conservative-but-tight:
-        // they reflect the actual measured block heights, with just
-        // enough breathing room that a wrapped line or extra Skonto
-        // row doesn't crash into the footer.
-        //   FOOTER_RESERVE       = 30  (one footer line ~12pt + ~18pt gap)
+        // ---- totals + payment block, right after the items ------------
+        // The closing blocks follow the table. We measure what they need and
+        // start a new page only when what is left of this one can't hold them
+        // (#1546). They used to be pinned to a fixed distance from the page
+        // bottom, which sent them to an otherwise empty page whenever the
+        // table ended below that anchor — and left a gap above it when the
+        // table ended well short.
         //   PAYMENT_BLOCK_HEIGHT = 80 with paymentTerm, 50 without
         //                          (header + 3-4 rows including the
         //                           skonto + skonto_amount lines)
         //   TOTALS_BLOCK_HEIGHT  = 90  (top divider + Net + Shipping +
         //                          VAT + middle divider + Total)
-        const FOOTER_RESERVE = 30;
         const PAYMENT_BLOCK_HEIGHT = ctx.paymentTerm ? 80 : 50;
         let TOTALS_BLOCK_HEIGHT  = 90;
         // A free-text VAT note (#794) adds a wrapped row under the MwSt. line —
@@ -1988,19 +2057,28 @@ function renderDocument(type, context) {
         }
         // No MwSt. row for a business that isn't VAT-registered: one row less.
         if (vatRowHidden(ctx)) TOTALS_BLOCK_HEIGHT -= 16;
-        const desiredPaymentY = PAGE.height - PAGE.marginBottom - FOOTER_RESERVE - PAYMENT_BLOCK_HEIGHT;
-        const desiredTotalsY  = desiredPaymentY - 12 - TOTALS_BLOCK_HEIGHT;
-
-        // If line items used more space than the totals anchor allows,
-        // advance to a new page before drawing totals — keeps the
-        // bottom block at a CONSTANT position from the footer on
-        // whatever page it lands on.
-        if (y > desiredTotalsY) {
-          doc.addPage();
+        // The outro sits between the totals and the payment block, so it
+        // counts towards the height the three need together.
+        let outroHeight = 0;
+        if (ctx.doc.outroText) {
+          doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(body.size);
+          outroHeight = doc.heightOfString(ctx.doc.outroText,
+            { width: PAGE.contentWidth, ...body.options }) + 12;
+          doc.fontSize(10);
         }
-        // Always reset to the fixed anchor — independent of where the
-        // table ended on the page.
-        y = desiredTotalsY;
+        const closingHeight = TOTALS_BLOCK_HEIGHT + outroHeight
+          + (isStorno ? 0 : 12 + PAYMENT_BLOCK_HEIGHT);
+
+        // The footer sits above the bottom margin, so the content has to stop
+        // short of it.
+        const footerReserve = footerHeight(doc, ctx.issuer);
+        const contentBottom = PAGE.height - PAGE.marginBottom - footerReserve - FOOTER_AIR;
+        const bandTop = PAGE.height - QR_BILL_BAND_HEIGHT;
+        if (y + closingHeight > contentBottom) {
+          doc.addPage();
+          y = PAGE.marginTop;
+        }
+        doc.y = y;
 
         // ---- totals box (right-aligned) -------------------------------
         y = drawTotals(doc, ctx, leftX, y, PAGE.contentWidth);
@@ -2014,36 +2092,52 @@ function renderDocument(type, context) {
         }
 
         // ---- payment conditions + IBAN block --------------------------
-        // Pin the payment block to the fixed anchor too — the totals
-        // box can end short of it (e.g. when only Net + Total render
-        // with no shipping/VAT), so we snap back unconditionally.
         // Suppressed on Stornorechnungen: a cancellation document is
         // not a payment instrument — no Zahlungsbedingungen, no IBAN,
         // no Skonto. Customers reading a Storno expect total clarity
         // that this is the REVERSAL of an obligation, not a new one.
         if (!isStorno) {
-          y = desiredPaymentY;
-          y = drawPaymentBlock(doc, ctx, leftX, y, PAGE.contentWidth);
+          y = drawPaymentBlock(doc, ctx, leftX, y + 12, PAGE.contentWidth);
         }
+
+        // Whether the QR-bill can share this page is answered here, where the
+        // closing blocks have already been drawn and `y` is where they really
+        // ended — not from the estimate above, which is deliberately generous
+        // and would lay a long payment block over the footer (#1546). The slip
+        // is built first so a page is never laid out around one that then
+        // turns out not to render.
+        const qrBill = type === 'invoice' && !isStorno && !isMahnung
+          ? buildSwissQrBill(ctx)
+          : null;
+        const slipSharesPage = !!qrBill
+          && y + FOOTER_AIR <= bandTop - SLIP_BAND_FOOTER_GAP - footerReserve;
 
         // ---- folding marks (left edge) --------------------------------
         drawFoldingMarks(doc, context.theme ? ctx.theme.foldingMarks : ctx.issuer?.foldingMarks);
 
         // ---- footer ---------------------------------------------------
-        drawFooter(doc, ctx.issuer, ctx.locale);
+        // On a page that also carries the QR-bill the footer moves up, so it
+        // stays out of the slip's reserved area.
+        drawFooter(doc, ctx.issuer, ctx.locale,
+          slipSharesPage ? { bottomLimit: bandTop - SLIP_BAND_FOOTER_GAP } : {});
 
-        // ---- payment QR on fresh page (invoices only) -----------------
+        // ---- payment QR (invoices only) -------------------------------
         // Two paths, mutually exclusive:
         //   - 'swiss' → SwissQRBill payment slip (CHF / EUR within CH/LI)
         //   - 'epc'   → SEPA EPC069-12 QR code (EUR-only, every SEPA bank)
-        // Both append a fresh page; 'none' is a no-op.
+        // Each takes a page of its own only when the last content page has
+        // no room for it; 'none' is a no-op.
         // Suppressed on Stornorechnungen — negative-amount QR codes
         // aren't a defined construct in either spec.
         if (type === 'invoice' && !isStorno && !isMahnung) {
-          if (ctx.qrFormat === 'swiss') {
-            appendSwissQrBill(doc, ctx);
+          if (qrBill) {
+            attachSwissQrBill(doc, qrBill, { attachToCurrentPage: slipSharesPage });
           } else if (ctx.qrFormat === 'epc') {
-            await appendEpcQr(doc, ctx);
+            // The EPC block has no reserved area of its own: it shares the
+            // page whenever it fits above the footer.
+            const epcTop = y + 24;
+            const sharesPage = epcTop + EPC_BLOCK_HEIGHT <= contentBottom;
+            await appendEpcQr(doc, ctx, sharesPage ? { top: epcTop } : {});
           }
         }
 
@@ -2057,7 +2151,7 @@ function renderDocument(type, context) {
           // Stamp on every page including single-page documents: "Page 1 of
           // 1" tells the recipient the document is complete. The payment-slip
           // page is left alone and not counted (#1445).
-          stampPageNumbers(doc, ctx.locale);
+          stampPageNumbers(doc, ctx.locale, { docLabel: docNumberForDisplay || null });
         } catch (err) {
           const logger = require('../utils/logger');
           logger.warn('Failed to stamp page numbers on PDF', { err: err.message });
