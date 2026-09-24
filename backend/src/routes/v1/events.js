@@ -1695,7 +1695,7 @@ router.get(
  *           videos, RAW (e.g. DNG) and HEIC/HEIF are always served at original
  *           size, because re-encoding them would ship bytes that disagree with
  *           their filename and Content-Type. A photo already inside the box is
- *           streamed as stored rather than buffered and re-encoded. A rendition
+ *           returned byte-for-byte rather than re-encoded. A rendition
  *           is never watermarked, whatever the gallery's watermark setting says.
  *
  *
