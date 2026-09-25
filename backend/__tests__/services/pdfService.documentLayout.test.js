@@ -499,6 +499,34 @@ describe('references', () => {
     expect(reference.y).toBeLessThan(findExact(calls, t('de', 'storno_title')).y);
   });
 
+  test('a prefixed quote number still sits in the block, not off to the left', async () => {
+    // Real document numbers carry a business prefix ("LBM-Q-2026-0010"), which
+    // pushes "Angebot …" past a value column sized for dates. It belongs in the
+    // block regardless: it takes the block's full width on one line.
+    const drawn = recordDrawing();
+    await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)], {}, {
+      invoiceNumber: 'LBM-R-2026-0009', sourceQuoteNumber: 'LBM-Q-2026-0010',
+    }));
+    const calls = drawn();
+
+    const reference = find(calls, 'LBM-Q-2026-0010');
+    const anyMetaRow = findExact(calls, `${t('de', 'invoice_number_label')}:`);
+    expect(reference.x).toBe(anyMetaRow.x);
+  });
+
+  test('a reference too long even for the block drops under the address field', async () => {
+    const drawn = recordDrawing();
+    await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)], {}, {
+      kind: 'storno', invoiceNumber: 'LBM-S-2026-0003',
+      cancelsInvoice: { number: 'LBM-R-2026-0009', issueDate: '2026-10-09' },
+    }));
+    const calls = drawn();
+
+    const reference = find(calls, t('de', 'reference_cancels'));
+    const anyMetaRow = findExact(calls, `${t('de', 'invoice_number_label')}:`);
+    expect(reference.x).toBeLessThan(anyMetaRow.x);
+  });
+
   test('an invoice names the quote it came from', async () => {
     const drawn = recordDrawing();
     await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)], {}, { sourceQuoteNumber: 'Q-2026-0044' }));
