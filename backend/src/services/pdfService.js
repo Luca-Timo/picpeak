@@ -478,9 +478,12 @@ function measureLabelGrid(doc, rows, right, { gap = 8, leftLimit = null, anchorL
     return { gap, labelW, valueW: Math.max(valueW, right - valueX), valueX, labelX: anchorLeft, right };
   }
   // The column may never reach into the address field: the sender block sits
-  // level with it.
+  // level with it. It is the VALUE column that gives way — labels are drawn
+  // without wrapping, so narrowing their column just runs them into the values
+  // beside them, and a long website or e-mail address would do exactly that.
+  // A value that no longer fits is cut with an ellipsis instead.
   if (leftLimit != null && right - (labelW + gap + valueW) < leftLimit) {
-    labelW = Math.max(40, right - leftLimit - gap - valueW);
+    valueW = Math.max(60, right - leftLimit - gap - labelW);
   }
   const valueX = right - valueW;
   return { gap, labelW, valueW, valueX, labelX: valueX - gap - labelW, right };
@@ -493,7 +496,9 @@ function measureLabelGrid(doc, rows, right, { gap = 8, leftLimit = null, anchorL
  */
 function drawGridRow(doc, grid, label, value, y) {
   doc.text(`${label}:`, grid.labelX, y, { width: grid.labelW, align: 'left', lineBreak: false });
-  doc.text(String(value), grid.valueX, y, { width: grid.valueW, align: 'left', lineBreak: false });
+  doc.text(String(value), grid.valueX, y, {
+    width: grid.valueW, align: 'left', lineBreak: false, ellipsis: true,
+  });
 }
 
 function drawIssuerBlock(doc, issuer, x, y, width, locale, { grid = null } = {}) {
@@ -960,18 +965,18 @@ function drawLineItems(doc, ctx, { reserveOnLastPage = 0 } = {}) {
       columns: showDiscount
         ? [
           { text: posLabel,                                          width: widths[0], align: 'left'  },
-          { text: descText,                                          width: widths[1], align: 'left',  color: numericColor },
-          { text: qtyText,                                           width: widths[2], align: 'right', color: numericColor },
-          { text: subItemPriceless || isDiscount ? '' : `${stripTrailingZeros(li.discountPercent)}%`, width: widths[3], align: 'right', color: numericColor },
-          { text: unitText,                                          width: widths[4], align: 'right', color: numericColor },
-          { text: lineTotalText,                                     width: widths[5], align: 'right', color: numericColor },
+          { text: descText,                                          width: widths[1], align: 'left',  textColor: numericColor },
+          { text: qtyText,                                           width: widths[2], align: 'right', textColor: numericColor },
+          { text: subItemPriceless || isDiscount ? '' : `${stripTrailingZeros(li.discountPercent)}%`, width: widths[3], align: 'right', textColor: numericColor },
+          { text: unitText,                                          width: widths[4], align: 'right', textColor: numericColor },
+          { text: lineTotalText,                                     width: widths[5], align: 'right', textColor: numericColor },
         ]
         : [
           { text: posLabel,                                          width: widths[0], align: 'left'  },
-          { text: descText,                                          width: widths[1], align: 'left',  color: numericColor },
-          { text: qtyText,                                           width: widths[2], align: 'right', color: numericColor },
-          { text: unitText,                                          width: widths[3], align: 'right', color: numericColor },
-          { text: lineTotalText,                                     width: widths[4], align: 'right', color: numericColor },
+          { text: descText,                                          width: widths[1], align: 'left',  textColor: numericColor },
+          { text: qtyText,                                           width: widths[2], align: 'right', textColor: numericColor },
+          { text: unitText,                                          width: widths[3], align: 'right', textColor: numericColor },
+          { text: lineTotalText,                                     width: widths[4], align: 'right', textColor: numericColor },
         ],
     };
   };
@@ -990,7 +995,7 @@ function drawLineItems(doc, ctx, { reserveOnLastPage = 0 } = {}) {
     columns: showDiscount
       ? [
         { text: '',   width: widths[0], align: 'left' },
-        { text,       width: widths[1], align: 'left', color: themeColor(doc, 'muted'), fontName: italicFont },
+        { text,       width: widths[1], align: 'left', textColor: themeColor(doc, 'muted'), fontName: italicFont },
         { text: '',   width: widths[2], align: 'right' },
         { text: '',   width: widths[3], align: 'right' },
         { text: '',   width: widths[4], align: 'right' },
@@ -998,7 +1003,7 @@ function drawLineItems(doc, ctx, { reserveOnLastPage = 0 } = {}) {
       ]
       : [
         { text: '',   width: widths[0], align: 'left' },
-        { text,       width: widths[1], align: 'left', color: themeColor(doc, 'muted'), fontName: italicFont },
+        { text,       width: widths[1], align: 'left', textColor: themeColor(doc, 'muted'), fontName: italicFont },
         { text: '',   width: widths[2], align: 'right' },
         { text: '',   width: widths[3], align: 'right' },
         { text: '',   width: widths[4], align: 'right' },
@@ -1110,59 +1115,105 @@ function drawLineItems(doc, ctx, { reserveOnLastPage = 0 } = {}) {
   const headerHeight = measureTableRow(doc, headerRow, defaults);
   const carryHeight = measureTableRow(doc, carryRow(0, 'table_carry_forward'), defaults);
   for (const group of groups) {
-    group.height = group.rows.reduce((sum, row) => sum + measureTableRow(doc, row, defaults), 0);
+    group.rowHeights = group.rows.map((row) => measureTableRow(doc, row, defaults));
+    group.height = group.rowHeights.reduce((sum, height) => sum + height, 0);
   }
 
   const pageBottom = doc.page.height - doc.page.margins.bottom;
+
+  // What the planner places. A group normally moves as one, so a parent, its
+  // sub-items and their comments keep the single divider they share. A group
+  // taller than a page cannot move as one: its rows are placed individually
+  // instead, which costs that group its shared divider but keeps the
+  // carry-over rows correct. Rows are far shorter than a page — the API caps a
+  // description at 1000 characters and a comment at 2000.
+  const wholePage = pageBottom - P.marginTop - headerHeight - carryHeight;
+  const units = [];
+  for (const group of groups) {
+    if (group.height <= wholePage) {
+      units.push({ rows: group.rows, height: group.height, netMinor: group.netMinor });
+      continue;
+    }
+    group.rows.forEach((row, i) => units.push({
+      rows: [row],
+      height: group.rowHeights[i],
+      // The line total sits on the group's first row, so that is where the
+      // carry-over starts counting it.
+      netMinor: i === 0 ? group.netMinor : 0,
+    }));
+  }
+
   const pages = [];
   let index = 0;
   let pageTop = doc.y;
+  let startOnNewPage = false;
   let carryIn = null;
   let runningNet = 0;
-  while (index < groups.length) {
-    let y = pageTop + headerHeight + (carryIn != null ? carryHeight : 0);
-    const remaining = groups.slice(index).reduce((sum, group) => sum + group.height, 0);
+  while (index < units.length) {
+    const top = pageTop + headerHeight + (carryIn != null ? carryHeight : 0);
+    const remaining = units.slice(index).reduce((sum, unit) => sum + unit.height, 0);
     // The last page is the one everything left fits on beside the reserve; any
     // earlier page has to keep room for the carry-over row that closes it.
-    const isLast = y + remaining <= pageBottom - reserveOnLastPage;
+    const isLast = top + remaining <= pageBottom - reserveOnLastPage;
     const limit = isLast ? pageBottom - reserveOnLastPage : pageBottom - carryHeight;
-    // A page that can't be the last one has to leave a group for the next,
+    // A page that can't be the last one has to leave a unit for the next,
     // otherwise it becomes the last page after all — with the reserve already
     // spent on line items and the pinned blocks nowhere to go.
-    const ceiling = isLast ? groups.length : groups.length - 1;
+    const ceiling = isLast ? units.length : units.length - 1;
     const taken = [];
-    while (index < ceiling && y + groups[index].height <= limit) {
-      y += groups[index].height;
-      runningNet += groups[index].netMinor;
-      taken.push(groups[index]);
+    let y = top;
+    // `<`, not `<=`: the library breaks a row whose bottom REACHES the bottom
+    // margin (`rowY + rowHeight >= bottom`), so equality is a fit here and a
+    // break there — which is exactly the disagreement this planner exists to
+    // avoid.
+    while (index < ceiling && y + units[index].height < limit) {
+      y += units[index].height;
+      runningNet += units[index].netMinor;
+      taken.push(units[index]);
       index += 1;
     }
     if (taken.length === 0) {
-      // Nothing fits: a line item taller than a whole page, or a first page
-      // whose remaining space can't hold even the first group. Place it and let
-      // the library's own break carry any overflow, rather than looping forever
-      // on a group that can never fit.
-      runningNet += groups[index].netMinor;
-      taken.push(groups[index]);
+      if (pageTop > P.marginTop) {
+        // Nothing fits in what is left of this page — a long intro, or a
+        // caller that only guaranteed a few points. Start the chunk on a fresh
+        // page rather than handing the library a unit it cannot place: it
+        // would draw the header here, break to a page of its own and repeat
+        // the header there, leaving an orphan header behind and the carry-over
+        // pinned to the foot of a page carrying nothing.
+        pageTop = P.marginTop;
+        startOnNewPage = true;
+        continue;
+      }
+      // At the top of a page and still too tall: a single row longer than the
+      // page. Place it and let the library carry the overflow, rather than
+      // looping forever on a unit that can never fit.
+      runningNet += units[index].netMinor;
+      taken.push(units[index]);
       index += 1;
     }
-    const more = index < groups.length;
-    pages.push({ groups: taken, carryIn, carryOut: more ? runningNet : null });
+    const more = index < units.length;
+    pages.push({
+      units: taken,
+      carryIn,
+      carryOut: more ? runningNet : null,
+      newPage: startOnNewPage || pages.length > 0,
+    });
+    startOnNewPage = false;
     carryIn = more ? runningNet : null;
     pageTop = P.marginTop;
   }
   // No line items at all: the header still renders, as it always did.
-  if (pages.length === 0) pages.push({ groups: [], carryIn: null, carryOut: null });
+  if (pages.length === 0) pages.push({ units: [], carryIn: null, carryOut: null, newPage: false });
 
-  pages.forEach((page, n) => {
-    if (n > 0) {
+  pages.forEach((page) => {
+    if (page.newPage) {
       doc.addPage();
       doc.x = P.marginLeft;
       doc.y = P.marginTop;
     }
     const rows = [headerRow];
     if (page.carryIn != null) rows.push(carryRow(page.carryIn, 'table_carry_brought'));
-    for (const group of page.groups) rows.push(...group.rows);
+    for (const unit of page.units) rows.push(...unit.rows);
     new Table({ width: contentWidth, rows }).attachTo(doc);
     if (page.carryOut != null) {
       // The row that closes a continuing page is pinned to its foot, like the
@@ -1548,7 +1599,7 @@ function measureClosingHeight(ctx, PAGE, options) {
     // table a little early; too small a one would draw the pinned blocks over
     // the footer.
     require('../utils/logger').warn('Could not measure the closing blocks; using a fallback height', { err: err.message });
-    return 260;
+    return { totals: 110, outro: 0, payment: 140, total: 260 };
   }
 }
 
@@ -1569,17 +1620,29 @@ function measureClosingBlocks(ctx, PAGE, { isStorno }) {
   scrap._fonts = registerThemeFonts(scrap, ctx.issuer, ctx.theme);
   const body = bodyText(scrap);
   const top = PAGE.marginTop;
-  let y = drawTotals(scrap, ctx, PAGE.marginLeft, top, PAGE.contentWidth);
+  // Each block is measured on its own as well as together: pinned, only the
+  // total matters, but a closing text too tall to pin has to flow, and then
+  // each block needs to be placed whole. drawTotals and drawPaymentBlock draw
+  // every cell of a row at an explicit y, so a block that straddles a page
+  // break leaves single cells stranded on pages of their own (#1546).
+  const afterTotals = drawTotals(scrap, ctx, PAGE.marginLeft, top, PAGE.contentWidth);
+  let y = afterTotals;
   if (ctx.doc.outroText) {
     scrap.font(scrap._fonts.body).fontSize(body.size);
     scrap.text(ctx.doc.outroText, PAGE.marginLeft, y, { width: PAGE.contentWidth, ...body.options });
     y = scrap.y + 12;
-    scrap.fontSize(10);
+    scrap.fontSize(body.size);
   }
+  const afterOutro = y;
   if (!isStorno) y = drawPaymentBlock(scrap, ctx, PAGE.marginLeft, y + 12, PAGE.contentWidth);
   // Deliberately not ended: nothing reads the bytes, and ending it would embed
   // the fonts and serialise a whole document we throw away.
-  return Math.max(0, y - top);
+  return {
+    totals: Math.max(0, afterTotals - top),
+    outro: Math.max(0, afterOutro - afterTotals),
+    payment: isStorno ? 0 : Math.max(0, y - afterOutro),
+    total: Math.max(0, y - top),
+  };
 }
 
 function drawFooter(doc, issuer, locale, { bottomLimit = null } = {}) {
@@ -1632,7 +1695,7 @@ function drawFooter(doc, issuer, locale, { bottomLimit = null } = {}) {
     });
   }
   // Reset fill colour so any code that runs after the footer (e.g.
-  // the appendSwissQrBill page) doesn't inherit the grey.
+  // the QR-bill page) doesn't inherit the grey.
   doc.fillColor(themeColor(doc, 'text'));
 }
 
@@ -1704,6 +1767,15 @@ function slipBandIsClear(doc) {
  * page of its own. Returns whether it landed.
  */
 function attachSwissQrBill(doc, qr, { attachToCurrentPage = false } = {}) {
+  // swissqrbill draws every field of the slip at an explicit y inside the
+  // reserved band, and the band reaches the very bottom of the sheet. With a
+  // bottom margin of 28-30mm (MARGIN_BOUNDS allows 30) PDFKit breaks the page
+  // under the library's feet and the amount, "Konto / Zahlbar an", the IBAN and
+  // "Zahlbar durch" land on pages of their own — a payment part with no amount
+  // on it. Its own isSpaceSufficient can't see this: it compares against the
+  // page height, not the margin. Zeroing the bottom margin for the draw is the
+  // same trick stampPageNumbers uses to write into the margin band.
+  const restoreBottom = doc.page.margins.bottom;
   if (attachToCurrentPage) {
     // The caller confirmed the band with slipBandIsClear before it placed the
     // footer; attachTo() measures the free space from `doc.y`, so put the
@@ -1715,6 +1787,7 @@ function attachSwissQrBill(doc, qr, { attachToCurrentPage = false } = {}) {
     markPaymentSlipPage(doc);
   }
   try {
+    doc.page.margins.bottom = 0;
     qr.attachTo(doc);
     return true;
   } catch (err) {
@@ -1726,6 +1799,8 @@ function attachSwissQrBill(doc, qr, { attachToCurrentPage = false } = {}) {
     logger.warn('SwissQRBill render failed; emitting invoice without QR section', { err: err.message });
     reportFinding(doc, { code: 'QR_MISSING', severity: 'warning' });
     return false;
+  } finally {
+    doc.page.margins.bottom = restoreBottom;
   }
 }
 
@@ -2317,7 +2392,7 @@ function renderDocument(type, context) {
           doc.text(ctx.doc.introText, leftX, y, { width: PAGE.contentWidth, ...body.options });
           y = doc.y + 12;
         }
-        doc.fontSize(10);
+        doc.fontSize(body.size);
 
         // ---- line items table ----------------------------------------
         // Small top padding — tight against the lead-in text since the
@@ -2336,7 +2411,8 @@ function renderDocument(type, context) {
         // Measured before the table draws, by rendering them once into a
         // document that is thrown away: they are pinned to the foot of the last
         // page, so the table has to stop exactly that far short (#1546).
-        const closingHeight = measureClosingHeight(ctx, PAGE, { isStorno });
+        const closing = measureClosingHeight(ctx, PAGE, { isStorno });
+        const closingHeight = closing.total;
 
         // Where the closing blocks sit: above the footer, or above the QR-bill's
         // reserved band when the slip shares the page. Both anchors are fixed —
@@ -2391,25 +2467,42 @@ function renderDocument(type, context) {
         const slipSharesPage = !!qrBill && pinned && contentTop <= closingTop(true)
           && slipBandIsClear(doc);
         y = pinned ? closingTop(slipSharesPage) : contentTop;
-        if (!pinned) {
-          // Flowing, because the blocks are taller than the page. Raise the
-          // bottom margin for the rest of them so PDFKit's own break happens
-          // above the footer band rather than on it — on this page and on any
-          // it adds. Restored below, so only the closing blocks are affected.
-          const clear = PAGE.marginBottom + footerReserve + FOOTER_AIR;
-          doc.page.margins.bottom = clear;
-          doc.options.margins.bottom = clear;
-        }
+        // Flowing, because the blocks together are taller than the page. Only
+        // the outro may actually flow: the totals and the payment block draw
+        // every cell of a row at an explicit y, so PDFKit breaks the page
+        // between two cells of the same row and strands them on pages of their
+        // own. Each of those blocks is therefore placed whole, on a fresh page
+        // when this one can't hold it (#1546).
+        const flowBottom = PAGE.height - PAGE.marginBottom - footerReserve - FOOTER_AIR;
+        const startBlock = (height) => {
+          if (y + height <= flowBottom) return;
+          doc.addPage();
+          y = PAGE.marginTop;
+        };
+        if (!pinned) startBlock(closing.totals);
 
         // ---- totals box (right-aligned) -------------------------------
         y = drawTotals(doc, ctx, leftX, y, PAGE.contentWidth);
 
         // ---- outro text -----------------------------------------------
+        // The one block that may run over a page: it is a single wrapped
+        // paragraph, so PDFKit breaks it between lines. The raised bottom
+        // margin keeps that break above the footer band, on this page and on
+        // any it adds.
         if (ctx.doc.outroText) {
+          const clear = PAGE.marginBottom + footerReserve + FOOTER_AIR;
+          if (!pinned) {
+            doc.page.margins.bottom = clear;
+            doc.options.margins.bottom = clear;
+          }
           doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(body.size).fillColor(themeColor(doc, 'text'));
           doc.text(ctx.doc.outroText, leftX, y, { width: PAGE.contentWidth, ...body.options });
           y = doc.y + 12;
-          doc.fontSize(10);
+          doc.fontSize(body.size);
+          if (!pinned) {
+            doc.page.margins.bottom = PAGE.marginBottom;
+            doc.options.margins.bottom = PAGE.marginBottom;
+          }
         }
 
         // ---- payment conditions + IBAN block --------------------------
@@ -2418,12 +2511,8 @@ function renderDocument(type, context) {
         // no Skonto. Customers reading a Storno expect total clarity
         // that this is the REVERSAL of an obligation, not a new one.
         if (!isStorno) {
+          if (!pinned) startBlock(closing.payment + 12);
           y = drawPaymentBlock(doc, ctx, leftX, y + 12, PAGE.contentWidth);
-        }
-
-        if (!pinned) {
-          doc.page.margins.bottom = PAGE.marginBottom;
-          doc.options.margins.bottom = PAGE.marginBottom;
         }
 
         // ---- folding marks (left edge) --------------------------------
