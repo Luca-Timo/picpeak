@@ -310,7 +310,7 @@ export const CrmSettingsPage: React.FC = () => {
             className="w-full px-3 py-2 rounded-lg border border-line-strong bg-shell text-heading"
           />
           <p className="mt-1 text-xs text-muted">
-            {t('crmSettings.crm_invoices_vat_note_text.help', 'Printed directly under the MwSt. line on every invoice PDF. If the business isn\'t VAT-registered (Settings → Accounting), it replaces that line on invoices and quotes without VAT. Leave empty to hide. Please confirm the exact wording with your tax advisor.')}
+            {t('crmSettings.crm_invoices_vat_note_text.help', 'Printed directly under the MwSt. line on every invoice PDF. If the business isn\'t VAT-registered (Settings → Accounting), it replaces that line on invoices without VAT. Quotes never carry it — an offer is not the tax document. Leave empty to hide. Please confirm the exact wording with your tax advisor.')}
           </p>
         </div>
 
