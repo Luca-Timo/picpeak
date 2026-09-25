@@ -90,6 +90,7 @@ function recordDrawing() {
       x: typeof x === 'number' ? x : null,
       y: typeof y === 'number' ? y : null,
       size: this._fontSize,
+      page: this.bufferedPageRange ? this.bufferedPageRange().count : null,
       doc: this,
     });
     return original.apply(this, arguments);
@@ -101,6 +102,26 @@ const find = (calls, needle) => calls.find((c) => c.text.includes(needle));
 /** For a word that is also part of a label — "Rechnung" inside "Rechnungsnummer". */
 const findExact = (calls, text) => calls.find((c) => c.text === text);
 const pageCount = async (buffer) => (await PdfLib.load(buffer)).getPageCount();
+
+/**
+ * Every page the line table's own row break inserted behind the planner's back.
+ * The planner exists to hand the library a table that fits, so this must stay
+ * empty: a break it didn't plan strands an orphan header, desyncs the page
+ * numbering and drops the carry-over row (#1546 review).
+ */
+function recordTableBreaks() {
+  const { Table } = require('swissqrbill/pdf');
+  const original = Table.prototype.attachTo;
+  const inserted = [];
+  jest.spyOn(Table.prototype, 'attachTo').mockImplementation(function attach(doc, ...rest) {
+    const before = doc.bufferedPageRange().count;
+    const result = original.call(this, doc, ...rest);
+    const after = doc.bufferedPageRange().count;
+    if (after !== before) inserted.push({ before, after });
+    return result;
+  });
+  return () => inserted;
+}
 
 const netLabel = t('de', 'totals_net');
 const skontoLabel = t('de', 'skonto_amount_label');
@@ -209,6 +230,77 @@ describe('the type scale', () => {
     expect(sizeOf(large, netLabel)).toBe(12);
     expect(sizeOf(large, t('de', 'payment_conditions'))).toBe(12);
     expect(sizeOf(large, issuer.footerLine)).toBe(10);
+  });
+});
+
+describe('the table planner', () => {
+  const wordy = (n) => Array.from({ length: n }, (_, i) => `Wort${i}`).join(' ');
+  const bulky = {
+    quantity: 1, discountPercent: 0, unitPriceMinor: 120000, lineTotalMinor: 120000,
+    description: wordy(45), detailsText: 'Ein Kommentar zur Position.',
+  };
+
+  test('never lets the library insert a page break of its own', async () => {
+    const breaks = recordTableBreaks();
+    // The shapes that used to provoke one: a long intro that leaves too little
+    // room for the first group, a table that spans pages, and a single group
+    // bigger than a page.
+    await pdfService.renderInvoiceToBuffer(invoice([bulky, shortItem(2), shortItem(3)], {}, { introText: wordy(470) }));
+    await pdfService.renderInvoiceToBuffer(invoice(Array.from({ length: 60 }, (_, i) => shortItem(i + 1))));
+    await pdfService.renderInvoiceToBuffer(invoice([
+      { ...bulky, description: wordy(160), detailsText: wordy(300) }, shortItem(2),
+    ]));
+    expect(breaks()).toEqual([]);
+  });
+
+  test('a long intro does not cost a page', async () => {
+    // Measured against main: 440-500 words came out at 2 pages there. The
+    // planner used to hand the library a group that could not fit what was
+    // left of page 1, which drew a header, broke to a page of its own and
+    // repeated the header — three pages, the first ending in an orphan header.
+    for (const words of [440, 470, 500]) {
+      const buffer = await pdfService.renderInvoiceToBuffer(
+        invoice([bulky, shortItem(2), shortItem(3), shortItem(4)], {}, { introText: wordy(words) }));
+      expect(await pageCount(buffer)).toBe(2);
+    }
+  });
+
+  test('keeps the carry-over when one item is taller than a page', async () => {
+    const huge = { ...bulky, description: wordy(160), detailsText: wordy(400) };
+    const breaks = recordTableBreaks();
+    const drawn = recordDrawing();
+    await pdfService.renderInvoiceToBuffer(invoice([huge, shortItem(2), shortItem(3)]));
+    // Its rows are placed individually rather than as one group, so every page
+    // it spans still closes and opens with the running figure — a pair per
+    // break — and the library never has to break it itself.
+    const rows = findAll(drawn(), t('de', 'table_carry_forward'));
+    expect(breaks()).toEqual([]);
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    expect(rows.length % 2).toBe(0);
+  });
+});
+
+describe('the unpinned closing blocks', () => {
+  const outro = 'Lorem ipsum dolor sit amet, consetetur sadipscing elitr sed diam nonumy eirmod. '.repeat(63);
+
+  test('never split a totals or payment row across a page', async () => {
+    // drawTotals and drawPaymentBlock draw every cell of a row at an explicit
+    // y. When the block flowed, PDFKit broke the page between two cells and
+    // stranded them on pages of their own — "Gesamtbetrag" on one page, "CHF"
+    // on the next, the amount on a third (#1546 review).
+    for (const count of [19, 20, 21]) {
+      jest.restoreAllMocks();
+      const drawn = recordDrawing();
+      await pdfService.renderInvoiceToBuffer(
+        invoice(Array.from({ length: count }, (_, i) => shortItem(i + 1)), {}, { outroText: outro }));
+      const calls = drawn();
+      for (const label of [netLabel, t('de', 'totals_shipping'), t('de', 'totals_vat'), t('de', 'totals_grand')]) {
+        const row = find(calls, label);
+        if (!row) continue;
+        const cells = calls.filter((c) => c.y === row.y);
+        expect(new Set(cells.map((c) => c.page)).size).toBe(1);
+      }
+    }
   });
 });
 
@@ -351,6 +443,18 @@ describe('the Swiss QR-bill', () => {
     // The draw used to sit inside the same try as the construction. It must
     // stay wrapped: the admin gets an invoice without a QR, not no invoice.
     const buffer = await pdfService.renderInvoiceToBuffer(swiss([longItem(1), longItem(2), longItem(3)]));
+    expect(await pageCount(buffer)).toBe(2);
+  });
+
+  test('keeps its own fields off extra pages at a wide bottom margin', async () => {
+    // The slip draws every field at an explicit y inside its band, and the band
+    // reaches the bottom edge. At the 30 mm bottom margin the theme allows,
+    // PDFKit used to break the page under the library and scatter the amount,
+    // the IBAN and "Zahlbar durch" onto pages of their own (#1546 review).
+    const base = builtInTheme('invoice');
+    const theme = { ...base, layout: { ...base.layout, margins: { left: 20, right: 15, bottom: 30 } } };
+    const buffer = await pdfService.renderInvoiceToBuffer(
+      invoice([shortItem(1), shortItem(2), shortItem(3)], { qrFormat: 'swiss', theme }));
     expect(await pageCount(buffer)).toBe(2);
   });
 
