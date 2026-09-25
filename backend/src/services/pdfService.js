@@ -2334,18 +2334,37 @@ function renderDocument(type, context) {
         // between header and body nor everything crowded against the top.
         doc.font(doc._fonts ? doc._fonts.body : FONT_BODY).fontSize(letterhead.size).fillColor(themeColor(doc, 'text'));
         const referenceLabel = t(ctx.locale, 'reference_label');
-        const besideField = [...metaRows];
+        // The block's full width, label column included.
+        const blockWidth = metaRight - grid.labelX;
+        const besideField = metaRows.map(([label, value]) => [label, value, false]);
         const underField = [];
         references.forEach((value) => {
-          if (doc.widthOfString(value) + 2 <= grid.valueW) besideField.push([referenceLabel, value]);
-          else underField.push([referenceLabel, value]);
+          // A reference is prose, not a figure, so it outruns a value column
+          // sized for dates and document numbers as soon as the numbers carry a
+          // prefix ("Bezug: Angebot LBM-Q-2026-0010"). It still belongs in the
+          // block: it takes the block's whole width on one line instead of the
+          // value column alone. Only a reference too long even for that — a
+          // Storno's "Storno zu Rechnung … vom …" — drops to a full-width row
+          // under the address field.
+          if (doc.widthOfString(value) + 2 <= grid.valueW) {
+            besideField.push([referenceLabel, value, false]);
+          } else if (doc.widthOfString(`${referenceLabel}: ${value}`) + 2 <= blockWidth) {
+            besideField.push([referenceLabel, value, true]);
+          } else {
+            underField.push([referenceLabel, value]);
+          }
         });
 
         let y = windowOn
           ? Math.max(issuerEndY + 12, windowBottom - besideField.length * letterhead.leading)
           : Math.max(issuerEndY, recipientEndY) + 6;
-        besideField.forEach(([label, value]) => {
-          drawGridRow(doc, grid, label, value, y);
+        besideField.forEach(([label, value, wide]) => {
+          if (wide) {
+            doc.text(`${label}: ${value}`, grid.labelX, y,
+              { width: blockWidth, align: 'left', lineBreak: false });
+          } else {
+            drawGridRow(doc, grid, label, value, y);
+          }
           y += letterhead.leading;
         });
 
