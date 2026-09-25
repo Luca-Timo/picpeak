@@ -7883,7 +7883,7 @@
       "note": "In Worten ausweisen („entspricht Rechnungsdatum“)",
       "repeat": "Datum erneut ausgeben",
       "omit": "Zeile weglassen",
-      "help": "Gilt nur, wenn das Leistungsdatum auf das Rechnungsdatum fällt; ein Leistungszeitraum wird immer ausgegeben. Das Steuerrecht in CH/LI und DE/AT verlangt den Leistungszeitpunkt auf der Rechnung — die Zeile wegzulassen ist eine Entscheidung, die du mit deinem Treuhänder bzw. Steuerberater abstimmen solltest."
+      "help": "Gilt nur, wenn das Leistungsdatum auf das Rechnungsdatum fällt; ein Leistungszeitraum wird immer ausgegeben. Das Steuerrecht in CH/LI und DE/AT verlangt den Leistungszeitpunkt auf der Rechnung — die Zeile wegzulassen ist eine Entscheidung, die Sie mit Ihrem Treuhänder bzw. Steuerberater abstimmen sollten."
     }
   },
   "quoteResponse": {

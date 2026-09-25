@@ -325,9 +325,9 @@ export const CrmSettingsPage: React.FC = () => {
           <select
             value={values.crm_invoices_service_date_mode ?? 'note'}
             onChange={(e) => setVal('crm_invoices_service_date_mode', e.target.value)}
-            className="w-full px-3 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+            className="w-full px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100"
           >
-            <option value="note">{t('crmSettings.crm_invoices_service_date_mode.note', 'State it in words ("corresponds to the invoice date")')}</option>
+            <option value="note">{t('crmSettings.crm_invoices_service_date_mode.note', 'State it in words ("same as invoice date")')}</option>
             <option value="repeat">{t('crmSettings.crm_invoices_service_date_mode.repeat', 'Print the date again')}</option>
             <option value="omit">{t('crmSettings.crm_invoices_service_date_mode.omit', 'Leave the row out')}</option>
           </select>

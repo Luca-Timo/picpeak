@@ -7879,7 +7879,7 @@
     },
     "crm_invoices_service_date_mode": {
       "label": "Service date equal to the invoice date",
-      "note": "State it in words (\"corresponds to the invoice date\")",
+      "note": "State it in words (\"same as invoice date\")",
       "repeat": "Print the date again",
       "omit": "Leave the row out",
       "help": "Only applies when the service date falls on the invoice date; a service period always prints. Tax law in CH/LI and DE/AT wants the time of supply on the invoice, so leaving the row out is a decision to confirm with your tax advisor."
