@@ -2351,11 +2351,19 @@ function renderDocument(type, context) {
         const referenceLabel = t(ctx.locale, 'reference_label');
         const besideField = [...metaRows];
         const underField = references.map((value) => [referenceLabel, value]);
+        // Directly under the document's own number: the two identifiers belong
+        // together, and the dates read as one group after them — number,
+        // reference, then Datum / Leistungsdatum / Fällig am.
+        let referenceRow = docNumberForDisplay ? 1 : 0;
         numberReferences.forEach(([label, value]) => {
           // A number that still outruns the column — an unusually long custom
           // format — falls back to a complete row rather than being cut.
-          if (doc.widthOfString(value) + 2 <= grid.valueW) besideField.push([label, value]);
-          else underField.push([label, value]);
+          if (doc.widthOfString(value) + 2 <= grid.valueW) {
+            besideField.splice(referenceRow, 0, [label, value]);
+            referenceRow += 1;
+          } else {
+            underField.push([label, value]);
+          }
         });
 
         let y = windowOn

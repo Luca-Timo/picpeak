@@ -517,7 +517,14 @@ describe('references', () => {
 
     expect(label.x).toBe(otherLabel.x);
     expect(value.x).toBe(otherValue.x);
-    expect(value.y).toBeGreaterThan(otherValue.y);
+
+    // Directly under the document's own number, before the dates: the two
+    // identifiers group together and the dates read as one block after them.
+    const dateLabel = findExact(calls, `${t('de', 'date')}:`);
+    const dueLabel = findExact(calls, `${t('de', 'due_date')}:`);
+    expect(label.y).toBeGreaterThan(otherLabel.y);
+    expect(label.y).toBeLessThan(dateLabel.y);
+    expect(dateLabel.y).toBeLessThan(dueLabel.y);
   });
 
   test('a dated reference is a complete row under the address field', async () => {
