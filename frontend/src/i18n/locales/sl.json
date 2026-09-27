@@ -7732,7 +7732,7 @@
     "crm_invoices_vat_note_text": {
       "label": "Opomba DDV / prosto besedilo na računih",
       "placeholder": "npr. Gemäß § 6 Abs. 1 Z 27 UStG 1994 wird keine Umsatzsteuer berechnet (Kleinunternehmer).",
-      "help": "Natisne se neposredno pod vrstico MwSt. na vsakem PDF-ju računa. Če podjetje ni registrirano za DDV (Nastavitve → Računovodstvo), na računih in ponudbah brez DDV nadomesti to vrstico. Pustite prazno za skritje. Natančno besedilo preverite pri davčnem svetovalcu."
+      "help": "Natisne se neposredno pod vrstico MwSt. na vsakem PDF-ju računa. Če podjetje ni registrirano za DDV (Nastavitve → Računovodstvo), nadomesti to vrstico na računih brez DDV. Na ponudbah se nikoli ne izpiše — ponudba ni davčni dokument. Pustite prazno, da ga skrijete. Natančno besedilo preverite pri svojem davčnem svetovalcu."
     },
     "crm_invoices_skonto_percent_default": {
       "label": "Stopnja skonta (privzeto %)"

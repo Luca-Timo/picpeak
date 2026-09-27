@@ -28,8 +28,11 @@ const { toStoredPath } = require('../utils/storedPath');
 // margins, address window, logo placement, body size and line height; 6:
 // uploaded fonts, the free-text font path no longer read, #1445; 7: totals
 // follow the items, the payment slip can share the last page, references moved
-// into the meta block, #1546).
-const RENDERER_VERSION = '7';
+// into the meta block, #1546; 8: a quote no longer prints the invoices' VAT
+// note, and an invoice's reference to its source quote is a "Referenz: <number>"
+// row rather than "Bezug: Angebot <number>" — which also shifts every row of the
+// bottom-aligned meta block).
+const RENDERER_VERSION = '8';
 const DOC_TYPES = ['quote', 'invoice', 'contract'];
 
 const sha256 = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex');

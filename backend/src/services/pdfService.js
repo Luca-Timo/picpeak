@@ -1371,7 +1371,7 @@ function drawTotals(doc, ctx, x, y, width) {
     y = doc.y + 4;
   }
 
-  // Free-text VAT / legal note (#794) — printed directly under the MwSt. line
+  // Free-text VAT / legal note (#794), invoices only — printed under the MwSt. line
   // (Benedikt's requested spot). The admin sets the exact wording in
   // Settings → CRM → Invoices (e.g. the Austrian Kleinunternehmer statement).
   // Optional; wraps across the totals column. Font size is restored to the row
@@ -1947,7 +1947,7 @@ async function appendEpcQr(doc, ctx) {
       ? `${t(ctx.locale, 'totals_grand')}: ${currencyUpper} ${formatMinor(docMeta.totalAmountMinor, currencyUpper, ctx.intlLocale)}`
       : '',
     docMeta.invoiceNumber
-      ? `${t(ctx.locale, 'reference_label')}: ${docMeta.invoiceNumber}`
+      ? `${t(ctx.locale, 'reference_number_label')}: ${docMeta.invoiceNumber}`
       : '',
   ].filter(Boolean);
   let lineY = summaryY;
@@ -2271,10 +2271,19 @@ function renderDocument(type, context) {
         // one — otherwise it would stretch the value column and drag every
         // label out of line.
         const letterhead = letterheadText(doc);
+        // A reference that is nothing but a number is a row of the block, so it
+        // is measured with the rest: "Referenz" is wider than the labels around
+        // it, and a grid sized without it would let the label run into the value
+        // column on a document whose other rows are thin.
+        const numberReferences = [];
+        if (type === 'invoice' && !isStorno && ctx.doc.sourceQuoteNumber) {
+          numberReferences.push([t(ctx.locale, 'reference_number_label'), ctx.doc.sourceQuoteNumber]);
+        }
         const gridRows = [
           ...issuerContactRows(ctx.issuer, ctx.locale)
             .map(([label, value]) => [label, value, letterhead.size]),
           ...metaRows.map(([label, value]) => [label, value, letterhead.size]),
+          ...numberReferences.map(([label, value]) => [label, value, letterhead.size]),
         ];
         const grid = measureLabelGrid(doc, gridRows, metaRight, {
           leftLimit: windowOn ? ADDR_WINDOW.left + ADDR_WINDOW.width + 12 : leftX,
@@ -2311,13 +2320,9 @@ function renderDocument(type, context) {
         // and wants both numbers and the original issue date. Those don't fit a
         // column sized for dates, so they stay a complete row under the address
         // field, where there is width for the whole sentence.
-        const numberReferences = [];
         const references = [];
         if (isStorno && ctx.doc.cancelsInvoice) {
           references.push(datedReference('reference_cancels', 'invoice_title', ctx.doc.cancelsInvoice));
-        }
-        if (type === 'invoice' && !isStorno && ctx.doc.sourceQuoteNumber) {
-          numberReferences.push([t(ctx.locale, 'reference_number_label'), ctx.doc.sourceQuoteNumber]);
         }
         if (type === 'invoice' && !isStorno && ctx.doc.replacesInvoice) {
           references.push(datedReference('reference_replaces', 'invoice_title', ctx.doc.replacesInvoice));
@@ -2597,7 +2602,13 @@ function normaliseContext(type, ctx) {
     doc: ctx.doc || {},
     qrFormat: ctx.qrFormat || 'none',
     // Free-text VAT/legal note printed under the MwSt. line on invoices (#794).
-    vatNote: (typeof ctx.vatNote === 'string' && ctx.vatNote.trim()) ? ctx.vatNote.trim() : null,
+    // Invoices only. The note is an invoice's statement about itself
+    // (`crm_invoices_vat_note_text`, MWSTG Art. 10 Abs. 2), so a quote never
+    // carries one whoever builds the context — the theme preview and the dev
+    // sampler assemble quote contexts by hand, and the rule has to hold for
+    // them too, not just for quoteService.
+    vatNote: type !== 'quote' && typeof ctx.vatNote === 'string' && ctx.vatNote.trim()
+      ? ctx.vatNote.trim() : null,
     // Is the business VAT-registered (Settings → Accounting)? Null = never set.
     vatRegistered: typeof ctx.vatRegistered === 'boolean' ? ctx.vatRegistered : null,
     // What to print when the service date is the issue date (Settings → CRM →

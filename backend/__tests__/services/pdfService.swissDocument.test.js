@@ -53,11 +53,21 @@ function drawnText() {
 const vatRow = t('de', 'totals_vat');
 
 describe('the VAT row', () => {
-  test('a business that isn\'t VAT-registered shows the note instead of a VAT row on a document without VAT', async () => {
+  test('a business that isn\'t VAT-registered shows the note instead of a VAT row on an invoice without VAT', async () => {
+    const drawn = drawnText();
+    await pdfService.renderInvoiceToBuffer(invoiceContext({}, { vatRegistered: false, vatNote: 'Nicht mehrwertsteuerpflichtig.' }));
+    expect(drawn()).not.toContain(vatRow);
+    expect(drawn()).toContain('Nicht mehrwertsteuerpflichtig.');
+  });
+
+  test('a quote drops the VAT row too, but never carries the note', async () => {
+    // The note is an invoice's statement about itself. normaliseContext drops
+    // it for a quote whoever assembled the context — the theme preview and the
+    // dev sampler build quote contexts by hand.
     const drawn = drawnText();
     await pdfService.renderQuoteToBuffer(quoteContext({ vatRegistered: false, vatNote: 'Nicht mehrwertsteuerpflichtig.' }));
     expect(drawn()).not.toContain(vatRow);
-    expect(drawn()).toContain('Nicht mehrwertsteuerpflichtig.');
+    expect(drawn()).not.toContain('Nicht mehrwertsteuerpflichtig.');
   });
 
   test('never set: the VAT row stays, as before', async () => {

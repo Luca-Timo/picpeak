@@ -520,7 +520,10 @@ describe('references', () => {
     expect(value.y).toBeGreaterThan(otherValue.y);
   });
 
-  test('a reference too long even for the block drops under the address field', async () => {
+  test('a dated reference is a complete row under the address field', async () => {
+    // A Storno names the invoice it reverses with both numbers and the original
+    // issue date — §14c wants the chain reconstructible from the document. No
+    // column sized for dates holds that, so it is a full-width row.
     const drawn = recordDrawing();
     await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)], {}, {
       kind: 'storno', invoiceNumber: 'LBM-S-2026-0003',
@@ -530,7 +533,25 @@ describe('references', () => {
 
     const reference = find(calls, t('de', 'reference_cancels'));
     const anyMetaRow = findExact(calls, `${t('de', 'invoice_number_label')}:`);
+    expect(reference.text).toContain('LBM-R-2026-0009');
+    expect(reference.text).toContain('09.10.2026');
     expect(reference.x).toBeLessThan(anyMetaRow.x);
+  });
+
+  test('a number too wide for its column falls back to a complete row', async () => {
+    // The escape hatch for an unusually long custom numbering format. Without
+    // it the number would be drawn with lineBreak:false and run past the page
+    // edge, so it is worth knowing the fallback actually fires.
+    const drawn = recordDrawing();
+    await pdfService.renderInvoiceToBuffer(invoice([shortItem(1)], {}, {
+      sourceQuoteNumber: 'ANGEBOT-MUSTERSTUDIO-VADUZ-2026-QUARTAL-04-0010',
+    }));
+    const calls = drawn();
+
+    const reference = find(calls, 'ANGEBOT-MUSTERSTUDIO-VADUZ-2026-QUARTAL-04-0010');
+    const anyMetaRow = findExact(calls, `${t('de', 'invoice_number_label')}:`);
+    expect(reference.x).toBeLessThan(anyMetaRow.x);
+    expect(reference.text).toContain(t('de', 'reference_number_label'));
   });
 
   test('an invoice names the quote it came from', async () => {

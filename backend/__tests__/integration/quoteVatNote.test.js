@@ -43,7 +43,10 @@ describe('the VAT note is an invoice statement', () => {
 
   async function quoteWithoutVat(status = 'draft') {
     const dealUuid = crypto.randomUUID();
-    const [id] = await db('quotes').insert({
+    // `.returning('id')` + the ?? — a bare insert yields the row id on SQLite
+    // and nothing on PostgreSQL, so the fixture has to ask for it explicitly.
+    // Same shape as seedMinimal.
+    const inserted = await db('quotes').insert({
       quote_number: `Q-${dealUuid.slice(0, 8)}`,
       customer_account_id: customerId,
       status,
@@ -55,7 +58,8 @@ describe('the VAT note is an invoice statement', () => {
       total_amount_minor: 100000,
       deal_uuid: dealUuid,
       created_by_admin_id: adminId,
-    });
+    }).returning('id');
+    const id = inserted[0]?.id ?? inserted[0];
     await db('quote_line_items').insert({
       quote_id: id,
       position: 1,
