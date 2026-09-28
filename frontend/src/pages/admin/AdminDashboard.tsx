@@ -106,7 +106,7 @@ export const AdminDashboard: React.FC = () => {
     // Order by soonest expiry so the five shown rows ARE the earliest to
     // expire — useExpiryRefresh then schedules against the true next boundary
     // even when >5 events are expiring (#909 review round 3).
-    queryFn: () => eventsService.getEvents(1, 5, 'expiring', undefined, 'expires_at', 'asc'),
+    queryFn: () => eventsService.getEvents({ limit: 5, status: 'expiring', sortBy: 'expires_at', sortOrder: 'asc' }),
   });
 
   // Keep the "expiring soon" card honest when a row crosses its expiry while

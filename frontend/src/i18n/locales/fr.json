@@ -723,7 +723,26 @@
       "showToGuestsHelp": "Les invités voient les noms des photos envoyées pendant que cette option est activée ; les noms donnés pendant qu’elle était désactivée restent réservés à vous et à l’hôte. La désactiver masque tous les noms aux invités. S’applique aussi aux crédits du photographe lus dans l’EXIF.",
       "shownToGuests": "Visible par les invités",
       "hiddenFromGuests": "Visible par vous seul"
-    }
+    },
+    "sortNameAsc": "A – Z",
+    "sortNameDesc": "Z – A",
+    "sortDateNewest": "Plus récentes d’abord",
+    "sortDateOldest": "Plus anciennes d’abord",
+    "sortCreatedNewest": "Créées récemment",
+    "sortCreatedOldest": "Créées en premier",
+    "sortPhotosMost": "Plus de photos",
+    "sortPhotosFewest": "Moins de photos",
+    "sortStatusActive": "Actives d’abord",
+    "sortStatusArchived": "Archivées d’abord",
+    "sortExpiresSoonest": "Expiration la plus proche",
+    "sortExpiresLatest": "Expiration la plus lointaine",
+    "filterAllTypes": "Tous les types",
+    "filterByType": "Filtrer par type",
+    "sortByName": "Trier par nom",
+    "sortByDate": "Trier par date",
+    "sortByPhotos": "Trier par nombre de photos",
+    "sortByStatus": "Trier par statut",
+    "sortByExpiry": "Trier par expiration"
   },
   "settings": {
     "title": "Paramètres système",

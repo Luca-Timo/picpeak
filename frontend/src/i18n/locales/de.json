@@ -2383,7 +2383,26 @@
       "showToGuestsHelp": "Gäste sehen die Namen bei Uploads, die hochgeladen wurden, während dies eingeschaltet war; Namen aus der Zeit, in der es aus war, bleiben dir und dem Gastgeber vorbehalten. Ausschalten verbirgt alle Namen vor Gästen. Gilt auch für Fotografen-Angaben aus den EXIF-Daten.",
       "shownToGuests": "Für Gäste sichtbar",
       "hiddenFromGuests": "Nur für dich sichtbar"
-    }
+    },
+    "sortNameAsc": "A – Z",
+    "sortNameDesc": "Z – A",
+    "sortDateNewest": "Neueste zuerst",
+    "sortDateOldest": "Älteste zuerst",
+    "sortCreatedNewest": "Zuletzt erstellt",
+    "sortCreatedOldest": "Zuerst erstellt",
+    "sortPhotosMost": "Meiste Fotos",
+    "sortPhotosFewest": "Wenigste Fotos",
+    "sortStatusActive": "Aktive zuerst",
+    "sortStatusArchived": "Archivierte zuerst",
+    "sortExpiresSoonest": "Läuft zuerst ab",
+    "sortExpiresLatest": "Läuft zuletzt ab",
+    "filterAllTypes": "Alle Typen",
+    "filterByType": "Nach Typ filtern",
+    "sortByName": "Nach Name sortieren",
+    "sortByDate": "Nach Datum sortieren",
+    "sortByPhotos": "Nach Fotoanzahl sortieren",
+    "sortByStatus": "Nach Status sortieren",
+    "sortByExpiry": "Nach Ablauf sortieren"
   },
   "settings": {
     "title": "Systemeinstellungen",

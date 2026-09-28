@@ -18,7 +18,7 @@ export const EventBookingSelect: React.FC<Props> = ({ value, onChange, className
   const { t } = useTranslation();
   const { data } = useQuery({
     queryKey: ['events-for-booking'],
-    queryFn: () => eventsService.getEvents(1, 200),
+    queryFn: () => eventsService.getEvents({ limit: 200 }),
     staleTime: 60_000,
   });
   const events = data?.events ?? [];

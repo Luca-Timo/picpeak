@@ -723,7 +723,26 @@
       "showToGuestsHelp": "Gasten zien de namen bij uploads die zijn gedaan terwijl dit aan stond; namen die zijn opgegeven terwijl het uit stond, blijven alleen voor jou en de gastheer. Uitzetten verbergt alle namen voor gasten. Geldt ook voor fotografenvermeldingen uit EXIF.",
       "shownToGuests": "Zichtbaar voor gasten",
       "hiddenFromGuests": "Alleen zichtbaar voor jou"
-    }
+    },
+    "sortNameAsc": "A – Z",
+    "sortNameDesc": "Z – A",
+    "sortDateNewest": "Nieuwste eerst",
+    "sortDateOldest": "Oudste eerst",
+    "sortCreatedNewest": "Recent aangemaakt",
+    "sortCreatedOldest": "Eerst aangemaakt",
+    "sortPhotosMost": "Meeste foto’s",
+    "sortPhotosFewest": "Minste foto’s",
+    "sortStatusActive": "Actieve eerst",
+    "sortStatusArchived": "Gearchiveerde eerst",
+    "sortExpiresSoonest": "Verloopt het eerst",
+    "sortExpiresLatest": "Verloopt het laatst",
+    "filterAllTypes": "Alle typen",
+    "filterByType": "Filteren op type",
+    "sortByName": "Sorteren op naam",
+    "sortByDate": "Sorteren op datum",
+    "sortByPhotos": "Sorteren op aantal foto’s",
+    "sortByStatus": "Sorteren op status",
+    "sortByExpiry": "Sorteren op vervaldatum"
   },
   "settings": {
     "title": "Systeeminstellingen",

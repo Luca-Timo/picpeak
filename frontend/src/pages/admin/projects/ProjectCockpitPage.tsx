@@ -166,7 +166,7 @@ export const ProjectCockpitPage: React.FC = () => {
   // already on this project).
   const { data: eventResults } = useQuery({
     queryKey: ['project-event-search', eventSearch],
-    queryFn: () => eventsService.getEvents(1, 10, undefined, eventSearch),
+    queryFn: () => eventsService.getEvents({ limit: 10, search: eventSearch }),
     enabled: eventSearch.trim().length >= 2,
   });
 

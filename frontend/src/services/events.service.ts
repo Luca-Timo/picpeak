@@ -104,6 +104,23 @@ export interface DownloadLimitUsage {
 
 export type EventStatusFilter = 'active' | 'inactive' | 'archived' | 'draft' | 'expiring';
 
+/**
+ * Columns the events list can be ordered by. Mirrors SORTABLE in
+ * backend/src/routes/adminEvents/listSort.js — `photo_count` and `status` are
+ * expressions there, not stored columns. Anything else falls back to
+ * created_at desc server-side rather than erroring.
+ */
+export type EventSortBy =
+  | 'event_name'
+  | 'event_type'
+  | 'event_date'
+  | 'created_at'
+  | 'updated_at'
+  | 'expires_at'
+  | 'slug'
+  | 'photo_count'
+  | 'status';
+
 interface EventsListResponse {
   events: Event[];
   pagination: {
@@ -114,16 +131,27 @@ interface EventsListResponse {
   };
 }
 
+/** Query options for the admin events list. */
+export interface EventsListParams {
+  page?: number;
+  limit?: number;
+  status?: EventStatusFilter;
+  search?: string;
+  /** event_types.slug_prefix, as stored on events.event_type. */
+  type?: string;
+  sortBy?: EventSortBy;
+  sortOrder?: 'asc' | 'desc';
+}
+
 export const eventsService = {
-  // Get all events (admin)
-  async getEvents(
-    page: number = 1,
-    limit: number = 20,
-    status?: EventStatusFilter,
-    search?: string,
-    sortBy?: string,
-    sortOrder?: 'asc' | 'desc'
-  ): Promise<EventsListResponse> {
+  // Get all events (admin).
+  //
+  // Takes an options object rather than positional arguments: with page,
+  // limit, status, search, type, sortBy and sortOrder the positional form had
+  // callers writing `getEvents(1, 100, undefined, undefined, 'event_date')`,
+  // where one misplaced undefined silently sorts by the wrong column.
+  async getEvents(options: EventsListParams = {}): Promise<EventsListResponse> {
+    const { page = 1, limit = 20, status, search, type, sortBy, sortOrder } = options;
     const params = new URLSearchParams({
       page: page.toString(),
       limit: limit.toString(),
@@ -134,6 +162,9 @@ export const eventsService = {
     }
     if (search) {
       params.append('search', search);
+    }
+    if (type) {
+      params.append('type', type);
     }
     if (sortBy) {
       params.append('sortBy', sortBy);

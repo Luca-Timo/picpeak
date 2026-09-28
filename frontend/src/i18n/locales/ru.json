@@ -755,7 +755,26 @@
       "showToGuestsHelp": "Гости видят имена у фото, загруженных, пока эта опция включена; имена, указанные, пока она была выключена, видны только вам и организатору. Выключение скрывает от гостей все имена. Относится и к авторству фотографа из EXIF.",
       "shownToGuests": "Видно гостям",
       "hiddenFromGuests": "Видно только вам"
-    }
+    },
+    "sortNameAsc": "А – Я",
+    "sortNameDesc": "Я – А",
+    "sortDateNewest": "Сначала новые",
+    "sortDateOldest": "Сначала старые",
+    "sortCreatedNewest": "Недавно созданные",
+    "sortCreatedOldest": "Созданные раньше",
+    "sortPhotosMost": "Больше фото",
+    "sortPhotosFewest": "Меньше фото",
+    "sortStatusActive": "Сначала активные",
+    "sortStatusArchived": "Сначала архивные",
+    "sortExpiresSoonest": "Истекают раньше",
+    "sortExpiresLatest": "Истекают позже",
+    "filterAllTypes": "Все типы",
+    "filterByType": "Фильтр по типу",
+    "sortByName": "Сортировка по имени",
+    "sortByDate": "Сортировка по дате",
+    "sortByPhotos": "Сортировка по числу фото",
+    "sortByStatus": "Сортировка по статусу",
+    "sortByExpiry": "Сортировка по сроку"
   },
   "settings": {
     "title": "Системные настройки",

@@ -81,7 +81,7 @@ export const AssignedEventsDialog: React.FC<Props> = ({ customerId, isOpen, init
     let cancelled = false;
     const handle = window.setTimeout(async () => {
       try {
-        const resp = await eventsService.getEvents(1, 25, undefined, term);
+        const resp = await eventsService.getEvents({ limit: 25, search: term });
         const events = Array.isArray((resp as any)?.events)
           ? (resp as any).events as AdminEvent[]
           : ([] as AdminEvent[]);

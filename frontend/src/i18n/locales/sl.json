@@ -1847,7 +1847,26 @@
       "showToGuestsHelp": "Gostje vidijo imena pri fotografijah, naloženih, ko je to vklopljeno; imena, vpisana, ko je bilo izklopljeno, ostanejo samo za vas in gostitelja. Izklop skrije vsa imena pred gosti. Velja tudi za avtorstvo fotografa iz EXIF.",
       "shownToGuests": "Vidno gostom",
       "hiddenFromGuests": "Vidno samo vam"
-    }
+    },
+    "sortNameAsc": "A – Z",
+    "sortNameDesc": "Z – A",
+    "sortDateNewest": "Najprej najnovejše",
+    "sortDateOldest": "Najprej najstarejše",
+    "sortCreatedNewest": "Nedavno ustvarjene",
+    "sortCreatedOldest": "Najprej ustvarjene",
+    "sortPhotosMost": "Največ fotografij",
+    "sortPhotosFewest": "Najmanj fotografij",
+    "sortStatusActive": "Najprej aktivne",
+    "sortStatusArchived": "Najprej arhivirane",
+    "sortExpiresSoonest": "Prej potečejo",
+    "sortExpiresLatest": "Pozneje potečejo",
+    "filterAllTypes": "Vse vrste",
+    "filterByType": "Filtriraj po vrsti",
+    "sortByName": "Razvrsti po imenu",
+    "sortByDate": "Razvrsti po datumu",
+    "sortByPhotos": "Razvrsti po številu fotografij",
+    "sortByStatus": "Razvrsti po stanju",
+    "sortByExpiry": "Razvrsti po poteku"
   },
   "settings": {
     "title": "Sistemske nastavitve",

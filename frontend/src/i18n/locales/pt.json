@@ -838,7 +838,26 @@
       "showToGuestsHelp": "Os convidados veem os nomes das fotos enviadas enquanto isto está ligado; os nomes dados enquanto estava desligado ficam apenas para si e para o anfitrião. Desligar oculta todos os nomes aos convidados. Aplica-se também aos créditos do fotógrafo lidos do EXIF.",
       "shownToGuests": "Visível para os convidados",
       "hiddenFromGuests": "Visível apenas para si"
-    }
+    },
+    "sortNameAsc": "A – Z",
+    "sortNameDesc": "Z – A",
+    "sortDateNewest": "Mais recentes primeiro",
+    "sortDateOldest": "Mais antigas primeiro",
+    "sortCreatedNewest": "Criadas recentemente",
+    "sortCreatedOldest": "Criadas primeiro",
+    "sortPhotosMost": "Mais fotos",
+    "sortPhotosFewest": "Menos fotos",
+    "sortStatusActive": "Ativas primeiro",
+    "sortStatusArchived": "Arquivadas primeiro",
+    "sortExpiresSoonest": "Expiram primeiro",
+    "sortExpiresLatest": "Expiram por último",
+    "filterAllTypes": "Todos os tipos",
+    "filterByType": "Filtrar por tipo",
+    "sortByName": "Ordenar por nome",
+    "sortByDate": "Ordenar por data",
+    "sortByPhotos": "Ordenar por número de fotos",
+    "sortByStatus": "Ordenar por estado",
+    "sortByExpiry": "Ordenar por expiração"
   },
   "settings": {
     "title": "Configurações do Sistema",

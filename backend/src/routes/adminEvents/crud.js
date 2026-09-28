@@ -25,6 +25,7 @@ const eventTypeService = require('../../services/eventTypeService');
 const { normaliseEventTimeTriple } = require('../../services/eventService');
 const { hasColumnCached } = require('../../utils/schemaCache');
 const { requireEventOwnership, scopeEventsListQuery, withoutForeignEventSecrets, scopeEventsQuery } = require('../../middleware/ownership');
+const { applyEventListSort } = require('./listSort');
 
 const { galleryPasswordColumns, dropCopiesIfStorageOff } = require('../../utils/galleryPasswordVault');
 const { credentialChangeColumns, sameAsStored } = require('../../utils/galleryCredentialCutoff');
@@ -340,9 +341,10 @@ module.exports = (router) => {
       const offset = (page - 1) * limit;
       const search = req.query.search || '';
       const status = req.query.status || 'all';
-      const allowedSortBy = ['created_at', 'event_name', 'slug', 'updated_at', 'expires_at', 'capture_date'];
-      const sortBy = allowedSortBy.includes(req.query.sortBy) ? req.query.sortBy : 'created_at';
-      const sortOrder = ['asc', 'desc'].includes(req.query.sortOrder) ? req.query.sortOrder : 'desc';
+      // Lowercased to match the slug normalisation every other slug_prefix
+      // comparison applies (eventTypeService.getEventTypeBySlug and friends);
+      // otherwise a hand-typed ?type=Wedding silently returns an empty list.
+      const eventType = typeof req.query.type === 'string' ? req.query.type.trim().toLowerCase() : '';
 
       // Build query
       let query = db('events');
@@ -360,6 +362,14 @@ module.exports = (router) => {
             .orWhereRaw(likeWithEscape('customer_email'), [pattern])
             .orWhereRaw(likeWithEscape('slug'), [pattern]);
         });
+      }
+
+      // Apply event type filter. The value is the event_types.slug_prefix the
+      // event row stores, so it is compared as-is; a rename cascades to
+      // events.event_type (eventTypeService.updateEventType) and a type in use
+      // cannot be deleted, so a slug shown in the filter always matches rows.
+      if (eventType && eventType !== 'all') {
+        query = query.where('event_type', eventType);
       }
 
       // Apply status filter
@@ -385,9 +395,9 @@ module.exports = (router) => {
       const countQuery = query.clone();
       const [{ count }] = await countQuery.count('* as count');
 
-      // Apply sorting and pagination
-      const events = await query
-        .orderBy(sortBy, sortOrder)
+      // Apply sorting and pagination. Ordering is added after the count clone
+      // above so the count never pays for the photo_count subquery.
+      const events = await applyEventListSort(query, req.query.sortBy, req.query.sortOrder)
         .limit(limit)
         .offset(offset);
 

@@ -52,7 +52,7 @@ export const TransferPhotoPicker: React.FC<TransferPhotoPickerProps> = ({
 
   const { data: eventsData, isLoading: eventsLoading } = useQuery({
     queryKey: ['transfer-picker-events', eventSearch],
-    queryFn: () => eventsService.getEvents(1, 100, undefined, eventSearch || undefined),
+    queryFn: () => eventsService.getEvents({ limit: 100, search: eventSearch || undefined }),
   });
   // Only offer events the caller may bundle — mirrors the backend's
   // filterOwnedEventIds gate (super_admin unrestricted; others get their own

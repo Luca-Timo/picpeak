@@ -1856,7 +1856,26 @@
       "showToGuestsHelp": "Guests see the names on uploads made while this is on; names given while it was off stay with you and the host. Turning it off hides all names from guests. Also covers photographer credits read from EXIF.",
       "shownToGuests": "Shown to guests",
       "hiddenFromGuests": "Visible to you only"
-    }
+    },
+    "sortNameAsc": "A – Z",
+    "sortNameDesc": "Z – A",
+    "sortDateNewest": "Newest first",
+    "sortDateOldest": "Oldest first",
+    "sortCreatedNewest": "Recently created",
+    "sortCreatedOldest": "First created",
+    "sortPhotosMost": "Most photos",
+    "sortPhotosFewest": "Fewest photos",
+    "sortStatusActive": "Active first",
+    "sortStatusArchived": "Archived first",
+    "sortExpiresSoonest": "Expiring soonest",
+    "sortExpiresLatest": "Expiring latest",
+    "filterAllTypes": "All types",
+    "filterByType": "Filter by type",
+    "sortByName": "Sort by name",
+    "sortByDate": "Sort by date",
+    "sortByPhotos": "Sort by photo count",
+    "sortByStatus": "Sort by status",
+    "sortByExpiry": "Sort by expiry"
   },
   "settings": {
     "title": "System Settings",
