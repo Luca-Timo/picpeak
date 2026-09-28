@@ -697,6 +697,12 @@
       "reason": "Router composition / helpers; decisions are recorded for each mounted family.",
       "route_signatures": []
     },
+    "adminEvents/listSort.js": {
+      "decision": "composition",
+      "signals": [],
+      "reason": "ORDER BY construction for the admin events list; declares no routes and reads no personal data.",
+      "route_signatures": []
+    },
     "adminEvents/logo.js": {
       "decision": "partial",
       "signals": [
