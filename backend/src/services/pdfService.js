@@ -2353,7 +2353,9 @@ function renderDocument(type, context) {
         const underField = references.map((value) => [referenceLabel, value]);
         // Directly under the document's own number: the two identifiers belong
         // together, and the dates read as one group after them — number,
-        // reference, then Datum / Leistungsdatum / Fällig am.
+        // reference, then Datum / Leistungsdatum / Fällig am. Index 1 is that
+        // position only because the number is pushed first when it exists;
+        // reorder the metaRows block above and this has to follow.
         let referenceRow = docNumberForDisplay ? 1 : 0;
         numberReferences.forEach(([label, value]) => {
           // A number that still outruns the column — an unusually long custom

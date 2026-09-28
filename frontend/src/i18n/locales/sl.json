@@ -2611,7 +2611,7 @@
       "vat": {
         "title": "DDV",
         "registered": "Registriran za DDV (obračunaj izhodni DDV + odbij vhodni DDV)",
-        "registeredHint": "Izklopljeno = malo podjetje / pod pragom: DDV se ne obračuna, vhodni DDV je strošek (ni odbiten). Računi in ponudbe brez DDV zato ne prikazujejo vrstice DDV; namesto nje se prikaže opomba o DDV iz nastavitev CRM.",
+        "registeredHint": "Izklopljeno = malo podjetje / pod pragom: DDV se ne obračuna, vhodni DDV je strošek (ni odbiten). Računi brez DDV zato ne prikazujejo vrstice DDV; namesto nje se prikaže opomba o DDV iz nastavitev CRM. Na ponudbah se nikoli ne izpiše — ponudba ni davčni dokument.",
         "reclaimCountries": "Države, kjer je vhodni DDV odbiten",
         "reclaimCountriesHint": "Običajno vaša domača država (CH / LI). Stroški iz drugih držav se obravnavajo kot tuji DDV brez pravice do odbitka. Cmd/Ctrl-klik za večkratni izbor.",
         "defaultOutputCode": "Privzeta koda DDV za nove račune",

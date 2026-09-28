@@ -2620,7 +2620,7 @@
       "vat": {
         "title": "VAT",
         "registered": "VAT-registered (charge output VAT + reclaim input VAT)",
-        "registeredHint": "Off = small business / under threshold: no VAT charged, input VAT is a cost (not reclaimable). Invoices and quotes without VAT then show no VAT line; the VAT note from the CRM settings stands in its place.",
+        "registeredHint": "Off = small business / under threshold: no VAT charged, input VAT is a cost (not reclaimable). Invoices without VAT then show no VAT line; the VAT note from the CRM settings stands in its place. Quotes never carry it — an offer is not the tax document.",
         "reclaimCountries": "Countries where input VAT is reclaimable",
         "reclaimCountriesHint": "Typically your domestic country (CH / LI). Costs from other countries are treated as non-reclaimable foreign VAT. Cmd/Ctrl-click to multi-select.",
         "defaultOutputCode": "Default VAT code for new invoices",

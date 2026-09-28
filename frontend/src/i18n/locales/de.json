@@ -3147,7 +3147,7 @@
       "vat": {
         "title": "MwSt.",
         "registered": "MwSt-pflichtig (Umsatzsteuer berechnen + Vorsteuer abziehen)",
-        "registeredHint": "Aus = Kleinunternehmen / unter der Schwelle: keine MwSt berechnet, Vorsteuer ist Aufwand (nicht abziehbar). Rechnungen und Angebote ohne MwSt zeigen dann keine MwSt.-Zeile; der MwSt.-Hinweis aus den CRM-Einstellungen steht an ihrer Stelle.",
+        "registeredHint": "Aus = Kleinunternehmen / unter der Schwelle: keine MwSt berechnet, Vorsteuer ist Aufwand (nicht abziehbar). Rechnungen ohne MwSt zeigen dann keine MwSt.-Zeile; der MwSt.-Hinweis aus den CRM-Einstellungen steht an ihrer Stelle. Auf Angeboten erscheint er nie — ein Angebot ist nicht das Steuerdokument.",
         "reclaimCountries": "Länder mit abziehbarer Vorsteuer",
         "reclaimCountriesHint": "Üblicherweise Ihr Inland (CH / LI). Kosten aus anderen Ländern gelten als nicht abziehbare ausländische MwSt. Cmd/Ctrl-Klick für Mehrfachauswahl.",
         "defaultOutputCode": "Standard-MwSt-Code für neue Rechnungen",
