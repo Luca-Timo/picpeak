@@ -571,7 +571,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
             the list. The section title lives in the brand row above. */}
         {section && (
           <div className="flex-shrink-0 animate-panel-in-right">
-            <div className={`border-b border-line py-2 ${
+            {/* No rules between the back row, the filter and the list: they
+                are one block of section chrome, and two hairlines inside four
+                rows read as three separate things. */}
+            <div className={`pt-2 ${
               collapsed ? 'px-4 lg:px-2' : 'px-4'
             }`}>
               <button
@@ -585,7 +588,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
               </button>
             </div>
             {searchable && (
-              <div className="px-4 py-2 border-b border-line">
+              <div className="px-4 pt-1 pb-2">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
                   <input
