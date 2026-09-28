@@ -1,127 +1,26 @@
 {
   "settings_tabs": {
-    "usage": {
-      "signals": [],
-      "reason": "Explicit consent/report inspection/feedback is not itself adoption telemetry."
-    },
-    "features": {
-      "signals": [],
-      "reason": "Only the allowlisted effective feature booleans; no settings visit/save marker."
-    },
-    "general": {
+    "accounting": {
       "signals": [
-        "video_uploads",
-        "camera_raw_uploads",
-        "public_site",
-        "custom_css",
-        "download_original_filenames"
+        "accounting",
+        "accounting_incoming_invoices",
+        "accounting_expenses",
+        "accounting_tax_report",
+        "accounting_ledger"
       ],
-      "reason": "General technical upload/public-site/CSS configuration only; no title, URLs, limits, times, HTML or identity. v3 also reports two installation inventory totals separately, with explicit consent."
-    },
-    "events": {
-      "signals": [
-        "galleries",
-        "gallery_guest_uploads",
-        "gallery_downloads_restricted",
-        "gallery_client_access",
-        "gallery_watermarks",
-        "gallery_image_protection",
-        "gallery_reveal",
-        "gallery_expiration",
-        "gallery_capture_date_sort"
-      ],
-      "reason": "Gallery operations and disclosed configuration only; no event/customer values or visitor use. v3 also reports two installation inventory totals separately, with explicit consent."
-    },
-    "eventTypes": {
-      "signals": [
-        "event_type_editing"
-      ],
-      "reason": "General admin event-type capability; no names or preset contents."
-    },
-    "categories": {
-      "signals": [
-        "category_editing",
-        "gallery_folders"
-      ],
-      "reason": "Category management capability only; no names/order/category membership."
-    },
-    "thumbnails": {
-      "signals": [
-        "photo_processing"
-      ],
-      "reason": "Admin processing settings/regeneration initiation only; no image data or progress."
-    },
-    "downloads": {
-      "signals": [
-        "download_resolution_picker"
-      ],
-      "reason": "Configuration boolean only; no actual download/selection behavior or resolution values."
-    },
-    "styling": {
-      "signals": [
-        "custom_css"
-      ],
-      "reason": "Presence/application only plus controlled gallery-layout enums, never CSS/theme values."
-    },
-    "email": {
-      "signals": [
-        "smtp",
-        "incoming_mail",
-        "messaging",
-        "email_template_editing",
-        "email_webhook"
-      ],
-      "reason": "Configuration and documented manual admin capability operations only; messages, recipients, automatic activity and mailbox values excluded."
-    },
-    "moderation": {
-      "signals": [
-        "feedback_moderation"
-      ],
-      "reason": "Admin moderation/word-filter capability, never feedback content or visitor behavior."
-    },
-    "security": {
-      "signals": [],
-      "reason": "Excluded password/MFA/session/rate-limit/security profiles and operations."
-    },
-    "sso": {
-      "signals": [
-        "oauth"
-      ],
-      "reason": "Enabled/config-present and successful admin callback only; no claims/provider details."
-    },
-    "imageSecurity": {
-      "signals": [
-        "gallery_image_protection"
-      ],
-      "reason": "Configuration presence only; no blocked-IP/security analytics or monitoring history."
-    },
-    "seo": {
-      "signals": [
-        "seo_editing"
-      ],
-      "reason": "Admin SEO configuration operation only; no meta tags, URLs, robots or verification tokens."
-    },
-    "apiTokens": {
-      "signals": [
-        "api_integration"
-      ],
-      "reason": "Valid credential presence and one successful scoped API capability bit; no tokens/scopes/owner metadata."
-    },
-    "webhooks": {
-      "signals": [
-        "webhooks"
-      ],
-      "reason": "Active configuration and manual test/replay enqueue only; no delivery data."
-    },
-    "status": {
-      "signals": [],
-      "reason": "Excluded operational health, diagnostics, resource data, update and storage polling."
+      "reason": "Only module capabilities, no tax codes, rates, balances or business identity."
     },
     "analytics": {
       "signals": [
         "analytics_dashboard"
       ],
       "reason": "Analytics capability and admin aggregate-view use only; no embedded analytics results/tracker IDs or visitors."
+    },
+    "apiTokens": {
+      "signals": [
+        "api_integration"
+      ],
+      "reason": "Valid credential presence and one successful scoped API capability bit; no tokens/scopes/owner metadata."
     },
     "backup": {
       "signals": [
@@ -133,9 +32,37 @@
       ],
       "reason": "Schedule presence/manual capability initiation only, no histories, sizes, paths or files."
     },
+    "branding": {
+      "signals": [
+        "branding_editing",
+        "gallery_watermarks"
+      ],
+      "reason": "Branding operation and watermark configuration only; no branding text, logos or colors."
+    },
     "businessProfile": {
       "signals": [],
       "reason": "Excluded business identity, bank accounts and addresses."
+    },
+    "categories": {
+      "signals": [
+        "category_editing",
+        "gallery_folders"
+      ],
+      "reason": "Category management capability only; no names/order/category membership."
+    },
+    "cms": {
+      "signals": [
+        "cms_content_editing",
+        "public_site"
+      ],
+      "reason": "Admin page editing capability/public-site enabled only; no HTML, slugs or traffic."
+    },
+    "contracts": {
+      "signals": [
+        "crm_contracts",
+        "document_templates"
+      ],
+      "reason": "Admin contract/template capability only; no legal text or signatures."
     },
     "crm": {
       "signals": [
@@ -153,35 +80,81 @@
       ],
       "reason": "Only coarse module capabilities; no policies/amounts/customer/payment values."
     },
-    "contracts": {
+    "downloads": {
       "signals": [
-        "crm_contracts",
-        "document_templates"
+        "download_resolution_picker"
       ],
-      "reason": "Admin contract/template capability only; no legal text or signatures."
+      "reason": "Configuration boolean only; no actual download/selection behavior or resolution values."
     },
-    "reminderTemplates": {
+    "email": {
       "signals": [
-        "reminder_emails",
-        "email_template_editing"
+        "smtp",
+        "incoming_mail",
+        "messaging",
+        "email_template_editing",
+        "email_webhook"
       ],
-      "reason": "Reminder flag configuration and admin template editing only; no automatic reminder sends/recipients/content."
+      "reason": "Configuration and documented manual admin capability operations only; messages, recipients, automatic activity and mailbox values excluded."
     },
-    "accounting": {
+    "eventTypes": {
       "signals": [
-        "accounting",
-        "accounting_incoming_invoices",
-        "accounting_expenses",
-        "accounting_tax_report",
-        "accounting_ledger"
+        "event_type_editing"
       ],
-      "reason": "Only module capabilities, no tax codes, rates, balances or business identity."
+      "reason": "General admin event-type capability; no names or preset contents."
     },
-    "whatsapp": {
+    "events": {
       "signals": [
-        "whatsapp"
+        "galleries",
+        "gallery_guest_uploads",
+        "gallery_downloads_restricted",
+        "gallery_client_access",
+        "gallery_watermarks",
+        "gallery_image_protection",
+        "gallery_reveal",
+        "gallery_expiration",
+        "gallery_capture_date_sort"
       ],
-      "reason": "Configured integration plus manual test only; no phone numbers, tokens or automatic delivery."
+      "reason": "Gallery operations and disclosed configuration only; no event/customer values or visitor use. v3 also reports two installation inventory totals separately, with explicit consent."
+    },
+    "features": {
+      "signals": [],
+      "reason": "Only the allowlisted effective feature booleans; no settings visit/save marker."
+    },
+    "general": {
+      "signals": [
+        "video_uploads",
+        "camera_raw_uploads",
+        "public_site",
+        "custom_css",
+        "download_original_filenames"
+      ],
+      "reason": "General technical upload/public-site/CSS configuration only; no title, URLs, limits, times, HTML or identity. v3 also reports two installation inventory totals separately, with explicit consent."
+    },
+    "health": {
+      "signals": [],
+      "reason": "Excluded operational health, stuck-email diagnostics, queue and key-state data — the same exclusion the Status tab and the adminSystemHealth route family already carry."
+    },
+    "imageSecurity": {
+      "signals": [
+        "gallery_image_protection"
+      ],
+      "reason": "Configuration presence only; no blocked-IP/security analytics or monitoring history."
+    },
+    "moderation": {
+      "signals": [
+        "feedback_moderation"
+      ],
+      "reason": "Admin moderation/word-filter capability, never feedback content or visitor behavior."
+    },
+    "security": {
+      "signals": [],
+      "reason": "Excluded password/MFA/session/rate-limit/security profiles and operations."
+    },
+    "seo": {
+      "signals": [
+        "seo_editing"
+      ],
+      "reason": "Admin SEO configuration operation only; no meta tags, URLs, robots or verification tokens."
     },
     "slideshow": {
       "signals": [
@@ -189,19 +162,49 @@
       ],
       "reason": "Admin setup capability only; no kiosk viewers, slide progress or photos."
     },
-    "branding": {
+    "sso": {
       "signals": [
-        "branding_editing",
-        "gallery_watermarks"
+        "oauth"
       ],
-      "reason": "Branding operation and watermark configuration only; no branding text, logos or colors."
+      "reason": "Enabled/config-present and successful admin callback only; no claims/provider details."
     },
-    "cms": {
+    "status": {
+      "signals": [],
+      "reason": "Excluded operational health, diagnostics, resource data, update and storage polling."
+    },
+    "styling": {
       "signals": [
-        "cms_content_editing",
-        "public_site"
+        "custom_css"
       ],
-      "reason": "Admin page editing capability/public-site enabled only; no HTML, slugs or traffic."
+      "reason": "Presence/application only plus controlled gallery-layout enums, never CSS/theme values."
+    },
+    "thumbnails": {
+      "signals": [
+        "photo_processing"
+      ],
+      "reason": "Admin processing settings/regeneration initiation only; no image data or progress."
+    },
+    "usage": {
+      "signals": [],
+      "reason": "Explicit consent/report inspection/feedback is not itself adoption telemetry."
+    },
+    "users": {
+      "signals": [
+        "admin_management"
+      ],
+      "reason": "Admin account/role management capability, as the top-level Users surface reported before it became a Settings tab; no names, emails, permissions, role labels or invitation contents."
+    },
+    "webhooks": {
+      "signals": [
+        "webhooks"
+      ],
+      "reason": "Active configuration and manual test/replay enqueue only; no delivery data."
+    },
+    "whatsapp": {
+      "signals": [
+        "whatsapp"
+      ],
+      "reason": "Configured integration plus manual test only; no phone numbers, tokens or automatic delivery."
     }
   },
   "reviewed_picpeak_base": "a5ff9264 (3.124.1-beta.0)",
