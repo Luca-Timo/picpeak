@@ -92,6 +92,9 @@ export const EventsListPage: React.FC = () => {
     }
   };
 
+  // Server-side pagination. Declared above patchParams, which resets it.
+  const [page, setPage] = useState(1);
+
   // Get filter from URL — backend supports all of these as `status` values
   const filterParam = searchParams.get('filter');
   const statusFilter: EventStatusFilter | undefined =
@@ -123,17 +126,23 @@ export const EventsListPage: React.FC = () => {
 
   // Preserves the params it is not changing: picking a status must not throw
   // away the sort the admin just chose, and vice versa.
+  //
+  // Resets the page here rather than leaving it to the effect below. That
+  // effect still runs — it is what catches a Back navigation or a pasted URL,
+  // where no click passed through this function — but on a click it would fire
+  // a render later, so the query went out once with the new sort and the OLD
+  // page before the page-1 request replaced it. One request per change, not
+  // two.
   const patchParams = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(searchParams);
     for (const [key, value] of Object.entries(patch)) {
       if (value === null || value === '') next.delete(key);
       else next.set(key, value);
     }
+    setPage(1);
     setSearchParams(next);
   };
 
-  // Server-side pagination + debounced search
-  const [page, setPage] = useState(1);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
 
   useEffect(() => {
@@ -141,8 +150,12 @@ export const EventsListPage: React.FC = () => {
     return () => clearTimeout(t);
   }, [searchTerm]);
 
-  // Reset to page 1 whenever the filter or search changes so users don't
-  // get stuck on a page index that no longer exists in the new result set.
+  // Reset to page 1 whenever the query changes so users don't get stuck on a
+  // page index that no longer exists in the new result set. patchParams
+  // already does this for a click; this covers the paths that bypass it —
+  // Back/Forward, a pasted link, and the debounced search box, which is local
+  // state rather than a URL param. Setting the same value is a no-op render,
+  // so the two together do not double up.
   useEffect(() => {
     setPage(1);
   }, [statusFilter, debouncedSearchTerm, typeFilter, sortBy, sortOrder]);
@@ -606,6 +619,11 @@ export const EventsListPage: React.FC = () => {
                   value={typeFilter}
                   state={typeFilter ? 'set' : null}
                   onSelect={(value) => patchParams({ type: value || null })}
+                  // Until the catalogue loads — or if it fails to — the only
+                  // option would be "All types", which filters nothing. A
+                  // header that plainly has no menu yet beats one that opens
+                  // and offers a single useless choice.
+                  disabled={!eventTypes}
                 />
                 <ColumnMenuHeader
                   label={t('events.date')}

@@ -270,15 +270,74 @@ describe('events list column menus', () => {
     expect(await screen.findByRole('button', { name: 'events.event' })).toBeInTheDocument();
   });
 
-  it('closes on Escape without applying anything', async () => {
+  it('closes on Escape without applying anything, and hands focus back', async () => {
     renderPage();
     await waitFor(() => expect(getEvents).toHaveBeenCalled());
     const before = getEvents.mock.calls.length;
 
+    const trigger = await screen.findByRole('button', { name: 'events.date' });
     await openMenu('events.date');
     await userEvent.keyboard('{Escape}');
 
     expect(screen.queryByRole('menuitemradio', { name: 'Newest first' })).not.toBeInTheDocument();
     expect(getEvents).toHaveBeenCalledTimes(before);
+    // Focus must come back to the header, or a keyboard user is dropped at the
+    // top of the document with no idea where they were.
+    expect(trigger).toHaveFocus();
+  });
+
+  it('caps the menu height and lets it scroll, rather than running off-screen', async () => {
+    // The type menu is one row per configured type, so the list is open-ended.
+    renderPage();
+    await openMenu('events.date');
+    const menu = screen.getByRole('menu');
+    expect(menu).toHaveClass('overflow-y-auto');
+    expect(menu.style.maxHeight).toMatch(/^\d+px$/);
+  });
+
+  it('closes on a page scroll, including one whose target is not a Node', async () => {
+    // Node.contains() throws on a non-Node argument rather than returning
+    // false, so a scroll event targeting the Window threw inside the handler
+    // and left the menu open for good.
+    renderPage();
+    await openMenu('events.date');
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+
+    window.dispatchEvent(new Event('scroll'));
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+  });
+
+  it('stays open when the scrolling happened inside the menu itself', async () => {
+    // Arrowing onto an option below the fold scrolls it into view — a scroll
+    // event — which must not be read as the page moving under the menu.
+    renderPage();
+    await openMenu('events.date');
+    const menu = screen.getByRole('menu');
+
+    menu.dispatchEvent(new Event('scroll', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
+  it('closes when focus leaves it by Tab', async () => {
+    renderPage();
+    await openMenu('events.date');
+    const menu = screen.getByRole('menu');
+
+    menu.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: document.body }));
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+  });
+
+  it('offers no type menu until the catalogue has loaded', async () => {
+    // An empty catalogue would leave a menu whose only entry is "All types",
+    // which filters nothing — the header says so by not opening.
+    const { eventTypesService } = await import('../../../services/eventTypes.service');
+    vi.mocked(eventTypesService.getEventTypes).mockReturnValueOnce(new Promise(() => {}));
+
+    renderPage();
+    const trigger = await screen.findByRole('button', { name: 'events.type' });
+    expect(trigger).toBeDisabled();
+    await userEvent.click(trigger);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 });

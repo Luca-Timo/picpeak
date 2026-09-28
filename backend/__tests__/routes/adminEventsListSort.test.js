@@ -182,6 +182,15 @@ describe('admin events list — ordering and type filter', () => {
       expect(names[names.length - 1]).toBe('X Never');
       expect(names.indexOf('S Expired')).toBeLessThan(names.indexOf('S Expiring'));
     });
+
+    it('keeps never-expiring galleries last descending too, not flipped to the top', async () => {
+      // The engines disagree about where a NULL lands by default, so both
+      // directions are pinned rather than only the one that happens to pass
+      // on the database the suite last ran against.
+      const names = await listNames({ sortBy: 'expires_at', sortOrder: 'desc' });
+      expect(names[names.length - 1]).toBe('X Never');
+      expect(names.indexOf('S Expiring')).toBeLessThan(names.indexOf('S Expired'));
+    });
   });
 
   describe('type filter', () => {
@@ -204,34 +213,45 @@ describe('admin events list — ordering and type filter', () => {
   });
 
   describe('untrusted input', () => {
-    it('falls back to the default order instead of erroring on an unknown column', async () => {
-      const res = await request(app)
-        .get('/api/admin/events')
-        .query({ limit: 100, sortBy: 'event_name); drop table events;--', sortOrder: 'sideways' })
-        .set('Authorization', `Bearer ${token}`);
-      expect(res.status).toBe(200);
-      expect(res.body.events.length).toBeGreaterThan(0);
+    // Asserting only "200, some rows" would pin the injection contract (no SQL
+    // error) while saying nothing about the order these cases claim to fall
+    // back to, so each compares the actual row order against a reference
+    // query. Note the resolver falls back PER HALF: an unusable key does not
+    // discard a usable direction, and vice versa.
+    const expectSameOrder = async (query, reference) => {
+      const rows = await listNames(query);
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows).toEqual(await listNames(reference));
+    };
+
+    it('falls back to the default order when neither half is usable', async () => {
+      await expectSameOrder(
+        { sortBy: 'event_name); drop table events;--', sortOrder: 'sideways' },
+        {},
+      );
+    });
+
+    it('keeps a recognised column when only the direction is unusable', async () => {
+      await expectSameOrder(
+        { sortBy: 'event_name', sortOrder: 'sideways' },
+        { sortBy: 'event_name', sortOrder: 'desc' },
+      );
     });
 
     it('does not treat an inherited Object property as a sortable column', async () => {
       // The allowlist is an object literal, so a plain `in` or `[key]` lookup
       // would accept 'constructor' and 'toString' and put them into raw SQL.
+      // The key falls back to created_at; the valid direction is kept.
       for (const sortBy of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
-        const res = await request(app)
-          .get('/api/admin/events')
-          .query({ limit: 100, sortBy, sortOrder: 'asc' })
-          .set('Authorization', `Bearer ${token}`);
-        expect(res.status).toBe(200);
-        expect(res.body.events.length).toBeGreaterThan(0);
+        await expectSameOrder(
+          { sortBy, sortOrder: 'asc' },
+          { sortBy: 'created_at', sortOrder: 'asc' },
+        );
       }
     });
 
     it('no longer accepts capture_date, which is a photo column and threw', async () => {
-      const res = await request(app)
-        .get('/api/admin/events')
-        .query({ limit: 100, sortBy: 'capture_date' })
-        .set('Authorization', `Bearer ${token}`);
-      expect(res.status).toBe(200);
+      await expectSameOrder({ sortBy: 'capture_date' }, {});
     });
   });
 });

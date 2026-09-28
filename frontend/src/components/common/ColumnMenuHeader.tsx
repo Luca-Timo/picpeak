@@ -47,6 +47,12 @@ interface ColumnMenuHeaderProps {
   state?: ColumnMenuState;
   align?: 'left' | 'right';
   /**
+   * Renders the header as plain text with no menu. For a column whose options
+   * are still loading or failed to load — an empty menu that opens is worse
+   * than a header that visibly has nothing to offer yet.
+   */
+  disabled?: boolean;
+  /**
    * Accessible name for the MENU, e.g. "Sort by date". Deliberately not an
    * aria-label on the trigger: that would replace the visible column name in
    * the accessible name, so "click Datum" would match nothing by voice and a
@@ -56,12 +62,24 @@ interface ColumnMenuHeaderProps {
 }
 
 const MENU_WIDTH = 224; // w-56
+const MENU_GAP = 4; // breathing room between trigger and menu
+const MENU_EDGE = 8; // smallest gap left against a viewport edge
+/** Below this, opening downwards is not worth it — flip above the trigger. */
+const MENU_MIN_HEIGHT = 160;
 const NAVIGATION_KEYS = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
 
+interface MenuPosition {
+  /** Exactly one of top/bottom is set; the other anchors an upward menu. */
+  top?: number;
+  bottom?: number;
+  left: number;
+  maxHeight: number;
+}
+
 export const ColumnMenuHeader: React.FC<ColumnMenuHeaderProps> = ({
-  label, options, value, onSelect, state = null, align = 'left', menuLabel,
+  label, options, value, onSelect, state = null, align = 'left', disabled = false, menuLabel,
 }) => {
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const [position, setPosition] = useState<MenuPosition | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -102,7 +120,28 @@ export const ColumnMenuHeader: React.FC<ColumnMenuHeaderProps> = ({
             : (current <= 0 ? items.length : current) - 1;
       items[next]?.focus();
     };
-    const onReflow = () => close();
+    // A fixed element does not follow the trigger, so the menu closes when the
+    // page moves under it — but NOT when the scrolling happened inside the
+    // menu itself. Without that exclusion, arrowing onto an option below the
+    // fold scrolls it into view, which is a scroll event, which closed the
+    // menu the keyboard was navigating.
+    const onReflow = (event: Event) => {
+      // `target` is a Document for a page scroll but can be the Window, and
+      // Node.contains() THROWS on a non-Node argument rather than returning
+      // false — a throw here leaves the menu open forever, which is the bug
+      // this guard exists to prevent.
+      const target = event.target;
+      if (event.type === 'scroll' && target instanceof Node && menuRef.current?.contains(target)) return;
+      close();
+    };
+    // Tab moves focus out of the menu without any of the handlers above
+    // firing, which left an open menu behind wherever focus went next.
+    const onFocusOut = (event: FocusEvent) => {
+      const next = event.relatedTarget as Node | null;
+      if (!next) return;
+      if (menuRef.current?.contains(next) || triggerRef.current?.contains(next)) return;
+      close();
+    };
 
     // Focus lands on the applied option when there is one, so a reader hears
     // the current choice rather than the top of the list.
@@ -111,13 +150,16 @@ export const ColumnMenuHeader: React.FC<ColumnMenuHeaderProps> = ({
     );
     (items.find((item) => item.getAttribute('aria-checked') === 'true') ?? items[0])?.focus();
 
+    const menu = menuRef.current;
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
+    menu?.addEventListener('focusout', onFocusOut);
     window.addEventListener('scroll', onReflow, true);
     window.addEventListener('resize', onReflow);
     return () => {
       document.removeEventListener('mousedown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
+      menu?.removeEventListener('focusout', onFocusOut);
       window.removeEventListener('scroll', onReflow, true);
       window.removeEventListener('resize', onReflow);
     };
@@ -132,10 +174,27 @@ export const ColumnMenuHeader: React.FC<ColumnMenuHeaderProps> = ({
     if (!rect) return;
     // Clamped to the viewport so a menu under the rightmost column does not
     // open off-screen (the table scrolls horizontally on narrow screens).
-    const preferredLeft = align === 'right' ? rect.right - MENU_WIDTH : rect.left;
+    const left = Math.max(
+      MENU_EDGE,
+      Math.min(
+        align === 'right' ? rect.right - MENU_WIDTH : rect.left,
+        window.innerWidth - MENU_WIDTH - MENU_EDGE,
+      ),
+    );
+    // The option list is open-ended — the type filter carries one row per
+    // configured event type, including deactivated ones — so the menu is
+    // capped to the space it actually has and scrolls within that cap. Without
+    // the cap an instance with a few dozen types runs past the bottom of the
+    // viewport and its last options cannot be reached at all.
+    const spaceBelow = window.innerHeight - rect.bottom - MENU_GAP - MENU_EDGE;
+    const spaceAbove = rect.top - MENU_GAP - MENU_EDGE;
+    const openUpwards = spaceBelow < MENU_MIN_HEIGHT && spaceAbove > spaceBelow;
     setPosition({
-      top: rect.bottom + 4,
-      left: Math.max(8, Math.min(preferredLeft, window.innerWidth - MENU_WIDTH - 8)),
+      ...(openUpwards
+        ? { bottom: window.innerHeight - rect.top + MENU_GAP }
+        : { top: rect.bottom + MENU_GAP }),
+      left,
+      maxHeight: Math.max(MENU_MIN_HEIGHT, openUpwards ? spaceAbove : spaceBelow),
     });
   };
 
@@ -147,19 +206,26 @@ export const ColumnMenuHeader: React.FC<ColumnMenuHeaderProps> = ({
         ref={triggerRef}
         type="button"
         onClick={toggle}
+        disabled={disabled}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        className={`group inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider transition-colors hover:text-body ${
+        className={`group inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider transition-colors ${
           align === 'right' ? 'flex-row-reverse' : ''
-        } ${applied ? 'text-body' : 'text-muted'}`}
+        } ${applied ? 'text-body' : 'text-muted'} ${
+          disabled ? 'cursor-default' : 'hover:text-body'
+        }`}
       >
         <span>{label}</span>
-        {state === 'asc' && <ChevronUp className="w-3 h-3" aria-hidden="true" />}
-        {state === 'desc' && <ChevronDown className="w-3 h-3" aria-hidden="true" />}
-        {state === 'set' && <Filter className="w-3 h-3" aria-hidden="true" />}
-        {state === null && (
-          <ChevronDown className="w-3 h-3 opacity-30 group-hover:opacity-60" aria-hidden="true" />
+        {!disabled && (
+          <>
+            {state === 'asc' && <ChevronUp className="w-3 h-3" aria-hidden="true" />}
+            {state === 'desc' && <ChevronDown className="w-3 h-3" aria-hidden="true" />}
+            {state === 'set' && <Filter className="w-3 h-3" aria-hidden="true" />}
+            {state === null && (
+              <ChevronDown className="w-3 h-3 opacity-30 group-hover:opacity-60" aria-hidden="true" />
+            )}
+          </>
         )}
       </button>
 
@@ -169,8 +235,13 @@ export const ColumnMenuHeader: React.FC<ColumnMenuHeaderProps> = ({
           id={menuId}
           role="menu"
           aria-label={menuLabel}
-          className="fixed z-50 w-56 rounded-md bg-panel py-1 shadow-lg ring-1 ring-black/5 dark:ring-neutral-700"
-          style={{ top: `${position.top}px`, left: `${position.left}px` }}
+          className="fixed z-50 w-56 overflow-y-auto rounded-md bg-panel py-1 shadow-lg ring-1 ring-line"
+          style={{
+            top: position.top !== undefined ? `${position.top}px` : undefined,
+            bottom: position.bottom !== undefined ? `${position.bottom}px` : undefined,
+            left: `${position.left}px`,
+            maxHeight: `${position.maxHeight}px`,
+          }}
         >
           {options.map((option) => {
             const isApplied = option.value === value;
