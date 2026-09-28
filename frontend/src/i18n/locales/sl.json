@@ -886,7 +886,6 @@
     "transfers": "PicTransfer",
     "messages": "Sporočila",
     "settings": "Nastavitve",
-    "systemHealth": "Stanje sistema",
     "eventTypes": "Vrste dogodkov",
     "branding": "Blagovna znamka",
     "emailSettings": "Nastavitve e-pošte",
@@ -897,7 +896,9 @@
     "clients": "Stranke",
     "accounting": "Računovodstvo",
     "workflows": "Delovni tokovi",
-    "betaTag": "Beta"
+    "betaTag": "Beta",
+    "communication": "Komunikacija",
+    "automation": "Avtomatizacija"
   },
   "transfers": {
     "title": "PicTransfer",
@@ -1917,7 +1918,10 @@
       "timeFormat": "Oblika časa",
       "timeFormat24h": "24-urna (14:30)",
       "timeFormat12h": "12-urna (2:30 PM)",
-      "timeFormatHelp": "Določa prikaz časa v skrbniških pogledih, straneh za stranke in PDF-jih. Shranjevanje ostane 24-urno (HH:mm); spremeni se samo prikaz."
+      "timeFormatHelp": "Določa prikaz časa v skrbniških pogledih, straneh za stranke in PDF-jih. Shranjevanje ostane 24-urno (HH:mm); spremeni se samo prikaz.",
+      "adminLanguage": "Vaš jezik skrbniškega dela",
+      "adminLanguageHelp": "Velja za skrbniški del, samo za vas na tej napravi. Učinkuje takoj — shranjevanje ni potrebno.",
+      "customerLanguage": "Jezik galerije in gostov"
     },
     "publicSite": {
       "badge": "Javna pristajalna stran",
@@ -2033,7 +2037,7 @@
       "aboutText": "Globalne kategorije so na voljo za vse dogodke. Pri urejanju posameznih dogodkov lahko ustvarite tudi kategorije za dogodek. Kategorije pomagajo organizirati fotografije in gostom omogočajo filtriranje fotografij po vrsti v prikazu galerije."
     },
     "systemStatus": {
-      "title": "Stanje sistema",
+      "title": "Status",
       "storageOverview": "Pregled prostora",
       "systemInfo": "Sistemske informacije",
       "databaseInfo": "Informacije o bazi podatkov",
@@ -2059,7 +2063,8 @@
       "failed": "Neuspešno",
       "lastUpdate": "Zadnja posodobitev",
       "emailProcessorStopped": "Ne deluje — e-pošta v čakalni vrsti se zapisuje, vendar je nič ne pošilja.",
-      "emailProcessorDegraded": "Deluje, vendar zadnji prehod ni mogel poslati: {{error}}"
+      "emailProcessorDegraded": "Deluje, vendar zadnji prehod ni mogel poslati: {{error}}",
+      "description": "Storitve, čakalne vrste, shramba in različica — kaj ta instanca trenutno izvaja."
     },
     "photoDimensions": {
       "title": "Dimenzije fotografij",
@@ -2316,7 +2321,8 @@
       "system": "Sistem",
       "appearance": "Vsebina in videz",
       "communication": "Komunikacija",
-      "crm": "Nastavitve CRM"
+      "crm": "Nastavitve CRM",
+      "people": "Osebe in dostop"
     },
     "contracts": {
       "title": "Pogodbe"
@@ -2600,7 +2606,9 @@
       "documents": {
         "title": "Dokumenti stranke",
         "description": "Delite dokumente s stranko v njenem portalu in od nje prejemajte dokumente. Datoteke, ki jih naložijo stranke, ostanejo nedostopne, dokler jih v zapisu stranke ne označite kot varne. Privzeto je dovoljen PDF; dodatne vrste datotek ter omejitve velikosti in prostora nastavite pod Nastavitve → CRM."
-      }
+      },
+      "configure": "Nastavi",
+      "sidebarInSettings": "Ni vnosa v stranski vrstici — najdete ga v nastavitvah"
     },
     "customerSurface": {
       "brandingTitle": "Glava nadzorne plošče stranke",
@@ -2835,6 +2843,15 @@
       "running": "Branje avtorjev...",
       "noneToRead": "Ni več fotografij za branje",
       "button": "Preberi avtorje iz EXIF"
+    },
+    "health": {
+      "title": "Stanje",
+      "description": "Napake v ozadju, ki potrebujejo pozornost — obtičala e-pošta, neuspele preverbe in čiščenje."
+    },
+    "search": {
+      "placeholder": "Iskanje po nastavitvah…",
+      "label": "Iskanje po nastavitvah",
+      "noResults": "Nobena nastavitev ne ustreza »{{query}}«."
     }
   },
   "analytics": {
@@ -9304,6 +9321,36 @@
     },
     "legalNotice": {
       "title": "Pravno obvestilo"
+    }
+  },
+  "search": {
+    "groups": {
+      "pages": "Strani"
+    },
+    "palette": {
+      "label": "Iskanje po skrbniškem delu",
+      "placeholder": "Iskanje strani in nastavitev…",
+      "noResults": "Nič ne ustreza »{{query}}«.",
+      "open": "Iskanje strani in nastavitev"
+    }
+  },
+  "communication": {
+    "empty": {
+      "title": "Nobena komunikacijska funkcija ni omogočena",
+      "body": "Omogočite Sporočila ali PicTransfer v Nastavitve → Funkcije, da začnete.",
+      "noAccessTitle": "Tukaj ni ničesar, kar bi lahko odprli",
+      "noAccessBody": "Te funkcije so vklopljene, vendar vaša vloga ne more odpreti nobene od njihovih strani. Za dostop prosite skrbnika."
+    }
+  },
+  "automation": {
+    "empty": {
+      "title": "Nobena funkcija avtomatizacije ni omogočena",
+      "body": "Omogočite Workflows ali opomnike po e-pošti v Nastavitve → Funkcije, da začnete.",
+      "noAccessTitle": "Tukaj ni ničesar, kar bi lahko odprli",
+      "noAccessBody": "Te funkcije so vklopljene, vendar vaša vloga ne more odpreti nobene od njihovih strani. Za dostop prosite skrbnika."
+    },
+    "subnav": {
+      "approvals": "Odobritve"
     }
   }
 }

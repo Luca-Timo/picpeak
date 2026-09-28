@@ -46,7 +46,10 @@ describe('useHasVisibleSettings', () => {
   it('gates both entry points', () => {
     // The sidebar filters its Settings item on the visible groups, and the
     // header's Settings item reads the hook; neither checks settings.view.
-    expect(read('components/admin/AdminSidebar.tsx')).toMatch(/item\.href === SETTINGS_PATH\) return settingsGroups\.length > 0/);
+    // The sidebar now derives this for every section from the section's own
+    // nav hook; Settings is the SETTINGS_PATH row of that map.
+    expect(read('components/admin/AdminSidebar.tsx')).toMatch(/\[SETTINGS_PATH\]: \{ count: settingsGroups\.length \}/);
+    expect(read('components/admin/AdminSidebar.tsx')).toMatch(/if \(section\) return section\.count > 0;/);
     expect(read('components/admin/AdminHeader.tsx')).toMatch(/hasVisibleSettings && \(/);
   });
 });

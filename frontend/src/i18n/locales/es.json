@@ -178,7 +178,9 @@
     "emailSettings": "Ajustes de correo",
     "backup": "Copia de seguridad",
     "cmsPages": "Páginas CMS",
-    "users": "Usuarios"
+    "users": "Usuarios",
+    "communication": "Comunicación",
+    "automation": "Automatización"
   },
   "archives": {
     "title": "Archivos",
@@ -806,7 +808,10 @@
       "accountEmailRequired": "Se requiere una dirección de correo",
       "accountEmailInvalid": "Introduce una dirección de correo válida",
       "accountSaveButton": "Guardar detalles de la cuenta",
-      "accountSaveSuccess": "Detalles de la cuenta actualizados"
+      "accountSaveSuccess": "Detalles de la cuenta actualizados",
+      "adminLanguage": "Tu idioma de administración",
+      "adminLanguageHelp": "Se aplica al área de administración, solo para ti en este dispositivo. Surte efecto de inmediato — no hace falta guardar.",
+      "customerLanguage": "Idioma de la galería y los invitados"
     },
     "publicSite": {
       "tabLabel": "Sitio público",
@@ -912,7 +917,7 @@
       "aboutText": "Las categorías globales están disponibles para todos los eventos. También puedes crear categorías específicas del evento al editar eventos individuales. Las categorías ayudan a organizar las fotos y permiten a los invitados filtrar por tipo en la galería."
     },
     "systemStatus": {
-      "title": "Estado del sistema",
+      "title": "Estado",
       "storageOverview": "Resumen de almacenamiento",
       "systemInfo": "Información del sistema",
       "databaseInfo": "Información de la base de datos",
@@ -936,7 +941,8 @@
       "pending": "Pendiente",
       "sent": "Enviado",
       "failed": "Fallado",
-      "lastUpdate": "Última actualización"
+      "lastUpdate": "Última actualización",
+      "description": "Servicios, colas, almacenamiento y versión — lo que esta instancia está ejecutando ahora."
     },
     "photoDimensions": {
       "title": "Dimensiones de foto",
@@ -1153,6 +1159,22 @@
       "running": "Leyendo autores...",
       "noneToRead": "No quedan fotos por leer",
       "button": "Leer autores del EXIF"
+    },
+    "groups": {
+      "people": "Personas y acceso"
+    },
+    "health": {
+      "title": "Estado de salud",
+      "description": "Fallos en segundo plano que requieren atención — correos atascados, comprobaciones fallidas y limpieza."
+    },
+    "search": {
+      "placeholder": "Buscar en los ajustes…",
+      "label": "Buscar en los ajustes",
+      "noResults": "Ningún ajuste coincide con «{{query}}»."
+    },
+    "features": {
+      "configure": "Configurar",
+      "sidebarInSettings": "Sin entrada en la barra lateral — está en los ajustes"
     }
   },
   "analytics": {
@@ -2662,5 +2684,35 @@
     "filenameAZ": "Nombre de archivo (A-Z)",
     "filenameZA": "Nombre de archivo (Z-A)",
     "dateTaken": "Fecha de captura"
+  },
+  "search": {
+    "groups": {
+      "pages": "Páginas"
+    },
+    "palette": {
+      "label": "Buscar en el área de administración",
+      "placeholder": "Buscar páginas y ajustes…",
+      "noResults": "Nada coincide con «{{query}}».",
+      "open": "Buscar páginas y ajustes"
+    }
+  },
+  "communication": {
+    "empty": {
+      "title": "No hay funciones de comunicación activadas",
+      "body": "Activa Mensajes o PicTransfer en Ajustes → Funciones para empezar.",
+      "noAccessTitle": "Aquí no hay nada que puedas abrir",
+      "noAccessBody": "Estas funciones están activadas, pero tu rol no puede abrir ninguna de sus páginas. Pide acceso a un administrador."
+    }
+  },
+  "automation": {
+    "empty": {
+      "title": "No hay funciones de automatización activadas",
+      "body": "Activa Workflows o los correos de recordatorio en Ajustes → Funciones para empezar.",
+      "noAccessTitle": "Aquí no hay nada que puedas abrir",
+      "noAccessBody": "Estas funciones están activadas, pero tu rol no puede abrir ninguna de sus páginas. Pide acceso a un administrador."
+    },
+    "subnav": {
+      "approvals": "Aprobaciones"
+    }
   }
 }

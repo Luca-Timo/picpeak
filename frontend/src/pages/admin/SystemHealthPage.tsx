@@ -136,14 +136,12 @@ export const SystemHealthPage: React.FC = () => {
     </div>
   );
 
+  // No header and no page padding of its own: this renders as the Settings →
+  // System → Health tab, and SettingsPage supplies the SectionPageHeader
+  // (title + description) and the page gutter. It used to be a top-level route
+  // at /admin/system-health, which now redirects here.
   return (
-    <div className="container py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-heading">{t('systemHealth.title', 'System health')}</h1>
-        <p className="text-sm text-muted mt-1">
-          {t('systemHealth.subtitle', 'Background failures that need attention.')}
-        </p>
-      </div>
+    <div>
 
       {/* Queue processor. Listed first because when this is stopped, every
           other count on the page is explained by it — and a stopped processor

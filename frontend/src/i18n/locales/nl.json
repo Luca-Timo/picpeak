@@ -178,7 +178,9 @@
     "cmsPages": "CMS-pagina's",
     "users": "Gebruikers",
     "calendar": "Agenda",
-    "clients": "Klanten"
+    "clients": "Klanten",
+    "communication": "Communicatie",
+    "automation": "Automatisering"
   },
   "archives": {
     "title": "Archieven",
@@ -781,7 +783,10 @@
       "accountEmailRequired": "E-mailadres is verplicht",
       "accountEmailInvalid": "Voer een geldig e-mailadres in",
       "accountSaveButton": "Accountgegevens opslaan",
-      "accountSaveSuccess": "Accountgegevens bijgewerkt"
+      "accountSaveSuccess": "Accountgegevens bijgewerkt",
+      "adminLanguage": "Jouw beheertaal",
+      "adminLanguageHelp": "Geldt voor het beheergedeelte, alleen voor jou op dit apparaat. Werkt direct — opslaan is niet nodig.",
+      "customerLanguage": "Taal voor galerie en gasten"
     },
     "publicSite": {
       "badge": "Openbare landingspagina",
@@ -874,7 +879,7 @@
       "aboutText": "Globale categorieen zijn beschikbaar voor alle evenementen. U kunt ook evenement-specifieke categorieen aanmaken bij het bewerken van individuele evenementen. Categorieen helpen foto's te organiseren en stellen gasten in staat om foto's op type te filteren in de galerijweergave."
     },
     "systemStatus": {
-      "title": "Systeemstatus",
+      "title": "Status",
       "storageOverview": "Opslagoverzicht",
       "systemInfo": "Systeeminformatie",
       "databaseInfo": "Database-informatie",
@@ -898,7 +903,8 @@
       "pending": "In afwachting",
       "sent": "Verzonden",
       "failed": "Mislukt",
-      "lastUpdate": "Laatste update"
+      "lastUpdate": "Laatste update",
+      "description": "Diensten, wachtrijen, opslag en versie — wat deze instantie nu draait."
     },
     "photoDimensions": {
       "title": "Fotoafmetingen",
@@ -1116,7 +1122,8 @@
       "integrations": "Integraties",
       "system": "Systeem",
       "appearance": "Inhoud & Weergave",
-      "communication": "Communicatie"
+      "communication": "Communicatie",
+      "people": "Personen en toegang"
     },
     "apiTokens": {
       "title": "API-tokens",
@@ -1245,7 +1252,9 @@
       "clients": {
         "title": "Klanten",
         "description": "Hoofdschakelaar voor het Klanten-onderdeel in de zijbalk. Uitgeschakeld verbergt het onderdeel en alle subfuncties ongeacht hun individuele schakelaars — opnieuw inschakelen herstelt de vorige status."
-      }
+      },
+      "configure": "Configureren",
+      "sidebarInSettings": "Geen item in de zijbalk — staat in Instellingen"
     },
     "customerSurface": {
       "brandingTitle": "Kopregel klantdashboard",
@@ -1267,6 +1276,15 @@
       "running": "Makers worden gelezen...",
       "noneToRead": "Geen foto’s meer te lezen",
       "button": "Makers uit EXIF lezen"
+    },
+    "health": {
+      "title": "Gezondheid",
+      "description": "Achtergrondfouten die aandacht nodig hebben — vastgelopen e-mails, mislukte controles en opruiming."
+    },
+    "search": {
+      "placeholder": "Instellingen zoeken…",
+      "label": "Instellingen zoeken",
+      "noResults": "Geen instelling komt overeen met “{{query}}”."
     }
   },
   "analytics": {
@@ -3239,6 +3257,36 @@
       "net": "Netto",
       "vat": "Btw",
       "total": "Bruto"
+    }
+  },
+  "search": {
+    "groups": {
+      "pages": "Pagina's"
+    },
+    "palette": {
+      "label": "Zoeken in het beheergedeelte",
+      "placeholder": "Pagina's en instellingen zoeken…",
+      "noResults": "Niets komt overeen met “{{query}}”.",
+      "open": "Pagina's en instellingen zoeken"
+    }
+  },
+  "communication": {
+    "empty": {
+      "title": "Geen communicatiefuncties ingeschakeld",
+      "body": "Schakel Berichten of PicTransfer in via Instellingen → Functies om te beginnen.",
+      "noAccessTitle": "Hier is niets dat je kunt openen",
+      "noAccessBody": "Deze functies staan aan, maar jouw rol kan geen van de bijbehorende pagina’s openen. Vraag een beheerder om toegang."
+    }
+  },
+  "automation": {
+    "empty": {
+      "title": "Geen automatiseringsfuncties ingeschakeld",
+      "body": "Schakel Workflows of herinneringsmails in via Instellingen → Functies om te beginnen.",
+      "noAccessTitle": "Hier is niets dat je kunt openen",
+      "noAccessBody": "Deze functies staan aan, maar jouw rol kan geen van de bijbehorende pagina’s openen. Vraag een beheerder om toegang."
+    },
+    "subnav": {
+      "approvals": "Goedkeuringen"
     }
   }
 }

@@ -39,7 +39,7 @@ export const WorkflowsListPage: React.FC = () => {
     mutationFn: () => workflowsService.create(NEW_WORKFLOW),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['workflows'] });
-      navigate(`/admin/workflows/${res.id}`);
+      navigate(`/admin/automation/workflows/${res.id}`);
     },
     onError: (err: any) => toast.error(err?.response?.data?.error || (t('workflows.toast.createFailed', 'Could not create workflow') as string)),
   });
@@ -98,7 +98,7 @@ export const WorkflowsListPage: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => navigate('/admin/workflows/approvals')} leftIcon={<Inbox className="w-4 h-4" />}>
+          <Button variant="outline" onClick={() => navigate('/admin/automation/approvals')} leftIcon={<Inbox className="w-4 h-4" />}>
             {t('workflows.approvals.title', 'Approvals')}
           </Button>
           <Button variant="primary" isLoading={createMutation.isPending} onClick={() => createMutation.mutate()} leftIcon={<Plus className="w-4 h-4" />}>
@@ -118,7 +118,7 @@ export const WorkflowsListPage: React.FC = () => {
               <li key={w.id} className="flex items-center gap-3 px-4 py-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <Link to={`/admin/workflows/${w.id}`} className="font-medium text-heading truncate hover:underline">{w.name}</Link>
+                    <Link to={`/admin/automation/workflows/${w.id}`} className="font-medium text-heading truncate hover:underline">{w.name}</Link>
                     {isBuiltin(w) && (
                       <span className="text-[11px] px-1.5 py-0.5 rounded bg-subtle text-body">{t('workflows.builtin', 'built-in')}</span>
                     )}
@@ -139,7 +139,7 @@ export const WorkflowsListPage: React.FC = () => {
                 <Button variant="ghost" size="sm" onClick={() => { setTestResult(null); setTestEntityId(''); setTestTarget(w); }} aria-label={t('workflows.test.title', 'Test run') as string}>
                   <FlaskConical className="w-4 h-4" />
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => navigate(`/admin/workflows/${w.id}`)} aria-label={t('common.edit', 'Edit') as string}>
+                <Button variant="ghost" size="sm" onClick={() => navigate(`/admin/automation/workflows/${w.id}`)} aria-label={t('common.edit', 'Edit') as string}>
                   <Pencil className="w-4 h-4" />
                 </Button>
                 {!isBuiltin(w) && (

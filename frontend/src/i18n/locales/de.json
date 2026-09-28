@@ -893,7 +893,6 @@
     "events": "Veranstaltungen",
     "messages": "Nachrichten",
     "settings": "Einstellungen",
-    "systemHealth": "Systemzustand",
     "archives": "Archive",
     "transfers": "PicTransfer",
     "emailSettings": "E-Mail-Einstellungen",
@@ -906,7 +905,9 @@
     "clients": "CRM",
     "accounting": "Buchhaltung",
     "workflows": "Workflows",
-    "betaTag": "Beta"
+    "betaTag": "Beta",
+    "communication": "Kommunikation",
+    "automation": "Automatisierung"
   },
   "transfers": {
     "title": "PicTransfer",
@@ -2473,7 +2474,10 @@
       "timeFormat": "Zeitformat",
       "timeFormat24h": "24-Stunden (14:30)",
       "timeFormat12h": "12-Stunden (2:30 PM)",
-      "timeFormatHelp": "Steuert die Darstellung von Uhrzeiten in der Administration, auf kundenseitigen Seiten und in PDFs. Gespeichert wird weiterhin im 24-Stunden-Format (HH:mm) — nur die Anzeige ändert sich."
+      "timeFormatHelp": "Steuert die Darstellung von Uhrzeiten in der Administration, auf kundenseitigen Seiten und in PDFs. Gespeichert wird weiterhin im 24-Stunden-Format (HH:mm) — nur die Anzeige ändert sich.",
+      "adminLanguage": "Ihre Admin-Sprache",
+      "adminLanguageHelp": "Gilt für den Admin-Bereich, nur für Sie auf diesem Gerät. Die Änderung wirkt sofort — Speichern ist nicht nötig.",
+      "customerLanguage": "Sprache für Galerie & Gäste"
     },
     "publicSite": {
       "badge": "Öffentliche Landingpage",
@@ -2726,7 +2730,7 @@
       "aboutText": "Globale Kategorien sind für alle Veranstaltungen verfügbar. Sie können auch veranstaltungsspezifische Kategorien erstellen, wenn Sie einzelne Veranstaltungen bearbeiten. Kategorien helfen beim Organisieren von Fotos und ermöglichen es Gästen, Fotos nach Typ in der Galerieansicht zu filtern."
     },
     "systemStatus": {
-      "title": "Systemstatus",
+      "title": "Status",
       "storageOverview": "Speicherübersicht",
       "systemInfo": "Systeminformationen",
       "databaseInfo": "Datenbankinformationen",
@@ -2752,7 +2756,8 @@
       "failed": "Fehlgeschlagen",
       "lastUpdate": "Letzte Aktualisierung",
       "emailProcessorStopped": "Läuft nicht — eingereihte E-Mails werden geschrieben, aber niemand versendet sie.",
-      "emailProcessorDegraded": "Läuft, aber der letzte Durchlauf konnte nicht senden: {{error}}"
+      "emailProcessorDegraded": "Läuft, aber der letzte Durchlauf konnte nicht senden: {{error}}",
+      "description": "Dienste, Warteschlangen, Speicher und Version — was diese Instanz gerade ausführt."
     },
     "photoDimensions": {
       "title": "Foto-Abmessungen",
@@ -2872,7 +2877,8 @@
       "system": "System",
       "appearance": "Inhalt & Erscheinungsbild",
       "communication": "Kommunikation",
-      "crm": "CRM-Einstellungen"
+      "crm": "CRM-Einstellungen",
+      "people": "Personen & Zugriff"
     },
     "contracts": {
       "title": "Verträge"
@@ -3156,7 +3162,9 @@
       "documents": {
         "title": "Kundendokumente",
         "description": "Teilen Sie Dokumente im Portal mit einem Kunden und erhalten Sie Dokumente von ihm. Kunden-Uploads bleiben gesperrt, bis Sie sie im Kundendatensatz als sauber markieren. Standardmäßig PDF; weitere Dateitypen, Größen- und Speichergrenzen unter Einstellungen → CRM."
-      }
+      },
+      "configure": "Konfigurieren",
+      "sidebarInSettings": "Kein Eintrag in der Seitenleiste — liegt in den Einstellungen"
     },
     "customerSurface": {
       "brandingTitle": "Kundendashboard-Kopfzeile",
@@ -3398,6 +3406,204 @@
       "leaveMessage": "Auf dieser Seite gibt es ungespeicherte Änderungen. Wenn du jetzt gehst, gehen sie verloren.",
       "leaveConfirm": "Verwerfen und verlassen",
       "leaveCancel": "Hier bleiben"
+    },
+    "health": {
+      "title": "Systemzustand",
+      "description": "Fehler im Hintergrund, die Aufmerksamkeit brauchen — hängende E-Mails, fehlgeschlagene Prüfungen und Aufräumarbeiten."
+    },
+    "search": {
+      "placeholder": "Einstellungen durchsuchen…",
+      "label": "Einstellungen durchsuchen",
+      "noResults": "Keine Einstellung passt zu „{{query}}“."
+    },
+    "keywords": {
+      "usage": [
+        "nutzung",
+        "lizenz",
+        "kontingent"
+      ],
+      "features": [
+        "funktionen",
+        "module",
+        "aktivieren",
+        "deaktivieren",
+        "schalter"
+      ],
+      "general": [
+        "sprache",
+        "zeitzone",
+        "datumsformat",
+        "uhrzeitformat",
+        "domain",
+        "konto",
+        "passwort"
+      ],
+      "events": [
+        "veranstaltungen",
+        "standardwerte",
+        "ablauf",
+        "uploadlimit"
+      ],
+      "eventTypes": [
+        "veranstaltungstypen",
+        "hochzeit",
+        "portrait"
+      ],
+      "users": [
+        "benutzer",
+        "rollen",
+        "berechtigungen",
+        "team",
+        "einladen",
+        "zugriff",
+        "mitarbeiter"
+      ],
+      "branding": [
+        "logo",
+        "farben",
+        "favicon",
+        "firmenname",
+        "erscheinungsbild"
+      ],
+      "categories": [
+        "kategorien",
+        "schlagworte"
+      ],
+      "thumbnails": [
+        "vorschaubilder",
+        "bildgröße"
+      ],
+      "downloads": [
+        "auflösung",
+        "originaldateien",
+        "herunterladen"
+      ],
+      "styling": [
+        "css",
+        "stylesheet",
+        "gestaltung"
+      ],
+      "cms": [
+        "impressum",
+        "datenschutz",
+        "agb",
+        "seiten",
+        "rechtliches"
+      ],
+      "email": [
+        "e-mail",
+        "smtp",
+        "imap",
+        "postfach",
+        "absender",
+        "signatur",
+        "vorlagen"
+      ],
+      "moderation": [
+        "moderation",
+        "feedback",
+        "kommentare",
+        "meldungen"
+      ],
+      "security": [
+        "sicherheit",
+        "anmeldung",
+        "sperre",
+        "sitzungen",
+        "passwortrichtlinie"
+      ],
+      "sso": [
+        "anmeldung",
+        "oidc",
+        "saml",
+        "identitätsanbieter",
+        "einmalanmeldung"
+      ],
+      "imageSecurity": [
+        "bildschutz",
+        "wasserzeichen",
+        "rechtsklick"
+      ],
+      "seo": [
+        "suchmaschine",
+        "robots",
+        "sitemap",
+        "indexierung"
+      ],
+      "apiTokens": [
+        "api",
+        "token",
+        "schlüssel",
+        "schnittstelle"
+      ],
+      "webhooks": [
+        "webhooks",
+        "rückrufe"
+      ],
+      "status": [
+        "systemstatus",
+        "dienste",
+        "warteschlange",
+        "speicher",
+        "version"
+      ],
+      "health": [
+        "systemzustand",
+        "hängende e-mails",
+        "diagnose",
+        "fehler",
+        "aufräumen"
+      ],
+      "analytics": [
+        "statistik",
+        "auswertung",
+        "besucher"
+      ],
+      "backup": [
+        "sicherung",
+        "wiederherstellung",
+        "export",
+        "import",
+        "datensicherung"
+      ],
+      "businessProfile": [
+        "firmenprofil",
+        "adresse",
+        "ust-idnr",
+        "steuernummer",
+        "iban",
+        "bank",
+        "rechnungssteller"
+      ],
+      "crm": [
+        "angebote",
+        "rechnungen",
+        "nummerierung",
+        "dokumente"
+      ],
+      "contracts": [
+        "verträge",
+        "klauseln",
+        "unterschrift",
+        "vorlagen",
+        "bausteine"
+      ],
+      "accounting": [
+        "buchhaltung",
+        "kontenplan",
+        "mwst",
+        "steuer",
+        "banana"
+      ],
+      "whatsapp": [
+        "whatsapp",
+        "telefon"
+      ],
+      "slideshow": [
+        "diashow",
+        "präsentation",
+        "kiosk"
+      ]
     }
   },
   "branding": {
@@ -9377,6 +9583,36 @@
     },
     "legalNotice": {
       "title": "Rechtlicher Hinweis"
+    }
+  },
+  "search": {
+    "groups": {
+      "pages": "Seiten"
+    },
+    "palette": {
+      "label": "Admin-Bereich durchsuchen",
+      "placeholder": "Seiten und Einstellungen durchsuchen…",
+      "noResults": "Nichts passt zu „{{query}}“.",
+      "open": "Seiten und Einstellungen durchsuchen"
+    }
+  },
+  "communication": {
+    "empty": {
+      "title": "Keine Kommunikationsfunktionen aktiviert",
+      "body": "Aktivieren Sie Nachrichten oder PicTransfer unter Einstellungen → Funktionen, um loszulegen.",
+      "noAccessTitle": "Hier gibt es nichts, was Sie öffnen können",
+      "noAccessBody": "Diese Funktionen sind aktiviert, aber Ihre Rolle kann keine ihrer Seiten öffnen. Bitten Sie eine Administratorin oder einen Administrator um Zugriff."
+    }
+  },
+  "automation": {
+    "empty": {
+      "title": "Keine Automatisierungsfunktionen aktiviert",
+      "body": "Aktivieren Sie Workflows oder Erinnerungs-E-Mails unter Einstellungen → Funktionen, um loszulegen.",
+      "noAccessTitle": "Hier gibt es nichts, was Sie öffnen können",
+      "noAccessBody": "Diese Funktionen sind aktiviert, aber Ihre Rolle kann keine ihrer Seiten öffnen. Bitten Sie eine Administratorin oder einen Administrator um Zugriff."
+    },
+    "subnav": {
+      "approvals": "Freigaben"
     }
   }
 }

@@ -895,7 +895,6 @@
     "transfers": "PicTransfer",
     "messages": "Messages",
     "settings": "Settings",
-    "systemHealth": "System health",
     "eventTypes": "Event Types",
     "branding": "Branding",
     "emailSettings": "Email Settings",
@@ -906,7 +905,9 @@
     "clients": "CRM",
     "accounting": "Accounting",
     "workflows": "Workflows",
-    "betaTag": "Beta"
+    "betaTag": "Beta",
+    "communication": "Communication",
+    "automation": "Automation"
   },
   "transfers": {
     "title": "PicTransfer",
@@ -1935,7 +1936,10 @@
       "timeFormat": "Time format",
       "timeFormat24h": "24-hour (14:30)",
       "timeFormat12h": "12-hour (2:30 PM)",
-      "timeFormatHelp": "Controls how times render across admin views, customer-facing pages, and PDFs. Storage stays 24-hour (HH:mm); only the display switches."
+      "timeFormatHelp": "Controls how times render across admin views, customer-facing pages, and PDFs. Storage stays 24-hour (HH:mm); only the display switches.",
+      "adminLanguage": "Your admin language",
+      "adminLanguageHelp": "Applies to the admin area, for you on this device only. It takes effect immediately — no need to save.",
+      "customerLanguage": "Gallery & guest language"
     },
     "publicSite": {
       "badge": "Public Landing",
@@ -2051,7 +2055,7 @@
       "aboutText": "Global categories are available for all events. You can also create event-specific categories when editing individual events. Categories help organize photos and allow guests to filter photos by type in the gallery view."
     },
     "systemStatus": {
-      "title": "System Status",
+      "title": "Status",
       "storageOverview": "Storage Overview",
       "systemInfo": "System Information",
       "databaseInfo": "Database Information",
@@ -2077,7 +2081,8 @@
       "failed": "Failed",
       "lastUpdate": "Last update",
       "emailProcessorStopped": "Not running — queued emails are written but nothing sends them.",
-      "emailProcessorDegraded": "Running, but the last pass could not send: {{error}}"
+      "emailProcessorDegraded": "Running, but the last pass could not send: {{error}}",
+      "description": "Services, queues, storage and version — what this instance is running right now."
     },
     "photoDimensions": {
       "title": "Photo Dimensions",
@@ -2334,7 +2339,8 @@
       "system": "System",
       "appearance": "Content & Appearance",
       "communication": "Communication",
-      "crm": "CRM-Settings"
+      "crm": "CRM-Settings",
+      "people": "People & access"
     },
     "contracts": {
       "title": "Contracts"
@@ -2618,7 +2624,9 @@
       "documents": {
         "title": "Customer documents",
         "description": "Share documents with a customer in their portal and receive documents from them. Customer uploads stay unavailable until you mark them clean on the customer record. PDF by default; more file types, size and storage limits under Settings → CRM."
-      }
+      },
+      "configure": "Configure",
+      "sidebarInSettings": "No sidebar item — lives in Settings"
     },
     "customerSurface": {
       "brandingTitle": "Customer dashboard header",
@@ -2860,6 +2868,239 @@
       "leaveMessage": "You have unsaved changes on this page. Leaving now discards them.",
       "leaveConfirm": "Discard and leave",
       "leaveCancel": "Stay"
+    },
+    "health": {
+      "title": "Health",
+      "description": "Background failures that need attention — stuck emails, failed checks and cleanup."
+    },
+    "search": {
+      "placeholder": "Search settings…",
+      "label": "Search settings",
+      "noResults": "No settings match “{{query}}”."
+    },
+    "keywords": {
+      "accounting": [
+        "accounting",
+        "chart of accounts",
+        "ledger",
+        "vat",
+        "tax",
+        "bookkeeping",
+        "banana"
+      ],
+      "analytics": [
+        "analytics",
+        "tracking",
+        "statistics",
+        "visitors"
+      ],
+      "apiTokens": [
+        "api",
+        "tokens",
+        "api key",
+        "integration"
+      ],
+      "backup": [
+        "backup",
+        "restore",
+        "export",
+        "import",
+        "snapshot",
+        "disaster recovery"
+      ],
+      "branding": [
+        "branding",
+        "logo",
+        "favicon",
+        "colors",
+        "colours",
+        "theme",
+        "company name"
+      ],
+      "businessProfile": [
+        "business profile",
+        "issuer",
+        "company address",
+        "vat id",
+        "tax number",
+        "iban",
+        "bank"
+      ],
+      "categories": [
+        "categories",
+        "photo categories",
+        "tags"
+      ],
+      "cms": [
+        "cms",
+        "pages",
+        "imprint",
+        "impressum",
+        "privacy policy",
+        "terms",
+        "legal"
+      ],
+      "contracts": [
+        "contracts",
+        "blocks",
+        "clauses",
+        "signature",
+        "templates"
+      ],
+      "crm": [
+        "crm",
+        "quotes",
+        "invoices",
+        "numbering",
+        "document defaults"
+      ],
+      "downloads": [
+        "downloads",
+        "resolution",
+        "export size",
+        "original files"
+      ],
+      "email": [
+        "email",
+        "smtp",
+        "imap",
+        "mail server",
+        "sender",
+        "templates",
+        "signature"
+      ],
+      "eventTypes": [
+        "event types",
+        "wedding",
+        "portrait",
+        "categories of event"
+      ],
+      "events": [
+        "event creation",
+        "defaults",
+        "expiry",
+        "upload limit"
+      ],
+      "features": [
+        "features",
+        "flags",
+        "toggles",
+        "enable",
+        "disable",
+        "modules"
+      ],
+      "general": [
+        "general",
+        "language",
+        "timezone",
+        "date format",
+        "time format",
+        "site url",
+        "domain",
+        "account",
+        "password",
+        "mfa",
+        "2fa"
+      ],
+      "health": [
+        "system health",
+        "stuck emails",
+        "diagnostics",
+        "cleanup",
+        "checks",
+        "troubleshooting"
+      ],
+      "imageSecurity": [
+        "image protection",
+        "watermark",
+        "right click",
+        "download protection"
+      ],
+      "moderation": [
+        "moderation",
+        "feedback",
+        "comments",
+        "reports",
+        "flagged"
+      ],
+      "security": [
+        "security",
+        "rate limit",
+        "login",
+        "lockout",
+        "sessions",
+        "password policy"
+      ],
+      "seo": [
+        "seo",
+        "robots",
+        "sitemap",
+        "meta tags",
+        "search engine",
+        "indexing"
+      ],
+      "slideshow": [
+        "slideshow",
+        "kiosk",
+        "presentation",
+        "display"
+      ],
+      "sso": [
+        "sso",
+        "single sign-on",
+        "oidc",
+        "saml",
+        "oauth",
+        "identity provider"
+      ],
+      "status": [
+        "system status",
+        "services",
+        "queue",
+        "workers",
+        "disk",
+        "version"
+      ],
+      "styling": [
+        "custom css",
+        "css",
+        "stylesheet",
+        "styling"
+      ],
+      "thumbnails": [
+        "thumbnails",
+        "preview size",
+        "image size"
+      ],
+      "usage": [
+        "usage",
+        "licence",
+        "license",
+        "plan",
+        "quota"
+      ],
+      "users": [
+        "users",
+        "accounts",
+        "roles",
+        "permissions",
+        "invite",
+        "team",
+        "staff",
+        "access"
+      ],
+      "webhooks": [
+        "webhooks",
+        "callbacks",
+        "http hooks",
+        "events feed"
+      ],
+      "whatsapp": [
+        "whatsapp",
+        "messaging",
+        "phone",
+        "business api"
+      ]
     }
   },
   "analytics": {
@@ -9376,6 +9617,36 @@
     },
     "legalNotice": {
       "title": "Legal notice"
+    }
+  },
+  "search": {
+    "groups": {
+      "pages": "Pages"
+    },
+    "palette": {
+      "label": "Search the admin area",
+      "placeholder": "Search pages and settings…",
+      "noResults": "Nothing matches “{{query}}”.",
+      "open": "Search pages and settings"
+    }
+  },
+  "communication": {
+    "empty": {
+      "title": "No communication features enabled",
+      "body": "Enable Messages or PicTransfer under Settings → Features to get started.",
+      "noAccessTitle": "Nothing here you can open",
+      "noAccessBody": "These features are switched on, but your role cannot open any of their pages. Ask an administrator for access."
+    }
+  },
+  "automation": {
+    "empty": {
+      "title": "No automation features enabled",
+      "body": "Enable Workflows or reminder emails under Settings → Features to get started.",
+      "noAccessTitle": "Nothing here you can open",
+      "noAccessBody": "These features are switched on, but your role cannot open any of their pages. Ask an administrator for access."
+    },
+    "subnav": {
+      "approvals": "Approvals"
     }
   }
 }

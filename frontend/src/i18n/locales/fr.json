@@ -178,7 +178,9 @@
     "cmsPages": "Pages CMS",
     "users": "Utilisateurs",
     "calendar": "Calendrier",
-    "clients": "Clients"
+    "clients": "Clients",
+    "communication": "Communication",
+    "automation": "Automatisation"
   },
   "archives": {
     "title": "Archives",
@@ -785,7 +787,10 @@
       "accountEmailRequired": "L'adresse e-mail est requise",
       "accountEmailInvalid": "Entrez une adresse e-mail valide",
       "accountSaveButton": "Enregistrer les détails du compte",
-      "accountSaveSuccess": "Détails du compte mis à jour"
+      "accountSaveSuccess": "Détails du compte mis à jour",
+      "adminLanguage": "Votre langue d’administration",
+      "adminLanguageHelp": "S'applique à l'espace d'administration, pour vous sur cet appareil uniquement. L'effet est immédiat — inutile d'enregistrer.",
+      "customerLanguage": "Langue de la galerie et des invités"
     },
     "publicSite": {
       "badge": "Page d'accueil publique",
@@ -878,7 +883,7 @@
       "aboutText": "Les catégories globales sont disponibles pour tous les événements. Vous pouvez également créer des catégories spécifiques à un événement lors de la modification d'événements individuels. Les catégories aident à organiser les photos et permettent aux invités de filtrer les photos par type dans la vue galerie."
     },
     "systemStatus": {
-      "title": "Statut du système",
+      "title": "État",
       "storageOverview": "Aperçu du stockage",
       "systemInfo": "Informations système",
       "databaseInfo": "Informations sur la base de données",
@@ -902,7 +907,8 @@
       "pending": "En attente",
       "sent": "Envoyé",
       "failed": "Échoué",
-      "lastUpdate": "Dernière mise à jour"
+      "lastUpdate": "Dernière mise à jour",
+      "description": "Services, files d'attente, stockage et version — ce que cette instance exécute actuellement."
     },
     "photoDimensions": {
       "title": "Dimensions des photos",
@@ -1127,7 +1133,8 @@
       "integrations": "Intégrations",
       "system": "Système",
       "appearance": "Contenu & Apparence",
-      "communication": "Communication"
+      "communication": "Communication",
+      "people": "Personnes et accès"
     },
     "apiTokens": {
       "title": "Jetons API",
@@ -1256,7 +1263,9 @@
       "clients": {
         "title": "Clients",
         "description": "Interrupteur principal pour la section Clients de la barre latérale. Désactivé masque la section et toutes les sous-fonctionnalités ci-dessous, quel que soit leur état individuel — réactivez pour restaurer selon ce que vous avez défini en dernier."
-      }
+      },
+      "configure": "Configurer",
+      "sidebarInSettings": "Pas d'entrée dans la barre latérale — se trouve dans les paramètres"
     },
     "customerSurface": {
       "brandingTitle": "En-tête du tableau de bord client",
@@ -1298,6 +1307,15 @@
       "running": "Lecture des crédits...",
       "noneToRead": "Plus aucune photo à lire",
       "button": "Lire les crédits EXIF"
+    },
+    "health": {
+      "title": "Santé",
+      "description": "Échecs en arrière-plan nécessitant une intervention — e-mails bloqués, vérifications échouées et nettoyage."
+    },
+    "search": {
+      "placeholder": "Rechercher dans les paramètres…",
+      "label": "Rechercher dans les paramètres",
+      "noResults": "Aucun paramètre ne correspond à « {{query}} »."
     }
   },
   "analytics": {
@@ -3270,6 +3288,36 @@
       "net": "Net",
       "vat": "TVA",
       "total": "Brut"
+    }
+  },
+  "search": {
+    "groups": {
+      "pages": "Pages"
+    },
+    "palette": {
+      "label": "Rechercher dans l'espace d'administration",
+      "placeholder": "Rechercher pages et paramètres…",
+      "noResults": "Rien ne correspond à « {{query}} ».",
+      "open": "Rechercher pages et paramètres"
+    }
+  },
+  "communication": {
+    "empty": {
+      "title": "Aucune fonction de communication activée",
+      "body": "Activez Messages ou PicTransfer dans Paramètres → Fonctionnalités pour commencer.",
+      "noAccessTitle": "Rien ici que vous puissiez ouvrir",
+      "noAccessBody": "Ces fonctionnalités sont activées, mais votre rôle ne peut ouvrir aucune de leurs pages. Demandez l'accès à un administrateur."
+    }
+  },
+  "automation": {
+    "empty": {
+      "title": "Aucune fonction d'automatisation activée",
+      "body": "Activez les Workflows ou les e-mails de rappel dans Paramètres → Fonctionnalités pour commencer.",
+      "noAccessTitle": "Rien ici que vous puissiez ouvrir",
+      "noAccessBody": "Ces fonctionnalités sont activées, mais votre rôle ne peut ouvrir aucune de leurs pages. Demandez l'accès à un administrateur."
+    },
+    "subnav": {
+      "approvals": "Approbations"
     }
   }
 }

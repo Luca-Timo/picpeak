@@ -32,12 +32,8 @@ describe('SidebarPreview feature gates (QA J.14)', () => {
   });
 
   it.each([
-    ['workflows', 'navigation.workflows'],
-    ['transfers', 'navigation.transfers'],
-    ['messaging', 'navigation.messages'],
     ['accounting', 'navigation.accounting'],
     ['analytics', 'admin.analytics'],
-    ['userManagement', 'navigation.users'],
   ] as const)('reflects the %s toggle', (flag, label) => {
     const { unmount } = render(<SidebarPreview staged={staged({ [flag]: false })} />);
     expect(screen.queryByText(label)).not.toBeInTheDocument();
@@ -45,6 +41,33 @@ describe('SidebarPreview feature gates (QA J.14)', () => {
 
     render(<SidebarPreview staged={staged({ [flag]: true })} />);
     expect(screen.getByText(label)).toBeInTheDocument();
+  });
+
+  // Section entries whose flags are an OR: the entry appears as soon as ONE
+  // sub-feature is on, and only disappears when every one of them is off.
+  // Getting this backwards would hide the section from an install that has
+  // exactly one of its features enabled.
+  it.each([
+    ['navigation.communication', ['messaging', 'transfers']],
+    ['navigation.automation', ['workflows', 'reminderEmails']],
+  ] as const)('shows %s when any of its sub-features is on', (label, flags) => {
+    const allOff = Object.fromEntries(flags.map((f) => [f, false])) as Partial<FeatureFlags>;
+    const { unmount } = render(<SidebarPreview staged={staged(allOff)} />);
+    expect(screen.queryByText(label)).not.toBeInTheDocument();
+    unmount();
+
+    for (const flag of flags) {
+      const one = render(<SidebarPreview staged={staged({ ...allOff, [flag]: true })} />);
+      expect(screen.getByText(label)).toBeInTheDocument();
+      one.unmount();
+    }
+  });
+
+  it('no longer offers Users as a sidebar entry', () => {
+    // User management moved into Settings → People & access, so the preview
+    // must not promise a main-menu entry that the sidebar will not render.
+    render(<SidebarPreview staged={staged({ userManagement: true })} />);
+    expect(screen.queryByText('navigation.users')).not.toBeInTheDocument();
   });
 
   it('shows the CRM entry only when one of its sub-features is on', () => {

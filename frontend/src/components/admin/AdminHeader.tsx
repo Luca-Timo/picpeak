@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, User, LogOut, Settings, Bell, Lock, CheckCircle, Trash2, Sun, Moon, Globe, ChevronDown, Eye, Download, Heart, Calendar, Image, Archive, AlertCircle, Clock, Database, FileText, Folder, Key, Mail, Tag, ToggleRight, UserCog, Webhook } from 'lucide-react';
+import { Menu, User, LogOut, Settings, Search, Bell, Lock, CheckCircle, Trash2, Sun, Moon, Globe, ChevronDown, Eye, Download, Heart, Calendar, Image, Archive, AlertCircle, Clock, Database, FileText, Folder, Key, Mail, Tag, ToggleRight, UserCog, Webhook } from 'lucide-react';
 
 // getNotificationStyle returns an icon NAME — map the ones we render to
 // components; anything unmapped keeps the Bell (codex review of #849:
@@ -23,7 +23,7 @@ import { useOnClickOutside } from '../../hooks/useOnClickOutside';
 import { usePublicSettings } from '../../hooks/usePublicSettings';
 import { useModal } from '../../hooks';
 import { PasswordChangeModal } from './PasswordChangeModal';
-import { LanguageSelector, SUPPORTED_LANGUAGES } from '../common';
+import { SUPPORTED_LANGUAGES } from '../common';
 import { notificationsService } from '../../services/notifications.service';
 import { toast } from 'react-toastify';
 import { buildResourceUrl } from '../../utils/url';
@@ -31,10 +31,15 @@ import { useHasVisibleSettings } from '../../features/settings/settingsNav';
 
 interface AdminHeaderProps {
   onMenuClick: () => void;
+  /** Opens the command palette; the keyboard shortcut is bound in AdminLayout. */
+  onOpenSearch?: () => void;
 }
 
-export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick }) => {
+export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick, onOpenSearch }) => {
   const navigate = useNavigate();
+  // Mac shows the Command glyph, everything else spells out Ctrl. Read from
+  // the platform string rather than the user agent: this only picks a label.
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '');
   // Same gate as the sidebar's Settings entry: any visible tab, not settings.view.
   const hasVisibleSettings = useHasVisibleSettings();
   const { confirmLeave } = useLeaveGuard();
@@ -290,14 +295,31 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick }) => {
                 {renderBrandBlock()}
               </div>
             )}
-            {/* Language Selector — hidden on <sm where it's surfaced
-                via the user dropdown instead (#523 follow-up: phone
-                view header was too crowded with 4 widgets; language
-                is a set-once preference so it doesn't deserve permanent
-                header real estate on mobile per Rekoo-PS's feedback). */}
-            <div className="hidden sm:block">
-              <LanguageSelector />
-            </div>
+            {/* Search trigger. Sits where the language selector used to, and
+                shows the shortcut because a palette nobody knows about is a
+                palette nobody uses. Hidden on phones, where the shortcut
+                cannot be typed and the row has no width to spare. */}
+            {onOpenSearch && (
+              <button
+                onClick={onOpenSearch}
+                className="hidden sm:flex items-center gap-2 pl-2.5 pr-2 py-1.5 rounded-lg border border-line text-muted hover:text-body hover:bg-hover-soft transition-colors"
+                aria-label={t('search.palette.open', 'Search pages and settings')}
+                title={t('search.palette.open', 'Search pages and settings')}
+              >
+                <Search className="w-4 h-4" />
+                <kbd className="text-[10px] font-medium px-1 py-0.5 rounded border border-line">
+                  {isMac ? '\u2318K' : 'Ctrl K'}
+                </kbd>
+              </button>
+            )}
+
+            {/* The language selector used to sit here on sm+. It now lives
+                in the user dropdown at every width, and its canonical home
+                is Settings > General > Language — which also carries the
+                gallery/guest default next to it, so the two scopes are
+                visible side by side. Dropping it here takes the widget
+                cluster from four to three, which is what #523 asked for on
+                phones and reads better everywhere else too. */}
 
             {/* Dark Mode Toggle — hidden entirely when an admin has locked
                 the instance to a specific mode via Branding > Force color mode. */}
@@ -423,10 +445,13 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({ onMenuClick }) => {
                   </div>
                   {/* Language sub-section — phone-only (#523 follow-up).
                       Rekoo-PS asked for language to live inside the profile
-                      menu since it's a set-once preference; on sm+ it
-                      stays in the header cluster where it's been. Collapsible
-                      so the menu isn't 8 rows taller by default. */}
-                  <div className="sm:hidden border-b border-line">
+                      menu since it's a set-once preference. It now shows at
+                      every width: the header selector is gone, and an admin
+                      who lands on a language they can't read must not have to
+                      navigate Settings in that language to get out. Settings >
+                      General > Language is the same preference, spelled out.
+                      Collapsible so the menu isn't 8 rows taller by default. */}
+                  <div className="border-b border-line">
                     <button
                       onClick={userMenuLangSectionModal.toggle}
                       className="w-full px-4 py-2 text-left text-sm text-body hover:bg-hover flex items-center gap-3"

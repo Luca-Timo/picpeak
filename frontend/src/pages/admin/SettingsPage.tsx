@@ -33,7 +33,13 @@ import { CMSPage } from './CMSPage';
 // CRM (#TBD)
 import { SettingsBusinessProfilePage } from './settings/SettingsBusinessProfilePage';
 import { CrmSettingsPage } from './settings/CrmSettingsPage';
-import { ReminderTemplatesPage } from './settings/ReminderTemplatesPage';
+// Reminder templates moved to the Automation section (it authors the emails
+// the Pre-event reminder workflow sends). The ?tab=reminderTemplates redirect
+// lives in App.tsx's SettingsRoute, above this page: done here it raced the
+// URL-sync effect below, which rewrote ?tab= to the fallback before the
+// redirect could fire.
+import { UserManagementPage } from './UserManagementPage';
+import { SystemHealthPage } from './SystemHealthPage';
 import { BlockLibraryPage } from './contracts/BlockLibraryPage';
 import { useFeatureFlags } from '../../contexts/FeatureFlagsContext';
 import { usePermissions } from '../../contexts/PermissionsContext';
@@ -139,7 +145,7 @@ export const SettingsPage: React.FC = () => {
   } = useSettingsState();
 
   // If the active tab refers to an item that's now hidden (e.g. admin
-  // landed on ?tab=reminderTemplates after disabling reminderEmails),
+  // landed on ?tab=whatsapp after disabling the WhatsApp feature),
   // snap to the first key that the dependency-rule flags allow. Effect
   // re-fires when flags toggle live. MUST stay above the isLoading early
   // return so React's rules-of-hooks count stays consistent across renders
@@ -156,7 +162,7 @@ export const SettingsPage: React.FC = () => {
       setActiveTab(DEFAULT_SETTINGS_TAB);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flagsLoading, flags.quotes, flags.bills, flags.contracts, flags.documents, flags.reminderEmails, flags.accounting, flags.whatsapp, flags.slideshow, activeTab]);
+  }, [flagsLoading, flags.quotes, flags.bills, flags.contracts, flags.documents, flags.userManagement, flags.accounting, flags.whatsapp, flags.slideshow, activeTab]);
 
   // Permission snap-back: if the active tab isn't permitted for this role (e.g.
   // a deep-linked ?tab=security a photographer can't access), move to the first
@@ -175,7 +181,7 @@ export const SettingsPage: React.FC = () => {
     );
     if (firstVisible && firstVisible !== activeTab) setActiveTab(firstVisible);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flagsLoading, permissionsLoading, activeTab, flags.quotes, flags.bills, flags.contracts, flags.documents, flags.reminderEmails, flags.accounting, flags.whatsapp, flags.slideshow]);
+  }, [flagsLoading, permissionsLoading, activeTab, flags.quotes, flags.bills, flags.contracts, flags.documents, flags.userManagement, flags.accounting, flags.whatsapp, flags.slideshow]);
 
   // Wait for the permissions context too: on a fresh/hard mount it starts out
   // empty, which filters every nav group down to nothing and left `activeItem`
@@ -198,14 +204,14 @@ export const SettingsPage: React.FC = () => {
   // header (FeaturesTab has its own icon+title+description block), skip
   // the Settings shell's section heading so the layout doesn't double
   // up.
-  const TABS_WITH_OWN_HEADER: TabType[] = ['features', 'email', 'branding', 'eventTypes', 'backup', 'cms', 'contracts', 'reminderTemplates'];
+  const TABS_WITH_OWN_HEADER: TabType[] = ['features', 'email', 'branding', 'eventTypes', 'backup', 'cms', 'contracts', 'users'];
   const showSectionHeading = !TABS_WITH_OWN_HEADER.includes(activeTab);
 
   return (
     <div>
       <div className="min-w-0">
           {showSectionHeading && activeItem && (
-            <SectionPageHeader icon={activeItem.icon} title={activeItem.label} />
+            <SectionPageHeader icon={activeItem.icon} title={activeItem.label} description={activeItem.description} />
           )}
 
           {activeTab === 'features' && <FeaturesTab />}
@@ -244,10 +250,11 @@ export const SettingsPage: React.FC = () => {
           {activeTab === 'cms' && <CMSPage />}
           {activeTab === 'email' && <EmailConfigPage />}
           {activeTab === 'backup' && <BackupManagement />}
+          {activeTab === 'users' && <UserManagementPage />}
+          {activeTab === 'health' && <SystemHealthPage />}
           {activeTab === 'businessProfile' && <SettingsBusinessProfilePage />}
           {activeTab === 'crm' && <CrmSettingsPage />}
           {activeTab === 'contracts' && <BlockLibraryPage />}
-          {activeTab === 'reminderTemplates' && <ReminderTemplatesPage />}
           {activeTab === 'accounting' && <AccountingTab />}
           {activeTab === 'whatsapp' && <WhatsAppTab />}
           {activeTab === 'usage' && hasAnyPermission(['settings.edit']) && <Suspense fallback={<Loading />}><ProductUsageTab /></Suspense>}

@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 
 import { useAdminAuth } from '../../contexts';
@@ -11,6 +11,7 @@ import { AdminSidebar } from './AdminSidebar';
 import { AdminHeader } from './AdminHeader';
 import { MaintenanceBanner } from './MaintenanceBanner';
 import { MandatoryPasswordChangeModal } from './MandatoryPasswordChangeModal';
+import { CommandPalette } from './CommandPalette';
 
 const SIDEBAR_COLLAPSED_KEY = 'admin-sidebar-collapsed';
 const ProductUsageNotice = lazy(() => import('./ProductUsageNotice'));
@@ -84,6 +85,24 @@ interface AdminLayoutInnerProps {
 }
 
 const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, mustChangePassword }) => {
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Cmd/Ctrl+K anywhere in the admin area. Registered on the layout rather
+  // than inside the palette so the listener exists whether or not the palette
+  // is mounted, and torn down with the admin shell. Suppressed while the
+  // mandatory password change is up: nothing else is reachable then.
+  useEffect(() => {
+    if (mustChangePassword) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [mustChangePassword]);
+
   return (
     // Explicit text colour on the admin shell: the branding theme sets
     // --color-text on <html> app-wide (GlobalThemeProvider applies it on every
@@ -94,6 +113,8 @@ const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSid
     <div className="h-screen bg-canvas text-heading flex overflow-hidden">
       {/* Mandatory Password Change Modal */}
       {mustChangePassword && <MandatoryPasswordChangeModal />}
+
+      <CommandPalette isOpen={paletteOpen && !mustChangePassword} onClose={() => setPaletteOpen(false)} />
       
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
@@ -128,7 +149,7 @@ const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSid
       >
         {/* Header - disabled when password change required */}
         <div className={mustChangePassword ? 'pointer-events-none opacity-50' : ''}>
-          <AdminHeader onMenuClick={() => setSidebarOpen(true)} />
+          <AdminHeader onMenuClick={() => setSidebarOpen(true)} onOpenSearch={() => setPaletteOpen(true)} />
         </div>
 
         {/* Maintenance mode banner */}

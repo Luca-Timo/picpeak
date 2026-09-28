@@ -270,7 +270,7 @@ export const WorkflowEditorPage: React.FC = () => {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/admin/workflows')} aria-label={t('common.back', 'Back') as string}>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/admin/automation/workflows')} aria-label={t('common.back', 'Back') as string}>
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <input

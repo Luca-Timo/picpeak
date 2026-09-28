@@ -43,7 +43,7 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
   updateAdminProfileMutation,
   adminProfileLoading,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // The public address reaches the CORS allowlist and the
   // Access-Control-Allow-Origin header since #705, not just email links — and
@@ -320,11 +320,41 @@ export const GeneralTab: React.FC<GeneralTabProps> = ({
         <h2 className="text-lg font-semibold text-heading mb-4">{t('settings.general.language')}</h2>
 
         <div className="space-y-4">
+          {/* Two languages, two scopes, and the order matters: the one the
+              admin is reading right now comes first.
+
+              This one is a per-admin browser preference, not an instance
+              setting — it is the same i18next value the header selector used
+              to write, so it applies the moment it changes and is deliberately
+              NOT part of `generalSettings`. Wiring it into the form state
+              would put a personal preference behind an instance-wide Save
+              button and let Discard revert the language mid-edit. */}
           <div>
-            <label className="block text-sm font-medium text-body mb-2">
-              {t('settings.general.language')}
+            <label htmlFor="admin-language" className="block text-sm font-medium text-body mb-2">
+              {t('settings.general.adminLanguage', 'Your admin language')}
             </label>
             <select
+              id="admin-language"
+              value={i18n.language}
+              onChange={(e) => { void i18n.changeLanguage(e.target.value); }}
+              className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            >
+              {SUPPORTED_LANGUAGES.map(lang => (
+                <option key={lang.code} value={lang.code}>{lang.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted mt-1">
+              {t('settings.general.adminLanguageHelp', 'Applies to the admin area, for you on this device only. It takes effect immediately — no need to save.')}
+            </p>
+          </div>
+
+          {/* Instance-wide, saved with the rest of the tab. */}
+          <div className="pt-4 border-t border-line">
+            <label htmlFor="gallery-language" className="block text-sm font-medium text-body mb-2">
+              {t('settings.general.customerLanguage', 'Gallery & guest language')}
+            </label>
+            <select
+              id="gallery-language"
               value={generalSettings.default_language}
               onChange={(e) => setGeneralSettings(prev => ({ ...prev, default_language: e.target.value }))}
               className="w-full px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"

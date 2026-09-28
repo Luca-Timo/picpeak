@@ -400,7 +400,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
               {pendingApprovals.length > 5 && (
                 <button
-                  onClick={() => navigate('/admin/workflows/approvals')}
+                  onClick={() => navigate('/admin/automation/approvals')}
                   className="w-full mt-4 text-sm text-accent hover:opacity-80 font-medium"
                 >
                   {t('workflows.approvals.viewAll', 'View all approvals')} →
