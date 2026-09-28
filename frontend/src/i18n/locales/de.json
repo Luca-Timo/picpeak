@@ -668,8 +668,6 @@
     }
   },
   "systemHealth": {
-    "title": "Systemzustand",
-    "subtitle": "Hintergrundfehler, die Aufmerksamkeit erfordern.",
     "retry": "Erneut versuchen",
     "dismiss": "Verwerfen",
     "retriedToast": "E-Mail erneut eingereiht.",

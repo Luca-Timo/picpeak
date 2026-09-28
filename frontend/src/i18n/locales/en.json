@@ -668,8 +668,6 @@
     }
   },
   "systemHealth": {
-    "title": "System health",
-    "subtitle": "Background failures that need attention.",
     "retry": "Retry",
     "dismiss": "Dismiss",
     "retriedToast": "Email re-queued.",

@@ -668,8 +668,6 @@
     }
   },
   "systemHealth": {
-    "title": "Stanje sistema",
-    "subtitle": "Napake v ozadju, ki potrebujejo pozornost.",
     "retry": "Ponovi",
     "dismiss": "Zapri",
     "retriedToast": "E-pošta ponovno dodana v čakalno vrsto.",

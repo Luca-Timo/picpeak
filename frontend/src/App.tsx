@@ -72,6 +72,7 @@ import { AcceptInvitePage } from './pages/public/AcceptInvitePage';
 import { TransfersPage } from './pages/admin/transfers/TransfersPage';
 import { CommunicationLayout } from './components/admin/CommunicationLayout';
 import { AutomationLayout } from './components/admin/AutomationLayout';
+import { RequirePermission } from './components/admin/RequirePermission';
 import { ReminderTemplatesPage } from './pages/admin/settings/ReminderTemplatesPage';
 import { TransferDownloadPage } from './pages/public/TransferDownloadPage';
 import { TransferUploadPage } from './pages/public/TransferUploadPage';
@@ -463,8 +464,17 @@ function App() {
                           <Route path="approvals" element={<WorkflowApprovalsPage />} />
                           <Route path="workflows/:id" element={<WorkflowEditorPage />} />
                         </Route>
+                        {/* Reminder emails needs BOTH gates. As a Settings tab
+                            it was gated by living in Settings, which filters
+                            tabs by permission and snaps away from one the role
+                            cannot see. A section page has no such inheritance:
+                            the section opens as soon as ANY item in it is
+                            permitted, so a workflows-only role would otherwise
+                            reach this page and watch its queries 403. */}
                         <Route element={<RequireFeature flag="reminderEmails" />}>
-                          <Route path="reminder-templates" element={<ReminderTemplatesPage />} />
+                          <Route element={<RequirePermission permission="email.view" />}>
+                            <Route path="reminder-templates" element={<ReminderTemplatesPage />} />
+                          </Route>
                         </Route>
                       </Route>
 

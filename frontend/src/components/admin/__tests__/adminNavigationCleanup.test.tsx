@@ -229,11 +229,33 @@ describe('settings search', () => {
   });
 });
 
+const app = readFileSync(resolve(__dirname, '../../../App.tsx'), 'utf8');
+
+describe('a page that left Settings keeps a permission gate', () => {
+  // Settings gates its tabs by permission and snaps away from one the role
+  // cannot see, so a Settings-hosted page was gated by living there. A section
+  // page has no such inheritance — the section opens as soon as ANY item in it
+  // is permitted — so Reminder emails needs the gate stated explicitly.
+  it('wraps reminder-templates in both a feature and a permission guard', () => {
+    const block = app.slice(app.indexOf('path="reminder-templates"') - 400,
+                            app.indexOf('path="reminder-templates"') + 120);
+    expect(block).toMatch(/RequireFeature flag="reminderEmails"/);
+    expect(block).toMatch(/RequirePermission permission="email\.view"/);
+  });
+
+  it('redirects rather than rendering when the permission is absent', () => {
+    const guard = readFileSync(
+      resolve(__dirname, '../RequirePermission.tsx'), 'utf8');
+    // Acting before the first fetch would redirect every role on a refresh.
+    expect(guard).toMatch(/if \(isLoading\) return null;/);
+    expect(guard).toMatch(/<Navigate to=\{fallback\} replace \/>/);
+  });
+});
+
 describe('moved URLs keep working', () => {
   // Source-level, deliberately: mounting the whole route tree to prove a
   // redirect exists costs more than it catches, and what actually regresses
   // is someone deleting the line.
-  const app = readFileSync(resolve(__dirname, '../../../App.tsx'), 'utf8');
 
   it.each([
     ['archives', '/admin/events/archives'],
