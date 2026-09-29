@@ -98,12 +98,26 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
     if (e.key === 'Enter') { e.preventDefault(); go(results[cursor]); return; }
     // Focus trap. The dialog is modal, so Tab cycles inside it rather than
     // stepping into the page underneath, which is still fully rendered.
+    //
+    // Only genuinely tabbable nodes count. The results are `tabIndex={-1}` on
+    // purpose — this is the activedescendant pattern, where the input keeps
+    // focus and `aria-activedescendant` names the active option — so a
+    // selector of bare `button` collects nodes Tab can never reach. That made
+    // `last` an unreachable option: forward Tab matched neither end and left
+    // the dialog, and Shift+Tab parked focus on an option whose keystrokes no
+    // longer reached this handler, which is bound to the input. Worse than no
+    // trap at all.
     if (e.key === 'Tab') {
-      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
-        'input, button, [href], [tabindex]:not([tabindex="-1"])');
-      if (!focusable?.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
+      const tabbable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'input:not([tabindex="-1"]), button:not([tabindex="-1"]), '
+        + '[href]:not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])');
+      if (!tabbable?.length) return;
+      const first = tabbable[0];
+      const last = tabbable[tabbable.length - 1];
+      // Today that is the input alone, so Tab has nowhere to go; Escape is the
+      // way out. Written as a cycle so it stays correct if the dialog ever
+      // grows a second tab stop.
+      if (tabbable.length === 1) { e.preventDefault(); first.focus(); return; }
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     }
@@ -140,7 +154,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
             aria-label={t('search.palette.placeholder', 'Search pages and settings…')}
             role="combobox"
             aria-expanded={results.length > 0}
-            aria-controls="command-palette-results"
+            aria-controls={results.length > 0 ? 'command-palette-results' : undefined}
             aria-activedescendant={results[cursor] ? `cmdk-${results[cursor].key}` : undefined}
             autoComplete="off"
             className="flex-1 py-3 bg-transparent text-heading placeholder:text-muted focus:outline-none text-sm"
@@ -173,9 +187,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
                       {entry.group}
                     </li>
                   )}
-                  <li role="option" id={`cmdk-${entry.key}`} aria-selected={isActive}>
+                  <li role="presentation">
                     <button
                       type="button"
+                      role="option"
+                      id={`cmdk-${entry.key}`}
+                      aria-selected={isActive}
                       tabIndex={-1}
                       data-index={index}
                       onMouseEnter={() => setCursor(index)}

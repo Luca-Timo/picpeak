@@ -459,11 +459,11 @@ function App() {
                             the builder and watch its queries 403. */}
                         <Route element={<RequireFeature flag="workflows" />}>
                           <Route element={<RequirePermission permission="workflows.view" />}>
-                          <Route path="workflows" element={<WorkflowsListPage />} />
-                          {/* Flattened out from under workflows/ so the
-                              Workflows entry doesn't stay highlighted here. */}
-                          <Route path="approvals" element={<WorkflowApprovalsPage />} />
-                          <Route path="workflows/:id" element={<WorkflowEditorPage />} />
+                            <Route path="workflows" element={<WorkflowsListPage />} />
+                            {/* Flattened out from under workflows/ so the
+                                Workflows entry doesn't stay highlighted here. */}
+                            <Route path="approvals" element={<WorkflowApprovalsPage />} />
+                            <Route path="workflows/:id" element={<WorkflowEditorPage />} />
                           </Route>
                         </Route>
                         {/* Reminder emails needs BOTH gates. As a Settings tab

@@ -83,8 +83,12 @@ export function useAdminSearchIndex(): AdminSearchEntry[] {
       context: string,
       items: { key: string; to: string; label: string; icon: LucideIcon }[],
     ) => {
+      // Fail closed. If a section's href is ever renamed and this lookup
+      // misses, skipping the section costs a few palette rows; carrying on
+      // would silently drop the permission gate and hand those rows to
+      // everyone — which is the bug this check exists to prevent.
       const entry = adminNavigation.find((i) => i.href === sectionHref);
-      if (entry && !navItemAllowed(entry, hasPermission, flags)) return;
+      if (!entry || !navItemAllowed(entry, hasPermission, flags)) return;
       for (const i of items) {
         entries.push({
           key: `${context}:${i.key}`,

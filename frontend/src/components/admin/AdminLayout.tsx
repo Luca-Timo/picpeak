@@ -98,10 +98,14 @@ const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSid
   // nothing else is reachable then.
   useEffect(() => {
     if (mustChangePassword) return;
+    // `navigator.platform` is deprecated; an empty value simply falls through
+    // to the Ctrl branch, which is the safe default on anything non-Apple.
     const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '');
     const onKeyDown = (e: KeyboardEvent) => {
       const mod = isMac ? e.metaKey : e.ctrlKey;
-      if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
+      // The OTHER modifier disqualifies too, so Ctrl+Cmd+K stays free.
+      const other = isMac ? e.ctrlKey : e.metaKey;
+      if (mod && !other && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setPaletteOpen((open) => !open);
       }
