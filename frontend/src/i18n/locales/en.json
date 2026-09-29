@@ -904,8 +904,8 @@
     "accounting": "Accounting",
     "workflows": "Workflows",
     "betaTag": "Beta",
-    "communication": "Communication",
-    "automation": "Automation"
+    "automation": "Automation",
+    "sharing": "Sharing"
   },
   "transfers": {
     "title": "PicTransfer",
@@ -9626,14 +9626,6 @@
       "placeholder": "Search pages and settings…",
       "noResults": "Nothing matches “{{query}}”.",
       "open": "Search pages and settings"
-    }
-  },
-  "communication": {
-    "empty": {
-      "title": "No communication features enabled",
-      "body": "Enable Messages or PicTransfer under Settings → Features to get started.",
-      "noAccessTitle": "Nothing here you can open",
-      "noAccessBody": "These features are switched on, but your role cannot open any of their pages. Ask an administrator for access."
     }
   },
   "automation": {

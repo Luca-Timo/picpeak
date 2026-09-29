@@ -179,8 +179,8 @@
     "users": "Gebruikers",
     "calendar": "Agenda",
     "clients": "Klanten",
-    "communication": "Communicatie",
-    "automation": "Automatisering"
+    "automation": "Automatisering",
+    "sharing": "Delen"
   },
   "archives": {
     "title": "Archieven",
@@ -3268,14 +3268,6 @@
       "placeholder": "Pagina's en instellingen zoeken…",
       "noResults": "Niets komt overeen met “{{query}}”.",
       "open": "Pagina's en instellingen zoeken"
-    }
-  },
-  "communication": {
-    "empty": {
-      "title": "Geen communicatiefuncties ingeschakeld",
-      "body": "Schakel Berichten of PicTransfer in via Instellingen → Functies om te beginnen.",
-      "noAccessTitle": "Hier is niets dat je kunt openen",
-      "noAccessBody": "Deze functies staan aan, maar jouw rol kan geen van de bijbehorende pagina’s openen. Vraag een beheerder om toegang."
     }
   },
   "automation": {

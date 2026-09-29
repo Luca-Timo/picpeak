@@ -27,13 +27,14 @@ describe('SidebarPreview feature gates (QA J.14)', () => {
     render(<SidebarPreview staged={staged({})} />);
 
     expect(screen.getByText('navigation.dashboard')).toBeInTheDocument();
-    expect(screen.getByText('navigation.events')).toBeInTheDocument();
+    expect(screen.getByText('navigation.sharing')).toBeInTheDocument();
     expect(screen.getByText('navigation.settings')).toBeInTheDocument();
   });
 
   it.each([
     ['accounting', 'navigation.accounting'],
     ['analytics', 'admin.analytics'],
+    ['messaging', 'navigation.messages'],
   ] as const)('reflects the %s toggle', (flag, label) => {
     const { unmount } = render(<SidebarPreview staged={staged({ [flag]: false })} />);
     expect(screen.queryByText(label)).not.toBeInTheDocument();
@@ -48,7 +49,6 @@ describe('SidebarPreview feature gates (QA J.14)', () => {
   // Getting this backwards would hide the section from an install that has
   // exactly one of its features enabled.
   it.each([
-    ['navigation.communication', ['messaging', 'transfers']],
     ['navigation.automation', ['workflows', 'reminderEmails']],
   ] as const)('shows %s when any of its sub-features is on', (label, flags) => {
     const allOff = Object.fromEntries(flags.map((f) => [f, false])) as Partial<FeatureFlags>;
@@ -61,6 +61,17 @@ describe('SidebarPreview feature gates (QA J.14)', () => {
       expect(screen.getByText(label)).toBeInTheDocument();
       one.unmount();
     }
+  });
+
+  it('always lists Sharing, which has no flag of its own', () => {
+    // Events is unconditional, so the section is too; PicTransfer's flag
+    // decides an item inside it, not whether the entry exists.
+    const { unmount } = render(<SidebarPreview staged={staged({ transfers: false })} />);
+    expect(screen.getByText('navigation.sharing')).toBeInTheDocument();
+    unmount();
+
+    render(<SidebarPreview staged={staged({ transfers: true })} />);
+    expect(screen.getByText('navigation.sharing')).toBeInTheDocument();
   });
 
   it('no longer offers Users as a sidebar entry', () => {

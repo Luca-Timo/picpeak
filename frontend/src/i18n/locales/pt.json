@@ -220,8 +220,8 @@
     "users": "Utilizadores",
     "calendar": "Calendário",
     "clients": "Clientes",
-    "communication": "Comunicação",
-    "automation": "Automação"
+    "automation": "Automação",
+    "sharing": "Partilha"
   },
   "archives": {
     "title": "Arquivos",
@@ -3511,14 +3511,6 @@
       "placeholder": "Pesquisar páginas e definições…",
       "noResults": "Nada corresponde a “{{query}}”.",
       "open": "Pesquisar páginas e definições"
-    }
-  },
-  "communication": {
-    "empty": {
-      "title": "Nenhuma funcionalidade de comunicação ativada",
-      "body": "Ative Mensagens ou PicTransfer em Definições → Funcionalidades para começar.",
-      "noAccessTitle": "Não há nada aqui que possa abrir",
-      "noAccessBody": "Estas funcionalidades estão ativadas, mas o seu perfil não pode abrir nenhuma das suas páginas. Peça acesso a um administrador."
     }
   },
   "automation": {

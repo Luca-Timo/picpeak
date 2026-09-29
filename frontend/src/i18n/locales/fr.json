@@ -179,8 +179,8 @@
     "users": "Utilisateurs",
     "calendar": "Calendrier",
     "clients": "Clients",
-    "communication": "Communication",
-    "automation": "Automatisation"
+    "automation": "Automatisation",
+    "sharing": "Partage"
   },
   "archives": {
     "title": "Archives",
@@ -3299,14 +3299,6 @@
       "placeholder": "Rechercher pages et paramètres…",
       "noResults": "Rien ne correspond à « {{query}} ».",
       "open": "Rechercher pages et paramètres"
-    }
-  },
-  "communication": {
-    "empty": {
-      "title": "Aucune fonction de communication activée",
-      "body": "Activez Messages ou PicTransfer dans Paramètres → Fonctionnalités pour commencer.",
-      "noAccessTitle": "Rien ici que vous puissiez ouvrir",
-      "noAccessBody": "Ces fonctionnalités sont activées, mais votre rôle ne peut ouvrir aucune de leurs pages. Demandez l'accès à un administrateur."
     }
   },
   "automation": {

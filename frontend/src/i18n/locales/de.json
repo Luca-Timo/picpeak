@@ -904,8 +904,8 @@
     "accounting": "Buchhaltung",
     "workflows": "Workflows",
     "betaTag": "Beta",
-    "communication": "Kommunikation",
-    "automation": "Automatisierung"
+    "automation": "Automatisierung",
+    "sharing": "Teilen"
   },
   "transfers": {
     "title": "PicTransfer",
@@ -9592,14 +9592,6 @@
       "placeholder": "Seiten und Einstellungen durchsuchen…",
       "noResults": "Nichts passt zu „{{query}}“.",
       "open": "Seiten und Einstellungen durchsuchen"
-    }
-  },
-  "communication": {
-    "empty": {
-      "title": "Keine Kommunikationsfunktionen aktiviert",
-      "body": "Aktivieren Sie Nachrichten oder PicTransfer unter Einstellungen → Funktionen, um loszulegen.",
-      "noAccessTitle": "Hier gibt es nichts, was Sie öffnen können",
-      "noAccessBody": "Diese Funktionen sind aktiviert, aber Ihre Rolle kann keine ihrer Seiten öffnen. Bitten Sie eine Administratorin oder einen Administrator um Zugriff."
     }
   },
   "automation": {

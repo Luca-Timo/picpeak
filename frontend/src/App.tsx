@@ -70,7 +70,6 @@ import { ContractAttachmentsPage } from './pages/admin/contracts/ContractAttachm
 import { PaymentCheckPage } from './pages/public/PaymentCheckPage';
 import { AcceptInvitePage } from './pages/public/AcceptInvitePage';
 import { TransfersPage } from './pages/admin/transfers/TransfersPage';
-import { CommunicationLayout } from './components/admin/CommunicationLayout';
 import { AutomationLayout } from './components/admin/AutomationLayout';
 import { RequirePermission } from './components/admin/RequirePermission';
 import { ReminderTemplatesPage } from './pages/admin/settings/ReminderTemplatesPage';
@@ -290,23 +289,19 @@ function App() {
                           so it outranks events/:id. */}
                       <Route path="events/archives" element={<ArchivesPage />} />
 
-                      {/* Communication section — the two surfaces for reaching
-                          a client directly, each still independently flagged.
-                          Both were top-level entries before the navigation
-                          cleanup. */}
-                      <Route path="communication" element={<CommunicationLayout />}>
-                        <Route element={<RequireFeature flag="messaging" />}>
-                          <Route path="messages" element={
-                            <Suspense fallback={<Loading />}>
-                              <MessagesPage />
-                            </Suspense>
-                          } />
-                        </Route>
-                        {/* PicTransfer (#997) — cross-event file transfers.
-                            Gated by the `transfers` flag (strictly opt-in). */}
-                        <Route element={<RequireFeature flag="transfers" />}>
-                          <Route path="transfers" element={<TransfersPage />} />
-                        </Route>
+                      {/* PicTransfer (#997) — cross-event file transfers.
+                          Gated by the `transfers` flag (strictly opt-in). It
+                          keeps this URL and joins Events and Archives in the
+                          Sharing section, which activates on both trees. */}
+                      <Route element={<RequireFeature flag="transfers" />}>
+                        <Route path="transfers" element={<TransfersPage />} />
+                      </Route>
+                      <Route element={<RequireFeature flag="messaging" />}>
+                        <Route path="messages" element={
+                          <Suspense fallback={<Loading />}>
+                            <MessagesPage />
+                          </Suspense>
+                        } />
                       </Route>
 
                       {/* Feature-gated surfaces — redirect to /admin/dashboard when flag is off. */}
@@ -484,10 +479,10 @@ function App() {
                       {/* Navigation cleanup — Archives, Messages, PicTransfer,
                           Workflows, Users and System health are no longer
                           top-level. Kept indefinitely as redirects: these paths
-                          are bookmarked and appear in already-sent email. */}
+                          are bookmarked and appear in already-sent email.
+                          Messages and PicTransfer are absent on purpose — they
+                          keep the URLs they always had. */}
                       <Route path="archives"           element={<Navigate to="/admin/events/archives" replace />} />
-                      <Route path="messages"           element={<Navigate to="/admin/communication/messages" replace />} />
-                      <Route path="transfers"          element={<Navigate to="/admin/communication/transfers" replace />} />
                       <Route path="workflows"          element={<Navigate to="/admin/automation/workflows" replace />} />
                       <Route path="workflows/approvals" element={<Navigate to="/admin/automation/approvals" replace />} />
                       <Route path="workflows/:id"      element={<RedirectWorkflowEditor />} />

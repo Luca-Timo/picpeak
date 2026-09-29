@@ -62,7 +62,7 @@ vi.mock('../../../services/settings.service', () => ({
 vi.mock('../VersionInfo', () => ({ VersionInfo: () => null }));
 
 import { AdminSidebar } from '../AdminSidebar';
-import { CommunicationLayout } from '../CommunicationLayout';
+import { AutomationLayout } from '../AutomationLayout';
 
 /** Every permission the sidebar and its section hooks ever ask about. */
 const ALL_PERMISSIONS = [
@@ -94,91 +94,89 @@ describe('admin sidebar — what is top level', () => {
     renderSidebar('/admin/dashboard');
 
     for (const key of [
-      'navigation.archives', 'navigation.messages', 'navigation.transfers',
+      'navigation.archives', 'navigation.transfers', 'navigation.events',
       'navigation.workflows', 'navigation.users', 'navigation.systemHealth',
     ]) {
       expect(screen.queryByText(key)).not.toBeInTheDocument();
     }
 
-    // …and the entries that replaced them are there.
-    expect(screen.getByText('navigation.events')).toBeInTheDocument();
-    expect(screen.getByText('navigation.communication')).toBeInTheDocument();
+    // …and the entries that replaced them are there. Messages keeps a plain
+    // entry of its own: it is one page, and sending files is not messaging,
+    // so it does not share a section with PicTransfer (review of #1718).
+    expect(screen.getByText('navigation.sharing')).toBeInTheDocument();
+    expect(screen.getByText('navigation.messages')).toBeInTheDocument();
     expect(screen.getByText('navigation.automation')).toBeInTheDocument();
     expect(screen.getByText('navigation.settings')).toBeInTheDocument();
   });
 
-  it('hides a section entry when the role or the flags leave it empty', () => {
-    granted = new Set(['events.view']); // no email.view, so Messages is unreachable
-    flags = { messaging: true, transfers: false };
+  it('hides Sharing when the role can reach nothing inside it', () => {
+    granted = new Set(['settings.view']); // neither events.view nor archives.view
     renderSidebar('/admin/dashboard');
 
-    // The flag is on, but this role cannot open the only page inside — the
-    // entry must not lead them to an empty section.
-    expect(screen.queryByText('navigation.communication')).not.toBeInTheDocument();
+    expect(screen.queryByText('navigation.sharing')).not.toBeInTheDocument();
   });
 
-  it('shows Communication as soon as one sub-feature is reachable', () => {
-    granted = new Set(['events.view']);
-    flags = { messaging: false, transfers: true }; // PicTransfer needs events.view
+  it('keeps Sharing for a role that holds only archives.view', () => {
+    granted = new Set(['archives.view']);
     renderSidebar('/admin/dashboard');
 
-    expect(screen.getByText('navigation.communication')).toBeInTheDocument();
+    expect(screen.getByText('navigation.sharing')).toBeInTheDocument();
   });
 });
 
 describe('a section entry has to lead somewhere the role can open', () => {
-  it('aims Events at Archives for a role that only holds archives.view', () => {
+  it('aims Sharing at Archives for a role that only holds archives.view', () => {
     // Before the cleanup this role saw a top-level Archives entry pointing
-    // straight at /admin/archives. Events is now the section that contains
-    // Archives, so the entry appears — but /admin/events is the events list,
-    // which 403s without events.view. The entry must aim at the first item
-    // this role can actually open, not at the section root.
+    // straight at /admin/archives. Archives now lives inside Sharing, so the
+    // entry appears — but the section's first path is /admin/events, the
+    // events list, which 403s without events.view. The entry must aim at the
+    // first item this role can actually open.
     granted = new Set(['archives.view']);
     renderSidebar('/admin/dashboard');
 
-    const entry = screen.getByText('navigation.events').closest('a');
+    const entry = screen.getByText('navigation.sharing').closest('a');
     expect(entry).toHaveAttribute('href', '/admin/events/archives');
   });
 
-  it('still aims Events at the events list for a role that can see it', () => {
+  it('still aims Sharing at the events list for a role that can see it', () => {
     granted = new Set(['events.view', 'archives.view']);
     renderSidebar('/admin/dashboard');
 
-    const entry = screen.getByText('navigation.events').closest('a');
+    const entry = screen.getByText('navigation.sharing').closest('a');
     expect(entry).toHaveAttribute('href', '/admin/events');
   });
 });
 
 describe('an empty section says which kind of empty it is', () => {
-  const renderCommunication = () => render(
+  const renderAutomation = () => render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <MemoryRouter initialEntries={['/admin/communication/messages']}>
-        <CommunicationLayout />
+      <MemoryRouter initialEntries={['/admin/automation/workflows']}>
+        <AutomationLayout />
       </MemoryRouter>
     </QueryClientProvider>,
   );
 
   it('offers the feature toggle when the flags are off', () => {
     granted = new Set(ALL_PERMISSIONS);
-    flags = { messaging: false, transfers: false };
-    renderCommunication();
-    expect(screen.getByText('communication.empty.title')).toBeInTheDocument();
+    flags = { workflows: false, reminderEmails: false };
+    renderAutomation();
+    expect(screen.getByText('automation.empty.title')).toBeInTheDocument();
   });
 
   it('does not tell a role to enable features that are already on', () => {
-    // Reached by a bookmark to the old /admin/messages path. Pointing this
+    // Reached by a bookmark to the old /admin/workflows path. Pointing this
     // admin at Settings > Features is advice they cannot act on: the features
     // are on, and they are not permitted to open the pages.
-    granted = new Set(['events.view']); // neither email.view nor a transfers route
-    flags = { messaging: true, transfers: false };
-    renderCommunication();
-    expect(screen.getByText('communication.empty.noAccessTitle')).toBeInTheDocument();
-    expect(screen.queryByText('communication.empty.title')).not.toBeInTheDocument();
+    granted = new Set(['events.view']); // neither workflows.view nor email.view
+    flags = { workflows: true, reminderEmails: false };
+    renderAutomation();
+    expect(screen.getByText('automation.empty.noAccessTitle')).toBeInTheDocument();
+    expect(screen.queryByText('automation.empty.title')).not.toBeInTheDocument();
   });
 });
 
 describe('admin sidebar — sections', () => {
-  it('takes the menu over on an Events sub-page and marks only the deepest match', () => {
+  it('takes the menu over on a Sharing sub-page and marks only the deepest match', () => {
     granted = new Set(ALL_PERMISSIONS);
     renderSidebar('/admin/events/archives');
 
@@ -192,6 +190,18 @@ describe('admin sidebar — sections', () => {
     for (const link of eventsLinks) {
       expect(link).not.toHaveAttribute('aria-current', 'page');
     }
+  });
+
+  it('stays in the Sharing section on PicTransfer, which is a different URL tree', () => {
+    granted = new Set(ALL_PERMISSIONS);
+    flags = { transfers: true };
+    renderSidebar('/admin/transfers');
+
+    // A section spanning two trees is the whole point of `paths`: without it
+    // PicTransfer would drop the admin back to the main menu.
+    const transfers = screen.getByText('navigation.transfers').closest('a');
+    expect(transfers).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByText('navigation.archives')).toBeInTheDocument();
   });
 });
 
@@ -259,8 +269,6 @@ describe('moved URLs keep working', () => {
 
   it.each([
     ['archives', '/admin/events/archives'],
-    ['messages', '/admin/communication/messages'],
-    ['transfers', '/admin/communication/transfers'],
     ['workflows', '/admin/automation/workflows'],
     ['workflows/approvals', '/admin/automation/approvals'],
     ['users', '/admin/settings?tab=users'],

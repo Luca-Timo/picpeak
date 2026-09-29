@@ -16,8 +16,7 @@ import {
   useSettingsNavGroups,
 } from '../../features/settings/settingsNav';
 import { adminNavigation, navItemAllowed, SECTION_PATHS } from './AdminSidebar';
-import { useEventsNavItems } from './eventsNav';
-import { useCommunicationNavItems } from './CommunicationLayout';
+import { useSharingNavItems } from './sharingNav';
 import { useAutomationNavItems } from './AutomationLayout';
 import { useClientsNavItems } from './ClientsLayout';
 import { useAccountingNavItems } from './AccountingLayout';
@@ -40,8 +39,7 @@ export function useAdminSearchIndex(): AdminSearchEntry[] {
   const { flags } = useFeatureFlags();
 
   const settingsGroups = useSettingsNavGroups();
-  const eventsItems = useEventsNavItems();
-  const communicationItems = useCommunicationNavItems();
+  const sharingItems = useSharingNavItems();
   const automationItems = useAutomationNavItems();
   const clientsItems = useClientsNavItems();
   const accountingItems = useAccountingNavItems();
@@ -81,8 +79,7 @@ export function useAdminSearchIndex(): AdminSearchEntry[] {
         });
       }
     };
-    pushSection(t('navigation.events', 'Events'), eventsItems);
-    pushSection(t('navigation.communication', 'Communication'), communicationItems);
+    pushSection(t('navigation.sharing', 'Sharing'), sharingItems);
     pushSection(t('navigation.clients', 'CRM'), clientsItems);
     pushSection(t('navigation.accounting', 'Accounting'), accountingItems);
     pushSection(t('navigation.automation', 'Automation'), automationItems);
@@ -103,6 +100,6 @@ export function useAdminSearchIndex(): AdminSearchEntry[] {
     }
 
     return entries;
-  }, [t, hasPermission, flags, settingsGroups, eventsItems, communicationItems,
+  }, [t, hasPermission, flags, settingsGroups, sharingItems,
       automationItems, clientsItems, accountingItems]);
 }

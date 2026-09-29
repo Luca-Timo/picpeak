@@ -4,13 +4,13 @@ import { useLeaveGuard } from '../../contexts/UnsavedChangesContext';
 import {
   ArrowLeft,
   LayoutDashboard,
-  Calendar,
   BarChart3,
   Settings,
   X,
   Briefcase,
   Landmark,
-  MessagesSquare,
+  Mail,
+  Share2,
   Workflow,
   PanelLeftClose,
   PanelLeftOpen,
@@ -38,8 +38,7 @@ import {
 } from '../../features/settings/settingsNav';
 import { useClientsNavItems } from './ClientsLayout';
 import { useAccountingNavItems } from './AccountingLayout';
-import { useEventsNavItems } from './eventsNav';
-import { useCommunicationNavItems } from './CommunicationLayout';
+import { useSharingNavItems, SHARING_PATHS } from './sharingNav';
 import { useAutomationNavItems } from './AutomationLayout';
 
 // A section that takes over the sidebar while the admin is inside it:
@@ -63,8 +62,13 @@ interface SidebarSectionGroup {
 }
 interface SidebarSection {
   key: string;
-  /** Route prefix that activates the section. */
-  path: string;
+  /**
+   * Route prefixes that activate the section, and the first of them is where
+   * the main-menu entry points by default. Usually one, but Sharing spans
+   * /admin/events and /admin/transfers: a section is a grouping of pages, and
+   * pages it groups need not share a URL prefix.
+   */
+  paths: string[];
   title: string;
   icon: LucideIcon;
   groups: SidebarSectionGroup[];
@@ -134,12 +138,15 @@ interface NavItem {
 // from what is inside the way a duplicated permission list can.
 export const adminNavigation: NavItem[] = [
   { nameKey: 'navigation.dashboard', href: '/admin/dashboard', icon: LayoutDashboard, permission: false },
-  // Events section — the list itself plus Archives.
-  { nameKey: 'navigation.events',    href: '/admin/events',    icon: Calendar },
-  // Communication section — Messages + PicTransfer.
+  // Sharing section — the three ways files reach someone: the galleries, the
+  // archived ones, and a direct PicTransfer link.
+  { nameKey: 'navigation.sharing',   href: '/admin/events',    icon: Share2 },
+  // Messages is a single page, so it stays a plain entry. It briefly shared a
+  // "Communication" section with PicTransfer; sending files is not messaging,
+  // and a section wrapping one page is worse than the page itself.
   {
-    nameKey: 'navigation.communication', href: '/admin/communication', icon: MessagesSquare,
-    featureFlagsAny: ['messaging', 'transfers'],
+    nameKey: 'navigation.messages', href: '/admin/messages', icon: Mail,
+    permission: 'email.view', featureFlag: 'messaging',
   },
   // Clients section (#354 follow-up) — admin-side surface for the
   // CRM-area sub-features. Today this entry leads to /admin/clients
@@ -217,7 +224,7 @@ export const adminNavigation: NavItem[] = [
  * carries no permission of its own.
  */
 export const SECTION_PATHS: readonly string[] = [
-  SETTINGS_PATH, '/admin/events', '/admin/communication',
+  SETTINGS_PATH, ...SHARING_PATHS,
   '/admin/automation', '/admin/clients', '/admin/accounting',
 ];
 
@@ -285,8 +292,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
   const brandAlt = publicSettings?.branding_company_name?.trim() || t('admin.title');
 
   const settingsGroups = useSettingsNavGroups();
-  const eventsItems = useEventsNavItems();
-  const communicationItems = useCommunicationNavItems();
+  const sharingItems = useSharingNavItems();
   const automationItems = useAutomationNavItems();
 
   // A section entry follows what is actually inside the section. Each of
@@ -307,8 +313,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
   // its own root, which snaps to a permitted tab by itself.
   const sectionState: Record<string, { count: number; entry?: string }> = {
     [SETTINGS_PATH]: { count: settingsGroups.length },
-    '/admin/events': { count: eventsItems.length, entry: eventsItems[0]?.to },
-    '/admin/communication': { count: communicationItems.length },
+    '/admin/events': { count: sharingItems.length, entry: sharingItems[0]?.to },
     '/admin/automation': { count: automationItems.length },
     // Clients and Accounting keep the declared permission/flag gating they
     // already had. Converting them to count-gating would be an improvement,
@@ -355,14 +360,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
     const longest = matches.reduce((a, b) => (b.to.length > a.to.length ? b : a));
     return new Set([longest.key]);
   };
-  const activeEvents = activeKeys(eventsItems);
-  const activeCommunication = activeKeys(communicationItems);
+  const activeSharing = activeKeys(sharingItems);
   const activeAutomation = activeKeys(automationItems);
 
   const sections: SidebarSection[] = [
     {
       key: 'settings',
-      path: SETTINGS_PATH,
+      paths: [SETTINGS_PATH],
       title: t('navigation.settings'),
       icon: Settings,
       groups: settingsGroups.map((g) => ({
@@ -380,7 +384,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
     },
     {
       key: 'clients',
-      path: '/admin/clients',
+      paths: ['/admin/clients'],
       title: t('navigation.clients'),
       icon: Briefcase,
       groups: [{
@@ -391,7 +395,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
     },
     {
       key: 'accounting',
-      path: '/admin/accounting',
+      paths: ['/admin/accounting'],
       title: t('navigation.accounting'),
       icon: Landmark,
       groups: [{
@@ -401,30 +405,21 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
       }],
     },
     {
-      key: 'events',
-      path: '/admin/events',
-      title: t('navigation.events'),
-      icon: Calendar,
+      key: 'sharing',
+      // Two trees, because PicTransfer keeps its own top-level URL rather than
+      // being renamed into the events tree just to sit in this section.
+      paths: [...SHARING_PATHS],
+      title: t('navigation.sharing', 'Sharing'),
+      icon: Share2,
       groups: [{
-        items: eventsItems.map((i) => ({
-          key: i.key, href: i.to, label: i.label, icon: i.icon, active: activeEvents.has(i.key),
-        })),
-      }],
-    },
-    {
-      key: 'communication',
-      path: '/admin/communication',
-      title: t('navigation.communication', 'Communication'),
-      icon: MessagesSquare,
-      groups: [{
-        items: communicationItems.map((i) => ({
-          key: i.key, href: i.to, label: i.label, icon: i.icon, active: activeCommunication.has(i.key),
+        items: sharingItems.map((i) => ({
+          key: i.key, href: i.to, label: i.label, icon: i.icon, active: activeSharing.has(i.key),
         })),
       }],
     },
     {
       key: 'automation',
-      path: '/admin/automation',
+      paths: ['/admin/automation'],
       title: t('navigation.automation', 'Automation'),
       icon: Workflow,
       groups: [{
@@ -434,7 +429,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
       }],
     },
   ];
-  const activeSection = sections.find((sec) => isUnder(sec.path)) ?? null;
+  const activeSection = sections.find((sec) => sec.paths.some(isUnder)) ?? null;
   const section = peekMain ? null : activeSection;
 
   // Settings is 30 tabs in 8 groups — long enough that scanning it is the
@@ -692,7 +687,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
                       // Clicking the current section's entry while peeking
                       // at the main menu hands the sidebar back to section
                       // mode even if the URL doesn't change.
-                      if (item.href === activeSection?.path) setPeekMain(false);
+                      if (activeSection?.paths.includes(item.href)) setPeekMain(false);
                       onClose();
                     })}
                     title={collapsed ? label : undefined}

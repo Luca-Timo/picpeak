@@ -895,8 +895,8 @@
     "accounting": "Računovodstvo",
     "workflows": "Delovni tokovi",
     "betaTag": "Beta",
-    "communication": "Komunikacija",
-    "automation": "Avtomatizacija"
+    "automation": "Avtomatizacija",
+    "sharing": "Deljenje"
   },
   "transfers": {
     "title": "PicTransfer",
@@ -9330,14 +9330,6 @@
       "placeholder": "Iskanje strani in nastavitev…",
       "noResults": "Nič ne ustreza »{{query}}«.",
       "open": "Iskanje strani in nastavitev"
-    }
-  },
-  "communication": {
-    "empty": {
-      "title": "Nobena komunikacijska funkcija ni omogočena",
-      "body": "Omogočite Sporočila ali PicTransfer v Nastavitve → Funkcije, da začnete.",
-      "noAccessTitle": "Tukaj ni ničesar, kar bi lahko odprli",
-      "noAccessBody": "Te funkcije so vklopljene, vendar vaša vloga ne more odpreti nobene od njihovih strani. Za dostop prosite skrbnika."
     }
   },
   "automation": {

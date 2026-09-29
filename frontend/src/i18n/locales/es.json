@@ -179,8 +179,8 @@
     "backup": "Copia de seguridad",
     "cmsPages": "Páginas CMS",
     "users": "Usuarios",
-    "communication": "Comunicación",
-    "automation": "Automatización"
+    "automation": "Automatización",
+    "sharing": "Compartir"
   },
   "archives": {
     "title": "Archivos",
@@ -2694,14 +2694,6 @@
       "placeholder": "Buscar páginas y ajustes…",
       "noResults": "Nada coincide con «{{query}}».",
       "open": "Buscar páginas y ajustes"
-    }
-  },
-  "communication": {
-    "empty": {
-      "title": "No hay funciones de comunicación activadas",
-      "body": "Activa Mensajes o PicTransfer en Ajustes → Funciones para empezar.",
-      "noAccessTitle": "Aquí no hay nada que puedas abrir",
-      "noAccessBody": "Estas funciones están activadas, pero tu rol no puede abrir ninguna de sus páginas. Pide acceso a un administrador."
     }
   },
   "automation": {
