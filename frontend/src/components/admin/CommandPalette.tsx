@@ -31,6 +31,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // Whatever had focus when the palette opened, so closing puts it back
+  // instead of dropping the caret at the top of the document.
+  const returnFocusRef = useRef<Element | null>(null);
 
   // Every open starts from a clean slate — a palette that reopens holding the
   // last query is a palette that navigates somewhere unexpected on Enter.
@@ -38,9 +42,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
     if (!isOpen) return;
     setQuery('');
     setCursor(0);
+    returnFocusRef.current = document.activeElement;
     // The input mounts with the overlay, so focus has to wait a frame.
     const id = window.requestAnimationFrame(() => inputRef.current?.focus());
-    return () => window.cancelAnimationFrame(id);
+    return () => {
+      window.cancelAnimationFrame(id);
+      // Back to the trigger. A modal that releases focus to the top of the
+      // page makes a keyboard user re-traverse the whole admin to get back.
+      const back = returnFocusRef.current;
+      if (back instanceof HTMLElement && document.contains(back)) back.focus();
+    };
   }, [isOpen]);
 
   const results = useMemo(() => {
@@ -84,7 +95,18 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       setCursor((c) => (results.length ? (c - 1 + results.length) % results.length : 0));
       return;
     }
-    if (e.key === 'Enter') { e.preventDefault(); go(results[cursor]); }
+    if (e.key === 'Enter') { e.preventDefault(); go(results[cursor]); return; }
+    // Focus trap. The dialog is modal, so Tab cycles inside it rather than
+    // stepping into the page underneath, which is still fully rendered.
+    if (e.key === 'Tab') {
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'input, button, [href], [tabindex]:not([tabindex="-1"])');
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
   };
 
   // Group headings are rendered by watching the group change down the list,
@@ -99,6 +121,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
     >
       <div className="fixed inset-0 bg-black/50" aria-hidden="true" />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label={t('search.palette.label', 'Search the admin area')}
@@ -115,6 +138,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
             onKeyDown={onKeyDown}
             placeholder={t('search.palette.placeholder', 'Search pages and settings…')}
             aria-label={t('search.palette.placeholder', 'Search pages and settings…')}
+            role="combobox"
+            aria-expanded={results.length > 0}
+            aria-controls="command-palette-results"
+            aria-activedescendant={results[cursor] ? `cmdk-${results[cursor].key}` : undefined}
+            autoComplete="off"
             className="flex-1 py-3 bg-transparent text-heading placeholder:text-muted focus:outline-none text-sm"
           />
           <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded border border-line text-muted">
@@ -127,7 +155,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
             {t('search.palette.noResults', 'Nothing matches “{{query}}”.', { query })}
           </p>
         ) : (
-          <ul ref={listRef} className="max-h-80 overflow-y-auto py-2">
+          <ul
+            ref={listRef}
+            id="command-palette-results"
+            role="listbox"
+            aria-label={t('search.palette.label', 'Search the admin area')}
+            className="max-h-80 overflow-y-auto py-2"
+          >
             {results.map((entry, index) => {
               const showGroup = entry.group !== lastGroup;
               lastGroup = entry.group;
@@ -135,13 +169,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
               return (
                 <React.Fragment key={entry.key}>
                   {showGroup && (
-                    <li className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                    <li role="presentation" className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
                       {entry.group}
                     </li>
                   )}
-                  <li>
+                  <li role="option" id={`cmdk-${entry.key}`} aria-selected={isActive}>
                     <button
                       type="button"
+                      tabIndex={-1}
                       data-index={index}
                       onMouseEnter={() => setCursor(index)}
                       onClick={() => go(entry)}

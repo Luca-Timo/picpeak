@@ -64,10 +64,27 @@ export function useAdminSearchIndex(): AdminSearchEntry[] {
       });
     }
 
+    /**
+     * Add a section's sub-pages — but only if this admin may enter the
+     * section at all.
+     *
+     * Sharing and Automation filter on permissions inside their own hooks, so
+     * their items are already safe. CRM and Accounting do not: Accounting's
+     * hook filters on flags alone and CRM's checks a permission only where an
+     * item declares one, because both rely on the SIDEBAR ENTRY to carry the
+     * section's permission (`accounting.view`, `customers.view |
+     * newsletters.view`) and on the section root to be the only way in.
+     * Indexing their items directly walked around that entry, which is how
+     * the palette came to offer Inbox and Tax report to a role that gets a
+     * 403 on both. Asking the entry keeps one gate, not two.
+     */
     const pushSection = (
+      sectionHref: string,
       context: string,
       items: { key: string; to: string; label: string; icon: LucideIcon }[],
     ) => {
+      const entry = adminNavigation.find((i) => i.href === sectionHref);
+      if (entry && !navItemAllowed(entry, hasPermission, flags)) return;
       for (const i of items) {
         entries.push({
           key: `${context}:${i.key}`,
@@ -79,10 +96,10 @@ export function useAdminSearchIndex(): AdminSearchEntry[] {
         });
       }
     };
-    pushSection(t('navigation.sharing', 'Sharing'), sharingItems);
-    pushSection(t('navigation.clients', 'CRM'), clientsItems);
-    pushSection(t('navigation.accounting', 'Accounting'), accountingItems);
-    pushSection(t('navigation.automation', 'Automation'), automationItems);
+    pushSection('/admin/events', t('navigation.sharing', 'Sharing'), sharingItems);
+    pushSection('/admin/clients', t('navigation.clients', 'CRM'), clientsItems);
+    pushSection('/admin/accounting', t('navigation.accounting', 'Accounting'), accountingItems);
+    pushSection('/admin/automation', t('navigation.automation', 'Automation'), automationItems);
 
     const settingsLabel = t('navigation.settings', 'Settings');
     for (const group of settingsGroups) {

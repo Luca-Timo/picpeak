@@ -87,14 +87,21 @@ interface AdminLayoutInnerProps {
 const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, mustChangePassword }) => {
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  // Cmd/Ctrl+K anywhere in the admin area. Registered on the layout rather
-  // than inside the palette so the listener exists whether or not the palette
-  // is mounted, and torn down with the admin shell. Suppressed while the
-  // mandatory password change is up: nothing else is reachable then.
+  // Cmd+K on a Mac, Ctrl+K everywhere else. NOT "either modifier": Ctrl+K on
+  // macOS is kill-to-end-of-line in every text field, and claiming it would
+  // take a working editing key away from anyone typing in the admin. Shift and
+  // Alt disqualify too, so Cmd+Shift+K stays free for whatever else wants it.
+  //
+  // Registered on the layout rather than inside the palette so the listener
+  // exists whether or not the palette is mounted, and is torn down with the
+  // admin shell. Suppressed while the mandatory password change is up:
+  // nothing else is reachable then.
   useEffect(() => {
     if (mustChangePassword) return;
+    const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '');
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      const mod = isMac ? e.metaKey : e.ctrlKey;
+      if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setPaletteOpen((open) => !open);
       }

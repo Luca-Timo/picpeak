@@ -116,22 +116,21 @@ interface NavItem {
 //
 // Folded into sections (same: redirects kept):
 //   /admin/archives  → Events section
-//   /admin/messages  → Communication section
-//   /admin/transfers → Communication section
+//   /admin/transfers → Sharing section (same URL, new home)
 //   /admin/workflows → Automation section
 //
 // What is left is eight entries, of which four disappear entirely on an
 // install with the matching features off.
 //
 // Feature-gated (only render when the corresponding feature flag is on):
-//   Analytics     → flags.analytics
-//   Communication → flags.messaging | flags.transfers
-//   Automation    → flags.workflows | flags.reminderEmails
+//   Analytics  → flags.analytics
+//   Messages   → flags.messaging
+//   Automation → flags.workflows | flags.reminderEmails
 // Exported so Settings → Features can render its "Sidebar preview" against
 // the same declaration the real sidebar uses (it used to keep a second,
 // hand-maintained array that only knew about 2 of the feature gates).
 //
-// Section entries (Events, Communication, Automation, Settings) carry their
+// Section entries (Sharing, Automation, Settings) carry their
 // FLAGS here — the preview reads them and applies nothing else — but no
 // permission fields. Their visibility is decided in the sidebar by asking the
 // section's own nav hook whether it has anything to show, which cannot drift
@@ -595,10 +594,18 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
                       if (e.key === 'Escape') { setQuery(''); return; }
                       // Enter goes to the best match, so a filter that has
                       // narrowed to one result doesn't still need the mouse.
+                      // It leaves the page, so it owes the open form the same
+                      // question every other route out of here asks — clicks
+                      // go through guardedClick, the palette through its own
+                      // confirmLeave, and this was the one path that did not.
                       if (e.key === 'Enter' && firstMatch) {
                         e.preventDefault();
-                        navigate(firstMatch.href, { replace: !!firstMatch.replace });
-                        onClose();
+                        const go = () => {
+                          navigate(firstMatch.href, { replace: !!firstMatch.replace });
+                          onClose();
+                        };
+                        if (!isAnyDirty) { go(); return; }
+                        void confirmLeave().then((ok) => { if (ok) go(); });
                       }
                     }}
                     placeholder={t('settings.search.placeholder', 'Search settings…')}

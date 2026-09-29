@@ -452,12 +452,19 @@ function App() {
                           Workflows for its schedule, so the two now sit in one
                           section. Each sub-area keeps its own flag. */}
                       <Route path="automation" element={<AutomationLayout />}>
+                        {/* Both gates, for the same reason reminder-templates
+                            carries them: a section opens as soon as ANY item
+                            in it is permitted, so `reminderEmails` alone would
+                            otherwise let a role without workflows.view open
+                            the builder and watch its queries 403. */}
                         <Route element={<RequireFeature flag="workflows" />}>
+                          <Route element={<RequirePermission permission="workflows.view" />}>
                           <Route path="workflows" element={<WorkflowsListPage />} />
                           {/* Flattened out from under workflows/ so the
                               Workflows entry doesn't stay highlighted here. */}
                           <Route path="approvals" element={<WorkflowApprovalsPage />} />
                           <Route path="workflows/:id" element={<WorkflowEditorPage />} />
+                          </Route>
                         </Route>
                         {/* Reminder emails needs BOTH gates. As a Settings tab
                             it was gated by living in Settings, which filters

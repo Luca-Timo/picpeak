@@ -33,7 +33,7 @@ import { Card } from '../../../components/common';
 import { api } from '../../../config/api';
 import { FeatureCard } from '../components/FeatureCard';
 import { SidebarPreview } from '../components/SidebarPreview';
-import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
+import { useFeatureFlags, type FeatureKey } from '../../../contexts/FeatureFlagsContext';
 import { usePermissions } from '../../../contexts/PermissionsContext';
 import {
   SETTINGS_TAB_PERMISSIONS,
@@ -70,7 +70,7 @@ export const FeaturesTab: React.FC = () => {
   const isSingleContainer = systemVersion?.single_container === true;
 
   const { t } = useTranslation();
-  const { staged, setFlag, save, reset, isDirty, isSaving } = useFeatureFlags();
+  const { staged, flags, setFlag, save, reset, isDirty, isSaving } = useFeatureFlags();
   const { hasPermission, hasAnyPermission } = usePermissions();
 
   // A "Configure" link is only worth showing if this admin can open what it
@@ -80,12 +80,19 @@ export const FeaturesTab: React.FC = () => {
   // and be snapped silently to an unrelated tab; the Automation pages would
   // greet them with "enable Workflows under Settings > Features" — the thing
   // they just did. No link is better than a link that lies.
-  const settingsTabLink = (tab: SettingsTab) =>
-    (hasAnyPermission(SETTINGS_TAB_PERMISSIONS[tab]) ? settingsTabHref(tab) : undefined);
+  //
+  // It also follows the SAVED flag, not the staged one. The destination is
+  // gated on what is saved (`settingsTabGatedOff`, and the section hooks read
+  // `flags`), so offering the link the moment a toggle flips would land the
+  // admin on a tab that snaps straight back out from under them.
+  const configurable = (flag: FeatureKey) => flags[flag];
+  const settingsTabLink = (flag: FeatureKey, tab: SettingsTab) =>
+    (configurable(flag) && hasAnyPermission(SETTINGS_TAB_PERMISSIONS[tab])
+      ? settingsTabHref(tab) : undefined);
   // Section pages are gated by their section hook; mirror the permission it
   // filters on rather than restating a set.
-  const sectionPageLink = (permission: string, href: string) =>
-    (hasPermission(permission) ? href : undefined);
+  const sectionPageLink = (flag: FeatureKey, permission: string, href: string) =>
+    (configurable(flag) && hasPermission(permission) ? href : undefined);
 
   // The localized label shown in StatusBadge — short, uppercased internally.
   const statusLabel = (status: FeatureStatus): string => {
@@ -166,7 +173,7 @@ export const FeaturesTab: React.FC = () => {
             sidebarHiddenLabel={sidebarHiddenLabel}
             enabled={staged.slideshow}
             onToggle={(next) => setFlag('slideshow', next)}
-            configureHref={settingsTabLink('slideshow')}
+            configureHref={settingsTabLink('slideshow', 'slideshow')}
             configureLabel={configureLabel}
           />
 
@@ -227,7 +234,7 @@ export const FeaturesTab: React.FC = () => {
             sidebarLabel={t('settings.features.workflows.sidebar', 'Workflows')}
             enabled={staged.workflows}
             onToggle={(next) => setFlag('workflows', next)}
-            configureHref={sectionPageLink('workflows.view', '/admin/automation/workflows')}
+            configureHref={sectionPageLink('workflows', 'workflows.view', '/admin/automation/workflows')}
             configureLabel={configureLabel}
           />
         </Section>
@@ -271,7 +278,7 @@ export const FeaturesTab: React.FC = () => {
             sidebarHiddenLabel={sidebarHiddenLabel}
             enabled={staged.documents}
             onToggle={(next) => setFlag('documents', next)}
-            configureHref={settingsTabLink('crm')}
+            configureHref={settingsTabLink('documents', 'crm')}
             configureLabel={configureLabel}
           />
           {/* Future sub-features (Calendar / Quotes / Bills / Messaging)
@@ -294,7 +301,7 @@ export const FeaturesTab: React.FC = () => {
             sidebarLabel={t('settings.reminderTemplates.title', 'Reminder emails')}
             enabled={staged.reminderEmails}
             onToggle={(next) => setFlag('reminderEmails', next)}
-            configureHref={sectionPageLink('email.view', '/admin/automation/reminder-templates')}
+            configureHref={sectionPageLink('reminderEmails', 'email.view', '/admin/automation/reminder-templates')}
             configureLabel={configureLabel}
           />
 
@@ -326,7 +333,7 @@ export const FeaturesTab: React.FC = () => {
             sidebarHiddenLabel={sidebarHiddenLabel}
             enabled={staged.whatsapp}
             onToggle={(next) => setFlag('whatsapp', next)}
-            configureHref={settingsTabLink('whatsapp')}
+            configureHref={settingsTabLink('whatsapp', 'whatsapp')}
             configureLabel={configureLabel}
           />
 
@@ -398,7 +405,7 @@ export const FeaturesTab: React.FC = () => {
             sidebarLabel={t('settings.features.quotes.sidebar', 'Quotes')}
             enabled={staged.quotes}
             onToggle={(next) => setFlag('quotes', next)}
-            configureHref={settingsTabLink('crm')}
+            configureHref={settingsTabLink('quotes', 'crm')}
             configureLabel={configureLabel}
           />
 
@@ -414,7 +421,7 @@ export const FeaturesTab: React.FC = () => {
             sidebarLabel={t('settings.features.contracts.sidebar', 'Contracts')}
             enabled={staged.contracts}
             onToggle={(next) => setFlag('contracts', next)}
-            configureHref={settingsTabLink('contracts')}
+            configureHref={settingsTabLink('contracts', 'contracts')}
             configureLabel={configureLabel}
           />
 
@@ -430,7 +437,7 @@ export const FeaturesTab: React.FC = () => {
             sidebarLabel={t('settings.features.bills.sidebar', 'Invoices')}
             enabled={staged.bills}
             onToggle={(next) => setFlag('bills', next)}
-            configureHref={settingsTabLink('crm')}
+            configureHref={settingsTabLink('bills', 'crm')}
             configureLabel={configureLabel}
           />
 
@@ -495,7 +502,7 @@ export const FeaturesTab: React.FC = () => {
             sidebarLabel={t('settings.features.accounting.sidebar', 'Accounting')}
             enabled={staged.accounting}
             onToggle={(next) => setFlag('accounting', next)}
-            configureHref={settingsTabLink('accounting')}
+            configureHref={settingsTabLink('accounting', 'accounting')}
             configureLabel={configureLabel}
             // Invoices force-enable Accounting (invoice VAT settings live here),
             // so the master can't be turned off while Bills is on.
@@ -578,7 +585,7 @@ export const FeaturesTab: React.FC = () => {
             sidebarLabel={t('admin.analytics', 'Analytics')}
             enabled={staged.analytics}
             onToggle={(next) => setFlag('analytics', next)}
-            configureHref={settingsTabLink('analytics')}
+            configureHref={settingsTabLink('analytics', 'analytics')}
             configureLabel={configureLabel}
           />
 
@@ -595,7 +602,7 @@ export const FeaturesTab: React.FC = () => {
             sidebarHiddenLabel={settingsOnlyLabel}
             enabled={staged.userManagement}
             onToggle={(next) => setFlag('userManagement', next)}
-            configureHref={settingsTabLink('users')}
+            configureHref={settingsTabLink('userManagement', 'users')}
             configureLabel={configureLabel}
             warning={t(
               'settings.features.userManagement.warning',

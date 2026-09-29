@@ -13,7 +13,7 @@
  *     already-sent email.
  */
 import React from 'react';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, renderHook, screen, cleanup, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { readFileSync } from 'fs';
@@ -50,8 +50,10 @@ vi.mock('../../../contexts/FeatureFlagsContext', () => ({
 vi.mock('../../../contexts/AdminDarkModeContext', () => ({
   useAdminDarkMode: () => ({ isDark: false }),
 }));
+let isAnyDirty = false;
+const confirmLeave = vi.fn(async () => true);
 vi.mock('../../../contexts/UnsavedChangesContext', () => ({
-  useLeaveGuard: () => ({ confirmLeave: async () => true, isAnyDirty: false }),
+  useLeaveGuard: () => ({ confirmLeave, isAnyDirty }),
 }));
 vi.mock('../../../hooks/usePublicSettings', () => ({
   usePublicSettings: () => ({ data: undefined }),
@@ -63,6 +65,7 @@ vi.mock('../VersionInfo', () => ({ VersionInfo: () => null }));
 
 import { AdminSidebar } from '../AdminSidebar';
 import { AutomationLayout } from '../AutomationLayout';
+import { useAdminSearchIndex } from '../adminSearchIndex';
 
 /** Every permission the sidebar and its section hooks ever ask about. */
 const ALL_PERMISSIONS = [
@@ -81,7 +84,7 @@ function renderSidebar(path: string) {
   );
 }
 
-afterEach(() => { cleanup(); granted = new Set(); flags = {}; });
+afterEach(() => { cleanup(); granted = new Set(); flags = {}; isAnyDirty = false; confirmLeave.mockClear(); });
 
 describe('admin sidebar — what is top level', () => {
   it('does not offer the six relocated surfaces as main-menu entries', () => {
@@ -222,6 +225,34 @@ describe('settings search', () => {
     expect(screen.getByText('settings.search.noResults')).toBeInTheDocument();
   });
 
+  it('asks an unsaved form before Enter leaves the page', async () => {
+    // Every other way out of the sidebar goes through the leave guard —
+    // clicks via guardedClick, the palette via its own confirmLeave. Enter in
+    // the filter was the one path that navigated straight past it, losing a
+    // dirty settings form's edits without asking.
+    granted = new Set(ALL_PERMISSIONS);
+    isAnyDirty = true;
+    renderSidebar('/admin/settings?tab=features');
+
+    const box = screen.getByLabelText('settings.search.label');
+    fireEvent.change(box, { target: { value: 'smtp' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+
+    expect(confirmLeave).toHaveBeenCalled();
+  });
+
+  it('does not interrupt when nothing is dirty', () => {
+    granted = new Set(ALL_PERMISSIONS);
+    isAnyDirty = false;
+    renderSidebar('/admin/settings?tab=features');
+
+    const box = screen.getByLabelText('settings.search.label');
+    fireEvent.change(box, { target: { value: 'smtp' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+
+    expect(confirmLeave).not.toHaveBeenCalled();
+  });
+
   it('ships the keyword bundle the search reads, in both authored locales', () => {
     // The test above runs on a fixture, so it would keep passing if the real
     // terms were dropped. en and de are the authored pair; the rest inherit
@@ -253,12 +284,57 @@ describe('a page that left Settings keeps a permission gate', () => {
     expect(block).toMatch(/RequirePermission permission="email\.view"/);
   });
 
+  it('gates the workflow builder on workflows.view too', () => {
+    // The same rule, applied to both siblings in the section rather than one:
+    // `reminderEmails` alone opens Automation, so without this a role with
+    // email.view and no workflows.view reaches the builder.
+    const block = app.slice(app.indexOf('path="automation"'),
+                            app.indexOf('path="reminder-templates"'));
+    expect(block).toMatch(/RequirePermission permission="workflows\.view"/);
+    expect(block).toMatch(/path="workflows"/);
+    expect(block).toMatch(/path="approvals"/);
+  });
+
   it('redirects rather than rendering when the permission is absent', () => {
     const guard = readFileSync(
       resolve(__dirname, '../RequirePermission.tsx'), 'utf8');
     // Acting before the first fetch would redirect every role on a refresh.
     expect(guard).toMatch(/if \(isLoading\) return null;/);
     expect(guard).toMatch(/<Navigate to=\{fallback\} replace \/>/);
+  });
+});
+
+describe('the command palette cannot offer what the sidebar hides', () => {
+  const indexAt = () => renderHook(() => useAdminSearchIndex(), {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter>{children}</MemoryRouter>
+      </QueryClientProvider>
+    ),
+  }).result.current.map((e) => e.href);
+
+  it('leaves out Accounting pages for a role without accounting.view', () => {
+    // Accounting's nav hook filters on flags ALONE — the section's permission
+    // lives on the sidebar entry. Indexing its items directly walked around
+    // that entry and offered Inbox and Tax report to a role that 403s on both.
+    granted = new Set(['events.view', 'settings.view']);
+    flags = { accounting: true, incomingInvoices: true, expenses: true, taxReport: true };
+    const hrefs = indexAt();
+    expect(hrefs.some((h) => h.startsWith('/admin/accounting'))).toBe(false);
+  });
+
+  it('includes them once the role holds it', () => {
+    granted = new Set(['events.view', 'settings.view', 'accounting.view']);
+    flags = { accounting: true, incomingInvoices: true, expenses: true, taxReport: true };
+    expect(indexAt().some((h) => h.startsWith('/admin/accounting'))).toBe(true);
+  });
+
+  it('leaves out CRM pages for a role holding none of the section permissions', () => {
+    // Same shape: projects/calendar/quotes/contracts/bills declare no
+    // permission of their own in useClientsNavItems.
+    granted = new Set(['events.view', 'settings.view']);
+    flags = { clients: true, quotes: true, contracts: true, projects: true };
+    expect(indexAt().some((h) => h.startsWith('/admin/clients'))).toBe(false);
   });
 });
 

@@ -8,10 +8,12 @@
  * messaging, and sending files is not messaging (review of #1718).
  *
  * There is no SharingLayout component to go with this. The section spans two
- * URL trees (/admin/events and /admin/transfers) rather than nesting under
- * one root, so there is no section root to redirect and no empty state to
- * own: Events is reachable by anyone who can enter the section at all. The
- * sidebar reads this hook directly and activates on either path.
+ * URL trees (/admin/events and /admin/transfers) rather than nesting under one
+ * root, so there is no section root to redirect and no empty state to own.
+ * Nothing here is reachable by everyone who can enter the section — a role
+ * holding only `archives.view` cannot open the events list — so the sidebar
+ * aims the menu entry at the first item this hook returns rather than at the
+ * section's first path. It reads this hook directly and activates on either.
  */
 import { useTranslation } from 'react-i18next';
 import { Calendar, Archive, Send } from 'lucide-react';
