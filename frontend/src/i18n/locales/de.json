@@ -909,12 +909,12 @@
   },
   "transfers": {
     "title": "PicTransfer",
-    "subtitle": "Originaldateien aus beliebigen Events als Download-Link versenden.",
+    "subtitle": "Dateien an Kundinnen und Kunden senden – oder Dateien von ihnen anfordern.",
     "new": "Neuer Transfer",
     "create": "Transfer erstellen",
     "created": "Transfer erstellt",
     "createFailed": "Transfer konnte nicht erstellt werden",
-    "empty": "Noch keine Transfers. Erstellen Sie einen, um Dateien zu teilen.",
+    "empty": "Noch nichts vorhanden. Senden Sie Dateien, oder fordern Sie welche an.",
     "untitled": "Unbenannter Transfer",
     "linkCopied": "Link in die Zwischenablage kopiert",
     "copyFailed": "Link konnte nicht kopiert werden",
@@ -928,7 +928,7 @@
     "filesAdded": "Dateien hinzugefügt",
     "deleted": "Transfer gelöscht",
     "deleteConfirmTitle": "Transfer löschen?",
-    "deleteConfirmBody": "Dies entfernt den Link und alle Kunden-Uploads. Die Fotos der Quell-Events sind nicht betroffen.",
+    "deleteConfirmBody": "Damit wird der Link entfernt. Die Fotos im Event bleiben unberührt.",
     "addImages": "Bilder hinzufügen",
     "clientUpload": "Kunden-Upload",
     "disableUploads": "Deaktivieren",
@@ -951,7 +951,9 @@
       "status": "Status",
       "downloads": "Downloads",
       "expires": "Läuft ab",
-      "uploads": "Uploads"
+      "uploads": "Uploads",
+      "kind": "Typ",
+      "deadline": "Frist"
     },
     "status": {
       "active": "Aktiv",
@@ -977,7 +979,12 @@
       "recipientsCount": "{{count}} Empfänger — jeder erhält den Download-Link",
       "recipientsHint": "Mehrere Adressen durch Kommas trennen. Jeder Empfänger erhält den Download-Link.",
       "recipientsCount_one": "{{count}} Empfänger — er erhält den Download-Link",
-      "recipientsCount_other": "{{count}} Empfänger — jeder erhält den Download-Link"
+      "recipientsCount_other": "{{count}} Empfänger — jeder erhält den Download-Link",
+      "requestTitlePlaceholder": "z. B. Logo und Markenmaterial für Familie Schmidt",
+      "requestMessage": "Was benötigen Sie von ihnen? (optional)",
+      "requestMessagePlaceholder": "Wird dem Kunden auf der Upload-Seite angezeigt",
+      "uploadWindowDays": "Uploads annehmen für (Tage)",
+      "requestRecipientsHint": "Mehrere Adressen mit Komma trennen. Jede erhält den Upload-Link."
     },
     "picker": {
       "title": "Bilder aus anderen Events auswählen",
@@ -1018,7 +1025,47 @@
       "send": "{{count}} Dateien hochladen",
       "failed": "Upload fehlgeschlagen. Bitte erneut versuchen.",
       "send_one": "{{count}} Datei hochladen",
-      "send_other": "{{count}} Dateien hochladen"
+      "send_other": "{{count}} Dateien hochladen",
+      "typeRejected": "Kein akzeptierter Dateityp: {{names}}",
+      "tooBigNamed": "Zu groß (max. {{mb}} MB): {{names}}",
+      "toomany": "Es können nur die ersten {{count}} Dateien auf einmal hochgeladen werden.",
+      "someRejected": "Diese Dateien wurden nicht akzeptiert: {{names}}",
+      "anyType": "Jeder Dateityp wird akzeptiert.",
+      "acceptedTypes": "Akzeptiert: {{types}}"
+    },
+    "newSend": "Dateien senden",
+    "newRequest": "Dateien anfordern",
+    "emptyTab": "In diesem Tab ist noch nichts vorhanden.",
+    "requestCreated": "Dateianfrage erstellt",
+    "requestCreateFailed": "Die Dateianfrage konnte nicht erstellt werden",
+    "createRequest": "Anfrage erstellen",
+    "createRequestAndSend": "Erstellen & anfragen",
+    "someRejected": "{{count}} Datei(en) hatten keinen erlaubten Typ und wurden übersprungen: {{names}}",
+    "uploadBy": "Nimmt Uploads an bis",
+    "filesReceived": "Erhaltene Dateien",
+    "closeRequest": "Anfrage schließen",
+    "requestClosed": "Anfrage geschlossen",
+    "resend": "Erneut senden",
+    "emailResent": "E-Mail erneut gesendet",
+    "askedOf": "Angefragt bei",
+    "uploadCode": "Kurzer Upload-Code",
+    "issueCode": "Code erstellen",
+    "rotateCode": "Neuer Code",
+    "revokeCode": "Zurückziehen",
+    "codeIssued": "Upload-Code erstellt",
+    "codeRevoked": "Upload-Code zurückgezogen",
+    "codeHint": "Optional: ein kurzer Code, den Sie am Telefon vorlesen können. Der vollständige Link oben funktioniert immer.",
+    "unscannedNote": "Diese Dateien werden genau so gespeichert, wie sie eingegangen sind, und von PicPeak nie geöffnet oder geprüft. Prüfen Sie sie, bevor Sie sie verwenden oder weitergeben.",
+    "deleteRequestConfirmTitle": "Dateianfrage löschen?",
+    "deleteRequestConfirmBody": "Damit wird der Upload-Link entfernt und jede vom Kunden gesendete Datei endgültig gelöscht.",
+    "tab": {
+      "all": "Alle",
+      "sent": "Gesendet",
+      "requested": "Angefordert"
+    },
+    "kind": {
+      "send": "Senden",
+      "request": "Anfrage"
     }
   },
   "workflows": {
@@ -3603,6 +3650,23 @@
         "präsentation",
         "kiosk"
       ]
+    },
+    "transfers": {
+      "title": "PicTransfer",
+      "description": "Welche Dateitypen Kunden Ihnen senden dürfen – und wie groß.",
+      "uploadsTitle": "Was Kunden Ihnen senden dürfen",
+      "uploadsIntro": "Gilt für Dateianfragen und für Dateien, die Sie einem Transfer anhängen. Ändert nicht, was in eine Galerie hochgeladen werden darf.",
+      "acceptAll": "Alle Dateitypen akzeptieren",
+      "acceptAllHint": "Jede Datei, die ein Kunde auswählt, wird angenommen. Größenlimit, Dateianzahl und Ablauf des Links gelten weiterhin.",
+      "acceptAllWarning": "Hochgeladene Dateien werden als undurchsichtige Downloads gespeichert und ausgeliefert. PicPeak öffnet, rendert und prüft sie nie und liefert sie nie als Webinhalt aus – kann Ihnen aber auch nicht sagen, ob eine Datei sicher ist. Prüfen Sie alles, was Sie öffnen oder weitergeben.",
+      "allowedTypes": "Erlaubte Dateitypen",
+      "addType": "Typ hinzufügen",
+      "allowedTypesHint": "Eine Datei wird angenommen, wenn ihr Typ passt und ihre Endung eine der aufgeführten ist. Endungen leer lassen, um nur auf den Typ zu prüfen.",
+      "noTypes": "Keine Typen aufgeführt. Fügen Sie mindestens einen hinzu oder aktivieren Sie „Alle Dateitypen akzeptieren“.",
+      "mime": "Dateityp",
+      "extensions": "Endungen",
+      "maxSize": "Maximale Dateigröße (MB)",
+      "maxSizeHint": "Gilt pro Datei, nicht pro Upload."
     }
   },
   "branding": {

@@ -611,6 +611,91 @@ router.put('/slideshow', adminAuth, requirePermission('settings.edit'), async (r
 });
 
 // ──────────────────────────────────────────────────────────────────────────
+// PicTransfer upload policy (#1544). Its own endpoints rather than a field on
+// the general settings page because this list is NOT `general_allowed_file_types`
+// — that one governs gallery photos, which the media pipeline decodes, and
+// widening it to carry a client's .psd would widen what sharp is handed.
+//
+// Behind the `transfers` feature flag on the BACKEND, not only in the sidebar:
+// a disabled feature must not be configurable by a direct API hit.
+// ──────────────────────────────────────────────────────────────────────────
+
+const { requireFeatureFlag: requireFlag } = require('../middleware/requireFeatureFlag');
+
+router.get('/transfers',
+  adminAuth,
+  requirePermission('settings.view'),
+  requireFlag('transfers'),
+  async (req, res) => {
+    try {
+      const { getTransferUploadPolicy } = require('../services/transferUploadPolicy');
+      const policy = await getTransferUploadPolicy();
+      res.json({
+        accept_all: policy.acceptAll,
+        allowed_types: policy.allowedTypes,
+        max_size_mb: policy.maxSizeMb,
+      });
+    } catch (error) {
+      errorResponse(res, error, 500, 'Failed to load transfer settings');
+    }
+  });
+
+router.put('/transfers',
+  adminAuth,
+  requirePermission('settings.edit'),
+  requireFlag('transfers'),
+  async (req, res) => {
+    try {
+      const { normalizeAllowedTypes } = require('../services/transferUploadPolicy');
+      const has = (k) => Object.prototype.hasOwnProperty.call(req.body, k);
+      const updated = [];
+
+      if (has('allowed_types')) {
+        // normalizeAllowedTypes drops anything that isn't a well-formed
+        // `type/subtype`, so a typo cannot land in the setting and silently
+        // match nothing. An empty result would make the policy fall back to
+        // the legacy key, which is not what "I cleared the list" means, so
+        // refuse it and say why.
+        const cleaned = normalizeAllowedTypes(req.body.allowed_types);
+        if (!cleaned.length) {
+          return res.status(400).json({
+            error: 'Add at least one file type, or turn on "Accept all file types".',
+            code: 'EMPTY_ALLOWLIST',
+          });
+        }
+        await upsertAppSetting('transfer_upload_allowed_types', JSON.stringify(cleaned), 'general');
+        updated.push('transfer_upload_allowed_types');
+      }
+
+      if (has('accept_all')) {
+        const acceptAll = req.body.accept_all === true || req.body.accept_all === 'true';
+        await upsertAppSetting('transfer_upload_accept_all', JSON.stringify(acceptAll), 'boolean');
+        updated.push('transfer_upload_accept_all');
+      }
+
+      if (has('max_size_mb')) {
+        const mb = Math.round(Number(req.body.max_size_mb));
+        if (!Number.isFinite(mb) || mb < 1 || mb > 100000) {
+          return res.status(400).json({ error: 'Maximum file size must be between 1 and 100000 MB', code: 'BAD_SIZE' });
+        }
+        await upsertAppSetting('transfer_max_upload_size_mb', JSON.stringify(mb), 'number');
+        updated.push('transfer_max_upload_size_mb');
+      }
+
+      await logActivity(
+        'settings_updated',
+        { category: 'transfers', changes: updated },
+        null,
+        { type: 'admin', id: req.admin.id, name: req.admin.username },
+      );
+
+      return res.json({ message: 'Transfer settings updated', updated });
+    } catch (error) {
+      return errorResponse(res, error, 500, 'Failed to save transfer settings');
+    }
+  });
+
+// ──────────────────────────────────────────────────────────────────────────
 // Download resolutions (#858). The standard resolution is what every ordinary
 // download hands out; the picker is an opt-in modal letting guests choose a
 // different size. Dedicated endpoints because a change here has to invalidate
