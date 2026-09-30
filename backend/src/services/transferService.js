@@ -44,6 +44,30 @@ const UPLOAD_TOKEN_LENGTH = 10;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// How long after a "files received" notice the next one is suppressed. See
+// notifyFilesReceived — the upload route is unauthenticated, so this is what
+// stops a request link being turned into a mail cannon.
+const UPLOAD_NOTICE_COOLDOWN_MS = 15 * 60 * 1000;
+
+/**
+ * Truncate to `max` UTF-16 units without splitting a surrogate pair.
+ *
+ * A plain `.slice(512)` can cut an emoji or an astral-plane character in half
+ * and leave a lone surrogate on the row. That value survives the insert, and
+ * then `encodeURIComponent` throws URIError on it inside buildContentDisposition
+ * — at download time, AFTER the byte stream is open, so the client gets a
+ * truncated 200 rather than an error.
+ */
+function truncateSafely(value, max) {
+  const str = String(value);
+  if (str.length <= max) return str;
+  let end = max;
+  // A high surrogate (D800–DBFF) at the cut means its pair is being severed.
+  const code = str.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  return str.slice(0, end);
+}
+
 // The two kinds a transfer can be (#1544, migration 257). Mutually exclusive:
 // a send hands files out behind `token`, a request takes files in behind
 // `token` (with `upload_token` as a short read-aloud alternative). Every public
@@ -968,10 +992,13 @@ async function addExtraFile(transferId, { originalFilename, storedPath, sizeByte
   const order = ((maxOrderRow && Number(maxOrderRow.max)) || 0) + 1;
   const [id] = await db('transfer_extra_files').insert({
     transfer_id: transferId,
-    original_filename: String(originalFilename || 'file').slice(0, 512),
+    original_filename: truncateSafely(originalFilename || 'file', 512),
     stored_path: storedPath,
     size_bytes: sizeBytes || null,
-    mime_type: mimeType || null,
+    // mime_type is varchar(100). A longer client-supplied type (they exist —
+    // some Office types are 90+ characters and a bogus one can be anything)
+    // fails the INSERT on PostgreSQL, after the bytes are already in storage.
+    mime_type: mimeType ? truncateSafely(mimeType, 100) : null,
     sort_order: order,
     created_at: new Date(),
   }).returning('id');
@@ -1132,6 +1159,25 @@ async function notifyFilesReceived(transferId, receivedCount) {
     const transfer = await db('transfers').where({ id: transferId }).first();
     if (!transfer || !isRequestRow(transfer)) return;
 
+    // Coalesce. The upload endpoint is unauthenticated — the link IS the
+    // secret — and its limiter allows 10 POSTs a minute per /64, so one mail
+    // per batch lets anyone holding a request link put hundreds of messages an
+    // hour into the creator's inbox. One notice per cooldown is enough: it
+    // says files arrived, and the detail panel carries the running count.
+    //
+    // Compare-and-swap on the value we just read, so two uploads racing here
+    // produce one mail rather than two.
+    const lastMs = timestampMs(transfer.uploads_notified_at);
+    if (Number.isFinite(lastMs) && Date.now() - lastMs < UPLOAD_NOTICE_COOLDOWN_MS) return;
+    const claim = db('transfers').where({ id: transferId });
+    if (transfer.uploads_notified_at === null || transfer.uploads_notified_at === undefined) {
+      claim.whereNull('uploads_notified_at');
+    } else {
+      claim.where('uploads_notified_at', transfer.uploads_notified_at);
+    }
+    const claimed = await claim.update({ uploads_notified_at: new Date() });
+    if (!claimed) return;
+
     // Addressed to the admin who owns the request. The fan-out to every admin
     // is ONLY for a legacy row with no creator: if the named creator is
     // inactive or has no address, telling every other admin instead would
@@ -1202,10 +1248,11 @@ function assertUploadable(transfer) {
 async function addUpload(transferId, { originalFilename, storedPath, sizeBytes, mimeType, ip }) {
   const [id] = await db('transfer_uploads').insert({
     transfer_id: transferId,
-    original_filename: String(originalFilename || 'file').slice(0, 512),
+    original_filename: truncateSafely(originalFilename || 'file', 512),
     stored_path: storedPath,
     size_bytes: sizeBytes || null,
-    mime_type: mimeType || null,
+    // varchar(100) — see addExtraFile.
+    mime_type: mimeType ? truncateSafely(mimeType, 100) : null,
     uploader_ip: ip || null,
     uploaded_at: new Date(),
   }).returning('id');
@@ -1256,18 +1303,37 @@ async function removeUploadedFiles(transferId) {
   // retention promise on every install.
   //
   // So: ask whether any OTHER transfer still references a path under this
-  // prefix. None does → recursive delete, orphans included. One does → leave
-  // the directory alone entirely.
+  // prefix. None does → sweep the prefix, orphans included. One does → leave
+  // it alone entirely.
+  //
+  // Both backends are swept, not just local: on S3 the same failed-insert case
+  // leaves an object with no row, and it has no retention of its own.
   try {
-    if (storage.kind() !== 'local') return;
     const prefix = `${uploadDirKey(transferId)}/`;
     const foreign = await db('transfer_uploads')
       .whereNot('transfer_id', transferId)
       .where('stored_path', 'like', `${prefix}%`)
       .first('id');
     if (foreign) return;
-    const dir = storage.resolveLocalPath(uploadDirKey(transferId));
-    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+
+    if (storage.kind() === 'local') {
+      const dir = storage.resolveLocalPath(uploadDirKey(transferId));
+      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+      return;
+    }
+
+    // S3 has no directories: list the prefix and delete what is left.
+    const remaining = await storage.list(uploadDirKey(transferId));
+    for (const entry of remaining || []) {
+      if (!entry || !entry.key) continue;
+      try {
+        await storage.delete(entry.key);
+      } catch (err) {
+        logger.warn('transferService: failed to delete orphaned transfer object', {
+          transferId, key: entry.key, error: err.message,
+        });
+      }
+    }
   } catch (err) {
     logger.warn('transferService: could not clean transfer upload directory', {
       transferId, error: err.message,
@@ -1290,6 +1356,7 @@ module.exports = {
   computeStatus,
   downloadsRemaining,
   stillInFuture,
+  truncateSafely,
   // admin CRUD
   createTransfer,
   listTransfers,

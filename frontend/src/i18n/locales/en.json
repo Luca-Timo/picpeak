@@ -910,7 +910,6 @@
   "transfers": {
     "title": "PicTransfer",
     "subtitle": "Send files to a client, or ask a client to send files to you.",
-    "new": "New transfer",
     "create": "Create transfer",
     "created": "Transfer created",
     "createFailed": "Could not create transfer",
@@ -930,12 +929,7 @@
     "deleteConfirmTitle": "Delete transfer?",
     "deleteConfirmBody": "This removes the link. Source event photos are not affected.",
     "addImages": "Add images",
-    "clientUpload": "Client upload",
-    "disableUploads": "Disable",
-    "enableUploads": "Enable upload link",
-    "uploadEnabled": "Upload link enabled",
     "noUploads": "No files uploaded by the client yet.",
-    "uploadHint": "Enable this to give the client a 6-character code to send you files (logos etc.).",
     "createAndSend": "Create & send",
     "uploadedFiles": "Uploaded files",
     "addFiles": "Add files",
@@ -950,8 +944,6 @@
       "files": "Files",
       "status": "Status",
       "downloads": "Downloads",
-      "expires": "Expires",
-      "uploads": "Uploads",
       "kind": "Type",
       "deadline": "Deadline"
     },
@@ -967,7 +959,6 @@
       "messagePlaceholder": "Shown to the recipient on the download page",
       "expiresInDays": "Link active for (days)",
       "maxDownloads": "Max downloads (0 = unlimited)",
-      "allowUploads": "Also give the client an upload link (to send logos etc.)",
       "files": "Files",
       "noFiles": "No images selected yet.",
       "uploadFiles": "Upload your own files",
@@ -976,10 +967,7 @@
       "delivery": "Delivery",
       "recipients": "Recipient email addresses",
       "recipientsPlaceholder": "anna@example.com, ben@example.com",
-      "recipientsCount": "{{count}} recipient(s) — each gets the download link",
       "recipientsHint": "Separate multiple addresses with commas. Each recipient gets the download link.",
-      "recipientsCount_one": "{{count}} recipient(s) — each gets the download link",
-      "recipientsCount_other": "{{count}} recipient(s) — each gets the download link",
       "requestTitlePlaceholder": "e.g. Logo and brand assets for the Smiths",
       "requestMessage": "What do you need from them? (optional)",
       "requestMessagePlaceholder": "Shown to the client on the upload page",
@@ -1031,7 +1019,8 @@
       "toomany": "Only the first {{count}} files can be uploaded at once.",
       "someRejected": "These files were not accepted: {{names}}",
       "anyType": "Any file type is accepted.",
-      "acceptedTypes": "Accepted: {{types}}"
+      "acceptedTypes": "Accepted: {{types}}",
+      "someFailed": "These files could not be stored. Please try them again: {{names}}"
     },
     "newSend": "Send files",
     "newRequest": "Request files",
@@ -1067,7 +1056,8 @@
       "send": "Send",
       "request": "Request"
     },
-    "emptyReadOnly": "Nothing here yet."
+    "emptyReadOnly": "Nothing here yet.",
+    "someDropped": "{{count}} attached file(s) were not kept — a file request only collects files: {{names}}"
   },
   "workflows": {
     "title": "Workflows",

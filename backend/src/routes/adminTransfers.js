@@ -91,9 +91,16 @@ async function runAdminUpload(req, res) {
     await new Promise((resolve, reject) => uploader(req, res, (err) => (err ? reject(err) : resolve())));
     return { ok: true };
   } catch (err) {
+    // Multer's own message is not echoed: a filesystem failure inside the
+    // temp-file destination carries the server path (EACCES /app/storage/...),
+    // and this route is unauthenticated. The size case is the only one worth
+    // naming, because it tells the client something actionable.
     const msg = err && err.code === 'LIMIT_FILE_SIZE'
       ? `Each file must be ${policy.maxSizeMb} MB or smaller`
-      : (err && err.message) || 'Upload failed';
+      : 'Upload failed';
+    if (err && err.code !== 'LIMIT_FILE_SIZE') {
+      logger.warn('transfer upload rejected', { code: err.code, error: err.message });
+    }
     if (!res.headersSent) res.status(400).json({ error: msg, code: 'UPLOAD_REJECTED' });
     return { ok: false };
   }
@@ -188,6 +195,25 @@ router.post('/',
     const recipientEmails = parseJsonArrayField(b.recipientEmails)
       .map((e) => String(e || '').trim()).filter(Boolean).slice(0, 100);
     const deliveryMethod = b.deliveryMethod === 'email' ? 'email' : 'link';
+
+    // A send has to be sending something. Before #1544 the file filter threw,
+    // so a create whose files were all rejected was a 400; now the filter skips
+    // them, and without this the row is created empty and — on
+    // deliveryMethod 'email' — a "your files are ready" mail goes out for a
+    // transfer holding nothing.
+    if (!isRequest && photoIds.length === 0 && !(req.files || []).length) {
+      const rejectedNow = req.rejectedFiles || [];
+      for (const file of req.files || []) {
+        try { if (fs.existsSync(file.path)) fs.unlinkSync(file.path); } catch (_) { /* noop */ }
+      }
+      return res.status(400).json({
+        error: rejectedNow.length
+          ? `Nothing to send — no allowed file type among: ${rejectedNow.join(', ')}`
+          : 'Add at least one photo or file to send',
+        code: rejectedNow.length ? 'TYPE_REJECTED' : 'NOTHING_TO_SEND',
+        rejected_files: rejectedNow,
+      });
+    }
 
     const transfer = await transferService.createTransfer({
       kind,
@@ -300,7 +326,7 @@ router.delete('/:id',
   }),
 );
 
-// Add photos (cross-event) to a transfer
+// Add photos (cross-event) to a SEND. A request has no outbound content.
 router.post('/:id/files',
   requirePermission('events.edit'),
   [
@@ -312,6 +338,11 @@ router.post('/:id/files',
     validateRequest(req);
     const existing = await transferService.getTransfer(parseInt(req.params.id, 10));
     if (!existing) return res.status(404).json({ error: 'Transfer not found' });
+    if (existing.kind === transferService.KIND_REQUEST) {
+      return res.status(400).json({
+        error: 'A file request does not send files out', code: 'NOT_A_SEND',
+      });
+    }
     const transfer = await transferService.addFiles(parseInt(req.params.id, 10), req.body.photoIds, req.admin);
     return successResponse(res, { transfer }, 200, 'Files added');
   }),

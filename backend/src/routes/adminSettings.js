@@ -658,7 +658,12 @@ router.put('/transfers',
     try {
       const { normalizeAllowedTypes } = require('../services/transferUploadPolicy');
       const has = (k) => Object.prototype.hasOwnProperty.call(req.body, k);
-      const updated = [];
+
+      // Validate EVERY field before writing any of them. Interleaving the two
+      // meant `{ allowed_types, max_size_mb: 0 }` saved the list and then
+      // answered 400 — the caller is told the save failed while half of it
+      // landed, and a retry with the size fixed is now a different change.
+      const writes = [];
 
       if (has('allowed_types')) {
         // normalizeAllowedTypes drops anything that isn't a well-formed
@@ -673,14 +678,12 @@ router.put('/transfers',
             code: 'EMPTY_ALLOWLIST',
           });
         }
-        await upsertAppSetting('transfer_upload_allowed_types', JSON.stringify(cleaned), 'general');
-        updated.push('transfer_upload_allowed_types');
+        writes.push(['transfer_upload_allowed_types', JSON.stringify(cleaned), 'general']);
       }
 
       if (has('accept_all')) {
         const acceptAll = req.body.accept_all === true || req.body.accept_all === 'true';
-        await upsertAppSetting('transfer_upload_accept_all', JSON.stringify(acceptAll), 'boolean');
-        updated.push('transfer_upload_accept_all');
+        writes.push(['transfer_upload_accept_all', JSON.stringify(acceptAll), 'boolean']);
       }
 
       if (has('max_size_mb')) {
@@ -688,8 +691,13 @@ router.put('/transfers',
         if (!Number.isFinite(mb) || mb < 1 || mb > 100000) {
           return res.status(400).json({ error: 'Maximum file size must be between 1 and 100000 MB', code: 'BAD_SIZE' });
         }
-        await upsertAppSetting('transfer_max_upload_size_mb', JSON.stringify(mb), 'number');
-        updated.push('transfer_max_upload_size_mb');
+        writes.push(['transfer_max_upload_size_mb', JSON.stringify(mb), 'number']);
+      }
+
+      const updated = [];
+      for (const [key, value, type] of writes) {
+        await upsertAppSetting(key, value, type);
+        updated.push(key);
       }
 
       await logActivity(

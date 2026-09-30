@@ -39,6 +39,11 @@ const DOWNLOAD_DEADLINE = new Date(Date.now() + 48 * HOUR).toISOString();
 const UPLOAD_DEADLINE = new Date(Date.now() + 12 * HOUR).toISOString();
 const NOTIFIED_AT = new Date(Date.now() - 6 * HOUR).toISOString();
 
+// Which insert produced a given row, so a token assertion can name the value
+// that row started with.
+const seqById = new Map();
+const seqOf = (id) => seqById.get(id);
+
 /** Insert a row in the shape a pre-257 release would have written. */
 async function insertLegacyRow({ uploadToken, allowUploads = true, withOutbound = false }) {
   seq += 1;
@@ -62,6 +67,7 @@ async function insertLegacyRow({ uploadToken, allowUploads = true, withOutbound 
     updated_at: new Date().toISOString(),
   }).returning('id');
   const id = typeof inserted === 'object' && inserted !== null ? inserted.id : inserted;
+  seqById.set(id, seq);
 
   if (withOutbound) {
     // Outbound content via transfer_extra_files — same branch as picked photos,
@@ -102,9 +108,14 @@ describe('257: a row that only collected files becomes a request in place', () =
     expect(rows[0].kind).toBe('request');
   });
 
-  it('keeps its 64-hex token — that is the request link', async () => {
+  it('mints a FRESH token — the old one was handed out as a download link', async () => {
     const row = await db('transfers').where({ id }).first();
-    expect(row.token).toMatch(/^[a-z0-9]{64}$/);
+    expect(row.token).toMatch(/^[a-f0-9]{64}$/);
+    // Post-257 `token` is the UPLOAD link. Reusing the value that was once a
+    // download link would let anyone who was ever sent it upload here.
+    expect(row.token).not.toBe(`tok${seqOf(id)}`.padEnd(64, '0'));
+    expect(row.token.startsWith('tok')).toBe(false);
+    // The short code is the client's actual handle and keeps working.
     expect(row.upload_token).toBe('CODEONLY1');
   });
 
@@ -192,6 +203,44 @@ describe('257: a row that did both is split so neither link breaks', () => {
     await migration.up(db);
     const after = await db('transfers').count('* as c').first();
     expect(Number(after.c)).toBe(Number(before.c));
+  });
+});
+
+describe('257: a row whose upload channel was CLOSED but still holds files', () => {
+  // Pre-257 `disableUploads` cleared allow_uploads and the short code but left
+  // transfer_uploads in place. Backfilling on allow_uploads alone left those
+  // rows as sends — and the detail panel shows received files only on a
+  // request, so the client's files had no UI at all and the retention sweep
+  // would hard-delete them unseen.
+  let closedOnlyId;
+  let closedWithOutboundId;
+
+  beforeAll(async () => {
+    closedOnlyId = await insertLegacyRow({ uploadToken: null, allowUploads: false, withOutbound: false });
+    closedWithOutboundId = await insertLegacyRow({ uploadToken: null, allowUploads: false, withOutbound: true });
+    await migration.up(db);
+  });
+
+  it('converts a receive-only row even though allow_uploads is false', async () => {
+    const row = await db('transfers').where({ id: closedOnlyId }).first();
+    expect(row.kind).toBe('request');
+    // Converted for visibility, not reopened — the channel stays shut.
+    expect(row.allow_uploads === true || row.allow_uploads === 1).toBe(false);
+    expect(await db('transfer_uploads').where({ transfer_id: closedOnlyId })).toHaveLength(1);
+  });
+
+  it('splits a closed row that also has outbound content, so both halves are reachable', async () => {
+    const send = await db('transfers').where({ id: closedWithOutboundId }).first();
+    expect(send.kind).toBe('send');
+    expect(await db('transfer_extra_files').where({ transfer_id: closedWithOutboundId })).toHaveLength(1);
+    expect(await db('transfer_uploads').where({ transfer_id: closedWithOutboundId })).toHaveLength(0);
+
+    const request = await db('transfers')
+      .where({ kind: 'request' })
+      .whereNot('id', closedWithOutboundId)
+      .orderBy('id', 'desc')
+      .first();
+    expect(await db('transfer_uploads').where({ transfer_id: request.id })).toHaveLength(1);
   });
 });
 

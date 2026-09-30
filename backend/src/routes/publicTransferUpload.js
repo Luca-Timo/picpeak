@@ -200,9 +200,16 @@ router.post('/:token', uploadLimiter, [param('token').matches(TOKEN_RE)], preUpl
     });
   } catch (err) {
     // Translate multer errors to a clean 4xx.
+    // Multer's own message is not echoed: a filesystem failure inside the
+    // temp-file destination carries the server path (EACCES /app/storage/...),
+    // and this route is unauthenticated. The size case is the only one worth
+    // naming, because it tells the client something actionable.
     const msg = err && err.code === 'LIMIT_FILE_SIZE'
       ? `Each file must be ${maxSizeMb} MB or smaller`
-      : (err && err.message) || 'Upload failed';
+      : 'Upload failed';
+    if (err && err.code !== 'LIMIT_FILE_SIZE') {
+      logger.warn('transfer upload rejected', { code: err.code, error: err.message });
+    }
     if (!res.headersSent) res.status(400).json({ error: msg, code: 'UPLOAD_REJECTED' });
     return;
   }

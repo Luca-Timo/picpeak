@@ -901,7 +901,6 @@
   "transfers": {
     "title": "PicTransfer",
     "subtitle": "Pošljite izvirne datoteke iz katerega koli dogodka prek povezave za prenos.",
-    "new": "Nov prenos",
     "create": "Ustvari prenos",
     "created": "Prenos ustvarjen",
     "createFailed": "Prenosa ni bilo mogoče ustvariti",
@@ -921,12 +920,7 @@
     "deleteConfirmTitle": "Izbrišem prenos?",
     "deleteConfirmBody": "S tem odstranite povezavo in vsa nalaganja stranke. Izvorne fotografije dogodka ostanejo nespremenjene.",
     "addImages": "Dodaj slike",
-    "clientUpload": "Nalaganje stranke",
-    "disableUploads": "Onemogoči",
-    "enableUploads": "Omogoči povezavo za nalaganje",
-    "uploadEnabled": "Povezava za nalaganje omogočena",
     "noUploads": "Stranka še ni naložila nobene datoteke.",
-    "uploadHint": "Omogočite to, da stranka dobi 6-mestno kodo za pošiljanje datotek (logotipi ipd.).",
     "createAndSend": "Ustvari in pošlji",
     "uploadedFiles": "Naložene datoteke",
     "addFiles": "Dodaj datoteke",
@@ -940,9 +934,7 @@
       "title": "Naslov",
       "files": "Datoteke",
       "status": "Stanje",
-      "downloads": "Prenosi",
-      "expires": "Poteče",
-      "uploads": "Nalaganja"
+      "downloads": "Prenosi"
     },
     "status": {
       "active": "Aktivno",
@@ -956,7 +948,6 @@
       "messagePlaceholder": "Prikaže se prejemniku na strani za prenos",
       "expiresInDays": "Povezava aktivna (dni)",
       "maxDownloads": "Največ prenosov (0 = neomejeno)",
-      "allowUploads": "Stranki omogoči tudi povezavo za nalaganje (za pošiljanje logotipov ipd.)",
       "files": "Datoteke",
       "noFiles": "Slike še niso izbrane.",
       "uploadFiles": "Naložite svoje datoteke",
@@ -965,10 +956,7 @@
       "delivery": "Dostava",
       "recipients": "E-poštni naslovi prejemnikov",
       "recipientsPlaceholder": "ana@example.com, ben@example.com",
-      "recipientsCount": "{{count}} prejemnikov — vsak prejme povezavo za prenos",
-      "recipientsHint": "Več naslovov ločite z vejicami. Vsak prejemnik prejme povezavo za prenos.",
-      "recipientsCount_one": "{{count}} prejemnikov — vsak prejme povezavo za prenos",
-      "recipientsCount_other": "{{count}} prejemnikov — vsak prejme povezavo za prenos"
+      "recipientsHint": "Več naslovov ločite z vejicami. Vsak prejemnik prejme povezavo za prenos."
     },
     "picker": {
       "title": "Izberite slike iz drugih dogodkov",

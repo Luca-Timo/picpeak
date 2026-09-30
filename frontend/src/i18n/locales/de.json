@@ -910,7 +910,6 @@
   "transfers": {
     "title": "PicTransfer",
     "subtitle": "Dateien an Kundinnen und Kunden senden – oder Dateien von ihnen anfordern.",
-    "new": "Neuer Transfer",
     "create": "Transfer erstellen",
     "created": "Transfer erstellt",
     "createFailed": "Transfer konnte nicht erstellt werden",
@@ -930,12 +929,7 @@
     "deleteConfirmTitle": "Transfer löschen?",
     "deleteConfirmBody": "Damit wird der Link entfernt. Die Fotos im Event bleiben unberührt.",
     "addImages": "Bilder hinzufügen",
-    "clientUpload": "Kunden-Upload",
-    "disableUploads": "Deaktivieren",
-    "enableUploads": "Upload-Link aktivieren",
-    "uploadEnabled": "Upload-Link aktiviert",
     "noUploads": "Der Kunde hat noch keine Dateien hochgeladen.",
-    "uploadHint": "Aktivieren Sie dies, um dem Kunden einen 6-stelligen Code zu geben, mit dem er Ihnen Dateien (Logos etc.) senden kann.",
     "createAndSend": "Erstellen & senden",
     "uploadedFiles": "Hochgeladene Dateien",
     "addFiles": "Dateien hinzufügen",
@@ -950,8 +944,6 @@
       "files": "Dateien",
       "status": "Status",
       "downloads": "Downloads",
-      "expires": "Läuft ab",
-      "uploads": "Uploads",
       "kind": "Typ",
       "deadline": "Frist"
     },
@@ -967,7 +959,6 @@
       "messagePlaceholder": "Wird dem Empfänger auf der Download-Seite angezeigt",
       "expiresInDays": "Link aktiv für (Tage)",
       "maxDownloads": "Max. Downloads (0 = unbegrenzt)",
-      "allowUploads": "Dem Kunden zusätzlich einen Upload-Link geben (für Logos etc.)",
       "files": "Dateien",
       "noFiles": "Noch keine Bilder ausgewählt.",
       "uploadFiles": "Eigene Dateien hochladen",
@@ -976,10 +967,7 @@
       "delivery": "Zustellung",
       "recipients": "E-Mail-Adressen der Empfänger",
       "recipientsPlaceholder": "anna@example.com, ben@example.com",
-      "recipientsCount": "{{count}} Empfänger — jeder erhält den Download-Link",
       "recipientsHint": "Mehrere Adressen durch Kommas trennen. Jeder Empfänger erhält den Download-Link.",
-      "recipientsCount_one": "{{count}} Empfänger — er erhält den Download-Link",
-      "recipientsCount_other": "{{count}} Empfänger — jeder erhält den Download-Link",
       "requestTitlePlaceholder": "z. B. Logo und Markenmaterial für Familie Schmidt",
       "requestMessage": "Was benötigen Sie von ihnen? (optional)",
       "requestMessagePlaceholder": "Wird dem Kunden auf der Upload-Seite angezeigt",
@@ -1031,7 +1019,8 @@
       "toomany": "Es können nur die ersten {{count}} Dateien auf einmal hochgeladen werden.",
       "someRejected": "Diese Dateien wurden nicht akzeptiert: {{names}}",
       "anyType": "Jeder Dateityp wird akzeptiert.",
-      "acceptedTypes": "Akzeptiert: {{types}}"
+      "acceptedTypes": "Akzeptiert: {{types}}",
+      "someFailed": "Diese Dateien konnten nicht gespeichert werden. Bitte erneut versuchen: {{names}}"
     },
     "newSend": "Dateien senden",
     "newRequest": "Dateien anfordern",
@@ -1067,7 +1056,8 @@
       "send": "Senden",
       "request": "Anfrage"
     },
-    "emptyReadOnly": "Noch nichts vorhanden."
+    "emptyReadOnly": "Noch nichts vorhanden.",
+    "someDropped": "{{count}} angehängte Datei(en) wurden nicht übernommen – eine Dateianfrage sammelt nur Dateien: {{names}}"
   },
   "workflows": {
     "title": "Workflows",

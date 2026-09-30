@@ -55,6 +55,36 @@ beforeAll(async () => {
 
 afterAll(async () => { if (cleanup) await cleanup(); });
 
+describe('the lookup layer filters on kind by itself', () => {
+  // The route tests below pass if EITHER the query filter or the assert* gate
+  // holds, so on their own they prove the pair, not each half. These pin the
+  // query layer directly; transferService.gating.test.js pins the gates.
+  //
+  // Required in beforeAll, not at describe-evaluation time: requiring the
+  // service pulls in db.js, and bootCrmDb has to set TEST_DATABASE_PATH before
+  // that module binds its pool.
+  let transferService;
+  beforeAll(() => { transferService = require('../../src/services/transferService'); });
+
+  it('getTransferByToken does not return a request', async () => {
+    expect(await transferService.getTransferByToken(REQUEST_TOKEN)).toBeUndefined();
+    expect(await transferService.getTransferByToken(SEND_TOKEN)).toBeDefined();
+  });
+
+  it('getRequestByToken does not return a send', async () => {
+    expect(await transferService.getRequestByToken(SEND_TOKEN)).toBeUndefined();
+    expect(await transferService.getRequestByToken(REQUEST_TOKEN)).toBeDefined();
+  });
+
+  it('getTransferByUploadToken does not return a send that still holds a code', async () => {
+    // Post-257 no send carries an upload_token, but a stray legacy row must
+    // not reopen the old combined behaviour.
+    await db('transfers').where({ token: SEND_TOKEN }).update({ upload_token: 'LEGACYCODE' });
+    expect(await transferService.getTransferByUploadToken('LEGACYCODE')).toBeUndefined();
+    await db('transfers').where({ token: SEND_TOKEN }).update({ upload_token: null });
+  });
+});
+
 describe('a send token cannot reach the upload route', () => {
   it('404s on the metadata endpoint', async () => {
     const res = await request(uploadApp).get(`/api/public/transfer-upload/${SEND_TOKEN}`);
@@ -130,6 +160,45 @@ describe('a batch with one unsupported file', () => {
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('TYPE_REJECTED');
     expect(res.body.rejected_files).toEqual(['a.exe', 'b.bat']);
+  });
+});
+
+describe('the files-received notice is coalesced', () => {
+  // The upload route is unauthenticated — the link IS the secret — and its
+  // limiter allows 10 POSTs a minute per /64. One mail per batch would let
+  // anyone holding a request link fill the creator's inbox.
+  const uploadOne = (name) => request(uploadApp)
+    .post(`/api/public/transfer-upload/${REQUEST_TOKEN}`)
+    .attach('files', Buffer.from('x'), { filename: name, contentType: 'image/png' });
+
+  beforeAll(async () => {
+    await db('transfers').where({ token: REQUEST_TOKEN }).update({ uploads_notified_at: null });
+  });
+
+  it('stamps on the first batch and suppresses the next', async () => {
+    expect((await uploadOne('n1.png')).status).toBe(201);
+    // The notice is fire-and-forget off the response path.
+    await new Promise((r) => setTimeout(r, 300));
+    const first = await db('transfers').where({ token: REQUEST_TOKEN }).first('uploads_notified_at');
+    expect(first.uploads_notified_at).toBeTruthy();
+
+    expect((await uploadOne('n2.png')).status).toBe(201);
+    await new Promise((r) => setTimeout(r, 300));
+    const second = await db('transfers').where({ token: REQUEST_TOKEN }).first('uploads_notified_at');
+    // Unchanged: the second batch did not claim a new notice.
+    expect(String(second.uploads_notified_at)).toBe(String(first.uploads_notified_at));
+  });
+
+  it('allows another notice once the cooldown has passed', async () => {
+    await db('transfers').where({ token: REQUEST_TOKEN })
+      .update({ uploads_notified_at: new Date(Date.now() - 60 * 60 * 1000).toISOString() });
+    const before = await db('transfers').where({ token: REQUEST_TOKEN }).first('uploads_notified_at');
+
+    expect((await uploadOne('n3.png')).status).toBe(201);
+    await new Promise((r) => setTimeout(r, 300));
+
+    const after = await db('transfers').where({ token: REQUEST_TOKEN }).first('uploads_notified_at');
+    expect(String(after.uploads_notified_at)).not.toBe(String(before.uploads_notified_at));
   });
 });
 

@@ -39,11 +39,12 @@ function extensionOf(name: string): string {
 /**
  * Would the server accept this file?
  *
- * Mirrors validateTransferFileType: accept-all short-circuits, otherwise the
- * MIME must be listed, and the extension must match when that type declares
- * any. The browser's `file.type` is unreliable (empty for unknown types), so an
- * extension the policy lists is accepted on its own — the server re-checks, and
- * guessing wrong here would only hide a file the admin meant to allow.
+ * Mirrors validateTransferFileType: accept-all short-circuits, then a listed
+ * extension is a match on its own, and only then is the MIME consulted. The
+ * order matters and is the server's — the browser's `file.type` is a guess
+ * (Windows sends `application/x-zip-compressed` for a .zip, and .dng/.psd
+ * routinely arrive as `application/octet-stream` or empty), so the extension
+ * the admin typed into Settings is the more reliable signal.
  */
 function isAccepted(
   file: File,
@@ -51,9 +52,9 @@ function isAccepted(
 ): boolean {
   if (info.accept_all) return true;
   const ext = extensionOf(file.name);
+  if (ext && info.allowed_extensions.includes(ext)) return true;
   const mime = (file.type || '').toLowerCase().split(';')[0].trim();
-  if (mime && info.allowed_mime.includes(mime)) return true;
-  return !!ext && info.allowed_extensions.includes(ext);
+  return !!mime && info.allowed_mime.includes(mime);
 }
 
 export const TransferUploadPage: React.FC = () => {
@@ -157,6 +158,22 @@ export const TransferUploadPage: React.FC = () => {
           { names: result.rejected_files.join(', ') },
         ));
       }
+
+      // Files whose bytes or row did not land are NOT uploaded, whatever the
+      // 201 says. Keep them on screen so retrying is one click, and do not
+      // show the "thank you" screen over a partial failure.
+      const failed = result.failed_files || [];
+      if (failed.length) {
+        toast.error(t(
+          'transfers.upload.someFailed',
+          'These files could not be stored. Please try them again: {{names}}',
+          { names: failed.join(', ') },
+        ));
+        setFiles((prev) => prev.filter((f) => failed.includes(f.name)));
+        setProgress(0);
+        return;
+      }
+
       setDone(true);
     } catch (err) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error

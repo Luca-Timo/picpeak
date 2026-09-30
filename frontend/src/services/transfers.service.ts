@@ -103,6 +103,20 @@ export interface CreateTransferInput {
   files?: File[];
 }
 
+/**
+ * A transfer plus what the write did NOT keep.
+ *
+ * The routes answer `{ transfer, rejected_files, dropped_files }`; returning
+ * `res.data.transfer` alone silently threw both lists away, so the admin was
+ * never told which files were skipped.
+ */
+export interface TransferWriteResult extends Transfer {
+  /** Files the server refused on type. */
+  rejected_files?: string[];
+  /** Files it accepted but did not keep (attached to a request, which sends nothing). */
+  dropped_files?: string[];
+}
+
 export interface UpdateTransferInput {
   title?: string;
   message?: string | null;
@@ -147,11 +161,27 @@ export interface UploadInfo {
   allowed_extensions: string[];
 }
 
-/** What an upload actually did — some files may have been dropped by type. */
+/** What an upload actually did — not every file necessarily landed. */
 export interface UploadResult {
   uploaded: number;
   files: { filename: string; size_bytes: number }[];
+  /** Refused on type before any bytes were stored. */
   rejected_files: string[];
+  /** Accepted, but the bytes or the row did not land. These are NOT uploaded. */
+  failed_files: string[];
+}
+
+/** Lift the sibling `rejected_files` / `dropped_files` onto the transfer. */
+function withWriteNotes(data: {
+  transfer: Transfer;
+  rejected_files?: string[];
+  dropped_files?: string[];
+}): TransferWriteResult {
+  return {
+    ...data.transfer,
+    rejected_files: data.rejected_files || [],
+    dropped_files: data.dropped_files || [],
+  };
 }
 
 export const transfersService = {
@@ -164,7 +194,7 @@ export const transfersService = {
     const res = await api.get(`/admin/transfers/${id}`);
     return res.data.transfer;
   },
-  async create(input: CreateTransferInput, onProgress?: (pct: number) => void): Promise<Transfer> {
+  async create(input: CreateTransferInput, onProgress?: (pct: number) => void): Promise<TransferWriteResult> {
     // multipart: the operator's own files ride along with the form fields.
     const form = new FormData();
     if (input.title != null) form.append('title', input.title);
@@ -182,10 +212,10 @@ export const transfersService = {
         if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
       },
     });
-    return res.data.transfer;
+    return withWriteNotes(res.data);
   },
   /** Add deliverable files to an existing transfer. */
-  async uploadFiles(id: number, files: File[], onProgress?: (pct: number) => void): Promise<Transfer> {
+  async uploadFiles(id: number, files: File[], onProgress?: (pct: number) => void): Promise<TransferWriteResult> {
     const form = new FormData();
     files.forEach((f) => form.append('files', f));
     const res = await api.post(`/admin/transfers/${id}/upload-files`, form, {
@@ -193,7 +223,7 @@ export const transfersService = {
         if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
       },
     });
-    return res.data.transfer;
+    return withWriteNotes(res.data);
   },
   async removeExtraFile(id: number, extraId: number): Promise<Transfer> {
     const res = await api.delete(`/admin/transfers/${id}/extra-files/${extraId}`);

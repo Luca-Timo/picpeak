@@ -27,7 +27,12 @@ import { TransferPhotoPicker, type PickedPhoto } from '../../../components/admin
 import { useMutationWithToast } from '../../../hooks/useMutationWithToast';
 import { usePermission } from '../../../hooks/usePermission';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
-import { transfersService, type Transfer, type TransferKind } from '../../../services/transfers.service';
+import {
+  transfersService,
+  type Transfer,
+  type TransferKind,
+  type TransferWriteResult,
+} from '../../../services/transfers.service';
 
 function formatBytes(bytes: number | null | undefined): string {
   if (!bytes) return '0 B';
@@ -54,13 +59,33 @@ type TabKey = 'all' | 'send' | 'request';
  * Warn about files the server took in but dropped on type. The create/upload
  * calls succeed with the good files, so without this the drop is silent.
  */
-function warnRejected(rejected: string[] | undefined, t: (k: string, d: string, o?: object) => string) {
-  if (!rejected || !rejected.length) return;
-  toast.warn(t(
-    'transfers.someRejected',
-    '{{count}} file(s) were not an allowed type and were skipped: {{names}}',
-    { count: rejected.length, names: rejected.join(', ') },
-  ));
+/**
+ * Say what a write did not keep.
+ *
+ * The routes answer 201/200 with the good files stored and the rest named
+ * alongside, so without this the drop is silent — the admin sees "Transfer
+ * created" and a file they picked is simply not there.
+ */
+function warnWriteNotes(
+  result: TransferWriteResult | undefined,
+  t: (k: string, d: string, o?: object) => string,
+) {
+  const rejected = result?.rejected_files || [];
+  const dropped = result?.dropped_files || [];
+  if (rejected.length) {
+    toast.warn(t(
+      'transfers.someRejected',
+      '{{count}} file(s) were not an allowed type and were skipped: {{names}}',
+      { count: rejected.length, names: rejected.join(', ') },
+    ));
+  }
+  if (dropped.length) {
+    toast.warn(t(
+      'transfers.someDropped',
+      '{{count}} attached file(s) were not kept — a file request only collects files: {{names}}',
+      { count: dropped.length, names: dropped.join(', ') },
+    ));
+  }
 }
 
 export const TransfersPage: React.FC = () => {
@@ -298,7 +323,7 @@ const CreateTransferModal: React.FC<{
       ? t('transfers.requestCreateFailed', 'Could not create the file request')
       : t('transfers.createFailed', 'Could not create transfer'),
     onSuccess: (transfer) => {
-      warnRejected((transfer as unknown as { rejected_files?: string[] })?.rejected_files, t);
+      warnWriteNotes(transfer, t);
       onCreated();
     },
   });
@@ -615,7 +640,7 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
     mutationFn: (list: File[]) => transfersService.uploadFiles(transferId, list),
     successMessage: t('transfers.filesAdded', 'Files added'),
     onSuccess: (updated) => {
-      warnRejected((updated as unknown as { rejected_files?: string[] })?.rejected_files, t);
+      warnWriteNotes(updated, t);
       refetch();
     },
   });

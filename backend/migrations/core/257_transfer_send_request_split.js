@@ -32,9 +32,11 @@
  * Note on the split rows' bytes: a moved `transfer_uploads.stored_path` still
  * points under the OLD transfer's `uploads/transfers/<oldId>/` directory. The
  * per-file deletes work off `stored_path` and are unaffected, and
- * transferService.removeUploadedFiles no longer recursively removes that
- * directory (it only drops it when empty), so deleting the send can't take the
- * request's received files with it.
+ * transferService.removeUploadedFiles asks whether any OTHER transfer still
+ * references a path under the prefix before removing the directory — none does
+ * → recursive delete, orphan bytes included; one does → the directory is left
+ * alone. So deleting the send cannot take the request's received files with it,
+ * and a file written before its DB row failed is still cleaned up.
  */
 
 const crypto = require('crypto');
@@ -102,9 +104,9 @@ const SEEDED_TEMPLATES = [
 
 <p>{{transfer_title}}</p>
 
-<div style="background-color: #f0f8ff; border-left: 4px solid #5C8762; padding: 20px; margin: 20px 0; border-radius: 4px;">
+{{#if message}}<div style="background-color: #f0f8ff; border-left: 4px solid #5C8762; padding: 20px; margin: 20px 0; border-radius: 4px;">
   <p style="margin: 0;">{{message}}</p>
-</div>
+</div>{{/if}}
 
 <p style="margin: 24px 0;">
   <a href="{{upload_url}}" class="button">Upload your files</a>
@@ -119,9 +121,9 @@ Your PicPeak Installation</p>`,
     body_text_en: `Please upload your files
 
 {{transfer_title}}
-
+{{#if message}}
 {{message}}
-
+{{/if}}
 Upload your files: {{upload_url}}
 
 Please upload by: {{expiry_date}}
@@ -133,9 +135,9 @@ Your PicPeak Installation`,
 
 <p>{{transfer_title}}</p>
 
-<div style="background-color: #f0f8ff; border-left: 4px solid #5C8762; padding: 20px; margin: 20px 0; border-radius: 4px;">
+{{#if message}}<div style="background-color: #f0f8ff; border-left: 4px solid #5C8762; padding: 20px; margin: 20px 0; border-radius: 4px;">
   <p style="margin: 0;">{{message}}</p>
-</div>
+</div>{{/if}}
 
 <p style="margin: 24px 0;">
   <a href="{{upload_url}}" class="button">Dateien hochladen</a>
@@ -150,9 +152,9 @@ Ihre PicPeak-Installation</p>`,
     body_text_de: `Bitte laden Sie Ihre Dateien hoch
 
 {{transfer_title}}
-
+{{#if message}}
 {{message}}
-
+{{/if}}
 Dateien hochladen: {{upload_url}}
 
 Bitte hochladen bis: {{expiry_date}}
@@ -245,13 +247,34 @@ exports.up = async function (knex) {
     });
   }
 
+  // A request's "files received" notice is rate-limited on this stamp. The
+  // upload endpoint is unauthenticated and rate-limited per /64 only, so
+  // without a cooldown anyone holding a request link could drive hundreds of
+  // mails an hour into the creator's inbox. Separate from admin_notified_at,
+  // which the expiry sweep owns.
+  if (!(await knex.schema.hasColumn('transfers', 'uploads_notified_at'))) {
+    await knex.schema.alterTable('transfers', (table) => {
+      table.timestamp('uploads_notified_at');
+    });
+  }
+
   // ------------------------------------------------------------- backfill
-  // Only upload-enabled rows can need reclassifying; everything else already
-  // has the column default. Their outbound-content counts come from two
-  // grouped queries rather than two per row.
+  // A row needs reclassifying if it can still RECEIVE (allow_uploads) or if it
+  // already HAS received something. The second half matters: pre-257
+  // `disableUploads` cleared allow_uploads and the short code but left
+  // `transfer_uploads` in place, so an instance can hold sends carrying a
+  // client's files. Those rows are invisible under a strict split — the detail
+  // panel shows received files only on a request — and the retention sweep
+  // would hard-delete files nobody could reach. Everything else already has
+  // the column default.
+  const receivedIn = (await knex('transfer_uploads').distinct('transfer_id').select('transfer_id'))
+    .map((r) => r.transfer_id);
   const rows = await knex('transfers')
     .whereNull('deleted_at')
-    .whereIn('allow_uploads', [true, 1])
+    .where((q) => {
+      q.whereIn('allow_uploads', [true, 1]);
+      if (receivedIn.length) q.orWhereIn('id', receivedIn);
+    })
     .select('*');
   const candidateIds = rows.map((r) => r.id);
 
@@ -274,10 +297,16 @@ exports.up = async function (knex) {
     const uploadDeadline = row.upload_expires_at || row.expires_at;
 
     if (!hasOutbound) {
-      // Upload-only already: convert in place. It keeps its 64-hex `token`,
-      // which is exactly the high-entropy request link the new flow wants.
+      // Nothing goes out: convert in place.
+      //
+      // A FRESH token, not the existing one. That value was handed out as a
+      // download link, and post-257 the same column is the upload link — so
+      // reusing it would let anyone who was ever sent the old (dead) download
+      // link upload into this request. The short code is unaffected and keeps
+      // working, which is what a client in the middle of a job actually holds.
       await knex('transfers').where({ id: row.id }).update({
         kind: 'request',
+        token: await uniqueDownloadToken(knex),
         expires_at: uploadDeadline,
         upload_expires_at: null,
         max_downloads: null,
@@ -288,50 +317,59 @@ exports.up = async function (knex) {
 
     // Did both: keep the send, spin the receiving half out into its own row.
     //
-    // The send releases the short code FIRST. `upload_token` carries a UNIQUE
-    // constraint, so inserting the request row while the send still holds the
-    // same value would fail the whole migration.
+    // All three statements run in ONE transaction. run-migrations.js wraps a
+    // migration in a transaction on PostgreSQL only, so on SQLite a crash
+    // between the send's update and the request's insert would lose the
+    // receiving half for good: the send is no longer a candidate on re-run
+    // (allow_uploads cleared), the short code is gone, and the uploads sit on
+    // a kind='send' row. A migration that moves rows should not have that
+    // window, however narrow.
     const shortCode = row.upload_token || null;
-    await knex('transfers').where({ id: row.id }).update({
-      kind: 'send',
-      allow_uploads: formatBoolean(false),
-      upload_token: null,
-      upload_expires_at: null,
-      updated_at: new Date(),
+    await knex.transaction(async (trx) => {
+      // The send releases the short code FIRST. `upload_token` carries a
+      // UNIQUE constraint, so inserting the request row while the send still
+      // holds the same value would fail.
+      await trx('transfers').where({ id: row.id }).update({
+        kind: 'send',
+        allow_uploads: formatBoolean(false),
+        upload_token: null,
+        upload_expires_at: null,
+        updated_at: new Date(),
+      });
+
+      const newToken = await uniqueDownloadToken(trx);
+      const inserted = await trx('transfers').insert({
+        token: newToken,
+        title: row.title || '',
+        message: row.message || null,
+        created_by: row.created_by || null,
+        kind: 'request',
+        expires_at: uploadDeadline,
+        max_downloads: null,
+        download_count: 0,
+        is_active: row.is_active,
+        disabled_at: row.disabled_at || null,
+        // Carried, not reset: transferCleanupService notifies on
+        // (inactive AND disabled_at AND admin_notified_at IS NULL), so a null
+        // here would send a SECOND expiry mail for a transfer the admin was
+        // already told about — worded for a send, reporting zero files.
+        admin_notified_at: row.admin_notified_at || null,
+        grace_days: row.grace_days,
+        allow_uploads: formatBoolean(true),
+        upload_token: shortCode,
+        upload_expires_at: null,
+        delivery_method: row.delivery_method || 'link',
+        created_at: row.created_at || new Date(),
+        updated_at: new Date(),
+      }).returning('id');
+      const newId = typeof inserted[0] === 'object' && inserted[0] !== null
+        ? inserted[0].id
+        : inserted[0];
+
+      // Received files follow the request. Their stored_path still points
+      // under the old transfer's directory — see the header note.
+      await trx('transfer_uploads').where('transfer_id', row.id).update({ transfer_id: newId });
     });
-
-    const newToken = await uniqueDownloadToken(knex);
-    const inserted = await knex('transfers').insert({
-      token: newToken,
-      title: row.title || '',
-      message: row.message || null,
-      created_by: row.created_by || null,
-      kind: 'request',
-      expires_at: uploadDeadline,
-      max_downloads: null,
-      download_count: 0,
-      is_active: row.is_active,
-      disabled_at: row.disabled_at || null,
-      // Carried, not reset: transferCleanupService notifies on
-      // (inactive AND disabled_at AND admin_notified_at IS NULL), so a null
-      // here would send a SECOND expiry mail for a transfer the admin was
-      // already told about — worded for a send, reporting zero files.
-      admin_notified_at: row.admin_notified_at || null,
-      grace_days: row.grace_days,
-      allow_uploads: formatBoolean(true),
-      upload_token: shortCode,
-      upload_expires_at: null,
-      delivery_method: row.delivery_method || 'link',
-      created_at: row.created_at || new Date(),
-      updated_at: new Date(),
-    }).returning('id');
-    const newId = typeof inserted[0] === 'object' && inserted[0] !== null
-      ? inserted[0].id
-      : inserted[0];
-
-    // Received files follow the request. Their stored_path still points under
-    // the old transfer's directory — see the header note.
-    await knex('transfer_uploads').where('transfer_id', row.id).update({ transfer_id: newId });
   }
 
   // ------------------------------------------------------------- settings
@@ -415,6 +453,11 @@ exports.down = async function (knex) {
   // from would have to guess which send, and the request rows are legitimate
   // records of files a client actually sent. Dropping `kind` just makes every
   // row a transfer again, which is what the pre-257 code expects.
+  if (await knex.schema.hasColumn('transfers', 'uploads_notified_at')) {
+    await knex.schema.alterTable('transfers', (table) => {
+      table.dropColumn('uploads_notified_at');
+    });
+  }
   if (await knex.schema.hasColumn('transfers', 'kind')) {
     await knex.schema.alterTable('transfers', (table) => {
       table.dropIndex(['kind'], 'transfers_kind_idx');

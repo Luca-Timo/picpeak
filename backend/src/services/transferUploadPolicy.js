@@ -35,7 +35,7 @@ const { buildContentDisposition } = require('../utils/filenameSanitizer');
 
 const DEFAULT_ALLOWED_MIME = [
   'image/jpeg', 'image/png', 'image/webp', 'image/gif',
-  'image/tiff', 'application/pdf', 'application/zip',
+  'image/tiff', 'application/pdf', 'application/zip', 'application/x-zip-compressed',
 ];
 
 // Mirrors migration 257's table. Used only to give a legacy flat MIME list
@@ -52,6 +52,8 @@ const LEGACY_MIME_EXTENSIONS = {
   'image/x-adobe-dng': ['.dng'],
   'application/pdf': ['.pdf'],
   'application/zip': ['.zip'],
+  // What Chrome and Firefox on Windows actually send for a .zip.
+  'application/x-zip-compressed': ['.zip'],
   'video/mp4': ['.mp4', '.m4v'],
   'video/quicktime': ['.mov'],
   'video/webm': ['.webm'],
@@ -159,10 +161,23 @@ async function getTransferUploadPolicy() {
 /**
  * Is this file acceptable under `policy`?
  *
- * A type entry with an empty `extensions` list matches on MIME alone. That is
- * deliberate: an admin who adds `application/vnd.….wordprocessingml.document`
- * without listing `.docx` means "allow this type", and inventing an extension
- * rule we can't verify would silently reject exactly the file they wanted.
+ * **A listed extension is a match on its own, before the MIME is consulted.**
+ * The browser's `file.type` is a guess and a platform-specific one: Chrome and
+ * Firefox on Windows label a `.zip` `application/x-zip-compressed`, and `.dng`,
+ * `.psd` and `.heic` routinely arrive as `application/octet-stream` or with no
+ * type at all. Looking the entry up by MIME first meant an allowlist that named
+ * `.zip` still refused a Windows client's ZIP — the exact failure this policy
+ * exists to end. The extension is what the admin actually typed into Settings,
+ * so it is what we trust.
+ *
+ * MIME is still consulted second, for the type an admin listed WITHOUT any
+ * extension: adding `application/vnd.….wordprocessingml.document` and no
+ * `.docx` means "allow this type", and inventing an extension rule we cannot
+ * verify would silently reject exactly the file they wanted.
+ *
+ * What this does NOT do is let a listed MIME drag in an unlisted extension:
+ * a `payload.html` labelled `image/png` still fails, because `.html` is on no
+ * entry and `image/png`'s entry does name extensions.
  *
  * Note this is a policy check, not a safety check — nothing downstream trusts
  * either the name or the MIME. See `attachmentHeaders()`.
@@ -171,13 +186,14 @@ function validateTransferFileType(filename, mimetype, policy) {
   if (!policy) return false;
   if (policy.acceptAll) return true;
 
-  const mime = normalizeMime(mimetype);
-  const entry = (policy.allowedTypes || []).find((t) => t.mime === mime);
-  if (!entry) return false;
-  if (!entry.extensions.length) return true;
-
+  const types = policy.allowedTypes || [];
   const ext = path.extname(String(filename || '')).toLowerCase();
-  return entry.extensions.includes(ext);
+  if (ext && types.some((t) => t.extensions.includes(ext))) return true;
+
+  // No listed extension matched. The only remaining way in is a type the admin
+  // listed with no extensions at all, identified by the (untrusted) MIME.
+  const entry = types.find((t) => t.mime === normalizeMime(mimetype));
+  return Boolean(entry) && entry.extensions.length === 0;
 }
 
 /** Flat MIME list for the public upload page's `accept` attribute. */

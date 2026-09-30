@@ -55,6 +55,33 @@ describe('validateTransferFileType', () => {
     expect(validateTransferFileType('scan.tif', 'image/tiff', policy)).toBe(true);
   });
 
+  describe('the browser\'s MIME is a guess, so a listed extension wins', () => {
+    // The ZIP fix does not hold if the entry is looked up by MIME first:
+    // Chrome and Firefox on Windows send application/x-zip-compressed, and
+    // .dng/.psd/.heic routinely arrive as octet-stream or with no type at all.
+    const policy = policyOf(['application/zip', { mime: 'image/x-adobe-dng', extensions: ['.dng'] }]);
+
+    it.each([
+      ['application/x-zip-compressed', 'assets.zip'],
+      ['application/octet-stream', 'assets.zip'],
+      ['', 'assets.zip'],
+      ['application/octet-stream', 'shoot.dng'],
+      ['', 'shoot.dng'],
+    ])('admits %s named %s', (mime, name) => {
+      expect(validateTransferFileType(name, mime, policy)).toBe(true);
+    });
+
+    it('still refuses an unlisted extension whatever the MIME claims', () => {
+      expect(validateTransferFileType('payload.html', 'application/zip', policy)).toBe(false);
+      expect(validateTransferFileType('payload.html', 'image/png', policyOf(['image/png']))).toBe(false);
+      expect(validateTransferFileType('macro.exe', 'application/octet-stream', policy)).toBe(false);
+    });
+
+    it('refuses a file with no extension when no entry matches on MIME alone', () => {
+      expect(validateTransferFileType('noextension', 'application/octet-stream', policy)).toBe(false);
+    });
+  });
+
   it('admits a type the built-in registry has never heard of', () => {
     const policy = policyOf([{ mime: 'image/vnd.adobe.photoshop', extensions: ['.psd'] }]);
     expect(validateTransferFileType('logo.psd', 'image/vnd.adobe.photoshop', policy)).toBe(true);
@@ -119,7 +146,10 @@ describe('getTransferUploadPolicy fallback chain', () => {
 
   it('uses the seeded defaults when neither key has ever been written', async () => {
     const policy = await load({});
-    expect(policy.allowedTypes.map((t) => t.mime)).toContain('application/zip');
+    const mimes = policy.allowedTypes.map((t) => t.mime);
+    expect(mimes).toContain('application/zip');
+    // Windows sends this one; a stock instance has to take it.
+    expect(mimes).toContain('application/x-zip-compressed');
   });
 
   it('reads the legacy flat MIME list when only that exists', async () => {

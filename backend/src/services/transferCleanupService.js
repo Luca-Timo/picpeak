@@ -69,10 +69,20 @@ async function notifyExpiredTransfers() {
 
   if (!pending.length) return;
 
-  const admins = await db('admin_users')
+  // Scoped the same way the files-received notice is: a transfer belongs to
+  // the admin who created it, and the ownership guard 404s everyone else from
+  // it, so telling every admin its title is a wider audience than the row
+  // itself has. The fan-out remains only for a legacy row with no creator.
+  const allAdmins = await db('admin_users')
     .where('is_active', formatBoolean(true))
     .whereNotNull('email')
-    .select('email');
+    .select('id', 'email');
+  const adminsById = new Map(allAdmins.map((a) => [a.id, a]));
+  const recipientsFor = (transfer) => {
+    if (!transfer.created_by) return allAdmins;
+    const owner = adminsById.get(transfer.created_by);
+    return owner ? [owner] : [];
+  };
   // getFrontendUrl is async — without the await this interpolated the Promise
   // itself, so every expiry notice carried an "[object Promise]/admin/transfers"
   // link.
@@ -95,7 +105,10 @@ async function notifyExpiredTransfers() {
     };
 
     let sent = false;
-    for (const { email } of admins) {
+    const recipients = recipientsFor(t);
+    // No reachable owner: stamp so the sweep moves on rather than retrying
+    // this row every hour forever.
+    for (const { email } of recipients) {
       try {
         await sendTemplateEmail(email, 'transfer_link_expired', vars);
         sent = true;
