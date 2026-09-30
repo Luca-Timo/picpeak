@@ -15,7 +15,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Eye, RefreshCw, Send } from 'lucide-react';
+import { Eye, RefreshCw, Send } from 'lucide-react';
 import { Button, Card, Loading, Input, LocalizedDateInput, TimeField } from '../../../components/common';
 import {
   quotesService,
@@ -529,10 +529,6 @@ export const QuoteEditorPage: React.FC = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <button onClick={() => navigate('/admin/clients/quotes')}
-            className="text-sm text-soft hover:underline mb-1 inline-flex items-center gap-1">
-            <ArrowLeft className="w-4 h-4" /> {t('common.back', 'Back')}
-          </button>
           <h2 className="text-xl font-bold">
             {isEdit ? `${t('quotes.edit', 'Edit quote')} ${existing?.quote.quoteNumber || ''}` : t('quotes.new', 'New quote')}
           </h2>

@@ -8358,7 +8358,6 @@
       "auditEmpty": "Noch keine Audit-Log-Einträge.",
       "auditTrail": "Audit-Verlauf",
       "auditTrailHelp": "Jedes auf diesem Vertrag erfasste Ereignis. Die Liste ist anhängend (append-only) und ist die Quelle der Wahrheit, falls der Vertrag angefochten wird.",
-      "back": "Zurück zur Liste",
       "blocks": "Enthaltene Bausteine",
       "cancel": "Stornieren",
       "cancelConfirm": "Diesen Vertrag stornieren? Der Signatur-Link des Kunden wird ungültig.",
@@ -8491,7 +8490,6 @@
       }
     },
     "editor": {
-      "back": "Zurück zur Liste",
       "backToDetail": "Zurück zum Vertrag",
       "create": "Entwurf erstellen",
       "createdToast": "Vertrag erstellt.",
@@ -8569,7 +8567,6 @@
       "takeTheirs": "Ihre übernehmen"
     },
     "blocks": {
-      "back": "Zurück zu den Verträgen",
       "title": "Vertragsbaustein-Bibliothek",
       "hideInactive": "Inaktive ausblenden",
       "disclaimerTitle": "Nur Beispiele — lassen Sie sie von Ihrem Anwalt prüfen",
@@ -8610,8 +8607,6 @@
     "templates": {
       "title": "Vertragsvorlagen",
       "intro": "Eine Vorlage legt fest, mit welchen Klauseln, in welcher Reihenfolge und mit welchem Wortlaut ein neuer Vertrag beginnt. Beim Veröffentlichen wird eine Version eingefroren; ein Vertrag behält die Version, aus der er erstellt wurde.",
-      "back": "Zurück zu den Verträgen",
-      "backToTemplates": "Zurück zu den Vorlagen",
       "newName": "Name der neuen Vorlage",
       "create": "Vorlage erstellen",
       "empty": "Noch keine Vorlagen.",

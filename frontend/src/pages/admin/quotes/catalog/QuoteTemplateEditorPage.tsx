@@ -8,7 +8,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowLeft, ArrowUp, Plus, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { Button, Card, Input, Loading } from '../../../../components/common';
 import { DecimalInput } from '../../../../components/common/DecimalInput';
@@ -240,10 +240,6 @@ export const QuoteTemplateEditorPage: React.FC = () => {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <button onClick={() => navigate('/admin/clients/quotes/catalog?tab=templates')}
-            className="text-sm text-soft hover:underline mb-1 inline-flex items-center gap-1">
-            <ArrowLeft className="w-4 h-4" /> {t('common.back', 'Back')}
-          </button>
           <h2 className="text-xl font-bold text-heading">
             {template.name}
             <span className="ml-2 text-sm font-normal text-muted">

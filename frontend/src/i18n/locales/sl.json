@@ -8095,7 +8095,6 @@
       "auditEmpty": "V revizijskem dnevniku še ni vnosov.",
       "auditTrail": "Revizijska sled",
       "auditTrailHelp": "Vsak dogodek, zabeležen pri tej pogodbi. Seznam je samo za dodajanje in je vir resnice v primeru spora glede pogodbe.",
-      "back": "Nazaj na seznam",
       "blocks": "Vključeni sklopi",
       "cancel": "Prekliči",
       "cancelConfirm": "Prekličem to pogodbo? Povezava za podpis stranke bo razveljavljena.",
@@ -8228,7 +8227,6 @@
       }
     },
     "editor": {
-      "back": "Nazaj na seznam",
       "backToDetail": "Nazaj na pogodbo",
       "create": "Ustvari osnutek",
       "createdToast": "Pogodba ustvarjena.",
@@ -8306,7 +8304,6 @@
       "takeTheirs": "Uporabi njihove"
     },
     "blocks": {
-      "back": "Nazaj na pogodbe",
       "title": "Knjižnica pogodbenih sklopov",
       "hideInactive": "Skrij neaktivne",
       "disclaimerTitle": "Samo primeri — naj jih pregleda vaš pravnik",
@@ -8347,8 +8344,6 @@
     "templates": {
       "title": "Predloge pogodb",
       "intro": "Predloga določa določila, s katerimi se začne nova pogodba, njihov vrstni red in besedilo. Objava zamrzne različico; pogodba ohrani različico, iz katere je bila ustvarjena.",
-      "back": "Nazaj na pogodbe",
-      "backToTemplates": "Nazaj na predloge",
       "newName": "Ime nove predloge",
       "create": "Ustvari predlogo",
       "empty": "Predlog še ni.",

@@ -18,9 +18,9 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Plus, Redo2, Undo2 } from 'lucide-react';
+import { Plus, Redo2, Undo2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { Button, Card, Input, Loading } from '../../../components/common';
 import { PermissionGate } from '../../../components/admin/PermissionGate';
@@ -741,10 +741,6 @@ export const ContractTemplateEditorPage: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
-        <Link to="/admin/clients/contracts/templates" className="p-1 rounded hover:bg-hover-soft"
-          aria-label={t('contracts.templates.backToTemplates', 'Back to templates') as string}>
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
         <h1 className="text-2xl font-bold flex-1 text-heading">{template.name}</h1>
         <span className="text-sm text-soft">
           {template.status === 'archived'
