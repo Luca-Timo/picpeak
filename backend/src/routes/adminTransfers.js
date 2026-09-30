@@ -204,7 +204,19 @@ router.post('/',
     }, req.admin);
 
     // Likewise: the admin's own deliverable files are outbound content.
-    if (!isRequest) await storeExtraFiles(transfer.id, req.files);
+    //
+    // storeExtraFiles is also what unlinks multer's temp copies, so on the
+    // request branch they have to be cleaned up here or they sit in
+    // storage/temp/transfer-admin-uploads forever — nothing sweeps that
+    // directory. The names are reported back so the drop is not silent.
+    const droppedOnRequest = isRequest ? (req.files || []).map((f) => f.originalname) : [];
+    if (isRequest) {
+      for (const file of req.files || []) {
+        try { if (fs.existsSync(file.path)) fs.unlinkSync(file.path); } catch (_) { /* noop */ }
+      }
+    } else {
+      await storeExtraFiles(transfer.id, req.files);
+    }
 
     if (deliveryMethod === 'email' && recipientEmails.length) {
       if (isRequest) {
@@ -216,13 +228,16 @@ router.post('/',
 
     const fresh = await transferService.getTransfer(transfer.id);
     const rejected = req.rejectedFiles || [];
+    const notes = [];
+    if (rejected.length) notes.push(`${rejected.length} file(s) were not an allowed type`);
+    if (droppedOnRequest.length) {
+      notes.push(`${droppedOnRequest.length} attached file(s) were not kept — a file request only collects files`);
+    }
     return successResponse(
       res,
-      { transfer: fresh, rejected_files: rejected },
+      { transfer: fresh, rejected_files: rejected, dropped_files: droppedOnRequest },
       201,
-      rejected.length
-        ? `Transfer created — ${rejected.length} file(s) were not an allowed type`
-        : 'Transfer created',
+      notes.length ? `${isRequest ? 'File request' : 'Transfer'} created — ${notes.join('; ')}` : 'Transfer created',
     );
   }),
 );
@@ -417,12 +432,19 @@ router.delete('/:id/upload-code',
   }),
 );
 
-// Resend the "please upload your files" email for a REQUEST.
+// Re-send this transfer's email: the "please upload your files" ask for a
+// request, the "your files are ready" delivery for a send. Both go through the
+// ownership mount above, so the addresses can only be attached to a transfer
+// this admin owns.
 router.post('/:id/resend',
   requirePermission('events.edit'),
   [
     param('id').isInt({ min: 1 }),
     body('recipientEmails').optional().isArray({ max: 100 }),
+    // Validate each address here rather than only dropping the bad ones in the
+    // service: a typo'd list otherwise answers 200 "Email sent" with sent: 0,
+    // and the admin has no reason to look again.
+    body('recipientEmails.*').optional().isEmail().withMessage('Not a valid email address'),
   ],
   handleAsync(async (req, res) => {
     validateRequest(req);

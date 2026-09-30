@@ -126,13 +126,29 @@ async function getTransferUploadPolicy() {
   const acceptAllRaw = await getAppSetting('transfer_upload_accept_all', false);
   const acceptAll = acceptAllRaw === true || acceptAllRaw === 'true' || acceptAllRaw === 1;
 
-  let allowedTypes = normalizeAllowedTypes(await getAppSetting('transfer_upload_allowed_types', null));
-  if (!allowedTypes.length) {
-    // Pre-257 instances, or a list an admin emptied by hand.
-    allowedTypes = normalizeAllowedTypes(await getAppSetting('transfer_upload_allowed_mime', null));
-  }
-  if (!allowedTypes.length) {
-    allowedTypes = normalizeAllowedTypes(DEFAULT_ALLOWED_MIME);
+  // An ABSENT key and a key holding an empty list mean different things, and
+  // collapsing them re-permits types the admin removed. `!length` is true for
+  // both, so the fallback chain walks presence, not emptiness:
+  //   key absent            → try the legacy key, then the seeded defaults
+  //   key present but empty → allow nothing (fail closed)
+  // The settings route refuses to write an empty list, so reaching the second
+  // case means someone edited the row by hand — and silently handing them
+  // jpeg/png/pdf/zip back would be the opposite of what they asked for.
+  const rawTypes = await getAppSetting('transfer_upload_allowed_types', null);
+  let allowedTypes;
+  if (Array.isArray(rawTypes)) {
+    allowedTypes = normalizeAllowedTypes(rawTypes);
+  } else {
+    const legacy = await getAppSetting('transfer_upload_allowed_mime', null);
+    allowedTypes = Array.isArray(legacy)
+      ? normalizeAllowedTypes(legacy)
+      : normalizeAllowedTypes(DEFAULT_ALLOWED_MIME);
+    // A legacy key that is present but unparseable is still a configured
+    // intent we cannot read; fall back rather than accept nothing, because
+    // pre-257 instances never had a way to express "allow nothing".
+    if (!allowedTypes.length && !Array.isArray(legacy)) {
+      allowedTypes = normalizeAllowedTypes(DEFAULT_ALLOWED_MIME);
+    }
   }
 
   const maxSizeMb = Number(await getAppSetting('transfer_max_upload_size_mb', 50)) || 50;

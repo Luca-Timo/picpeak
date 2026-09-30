@@ -101,6 +101,51 @@ describe('validateTransferFileType', () => {
   });
 });
 
+describe('getTransferUploadPolicy fallback chain', () => {
+  // The distinction that matters: an ABSENT key means "never configured, use
+  // the defaults"; a key holding an empty list means "the admin removed
+  // everything". Collapsing them re-permits types that were deliberately taken
+  // away, which is the §17 empty-means-unconfigured shape.
+  const load = async (settings) => {
+    jest.resetModules();
+    jest.doMock('../../src/utils/appSettings', () => ({
+      getAppSetting: async (key, fallback) => (key in settings ? settings[key] : fallback),
+    }));
+    // eslint-disable-next-line global-require
+    return require('../../src/services/transferUploadPolicy').getTransferUploadPolicy();
+  };
+
+  afterEach(() => { jest.resetModules(); jest.dontMock('../../src/utils/appSettings'); });
+
+  it('uses the seeded defaults when neither key has ever been written', async () => {
+    const policy = await load({});
+    expect(policy.allowedTypes.map((t) => t.mime)).toContain('application/zip');
+  });
+
+  it('reads the legacy flat MIME list when only that exists', async () => {
+    const policy = await load({ transfer_upload_allowed_mime: ['image/svg+xml'] });
+    expect(policy.allowedTypes).toEqual([{ mime: 'image/svg+xml', extensions: ['.svg'] }]);
+  });
+
+  it('honours an explicitly emptied list instead of restoring the defaults', async () => {
+    const policy = await load({ transfer_upload_allowed_types: [] });
+    expect(policy.allowedTypes).toEqual([]);
+    // Fail closed: nothing is accepted, rather than jpeg/png/pdf/zip coming back.
+    expect(validateTransferFileType('a.zip', 'application/zip', policy)).toBe(false);
+  });
+
+  it('never turns a missing or empty list into accept-all', async () => {
+    for (const settings of [{}, { transfer_upload_allowed_types: [] }]) {
+      expect((await load(settings)).acceptAll).toBe(false);
+    }
+  });
+
+  it('reads accept-all from the string the settings row stores', async () => {
+    expect((await load({ transfer_upload_accept_all: 'true' })).acceptAll).toBe(true);
+    expect((await load({ transfer_upload_accept_all: false })).acceptAll).toBe(false);
+  });
+});
+
 describe('allowedExtensionList', () => {
   it('flattens and de-duplicates for the upload page hint', () => {
     expect(allowedExtensionList(policyOf(['image/jpeg', 'application/pdf'])))

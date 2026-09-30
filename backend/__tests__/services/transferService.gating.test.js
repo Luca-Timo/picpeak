@@ -74,6 +74,37 @@ describe('transferService.assertDownloadable', () => {
   });
 });
 
+describe('expiry checks fail closed', () => {
+  // `new Date(x).getTime() <= Date.now()` is FALSE for an unparseable stamp, so
+  // the old shape kept a corrupted row downloadable (and accepting uploads)
+  // forever. Every guard now asks "is this a usable timestamp in the future?".
+  const BAD = [null, undefined, '', 'not a date', NaN, {}];
+
+  it.each(BAD)('assertDownloadable treats %p as expired, not eternal', (value) => {
+    expect(transferService.assertDownloadable(make({ expires_at: value })))
+      .toMatchObject({ ok: false, code: 'TRANSFER_EXPIRED', status: 410 });
+  });
+
+  it.each(BAD)('assertUploadable treats %p as expired, not eternal', (value) => {
+    expect(transferService.assertUploadable(make({
+      kind: 'request', allow_uploads: true, upload_expires_at: null, expires_at: value,
+    }))).toMatchObject({ ok: false, code: 'UPLOAD_EXPIRED', status: 410 });
+  });
+
+  it.each(BAD)('computeStatus reports %p as expired', (value) => {
+    expect(transferService.computeStatus(make({ expires_at: value }))).toBe('expired');
+  });
+
+  it('still accepts the timestamp shapes the two engines actually store', () => {
+    const future = Date.now() + 24 * HOUR;
+    // pg hands back a Date, SQLite a string or epoch millis.
+    for (const value of [new Date(future), new Date(future).toISOString(), future]) {
+      expect(transferService.stillInFuture(value)).toBe(true);
+      expect(transferService.assertDownloadable(make({ expires_at: value })).ok).toBe(true);
+    }
+  });
+});
+
 describe('transferService.assertUploadable', () => {
   const request = (overrides = {}) => make({ kind: 'request', allow_uploads: true, ...overrides });
 

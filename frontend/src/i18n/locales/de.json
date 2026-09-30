@@ -1066,7 +1066,8 @@
     "kind": {
       "send": "Senden",
       "request": "Anfrage"
-    }
+    },
+    "emptyReadOnly": "Noch nichts vorhanden."
   },
   "workflows": {
     "title": "Workflows",
@@ -3191,7 +3192,7 @@
       },
       "transfers": {
         "title": "PicTransfer",
-        "description": "Originaldateien aus beliebigen Events als sicheren, Token-geschützten Download-Link versenden – mit optionalem Kunden-Upload-Code, über den Kunden Ihnen Logos und Dateien zurücksenden können. Strikt optional.",
+        "description": "Dateien als sicheren, tokengeschützten Download-Link an Kunden senden – und über einen eigenen Upload-Link Dateien von Kunden anfordern. Strikt optional.",
         "sidebar": "PicTransfer"
       },
       "workflows": {
@@ -3649,6 +3650,18 @@
         "diashow",
         "präsentation",
         "kiosk"
+      ],
+      "transfers": [
+        "transfer",
+        "pictransfer",
+        "upload",
+        "dateitypen",
+        "mime",
+        "svg",
+        "erlaubte dateien",
+        "alle akzeptieren",
+        "dateigröße",
+        "dateien anfordern"
       ]
     },
     "transfers": {
@@ -3666,7 +3679,8 @@
       "mime": "Dateityp",
       "extensions": "Endungen",
       "maxSize": "Maximale Dateigröße (MB)",
-      "maxSizeHint": "Gilt pro Datei, nicht pro Upload."
+      "maxSizeHint": "Gilt pro Datei, nicht pro Upload.",
+      "readOnly": "Nur Admins mit Bearbeitungsrechten für Einstellungen können ändern, was Kunden senden dürfen."
     }
   },
   "branding": {

@@ -146,11 +146,37 @@ function newExtraFileKey(transferId) {
  */
 function computeStatus(transfer) {
   if (transfer.deleted_at) return 'deleted';
-  const now = Date.now();
-  const expired = !transfer.is_active
-    || (transfer.expires_at && new Date(transfer.expires_at).getTime() <= now);
+  const expired = !transfer.is_active || !stillInFuture(transfer.expires_at);
   if (expired) return 'expired';
   return 'active';
+}
+
+/**
+ * Milliseconds for a stored timestamp, or NaN.
+ *
+ * Every expiry check below compares against this and treats a non-finite
+ * result as EXPIRED. `new Date(x).getTime() <= Date.now()` is false for an
+ * unparseable stamp, so the old shape failed OPEN — a row whose expires_at was
+ * corrupted, or written by a path that stored something other than a date,
+ * stayed downloadable (or kept accepting uploads) forever.
+ */
+function timestampMs(value) {
+  if (value === null || value === undefined) return NaN;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  return new Date(value).getTime();
+}
+
+/** True when `value` is a usable timestamp that has not yet been reached. */
+function stillInFuture(value) {
+  const ms = timestampMs(value);
+  return Number.isFinite(ms) && ms > Date.now();
+}
+
+/** ISO date (YYYY-MM-DD) for an email variable, or '' for an unusable stamp. */
+function isoDateOrEmpty(value) {
+  const ms = timestampMs(value);
+  return Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : '';
 }
 
 function downloadsRemaining(transfer) {
@@ -629,7 +655,8 @@ function assertDownloadable(transfer) {
   if (isRequestRow(transfer)) return { ok: false, code: 'NOT_FOUND', status: 404 };
   const isActive = transfer.is_active === true || transfer.is_active === 1;
   if (!isActive) return { ok: false, code: 'TRANSFER_DISABLED', status: 410 };
-  if (transfer.expires_at && new Date(transfer.expires_at).getTime() <= Date.now()) {
+  // Fail closed: an absent or unparseable expiry is expired, not eternal.
+  if (!stillInFuture(transfer.expires_at)) {
     return { ok: false, code: 'TRANSFER_EXPIRED', status: 410 };
   }
   const remaining = downloadsRemaining(transfer);
@@ -1019,7 +1046,7 @@ async function sendTransferEmails(transferId, emails) {
     message: transfer.message || '',
     download_url: downloadUrl,
     file_count: String(fileCount),
-    expiry_date: transfer.expires_at ? new Date(transfer.expires_at).toISOString().slice(0, 10) : '',
+    expiry_date: isoDateOrEmpty(transfer.expires_at),
   };
 
   let sent = 0;
@@ -1067,7 +1094,7 @@ async function sendTransferRequestEmails(transferId, emails) {
     message: transfer.message || '',
     upload_url: uploadUrl,
     upload_code: transfer.upload_token || '',
-    expiry_date: transfer.expires_at ? new Date(transfer.expires_at).toISOString().slice(0, 10) : '',
+    expiry_date: isoDateOrEmpty(transfer.expires_at),
   };
 
   let sent = 0;
@@ -1105,15 +1132,18 @@ async function notifyFilesReceived(transferId, receivedCount) {
     const transfer = await db('transfers').where({ id: transferId }).first();
     if (!transfer || !isRequestRow(transfer)) return;
 
-    let recipients = [];
+    // Addressed to the admin who owns the request. The fan-out to every admin
+    // is ONLY for a legacy row with no creator: if the named creator is
+    // inactive or has no address, telling every other admin instead would
+    // hand the request's title to people the ownership guard 404s from it.
+    let recipients;
     if (transfer.created_by) {
       recipients = await db('admin_users')
         .where('id', transfer.created_by)
         .where('is_active', formatBoolean(true))
         .whereNotNull('email')
         .select('email');
-    }
-    if (!recipients.length) {
+    } else {
       recipients = await db('admin_users')
         .where('is_active', formatBoolean(true))
         .whereNotNull('email')
@@ -1162,7 +1192,7 @@ function assertUploadable(transfer) {
   // A request has one deadline (`expires_at`). `upload_expires_at` is only read
   // for a row an older release wrote and 257 has not yet converted.
   const exp = transfer.upload_expires_at || transfer.expires_at;
-  if (exp && new Date(exp).getTime() <= Date.now()) {
+  if (!stillInFuture(exp)) {
     return { ok: false, code: 'UPLOAD_EXPIRED', status: 410 };
   }
   return { ok: true };
@@ -1213,18 +1243,36 @@ async function removeUploadedFiles(transferId) {
       });
     }
   }
-  // Best-effort: drop the per-transfer directory, but only when it is already
-  // empty. Migration 257 splits a combined transfer into a send and a request
-  // and leaves the request's `stored_path` values pointing inside the SEND's
-  // directory, so a recursive delete here would take another transfer's
-  // received files with it. rmdirSync throws on a non-empty directory, which is
-  // exactly the guard we want.
+  // Best-effort directory cleanup.
+  //
+  // This used to be an unconditional recursive delete, which is wrong since
+  // migration 257: splitting a combined transfer leaves the REQUEST's
+  // `stored_path` values pointing inside the SEND's directory, so deleting the
+  // send would take the request's received files with it.
+  //
+  // Only dropping an already-empty directory would be safe but leaks: bytes
+  // written by a `putFromFile` that succeeded before its DB insert failed have
+  // no row, so the per-file loop above never sees them and they outlive the
+  // retention promise on every install.
+  //
+  // So: ask whether any OTHER transfer still references a path under this
+  // prefix. None does → recursive delete, orphans included. One does → leave
+  // the directory alone entirely.
   try {
-    if (storage.kind() === 'local') {
-      const dir = storage.resolveLocalPath(uploadDirKey(transferId));
-      if (fs.existsSync(dir)) fs.rmdirSync(dir);
-    }
-  } catch (_) { /* noop — directory still holds another transfer's files */ }
+    if (storage.kind() !== 'local') return;
+    const prefix = `${uploadDirKey(transferId)}/`;
+    const foreign = await db('transfer_uploads')
+      .whereNot('transfer_id', transferId)
+      .where('stored_path', 'like', `${prefix}%`)
+      .first('id');
+    if (foreign) return;
+    const dir = storage.resolveLocalPath(uploadDirKey(transferId));
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+  } catch (err) {
+    logger.warn('transferService: could not clean transfer upload directory', {
+      transferId, error: err.message,
+    });
+  }
 }
 
 module.exports = {
@@ -1241,6 +1289,7 @@ module.exports = {
   newExtraFileKey,
   computeStatus,
   downloadsRemaining,
+  stillInFuture,
   // admin CRUD
   createTransfer,
   listTransfers,

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, ShieldAlert } from 'lucide-react';
+import { Plus, Trash2, ShieldAlert, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-toastify';
@@ -7,6 +7,7 @@ import { toast } from 'react-toastify';
 import { Button, Card, Input, Loading } from '../../../components/common';
 import { SettingsSaveBar } from '../../../components/admin/SettingsSaveBar';
 import { api } from '../../../config/api';
+import { usePermission } from '../../../hooks/usePermission';
 
 /**
  * Settings → PicTransfer (#1544).
@@ -56,6 +57,9 @@ export const TransfersTab: React.FC = () => {
   // What the server last sent — dirty is a comparison against it.
   const [loaded, setLoaded] = useState<TransferSettings | null>(null);
   const isDirty = JSON.stringify(form) !== JSON.stringify(loaded);
+  // The PUT requires settings.edit. Without this an admin holding only
+  // settings.view sees a live form and earns a 403 toast on Save.
+  const canEdit = usePermission('settings.edit');
 
   const { data, isLoading } = useQuery<TransferSettings>({
     queryKey: ['admin-transfer-settings'],
@@ -106,6 +110,15 @@ export const TransfersTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {!canEdit && (
+        <Card padding="md" className="bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800">
+          <div className="flex items-start gap-3 text-sm text-amber-800 dark:text-amber-200">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <p>{t('settings.transfers.readOnly', 'Only admins who can edit settings can change what clients may send.')}</p>
+          </div>
+        </Card>
+      )}
+      <fieldset disabled={!canEdit} className="space-y-6 min-w-0">
       <Card className="p-6">
         <h3 className="mb-1 text-lg font-semibold text-heading">
           {t('settings.transfers.uploadsTitle', 'What clients may send you')}
@@ -192,7 +205,7 @@ export const TransfersTab: React.FC = () => {
                     type="button"
                     disabled={form.accept_all}
                     onClick={() => update({ allowed_types: form.allowed_types.filter((_, i) => i !== index) })}
-                    className="rounded p-2 text-neutral-400 hover:bg-hover hover:text-red-600 disabled:opacity-40"
+                    className="rounded p-2 text-muted hover:bg-hover hover:text-red-600 disabled:opacity-40"
                     title={t('common.remove', 'Remove')}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -217,12 +230,16 @@ export const TransfersTab: React.FC = () => {
         </div>
       </Card>
 
+      </fieldset>
+
       <SettingsSaveBar
         isDirty={isDirty}
         isSaving={saveMutation.isPending}
         onSave={() => saveMutation.mutate()}
         onDiscard={() => setForm(loaded)}
-        canSave={form.accept_all || form.allowed_types.some((tp) => tp.mime.includes('/'))}
+        canSave={canEdit
+          && form.max_size_mb >= 1
+          && (form.accept_all || form.allowed_types.some((tp) => tp.mime.includes('/')))}
       />
     </div>
   );

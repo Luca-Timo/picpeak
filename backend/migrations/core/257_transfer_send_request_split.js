@@ -88,124 +88,12 @@ function parseSettingValue(raw, fallback) {
   }
 }
 
-exports.up = async function (knex) {
-  // ---------------------------------------------------------------- kind
-  if (!(await knex.schema.hasColumn('transfers', 'kind'))) {
-    await knex.schema.alterTable('transfers', (table) => {
-      // 'send' | 'request'. Defaulting to 'send' makes every pre-existing row
-      // a send until the backfill below reclassifies the upload-only ones.
-      table.string('kind', 10).notNullable().defaultTo('send');
-    });
-    await knex.schema.alterTable('transfers', (table) => {
-      table.index(['kind'], 'transfers_kind_idx');
-    });
-  }
-
-  // ------------------------------------------------------------- backfill
-  const rows = await knex('transfers').whereNull('deleted_at').select('*');
-
-  for (const row of rows) {
-    const allowsUploads = row.allow_uploads === true || row.allow_uploads === 1;
-    if (!allowsUploads) continue; // plain send — the column default is already right
-
-    const photoCount = Number(
-      (await knex('transfer_files').where('transfer_id', row.id).count('* as c').first())?.c,
-    ) || 0;
-    const extraCount = Number(
-      (await knex('transfer_extra_files').where('transfer_id', row.id).count('* as c').first())?.c,
-    ) || 0;
-    const hasOutbound = photoCount + extraCount > 0;
-
-    // The upload deadline becomes the request's single `expires_at`.
-    const uploadDeadline = row.upload_expires_at || row.expires_at;
-
-    if (!hasOutbound) {
-      // Upload-only already: convert in place. It keeps its 64-hex `token`,
-      // which is exactly the high-entropy request link the new flow wants.
-      await knex('transfers').where({ id: row.id }).update({
-        kind: 'request',
-        expires_at: uploadDeadline,
-        upload_expires_at: null,
-        max_downloads: null,
-        updated_at: new Date(),
-      });
-      continue;
-    }
-
-    // Did both: keep the send, spin the receiving half out into its own row.
-    //
-    // The send releases the short code FIRST. `upload_token` carries a UNIQUE
-    // constraint, so inserting the request row while the send still holds the
-    // same value would fail the whole migration.
-    const shortCode = row.upload_token || null;
-    await knex('transfers').where({ id: row.id }).update({
-      kind: 'send',
-      allow_uploads: formatBoolean(false),
-      upload_token: null,
-      upload_expires_at: null,
-      updated_at: new Date(),
-    });
-
-    const newToken = await uniqueDownloadToken(knex);
-    const inserted = await knex('transfers').insert({
-      token: newToken,
-      title: row.title || '',
-      message: row.message || null,
-      created_by: row.created_by || null,
-      kind: 'request',
-      expires_at: uploadDeadline,
-      max_downloads: null,
-      download_count: 0,
-      is_active: row.is_active,
-      disabled_at: row.disabled_at || null,
-      grace_days: row.grace_days,
-      allow_uploads: formatBoolean(true),
-      upload_token: shortCode,
-      upload_expires_at: null,
-      delivery_method: row.delivery_method || 'link',
-      created_at: row.created_at || new Date(),
-      updated_at: new Date(),
-    }).returning('id');
-    const newId = typeof inserted[0] === 'object' && inserted[0] !== null
-      ? inserted[0].id
-      : inserted[0];
-
-    // Received files follow the request. Their stored_path still points under
-    // the old transfer's directory — see the header note.
-    await knex('transfer_uploads').where('transfer_id', row.id).update({ transfer_id: newId });
-  }
-
-  // ------------------------------------------------------------- settings
-  const legacyRow = await knex('app_settings')
-    .where('setting_key', 'transfer_upload_allowed_mime')
-    .first();
-  const legacyList = parseSettingValue(legacyRow && legacyRow.setting_value, DEFAULT_ALLOWED_MIME);
-  const mimes = Array.isArray(legacyList) && legacyList.length ? legacyList : DEFAULT_ALLOWED_MIME;
-
-  const allowedTypes = [...new Set(mimes.map((m) => String(m || '').trim().toLowerCase()).filter(Boolean))]
-    .map((mime) => ({ mime, extensions: extensionsFor(mime) }));
-
-  const newSettings = [
-    {
-      setting_key: 'transfer_upload_allowed_types',
-      setting_value: JSON.stringify(allowedTypes),
-      setting_type: 'general',
-    },
-    {
-      setting_key: 'transfer_upload_accept_all',
-      setting_value: JSON.stringify(false),
-      setting_type: 'boolean',
-    },
-  ];
-  for (const s of newSettings) {
-    const exists = await knex('app_settings').where('setting_key', s.setting_key).first();
-    if (!exists) {
-      await knex('app_settings').insert({ ...s, updated_at: knex.fn.now() });
-    }
-  }
-
-  // ------------------------------------------------------------ templates
-  await insertTemplate(knex, {
+/**
+ * The two templates this migration seeds. Declared once so `down()` can compare
+ * a live row against what was actually written here — see `seededBodyFor`.
+ */
+const SEEDED_TEMPLATES = [
+  {
     template_key: 'transfer_request',
     subject_en: 'Please upload your files — {{transfer_title}}',
     subject_de: 'Bitte laden Sie Ihre Dateien hoch — {{transfer_title}}',
@@ -272,9 +160,9 @@ Bitte hochladen bis: {{expiry_date}}
 Mit freundlichen Grüßen,
 Ihre PicPeak-Installation`,
     variables: JSON.stringify(['transfer_title', 'message', 'upload_url', 'upload_code', 'expiry_date']),
-  });
+  },
 
-  await insertTemplate(knex, {
+  {
     template_key: 'transfer_files_received',
     subject_en: 'Files received — {{transfer_title}}',
     subject_de: 'Dateien erhalten — {{transfer_title}}',
@@ -337,7 +225,148 @@ Hochgeladene Dateien werden unverändert gespeichert und von PicPeak nie geöffn
 Mit freundlichen Grüßen,
 Ihre PicPeak-Installation`,
     variables: JSON.stringify(['transfer_title', 'file_count', 'total_count', 'received_at', 'admin_url']),
-  });
+  },
+];
+
+const SEEDED_TEMPLATE_BODIES = Object.fromEntries(
+  SEEDED_TEMPLATES.map((tpl) => [tpl.template_key, tpl.body_html_en]),
+);
+
+exports.up = async function (knex) {
+  // ---------------------------------------------------------------- kind
+  if (!(await knex.schema.hasColumn('transfers', 'kind'))) {
+    await knex.schema.alterTable('transfers', (table) => {
+      // 'send' | 'request'. Defaulting to 'send' makes every pre-existing row
+      // a send until the backfill below reclassifies the upload-only ones.
+      table.string('kind', 10).notNullable().defaultTo('send');
+    });
+    await knex.schema.alterTable('transfers', (table) => {
+      table.index(['kind'], 'transfers_kind_idx');
+    });
+  }
+
+  // ------------------------------------------------------------- backfill
+  // Only upload-enabled rows can need reclassifying; everything else already
+  // has the column default. Their outbound-content counts come from two
+  // grouped queries rather than two per row.
+  const rows = await knex('transfers')
+    .whereNull('deleted_at')
+    .whereIn('allow_uploads', [true, 1])
+    .select('*');
+  const candidateIds = rows.map((r) => r.id);
+
+  const countsFor = async (table) => {
+    if (!candidateIds.length) return new Map();
+    const grouped = await knex(table)
+      .whereIn('transfer_id', candidateIds)
+      .select('transfer_id')
+      .count('* as c')
+      .groupBy('transfer_id');
+    return new Map(grouped.map((g) => [g.transfer_id, Number(g.c) || 0]));
+  };
+  const photoCounts = await countsFor('transfer_files');
+  const extraCounts = await countsFor('transfer_extra_files');
+
+  for (const row of rows) {
+    const hasOutbound = (photoCounts.get(row.id) || 0) + (extraCounts.get(row.id) || 0) > 0;
+
+    // The upload deadline becomes the request's single `expires_at`.
+    const uploadDeadline = row.upload_expires_at || row.expires_at;
+
+    if (!hasOutbound) {
+      // Upload-only already: convert in place. It keeps its 64-hex `token`,
+      // which is exactly the high-entropy request link the new flow wants.
+      await knex('transfers').where({ id: row.id }).update({
+        kind: 'request',
+        expires_at: uploadDeadline,
+        upload_expires_at: null,
+        max_downloads: null,
+        updated_at: new Date(),
+      });
+      continue;
+    }
+
+    // Did both: keep the send, spin the receiving half out into its own row.
+    //
+    // The send releases the short code FIRST. `upload_token` carries a UNIQUE
+    // constraint, so inserting the request row while the send still holds the
+    // same value would fail the whole migration.
+    const shortCode = row.upload_token || null;
+    await knex('transfers').where({ id: row.id }).update({
+      kind: 'send',
+      allow_uploads: formatBoolean(false),
+      upload_token: null,
+      upload_expires_at: null,
+      updated_at: new Date(),
+    });
+
+    const newToken = await uniqueDownloadToken(knex);
+    const inserted = await knex('transfers').insert({
+      token: newToken,
+      title: row.title || '',
+      message: row.message || null,
+      created_by: row.created_by || null,
+      kind: 'request',
+      expires_at: uploadDeadline,
+      max_downloads: null,
+      download_count: 0,
+      is_active: row.is_active,
+      disabled_at: row.disabled_at || null,
+      // Carried, not reset: transferCleanupService notifies on
+      // (inactive AND disabled_at AND admin_notified_at IS NULL), so a null
+      // here would send a SECOND expiry mail for a transfer the admin was
+      // already told about — worded for a send, reporting zero files.
+      admin_notified_at: row.admin_notified_at || null,
+      grace_days: row.grace_days,
+      allow_uploads: formatBoolean(true),
+      upload_token: shortCode,
+      upload_expires_at: null,
+      delivery_method: row.delivery_method || 'link',
+      created_at: row.created_at || new Date(),
+      updated_at: new Date(),
+    }).returning('id');
+    const newId = typeof inserted[0] === 'object' && inserted[0] !== null
+      ? inserted[0].id
+      : inserted[0];
+
+    // Received files follow the request. Their stored_path still points under
+    // the old transfer's directory — see the header note.
+    await knex('transfer_uploads').where('transfer_id', row.id).update({ transfer_id: newId });
+  }
+
+  // ------------------------------------------------------------- settings
+  const legacyRow = await knex('app_settings')
+    .where('setting_key', 'transfer_upload_allowed_mime')
+    .first();
+  const legacyList = parseSettingValue(legacyRow && legacyRow.setting_value, DEFAULT_ALLOWED_MIME);
+  const mimes = Array.isArray(legacyList) && legacyList.length ? legacyList : DEFAULT_ALLOWED_MIME;
+
+  const allowedTypes = [...new Set(mimes.map((m) => String(m || '').trim().toLowerCase()).filter(Boolean))]
+    .map((mime) => ({ mime, extensions: extensionsFor(mime) }));
+
+  const newSettings = [
+    {
+      setting_key: 'transfer_upload_allowed_types',
+      setting_value: JSON.stringify(allowedTypes),
+      setting_type: 'general',
+    },
+    {
+      setting_key: 'transfer_upload_accept_all',
+      setting_value: JSON.stringify(false),
+      setting_type: 'boolean',
+    },
+  ];
+  for (const s of newSettings) {
+    const exists = await knex('app_settings').where('setting_key', s.setting_key).first();
+    if (!exists) {
+      await knex('app_settings').insert({ ...s, updated_at: knex.fn.now() });
+    }
+  }
+
+  // ------------------------------------------------------------ templates
+  for (const tpl of SEEDED_TEMPLATES) {
+    await insertTemplate(knex, tpl);
+  }
 };
 
 async function uniqueDownloadToken(knex) {
@@ -357,10 +386,28 @@ async function insertTemplate(knex, template) {
   await knex('email_templates').insert(template);
 }
 
+/**
+ * The seeded body for a template key, so `down()` can tell a row this
+ * migration created from one an admin has since edited (or one that already
+ * existed and was left alone by `insertTemplate`).
+ */
+function seededBodyFor(key) {
+  return SEEDED_TEMPLATE_BODIES[key] || null;
+}
+
 exports.down = async function (knex) {
-  await knex('email_templates')
-    .whereIn('template_key', ['transfer_request', 'transfer_files_received'])
-    .del();
+  // Only remove a template that still looks exactly as this migration seeded
+  // it. `insertTemplate` skips a key that already existed, and an admin may
+  // have edited the wording since — an unconditional delete would destroy
+  // either one on a rollback.
+  for (const key of ['transfer_request', 'transfer_files_received']) {
+    const row = await knex('email_templates').where('template_key', key).first();
+    if (!row) continue;
+    const seeded = seededBodyFor(key);
+    if (seeded && row.body_html_en === seeded) {
+      await knex('email_templates').where('template_key', key).del();
+    }
+  }
   await knex('app_settings')
     .whereIn('setting_key', ['transfer_upload_allowed_types', 'transfer_upload_accept_all'])
     .del();

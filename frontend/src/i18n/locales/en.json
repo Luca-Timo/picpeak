@@ -1066,7 +1066,8 @@
     "kind": {
       "send": "Send",
       "request": "Request"
-    }
+    },
+    "emptyReadOnly": "Nothing here yet."
   },
   "workflows": {
     "title": "Workflows",
@@ -2653,7 +2654,7 @@
       },
       "transfers": {
         "title": "PicTransfer",
-        "description": "Send original files from any event(s) as a secure, token-protected download link, with an optional client-upload code so clients can send you logos and files back. Strictly opt-in.",
+        "description": "Send files to a client as a secure, token-protected download link, and request files from a client through an upload link of their own. Strictly opt-in.",
         "sidebar": "PicTransfer"
       },
       "workflows": {
@@ -3146,6 +3147,18 @@
         "messaging",
         "phone",
         "business api"
+      ],
+      "transfers": [
+        "transfer",
+        "pictransfer",
+        "upload",
+        "file types",
+        "mime",
+        "svg",
+        "allowlist",
+        "accept all",
+        "file size",
+        "request files"
       ]
     },
     "transfers": {
@@ -3163,7 +3176,8 @@
       "mime": "File type",
       "extensions": "Extensions",
       "maxSize": "Maximum file size (MB)",
-      "maxSizeHint": "Applies per file, not per upload."
+      "maxSizeHint": "Applies per file, not per upload.",
+      "readOnly": "Only admins who can edit settings can change what clients may send."
     }
   },
   "analytics": {

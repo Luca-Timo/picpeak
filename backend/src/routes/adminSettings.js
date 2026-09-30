@@ -71,9 +71,19 @@ const RESERVED_SETTING_KEYS = [
 // built AT the standard resolution, so changing it has to invalidate those
 // zips and re-validate the value against the preset list. A generic upsert
 // would do neither, leaving galleries handing out archives at the old size.
+// Every transfer_upload_* / transfer_max_upload_* key is reserved (#1544) for
+// the same reason: PUT /transfers is gated on the `transfers` feature flag and
+// refuses an empty allowlist, and it is the ONLY writer that does. Left
+// unreserved, a settings.edit holder could set transfer_upload_accept_all
+// through the generic /general writer with the feature flag off, and the public
+// upload route — which reads the key directly — would start accepting every
+// file type. A backend flag gate that another endpoint can write around is not
+// a gate.
 const isReservedSettingKey = (key) => RESERVED_SETTING_KEYS.includes(key)
   || key.startsWith('oidc_')
   || key.startsWith('download_')
+  || key.startsWith('transfer_upload_')
+  || key === 'transfer_max_upload_size_mb'
   // Derived, read-only fields the GET response adds for the General tab
   // (#705). They are computed from the environment, never stored, so a
   // round-trip of the GET payload must not create phantom setting rows.

@@ -33,6 +33,10 @@ vi.mock('../../../../hooks/useLocalizedDate', () => ({
   useLocalizedDate: () => ({ formatDateTime: (v: string) => v, formatDate: (v: string) => v }),
 }));
 
+// The page gates its create/mutate controls on events.edit (#1544); this test
+// is about the file picker, so it runs as an admin who holds it.
+vi.mock('../../../../hooks/usePermission', () => ({ usePermission: () => true }));
+
 vi.mock('../../../../services/transfers.service', () => ({
   transfersService: { list: vi.fn().mockResolvedValue([]), create: vi.fn() },
 }));

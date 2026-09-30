@@ -25,6 +25,7 @@ import { Button, Input, Card, CardContent, Loading, useConfirm } from '../../../
 import { AdminAuthenticatedImage } from '../../../components/admin/AdminAuthenticatedImage';
 import { TransferPhotoPicker, type PickedPhoto } from '../../../components/admin/TransferPhotoPicker';
 import { useMutationWithToast } from '../../../hooks/useMutationWithToast';
+import { usePermission } from '../../../hooks/usePermission';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { transfersService, type Transfer, type TransferKind } from '../../../services/transfers.service';
 
@@ -70,10 +71,17 @@ export const TransfersPage: React.FC = () => {
   const [createKind, setCreateKind] = useState<TransferKind | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [tab, setTab] = useState<TabKey>('all');
+  // Creating and changing transfers is events.edit on the server; without this
+  // a read-only admin sees both create buttons and earns a 403 toast.
+  const canEdit = usePermission('events.edit');
+  const canView = usePermission('events.view');
 
   const { data: transfers, isLoading, refetch } = useQuery({
     queryKey: ['admin-transfers'],
     queryFn: () => transfersService.list(),
+    // Hiding the control is not enough — the list endpoint is events.view, so
+    // without this an admin who lacks it still fires a request that 403s.
+    enabled: canView,
   });
 
   const counts = useMemo(() => ({
@@ -113,18 +121,20 @@ export const TransfersPage: React.FC = () => {
             {t('transfers.subtitle', 'Send files to a client, or ask a client to send files to you.')}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            leftIcon={<Inbox className="h-4 w-4" />}
-            onClick={() => setCreateKind('request')}
-          >
-            {t('transfers.newRequest', 'Request files')}
-          </Button>
-          <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreateKind('send')}>
-            {t('transfers.newSend', 'Send files')}
-          </Button>
-        </div>
+        {canEdit && (
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              leftIcon={<Inbox className="h-4 w-4" />}
+              onClick={() => setCreateKind('request')}
+            >
+              {t('transfers.newRequest', 'Request files')}
+            </Button>
+            <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreateKind('send')}>
+              {t('transfers.newSend', 'Send files')}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Kind filter. Shown whenever there is anything to filter, so the two
@@ -141,7 +151,7 @@ export const TransfersPage: React.FC = () => {
                   : 'border-transparent text-muted hover:text-body'
               }`}
             >
-              {tb.label} <span className="text-neutral-400">({counts[tb.key]})</span>
+              {tb.label} <span className="text-muted">({counts[tb.key]})</span>
             </button>
           ))}
         </div>
@@ -151,11 +161,13 @@ export const TransfersPage: React.FC = () => {
         <Loading />
       ) : visible.length === 0 ? (
         <Card>
-          <CardContent className="py-12 text-center text-neutral-500">
-            <Send className="mx-auto mb-3 h-10 w-10 text-neutral-300" />
+          <CardContent className="py-12 text-center text-muted">
+            <Send className="mx-auto mb-3 h-10 w-10 text-muted" />
             <p>
               {counts.all === 0
-                ? t('transfers.empty', 'Nothing here yet. Send files to a client, or ask them to send you some.')
+                ? (canEdit
+                  ? t('transfers.empty', 'Nothing here yet. Send files to a client, or ask them to send you some.')
+                  : t('transfers.emptyReadOnly', 'Nothing here yet.'))
                 : t('transfers.emptyTab', 'Nothing in this tab yet.')}
             </p>
           </CardContent>
@@ -165,7 +177,7 @@ export const TransfersPage: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="border-b border-line text-left text-neutral-500">
+                <tr className="border-b border-line text-left text-muted">
                   <th className="px-4 py-3 font-medium">{t('transfers.col.title', 'Title')}</th>
                   <th className="px-4 py-3 font-medium">{t('transfers.col.kind', 'Type')}</th>
                   <th className="px-4 py-3 font-medium">{t('transfers.col.files', 'Files')}</th>
@@ -202,7 +214,7 @@ export const TransfersPage: React.FC = () => {
                       </td>
                       <td className="px-4 py-3">
                         {isRequest
-                          ? <span className="text-neutral-400">—</span>
+                          ? <span className="text-muted">—</span>
                           : `${tr.download_count}${tr.max_downloads ? ` / ${tr.max_downloads}` : ''}`}
                       </td>
                       <td className="px-4 py-3 text-muted">{fmtDate(tr.expires_at)}</td>
@@ -228,6 +240,8 @@ export const TransfersPage: React.FC = () => {
           onClose={() => { setDetailId(null); refetch(); }}
           onCopy={copyLink}
           confirm={confirm}
+          canEdit={canEdit}
+          canView={canView}
         />
       )}
     </div>
@@ -321,7 +335,7 @@ const CreateTransferModal: React.FC<{
               ? <><Inbox className="h-5 w-5" /> {t('transfers.newRequest', 'Request files')}</>
               : <><Send className="h-5 w-5" /> {t('transfers.newSend', 'Send files')}</>}
           </h2>
-          <button onClick={onClose} className="rounded p-1 text-neutral-500 hover:bg-hover-soft"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} className="rounded p-1 text-muted hover:bg-hover-soft"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
@@ -386,7 +400,7 @@ const CreateTransferModal: React.FC<{
                   </Button>
                 </div>
                 {picked.length === 0 ? (
-                  <p className="text-sm text-neutral-400">{t('transfers.field.noFiles', 'No images selected yet.')}</p>
+                  <p className="text-sm text-muted">{t('transfers.field.noFiles', 'No images selected yet.')}</p>
                 ) : (
                   <div className="grid grid-cols-6 gap-2">
                     {picked.slice(0, 18).map((p) => (
@@ -401,7 +415,7 @@ const CreateTransferModal: React.FC<{
                       </div>
                     ))}
                     {picked.length > 18 && (
-                      <div className="flex aspect-square items-center justify-center rounded bg-subtle text-xs text-neutral-500">
+                      <div className="flex aspect-square items-center justify-center rounded bg-subtle text-xs text-muted">
                         +{picked.length - 18}
                       </div>
                     )}
@@ -426,19 +440,19 @@ const CreateTransferModal: React.FC<{
                   </label>
                 </div>
                 {files.length === 0 ? (
-                  <p className="text-sm text-neutral-400">{t('transfers.field.noUploadFiles', 'Optionally add files from your computer to send along.')}</p>
+                  <p className="text-sm text-muted">{t('transfers.field.noUploadFiles', 'Optionally add files from your computer to send along.')}</p>
                 ) : (
                   <ul className="divide-y divide-line-faint">
                     {files.map((f, idx) => (
                       <li key={`${f.name}-${idx}`} className="flex items-center justify-between py-1.5 text-sm">
                         <span className="flex min-w-0 items-center gap-2">
-                          <FileText className="h-4 w-4 shrink-0 text-neutral-400" />
+                          <FileText className="h-4 w-4 shrink-0 text-muted" />
                           <span className="truncate text-body">{f.name}</span>
                         </span>
                         <button
                           type="button"
                           onClick={() => setFiles((prev) => prev.filter((_, i) => i !== idx))}
-                          className="rounded p-1 text-neutral-400 hover:bg-hover hover:text-neutral-600"
+                          className="rounded p-1 text-muted hover:bg-hover hover:text-soft"
                         ><X className="h-3.5 w-3.5" /></button>
                       </li>
                     ))}
@@ -485,7 +499,7 @@ const CreateTransferModal: React.FC<{
                   className="w-full rounded-md border border-line-strong px-3 py-2 text-sm dark:bg-neutral-800"
                   placeholder={t('transfers.field.recipientsPlaceholder', 'anna@example.com, ben@example.com')}
                 />
-                <p className="mt-1 text-xs text-neutral-400">
+                <p className="mt-1 text-xs text-muted">
                   {isRequest
                     ? t('transfers.field.requestRecipientsHint', 'Separate multiple addresses with commas. Each one gets the upload link.')
                     : t('transfers.field.recipientsHint', 'Separate multiple addresses with commas. Each recipient gets the download link.')}
@@ -533,9 +547,13 @@ interface DetailProps {
   onClose: () => void;
   onCopy: (text: string) => void;
   confirm: ReturnType<typeof useConfirm>;
+  /** events.edit — every mutating control below is hidden without it. */
+  canEdit: boolean;
+  /** events.view — gates the detail query itself. */
+  canView: boolean;
 }
 
-const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCopy, confirm }) => {
+const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCopy, confirm, canEdit, canView }) => {
   const { t } = useTranslation();
   const { formatDateTime } = useLocalizedDate();
   const fmtDate = (d: string | null) => (d ? formatDateTime(d) : '—');
@@ -544,8 +562,13 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
   const { data: transfer, isLoading, refetch } = useQuery({
     queryKey: ['admin-transfer', transferId],
     queryFn: () => transfersService.get(transferId),
+    enabled: canView,
   });
   const isRequest = transfer?.kind === 'request';
+  // The ZIP route is photos.download, NOT events.edit — a different permission
+  // from everything else in this modal. It is a plain <a href>, so an admin
+  // without it would navigate to raw 403 JSON rather than see an error toast.
+  const canDownload = usePermission('photos.download');
 
   const addFilesMutation = useMutationWithToast({
     mutationFn: (photoIds: number[]) => transfersService.addFiles(transferId, photoIds),
@@ -626,7 +649,7 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
             {transfer && (isRequest ? <Inbox className="h-5 w-5 shrink-0" /> : <Send className="h-5 w-5 shrink-0" />)}
             <span className="truncate">{transfer?.title || t('transfers.untitled', 'Untitled transfer')}</span>
           </h2>
-          <button onClick={onClose} className="rounded p-1 text-neutral-500 hover:bg-hover-soft"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} className="rounded p-1 text-muted hover:bg-hover-soft"><X className="h-5 w-5" /></button>
         </div>
 
         {isLoading || !transfer ? (
@@ -641,7 +664,7 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
                   {t('transfers.copyLink', 'Copy link')}
                 </Button>
                 {/* A request has no outgoing bundle to zip. */}
-                {!isRequest && (
+                {!isRequest && canDownload && (
                   <a href={transfersService.adminDownloadUrl(transfer.id)}>
                     <Button leftIcon={<Download className="h-4 w-4" />}>{t('transfers.downloadAll', 'Download all')}</Button>
                   </a>
@@ -659,6 +682,7 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
                 )}
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[transfer.status] || ''}`}>{t(`transfers.status.${transfer.status}`, transfer.status)}</span>
               </div>
+              {canEdit && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {transfer.is_active ? (
                   <Button size="sm" variant="outline" leftIcon={<Ban className="h-4 w-4" />} onClick={() => disableMutation.mutate()} isLoading={disableMutation.isPending}>
@@ -678,6 +702,7 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
                   {t('common.delete', 'Delete')}
                 </Button>
               </div>
+              )}
             </div>
 
             {/* ---------------- Send-only sections ---------------- */}
@@ -686,26 +711,30 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
                 <div>
                   <div className="mb-2 flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-body">{t('transfers.field.files', 'Files')} · {transfer.file_count}</h3>
-                    <Button size="sm" variant="outline" leftIcon={<ImageIcon className="h-4 w-4" />} onClick={() => setShowPicker(true)}>
-                      {t('transfers.addImages', 'Add images')}
-                    </Button>
+                    {canEdit && (
+                      <Button size="sm" variant="outline" leftIcon={<ImageIcon className="h-4 w-4" />} onClick={() => setShowPicker(true)}>
+                        {t('transfers.addImages', 'Add images')}
+                      </Button>
+                    )}
                   </div>
                   {transfer.files && transfer.files.length > 0 ? (
                     <div className="grid grid-cols-4 gap-3 sm:grid-cols-6">
                       {transfer.files.map((f) => (
                         <div key={f.file_id} className="group relative aspect-square overflow-hidden rounded">
                           <AdminAuthenticatedImage src={f.thumbnail_url} alt={f.filename} className="h-full w-full object-cover" />
-                          <button
-                            onClick={() => removeFileMutation.mutate(f.file_id)}
-                            className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
-                            title={t('common.remove', 'Remove')}
-                          ><X className="h-3 w-3" /></button>
+                          {canEdit && (
+                            <button
+                              onClick={() => removeFileMutation.mutate(f.file_id)}
+                              className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                              title={t('common.remove', 'Remove')}
+                            ><X className="h-3 w-3" /></button>
+                          )}
                           <span className="absolute inset-x-0 bottom-0 truncate bg-black/50 px-1 py-0.5 text-[10px] text-white" title={f.event_name}>{f.event_name}</span>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-neutral-400">{t('transfers.field.noFiles', 'No images selected yet.')}</p>
+                    <p className="text-sm text-muted">{t('transfers.field.noFiles', 'No images selected yet.')}</p>
                   )}
                 </div>
 
@@ -714,44 +743,48 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
                     <h3 className="flex items-center gap-2 text-sm font-semibold text-body">
                       <Paperclip className="h-4 w-4" /> {t('transfers.uploadedFiles', 'Uploaded files')} · {transfer.extra_files?.length || 0}
                     </h3>
-                    <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1.5 text-sm text-body hover:bg-hover-soft">
-                      <Upload className="h-4 w-4" />
-                      {t('transfers.addFiles', 'Add files')}
-                      <input
-                        type="file"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files?.length) uploadFilesMutation.mutate(Array.from(e.target.files));
-                          e.target.value = '';
-                        }}
-                      />
-                    </label>
+                    {canEdit && (
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1.5 text-sm text-body hover:bg-hover-soft">
+                        <Upload className="h-4 w-4" />
+                        {t('transfers.addFiles', 'Add files')}
+                        <input
+                          type="file"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files?.length) uploadFilesMutation.mutate(Array.from(e.target.files));
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    )}
                   </div>
                   {transfer.extra_files && transfer.extra_files.length > 0 ? (
                     <ul className="divide-y divide-line-faint">
                       {transfer.extra_files.map((f) => (
                         <li key={f.id} className="flex items-center justify-between py-2 text-sm">
                           <span className="flex min-w-0 items-center gap-2">
-                            <FileText className="h-4 w-4 shrink-0 text-neutral-400" />
+                            <FileText className="h-4 w-4 shrink-0 text-muted" />
                             <span className="truncate text-body">{f.filename}</span>
                           </span>
-                          <span className="flex shrink-0 items-center gap-3 text-neutral-500">
+                          <span className="flex shrink-0 items-center gap-3 text-muted">
                             <span>{formatBytes(f.size_bytes)}</span>
                             <a href={transfersService.adminExtraFileDownloadUrl(transferId, f.id)} className="text-primary-600 hover:underline">
                               <Download className="h-4 w-4" />
                             </a>
-                            <button
-                              onClick={() => removeExtraFileMutation.mutate(f.id)}
-                              className="rounded p-1 text-neutral-400 hover:bg-hover hover:text-red-600"
-                              title={t('common.remove', 'Remove')}
-                            ><X className="h-3.5 w-3.5" /></button>
+                            {canEdit && (
+                              <button
+                                onClick={() => removeExtraFileMutation.mutate(f.id)}
+                                className="rounded p-1 text-muted hover:bg-hover hover:text-red-600"
+                                title={t('common.remove', 'Remove')}
+                              ><X className="h-3.5 w-3.5" /></button>
+                            )}
                           </span>
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-sm text-neutral-400">{t('transfers.noUploadedFiles', 'No uploaded files. Add files from your computer to include them in the download.')}</p>
+                    <p className="text-sm text-muted">{t('transfers.noUploadedFiles', 'No uploaded files. Add files from your computer to include them in the download.')}</p>
                   )}
                 </div>
               </>
@@ -766,7 +799,7 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
                     <h3 className="flex items-center gap-2 text-sm font-semibold text-body">
                       <KeyRound className="h-4 w-4" /> {t('transfers.uploadCode', 'Short upload code')}
                     </h3>
-                    {transfer.upload_code ? (
+                    {!canEdit ? null : transfer.upload_code ? (
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" leftIcon={<RefreshCw className="h-4 w-4" />} onClick={() => issueCodeMutation.mutate(true)} isLoading={issueCodeMutation.isPending}>
                           {t('transfers.rotateCode', 'New code')}
@@ -790,7 +823,7 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
                       </Button>
                     </div>
                   ) : (
-                    <p className="text-sm text-neutral-400">
+                    <p className="text-sm text-muted">
                       {t('transfers.codeHint', 'Optional: a short code you can read out over the phone. The full link above always works.')}
                     </p>
                   )}
@@ -807,10 +840,10 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
                         {transfer.uploads.map((u) => (
                           <li key={u.id} className="flex items-center justify-between py-2 text-sm">
                             <span className="flex min-w-0 items-center gap-2">
-                              <FileText className="h-4 w-4 shrink-0 text-neutral-400" />
+                              <FileText className="h-4 w-4 shrink-0 text-muted" />
                               <span className="truncate text-body">{u.original_filename}</span>
                             </span>
-                            <span className="flex shrink-0 items-center gap-3 text-neutral-500">
+                            <span className="flex shrink-0 items-center gap-3 text-muted">
                               <span>{fmtDate(u.uploaded_at)}</span>
                               <span>{formatBytes(u.size_bytes)}</span>
                               <a href={transfersService.adminUploadDownloadUrl(transferId, u.id)} className="text-primary-600 hover:underline">
@@ -828,7 +861,7 @@ const TransferDetailModal: React.FC<DetailProps> = ({ transferId, onClose, onCop
                       </p>
                     </>
                   ) : (
-                    <p className="text-sm text-neutral-400">{t('transfers.noUploads', 'No files uploaded by the client yet.')}</p>
+                    <p className="text-sm text-muted">{t('transfers.noUploads', 'No files uploaded by the client yet.')}</p>
                   )}
                 </div>
               </>

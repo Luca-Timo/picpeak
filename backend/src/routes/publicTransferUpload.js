@@ -224,6 +224,10 @@ router.post('/:token', uploadLimiter, [param('token').matches(TOKEN_RE)], preUpl
   const storage = getStorage();
   const ip = clientIpForAudit(req);
   const saved = [];
+  // A file whose bytes or row fail to land is NOT a success. Without this the
+  // client sees "Uploaded 3 files" for a batch of 5 and has no reason to try
+  // again, while the admin's list quietly shows three.
+  const failed = [];
   for (const file of req.files) {
     // Opaque key — the client's extension is deliberately dropped so no stored
     // object can end in .html/.svg/.js/.php on disk or in S3. The real name is
@@ -240,7 +244,10 @@ router.post('/:token', uploadLimiter, [param('token').matches(TOKEN_RE)], preUpl
       });
       saved.push({ filename: file.originalname, size_bytes: file.size });
     } catch (err) {
-      logger.error('transfer upload: failed to store file', { transferId: transfer.id, error: err.message });
+      failed.push(file.originalname);
+      logger.error('transfer upload: failed to store file', {
+        transferId: transfer.id, filename: file.originalname, error: err.message,
+      });
     } finally {
       // Remove the temp copy regardless of outcome.
       try { if (fs.existsSync(file.path)) fs.unlinkSync(file.path); } catch (_) { /* noop */ }
@@ -256,11 +263,20 @@ router.post('/:token', uploadLimiter, [param('token').matches(TOKEN_RE)], preUpl
   // already succeeded and must not be failed by an SMTP problem.
   transferService.notifyFilesReceived(transfer.id, saved.length).catch(() => { /* logged inside */ });
 
+  const notes = [];
+  if (rejected.length) notes.push(`${rejected.length} were not an allowed type`);
+  if (failed.length) notes.push(`${failed.length} could not be stored — please try those again`);
+
   return successResponse(
     res,
-    { uploaded: saved.length, files: saved, rejected_files: rejected },
+    {
+      uploaded: saved.length,
+      files: saved,
+      rejected_files: rejected,
+      failed_files: failed,
+    },
     201,
-    rejected.length ? `Uploaded ${saved.length} file(s); ${rejected.length} were not an allowed type` : 'Files uploaded',
+    notes.length ? `Uploaded ${saved.length} file(s); ${notes.join('; ')}` : 'Files uploaded',
   );
 }));
 

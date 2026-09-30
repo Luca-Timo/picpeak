@@ -37,6 +37,7 @@ let seq = 0;
 // epoch millis correctly — but it would make the assertions below meaningless.
 const DOWNLOAD_DEADLINE = new Date(Date.now() + 48 * HOUR).toISOString();
 const UPLOAD_DEADLINE = new Date(Date.now() + 12 * HOUR).toISOString();
+const NOTIFIED_AT = new Date(Date.now() - 6 * HOUR).toISOString();
 
 /** Insert a row in the shape a pre-257 release would have written. */
 async function insertLegacyRow({ uploadToken, allowUploads = true, withOutbound = false }) {
@@ -50,6 +51,9 @@ async function insertLegacyRow({ uploadToken, allowUploads = true, withOutbound 
     max_downloads: 5,
     download_count: 0,
     is_active: true,
+    // Set so the split's handling of it is observable — see the
+    // admin_notified_at assertion below.
+    admin_notified_at: NOTIFIED_AT,
     grace_days: 7,
     allow_uploads: allowUploads,
     upload_token: uploadToken,
@@ -170,6 +174,14 @@ describe('257: a row that did both is split so neither link breaks', () => {
     expect(new Date(send.expires_at).toISOString()).toBe(DOWNLOAD_DEADLINE);
   });
 
+  it('carries admin_notified_at, so the split does not re-notify an expiry', async () => {
+    // transferCleanupService notifies on
+    // (inactive AND disabled_at AND admin_notified_at IS NULL). A null here
+    // would send a second "link expired" mail for the same transfer, worded
+    // for a send and reporting zero files.
+    expect(request.admin_notified_at).toEqual(send.admin_notified_at);
+  });
+
   it('moves the received files to the request', async () => {
     expect(await db('transfer_uploads').where({ transfer_id: sendId })).toHaveLength(0);
     expect(await db('transfer_uploads').where({ transfer_id: request.id })).toHaveLength(1);
@@ -180,6 +192,24 @@ describe('257: a row that did both is split so neither link breaks', () => {
     await migration.up(db);
     const after = await db('transfers').count('* as c').first();
     expect(Number(after.c)).toBe(Number(before.c));
+  });
+});
+
+describe('257: down() does not destroy what it did not create', () => {
+  it('leaves an admin-edited template alone on rollback', async () => {
+    await db('email_templates')
+      .where('template_key', 'transfer_request')
+      .update({ body_html_en: '<p>Our own wording</p>' });
+
+    await migration.down(db);
+
+    const row = await db('email_templates').where('template_key', 'transfer_request').first();
+    expect(row).toBeDefined();
+    expect(row.body_html_en).toBe('<p>Our own wording</p>');
+
+    // Put the seeded pair back for the suites that follow.
+    await db('email_templates').where('template_key', 'transfer_request').del();
+    await migration.up(db);
   });
 });
 
