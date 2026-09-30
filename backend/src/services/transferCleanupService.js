@@ -73,7 +73,10 @@ async function notifyExpiredTransfers() {
     .where('is_active', formatBoolean(true))
     .whereNotNull('email')
     .select('email');
-  const adminUrl = `${transferService.getFrontendUrl()}/admin/transfers`;
+  // getFrontendUrl is async — without the await this interpolated the Promise
+  // itself, so every expiry notice carried an "[object Promise]/admin/transfers"
+  // link.
+  const adminUrl = `${await transferService.getFrontendUrl()}/admin/transfers`;
 
   for (const t of pending) {
     const fileCount = await db('transfer_files').where('transfer_id', t.id).count('* as c').first();

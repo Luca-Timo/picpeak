@@ -30,7 +30,8 @@ const { getAppSetting } = require('../utils/appSettings');
 const { getStorage } = require('./storage');
 const { resolvePhotoStorageKey, resolvePhotoFilePath } = require('./photoResolver');
 const { getUseOriginalFilenames, getZipEntryNames } = require('./downloadFilenameService');
-const { sanitizeForZipEntry } = require('../utils/filenameSanitizer');
+const { sanitizeForZipEntry, buildContentDisposition } = require('../utils/filenameSanitizer');
+const { setAttachmentHeaders, opaqueStoredName } = require('./transferUploadPolicy');
 const { filterOwnedEventIds } = require('../middleware/ownership');
 
 // Unambiguous alphabet for the client upload token — no 0/O/1/I/L to keep it
@@ -42,6 +43,23 @@ const UPLOAD_TOKEN_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const UPLOAD_TOKEN_LENGTH = 10;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+// The two kinds a transfer can be (#1544, migration 257). Mutually exclusive:
+// a send hands files out behind `token`, a request takes files in behind
+// `token` (with `upload_token` as a short read-aloud alternative). Every public
+// lookup below filters on the kind it serves, so a send token handed to the
+// upload route — or a request token handed to the download route — is a 404
+// rather than a cross-flow leak.
+const KIND_SEND = 'send';
+const KIND_REQUEST = 'request';
+
+function normalizeKind(value) {
+  return String(value || '').toLowerCase() === KIND_REQUEST ? KIND_REQUEST : KIND_SEND;
+}
+
+function isRequestRow(row) {
+  return row && normalizeKind(row.kind) === KIND_REQUEST;
+}
 
 async function getFrontendUrl() {
   const { getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
@@ -106,6 +124,23 @@ function extraFilesDirKey(transferId) {
 }
 
 /**
+ * Storage key for a newly stored transfer file.
+ *
+ * The client's extension is dropped on purpose — see `opaqueStoredName`. Keys
+ * written before #1544 keep their original names; nothing resolves a stored
+ * file by name, so the two shapes coexist without a rename migration reaching
+ * into S3 for files that expire on their own anyway.
+ */
+function newUploadFileKey(transferId) {
+  return path.posix.join(uploadDirKey(transferId), opaqueStoredName(crypto.randomBytes(16).toString('hex')));
+}
+
+/** As `newUploadFileKey`, for the admin's own deliverable files. */
+function newExtraFileKey(transferId) {
+  return path.posix.join(extraFilesDirKey(transferId), opaqueStoredName(crypto.randomBytes(16).toString('hex')));
+}
+
+/**
  * Derive the recipient-facing/admin status of a transfer row.
  * Never mutates — the cron sweep is what actually flips is_active/deleted_at.
  */
@@ -136,11 +171,15 @@ async function createTransfer(input, admin) {
     expiresInDays,
     maxDownloads,
     graceDays,
-    allowUploads = false,
-    uploadExpiresInDays,
     photoIds = [],
     deliveryMethod = 'link',
   } = input || {};
+
+  // A transfer is one thing or the other (#1544). A send never accepts uploads;
+  // a request never serves a download. Anything unrecognised is a send, which
+  // is the shape every pre-257 caller meant.
+  const kind = normalizeKind(input && input.kind);
+  const isRequest = kind === KIND_REQUEST;
 
   const defaultExpiry = await getAppSetting('transfer_default_expiry_days', 14);
   const defaultGrace = await getAppSetting('transfer_default_grace_days', 7);
@@ -158,31 +197,34 @@ async function createTransfer(input, admin) {
 
   const row = {
     token: generateDownloadToken(),
+    kind,
     title: String(title || '').slice(0, 255),
     message: message || null,
     created_by: adminId || null,
+    // For a request this single deadline IS the upload deadline — there is no
+    // second `upload_expires_at` to drift out of sync with it.
     expires_at: expiresAt,
-    max_downloads: cap,
+    max_downloads: isRequest ? null : cap,
     download_count: 0,
     is_active: formatBoolean(true),
     grace_days: grace,
-    allow_uploads: formatBoolean(!!allowUploads),
+    allow_uploads: formatBoolean(isRequest),
     delivery_method: deliveryMethod === 'email' ? 'email' : 'link',
     created_at: now,
     updated_at: now,
   };
 
-  if (allowUploads) {
+  if (isRequest) {
+    // The 64-hex `token` is the request link. The short code stays on as the
+    // optional read-aloud alternative, with its own per-network lockout.
     row.upload_token = await generateUniqueUploadToken();
-    const uploadDays = Number.isFinite(Number(uploadExpiresInDays)) && Number(uploadExpiresInDays) > 0
-      ? Number(uploadExpiresInDays) : expiryDays;
-    row.upload_expires_at = new Date(now.getTime() + uploadDays * DAY_MS);
   }
 
   const [id] = await db('transfers').insert(row).returning('id');
   const transferId = typeof id === 'object' && id !== null ? id.id : id;
 
-  if (Array.isArray(photoIds) && photoIds.length) {
+  // Photos are outbound content; a request has none by definition.
+  if (!isRequest && Array.isArray(photoIds) && photoIds.length) {
     await addFiles(transferId, photoIds, admin);
   }
 
@@ -233,6 +275,8 @@ async function listTransfers({ search = '', admin } = {}) {
     delete safe.upload_token;
     delete safe.download_url;
     delete safe.upload_url;
+    delete safe.upload_code;
+    delete safe.upload_code_url;
     safe.file_count = (fileCountMap.get(r.id) || 0) + (extraCountMap.get(r.id) || 0);
     safe.upload_count = uploadCountMap.get(r.id) || 0;
     return safe;
@@ -240,9 +284,12 @@ async function listTransfers({ search = '', admin } = {}) {
 }
 
 function serializeTransfer(row) {
+  const kind = normalizeKind(row.kind);
+  const request = kind === KIND_REQUEST;
   return {
     id: row.id,
     token: row.token,
+    kind,
     title: row.title,
     message: row.message,
     created_by: row.created_by,
@@ -261,8 +308,13 @@ function serializeTransfer(row) {
     created_at: row.created_at,
     updated_at: row.updated_at,
     status: computeStatus(row),
-    download_url: `/transfer/${row.token}`,
-    upload_url: row.upload_token ? `/transfer-upload/${row.upload_token}` : null,
+    // Exactly one of these is real. A request's primary link is the 64-hex
+    // token on the upload route; the short code is the same page reached by a
+    // code someone can read down a phone.
+    download_url: request ? null : `/transfer/${row.token}`,
+    upload_url: request ? `/transfer-upload/${row.token}` : null,
+    upload_code: request && row.upload_token ? row.upload_token : null,
+    upload_code_url: request && row.upload_token ? `/transfer-upload/${row.upload_token}` : null,
   };
 }
 
@@ -438,28 +490,38 @@ async function removeFile(transferId, fileId) {
   return getTransfer(transferId);
 }
 
-async function enableUploads(transferId, { uploadExpiresInDays } = {}) {
+/**
+ * Issue (or re-issue) the short read-aloud upload code for a request.
+ *
+ * Pre-257 this turned an upload channel on for any transfer. There is no such
+ * thing now — a request is born with uploads open and its 64-hex `token` is the
+ * link — so this only manages the optional short code, and refuses on a send.
+ * Passing `{ rotate: true }` replaces a code that has leaked.
+ */
+async function enableUploadCode(transferId, { rotate = false } = {}) {
   const row = await db('transfers').where({ id: transferId }).first();
   if (!row) return null;
-  const now = new Date();
-  const days = Number.isFinite(Number(uploadExpiresInDays)) && Number(uploadExpiresInDays) > 0
-    ? Number(uploadExpiresInDays)
-    : Math.max(1, Math.ceil((new Date(row.expires_at).getTime() - now.getTime()) / DAY_MS));
-  const update = {
+  if (!isRequestRow(row)) return { error: 'NOT_A_REQUEST' };
+  const keepExisting = row.upload_token && !rotate;
+  await db('transfers').where({ id: transferId }).update({
     allow_uploads: formatBoolean(true),
-    upload_token: row.upload_token || (await generateUniqueUploadToken()),
-    upload_expires_at: new Date(now.getTime() + days * DAY_MS),
-    updated_at: now,
-  };
-  await db('transfers').where({ id: transferId }).update(update);
+    upload_token: keepExisting ? row.upload_token : await generateUniqueUploadToken(),
+    updated_at: new Date(),
+  });
   return getTransfer(transferId);
 }
 
-async function disableUploads(transferId) {
+/**
+ * Withdraw the short code. The request stays open on its 64-hex link —
+ * `allow_uploads` is what a request IS, so it is not cleared here; closing a
+ * request for good is `updateTransfer({ isActive: false })`.
+ */
+async function disableUploadCode(transferId) {
+  const row = await db('transfers').where({ id: transferId }).first();
+  if (!row) return null;
+  if (!isRequestRow(row)) return { error: 'NOT_A_REQUEST' };
   await db('transfers').where({ id: transferId }).update({
-    allow_uploads: formatBoolean(false),
     upload_token: null,
-    upload_expires_at: null,
     updated_at: new Date(),
   });
   return getTransfer(transferId);
@@ -469,12 +531,40 @@ async function disableUploads(transferId) {
 // Public lookups (token-authenticated)
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolve a recipient DOWNLOAD token. Filtered to sends: a request's token
+ * addresses the same column but must never open a download, so handing a
+ * request link to /transfer/:token is an ordinary 404.
+ */
 async function getTransferByToken(token) {
-  return db('transfers').where({ token }).whereNull('deleted_at').first();
+  return db('transfers')
+    .where({ token, kind: KIND_SEND })
+    .whereNull('deleted_at')
+    .first();
 }
 
+/**
+ * Resolve the 64-hex REQUEST token — the primary link on a request. Filtered to
+ * requests for the same reason in reverse: a send's download token must not
+ * open an upload page.
+ */
+async function getRequestByToken(token) {
+  return db('transfers')
+    .where({ token, kind: KIND_REQUEST })
+    .whereNull('deleted_at')
+    .first();
+}
+
+/**
+ * Resolve the short read-aloud upload code. Also request-only — post-257 no
+ * send row carries an `upload_token` at all, but filtering here means a stray
+ * legacy row can't reopen the old combined behaviour.
+ */
 async function getTransferByUploadToken(uploadToken) {
-  return db('transfers').where({ upload_token: uploadToken }).whereNull('deleted_at').first();
+  return db('transfers')
+    .where({ upload_token: uploadToken, kind: KIND_REQUEST })
+    .whereNull('deleted_at')
+    .first();
 }
 
 /**
@@ -534,6 +624,9 @@ async function getPublicView(transfer) {
  */
 function assertDownloadable(transfer) {
   if (!transfer || transfer.deleted_at) return { ok: false, code: 'NOT_FOUND', status: 404 };
+  // Defence in depth behind getTransferByToken's kind filter: a request holds
+  // received files that belong to the admin, never to whoever has the link.
+  if (isRequestRow(transfer)) return { ok: false, code: 'NOT_FOUND', status: 404 };
   const isActive = transfer.is_active === true || transfer.is_active === 1;
   if (!isActive) return { ok: false, code: 'TRANSFER_DISABLED', status: 410 };
   if (transfer.expires_at && new Date(transfer.expires_at).getTime() <= Date.now()) {
@@ -628,8 +721,13 @@ async function streamTransferArchive(transfer, res) {
   const photos = await loadTransferPhotos(transfer.id);
 
   const archiveName = `${sanitizeForZipEntry(transfer.title || 'transfer') || 'transfer'}.zip`;
+  // A ZIP we built ourselves, so the type is known rather than echoed — but it
+  // still carries the same nosniff/sandbox guarantees as every other transfer
+  // download, and an RFC 6266 disposition so a title with umlauts survives.
   res.setHeader('Content-Type', 'application/zip');
-  res.setHeader('Content-Disposition', `attachment; filename="${archiveName}"`);
+  res.setHeader('Content-Disposition', buildContentDisposition(archiveName));
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', 'default-src \'none\'; sandbox');
 
   const archive = archiver('zip', { zlib: { level: 5 } });
   archive.on('error', (err) => {
@@ -801,8 +899,7 @@ async function streamTransferFile(transfer, rawFileId, res, { beforeStream = nul
   // out. A refused claim leaves the response untouched.
   if (!(await allowStream(beforeStream, source.type === 'stream' ? source.value : null))) return false;
 
-  res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
-  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+  setAttachmentHeaders(res, filename, row.mime_type);
   // Through the helper, never a bare pipe: the local read stream opens lazily
   // and an S3 body can drop mid-transfer, and a source 'error' with no
   // listener is an uncaught throw that ends the process. This route is
@@ -826,8 +923,7 @@ async function streamTransferExtraFile(transfer, extraId, res, { beforeStream = 
   }
   const stream = await storage.get(row.stored_path);
   if (!(await allowStream(beforeStream, stream))) return false;
-  res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
-  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(row.original_filename)}"`);
+  setAttachmentHeaders(res, row.original_filename, row.mime_type);
   pipeStreamToResponse(stream, res, { context: `transfer ${transfer.id} extra file ${row.id}` });
   return true;
 }
@@ -950,14 +1046,121 @@ async function sendTransferEmails(transferId, emails) {
   return { sent, recipients: clean };
 }
 
+/**
+ * Email the upload link for a REQUEST to one or more clients, and record them.
+ * Mirrors sendTransferEmails: best-effort per address so a bad SMTP config
+ * cannot fail the create, recipients recorded either way.
+ */
+async function sendTransferRequestEmails(transferId, emails) {
+  const clean = [...new Set((emails || [])
+    .map((e) => String(e || '').trim())
+    .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)))];
+  if (!clean.length) return { sent: 0, recipients: [] };
+
+  const transfer = await db('transfers').where({ id: transferId }).first();
+  if (!transfer || !isRequestRow(transfer)) return { sent: 0, recipients: [] };
+
+  const { sendTemplateEmail } = require('./emailProcessor');
+  const uploadUrl = `${await getFrontendUrl()}/transfer-upload/${transfer.token}`;
+  const vars = {
+    transfer_title: transfer.title || `Request #${transferId}`,
+    message: transfer.message || '',
+    upload_url: uploadUrl,
+    upload_code: transfer.upload_token || '',
+    expiry_date: transfer.expires_at ? new Date(transfer.expires_at).toISOString().slice(0, 10) : '',
+  };
+
+  let sent = 0;
+  for (const email of clean) {
+    try {
+      await sendTemplateEmail(email, 'transfer_request', vars);
+      sent += 1;
+    } catch (err) {
+      logger.warn('transferService: failed to send transfer_request email', {
+        transferId, email, error: err.message,
+      });
+    }
+    const existing = await db('transfer_recipients').where({ transfer_id: transferId, email }).first();
+    if (existing) {
+      await db('transfer_recipients').where({ id: existing.id }).update({ last_sent_at: new Date() });
+    } else {
+      await db('transfer_recipients').insert({
+        transfer_id: transferId, email, created_at: new Date(), last_sent_at: new Date(),
+      });
+    }
+  }
+  return { sent, recipients: clean };
+}
+
+/**
+ * Tell the admin that files landed on one of their requests.
+ *
+ * Addressed to the admin who created the request; a legacy row with no
+ * `created_by` falls back to every active admin, matching the expiry notice.
+ * Best-effort throughout — a client's upload has already succeeded by the time
+ * this runs and must not be failed by a mail problem.
+ */
+async function notifyFilesReceived(transferId, receivedCount) {
+  try {
+    const transfer = await db('transfers').where({ id: transferId }).first();
+    if (!transfer || !isRequestRow(transfer)) return;
+
+    let recipients = [];
+    if (transfer.created_by) {
+      recipients = await db('admin_users')
+        .where('id', transfer.created_by)
+        .where('is_active', formatBoolean(true))
+        .whereNotNull('email')
+        .select('email');
+    }
+    if (!recipients.length) {
+      recipients = await db('admin_users')
+        .where('is_active', formatBoolean(true))
+        .whereNotNull('email')
+        .select('email');
+    }
+    if (!recipients.length) return;
+
+    const totalRow = await db('transfer_uploads').where('transfer_id', transferId).count('* as c').first();
+    const { sendTemplateEmail } = require('./emailProcessor');
+    const vars = {
+      transfer_title: transfer.title || `Request #${transferId}`,
+      file_count: String(receivedCount),
+      total_count: String(Number(totalRow?.c) || receivedCount),
+      received_at: new Date().toISOString().slice(0, 16).replace('T', ' '),
+      admin_url: `${await getFrontendUrl()}/admin/transfers`,
+    };
+
+    for (const { email } of recipients) {
+      try {
+        await sendTemplateEmail(email, 'transfer_files_received', vars);
+      } catch (err) {
+        logger.warn('transferService: failed to send transfer_files_received email', {
+          transferId, email, error: err.message,
+        });
+      }
+    }
+  } catch (err) {
+    logger.warn('transferService: files-received notification failed', {
+      transferId, error: err.message,
+    });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Client uploads
 // ---------------------------------------------------------------------------
 
 function assertUploadable(transfer) {
   if (!transfer || transfer.deleted_at) return { ok: false, code: 'NOT_FOUND', status: 404 };
+  // Only a request takes uploads. Post-257 nothing else can even reach here.
+  if (!isRequestRow(transfer)) return { ok: false, code: 'NOT_FOUND', status: 404 };
   const allow = transfer.allow_uploads === true || transfer.allow_uploads === 1;
   if (!allow) return { ok: false, code: 'UPLOADS_DISABLED', status: 403 };
+  const isActive = transfer.is_active === true || transfer.is_active === 1;
+  if (!isActive) return { ok: false, code: 'UPLOADS_DISABLED', status: 403 };
+  // A request has one deadline (`expires_at`). `upload_expires_at` is only read
+  // for a row an older release wrote and 257 has not yet converted.
   const exp = transfer.upload_expires_at || transfer.expires_at;
   if (exp && new Date(exp).getTime() <= Date.now()) {
     return { ok: false, code: 'UPLOAD_EXPIRED', status: 410 };
@@ -1010,21 +1213,32 @@ async function removeUploadedFiles(transferId) {
       });
     }
   }
-  // Best-effort: remove the now-empty per-transfer directory on local storage.
+  // Best-effort: drop the per-transfer directory, but only when it is already
+  // empty. Migration 257 splits a combined transfer into a send and a request
+  // and leaves the request's `stored_path` values pointing inside the SEND's
+  // directory, so a recursive delete here would take another transfer's
+  // received files with it. rmdirSync throws on a non-empty directory, which is
+  // exactly the guard we want.
   try {
     if (storage.kind() === 'local') {
       const dir = storage.resolveLocalPath(uploadDirKey(transferId));
-      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+      if (fs.existsSync(dir)) fs.rmdirSync(dir);
     }
-  } catch (_) { /* noop */ }
+  } catch (_) { /* noop — directory still holds another transfer's files */ }
 }
 
 module.exports = {
   // constants / helpers
   UPLOAD_TOKEN_LENGTH,
+  KIND_SEND,
+  KIND_REQUEST,
+  normalizeKind,
+  isRequestRow,
   getFrontendUrl,
   uploadDirKey,
   extraFilesDirKey,
+  newUploadFileKey,
+  newExtraFileKey,
   computeStatus,
   downloadsRemaining,
   // admin CRUD
@@ -1040,11 +1254,14 @@ module.exports = {
   addExtraFile,
   removeExtraFile,
   removeExtraFiles,
-  enableUploads,
-  disableUploads,
+  enableUploadCode,
+  disableUploadCode,
   sendTransferEmails,
+  sendTransferRequestEmails,
+  notifyFilesReceived,
   // public
   getTransferByToken,
+  getRequestByToken,
   getTransferByUploadToken,
   generateUniqueUploadToken,
   getPublicView,
