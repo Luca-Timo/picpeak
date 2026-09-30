@@ -251,7 +251,7 @@ export const QuoteTemplateEditorPage: React.FC = () => {
             </span>
           </h2>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {/* The exit sits in the action group so it lands next to Save rather
               than mid-row, but outside the permission gate and the archived
               check: a read-only viewer still needs it, and the catalogue is
@@ -267,7 +267,7 @@ export const QuoteTemplateEditorPage: React.FC = () => {
           {/* Writes need quotes.manage; with quotes.view the editor is read-only. */}
           {!archived && (
             <PermissionGate permission="quotes.manage">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={archive} disabled={busy}>{t('quotes.catalog.archive', 'Archive')}</Button>
                 <Button variant="outline" onClick={() => save()} disabled={busy}>{t('quotes.templates.saveDraft', 'Save draft')}</Button>
                 <Button onClick={publish} disabled={busy || draft.sections.length === 0}>{t('quotes.templates.publish', 'Publish')}</Button>
