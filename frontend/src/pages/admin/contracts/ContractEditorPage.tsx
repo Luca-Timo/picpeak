@@ -648,6 +648,17 @@ export const ContractEditorPage: React.FC = () => {
             ? t('contracts.editor.titleEdit', 'Edit contract')
             : t('contracts.editor.titleNew', 'New contract')}
         </h1>
+        {/* The only exit that does not write. This editor has no other
+            cancel, and the sidebar is an off-canvas drawer below lg, so a
+            named control beats relying on browser-back. An edit returns to
+            the contract it came from; a new one has no detail page yet. */}
+        <Button
+          variant="outline"
+          onClick={() => navigate(isEdit ? `/admin/clients/contracts/${numericId}` : '/admin/clients/contracts')}
+          disabled={isSaving}
+        >
+          {t('common.cancel', 'Cancel')}
+        </Button>
         {isEdit && (
           <Button variant="outline" onClick={handlePreview}>
             <Eye className="w-4 h-4 mr-1" />

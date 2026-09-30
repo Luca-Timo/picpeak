@@ -247,6 +247,15 @@ export const QuoteTemplateEditorPage: React.FC = () => {
             </span>
           </h2>
         </div>
+        {/* Leaving without saving. Outside the permission gate and the
+            archived check on purpose: a read-only viewer needs the exit too,
+            and the catalogue is not a sidebar entry to fall back on. */}
+        <Button
+          variant="outline"
+          onClick={() => navigate('/admin/clients/quotes/catalog?tab=templates')}
+        >
+          {t('common.cancel', 'Cancel')}
+        </Button>
         {/* Writes need quotes.manage; with quotes.view the editor is read-only. */}
         {!archived && (
           <PermissionGate permission="quotes.manage">

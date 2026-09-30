@@ -742,6 +742,15 @@ export const ContractTemplateEditorPage: React.FC = () => {
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="text-2xl font-bold flex-1 text-heading">{template.name}</h1>
+        {/* This editor autosaves, so there is nothing to cancel — but the
+            templates list is not a sidebar entry, so it still needs a named
+            way back. */}
+        <Button
+          variant="outline"
+          onClick={() => navigate('/admin/clients/contracts/templates')}
+        >
+          {t('contracts.templates.backToTemplates', 'Back to templates')}
+        </Button>
         <span className="text-sm text-soft">
           {template.status === 'archived'
             ? t('contracts.templates.status.archived', 'Archived')
