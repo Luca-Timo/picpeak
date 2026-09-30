@@ -48,6 +48,15 @@ const DEFAULT_ALLOWED_MIME = [
   'image/tiff', 'application/pdf', 'application/zip',
 ];
 
+// Types that are the same thing under two names. An allowlist naming one must
+// name the other, or the file is refused on whichever platform sends the
+// spelling that was left out. Extension matching covers the common case on its
+// own, but a file with no extension has only its MIME to go on.
+const MIME_ALIASES = {
+  'application/zip': ['application/x-zip-compressed'],
+  'application/x-zip-compressed': ['application/zip'],
+};
+
 // Extensions for the types 170 seeded, plus the ones admins most often add by
 // hand. `image/tiff` and `application/zip` were seeded as allowed but had no
 // entry in fileSecurityUtils' registry, so validateFileType rejected them —
@@ -64,6 +73,8 @@ const MIME_EXTENSIONS = {
   'image/x-adobe-dng': ['.dng'],
   'application/pdf': ['.pdf'],
   'application/zip': ['.zip'],
+  // What Chrome and Firefox on Windows actually send for a .zip.
+  'application/x-zip-compressed': ['.zip'],
   'video/mp4': ['.mp4', '.m4v'],
   'video/quicktime': ['.mov'],
   'video/webm': ['.webm'],
@@ -379,8 +390,15 @@ exports.up = async function (knex) {
   const legacyList = parseSettingValue(legacyRow && legacyRow.setting_value, DEFAULT_ALLOWED_MIME);
   const mimes = Array.isArray(legacyList) && legacyList.length ? legacyList : DEFAULT_ALLOWED_MIME;
 
-  const allowedTypes = [...new Set(mimes.map((m) => String(m || '').trim().toLowerCase()).filter(Boolean))]
-    .map((mime) => ({ mime, extensions: extensionsFor(mime) }));
+  // Carry the legacy list over, and add each entry's aliases. Migration 170
+  // seeded `application/zip` only, so without this every upgrading instance —
+  // which is all of them — would still refuse a ZIP sent from Windows under
+  // its other name.
+  const wanted = new Set(mimes.map((m) => String(m || '').trim().toLowerCase()).filter(Boolean));
+  for (const mime of [...wanted]) {
+    for (const alias of MIME_ALIASES[mime] || []) wanted.add(alias);
+  }
+  const allowedTypes = [...wanted].map((mime) => ({ mime, extensions: extensionsFor(mime) }));
 
   const newSettings = [
     {

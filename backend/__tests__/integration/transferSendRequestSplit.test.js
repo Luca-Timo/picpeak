@@ -273,6 +273,19 @@ describe('257: settings and templates', () => {
     expect(zip).toEqual({ mime: 'application/zip', extensions: ['.zip'] });
   });
 
+  it('adds the Windows spelling of ZIP alongside the one 170 seeded', async () => {
+    // 170 seeded `application/zip` only. Chrome and Firefox on Windows send
+    // `application/x-zip-compressed`, so without this an upgrading instance —
+    // which is every instance — still refuses a ZIP from a Windows client
+    // whenever the extension cannot carry the match on its own.
+    const row = await db('app_settings').where('setting_key', 'transfer_upload_allowed_types').first();
+    const types = JSON.parse(row.setting_value);
+    expect(types).toEqual(expect.arrayContaining([
+      { mime: 'application/zip', extensions: ['.zip'] },
+      { mime: 'application/x-zip-compressed', extensions: ['.zip'] },
+    ]));
+  });
+
   it('defaults accept-all to off', async () => {
     const row = await db('app_settings').where('setting_key', 'transfer_upload_accept_all').first();
     expect(JSON.parse(row.setting_value)).toBe(false);
