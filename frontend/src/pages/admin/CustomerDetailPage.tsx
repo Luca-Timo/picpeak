@@ -303,13 +303,11 @@ export const CustomerDetailPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-heading truncate">
-              {customer.displayName || customer.email}
-            </h1>
-            <p className="text-sm text-muted truncate">{customer.email}</p>
-          </div>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-heading truncate">
+            {customer.displayName || customer.email}
+          </h1>
+          <p className="text-sm text-muted truncate">{customer.email}</p>
         </div>
         <div className="flex flex-col items-end gap-1">
           {customer.isActive ? (

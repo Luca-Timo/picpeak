@@ -156,6 +156,10 @@ export const QuoteTemplateEditorPage: React.FC = () => {
   if (isLoading || !data || !draft) return <Loading />;
   const template = data.template;
   const archived = template.status === 'archived';
+  // With quotes.view, or on an archived template, there is nothing to
+  // cancel — the same reason the contract template editor says
+  // "Back to templates" rather than pretending to discard.
+  const canEdit = !archived && hasPermission('quotes.manage');
 
   const setSections = (sections: TemplateSection[]) => setDraft({ ...draft, sections });
   const updateSection = (idx: number, section: TemplateSection) => setSections(draft.sections.map((s, i) => (i === idx ? section : s)));
@@ -247,25 +251,30 @@ export const QuoteTemplateEditorPage: React.FC = () => {
             </span>
           </h2>
         </div>
-        {/* Leaving without saving. Outside the permission gate and the
-            archived check on purpose: a read-only viewer needs the exit too,
-            and the catalogue is not a sidebar entry to fall back on. */}
-        <Button
-          variant="outline"
-          onClick={() => navigate('/admin/clients/quotes/catalog?tab=templates')}
-        >
-          {t('common.cancel', 'Cancel')}
-        </Button>
-        {/* Writes need quotes.manage; with quotes.view the editor is read-only. */}
-        {!archived && (
-          <PermissionGate permission="quotes.manage">
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={archive} disabled={busy}>{t('quotes.catalog.archive', 'Archive')}</Button>
-              <Button variant="outline" onClick={() => save()} disabled={busy}>{t('quotes.templates.saveDraft', 'Save draft')}</Button>
-              <Button onClick={publish} disabled={busy || draft.sections.length === 0}>{t('quotes.templates.publish', 'Publish')}</Button>
-            </div>
-          </PermissionGate>
-        )}
+        <div className="flex gap-2">
+          {/* The exit sits in the action group so it lands next to Save rather
+              than mid-row, but outside the permission gate and the archived
+              check: a read-only viewer still needs it, and the catalogue is
+              not a sidebar entry to fall back on. */}
+          <Button
+            variant="outline"
+            onClick={() => navigate('/admin/clients/quotes/catalog?tab=templates')}
+          >
+            {canEdit
+              ? t('common.cancel', 'Cancel')
+              : t('quotes.catalog.backToTemplates', 'Back to templates')}
+          </Button>
+          {/* Writes need quotes.manage; with quotes.view the editor is read-only. */}
+          {!archived && (
+            <PermissionGate permission="quotes.manage">
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={archive} disabled={busy}>{t('quotes.catalog.archive', 'Archive')}</Button>
+                <Button variant="outline" onClick={() => save()} disabled={busy}>{t('quotes.templates.saveDraft', 'Save draft')}</Button>
+                <Button onClick={publish} disabled={busy || draft.sections.length === 0}>{t('quotes.templates.publish', 'Publish')}</Button>
+              </div>
+            </PermissionGate>
+          )}
+        </div>
       </div>
 
       <Card padding="lg">

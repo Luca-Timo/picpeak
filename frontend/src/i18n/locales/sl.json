@@ -7163,6 +7163,7 @@
     "catalog": {
       "addItem": "Dodaj postavko",
       "archive": "Arhiv",
+      "backToTemplates": "Nazaj na predloge",
       "archived": "Arhiviran",
       "boundTo": "Količina",
       "boundToNone": "Fiksna količina",
@@ -8343,6 +8344,7 @@
     "templates": {
       "title": "Predloge pogodb",
       "intro": "Predloga določa določila, s katerimi se začne nova pogodba, njihov vrstni red in besedilo. Objava zamrzne različico; pogodba ohrani različico, iz katere je bila ustvarjena.",
+      "backToTemplates": "Nazaj na predloge",
       "newName": "Ime nove predloge",
       "create": "Ustvari predlogo",
       "empty": "Predlog še ni.",

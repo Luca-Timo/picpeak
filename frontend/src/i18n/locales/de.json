@@ -7418,6 +7418,7 @@
     "catalog": {
       "addItem": "Leistung hinzufügen",
       "archive": "Archivieren",
+      "backToTemplates": "Zurück zu den Vorlagen",
       "archived": "Archiviert",
       "boundTo": "Menge",
       "boundToNone": "Feste Menge",
@@ -8606,6 +8607,7 @@
     "templates": {
       "title": "Vertragsvorlagen",
       "intro": "Eine Vorlage legt fest, mit welchen Klauseln, in welcher Reihenfolge und mit welchem Wortlaut ein neuer Vertrag beginnt. Beim Veröffentlichen wird eine Version eingefroren; ein Vertrag behält die Version, aus der er erstellt wurde.",
+      "backToTemplates": "Zurück zu den Vorlagen",
       "newName": "Name der neuen Vorlage",
       "create": "Vorlage erstellen",
       "empty": "Noch keine Vorlagen.",

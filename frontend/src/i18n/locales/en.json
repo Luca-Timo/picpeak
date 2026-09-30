@@ -7453,6 +7453,7 @@
     "catalog": {
       "addItem": "Add item",
       "archive": "Archive",
+      "backToTemplates": "Back to templates",
       "archived": "Archived",
       "boundTo": "Quantity",
       "boundToNone": "Fixed quantity",
@@ -8640,6 +8641,7 @@
     "templates": {
       "title": "Contract templates",
       "intro": "A template sets the clauses a new contract starts with, their order and their wording. Publishing freezes a version; a contract keeps the version it was made from.",
+      "backToTemplates": "Back to templates",
       "newName": "New template name",
       "create": "Create template",
       "empty": "No templates yet.",

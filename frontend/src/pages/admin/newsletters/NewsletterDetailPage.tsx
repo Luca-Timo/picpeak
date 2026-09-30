@@ -97,13 +97,16 @@ export const NewsletterDetailPage: React.FC = () => {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 gap-4">
-        {inFlight && canSend && (
+      {/* Only rendered when the button is: with the back link gone this row
+          would otherwise be an empty 24px gap on a finished campaign, and
+          justify-between would park a lone button at the left edge. */}
+      {inFlight && canSend && (
+        <div className="flex items-center justify-end mb-6 gap-4">
           <Button variant="outline" onClick={cancelCampaign} leftIcon={<Ban className="w-4 h-4" />}>
             {t('newsletters.cancel', 'Cancel campaign')}
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       <Card className="mb-6">
         <div className="flex items-start justify-between gap-4 mb-4">
