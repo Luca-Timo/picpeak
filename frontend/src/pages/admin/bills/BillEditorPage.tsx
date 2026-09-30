@@ -485,11 +485,14 @@ export const BillEditorPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      {/* Wraps: Cancel made this row one button wider, and at 390px the
+          action group ran past the card edge. German labels are wider
+          still. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-xl font-bold">{isEdit ? `${t('bills.edit', 'Edit invoice')} ${existing?.invoice.invoiceNumber || ''}` : t('bills.new', 'New invoice')}</h2>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {/* The only exit that does not write. These editors have no other
               cancel, and the sidebar is an off-canvas drawer below lg, so a
               named control beats relying on browser-back. An edit returns to

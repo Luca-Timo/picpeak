@@ -642,7 +642,7 @@ export const ContractEditorPage: React.FC = () => {
 
   return (
     <div>
-      <div className="mb-4 flex items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold flex-1">
           {isEdit
             ? t('contracts.editor.titleEdit', 'Edit contract')

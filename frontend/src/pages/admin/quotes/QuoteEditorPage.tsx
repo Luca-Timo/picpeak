@@ -527,13 +527,15 @@ export const QuoteEditorPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      {/* Wraps: up to five controls here — Cancel, Recalculate, Preview PDF,
+          Save, Save & send — and they do not fit a phone in any language. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-xl font-bold">
             {isEdit ? `${t('quotes.edit', 'Edit quote')} ${existing?.quote.quoteNumber || ''}` : t('quotes.new', 'New quote')}
           </h2>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {/* The only exit that does not write. These editors have no other
               cancel, and the sidebar is an off-canvas drawer below lg, so a
               named control beats relying on browser-back. An edit returns to
