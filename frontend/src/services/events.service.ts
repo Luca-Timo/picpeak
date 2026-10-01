@@ -55,6 +55,13 @@ interface CreateEventData {
   // customer_accounts.id; backend service diffs against the existing
   // assignments and applies inserts/deletes inside the same transaction.
   customer_account_ids?: number[];
+  // Custom styling switch; off = follow the global Branding theme.
+  custom_theme_enabled?: boolean;
+  // Photo source; import_now starts the folder's first import on create.
+  source_mode?: 'managed' | 'reference';
+  external_path?: string;
+  external_watch?: boolean;
+  import_now?: boolean;
 }
 
 interface UpdateEventData {
@@ -190,9 +197,9 @@ export const eventsService = {
   },
 
   // Create new event (admin)
-  async createEvent(data: CreateEventData): Promise<Event> {
-    const response = await api.post<Event>('/admin/events', data);
-    return normalizeEvent(response.data as Event);
+  async createEvent(data: CreateEventData): Promise<Event & { import_started?: boolean }> {
+    const response = await api.post<Event & { import_started?: boolean }>('/admin/events', data);
+    return { ...normalizeEvent(response.data as Event), import_started: response.data.import_started === true };
   },
 
   // Download limit usage (issue 1560). The limit itself is set through

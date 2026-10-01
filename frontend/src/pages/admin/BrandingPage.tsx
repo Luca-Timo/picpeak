@@ -18,6 +18,7 @@ import { usePublicSettings } from '../../hooks/usePublicSettings';
 import { useMutationWithToast } from '../../hooks';
 import { SectionPageHeader } from '../../components/admin/SectionPageHeader';
 import { SettingsSaveBar } from '../../components/admin/SettingsSaveBar';
+import { cssTemplatesService } from '../../services/cssTemplates.service';
 
 const INITIAL_BRANDING: BrandingSettings = {
   company_name: '',
@@ -61,6 +62,10 @@ export const BrandingPage: React.FC = () => {
   const [brandingSettings, setBrandingSettings] = useState<BrandingSettings>(INITIAL_BRANDING);
 
   const [currentTheme, setCurrentTheme] = useState<ThemeConfig>(theme);
+  const { data: cssTemplates = [] } = useQuery({
+    queryKey: ['css-templates-enabled'],
+    queryFn: () => cssTemplatesService.getEnabledTemplates(),
+  });
   const [currentThemeName, setCurrentThemeName] = useState('default');
   // What the server last sent for everything handleSave writes, so the save
   // bar can tell dirty from clean and Discard can put the draft back.
@@ -209,7 +214,8 @@ export const BrandingPage: React.FC = () => {
     const mergedTheme: ThemeConfig = {
       ...newTheme,
       logoUrl: newTheme.logoUrl ?? currentTheme.logoUrl,
-      customCss: newTheme.customCss ?? currentTheme.customCss
+      customCss: newTheme.customCss ?? currentTheme.customCss,
+      cssTemplateId: newTheme.cssTemplateId !== undefined ? newTheme.cssTemplateId : currentTheme.cssTemplateId,
     };
     setCurrentTheme(mergedTheme);
     if (newTheme.logoUrl !== undefined && newTheme.logoUrl !== currentTheme.logoUrl) {
@@ -231,7 +237,8 @@ export const BrandingPage: React.FC = () => {
       setCurrentTheme(prev => ({
         ...preset.config,
         logoUrl: prev.logoUrl,
-        customCss: prev.customCss
+        customCss: prev.customCss,
+        cssTemplateId: prev.cssTemplateId,
       }));
       if (isPreviewMode) {
         setTheme({
@@ -1223,6 +1230,11 @@ export const BrandingPage: React.FC = () => {
                 hideActions={true}
                 forceColorMode={brandingSettings.force_color_mode ?? null}
                 onForceColorModeChange={handleForceColorModeChange}
+                // The global CSS template: every gallery without custom
+                // styling renders with it (backend services/galleryTheme).
+                cssTemplates={cssTemplates}
+                cssTemplateId={currentTheme.cssTemplateId ?? null}
+                onCssTemplateChange={(cssTemplateId) => handleThemeChange({ ...currentTheme, cssTemplateId })}
                 slotBeforeCustomCss={
                   (flags.quotes || flags.bills || flags.taxReport)
                     ? <PdfTypographyCard value={pdfFontFamily} onChange={setPdfFontFamily} />

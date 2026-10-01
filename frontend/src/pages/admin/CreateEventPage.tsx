@@ -12,7 +12,8 @@ import {
   Image,
   Key,
   Download,
-  Shield
+  Shield,
+  FolderOpen
 } from 'lucide-react';
 import { addDays } from 'date-fns';
 import { toast } from 'react-toastify';
@@ -34,6 +35,9 @@ import { userManagementService } from '../../services/userManagement.service';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { useTranslation } from 'react-i18next';
 import { ThemeConfig, GALLERY_THEME_PRESETS } from '../../types/theme.types';
+import { usePermission } from '../../hooks/usePermission';
+import { ExternalFolderPicker } from './event-details/ExternalFolderPicker';
+import { ThemeDisplay } from '../../components/admin';
 import { Code } from 'lucide-react';
 
 interface FormData {
@@ -64,6 +68,14 @@ interface FormData {
   guest_name_mode: GuestNameMode;
   show_credits_to_guests: boolean;
   css_template_id: number | null;
+  // Off: the gallery follows the global Branding theme (and any later change
+  // to it); on: theme_config / css_template_id are this gallery's own.
+  custom_theme_enabled: boolean;
+  // Photo source: upload, or an external folder imported right away.
+  source_mode: 'managed' | 'reference';
+  external_path: string;
+  external_watch: boolean;
+  import_now: boolean;
   photo_cap: number;
   // Download limit (issue 1560). 0 = unlimited.
   download_limit: number;
@@ -149,6 +161,11 @@ export const CreateEventPage: React.FC = () => {
     guest_name_mode: 'off',
     show_credits_to_guests: false,
     css_template_id: null,
+    custom_theme_enabled: false,
+    source_mode: 'managed',
+    external_path: '',
+    external_watch: true,
+    import_now: true,
     photo_cap: 0,
     download_limit: 0,
     feedback_settings: {
@@ -227,6 +244,9 @@ export const CreateEventPage: React.FC = () => {
   });
 
   const { data: publicSettings } = usePublicSettings();
+  // Watching a folder or importing it makes the server import on this admin's
+  // behalf, which needs photos.upload (the backend checks it too).
+  const canImport = usePermission('photos.upload');
 
   // Current logged-in admin (used to prefill the admin email field)
   const { user: currentAdmin } = useAdminAuth();
@@ -395,6 +415,9 @@ export const CreateEventPage: React.FC = () => {
   // wedding default doesn't out-race the Branding-default effect above
   // when eventTypes resolves AFTER settings — #323-B / smoke spec 07).
   const prevEventTypeRef = useRef<string | null>(null);
+  // The admin flipped "Custom gallery styling" themselves; a type change then
+  // leaves the switch alone.
+  const customThemeChosenRef = useRef(false);
   useEffect(() => {
     const prev = prevEventTypeRef.current;
     prevEventTypeRef.current = formData.event_type;
@@ -408,13 +431,21 @@ export const CreateEventPage: React.FC = () => {
     const selectedType = availableEventTypes.find(t => t.value === formData.event_type);
     const recommendedPreset = selectedType?.theme_preset;
 
-    if (recommendedPreset && recommendedPreset !== 'default' && GALLERY_THEME_PRESETS[recommendedPreset]) {
-      setFormData(prev => ({
-        ...prev,
-        theme_preset: recommendedPreset,
-        theme_config: GALLERY_THEME_PRESETS[recommendedPreset].config
-      }));
+    if (!(recommendedPreset && recommendedPreset !== 'default' && GALLERY_THEME_PRESETS[recommendedPreset])) {
+      // A type without its own look goes back to Branding, unless the admin
+      // switched custom styling on by hand.
+      if (!customThemeChosenRef.current) {
+        setFormData(prev => ({ ...prev, custom_theme_enabled: false }));
+      }
+      return;
     }
+    // A gallery type with its own look is custom styling for this gallery.
+    setFormData(prev => ({
+      ...prev,
+      custom_theme_enabled: true,
+      theme_preset: recommendedPreset,
+      theme_config: GALLERY_THEME_PRESETS[recommendedPreset].config
+    }));
   }, [formData.event_type, availableEventTypes]);
 
   const createMutation = useMutation({
@@ -422,7 +453,8 @@ export const CreateEventPage: React.FC = () => {
     onSuccess: (data) => {
       if (isMountedRef.current) {
         toast.success(t('toast.eventCreated'));
-        navigate(`/admin/events/${data.id}`);
+        // An import started with the gallery is followed on the Photos tab.
+        navigate(data.import_started ? `/admin/events/${data.id}?tab=photos` : `/admin/events/${data.id}`);
       }
     },
     onError: (error: any) => {
@@ -496,6 +528,11 @@ export const CreateEventPage: React.FC = () => {
       }
     }
 
+    if (formData.source_mode === 'reference' && !formData.external_path.trim()) {
+      newErrors.external_path = t('events.externalFolderRequired', 'Please select an external folder before saving.');
+      toast.error(newErrors.external_path);
+    }
+
     if (requireExpiration && (formData.expires_in_days < 1 || formData.expires_in_days > 365)) {
       newErrors.expires_in_days = t('validation.expirationRange');
     }
@@ -534,15 +571,26 @@ export const CreateEventPage: React.FC = () => {
       require_password: formData.require_password,
       password: formData.require_password ? formData.password : undefined,
       welcome_message: formData.welcome_message || '',
-      color_theme: JSON.stringify(formData.theme_config),
-      header_style: formData.theme_config.headerStyle || 'standard',
-      hero_divider_style: formData.theme_config.heroDividerStyle || 'wave',
+      // Only a gallery with custom styling stores a theme; the rest follow
+      // Branding (backend services/galleryTheme).
+      custom_theme_enabled: formData.custom_theme_enabled,
+      ...(formData.custom_theme_enabled ? {
+        color_theme: JSON.stringify(formData.theme_config),
+        header_style: formData.theme_config.headerStyle || 'standard',
+        hero_divider_style: formData.theme_config.heroDividerStyle || 'wave',
+        css_template_id: formData.css_template_id,
+      } : {}),
+      source_mode: formData.source_mode,
+      ...(formData.source_mode === 'reference' ? {
+        external_path: formData.external_path.trim(),
+        external_watch: canImport && formData.external_watch,
+        import_now: canImport && formData.import_now,
+      } : {}),
       expiration_days: requireExpiration ? formData.expires_in_days : undefined,
       allow_user_uploads: formData.allow_user_uploads,
       upload_category_id: formData.upload_category_id,
       guest_name_mode: formData.guest_name_mode,
       show_credits_to_guests: formData.show_credits_to_guests,
-      css_template_id: formData.css_template_id,
       photo_cap: formData.photo_cap > 0 ? formData.photo_cap : null,
       download_limit: formData.download_limit > 0 ? formData.download_limit : null,
       feedback_enabled: feedbackSettings.feedback_enabled,
@@ -728,150 +776,79 @@ export const CreateEventPage: React.FC = () => {
           </div>
         </Card>
 
-        {/* Theme Selection */}
+        {/* Photo source: upload, or an external folder imported right away,
+            so a gallery is ready from this form alone. */}
         <Card>
-          <div className="p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-heading flex items-center gap-2">
-                <Palette className="w-5 h-5" />
-                {t('events.themeAndStyle')}
-              </h2>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowThemeCustomizer(!showThemeCustomizer)}
-                leftIcon={showThemeCustomizer ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              >
-                {showThemeCustomizer ? t('common.hide') : t('common.customize')}
-              </Button>
+          <div className="p-6 space-y-4">
+            <h2 className="text-lg font-semibold text-heading flex items-center gap-2">
+              <FolderOpen className="w-5 h-5" />
+              {t('events.settingsTab.source', 'Photo source')}
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3" role="radiogroup" aria-label={t('events.sourceMode', 'Source Mode')}>
+              {(['managed', 'reference'] as const).map((sourceMode) => (
+                <button
+                  key={sourceMode}
+                  type="button"
+                  role="radio"
+                  aria-checked={formData.source_mode === sourceMode}
+                  onClick={() => setFormData(prev => ({ ...prev, source_mode: sourceMode }))}
+                  className={`flex flex-col items-start gap-1 text-left p-4 rounded-lg border-2 transition-all ${
+                    formData.source_mode === sourceMode ? 'tile-selected' : 'border-line hover:border-line-strong'
+                  }`}
+                >
+                  <span className="text-sm font-semibold text-heading">
+                    {sourceMode === 'managed'
+                      ? t('events.sourceModeManaged', 'Managed (upload to PicPeak)')
+                      : t('events.sourceModeReference', 'Reference external folder')}
+                  </span>
+                  <span className="text-xs text-soft">
+                    {sourceMode === 'managed'
+                      ? t('events.createSource.managedHelp', 'Upload on the Photos tab after creating.')
+                      : t('events.settingsTab.sourceReferenceHelp', 'Photos stay in your folder; PicPeak links to them.')}
+                  </span>
+                </button>
+              ))}
             </div>
-
-            {/* Quick Theme Preview */}
-            {!showThemeCustomizer && (
-              <div className="p-4 rounded-lg border border-line bg-subtle">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold text-heading" style={{ fontFamily: formData.theme_config.fontFamily }}>
-                    {GALLERY_THEME_PRESETS[formData.theme_preset]?.name || 'Custom Theme'}
-                  </h3>
-                  <div className="flex gap-2">
-                    <div 
-                      className="w-6 h-6 rounded-full border-2 border-white shadow-sm"
-                      style={{ backgroundColor: formData.theme_config.primaryColor }}
-                    />
-                    <div 
-                      className="w-6 h-6 rounded-full border-2 border-white shadow-sm"
-                      style={{ backgroundColor: formData.theme_config.accentColor }}
-                    />
-                  </div>
-                </div>
-                <p className="text-sm text-soft">
-                  Gallery Layout: <span className="font-medium capitalize">{formData.theme_config.galleryLayout || 'grid'}</span>
-                </p>
-              </div>
-            )}
-
-            {/* Theme Customizer */}
-            {showThemeCustomizer && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Theme Customizer */}
-                  <ThemeCustomizerEnhanced
-                    value={formData.theme_config}
-                    onChange={handleThemeChange}
-                    presetName={formData.theme_preset}
-                    onPresetChange={handlePresetChange}
-                    forceColorMode={publicSettings?.branding_force_color_mode ?? null}
-                    showGalleryLayouts={true}
-                    hideActions={true}
-                    onSyncFromBranding={() => {
-                      // Pull the 8 colour tokens (+ legacy primary alias) from
-                      // the global Branding theme into the current event theme.
-                      // Layout / header / typography are kept untouched so an
-                      // admin who has already arranged structure can refresh
-                      // just the palette.
-                      const branding = settings?.theme_config as ThemeConfig | undefined;
-                      if (!branding) {
-                        toast.error(t('toast.brandingThemeMissing', 'No branding theme has been saved yet.'));
-                        return;
-                      }
-                      setFormData(prev => ({
-                        ...prev,
-                        theme_preset: 'custom',
-                        theme_config: {
-                          ...prev.theme_config,
-                          primaryColor: branding.primaryColor,
-                          accentColor: branding.accentColor,
-                          accentDarkColor: branding.accentDarkColor,
-                          backgroundColor: branding.backgroundColor,
-                          surfaceColor: branding.surfaceColor,
-                          elevatedColor: branding.elevatedColor,
-                          surfaceBorderColor: branding.surfaceBorderColor,
-                          textColor: branding.textColor,
-                          mutedTextColor: branding.mutedTextColor,
-                          colorMode: branding.colorMode ?? prev.theme_config.colorMode,
-                        },
-                      }));
-                      toast.success(t('toast.brandingPaletteSynced', 'Palette synced from Branding.'));
-                    }}
+            {formData.source_mode === 'reference' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <span className="block text-sm font-medium text-body mb-2">{t('events.externalFolder', 'External Folder')}</span>
+                  <ExternalFolderPicker
+                    value={formData.external_path}
+                    onChange={(folder) => setFormData(prev => ({ ...prev, external_path: folder }))}
                   />
-                  
-                  {/* Gallery Preview */}
-                  <div className="lg:sticky lg:top-4 lg:h-fit">
-                    <GalleryPreview 
-                      theme={formData.theme_config} 
-                      className="shadow-lg" 
-                    />
-                  </div>
+                  {errors.external_path && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.external_path}</p>}
                 </div>
-              </div>
-            )}
-
-            {/* Custom CSS Template Selection */}
-            {cssTemplates && cssTemplates.length > 0 && (
-              <div className="pt-6 border-t border-line">
-                <h3 className="text-md font-semibold text-heading mb-3 flex items-center gap-2">
-                  <Code className="w-4 h-4" />
-                  {t('events.customCssTemplate', 'Custom CSS Template')}
-                </h3>
-                <p className="text-sm text-soft mb-4">
-                  {t('events.customCssTemplateDesc', 'Apply a custom CSS template to style the gallery with unique visual effects.')}
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {/* No template option */}
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, css_template_id: null })}
-                    className={`p-4 rounded-lg border-2 transition-all text-left ${
-                      formData.css_template_id === null
-                        ? 'tile-selected'
-                        : 'border-line hover:border-line-strong'
-                    }`}
-                  >
-                    <div className="font-medium text-sm text-heading">{t('events.noTemplate', 'No Template')}</div>
-                    <div className="text-xs text-muted mt-1">
-                      {t('events.useThemeOnly', 'Use theme preset only')}
-                    </div>
-                  </button>
-
-                  {/* Available templates */}
-                  {cssTemplates.map(template => (
-                    <button
-                      key={template.id}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, css_template_id: template.id })}
-                      className={`p-4 rounded-lg border-2 transition-all text-left ${
-                        formData.css_template_id === template.id
-                          ? 'tile-selected'
-                          : 'border-line hover:border-line-strong'
-                      }`}
-                    >
-                      <div className="font-medium text-sm text-heading">{template.name}</div>
-                      <div className="text-xs text-muted mt-1">
-                        {t('events.customTemplate', 'Custom Template')} {template.slot_number}
-                      </div>
-                    </button>
-                  ))}
+                <div className="space-y-4">
+                  <label className={`flex items-start gap-2 ${canImport ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}>
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 rounded border-line-strong text-accent focus:ring-primary-500"
+                      checked={canImport && formData.import_now}
+                      disabled={!canImport}
+                      onChange={(e) => setFormData(prev => ({ ...prev, import_now: e.target.checked }))}
+                    />
+                    <span className="text-sm">
+                      <span className="font-medium text-heading">{t('events.createSource.importNow', 'Import right after creating')}</span>
+                      <span className="block text-xs text-muted mt-0.5">{t('events.createSource.importNowHelp', 'Runs in the background; you land on the Photos tab.')}</span>
+                    </span>
+                  </label>
+                  <label className={`flex items-start gap-2 ${canImport ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}>
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 rounded border-line-strong text-accent focus:ring-primary-500"
+                      checked={canImport && formData.external_watch}
+                      disabled={!canImport}
+                      onChange={(e) => setFormData(prev => ({ ...prev, external_watch: e.target.checked }))}
+                    />
+                    <span className="text-sm">
+                      <span className="font-medium text-heading">{t('events.externalWatch', 'Watch folder for new files')}</span>
+                      <span className="block text-xs text-muted mt-0.5">{t('events.createSource.watchHelp', 'New photos copied into the folder show up by themselves.')}</span>
+                    </span>
+                  </label>
+                  {!canImport && (
+                    <p className="text-xs text-muted">{t('events.externalWatchNoPermission', 'Requires the permission to upload photos.')}</p>
+                  )}
                 </div>
               </div>
             )}
@@ -1272,6 +1249,189 @@ export const CreateEventPage: React.FC = () => {
                 onShowToGuestsChange={(show_credits_to_guests) => setFormData(prev => ({ ...prev, show_credits_to_guests }))}
               />
             </div>
+          </div>
+        </Card>
+
+        {/* Theme Selection */}
+        <Card>
+          <div className="p-6 space-y-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-heading flex items-center gap-2">
+                  <Palette className="w-5 h-5" />
+                  {t('events.settingsTab.customStyling', 'Custom gallery styling')}
+                </h2>
+                <p className="text-sm text-soft mt-1">
+                  {t('events.settingsTab.customStylingHelp', 'Off: this gallery uses the global theme from Branding and follows every change made there. On: override the layout, header, controls, colours, fonts, CSS template and custom CSS for this gallery only.')}
+                </p>
+              </div>
+              <label className="inline-flex items-center gap-2 cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  className="w-4 h-4 text-accent border-line-strong rounded focus:ring-primary-500"
+                  checked={formData.custom_theme_enabled}
+                  onChange={(e) => {
+                    customThemeChosenRef.current = true;
+                    setFormData(prev => ({ ...prev, custom_theme_enabled: e.target.checked }));
+                  }}
+                  aria-label={t('events.settingsTab.customStyling', 'Custom gallery styling')}
+                />
+                <span className="text-sm font-medium text-body">
+                  {formData.custom_theme_enabled ? t('common.on', 'on') : t('common.off', 'off')}
+                </span>
+              </label>
+            </div>
+
+            {!formData.custom_theme_enabled && (
+              <div className="rounded-lg border border-line bg-subtle p-4">
+                <p className="text-sm font-semibold text-heading mb-3">{t('events.settingsTab.globalTheme', 'Global theme (Branding)')}</p>
+                <ThemeDisplay theme={(settings?.theme_config as ThemeConfig | undefined) ?? GALLERY_THEME_PRESETS.default.config} showDetails={true} />
+              </div>
+            )}
+
+            {formData.custom_theme_enabled && (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowThemeCustomizer(!showThemeCustomizer)}
+                  leftIcon={showThemeCustomizer ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                >
+                  {showThemeCustomizer ? t('common.hide') : t('common.customize')}
+                </Button>
+              </div>
+            )}
+
+            {/* Quick Theme Preview */}
+            {formData.custom_theme_enabled && !showThemeCustomizer && (
+              <div className="p-4 rounded-lg border border-line bg-subtle">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold text-heading" style={{ fontFamily: formData.theme_config.fontFamily }}>
+                    {GALLERY_THEME_PRESETS[formData.theme_preset]?.name || 'Custom Theme'}
+                  </h3>
+                  <div className="flex gap-2">
+                    <div 
+                      className="w-6 h-6 rounded-full border-2 border-white shadow-sm"
+                      style={{ backgroundColor: formData.theme_config.primaryColor }}
+                    />
+                    <div 
+                      className="w-6 h-6 rounded-full border-2 border-white shadow-sm"
+                      style={{ backgroundColor: formData.theme_config.accentColor }}
+                    />
+                  </div>
+                </div>
+                <p className="text-sm text-soft">
+                  Gallery Layout: <span className="font-medium capitalize">{formData.theme_config.galleryLayout || 'grid'}</span>
+                </p>
+              </div>
+            )}
+
+            {/* Theme Customizer */}
+            {formData.custom_theme_enabled && showThemeCustomizer && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Theme Customizer */}
+                  <ThemeCustomizerEnhanced
+                    value={formData.theme_config}
+                    onChange={handleThemeChange}
+                    presetName={formData.theme_preset}
+                    onPresetChange={handlePresetChange}
+                    forceColorMode={publicSettings?.branding_force_color_mode ?? null}
+                    showGalleryLayouts={true}
+                    hideActions={true}
+                    onSyncFromBranding={() => {
+                      // Pull the 8 colour tokens (+ legacy primary alias) from
+                      // the global Branding theme into the current event theme.
+                      // Layout / header / typography are kept untouched so an
+                      // admin who has already arranged structure can refresh
+                      // just the palette.
+                      const branding = settings?.theme_config as ThemeConfig | undefined;
+                      if (!branding) {
+                        toast.error(t('toast.brandingThemeMissing', 'No branding theme has been saved yet.'));
+                        return;
+                      }
+                      setFormData(prev => ({
+                        ...prev,
+                        theme_preset: 'custom',
+                        theme_config: {
+                          ...prev.theme_config,
+                          primaryColor: branding.primaryColor,
+                          accentColor: branding.accentColor,
+                          accentDarkColor: branding.accentDarkColor,
+                          backgroundColor: branding.backgroundColor,
+                          surfaceColor: branding.surfaceColor,
+                          elevatedColor: branding.elevatedColor,
+                          surfaceBorderColor: branding.surfaceBorderColor,
+                          textColor: branding.textColor,
+                          mutedTextColor: branding.mutedTextColor,
+                          colorMode: branding.colorMode ?? prev.theme_config.colorMode,
+                        },
+                      }));
+                      toast.success(t('toast.brandingPaletteSynced', 'Palette synced from Branding.'));
+                    }}
+                  />
+                  
+                  {/* Gallery Preview */}
+                  <div className="lg:sticky lg:top-4 lg:h-fit">
+                    <GalleryPreview 
+                      theme={formData.theme_config} 
+                      className="shadow-lg" 
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Custom CSS Template Selection */}
+            {formData.custom_theme_enabled && cssTemplates && cssTemplates.length > 0 && (
+              <div className="pt-6 border-t border-line">
+                <h3 className="text-md font-semibold text-heading mb-3 flex items-center gap-2">
+                  <Code className="w-4 h-4" />
+                  {t('events.customCssTemplate', 'Custom CSS Template')}
+                </h3>
+                <p className="text-sm text-soft mb-4">
+                  {t('events.customCssTemplateDesc', 'Apply a custom CSS template to style the gallery with unique visual effects.')}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {/* No template option */}
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, css_template_id: null })}
+                    className={`p-4 rounded-lg border-2 transition-all text-left ${
+                      formData.css_template_id === null
+                        ? 'tile-selected'
+                        : 'border-line hover:border-line-strong'
+                    }`}
+                  >
+                    <div className="font-medium text-sm text-heading">{t('events.noTemplate', 'No Template')}</div>
+                    <div className="text-xs text-muted mt-1">
+                      {t('events.useThemeOnly', 'Use theme preset only')}
+                    </div>
+                  </button>
+
+                  {/* Available templates */}
+                  {cssTemplates.map(template => (
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, css_template_id: template.id })}
+                      className={`p-4 rounded-lg border-2 transition-all text-left ${
+                        formData.css_template_id === template.id
+                          ? 'tile-selected'
+                          : 'border-line hover:border-line-strong'
+                      }`}
+                    >
+                      <div className="font-medium text-sm text-heading">{template.name}</div>
+                      <div className="text-xs text-muted mt-1">
+                        {t('events.customTemplate', 'Custom Template')} {template.slot_number}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </Card>
 
