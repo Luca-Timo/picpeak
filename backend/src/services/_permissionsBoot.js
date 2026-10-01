@@ -82,6 +82,16 @@ async function ensurePreset(db, logger, preset) {
   const existing = await db('roles').where({ name: preset.name }).first();
   if (existing) return; // frozen — never re-sync its grants
 
+  // A listed preset whose permissions are not all in the catalog yet (the
+  // server started against a database its migrations have not reached) is
+  // left for the migration that adds them. Seeding it now would freeze it
+  // with a partial grant set: the migration skips a preset that exists.
+  let listed = null;
+  if (preset.permissions !== 'ALL') {
+    listed = await db('permissions').whereIn('name', preset.permissions).select('id');
+    if (listed.length < preset.permissions.length) return;
+  }
+
   await db('roles').insert({
     name: preset.name,
     display_name: preset.display_name,
@@ -98,8 +108,7 @@ async function ensurePreset(db, logger, preset) {
   if (preset.permissions === 'ALL') {
     permIds = (await db('permissions').select('id')).map((p) => p.id);
   } else {
-    const rows = await db('permissions').whereIn('name', preset.permissions).select('id');
-    permIds = rows.map((p) => p.id);
+    permIds = listed.map((p) => p.id);
   }
   if (permIds.length > 0) {
     const inserts = permIds.map((id) => ({ role_id: role.id, permission_id: id }));

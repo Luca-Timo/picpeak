@@ -65,9 +65,12 @@ export interface EventSettingsDraft {
 const truthy = (v: unknown) => v === true || v === 1 || v === '1' || v === 'true';
 
 /**
- * The theme the editor starts from: the gallery's own, else Branding, with
- * the gallery's header and hero divider columns on top — the gallery renders
- * those ahead of the theme, so that is what it looks like today.
+ * The theme the editor starts from: the gallery's own, else Branding. While
+ * custom styling is ON the gallery renders its header and hero divider
+ * columns ahead of the theme, so those go on top. While it is OFF the gallery
+ * renders Branding's header (backend services/galleryTheme), and the columns
+ * may be stale — overlaying them would hand the editor, and the next save, a
+ * header the gallery does not show.
  */
 export function themeFromEvent(event: Event, branding: ThemeConfig | null | undefined): ThemeConfig {
   const stored = event.color_theme;
@@ -83,6 +86,7 @@ export function themeFromEvent(event: Event, branding: ThemeConfig | null | unde
       theme = GALLERY_THEME_PRESETS[stored].config;
     }
   }
+  if (!usesCustomTheme(event)) return theme;
   const e = event as Event & { header_style?: string | null; hero_divider_style?: string | null };
   return {
     ...theme,

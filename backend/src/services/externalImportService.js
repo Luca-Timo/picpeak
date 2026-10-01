@@ -624,15 +624,33 @@ async function importExternalFolder({
     // catch rather than a finally so a run that lost its claim does not clear
     // the new owner's flag — release() is token-scoped and refuses that anyway,
     // but there is no reason to make the call.
-    await jobState.release(jobName, token, { failed: true, error: String(error?.message || error) });
+    // The marker is shown in the admin UI, so it carries a fixed code, not
+    // the message: fs errors quote the absolute path under
+    // EXTERNAL_MEDIA_ROOT, which the route's 500 deliberately hides.
+    await jobState.release(jobName, token, { failed: true, error: importFailureCode(error) });
     throw error;
   } finally {
     clearInterval(heartbeatTimer);
   }
 }
 
+/** The reason for a failed import, as a code the admin UI translates. */
+function importFailureCode(error) {
+  switch (error?.code) {
+    case 'ENOENT':
+    case 'ENOTDIR':
+      return 'folder_missing';
+    case 'EACCES':
+    case 'EPERM':
+      return 'permission_denied';
+    default:
+      return 'import_failed';
+  }
+}
+
 module.exports = {
   importExternalFolder,
+  importFailureCode,
   recordExclusions,
   ImportInProgressError,
   EventNotFoundError,

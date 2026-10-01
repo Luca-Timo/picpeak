@@ -69,6 +69,17 @@ export const ExternalSourceBar: React.FC<{ event: Event; onChangeFolder: () => v
   // A failed run is recorded as its outcome; without this it would read as a
   // finished scan of an empty folder.
   const failed = !running && status?.last_result?.failed === true;
+  // The server stores a code, never the fs message (that quotes host paths).
+  const failureText = (() => {
+    switch (status?.last_result?.error) {
+      case 'folder_missing':
+        return t('events.externalSource.failedMissing', 'The last import failed: the folder can no longer be found.');
+      case 'permission_denied':
+        return t('events.externalSource.failedPermission', 'The last import failed: PicPeak is not allowed to read the folder.');
+      default:
+        return t('events.externalSource.failedGeneric', 'The last import failed.');
+    }
+  })();
   const lastScan = status?.finished_at
     ? t('events.externalSource.lastScan', 'Last scan {{when}}', { when: formatDistanceToNow(new Date(status.finished_at), { addSuffix: true }) })
     : t('events.externalSource.neverScanned', 'Not scanned yet');
@@ -87,7 +98,7 @@ export const ExternalSourceBar: React.FC<{ event: Event; onChangeFolder: () => v
       )}
       {failed ? (
         <span className="text-xs text-red-700 dark:text-red-400" role="alert">
-          {t('events.externalSource.lastFailed', 'The last import failed: {{error}}', { error: status?.last_result?.error || '' })}
+          {failureText}
         </span>
       ) : (
         <span className="text-xs text-soft" role="status">
