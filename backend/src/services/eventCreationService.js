@@ -686,7 +686,9 @@ async function resolveCreationSource({ source_mode, external_path, external_watc
     return { source_mode: 'managed', external_path: null, external_watch: false, import_now: false };
   }
   const relPath = typeof external_path === 'string' ? external_path.trim().replace(/^\/+/, '') : '';
-  if (!relPath) {
+  // '', '.', './' and 'a/..' all name EXTERNAL_MEDIA_ROOT itself: a gallery
+  // gets a folder under the root, never the whole mount.
+  if (!relPath || ['.', ''].includes(path.posix.normalize(relPath).replace(/\/+$/, ''))) {
     throw new AppError('external_path is required when source_mode is reference', 400, 'EXTERNAL_PATH_REQUIRED');
   }
   let resolved;

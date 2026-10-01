@@ -28,8 +28,13 @@ export interface ExternalImportStatus {
   is_running: boolean;
   /** When the last import of the gallery's folder finished (ISO), or null. */
   finished_at: string | null;
-  /** The last run's outcome; `failed` with `error` when it threw. */
-  last_result: { imported?: number; skipped?: number; failed?: boolean; error?: string } | null;
+  /** The last run's outcome; `failed` with an `error` code when it threw. */
+  last_result: {
+    imported?: number;
+    skipped?: number;
+    failed?: boolean;
+    error?: 'folder_missing' | 'permission_denied' | 'import_failed';
+  } | null;
 }
 
 export const externalMediaService = {

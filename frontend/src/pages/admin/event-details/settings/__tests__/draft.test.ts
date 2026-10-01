@@ -111,4 +111,12 @@ describe('event settings draft', () => {
     expect(rebased.event.expires_at).toBe('2027-01-13');
     expect(eventUpdatePayload(rebased.event, server.event, t)).toEqual({ welcome_message: 'Hi' });
   });
+
+  it('takes the header columns only while custom styling is on', () => {
+    const withHeader = { ...EVENT, color_theme: undefined, header_style: 'minimal' } as unknown as Event;
+    // Off: the gallery renders Branding's header, so the stale column must not seed the editor.
+    expect(eventFieldsFromEvent({ ...withHeader, custom_theme_enabled: false } as Event, branding).theme.headerStyle).toBe('standard');
+    // On: the gallery renders its own column.
+    expect(eventFieldsFromEvent({ ...withHeader, custom_theme_enabled: true } as Event, branding).theme.headerStyle).toBe('minimal');
+  });
 });

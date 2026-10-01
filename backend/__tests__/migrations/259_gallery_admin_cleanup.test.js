@@ -105,4 +105,15 @@ describe('migration 259 permissions', () => {
     }
     expect(got).toEqual({ none: false, copy: false, own: true, preset: true, header: true });
   });
+
+  it('boot before the migration leaves customer_support for the migration to seed whole', async () => {
+    const { seedPermissionsAtBoot } = require('../../src/services/_permissionsBoot');
+    await mig.down(db); // the catalog as before 259: no events.support / view_all / manage_all
+    await seedPermissionsAtBoot(db);
+    expect(await db('roles').where({ name: 'customer_support' }).first()).toBeUndefined();
+
+    await mig.up(db);
+    const after = await grantsByRole(db);
+    expect([...after.customer_support].sort()).toEqual([...mig.CUSTOMER_SUPPORT.permissions].sort());
+  });
 });

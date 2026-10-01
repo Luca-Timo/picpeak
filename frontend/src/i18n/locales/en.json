@@ -1950,8 +1950,10 @@
       "rescanFailed": "Rescan failed",
       "source": "Source",
       "watching": "Watching for new files",
-      "lastFailed": "The last import failed: {{error}}",
-      "retry": "Try again"
+      "retry": "Try again",
+      "failedMissing": "The last import failed: the folder can no longer be found.",
+      "failedPermission": "The last import failed: PicPeak is not allowed to read the folder.",
+      "failedGeneric": "The last import failed."
     },
     "header": {
       "moreActions": "More actions"

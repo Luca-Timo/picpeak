@@ -163,6 +163,11 @@ const photoUpload = async (req, res, next) => {
  *               hero_logo_size: { type: string, nullable: true, enum: [small, medium, large, xlarge], description: "Hero logo size. When omitted, falls back to the global branding_logo_size setting." }
  *               hero_logo_position: { type: string, nullable: true, enum: [top, center, bottom], description: "Hero logo position. Defaults to 'top' (not settings-backed — see migration 084)." }
  *               download_limit: { type: integer, minimum: 1, nullable: true, description: "Maximum number of distinct photos the gallery may download. null = unlimited. When omitted, falls back to the global event_default_download_limit setting." }
+ *               custom_theme_enabled: { type: boolean, nullable: true, description: "true = the gallery uses its own color_theme / css_template_id; false = it follows the global Branding theme. When omitted, a color_theme or css_template_id sent with the request makes it true (the behaviour before this field existed)." }
+ *               source_mode: { type: string, enum: [managed, reference], default: managed, description: "managed = photos are uploaded to PicPeak; reference = the gallery links the photos in a folder under EXTERNAL_MEDIA_ROOT." }
+ *               external_path: { type: string, nullable: true, description: "Required with source_mode reference. A folder relative to EXTERNAL_MEDIA_ROOT that must exist; the root itself ('', '.') is rejected." }
+ *               external_watch: { type: boolean, default: false, description: "With source_mode reference: import new files that appear in the folder automatically. Requires the token owner to hold photos.upload (403 otherwise)." }
+ *               import_now: { type: boolean, default: false, description: "With source_mode reference: start the folder's first import in the background right after the gallery is created. Requires photos.upload (403 otherwise). Progress: GET /api/admin/external-media/events/{id}/status." }
  *     responses:
  *       201:
  *         description: Event created
@@ -175,9 +180,9 @@ const photoUpload = async (req, res, next) => {
  *                 slug: { type: string }
  *                 share_url: { type: string, format: uri }
  *                 share_token: { type: string }
- *       400: { description: Validation error }
+ *       400: { description: "Validation error, or an external_path that is missing, the media root itself, or not a folder" }
  *       401: { description: Missing/invalid token }
- *       403: { description: Token lacks admin scope }
+ *       403: { description: "Token lacks admin scope, or external_watch / import_now without photos.upload" }
  */
 router.post(
   '/events',

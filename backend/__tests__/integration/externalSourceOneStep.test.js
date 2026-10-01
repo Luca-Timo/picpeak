@@ -122,6 +122,11 @@ describe('external folder in one step', () => {
       .rejects.toMatchObject({ statusCode: 400 });
     await expect(createEvent({ ...base('missing'), source_mode: 'reference', external_path: 'Nope' }, { actor }))
       .rejects.toMatchObject({ statusCode: 400 });
+    // The media root itself is never one gallery's folder.
+    for (const external_path of ['.', './', 'Wedding/..', '/']) {
+      await expect(createEvent({ ...base('root'), source_mode: 'reference', external_path }, { actor }))
+        .rejects.toMatchObject({ statusCode: 400, code: 'EXTERNAL_PATH_REQUIRED' });
+    }
   });
 
   it('needs photos.upload to import or watch on create', async () => {
@@ -144,7 +149,8 @@ describe('external folder in one step', () => {
     const res = await request(app).post(`/api/admin/external-media/events/${created.id}/import-external`).send({});
     expect(res.status).toBe(500);
     const status = await request(app).get(`/api/admin/external-media/events/${created.id}/status`);
-    expect(status.body.last_result).toMatchObject({ failed: true });
-    expect(typeof status.body.last_result.error).toBe('string');
+    // A code, never the fs message: that quotes the absolute host path.
+    expect(status.body.last_result).toEqual({ failed: true, error: 'folder_missing' });
+    expect(JSON.stringify(status.body)).not.toContain(mediaRoot);
   });
 });
