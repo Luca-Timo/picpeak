@@ -21,11 +21,18 @@ same order.
 
 | Part | Contains | Example |
 |---|---|---|
-| Back link | to the list it came from | "Back to Events" |
 | Header | title, status badges, **one** primary action, a `⋯` menu for the rest, external "View" link | `EventDetailsHeader.tsx` |
 | Banners | state that blocks or warns: draft, expiring, archived | draft banner with Publish |
 | Tabs | `Overview` first, `Settings` last | `EventTabs.tsx` |
 | Tab body | see below | |
+
+There is **no back link** on list and detail pages: they navigate by the
+sidebar, where the list is on screen (#1730). Only an **editor** — a page
+you can leave without saving — gets a named exit: **Cancel** back to the
+record (or to the list when the record does not exist yet), or a named
+"Back to …" when it autosaves and Cancel would be a lie. Below `lg` the
+sidebar is a drawer, which is why editors get a named control rather than
+relying on browser-back.
 
 **Do**
 - Sync the tab to `?tab=` and a sub-section to `?section=`, both read on mount
@@ -47,7 +54,7 @@ same order.
 - **Overview** answers "what is this and what do I do now?": links, status,
   counts, the next actions. Nothing on it needs saving.
 - **Settings** holds everything configurable, in sections listed on the left
-  (`EventSettingsTab.tsx`). Order sections from most to least used; a
+  (`event-details/settings/EventSettingsTab.tsx`). Order sections from most to least used; a
   destructive section ("Danger zone") is always last and red.
 - Overview may *summarise* a setting and link to its section ("Photo source:
   External folder · watched" → Settings › Photo source).
@@ -62,6 +69,15 @@ The most important distinction in the admin.
 | Examples | welcome message, download limit, reminder offset, slideshow style | publish, send email, extend +30 days, reset password, rescan, generate a link, upload a logo |
 | How it saves | through the page's draft and **one** save bar | immediately, with its own button and toast |
 | Can be discarded | yes | no (confirm first if it can't be undone) |
+
+**The test for the grey zone:** a setting is anything persisted that can
+later be changed back with no external side effect; anything that sends,
+generates, publishes or deletes is an action. "Watch this folder" is a
+setting; "Import now" is an action.
+
+**Scope:** this applies to new and reworked pages. Existing pages that save
+differently (6 of the 20 global settings tabs don't use the save bar yet)
+migrate when they are touched — no big-bang rewrite.
 
 **Do**
 - Edit settings in a draft and save them through `SettingsSaveBar`. It shows
@@ -192,8 +208,12 @@ Every data view has five states. Design all of them.
 - Every string through `t('key', 'English fallback')`; the fallback must
   match `en.json`. New keys go into `en.json` **and** `de.json`.
 - Say the same thing the same way across pages: one word per concept, used
-  everywhere. (The admin currently mixes "event" and "gallery" for the same
-  thing; settling that is part of the overhaul.)
+  everywhere.
+- **"Gallery" for everything the user sees.** "Event" stays only where it
+  means the occasion ("Event date", "Event type"). Code, API, database and
+  i18n **keys** keep `event` — rename values, never keys. The switch happens
+  page by page inside the overhaul PRs, not as one big rename (`en.json`
+  says "event" ~350 times; a mass rename would conflict with every open PR).
 
 **Don't**
 - Don't hard-code strings, and don't build sentences by concatenating
@@ -238,3 +258,15 @@ Run before opening a PR that touches the admin UI.
 9. New strings in `en.json` and `de.json`, inline fallbacks matching?
 10. `npm run lint` (UI tokens), `npm run build`, and before/after screenshots
     on the `pr-assets` branch (CONTRIBUTING.md).
+11. **E2E selectors:** run the specs in `tests/e2e` that cover the page you
+    changed. In specs, prefer `getByRole` and test ids over visible text —
+    copy changes are what keep breaking the scheduled suite.
+12. **New permission or route = more edits than the route file.** A new
+    permission goes into the migration's role grants (and the boot preset
+    list if a preset should hold it) as well as the route guard. A new route
+    needs a decision in `docs/usage-coverage.v<current>.json`, or the backend
+    inventory gate fails.
+13. **PR hygiene:** no closing keywords ("Fixes #N") unless merging should
+    close the issue; no `Refs #N` / bare `#N` in commit bodies
+    (conventional-changelog turns them into closes — write "issue N");
+    screenshots on `pr-assets`, never a branch of their own.

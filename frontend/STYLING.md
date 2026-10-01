@@ -96,12 +96,24 @@ Never put accent text on an accent tint (`text-accent` on `bg-accent-dark/10`):
 it disappears on dark themes. That is why `.tile-selected` fills and turns its
 content white.
 
+Following the brand colour is a feature; the risk is contrast. A pastel
+accent makes the white text on `.btn-primary` unreadable. **Follow-up for the
+token layer:** a `--ui-accent` token that defaults to the brand accent and is
+contrast-clamped against white text, so the admin keeps the studio's colour
+without inheriting an unreadable one. There is no separate neutral admin
+accent.
+
 ### Status colours
 
 Success, warning, danger and info keep Tailwind's `green`, `amber`, `red` and
-`blue` scales. They are the same family in both modes by design. A token
-layer for them is a follow-up; until then use exactly these pairs in the
-admin, so every badge and banner reads the same:
+`blue` scales. They are the same family in both modes by design.
+
+**Interim rule.** There is no `Badge` / `Notice` primitive in `common/` yet,
+so for now copy exactly these pairs, so every badge and banner reads the same.
+The first overhaul PR adds `Badge` (`tone: success | warning | danger |
+info`) and `Notice`; from then on this table is those components' internals,
+rule 3 applies (use the component, don't copy classes), and the status token
+layer becomes a one-file change:
 
 | Meaning | Badge | Banner (box) | Text only |
 |---|---|---|---|
