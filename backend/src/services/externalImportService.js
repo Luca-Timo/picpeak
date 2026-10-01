@@ -618,11 +618,13 @@ async function importExternalFolder({
     if (!superseded) await jobState.release(jobName, token, result);
     return result;
   } catch (error) {
-    // Release without a result so the last real outcome is kept, and in the
+    // Record the failure as the outcome, so the Photos tab (GET
+    // /external-media/events/:id/status) says the import failed instead of
+    // showing a finished scan of an apparently empty folder. Released in the
     // catch rather than a finally so a run that lost its claim does not clear
     // the new owner's flag — release() is token-scoped and refuses that anyway,
     // but there is no reason to make the call.
-    await jobState.release(jobName, token, null);
+    await jobState.release(jobName, token, { failed: true, error: String(error?.message || error) });
     throw error;
   } finally {
     clearInterval(heartbeatTimer);

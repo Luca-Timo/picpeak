@@ -1,4 +1,5 @@
 const { isGalleryAvailable } = require('../utils/galleryLifecycle');
+const { publicThemeFields } = require('../services/galleryTheme');
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -549,7 +550,7 @@ router.post('/gallery/verify', [
         event_type: event.event_type,
         event_date: event.event_date,
         welcome_message: event.welcome_message,
-        color_theme: event.color_theme,
+        color_theme: (await publicThemeFields(event)).color_theme,
         expires_at: event.expires_at,
         allow_user_uploads: event.allow_user_uploads,
         upload_category_id: event.upload_category_id,
@@ -627,7 +628,7 @@ router.post('/gallery/:slug/client-login', [
         event_type: event.event_type,
         event_date: event.event_date,
         welcome_message: event.welcome_message,
-        color_theme: event.color_theme,
+        color_theme: (await publicThemeFields(event)).color_theme,
         expires_at: event.expires_at,
         allow_user_uploads: event.allow_user_uploads,
         upload_category_id: event.upload_category_id,
@@ -726,7 +727,7 @@ router.post('/gallery/share-login', [
         event_type: event.event_type,
         event_date: event.event_date,
         welcome_message: event.welcome_message,
-        color_theme: event.color_theme,
+        color_theme: (await publicThemeFields(event)).color_theme,
         expires_at: event.expires_at,
         allow_user_uploads: event.allow_user_uploads,
         upload_category_id: event.upload_category_id,

@@ -77,4 +77,32 @@ describe('migration 259 permissions', () => {
     const after = await grantsByRole(db);
     expect([...after.customer_support]).toEqual(['events.view']);
   });
+
+  it('switches custom styling on only where the look would change', async () => {
+    const branding = { colors: { primary: '#111111' }, headerStyle: 'standard' };
+    await db('app_settings').where({ setting_key: 'theme_config' }).del();
+    await db('app_settings').insert({ setting_key: 'theme_config', setting_value: JSON.stringify(branding), setting_type: 'theme', updated_at: new Date() });
+    const base = { event_type: 'wedding', event_date: '2026-08-01', host_email: 'h@e.com', admin_email: 'a@e.com',
+      password_hash: 'x', expires_at: new Date(Date.now() + 864e5).toISOString(), is_active: 1, is_archived: 0, is_draft: 0,
+      created_at: new Date().toISOString() };
+    const rows = {
+      none: { color_theme: null },
+      copy: { color_theme: JSON.stringify({ ...branding, logoUrl: '/l.png' }) },
+      own: { color_theme: JSON.stringify({ colors: { primary: '#222222' } }) },
+      preset: { color_theme: 'elegantWedding' },
+      // No theme, but its own header column, which the gallery renders today.
+      header: { color_theme: null, header_style: 'hero' },
+    };
+    for (const [slug, extra] of Object.entries(rows)) {
+      await db('events').insert({ ...base, ...extra, slug: `t-${slug}`, event_name: slug, share_token: `tok-${slug}`, share_link: `/g/t-${slug}/tok-${slug}` });
+    }
+    await mig.down(db);
+    await mig.up(db);
+    const got = {};
+    for (const slug of Object.keys(rows)) {
+      const row = await db('events').where({ slug: `t-${slug}` }).first('custom_theme_enabled');
+      got[slug] = Boolean(row.custom_theme_enabled);
+    }
+    expect(got).toEqual({ none: false, copy: false, own: true, preset: true, header: true });
+  });
 });

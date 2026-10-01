@@ -1,4 +1,5 @@
 const { isGalleryExpired } = require('../../utils/galleryLifecycle');
+const { publicThemeFields } = require('../../services/galleryTheme');
 const express = require('express');
 const { db } = require('../../database/db');
 const { formatBoolean } = require('../../utils/dbCompat');
@@ -177,6 +178,8 @@ router.get('/:slug/info', async (req, res) => {
         'watermark_text',
         'require_password',
         'color_theme',
+        'custom_theme_enabled',
+        'css_template_id',
         'enable_devtools_protection',
         'use_canvas_rendering',
         'hero_logo_visible',
@@ -247,6 +250,7 @@ router.get('/:slug/info', async (req, res) => {
     const globalHeroLogoVisible = await getAppSetting('branding_logo_display_hero', true);
     const globalLogoSize = await getAppSetting('branding_logo_size', 'medium');
 
+    const theme = await publicThemeFields(event);
     res.json({
       event_name: event.event_name,
       event_type: event.event_type,
@@ -255,7 +259,7 @@ router.get('/:slug/info', async (req, res) => {
       is_active: event.is_active,
       is_expired: !event.is_active || isGalleryExpired(event),
       requires_password: requiresPassword,
-      color_theme: event.color_theme,
+      color_theme: theme.color_theme,
       allow_downloads: !(event.allow_downloads === false || event.allow_downloads === 0 || event.allow_downloads === '0'),
       allow_user_uploads: event.allow_user_uploads === true || event.allow_user_uploads === 1 || event.allow_user_uploads === '1',
       // Reveal mode (#838): effective hidden state (computed, time-exact) so
@@ -275,8 +279,8 @@ router.get('/:slug/info', async (req, res) => {
       hero_logo_size: event.hero_logo_size || globalLogoSize || 'medium',
       hero_logo_position: event.hero_logo_position || 'top',
       hero_logo_url: event.hero_logo_url || null,
-      header_style: event.header_style || 'standard',
-      hero_divider_style: event.hero_divider_style || 'wave',
+      header_style: theme.header_style,
+      hero_divider_style: theme.hero_divider_style,
       hero_image_anchor: event.hero_image_anchor || 'center',
       default_photo_sort: event.default_photo_sort || 'upload_date_desc',
       // Per-event promotional override (#440). Frontend resolves

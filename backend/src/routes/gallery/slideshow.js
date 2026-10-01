@@ -1,4 +1,5 @@
 const { isGalleryAvailable } = require('../../utils/galleryLifecycle');
+const { publicThemeFields } = require('../../services/galleryTheme');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -253,7 +254,7 @@ router.get('/:slug/show/:token/session', noStoreCache, handleAsync(async (req, r
     event: {
       event_name: event.event_name,
       event_type: event.event_type,
-      color_theme: event.color_theme
+      color_theme: (await publicThemeFields(event)).color_theme
     },
     settings: await slideshowSettings(event, req),
     photo_count: parseInt(count, 10) || 0,

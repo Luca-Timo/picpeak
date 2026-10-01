@@ -23,8 +23,19 @@
  * And a `customer_support` preset role, created only when no role of that name
  * exists. Never overwrites a role an operator already made.
  *
+ * Theme — `events.custom_theme_enabled` (boolean, default false). Off, the
+ * gallery renders the global Branding theme (services/galleryTheme.js); on, its
+ * own color_theme / css_template_id. Backfilled so no gallery changes its look:
+ * on for every gallery with a CSS template, a preset name, a theme that
+ * differs from the current Branding theme, or a header / hero divider style
+ * of its own (the gallery renders events.header_style ahead of the theme). Off only for galleries without a
+ * theme and for exact copies of Branding (what the create form used to save),
+ * which look the same and now follow later Branding changes.
+ *
  * Idempotent throughout.
  */
+
+const { formatBoolean } = require('../../src/utils/dbCompat');
 
 const NEW_PERMISSIONS = [
   { name: 'events.support', display_name: 'Help Gallery Clients', category: 'events', description: 'Send and resend the gallery email, show and reset the gallery password, extend expiry, reset the download limit, moderate feedback and manage guests.' },
@@ -101,7 +112,7 @@ async function upPermissions(knex) {
       name: CUSTOMER_SUPPORT.name,
       display_name: CUSTOMER_SUPPORT.display_name,
       description: CUSTOMER_SUPPORT.description,
-      is_system: CUSTOMER_SUPPORT.is_system,
+      is_system: formatBoolean(CUSTOMER_SUPPORT.is_system),
       priority: CUSTOMER_SUPPORT.priority,
       created_at: knex.fn.now(),
       updated_at: knex.fn.now(),
@@ -112,7 +123,9 @@ async function upPermissions(knex) {
 }
 
 async function downPermissions(knex) {
-  if (!(await knex.schema.hasTable('permissions'))) return;
+  for (const table of ['permissions', 'roles', 'role_permissions', 'admin_users']) {
+    if (!(await knex.schema.hasTable(table))) return;
+  }
   const role = await knex('roles').where({ name: CUSTOMER_SUPPORT.name }).first();
   if (role) {
     const assigned = await knex('admin_users').where({ role_id: role.id }).first();
@@ -128,13 +141,93 @@ async function downPermissions(knex) {
   }
 }
 
+// Keys a stored theme copy may carry that are not part of the look.
+const THEME_COMPARE_IGNORED = new Set(['logoUrl', 'name']);
+
+function canonicalTheme(value) {
+  if (Array.isArray(value)) return value.map(canonicalTheme);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const key of Object.keys(value).sort()) {
+      if (THEME_COMPARE_IGNORED.has(key) || value[key] === undefined || value[key] === null) continue;
+      out[key] = canonicalTheme(value[key]);
+    }
+    return out;
+  }
+  return value;
+}
+
+function parseThemeValue(value) {
+  if (value == null) return null;
+  if (typeof value === 'object') return value;
+  const text = String(value).trim();
+  if (!text.startsWith('{')) return undefined; // a preset name, or junk
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    return undefined;
+  }
+}
+
+/**
+ * Whether a gallery's stored theme makes it look different from Branding, so
+ * it must keep its own look. Errs towards true: only "no theme" and an exact
+ * copy of the Branding theme count as not custom.
+ */
+function storedThemeIsCustom(event, brandingTheme) {
+  if (event.css_template_id != null) return true;
+  // GalleryView renders events.header_style / hero_divider_style ahead of the
+  // theme, so a gallery whose own value differs from Branding's looks
+  // different today and must keep it.
+  const brandingHeader = brandingTheme?.headerStyle || 'standard';
+  const brandingDivider = brandingTheme?.heroDividerStyle || 'wave';
+  if (event.header_style && event.header_style !== brandingHeader) return true;
+  if (event.hero_divider_style && event.hero_divider_style !== brandingDivider) return true;
+  if (event.color_theme == null || String(event.color_theme).trim() === '') return false;
+  const theme = parseThemeValue(event.color_theme);
+  if (!theme || typeof theme !== 'object' || !brandingTheme) return true;
+  return JSON.stringify(canonicalTheme(theme)) !== JSON.stringify(canonicalTheme(brandingTheme));
+}
+
+async function upTheme(knex) {
+  if (!(await knex.schema.hasTable('events'))) return;
+  if (await knex.schema.hasColumn('events', 'custom_theme_enabled')) return;
+  await knex.schema.alterTable('events', (table) => {
+    table.boolean('custom_theme_enabled').notNullable().defaultTo(false);
+  });
+
+  let brandingTheme = null;
+  if (await knex.schema.hasTable('app_settings')) {
+    const row = await knex('app_settings').where({ setting_key: 'theme_config' }).first('setting_value');
+    const parsed = parseThemeValue(row?.setting_value);
+    brandingTheme = parsed && typeof parsed === 'object' ? parsed : null;
+  }
+
+  const rows = await knex('events').select('id', 'color_theme', 'css_template_id', 'header_style', 'hero_divider_style');
+  const customIds = rows.filter((r) => storedThemeIsCustom(r, brandingTheme)).map((r) => r.id);
+  for (let i = 0; i < customIds.length; i += 200) {
+    await knex('events').whereIn('id', customIds.slice(i, i + 200)).update({ custom_theme_enabled: formatBoolean(true) });
+  }
+  console.log(`259: custom_theme_enabled on for ${customIds.length} of ${rows.length} galleries`);
+}
+
+async function downTheme(knex) {
+  if (await knex.schema.hasColumn('events', 'custom_theme_enabled')) {
+    await knex.schema.alterTable('events', (table) => table.dropColumn('custom_theme_enabled'));
+  }
+}
+
 exports.up = async function (knex) {
   await upPermissions(knex);
+  await upTheme(knex);
 };
 
 exports.down = async function (knex) {
+  await downTheme(knex);
   await downPermissions(knex);
 };
+
+exports.storedThemeIsCustom = storedThemeIsCustom;
 
 exports.NEW_PERMISSIONS = NEW_PERMISSIONS;
 exports.CUSTOMER_SUPPORT = CUSTOMER_SUPPORT;

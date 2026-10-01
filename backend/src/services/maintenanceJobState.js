@@ -41,6 +41,7 @@ const crypto = require('crypto');
 const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { isUniqueViolation } = require('../utils/dbErrors');
+const { toIso } = require('../utils/dateNormalize');
 
 const JOB_DIMENSION_REPAIR = 'photo_dimension_repair';
 const JOB_CAPTURE_DATE_BACKFILL = 'photo_capture_date_backfill';
@@ -172,7 +173,7 @@ async function release(jobName, token, result = null) {
  */
 async function read(jobName, { staleAfterMs = DEFAULT_STALE_MS } = {}) {
   const row = await db('maintenance_jobs').where({ job_name: jobName }).first();
-  if (!row) return { isRunning: false, lastResult: null };
+  if (!row) return { isRunning: false, lastResult: null, finishedAt: null };
 
   const alive = row.heartbeat_at && new Date(row.heartbeat_at).getTime() > Date.now() - staleAfterMs;
 
@@ -186,7 +187,11 @@ async function read(jobName, { staleAfterMs = DEFAULT_STALE_MS } = {}) {
     }
   }
 
-  return { isRunning: Boolean(row.is_running) && Boolean(alive), lastResult };
+  return {
+    isRunning: Boolean(row.is_running) && Boolean(alive),
+    lastResult,
+    finishedAt: row.finished_at ? toIso(row.finished_at) : null,
+  };
 }
 
 module.exports = {

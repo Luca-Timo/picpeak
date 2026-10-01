@@ -1,4 +1,5 @@
 const { toIso } = require('../utils/dateNormalize');
+const { publicThemeFields } = require('./galleryTheme');
 const { db } = require('../database/db');
 const { parseBooleanInput } = require('../utils/parsers');
 const { getAppSetting } = require('../utils/appSettings');
@@ -426,6 +427,7 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
   const creditsVisible = accessLevel !== 'slideshow'
     && (isClient || parseBooleanInput(event.show_credits_to_guests, false));
 
+  const theme = await publicThemeFields(event);
   return {
     pagination: { page, limit: limit || total, total, has_more: !!limit && page * limit < total },
     event: {
@@ -434,7 +436,7 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
       event_type: event.event_type,
       event_date: event.event_date,
       welcome_message: event.welcome_message,
-      color_theme: event.color_theme,
+      color_theme: theme.color_theme,
       expires_at: event.expires_at,
       hero_photo_id: event.hero_photo_id,
       // Defaults match /info: downloads on unless explicitly disabled,
@@ -470,8 +472,8 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
       hero_logo_size: event.hero_logo_size || globalLogoSize || 'medium',
       hero_logo_position: event.hero_logo_position || 'top',
       hero_logo_url: event.hero_logo_url || null,
-      header_style: event.header_style || 'standard',
-      hero_divider_style: event.hero_divider_style || 'wave',
+      header_style: theme.header_style,
+      hero_divider_style: theme.hero_divider_style,
       hero_image_anchor: event.hero_image_anchor || 'center',
       default_photo_sort: event.default_photo_sort || 'upload_date_desc',
       // Promo banner override (#440). GalleryView has always read

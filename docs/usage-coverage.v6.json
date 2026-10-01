@@ -832,7 +832,8 @@
       "reason": "Only admin import operation; status/list/browse are not use. Snapshot checks external-path presence, never reports a path.",
       "route_signatures": [
         "GET /list",
-        "POST /events/:id/import-external"
+        "POST /events/:id/import-external",
+        "GET /events/:id/status"
       ]
     },
     "adminFeatureFlags.js": {

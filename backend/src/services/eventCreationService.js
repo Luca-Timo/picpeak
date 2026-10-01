@@ -24,6 +24,9 @@ const { getStoragePath, getEventFieldRequirements, readBooleanSetting, getDownlo
 const { validateCreationInput } = require('./eventCreationValidation');
 const { normaliseDownloadLimit } = require('./downloadQuota');
 const { guestNameModeOf } = require('./photoCredit');
+const { resolveExternalPath } = require('./externalMediaService');
+const { importExternalFolder } = require('./externalImportService');
+const { userHasAllPermissions } = require('../middleware/permissions');
 function creationError(body) {
   const error = new AppError(body.error || 'Invalid event', 400, 'EVENT_INVALID');
   error.responseBody = body;
@@ -114,8 +117,26 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
     promo_mode = 'inherit',
     promo_markdown = null,
     info_mode = 'inherit',
-    info_markdown = null
+    info_markdown = null,
+    // Photo source: upload, or reference an external folder. With
+    // import_now the folder's first import starts right after the insert,
+    // so a gallery is ready from the create form alone.
+    source_mode = 'managed',
+    external_path = null,
+    external_watch = false,
+    import_now = false,
   } = input;
+
+  // Custom styling (services/galleryTheme). Callers that do not send the
+  // switch (the v1 API, older clients) keep the old meaning: a theme or CSS
+  // template sent with the gallery is the gallery's own.
+  const customThemeEnabled = input.custom_theme_enabled !== undefined && input.custom_theme_enabled !== null
+    ? parseBooleanInput(input.custom_theme_enabled, false)
+    : Boolean(color_theme) || (css_template_id !== undefined && css_template_id !== null);
+
+  const photoSource = await resolveCreationSource({
+    source_mode, external_path, external_watch, import_now, actor,
+  });
 
   const customerName = getCustomerNameFromPayload(input);
   const customerEmail = getCustomerEmailFromPayload(input);
@@ -435,6 +456,10 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
     // false on create — admin opts in from the event detail page once
     // they've picked a hero they're comfortable surfacing publicly.
     og_image_share_enabled: formatBoolean(input.og_image_share_enabled === true),
+    custom_theme_enabled: formatBoolean(customThemeEnabled),
+    source_mode: photoSource.source_mode,
+    external_path: photoSource.external_path,
+    external_watch: formatBoolean(photoSource.external_watch),
   };
     
   // The gallery row and its feedback configuration commit together.
@@ -627,6 +652,8 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
     }).catch(error => logger.warn('Failed to emit gallery.published', { eventId, error: error.message }));
   }
 
+  if (photoSource.import_now) startInitialImport(eventId, photoSource.external_path, actor);
+
   return {
     id: eventId,
     slug,
@@ -641,8 +668,61 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
     share_link: shareUrl,
     share_token: shareToken,
     expires_at: expires_at ? expires_at.toISOString() : null,
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
+    source_mode: photoSource.source_mode,
+    import_started: photoSource.import_now,
   };
+}
+
+/**
+ * The photo source a new gallery starts with, held to the rules the edit route
+ * applies (routes/adminEvents/crud.js PUT /:id): a referenced folder needs a
+ * path that resolves under EXTERNAL_MEDIA_ROOT, and anything that makes the
+ * server import on the creator's behalf (watching, or importing right away)
+ * needs photos.upload, like the manual import endpoint.
+ */
+async function resolveCreationSource({ source_mode, external_path, external_watch, import_now, actor }) {
+  if (source_mode !== 'reference') {
+    return { source_mode: 'managed', external_path: null, external_watch: false, import_now: false };
+  }
+  const relPath = typeof external_path === 'string' ? external_path.trim().replace(/^\/+/, '') : '';
+  if (!relPath) {
+    throw new AppError('external_path is required when source_mode is reference', 400, 'EXTERNAL_PATH_REQUIRED');
+  }
+  let resolved;
+  try {
+    resolved = resolveExternalPath({ external_path: relPath }, '');
+  } catch (_) {
+    throw new AppError('Invalid external media path', 400, 'EXTERNAL_PATH_INVALID');
+  }
+  const stat = await fs.stat(resolved).catch(() => null);
+  if (!stat || !stat.isDirectory()) {
+    throw new AppError('The external folder does not exist', 400, 'EXTERNAL_PATH_NOT_FOUND');
+  }
+  const watch = parseBooleanInput(external_watch, false);
+  const importNow = parseBooleanInput(import_now, false);
+  if ((watch || importNow) && !(await userHasAllPermissions(actor.id, ['photos.upload']))) {
+    throw new AppError('The photos.upload permission is required to import from this folder', 403, 'FORBIDDEN');
+  }
+  return { source_mode: 'reference', external_path: relPath, external_watch: watch, import_now: importNow };
+}
+
+/**
+ * Starts the first import of a new gallery's folder without holding up the
+ * create response. The Photos tab follows it through the import status
+ * endpoint; a failure is logged and the admin can press Rescan.
+ */
+function startInitialImport(eventId, externalPath, actor) {
+  setImmediate(() => {
+    importExternalFolder({
+      eventId,
+      externalPath,
+      recursive: true,
+      actor: { type: 'admin', id: actor?.id, name: actor?.username },
+    }).catch((error) => {
+      logger.error('Initial external import failed', { eventId, error: error.message });
+    });
+  });
 }
 
 module.exports = { createEvent };
