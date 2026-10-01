@@ -52,9 +52,21 @@ vi.mock('../../../contexts/AdminDarkModeContext', () => ({
 }));
 let isAnyDirty = false;
 const confirmLeave = vi.fn(async () => true);
-vi.mock('../../../contexts/UnsavedChangesContext', () => ({
-  useLeaveGuard: () => ({ confirmLeave, isAnyDirty }),
-}));
+vi.mock('../../../contexts/UnsavedChangesContext', async () => {
+  const { useNavigate } = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return {
+    useLeaveGuard: () => ({ confirmLeave, isAnyDirty }),
+    // Same contract as the real hook, routed through the mocks above.
+    useGuardedLinkClick: () => {
+      const navigate = useNavigate();
+      return (e: { preventDefault: () => void }, href: string, opts: { replace?: boolean; after?: () => void } = {}) => {
+        if (!isAnyDirty) { opts.after?.(); return; }
+        e.preventDefault();
+        void confirmLeave().then((ok) => { if (ok) { opts.after?.(); navigate(href, { replace: !!opts.replace }); } });
+      };
+    },
+  };
+});
 vi.mock('../../../hooks/usePublicSettings', () => ({
   usePublicSettings: () => ({ data: undefined }),
 }));
