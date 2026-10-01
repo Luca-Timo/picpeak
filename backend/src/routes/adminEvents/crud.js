@@ -567,7 +567,7 @@ module.exports = (router) => {
   // spam, the address was wrong and has been corrected — and refusing would
   // just push people to unpublish and republish, which changes gallery state
   // to work around a mail problem.
-  router.post('/:id/send-gallery-email', adminAuth, requirePermission('events.edit'), requireEventOwnership, [
+  router.post('/:id/send-gallery-email', adminAuth, requirePermission(['events.edit', 'events.support']), requireEventOwnership, [
     body('password').optional().isString().isLength({ min: 6 })
       .withMessage('Password must be at least 6 characters long'),
   ], async (req, res) => {
@@ -1833,7 +1833,7 @@ module.exports = (router) => {
   // (removed — GHSA-4j34-x562-5vfq), now on the canonical mount with the same
   // permission + ownership guards as every other gallery mutation, so a
   // non-owning editor/viewer can no longer touch a gallery they don't own.
-  router.post('/:id/extend', adminAuth, requirePermission('events.edit'), requireEventOwnership, [
+  router.post('/:id/extend', adminAuth, requirePermission(['events.edit', 'events.support']), requireEventOwnership, [
     body('days').isInt({ min: 1, max: 365 })
   ], async (req, res) => {
     try {

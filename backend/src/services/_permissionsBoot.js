@@ -15,15 +15,17 @@
  * owner grants those explicitly via the role editor.
  *
  * The solo_photographer preset itself is seeded (with all-perms-at-seed-time) by
- * migration 174; this pass only ensures it exists so a partially-migrated or
+ * migration 175; this pass only ensures it exists so a partially-migrated or
  * hand-restored DB still shows the preset. Its grants are never re-synced.
  *
  * Idempotent and best-effort: any failure is logged and swallowed so a boot is
  * never blocked by permission housekeeping.
  */
 
+const { CUSTOMER_SUPPORT } = require('../../migrations/core/259_gallery_admin_cleanup');
+
 // Preset roles shipped with the app. `permissions: 'ALL'` = every current perm.
-// Kept in sync with migration 174 (PRESET_ROLES). This boot pass only ensures a
+// Kept in sync with migration 175 (PRESET_ROLES) and 259 (customer_support). This boot pass only ensures a
 // preset EXISTS (create + grant if missing) so a partially-migrated or restored
 // DB still shows it; it never re-syncs an existing preset's grants (frozen).
 const PRESETS = [
@@ -47,6 +49,7 @@ const PRESETS = [
       'customers.view', 'quotes.view', 'bills.view',
     ],
   },
+  CUSTOMER_SUPPORT,
 ];
 
 async function ensureSuperAdminHasAllPermissions(db, logger) {

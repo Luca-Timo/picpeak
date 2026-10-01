@@ -21,7 +21,7 @@ module.exports = (router) => {
 
 
   // Reset event password
-  router.post('/:id/reset-password', adminAuth, requirePermission('events.edit'), requireEventOwnership, async (req, res) => {
+  router.post('/:id/reset-password', adminAuth, requirePermission(['events.edit', 'events.support']), requireEventOwnership, async (req, res) => {
     try {
       const { id } = req.params;
       const { sendEmail = true, password: clientPassword } = req.body;
@@ -119,7 +119,7 @@ module.exports = (router) => {
   });
 
   // Resend creation email
-  router.post('/:id/resend-email', adminAuth, requirePermission('events.edit'), requireEventOwnership, async (req, res) => {
+  router.post('/:id/resend-email', adminAuth, requirePermission(['events.edit', 'events.support']), requireEventOwnership, async (req, res) => {
     try {
       const { id } = req.params;
 

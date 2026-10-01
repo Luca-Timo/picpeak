@@ -44,7 +44,7 @@ jest.mock('../../src/database/db', () => {
   });
   return { db, withRetry: (fn) => fn() };
 });
-jest.mock('../../src/middleware/permissions', () => ({ userHasAllPermissions: jest.fn().mockResolvedValue(true) }));
+jest.mock('../../src/middleware/permissions', () => ({ userHasAllPermissions: jest.fn().mockResolvedValue(true), roleEventScope: jest.fn().mockResolvedValue(null) }));
 jest.mock('../../src/utils/logger', () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }));
 jest.mock('../../src/utils/tokenRevocation', () => ({ isTokenRevoked: jest.fn(async () => mockFake.revoked) }));
 jest.mock('../../src/utils/sessionCutoff', () => ({ isTokenBeforeCutoff: jest.fn(async () => mockFake.beforeCutoff) }));

@@ -1,5 +1,5 @@
 const { db } = require('../database/db');
-const { userHasAllPermissions } = require('../middleware/permissions');
+const { userHasAllPermissions, roleEventScope } = require('../middleware/permissions');
 const { canAccessEvent } = require('../middleware/ownership');
 const { assertGalleryAvailable, requiresGalleryPassword } = require('../utils/galleryLifecycle');
 const { isTokenBeforeCutoff } = require('../utils/sessionCutoff');
@@ -47,7 +47,9 @@ class GalleryAccessService {
       if (account.must_change_password) {
         throw new AppError('Password change required before continuing', 403, 'MUST_CHANGE_PASSWORD');
       }
-      const principal = { id: account.id, roleName: account.role_name };
+      const principal = {
+        id: account.id, roleName: account.role_name, eventScope: await roleEventScope(account.role_name),
+      };
       if (!canAccessEvent(principal, event)
         || !await userHasAllPermissions(account.id, ['events.view', 'photos.view'])) {
         throw new AppError('Access denied', 403, 'FORBIDDEN');

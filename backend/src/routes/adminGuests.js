@@ -264,7 +264,7 @@ router.get(
 router.post(
   '/events/:eventId/guests/invites',
   adminAuth,
-  requirePermission('events.edit'),
+  requirePermission(['events.edit', 'events.support']),
   requireEventOwnership,
   async (req, res) => {
     try {
@@ -333,7 +333,7 @@ router.post(
 router.delete(
   '/events/:eventId/guests/invites/:inviteId',
   adminAuth,
-  requirePermission('events.edit'),
+  requirePermission(['events.edit', 'events.support']),
   requireEventOwnership,
   async (req, res) => {
     try {
@@ -583,7 +583,7 @@ router.get(
 router.delete(
   '/events/:eventId/guests/:guestId',
   adminAuth,
-  requirePermission('events.edit'),
+  requirePermission(['events.edit', 'events.support']),
   requireEventOwnership,
   async (req, res) => {
     try {
@@ -629,7 +629,7 @@ const MAX_MERGE_GUESTS = 100;
 router.post(
   '/events/:eventId/guests/:keepId/merge',
   adminAuth,
-  requirePermission('events.edit'),
+  requirePermission(['events.edit', 'events.support']),
   requireEventOwnership,
   async (req, res) => {
     try {

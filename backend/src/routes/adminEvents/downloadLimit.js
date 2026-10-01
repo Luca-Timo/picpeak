@@ -41,7 +41,7 @@ module.exports = (router) => {
 
   // Clears every grant, so the gallery gets its whole quota back. Photos the
   // client already downloaded count again if they download them again.
-  router.post('/:id/download-limit/reset', adminAuth, requirePermission('events.edit'), requireEventOwnership, async (req, res) => {
+  router.post('/:id/download-limit/reset', adminAuth, requirePermission(['events.edit', 'events.support']), requireEventOwnership, async (req, res) => {
     try {
       const event = await loadOwnedEvent(req);
       if (!event) return res.status(404).json({ error: 'Event not found' });

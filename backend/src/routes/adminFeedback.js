@@ -185,7 +185,7 @@ async function assertOwnsFeedback(req, res, feedbackId) {
 // Moderate feedback (approve/hide/reject)
 router.put('/feedback/:feedbackId/:action',
   adminAuth,
-  requirePermission('events.edit'),
+  requirePermission(['events.edit', 'events.support']),
   async (req, res) => {
     try {
       const { feedbackId, action } = req.params;

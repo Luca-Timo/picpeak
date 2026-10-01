@@ -32,7 +32,7 @@ module.exports = (router) => {
     }
   });
 
-  router.get('/:id/password', adminAuth, noStoreCache, requirePermission('events.edit'), requireEventOwnership, async (req, res) => {
+  router.get('/:id/password', adminAuth, noStoreCache, requirePermission(['events.edit', 'events.support']), requireEventOwnership, async (req, res) => {
     try {
       const { id } = req.params;
       // Ownership: the rule requireEventOwnership already enforced, kept as

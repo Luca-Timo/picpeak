@@ -692,7 +692,7 @@ async function validateInvitationToken(token) {
 // System roles that ship with the app. Their `name` (the semantic key routes
 // check) is immutable and they cannot be deleted; their display/description and
 // (except super_admin) their permission set may be tweaked.
-const RESERVED_ROLE_NAMES = ['super_admin', 'admin', 'editor', 'viewer', 'solo_photographer', 'team_photographer'];
+const RESERVED_ROLE_NAMES = ['super_admin', 'admin', 'editor', 'viewer', 'solo_photographer', 'team_photographer', 'customer_support'];
 
 function clearPermCache() {
   // Bust the RBAC middleware cache so grant changes take effect immediately
