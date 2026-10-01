@@ -13,7 +13,7 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 vi.mock('react-toastify', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('../../../../hooks/usePermission', () => ({ usePermission: () => true }));
+vi.mock('../../../../hooks/usePermission', () => ({ usePermission: () => true, useAnyPermission: () => true }));
 vi.mock('../../../../services/events.service', () => ({
   eventsService: {
     getDownloadLimitUsage: vi.fn(),

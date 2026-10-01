@@ -817,7 +817,9 @@
     "actions": "Actions",
     "copyFailed": "Could not copy to clipboard",
     "searching": "Searching…",
-    "language": "Language"
+    "language": "Language",
+    "hidePassword": "Hide password",
+    "showPassword": "Show password"
   },
   "upload": {
     "photoCategory": "Photo Category",
@@ -1585,7 +1587,6 @@
     "loadingPhotos": "Loading photos...",
     "photoCategories": "Photo Categories",
     "organizeCategoriesInfo": "Organize your photos into categories. Categories help guests navigate and find specific types of photos.",
-    "categoriesTip": "Tip: Categories are specific to each event. You can create custom categories like \"Ceremony\", \"Reception\", \"Portraits\", etc.",
     "galleryPassword": "Gallery Password",
     "requirePasswordToggle": "Require password for this gallery",
     "requirePasswordToggleHelp": "Disable this if you want to share the gallery without a password. Anyone with the link will be able to view the photos.",
@@ -1930,7 +1931,80 @@
     "sortByDate": "Sort by date",
     "sortByPhotos": "Sort by photo count",
     "sortByStatus": "Sort by status",
-    "sortByExpiry": "Sort by expiry"
+    "sortByExpiry": "Sort by expiry",
+    "createSource": {
+      "importNow": "Import right after creating",
+      "importNowHelp": "Runs in the background; you land on the Photos tab.",
+      "managedHelp": "Upload on the Photos tab after creating.",
+      "watchHelp": "New photos copied into the folder show up by themselves."
+    },
+    "externalSource": {
+      "alreadyRunning": "An import of this folder is already running.",
+      "changeFolder": "Change folder",
+      "importNow": "Import now",
+      "importing": "Importing…",
+      "lastScan": "Last scan {{when}}",
+      "neverScanned": "Not scanned yet",
+      "rescan": "Rescan",
+      "rescanDone": "Rescan done: {{count}} new photos",
+      "rescanFailed": "Rescan failed",
+      "source": "Source",
+      "watching": "Watching for new files",
+      "lastFailed": "The last import failed: {{error}}",
+      "retry": "Try again"
+    },
+    "header": {
+      "moreActions": "More actions"
+    },
+    "overviewTab": {
+      "details": "Details",
+      "downloadsOn": "Allowed",
+      "extendDays": "+{{days}} days",
+      "helpClient": "Help the client",
+      "helpClientHint": "Actions that take effect at once. Password and resend-email are on the share card above.",
+      "openFeedback": "Open Guests & Feedback",
+      "reminderOff": "Off for this gallery",
+      "reminderOn": "On",
+      "reminderSent": "Sent {{date}}",
+      "setup": "Setup",
+      "sourceExternal": "External folder",
+      "sourceUploads": "Uploads",
+      "sourceWatched": "External folder · watched",
+      "themeCustom": "Custom styling"
+    },
+    "settingsTab": {
+      "access": "Access",
+      "appearance": "Appearance",
+      "copiedBranding": "Copied the global theme. Save to keep it.",
+      "customStyling": "Custom gallery styling",
+      "customStylingHelp": "Off: this gallery uses the global theme from Branding and follows every change made there. On: override the layout, header, controls, colours, fonts, CSS template and custom CSS for this gallery only.",
+      "customStylingKept": "Switching this off keeps these values, so switching it on again restores them.",
+      "danger": "Danger zone",
+      "deleteConfirm": "Delete \"{{name}}\" and all its photos? This cannot be undone.",
+      "deleteHelp": "Removes the gallery and its photos for good. This cannot be undone.",
+      "deleteTitle": "Delete gallery",
+      "deleted": "Gallery deleted",
+      "downloads": "Downloads",
+      "editGlobalTheme": "Edit global theme",
+      "faces": "Faces",
+      "general": "General",
+      "globalTheme": "Global theme (Branding)",
+      "guests": "Guest interaction",
+      "heroLogoBanners": "Hero, logo & banners",
+      "passwordKeep": "Leave empty to keep the current password",
+      "readOnly": "You can see these settings but not change them.",
+      "readOnlyArchived": "This gallery is archived. Its settings can no longer be changed.",
+      "reminderOff": "No reminder is sent for this gallery.",
+      "reminderOffset": "Days before the event",
+      "reminderSend": "Send the pre-event reminder for this gallery",
+      "reminderWhen": "Goes out on {{date}}",
+      "reminderWhenTo": "Goes out on {{date}} to {{recipient}}",
+      "sections": "Settings sections",
+      "source": "Photo source",
+      "sourceImportHint": "Saving a new folder imports nothing by itself. After saving, use Import now on the Photos tab.",
+      "sourceManagedHelp": "Photos are uploaded on the Photos tab and stored by PicPeak.",
+      "sourceReferenceHelp": "Photos stay in your folder; PicPeak links to them."
+    }
   },
   "settings": {
     "title": "System Settings",
@@ -3984,7 +4058,9 @@
     },
     "events": {
       "tabs": {
-        "guests": "Guests"
+        "guests": "Guests",
+        "guestsFeedback": "Guests & Feedback",
+        "settings": "Settings"
       }
     },
     "daysLeft_one": "{{count}} day left",
@@ -5462,8 +5538,6 @@
       "timeWindow": "Time Window (minutes)",
       "maxRequests": "Max Requests"
     },
-    "settingsUpdated": "Feedback settings updated",
-    "settingsUpdateError": "Failed to update settings",
     "moderated": "Feedback moderated",
     "deleted": "Feedback deleted",
     "exported": "Feedback exported",
@@ -5472,7 +5546,6 @@
     "exportCSV": "Export CSV",
     "exportJSON": "Export JSON",
     "tabs": {
-      "settings": "Settings",
       "feedback": "Feedback",
       "analytics": "Analytics",
       "moderation": "Moderation"
@@ -8340,7 +8413,6 @@
   },
   "eventReminderOverride": {
     "title": "Pre-event reminder",
-    "save": "Save override",
     "help": "Per-event override for the customer reminder. Global on-off + default offset live under Settings → Reminder emails. Anything left blank here inherits the global setting / resolved template.",
     "disabledLabel": "Disable the reminder for this event (no email goes out)",
     "offsetLabel": "Days before the event (override) — leave blank to inherit",

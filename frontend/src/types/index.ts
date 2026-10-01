@@ -81,6 +81,9 @@ export interface Event {
   hero_image_anchor?: string;
   // CSS Template
   css_template_id?: number | null;
+  // Off = the gallery renders the global Branding theme; on = its own
+  // color_theme / css_template_id (backend services/galleryTheme).
+  custom_theme_enabled?: boolean | number | null;
   // Photo cap
   photo_cap?: number | null;
   // Download limit (issue 1560). null = unlimited.

@@ -114,6 +114,9 @@ export interface ThemeConfig {
   // Advanced
   logoUrl?: string;
   customCss?: string;
+  // The global CSS template (Branding theme only). A gallery with custom
+  // styling uses its own events.css_template_id instead.
+  cssTemplateId?: number | null;
   backgroundPattern?: 'none' | 'dots' | 'grid' | 'waves';
 }
 

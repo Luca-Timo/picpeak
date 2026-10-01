@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'react-toastify';
-import { AlertCircle, Upload, X } from 'lucide-react';
+import { AlertCircle, FolderTree, Upload } from 'lucide-react';
 import type { Event } from '../../../types';
 import { Button, Card, Loading } from '../../../components/common';
-import { AdminPhotoGrid, AdminPhotoViewer, PhotoFilters, PhotoUploadModal, PhotoFilterPanel, PhotoExportMenu } from '../../../components/admin';
+import { AdminPhotoGrid, AdminPhotoViewer, PhotoFilters, PhotoUploadModal, PhotoFilterPanel, PhotoExportMenu, EventCategoryManager } from '../../../components/admin';
 import { PermissionGate } from '../../../components/admin/PermissionGate';
-import { externalMediaService } from '../../../services/externalMedia.service';
 import { AdminPhoto, photosService, CREDIT_FILTER_NONE, type PhotoFilters as PhotoFilterParams, type FeedbackFilters, type FilterSummary } from '../../../services/photos.service';
-import { ExternalFolderPicker } from './ExternalFolderPicker';
+import { ExternalSourceBar } from './ExternalSourceBar';
 
 interface PhotosTabProps {
   event: Event;
@@ -25,6 +23,10 @@ interface PhotosTabProps {
   setFeedbackFilters: React.Dispatch<React.SetStateAction<FeedbackFilters>>;
   filterSummary: FilterSummary | undefined;
   showMediaFilter: boolean;
+  /** Open the categories panel on mount (an old ?tab=categories link). */
+  initialCategoriesOpen?: boolean;
+  /** Settings → Photo source, where the folder is chosen. */
+  onChangeFolder: () => void;
 }
 
 export const PhotosTab: React.FC<PhotosTabProps> = ({
@@ -40,15 +42,15 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
   feedbackFilters,
   setFeedbackFilters,
   filterSummary,
-  showMediaFilter
+  showMediaFilter,
+  initialCategoriesOpen = false,
+  onChangeFolder,
 }) => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
-  const [showExternalImport, setShowExternalImport] = useState(false);
-  const [externalPath, setExternalPath] = useState<string>('');
-  const [importing, setImporting] = useState<boolean>(false);
+  const [showCategories, setShowCategories] = useState(initialCategoriesOpen);
   const [selectedPhoto, setSelectedPhoto] = useState<{ photo: AdminPhoto; index: number } | null>(null);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<number[]>([]);
 
@@ -73,6 +75,27 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
         onClose={() => setShowPhotoUpload(false)}
         eventId={parseInt(id!)}
       />
+
+      {event.source_mode === 'reference' && event.external_path && (
+        <ExternalSourceBar event={event} onChangeFolder={onChangeFolder} />
+      )}
+
+      {/* Categories (formerly their own tab): organise into categories next
+          to the photos they hold. */}
+      {showCategories && (
+        <Card padding="md" className="mb-4">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-heading">{t('events.photoCategories')}</h2>
+              <p className="text-sm text-soft">{t('events.organizeCategoriesInfo')}</p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setShowCategories(false)}>
+              {t('common.close', 'Close')}
+            </Button>
+          </div>
+          <EventCategoryManager eventId={parseInt(id!)} />
+        </Card>
+      )}
 
       {/* Photo Filters */}
       <PhotoFilters
@@ -118,17 +141,15 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
               {(event.video_count ?? 0) > 0 ? t('upload.uploadMedia', 'Upload Photos & Videos') : t('events.uploadPhotos')}
             </Button>
           </PermissionGate>
-          {event.source_mode === 'reference' && (
-            <PermissionGate permission="photos.upload">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowExternalImport(true)}
-              >
-                {t('events.importExternal', 'Import from External Folder')}
-              </Button>
-            </PermissionGate>
-          )}
+          <Button
+            variant={showCategories ? 'secondary' : 'outline'}
+            size="sm"
+            leftIcon={<FolderTree className="w-4 h-4" />}
+            onClick={() => setShowCategories((open) => !open)}
+            aria-expanded={showCategories}
+          >
+            {t('events.categories')}
+          </Button>
         </div>
         <PermissionGate permission="photos.download">
           <PhotoExportMenu
@@ -191,59 +212,6 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
         />
       )}
 
-      {/* External Import Modal */}
-      {showExternalImport && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="max-w-2xl w-full">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-heading">{t('events.importExternal', 'Import from External Folder')}</h2>
-              <button onClick={() => setShowExternalImport(false)} className="text-neutral-400 hover:text-body">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="mb-3 text-sm text-body">
-              {t('events.externalImportInfo', 'All pictures from the selected folder will be imported.')}
-            </div>
-            <div className="mb-2 text-sm text-body">
-              {t('events.selectExternalFolder', 'Select external folder under /external-media')}
-            </div>
-            <ExternalFolderPicker value={externalPath || event.external_path || ''} onChange={setExternalPath} />
-
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowExternalImport(false)}>
-                {t('common.cancel')}
-              </Button>
-              <Button
-                variant="primary"
-                isLoading={importing}
-                onClick={async () => {
-                  try {
-                    setImporting(true);
-                    const selected = externalPath || event.external_path || '';
-                    if (!selected) {
-                      toast.error(t('errors.somethingWentWrong', 'Something went wrong'));
-                      return;
-                    }
-                    await externalMediaService.importEvent(parseInt(id!), selected, { recursive: true });
-                    toast.success(t('toast.saveSuccess'));
-                    queryClient.invalidateQueries({ queryKey: ['admin-event', id] });
-                    queryClient.invalidateQueries({ queryKey: ['admin-event-photos', id] });
-                    queryClient.invalidateQueries({ queryKey: ['admin-photo-credits', eventId] });
-                    setShowExternalImport(false);
-                  } catch (e: any) {
-                    toast.error(e?.response?.data?.error || 'Import failed');
-                  } finally {
-                    setImporting(false);
-                  }
-                }}
-              >
-                {t('events.importFromSelectedFolder', 'Import from selected folder')}
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
     </div>
   );
 };

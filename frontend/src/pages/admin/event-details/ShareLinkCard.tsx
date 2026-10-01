@@ -8,6 +8,7 @@ import { Button, Card } from '../../../components/common';
 import { eventsService } from '../../../services/events.service';
 import { buildShareLinkUrl } from '../../../utils/url';
 import { isGalleryPublic } from '../../../utils/accessControl';
+import { useAnyPermission } from '../../../hooks/usePermission';
 
 // Clipboard with the textarea/execCommand fallback for non-HTTPS installs
 // (the documented http://host:3000/admin setup has no navigator.clipboard).
@@ -59,6 +60,10 @@ export const ShareLinkCard: React.FC<ShareLinkCardProps> = ({ event, setShowPass
   // Generation of the current reveal: a reset that lands while a reveal is
   // in flight must not have the late response bring the old password back.
   const revealGeneration = useRef(0);
+  // Show / reset the password and resend the email are client help: the
+  // routes accept events.edit or events.support, on galleries this admin may
+  // act on.
+  const canHelpClient = useAnyPermission(['events.edit', 'events.support']) && !event.share_secrets_hidden;
 
   // #1271 — "Show password" only exists while the admin has opted into
   // recoverable storage in Settings → Security. Off is the default; the
@@ -234,7 +239,7 @@ export const ShareLinkCard: React.FC<ShareLinkCardProps> = ({ event, setShowPass
         </div>
       )}
 
-      {!event.is_archived && (
+      {!event.is_archived && canHelpClient && (
         <div className="mt-4 pt-4 border-t border-line space-y-2">
           {passwordRecoverable && hasSecret && (
             <>

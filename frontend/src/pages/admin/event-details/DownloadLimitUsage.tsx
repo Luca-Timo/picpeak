@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Download, RotateCcw } from 'lucide-react';
 import { eventsService } from '../../../services/events.service';
-import { usePermission } from '../../../hooks/usePermission';
+import { useAnyPermission } from '../../../hooks/usePermission';
 import { useMutationWithToast } from '../../../hooks/useMutationWithToast';
 
 // Download limit usage on the event page (issue 1560): "7 / 10 downloaded",
@@ -21,7 +21,8 @@ interface DownloadLimitUsageProps {
 
 export const DownloadLimitUsage: React.FC<DownloadLimitUsageProps> = ({ eventId, downloadLimit, ownedByOther = false }) => {
   const { t } = useTranslation();
-  const canEdit = usePermission('events.edit') && !ownedByOther;
+  // Resetting is client help (events.edit or events.support).
+  const canEdit = useAnyPermission(['events.edit', 'events.support']) && !ownedByOther;
 
   const { data: usage } = useQuery({
     // The limit is part of the key so an edit re-reads the usage at once.

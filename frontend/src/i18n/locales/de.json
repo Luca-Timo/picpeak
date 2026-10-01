@@ -817,7 +817,9 @@
     "actions": "Aktionen",
     "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen.",
     "searching": "Wird gesucht…",
-    "language": "Sprache"
+    "language": "Sprache",
+    "hidePassword": "Passwort verbergen",
+    "showPassword": "Passwort anzeigen"
   },
   "upload": {
     "photoCategory": "Fotokategorie",
@@ -2124,7 +2126,6 @@
     "loadingPhotos": "Fotos werden geladen...",
     "photoCategories": "Fotokategorien",
     "organizeCategoriesInfo": "Organisieren Sie Ihre Fotos in Kategorien. Kategorien helfen Gästen, bestimmte Fototypen zu navigieren und zu finden.",
-    "categoriesTip": "Tipp: Kategorien sind spezifisch für jede Veranstaltung. Sie können auch globale Kategorien in den Einstellungen erstellen.",
     "galleryPassword": "Galerie-Passwort",
     "requirePasswordToggle": "Galerie mit Passwort schützen",
     "requirePasswordToggleHelp": "Deaktivieren Sie diese Option, wenn die Galerie ohne Passwort geteilt werden soll. Jeder mit dem Link kann die Fotos ansehen.",
@@ -2468,7 +2469,80 @@
     "sortByDate": "Nach Datum sortieren",
     "sortByPhotos": "Nach Fotoanzahl sortieren",
     "sortByStatus": "Nach Status sortieren",
-    "sortByExpiry": "Nach Ablauf sortieren"
+    "sortByExpiry": "Nach Ablauf sortieren",
+    "createSource": {
+      "importNow": "Direkt nach dem Erstellen importieren",
+      "importNowHelp": "Läuft im Hintergrund; du landest im Tab Fotos.",
+      "managedHelp": "Nach dem Erstellen im Tab Fotos hochladen.",
+      "watchHelp": "Neue Fotos im Ordner erscheinen von selbst."
+    },
+    "externalSource": {
+      "alreadyRunning": "Für diesen Ordner läuft bereits ein Import.",
+      "changeFolder": "Ordner ändern",
+      "importNow": "Jetzt importieren",
+      "importing": "Importiert…",
+      "lastScan": "Letzter Scan {{when}}",
+      "neverScanned": "Noch nicht gescannt",
+      "rescan": "Neu scannen",
+      "rescanDone": "Scan fertig: {{count}} neue Fotos",
+      "rescanFailed": "Scan fehlgeschlagen",
+      "source": "Quelle",
+      "watching": "Überwacht neue Dateien",
+      "lastFailed": "Der letzte Import ist fehlgeschlagen: {{error}}",
+      "retry": "Erneut versuchen"
+    },
+    "header": {
+      "moreActions": "Weitere Aktionen"
+    },
+    "overviewTab": {
+      "details": "Details",
+      "downloadsOn": "Erlaubt",
+      "extendDays": "+{{days}} Tage",
+      "helpClient": "Kunden unterstützen",
+      "helpClientHint": "Aktionen, die sofort wirken. Passwort und erneuter E-Mail-Versand sind in der Teilen-Karte oben.",
+      "openFeedback": "Gäste & Feedback öffnen",
+      "reminderOff": "Für diese Galerie aus",
+      "reminderOn": "An",
+      "reminderSent": "Gesendet {{date}}",
+      "setup": "Einrichtung",
+      "sourceExternal": "Externer Ordner",
+      "sourceUploads": "Uploads",
+      "sourceWatched": "Externer Ordner · überwacht",
+      "themeCustom": "Eigenes Design"
+    },
+    "settingsTab": {
+      "access": "Zugang",
+      "appearance": "Erscheinungsbild",
+      "copiedBranding": "Globales Design übernommen. Zum Behalten speichern.",
+      "customStyling": "Eigenes Galerie-Design",
+      "customStylingHelp": "Aus: Diese Galerie nutzt das globale Design aus dem Branding und folgt jeder Änderung dort. An: Layout, Header, Bedienelemente, Farben, Schriften, CSS-Vorlage und eigenes CSS nur für diese Galerie überschreiben.",
+      "customStylingKept": "Beim Ausschalten bleiben diese Werte erhalten; beim Wiedereinschalten sind sie zurück.",
+      "danger": "Gefahrenbereich",
+      "deleteConfirm": "„{{name}}“ und alle Fotos löschen? Das kann nicht rückgängig gemacht werden.",
+      "deleteHelp": "Entfernt die Galerie und ihre Fotos endgültig. Das kann nicht rückgängig gemacht werden.",
+      "deleteTitle": "Galerie löschen",
+      "deleted": "Galerie gelöscht",
+      "downloads": "Downloads",
+      "editGlobalTheme": "Globales Design bearbeiten",
+      "faces": "Gesichter",
+      "general": "Allgemein",
+      "globalTheme": "Globales Design (Branding)",
+      "guests": "Gäste-Interaktion",
+      "heroLogoBanners": "Titelbild, Logo & Banner",
+      "passwordKeep": "Leer lassen, um das aktuelle Passwort zu behalten",
+      "readOnly": "Du kannst diese Einstellungen sehen, aber nicht ändern.",
+      "readOnlyArchived": "Diese Galerie ist archiviert. Ihre Einstellungen können nicht mehr geändert werden.",
+      "reminderOff": "Für diese Galerie wird keine Erinnerung gesendet.",
+      "reminderOffset": "Tage vor dem Event",
+      "reminderSend": "Erinnerung vor dem Event für diese Galerie senden",
+      "reminderWhen": "Wird am {{date}} gesendet",
+      "reminderWhenTo": "Wird am {{date}} an {{recipient}} gesendet",
+      "sections": "Einstellungsbereiche",
+      "source": "Fotoquelle",
+      "sourceImportHint": "Das Speichern eines neuen Ordners importiert noch nichts. Danach im Tab Fotos „Jetzt importieren“ nutzen.",
+      "sourceManagedHelp": "Fotos werden im Tab Fotos hochgeladen und von PicPeak gespeichert.",
+      "sourceReferenceHelp": "Fotos bleiben in deinem Ordner; PicPeak verlinkt sie."
+    }
   },
   "settings": {
     "title": "Systemeinstellungen",
@@ -4453,7 +4527,9 @@
     },
     "events": {
       "tabs": {
-        "guests": "Gäste"
+        "guests": "Gäste",
+        "guestsFeedback": "Gäste & Feedback",
+        "settings": "Einstellungen"
       }
     },
     "daysLeft_one": "{{count}} Tag verbleibend",
@@ -5407,8 +5483,6 @@
       "timeWindow": "Zeitfenster (Minuten)",
       "maxRequests": "Maximale Anfragen"
     },
-    "settingsUpdated": "Feedback-Einstellungen aktualisiert",
-    "settingsUpdateError": "Einstellungen konnten nicht aktualisiert werden",
     "moderated": "Feedback moderiert",
     "deleted": "Feedback gelöscht",
     "exported": "Feedback exportiert",
@@ -5417,7 +5491,6 @@
     "exportCSV": "CSV exportieren",
     "exportJSON": "JSON exportieren",
     "tabs": {
-      "settings": "Einstellungen",
       "feedback": "Feedback",
       "analytics": "Analytik",
       "moderation": "Moderation"
@@ -8306,7 +8379,6 @@
   },
   "eventReminderOverride": {
     "title": "Erinnerung vor dem Event",
-    "save": "Override speichern",
     "help": "Event-spezifischer Override für die Kundenerinnerung. Globaler An/Aus-Schalter und Standard-Offset liegen unter Einstellungen → Erinnerungs-E-Mails. Was hier leer bleibt, übernimmt die globale Einstellung bzw. die aufgelöste Vorlage.",
     "disabledLabel": "Erinnerung für dieses Event deaktivieren (es wird keine E-Mail verschickt)",
     "offsetLabel": "Tage vor dem Event (Override) — leer lassen für Standard",

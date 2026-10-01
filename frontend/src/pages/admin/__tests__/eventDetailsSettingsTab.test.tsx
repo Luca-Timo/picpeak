@@ -1,15 +1,11 @@
 /**
- * Two QA follow-ups on /admin/events/:id, both observable on the Photos tab:
- *
- *  - `?tab=photos` was ignored — the page always mounted on Overview, unlike
- *    Settings which seeds its tab state from the same param.
- *  - With the network down, the photos query failed and the grid fell through
- *    to its "no media uploaded yet" empty state, so an admin could reasonably
- *    conclude the photos were gone.
+ * The gallery's Settings tab behaves like the admin Settings pages: one
+ * draft, one Save bar, only changed fields saved, and read-only sections for
+ * a role that may not change them.
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -27,11 +23,12 @@ vi.mock('react-i18next', async () => {
 vi.mock('react-toastify', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 const getEvent = vi.fn();
+const updateEvent = vi.fn();
 vi.mock('../../../services/events.service', () => ({
   eventsService: {
     getEvent: (...args: unknown[]) => getEvent(...args),
     getEventCategories: vi.fn().mockResolvedValue([]),
-    updateEvent: vi.fn(),
+    updateEvent: (...args: unknown[]) => updateEvent(...args),
     deleteEvent: vi.fn(),
     extendExpiration: vi.fn(),
     duplicateEvent: vi.fn(),
@@ -80,8 +77,13 @@ vi.mock('../../../config/api', () => ({
   api: { get: vi.fn().mockResolvedValue({ data: undefined }), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
 
+let mockPerms: string[] = [];
 vi.mock('../../../contexts/PermissionsContext', () => ({
-  usePermissions: () => ({ hasAnyPermission: () => true, hasPermission: () => true, isLoading: false }),
+  usePermissions: () => ({
+    hasPermission: (p: string) => mockPerms.includes(p),
+    hasAnyPermission: (ps: string[]) => ps.some((p) => mockPerms.includes(p)),
+    isLoading: false,
+  }),
 }));
 
 import { EventDetailsPage } from '../EventDetailsPage';
@@ -99,6 +101,8 @@ const EVENT = {
   is_archived: false,
   photo_count: 3,
   source_mode: 'managed',
+  welcome_message: 'Hello',
+  require_password: true,
 };
 
 function renderPage(entry: string) {
@@ -110,7 +114,6 @@ function renderPage(entry: string) {
           <MemoryRouter initialEntries={[entry]}>
             <Routes>
               <Route path="/admin/events/:id" element={<EventDetailsPage />} />
-              <Route path="/admin/events" element={<div>events list</div>} />
             </Routes>
           </MemoryRouter>
         </UnsavedChangesProvider>
@@ -119,40 +122,36 @@ function renderPage(entry: string) {
   );
 }
 
-describe('EventDetailsPage photos tab', () => {
+describe('EventDetailsPage settings tab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getEvent.mockResolvedValue(EVENT);
     getEventPhotos.mockResolvedValue([]);
+    updateEvent.mockResolvedValue({});
   });
 
-  it('honours a ?tab=photos deep link instead of landing on Overview', async () => {
-    renderPage('/admin/events/1?tab=photos');
+  it('saves only what changed, through the one save bar', async () => {
+    mockPerms = ['events.view', 'events.edit'];
+    renderPage('/admin/events/1?tab=settings&section=general');
 
-    await waitFor(() => {
-      expect(screen.getByText('events.uploadPhotos')).toBeInTheDocument();
-    });
-    // Overview-only control must not be on screen.
-    expect(screen.queryByText('events.eventInformation')).not.toBeInTheDocument();
+    const welcome = await screen.findByLabelText('events.welcomeMessageLabel');
+    const save = screen.getByRole('button', { name: 'Save changes' });
+    expect(save).toBeDisabled();
+
+    fireEvent.change(welcome, { target: { value: 'Welcome!' } });
+    await waitFor(() => expect(save).not.toBeDisabled());
+    fireEvent.click(save);
+
+    await waitFor(() => expect(updateEvent).toHaveBeenCalledTimes(1));
+    expect(updateEvent).toHaveBeenCalledWith(1, { welcome_message: 'Welcome!' });
   });
 
-  it('falls back to Overview for an unknown ?tab= value', async () => {
-    renderPage('/admin/events/1?tab=nonsense');
+  it('shows the settings read-only to a role without events.edit', async () => {
+    mockPerms = ['events.view', 'events.support'];
+    renderPage('/admin/events/1?tab=settings&section=general');
 
-    await waitFor(() => {
-      expect(screen.queryByText('events.uploadPhotos')).not.toBeInTheDocument();
-    });
-  });
-
-  it('renders an error with retry, not the empty state, when the photos query fails', async () => {
-    getEventPhotos.mockRejectedValue(new Error('Network Error'));
-
-    renderPage('/admin/events/1?tab=photos');
-
-    await waitFor(() => {
-      expect(screen.getByText('gallery.failedToLoad')).toBeInTheDocument();
-    });
-    expect(screen.getByRole('button', { name: 'common.retry' })).toBeInTheDocument();
-    expect(screen.queryByText('No media uploaded yet')).not.toBeInTheDocument();
+    const welcome = await screen.findByLabelText('events.welcomeMessageLabel');
+    expect(welcome).toBeDisabled();
+    expect(screen.getByText('You can see these settings but not change them.')).toBeInTheDocument();
   });
 });

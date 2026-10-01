@@ -78,11 +78,18 @@ vi.mock('../../../contexts/FeatureFlagsContext', () => ({
   useFeatureEnabled: () => false,
 }));
 
+// The Settings draft reads the download-resolution overrides directly.
+vi.mock('../../../config/api', () => ({
+  api: { get: vi.fn().mockResolvedValue({ data: undefined }), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+}));
+
 vi.mock('../../../contexts/PermissionsContext', () => ({
   usePermissions: () => ({ hasAnyPermission: () => true, hasPermission: () => true, isLoading: false }),
 }));
 
 import { EventDetailsPage } from '../EventDetailsPage';
+import { ConfirmDialogProvider } from '../../../components/common/ConfirmDialog';
+import { UnsavedChangesProvider } from '../../../contexts/UnsavedChangesContext';
 
 const EVENT = {
   id: 1,
@@ -100,11 +107,15 @@ function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/admin/events/1?tab=photos']}>
-        <Routes>
-          <Route path="/admin/events/:id" element={<EventDetailsPage />} />
-        </Routes>
-      </MemoryRouter>
+      <ConfirmDialogProvider>
+        <UnsavedChangesProvider>
+          <MemoryRouter initialEntries={['/admin/events/1?tab=photos']}>
+            <Routes>
+              <Route path="/admin/events/:id" element={<EventDetailsPage />} />
+            </Routes>
+          </MemoryRouter>
+        </UnsavedChangesProvider>
+      </ConfirmDialogProvider>
     </QueryClientProvider>
   );
 }
