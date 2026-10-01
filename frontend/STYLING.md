@@ -5,6 +5,10 @@ value there and every card, border, heading and hover in the admin follows.
 This document explains what is in that file, how components consume it, and
 the rules that keep it the single source.
 
+This file is about **how things look**. How pages behave — page structure,
+saving, permissions, states, confirmations, copy — is in [`UX.md`](UX.md).
+Read both before building or reworking an admin surface.
+
 ## The two token families
 
 PicPeak has two audiences with different owners, so it has two token families.
@@ -72,11 +76,47 @@ Tailwind forms work as usual.
 is one edit. The values are Tailwind's defaults plus the project's `xl`/`2xl`
 radii and `soft`/`medium`/`large` shadows.
 
+### Accent: the one brand colour the admin follows
+
+The admin is neutral except for one colour: the operator's accent from
+Branding. `text-accent`, `border-accent`, `bg-accent-dark`, `.btn-primary` and
+`.tile-selected` read `--color-accent` / `--color-accent-dark`, so the active
+tab, the primary button and a selected tile carry the studio's brand colour.
+That is the deliberate exception to rule 2 below — use those five forms and
+nothing else from the theme family.
+
+| Use | Class |
+|---|---|
+| Primary action (one per view) | `<Button variant="primary">` (`.btn-primary`) |
+| Active tab, active nav item, links | `text-accent` / `border-accent` |
+| Selected option in a picker grid (layout, source, preset) | `.tile-selected` — full fill, white content |
+| Soft highlight (a selected list row, an info note) | `bg-accent-dark/10` with `text-body` / `text-heading` |
+
+Never put accent text on an accent tint (`text-accent` on `bg-accent-dark/10`):
+it disappears on dark themes. That is why `.tile-selected` fills and turns its
+content white.
+
 ### Status colours
 
 Success, warning, danger and info keep Tailwind's `green`, `amber`, `red` and
-`blue` scales, and the `.status-chip` / `.hue-*` classes in `index.css`. They
-are the same in both modes by design. A token layer for them is a follow-up.
+`blue` scales. They are the same family in both modes by design. A token
+layer for them is a follow-up; until then use exactly these pairs in the
+admin, so every badge and banner reads the same:
+
+| Meaning | Badge | Banner (box) | Text only |
+|---|---|---|---|
+| success | `bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300` | `border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20` | `text-green-700 dark:text-green-400` |
+| warning | `bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300` | `border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20` | `text-amber-700 dark:text-amber-400` |
+| danger | `bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300` | `border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20` | `text-red-600 dark:text-red-400` |
+| info | `bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300` | `border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20` | `text-blue-700 dark:text-blue-400` |
+
+A status colour always comes with a word ("Draft", "Failed", "Watching") — never
+colour alone. Unsaved changes are amber (`bg-amber-500` dot, as in the Settings
+section list).
+
+The `.status-chip` / `.hue-*` classes in `index.css` are for the **customer
+portal and public pages**: they mix the hue into the operator's theme surface.
+Do not use them in the admin.
 
 ## Rules for admin code
 
@@ -96,6 +136,52 @@ are the same in both modes by design. A token layer for them is a follow-up.
    tables above, add a token to `tokens.css` (light and dark), expose it in
    `tailwind.config.js`, and document it here. Do not reach for
    `neutral-350` in a component.
+5. **No lone neutrals in new code.** `text-neutral-400` without a pair renders
+   the same in both modes and goes invisible on a dark panel. Use the token
+   (`text-faint` for an icon at rest). Adding `dark:` to a lone neutral is not
+   the fix: the lint rule rejects the pair it creates.
+
+## Building blocks
+
+Reach for these before writing markup. A missing variant is added to the
+component, not re-created next to it.
+
+| Need | Use | Notes |
+|---|---|---|
+| Button | `Button` (`common`) — `primary` / `secondary` / `outline` / `ghost`, `sm` / `md` / `lg`, `leftIcon`, `isLoading` | one `primary` per view; `ghost` for tertiary actions in toolbars and menus |
+| Card / section box | `Card` (`common`), or `bg-panel border border-line rounded-xl p-5` for a settings section | |
+| Text field | `Input` (`common`) — `label`, `error`, `leftIcon` | |
+| Date | `LocalizedDateInput` | follows the general date format setting |
+| Time | `TimeField` | |
+| Money / decimals | `DecimalInput` | accepts `1,50` and `1.50`; `type="number"` does not |
+| Loading | `Loading`, `Skeleton*` (`common`) | skeletons for lists and grids, `Loading` for a whole page |
+| Confirm | `useConfirm()` (`ConfirmDialog`) — `variant: 'danger'` for destructive | never `window.confirm()` |
+| Page header (section pages) | `SectionPageHeader` (`admin`) | icon, title, one-line description, actions |
+| Settings save | `SettingsSaveBar` (`admin`) | see UX.md › Saving |
+| Permission gate | `PermissionGate`, `usePermission`, `useAnyPermission`; route level `RequirePermission` | see UX.md › Permissions |
+| Picker tile | `.tile-selected` on the chosen tile, `border-2 border-line` on the rest | |
+| Hover help | `<span class="info-tooltip" data-tooltip="…">` | for a short hint on an icon; longer help goes under the field |
+
+## Layout and spacing
+
+- **Sizes come from the scale.** `gap-2` inside a control group, `gap-4`
+  between fields, `space-y-4` inside a section, `space-y-6` / `gap-6`
+  between cards. Don't invent `mt-[13px]`.
+- **Radius:** `rounded-lg` for controls (buttons, inputs, menu items),
+  `rounded-xl` for cards and sections, `rounded-full` for chips and dots.
+- **Forms read in one column** up to `max-w-3xl`; pair short fields
+  (`grid-cols-1 md:grid-cols-2`) only when they belong together (name +
+  email, from + to).
+- **Two-column overview pages:** content left, summary right —
+  `grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px]`. Below `xl` it stacks.
+- **Every flex row of controls wraps.** `flex flex-wrap gap-2`, and
+  `min-w-0` on a growing input inside a row. German labels run 30–50 % wider
+  than English; check the row in German at 390 px.
+- **No horizontal scroll** in the admin content area at any width. A grid
+  child that must not grow gets `min-w-0`; a fixed `w-64` inside a grid cell
+  becomes `w-full`.
+- **Icons:** `lucide-react`, `w-4 h-4` in buttons and inline, `w-5 h-5` in
+  card titles. Icon-only buttons need `aria-label`.
 
 ## Changing the look
 
