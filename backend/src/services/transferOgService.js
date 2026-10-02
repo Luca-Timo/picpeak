@@ -24,7 +24,7 @@ const { isFeatureEnabled } = require('../middleware/requireFeatureFlag');
 const transferService = require('./transferService');
 const { fetchBranding, absoluteUrl, renderOgHtml } = require('./galleryOgService');
 
-const LONG_TOKEN_RE = /^[a-f0-9]{64}$/i;
+const LONG_TOKEN_RE = /^[a-f0-9]{64}$/;
 
 const KINDS = {
   send: {
