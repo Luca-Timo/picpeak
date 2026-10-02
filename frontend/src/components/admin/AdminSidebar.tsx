@@ -537,6 +537,16 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onClose, col
                 {collapsed && (
                   <span className="text-xl font-bold text-heading lg:hidden">{t('admin.title')}</span>
                 )}
+                {/* The collapsed desktop rail has no wordmark, and the row is
+                    the home link, so it shows the Dashboard icon rather than
+                    an empty, focusable target. */}
+                {collapsed && (
+                  <LayoutDashboard
+                    role="img"
+                    aria-label={t('navigation.dashboard', 'Dashboard')}
+                    className="hidden lg:block w-5 h-5 text-body"
+                  />
+                )}
               </>
             )}
           </DashboardHomeLink>
