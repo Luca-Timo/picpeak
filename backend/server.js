@@ -678,6 +678,12 @@ app.get('/og/gallery/:slug', handleGalleryOgRequest);
 // events.og_image_share_enabled (#474). Unauthenticated by design;
 // returns 404 unless the opt-in is on AND a hero_photo_id is set.
 app.get('/og/gallery/:slug/cover', handleGalleryOgCover);
+// Same for PicTransfer links: nginx rewrites crawler hits on
+// /transfer/:token and /transfer-upload/:token here so the preview shows
+// the transfer's name + the branding tagline instead of the SPA stub.
+const { handleTransferOgRequest } = require('./src/services/transferOgService');
+app.get('/og/transfer/:token', handleTransferOgRequest('send'));
+app.get('/og/transfer-upload/:token', handleTransferOgRequest('request'));
 
 // Branded URL shortener (#699). /s/<short_slug> is bot-UA aware:
 //   - Social crawler → server-render OG for the target event so the
@@ -1042,6 +1048,13 @@ try {
     };
     app.get('/gallery/:slug/:token?', ogIntercept, (req, res) => sendSpa(res));
     app.get('/gallery/:slug/show/:token', ogIntercept, (req, res) => sendSpa(res));
+    // PicTransfer links (single-container deploys without nginx).
+    const transferOgIntercept = (kind) => {
+      const handler = handleTransferOgRequest(kind);
+      return (req, res, next) => (isSocialCrawler(req.get('user-agent')) ? handler(req, res) : next());
+    };
+    app.get('/transfer/:token', transferOgIntercept('send'), (req, res) => sendSpa(res));
+    app.get('/transfer-upload/:token', transferOgIntercept('request'), (req, res) => sendSpa(res));
 
     app.get(['/admin', '/admin/*', '/gallery/*'], (req, res) => {
       sendSpa(res);

@@ -253,6 +253,7 @@ function renderOgHtml(meta) {
   const i = escapeHtml(meta.image);
   const u = escapeHtml(meta.url);
   const s = escapeHtml(meta.siteName);
+  const l = escapeHtml(meta.linkLabel || 'View gallery');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -275,7 +276,7 @@ function renderOgHtml(meta) {
 <body>
   <h1>${t}</h1>
   <p>${d}</p>
-  <p><a href="${u}">View gallery</a></p>
+  <p><a href="${u}">${l}</a></p>
 </body>
 </html>`;
 }
@@ -375,6 +376,8 @@ async function handleGalleryOgCover(req, res) {
 
 module.exports = {
   isSocialCrawler,
+  fetchBranding,
+  absoluteUrl,
   buildOgMetadata,
   renderOgHtml,
   handleGalleryOgRequest,
