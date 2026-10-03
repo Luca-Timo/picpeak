@@ -25,6 +25,8 @@ readonly DEFAULT_PORT=3001
 readonly NATIVE_APP_DIR="/opt/picpeak"
 readonly NATIVE_APP_USER="picpeak"
 readonly DOCKER_APP_DIR="$HOME/picpeak"
+readonly UPDATER_LIB_DIR="/usr/local/lib/picpeak"
+readonly UPDATER_UNIT_DIR="/etc/systemd/system"
 
 # Color codes for output
 readonly RED='\033[0;31m'
@@ -62,6 +64,7 @@ UNATTENDED=false
 UPDATE_MODE=false
 UNINSTALL_MODE=false
 FORCE_ADMIN_PASSWORD_RESET=false
+ENABLE_SELF_UPDATE=false   # install the in-app updater host agent (Docker only)
 
 ################################################################################
 # Helper Functions
@@ -152,6 +155,7 @@ review_and_confirm() {
     echo "  Install method : ${INSTALL_METHOD}"
     echo "  Directory      : $([[ "$INSTALL_METHOD" == "docker" ]] && docker_default_dir || echo "$NATIVE_APP_DIR")"
     [[ "$INSTALL_METHOD" == "docker" ]] && echo "  Release channel: ${PICPEAK_CHANNEL}"
+    [[ "$INSTALL_METHOD" == "docker" ]] && echo "  In-app updates : $([[ "$ENABLE_SELF_UPDATE" == "true" ]] && echo "enabled (host agent)" || echo "off")"
     echo "  Domain         : ${DOMAIN_NAME:-（none — local IP over HTTP）}"
     echo "  HTTPS          : ${HTTPS_MODE}"
     echo "  Admin email    : ${ADMIN_EMAIL}"
@@ -188,6 +192,17 @@ run_wizard() {
         echo "Release channel: 'stable' (recommended) or 'beta' (newest features)."
         local ch; read -p "Channel [${PICPEAK_CHANNEL}]: " ch
         PICPEAK_CHANNEL="${ch:-$PICPEAK_CHANNEL}"
+    fi
+
+    # 3b) In-app updates (Docker only): installs a small systemd agent that runs
+    # `docker compose pull && up -d` when an admin presses "Update now".
+    if [[ "$INSTALL_METHOD" == "docker" && "$ENABLE_SELF_UPDATE" != "true" ]]; then
+        echo
+        echo "In-app updates let an admin update PicPeak from the browser, without a terminal."
+        echo "This installs a small systemd agent on this server (see docs/self-update.md)."
+        if confirm "Enable in-app updates?" "n"; then
+            ENABLE_SELF_UPDATE=true
+        fi
     fi
 
     # 4) Domain
@@ -228,6 +243,9 @@ validate_unattended() {
 
     if [[ "$ENABLE_SSL" == "true" && -z "$DOMAIN_NAME" ]]; then
         die "--enable-ssl requires --domain in unattended mode."
+    fi
+    if [[ "$ENABLE_SELF_UPDATE" == "true" && "$INSTALL_METHOD" != "docker" ]]; then
+        die "--enable-self-update is only available for Docker installs."
     fi
     # Resolve HTTPS mode for unattended runs.
     if [[ -n "$DOMAIN_NAME" ]]; then
@@ -581,6 +599,12 @@ setup_docker_installation() {
         app_dir="/home/$SUDO_USER/picpeak"
     fi
     
+    # A re-run of the installer must not silently drop an agent that is already
+    # installed: the .env below is rewritten wholesale.
+    if update_agent_installed; then
+        ENABLE_SELF_UPDATE=true
+    fi
+
     log_step "Preparing application directory at $app_dir"
     local app_parent_dir
     app_parent_dir=$(dirname "$app_dir")
@@ -709,6 +733,7 @@ COMPOSE_FILE=docker-compose.production.yml
 # Release channel: stable | beta
 PICPEAK_CHANNEL=$PICPEAK_CHANNEL
 NODE_ENV=production
+$(if [[ "$ENABLE_SELF_UPDATE" == "true" ]]; then printf '\n# In-app updates via the host agent (docs/self-update.md)\nPICPEAK_SELF_UPDATE=true\n'; fi)
 
 # Machine secrets. Written explicitly only when this file already pinned them or
 # there is no picpeak-secrets volume to own them; otherwise left commented so the
@@ -798,6 +823,10 @@ EOF
       sleep 2
     done
 
+    if [[ "$ENABLE_SELF_UPDATE" == "true" ]]; then
+        install_update_agent "$app_dir"
+    fi
+
     # Admin access. Two paths:
     #   - Seeded (ADMIN_PASSWORD set, or --force-admin-password-reset): the
     #     migration/reset script writes ADMIN_CREDENTIALS.txt — copy it to the host.
@@ -817,6 +846,81 @@ EOF
     fi
 
     log_success "Docker installation completed!"
+}
+
+################################################################################
+# In-app updater (host agent)
+################################################################################
+
+# The host packaging of updater/picpeak-updater.sh: a systemd path unit that
+# runs one update whenever the backend files a request. Nothing in a container
+# holds the Docker socket. See docs/self-update.md.
+
+update_agent_installed() {
+    [[ -f "$UPDATER_UNIT_DIR/picpeak-updater.path" ]]
+}
+
+# Sets KEY=VALUE in an env file, replacing an existing line or appending one.
+set_env_value() {
+    local file="$1" key="$2" value="$3"
+    if grep -q "^${key}=" "$file" 2>/dev/null; then
+        sed -i "s|^${key}=.*|${key}=${value}|" "$file"
+    else
+        printf '\n%s=%s\n' "$key" "$value" >> "$file"
+    fi
+}
+
+# Installs or refreshes the agent from the checkout in $1. Re-running it is how
+# the agent itself gets updated (`--update` does that): it never fetches code to
+# run as root on its own.
+install_update_agent() {
+    local app_dir="$1"
+    local update_dir="$app_dir/update"
+
+    if ! command_exists systemctl; then
+        log_warn "systemd not found, so the in-app updater was not installed. Use the container variant instead (docs/self-update.md)."
+        return 0
+    fi
+    if [[ ! -f "$app_dir/updater/picpeak-updater.sh" ]]; then
+        log_warn "$app_dir/updater/picpeak-updater.sh is missing, so the in-app updater was not installed."
+        return 0
+    fi
+
+    log_step "Installing the in-app updater (host agent)..."
+
+    # request/ belongs to the backend (UID 1001), which files requests there.
+    # status/ belongs to the agent alone; the backend only reads it.
+    mkdir -p "$update_dir/request" "$update_dir/status"
+    chown 1001:1001 "$update_dir/request"
+    chmod 0750 "$update_dir/request"
+    chown root:root "$update_dir/status"
+    chmod 0755 "$update_dir/status"
+
+    install -d -m 0755 "$UPDATER_LIB_DIR"
+    install -m 0755 "$app_dir/updater/picpeak-updater.sh" "$UPDATER_LIB_DIR/picpeak-updater.sh"
+
+    local unit
+    for unit in picpeak-updater.path picpeak-updater.service; do
+        sed -e "s#@PROJECT_DIR@#${app_dir}#g" -e "s#@UPDATE_DIR@#${update_dir}#g" \
+            "$app_dir/updater/systemd/${unit}.in" > "$UPDATER_UNIT_DIR/$unit"
+    done
+    systemctl daemon-reload
+
+    PICPEAK_PROJECT_DIR="$app_dir" PICPEAK_UPDATE_DIR="$update_dir" \
+        "$UPDATER_LIB_DIR/picpeak-updater.sh" init \
+        || log_warn "The updater could not write its initial status."
+
+    systemctl enable --now picpeak-updater.path
+    log_success "In-app updater installed ($("$UPDATER_LIB_DIR/picpeak-updater.sh" version))."
+}
+
+remove_update_agent() {
+    update_agent_installed || return 0
+    log_step "Removing the in-app updater..."
+    systemctl disable --now picpeak-updater.path 2>/dev/null || true
+    rm -f "$UPDATER_UNIT_DIR/picpeak-updater.path" "$UPDATER_UNIT_DIR/picpeak-updater.service"
+    rm -rf "$UPDATER_LIB_DIR"
+    systemctl daemon-reload
 }
 
 ################################################################################
@@ -1292,6 +1396,9 @@ print_success_message() {
         echo "Stop:         cd $app_dir && docker compose down"
         echo "Start:        cd $app_dir && docker compose up -d"
         echo "Update:       cd $app_dir && git pull && docker compose pull && docker compose up -d"
+        if [[ "$ENABLE_SELF_UPDATE" == "true" ]]; then
+            echo "Updater log:  sudo journalctl -u picpeak-updater"
+        fi
     else
         echo
         echo "🔧 Service Commands:"
@@ -1334,6 +1441,10 @@ update_installation() {
         docker_detected=true
     fi
 
+    if [[ "$native_detected" == true && "$ENABLE_SELF_UPDATE" == "true" ]]; then
+        die "--enable-self-update is only available for Docker installs."
+    fi
+
     if [[ "$native_detected" == true ]]; then
         INSTALL_METHOD="native"
         update_native_installation
@@ -1358,6 +1469,11 @@ update_docker_installation() {
     
     # Pull latest code (new compose file / defaults) and refresh the images.
     git pull
+
+    # Before `up`, so the backend starts with the flag set.
+    if [[ "$ENABLE_SELF_UPDATE" == "true" ]]; then
+        set_env_value .env PICPEAK_SELF_UPDATE true
+    fi
 
     # Production compose uses prebuilt GHCR images, so pull rather than build.
     # COMPOSE_FILE in .env points every command at docker-compose.production.yml.
@@ -1385,6 +1501,12 @@ update_docker_installation() {
       fi
       sleep 2
     done
+
+    # Installs the agent fresh, or refreshes an installed one from the code just
+    # pulled. This is the only way the host agent itself gets updated.
+    if [[ "$ENABLE_SELF_UPDATE" == "true" ]] || update_agent_installed; then
+        install_update_agent "$app_dir"
+    fi
 
     log_success "Docker installation updated successfully!"
 }
@@ -1488,6 +1610,8 @@ uninstall_docker() {
     
     log_step "Removing Docker installation..."
     
+    remove_update_agent
+
     cd "$app_dir"
     docker compose down -v
     
@@ -1589,6 +1713,10 @@ parse_arguments() {
                 UPDATE_MODE=true
                 shift
                 ;;
+            --enable-self-update)
+                ENABLE_SELF_UPDATE=true
+                shift
+                ;;
             --uninstall)
                 UNINSTALL_MODE=true
                 shift
@@ -1634,6 +1762,9 @@ Options:
   --enable-ssl        Native only: provision HTTPS via Caddy (needs --domain)
   --port PORT         Custom user-facing port
   --update            Update existing installation
+  --enable-self-update  Docker only: install the in-app updater host agent, so
+                      admins can update from the browser (docs/self-update.md).
+                      Works on a new install and together with --update.
   --uninstall         Remove PicPeak installation
   --help              Show this help message
 

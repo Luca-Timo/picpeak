@@ -273,6 +273,31 @@ services:
       timeout: 10s
       retries: 3
 
+  # Optional in-app updater, container packaging (docs/self-update.md). Off by
+  # default: enable with COMPOSE_PROFILES=updater and PICPEAK_PROJECT_DIR in
+  # .env. Prefer the host agent (`picpeak-setup.sh --enable-self-update`) where
+  # you have a shell — this container holds the Docker socket, which is root on
+  # the host.
+  #
+  # It has no port and no network: the backend reaches it only through the
+  # request/status files in ./update. The project directory is mounted
+  # read-only at the IDENTICAL host path, because compose resolves the relative
+  # bind mounts above against it; the updater refuses to run otherwise. The
+  # placeholder default only keeps interpolation from failing on installs that
+  # never enable the profile.
+  updater:
+    image: ghcr.io/picpeak/picpeak/updater:${PICPEAK_UPDATER_TAG:-1}
+    container_name: picpeak-updater
+    profiles: [updater]
+    network_mode: none
+    environment:
+      - PICPEAK_PROJECT_DIR=${PICPEAK_PROJECT_DIR:-/picpeak-project-dir-not-set}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PICPEAK_PROJECT_DIR:-/picpeak-project-dir-not-set}:${PICPEAK_PROJECT_DIR:-/picpeak-project-dir-not-set}:ro
+      - ${APP_UPDATE:-./update}:/update
+    restart: unless-stopped
+
   # Optional: Nginx reverse proxy for production with SSL
   # Uncomment and configure if you want built-in HTTPS support
   # nginx:
