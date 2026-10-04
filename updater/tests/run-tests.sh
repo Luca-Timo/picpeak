@@ -176,6 +176,8 @@ expect_eq "state" "$(status_field state)" rolled_back
 expect_eq "backend back on old" "$(running backend)" old
 expect_eq "frontend back on old" "$(running frontend)" fe-old
 expect_eq "old tag restored" "$(tagged backend)" old
+grep -q 'backend is unhealthy' "$PROJECT/update/status/status.json" && pass "health cause reported" || fail "health cause reported"
+grep -q 'Recreated' "$PROJECT/update/status/status.json" && fail "compose progress not reported as the cause" || pass "compose progress not reported as the cause"
 
 scenario "unhealthy with new migrations stops without rollback"
 new_image new 3.160.0 001_a.js 002_b.js 003_c.js

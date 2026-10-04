@@ -412,13 +412,18 @@ do_update() {
     new_migrations=$(comm -13 <(image_migrations "$old_backend") <(image_migrations "$new_backend") | wc -l | tr -d ' ')
 
     set_step recreate "Installing PicPeak $ST_TO"
-    if compose up -d --no-build "${SERVICES[@]}" >/dev/null 2>"$WORK_DIR/up.err" && \
-        { set_step health "Waiting for PicPeak $ST_TO to start"; wait_healthy; }; then
-        finish succeeded "" "Updated PicPeak from $ST_FROM to $ST_TO."
-        self_update
-        return
+    # compose writes its progress to stderr too, so its output only explains a
+    # failure of `up` itself; otherwise wait_healthy's LAST_ERROR is the cause.
+    if compose up -d --no-build "${SERVICES[@]}" >/dev/null 2>"$WORK_DIR/up.err"; then
+        set_step health "Waiting for PicPeak $ST_TO to start"
+        if wait_healthy; then
+            finish succeeded "" "Updated PicPeak from $ST_FROM to $ST_TO."
+            self_update
+            return
+        fi
+    else
+        LAST_ERROR=$(tail -n 3 "$WORK_DIR/up.err")
     fi
-    [[ -s "$WORK_DIR/up.err" ]] && LAST_ERROR=$(tail -n 3 "$WORK_DIR/up.err")
 
     # Rolling back images is only safe while the database is still on the old
     # schema. If the new version ships migrations they may already have run, and
@@ -428,12 +433,13 @@ do_update() {
         return
     fi
 
-    set_step rollback "PicPeak $ST_TO did not become healthy ($LAST_ERROR). Bringing back $ST_FROM"
+    local cause="$LAST_ERROR"
+    set_step rollback "PicPeak $ST_TO did not become healthy ($cause). Bringing back $ST_FROM"
     restore_tags
     if compose up -d --no-build "${SERVICES[@]}" >/dev/null 2>&1 && wait_healthy; then
-        finish rolled_back "" "PicPeak $ST_TO did not start, so $ST_FROM was brought back. Nothing else changed."
+        finish rolled_back "" "PicPeak $ST_TO did not start ($cause), so $ST_FROM was brought back. Nothing else changed."
     else
-        finish failed rollback_failed "PicPeak $ST_TO did not start and bringing back $ST_FROM failed too ($LAST_ERROR). Check the server."
+        finish failed rollback_failed "PicPeak $ST_TO did not start ($cause) and bringing back $ST_FROM failed too ($LAST_ERROR). Check the server."
     fi
 }
 

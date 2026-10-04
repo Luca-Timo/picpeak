@@ -46,6 +46,9 @@ if [[ "$1" == "compose" ]]; then
             exit 0 ;;
         up)
             shift
+            # Real compose reports progress on stderr even when it succeeds.
+            echo " Container picpeak-backend  Recreated" >&2
+            echo " Container picpeak-backend  Started" >&2
             for a in "$@"; do
                 [[ "$a" == -* ]] && continue
                 cp "$S/tags/$a" "$S/running/$a"
