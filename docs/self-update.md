@@ -10,7 +10,7 @@ It is **off by default** and only works with the prebuilt images from `docker-co
 
 An update always goes to the newest image of the channel the install already follows (`PICPEAK_CHANNEL`, so `stable` or `beta`). The updater has no version argument, never edits `.env` and never downgrades.
 
-1. **Checks the install.** It finds the compose project from the running backend container. It refuses source builds, meaning a backend image with no registry digest or a `build:` section in the compose config.
+1. **Checks the install.** It finds the compose project from the running backend container and uses the same compose files the stack was started with (Compose records them in a container label), so an install started with `-f docker-compose.production.yml` is handled even without `COMPOSE_FILE` in `.env`. It refuses source builds, meaning a backend image with no registry digest or a `build:` section in the compose config.
 2. **Pulls** the images of every running service. A failed pull is retried with backoff (5 attempts by default). If every attempt fails, the updater reports the registry's error and restores the old local tags, so nothing has changed.
 3. **Checks the new backend image**, still before recreating anything:
    - its version must not be older than the running one (no downgrades);
@@ -80,7 +80,11 @@ The backend and the updater share no network path and no secret, only two direct
 | `update/request/update-requested` | backend | read-write |
 | `update/status/status.json` | updater only | **read-only** |
 
-**Request.** The backend creates `request/update-requested`, ideally by writing a temporary file and renaming it. Only the file's existence counts: the updater never reads the content, and it deletes the file before doing anything else. A compromised backend can therefore trigger exactly one thing, a legitimate update to the published channel tag.
+**Request.** The backend creates `request/update-requested`, ideally by writing a temporary file and renaming it. Only the file's existence counts: the updater never reads the content. It claims the file with a rename before doing anything else, so a failing run is never retriggered and two updaters can never act on one request. A compromised backend can therefore trigger exactly one thing, a legitimate update to the published channel tag.
+
+`request/` is owned by UID 1001 (the backend user) with mode 0750. The setup script creates it; the updater creates it itself when it is missing, which is the case for container-variant installs.
+
+**Lock.** Runs serialise on `status/.lock`. Because both packagings see the same directory, a host agent and a container enabled on the same install never run at once.
 
 **Status.** The updater replaces `status/status.json` atomically at every step:
 
@@ -122,6 +126,7 @@ The backend and the updater share no network path and no secret, only two direct
 | `pull_failed` | failed | The registry pull failed after every retry; nothing was changed |
 | `migrations_may_have_run` | failed | The new version did not start and was left in place (see below) |
 | `rollback_failed` | failed | The new version did not start and neither did the old one |
+| `internal_error` | failed | A Docker command failed unexpectedly; `step` says where |
 | `interrupted` | failed | The previous run stopped mid-way (reboot, killed container) |
 
 The contract number changes only for incompatible changes. The container image's major version follows it.
@@ -131,7 +136,7 @@ The contract number changes only for incompatible changes. The container image's
 The new version did not start, and its migrations may have changed the database. Rolling back only the images is not safe, so the updater did not do it.
 
 1. Check the backend log: `docker compose logs backend`. Often the cause is environmental (disk full, a mount that is missing) and a restart with `docker compose up -d` fixes it.
-2. If the new version has to go, restore the backup the backend took before the update, using **Admin → Backup → Restore**. That is the same hardened restore flow as for any other backup.
+2. If the new version has to go, restore the backup the backend took before the update, from **Admin → Settings → Backup**. That is the same restore flow as for any other backup, and it needs a running backend.
 3. If the admin UI is not reachable, open an issue with the backend log. Do not start the old version against the migrated database.
 
 ## For maintainers: releases that need manual steps
@@ -146,7 +151,7 @@ CI bakes the value into every backend image as `io.picpeak.update.auto-from` unt
 
 ## Limitations
 
-- **Source builds** (`git pull && docker compose up -d --build`) are detected and refused. Switch to the prebuilt images in `docker-compose.production.yml` to use in-app updates.
+- **Source builds** are detected and refused. That includes the README Quick Start, whose plain `docker compose up -d` uses `docker-compose.yml` and builds the images locally. Switch to the prebuilt images in `docker-compose.production.yml` (or install with `picpeak-setup.sh`) to use in-app updates.
 - **Native (non-Docker) installs** and the **single-container (AIO)** image are not supported yet.
 - **The compose file is not updated.** The updater only changes images. Releases that need a new compose file must set `AUTO_UPDATE_FROM`.
 - **Old images are kept.** Run `docker image prune` now and then to reclaim disk space.

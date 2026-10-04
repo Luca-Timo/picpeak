@@ -15,8 +15,7 @@ COPY picpeak-updater.sh /usr/local/bin/picpeak-updater
 RUN chmod 0755 /usr/local/bin/picpeak-updater
 
 ENV PICPEAK_UPDATER_PACKAGING=container \
-    PICPEAK_UPDATE_DIR=/update \
-    PICPEAK_UPDATER_LOCK=/tmp/picpeak-updater.lock
+    PICPEAK_UPDATE_DIR=/update
 
 ENTRYPOINT ["/usr/local/bin/picpeak-updater"]
 CMD ["watch"]

@@ -91,7 +91,6 @@ run_updater() {
     PATH="$ROOT/bin:$PATH" \
     PICPEAK_PROJECT_DIR="$PROJECT" \
     PICPEAK_UPDATE_DIR="$PROJECT/update" \
-    PICPEAK_UPDATER_LOCK="$PROJECT.lock" \
     PICPEAK_UPDATER_HEALTH_TIMEOUT=1 \
     PICPEAK_UPDATER_PULL_ATTEMPTS=3 \
         bash "$UPDATER" "${1:-run}" 2>"$PROJECT.log"
@@ -186,6 +185,39 @@ expect_eq "state" "$(status_field state)" failed
 expect_eq "reason" "$(status_field reason)" migrations_may_have_run
 expect_eq "backend left on new" "$(running backend)" new
 
+scenario "compose files come from the running stack"
+echo "$PROJECT/docker-compose.production.yml,$PROJECT/docker-compose.override.yml" > "$FAKE_STATE/config_files"
+run_updater
+expect_eq "state" "$(status_field state)" succeeded
+grep -q -- "-f $PROJECT/docker-compose.production.yml -f $PROJECT/docker-compose.override.yml up" "$FAKE_STATE/calls" \
+    && pass "up uses both files" || fail "up uses both files"
+
+scenario "unexpected docker failure mid-run is reported, not left running"
+touch "$FAKE_STATE/fail_label_read"
+run_updater
+expect_eq "state" "$(status_field state)" failed
+expect_eq "reason" "$(status_field reason)" internal_error
+expect_eq "step recorded" "$(status_field step)" verify
+
+scenario "a second updater cannot claim the same request"
+mkdir -p "$PROJECT/update/status"
+exec 8>"$PROJECT/update/status/.lock"
+if command -v flock >/dev/null 2>&1 && [[ "$(command -v flock)" != "$ROOT/bin/flock" ]]; then
+    flock -n 8
+    run_updater
+    expect_eq "lock holder blocks the run" "$(running backend)" old
+    [[ -e "$PROJECT/update/request/update-requested" ]] && pass "request left for the holder" || fail "request left for the holder"
+    flock -u 8
+else
+    echo "  skip (no flock on this host)"
+fi
+exec 8>&-
+
+scenario "request dir is created when missing"
+rm -rf "$PROJECT/update/request"
+run_updater init
+[[ -d "$PROJECT/update/request" ]] && pass "request dir exists" || fail "request dir exists"
+
 scenario "interrupted run is reported"
 mkdir -p "$PROJECT/update/status"
 printf '{\n  "state": "running",\n  "from_version": "3.159.0",\n  "started_at": "2026-10-03T10:00:00Z",\n}\n' \
@@ -203,6 +235,7 @@ ln -s "$PROJECT.target" "$PROJECT/update/request/update-requested"
 run_updater
 expect_eq "target intact" "$(cat "$PROJECT.target")" keep
 expect_eq "state" "$(status_field state)" succeeded
+expect_eq "no claimed leftovers" "$(ls -A "$PROJECT/update/request")" ""
 
 echo
 echo "$PASSES passed, $FAILS failed"

@@ -40,11 +40,12 @@ HEALTH_TIMEOUT="${PICPEAK_UPDATER_HEALTH_TIMEOUT:-600}"
 PULL_ATTEMPTS="${PICPEAK_UPDATER_PULL_ATTEMPTS:-5}"
 PULL_BACKOFF="${PICPEAK_UPDATER_PULL_BACKOFF:-15}"
 POLL_INTERVAL="${PICPEAK_UPDATER_POLL_INTERVAL:-5}"
-LOCK_FILE="${PICPEAK_UPDATER_LOCK:-/run/lock/picpeak-updater.lock}"
 
+REQUEST_DIR=""
 REQUEST_FILE=""
 STATUS_DIR=""
 STATUS_FILE=""
+LOCK_FILE=""
 
 # Status fields, written as one JSON document by write_status.
 ST_STATE="idle"
@@ -59,6 +60,7 @@ ST_FINISHED=""
 
 # Snapshot of the running stack, filled by snapshot_stack.
 PROJECT_NAME=""
+COMPOSE_FILES=()
 SERVICES=()
 IMAGE_REFS=()
 OLD_IDS=()
@@ -182,8 +184,10 @@ version_cmp() {
 # Docker helpers
 ################################################################################
 
+# The guarded expansion keeps an empty COMPOSE_FILES from tripping `set -u` on
+# bash before 4.4.
 compose() {
-    docker compose --project-directory "$PROJECT_DIR" -p "$PROJECT_NAME" "$@"
+    docker compose --project-directory "$PROJECT_DIR" -p "$PROJECT_NAME" ${COMPOSE_FILES[@]+"${COMPOSE_FILES[@]}"} "$@"
 }
 
 # Reads one file out of an image without running it.
@@ -233,6 +237,18 @@ discover_project() {
     fi
     PROJECT_NAME=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$ids")
     [[ -n "$PROJECT_NAME" ]] || { LAST_ERROR="Could not read the compose project name."; return 1; }
+
+    # Use the compose files the stack was started with, not whatever a plain
+    # `docker compose` in that directory would pick: an install started with
+    # `-f docker-compose.production.yml` and no COMPOSE_FILE in .env would
+    # otherwise be read through the source-build docker-compose.yml.
+    local files f
+    files=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$ids" | sed 's/^<no value>$//')
+    COMPOSE_FILES=()
+    local IFS=','
+    for f in $files; do
+        [[ -n "$f" ]] && COMPOSE_FILES+=(-f "$f")
+    done
 }
 
 # Records every running service with the image ref compose uses and the image ID
@@ -465,28 +481,52 @@ setup_paths() {
     [[ "$PROJECT_DIR" == /* ]] || die_usage "PICPEAK_PROJECT_DIR must be an absolute path."
     [[ -d "$PROJECT_DIR" ]] || die_usage "PICPEAK_PROJECT_DIR ($PROJECT_DIR) does not exist."
     [[ -n "$UPDATE_DIR" ]] || die_usage "PICPEAK_UPDATE_DIR is not set."
-    REQUEST_FILE="$UPDATE_DIR/request/update-requested"
+    REQUEST_DIR="$UPDATE_DIR/request"
+    REQUEST_FILE="$REQUEST_DIR/update-requested"
     STATUS_DIR="$UPDATE_DIR/status"
     STATUS_FILE="$STATUS_DIR/status.json"
+    # The lock lives in status/, which only updaters can write. Both packagings
+    # see the same directory, so a host agent and a container enabled on one
+    # install still never run at the same time.
+    LOCK_FILE="$STATUS_DIR/.lock"
     mkdir -p "$STATUS_DIR"
-    [[ -d "$UPDATE_DIR/request" ]] || die_usage "$UPDATE_DIR/request does not exist (picpeak-setup.sh --enable-self-update creates it)."
+    # request/ belongs to the backend (UID 1001). The setup script creates it;
+    # the container variant has no shell to do that, so create it here.
+    if [[ ! -d "$REQUEST_DIR" ]]; then
+        mkdir -p "$REQUEST_DIR"
+        chown 1001:1001 "$REQUEST_DIR" 2>/dev/null || log "could not chown $REQUEST_DIR to UID 1001"
+        chmod 0750 "$REQUEST_DIR"
+    fi
     WORK_DIR=$(mktemp -d)
-    trap 'rm -rf "$WORK_DIR"' EXIT
+    trap on_exit EXIT
+}
+
+# A command that fails under `set -e` mid-update must not leave the status on
+# "running": the UI would spin until the next run marks it interrupted.
+on_exit() {
+    local code=$?
+    if [[ "$ST_STATE" == "running" && -n "$STATUS_FILE" ]]; then
+        finish failed internal_error "The updater stopped unexpectedly during step '$ST_STEP' (exit $code). Check the updater log." || true
+    fi
+    rm -rf "$WORK_DIR"
 }
 
 with_lock() {
-    mkdir -p "$(dirname "$LOCK_FILE")"
     exec 9>"$LOCK_FILE"
     flock -n 9 || { log "another update is already running"; return 0; }
     "$@"
     flock -u 9
 }
 
-# Removes the marker before anything else, so a failing run is never triggered
-# again in a loop by the systemd path unit. unlink() does not follow symlinks.
+# Claims the marker with a rename before anything else, so a failing run is
+# never retriggered in a loop by the systemd path unit, and two updaters seeing
+# the same request cannot both act on it: only one rename succeeds. Neither
+# rename() nor unlink() follows a symlink the backend may have planted.
 process_request() {
     [[ -e "$REQUEST_FILE" || -L "$REQUEST_FILE" ]] || return 0
-    rm -f "$REQUEST_FILE"
+    local claimed="$REQUEST_DIR/.claimed.$RANDOM$RANDOM"
+    mv -- "$REQUEST_FILE" "$claimed" 2>/dev/null || return 0
+    rm -f -- "$claimed"
     log "update requested"
     do_update
 }

@@ -9,6 +9,8 @@
 #   running/<svc>      image id the running container uses
 #   pull_failures      number of pulls that fail before one succeeds
 #   broken             image ids that never become healthy, one per line
+#   config_files       value of the compose config_files label (optional)
+#   fail_label_read    when present, reading an image label fails
 #   calls              every invocation, appended
 set -euo pipefail
 
@@ -20,8 +22,14 @@ svc_of_ref() { local r="${1##*/}"; echo "${r%%:*}"; }
 services() { ls "$S/running"; }
 
 if [[ "$1" == "compose" ]]; then
-    # Skip --project-directory DIR -p NAME
-    shift 5
+    # Skip the global options (--project-directory DIR -p NAME [-f FILE]...)
+    shift
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --project-directory|-p|-f) shift 2 ;;
+            *) break ;;
+        esac
+    done
     case "$1" in
         config)
             [[ -f "$S/build_context" ]] && printf 'services:\n  backend:\n    build:\n      context: ./backend\n'
@@ -59,6 +67,7 @@ case "$1" in
         fmt="$3"; cid="$4"; svc="${cid#c-}"
         case "$fmt" in
             *com.docker.compose.project\"*) echo "picpeak" ;;
+            *config_files*) cat "$S/config_files" 2>/dev/null || echo "<no value>" ;;
             *Config.Image*) printf '%s\t%s\t%s\n' "$svc" "$(ref_of "$svc")" "$(cat "$S/running/$svc")" ;;
             *State.Status*) echo running ;;
             *State.Health*)
@@ -76,7 +85,9 @@ case "$1" in
         fi
         case "$fmt" in
             *RepoDigests*) [[ -f "$S/images/$target/local" ]] && echo 0 || echo 1 ;;
-            *auto-from*) cat "$S/images/$target/label" 2>/dev/null || echo "<no value>" ;;
+            *auto-from*)
+                [[ -f "$S/fail_label_read" ]] && { echo "Error: daemon unreachable" >&2; exit 1; }
+                cat "$S/images/$target/label" 2>/dev/null || echo "<no value>" ;;
             *.Id*) echo "$target" ;;
         esac
         exit 0 ;;
