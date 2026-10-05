@@ -196,4 +196,23 @@ describe('event settings draft', () => {
     // On: the gallery renders its own column.
     expect(eventFieldsFromEvent({ ...withHeader, custom_theme_enabled: true } as Event, branding).theme.headerStyle).toBe('minimal');
   });
+
+  it('asks for a password before a customer email reaches a gallery whose password was generated', () => {
+    const portalOnly = { ...EVENT, customer_email: null, password_generated: 1 } as unknown as Event;
+    const base = eventFieldsFromEvent(portalOnly, branding);
+    expect(base.generated_password_pending).toBe(true);
+
+    const withEmail = { ...base, customer_email: 'client@example.com' };
+    expect(() => eventUpdatePayload(withEmail, base, t)).toThrow(DraftValidationError);
+
+    const payload = eventUpdatePayload(
+      { ...withEmail, new_password: 'Sunrise-Lake-42', confirm_new_password: 'Sunrise-Lake-42' }, base, t,
+    );
+    expect(payload).toMatchObject({ customer_email: 'client@example.com', password: 'Sunrise-Lake-42' });
+  });
+
+  it('does not ask galleries whose password an admin typed', () => {
+    const base = eventFieldsFromEvent({ ...EVENT, customer_email: null } as unknown as Event, branding);
+    expect(eventUpdatePayload({ ...base, customer_email: 'client@example.com' }, base, t)).toMatchObject({ customer_email: 'client@example.com' });
+  });
 });

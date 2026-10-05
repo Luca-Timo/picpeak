@@ -1729,9 +1729,7 @@
     "publishSuccess": "Galerija je bila objavljena, stranka pa obveščena!",
     "publishDialog": {
       "title": "Objavi galerijo",
-      "descriptionWithEmail": "Objava »{{eventName}}« naredi galerijo dostopno in pošlje e-poštno obvestilo na {{customerEmail}}.",
       "descriptionNoEmail": "Objava »{{eventName}}« naredi galerijo dostopno. E-poštni naslov stranke ni nastavljen, zato obvestilo ne bo poslano.",
-      "descriptionAssignedAccount": "Objava »{{eventName}}« naredi galerijo dostopno. Dodeljeni računi strank bodo po e-pošti (v svojem jeziku) obveščeni, da je na voljo.",
       "justPublish": "Objavi",
       "passwordLabel": "Geslo galerije",
       "passwordPlaceholder": "Vnesite geslo galerije",
@@ -1741,8 +1739,7 @@
       "notifyHelp": "Odstranite kljukico za tiho objavo — galerija postane aktivna in nič se ne pošlje. E-pošto lahko pošljete pozneje s te strani.",
       "descriptionQuiet": "Objava »{{eventName}}« naredi galerijo dostopno. E-pošta ne bo poslana — pošljete jo lahko pozneje s te strani.",
       "descriptionWhatsapp": "Objava »{{eventName}}« naredi galerijo dostopno. Če je WhatsApp nastavljen, bo stranka tam obveščena.",
-      "descriptionAssignedAccount_one": "Objava »{{eventName}}« naredi galerijo dostopno. Dodeljeni račun stranke bo po e-pošti (v svojem jeziku) obveščen, da je na voljo.",
-      "descriptionAssignedAccount_other": "Objava »{{eventName}}« naredi galerijo dostopno. Dodeljeni računi strank bodo po e-pošti (v svojem jeziku) obveščeni, da je na voljo."
+      "descriptionNotify": "Objava »{{eventName}}« naredi galerijo dostopno in obvesti:"
     },
     "duplicateEvent": "Podvoji galerijo",
     "duplicateDialog": {
@@ -1901,8 +1898,8 @@
       "confirm": "Pošljem e-pošto galerije na {{recipient}}?",
       "success": "E-pošta galerije dodana v čakalno vrsto za {{recipient}}.",
       "title": "Pošlji e-pošto galerije",
-      "description": "Pošlje povezavo do galerije »{{eventName}}« na {{recipient}}.",
-      "passwordHelp": "E-pošta vsebuje natanko to besedilo. Znova vnesite geslo galerije (ali izberite novo) — backend ga ponovno zgosti, da prijava še naprej deluje."
+      "passwordHelp": "E-pošta vsebuje natanko to besedilo. Znova vnesite geslo galerije (ali izberite novo) — backend ga ponovno zgosti, da prijava še naprej deluje.",
+      "descriptionList": "Pošlje povezavo do galerije »{{eventName}}« na:"
     },
     "bulkArchive": {
       "title": "Potrditev množičnega arhiviranja",
@@ -2036,6 +2033,21 @@
       "structureApplied_other": "Fotografije, premaknjene v mape: {{count}}",
       "structureNothing": "Vse fotografije iz podmap so že v mapi",
       "structureFailed": "Strukture map ni bilo mogoče uporabiti"
+    },
+    "recipients": {
+      "andMore": "{{names}} +{{count}} več",
+      "customerAccounts": "Računi strank",
+      "galleryEmail": "E-pošta galerije",
+      "portalEmail": "E-pošta portala za stranke",
+      "previewTitle": "Obveščeni ob objavi galerije:",
+      "generatedPasswordNote": "Stranke se prijavijo prek portala za stranke, zato geslo galerije ni potrebno. Za zaščito povezave do galerije se ustvari močno geslo. Če pozneje dodate e-pošto stranke, takrat nastavite geslo.",
+      "passwordForEmailRequired": "Pred dodajanjem e-pošte stranke nastavite geslo galerije — e-pošta galerije ga vsebuje.",
+      "passwordForEmailHint": "Ta galerija je bila deljena samo prek portala za stranke, zato je bilo njeno geslo ustvarjeno in ga nihče ne pozna. E-pošta galerije na ta naslov vsebuje geslo, zato ga nastavite zdaj.",
+      "accountCount_one": "{{count}} račun stranke",
+      "accountCount_two": "{{count}} računa strank",
+      "accountCount_few": "{{count}} računi strank",
+      "accountCount_other": "{{count}} računov strank",
+      "whatsapp": "WhatsApp"
     }
   },
   "settings": {

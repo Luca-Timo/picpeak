@@ -1778,9 +1778,7 @@
     "publishSuccess": "Gallery published and client notified!",
     "publishDialog": {
       "title": "Publish gallery",
-      "descriptionWithEmail": "Publishing \"{{eventName}}\" makes the gallery accessible and sends the notification email to {{customerEmail}}.",
       "descriptionNoEmail": "Publishing \"{{eventName}}\" makes the gallery accessible. No customer email is set, so no notification will be sent.",
-      "descriptionAssignedAccount": "Publishing \"{{eventName}}\" makes the gallery accessible. The assigned customer account(s) will be notified by email (in their language) that it is available.",
       "justPublish": "Publish",
       "passwordLabel": "Gallery password",
       "passwordPlaceholder": "Enter the gallery password",
@@ -1790,8 +1788,7 @@
       "notifyHelp": "Uncheck to publish quietly — the gallery goes live and nothing is sent. You can send the email later from this page.",
       "descriptionQuiet": "Publishing \"{{eventName}}\" makes the gallery accessible. No email will be sent — you can send it later from this page.",
       "descriptionWhatsapp": "Publishing \"{{eventName}}\" makes the gallery accessible. If WhatsApp is configured, the customer is notified there.",
-      "descriptionAssignedAccount_one": "Publishing \"{{eventName}}\" makes the gallery accessible. The assigned customer account(s) will be notified by email (in their language) that it is available.",
-      "descriptionAssignedAccount_other": "Publishing \"{{eventName}}\" makes the gallery accessible. The assigned customer account(s) will be notified by email (in their language) that it is available."
+      "descriptionNotify": "Publishing \"{{eventName}}\" makes the gallery accessible and notifies:"
     },
     "duplicateEvent": "Duplicate gallery",
     "duplicateDialog": {
@@ -1950,8 +1947,8 @@
       "confirm": "Send the gallery email to {{recipient}}?",
       "success": "Gallery email queued to {{recipient}}.",
       "title": "Send gallery email",
-      "description": "Sends the gallery link for \"{{eventName}}\" to {{recipient}}.",
-      "passwordHelp": "The email includes this exact text. Re-type the gallery password (or pick a new one) — the backend re-hashes it so the login still works."
+      "passwordHelp": "The email includes this exact text. Re-type the gallery password (or pick a new one) — the backend re-hashes it so the login still works.",
+      "descriptionList": "Sends the gallery link for \"{{eventName}}\" to:"
     },
     "bulkArchive": {
       "title": "Confirm Bulk Archive",
@@ -2212,6 +2209,19 @@
       "removeDuplicates_one": "Remove {{count}} first-look duplicate",
       "removeDuplicates_other": "Remove {{count}} first-look duplicates",
       "duplicatesNotRemoved": "The gallery is complete, but the first-look duplicates could not be removed. Delete them from the Photos tab."
+    },
+    "recipients": {
+      "andMore": "{{names}} +{{count}} more",
+      "customerAccounts": "Customer accounts",
+      "galleryEmail": "Gallery email",
+      "portalEmail": "Customer portal email",
+      "previewTitle": "Notified when you publish the gallery:",
+      "generatedPasswordNote": "Customers sign in through their customer portal, so no gallery password is needed. A strong one is generated to keep the gallery link locked. If you add a customer email later, you set a password then.",
+      "passwordForEmailRequired": "Set a gallery password before adding the customer email — the gallery email carries it.",
+      "passwordForEmailHint": "This gallery was shared through the customer portal only, so its password was generated and nobody knows it. The gallery email to this address includes the password, so set one now.",
+      "accountCount_one": "{{count}} customer account",
+      "accountCount_other": "{{count}} customer accounts",
+      "whatsapp": "WhatsApp"
     }
   },
   "settings": {

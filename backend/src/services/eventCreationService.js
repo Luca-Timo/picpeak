@@ -17,6 +17,9 @@ const { getAppSetting } = require('../utils/appSettings');
 const { galleryPasswordColumns, dropCopiesIfStorageOff } = require('../utils/galleryPasswordVault');
 const { clampIntOrUndefined } = require('../utils/numericHelpers');
 const { getFrontendBaseUrl } = require('../utils/frontendUrl');
+const {
+  notifyGalleryRecipients, resolveGalleryRecipients, reachableAccountsByIds, hasPasswordGeneratedColumn,
+} = require('./galleryNotificationService');
 const { resolveEventFeedbackDefaults, applyFeedbackDefaults } = require('./feedbackDefaults');
 const { getStoragePath, getEventFieldRequirements, readBooleanSetting, getDownloadProtectionDefaults,
   getImageSecurityDefaults, resolveImageSecurityColumns, getBrandingDefaults, getCustomerNameFromPayload,
@@ -160,12 +163,34 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
 
   const customerColumnsAvailable = await hasCustomerContactColumns();
 
+  // Customer accounts to assign (#354) — only while the customer portal is
+  // on; the frontend hides the picker otherwise, but a stale tab could still
+  // POST customer_account_ids, and those are ignored rather than 403ing the
+  // whole create.
+  const customerAccountsService = require('./customerAccountsService');
+  const customerAccountIds = Array.isArray(input.customer_account_ids)
+    && await customerAccountsService.isCustomerPortalEnabled()
+    ? input.customer_account_ids.map(Number).filter((n) => Number.isFinite(n) && n > 0)
+    : null;
+  // Announcing a gallery to customer accounts — and letting them stand in for
+  // the customer email — is customers.events, the permission that governs
+  // assigning them; and only to accounts the portal email can reach (active,
+  // able to sign in), the same rule notifyGalleryRecipients applies.
+  const announcesToAccounts = Boolean(customerAccountIds && customerAccountIds.length > 0
+    && await userHasAllPermissions(actor.id, ['customers.events']));
+  const reachableAccounts = announcesToAccounts ? await reachableAccountsByIds(customerAccountIds) : [];
+  // Announced only through the customer portal: nobody receives the standard
+  // gallery email, and the portal opens the gallery without its password.
+  const portalOnly = !customerEmail && reachableAccounts.length > 0;
+
   // Conditional validation based on settings
   const validationErrors = [];
   if (fieldRequirements.require_customer_name && !customerName) {
     validationErrors.push({ path: 'customer_name', msg: 'Customer name is required' });
   }
-  if (fieldRequirements.require_customer_email && !customerEmail) {
+  // A reachable assigned account is a recipient too, so it satisfies the
+  // requirement.
+  if (fieldRequirements.require_customer_email && !customerEmail && reachableAccounts.length === 0) {
     validationErrors.push({ path: 'customer_email', msg: 'Customer email is required' });
   }
   if (fieldRequirements.require_admin_email && !admin_email) {
@@ -233,7 +258,13 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
 
   let passwordValidation = null;
 
-  if (requirePassword) {
+  // A portal-only gallery still keeps its share link locked, with a strong
+  // password nobody is shown or mailed (migration 264). Adding a customer
+  // email later asks the admin for a real one.
+  const passwordGenerated = requirePassword && portalOnly
+    && (typeof password !== 'string' || password.length === 0);
+
+  if (requirePassword && !passwordGenerated) {
     // The v1 route validator marks password optional; the admin route's
     // custom() guard is not shared, so enforce presence here for every path.
     if (typeof password !== 'string' || password.length === 0) {
@@ -274,7 +305,7 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
   const { shareUrl, shareLinkToStore } = await buildShareLinkVariants({ slug, shareToken });
     
   // Hash password with configurable rounds (random placeholder when not required)
-  const password_hash = requirePassword
+  const password_hash = requirePassword && !passwordGenerated
     ? await bcrypt.hash(password, getBcryptRounds())
     : await bcrypt.hash(crypto.randomBytes(32).toString('hex'), getBcryptRounds());
     
@@ -427,6 +458,7 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
       ...(requirePassword && password ? { password } : {}),
       ...(client_access_enabled && client_password ? { clientPassword: client_password } : {}),
     })),
+    ...(await hasPasswordGeneratedColumn() ? { password_generated: formatBoolean(passwordGenerated) } : {}),
     welcome_message,
     color_theme,
     share_link: shareLinkToStore,
@@ -519,20 +551,10 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
   // #1271 — the setting was read before the hashes; re-check after the write
   await dropCopiesIfStorageOff(eventId);
 
-  // Apply customer-account assignments (#354). Skip when the customer
-  // portal flag is off — the frontend hides the picker in that case,
-  // but a stale tab could still POST customer_account_ids; we ignore
-  // them rather than 403 the entire create.
-  if (Array.isArray(input.customer_account_ids)) {
+  // Apply customer-account assignments (#354); null while the portal is off.
+  if (customerAccountIds) {
     try {
-      const customerAccountsService = require('./customerAccountsService');
-      if (await customerAccountsService.isCustomerPortalEnabled()) {
-        await customerAccountsService.setAssignmentsForEvent(
-          eventId,
-          input.customer_account_ids,
-          actor.id
-        );
-      }
+      await customerAccountsService.setAssignmentsForEvent(eventId, customerAccountIds, actor.id);
     } catch (e) {
       logger.error('Failed to set customer assignments on event create', {
         eventId, error: e.message,
@@ -572,53 +594,58 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
     });
   } catch (e) { /* webhookService.fire never throws but be defensive */ }
 
-  // Queue creation email (only if there is a recipient and event is not a draft)
-  // Language detection is handled by email processor
+  // Announce the gallery (only when it is not a draft): the standard email to
+  // the inline address, the portal email to every assigned account. Language
+  // detection is handled by the email processor.
   const isDraft = parseBooleanInput(is_draft, true);
 
-  if (customerEmail && !isDraft) {
-    // Build email data with optional client access info
-    const emailData = {
-      customer_name: customerName,
-      customer_email: customerEmail,
-      host_name: customerName || (customerEmail ? customerEmail.split('@')[0] : null),
-      event_name,
-      event_date: event_date,  // Pass raw date - will be formatted by email processor
-      gallery_link: shareUrl,
-      gallery_password: requirePassword ? password : 'No password required',
-      expiry_date: expires_at ? expires_at.toISOString() : null,  // Pass ISO string - will be formatted by email processor
-      welcome_message: welcome_message || ''
-    };
+  if (!isDraft) {
+    const buildInlineEmailData = async (recipient) => {
+      const emailData = {
+        customer_name: customerName,
+        customer_email: recipient,
+        host_name: customerName || recipient.split('@')[0],
+        event_name,
+        event_date: event_date,  // Pass raw date - will be formatted by email processor
+        gallery_link: shareUrl,
+        gallery_password: requirePassword ? password : 'No password required',
+        expiry_date: expires_at ? expires_at.toISOString() : null,  // Pass ISO string - will be formatted by email processor
+        welcome_message: welcome_message || ''
+      };
 
-    // Include client access info in email when enabled (#172)
-    if (client_access_enabled && client_password) {
-      const createdEvent = await db('events').where('id', eventId).first();
-      // Same FRONTEND_URL-before-APP_URL order as before: APP_URL is
-      // passed as the override so it still outranks the general_site_url
-      // setting and the request origin. Chaining it after the resolver
-      // would make it dead code, because the resolver only returns falsy
-      // when NOTHING is configured (#1104).
-      const resolvedFrontendUrl = frontendUrl || await getFrontendBaseUrl();
-      emailData.client_link = `${resolvedFrontendUrl}/gallery/${slug}/client-access?token=${createdEvent.client_share_token}`;
-      emailData.client_password = client_password;
-    }
+      // Include client access info in email when enabled (#172)
+      if (client_access_enabled && client_password) {
+        const createdEvent = await db('events').where('id', eventId).first();
+        // Same FRONTEND_URL-before-APP_URL order as before: APP_URL is
+        // passed as the override so it still outranks the general_site_url
+        // setting and the request origin. Chaining it after the resolver
+        // would make it dead code, because the resolver only returns falsy
+        // when NOTHING is configured (#1104).
+        const resolvedFrontendUrl = frontendUrl || await getFrontendBaseUrl();
+        emailData.client_link = `${resolvedFrontendUrl}/gallery/${slug}/client-access?token=${createdEvent.client_share_token}`;
+        emailData.client_password = client_password;
+      }
+      return emailData;
+    };
 
     // Best-effort, as the v1 route always was: the event, folder, activity
     // log and webhook are committed by now, so a queue failure must not 500.
     try {
-      await db('email_queue').insert({
-        event_id: eventId,
-        recipient_email: customerEmail,
-        email_type: 'gallery_created',
-        email_data: JSON.stringify(emailData),
-        status: 'pending',
-        created_at: new Date(),
-        // Explicit NULL, not the column default: on SQLite the default is
-        // text and the processor never picks the row up (issue 1670).
-        scheduled_at: null
+      const announced = {
+        id: eventId,
+        customer_email: customerEmail,
+        host_email: customerEmail,
+        welcome_message,
+        client_access_enabled: Boolean(client_access_enabled && client_password),
+      };
+      await notifyGalleryRecipients(announced, {
+        buildInlineEmailData,
+        // Without customers.events the accounts are assigned (as before)
+        // but not mailed, and the customer email gets the gallery email.
+        recipients: await resolveGalleryRecipients(announced, { includeAccounts: announcesToAccounts }),
       });
     } catch (queueError) {
-      logger.warn('Failed to queue gallery_created email on create', { eventId, error: queueError.message });
+      logger.warn('Failed to queue gallery notification on create', { eventId, error: queueError.message });
     }
   }
 

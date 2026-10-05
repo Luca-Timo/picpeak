@@ -36,6 +36,12 @@ export type SettingsSectionKey =
   | 'danger';
 
 export interface EventFields extends EditFormState {
+  /**
+   * Read-only. The gallery's password was generated for portal-only access
+   * (migration 264) and no customer email has been told it, so adding one
+   * needs a real password first — the gallery email carries it.
+   */
+  generated_password_pending: boolean;
   /** Off: the gallery renders the global Branding theme. */
   custom_theme_enabled: boolean;
   /** The gallery's own theme; only written while custom_theme_enabled is on. */
@@ -140,6 +146,7 @@ export function eventFieldsFromEvent(event: Event, branding: ThemeConfig | null 
     customer_name: event.customer_name || '',
     customer_email: event.customer_email || '',
     customer_phone: event.customer_phone || '',
+    generated_password_pending: truthy((event as Event & { password_generated?: unknown }).password_generated) && !event.customer_email,
     source_mode: event.source_mode === 'reference' ? 'reference' : 'managed',
     external_path: event.external_path || '',
     external_watch: truthy(event.external_watch),
@@ -209,6 +216,7 @@ export const SECTION_OF_FIELD: Record<keyof EventFields, SettingsSectionKey> = {
   customer_email: 'general',
   customer_phone: 'general',
   customer_accounts: 'general',
+  generated_password_pending: 'general',
   expires_at: 'access',
   require_password: 'access',
   new_password: 'access',
@@ -406,12 +414,20 @@ function requestFields(f: EventFields): Record<string, unknown> {
   return body;
 }
 
+/** Adding a customer email to this gallery needs a password first (see generated_password_pending). */
+export function emailNeedsPassword(f: EventFields): boolean {
+  return f.generated_password_pending && f.require_password && !!f.customer_email.trim();
+}
+
 /** The fields to PUT, or null when the events row is unchanged. */
 export function eventUpdatePayload(
   draft: EventFields,
   base: EventFields,
   t: Translate,
 ): Record<string, unknown> | null {
+  if (emailNeedsPassword(draft) && !draft.new_password) {
+    throw new DraftValidationError(t('events.recipients.passwordForEmailRequired', 'Set a gallery password before adding the customer email — the gallery email carries it.'), 'general');
+  }
   if (draft.require_password) {
     if (draft.require_password !== base.require_password && !draft.new_password) {
       throw new DraftValidationError(t('events.newPasswordRequired', 'Please set a password before enabling protection.'), 'access');

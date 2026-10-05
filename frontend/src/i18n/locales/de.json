@@ -2327,9 +2327,7 @@
     "publishSuccess": "Galerie veröffentlicht und Kunde benachrichtigt!",
     "publishDialog": {
       "title": "Galerie veröffentlichen",
-      "descriptionWithEmail": "Die Galerie \"{{eventName}}\" wird zugänglich gemacht und die Benachrichtigungs-E-Mail an {{customerEmail}} gesendet.",
       "descriptionNoEmail": "Die Galerie \"{{eventName}}\" wird zugänglich gemacht. Es ist keine Kunden-E-Mail hinterlegt – es wird keine Benachrichtigung gesendet.",
-      "descriptionAssignedAccount": "Die Galerie \"{{eventName}}\" wird zugänglich gemacht. Die zugewiesenen Kundenkonten werden per E-Mail (in ihrer Sprache) benachrichtigt, dass sie verfügbar ist.",
       "justPublish": "Veröffentlichen",
       "passwordLabel": "Galerie-Passwort",
       "passwordPlaceholder": "Galerie-Passwort eingeben",
@@ -2339,8 +2337,7 @@
       "notifyHelp": "Abwählen, um still zu veröffentlichen — die Galerie geht online, es wird nichts versendet. Die E-Mail lässt sich später auf dieser Seite senden.",
       "descriptionQuiet": "Durch das Veröffentlichen wird \"{{eventName}}\" zugänglich. Es wird keine E-Mail versendet — Sie können sie später auf dieser Seite senden.",
       "descriptionWhatsapp": "Durch das Veröffentlichen wird \"{{eventName}}\" zugänglich. Sofern WhatsApp eingerichtet ist, wird der Kunde dort benachrichtigt.",
-      "descriptionAssignedAccount_one": "Die Galerie \"{{eventName}}\" wird zugänglich gemacht. Das zugewiesene Kundenkonto wird per E-Mail (in seiner Sprache) benachrichtigt, dass sie verfügbar ist.",
-      "descriptionAssignedAccount_other": "Die Galerie \"{{eventName}}\" wird zugänglich gemacht. Die zugewiesenen Kundenkonten werden per E-Mail (in ihrer Sprache) benachrichtigt, dass sie verfügbar ist."
+      "descriptionNotify": "Durch das Veröffentlichen wird \"{{eventName}}\" zugänglich. Benachrichtigt werden:"
     },
     "duplicateEvent": "Galerie duplizieren",
     "duplicateDialog": {
@@ -2488,8 +2485,8 @@
       "confirm": "Galerie-E-Mail an {{recipient}} senden?",
       "success": "Galerie-E-Mail an {{recipient}} eingereiht.",
       "title": "Galerie-E-Mail senden",
-      "description": "Sendet den Galerie-Link für \"{{eventName}}\" an {{recipient}}.",
-      "passwordHelp": "Die E-Mail enthält genau diesen Text. Geben Sie das Galerie-Passwort erneut ein (oder wählen Sie ein neues) — das Backend hasht es neu, damit der Login weiter funktioniert."
+      "passwordHelp": "Die E-Mail enthält genau diesen Text. Geben Sie das Galerie-Passwort erneut ein (oder wählen Sie ein neues) — das Backend hasht es neu, damit der Login weiter funktioniert.",
+      "descriptionList": "Sendet den Galerie-Link für \"{{eventName}}\" an:"
     },
     "bulkArchive": {
       "title": "Massen-Archivierung bestätigen",
@@ -2750,6 +2747,19 @@
       "removeDuplicates_one": "{{count}} Duplikat der ersten Auswahl entfernen",
       "removeDuplicates_other": "{{count}} Duplikate der ersten Auswahl entfernen",
       "duplicatesNotRemoved": "Die Galerie ist vollständig, aber die Duplikate der ersten Auswahl konnten nicht entfernt werden. Löschen Sie sie im Tab Fotos."
+    },
+    "recipients": {
+      "andMore": "{{names}} +{{count}} weitere",
+      "customerAccounts": "Kundenkonten",
+      "galleryEmail": "Galerie-E-Mail",
+      "portalEmail": "Kundenportal-E-Mail",
+      "previewTitle": "Benachrichtigt, wenn Sie die Galerie veröffentlichen:",
+      "generatedPasswordNote": "Kunden melden sich über ihr Kundenportal an und brauchen kein Galerie-Passwort. Damit der Galerie-Link geschützt bleibt, wird ein sicheres Passwort erzeugt. Wenn Sie später eine Kunden-E-Mail hinzufügen, legen Sie dann ein Passwort fest.",
+      "passwordForEmailRequired": "Legen Sie ein Galerie-Passwort fest, bevor Sie die Kunden-E-Mail hinzufügen — die Galerie-E-Mail enthält es.",
+      "passwordForEmailHint": "Diese Galerie wurde nur über das Kundenportal geteilt, daher wurde ihr Passwort erzeugt und niemand kennt es. Die Galerie-E-Mail an diese Adresse enthält das Passwort — legen Sie jetzt eines fest.",
+      "accountCount_one": "{{count}} Kundenkonto",
+      "accountCount_other": "{{count}} Kundenkonten",
+      "whatsapp": "WhatsApp"
     }
   },
   "settings": {

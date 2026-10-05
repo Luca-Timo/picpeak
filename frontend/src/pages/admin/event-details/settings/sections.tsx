@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Eye, EyeOff, Lock, RefreshCw } from 'lucide-react';
 import type { Event } from '../../../../types';
-import { Button, Input, LocalizedDateInput } from '../../../../components/common';
+import { Button, Input, LocalizedDateInput, PasswordGenerator } from '../../../../components/common';
 import { FeedbackSettings } from '../../../../components/admin';
 import { CustomerAccountPicker } from '../../../../components/admin/CustomerAccountPicker';
 import { UploaderNameSettings } from '../../../../components/admin/UploaderNameSettings';
@@ -16,7 +16,7 @@ import { usePermission } from '../../../../hooks/usePermission';
 import type { FeedbackSettings as FeedbackSettingsType } from '../../../../services/feedback.service';
 import { ExternalFolderPicker } from '../ExternalFolderPicker';
 import { useExternalImport } from '../useExternalImport';
-import type { EventFields } from './draft';
+import { emailNeedsPassword, type EventFields } from './draft';
 
 export interface FieldsProps {
   f: EventFields;
@@ -44,8 +44,13 @@ export const SectionCard: React.FC<{ title?: string; description?: string; child
   </section>
 );
 
-export const GeneralSection: React.FC<FieldsProps & { phoneFieldEnabled: boolean }> = ({ f, set, phoneFieldEnabled }) => {
+export const GeneralSection: React.FC<FieldsProps & {
+  phoneFieldEnabled: boolean;
+  /** Feed the password generator, as on the create form. */
+  event?: Pick<Event, 'event_name' | 'event_date' | 'event_type'>;
+}> = ({ f, set, phoneFieldEnabled, event }) => {
   const { t } = useTranslation();
+  const [showPassword, setShowPassword] = useState(false);
   return (
     <SectionCard>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -69,6 +74,63 @@ export const GeneralSection: React.FC<FieldsProps & { phoneFieldEnabled: boolean
             placeholder={t('events.hostEmailPlaceholder')}
           />
         </div>
+        {emailNeedsPassword(f) && (
+          <div className="md:col-span-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 p-4 space-y-3">
+            <p className="text-sm text-amber-800 dark:text-amber-300">
+              {t('events.recipients.passwordForEmailHint', 'This gallery was shared through the customer portal only, so its password was generated and nobody knows it. The gallery email to this address includes the password, so set one now.')}
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass} htmlFor="settings-email-password">{t('events.galleryPassword')}</label>
+                <div className="relative">
+                  <Input
+                    id="settings-email-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={f.new_password}
+                    onChange={(e) => set({ new_password: e.target.value })}
+                    placeholder={t('events.passwordPlaceholder')}
+                    leftIcon={<Lock className="w-5 h-5 text-faint" />}
+                    className="pr-10"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    aria-label={showPassword ? t('common.hidePassword', 'Hide password') : t('common.showPassword', 'Show password')}
+                  >
+                    {showPassword
+                      ? <EyeOff className="w-5 h-5 text-faint hover:text-body" />
+                      : <Eye className="w-5 h-5 text-faint hover:text-body" />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className={labelClass} htmlFor="settings-email-password-confirm">{t('events.confirmPassword')}</label>
+                <Input
+                  id="settings-email-password-confirm"
+                  type={showPassword ? 'text' : 'password'}
+                  value={f.confirm_new_password}
+                  onChange={(e) => set({ confirm_new_password: e.target.value })}
+                  placeholder={t('events.confirmPasswordPlaceholder')}
+                  leftIcon={<Lock className="w-5 h-5 text-faint" />}
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+            <PasswordGenerator
+              eventName={event?.event_name}
+              eventDate={event?.event_date}
+              eventType={event?.event_type}
+              onPasswordGenerated={(password) => {
+                set({ new_password: password, confirm_new_password: password });
+                setShowPassword(true);
+              }}
+              passwordComplexity="moderate"
+              className="w-full"
+            />
+          </div>
+        )}
         {phoneFieldEnabled && (
           <div>
             <label className={labelClass} htmlFor="settings-host-phone">

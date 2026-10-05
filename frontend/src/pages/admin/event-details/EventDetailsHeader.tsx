@@ -29,7 +29,7 @@ import { usePermissions } from '../../../contexts/PermissionsContext';
 import { buildShareLinkUrl } from '../../../utils/url';
 import { isGalleryPublic } from '../../../utils/accessControl';
 import { safeParseDate } from './utils';
-import { canSendGalleryEmail } from './OverviewTab';
+import { canSendGalleryEmail, useAccountReach } from './OverviewTab';
 
 interface EventDetailsHeaderProps {
   event: Event;
@@ -127,6 +127,7 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
   const { t } = useTranslation();
   const { format } = useLocalizedDate();
   const { flags } = useFeatureFlags();
+  const reach = useAccountReach();
   const { hasPermission, hasAnyPermission } = usePermissions();
   const confirm = useConfirm();
   const archived = Boolean(event.is_archived);
@@ -251,7 +252,7 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
                 {t('events.viewGallery')}
               </a>
             )}
-            {canHelpClient && canSendGalleryEmail(event) && (
+            {canHelpClient && canSendGalleryEmail(event, reach) && (
               <Button
                 variant="primary"
                 size="sm"

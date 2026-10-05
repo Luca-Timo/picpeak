@@ -169,7 +169,7 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
   const body = (() => {
     switch (active) {
       case 'general':
-        return <GeneralSection f={draft.event} set={set} phoneFieldEnabled={phoneFieldEnabled} />;
+        return <GeneralSection f={draft.event} set={set} phoneFieldEnabled={phoneFieldEnabled} event={event} />;
       case 'access':
         return <AccessSection f={draft.event} set={set} />;
       case 'downloads':

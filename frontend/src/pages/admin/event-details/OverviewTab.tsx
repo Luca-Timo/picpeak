@@ -12,8 +12,9 @@ import { FeedbackModerationPanel } from '../../../components/admin';
 import { ShortUrlsCard } from '../../../components/admin/ShortUrlsCard';
 import { useAnyPermission, usePermission } from '../../../hooks/usePermission';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
-import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
+import { useFeatureEnabled, useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
 import { toBoolean } from '../../../utils/parsers';
+import { accountName, formatNameList, galleryRecipients, type GalleryRecipients, type RecipientAccount } from '../../../utils/galleryRecipients';
 import type { FeedbackSettings as FeedbackSettingsType } from '../../../services/feedback.service';
 import type { EventDetailsTab } from './types';
 import type { SettingsSectionKey } from './settings/draft';
@@ -43,14 +44,37 @@ interface OverviewTabProps {
   onRevealNow: () => void;
 }
 
-/** Accounts the gallery email can actually reach (mirrors crud.js canReceiveGalleryNotice). */
-export function reachableCustomerCount(event: Event): number {
-  const accounts = (event as { customer_accounts?: Array<{ email?: string; is_active?: unknown; can_sign_in?: unknown }> }).customer_accounts || [];
-  return accounts.filter((c) => toBoolean(c.is_active, true) && toBoolean(c.can_sign_in, true) && !!c.email).length;
+/** The customer accounts assigned to the gallery, as the event detail route returns them. */
+export function assignedAccounts(event: Event): RecipientAccount[] {
+  return (event as { customer_accounts?: RecipientAccount[] }).customer_accounts || [];
 }
 
-export function canSendGalleryEmail(event: Event): boolean {
-  const hasRecipient = !!event.customer_email || reachableCustomerCount(event) > 0;
+/** Whether this admin's gallery notices reach customer accounts at all. */
+export interface AccountReach {
+  portalEnabled: boolean;
+  /** customers.events, as the backend requires on every announcing route. */
+  canAnnounceToAccounts: boolean;
+}
+
+export function useAccountReach(): AccountReach {
+  return {
+    portalEnabled: useFeatureEnabled('customerPortal'),
+    canAnnounceToAccounts: usePermission('customers.events'),
+  };
+}
+
+/** Who a gallery notice for this event reaches (mirrors galleryNotificationService). */
+export function eventRecipients(event: Event, reach: AccountReach): GalleryRecipients {
+  return galleryRecipients(event.customer_email, assignedAccounts(event), {
+    portalEnabled: reach.portalEnabled,
+    includeAccounts: reach.canAnnounceToAccounts,
+    prefersGalleryEmail: !!event.welcome_message?.trim() || toBoolean(event.client_access_enabled, false),
+  });
+}
+
+export function canSendGalleryEmail(event: Event, reach: AccountReach): boolean {
+  const { inlineEmail, accounts } = eventRecipients(event, reach);
+  const hasRecipient = !!inlineEmail || accounts.length > 0;
   const isExpired = !!event.expires_at && new Date(event.expires_at) <= new Date();
   return hasRecipient && !isExpired && toBoolean(event.is_active, true) && !event.is_draft && !event.is_archived;
 }
@@ -82,6 +106,9 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   const { t } = useTranslation();
   const { format } = useLocalizedDate();
   const { flags } = useFeatureFlags();
+  const reach = useAccountReach();
+  const portalEnabled = reach.portalEnabled;
+  const accounts = assignedAccounts(event);
   const canHelpClient = useAnyPermission(['events.edit', 'events.support']) && !event.share_secrets_hidden;
   // Revealing changes what guests see; the route needs events.edit.
   const canReveal = usePermission('events.edit') && !event.share_secrets_hidden;
@@ -106,7 +133,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
               {t('events.overviewTab.helpClientHint', 'Actions that take effect at once. Password and resend-email are on the share card above.')}
             </p>
             <div className="flex flex-wrap gap-2">
-              {canSendGalleryEmail(event) && (
+              {canSendGalleryEmail(event, reach) && (
                 <Button variant="outline" size="sm" leftIcon={<Mail className="w-4 h-4" />} onClick={onSendGalleryEmail} isLoading={isSendingGalleryEmail}>
                   {t('events.sendGalleryEmail.button', 'Send gallery email')}
                 </Button>
@@ -149,6 +176,13 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
           <h2 className="text-lg font-semibold text-heading mb-2">{t('events.overviewTab.details', 'Details')}</h2>
           <SummaryRow label={t('events.hostName')}>{event.customer_name || <span className="text-muted">{t('common.notSet')}</span>}</SummaryRow>
           <SummaryRow label={t('events.hostEmail')}>{event.customer_email || <span className="text-muted">{t('common.notSet')}</span>}</SummaryRow>
+          {portalEnabled && accounts.length > 0 && (
+            <SummaryRow label={t('events.recipients.customerAccounts', 'Customer accounts')}>
+              <span title={accounts.map(accountName).join(', ')}>
+                {formatNameList(accounts.map(accountName), t)}
+              </span>
+            </SummaryRow>
+          )}
           {event.admin_email && <SummaryRow label={t('events.adminEmail')}>{event.admin_email}</SummaryRow>}
           {event.created_at && <SummaryRow label={t('events.created')}>{format(safeParseDate(event.created_at)!, 'PP')}</SummaryRow>}
           <SummaryRow label={t('events.expires')}>

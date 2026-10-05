@@ -21,6 +21,9 @@ import { toast } from 'react-toastify';
 import { Button, Input, Card, PasswordGenerator, LocalizedDateInput, TimeField } from '../../components/common';
 import { ThemeCustomizerEnhanced, GalleryPreview, WelcomeMessageEditor, FeedbackSettings } from '../../components/admin';
 import { CustomerAccountPicker } from '../../components/admin/CustomerAccountPicker';
+import { GalleryRecipientsList } from '../../components/admin/GalleryRecipientsList';
+import { useFeatureEnabled } from '../../contexts/FeatureFlagsContext';
+import { accountName, galleryRecipients } from '../../utils/galleryRecipients';
 import { UploaderNameSettings } from '../../components/admin/UploaderNameSettings';
 import type { GuestNameMode } from '../../types';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -285,7 +288,23 @@ export const CreateEventPage: React.FC = () => {
 
   // Get field requirements (default to true if not set)
   const requireCustomerName = publicSettings?.event_require_customer_name !== false;
-  const requireCustomerEmail = publicSettings?.event_require_customer_email !== false;
+  // Customer accounts (#354) the portal email can reach are recipients too:
+  // with one picked, the inline customer email is optional even where the
+  // setting requires it. Same rule as the backend (eventCreationService):
+  // customers.events, and active accounts that can sign in.
+  const portalEnabled = useFeatureEnabled('customerPortal');
+  const canAnnounceToAccounts = usePermission('customers.events');
+  const recipients = galleryRecipients(formData.customer_email, formData.customer_accounts, {
+    portalEnabled,
+    includeAccounts: canAnnounceToAccounts,
+    prefersGalleryEmail: !!formData.welcome_message?.trim() || formData.client_access_enabled,
+  });
+  const picksAccounts = recipients.accounts.length > 0;
+  const requireCustomerEmail = publicSettings?.event_require_customer_email !== false && !picksAccounts;
+  // Announced only through the customer portal, which opens the gallery
+  // without its password — so the backend generates one that just keeps the
+  // share link locked, and the admin has nothing to type.
+  const portalOnly = picksAccounts && !formData.customer_email.trim();
   const phoneFieldEnabled = publicSettings?.event_phone_field_enabled === true;
   const requireAdminEmail = publicSettings?.event_require_admin_email !== false;
   const requireEventDate = publicSettings?.event_require_event_date !== false;
@@ -513,7 +532,7 @@ export const CreateEventPage: React.FC = () => {
       newErrors.admin_email = t('validation.invalidEmailFormat');
     }
 
-    if (formData.require_password) {
+    if (formData.require_password && !portalOnly) {
       if (!formData.password) {
         newErrors.password = t('validation.passwordRequired');
       } else if (formData.password.length < 6) {
@@ -569,7 +588,7 @@ export const CreateEventPage: React.FC = () => {
       ...(phoneFieldEnabled && formData.customer_phone ? { customer_phone: formData.customer_phone.trim() } : {}),
       admin_email: formData.admin_email,
       require_password: formData.require_password,
-      password: formData.require_password ? formData.password : undefined,
+      password: formData.require_password && !portalOnly ? formData.password : undefined,
       welcome_message: formData.welcome_message || '',
       // Only a gallery with custom styling stores a theme; the rest follow
       // Branding (backend services/galleryTheme).
@@ -904,6 +923,18 @@ export const CreateEventPage: React.FC = () => {
                 onChange={(next) => setFormData((prev) => ({ ...prev, customer_accounts: next }))}
               />
 
+              {(recipients.inlineEmail || recipients.accounts.length > 0) && (
+                <div>
+                  <p className="text-xs text-soft mb-1">
+                    {t('events.recipients.previewTitle', 'Notified when you publish the gallery:')}
+                  </p>
+                  <GalleryRecipientsList
+                    inlineEmail={recipients.inlineEmail}
+                    accountNames={recipients.accounts.map(accountName)}
+                  />
+                </div>
+              )}
+
               <Input
                 type="email"
                 label={requireAdminEmail ? t('events.adminEmail') : `${t('events.adminEmail')} (${t('common.optional')})`}
@@ -976,7 +1007,16 @@ export const CreateEventPage: React.FC = () => {
               )}
             </div>
 
-            {formData.require_password && (
+            {formData.require_password && portalOnly && (
+              <div className="rounded-md border border-line bg-inset p-3 text-sm text-body flex items-start gap-2">
+                <Key className="w-4 h-4 mt-0.5 shrink-0 text-soft" />
+                <span>
+                  {t('events.recipients.generatedPasswordNote', 'Customers sign in through their customer portal, so no gallery password is needed. A strong one is generated to keep the gallery link locked. If you add a customer email later, you set a password then.')}
+                </span>
+              </div>
+            )}
+
+            {formData.require_password && !portalOnly && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Input

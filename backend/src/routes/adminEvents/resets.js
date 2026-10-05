@@ -4,7 +4,7 @@
 
 const { db, logActivity } = require('../../database/db');
 const { adminAuth } = require('../../middleware/auth');
-const { requirePermission } = require('../../middleware/permissions');
+const { requirePermission, userHasAnyPermission } = require('../../middleware/permissions');
 const bcrypt = require('bcrypt');
 const { queueEmail } = require('../../services/emailProcessor');
 const { galleryPasswordColumns, readGalleryPassword, dropCopiesIfStorageOff } = require('../../utils/galleryPasswordVault');
@@ -16,6 +16,9 @@ const { buildShareLinkVariants } = require('../../services/shareLinkService');
 const { requireEventOwnership, scopeEventsQuery } = require('../../middleware/ownership');
 const { getAbsoluteFrontendUrl } = require('../../utils/frontendUrl');
 const { parseBooleanInput } = require('../../utils/parsers');
+const {
+  resolveGalleryRecipients, notifyGalleryRecipients, describeRecipients, recipientSummary, passwordKnownColumns,
+} = require('../../services/galleryNotificationService');
 
 module.exports = (router) => {
 
@@ -60,7 +63,9 @@ module.exports = (router) => {
         newPassword = generateReadablePassword();
       }
       const passwordHash = await bcrypt.hash(newPassword, getBcryptRounds());
-      const copyColumns = await galleryPasswordColumns({ password: newPassword });
+      // The admin sees this password in the response, so it is no longer the
+      // generated one nobody knows (migration 264).
+      const copyColumns = { ...(await galleryPasswordColumns({ password: newPassword })), ...(await passwordKnownColumns()) };
       // An admin-chosen password equal to the current one is not a change; it
       // keeps the hash only while the stored hash is still the one compared.
       // A generated password is always new. #1271 — the copy is written in the
@@ -178,8 +183,15 @@ module.exports = (router) => {
     
       // Dates will be formatted by the email processor based on recipient language
     
-      // Queue the email
-      const recipientEmail = event.customer_email || event.host_email;
+      // Everyone the gallery was announced to: the inline address (unless it
+      // is one of the assigned accounts) and every reachable account.
+      const recipients = await resolveGalleryRecipients(event, {
+        includeAccounts: await userHasAnyPermission(req.admin.id, ['customers.events']),
+      });
+      if (!recipients.inlineEmail && recipients.accounts.length === 0) {
+        return res.status(400).json({ error: 'No customer email is set for this event' });
+      }
+      const recipientEmail = recipients.inlineEmail;
       const recipientName = event.customer_name || event.host_name || (recipientEmail ? recipientEmail.split('@')[0] : null);
       // event.share_link is the path-only form; use the full URL so the
       // customer's mail client renders a clickable absolute link.
@@ -206,13 +218,16 @@ module.exports = (router) => {
         emailData.client_link = `${frontendUrl}/gallery/${event.slug}/client-access?token=${event.client_share_token}`;
         emailData.client_password = stored.clientPassword;
       }
-      await queueEmail(id, recipientEmail, 'gallery_created', emailData);
-    
+      const sent = await notifyGalleryRecipients(event, {
+        recipients,
+        buildInlineEmailData: () => emailData,
+      });
+
       // Log the activity using the proper schema
       try {
         await logActivity('email_resent', {
-          email_type: 'gallery_created',
-          recipient: recipientEmail,
+          email_type: sent.inlineEmail ? 'gallery_created' : 'customer_gallery_assigned',
+          recipient: recipientSummary(sent),
           ip_address: req.ip || '0.0.0.0',
           user_agent: req.get('user-agent') || 'Unknown'
         }, id, {
@@ -226,8 +241,11 @@ module.exports = (router) => {
       }
     
       res.json({
-        usedStoredPassword, 
+        usedStoredPassword,
         success: true,
+        recipients: describeRecipients(sent, {
+          withIdentities: await userHasAnyPermission(req.admin.id, ['customers.view']),
+        }),
         message: 'Creation email has been queued for sending'
       });
     } catch (error) {

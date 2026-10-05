@@ -125,6 +125,16 @@ export interface CompleteDeliveryResult {
   state: DeliveryState;
 }
 
+/** Who a gallery notice was queued for (galleryNotificationService.describeRecipients). */
+export interface GalleryNoticeRecipients {
+  /** Got the standard gallery email. */
+  email: string | null;
+  /** How many accounts got their customer portal email. */
+  account_count: number;
+  /** Who they are — empty without customers.view. */
+  accounts: Array<{ id: number; name: string; email: string }>;
+}
+
 export interface DownloadLimitUsage {
   download_limit: number | null;
   downloads_used: number;
@@ -426,7 +436,7 @@ export const eventsService = {
   async sendGalleryEmail(
     eventId: number,
     options?: { password?: string },
-  ): Promise<{ message: string; recipient: string }> {
+  ): Promise<{ message: string; recipient: string; recipients?: GalleryNoticeRecipients }> {
     const body = options?.password ? { password: options.password } : undefined;
     const response = await api.post(`/admin/events/${eventId}/send-gallery-email`, body);
     return response.data;
