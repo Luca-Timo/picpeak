@@ -20,6 +20,7 @@ const sharp = require('sharp');
 const { body, query, validationResult } = require('express-validator');
 const { safeValidationErrors } = require('../../utils/routeHelpers');
 const { db, logActivity } = require('../../database/db');
+const { parseBooleanInput } = require('../../utils/parsers');
 const { apiTokenAuth, requireApiScope } = require('../../middleware/apiTokenAuth');
 const { requireEventOwnership, scopeEventsQuery } = require('../../middleware/ownership');
 // GHSA-9697: migration 081 defines a token's effective permissions as the
@@ -461,6 +462,7 @@ router.post(
       const rawCategoryId = req.body?.category_id;
       const parsedCategoryId = rawCategoryId ? parseInt(rawCategoryId, 10) : NaN;
       let categoryId = null;
+      let folderId = null;
       let photoType = 'individual';
       if (!Number.isNaN(parsedCategoryId)) {
         // Scope to categories owned by this event (event_id = event.id) or
@@ -488,6 +490,8 @@ router.post(
         if (category.slug === 'collage' || category.slug === 'collages') {
           photoType = 'collage';
         }
+        // A folder (issue 1786) lives in folder_id since migration 265.
+        if (parseBooleanInput(category.is_folder, false)) folderId = category.id;
       }
 
       // Replacement (#745). The Lightroom plugin stores the picpeak photo id
@@ -614,7 +618,8 @@ router.post(
         path: relPath,
         thumbnail_path: thumbRel,
         type: photoType,
-        category_id: categoryId,
+        category_id: folderId ? null : categoryId,
+        folder_id: folderId,
         size_bytes: stat.size,
         width,
         height,

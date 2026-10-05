@@ -65,7 +65,26 @@ async function archiveEvent(event) {
           // For resolving the row's storage key below, not written out.
           'photos.path',
           'photos.source_origin',
+          // Turned into folder_path below (issue 1786), not written out.
+          'photos.folder_id',
+          'photos.first_look',
         );
+      // The folder a photo lives in, as a path ("Saturday/Activity B"):
+      // folder ids do not survive a restore into a fresh database, names do.
+      const folders = await require('./folderTreeService').eventFolders(event.id);
+      const byId = new Map(folders.map((f) => [Number(f.id), f]));
+      const pathOf = (id) => {
+        const names = [];
+        let cur = byId.get(Number(id));
+        const seen = new Set();
+        while (cur && !seen.has(cur.id)) {
+          seen.add(cur.id);
+          names.unshift(cur.name);
+          cur = cur.parent_id ? byId.get(Number(cur.parent_id)) : null;
+        }
+        return names.length ? names.join('/') : null;
+      };
+      manifestRows = manifestRows.map((row) => ({ ...row, folder_path: row.folder_id ? pathOf(row.folder_id) : null }));
     } catch (error) {
       logger.error(`Error building photos manifest for event ${event.slug}:`, error);
       // Non-fatal — restore will fall back to filename as original_filename
@@ -149,7 +168,7 @@ async function archiveEvent(event) {
     if (manifestRows.length > 0) {
       const zipPathByKey = new Map(photoEntries.map((entry, i) => [entry.key, dedupedNames[i]]));
       const manifest = manifestRows.map((row) => {
-        const { path: _path, source_origin: _origin, ...fields } = row;
+        const { path: _path, source_origin: _origin, folder_id: _folder, ...fields } = row;
         let zipPath = null;
         try {
           const key = resolvePhotoStorageKey(event, row);

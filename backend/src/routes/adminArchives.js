@@ -18,6 +18,8 @@ const { getPagination } = require('../utils/routeHelpers');
 const { ALLOWED_MEDIA_TYPES, ALLOWED_VIDEO_TYPES } = require('../utils/fileSecurityUtils');
 const { toIso } = require('../utils/dateNormalize');
 const { clearGuestCredits } = require('../services/photoCredit');
+const folderTree = require('../services/folderTreeService');
+const { parseBooleanInput } = require('../utils/parsers');
 const { getStorage } = require('../services/storage');
 const { pipeStreamToResponse } = require('../utils/streamResponse');
 const router = express.Router();
@@ -655,6 +657,22 @@ router.post('/:id/restore', adminAuth, requirePermission('archives.restore'), re
           categoryId = await resolveCategoryId(dirPath.split('/')[0]);
         }
 
+        // Folder (issue 1786): rebuilt from the recorded path. A category name
+        // that resolves to a folder (an archive written before folder_id
+        // existed) lands in folder_id too, where that photo used to render.
+        let folderId = null;
+        if (manifestEntry?.folder_path) {
+          const segments = String(manifestEntry.folder_path).split('/').filter(Boolean);
+          ({ folderId } = await folderTree.ensurePath(archive.id, segments, { canCreate: true }));
+        }
+        if (categoryId) {
+          const resolved = await db('photo_categories').where('id', categoryId).first('is_folder');
+          if (resolved && parseBooleanInput(resolved.is_folder, false)) {
+            folderId = folderId || categoryId;
+            categoryId = null;
+          }
+        }
+
         const isVideoEntry = manifestEntry?.media_type === 'video'
           || String(manifestEntry?.mime_type || '').startsWith('video/')
           || VIDEO_EXTENSIONS.has(extension);
@@ -694,6 +712,8 @@ router.post('/:id/restore', adminAuth, requirePermission('archives.restore'), re
           // was just written.
           size_bytes: entry.size,
           category_id: categoryId,
+          folder_id: folderId,
+          first_look: formatBoolean(parseBooleanInput(manifestEntry?.first_look, false)),
           // Restore order is not upload order; stamping the clock here
           // reshuffled the whole gallery. The manifest holds whatever
           // shape the row had, and on SQLite a `new Date()` written

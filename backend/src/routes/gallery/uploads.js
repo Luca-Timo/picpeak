@@ -179,6 +179,16 @@ router.post('/:eventId/upload', verifyGalleryAccess, denySlideshowToken, resolve
             numericCategoryId = defaultCategoryId;
           }
         }
+        // A folder as the upload category (issue 1160) lands in folder_id
+        // since migration 265; category_id holds filter categories only.
+        let numericFolderId = null;
+        if (numericCategoryId) {
+          const assignment = await categoryScope.resolveCategoryAssignment(eventId, numericCategoryId);
+          if (assignment && assignment.folder_id) {
+            numericFolderId = assignment.folder_id;
+            numericCategoryId = null;
+          }
+        }
 
         // Queue files as 'pending' — the background worker will process
         // thumbnails / EXIF / dimensions off the request thread (#357).
@@ -186,6 +196,7 @@ router.post('/:eventId/upload', verifyGalleryAccess, denySlideshowToken, resolve
           eventId,
           photoType: 'individual',
           categoryId: numericCategoryId,
+          folderId: numericFolderId,
           photoCap,
           uploadedBy: 'guest',
           credit,

@@ -50,7 +50,18 @@ const { getStoragePath } = require('../config/storage');
 
 // Category ids are resolved within one event's scope (#500 / #525); shared
 // with the gallery upload route.
-const { findScopedCategory, outOfScopeCategoryError } = require('../utils/categoryScope');
+const { outOfScopeCategoryError, resolveCategoryAssignment } = require('../utils/categoryScope');
+const { parseBooleanInput } = require('../utils/parsers');
+const { resolveUploadPlacement, placementColumns, afterUploadPlacement } = require('../services/uploadPlacement');
+
+/** `folder_id` from a request as a photo column: a folder of this event, or null for the root. */
+async function folderIdUpdate(eventId, raw) {
+  const id = parseInt(raw, 10);
+  if (raw === null || raw === undefined || raw === '' || !(id > 0)) return { folder_id: null };
+  const folder = await require('../services/folderTreeService').findEventFolder(eventId, id);
+  if (!folder) return { error: `Unknown folder_id ${id}` };
+  return { folder_id: id };
+}
 const { photoCapOf, countEventPhotos } = require('../services/photoCap');
 const { manualCreditFields, CREDIT_NONE } = require('../services/photoCredit');
 
@@ -329,11 +340,14 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
     // admin upload silently accepts any category id including ones that
     // belong to a different event. The v1 route rejects out-of-scope ids
     // with 400; mirror that here so admin and v1 stay consistent.
+    // Folder, folder request and first-look flag of this batch (issues 1786,
+    // 1562); also maps a folder sent as category_id onto folder_id.
+    const { placement, category: resolvedCategory, error: placementError } = await resolveUploadPlacement(event.id, req.body);
+    if (placementError) {
+      return res.status(400).json(placementError);
+    }
     if (parsedCategoryId && !isNaN(parsedCategoryId)) {
-      const category = await findScopedCategory(event.id, parsedCategoryId);
-      if (!category) {
-        return res.status(400).json(outOfScopeCategoryError(parsedCategoryId));
-      }
+      const category = resolvedCategory;
       categoryName = category.slug || category.name.toLowerCase().replace(/\s+/g, '_');
       // Use category slug for type determination
       if (category.slug === 'collage' || category.slug === 'collages') {
@@ -479,7 +493,7 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
             path: relativePath,
             thumbnail_path: null,
             type: photoType,
-            category_id: parsedCategoryId,
+            ...placementColumns(placement),
             size_bytes: tempStats.size,
             captured_at: null,
             media_type: isVideo ? 'video' : 'image',
@@ -499,7 +513,8 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
           id: photoId,
           filename: newFilename,
           size: tempStats.size,
-          category_id: parsedCategoryId,
+          category_id: placement.category_id,
+          folder_id: placement.folder_id,
           media_type: isVideo ? 'video' : 'image',
         });
       } catch (err) {
@@ -523,6 +538,9 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
       eventId,
       { type: 'admin', id: req.admin.id, name: req.admin.username }
     );
+
+    await afterUploadPlacement(eventId, placement, uploadedPhotos.length,
+      { type: 'admin', id: req.admin.id, name: req.admin.username });
 
     // Log individual replacements for audit trail
     for (const rp of replacedPhotos) {
@@ -935,6 +953,8 @@ router.patch('/:eventId/photos/:photoId', adminAuth, requirePermission('photos.e
     if (category_id === 'individual' || category_id === 'collage') {
       updateData.type = category_id;
       updateData.category_id = null; // Clear legacy category_id
+    } else if (category_id === undefined && Object.prototype.hasOwnProperty.call(req.body, 'folder_id')) {
+      // A folder move alone (issue 1786) leaves the filter category alone.
     } else if (category_id === null || category_id === undefined) {
       // Explicitly clear category
       updateData.category_id = null;
@@ -952,14 +972,25 @@ router.patch('/:eventId/photos/:photoId', adminAuth, requirePermission('photos.e
         // Same scope check the upload route runs: without it any positive id
         // was accepted, so a photo could be moved into another event's
         // category (the grid then never shows it under any filter).
-        const category = await findScopedCategory(parseInt(eventId, 10), numericCategoryId);
-        if (!category) {
+        const assignment = await resolveCategoryAssignment(parseInt(eventId, 10), numericCategoryId);
+        if (!assignment) {
           return res.status(400).json(outOfScopeCategoryError(numericCategoryId));
         }
-        updateData.category_id = numericCategoryId;
+        // A folder sent as category_id (pre-migration-265 client) moves the
+        // photo into that folder and leaves its filter category alone.
+        if (assignment.folder_id) updateData.folder_id = assignment.folder_id;
+        else updateData.category_id = numericCategoryId;
       } else {
         updateData.category_id = null;
       }
+    }
+
+    // Folder (issue 1786): null/0 = gallery root.
+    if (Object.prototype.hasOwnProperty.call(req.body, 'folder_id')) {
+      const folderUpdate = await folderIdUpdate(parseInt(eventId, 10), req.body.folder_id);
+      if (folderUpdate.error) return res.status(400).json({ error: folderUpdate.error });
+      updateData.folder_id = folderUpdate.folder_id;
+      updateData.pending_folder_request_id = null;
     }
 
     // A human just set (or cleared) this category, so it is no longer an
@@ -979,6 +1010,7 @@ router.patch('/:eventId/photos/:photoId', adminAuth, requirePermission('photos.e
     // photos added in between (codex review).
     if (updateData.visibility !== undefined
         || Object.prototype.hasOwnProperty.call(updateData, 'category_id')
+        || Object.prototype.hasOwnProperty.call(updateData, 'folder_id')
         || Object.prototype.hasOwnProperty.call(updateData, 'type')) {
       downloadZipService.invalidate(parseInt(eventId, 10));
     }
@@ -1147,11 +1179,12 @@ router.post('/:eventId/photos/bulk-update', adminAuth, requirePermission('photos
         const numericCategoryId = parseInt(updates.category_id, 10);
         if (numericCategoryId > 0) {
           // Scope check, as on the PATCH and upload routes above.
-          const category = await findScopedCategory(parseInt(eventId, 10), numericCategoryId);
-          if (!category) {
+          const assignment = await resolveCategoryAssignment(parseInt(eventId, 10), numericCategoryId);
+          if (!assignment) {
             return res.status(400).json(outOfScopeCategoryError(numericCategoryId));
           }
-          updateData.category_id = numericCategoryId;
+          if (assignment.folder_id) updateData.folder_id = assignment.folder_id;
+          else updateData.category_id = numericCategoryId;
         } else {
           updateData.category_id = null;
         }
@@ -1162,6 +1195,14 @@ router.post('/:eventId/photos/bulk-update', adminAuth, requirePermission('photos
       // "undo automatic categories" would later wipe the photographer's own
       // choice — exactly the guarantee the rule engine advertises.
       updateData.auto_categorized = false;
+    }
+
+    // Folder (issue 1786): move many photos at once; null/0 = gallery root.
+    if (Object.prototype.hasOwnProperty.call(updates, 'folder_id')) {
+      const folderUpdate = await folderIdUpdate(parseInt(eventId, 10), updates.folder_id);
+      if (folderUpdate.error) return res.status(400).json({ error: folderUpdate.error });
+      updateData.folder_id = folderUpdate.folder_id;
+      updateData.pending_folder_request_id = null;
     }
 
     // Credit (#1561): correct or clear a name on many photos at once — the
@@ -1187,6 +1228,7 @@ router.post('/:eventId/photos/bulk-update', adminAuth, requirePermission('photos
     // cached ZIP so it rebuilds fresh (codex review).
     if (updateData.visibility !== undefined
         || Object.prototype.hasOwnProperty.call(updateData, 'category_id')
+        || Object.prototype.hasOwnProperty.call(updateData, 'folder_id')
         || Object.prototype.hasOwnProperty.call(updateData, 'type')) {
       downloadZipService.invalidate(parseInt(eventId, 10));
     }
@@ -1336,6 +1378,19 @@ router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requ
     // Keep type filter for backwards compatibility
     if (type) {
       query = query.where({ 'photos.type': type });
+    }
+
+    // Folder (issue 1786): `root` = photos in no folder, a number = the
+    // photos directly in that folder (the admin browses one level at a time,
+    // like the guest), `pending` = photos waiting for a folder request.
+    const folderParam = req.query.folder_id;
+    if (folderParam === 'root') {
+      query = query.whereNull('photos.folder_id');
+    } else if (folderParam === 'pending') {
+      query = query.whereNotNull('photos.pending_folder_request_id');
+    } else if (folderParam !== undefined && folderParam !== '') {
+      const numericFolderId = parseInt(folderParam, 10);
+      if (numericFolderId > 0) query = query.where('photos.folder_id', numericFolderId);
     }
 
     // Media type filter. The admin grid has sent media_type=photo|video since
@@ -1542,6 +1597,10 @@ router.get('/:eventId/photos', adminAuth, requirePermission('photos.view'), requ
         // the default label from category_slug and the media type.
         category_name: photo.pc_name || null,
         category_slug: photo.pc_slug || photo.type,
+        // Folder (issue 1786) and first-look flag (issue 1562).
+        folder_id: photo.folder_id || null,
+        pending_folder_request_id: photo.pending_folder_request_id || null,
+        first_look: parseBooleanInput(photo.first_look, false),
         media_type: photo.media_type || 'image',
         mime_type: photo.mime_type || null,
         // Browser-playable copy (issue 1430, item 8): null until the setting
@@ -1911,11 +1970,10 @@ router.post('/:eventId/chunked-upload/:uploadId/complete', adminAuth, requirePer
     if (!event) {
       return res.status(404).json({ error: 'Event not found' });
     }
-    const rawParsed = category_id ? parseInt(category_id, 10) : NaN;
-    const parsedCategoryId = rawParsed > 0 ? rawParsed : null;
-    if (parsedCategoryId && !(await findScopedCategory(event.id, parsedCategoryId))) {
+    const { placement, error: placementError } = await resolveUploadPlacement(event.id, req.body);
+    if (placementError) {
       await chunkedUpload.abortUpload(uploadId, { owner: uploadOwner(req) }).catch(() => {});
-      return res.status(400).json(outOfScopeCategoryError(parsedCategoryId));
+      return res.status(400).json(placementError);
     }
     const photoCap = photoCapOf(event);
     if (photoCap) {
@@ -1945,8 +2003,11 @@ router.post('/:eventId/chunked-upload/:uploadId/complete', adminAuth, requirePer
       [fileObj],
       mergedFile.eventId,
       'admin',
-      category_id || null
+      category_id || null,
+      placementColumns(placement)
     );
+    await afterUploadPlacement(mergedFile.eventId, placement, uploadedPhotos.length,
+      { type: 'admin', id: req.admin.id, name: req.admin.username });
     if (uploadedPhotos.length) acceptedUpload(res, {
       video: isVideoMimeType(fileObj.mimetype),
       raw: path.extname(fileObj.originalname).toLowerCase() === '.dng',

@@ -36,6 +36,26 @@ const { isUniqueViolation } = require('../utils/dbErrors');
 const { resolveCredit } = require('./photoCredit');
 const { photoCapOf, insertPhotoWithinCap } = require('./photoCap');
 const jobState = require('./maintenanceJobState');
+const folderTree = require('./folderTreeService');
+const { parseBooleanInput } = require('../utils/parsers');
+const { formatBoolean } = require('../utils/dbCompat');
+
+/**
+ * Where an external file lands (issues 1786 + 1562), from its path relative
+ * to the imported folder. The first segment is still consumed by the
+ * individual/collages type map. With the event's folder structure on, the
+ * remaining directories become nested folders; a top-level FirstLook keyword
+ * folder is a marker (photos flagged, folder not created) either way.
+ */
+function externalPlacement(rel, { map, keywords, mirror }) {
+  const dirs = path.dirname(rel) === '.' ? [] : path.dirname(rel).split(path.sep);
+  if (dirs.length && (dirs[0] === map.collages || dirs[0] === map.individual)) dirs.shift();
+  const segs = folderTree.toSegments(dirs) || [];
+  if (segs.length && folderTree.matchesFirstLookKeyword(segs[0], keywords)) {
+    return { segments: [], firstLook: true };
+  }
+  return { segments: mirror ? segs.slice(0, folderTree.MAX_FOLDER_DEPTH) : [], firstLook: false };
+}
 
 class ImportInProgressError extends Error {
   constructor(eventId) {
@@ -178,6 +198,10 @@ async function importExternalFolder({
   // Load event
   const event = await db('events').where('id', eventId).first();
   if (!event) throw new EventNotFoundError(eventId);
+  const mirrorFolders = parseBooleanInput(event.folder_structure, false);
+  const firstLookKeywords = await folderTree.getFirstLookKeywords();
+  const folderIdByPath = new Map();
+  let firstLookImported = 0;
 
   // The claim comes AFTER the event lookup and BEFORE anything touches the
   // filesystem: a large tree takes long enough that a run looks hung and
@@ -263,9 +287,16 @@ async function importExternalFolder({
       }
     }
 
+    // Same name in two subfolders is two photos once the subfolders are
+    // gallery folders (Friday/IMG_0001.jpg vs Saturday/IMG_0001.jpg); without
+    // folders the historical type+name key stays, so flat imports dedupe
+    // exactly as before.
+    const dedupeKeyOf = (file) => (mirrorFolders
+      ? `${file.type}:${path.dirname(file.rel).toLowerCase()}:${path.basename(file.rel).toLowerCase()}`
+      : `${file.type}:${path.basename(file.rel).toLowerCase()}`);
     const dedupeMap = new Map();
     for (const file of preparedFiles) {
-      const dedupeKey = `${file.type}:${path.basename(file.rel).toLowerCase()}`;
+      const dedupeKey = dedupeKeyOf(file);
       const existing = dedupeMap.get(dedupeKey);
       if (!existing || file.size > existing.size) {
         if (existing) skipped++;
@@ -295,7 +326,7 @@ async function importExternalFolder({
         const unsettled = [];
         const before = new Map();
         for (const f of fresh) {
-          if (!dedupeMap.has(`${f.type}:${path.basename(f.rel).toLowerCase()}`)) continue;
+          if (!dedupeMap.has(dedupeKeyOf(f))) continue;
           try {
             const st = await fs.stat(f.full);
             if (Date.now() - st.mtimeMs < settleMs) unsettled.push(f);
@@ -489,6 +520,19 @@ async function importExternalFolder({
         // Videos carry none, as on every other ingest path.
         const credit = await resolveCredit({ localPath: f.full, isVideo });
 
+        // Folder + first-look flag (issues 1786, 1562). Folders are created on
+        // insert only; a rescan never moves an existing row, so an admin's
+        // manual moves survive.
+        const where = externalPlacement(f.rel, { map, keywords: firstLookKeywords, mirror: mirrorFolders });
+        let folderId = null;
+        if (where.segments.length) {
+          const key = folderTree.pathKey(where.segments);
+          if (!folderIdByPath.has(key)) {
+            folderIdByPath.set(key, (await folderTree.ensurePath(eventId, where.segments, { canCreate: true })).folderId);
+          }
+          folderId = folderIdByPath.get(key);
+        }
+
         let inserted;
         try {
           inserted = await insertPhotoWithinCap({
@@ -508,6 +552,8 @@ async function importExternalFolder({
             height,
             source_origin: 'external',
             external_relpath: relFromRoot,
+            folder_id: folderId,
+            first_look: formatBoolean(where.firstLook),
             // .toISOString() rather than the Date: inside jest, Dates handed
             // to the sqlite3 binding land as the literal string
             // "[object Object]" (see CLAUDE.md). Strings round-trip on both
@@ -610,6 +656,7 @@ async function importExternalFolder({
 
         if (photoId != null && !isVideo) importedPhotoIds.push(photoId);
         imported += (inserted?.length ? 1 : 0);
+        if (photoId != null && where.firstLook) firstLookImported += 1;
 
         // The manual Import is the explicit intent the exclusion list exists
         // to protect: what it brings back is no longer excluded.
@@ -662,6 +709,11 @@ async function importExternalFolder({
       truncated: walkBudget.truncated, capReached,
     };
 
+    if (firstLookImported > 0) {
+      await require('./deliveryService').markFirstLookArrived(eventId, { actor, source: 'import' })
+        .catch((err) => logger.warn(`First look switch failed for event ${eventId}: ${err.message}`));
+    }
+
     // Only a run that changed something goes into the activity log. The
     // watcher re-runs this pass on a timer for every watched event, and a
     // "0 imported, 6012 skipped" row every fifteen minutes per event would
@@ -709,6 +761,7 @@ function importFailureCode(error) {
 }
 
 module.exports = {
+  externalPlacement,
   importExternalFolder,
   importFailureCode,
   recordExclusions,

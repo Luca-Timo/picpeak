@@ -53,7 +53,10 @@ function normalizeFiles(files) {
   return [];
 }
 
-async function processUploadedPhotos(files, eventId, uploadedBy = 'admin', categoryId = null) {
+// `placement` (issue 1786): photo columns resolved by uploadPlacement —
+// category_id, folder_id, first_look, pending_folder_request_id. Before it
+// existed this path dropped the category of a chunked upload entirely.
+async function processUploadedPhotos(files, eventId, uploadedBy = 'admin', categoryId = null, placement = {}) {
   const uploadedPhotos = [];
   const fileList = normalizeFiles(files);
 
@@ -248,6 +251,7 @@ async function processUploadedPhotos(files, eventId, uploadedBy = 'admin', categ
         // is on, so installs without it never write a web_status.
         ...(isVideo && webCopyEnabled ? { web_status: 'pending' } : {}),
         ...(processingError ? { processing_error: processingError } : {}),
+        ...placement,
         ...credit
       };
 
@@ -373,6 +377,7 @@ async function processUploadedPhotos(files, eventId, uploadedBy = 'admin', categ
  *   - eventId           required
  *   - photoType         'individual' | 'collage' (default 'individual')
  *   - categoryId        numeric category id or null
+ *   - folderId          folder (issue 1786) or null for the gallery root
  *   - uploadId          optional pre-generated upload id (caller can
  *                       provide it for chunked uploads that span
  *                       multiple HTTP requests)
@@ -387,7 +392,7 @@ async function queueFilesForProcessing(files, options = {}) {
   const crypto = require('crypto');
   const { countEventPhotos, insertPhotoWithinCap, photoCapError } = require('./photoCap');
   const {
-    eventId, photoType = 'individual', categoryId = null, uploadId: providedUploadId, photoCap = null,
+    eventId, photoType = 'individual', categoryId = null, folderId = null, uploadId: providedUploadId, photoCap = null,
     uploadedBy = 'admin', credit = {},
   } = options;
   const uploadId = providedUploadId || crypto.randomBytes(16).toString('hex');
@@ -465,6 +470,7 @@ async function queueFilesForProcessing(files, options = {}) {
         thumbnail_path: null,
         type: photoType,
         category_id: categoryId,
+        folder_id: folderId,
         size_bytes: tempStats.size,
         captured_at: null,
         media_type: isVideo ? 'video' : 'image',
