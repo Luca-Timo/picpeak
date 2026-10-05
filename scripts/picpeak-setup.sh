@@ -65,6 +65,7 @@ UPDATE_MODE=false
 UNINSTALL_MODE=false
 FORCE_ADMIN_PASSWORD_RESET=false
 ENABLE_SELF_UPDATE=false   # install the in-app updater host agent (Docker only)
+DISABLE_SELF_UPDATE=false  # remove the host agent and turn the flag off
 
 ################################################################################
 # Helper Functions
@@ -877,12 +878,21 @@ install_update_agent() {
     local app_dir="$1"
     local update_dir="$app_dir/update"
 
-    if ! command_exists systemctl; then
-        log_warn "systemd not found, so the in-app updater was not installed. Use the container variant instead (docs/self-update.md)."
+    # systemctl also exists on WSL and in containers where systemd is not PID 1;
+    # daemon-reload would then fail after the stack is already up.
+    if [[ ! -d /run/systemd/system ]]; then
+        log_warn "systemd is not running here, so the in-app updater was not installed. Use the container variant instead (docs/self-update.md)."
         return 0
     fi
     if [[ ! -f "$app_dir/updater/picpeak-updater.sh" ]]; then
         log_warn "$app_dir/updater/picpeak-updater.sh is missing, so the in-app updater was not installed."
+        return 0
+    fi
+
+    # The unit files quote these paths; a quote or backslash in them would need
+    # systemd's own escaping on top. Not worth it for a path nobody chooses.
+    if [[ "$app_dir" == *[\"\\]* ]]; then
+        log_warn "The install path $app_dir contains a quote or backslash, so the in-app updater was not installed."
         return 0
     fi
 
@@ -899,9 +909,11 @@ install_update_agent() {
     install -d -m 0755 "$UPDATER_LIB_DIR"
     install -m 0755 "$app_dir/updater/picpeak-updater.sh" "$UPDATER_LIB_DIR/picpeak-updater.sh"
 
-    local unit
+    local unit project_value update_value
+    project_value=$(systemd_sed_value "$app_dir")
+    update_value=$(systemd_sed_value "$update_dir")
     for unit in picpeak-updater.path picpeak-updater.service; do
-        sed -e "s#@PROJECT_DIR@#${app_dir}#g" -e "s#@UPDATE_DIR@#${update_dir}#g" \
+        sed -e "s#@PROJECT_DIR@#${project_value}#g" -e "s#@UPDATE_DIR@#${update_value}#g" \
             "$app_dir/updater/systemd/${unit}.in" > "$UPDATER_UNIT_DIR/$unit"
     done
     systemctl daemon-reload
@@ -912,6 +924,13 @@ install_update_agent() {
 
     systemctl enable --now picpeak-updater.path
     log_success "In-app updater installed ($("$UPDATER_LIB_DIR/picpeak-updater.sh" version))."
+}
+
+# A path made safe for a systemd unit (`%` starts a specifier) and then for the
+# replacement side of the `s#…#…#` above (`\`, `&` and the `#` delimiter).
+systemd_sed_value() {
+    local v="${1//%/%%}"
+    printf '%s' "$v" | sed -e 's/[\\&#]/\\&/g'
 }
 
 remove_update_agent() {
@@ -1444,6 +1463,9 @@ update_installation() {
     if [[ "$native_detected" == true && "$ENABLE_SELF_UPDATE" == "true" ]]; then
         die "--enable-self-update is only available for Docker installs."
     fi
+    if [[ "$ENABLE_SELF_UPDATE" == "true" && "$DISABLE_SELF_UPDATE" == "true" ]]; then
+        die "--enable-self-update and --disable-self-update cannot be combined."
+    fi
 
     if [[ "$native_detected" == true ]]; then
         INSTALL_METHOD="native"
@@ -1471,7 +1493,9 @@ update_docker_installation() {
     git pull
 
     # Before `up`, so the backend starts with the flag set.
-    if [[ "$ENABLE_SELF_UPDATE" == "true" ]]; then
+    if [[ "$DISABLE_SELF_UPDATE" == "true" ]]; then
+        set_env_value .env PICPEAK_SELF_UPDATE false
+    elif [[ "$ENABLE_SELF_UPDATE" == "true" ]]; then
         set_env_value .env PICPEAK_SELF_UPDATE true
     fi
 
@@ -1503,8 +1527,12 @@ update_docker_installation() {
     done
 
     # Installs the agent fresh, or refreshes an installed one from the code just
-    # pulled. This is the only way the host agent itself gets updated.
-    if [[ "$ENABLE_SELF_UPDATE" == "true" ]] || update_agent_installed; then
+    # pulled. This is the only way the host agent itself gets updated, which is
+    # also why turning it off means removing it: a disabled unit would come back
+    # on the next --update.
+    if [[ "$DISABLE_SELF_UPDATE" == "true" ]]; then
+        remove_update_agent
+    elif [[ "$ENABLE_SELF_UPDATE" == "true" ]] || update_agent_installed; then
         install_update_agent "$app_dir"
     fi
 
@@ -1717,6 +1745,10 @@ parse_arguments() {
                 ENABLE_SELF_UPDATE=true
                 shift
                 ;;
+            --disable-self-update)
+                DISABLE_SELF_UPDATE=true
+                shift
+                ;;
             --uninstall)
                 UNINSTALL_MODE=true
                 shift
@@ -1765,6 +1797,8 @@ Options:
   --enable-self-update  Docker only: install the in-app updater host agent, so
                       admins can update from the browser (docs/self-update.md).
                       Works on a new install and together with --update.
+  --disable-self-update  With --update: remove the host agent and set
+                      PICPEAK_SELF_UPDATE=false.
   --uninstall         Remove PicPeak installation
   --help              Show this help message
 

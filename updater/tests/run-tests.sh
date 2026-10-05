@@ -76,7 +76,8 @@ scenario() {
     echo "$1"
     PROJECT="$ROOT/$(echo "$1" | tr -c 'a-z0-9' '-')"
     FAKE_STATE="$PROJECT.state"
-    export FAKE_STATE
+    FAKE_WORKING_DIR="$PROJECT"
+    export FAKE_STATE FAKE_WORKING_DIR
     mkdir -p "$PROJECT/update/request" "$FAKE_STATE"/{images,registry,tags,running}
     new_image old 3.159.0 001_a.js 002_b.js
     new_image new 3.160.0 001_a.js 002_b.js
@@ -89,11 +90,16 @@ scenario() {
 
 run_updater() {
     PATH="$ROOT/bin:$PATH" \
-    PICPEAK_PROJECT_DIR="$PROJECT" \
+    PICPEAK_PROJECT_DIR="${PROJECT_DIR_OVERRIDE:-$PROJECT}" \
     PICPEAK_UPDATE_DIR="$PROJECT/update" \
+    PICPEAK_UPDATER_PACKAGING="${PACKAGING:-host}" \
     PICPEAK_UPDATER_HEALTH_TIMEOUT=1 \
     PICPEAK_UPDATER_PULL_ATTEMPTS=3 \
         bash "$UPDATER" "${1:-run}" 2>"$PROJECT.log"
+}
+
+has_real_flock() {
+    command -v flock >/dev/null 2>&1 && [[ "$(command -v flock)" != "$ROOT/bin/flock" ]]
 }
 
 running() { cat "$FAKE_STATE/running/$1"; }
@@ -201,19 +207,117 @@ expect_eq "state" "$(status_field state)" failed
 expect_eq "reason" "$(status_field reason)" internal_error
 expect_eq "step recorded" "$(status_field step)" verify
 
-scenario "a second updater cannot claim the same request"
+scenario "a request filed while another updater holds the lock is dropped"
 mkdir -p "$PROJECT/update/status"
 exec 8>"$PROJECT/update/status/.lock"
-if command -v flock >/dev/null 2>&1 && [[ "$(command -v flock)" != "$ROOT/bin/flock" ]]; then
+if has_real_flock; then
     flock -n 8
     run_updater
     expect_eq "lock holder blocks the run" "$(running backend)" old
-    [[ -e "$PROJECT/update/request/update-requested" ]] && pass "request left for the holder" || fail "request left for the holder"
+    # Left in place, the marker would keep the systemd path unit retriggering.
+    [[ ! -e "$PROJECT/update/request/update-requested" ]] && pass "request dropped" || fail "request dropped"
+    grep -q 'covered by it' "$PROJECT.log" && pass "drop is logged" || fail "drop is logged"
     flock -u 8
 else
     echo "  skip (no flock on this host)"
 fi
 exec 8>&-
+
+scenario "lock file is not readable by the backend"
+run_updater
+expect_eq "mode 0600" "$(ls -l "$PROJECT/update/status/.lock" | cut -c1-10)" "-rw-------"
+
+scenario "planted directory as request is claimed and removed"
+rm "$PROJECT/update/request/update-requested"
+mkdir -p "$PROJECT/update/request/update-requested/nested"
+touch "$PROJECT/update/request/update-requested/nested/file"
+run_updater; code=$?
+expect_eq "run does not abort" "$code" 0
+expect_eq "state" "$(status_field state)" succeeded
+expect_eq "no leftovers" "$(ls -A "$PROJECT/update/request")" ""
+
+scenario "planted FIFO as request is claimed without being read"
+rm "$PROJECT/update/request/update-requested"
+mkfifo "$PROJECT/update/request/update-requested"
+run_updater; code=$?
+expect_eq "run does not abort" "$code" 0
+expect_eq "state" "$(status_field state)" succeeded
+expect_eq "no leftovers" "$(ls -A "$PROJECT/update/request")" ""
+
+scenario "crash-looping backend is named as the cause"
+echo new > "$FAKE_STATE/crashing"
+run_updater
+expect_eq "state" "$(status_field state)" rolled_back
+grep -q 'backend is restarting' "$PROJECT/update/status/status.json" && pass "cause reported" || fail "cause reported"
+
+scenario "service without a container is named as the cause"
+echo frontend > "$FAKE_STATE/no_container"
+run_updater
+# It stays gone during the rollback too, so the rollback cannot succeed either.
+expect_eq "state" "$(status_field state)" failed
+expect_eq "reason" "$(status_field reason)" rollback_failed
+grep -q 'frontend has no container' "$PROJECT/update/status/status.json" && pass "cause reported" || fail "cause reported"
+
+scenario "service without a healthcheck counts as healthy when running"
+echo frontend > "$FAKE_STATE/no_healthcheck"
+run_updater
+expect_eq "state" "$(status_field state)" succeeded
+
+scenario "leftover compose run container is ignored"
+touch "$FAKE_STATE/oneoff_leftover"
+run_updater
+expect_eq "state" "$(status_field state)" succeeded
+
+scenario "trailing slash on the project dir still matches"
+PROJECT_DIR_OVERRIDE="$PROJECT/" run_updater
+expect_eq "state" "$(status_field state)" succeeded
+
+scenario "only a non-backend image moved"
+echo old > "$FAKE_STATE/registry/backend"
+run_updater
+expect_eq "state" "$(status_field state)" succeeded
+grep -q 'stays at 3.159.0; updated the frontend image' "$PROJECT/update/status/status.json" \
+    && pass "says what changed" || fail "says what changed"
+
+scenario "container packaging hands its restart to the new updater image"
+new_image upd-old 1.0.0; new_image upd-new 1.0.1
+echo upd-old > "$FAKE_STATE/running/updater"; echo upd-old > "$FAKE_STATE/tags/updater"; echo upd-new > "$FAKE_STATE/registry/updater"
+PACKAGING=container run_updater
+expect_eq "state" "$(status_field state)" succeeded
+expect_eq "updater not recreated by the app update" "$(running updater)" upd-old
+grep -q '^run -d --rm --name picpeak-updater-handoff .* upd-new recreate-self$' "$FAKE_STATE/calls" \
+    && pass "hand-off started from the new image" || fail "hand-off started from the new image"
+
+scenario "container packaging leaves an unchanged updater alone"
+new_image upd-old 1.0.0
+echo upd-old > "$FAKE_STATE/running/updater"; echo upd-old > "$FAKE_STATE/tags/updater"; echo upd-old > "$FAKE_STATE/registry/updater"
+PACKAGING=container run_updater
+grep -q '^run ' "$FAKE_STATE/calls" && fail "no hand-off" || pass "no hand-off"
+
+scenario "container packaging gives up on its own pull after one attempt"
+new_image upd-old 1.0.0
+echo upd-old > "$FAKE_STATE/running/updater"; echo upd-old > "$FAKE_STATE/tags/updater"
+PACKAGING=container run_updater
+expect_eq "state" "$(status_field state)" succeeded
+expect_eq "one pull of the updater image" "$(grep -c '^pull -q ghcr.io/picpeak/picpeak/updater:1$' "$FAKE_STATE/calls")" 1
+
+scenario "watch processes a request and stops promptly on SIGTERM"
+rm "$PROJECT/update/request/update-requested"
+PATH="$ROOT/bin:$PATH" PICPEAK_PROJECT_DIR="$PROJECT" PICPEAK_UPDATE_DIR="$PROJECT/update" \
+    PICPEAK_UPDATER_HEALTH_TIMEOUT=1 bash "$UPDATER" watch 2>"$PROJECT.log" &
+watch_pid=$!
+for _ in $(seq 1 100); do [[ -f "$PROJECT/update/status/status.json" ]] && break; /bin/sleep 0.1; done
+touch "$PROJECT/update/request/update-requested"
+for _ in $(seq 1 100); do [[ "$(status_field state)" == succeeded ]] && break; /bin/sleep 0.1; done
+expect_eq "state" "$(status_field state)" succeeded
+kill -TERM "$watch_pid"
+for _ in $(seq 1 50); do kill -0 "$watch_pid" 2>/dev/null || break; /bin/sleep 0.1; done
+if kill -0 "$watch_pid" 2>/dev/null; then
+    fail "exits within 5 s of SIGTERM"; kill -KILL "$watch_pid"
+else
+    pass "exits within 5 s of SIGTERM"
+fi
+wait "$watch_pid" 2>/dev/null
 
 scenario "request dir is created when missing"
 rm -rf "$PROJECT/update/request"

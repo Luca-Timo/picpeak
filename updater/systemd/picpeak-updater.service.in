@@ -2,13 +2,16 @@
 # update and exits. Logs: journalctl -u picpeak-updater
 [Unit]
 Description=PicPeak updater
-After=docker.service
-Requires=docker.service
+# Wants, not Requires: snap installs run the daemon as snap.docker.dockerd, and
+# a missing docker.service must not stop the unit from starting. The script
+# fails cleanly when there is no daemon to talk to.
+Wants=docker.service
+After=docker.service snap.docker.dockerd.service
 
 [Service]
 Type=oneshot
-Environment=PICPEAK_PROJECT_DIR=@PROJECT_DIR@
-Environment=PICPEAK_UPDATE_DIR=@UPDATE_DIR@
+Environment="PICPEAK_PROJECT_DIR=@PROJECT_DIR@"
+Environment="PICPEAK_UPDATE_DIR=@UPDATE_DIR@"
 Environment=PICPEAK_UPDATER_PACKAGING=host
 ExecStart=/usr/local/lib/picpeak/picpeak-updater.sh run
 # Pulls plus a migration-heavy first boot can take a while; the script has its

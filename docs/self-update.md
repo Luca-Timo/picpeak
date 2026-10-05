@@ -28,7 +28,7 @@ There are two packagings of the same script, `updater/picpeak-updater.sh`.
 
 ### Host agent (recommended)
 
-For installs made with `scripts/picpeak-setup.sh`. A systemd path unit starts one update run whenever a request appears. Nothing in a container holds the Docker socket.
+For installs made with `scripts/picpeak-setup.sh` on a host where systemd is running (not WSL, and not inside a container). A systemd path unit starts one update run whenever a request appears. Nothing in a container holds the Docker socket.
 
 New install: answer **yes** to "Enable in-app updates?" in the wizard, or pass the flag:
 
@@ -66,9 +66,11 @@ The `updater` service has no port and no network. It holds `/var/run/docker.sock
 
 The updater image is versioned separately (`ghcr.io/picpeak/picpeak/updater:1` follows the latest 1.x). After each run it pulls its own tag. When the image has changed, it hands its restart to a short-lived container started from the new image, so it never stops itself mid-run.
 
+To stay on one exact updater release instead of following the major, pin it in `.env`, for example `PICPEAK_UPDATER_TAG=1.0.0`. It then only changes when you change that value.
+
 ### Turning it off
 
-- Host agent: `sudo systemctl disable --now picpeak-updater.path`, and remove `PICPEAK_SELF_UPDATE` from `.env`. `picpeak-setup.sh --uninstall` removes the agent completely.
+- Host agent: `sudo ./scripts/picpeak-setup.sh --update --disable-self-update`. This removes the units and the script, and sets `PICPEAK_SELF_UPDATE=false`. Only disabling the unit with `systemctl` does not last: the next `--update` refreshes an installed agent and enables it again. `picpeak-setup.sh --uninstall` also removes the agent.
 - Container: remove `updater` from `COMPOSE_PROFILES`, then `docker compose up -d --remove-orphans`.
 
 ## File contract (version 1)
@@ -80,11 +82,13 @@ The backend and the updater share no network path and no secret, only two direct
 | `update/request/update-requested` | backend | read-write |
 | `update/status/status.json` | updater only | **read-only** |
 
-**Request.** The backend creates `request/update-requested`, ideally by writing a temporary file and renaming it. Only the file's existence counts: the updater never reads the content. It claims the file with a rename before doing anything else, so a failing run is never retriggered and two updaters can never act on one request. A compromised backend can therefore trigger exactly one thing, a legitimate update to the published channel tag.
+**Request.** The backend creates `request/update-requested`, ideally by writing a temporary file and renaming it. Only the name's existence counts: the updater never reads the content. It claims the entry with a rename before doing anything else and then removes it, whatever it is (a file, symlink, directory or FIFO), without reading it or following it. So a failing run is never retriggered, and two updaters can never act on one request. A compromised backend can therefore trigger exactly one thing, a legitimate update to the published channel tag.
+
+A request that arrives while another run holds the lock is removed without running a second update: the run in progress already goes to the same channel tag.
 
 `request/` is owned by UID 1001 (the backend user) with mode 0750. The setup script creates it; the updater creates it itself when it is missing, which is the case for container-variant installs.
 
-**Lock.** Runs serialise on `status/.lock`. Because both packagings see the same directory, a host agent and a container enabled on the same install never run at once.
+**Lock.** Runs serialise on `status/.lock`. Because both packagings see the same directory, a host agent and a container enabled on the same install never run at once. The lock file is created with mode 0600: `flock` only needs a read-only descriptor, so a lock the backend could open is one it could hold forever.
 
 **Status.** The updater replaces `status/status.json` atomically at every step:
 
@@ -127,7 +131,7 @@ The backend and the updater share no network path and no secret, only two direct
 | `migrations_may_have_run` | failed | The new version did not start and was left in place (see below) |
 | `rollback_failed` | failed | The new version did not start and neither did the old one |
 | `internal_error` | failed | A Docker command failed unexpectedly; `step` says where |
-| `interrupted` | failed | The previous run stopped mid-way (reboot, killed container) |
+| `interrupted` | failed | The run was stopped mid-way (reboot, killed or stopped container) |
 
 The contract number changes only for incompatible changes. The container image's major version follows it.
 

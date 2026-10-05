@@ -33,9 +33,12 @@ readonly CONTRACT_VERSION=1
 readonly AUTO_FROM_LABEL="io.picpeak.update.auto-from"
 
 PROJECT_DIR="${PICPEAK_PROJECT_DIR:-}"
+# Compose records working_dir without a trailing slash; compare like with like.
+PROJECT_DIR="${PROJECT_DIR%/}"
 UPDATE_DIR="${PICPEAK_UPDATE_DIR:-${PROJECT_DIR:+$PROJECT_DIR/update}}"
 PACKAGING="${PICPEAK_UPDATER_PACKAGING:-host}"
 SELF_SERVICE="${PICPEAK_UPDATER_SERVICE:-updater}"
+SELF_PROFILE="${PICPEAK_UPDATER_PROFILE:-updater}"
 HEALTH_TIMEOUT="${PICPEAK_UPDATER_HEALTH_TIMEOUT:-600}"
 PULL_ATTEMPTS="${PICPEAK_UPDATER_PULL_ATTEMPTS:-5}"
 PULL_BACKOFF="${PICPEAK_UPDATER_PULL_BACKOFF:-15}"
@@ -223,8 +226,11 @@ image_label() {
 # empty storage.
 discover_project() {
     local ids
+    # oneoff=False skips leftovers of `docker compose run backend ...`, which
+    # carry the same service label.
     ids=$(docker ps -a \
         --filter "label=com.docker.compose.service=backend" \
+        --filter "label=com.docker.compose.oneoff=False" \
         --filter "label=com.docker.compose.project.working_dir=$PROJECT_DIR" \
         --format '{{.ID}}')
     if [[ -z "$ids" ]]; then
@@ -263,6 +269,7 @@ snapshot_stack() {
         [[ "$svc" == "backend" ]] && BACKEND_INDEX=$(( ${#SERVICES[@]} - 1 ))
     done < <(docker ps \
         --filter "label=com.docker.compose.project=$PROJECT_NAME" \
+        --filter "label=com.docker.compose.oneoff=False" \
         --filter status=running \
         --format '{{.ID}}' \
         | while read -r line; do
@@ -289,9 +296,13 @@ restore_tags() {
 # Retries with backoff and jitter, and reports the real exit status. A single
 # pull that fails on a registry rate limit must not read as "updated".
 pull_with_retry() {
+    retry_pull compose pull --quiet "$@"
+}
+
+retry_pull() {
     local attempt=1 delay="$PULL_BACKOFF" out
     while :; do
-        if out=$(compose pull --quiet "$@" 2>&1); then
+        if out=$("$@" 2>&1); then
             return 0
         fi
         LAST_ERROR=$(tail -n 3 <<<"$out")
@@ -307,19 +318,27 @@ pull_with_retry() {
 
 # Every service is running, and healthy where it has a healthcheck.
 wait_healthy() {
-    local deadline=$(( $(date +%s) + HEALTH_TIMEOUT )) svc cid state health all_ok
+    local deadline=$(( $(date +%s) + HEALTH_TIMEOUT )) svc cids cid state health all_ok
     while (( $(date +%s) < deadline )); do
         all_ok=true
         for svc in "${SERVICES[@]}"; do
-            cid=$(compose ps -q "$svc" 2>/dev/null | head -n 1)
-            if [[ -z "$cid" ]]; then all_ok=false; break; fi
-            state=$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null || echo missing)
-            health=$(docker inspect -f '{{ if .State.Health }}{{.State.Health.Status}}{{ end }}' "$cid" 2>/dev/null || true)
-            if [[ "$state" != "running" ]] || [[ -n "$health" && "$health" != "healthy" ]]; then
+            # -a: a crash-looping container is not "running" and would vanish
+            # from the list, leaving no cause to report. Every replica counts.
+            cids=$(compose ps -a -q "$svc" 2>/dev/null || true)
+            if [[ -z "$cids" ]]; then
                 all_ok=false
-                LAST_ERROR="$svc is ${health:-$state}"
+                LAST_ERROR="$svc has no container"
                 break
             fi
+            for cid in $cids; do
+                state=$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null || echo missing)
+                health=$(docker inspect -f '{{ if .State.Health }}{{.State.Health.Status}}{{ end }}' "$cid" 2>/dev/null || true)
+                if [[ "$state" != "running" ]] || [[ -n "$health" && "$health" != "healthy" ]]; then
+                    all_ok=false
+                    LAST_ERROR="$svc is ${health:-$state}"
+                    break 2
+                fi
+            done
         done
         $all_ok && return 0
         sleep 5
@@ -361,7 +380,7 @@ do_update() {
         return
     fi
 
-    local i changed=false new_ids=()
+    local i changed=false changed_services="" new_ids=()
     for i in "${!SERVICES[@]}"; do
         new_ids[i]=$(docker image inspect -f '{{.Id}}' "${IMAGE_REFS[i]}" 2>/dev/null || true)
         if [[ -z "${new_ids[i]}" ]]; then
@@ -369,7 +388,10 @@ do_update() {
             finish failed pull_failed "The pull reported success but ${IMAGE_REFS[i]} is not available locally. Nothing was changed."
             return
         fi
-        [[ "${new_ids[i]}" != "${OLD_IDS[i]}" ]] && changed=true
+        if [[ "${new_ids[i]}" != "${OLD_IDS[i]}" ]]; then
+            changed=true
+            changed_services+="${changed_services:+, }${SERVICES[i]}"
+        fi
     done
     local new_backend="${new_ids[$BACKEND_INDEX]}"
     ST_TO=$(image_version "$new_backend" || true)
@@ -417,7 +439,11 @@ do_update() {
     if compose up -d --no-build "${SERVICES[@]}" >/dev/null 2>"$WORK_DIR/up.err"; then
         set_step health "Waiting for PicPeak $ST_TO to start"
         if wait_healthy; then
-            finish succeeded "" "Updated PicPeak from $ST_FROM to $ST_TO."
+            if [[ "$ST_TO" == "$ST_FROM" ]]; then
+                finish succeeded "" "PicPeak stays at $ST_FROM; updated the $changed_services image(s)."
+            else
+                finish succeeded "" "Updated PicPeak from $ST_FROM to $ST_TO."
+            fi
             self_update
             return
         fi
@@ -428,6 +454,9 @@ do_update() {
     # Rolling back images is only safe while the database is still on the old
     # schema. If the new version ships migrations they may already have run, and
     # the old code against a migrated database is worse than a stopped update.
+    # No new migration files does not mean no database writes: the boot-time
+    # seeders in server.js run after migrations. They are additive, so the old
+    # version still runs against what they leave behind.
     if (( new_migrations > 0 )); then
         finish failed migrations_may_have_run "PicPeak $ST_TO did not become healthy ($LAST_ERROR). It ships $new_migrations database migration(s) that may already have run, so the old version was not brought back automatically. Restore the backup taken before the update (see docs/self-update.md)."
         return
@@ -450,14 +479,19 @@ do_update() {
 # run as root on its own.
 self_update() {
     [[ "$PACKAGING" == "container" ]] || return 0
+    # One attempt: a failure here only delays the updater's own refresh to the
+    # next run, and retrying would hold the lock for minutes.
+    local PULL_ATTEMPTS=1
     local self ref old new
     self=$(docker ps -q \
         --filter "label=com.docker.compose.project=$PROJECT_NAME" \
         --filter "label=com.docker.compose.service=$SELF_SERVICE" | head -n 1)
     [[ -n "$self" ]] || return 0
-    ref=$(docker inspect -f '{{.Config.Image}}' "$self")
-    old=$(docker inspect -f '{{.Image}}' "$self")
-    if ! pull_with_retry "$SELF_SERVICE"; then
+    ref=$(docker inspect -f '{{.Config.Image}}' "$self") || return 0
+    old=$(docker inspect -f '{{.Image}}' "$self") || return 0
+    # Pull the image itself rather than the service: the profile may have been
+    # enabled on the command line only, and compose then does not know it.
+    if ! retry_pull docker pull -q "$ref"; then
         log "could not pull a newer updater image: $LAST_ERROR"
         return 0
     fi
@@ -471,6 +505,7 @@ self_update() {
         -v "$PROJECT_DIR:$PROJECT_DIR:ro" \
         -e "PICPEAK_PROJECT_DIR=$PROJECT_DIR" \
         -e "PICPEAK_UPDATER_SERVICE=$SELF_SERVICE" \
+        -e "PICPEAK_UPDATER_PROFILE=$SELF_PROFILE" \
         --entrypoint /usr/local/bin/picpeak-updater \
         "$new" recreate-self >/dev/null \
         || log "could not start the updater hand-off container"
@@ -505,6 +540,21 @@ setup_paths() {
     fi
     WORK_DIR=$(mktemp -d)
     trap on_exit EXIT
+    open_lock
+}
+
+# flock(2) needs only a read-only descriptor, and status/ is mounted into the
+# backend read-only: a lock file the backend can open is one it can hold
+# forever, blocking every run. Create it 0600 under umask 077, so it is never
+# readable even for an instant, and tighten one left with looser permissions.
+# fd 9 stays open for the life of the process.
+open_lock() {
+    local old_umask
+    old_umask=$(umask)
+    umask 077
+    exec 9>"$LOCK_FILE"
+    umask "$old_umask"
+    chmod 0600 "$LOCK_FILE"
 }
 
 # A command that fails under `set -e` mid-update must not leave the status on
@@ -512,51 +562,77 @@ setup_paths() {
 on_exit() {
     local code=$?
     if [[ "$ST_STATE" == "running" && -n "$STATUS_FILE" ]]; then
-        finish failed internal_error "The updater stopped unexpectedly during step '$ST_STEP' (exit $code). Check the updater log." || true
+        if (( code == 143 )); then
+            finish failed interrupted "The updater was stopped during step '$ST_STEP'. Check that PicPeak is running, then try again." || true
+        else
+            finish failed internal_error "The updater stopped unexpectedly during step '$ST_STEP' (exit $code). Check the updater log." || true
+        fi
     fi
     rm -rf "$WORK_DIR"
 }
 
-with_lock() {
-    exec 9>"$LOCK_FILE"
-    flock -n 9 || { log "another update is already running"; return 0; }
-    "$@"
-    flock -u 9
-}
-
 # Claims the marker with a rename before anything else, so a failing run is
 # never retriggered in a loop by the systemd path unit, and two updaters seeing
-# the same request cannot both act on it: only one rename succeeds. Neither
-# rename() nor unlink() follows a symlink the backend may have planted.
-process_request() {
-    [[ -e "$REQUEST_FILE" || -L "$REQUEST_FILE" ]] || return 0
+# the same request cannot both act on it: only one rename succeeds. Whatever the
+# backend put there (file, symlink, directory, FIFO) is renamed and removed
+# without being read or followed; only its existence counts. rm -rf also covers
+# a directory planted at the .claimed name, which mv would move the marker into.
+claim_request() {
+    [[ -e "$REQUEST_FILE" || -L "$REQUEST_FILE" ]] || return 1
     local claimed="$REQUEST_DIR/.claimed.$RANDOM$RANDOM"
-    mv -- "$REQUEST_FILE" "$claimed" 2>/dev/null || return 0
-    rm -f -- "$claimed"
-    log "update requested"
-    do_update
+    mv -- "$REQUEST_FILE" "$claimed" 2>/dev/null || return 1
+    rm -rf -- "$claimed" || log "could not remove the claimed request $claimed"
+    return 0
+}
+
+# The lock is only ever taken in an `if` condition and the work runs in its
+# body: a function called from a condition runs with `set -e` suspended, which
+# would silently disable the internal_error reporting in do_update.
+handle_request() {
+    if flock -n 9; then
+        if claim_request; then
+            log "update requested"
+            do_update
+        fi
+        flock -u 9
+        return 0
+    fi
+    # Another updater holds the lock. It has already claimed its own request
+    # and updates to the same channel tag, so this one is covered. Drop it:
+    # left in place, it keeps the systemd path unit retriggering.
+    if claim_request; then
+        log "an update is already running; this request is covered by it"
+    fi
 }
 
 init_status() {
+    if ! flock -n 9; then
+        return 0
+    fi
     mark_interrupted_run
     if [[ ! -f "$STATUS_FILE" ]]; then
         ST_STATE="idle"
         write_status
     fi
+    flock -u 9
 }
 
 cmd_run() {
     setup_paths
-    with_lock init_status
-    with_lock process_request
+    init_status
+    handle_request
 }
 
 cmd_watch() {
     setup_paths
-    with_lock init_status
+    # bash as PID 1 ignores SIGTERM unless it traps it; without this every
+    # `docker compose down` waits out the 10 s grace period. on_exit still
+    # records a run that was in progress.
+    trap 'exit 143' TERM
+    init_status
     log "watching $REQUEST_FILE (updater $UPDATER_VERSION, contract $CONTRACT_VERSION)"
     while :; do
-        with_lock process_request
+        handle_request
         sleep "$POLL_INTERVAL"
     done
 }
@@ -565,7 +641,7 @@ cmd_recreate_self() {
     [[ -n "$PROJECT_DIR" ]] || die_usage "PICPEAK_PROJECT_DIR is not set."
     sleep 5
     discover_project || die_usage "$LAST_ERROR"
-    compose up -d --no-deps --no-build "$SELF_SERVICE"
+    compose --profile "$SELF_PROFILE" up -d --no-deps --no-build "$SELF_SERVICE"
 }
 
 usage() {
@@ -590,7 +666,7 @@ EOF
 
 main() {
     case "${1:-}" in
-        init) setup_paths; with_lock init_status ;;
+        init) setup_paths; init_status ;;
         run) cmd_run ;;
         watch) cmd_watch ;;
         recreate-self) cmd_recreate_self ;;
