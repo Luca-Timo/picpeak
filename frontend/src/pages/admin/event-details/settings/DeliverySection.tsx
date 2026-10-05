@@ -164,7 +164,7 @@ export const DeliverySection: React.FC<FieldsProps & { event: Event; onChanged: 
               </label>
               <LocalizedDateInput value={f.delivery_due_at} onChange={(iso) => set({ delivery_due_at: iso })} />
               <p className="text-xs text-muted mt-1">
-                {t('events.delivery.dueHelp', 'Shown to guests and used for your reminder. Empty: event date plus the default from Settings → Event defaults.')}
+                {t('events.delivery.dueHelp', 'Shown to guests and used for your reminder. Empty: event date plus the default from Settings → Events.')}
               </p>
             </div>
             <div>

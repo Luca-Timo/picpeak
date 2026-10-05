@@ -164,7 +164,7 @@ export const FolderRequestsPanel: React.FC<FolderRequestsPanelProps> = ({
                 </>
               )}
             </span>
-            <div className="ml-auto flex items-center gap-1">
+            <div className="ml-auto flex flex-wrap items-center gap-1">
               <Button
                 variant="outline"
                 size="sm"

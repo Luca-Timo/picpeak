@@ -16,6 +16,7 @@ const { db, logActivity } = require('../database/db');
 const logger = require('../utils/logger');
 const { getAppSetting } = require('../utils/appSettings');
 const { parseBooleanInput } = require('../utils/parsers');
+const { whereTimestamp } = require('../utils/dbCompat');
 
 const DEFAULT_DELIVERY_DAYS = 7;
 const REMINDER_LEAD_HOURS = 24;
@@ -44,7 +45,8 @@ async function markFirstLookArrived(eventId, { actor, source } = {}) {
   if (!event || event.delivery_completed_at || isPartial(event)) return false;
   const update = { delivery_status: 'partial' };
   if (!event.delivery_due_at) {
-    update.delivery_due_at = await defaultDueAt(event);
+    // ISO strings, not Dates: node-sqlite3 can store a Date as "[object Object]".
+    update.delivery_due_at = (await defaultDueAt(event)).toISOString();
     update.delivery_due_source = 'default';
   }
   const changed = await db('events')
@@ -107,7 +109,7 @@ async function completeDelivery(eventId, { transferBadges = true } = {}) {
   if (!isPartial(event)) return { already: true, event, duplicates: [] };
 
   const duplicates = await findFirstLookDuplicates(eventId);
-  const now = new Date();
+  const now = new Date().toISOString();
   await db.transaction(async (trx) => {
     await trx('events').where('id', eventId).update({ delivery_status: 'complete', delivery_completed_at: now });
     if (transferBadges && duplicates.length) {
@@ -128,7 +130,9 @@ async function runDeliveryReminderPass({ now = new Date() } = {}) {
   const events = await db('events')
     .where('delivery_status', 'partial')
     .whereNotNull('delivery_due_at')
-    .where('delivery_due_at', '<=', soon)
+    // whereTimestamp: the column holds ISO strings, and a Date bind compares
+    // as epoch milliseconds on SQLite (issue 1733's expiry bug).
+    .modify(whereTimestamp, 'delivery_due_at', '<=', soon)
     .where((q) => q.whereNull('is_archived').orWhere('is_archived', false))
     .select('*');
   let sent = 0;
@@ -136,7 +140,7 @@ async function runDeliveryReminderPass({ now = new Date() } = {}) {
     const overdue = new Date(event.delivery_due_at) <= now;
     const column = overdue ? 'delivery_overdue_notified_at' : 'delivery_reminder_sent_at';
     if (event[column]) continue;
-    const claimed = await db('events').where('id', event.id).whereNull(column).update({ [column]: now });
+    const claimed = await db('events').where('id', event.id).whereNull(column).update({ [column]: now.toISOString() });
     if (!claimed) continue;
     try {
       const profile = await db.schema.hasTable('business_profile')

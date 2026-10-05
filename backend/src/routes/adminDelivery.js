@@ -103,7 +103,7 @@ router.post('/events/:eventId/delivery/complete', adminAuth, requirePermission('
       await require('../services/workflows').emitWorkflowEvent('gallery.completed', {
         entityType: 'event',
         entityId: eventId,
-        dedupSuffix: String(new Date(event.delivery_completed_at).getTime()),
+        dedupSuffix: String(Date.parse(event.delivery_completed_at) || Date.now()),
         payload: {
           eventId,
           slug: event.slug,

@@ -32,7 +32,7 @@ async function openRequest(eventId, segments, fallbackFolderId, adminId, conn = 
       fallback_folder_id: fallbackFolderId == null ? null : Number(fallbackFolderId),
       requested_by: adminId || null,
       status: 'pending',
-      created_at: new Date(),
+      created_at: new Date().toISOString(),
     }).returning('id');
     return Number(inserted[0]?.id ?? inserted[0]);
   } catch (err) {
@@ -103,7 +103,7 @@ async function approveRequest(eventId, requestId, adminId, { targetFolderId } = 
     await trx('photos').where({ event_id: eventId, pending_folder_request_id: request.id })
       .update({ pending_folder_request_id: null });
     await trx('folder_requests').where('id', request.id).update({
-      status: 'approved', decided_by: adminId || null, decided_at: new Date(), approved_folder_id: folderId,
+      status: 'approved', decided_by: adminId || null, decided_at: new Date().toISOString(), approved_folder_id: folderId,
     });
     return { folderId, moved, path: request.path };
   });
@@ -116,7 +116,7 @@ async function rejectRequest(eventId, requestId, adminId) {
     await trx('photos').where({ event_id: eventId, pending_folder_request_id: request.id })
       .update({ pending_folder_request_id: null });
     await trx('folder_requests').where('id', request.id).update({
-      status: 'rejected', decided_by: adminId || null, decided_at: new Date(),
+      status: 'rejected', decided_by: adminId || null, decided_at: new Date().toISOString(),
     });
     return { path: request.path };
   });
