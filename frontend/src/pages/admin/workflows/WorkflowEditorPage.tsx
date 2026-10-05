@@ -32,7 +32,7 @@ const TRIGGERS = [
   'quote.sent', 'quote.accepted', 'quote.declined',
   'contract.sent', 'contract.signed_by_customer', 'contract.signed', 'contract.declined', 'contract.expired',
   'event.date_approaching',
-  'gallery.published', 'gallery.expiring', 'gallery.expired', 'gallery.revealed',
+  'gallery.published', 'gallery.expiring', 'gallery.expired', 'gallery.revealed', 'gallery.completed',
   'customer.created',
   'document.shared', 'document.uploaded', 'document.requested',
 ];

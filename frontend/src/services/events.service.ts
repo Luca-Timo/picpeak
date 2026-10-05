@@ -103,13 +103,35 @@ interface UpdateEventData {
   customer_account_ids?: number[];
 }
 
+/** Two-stage delivery state of one gallery (issue 1562). */
+export interface DeliveryState {
+  status: 'complete' | 'partial';
+  expected_count: number | null;
+  due_at: string | null;
+  /** 'manual' | 'default' */
+  due_source: string | null;
+  badge_label: string | null;
+  completed_at: string | null;
+  delivered_count: number;
+  first_look_count: number;
+  /** First-look photos whose original filename arrived again in the full set. */
+  duplicate_count: number;
+}
+
+export interface CompleteDeliveryResult {
+  completed: boolean;
+  email_queued: boolean;
+  duplicate_photo_ids: number[];
+  state: DeliveryState;
+}
+
 export interface DownloadLimitUsage {
   download_limit: number | null;
   downloads_used: number;
   downloads_remaining: number | null;
 }
 
-export type EventStatusFilter = 'active' | 'inactive' | 'archived' | 'draft' | 'expiring';
+export type EventStatusFilter = 'active' | 'inactive' | 'archived' | 'draft' | 'expiring' | 'awaiting_delivery';
 
 /**
  * Columns the events list can be ordered by. Mirrors SORTABLE in
@@ -218,6 +240,23 @@ export const eventsService = {
   // Reveal now (#838): stamps revealed_at so the gallery opens for guests.
   async revealEvent(id: number): Promise<{ revealed_at: string }> {
     const response = await api.post(`/admin/events/${id}/reveal`);
+    return response.data;
+  },
+
+  // Two-stage delivery (issue 1562): the state read-out for the Delivery
+  // section and the event header.
+  async getDelivery(id: number): Promise<DeliveryState> {
+    const response = await api.get<DeliveryState>(`/admin/events/${id}/delivery`);
+    return response.data;
+  },
+
+  // "Full gallery is ready". Returns the first-look photos that arrived again
+  // in the full set; the caller deletes them through the regular photo delete
+  // when the admin asked for it.
+  async completeDelivery(id: number, options: { sendEmail: boolean }): Promise<CompleteDeliveryResult> {
+    const response = await api.post<CompleteDeliveryResult>(`/admin/events/${id}/delivery/complete`, {
+      send_email: options.sendEmail,
+    });
     return response.data;
   },
 

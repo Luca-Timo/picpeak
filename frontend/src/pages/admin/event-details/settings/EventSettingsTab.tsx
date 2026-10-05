@@ -24,6 +24,7 @@ import { AccessSection, GeneralSection, GuestsSection, ReminderSection, SectionC
 import { DownloadsSection } from './DownloadsSection';
 import { AppearanceSection } from './AppearanceSection';
 import { SlideshowSection } from './SlideshowSection';
+import { DeliverySection } from './DeliverySection';
 import { safeParseDate } from '../utils';
 
 export interface EventSettingsTabProps {
@@ -62,6 +63,7 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
     { key: 'guests', label: t('events.settingsTab.guests', 'Guest interaction'), show: true },
     { key: 'appearance', label: t('events.settingsTab.appearance', 'Appearance'), show: true },
     { key: 'source', label: t('events.settingsTab.source', 'Photo source'), show: true },
+    { key: 'delivery', label: t('events.settingsTab.delivery', 'Folders & delivery'), show: true },
     { key: 'reminder', label: t('eventReminderOverride.title', 'Pre-event reminder'), show: !!flags.reminderEmails },
     { key: 'slideshow', label: t('slideshow.adminTitle', 'Live Slideshow'), show: !!flags.slideshow },
     { key: 'faces', label: t('events.settingsTab.faces', 'Faces'), show: !!flags.faces },
@@ -117,6 +119,8 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
         return <AppearanceSection f={draft.event} set={set} event={event} photos={photos} readOnly={!canEdit} />;
       case 'source':
         return <SourceSection f={draft.event} set={set} event={event} />;
+      case 'delivery':
+        return <DeliverySection f={draft.event} set={set} event={event} onChanged={refetchEvent} />;
       case 'reminder':
         return (
           <ReminderSection

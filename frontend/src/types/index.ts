@@ -53,6 +53,16 @@ export interface Event {
   external_path?: string | null;
   // Folder watcher opt-in (issue 1187). SQLite hands back 0/1, Postgres a boolean.
   external_watch?: boolean | number | null;
+  // Mirror subfolders of uploads and imports as gallery folders (issue 1786).
+  folder_structure?: boolean | number | null;
+  // Two-stage delivery (issue 1562).
+  delivery_status?: 'complete' | 'partial';
+  delivery_expected_count?: number | null;
+  delivery_due_at?: string | null;
+  // 'manual' | 'default' — how the promised date was set.
+  delivery_due_source?: string | null;
+  delivery_badge_label?: string | null;
+  delivery_completed_at?: string | null;
   // Download protection fields
   allow_downloads?: boolean;
   protection_level?: 'basic' | 'standard' | 'enhanced' | 'maximum';
@@ -194,9 +204,16 @@ export interface Photo {
   // stops serving multi-megabyte originals to display a photo on screen.
   slideshow_url?: string | null;
   type: 'collage' | 'individual' | 'video';
+  // Filter category (Portraits, Ceremony …). Since migration 265 never a
+  // folder: folders live in folder_id.
   category_id?: number | string | null;
   category_name?: string;
   category_slug?: string;
+  // The folder the photo lives in (issue 1786); null/absent = gallery root.
+  folder_id?: number | null;
+  // Delivered as part of a first look (issue 1562). The badge stays after the
+  // full gallery lands.
+  first_look?: boolean;
   // Per-category download permission (#640). Defaults true for uncategorised
   // photos and for categories that pre-date migration 135. The frontend hides
   // the lightbox download button when this is false (event-level allow_downloads
@@ -294,6 +311,22 @@ export interface PhotoCategory {
   // grid and narrows it when picked; a folder CONTAINS them — they are absent
   // from the root grid and only render once the guest opens the folder.
   is_folder?: boolean;
+  // Nesting (issue 1786): the parent folder, null = top level. Only folders
+  // nest, at most three levels deep.
+  parent_id?: number | null;
+}
+
+// Two-stage delivery (issue 1562) as the guest payload carries it. Absent or
+// null for an ordinary gallery.
+export interface GalleryDelivery {
+  status: 'partial' | 'complete';
+  expected_count: number | null;
+  delivered_count: number;
+  // Skeleton tiles to draw below the delivered photos; already capped.
+  placeholder_count: number;
+  due_at: string | null;
+  // Badge text; null = the translated default ("First look").
+  badge_label: string | null;
 }
 
 export interface GalleryData {
@@ -317,6 +350,8 @@ export interface GalleryData {
     upload_category_id?: number | null;
     hero_photo_id?: number | null;
     allow_downloads?: boolean;
+    // Two-stage delivery (issue 1562).
+    delivery?: GalleryDelivery | null;
     /** True when a pre-built download zip is on disk, so "download all" can skip the build. */
     download_zip_ready?: boolean;
     // Download limit (issue 1560). null = unlimited. Counted in distinct

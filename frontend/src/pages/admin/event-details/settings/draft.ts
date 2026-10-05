@@ -29,6 +29,7 @@ export type SettingsSectionKey =
   | 'guests'
   | 'appearance'
   | 'source'
+  | 'delivery'
   | 'reminder'
   | 'slideshow'
   | 'faces'
@@ -43,6 +44,16 @@ export interface EventFields extends EditFormState {
   /** '' = inherit the global offset. */
   event_reminder_offset_days: string;
   event_reminder_body_override: string;
+  /** Mirror subfolders of uploads and imports as gallery folders (issue 1786). */
+  folder_structure: boolean;
+  /** Two-stage delivery (issue 1562). */
+  delivery_status: 'complete' | 'partial';
+  /** '' = not set. */
+  delivery_expected_count: string;
+  /** 'yyyy-MM-dd', '' = not set. */
+  delivery_due_at: string;
+  /** '' = the translated default ("First look"). */
+  delivery_badge_label: string;
 }
 
 export const INHERIT = '__inherit__';
@@ -164,6 +175,14 @@ export function eventFieldsFromEvent(event: Event, branding: ThemeConfig | null 
     event_reminder_disabled: truthy(event.event_reminder_disabled),
     event_reminder_offset_days: event.event_reminder_offset_days == null ? '' : String(event.event_reminder_offset_days),
     event_reminder_body_override: event.event_reminder_body_override || '',
+    folder_structure: truthy(event.folder_structure),
+    delivery_status: event.delivery_status === 'partial' ? 'partial' : 'complete',
+    delivery_expected_count: event.delivery_expected_count ? String(event.delivery_expected_count) : '',
+    delivery_due_at: (() => {
+      const due = safeParseDate(event.delivery_due_at ?? null);
+      return due ? format(due, 'yyyy-MM-dd') : '';
+    })(),
+    delivery_badge_label: event.delivery_badge_label || '',
   };
 }
 
@@ -230,6 +249,11 @@ export const SECTION_OF_FIELD: Record<keyof EventFields, SettingsSectionKey> = {
   event_reminder_disabled: 'reminder',
   event_reminder_offset_days: 'reminder',
   event_reminder_body_override: 'reminder',
+  folder_structure: 'delivery',
+  delivery_status: 'delivery',
+  delivery_expected_count: 'delivery',
+  delivery_due_at: 'delivery',
+  delivery_badge_label: 'delivery',
 };
 
 /** Key-order independent JSON, so two equal drafts always compare equal. */
@@ -346,6 +370,12 @@ function requestFields(f: EventFields): Record<string, unknown> {
     event_reminder_disabled: f.event_reminder_disabled,
     event_reminder_offset_days: offset === '' ? null : Math.floor(Number(offset)),
     event_reminder_body_override: f.event_reminder_body_override.trim() === '' ? null : f.event_reminder_body_override,
+    folder_structure: f.folder_structure,
+    delivery_status: f.delivery_status,
+    delivery_expected_count: f.delivery_expected_count.trim() === '' ? null : Math.floor(Number(f.delivery_expected_count)),
+    // Noon UTC: a calendar date that reads the same in every timezone.
+    delivery_due_at: f.delivery_due_at ? `${f.delivery_due_at}T12:00:00.000Z` : null,
+    delivery_badge_label: f.delivery_badge_label.trim() === '' ? null : f.delivery_badge_label.trim(),
   };
   // The gallery's own look is only written while it is in use; switching
   // custom styling off leaves the stored theme for a later switch back on.
@@ -383,6 +413,10 @@ export function eventUpdatePayload(
   const offset = draft.event_reminder_offset_days.trim();
   if (offset !== '' && (!Number.isFinite(Number(offset)) || Number(offset) < 0)) {
     throw new DraftValidationError(t('eventReminderOverride.invalidOffset', 'Offset must be a non-negative integer or blank.'), 'reminder');
+  }
+  const expected = draft.delivery_expected_count.trim();
+  if (expected !== '' && (!Number.isInteger(Number(expected)) || Number(expected) < 1)) {
+    throw new DraftValidationError(t('events.delivery.invalidExpected', 'The expected number of photos must be a whole number above 0, or empty.'), 'delivery');
   }
 
   const next = requestFields(draft);

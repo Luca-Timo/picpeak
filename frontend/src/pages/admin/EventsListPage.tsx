@@ -17,7 +17,8 @@ import {
   Copy,
   CheckCircle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Sparkles
 } from 'lucide-react';
 import { parseISO } from 'date-fns';
 import { toast } from 'react-toastify';
@@ -36,6 +37,7 @@ import { isGalleryPublic } from '../../utils/accessControl';
 import { mediaSplitLabel, splitMediaCount } from '../../utils/mediaCounts';
 import { buildShareLinkUrl } from '../../utils/url';
 import type { Event } from '../../types';
+import { deliveryDue, isAwaitingFullGallery } from './event-details/deliveryStatus';
 import { useTranslation } from 'react-i18next';
 
 const PAGE_SIZE = 20;
@@ -101,11 +103,12 @@ export const EventsListPage: React.FC = () => {
   const statusFilter: EventStatusFilter | undefined =
     filterParam === 'active' || filterParam === 'archived' ||
     filterParam === 'draft' || filterParam === 'expiring' ||
-    filterParam === 'inactive'
+    filterParam === 'inactive' || filterParam === 'awaiting_delivery'
       ? filterParam
       : undefined;
   const isExpiringFilter = filterParam === 'expiring';
   const isDraftFilter = filterParam === 'draft';
+  const isAwaitingFilter = filterParam === 'awaiting_delivery';
 
   // Sort and type filter live in the URL alongside `filter`, so a view the
   // admin arranged survives a reload, the browser Back button and a link
@@ -387,6 +390,28 @@ export const EventsListPage: React.FC = () => {
     );
   };
 
+  // Two-stage delivery (issue 1562): next to the status, a gallery waiting
+  // for its full delivery says how close the promised date is.
+  const deliveryPill = (event: Event) => {
+    if (!isAwaitingFullGallery(event) || event.is_archived) return null;
+    const due = deliveryDue(event.delivery_due_at);
+    const color = due?.tone === 'overdue'
+      ? 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40'
+      : due?.tone === 'soon'
+        ? 'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40'
+        : 'text-body bg-inset';
+    return (
+      <span className={`mt-1 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${color}`}>
+        <Sparkles className="w-3 h-3" />
+        {!due
+          ? t('events.delivery.pill', 'First look')
+          : due.tone === 'overdue'
+            ? t('events.delivery.pillOverdue', 'First look · overdue')
+            : t('events.delivery.pillDue', 'First look · due in {{count}} d', { count: due.days })}
+      </span>
+    );
+  };
+
   const getEventStatus = (event: Event) => {
     if (event.is_draft) return { label: t('events.draft'), color: 'text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/40' };
     if (event.is_archived) return { label: t('events.archived'), color: 'text-muted bg-inset' };
@@ -551,6 +576,14 @@ export const EventsListPage: React.FC = () => {
               onClick={() => patchParams({ filter: 'draft' })}
             >
               {t('events.draft')}
+            </Button>
+            <Button
+              variant={isAwaitingFilter ? 'primary' : 'outline'}
+              size="md"
+              onClick={() => patchParams({ filter: 'awaiting_delivery' })}
+              leftIcon={<Sparkles className="w-4 h-4" />}
+            >
+              {t('events.delivery.awaitingFilter', 'Awaiting full gallery')}
             </Button>
             <Button
               variant={statusFilter === 'archived' ? 'primary' : 'outline'}
@@ -730,6 +763,7 @@ export const EventsListPage: React.FC = () => {
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
                           {status.label}
                         </span>
+                        {deliveryPill(event)}
                       </td>
                       <td className="px-6 py-4 text-sm text-body">
                         {event.expires_at ? format(parseISO(event.expires_at)) : 'N/A'}

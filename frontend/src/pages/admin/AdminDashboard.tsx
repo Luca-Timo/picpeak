@@ -13,7 +13,8 @@ import {
   Heart,
   Inbox,
   Check,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 import { parseISO } from 'date-fns';
 import { useQueryClient } from '@tanstack/react-query';
@@ -29,6 +30,7 @@ import { WhatsNewBanner } from '../../components/admin/WhatsNewBanner';
 import { CrmOverviewSection } from '../../components/admin/CrmOverviewSection';
 import { useQuery } from '@tanstack/react-query';
 import { eventsService } from '../../services/events.service';
+import { deliveryDue } from './event-details/deliveryStatus';
 import { adminService, ActivityType, type Activity } from '../../services/admin.service';
 import { mediaSplitLabel, splitMediaCount } from '../../utils/mediaCounts';
 import { workflowsService } from '../../services/workflows.service';
@@ -124,6 +126,17 @@ export const AdminDashboard: React.FC = () => {
     // even when >5 events are expiring (#909 review round 3).
     queryFn: () => eventsService.getEvents({ limit: 5, status: 'expiring', sortBy: 'expires_at', sortOrder: 'asc' }),
   });
+
+  // Two-stage delivery (issue 1562): galleries whose first look is out and
+  // whose full delivery is still owed, soonest promise first. The card only
+  // renders when there are any.
+  const { data: awaitingData } = useQuery({
+    queryKey: ['admin-events-summary', 'awaiting_delivery'],
+    queryFn: () => eventsService.getEvents({ limit: 20, status: 'awaiting_delivery' }),
+  });
+  const awaitingEvents = [...(awaitingData?.events || [])]
+    .sort((a, b) => (Date.parse(a.delivery_due_at || '') || Infinity) - (Date.parse(b.delivery_due_at || '') || Infinity))
+    .slice(0, 5);
 
   // Keep the "expiring soon" card honest when a row crosses its expiry while
   // the dashboard sits open (#909 review). Filtering client-side desynced the
@@ -368,6 +381,54 @@ export const AdminDashboard: React.FC = () => {
               </button>
             )}
           </Card>
+
+          {awaitingEvents.length > 0 && (
+            <Card padding="md" className="mt-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-heading">{t('events.delivery.awaitingFilter', 'Awaiting full gallery')}</h2>
+                <Sparkles className="w-5 h-5 text-accent" />
+              </div>
+              <div className="space-y-3">
+                {awaitingEvents.map((event) => {
+                  const due = deliveryDue(event.delivery_due_at);
+                  const tone = due?.tone === 'overdue'
+                    ? 'text-red-600 dark:text-red-400'
+                    : due?.tone === 'soon' ? 'text-amber-600 dark:text-amber-400' : 'text-body';
+                  return (
+                    <div
+                      key={event.id}
+                      className="flex items-center justify-between p-4 bg-inset rounded-lg border border-line cursor-pointer hover:bg-hover transition-colors"
+                      onClick={() => navigate(`/admin/events/${event.id}`)}
+                    >
+                      <div>
+                        <h3 className="font-medium text-heading">{event.event_name}</h3>
+                        <p className="text-sm text-soft">
+                          {event.delivery_expected_count
+                            ? t('events.delivery.progressShort', '{{count}} of ~{{expected}} photos', { count: event.photo_count || 0, expected: event.delivery_expected_count })
+                            : t('events.delivery.progressNoExpected', '{{count}} photos so far', { count: event.photo_count || 0 })}
+                        </p>
+                      </div>
+                      {due && (
+                        <p className={`text-sm font-medium text-right ${tone}`}>
+                          {due.tone === 'overdue'
+                            ? t('events.delivery.overdueShort', 'Overdue since {{date}}', { date: format(due.date, 'PP') })
+                            : t('events.delivery.dueShort', 'Due {{date}}', { date: format(due.date, 'PP') })}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {(awaitingData?.events?.length || 0) > 5 && (
+                <button
+                  onClick={() => navigate('/admin/events?filter=awaiting_delivery')}
+                  className="w-full mt-4 text-sm text-accent hover:opacity-80 font-medium"
+                >
+                  {t('events.delivery.viewAllAwaiting', 'Show all')} →
+                </button>
+              )}
+            </Card>
+          )}
 
           {/* Pending workflow approvals — the human-in-the-loop gates. Only
               rendered when the workflow engine is live and something is waiting. */}

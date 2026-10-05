@@ -312,6 +312,87 @@ export const EventsTab: React.FC<EventsTabProps> = ({
             </p>
           </div>
 
+          {/* Folders + two-stage delivery (issues 1786, 1562): defaults for new
+              galleries, and the keyword folders that start a first look. */}
+          <div className="space-y-4 rounded-lg border border-line p-4">
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={eventSettings.event_default_folder_structure}
+                onChange={(e) => setEventSettings(prev => ({ ...prev, event_default_folder_structure: e.target.checked }))}
+                className="mt-1 w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-body">
+                  {t('settings.events.defaultFolderStructure', 'Mirror folder structure in new galleries')}
+                </span>
+                <p className="text-xs text-muted mt-1">
+                  {t('settings.events.defaultFolderStructureHelp', 'Subfolders of uploads and external folders become nested gallery folders. Existing galleries keep their own setting.')}
+                </p>
+              </div>
+            </label>
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={eventSettings.first_look_keyword_detection}
+                onChange={(e) => setEventSettings(prev => ({ ...prev, first_look_keyword_detection: e.target.checked }))}
+                className="mt-1 w-4 h-4 text-primary-600 rounded focus:ring-primary-500"
+              />
+              <div>
+                <span className="text-sm font-medium text-body">
+                  {t('settings.events.firstLookDetection', 'Start a first look from keyword folders')}
+                </span>
+                <p className="text-xs text-muted mt-1">
+                  {t('settings.events.firstLookDetectionHelp', 'A top-level folder whose name contains one of these words (e.g. "Wedding (FirstLook)") is not created as a folder: its photos are badged and the gallery switches to two-stage delivery.')}
+                </p>
+              </div>
+            </label>
+            {eventSettings.first_look_keyword_detection && (
+              <div>
+                <label className="block text-sm font-medium text-body mb-1" htmlFor="first_look_folder_keywords">
+                  {t('settings.events.firstLookKeywords', 'Keywords')}
+                </label>
+                <input
+                  id="first_look_folder_keywords"
+                  type="text"
+                  value={eventSettings.first_look_folder_keywords.join(', ')}
+                  onChange={(e) => setEventSettings(prev => ({
+                    ...prev,
+                    first_look_folder_keywords: e.target.value.split(',').map((k) => k.trimStart()),
+                  }))}
+                  onBlur={() => setEventSettings(prev => ({
+                    ...prev,
+                    first_look_folder_keywords: prev.first_look_folder_keywords.map((k) => k.trim()).filter(Boolean),
+                  }))}
+                  className="w-full max-w-md px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading text-sm"
+                />
+                <p className="text-xs text-muted mt-1">
+                  {t('settings.events.firstLookKeywordsHelp', 'Comma-separated. Case, spaces, dashes and underscores are ignored, so "FirstLook" also matches "first-look".')}
+                </p>
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-body mb-1" htmlFor="event_default_delivery_days">
+                {t('settings.events.deliveryDays', 'Full gallery due after (days)')}
+              </label>
+              <input
+                id="event_default_delivery_days"
+                type="number"
+                min={1}
+                max={365}
+                value={eventSettings.event_default_delivery_days}
+                onChange={(e) => setEventSettings(prev => ({
+                  ...prev,
+                  event_default_delivery_days: Math.min(365, Math.max(1, parseInt(e.target.value, 10) || 1)),
+                }))}
+                className="w-32 px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading text-sm"
+              />
+              <p className="text-xs text-muted mt-1">
+                {t('settings.events.deliveryDaysHelp', 'When a first look starts without a promised date, the full gallery is due this many days after the event date.')}
+              </p>
+            </div>
+          </div>
+
           {/* Uploader names (#1561): defaults for new galleries only. */}
           <UploaderNameSettings
             className="max-w-sm"

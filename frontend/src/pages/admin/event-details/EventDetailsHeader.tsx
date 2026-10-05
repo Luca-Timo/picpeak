@@ -11,8 +11,14 @@ import {
   MoreHorizontal,
   Receipt,
   Type,
-  Send
+  Send,
+  Sparkles,
+  CheckCircle2
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { eventsService } from '../../../services/events.service';
+import { CompleteDeliveryDialog } from './CompleteDeliveryDialog';
+import { deliveryDue, isAwaitingFullGallery } from './deliveryStatus';
 import type { Event } from '../../../types';
 import { Button, Card } from '../../../components/common';
 import { PermissionGate } from '../../../components/admin/PermissionGate';
@@ -126,6 +132,17 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
   const archived = Boolean(event.is_archived);
   const canHelpClient = hasAnyPermission(['events.edit', 'events.support']) && !event.share_secrets_hidden;
 
+  // Two-stage delivery (issue 1562): the pill says how close the promised
+  // date is; the button is the one place the full gallery is announced.
+  const awaiting = isAwaitingFullGallery(event) && !archived;
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const { data: delivery, refetch: refetchDelivery } = useQuery({
+    queryKey: ['event-delivery', event.id],
+    queryFn: () => eventsService.getDelivery(event.id),
+    enabled: awaiting,
+  });
+  const due = deliveryDue(event.delivery_due_at);
+
   const menuItems: MenuItem[] = [];
   if (!archived && hasPermission('events.edit')) {
     menuItems.push({ key: 'rename', label: t('events.rename.button', 'Rename'), icon: <Type className="w-4 h-4" />, onSelect: () => setShowRenameDialog(true) });
@@ -199,6 +216,24 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
                   {t('events.archived')}
                 </span>
               ) : null}
+              {awaiting && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                    due?.tone === 'overdue'
+                      ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
+                      : due?.tone === 'soon'
+                        ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
+                        : 'bg-inset text-body'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {!due
+                    ? t('events.delivery.pill', 'First look')
+                    : due.tone === 'overdue'
+                      ? t('events.delivery.pillOverdue', 'First look · overdue')
+                      : t('events.delivery.pillDue', 'First look · due in {{count}} d', { count: due.days })}
+                </span>
+              )}
             </div>
           </div>
 
@@ -227,10 +262,30 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
                 {t('events.sendGalleryEmail.button', 'Send gallery email')}
               </Button>
             )}
+            {awaiting && hasPermission('events.edit') && delivery && (
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<CheckCircle2 className="w-4 h-4" />}
+                onClick={() => setCompleteOpen(true)}
+              >
+                {t('events.delivery.completeButton', 'Full gallery is ready')}
+              </Button>
+            )}
             <ActionsMenu items={menuItems} />
           </div>
         </div>
       </div>
+
+      {delivery && (
+        <CompleteDeliveryDialog
+          eventId={event.id}
+          state={delivery}
+          isOpen={completeOpen}
+          onClose={() => setCompleteOpen(false)}
+          onCompleted={() => { refetchDelivery(); }}
+        />
+      )}
 
       {/* Draft Banner. !! — SQLite returns integer booleans; a bare 0 would render as "0" */}
       {!!event.is_draft && !archived && (

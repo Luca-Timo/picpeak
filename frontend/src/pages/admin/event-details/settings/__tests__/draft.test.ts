@@ -99,6 +99,38 @@ describe('event settings draft', () => {
     expect(payload).toEqual({ password: 'secret12' });
   });
 
+  it('sends the delivery fields as the backend reads them (issue 1562)', () => {
+    const base = eventFieldsFromEvent(EVENT, branding);
+    expect(base).toMatchObject({ folder_structure: false, delivery_status: 'complete', delivery_due_at: '' });
+    const payload = eventUpdatePayload({
+      ...base,
+      folder_structure: true,
+      delivery_status: 'partial',
+      delivery_expected_count: '80',
+      delivery_due_at: '2026-06-21',
+      delivery_badge_label: '  Social media pre-delivery ',
+    }, base, t);
+    expect(payload).toEqual({
+      folder_structure: true,
+      delivery_status: 'partial',
+      delivery_expected_count: 80,
+      // Noon UTC keeps the calendar date in every timezone.
+      delivery_due_at: '2026-06-21T12:00:00.000Z',
+      delivery_badge_label: 'Social media pre-delivery',
+    });
+  });
+
+  it('refuses a non-integer expected count, naming the delivery section', () => {
+    const base = eventFieldsFromEvent(EVENT, branding);
+    expect(() => eventUpdatePayload({ ...base, delivery_expected_count: '0' }, base, t))
+      .toThrow(DraftValidationError);
+    try {
+      eventUpdatePayload({ ...base, delivery_expected_count: '1.5' }, base, t);
+    } catch (err) {
+      expect((err as DraftValidationError).section).toBe('delivery');
+    }
+  });
+
   it('marks the sections whose fields differ', () => {
     const fields = eventFieldsFromEvent(EVENT, branding);
     const base: EventSettingsDraft = { event: fields, feedback: null, downloads: null, slideshow: slideshowFromEvent(EVENT) };

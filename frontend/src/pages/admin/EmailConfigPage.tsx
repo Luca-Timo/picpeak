@@ -126,6 +126,9 @@ const TEMPLATE_DISPLAY_NAMES: Record<string, string> = {
   expiration_warning: 'Expiration Warning',
   gallery_expired: 'Gallery Expired',
   archive_complete: 'Archive Complete (Admin)',
+  // two-stage delivery (issue 1562)
+  gallery_completed: 'Complete Gallery Ready',
+  delivery_due_reminder: 'Full Gallery Due (Admin)',
   // core / admin
   admin_invitation: 'Admin Invitation',
   admin_password_reset: 'Admin Password Reset',
