@@ -625,9 +625,10 @@ cmd_run() {
 
 cmd_watch() {
     setup_paths
-    # bash as PID 1 ignores SIGTERM unless it traps it; without this every
-    # `docker compose down` waits out the 10 s grace period. on_exit still
-    # records a run that was in progress.
+    # Without this, bash still runs the EXIT trap on SIGTERM, but with $? = 1,
+    # so a `docker compose down` mid-update would be recorded as an unexplained
+    # internal_error. With it, on_exit sees 143 and records "interrupted". bash
+    # runs the trap once the current command returns.
     trap 'exit 143' TERM
     init_status
     log "watching $REQUEST_FILE (updater $UPDATER_VERSION, contract $CONTRACT_VERSION)"

@@ -301,6 +301,16 @@ PACKAGING=container run_updater
 expect_eq "state" "$(status_field state)" succeeded
 expect_eq "one pull of the updater image" "$(grep -c '^pull -q ghcr.io/picpeak/picpeak/updater:1$' "$FAKE_STATE/calls")" 1
 
+scenario "SIGTERM during an update is recorded as interrupted"
+touch "$FAKE_STATE/slow_up"
+PATH="$ROOT/bin:$PATH" PICPEAK_PROJECT_DIR="$PROJECT" PICPEAK_UPDATE_DIR="$PROJECT/update" \
+    PICPEAK_UPDATER_HEALTH_TIMEOUT=1 bash "$UPDATER" watch 2>"$PROJECT.log" &
+watch_pid=$!
+for _ in $(seq 1 100); do [[ "$(status_field step 2>/dev/null)" == recreate ]] && break; /bin/sleep 0.05; done
+kill -TERM "$watch_pid"; wait "$watch_pid" 2>/dev/null
+expect_eq "state" "$(status_field state)" failed
+expect_eq "reason" "$(status_field reason)" interrupted
+
 scenario "watch processes a request and stops promptly on SIGTERM"
 rm "$PROJECT/update/request/update-requested"
 PATH="$ROOT/bin:$PATH" PICPEAK_PROJECT_DIR="$PROJECT" PICPEAK_UPDATE_DIR="$PROJECT/update" \

@@ -13,6 +13,7 @@
 #   no_container       services whose container is gone entirely
 #   no_healthcheck     services without a healthcheck
 #   oneoff_leftover    an exited `compose run backend` container exists
+#   slow_up            `compose up` takes a second (to signal a run mid-way)
 #   config_files       value of the compose config_files label (optional)
 #   fail_label_read    when present, reading an image label fails
 #   calls              every invocation, appended
@@ -57,6 +58,7 @@ if [[ "$1" == "compose" ]]; then
             exit 0 ;;
         up)
             shift
+            if [[ -f "$S/slow_up" ]]; then /bin/sleep 1; fi
             # Real compose reports progress on stderr even when it succeeds.
             echo " Container picpeak-backend  Recreated" >&2
             echo " Container picpeak-backend  Started" >&2
