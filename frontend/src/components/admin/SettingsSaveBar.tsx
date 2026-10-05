@@ -1,8 +1,10 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Save } from 'lucide-react';
 import { Button } from '../common';
 import { useUnsavedChanges } from '../../contexts/UnsavedChangesContext';
+import { useBottomBarSlot } from './bottomBarSlot';
 
 interface SettingsSaveBarProps {
   /** Draft differs from what the server has. Drives the hint and both buttons. */
@@ -29,9 +31,12 @@ interface SettingsSaveBarProps {
 /**
  * The one save control for settings forms (discussion 1541, point 3).
  *
- * Sticks to the bottom of the admin content so it sits in the same place
- * on every tab, at the height of the sidebar's collapse row (py-2 around
- * h-9 buttons) so the two bottom edges line up; Save and Discard are disabled while the draft equals the
+ * Rendered into AdminLayout's bottom bar slot, so it sits at the bottom of
+ * the window on every page — also on a page shorter than the window, where
+ * a bar sticky inside the content would float under the last field. Outside
+ * the layout (tests) it renders in place. It has the height of the
+ * sidebar's collapse row (py-2 around h-9 buttons) so the two bottom edges
+ * line up. Save and Discard are disabled while the draft equals the
  * server state, and the "unsaved changes" hint appears as soon as it does
  * not. Rendering it also registers the form with UnsavedChangesProvider, so
  * closing the tab or navigating away asks first. Instant-save toggles (a
@@ -49,11 +54,12 @@ export const SettingsSaveBar: React.FC<SettingsSaveBarProps> = ({
 }) => {
   const { t } = useTranslation();
   useUnsavedChanges(isDirty, onDiscard);
+  const slot = useBottomBarSlot();
 
-  return (
+  const bar = (
     <div
       data-testid="settings-save-bar"
-      className="sticky bottom-0 z-20 -mx-4 sm:-mx-6 lg:-mx-8 mt-8 px-4 sm:px-6 lg:px-8 py-2 bg-shell border-t border-line"
+      className={`${slot ? '' : 'sticky bottom-0 z-20 -mx-4 sm:-mx-6 lg:-mx-8 mt-8 '}px-4 sm:px-6 lg:px-8 py-2 bg-shell border-t border-line`}
     >
       <div className="flex flex-wrap items-center justify-end gap-2">
         {isDirty && (
@@ -82,6 +88,8 @@ export const SettingsSaveBar: React.FC<SettingsSaveBarProps> = ({
       </div>
     </div>
   );
+
+  return slot ? createPortal(bar, slot) : bar;
 };
 
 SettingsSaveBar.displayName = 'SettingsSaveBar';
