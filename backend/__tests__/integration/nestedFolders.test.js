@@ -174,7 +174,7 @@ describe('nested folders', () => {
       expect(res.status).toBe(200);
       expect(res.body.nodes).toEqual({ Friday: 'exists', 'Friday/A': 'new' });
       expect(res.body.results['Export/FirstLook']).toMatchObject({ first_look: true, status: 'root' });
-      expect(await db('photo_categories').where('event_id', eventId).count('id as c').first()).toMatchObject({ c: 1 });
+      expect(Number((await db('photo_categories').where('event_id', eventId).count('id as c').first()).c)).toBe(1);
     });
 
     it('creates missing folders for a role with folders.manage', async () => {

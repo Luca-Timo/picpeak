@@ -108,7 +108,8 @@ describe('folder ingest and two-stage delivery', () => {
       const byPath = Object.fromEntries(photos.map((p) => [p.external_relpath.split(path.sep).slice(1).join('/'), p]));
       expect(byPath['Friday/Activity A/IMG_0001.jpg'].folder_id).toBe(byName['Activity A'].id);
       expect(byPath['Saturday/IMG_0001.jpg'].folder_id).toBe(byName.Saturday.id);
-      expect(byPath['Wedding (FirstLook)/best.jpg']).toMatchObject({ folder_id: null, first_look: 1 });
+      expect(byPath['Wedding (FirstLook)/best.jpg'].folder_id).toBeNull();
+      expect(Boolean(byPath['Wedding (FirstLook)/best.jpg'].first_look)).toBe(true);
       expect(byPath['loose.jpg'].folder_id).toBeNull();
 
       const event = await db('events').where('id', eventId).first();
@@ -118,8 +119,8 @@ describe('folder ingest and two-stage delivery', () => {
       // A rescan creates nothing new and moves nothing.
       await db('photos').where({ event_id: eventId }).whereNotNull('folder_id').update({ folder_id: null });
       await runImport(eventId, root);
-      expect(await db('photos').where('event_id', eventId).whereNotNull('folder_id').count('id as c').first()).toMatchObject({ c: 0 });
-      expect(await db('photo_categories').where('event_id', eventId).count('id as c').first()).toMatchObject({ c: 3 });
+      expect(Number((await db('photos').where('event_id', eventId).whereNotNull('folder_id').count('id as c').first()).c)).toBe(0);
+      expect(Number((await db('photo_categories').where('event_id', eventId).count('id as c').first()).c)).toBe(3);
     });
 
     it('stays flat with folder structure off, but still flags the first look', async () => {
@@ -130,8 +131,8 @@ describe('folder ingest and two-stage delivery', () => {
       await runImport(eventId, root);
       const photos = await db('photos').where('event_id', eventId).select('filename', 'folder_id', 'first_look');
       expect(photos.every((p) => p.folder_id === null)).toBe(true);
-      expect(photos.find((p) => p.filename === 'b.jpg').first_look).toBe(1);
-      expect(await db('photo_categories').where('event_id', eventId).count('id as c').first()).toMatchObject({ c: 0 });
+      expect(Boolean(photos.find((p) => p.filename === 'b.jpg').first_look)).toBe(true);
+      expect(Number((await db('photo_categories').where('event_id', eventId).count('id as c').first()).c)).toBe(0);
     });
   });
 
@@ -182,8 +183,8 @@ describe('folder ingest and two-stage delivery', () => {
       expect(res.status).toBe(200);
       expect(res.body.duplicate_photo_ids).toEqual([flDup]);
       expect(res.body.email_queued).toBe(true);
-      expect((await db('photos').where('id', full).first()).first_look).toBe(1);
-      expect((await db('photos').where('id', flOnly).first()).first_look).toBe(1);
+      expect(Boolean((await db('photos').where('id', full).first()).first_look)).toBe(true);
+      expect(Boolean((await db('photos').where('id', flOnly).first()).first_look)).toBe(true);
       const event = await db('events').where('id', eventId).first();
       expect(event.delivery_status).toBe('complete');
       expect(event.delivery_completed_at).toBeTruthy();
