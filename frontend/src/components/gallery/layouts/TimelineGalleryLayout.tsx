@@ -3,6 +3,7 @@ import { Calendar, Heart } from 'lucide-react';
 import { format, parseISO, startOfDay, startOfWeek, startOfMonth } from 'date-fns';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { PhotoCard } from '../PhotoCard';
+import { firstLookAboveChips } from '../GalleryTileBadges';
 import type { BaseGalleryLayoutProps } from './BaseGalleryLayout';
 import type { Photo } from '../../../types';
 import { useLazyBands } from './lazyBands';
@@ -128,6 +129,8 @@ export const TimelineGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
                 return (
                   <PhotoCard
                     key={photo.id}
+                    // Above the always-present time chip (issue 1562).
+                    firstLookClassName={firstLookAboveChips(photo.type === 'collage' ? 2 : 1)}
                     photo={photo}
                     isSelected={selectedPhotos.has(photo.id)}
                     isSelectionMode={isSelectionMode}

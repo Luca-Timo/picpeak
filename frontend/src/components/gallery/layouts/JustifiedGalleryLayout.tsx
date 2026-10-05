@@ -6,6 +6,7 @@ import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { AuthenticatedImage } from '../../common';
 import { PhotoCard } from '../PhotoCard';
+import { firstLookAboveChips } from '../GalleryTileBadges';
 import { FeedbackIdentityModal } from '../../gallery/FeedbackIdentityModal';
 import { feedbackService } from '../../../services/feedback.service';
 import { buildResourceUrl } from '../../../utils/url';
@@ -96,9 +97,14 @@ const JustifiedPhoto: React.FC<JustifiedPhotoProps> = ({
     (photo.mime_type && photo.mime_type.startsWith('video/')) ||
     photo.type === 'video';
 
+  // Same corner rule as the grid: above the feedback indicators (issue 1562).
+  const hasIndicators = commentCount > 0 || averageRating > 0 || likeCount > 0 || liked;
+  const firstLookRows = hasIndicators ? (photo.type === 'collage' ? 2 : 1) : 0;
+
   return (
     <PhotoCard
       photo={photo}
+      firstLookClassName={firstLookAboveChips(firstLookRows)}
       isSelected={isSelected}
       isSelectionMode={isSelectionMode}
       onClick={onClick}

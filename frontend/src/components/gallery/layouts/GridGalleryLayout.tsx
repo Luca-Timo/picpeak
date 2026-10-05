@@ -3,10 +3,12 @@ import { MessageSquare, Star, Heart, Video, Eye, EyeOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { PhotoCard } from '../PhotoCard';
+import { firstLookAboveChips } from '../GalleryTileBadges';
 import { FeedbackIdentityModal } from '../../gallery/FeedbackIdentityModal';
 import { feedbackService } from '../../../services/feedback.service';
 import type { BaseGalleryLayoutProps } from './BaseGalleryLayout';
 import type { Photo } from '../../../types';
+import type { GalleryLayoutSettings } from '../../../types/theme.types';
 import { useLazyBands } from './lazyBands';
 
 interface GridPhotoProps {
@@ -73,9 +75,15 @@ const GridPhoto: React.FC<GridPhotoProps> = ({
     (photo.mime_type && photo.mime_type.startsWith('video/')) ||
     photo.type === 'video';
 
+  // Feedback indicators own the bottom-left corner (one row higher on a
+  // collage); the first-look pill sits above them (issue 1562).
+  const hasIndicators = commentCount > 0 || averageRating > 0 || likeCount > 0 || liked;
+  const firstLookRows = hasIndicators ? (photo.type === 'collage' ? 2 : 1) : 0;
+
   return (
     <PhotoCard
       photo={photo}
+      firstLookClassName={firstLookAboveChips(firstLookRows)}
       isSelected={isSelected}
       isSelectionMode={isSelectionMode}
       onClick={onClick}
@@ -203,6 +211,27 @@ const GridPhoto: React.FC<GridPhotoProps> = ({
   );
 };
 
+/**
+ * The grid's columns and gaps from the theme. Shared with the delivery
+ * placeholders (issue 1562), which have to line up with the real tiles above
+ * them. The grid-cols classes are safelisted in tailwind.config.
+ */
+export function gridGeometryClass(gallerySettings: GalleryLayoutSettings): string {
+  const columns = gallerySettings.gridColumns || { mobile: 2, tablet: 3, desktop: 4 };
+  const spacing = gallerySettings.spacing || 'normal';
+  const scale = gallerySettings.thumbnailScale || 'md';
+
+  const scaleOffsets: Record<string, number> = { xs: 3, sm: 1, md: 0, lg: -1, xl: -2 };
+  const applyScale = (cols: number) => Math.max(1, cols + (scaleOffsets[scale] ?? 0));
+  const spacingClass = spacing === 'tight' ? 'gap-2' : spacing === 'relaxed' ? 'gap-6' : 'gap-4';
+
+  return `grid ${spacingClass}
+    grid-cols-${applyScale(columns.mobile)}
+    sm:grid-cols-${applyScale(columns.tablet)}
+    lg:grid-cols-${applyScale(columns.desktop)}
+    xl:grid-cols-${applyScale(columns.desktop + 1)}`;
+}
+
 export const GridGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
   photos,
   slug,
@@ -222,13 +251,7 @@ export const GridGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
 }) => {
   const { theme } = useTheme();
   const gallerySettings = theme.gallerySettings || {};
-  const columns = gallerySettings.gridColumns || { mobile: 2, tablet: 3, desktop: 4 };
-  const spacing = gallerySettings.spacing || 'normal';
   const animation = gallerySettings.photoAnimation || 'fade';
-  const scale = gallerySettings.thumbnailScale || 'md';
-
-  const scaleOffsets: Record<string, number> = { xs: 3, sm: 1, md: 0, lg: -1, xl: -2 };
-  const applyScale = (cols: number) => Math.max(1, cols + (scaleOffsets[scale] ?? 0));
 
   const [showIdentityModal, setShowIdentityModal] = React.useState(false);
   const [pendingAction, setPendingAction] = React.useState<null | { type: 'like'; photoId: number }>(null);
@@ -243,13 +266,7 @@ export const GridGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
   }, [photos]);
   const [savedIdentity, setSavedIdentity] = React.useState<{ name: string; email: string } | null>(null);
 
-  const spacingClass = spacing === 'tight' ? 'gap-2' : spacing === 'relaxed' ? 'gap-6' : 'gap-4';
-
-  const gridClass = `photo-grid grid ${spacingClass}
-    grid-cols-${applyScale(columns.mobile)}
-    sm:grid-cols-${applyScale(columns.tablet)}
-    lg:grid-cols-${applyScale(columns.desktop)}
-    xl:grid-cols-${applyScale(columns.desktop + 1)}`;
+  const gridClass = `photo-grid ${gridGeometryClass(gallerySettings)}`;
 
   return (
     <div className={gridClass}>

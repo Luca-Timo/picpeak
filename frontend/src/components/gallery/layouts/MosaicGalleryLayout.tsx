@@ -2,6 +2,7 @@ import React from 'react';
 import { Heart } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { PhotoCard } from '../PhotoCard';
+import { firstLookAboveChips } from '../GalleryTileBadges';
 import { FeedbackIdentityModal } from '../../gallery/FeedbackIdentityModal';
 import { feedbackService } from '../../../services/feedback.service';
 import type { BaseGalleryLayoutProps } from './BaseGalleryLayout';
@@ -71,6 +72,10 @@ const MosaicPhoto: React.FC<MosaicPhotoProps> = ({
     <>
       <PhotoCard
         photo={photo}
+        // Above the like indicator and the collage chip, both bottom-left (issue 1562).
+        firstLookClassName={firstLookAboveChips(
+          (((photo.like_count ?? 0) > 0 || likedLocal) ? 1 : 0) + (photo.type === 'collage' ? 1 : 0)
+        )}
         isSelected={isSelected}
         isSelectionMode={isSelectionMode}
         onClick={(e) => {

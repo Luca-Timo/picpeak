@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { MessageSquare, Star, Heart } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { PhotoCard } from '../PhotoCard';
+import { firstLookAboveChips } from '../GalleryTileBadges';
 import {
   calculateJustifiedLayout,
   createJustifiedPhotos,
@@ -111,6 +112,8 @@ const MasonryPhoto: React.FC<MasonryPhotoProps> = ({
   return (
     <PhotoCard
       photo={photo}
+      // The collage chip owns bottom-left (issue 1562).
+      firstLookClassName={firstLookAboveChips(photo.type === 'collage' ? 1 : 0)}
       isSelected={isSelected}
       isSelectionMode={isSelectionMode}
       onClick={onClick}
@@ -399,6 +402,7 @@ export const MasonryGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
           return (
             <PhotoCard
               key={photo.id}
+              firstLookClassName={firstLookAboveChips(photo.type === 'collage' ? 1 : 0)}
               photo={photo}
               isSelected={selectedPhotos.has(photo.id)}
               isSelectionMode={isSelectionMode}
@@ -465,6 +469,7 @@ export const MasonryGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
           return (
             <PhotoCard
               key={photo.id}
+              firstLookClassName={firstLookAboveChips(photo.type === 'collage' ? 1 : 0)}
               photo={photo}
               isSelected={selectedPhotos.has(photo.id)}
               isSelectionMode={isSelectionMode}
@@ -543,6 +548,7 @@ export const MasonryGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
           return (
             <PhotoCard
               key={photo.id}
+              firstLookClassName={firstLookAboveChips(photo.type === 'collage' ? 1 : 0)}
               photo={photo}
               isSelected={selectedPhotos.has(photo.id)}
               isSelectionMode={isSelectionMode}

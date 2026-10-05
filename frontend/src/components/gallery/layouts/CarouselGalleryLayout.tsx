@@ -1,9 +1,10 @@
 import { usePhotoSelection } from '../../../hooks/usePhotoSelection';
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Download, Maximize2, Play, Pause, Heart, MessageSquare } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Maximize2, Play, Pause, Heart, MessageSquare, Sparkles } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { AuthenticatedImage, Button } from '../../common';
 import { ColorLabelBadge } from '../ColorLabelBadge';
+import { useGalleryTileBadges } from '../GalleryTileBadges';
 import type { BaseGalleryLayoutProps } from './BaseGalleryLayout';
 import { FeedbackIdentityModal } from '../../gallery/FeedbackIdentityModal';
 import { feedbackService } from '../../../services/feedback.service';
@@ -71,6 +72,10 @@ export const CarouselGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
   const guestIdentity = useGuestIdentityOptional();
   // Download limit (issue 1560); see PhotoCard for why aria-disabled.
   const downloadQuota = useDownloadQuota();
+  // First look (issue 1562) and the "All photos" folder hint (issue 1786)
+  // ride in the chip row next to the category: this layout's corners are
+  // all taken (see the colour-label note below).
+  const tileBadges = useGalleryTileBadges();
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
   // Seed from server is_liked on first non-empty payload (#590 follow-up).
   // Mount-only so refetches don't clobber in-session optimistic toggles.
@@ -137,6 +142,17 @@ export const CarouselGalleryLayout: React.FC<BaseGalleryLayoutProps> = ({
             {currentPhoto.category_name && (
               <span className="px-3 py-1 bg-black/50 text-white rounded-full text-sm">
                 {currentPhoto.category_name}
+              </span>
+            )}
+            {tileBadges.folderNameOf && tileBadges.folderNameOf(currentPhoto) && (
+              <span className="px-3 py-1 bg-black/50 text-white rounded-full text-sm max-w-[10rem] truncate">
+                {tileBadges.folderNameOf(currentPhoto)}
+              </span>
+            )}
+            {currentPhoto.first_look && tileBadges.firstLookLabel && (
+              <span className="inline-flex items-center gap-1 px-3 py-1 bg-white/90 text-neutral-800 rounded-full text-sm">
+                <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+                {tileBadges.firstLookLabel}
               </span>
             )}
           </div>

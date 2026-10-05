@@ -59,6 +59,30 @@ describe('resolvePhotoLink', () => {
   });
 });
 
+// Issue 1786: folders nest and a photo's folder lives in `folder_id`, so a
+// link to a photo three levels down has to open that deepest folder — the only
+// grid the photo is on.
+describe('resolvePhotoLink with nested folders', () => {
+  const nested: PhotoCategory[] = [
+    cat({ id: 2, slug: 'portraits' }),
+    cat({ id: 20, slug: 'saturday', is_folder: true, parent_id: null }),
+    cat({ id: 21, slug: 'activity-b', is_folder: true, parent_id: 20 }),
+    cat({ id: 22, slug: 'part-1', is_folder: true, parent_id: 21 }),
+  ];
+  const nestedPhotos = [
+    { id: 50, filename: '50.jpg', folder_id: 22, category_id: 2 },
+    { id: 51, filename: '51.jpg', folder_id: null, category_id: 2 },
+  ] as unknown as Photo[];
+
+  it('names the deepest folder, not the filter category', () => {
+    expect(resolvePhotoLink(nestedPhotos, nested, 50)?.folder?.id).toBe(22);
+  });
+
+  it('keeps a categorised root photo at root', () => {
+    expect(resolvePhotoLink(nestedPhotos, nested, 51)?.folder).toBeNull();
+  });
+});
+
 describe('history protocol', () => {
   const original = window.location.href;
   let back: ReturnType<typeof vi.spyOn>;

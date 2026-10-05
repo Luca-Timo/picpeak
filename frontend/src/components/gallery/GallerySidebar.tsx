@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { X, Download, Filter, SortAsc, SortDesc, Search, Calendar, Type, HardDrive, Check, Star, Upload, Camera, ClipboardList } from 'lucide-react';
+import { X, Download, Filter, FolderTree, SortAsc, SortDesc, Search, Calendar, Type, HardDrive, Check, Star, Upload, Camera, ClipboardList } from 'lucide-react';
 import { Button } from '../common';
 import { PhotoCategory, type Photo } from '../../types';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ import { useDownloadQuota } from '../../contexts/DownloadQuotaContext';
 import type { QuotaPhoto } from '../../utils/downloadLimit';
 import { selectLabel } from '../../utils/mediaCounts';
 import { DownloadQuotaNotice } from './DownloadQuotaNotice';
+import { GallerySidebarFolderTree, type SidebarFolderTreeProps } from './GallerySidebarFolderTree';
 
 interface GallerySidebarProps {
   isOpen: boolean;
@@ -88,6 +89,11 @@ interface GallerySidebarProps {
   // when nothing is selected; the control is hidden at zero.
   onCopyFilenames?: () => void;
   copyFilenamesCount?: number;
+  /**
+   * Folder navigation (issue 1786) as a collapsible tree. Absent for a gallery
+   * without folders, which keeps its sidebar exactly as before.
+   */
+  folderTree?: SidebarFolderTreeProps;
 }
 
 export const GallerySidebar: React.FC<GallerySidebarProps> = ({
@@ -144,6 +150,7 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
   onCreditChange,
   onCopyFilenames,
   copyFilenamesCount = 0,
+  folderTree,
 }) => {
   const { t } = useTranslation();
   const downloadQuota = useDownloadQuota();
@@ -396,6 +403,29 @@ export const GallerySidebar: React.FC<GallerySidebarProps> = ({
                 if (isMobile) onClose();
               }}
             />
+          )}
+
+          {/* Folders (issue 1786). Not hidden for the carousel like the
+              categories below: containment applies there too, so this is the
+              only way into a folder from the sidebar. */}
+          {folderTree && folderTree.nodes.length > 0 && (
+            <div className="gallery-sidebar-section gallery-sidebar-folders p-4 border-b border-surface">
+              <h3 className="gallery-sidebar-section-title text-sm font-semibold text-muted-theme mb-3 flex items-center gap-2">
+                <FolderTree className="w-4 h-4" />
+                {t('gallery.folders', 'Folders')}
+              </h3>
+              <GallerySidebarFolderTree
+                {...folderTree}
+                onOpenFolder={(key) => {
+                  folderTree.onOpenFolder(key);
+                  if (isMobile) onClose();
+                }}
+                onViewChange={(view) => {
+                  folderTree.onViewChange(view);
+                  if (isMobile) onClose();
+                }}
+              />
+            </div>
           )}
 
           {/* Categories Section - Hidden for carousel layout */}

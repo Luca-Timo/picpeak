@@ -20,7 +20,7 @@
  * renders in place without touching the query string.
  */
 import type { Photo, PhotoCategory } from '../../types';
-import { folderCategoryIds } from './folders';
+import { folderCategoryIds, photoFolderId } from './folders';
 
 export const PHOTO_QUERY_PARAM = 'photo';
 
@@ -52,7 +52,8 @@ export interface ResolvedPhotoLink {
  * The photo a `?photo=<id>` points at, or null for an id that is not in the
  * loaded list. Also says which folder has to be open for the photo to be on
  * screen: a foldered photo is absent from the root grid (folders.ts), so a
- * deep link to it has to switch folders first.
+ * deep link to it has to switch folders first. In "All photos" mode every
+ * photo is on screen and the caller leaves the view alone.
  */
 export function resolvePhotoLink(
   photos: Photo[] | undefined,
@@ -62,8 +63,11 @@ export function resolvePhotoLink(
   if (photoId === null) return null;
   const photo = (photos || []).find((p) => p.id === photoId);
   if (!photo) return null;
-  const folder = photo.category_id && folderCategoryIds(categories).has(photo.category_id)
-    ? (categories || []).find((c) => c.id === photo.category_id) || null
+  // Any depth (issue 1786): the folder the photo lives in directly, which is
+  // the one whose grid shows it.
+  const folderId = photoFolderId(photo, new Set([...folderCategoryIds(categories)].map(String)));
+  const folder = folderId !== null
+    ? (categories || []).find((c) => String(c.id) === folderId) || null
     : null;
   return { photo, folder };
 }

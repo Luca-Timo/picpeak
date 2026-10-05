@@ -3,6 +3,7 @@ import { motion, useInView } from 'framer-motion';
 import { Heart, Check } from 'lucide-react';
 import { AuthenticatedImage } from '../../../common';
 import { ColorLabelBadge } from '../../ColorLabelBadge';
+import { FirstLookBadge } from '../../GalleryTileBadges';
 import type { Photo } from '../../../../types';
 import { lightboxImageUrl } from '../../imageTiers';
 
@@ -139,6 +140,10 @@ export const StoryPhotoCard: React.FC<StoryPhotoCardProps> = ({
 
       {/* Overlay */}
       <div className="story-photo-card-overlay" />
+
+      {/* First look (issue 1562). Bottom-left is free until hover, when the
+          filename caption slides over it — so the pill steps aside then. */}
+      <FirstLookBadge photo={photo} className="bottom-3 left-3 transition-opacity group-hover:opacity-0" />
 
       {/* Selection checkbox (issue 1716). Visible while selecting or when
           selected; outside selection mode it appears on hover and starts the

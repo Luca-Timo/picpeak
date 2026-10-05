@@ -15,16 +15,29 @@ import { useGalleryAuth, useTheme } from '../../contexts';
 import { useGalleryPhotos, useDownloadAllPhotos } from '../../hooks/useGallery';
 import { PhotoGridWithLayouts } from './PhotoGridWithLayouts';
 import { GalleryFolderTiles } from './GalleryFolderTiles';
+import { GalleryBreadcrumb } from './GalleryBreadcrumb';
+import { GalleryViewSwitch } from './GalleryViewSwitch';
+import { GalleryDeliveryBanner } from './GalleryDeliveryBanner';
+import { GalleryTileBadgesProvider, type GalleryTileBadgesValue } from './GalleryTileBadges';
 import {
   findFolderByKey,
   filterCategories,
+  folderAncestors,
+  folderCategoryIds,
   folderTiles,
+  folderTree,
   peopleInScope,
+  photoFolderId,
   photosInScope,
+  photosInSubtree,
+  photosInView,
   SELECTED_DOWNLOAD_LIMIT,
   folderKey,
   readFolderParam,
+  readViewParam,
   writeFolderParam,
+  writeViewParam,
+  type GalleryViewMode,
 } from './folders';
 import {
   leavePhotoParam,
@@ -57,7 +70,7 @@ import { DownloadQuotaNotice } from './DownloadQuotaNotice';
 import type { FilterType, FeedbackFilterType } from './GalleryFilter';
 import { analyticsService } from '../../services/analytics.service';
 import { useDevToolsProtection } from '../../hooks/useDevToolsProtection';
-import { Upload, Menu, Eye, EyeOff, Shield, X, Download, ChevronLeft, ClipboardList } from 'lucide-react';
+import { Upload, Menu, Eye, EyeOff, Shield, X, Download, ClipboardList } from 'lucide-react';
 import { galleryService } from '../../services/gallery.service';
 import { feedbackService, type ColorLabel } from '../../services/feedback.service';
 import { useWatermarkSettings } from '../../hooks/useWatermarkSettings';
@@ -132,6 +145,8 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
   // Open folder (#1160), mirrored to `?folder=<slug>` so it is linkable and the
   // browser back button walks out of it. Seeded from the URL on first render.
   const [openFolderSlug, setOpenFolderSlug] = useState<string | null>(() => readFolderParam());
+  // "Folders | All photos" (issue 1786), mirrored to `?view=all`.
+  const [galleryView, setGalleryView] = useState<GalleryViewMode>(() => readViewParam());
   // Link to a single photo (issue 1733). `pendingPhotoLink` is a `?photo=`
   // still to be checked against the loaded list — the deep link on arrival,
   // or a Back/Forward step; `linkedPhotoId` is the photo the lightbox is
@@ -386,17 +401,43 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
   // identity on every render.
   const allPeople = useMemo(() => peopleData?.people || [], [peopleData?.people]);
 
-  // Folders (#1160). `openFolder` resolves the `?folder=` slug against the
-  // categories the gallery actually returned, so a stale or hand-typed slug
-  // simply falls back to root instead of rendering an empty gallery.
-  const openFolder = useMemo(
-    () => findFolderByKey(data?.categories, openFolderSlug),
-    [data?.categories, openFolderSlug]
-  );
-
-  const tiles = useMemo(
-    () => folderTiles(data?.categories, data?.photos),
+  // Folders (#1160, nested since issue 1786). A gallery "has folders" when
+  // the root has at least one folder tile; without one the switch and the
+  // breadcrumb never render and the gallery looks exactly as before.
+  const rootTiles = useMemo(
+    () => folderTiles(data?.categories, data?.photos, null),
     [data?.categories, data?.photos]
+  );
+  const hasFolders = rootTiles.length > 0;
+  // "All photos": containment off. Ignored for a gallery without folders,
+  // where the root already is every photo.
+  const viewAll = hasFolders && galleryView === 'all';
+
+  // `openFolder` resolves the `?folder=` slug against the categories the
+  // gallery actually returned, so a stale or hand-typed slug simply falls back
+  // to root instead of rendering an empty gallery.
+  const openFolder = useMemo(
+    () => (viewAll ? null : findFolderByKey(data?.categories, openFolderSlug)),
+    [data?.categories, openFolderSlug, viewAll]
+  );
+  const openFolderId = openFolder?.id ?? null;
+
+  // Tiles for the subfolders of the current level; none in "All photos".
+  const tiles = useMemo(
+    () => (viewAll ? [] : openFolderId === null ? rootTiles : folderTiles(data?.categories, data?.photos, openFolderId)),
+    [viewAll, openFolderId, rootTiles, data?.categories, data?.photos]
+  );
+  const folderTrail = useMemo(
+    () => folderAncestors(data?.categories, openFolderId),
+    [data?.categories, openFolderId]
+  );
+  const sidebarFolderTree = useMemo(
+    () => (hasFolders ? folderTree(data?.categories, data?.photos) : []),
+    [hasFolders, data?.categories, data?.photos]
+  );
+  const rootPhotoCount = useMemo(
+    () => (hasFolders ? photosInScope(data?.photos, data?.categories, null).length : 0),
+    [hasFolders, data?.photos, data?.categories]
   );
 
   // Photos the current view is allowed to show, before any user-applied filter.
@@ -404,9 +445,29 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
   // the category counts: scoping those by the person filter would zero out
   // every other face the moment one is picked.
   const scopedPhotos = useMemo(
-    () => photosInScope(data?.photos, data?.categories, openFolder?.id ?? null),
-    [data?.photos, data?.categories, openFolder]
+    () => photosInView(data?.photos, data?.categories, openFolderId, viewAll),
+    [data?.photos, data?.categories, openFolderId, viewAll]
   );
+
+  // Per-tile badges (issues 1562, 1786): the first-look pill whenever the
+  // gallery is a two-stage delivery (it stays after completion), and in "All
+  // photos" the folder each photo lives in, since the grid no longer says.
+  const delivery = data?.event?.delivery ?? null;
+  const tileBadges = useMemo<GalleryTileBadgesValue>(() => {
+    let folderNameOf: GalleryTileBadgesValue['folderNameOf'] = null;
+    if (viewAll) {
+      const folderIds = new Set([...folderCategoryIds(data?.categories)].map(String));
+      const names = new Map((data?.categories || []).map((c) => [String(c.id), c.name]));
+      folderNameOf = (photo) => {
+        const id = photoFolderId(photo, folderIds);
+        return id !== null ? names.get(id) || null : null;
+      };
+    }
+    return {
+      firstLookLabel: delivery ? (delivery.badge_label || t('gallery.firstLook', 'First look')) : null,
+      folderNameOf,
+    };
+  }, [viewAll, data?.categories, delivery, t]);
 
   const people = useMemo(() => peopleInScope(allPeople, scopedPhotos), [allPeople, scopedPhotos]);
 
@@ -676,11 +737,10 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
   const isExpired = daysUntilExpiration !== null && daysUntilExpiration < 0;
 
 
-  const openFolderBySlug = useCallback((key: string | null) => {
-    setOpenFolderSlug(key);
-    writeFolderParam(key);
-    // Entering or leaving a folder is a scope change, not a filter change —
-    // carrying a category selection across it would contradict the new scope.
+  // Entering or leaving a folder, or switching views, is a scope change, not a
+  // filter change.
+  const resetScopeState = useCallback(() => {
+    // Carrying a category selection across would contradict the new scope.
     setSelectedCategoryId(null);
     // The grid only auto-clears its selection when `categoryId` changes, and
     // that is already null at root — so without this a selection made outside
@@ -695,23 +755,36 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
     // Same for a credit name (#1561): the chips hide a name with no photos
     // in the new scope, and with it the only way to clear the filter.
     setSelectedCreditKey(null);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [setSelectedPhotos]);
+
+  const openFolderBySlug = useCallback((key: string | null) => {
+    setOpenFolderSlug(key);
+    // Folder navigation always happens in the folders view (issue 1786).
+    setGalleryView('folders');
+    writeFolderParam(key);
+    resetScopeState();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [resetScopeState]);
+
+  const changeGalleryView = useCallback((view: GalleryViewMode) => {
+    setGalleryView(view);
+    setOpenFolderSlug(null);
+    writeViewParam(view);
+    resetScopeState();
+  }, [resetScopeState]);
 
   // The address bar is the source of truth, so Back/Forward walk in and out of
   // folders instead of leaving the gallery.
   useEffect(() => {
     const onPop = () => {
       const folderParam = readFolderParam();
-      // Only a folder change is a scope change. Back out of a photo (issue
-      // 1733) lands on the same grid, filters included.
-      if (folderParam !== openFolderSlug) {
+      const viewParam = readViewParam();
+      // Only a folder or view change is a scope change. Back out of a photo
+      // (issue 1733) lands on the same grid, filters included.
+      if (folderParam !== openFolderSlug || viewParam !== galleryView) {
         setOpenFolderSlug(folderParam);
-        setSelectedCategoryId(null);
-        setSelectedPhotos(new Set());
-        setSelectedPersonIds([]);
-        setPeopleMatchAny(false);
-        setSelectedCreditKey(null);
+        setGalleryView(viewParam);
+        resetScopeState();
       }
       // Back closes the lightbox, Forward reopens it. An id is checked against
       // the loaded list like a deep link, so it can switch folders too.
@@ -727,10 +800,10 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, [setSelectedPhotos, openFolderSlug]);
+  }, [resetScopeState, openFolderSlug, galleryView]);
 
   const filteredPhotos = useGalleryFiltering({
-    sourcePhotos: data?.photos, categories: data?.categories, folderId: openFolder?.id ?? null,
+    sourcePhotos: data?.photos, categories: data?.categories, folderId: openFolderId, viewAll,
     selectedCategoryId, searchTerm, sortBy, sortDesc, watermarkEnabled, slug,
     activeFilters, activeColorFilters, mediaFilter, isGuestIdentityMode, myFeedbackPhotoIds,
     selectedPersonIds, peopleMatchAny,
@@ -760,7 +833,9 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
       return;
     }
     const targetFolderId = resolved.folder?.id ?? null;
-    if (targetFolderId !== (openFolder?.id ?? null)) {
+    // In "All photos" every photo is already on screen (issue 1786); only the
+    // folders view has to open the photo's folder, at whatever depth.
+    if (!viewAll && targetFolderId !== openFolderId) {
       const key = resolved.folder ? folderKey(resolved.folder) : null;
       setOpenFolderSlug(key);
       writeFolderParam(key, { replace: true });
@@ -777,7 +852,7 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
       setSelectedCreditKey(null);
     }
     setLinkedPhotoId(resolved.photo.id);
-  }, [pendingPhotoLink, data?.photos, data?.categories, hiddenUntilReveal, openFolder, filteredPhotos, setSelectedPhotos]);
+  }, [pendingPhotoLink, data?.photos, data?.categories, hiddenUntilReveal, viewAll, openFolderId, filteredPhotos, setSelectedPhotos]);
 
   // The lightbox's own moves, mirrored to the URL (photoLink.ts): one pushed
   // entry per opening, rewritten while stepping, left on close.
@@ -1035,19 +1110,21 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
 
   // Download just the open folder (#1160). The event-wide "download all" still
   // zips the whole gallery including foldered photos; this is the "only this
-  // folder, once" case. Honours the per-category opt-out (#640), so a folder
-  // with allow_downloads = false offers no button at all.
+  // folder, once" case. Recursive since issue 1786: the folder and every
+  // subfolder below it. Honours the per-category opt-out (#640), so a folder
+  // with allow_downloads = false offers no button at all; a restriction on a
+  // parent folder already reaches each photo's `category_allow_downloads`.
   const folderDownloadableIds = useMemo(() => {
     if (!openFolder) return [];
     if (openFolder.allow_downloads === false) return [];
-    // scopedPhotos, not filteredPhotos: a search or feedback chip stays active
-    // when entering a folder, and a button that says "Download folder" must not
-    // quietly hand over a filtered subset of it (or vanish when the filter
-    // matches nothing).
-    return scopedPhotos
+    // The unfiltered subtree, not filteredPhotos: a search or feedback chip
+    // stays active when entering a folder, and a button that says "Download
+    // folder" must not quietly hand over a filtered subset of it (or vanish
+    // when the filter matches nothing).
+    return photosInSubtree(data?.photos, data?.categories, openFolder.id)
       .filter((photo) => photo.category_allow_downloads !== false)
       .map((photo) => photo.id);
-  }, [openFolder, scopedPhotos]);
+  }, [openFolder, data?.photos, data?.categories]);
 
   // /download-selected caps the id list server-side, so a folder bigger than the
   // cap would deliver a truncated archive under a button promising the whole
@@ -1272,74 +1349,89 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
   // the guest answer, and vice versa.
   const showLogoutControl = requiresPassword || isClient || viaCustomer;
 
-  // Folder navigation (#1160): tiles at root, a breadcrumb + folder download
-  // inside one. Defined once and rendered by BOTH layout branches — containment
-  // comes from `filteredPhotos`, which every branch uses, so a branch that hides
-  // foldered photos without offering the tiles makes them unreachable.
-  // Renders nothing at all when the gallery has no folders, so galleries that
-  // don't use the feature are untouched.
-  const buildFolderNav = (compact: boolean) => openFolder ? (
-    <div className="mb-6 flex items-center gap-2 text-sm flex-wrap">
-      <button
-        type="button"
-        onClick={() => openFolderBySlug(null)}
-        className="inline-flex items-center gap-1 underline hover:no-underline"
-        style={{ color: 'var(--color-muted-text)' }}
-      >
-        <ChevronLeft className="w-4 h-4" />
-        {t('gallery.backToGallery', 'All photos')}
-      </button>
-      <span style={{ color: 'var(--color-muted-text)' }}>/</span>
-      <span className="font-medium" style={{ color: 'var(--color-text)' }}>
-        {openFolder.name}
-      </span>
-      {allowDownloads && folderDownloadableIds.length > 0 && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleDownloadFolder}
-          leftIcon={<Download className="w-4 h-4" />}
-          className="ml-auto"
-        >
-          {folderDownloadCapped
-            ? t('gallery.downloadFolderCapped', 'Download first {{limit}} of {{total}}', {
-                limit: SELECTED_DOWNLOAD_LIMIT,
-                total: folderDownloadableIds.length,
-              })
-            : t('gallery.downloadFolder', 'Download folder ({{count}})', {
-                count: folderDownloadableIds.length,
-              })}
-        </Button>
+  // Folder navigation (#1160, nested since issue 1786): the view switch, a
+  // breadcrumb, the tiles of the current level's subfolders and, inside a
+  // folder, its (recursive) download. Defined once and rendered by BOTH layout
+  // branches — containment comes from `filteredPhotos`, which every branch
+  // uses, so a branch that hides foldered photos without offering the tiles
+  // makes them unreachable. Renders nothing at all when the gallery has no
+  // folders, so galleries that don't use the feature are untouched.
+  const folderDownloadButton = openFolder && allowDownloads && folderDownloadableIds.length > 0 ? (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleDownloadFolder}
+      leftIcon={<Download className="w-4 h-4" />}
+    >
+      {folderDownloadCapped
+        ? t('gallery.downloadFolderCapped', 'Download first {{limit}} of {{total}}', {
+            limit: SELECTED_DOWNLOAD_LIMIT,
+            total: folderDownloadableIds.length,
+          })
+        : tiles.length > 0
+          ? t('gallery.downloadFolderWithSubfolders', 'Download folder incl. subfolders ({{count}})', {
+              count: folderDownloadableIds.length,
+            })
+          : t('gallery.downloadFolder', 'Download folder ({{count}})', {
+              count: folderDownloadableIds.length,
+            })}
+    </Button>
+  ) : null;
+
+  const buildFolderNav = (compact: boolean) => hasFolders ? (
+    // GalleryFolderTiles brings its own bottom margin.
+    <div className={compact ? 'flex flex-col gap-3' : tiles.length > 0 ? '' : 'mb-6'}>
+      <div className={`flex flex-wrap items-center gap-3 ${compact || tiles.length === 0 ? '' : 'mb-6'}`}>
+        {/* On a phone the switch gets its own full-width row on top, as in
+            the issue 1786 mockup; from sm up it sits at the right. */}
+        <GalleryViewSwitch
+          view={viewAll ? 'all' : 'folders'}
+          onChange={changeGalleryView}
+          className={compact ? 'sm:order-last' : 'order-first w-full sm:w-auto sm:order-last sm:ml-auto'}
+        />
+        {!viewAll && (
+          <GalleryBreadcrumb trail={folderTrail} onNavigate={openFolderBySlug} className="flex-1" />
+        )}
+        {folderDownloadButton}
+      </div>
+      {!viewAll && (
+        <GalleryFolderTiles
+          tiles={tiles}
+          onOpen={openFolderBySlug}
+          compact={compact}
+          slug={slug}
+          useEnhancedProtection={protectionLevel !== 'basic'}
+          allowDownloads={allowDownloads}
+        />
       )}
     </div>
-  ) : (
-    <GalleryFolderTiles
-      tiles={tiles}
-      onOpen={openFolderBySlug}
-      compact={compact}
-      slug={slug}
-      useEnhancedProtection={protectionLevel !== 'basic'}
-      allowDownloads={allowDownloads}
-    />
-  );
+  ) : null;
 
   const folderNav = buildFolderNav(false);
 
   // True only when there is something to show, so the full-page layouts keep
   // their edge-to-edge hero untouched unless folders are actually in use.
-  const hasFolderNav = !!openFolder || tiles.length > 0;
+  const hasFolderNav = hasFolders;
 
-  // Root of a gallery where every photo lives in a folder: the tiles ARE the
-  // content, and the grid below them would otherwise render its empty state.
-  // Deliberately `scopedPhotos`, not `filteredPhotos`: with loose root photos
-  // present, a search matching none of them would otherwise look "folder-only"
-  // and swallow the no-results message the guest needs.
-  const rootIsFoldersOnly = !openFolder && tiles.length > 0 && scopedPhotos.length === 0;
+  // A level where every photo lives in a subfolder (a folder-only root, or a
+  // "Saturday" that only holds activities): the tiles ARE the content, and the
+  // grid below them would otherwise render its empty state. Deliberately
+  // `scopedPhotos`, not `filteredPhotos`: with loose photos present, a search
+  // matching none of them would otherwise look "folder-only" and swallow the
+  // no-results message the guest needs.
+  const rootIsFoldersOnly = !viewAll && tiles.length > 0 && scopedPhotos.length === 0;
+
+  // Two-stage delivery (issue 1562): banner + placeholders after the
+  // delivered photos, at the root and in "All photos" — not inside a folder,
+  // where "more photos are coming" would read as "more for this folder".
+  const showDeliveryBanner = delivery?.status === 'partial' && !openFolder;
+  const gridKey = viewAll ? 'all' : openFolder ? `folder-${openFolder.id}` : 'root';
 
   // For full-page layouts, render just the PhotoGridWithLayouts without any wrappers
   if (isFullPageLayout) {
     return (
       <DownloadQuotaProvider slug={slug} event={data?.event}>
+      <GalleryTileBadgesProvider value={tileBadges}>
         {/* #1160: these layouts return early and render edge-to-edge, but they
             still get `filteredPhotos`, so without this the foldered photos
             would be hidden with no way in. Contained width so the folder strip
@@ -1407,10 +1499,15 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
           // carousel's currentIndex is only meaningful for the photo set it was
           // built against, and an index kept from a larger scope indexes past
           // the end of a smaller folder.
-          key={openFolder ? `folder-${openFolder.id}` : 'root'}
+          key={gridKey}
           photos={filteredPhotos}
           openPhotoId={linkedPhotoId}
           onLightboxPhotoChange={handleLightboxPhotoChange}
+          // Banner only: these layouts tile photos in their own geometry, which
+          // a plain grid of placeholders would not match (issue 1562).
+          afterGrid={showDeliveryBanner
+            ? <GalleryDeliveryBanner delivery={delivery} showPlaceholders={false} />
+            : undefined}
           // The hero, title, logout and download controls live inside this
           // component for the full-bleed layouts, so a folder-only root must
           // silence the empty message without unmounting the shell (#1160).
@@ -1516,6 +1613,7 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
             onClose={() => setShowCopyFilenames(false)}
           />
         )}
+      </GalleryTileBadgesProvider>
       </DownloadQuotaProvider>
     );
   }
@@ -1526,6 +1624,7 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
   return (
     <GuestIdentityProvider slug={slug} identityMode={identityMode}>
     <DownloadQuotaProvider slug={slug} event={data?.event}>
+      <GalleryTileBadgesProvider value={tileBadges}>
       <GuestNamePromptModal requireEmail={!!feedbackSettings?.require_name_email} />
       <GuestRecoveryModal />
       {/* Sidebar for non-grid layouts */}
@@ -1587,6 +1686,15 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
           onCreditChange={setSelectedCreditKey}
           onCopyFilenames={() => setShowCopyFilenames(true)}
           copyFilenamesCount={copyFilenames.photos.length}
+          folderTree={hasFolders ? {
+            nodes: sidebarFolderTree,
+            openPath: folderTrail.map((folder) => folder.id),
+            view: viewAll ? 'all' : 'folders',
+            onOpenFolder: openFolderBySlug,
+            onViewChange: changeGalleryView,
+            rootCount: rootPhotoCount,
+            totalCount: data?.photos?.length || 0,
+          } : undefined}
         />
       ) : null}
 
@@ -1717,10 +1825,10 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
           <div className="mt-6">
             <PhotoFilterBar
               // Folders are navigation, not a filter (#1160) — they get tiles.
-              // Inside a folder the category chips are dead controls: the filter
-              // branch ignores `selectedCategoryId` there, so offering them would
-              // let a guest click a chip and see nothing happen.
-              categories={openFolder ? [] : filterCategories(data.categories)}
+              // Since issue 1786 a photo's folder and its filter category are
+              // separate fields, so the chips work inside a folder and in "All
+              // photos" too.
+              categories={filterCategories(data.categories)}
               // Scoped, so a chip can't advertise a count the grid won't produce.
               photos={scopedPhotos}
               selectedCategoryId={selectedCategoryId}
@@ -1879,8 +1987,11 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
               — directly under the tiles that prove otherwise. Skip the grid when
               the tiles are the entire content. */}
           <PhotoGridWithLayouts
-            key={openFolder ? `folder-${openFolder.id}` : 'root'}
+            key={gridKey}
             photos={filteredPhotos}
+            afterGrid={showDeliveryBanner
+              ? <GalleryDeliveryBanner delivery={delivery} className="mt-8" />
+              : undefined}
             openPhotoId={linkedPhotoId}
             onLightboxPhotoChange={handleLightboxPhotoChange}
             suppressEmptyState={rootIsFoldersOnly}
@@ -1986,6 +2097,7 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
           />
         )}
       </GalleryLayout>
+      </GalleryTileBadgesProvider>
     </DownloadQuotaProvider>
     </GuestIdentityProvider>
   );

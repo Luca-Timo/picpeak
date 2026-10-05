@@ -7,6 +7,7 @@ import { FeedbackIdentityModal } from './FeedbackIdentityModal';
 import { feedbackService } from '../../services/feedback.service';
 import { ColorLabelBadge } from './ColorLabelBadge';
 import { TileRating } from './TileRating';
+import { FirstLookBadge, FolderHintPill } from './GalleryTileBadges';
 import { useGuestIdentityOptional } from '../../contexts/GuestIdentityContext';
 import { useDownloadQuota } from '../../contexts/DownloadQuotaContext';
 import { downloadLimitReachedMessage } from '../../utils/downloadLimit';
@@ -87,6 +88,11 @@ export interface PhotoCardProps {
   afterOverlay?: React.ReactNode;
   /** Rendered after the selection checkbox. */
   children?: React.ReactNode;
+  /**
+   * Where the first-look pill sits (issue 1562). Bottom-left by default; a
+   * layout that keeps its own chips in that corner lifts it above them.
+   */
+  firstLookClassName?: string;
 }
 
 export const PhotoCard: React.FC<PhotoCardProps> = ({
@@ -125,6 +131,7 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
   beforeOverlay,
   afterOverlay,
   children,
+  firstLookClassName = 'bottom-2 left-2',
 }) => {
   const guestIdentity = useGuestIdentityOptional();
   // Download limit (issue 1560): shown as unavailable once nothing is left.
@@ -302,6 +309,12 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
     isSelected || isSelectionMode || overlayVisible,
   );
 
+  // The folder hint ("All photos", issue 1786) shares the top-right corner
+  // with the checkbox, so it steps aside whenever the checkbox shows.
+  const folderHintVisibilityClass = isSelected || isSelectionMode || overlayVisible
+    ? 'opacity-0'
+    : isTouchDevice ? 'opacity-100' : 'opacity-100 group-hover:opacity-0';
+
   const buttonType = actionVariant === 'dark' ? ('button' as const) : undefined;
   const actionButtonClass =
     actionVariant === 'dark'
@@ -471,6 +484,9 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
             colorLabel={photo.my_color_label}
             otherColorLabels={photo.other_color_labels}
           />
+
+          <FirstLookBadge photo={photo} className={firstLookClassName} />
+          <FolderHintPill photo={photo} className={`top-2 right-2 ${folderHintVisibilityClass}`} />
 
           {beforeOverlay}
 

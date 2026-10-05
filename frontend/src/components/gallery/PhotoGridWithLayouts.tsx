@@ -107,6 +107,8 @@ interface PhotoGridWithLayoutsProps {
   copyFilenamesCount?: number;
   /** Link to a single photo (issue 1733) — see BaseGalleryLayoutProps. */
   openPhotoId?: number | null;
+  /** After the photos, before a full-page layout's footer (issue 1562). */
+  afterGrid?: React.ReactNode;
   onLightboxPhotoChange?: LightboxPhotoChangeHandler;
 }
 
@@ -119,6 +121,7 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
   copyFilenamesCount = 0,
   openPhotoId,
   onLightboxPhotoChange,
+  afterGrid,
   slug,
   categoryId,
   heroPhotoOverride,
@@ -384,6 +387,7 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
     onDownloadEverything,
     onCopyFilenames,
     copyFilenamesCount,
+    afterGrid,
     slug,
     // Face data (#1074) must reach the full-page layouts too — they render
     // their OWN lightbox rather than the one below, so without this the
@@ -586,6 +590,8 @@ export const PhotoGridWithLayouts: React.FC<PhotoGridWithLayoutsProps> = ({
 
       {/* Render the selected layout */}
       <LayoutComponent {...layoutProps} />
+      {/* Full-page layouts place it themselves, ahead of their footer. */}
+      {!isFullPageLayout && afterGrid}
 
       {/* Lightbox - skip for full-page layouts which have their own lightbox */}
       {selectedPhotoIndex !== null && !isFullPageLayout && (

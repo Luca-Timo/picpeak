@@ -70,6 +70,7 @@ export const GalleryStoryLayout: React.FC<GalleryStoryLayoutProps> = ({
   eventDate,
   allowDownloads = true,
   suppressEmptyState = false,
+  afterGrid,
   eventPhotoCount,
   onDownloadEverything,
   onCopyFilenames,
@@ -649,6 +650,8 @@ export const GalleryStoryLayout: React.FC<GalleryStoryLayoutProps> = ({
           );
         })}
       </main>
+
+      {afterGrid && <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{afterGrid}</div>}
 
       {/* Footer */}
       <footer className="story-footer">

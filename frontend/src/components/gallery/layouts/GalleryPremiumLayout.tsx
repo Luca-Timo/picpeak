@@ -11,6 +11,7 @@ import Captions from 'yet-another-react-lightbox/plugins/captions';
 import 'yet-another-react-lightbox/styles.css';
 import 'yet-another-react-lightbox/plugins/thumbnails.css';
 import { ColorLabelBadge } from '../ColorLabelBadge';
+import { FirstLookBadge } from '../GalleryTileBadges';
 import 'yet-another-react-lightbox/plugins/captions.css';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download as DownloadIcon, Heart, Check, Star, MessageSquare, Package, LogOut } from 'lucide-react';
@@ -135,6 +136,18 @@ const PhotoCard: React.FC<PhotoCardProps> = ({
       {/* Overlay Gradient */}
       <div className="gallery-premium-photo-overlay" />
 
+      {/* First look (issue 1562): bottom-left like the shared card, lifted
+          above the feedback indicators that own that corner here. No folder
+          hint (issue 1786) on this card: its top corners hold the checkbox and
+          a like button that is always shown on touch. */}
+      <FirstLookBadge
+        photo={photo}
+        className={feedbackEnabled && (likeCount > 0 || averageRating > 0 || commentCount > 0 || isLiked)
+          ? 'bottom-10 left-2'
+          : 'bottom-2 left-2'}
+      />
+
+
       {/* Selection Checkbox */}
       <button
         onClick={onSelect}
@@ -193,6 +206,7 @@ interface GalleryPremiumLayoutProps extends BaseGalleryLayoutProps {
 export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
   // #1160: folder-only root — render the shell, skip the empty message.
   suppressEmptyState = false,
+  afterGrid,
   photos,
   slug,
   onPhotoClick: _onPhotoClick,
@@ -751,6 +765,8 @@ export const GalleryPremiumLayout: React.FC<GalleryPremiumLayoutProps> = ({
           spacing={16}
         />
       </main>
+
+      {afterGrid && <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{afterGrid}</div>}
 
       {/* Footer */}
       <footer className="gallery-premium-footer">

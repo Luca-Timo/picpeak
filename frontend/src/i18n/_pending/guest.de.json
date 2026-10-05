@@ -1,0 +1,26 @@
+{
+  "gallery": {
+    "firstLook": "Erste Auswahl",
+    "viewAllPhotos": "Alle Fotos",
+    "viewSwitch": "Fotos anzeigen nach",
+    "folderRoot": "Galerie",
+    "folderPath": "Ordnerpfad",
+    "folderUp": "Zurück zu {{name}}",
+    "subfolderCount": "{{count}} Ordner",
+    "subfolderCount_one": "{{count}} Ordner",
+    "subfolderCount_other": "{{count}} Ordner",
+    "downloadFolderWithSubfolders": "Ordner inkl. Unterordner herunterladen ({{count}})",
+    "downloadFolderWithSubfolders_one": "Ordner inkl. Unterordner herunterladen ({{count}})",
+    "downloadFolderWithSubfolders_other": "Ordner inkl. Unterordner herunterladen ({{count}})",
+    "collapseFolder": "{{name}} zuklappen",
+    "expandFolder": "{{name}} aufklappen",
+    "delivery": {
+      "title": "Weitere Fotos folgen",
+      "progressWithDate": "{{delivered}} von ca. {{expected}} Fotos sind bereits da. Die restlichen Bilder sind noch in Bearbeitung – die vollständige Galerie folgt spätestens am {{date}}.",
+      "progress": "{{delivered}} von ca. {{expected}} Fotos sind bereits da. Die restlichen Bilder sind noch in Bearbeitung.",
+      "withDate": "Die restlichen Bilder sind noch in Bearbeitung – die vollständige Galerie folgt spätestens am {{date}}.",
+      "noDetails": "Die restlichen Bilder sind noch in Bearbeitung.",
+      "progressLabel": "Bisher gelieferte Fotos"
+    }
+  }
+}

@@ -61,6 +61,13 @@ export interface BaseGalleryLayoutProps {
    * /download-all has no such cap.
    */
   onDownloadEverything?: () => void;
+  /**
+   * Rendered right after the photos and before a layout's own footer — the
+   * two-stage delivery banner (issue 1562), which has to follow the delivered
+   * photos but must not land below "Powered by". Only the full-page layouts
+   * read it; for the others PhotoGridWithLayouts renders it after the layout.
+   */
+  afterGrid?: React.ReactNode;
   // Copyable filename list (issue 1733, A3d), for layouts that own their
   // chrome: the selection, or the viewer's favourites. Hidden at zero.
   onCopyFilenames?: () => void;
