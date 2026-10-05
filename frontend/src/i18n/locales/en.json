@@ -2221,7 +2221,9 @@
       "passwordForEmailHint": "This gallery was shared through the customer portal only, so its password was generated and nobody knows it. The gallery email to this address includes the password, so set one now.",
       "accountCount_one": "{{count}} customer account",
       "accountCount_other": "{{count}} customer accounts",
-      "whatsapp": "WhatsApp"
+      "whatsapp": "WhatsApp",
+      "skippedAccounts_one": "{{count}} customer account is not notified — that needs the customers.events permission",
+      "skippedAccounts_other": "{{count}} customer accounts are not notified — that needs the customers.events permission"
     }
   },
   "settings": {

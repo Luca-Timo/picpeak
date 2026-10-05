@@ -20,8 +20,8 @@ import { safeParseDate, eventHasGuests } from './event-details/utils';
 import type { EventDetailsTab } from './event-details/types';
 import { EventDetailsHeader } from './event-details/EventDetailsHeader';
 import { EventTabs } from './event-details/EventTabs';
-import { OverviewTab, eventRecipients, useAccountReach } from './event-details/OverviewTab';
-import { accountName, formatNameList } from '../../utils/galleryRecipients';
+import { OverviewTab, eventNotice, useAccountReach } from './event-details/OverviewTab';
+import { formatNameList } from '../../utils/galleryRecipients';
 import { PhotosTab } from './event-details/PhotosTab';
 import { EventSettingsTab } from './event-details/settings/EventSettingsTab';
 import { useEventSettingsDraft } from './event-details/settings/useEventSettingsDraft';
@@ -138,7 +138,9 @@ export const EventDetailsPage: React.FC = () => {
   });
   // Who the publish / send dialogs announce the gallery to.
   const reach = useAccountReach();
-  const recipients = event ? eventRecipients(event, reach) : { inlineEmail: null, accounts: [] };
+  const notice = event
+    ? eventNotice(event, reach)
+    : { inlineEmail: null, accountNames: [], accountCount: 0, skippedAccountCount: 0 };
 
   // Flip the expiry banner live when the timestamp passes with the page open (#909).
   const [, setExpiryTick] = useState(0);
@@ -487,9 +489,11 @@ export const EventDetailsPage: React.FC = () => {
             <PublishGalleryDialog
               eventName={event.event_name}
               requirePassword={!isGalleryPublic(event.require_password)}
-              inlineEmail={recipients.inlineEmail}
+              inlineEmail={notice.inlineEmail}
               customerPhone={event.customer_phone}
-              accountNames={recipients.accounts.map(accountName)}
+              accountNames={notice.accountNames}
+              accountCount={notice.accountCount}
+              skippedAccountCount={notice.skippedAccountCount}
               isPublishing={publishMutation.isPending}
               onConfirm={(password, notifyCustomer) => publishMutation.mutate({ password, notifyCustomer })}
               onClose={() => { if (!publishMutation.isPending) setShowPublishDialog(false); }}
@@ -501,9 +505,11 @@ export const EventDetailsPage: React.FC = () => {
           {showSendEmailDialog && (
             <SendGalleryEmailDialog
               eventName={event.event_name}
-              inlineEmail={recipients.inlineEmail}
-              accountNames={recipients.accounts.map(accountName)}
-              requirePassword={!!recipients.inlineEmail && !isGalleryPublic(event.require_password)}
+              inlineEmail={notice.inlineEmail}
+              accountNames={notice.accountNames}
+              accountCount={notice.accountCount}
+              skippedAccountCount={notice.skippedAccountCount}
+              requirePassword={!!notice.inlineEmail && !isGalleryPublic(event.require_password)}
               isSending={sendGalleryEmailMutation.isPending}
               onConfirm={(password) => sendGalleryEmailMutation.mutate(password)}
               onClose={() => { if (!sendGalleryEmailMutation.isPending) setShowSendEmailDialog(false); }}

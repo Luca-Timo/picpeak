@@ -10,6 +10,10 @@ interface SendGalleryEmailDialogProps {
   inlineEmail: string | null;
   /** Assigned customer accounts — each gets its portal email. */
   accountNames: string[];
+  /** Portal-email accounts when their names are not visible. */
+  accountCount?: number;
+  /** Accounts this admin may not mail (customers.events). */
+  skippedAccountCount?: number;
   /** Ask for the password: only when the standard gallery email, which carries it, goes out. */
   requirePassword: boolean;
   isSending: boolean;
@@ -35,6 +39,8 @@ export const SendGalleryEmailDialog: React.FC<SendGalleryEmailDialogProps> = ({
   eventName,
   inlineEmail,
   accountNames,
+  accountCount,
+  skippedAccountCount,
   requirePassword,
   isSending,
   onConfirm,
@@ -78,7 +84,13 @@ export const SendGalleryEmailDialog: React.FC<SendGalleryEmailDialogProps> = ({
             defaultValue: 'Sends the gallery link for "{{eventName}}" to:',
           })}
         </p>
-        <GalleryRecipientsList inlineEmail={inlineEmail} accountNames={accountNames} className="mb-4" />
+        <GalleryRecipientsList
+          inlineEmail={inlineEmail}
+          accountNames={accountNames}
+          accountCount={accountCount}
+          skippedAccountCount={skippedAccountCount}
+          className="mb-4"
+        />
 
         {requirePassword && (
           <div className="space-y-3 mb-4">

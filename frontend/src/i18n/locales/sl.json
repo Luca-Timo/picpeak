@@ -2047,7 +2047,11 @@
       "accountCount_two": "{{count}} računa strank",
       "accountCount_few": "{{count}} računi strank",
       "accountCount_other": "{{count}} računov strank",
-      "whatsapp": "WhatsApp"
+      "whatsapp": "WhatsApp",
+      "skippedAccounts_one": "{{count}} račun stranke ne bo obveščen — za to je potrebno dovoljenje customers.events",
+      "skippedAccounts_two": "{{count}} računa strank ne bosta obveščena — za to je potrebno dovoljenje customers.events",
+      "skippedAccounts_few": "{{count}} računi strank ne bodo obveščeni — za to je potrebno dovoljenje customers.events",
+      "skippedAccounts_other": "{{count}} računov strank ne bo obveščenih — za to je potrebno dovoljenje customers.events"
     }
   },
   "settings": {

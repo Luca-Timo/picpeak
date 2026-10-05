@@ -653,7 +653,8 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
   // created NOT as a draft, the `whatsapp` flag is on, a config exists, and
   // the customer supplied a phone number. Non-fatal: a queue failure should
   // never block gallery creation.
-  if (!isDraft && customerPhone) {
+  // Skipped for a generated password: nobody could use the link it sends.
+  if (!isDraft && customerPhone && !passwordGenerated) {
     try {
       const { queueWhatsapp, getWhatsAppConfig } = require('./whatsappProcessor');
       const waConfig = await getWhatsAppConfig();

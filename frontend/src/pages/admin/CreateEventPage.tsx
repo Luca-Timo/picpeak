@@ -923,7 +923,7 @@ export const CreateEventPage: React.FC = () => {
                 onChange={(next) => setFormData((prev) => ({ ...prev, customer_accounts: next }))}
               />
 
-              {(recipients.inlineEmail || recipients.accounts.length > 0) && (
+              {(recipients.inlineEmail || recipients.accounts.length > 0 || (!canAnnounceToAccounts && formData.customer_accounts.length > 0)) && (
                 <div>
                   <p className="text-xs text-soft mb-1">
                     {t('events.recipients.previewTitle', 'Notified when you publish the gallery:')}
@@ -931,6 +931,7 @@ export const CreateEventPage: React.FC = () => {
                   <GalleryRecipientsList
                     inlineEmail={recipients.inlineEmail}
                     accountNames={recipients.accounts.map(accountName)}
+                    skippedAccountCount={canAnnounceToAccounts ? 0 : galleryRecipients(formData.customer_email, formData.customer_accounts, { portalEnabled }).accounts.length}
                   />
                 </div>
               )}

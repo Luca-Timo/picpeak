@@ -75,8 +75,8 @@ export const GeneralSection: React.FC<FieldsProps & {
           />
         </div>
         {emailNeedsPassword(f) && (
-          <div className="md:col-span-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 p-4 space-y-3">
-            <p className="text-sm text-amber-800 dark:text-amber-300">
+          <div className="md:col-span-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 space-y-3">
+            <p className="text-sm text-amber-700 dark:text-amber-400">
               {t('events.recipients.passwordForEmailHint', 'This gallery was shared through the customer portal only, so its password was generated and nobody knows it. The gallery email to this address includes the password, so set one now.')}
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -148,13 +148,6 @@ module.exports = (router) => {
         return res.status(404).json({ error: 'Event not found' });
       }
 
-      // The email is optional at creation and can be cleared later (issue
-      // 1733), so there may be nobody to send to. Say so instead of
-      // answering "queued" for a row the processor could never deliver.
-      if (!(event.customer_email || event.host_email)) {
-        return res.status(400).json({ error: 'The event has no customer email to send to' });
-      }
-
       // The email processor will determine the language based on:
       // 1. Event language setting
       // 2. App settings general_default_language  
@@ -184,44 +177,58 @@ module.exports = (router) => {
       // Dates will be formatted by the email processor based on recipient language
     
       // Everyone the gallery was announced to: the inline address (unless it
-      // is one of the assigned accounts) and every reachable account.
+      // is one of the assigned accounts) and every reachable account. The
+      // email is optional at creation and can be cleared later (issue 1733),
+      // so there may be nobody to send to; say so instead of answering
+      // "queued" for a row the processor could never deliver.
       const recipients = await resolveGalleryRecipients(event, {
         includeAccounts: await userHasAnyPermission(req.admin.id, ['customers.events']),
       });
       if (!recipients.inlineEmail && recipients.accounts.length === 0) {
-        return res.status(400).json({ error: 'No customer email is set for this event' });
+        return res.status(400).json({ error: 'The event has no customer email to send to' });
       }
-      const recipientEmail = recipients.inlineEmail;
-      const recipientName = event.customer_name || event.host_name || (recipientEmail ? recipientEmail.split('@')[0] : null);
       // event.share_link is the path-only form; use the full URL so the
       // customer's mail client renders a clickable absolute link.
       const { shareUrl } = await buildShareLinkVariants({ slug: event.slug, shareToken: event.share_token });
 
-      const emailData = {
-        customer_name: recipientName,
-        customer_email: recipientEmail,
-        host_name: recipientName,
-        event_name: event.event_name,
-        event_date: event.event_date,  // Pass raw date - will be formatted by email processor
-        gallery_link: shareUrl,
-        gallery_password: galleryPassword,
-        expiry_date: event.expires_at,  // Pass raw date - will be formatted by email processor
-        welcome_message: event.welcome_message || '',
-        eventId: id,
-        isResend: true // Flag to indicate this is a resend
+      const frontendUrl = await getAbsoluteFrontendUrl(req, { override: process.env.APP_URL });
+
+      // Built for whichever address actually gets the standard email — the
+      // inline one, or the folded-in one when its account notice is skipped.
+      const emailDataFor = (recipientEmail) => {
+        const recipientName = event.customer_name || event.host_name || (recipientEmail ? recipientEmail.split('@')[0] : null);
+        const emailData = {
+          customer_name: recipientName,
+          customer_email: recipientEmail,
+          host_name: recipientName,
+          event_name: event.event_name,
+          event_date: event.event_date,  // Pass raw date - will be formatted by email processor
+          gallery_link: shareUrl,
+          gallery_password: galleryPassword,
+          expiry_date: event.expires_at,  // Pass raw date - will be formatted by email processor
+          welcome_message: event.welcome_message || '',
+          eventId: id,
+          isResend: true // Flag to indicate this is a resend
+        };
+        // The creation mail carries the client link and PIN (#172). A resend can
+        // only do the same when a stored PIN exists (#1271); otherwise the client
+        // section is left out rather than sent with a placeholder.
+        if (parseBooleanInput(event.client_access_enabled, false) && stored.clientPassword && event.client_share_token) {
+          emailData.client_link = `${frontendUrl}/gallery/${event.slug}/client-access?token=${event.client_share_token}`;
+          emailData.client_password = stored.clientPassword;
+        }
+        return emailData;
       };
-      // The creation mail carries the client link and PIN (#172). A resend can
-      // only do the same when a stored PIN exists (#1271); otherwise the client
-      // section is left out rather than sent with a placeholder.
-      if (parseBooleanInput(event.client_access_enabled, false) && stored.clientPassword && event.client_share_token) {
-        const frontendUrl = await getAbsoluteFrontendUrl(req, { override: process.env.APP_URL });
-        emailData.client_link = `${frontendUrl}/gallery/${event.slug}/client-access?token=${event.client_share_token}`;
-        emailData.client_password = stored.clientPassword;
-      }
+
       const sent = await notifyGalleryRecipients(event, {
         recipients,
-        buildInlineEmailData: () => emailData,
+        buildInlineEmailData: emailDataFor,
       });
+      // Nothing queued — the only notice was skipped, or the queue refused —
+      // must not read as a resend.
+      if (!sent.inlineEmail && sent.accounts.length === 0) {
+        return res.status(400).json({ error: 'No email could be queued for this gallery' });
+      }
 
       // Log the activity using the proper schema
       try {

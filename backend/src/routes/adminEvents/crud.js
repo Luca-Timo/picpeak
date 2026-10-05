@@ -471,8 +471,21 @@ module.exports = (router) => {
         logger.warn('Failed to load customer groups for event', { eventId: id, error: e.message });
       }
 
+      // Who a gallery notice would reach, as counts only: customer_accounts
+      // above is customers.view data, but every admin who may announce the
+      // gallery needs to know whether anyone is told. `folds_inline`: the
+      // inline address is one of the accounts and gets the portal email.
+      let galleryNotice = null;
+      try {
+        const { accounts, fallbackFor } = await resolveGalleryRecipients(event, { includeAccounts: true });
+        galleryNotice = { account_count: accounts.length, folds_inline: Boolean(fallbackFor) };
+      } catch (e) {
+        logger.warn('Failed to resolve gallery notice recipients', { eventId: id, error: e.message });
+      }
+
       res.json(withoutForeignEventSecrets(mapEventForApi({
         ...event,
+        gallery_notice: galleryNotice,
         photo_count: parseInt(photoCount) || 0,
         video_count: Number(videoCount) || 0,
         video_duration: Number(videoDuration) || 0,
@@ -559,6 +572,17 @@ module.exports = (router) => {
       });
       if (!recipients.inlineEmail && recipients.accounts.length === 0) {
         return res.status(400).json({ error: 'No customer email is set for this event' });
+      }
+      // A generated password was never shown to anyone (migration 264). The
+      // standard email would carry the "(set at creation)" sentinel instead,
+      // so it needs the real password in the request — the dialog asks for it.
+      const passwordGenerated = parseBooleanInput(event.password_generated, false);
+      if (requirePassword && !password && passwordGenerated
+        && (recipients.inlineEmail || recipients.fallbackFor)) {
+        return res.status(400).json({
+          error: 'Set a gallery password — the gallery email carries it.',
+          code: 'GALLERY_PASSWORD_REQUIRED',
+        });
       }
 
       // Persist the password ONLY when the mail that carries it is actually
@@ -654,6 +678,23 @@ module.exports = (router) => {
       }
 
       const requirePassword = parseBooleanInput(event.require_password, true);
+      // Resolved before the gallery goes live, so a refusal below changes nothing.
+      const recipients = notifyCustomer
+        ? await resolveGalleryRecipients(event, {
+          includeAccounts: await userHasAnyPermission(req.admin.id, ['customers.events']),
+        })
+        : { inlineEmail: null, accounts: [] };
+      // A generated password was never shown to anyone (migration 264). The
+      // standard email would carry the "(set at creation)" sentinel instead,
+      // so it needs the real password in the request — the dialog asks for it.
+      const passwordGenerated = parseBooleanInput(event.password_generated, false);
+      if (requirePassword && !password && passwordGenerated
+        && (recipients.inlineEmail || recipients.fallbackFor)) {
+        return res.status(400).json({
+          error: 'Set a gallery password — the gallery email carries it.',
+          code: 'GALLERY_PASSWORD_REQUIRED',
+        });
+      }
       const publishUpdates = { is_draft: formatBoolean(false) };
       let publishKeepsHash = false;
       let publishWritesPassword = false;
@@ -693,9 +734,7 @@ module.exports = (router) => {
       if (notifyCustomer) {
         try {
           notified = await notifyGalleryRecipients(event, {
-            recipients: await resolveGalleryRecipients(event, {
-              includeAccounts: await userHasAnyPermission(req.admin.id, ['customers.events']),
-            }),
+            recipients,
             buildInlineEmailData: () => galleryCreatedEmailData(event, { password, requirePassword }),
           });
         } catch (err) {
@@ -706,7 +745,9 @@ module.exports = (router) => {
       // WhatsApp gallery_ready on publish-from-draft (#640D). The PublishGallery
       // dialog (#627) hands us the password back so we can deliver it via
       // WhatsApp as well. Uses customer_phone from the persisted event row.
-      if (notifyCustomer && event.customer_phone) {
+      // Not for a generated password nobody knows: the message would carry
+      // an empty password line and a link that asks for one.
+      if (notifyCustomer && event.customer_phone && !(passwordGenerated && requirePassword && !password)) {
         try {
           const { queueWhatsapp, getWhatsAppConfig } = require('../../services/whatsappProcessor');
           const waConfig = await getWhatsAppConfig();
@@ -1513,7 +1554,9 @@ module.exports = (router) => {
       // password, or that email would say "(set at creation)" to someone
       // who was never told it.
       const passwordStaysRequired = hasRequirePasswordUpdate ? requirePasswordUpdate : currentRequirePassword;
-      if (updates.customer_email !== undefined || updates.host_email !== undefined) {
+      // The next value, not the key: a cleared address is written as null.
+      const nextInlineEmail = updates.customer_email || updates.host_email;
+      if (nextInlineEmail) {
         const hadInlineEmail = Boolean(event.customer_email || event.host_email);
         if (!hadInlineEmail && passwordStaysRequired && !newPasswordPlain
           && parseBooleanInput(event.password_generated, false)) {

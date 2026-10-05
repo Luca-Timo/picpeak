@@ -2759,7 +2759,9 @@
       "passwordForEmailHint": "Diese Galerie wurde nur über das Kundenportal geteilt, daher wurde ihr Passwort erzeugt und niemand kennt es. Die Galerie-E-Mail an diese Adresse enthält das Passwort — legen Sie jetzt eines fest.",
       "accountCount_one": "{{count}} Kundenkonto",
       "accountCount_other": "{{count}} Kundenkonten",
-      "whatsapp": "WhatsApp"
+      "whatsapp": "WhatsApp",
+      "skippedAccounts_one": "{{count}} Kundenkonto wird nicht benachrichtigt — dafür ist die Berechtigung customers.events nötig",
+      "skippedAccounts_other": "{{count}} Kundenkonten werden nicht benachrichtigt — dafür ist die Berechtigung customers.events nötig"
     }
   },
   "settings": {

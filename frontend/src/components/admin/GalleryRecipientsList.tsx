@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mail, MessageCircle, UserRound } from 'lucide-react';
+import { Mail, MessageCircle, UserRound, UserX } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatNameList } from '../../utils/galleryRecipients';
 
@@ -8,6 +8,10 @@ interface GalleryRecipientsListProps {
   inlineEmail: string | null;
   /** Assigned customer accounts — get a link to their customer portal. */
   accountNames: string[];
+  /** Portal-email accounts when their names are not visible (no customers.view). */
+  accountCount?: number;
+  /** Accounts this admin may not mail (no customers.events) — shown, not sent. */
+  skippedAccountCount?: number;
   /** Publish also messages this number when WhatsApp is configured. */
   whatsappPhone?: string | null;
   className?: string;
@@ -19,9 +23,14 @@ interface GalleryRecipientsListProps {
  * the assigned accounts get their portal email. Names are shortened to the
  * first two; the full list is in the tooltip.
  */
-export const GalleryRecipientsList: React.FC<GalleryRecipientsListProps> = ({ inlineEmail, accountNames, whatsappPhone, className = '' }) => {
+export const GalleryRecipientsList: React.FC<GalleryRecipientsListProps> = ({
+  inlineEmail, accountNames, accountCount = accountNames.length, skippedAccountCount = 0, whatsappPhone, className = '',
+}) => {
   const { t } = useTranslation();
-  if (!inlineEmail && accountNames.length === 0 && !whatsappPhone) return null;
+  if (!inlineEmail && accountCount === 0 && skippedAccountCount === 0 && !whatsappPhone) return null;
+  const accountText = accountNames.length > 0
+    ? formatNameList(accountNames, t)
+    : t('events.recipients.accountCount', { count: accountCount, defaultValue: '{{count}} customer accounts' });
   return (
     <ul className={`rounded-md border border-line bg-inset px-3 py-2 space-y-1.5 text-sm ${className}`}>
       {inlineEmail && (
@@ -33,12 +42,23 @@ export const GalleryRecipientsList: React.FC<GalleryRecipientsListProps> = ({ in
           </span>
         </li>
       )}
-      {accountNames.length > 0 && (
+      {accountCount > 0 && (
         <li className="flex items-start gap-2">
           <UserRound className="w-4 h-4 mt-0.5 shrink-0 text-soft" />
-          <span className="min-w-0 break-words" title={accountNames.join(', ')}>
+          <span className="min-w-0 break-words" title={accountNames.join(', ') || undefined}>
             <span className="text-soft">{t('events.recipients.portalEmail', 'Customer portal email')}:</span>{' '}
-            <span className="text-heading">{formatNameList(accountNames, t)}</span>
+            <span className="text-heading">{accountText}</span>
+          </span>
+        </li>
+      )}
+      {skippedAccountCount > 0 && (
+        <li className="flex items-start gap-2 text-amber-700 dark:text-amber-400">
+          <UserX className="w-4 h-4 mt-0.5 shrink-0" />
+          <span className="min-w-0 break-words">
+            {t('events.recipients.skippedAccounts', {
+              count: skippedAccountCount,
+              defaultValue: '{{count}} customer accounts are not notified — that needs the customers.events permission',
+            })}
           </span>
         </li>
       )}

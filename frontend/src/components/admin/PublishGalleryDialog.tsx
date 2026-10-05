@@ -13,6 +13,10 @@ interface PublishGalleryDialogProps {
   customerPhone?: string | null;
   /** Assigned customer accounts — each gets its portal email ("your galleries"). */
   accountNames?: string[];
+  /** Portal-email accounts when their names are not visible. */
+  accountCount?: number;
+  /** Accounts this admin may not mail (customers.events). */
+  skippedAccountCount?: number;
   isPublishing: boolean;
   onConfirm: (password?: string, notifyCustomer?: boolean) => void;
   onClose: () => void;
@@ -36,6 +40,8 @@ export const PublishGalleryDialog: React.FC<PublishGalleryDialogProps> = ({
   inlineEmail,
   customerPhone,
   accountNames = [],
+  accountCount = accountNames.length,
+  skippedAccountCount = 0,
   isPublishing,
   onConfirm,
   onClose,
@@ -46,7 +52,7 @@ export const PublishGalleryDialog: React.FC<PublishGalleryDialogProps> = ({
   // for that last one. Leaving the phone out hid the opt-out on phone-only
   // galleries AND told the admin nothing would be sent, while the WhatsApp
   // went out anyway.
-  const willEmail = !!inlineEmail || accountNames.length > 0;
+  const willEmail = !!inlineEmail || accountCount > 0;
   const willNotify = willEmail || !!customerPhone;
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -117,10 +123,12 @@ export const PublishGalleryDialog: React.FC<PublishGalleryDialogProps> = ({
                   })}
         </p>
 
-        {willEmail && notifyCustomer && (
+        {(willEmail || skippedAccountCount > 0) && notifyCustomer && (
           <GalleryRecipientsList
             inlineEmail={inlineEmail ?? null}
             accountNames={accountNames}
+            accountCount={accountCount}
+            skippedAccountCount={skippedAccountCount}
             whatsappPhone={customerPhone}
             className="mb-4"
           />

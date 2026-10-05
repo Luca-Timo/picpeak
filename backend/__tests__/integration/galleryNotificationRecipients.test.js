@@ -79,7 +79,10 @@ beforeEach(async () => {
 
 const idOf = (row) => (typeof row === 'object' ? row.id : row);
 
-async function seedEvent({ slug, customerEmail = null, isDraft = false, passwordGenerated = false, welcome = null } = {}) {
+async function seedEvent({
+  slug, customerEmail = null, isDraft = false, passwordGenerated = false, welcome = null,
+  expiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+} = {}) {
   const [row] = await db('events').insert({
     slug,
     event_type: 'wedding',
@@ -93,7 +96,7 @@ async function seedEvent({ slug, customerEmail = null, isDraft = false, password
     require_password: 1,
     share_link: `/gallery/${slug}/share`,
     share_token: `${slug}-token`,
-    expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+    expires_at: expiresAt,
     is_active: 1,
     is_archived: 0,
     is_draft: isDraft ? 1 : 0,
@@ -193,6 +196,68 @@ describe('publish and send later reach every recipient', () => {
     const accountsOnly = await seedEvent({ slug: 'no-assign-perm-only' });
     await assign(accountsOnly, await seedAccount('ben@recipients.test', 'Ben Beispiel'));
     expect((await request(app).post(`/admin/events/${accountsOnly}/send-gallery-email`).send({})).status).toBe(400);
+  });
+
+  it('resend falls back to the gallery email when the folded-in account notice is skipped (draft)', async () => {
+    const id = await seedEvent({ slug: 'resend-draft-same', customerEmail: 'anna@recipients.test', isDraft: true });
+    await assign(id, await seedAccount('anna@recipients.test', 'Anna Muster'));
+
+    const res = await request(app).post(`/admin/events/${id}/resend-email`).send({});
+    expect(res.status).toBe(200);
+    expect(await recipientsOf('gallery_created')).toEqual(['anna@recipients.test']);
+    expect(await queued('customer_gallery_assigned')).toHaveLength(0);
+    const [row] = await queued('gallery_created');
+    const data = typeof row.email_data === 'string' ? JSON.parse(row.email_data) : row.email_data;
+    expect(data.customer_email).toBe('anna@recipients.test');
+  });
+
+  it('resend answers 400 when nothing at all could be queued', async () => {
+    const id = await seedEvent({ slug: 'resend-draft-accounts', isDraft: true });
+    await assign(id, await seedAccount('anna@recipients.test', 'Anna Muster'));
+
+    const res = await request(app).post(`/admin/events/${id}/resend-email`).send({});
+    expect(res.status).toBe(400);
+    expect(await db('email_queue')).toHaveLength(0);
+  });
+
+  // SQLite only: Postgres stores expires_at as a timestamp, so there is no
+  // epoch-ms shape to sort below text.
+  (process.env.DATABASE_CLIENT === 'pg' ? it.skip : it)('still notifies accounts of a gallery whose expiry is stored as epoch ms (an extended one)', async () => {
+    const id = await seedEvent({ slug: 'epoch-expiry', expiresAt: Date.now() + 30 * 24 * 3600 * 1000 });
+    await assign(id, await seedAccount('anna@recipients.test', 'Anna Muster'));
+
+    const res = await request(app).post(`/admin/events/${id}/send-gallery-email`).send({});
+    expect(res.status).toBe(200);
+    expect(await recipientsOf('customer_gallery_assigned')).toEqual(['anna@recipients.test']);
+  });
+
+  it('refuses to mail "(set at creation)" for a password nobody was shown', async () => {
+    const id = await seedEvent({ slug: 'generated-publish', customerEmail: 'client@recipients.test', isDraft: true, passwordGenerated: true });
+
+    const refused = await request(app).post(`/admin/events/${id}/publish`).send({});
+    expect(refused.status).toBe(400);
+    expect(refused.body.code).toBe('GALLERY_PASSWORD_REQUIRED');
+    expect(Number((await db('events').where({ id }).first()).is_draft)).toBe(1);
+
+    const ok = await request(app).post(`/admin/events/${id}/publish`).send({ password: 'Sunrise-Lake-42' });
+    expect(ok.status).toBe(200);
+    expect(Number((await db('events').where({ id }).first()).password_generated)).toBe(0);
+    // Publishing quietly needs no password: nothing carries it.
+    const quiet = await seedEvent({ slug: 'generated-quiet', customerEmail: 'client@recipients.test', isDraft: true, passwordGenerated: true });
+    expect((await request(app).post(`/admin/events/${quiet}/publish`).send({ notify_customer: false })).status).toBe(200);
+  });
+
+  it('gives every admin the notice counts, without the account identities', async () => {
+    mockCanViewCustomers = false;
+    const id = await seedEvent({ slug: 'notice-counts', customerEmail: 'anna@recipients.test' });
+    await assign(id,
+      await seedAccount('anna@recipients.test', 'Anna Muster'),
+      await seedAccount('ben@recipients.test', 'Ben Beispiel'));
+
+    const res = await request(app).get(`/admin/events/${id}`);
+    expect(res.status).toBe(200);
+    expect(res.body.gallery_notice).toEqual({ account_count: 2, folds_inline: true });
+    expect(res.body.customer_accounts).toEqual([]);
   });
 
   it('sends no standard gallery email when only accounts are assigned', async () => {
@@ -328,6 +393,19 @@ describe('accounts-only galleries get a generated password', () => {
     const row = await db('events').where({ id }).first();
     expect(row.customer_email).toBe('client@recipients.test');
     expect(Number(row.password_generated)).toBe(0);
+  });
+
+  it('clearing the email of a generated-password gallery is not adding one', async () => {
+    // Clearing is only allowed while the email is optional (issue 1733).
+    await db('app_settings').insert({ setting_key: 'event_require_customer_email', setting_value: 'false', setting_type: 'boolean' })
+      .onConflict('setting_key').merge({ setting_value: 'false' });
+    try {
+      const id = await seedEvent({ slug: 'clear-email', passwordGenerated: true });
+      const res = await request(app).put(`/admin/events/${id}`).send({ customer_email: null });
+      expect(res.status).toBe(200);
+    } finally {
+      await db('app_settings').where({ setting_key: 'event_require_customer_email' }).del();
+    }
   });
 
   it('does not ask galleries whose password an admin typed', async () => {

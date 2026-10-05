@@ -107,7 +107,11 @@ function hasGalleryEmailOnlyContent(event) {
  * `includeAccounts` is the caller's customers.events — the permission that
  * governs assigning accounts also governs mailing them, on every path.
  *
- * @returns {Promise<{ inlineEmail: string|null, accounts: object[] }>}
+ * `fallbackFor` names the account the inline address was folded into, so the
+ * notifier can still send the standard email when that account's notice is
+ * skipped (draft, expired, archived) — the person is told once, not never.
+ *
+ * @returns {Promise<{ inlineEmail: string|null, accounts: object[], fallbackFor?: object }>}
  */
 async function resolveGalleryRecipients(event, { includeAccounts = true } = {}) {
   const reachable = includeAccounts ? await reachableAccountsForEvent(event.id) : [];
@@ -117,7 +121,7 @@ async function resolveGalleryRecipients(event, { includeAccounts = true } = {}) 
   if (hasGalleryEmailOnlyContent(event)) {
     return { inlineEmail: contact, accounts: reachable.filter((a) => a !== samePerson) };
   }
-  return { inlineEmail: null, accounts: reachable };
+  return { inlineEmail: null, accounts: reachable, fallbackFor: { account: samePerson, email: contact } };
 }
 
 /**
@@ -163,19 +167,21 @@ async function galleryCreatedEmailData(event, { password, requirePassword } = {}
  *   actually queued
  */
 async function notifyGalleryRecipients(event, { buildInlineEmailData, recipients } = {}) {
-  const { inlineEmail, accounts } = recipients || await resolveGalleryRecipients(event);
+  const { inlineEmail, accounts, fallbackFor } = recipients || await resolveGalleryRecipients(event);
 
   // Each recipient on its own: a failure for one must not cost the others
-  // their mail. Only what was actually queued is reported back.
-  let inlineQueued = null;
-  if (inlineEmail) {
+  // their mail. Only what was actually queued is reported back — queueEmail
+  // resolves false when it queued nothing.
+  const queueInline = async (email) => {
     try {
-      await queueEmail(event.id, inlineEmail, 'gallery_created', await buildInlineEmailData(inlineEmail));
-      inlineQueued = inlineEmail;
+      return (await queueEmail(event.id, email, 'gallery_created', await buildInlineEmailData(email))) === true
+        ? email : null;
     } catch (err) {
       logger.warn('Gallery email to the customer email failed', { eventId: event.id, error: err.message });
+      return null;
     }
-  }
+  };
+  let inlineQueued = inlineEmail ? await queueInline(inlineEmail) : null;
 
   const customerAccountsService = require('./customerAccountsService');
   const notified = [];
@@ -189,6 +195,12 @@ async function notifyGalleryRecipients(event, { buildInlineEmailData, recipients
         eventId: event.id, customerId: account.id, error: err.message,
       });
     }
+  }
+
+  // The inline address was folded into an account whose notice was skipped:
+  // send the standard email instead, so the person is still told.
+  if (fallbackFor && !notified.includes(fallbackFor.account)) {
+    inlineQueued = await queueInline(fallbackFor.email);
   }
 
   return { inlineEmail: inlineQueued, accounts: notified };
