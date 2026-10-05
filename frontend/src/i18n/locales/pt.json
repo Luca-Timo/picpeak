@@ -248,7 +248,8 @@
       "firstLookCallout_many": "Pasta de primeira seleção encontrada: \"{{name}}\". As {{count}} fotos dela são marcadas como \"Primeira seleção\" e esta galeria passa para a entrega em duas etapas: os convidados veem que há mais fotos a caminho até que você marque a galeria completa como pronta.",
       "firstLookCallout_other": "Pasta de primeira seleção encontrada: \"{{name}}\". As {{count}} fotos dela são marcadas como \"Primeira seleção\" e esta galeria passa para a entrega em duas etapas: os convidados veem que há mais fotos a caminho até que você marque a galeria completa como pronta.",
       "firstLookSettings": "Data prevista e selo: Configurações → Entrega. Palavras-chave: Configurações → Galeria."
-    }
+    },
+    "largeFileReplaceSkipped": "Substituir pelo nome não é suportado para arquivos acima do tamanho do lote; envie-o sem substituir."
   },
   "navigation": {
     "dashboard": "Painel",

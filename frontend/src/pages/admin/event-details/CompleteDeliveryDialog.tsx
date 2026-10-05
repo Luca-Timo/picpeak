@@ -98,7 +98,7 @@ export const CompleteDeliveryDialog: React.FC<CompleteDeliveryDialogProps> = ({ 
             <span>
               <span className="font-medium text-heading block">{t('events.delivery.sendMail', 'Send the "your complete gallery is ready" email')}</span>
               <span className="text-xs text-muted">
-                {t('events.delivery.sendMailHelp', 'To the customer email of this gallery. Workflows can also react to "Gallery completed".')}
+                {t('events.delivery.sendMailHelp', 'To the customer email of this gallery. Workflows can also react to "gallery.completed".')}
               </span>
             </span>
           </label>

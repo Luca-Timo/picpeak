@@ -923,7 +923,8 @@
       "firstLookCallout_one": "First-look folder found: \"{{name}}\". Its {{count}} photo is badged \"First look\", and this gallery switches to two-stage delivery: guests see that more photos are on their way until you mark the full gallery as ready.",
       "firstLookCallout_other": "First-look folder found: \"{{name}}\". Its {{count}} photos are badged \"First look\", and this gallery switches to two-stage delivery: guests see that more photos are on their way until you mark the full gallery as ready.",
       "firstLookSettings": "Due date and badge: Settings → Delivery. Keywords: Settings → Gallery."
-    }
+    },
+    "largeFileReplaceSkipped": "Replace-by-name is not supported for files above the batch size; upload it without replace."
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -2139,7 +2140,13 @@
       "progressNoExpected": "{{count}} photos so far",
       "overdueShort": "Overdue since {{date}}",
       "dueShort": "Due {{date}}",
-      "viewAllAwaiting": "Show all"
+      "viewAllAwaiting": "Show all",
+      "promisedBy_one": "Promised by {{date}} · in {{count}} day",
+      "promisedBy_other": "Promised by {{date}} · in {{count}} days",
+      "progressNoExpected_one": "{{count}} photo so far",
+      "progressNoExpected_other": "{{count}} photos so far",
+      "removeDuplicates_one": "Remove {{count}} first-look duplicate",
+      "removeDuplicates_other": "Remove {{count}} first-look duplicates"
     }
   },
   "settings": {

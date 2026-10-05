@@ -923,7 +923,8 @@
       "firstLookCallout_one": "First-look-Ordner gefunden: „{{name}}“. Sein {{count}} Foto wird als „First look“ markiert, und die Galerie wechselt zur zweistufigen Auslieferung: Gäste sehen, dass weitere Fotos unterwegs sind, bis Sie die vollständige Galerie als fertig markieren.",
       "firstLookCallout_other": "First-look-Ordner gefunden: „{{name}}“. Seine {{count}} Fotos werden als „First look“ markiert, und die Galerie wechselt zur zweistufigen Auslieferung: Gäste sehen, dass weitere Fotos unterwegs sind, bis Sie die vollständige Galerie als fertig markieren.",
       "firstLookSettings": "Fälligkeitsdatum und Markierung: Einstellungen → Auslieferung. Stichwörter: Einstellungen → Galerie."
-    }
+    },
+    "largeFileReplaceSkipped": "Ersetzen nach Dateiname ist für Dateien über der Stapelgröße nicht möglich; laden Sie die Datei ohne Ersetzen hoch."
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -2677,7 +2678,13 @@
       "progressNoExpected": "Bisher {{count}} Fotos",
       "overdueShort": "Überfällig seit {{date}}",
       "dueShort": "Fällig am {{date}}",
-      "viewAllAwaiting": "Alle anzeigen"
+      "viewAllAwaiting": "Alle anzeigen",
+      "promisedBy_one": "Zugesagt bis {{date}} · in {{count}} Tag",
+      "promisedBy_other": "Zugesagt bis {{date}} · in {{count}} Tagen",
+      "progressNoExpected_one": "Bisher {{count}} Foto",
+      "progressNoExpected_other": "Bisher {{count}} Fotos",
+      "removeDuplicates_one": "{{count}} Duplikat der ersten Auswahl entfernen",
+      "removeDuplicates_other": "{{count}} Duplikate der ersten Auswahl entfernen"
     }
   },
   "settings": {

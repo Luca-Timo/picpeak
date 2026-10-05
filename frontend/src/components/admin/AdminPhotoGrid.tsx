@@ -370,8 +370,8 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
   return (
     <div>
       {/* Action Bar */}
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             variant={isSelectionMode ? "primary" : "outline"}
             size="sm"

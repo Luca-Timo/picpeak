@@ -200,7 +200,8 @@
       "firstLookCallout_one": "Map voor eerste selectie gevonden: \"{{name}}\". De {{count}} foto daarin wordt gemarkeerd als \"Eerste selectie\" en deze galerij schakelt over op levering in twee fasen: gasten zien dat er meer foto's onderweg zijn, totdat u de volledige galerij als gereed markeert.",
       "firstLookCallout_other": "Map voor eerste selectie gevonden: \"{{name}}\". De {{count}} foto's daarin worden gemarkeerd als \"Eerste selectie\" en deze galerij schakelt over op levering in twee fasen: gasten zien dat er meer foto's onderweg zijn, totdat u de volledige galerij als gereed markeert.",
       "firstLookSettings": "Vervaldatum en badge: Instellingen → Levering. Trefwoorden: Instellingen → Galerij."
-    }
+    },
+    "largeFileReplaceSkipped": "Vervangen op naam wordt niet ondersteund voor bestanden boven de batchgrootte; upload het bestand zonder vervangen."
   },
   "navigation": {
     "dashboard": "Dashboard",

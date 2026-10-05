@@ -411,8 +411,8 @@ export const AdminDashboard: React.FC = () => {
                       {due && (
                         <p className={`text-sm font-medium text-right ${tone}`}>
                           {due.tone === 'overdue'
-                            ? t('events.delivery.overdueShort', 'Overdue since {{date}}', { date: format(due.date, 'PP') })
-                            : t('events.delivery.dueShort', 'Due {{date}}', { date: format(due.date, 'PP') })}
+                            ? t('events.delivery.overdueShort', 'Overdue since {{date}}', { date: format(due.date) })
+                            : t('events.delivery.dueShort', 'Due {{date}}', { date: format(due.date) })}
                         </p>
                       )}
                     </div>

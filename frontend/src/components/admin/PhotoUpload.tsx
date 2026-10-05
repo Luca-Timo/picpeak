@@ -315,7 +315,9 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
     () => (resolved ? buildUploadPreview(selectedFiles, resolved, { skipOuter, keepStructure }) : null),
     [resolved, selectedFiles, skipOuter, keepStructure]
   );
-  const canManageFolders = resolved?.can_manage ?? folderTree?.can_manage ?? true;
+  // Unknown until the folder list loads: assume the narrower role so an
+  // upload-only admin never sees "create folders" wording first.
+  const canManageFolders = resolved?.can_manage ?? folderTree?.can_manage ?? false;
   const looseTargetLabel = looseFolderId
     ? folderPathLabel(folders, looseFolderId) || t('upload.structure.galleryRoot', 'gallery root')
     : t('upload.structure.galleryRoot', 'gallery root');

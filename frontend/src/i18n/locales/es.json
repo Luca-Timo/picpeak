@@ -201,7 +201,8 @@
       "firstLookCallout_one": "Carpeta de primera selección encontrada: \"{{name}}\". Su {{count}} foto se marca como \"Primera selección\" y esta galería pasa a la entrega en dos etapas: los invitados ven que hay más fotos en camino hasta que marques la galería completa como lista.",
       "firstLookCallout_other": "Carpeta de primera selección encontrada: \"{{name}}\". Sus {{count}} fotos se marcan como \"Primera selección\" y esta galería pasa a la entrega en dos etapas: los invitados ven que hay más fotos en camino hasta que marques la galería completa como lista.",
       "firstLookSettings": "Fecha prevista e insignia: Ajustes → Entrega. Palabras clave: Ajustes → Galería."
-    }
+    },
+    "largeFileReplaceSkipped": "Reemplazar por nombre no está disponible para archivos que superan el tamaño del lote; súbelo sin reemplazar."
   },
   "navigation": {
     "dashboard": "Panel",

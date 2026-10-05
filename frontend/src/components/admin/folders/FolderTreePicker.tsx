@@ -41,7 +41,7 @@ export const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
 
   const rowClass = (selected: boolean, disabled: boolean) =>
     'flex items-center gap-1 py-1 pr-1 rounded ' +
-    (selected ? 'bg-accent-dark/15' : disabled ? '' : 'hover:bg-hover');
+    (selected ? 'bg-accent-dark/10' : disabled ? '' : 'hover:bg-hover');
 
   const renderLevel = (parentId: number | null, depth: number): React.ReactNode =>
     childFolders(folders, parentId).map((folder) => {
@@ -70,11 +70,11 @@ export const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
               onClick={() => onChange(folder.id)}
               className={
                 'flex items-center gap-1.5 flex-1 min-w-0 text-left text-sm disabled:cursor-not-allowed disabled:opacity-40 ' +
-                (selected ? 'text-accent-dark font-medium' : 'text-heading')
+                (selected ? 'text-heading font-semibold' : 'text-heading')
               }
             >
               {open ? (
-                <FolderOpen className="w-4 h-4 flex-shrink-0 text-accent" />
+                <FolderOpen className="w-4 h-4 flex-shrink-0 text-muted" />
               ) : (
                 <Folder className="w-4 h-4 flex-shrink-0 text-muted" />
               )}
@@ -96,7 +96,7 @@ export const FolderTreePicker: React.FC<FolderTreePickerProps> = ({
             onClick={() => onChange(null)}
             className={
               'flex items-center gap-1.5 flex-1 min-w-0 text-left text-sm ' +
-              (value === null ? 'text-accent-dark font-medium' : 'text-heading')
+              (value === null ? 'text-heading font-semibold' : 'text-heading')
             }
           >
             <House className="w-4 h-4 flex-shrink-0 text-muted" />

@@ -547,7 +547,7 @@ export const EventsListPage: React.FC = () => {
           </div>
 
           {/* Filter Buttons */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant={!statusFilter ? 'primary' : 'outline'}
               size="md"

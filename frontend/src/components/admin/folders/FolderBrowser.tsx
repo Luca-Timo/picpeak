@@ -141,13 +141,13 @@ export const FolderBrowser: React.FC<FolderBrowserProps> = ({
   const crumbClass = (active: boolean) =>
     clsx(
       'px-2 py-1 rounded-md text-sm transition-colors',
-      active ? 'bg-accent-dark/15 text-accent-dark font-medium' : 'text-body hover:bg-hover'
+      active ? 'bg-accent-dark/10 text-heading font-medium' : 'text-body hover:bg-hover'
     );
 
   return (
     <div className="mb-4 rounded-xl border border-line bg-panel px-4 py-3 space-y-3" data-testid="folder-browser">
       <div className="flex flex-wrap items-center gap-2">
-        <FolderTree className="w-5 h-5 text-accent shrink-0" aria-hidden="true" />
+        <FolderTree className="w-5 h-5 text-muted shrink-0" aria-hidden="true" />
         <button type="button" className={crumbClass(value === undefined)} onClick={() => onChange(undefined)}>
           {t('photos.folders.allPhotos', 'All photos')}
         </button>

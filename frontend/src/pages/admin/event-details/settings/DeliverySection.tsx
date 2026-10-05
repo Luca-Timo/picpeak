@@ -111,8 +111,8 @@ export const DeliverySection: React.FC<FieldsProps & { event: Event; onChanged: 
                 <p className={`flex items-center gap-1.5 ${due.tone === 'overdue' ? 'text-red-600 dark:text-red-400' : due.tone === 'soon' ? 'text-amber-600 dark:text-amber-400' : 'text-body'}`}>
                   <Clock className="w-4 h-4" />
                   {due.tone === 'overdue'
-                    ? t('events.delivery.overdueSince', 'Promised by {{date}} — overdue', { date: format(due.date, 'PP') })
-                    : t('events.delivery.promisedBy', 'Promised by {{date}} · in {{count}} days', { date: format(due.date, 'PP'), count: due.days })}
+                    ? t('events.delivery.overdueSince', 'Promised by {{date}} — overdue', { date: format(due.date) })
+                    : t('events.delivery.promisedBy', 'Promised by {{date}} · in {{count}} days', { date: format(due.date), count: due.days })}
                 </p>
               )}
             </div>
@@ -132,7 +132,7 @@ export const DeliverySection: React.FC<FieldsProps & { event: Event; onChanged: 
 
         {state?.status === 'complete' && state.completed_at && (
           <p className="text-sm rounded-lg bg-inset text-body px-3 py-2">
-            {t('events.delivery.completedOn', 'Completed on {{date}}. The first-look badges stay on their photos.', { date: format(new Date(state.completed_at), 'PP') })}
+            {t('events.delivery.completedOn', 'Completed on {{date}}. The first-look badges stay on their photos.', { date: format(new Date(state.completed_at)) })}
           </p>
         )}
 

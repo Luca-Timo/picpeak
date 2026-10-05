@@ -190,7 +190,7 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
 
       {/* Actions Bar */}
       <div className="mb-4 flex flex-wrap justify-between items-center gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <PermissionGate permission="photos.upload">
             <Button
               variant="primary"
