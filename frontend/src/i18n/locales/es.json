@@ -200,7 +200,7 @@
       "needsAdminNotice_other": "{{count}} carpetas aún no existen. Tu rol puede subir archivos, pero no crear carpetas, así que se envían a un administrador como solicitudes de carpeta. Hasta que un administrador las confirme, sus {{files}} fotos esperan en la carpeta existente más cercana (indicada con →) y pasan automáticamente a las nuevas carpetas una vez confirmadas.",
       "firstLookCallout_one": "Carpeta de primera selección encontrada: \"{{name}}\". Su {{count}} foto se marca como \"Primera selección\" y esta galería pasa a la entrega en dos etapas: los invitados ven que hay más fotos en camino hasta que marques la galería completa como lista.",
       "firstLookCallout_other": "Carpeta de primera selección encontrada: \"{{name}}\". Sus {{count}} fotos se marcan como \"Primera selección\" y esta galería pasa a la entrega en dos etapas: los invitados ven que hay más fotos en camino hasta que marques la galería completa como lista.",
-      "firstLookSettings": "Fecha prevista e insignia: Ajustes → Entrega. Palabras clave: Ajustes → Galería."
+      "firstLookSettings": "Fecha y insignia: Ajustes de esta galería → Carpetas y entrega. Palabras clave: Ajustes → Eventos."
     },
     "largeFileReplaceSkipped": "Reemplazar por nombre no está disponible para archivos que superan el tamaño del lote; súbelo sin reemplazar."
   },

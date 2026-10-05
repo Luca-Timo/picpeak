@@ -922,7 +922,7 @@
       "needsAdminNotice_other": "{{count}} Ordner existieren noch nicht. Ihre Rolle darf hochladen, aber keine Ordner anlegen, deshalb gehen sie als Ordneranfragen an einen Admin. Bis ein Admin bestätigt, warten die {{files}} Fotos im nächstgelegenen vorhandenen Ordner (mit → angezeigt) und wandern nach der Bestätigung automatisch in die neuen Ordner.",
       "firstLookCallout_one": "First-look-Ordner gefunden: „{{name}}“. Sein {{count}} Foto wird als „First look“ markiert, und die Galerie wechselt zur zweistufigen Auslieferung: Gäste sehen, dass weitere Fotos unterwegs sind, bis Sie die vollständige Galerie als fertig markieren.",
       "firstLookCallout_other": "First-look-Ordner gefunden: „{{name}}“. Seine {{count}} Fotos werden als „First look“ markiert, und die Galerie wechselt zur zweistufigen Auslieferung: Gäste sehen, dass weitere Fotos unterwegs sind, bis Sie die vollständige Galerie als fertig markieren.",
-      "firstLookSettings": "Fälligkeitsdatum und Markierung: Einstellungen → Auslieferung. Stichwörter: Einstellungen → Galerie."
+      "firstLookSettings": "Fälligkeit und Badge: Einstellungen dieser Galerie → Ordner & Auslieferung. Stichwörter: Einstellungen → Events."
     },
     "largeFileReplaceSkipped": "Ersetzen nach Dateiname ist für Dateien über der Stapelgröße nicht möglich; laden Sie die Datei ohne Ersetzen hoch."
   },

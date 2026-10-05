@@ -38,7 +38,7 @@ export const GalleryViewSwitch: React.FC<GalleryViewSwitchProps> = ({ view, onCh
             type="button"
             aria-pressed={active}
             onClick={() => { if (!active) onChange(value); }}
-            className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 ${
               active ? 'bg-surface shadow-sm font-medium' : 'text-muted-theme hover:opacity-80'
             }`}
             style={active ? { color: 'var(--color-text)' } : undefined}

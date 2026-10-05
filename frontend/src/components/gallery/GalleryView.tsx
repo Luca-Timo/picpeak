@@ -1390,7 +1390,7 @@ export const GalleryView: React.FC<GalleryViewProps> = ({ slug, event, requiresP
           className={compact ? 'sm:order-last' : 'order-first w-full sm:w-auto sm:order-last sm:ml-auto'}
         />
         {!viewAll && (
-          <GalleryBreadcrumb trail={folderTrail} onNavigate={openFolderBySlug} className="flex-1" />
+          <GalleryBreadcrumb trail={folderTrail} onNavigate={openFolderBySlug} className="min-w-0 basis-full sm:basis-0 sm:flex-1" />
         )}
         {folderDownloadButton}
       </div>

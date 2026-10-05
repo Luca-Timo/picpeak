@@ -206,7 +206,7 @@
       "firstLookCallout_one": "Dossier de première sélection trouvé : « {{name}} ». Sa {{count}} photo est marquée « Première sélection », et cette galerie passe à la livraison en deux temps : les invités voient que d'autres photos arrivent jusqu'à ce que vous marquiez la galerie complète comme prête.",
       "firstLookCallout_many": "Dossier de première sélection trouvé : « {{name}} ». Ses {{count}} photos sont marquées « Première sélection », et cette galerie passe à la livraison en deux temps : les invités voient que d'autres photos arrivent jusqu'à ce que vous marquiez la galerie complète comme prête.",
       "firstLookCallout_other": "Dossier de première sélection trouvé : « {{name}} ». Ses {{count}} photos sont marquées « Première sélection », et cette galerie passe à la livraison en deux temps : les invités voient que d'autres photos arrivent jusqu'à ce que vous marquiez la galerie complète comme prête.",
-      "firstLookSettings": "Date d'échéance et badge : Paramètres → Livraison. Mots-clés : Paramètres → Galerie."
+      "firstLookSettings": "Échéance et badge : Paramètres de cette galerie → Dossiers et livraison. Mots-clés : Paramètres → Événements."
     },
     "largeFileReplaceSkipped": "Le remplacement par nom n'est pas pris en charge pour les fichiers au-delà de la taille du lot ; téléversez-le sans remplacement."
   },

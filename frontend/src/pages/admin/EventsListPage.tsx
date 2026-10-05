@@ -401,7 +401,7 @@ export const EventsListPage: React.FC = () => {
         ? 'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40'
         : 'text-body bg-inset';
     return (
-      <span className={`mt-1 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${color}`}>
+      <span className={`mt-1 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${color}`}>
         <Sparkles className="w-3 h-3" />
         {!due
           ? t('events.delivery.pill', 'First look')

@@ -924,7 +924,7 @@
       "firstLookCallout_two": "Najdena je mapa prvega izbora: »{{name}}«. Njene fotografije ({{count}}) so označene kot »Prvi izbor« in galerija preklopi na dostavo v dveh korakih: gostje vidijo, da je na poti še več fotografij, dokler celotne galerije ne označite kot pripravljene.",
       "firstLookCallout_few": "Najdena je mapa prvega izbora: »{{name}}«. Njene fotografije ({{count}}) so označene kot »Prvi izbor« in galerija preklopi na dostavo v dveh korakih: gostje vidijo, da je na poti še več fotografij, dokler celotne galerije ne označite kot pripravljene.",
       "firstLookCallout_other": "Najdena je mapa prvega izbora: »{{name}}«. Njene fotografije ({{count}}) so označene kot »Prvi izbor« in galerija preklopi na dostavo v dveh korakih: gostje vidijo, da je na poti še več fotografij, dokler celotne galerije ne označite kot pripravljene.",
-      "firstLookSettings": "Rok in oznaka: Nastavitve → Dostava. Ključne besede: Nastavitve → Galerija."
+      "firstLookSettings": "Rok in oznaka: nastavitve te galerije → Mape in dostava. Ključne besede: Nastavitve → Dogodki."
     },
     "largeFileReplaceSkipped": "Zamenjava po imenu ni podprta za datoteke, večje od velikosti paketa; naložite jo brez zamenjave."
   },

@@ -922,7 +922,7 @@
       "needsAdminNotice_other": "{{count}} folders don't exist yet. Your role can upload but not create folders, so they're sent to an admin as folder requests. Until an admin confirms, their {{files}} photos wait in the closest existing folder (shown with →) and move into the new folders automatically once confirmed.",
       "firstLookCallout_one": "First-look folder found: \"{{name}}\". Its {{count}} photo is badged \"First look\", and this gallery switches to two-stage delivery: guests see that more photos are on their way until you mark the full gallery as ready.",
       "firstLookCallout_other": "First-look folder found: \"{{name}}\". Its {{count}} photos are badged \"First look\", and this gallery switches to two-stage delivery: guests see that more photos are on their way until you mark the full gallery as ready.",
-      "firstLookSettings": "Due date and badge: Settings → Delivery. Keywords: Settings → Gallery."
+      "firstLookSettings": "Due date and badge: this gallery’s Settings → Folders & delivery. Keywords: Settings → Events."
     },
     "largeFileReplaceSkipped": "Replace-by-name is not supported for files above the batch size; upload it without replace."
   },

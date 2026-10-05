@@ -204,7 +204,7 @@ export const UploadStructurePreview: React.FC<UploadStructurePreviewProps> = ({
               )}
             </p>
             <p className="mt-1 text-xs text-amber-800/80 dark:text-amber-300/80">
-              {t('upload.structure.firstLookSettings', 'Due date and badge: Settings → Delivery. Keywords: Settings → Gallery.')}
+              {t('upload.structure.firstLookSettings', 'Due date and badge: this gallery’s Settings → Folders & delivery. Keywords: Settings → Events.')}
             </p>
           </div>
         </div>

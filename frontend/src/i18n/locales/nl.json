@@ -199,7 +199,7 @@
       "needsAdminNotice_other": "{{count}} mappen bestaan nog niet. Uw rol mag uploaden, maar geen mappen aanmaken, daarom gaan deze als mapaanvragen naar een beheerder. Totdat een beheerder bevestigt, wachten de {{files}} foto's in de dichtstbijzijnde bestaande map (aangegeven met →) en gaan ze na bevestiging automatisch naar de nieuwe mappen.",
       "firstLookCallout_one": "Map voor eerste selectie gevonden: \"{{name}}\". De {{count}} foto daarin wordt gemarkeerd als \"Eerste selectie\" en deze galerij schakelt over op levering in twee fasen: gasten zien dat er meer foto's onderweg zijn, totdat u de volledige galerij als gereed markeert.",
       "firstLookCallout_other": "Map voor eerste selectie gevonden: \"{{name}}\". De {{count}} foto's daarin worden gemarkeerd als \"Eerste selectie\" en deze galerij schakelt over op levering in twee fasen: gasten zien dat er meer foto's onderweg zijn, totdat u de volledige galerij als gereed markeert.",
-      "firstLookSettings": "Vervaldatum en badge: Instellingen → Levering. Trefwoorden: Instellingen → Galerij."
+      "firstLookSettings": "Datum en badge: Instellingen van deze galerie → Mappen en levering. Trefwoorden: Instellingen → Evenementen."
     },
     "largeFileReplaceSkipped": "Vervangen op naam wordt niet ondersteund voor bestanden boven de batchgrootte; upload het bestand zonder vervangen."
   },
