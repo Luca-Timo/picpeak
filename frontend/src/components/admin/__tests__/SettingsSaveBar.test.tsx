@@ -9,6 +9,8 @@
  *  - a dirty bar arms the leave guard: confirmLeave asks, and on "discard"
  *    runs the form's discard before resolving true; on "stay" resolves false
  *  - with nothing dirty, confirmLeave resolves true without asking
+ *  - inside AdminLayout (a slot in BottomBarSlotContext) the bar renders into
+ *    the slot, the path every page takes; without one it renders in place
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -16,6 +18,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 
 import { SettingsSaveBar } from '../SettingsSaveBar';
+import { BottomBarSlotContext } from '../bottomBarSlot';
 import { UnsavedChangesProvider, useLeaveGuard } from '../../../contexts/UnsavedChangesContext';
 
 vi.mock('react-i18next', async () => {
@@ -133,5 +136,33 @@ describe('leave guard', () => {
     await user.click(screen.getByText(/leave \(dirty\)/));
     await waitFor(() => expect(onResult).toHaveBeenCalledWith(false));
     expect(onDiscard).not.toHaveBeenCalled();
+  });
+
+  it('renders into the layout slot when there is one, and still works there', async () => {
+    const slot = document.createElement('div');
+    document.body.appendChild(slot);
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+    const { container } = renderBar(
+      <BottomBarSlotContext.Provider value={slot}>
+        <SettingsSaveBar isDirty onSave={onSave} onDiscard={vi.fn()} />
+      </BottomBarSlotContext.Provider>
+    );
+
+    const bar = screen.getByTestId('settings-save-bar');
+    expect(slot).toContainElement(bar);
+    expect(container).not.toContainElement(bar);
+    // In the slot the layout positions it; the in-page sticky classes are only for the fallback.
+    expect(bar.className).not.toMatch(/sticky/);
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    slot.remove();
+  });
+
+  it('renders in place with its own sticky classes outside the layout', () => {
+    const { container } = renderBar(<SettingsSaveBar isDirty={false} onSave={vi.fn()} onDiscard={vi.fn()} />);
+    const bar = screen.getByTestId('settings-save-bar');
+    expect(container).toContainElement(bar);
+    expect(bar.className).toMatch(/sticky bottom-0/);
   });
 });

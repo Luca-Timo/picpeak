@@ -3585,7 +3585,8 @@
       "leaveTitle": "Ungespeicherte Änderungen verwerfen?",
       "leaveMessage": "Auf dieser Seite gibt es ungespeicherte Änderungen. Wenn du jetzt gehst, gehen sie verloren.",
       "leaveConfirm": "Verwerfen und verlassen",
-      "leaveCancel": "Hier bleiben"
+      "leaveCancel": "Hier bleiben",
+      "region": "Änderungen speichern oder verwerfen"
     },
     "health": {
       "title": "Systemzustand",

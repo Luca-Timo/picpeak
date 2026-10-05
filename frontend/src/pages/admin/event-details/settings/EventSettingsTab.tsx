@@ -6,12 +6,14 @@
  * Split view (issue 1765, draft E5): the sections as a grouped overview on
  * the left, each with a line of its current state, and the selected section
  * edited on the right. Below `lg` the overview is the page and a section
- * opens full-screen with a back arrow.
+ * opens full-screen with a back arrow; opening one there adds a history
+ * entry, so the browser's Back returns to the overview too.
  *
  * Sections the admin may not change render read-only (a disabled fieldset);
  * the backend enforces the same permissions on every endpoint.
  */
 import React, { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Archive, ArrowLeft, Trash2, Undo2 } from 'lucide-react';
 import type { Event } from '../../../../types';
@@ -35,8 +37,9 @@ import { SECTION_ICON, SettingsOverview, useSectionSummaries } from './SettingsO
 export interface EventSettingsTabProps {
   event: Event;
   settings: EventSettingsDraftApi;
-  section: SettingsSectionKey;
-  setSection: (section: SettingsSectionKey) => void;
+  /** The section opened through the URL, or null when none was. */
+  section: SettingsSectionKey | null;
+  setSection: (section: SettingsSectionKey | null, options?: { push?: boolean }) => void;
   categories: Array<{ id: number; name: string }>;
   photos: AdminPhoto[];
   phoneFieldEnabled: boolean;
@@ -45,6 +48,24 @@ export interface EventSettingsTabProps {
   onDelete: () => void;
   isDeleting: boolean;
   refetchEvent: () => void;
+}
+
+const LG_QUERY = '(min-width: 1024px)';
+
+/** Tailwind's `lg` and up, where the overview and the section sit side by side. */
+const canMatch = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function';
+
+function useSideBySide(): boolean {
+  // No matchMedia (tests, old webviews): assume the desktop layout.
+  const [matches, setMatches] = useState(() => (canMatch() ? window.matchMedia(LG_QUERY).matches : true));
+  useEffect(() => {
+    if (!canMatch()) return undefined;
+    const query = window.matchMedia(LG_QUERY);
+    const onChange = () => setMatches(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  return matches;
 }
 
 export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
@@ -74,23 +95,40 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
     { key: 'danger', label: t('events.settingsTab.danger', 'Danger zone'), show: !archived && (hasPermission('events.archive') || hasPermission('events.delete')) },
   ];
   const visible = sections.filter((s) => s.show);
-  const active = visible.some((s) => s.key === section) ? section : 'general';
+  const opened = section && visible.some((s) => s.key === section) ? section : null;
+  // Side by side, nothing opened means General. On a phone it means the overview.
+  const active: SettingsSectionKey = opened ?? 'general';
+  const sideBySide = useSideBySide();
+  const phoneOpen = opened !== null;
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const set = (patch: Partial<EventFields>) => setEvent((prev) => ({ ...prev, ...patch }));
 
-  // Phone only: the overview is the page until a section is opened. A link
-  // to a particular section (?section=access, or one from Overview) opens it;
-  // the page always writes ?section=, so the default one does not count.
-  const [phoneOpen, setPhoneOpen] = useState(() => section !== 'general');
-  const firstSection = useRef(section);
+  // A link to a section the flags hide (or the role can't see) falls back
+  // to nothing opened, and the URL stops naming it.
   useEffect(() => {
-    if (section !== firstSection.current) setPhoneOpen(true);
-  }, [section]);
+    if (section && !opened) setSection(null);
+  }, [section, opened, setSection]);
 
-  const open = (key: SettingsSectionKey) => {
-    setSection(key);
-    setPhoneOpen(true);
+  // On a phone, opening a section from the overview adds a history entry.
+  const open = (key: SettingsSectionKey) => setSection(key, { push: !sideBySide && !opened });
+
+  // Back to the overview: undo our own history entry when there is one, so
+  // the browser's Back and this arrow agree; otherwise just close.
+  const overviewRef = useRef<HTMLDivElement>(null);
+  const lastOpened = useRef<SettingsSectionKey | null>(null);
+  const closeSection = () => {
+    lastOpened.current = opened;
+    if ((location.state as { settingsSectionPushed?: boolean } | null)?.settingsSectionPushed) navigate(-1);
+    else setSection(null);
   };
+  // The arrow hides its own container, so focus goes back to the row it came from.
+  useEffect(() => {
+    if (opened || !lastOpened.current) return;
+    overviewRef.current?.querySelector<HTMLButtonElement>(`[data-section="${lastOpened.current}"]`)?.focus();
+    lastOpened.current = null;
+  }, [opened]);
 
   const onSave = async () => {
     const { invalidSection } = await save();
@@ -175,7 +213,7 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
       case 'faces':
         // Face recognition is a set of jobs (detect, rescan, recluster,
         // delete) rather than settings, so it acts immediately.
-        return <FaceRecognitionCard eventId={event.id} isArchived={archived} />;
+        return <FaceRecognitionCard eventId={event.id} isArchived={archived} bare />;
       case 'danger':
         return (
           <SectionCard>
@@ -237,11 +275,13 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
     <div>
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)] 2xl:grid-cols-[420px_minmax(0,1fr)] gap-6 xl:gap-8 2xl:gap-10 items-start">
         {/* The overview scrolls on its own, so the selected section stays in
-            view next to a long list on a short screen. */}
-        <div className={`${phoneOpen ? 'hidden lg:block' : ''} lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-1`}>
+            view next to a long list on a short screen. Its height stops above
+            the save bar pinned to the bottom of the same column (~3.5rem), so
+            the last row is never under the bar. */}
+        <div ref={overviewRef} className={`${phoneOpen ? 'hidden lg:block' : ''} lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-1`}>
           <SettingsOverview
             sections={visible}
-            active={active}
+            active={sideBySide ? active : opened}
             onSelect={open}
             dirty={dirty}
             summaries={summaries}
@@ -256,7 +296,7 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
           <div className="flex flex-wrap items-start gap-3 px-5 sm:px-7 2xl:px-10 py-4 2xl:py-5 border-b border-line">
             <button
               type="button"
-              onClick={() => setPhoneOpen(false)}
+              onClick={closeSection}
               className="lg:hidden -ml-1 p-1 rounded-lg text-soft hover:bg-hover"
               aria-label={t('events.settingsTab.backToSections', 'All settings')}
             >

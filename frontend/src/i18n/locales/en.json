@@ -3047,7 +3047,8 @@
       "leaveTitle": "Discard unsaved changes?",
       "leaveMessage": "You have unsaved changes on this page. Leaving now discards them.",
       "leaveConfirm": "Discard and leave",
-      "leaveCancel": "Stay"
+      "leaveCancel": "Stay",
+      "region": "Save or discard changes"
     },
     "health": {
       "title": "Health",

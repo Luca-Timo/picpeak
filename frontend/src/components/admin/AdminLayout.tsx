@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import { useAdminAuth } from '../../contexts';
 import { FeatureFlagsProvider } from '../../contexts/FeatureFlagsContext';
@@ -88,6 +89,7 @@ interface AdminLayoutInnerProps {
 const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, mustChangePassword }) => {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [bottomBarSlot, setBottomBarSlot] = useState<HTMLDivElement | null>(null);
+  const { t } = useTranslation();
 
   // Cmd+K on a Mac, Ctrl+K everywhere else. NOT "either modifier": Ctrl+K on
   // macOS is kill-to-end-of-line in every text field, and claiming it would
@@ -186,7 +188,12 @@ const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSid
         {/* Bottom bars (SettingsSaveBar) render here: after a <main> that
             fills the column, so they sit at the bottom of the window even
             when the page is shorter than it. */}
-        <div ref={setBottomBarSlot} className={`sticky bottom-0 z-20 empty:hidden ${mustChangePassword ? 'opacity-50 pointer-events-none' : ''}`} />
+        <div
+          ref={setBottomBarSlot}
+          role="region"
+          aria-label={t('settings.saveBar.region', 'Save or discard changes')}
+          className={`sticky bottom-0 z-20 empty:hidden ${mustChangePassword ? 'opacity-50 pointer-events-none' : ''}`}
+        />
       </div>
     </div>
   );

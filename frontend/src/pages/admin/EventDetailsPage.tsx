@@ -60,14 +60,17 @@ export const EventDetailsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<EventDetailsTab>(
     isValidTab(initialTabParam) ? initialTabParam : initialTabParam === 'categories' ? 'photos' : 'overview'
   );
-  const [settingsSection, setSettingsSection] = useState<SettingsSectionKey>(
-    isValidSection(searchParams.get('section')) ? (searchParams.get('section') as SettingsSectionKey) : 'general'
+  // The Settings section someone opened, or null when none was: the desktop
+  // then shows General, a phone shows the section overview. It lives in the
+  // URL so a link to any section (General included) opens it.
+  const [settingsSection, setSettingsSection] = useState<SettingsSectionKey | null>(
+    isValidSection(searchParams.get('section')) ? (searchParams.get('section') as SettingsSectionKey) : null
   );
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
     next.set('tab', activeTab);
-    if (activeTab === 'settings') next.set('section', settingsSection);
+    if (activeTab === 'settings' && settingsSection) next.set('section', settingsSection);
     else next.delete('section');
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -78,7 +81,8 @@ export const EventDetailsPage: React.FC = () => {
     const urlTab = searchParams.get('tab');
     if (isValidTab(urlTab) && urlTab !== activeTab) setActiveTab(urlTab);
     const urlSection = searchParams.get('section');
-    if (isValidSection(urlSection) && urlSection !== settingsSection) setSettingsSection(urlSection);
+    const nextSection = isValidSection(urlSection) ? urlSection : null;
+    if (nextSection !== settingsSection) setSettingsSection(nextSection);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
@@ -86,6 +90,20 @@ export const EventDetailsPage: React.FC = () => {
     setSettingsSection(section);
     setActiveTab('settings');
   }, []);
+
+  // Opening or closing a section from the Settings tab. `push` adds a history
+  // entry, so on a phone (where a section replaces the overview) Back returns
+  // to the overview instead of leaving the gallery. Only the URL changes here;
+  // the effect above takes the state from it. Setting both at once let the
+  // sync effect run against the old URL and replace the pushed entry.
+  const changeSettingsSection = useCallback((section: SettingsSectionKey | null, { push = false } = {}) => {
+    const next = new URLSearchParams(searchParams);
+    if (section) next.set('section', section);
+    else next.delete('section');
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, push ? { state: { settingsSectionPushed: true } } : { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
@@ -404,7 +422,7 @@ export const EventDetailsPage: React.FC = () => {
               event={event}
               settings={settings}
               section={settingsSection}
-              setSection={setSettingsSection}
+              setSection={changeSettingsSection}
               categories={categories}
               photos={photos}
               phoneFieldEnabled={phoneFieldEnabled}

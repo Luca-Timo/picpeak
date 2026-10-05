@@ -140,7 +140,8 @@ export function useSectionSummaries(
 
 export interface SettingsOverviewProps {
   sections: Array<{ key: SettingsSectionKey; label: string }>;
-  active: SettingsSectionKey;
+  /** The open section; null on a phone while the overview is shown alone. */
+  active: SettingsSectionKey | null;
   onSelect: (key: SettingsSectionKey) => void;
   dirty: Set<SettingsSectionKey>;
   summaries: ReturnType<typeof useSectionSummaries>;
@@ -162,11 +163,12 @@ export const SettingsOverview: React.FC<SettingsOverviewProps> = ({ sections, ac
       <li key={key}>
         <button
           type="button"
+          data-section={key}
           onClick={() => onSelect(key)}
           aria-current={selected ? 'page' : undefined}
           className={`w-full flex items-center gap-3 px-3.5 py-2.5 2xl:px-4 2xl:py-3 rounded-xl border text-left transition-colors ${
             danger
-              ? 'border-red-200 dark:border-red-900/60 hover:bg-red-50 dark:hover:bg-red-900/20'
+              ? 'border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20'
               : selected
                 // Only beside the open section; on a phone the list is shown
                 // on its own, so nothing in it is "open".
@@ -210,6 +212,8 @@ export const SettingsOverview: React.FC<SettingsOverviewProps> = ({ sections, ac
 
   return (
     <nav aria-label={t('events.settingsTab.sections', 'Settings sections')} className="space-y-4 2xl:space-y-6">
+      {/* Keeps the heading order: this h2, its group h3s, then the open section's h2. */}
+      <h2 className="sr-only">{t('events.settingsTab.sections', 'Settings sections')}</h2>
       {SECTION_GROUPS.map((group) => {
         const keys = group.sections.filter((k) => byKey.has(k));
         if (keys.length === 0) return null;

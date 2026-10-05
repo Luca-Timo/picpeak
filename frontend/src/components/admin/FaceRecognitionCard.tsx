@@ -63,9 +63,11 @@ const BURNS_PHOTOS = new Set(['unauthorized', 'rejected']);
 interface FaceRecognitionCardProps {
   eventId: number;
   isArchived?: boolean;
+  /** Without its own card frame, for a host that already draws one (the gallery Settings card). */
+  bare?: boolean;
 }
 
-export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventId, isArchived }) => {
+export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventId, isArchived, bare = false }) => {
   const { t } = useTranslation();
   const [saving, setSaving] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
@@ -245,8 +247,10 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
     }
   };
 
+  const Frame = bare ? 'div' : Card;
+
   if (isLoading) {
-    return <Card><Loading /></Card>;
+    return <Frame><Loading /></Frame>;
   }
   if (!data) return null;
 
@@ -285,7 +289,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
   ) : null;
 
   return (
-    <Card>
+    <Frame>
       <div className="flex items-start gap-3 mb-4">
         <Users className="text-neutral-400 mt-0.5" size={20} />
         <div>
@@ -564,7 +568,7 @@ export const FaceRecognitionCard: React.FC<FaceRecognitionCardProps> = ({ eventI
           />
         </>
       )}
-    </Card>
+    </Frame>
   );
 };
 

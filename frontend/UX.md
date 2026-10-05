@@ -69,8 +69,13 @@ relying on browser-back.
     zone") is one full-width red row **after** the groups: it holds actions,
     not settings.
   - **Below `lg`** the overview is the page; tapping a row opens that section
-    full-screen with a back arrow. A link to a particular section opens it
-    directly.
+    full-screen with a back arrow. Opening it adds a history entry, so the
+    browser's Back returns to the overview as the arrow does, and focus goes
+    back to the row. The open section is in the URL (`?section=`): a link to
+    any section, General included, opens it; one the flags hide falls back to
+    the overview.
+  - Side by side, switching sections replaces the URL instead of adding to
+    history, like the tabs. Nothing opened means General there.
   - This is not a second menu next to the sidebar (#1689): the rows describe
     **this record's** state, they are not places in the app. Global Settings,
     CRM and Accounting keep the sidebar.
