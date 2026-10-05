@@ -139,6 +139,17 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
     source_mode, external_path, external_watch, import_now, actor,
   });
 
+  // Folder structure (issue 1786): mirror the subfolders of uploads and
+  // external imports. New galleries follow Settings → Event defaults (on
+  // unless turned off); an explicit body value wins. Existing galleries were
+  // pinned off by migration 265.
+  let folderStructureFallback = true;
+  if (input.folder_structure === undefined) {
+    const setting = await readBooleanSetting('event_default_folder_structure');
+    if (setting !== undefined) folderStructureFallback = setting;
+  }
+  const folderStructure = parseBooleanInput(input.folder_structure, folderStructureFallback);
+
   const customerName = getCustomerNameFromPayload(input);
   const customerEmail = getCustomerEmailFromPayload(input);
   // Phone field is opt-in via the global setting (#322). If disabled,
@@ -473,6 +484,7 @@ async function createEvent(data, { actor, source = 'admin', frontendUrl } = {}) 
     source_mode: photoSource.source_mode,
     external_path: photoSource.external_path,
     external_watch: formatBoolean(photoSource.external_watch),
+    folder_structure: formatBoolean(folderStructure),
   };
     
   // The gallery row and its feedback configuration commit together.

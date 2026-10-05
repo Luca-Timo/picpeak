@@ -10,6 +10,8 @@ const { SHARED_COLOR_LABEL_IDENTITY } = require('../constants/colorLabels');
 const watermarkService = require('./watermarkService');
 const logger = require('../utils/logger');
 const { getEventCategoriesOrdered } = require('../utils/categoryOrder');
+const folderTree = require('./folderTreeService');
+const { guestDeliveryPayload } = require('./deliveryService');
 const { getUseOriginalFilenames } = require('./downloadFilenameService');
 const { resolveEventDownloadPolicy } = require('../utils/downloadResolutions');
 const { resolveHeroLogoVisible, originalNeedsPreview } = require('./galleryModel');
@@ -57,7 +59,15 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
   // viewer can't widen the set: when the event pins show_category_id, the
   // slideshow only sees that category. NULL = all photos (unchanged).
   if (accessLevel === 'slideshow' && event.show_category_id) {
-    photosQuery = photosQuery.where('photos.category_id', event.show_category_id);
+    // A folder (issue 1786) pins the slideshow to the folder and everything
+    // below it; a filter category to its own photos.
+    const pinned = await db('photo_categories').where('id', event.show_category_id).first('id', 'is_folder', 'event_id');
+    if (pinned && parseBooleanInput(pinned.is_folder, false) && pinned.event_id) {
+      const ids = await folderTree.subtreeIds(event.id, pinned.id);
+      photosQuery = photosQuery.whereIn('photos.folder_id', ids);
+    } else {
+      photosQuery = photosQuery.where('photos.category_id', event.show_category_id);
+    }
   }
 
   // Apply sort option.
@@ -307,11 +317,38 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
 
   // Get actual categories used by photos in this event
   // This includes both global categories and event-specific ones
-  const usedCategoryIds = hiddenForGuest ? [] : await db('photos')
+  const usedFilterIds = hiddenForGuest ? [] : await db('photos')
     .where('event_id', event.id)
     .whereNotNull('category_id')
     .distinct('category_id')
     .pluck('category_id');
+  // Folders (issue 1786): every folder that holds photos, plus all of its
+  // ancestors — a parent that only contains subfolders still has to render
+  // as a tile, or the subfolders below it are unreachable.
+  const allFolders = hiddenForGuest ? [] : await folderTree.eventFolders(event.id);
+  const folderById = folderTree.indexById(allFolders);
+  const usedFolderIds = new Set();
+  if (!hiddenForGuest) {
+    const direct = await db('photos')
+      .where('event_id', event.id)
+      .whereNotNull('folder_id')
+      .distinct('folder_id')
+      .pluck('folder_id');
+    for (const id of direct) {
+      let cur = folderById.get(Number(id));
+      const seen = new Set();
+      while (cur && !seen.has(cur.id)) {
+        seen.add(cur.id);
+        usedFolderIds.add(Number(cur.id));
+        cur = cur.parent_id ? folderById.get(Number(cur.parent_id)) : null;
+      }
+      // A legacy global "folder" (pre-265 data) is not in the event tree
+      // but still holds photos; keep it reachable as a top-level folder.
+      if (!folderById.has(Number(id))) usedFolderIds.add(Number(id));
+    }
+  }
+  const usedCategoryIds = [...new Set([...usedFilterIds.map(Number), ...usedFolderIds])];
+  const blockedFolderIds = folderTree.blockedFolderIdsFrom(allFolders);
 
   // Fetch category details from photo_categories table
   let categories = [];
@@ -320,7 +357,7 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
     // default, else name — restricted to categories that have photos.
     const categoryDetails = await getEventCategoriesOrdered(event.id, {
       onlyIds: usedCategoryIds,
-      select: ['c.id', 'c.name', 'c.slug', 'c.is_global', 'c.hero_photo_id', 'c.allow_downloads', 'c.is_folder'],
+      select: ['c.id', 'c.name', 'c.slug', 'c.is_global', 'c.hero_photo_id', 'c.allow_downloads', 'c.is_folder', 'c.parent_id'],
     });
 
     categories = categoryDetails.map(cat => ({
@@ -336,7 +373,9 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
       // Folder vs filter (#1160). true = the category CONTAINS its photos:
       // they leave the root grid and only render inside the folder. Defaults
       // false so categories predating migration 185 keep filtering.
-      is_folder: parseBooleanInput(cat.is_folder, false)
+      is_folder: parseBooleanInput(cat.is_folder, false),
+      // Nesting (issue 1786): null = top level. Only folders nest.
+      parent_id: cat.parent_id == null ? null : Number(cat.parent_id),
     }));
   }
 
@@ -345,6 +384,15 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
   categories.forEach(cat => {
     categoryMap[cat.id] = cat;
   });
+
+  // A row written before migration 265 (or restored from an older backup)
+  // can still carry its folder in category_id. Report it the way current
+  // rows are stored — folder in folder_id, no filter category — so the
+  // gallery's containment never depends on how the row was written.
+  const legacyFolderId = (photo) => (photo.category_id && categoryMap[photo.category_id]?.is_folder
+    ? Number(photo.category_id) : null);
+  const folderIdOf = (photo) => (photo.folder_id ? Number(photo.folder_id) : legacyFolderId(photo));
+  const filterCategoryIdOf = (photo) => (legacyFolderId(photo) ? null : (photo.category_id || null));
     
   // Include protection settings in response
   const protectionSettings = {
@@ -460,6 +508,8 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
       // Reveal mode (#838): armed flag lets an open VISIBLE gallery keep
       // polling so a re-hide propagates without a manual reload.
       reveal_armed: parseBooleanInput(event.reveal_mode, false),
+      // Two-stage delivery (issue 1562): null for an ordinary gallery.
+      delivery: hiddenForGuest ? null : guestDeliveryPayload(event, total),
       disable_right_click: parseBooleanInput(event.disable_right_click, false),
       watermark_downloads: parseBooleanInput(event.watermark_downloads, false),
       watermark_text: event.watermark_text,
@@ -582,14 +632,20 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
           ? `/api/gallery/${slug}/preview/${photo.id}${wmQuery}`
           : null,
         type: photo.type,
-        category_id: photo.category_id || null,
-        category_name: photo.category_id && categoryMap[photo.category_id] ? categoryMap[photo.category_id].name : null,
+        category_id: filterCategoryIdOf(photo),
+        category_name: filterCategoryIdOf(photo) && categoryMap[photo.category_id] ? categoryMap[photo.category_id].name : null,
         // Per-category download permission (#640). Defaults true for photos
         // without a category or for categories that pre-date migration 135.
-        category_allow_downloads: photo.category_id && categoryMap[photo.category_id]
+        // Since issue 1786 the folder chain counts too (inherited, the most
+        // restrictive wins) — the download routes apply the same rule.
+        category_allow_downloads: (photo.category_id && categoryMap[photo.category_id]
           ? parseBooleanInput(categoryMap[photo.category_id].allow_downloads, true)
-          : true,
-        category_slug: photo.category_id && categoryMap[photo.category_id] ? categoryMap[photo.category_id].slug : null,
+          : true) && !(photo.folder_id && blockedFolderIds.has(Number(photo.folder_id))),
+        // Folder (issue 1786); null = gallery root.
+        folder_id: folderIdOf(photo),
+        // Delivered as part of a first look (issue 1562); the badge stays.
+        first_look: parseBooleanInput(photo.first_look, false),
+        category_slug: filterCategoryIdOf(photo) && categoryMap[photo.category_id] ? categoryMap[photo.category_id].slug : null,
         // Download limit (issue 1560): already granted, so downloading it
         // again costs nothing.
         download_granted: grantedIds.has(Number(photo.id)),

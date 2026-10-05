@@ -20,6 +20,7 @@ const { resolvePhotoFilePath, resolvePhotoStorageKey } = require('../../services
 const { errorResponse } = require('../../utils/routeHelpers');
 const { blockHiddenGallery } = require('../../utils/revealMode');
 const downloadZipService = require('../../services/downloadZipService');
+const folderTree = require('../../services/folderTreeService');
 const {
   renderPhotoForDownload, renderPreviewForDownload, previewDownloadName, resolveWatermarkSettings,
 } = require('../../services/downloadRendition');
@@ -162,6 +163,14 @@ router.get('/:slug/download/:photoId', verifyGalleryAccess, denySlideshowToken, 
         .first('allow_downloads');
       if (cat && !parseBooleanInput(cat.allow_downloads, true)) {
         return res.status(403).json({ error: 'Downloads are disabled for this category' });
+      }
+    }
+    // Folder downloads are inherited (issue 1786): off on a folder means off
+    // for everything below it.
+    if (photo.folder_id) {
+      const blocked = await folderTree.downloadBlockedFolderIds(req.event.id);
+      if (blocked.includes(Number(photo.folder_id))) {
+        return res.status(403).json({ error: 'Downloads are disabled for this folder' });
       }
     }
 
@@ -638,12 +647,13 @@ router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, block
     // prebuilt zip would hand them exactly the photos they may not download.
     const eventHasDownloadRestrictedPhotos = (isClient || eventHasHidden)
       ? false
-      : await db('photos')
+      : (await db('photos')
         .join('photo_categories', 'photos.category_id', 'photo_categories.id')
         .where('photos.event_id', req.event.id)
         .where('photo_categories.allow_downloads', false)
         .first('photos.id')
-        .then(Boolean);
+        .then(Boolean))
+        || (await folderTree.downloadBlockedFolderIds(req.event.id)).length > 0;
     // A download limit (issue 1560) grants exactly the photos that ship. The
     // stream below knows that set; the prebuilt archive does not have to match
     // it, so a limited gallery always streams.
@@ -699,6 +709,7 @@ router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, block
     // Fetch photos — exclude photos in categories that disabled downloads (#640).
     // Uncategorised photos are always included; categories without the column
     // (pre-migration-135) fall through the LEFT JOIN's null and are included.
+    const blockedFolders = await folderTree.downloadBlockedFolderIds(req.event.id);
     const photos = await applyPhotoVisibilityFilter(
       db('photos')
         .leftJoin('photo_categories', 'photos.category_id', 'photo_categories.id')
@@ -707,7 +718,8 @@ router.get('/:slug/download-all', verifyGalleryAccess, denySlideshowToken, block
           this.whereNull('photos.category_id')
             .orWhere('photo_categories.allow_downloads', true)
             .orWhereNull('photo_categories.allow_downloads');
-        }),
+        })
+        .where(folderTree.whereFolderAllowsDownload(blockedFolders)),
       req.accessLevel
     )
       .select('photos.*')
@@ -954,6 +966,7 @@ router.post('/:slug/download-selected', verifyGalleryAccess, denySlideshowToken,
 
     // Fetch photos — exclude photos in categories that disabled downloads (#640).
     // Same LEFT JOIN pattern as the download-all endpoint.
+    const blockedFolders = await folderTree.downloadBlockedFolderIds(req.event.id);
     const photos = await applyPhotoVisibilityFilter(
       db('photos')
         .leftJoin('photo_categories', 'photos.category_id', 'photo_categories.id')
@@ -963,7 +976,8 @@ router.post('/:slug/download-selected', verifyGalleryAccess, denySlideshowToken,
           this.whereNull('photos.category_id')
             .orWhere('photo_categories.allow_downloads', true)
             .orWhereNull('photo_categories.allow_downloads');
-        }),
+        })
+        .where(folderTree.whereFolderAllowsDownload(blockedFolders)),
       req.accessLevel
     )
       .select('photos.*')
@@ -1188,7 +1202,7 @@ router.post('/:slug/download-jobs', verifyGalleryAccess, denySlideshowToken, blo
     if (await isPreviewOnly(req)) return res.status(403).json(clientOnlyError());
     if (downloadLimitOf(req.event) && !req.isAdminPreview) {
       const resolved = await downloadJobService
-        .photoQuery(req.event.id, photoIds, req.accessLevel)
+        .photoQuery(req.event.id, photoIds, req.accessLevel, await folderTree.downloadBlockedFolderIds(req.event.id))
         .select('photos.id');
       const quota = await checkDownloads(req.event, resolved.map((r) => r.id));
       if (!quota.ok) return res.status(403).json(downloadLimitError(quota));

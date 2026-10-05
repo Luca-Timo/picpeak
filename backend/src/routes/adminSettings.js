@@ -1814,6 +1814,32 @@ router.put('/general', adminAuth, requirePermission('settings.edit'), async (req
       settings.event_default_show_credits_to_guests = raw === true || raw === 'true' || raw === 1 || raw === '1';
     }
 
+    // Folders (issue 1786) and two-stage delivery (issue 1562).
+    for (const key of ['event_default_folder_structure', 'first_look_keyword_detection']) {
+      if (Object.prototype.hasOwnProperty.call(settings, key)) {
+        const raw = settings[key];
+        settings[key] = raw === true || raw === 'true' || raw === 1 || raw === '1';
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'first_look_folder_keywords')) {
+      const raw = settings.first_look_folder_keywords;
+      const list = (Array.isArray(raw) ? raw : String(raw || '').split(','))
+        .map((k) => String(k).replace(/\s+/g, ' ').trim())
+        .filter((k) => k.replace(/[^\p{L}\p{N}]/gu, '').length >= 3)
+        .slice(0, 20);
+      if (list.some((k) => k.length > 60)) {
+        return res.status(400).json({ error: 'first_look_folder_keywords: each keyword must be at most 60 characters' });
+      }
+      settings.first_look_folder_keywords = [...new Set(list)];
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'event_default_delivery_days')) {
+      const days = Number(settings.event_default_delivery_days);
+      if (!Number.isInteger(days) || days < 1 || days > 365) {
+        return res.status(400).json({ error: 'event_default_delivery_days must be an integer between 1 and 365' });
+      }
+      settings.event_default_delivery_days = days;
+    }
+
     if (publicSiteKeysTouched) {
       if (Object.prototype.hasOwnProperty.call(settings, 'general_public_site_custom_css')) {
         settings.general_public_site_custom_css = sanitizeCss(settings.general_public_site_custom_css || '');

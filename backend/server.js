@@ -865,6 +865,10 @@ app.use('/api/admin/system', require('./src/routes/adminSystem'));
 // per event. Mounted at /api/admin so the routes appear at
 // /api/admin/events/:eventId/short-urls and /api/admin/short-urls/:id.
 app.use('/api/admin', require('./src/routes/adminShortUrls'));
+// Gallery folders (issue 1786) and two-stage delivery (issue 1562): routes
+// under /api/admin/events/:eventId/folders|folder-requests|delivery.
+app.use('/api/admin', require('./src/routes/adminFolders'));
+app.use('/api/admin', require('./src/routes/adminDelivery'));
 app.use('/api/admin/feature-flags', require('./src/routes/adminFeatureFlags'));
 app.use('/api/admin/whatsapp', require('./src/routes/adminWhatsapp'));
 app.use('/api/admin/database-backup', require('./src/routes/adminDatabaseBackup'));

@@ -331,6 +331,33 @@
         "DELETE /bank-accounts/:id"
       ]
     },
+    "adminDelivery.js": {
+      "decision": "excluded",
+      "signals": [],
+      "reason": "Two-stage delivery state and the Full gallery is ready action (issue 1562): no product-usage middleware, counters or report triggers; delivery dates and counts stay on the install.",
+      "route_signatures": [
+        "GET /events/:eventId/delivery",
+        "POST /events/:eventId/delivery/complete"
+      ]
+    },
+    "adminFolders.js": {
+      "decision": "partial",
+      "signals": [
+        "gallery_folders"
+      ],
+      "reason": "Gallery folder tree (issue 1786): only the existing gallery_folders capability marker when a folder is actually created. No folder names, paths, counts, requests or approvals.",
+      "route_signatures": [
+        "GET /events/:eventId/folders",
+        "POST /events/:eventId/folders",
+        "PATCH /events/:eventId/folders/:folderId",
+        "DELETE /events/:eventId/folders/:folderId",
+        "POST /events/:eventId/folders/resolve",
+        "POST /events/:eventId/folders/apply-external-structure",
+        "GET /events/:eventId/folder-requests",
+        "POST /events/:eventId/folder-requests/:requestId/approve",
+        "POST /events/:eventId/folder-requests/:requestId/reject"
+      ]
+    },
     "adminPdfThemes.js": {
       "decision": "excluded",
       "signals": [],

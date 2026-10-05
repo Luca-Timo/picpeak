@@ -982,6 +982,10 @@ module.exports = (router) => {
         // Uploader names are part of the gallery's configuration (#1561).
         guest_name_mode: source.guest_name_mode || 'off',
         show_credits_to_guests: formatBoolean(parseBooleanInput(source.show_credits_to_guests, false)),
+        // Folder structure is configuration (issue 1786); the delivery state
+        // of the source (issue 1562) is not — a copy starts complete.
+        folder_structure: formatBoolean(parseBooleanInput(source.folder_structure, false)),
+        delivery_badge_label: source.delivery_badge_label || null,
         allow_downloads: source.allow_downloads,
         disable_right_click: source.disable_right_click,
         enable_devtools_protection: source.enable_devtools_protection,
@@ -1065,20 +1069,28 @@ module.exports = (router) => {
         const sourceCategories = await db('photo_categories')
           .where({ event_id: id })
           .where(function () { this.whereNull('is_global').orWhere('is_global', formatBoolean(false)); })
-          .select('name', 'slug', 'is_global', 'is_folder');
-        if (sourceCategories.length > 0) {
-          await db('photo_categories').insert(
-            sourceCategories.map((c) => ({
-              event_id: newEventId,
-              name: c.name,
-              slug: c.slug,
-              is_global: formatBoolean(false),
-              // #1160: carry folder-ness across. Without this the clone silently
-              // falls back to the column default and a duplicated gallery turns
-              // every folder back into a filter.
-              is_folder: formatBoolean(parseBooleanInput(c.is_folder, false)),
-            })),
-          );
+          .select('id', 'name', 'slug', 'is_global', 'is_folder', 'parent_id', 'source_path');
+        // Parents before children so each clone can point at its parent's
+        // clone (issue 1786: nested folders keep their tree).
+        const newIdByOld = new Map();
+        const pending = [...sourceCategories];
+        while (pending.length > 0) {
+          const index = pending.findIndex((c) => !c.parent_id || newIdByOld.has(Number(c.parent_id))
+            || !sourceCategories.some((o) => Number(o.id) === Number(c.parent_id)));
+          const c = pending.splice(index === -1 ? 0 : index, 1)[0];
+          const inserted = await db('photo_categories').insert({
+            event_id: newEventId,
+            name: c.name,
+            slug: c.slug,
+            is_global: formatBoolean(false),
+            // #1160: carry folder-ness across. Without this the clone silently
+            // falls back to the column default and a duplicated gallery turns
+            // every folder back into a filter.
+            is_folder: formatBoolean(parseBooleanInput(c.is_folder, false)),
+            parent_id: c.parent_id ? (newIdByOld.get(Number(c.parent_id)) ?? null) : null,
+            source_path: c.source_path || null,
+          }).returning('id');
+          newIdByOld.set(Number(c.id), Number(inserted[0]?.id ?? inserted[0]));
         }
       }
 
@@ -1134,6 +1146,12 @@ module.exports = (router) => {
     // Reveal mode (#838): hide the gallery from guests until reveal.
     body('reveal_mode').optional().isBoolean(),
     body('reveal_at').optional({ nullable: true, checkFalsy: true }).isISO8601(),
+    // Folders (issue 1786) and two-stage delivery (issue 1562).
+    body('folder_structure').optional().isBoolean(),
+    body('delivery_status').optional().isIn(['complete', 'partial']),
+    body('delivery_expected_count').optional({ nullable: true, checkFalsy: true }).isInt({ min: 1, max: 100000 }),
+    body('delivery_due_at').optional({ nullable: true, checkFalsy: true }).isISO8601(),
+    body('delivery_badge_label').optional({ nullable: true }).isString().isLength({ max: 60 }),
     // Migration 143 — per-event reminder overrides. All three are
     // optional; nullable values are accepted so admins can clear an
     // override (e.g. drop a custom offset back to the global default).
@@ -1335,6 +1353,11 @@ module.exports = (router) => {
         'project_id', 'quote_id',
         // Legacy mirrors — rejected explicitly below in favour of customer_*.
         'host_name', 'host_email',
+        // Two-stage delivery (issue 1562): completion is stamped only by
+        // POST /delivery/complete, the reminder stamps by the hourly pass, and
+        // the due-date source is derived below from how the date was set.
+        'delivery_completed_at', 'delivery_reminder_sent_at', 'delivery_overdue_notified_at',
+        'delivery_due_source',
       ];
       // Only canonical keys reach the UPDATE. SQLite resolves quoted
       // identifiers case-insensitively, so `{ "Event_Name": ... }` lands on
@@ -1735,6 +1758,41 @@ module.exports = (router) => {
         if (updates.reveal_at && new Date(updates.reveal_at) > new Date() && event.revealed_at) {
           updates.revealed_at = null;
         }
+      }
+
+      // Folders (issue 1786): whether uploads and imports mirror subfolders.
+      if (Object.prototype.hasOwnProperty.call(updates, 'folder_structure')) {
+        updates.folder_structure = formatBoolean(parseBooleanInput(updates.folder_structure, false));
+      }
+
+      // Two-stage delivery (issue 1562). Switching to partial by hand is how
+      // a gallery without a keyword folder gets a first look; switching back
+      // to complete here only drops the state — the "Full gallery is ready"
+      // action is what stamps completion and notifies the customer.
+      if (Object.prototype.hasOwnProperty.call(updates, 'delivery_status')) {
+        if (updates.delivery_status === 'partial' && event.delivery_status !== 'partial') {
+          updates.delivery_completed_at = null;
+          updates.delivery_reminder_sent_at = null;
+          updates.delivery_overdue_notified_at = null;
+          if (!updates.delivery_due_at && !event.delivery_due_at) {
+            updates.delivery_due_at = (await require('../../services/deliveryService').defaultDueAt(event)).toISOString();
+            updates.delivery_due_source = 'default';
+          }
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(updates, 'delivery_due_at')) {
+        updates.delivery_due_at = updates.delivery_due_at ? new Date(updates.delivery_due_at).toISOString() : null;
+        if (!Object.prototype.hasOwnProperty.call(updates, 'delivery_due_source')) updates.delivery_due_source = 'manual';
+        // A new promise gets its own reminders.
+        updates.delivery_reminder_sent_at = null;
+        updates.delivery_overdue_notified_at = null;
+      }
+      if (Object.prototype.hasOwnProperty.call(updates, 'delivery_expected_count')) {
+        updates.delivery_expected_count = updates.delivery_expected_count ? parseInt(updates.delivery_expected_count, 10) : null;
+      }
+      if (Object.prototype.hasOwnProperty.call(updates, 'delivery_badge_label')) {
+        const label = String(updates.delivery_badge_label || '').trim();
+        updates.delivery_badge_label = label || null;
       }
 
       // Handle client access fields (#172)

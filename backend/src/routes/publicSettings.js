@@ -34,6 +34,8 @@ router.get('/', async (req, res) => {
               // Uploader names (#1561), for the create form.
               'event_default_guest_name_mode',
               'event_default_show_credits_to_guests',
+              // Folder structure default (issue 1786), for the create form.
+              'event_default_folder_structure',
               'gallery_show_filter_bar',
               'event_phone_field_enabled',
               // #613 — guest upload UI needs to know the per-batch file
@@ -230,6 +232,8 @@ router.get('/', async (req, res) => {
         ? settingsObject.event_default_guest_name_mode
         : 'off',
       event_default_show_credits_to_guests: settingsObject.event_default_show_credits_to_guests === true,
+      // Folder structure (issue 1786): on unless turned off, as on create.
+      event_default_folder_structure: settingsObject.event_default_folder_structure !== false,
       // Per-type feedback defaults (#1044). The fallbacks mirror
       // FEEDBACK_TOGGLES in services/feedbackDefaults.js — the backend is
       // still the authority; these only pre-fill the create form.
