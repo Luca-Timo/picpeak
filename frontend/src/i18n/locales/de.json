@@ -4493,7 +4493,51 @@
       "noReleases": "Keine Versionshinweise verfügbar.",
       "viewOnGitHub": "Auf GitHub ansehen",
       "noNotes": "Keine Versionshinweise hinterlegt.",
-      "dismissUntilNext": "Bis zur nächsten Version ausblenden"
+      "dismissUntilNext": "Bis zur nächsten Version ausblenden",
+      "selfUpdate": {
+        "title": "Direkt hier aktualisieren",
+        "description": "PicPeak sichert zuerst seine Datenbank und installiert dann die neueste Version seines Release-Kanals. Während des Neustarts ist die Seite ein bis zwei Minuten nicht erreichbar.",
+        "password": "Mit Ihrem Passwort bestätigen",
+        "submit": "Jetzt aktualisieren",
+        "submitting": "Wird gestartet…",
+        "onlySuperAdmin": "Ein Super-Admin kann PicPeak hier aktualisieren.",
+        "noAgent": "In-App-Updates sind aktiviert, aber der Updater ist nicht installiert oder nicht erreichbar. Nutzen Sie die Befehle unten oder richten Sie ihn wie in docs/self-update.md beschrieben ein.",
+        "unsupportedContract": "Der installierte Updater passt nicht zu dieser PicPeak-Version. Aktualisieren Sie ihn mit picpeak-setup.sh --update oder aktualisieren Sie den Updater-Container.",
+        "busyOther": "Es läuft bereits ein Update.",
+        "keepOpen": "Sie können dieses Fenster offen lassen. Die Seite ist ein bis zwei Minuten nicht erreichbar, während die neue Version startet.",
+        "reload": "PicPeak neu laden",
+        "manualInstead": "Stattdessen manuell aktualisieren",
+        "phase": {
+          "backingUp": "Datenbank wird gesichert…",
+          "waiting": "Warte darauf, dass der Updater startet…",
+          "waitingLong": "Der Updater hat die Anfrage noch nicht übernommen. Prüfen Sie, ob er auf dem Server läuft (journalctl -u picpeak-updater oder der Updater-Container).",
+          "restarting": "PicPeak startet neu…"
+        },
+        "step": {
+          "discover": "Installation wird geprüft…",
+          "pull": "Neue Version wird heruntergeladen…",
+          "verify": "Neue Version wird geprüft…",
+          "recreate": "Neue Version wird installiert…",
+          "health": "Warte, bis PicPeak gestartet ist…",
+          "rollback": "Die neue Version ist nicht gestartet. Die vorherige wird wiederhergestellt…",
+          "working": "Wird aktualisiert…"
+        },
+        "result": {
+          "succeeded": "PicPeak wurde aktualisiert.",
+          "upToDate": "PicPeak ist bereits auf der neuesten Version seines Kanals.",
+          "refused": "Das Update wurde nicht installiert. Es wurde nichts verändert.",
+          "failed": "Das Update ist fehlgeschlagen.",
+          "rolledBack": "Die neue Version ist nicht gestartet, deshalb wurde die vorherige Version wiederhergestellt.",
+          "backupFailed": "Die Datenbanksicherung ist fehlgeschlagen, deshalb wurde das Update nicht gestartet. Es wurde nichts verändert.",
+          "requestFailed": "Die Sicherung wurde erstellt, aber die Update-Anfrage konnte nicht abgelegt werden. Es wurde nichts verändert."
+        },
+        "error": {
+          "badPassword": "Das Passwort ist falsch.",
+          "rateLimited": "Zu viele Versuche. Versuchen Sie es in ein paar Minuten erneut.",
+          "busy": "Es läuft bereits ein Update.",
+          "generic": "Das Update konnte nicht gestartet werden."
+        }
+      }
     },
     "notifications": "Benachrichtigungen",
     "markAllRead": "Alle als gelesen markieren",
@@ -5046,7 +5090,8 @@
       "delivery_first_look_started": "Erste Auswahl für {{eventName}} gestartet",
       "delivery_completed": "Vollständige Galerie ausgeliefert: {{eventName}}",
       "delivery_due_soon": "Vollständige Galerie für {{eventName}} ist bald fällig",
-      "delivery_overdue": "Vollständige Galerie für {{eventName}} ist überfällig"
+      "delivery_overdue": "Vollständige Galerie für {{eventName}} ist überfällig",
+      "self_update_requested": "In-App-Update angefordert (von v{{from_version}})"
     },
     "people": {
       "title": "Personen in dieser Galerie",

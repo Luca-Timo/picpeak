@@ -1,7 +1,9 @@
 const express = require('express');
-const { db } = require('../database/db');
+const bcrypt = require('bcrypt');
+const rateLimit = require('express-rate-limit');
+const { db, logActivity } = require('../database/db');
 const { adminAuth } = require('../middleware/auth');
-const { requirePermission } = require('../middleware/permissions');
+const { requirePermission, requireSuperAdmin, isSuperAdminUser } = require('../middleware/permissions');
 const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
@@ -222,6 +224,79 @@ router.get('/updates/instructions', adminAuth, requirePermission(['settings.view
   } catch (error) {
     logger.error('Error generating update instructions:', error);
     res.status(500).json({ error: 'Failed to generate update instructions' });
+  }
+});
+
+// In-app updates (docs/self-update.md). The backend never runs the update: it
+// takes a database dump, then files a request the updater picks up. Status is
+// readable with the same permissions as the rest of the update UI; requesting
+// needs super_admin, the admin's password again, and PICPEAK_SELF_UPDATE=true.
+router.get('/updates/self-update', adminAuth, requirePermission(['settings.view', 'system.view']), async (req, res) => {
+  try {
+    const selfUpdateService = require('../services/selfUpdateService');
+    const status = await selfUpdateService.getStatus();
+    res.json({
+      ...status,
+      currentVersion: await getCurrentVersion(),
+      can_request: await isSuperAdminUser(req.admin.id)
+    });
+  } catch (error) {
+    logger.error('Error reading the self-update status:', error);
+    res.status(500).json({ error: 'Failed to read the update status' });
+  }
+});
+
+// Guesses at the password re-confirmation, per admin. The login limiter does
+// not cover an already-authenticated session, and this is the one check that
+// stands between a stolen session cookie and restarting the whole stack.
+const selfUpdateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  keyGenerator: (req) => `self-update:${req.admin?.id}`,
+  // Only failures count: a wrong password, or a request refused as busy.
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) =>
+    res.status(429).json({
+      error: 'Too many attempts. Try again later.',
+      code: 'SELF_UPDATE_RATE_LIMITED'
+    })
+});
+
+router.post('/updates/self-update', adminAuth, requireSuperAdmin(), selfUpdateLimiter, async (req, res) => {
+  try {
+    const selfUpdateService = require('../services/selfUpdateService');
+    if (!selfUpdateService.isEnabled()) {
+      return res.status(403).json({ error: 'In-app updates are not enabled on this installation.', code: 'SELF_UPDATE_DISABLED' });
+    }
+
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    const user = password
+      ? await db('admin_users').where('id', req.admin.id).select('password_hash').first()
+      : null;
+    // 400, as for the current password in /auth/change-password: a 401 would
+    // read as an expired session to the admin client and log the admin out.
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      return res.status(400).json({ error: 'Password is incorrect.', code: 'SELF_UPDATE_BAD_PASSWORD' });
+    }
+
+    let job;
+    try {
+      job = await selfUpdateService.requestUpdate({ admin: req.admin });
+    } catch (error) {
+      if (error instanceof selfUpdateService.SelfUpdateError) {
+        return res.status(error.status).json({ error: error.message, code: `SELF_UPDATE_${error.code.toUpperCase()}` });
+      }
+      throw error;
+    }
+
+    await logActivity('self_update_requested', { job_id: job.id, from_version: await getCurrentVersion() }, null,
+      { type: 'admin', id: req.admin.id, name: req.admin.username });
+    res.status(202).json({ job });
+  } catch (error) {
+    logger.error('Error requesting a self-update:', error);
+    res.status(500).json({ error: 'Failed to request the update' });
   }
 });
 

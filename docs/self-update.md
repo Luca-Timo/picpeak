@@ -4,7 +4,6 @@ PicPeak can update itself when an admin asks for it, with no terminal or SSH ses
 
 It is **off by default** and only works with the prebuilt images from `docker-compose.production.yml`.
 
-> This document covers the updater and its file contract. The admin button that sends the request (backend routes and UI) is a separate change.
 
 ## What it does
 
@@ -21,6 +20,21 @@ An update always goes to the newest image of the channel the install already fol
    - When it does ship new migrations, they may already have run, and the old code against a migrated database is worse than a stopped update. The updater stops and reports `migrations_may_have_run`; see [Recovering](#recovering-after-migrations_may_have_run).
 
 The **backup** is not the updater's job. The backend takes it with the existing backup service before it files the request, so the updater needs no database credentials.
+
+## Updating from the admin UI
+
+When in-app updates are enabled and the updater is reachable, the **Update PicPeak** dialog (from the update notice) and the **Update available** dialog (from the version link in the sidebar) start with an **Update from here** section:
+
+1. A **super admin** confirms with their password. Other admins see that a super admin can do it. Five wrong passwords lock the button for 15 minutes.
+2. The backend takes a **database dump** (the same one as Settings → Backup, written to the database backup destination). If the dump fails, nothing is requested and nothing changes.
+3. The backend files the request; the updater takes over. The dialog follows its steps through the restart, during which the site is unavailable for a minute or two, and ends on the result with the updater's own explanation.
+
+The manual commands stay available under **Update manually instead**. Their checklist ("I have backed up my database", …) belongs to that path only: the one-click path takes the backup itself.
+
+What the backend needs, all in `docker-compose.production.yml`:
+
+- `PICPEAK_SELF_UPDATE=true` in `.env`. Anything else, including unset, keeps the feature off and the dialogs unchanged.
+- `update/request` mounted read-write at `/app/update/request` and `update/status` mounted **read-only** at `/app/update/status`. Docker creates both directories on first start, even with the feature off; the entrypoint hands `request/` to UID 1001 (shallowly) so the backend can write there.
 
 ## Enabling it
 
