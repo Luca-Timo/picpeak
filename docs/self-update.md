@@ -82,9 +82,9 @@ The backend and the updater share no network path and no secret, only two direct
 | `update/request/update-requested` | backend | read-write |
 | `update/status/status.json` | updater only | **read-only** |
 
-**Request.** The backend creates `request/update-requested`, ideally by writing a temporary file and renaming it. Only the name's existence counts: the updater never reads the content. It claims the entry with a rename before doing anything else and then removes it, whatever it is (a file, symlink, directory or FIFO), without reading it or following it. So a failing run is never retriggered, and two updaters can never act on one request. A compromised backend can therefore trigger exactly one thing, a legitimate update to the published channel tag.
+**Request.** The backend creates `request/update-requested`, ideally by writing a temporary file and renaming it. Only the name's existence counts: the updater never reads the content. It removes the entry before doing anything else, so a failing run is never retriggered. `request/` belongs to the backend, so the updater only uses operations that act on the name itself and never follow a link or descend into a directory: `unlink` for a file, symlink or FIFO, and `rmdir` for an empty directory. A non-empty directory is renamed to `status/.rejected-request`, which only updaters can write. It is never deleted recursively. While one is already there, further directory markers are refused (and logged) until an operator removes it. A compromised backend can therefore trigger exactly one thing, a legitimate update to the published channel tag.
 
-A request that arrives while another run holds the lock is removed without running a second update: the run in progress already goes to the same channel tag.
+A request that arrives while another updater is *running an update* is removed without starting a second one, because that run already goes to the same channel tag. If the other updater is only starting up or polling, the request stays for the next pass.
 
 `request/` is owned by UID 1001 (the backend user) with mode 0750. The setup script creates it; the updater creates it itself when it is missing, which is the case for container-variant installs.
 
@@ -131,7 +131,7 @@ A request that arrives while another run holds the lock is removed without runni
 | `migrations_may_have_run` | failed | The new version did not start and was left in place (see below) |
 | `rollback_failed` | failed | The new version did not start and neither did the old one |
 | `internal_error` | failed | A Docker command failed unexpectedly; `step` says where |
-| `interrupted` | failed | The run was stopped mid-way (reboot, killed or stopped container) |
+| `interrupted` | failed | The run was stopped mid-way (reboot or shutdown, `systemctl stop`, a stopped or killed container) |
 
 The contract number changes only for incompatible changes. The container image's major version follows it.
 

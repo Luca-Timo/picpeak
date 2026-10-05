@@ -540,6 +540,12 @@ setup_paths() {
     fi
     WORK_DIR=$(mktemp -d)
     trap on_exit EXIT
+    # Without this, bash still runs the EXIT trap on SIGTERM, but with $? = 1,
+    # so a stop mid-update (`docker compose down`, a host shutdown stopping the
+    # oneshot) would be recorded as an unexplained internal_error. With it,
+    # on_exit sees 143 and records "interrupted". bash runs the trap once the
+    # current command returns.
+    trap 'exit 143' TERM
     open_lock
 }
 
@@ -571,17 +577,30 @@ on_exit() {
     rm -rf "$WORK_DIR"
 }
 
-# Claims the marker with a rename before anything else, so a failing run is
-# never retriggered in a loop by the systemd path unit, and two updaters seeing
-# the same request cannot both act on it: only one rename succeeds. Whatever the
-# backend put there (file, symlink, directory, FIFO) is renamed and removed
-# without being read or followed; only its existence counts. rm -rf also covers
-# a directory planted at the .claimed name, which mv would move the marker into.
+# Clears the marker before anything else, so a failing run is never retriggered
+# in a loop by the systemd path unit. request/ belongs to the backend, so root
+# must not rename anything into it or walk a tree in it: unlink(2) and rmdir(2)
+# act on the name itself, never follow a link and never descend. The lock
+# already serialises updaters, so no rename is needed to claim the request.
 claim_request() {
     [[ -e "$REQUEST_FILE" || -L "$REQUEST_FILE" ]] || return 1
-    local claimed="$REQUEST_DIR/.claimed.$RANDOM$RANDOM"
-    mv -- "$REQUEST_FILE" "$claimed" 2>/dev/null || return 1
-    rm -rf -- "$claimed" || log "could not remove the claimed request $claimed"
+    rm -f -- "$REQUEST_FILE" 2>/dev/null || rmdir -- "$REQUEST_FILE" 2>/dev/null || true
+    if [[ -e "$REQUEST_FILE" || -L "$REQUEST_FILE" ]]; then
+        # A non-empty directory. Move it out of the trigger path to a fixed
+        # name in status/: only updaters can write there, so a name found
+        # absent stays absent, and mv renames rather than moving into anything.
+        # Same filesystem (both under update/), so it is a rename, not a copy.
+        # It is never deleted recursively; one left from an earlier run means
+        # the backend is planting trees, and the request is refused.
+        local rejected="$STATUS_DIR/.rejected-request"
+        if [[ -e "$rejected" || -L "$rejected" ]]; then
+            log "the request marker is a non-empty directory and $rejected already exists; refusing it"
+            return 1
+        fi
+        mv -- "$REQUEST_FILE" "$rejected" 2>/dev/null \
+            || { log "could not clear the request marker"; return 1; }
+        log "the request marker was a non-empty directory; moved aside to $rejected"
+    fi
     return 0
 }
 
@@ -597,10 +616,11 @@ handle_request() {
         flock -u 9
         return 0
     fi
-    # Another updater holds the lock. It has already claimed its own request
-    # and updates to the same channel tag, so this one is covered. Drop it:
-    # left in place, it keeps the systemd path unit retriggering.
-    if claim_request; then
+    # Another updater holds the lock. Only while it is running an update is
+    # this request covered (same channel tag), so only then drop it: left in
+    # place it keeps the systemd path unit retriggering. A holder that is just
+    # initialising or polling has not claimed it, so leave it for the next pass.
+    if grep -q '"state": "running"' "$STATUS_FILE" 2>/dev/null && claim_request; then
         log "an update is already running; this request is covered by it"
     fi
 }
@@ -625,11 +645,6 @@ cmd_run() {
 
 cmd_watch() {
     setup_paths
-    # Without this, bash still runs the EXIT trap on SIGTERM, but with $? = 1,
-    # so a `docker compose down` mid-update would be recorded as an unexplained
-    # internal_error. With it, on_exit sees 143 and records "interrupted". bash
-    # runs the trap once the current command returns.
-    trap 'exit 143' TERM
     init_status
     log "watching $REQUEST_FILE (updater $UPDATER_VERSION, contract $CONTRACT_VERSION)"
     while :; do

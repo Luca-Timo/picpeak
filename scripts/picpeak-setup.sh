@@ -890,9 +890,10 @@ install_update_agent() {
     fi
 
     # The unit files quote these paths; a quote or backslash in them would need
-    # systemd's own escaping on top. Not worth it for a path nobody chooses.
-    if [[ "$app_dir" == *[\"\\]* ]]; then
-        log_warn "The install path $app_dir contains a quote or backslash, so the in-app updater was not installed."
+    # systemd's own escaping on top, and a newline breaks the sed that renders
+    # them. Not worth it for a path nobody chooses.
+    if [[ "$app_dir" == *[\"\\]* || "$app_dir" == *$'\n'* ]]; then
+        log_warn "The install path $app_dir contains a quote, backslash or newline, so the in-app updater was not installed."
         return 0
     fi
 
@@ -1463,9 +1464,6 @@ update_installation() {
     if [[ "$native_detected" == true && "$ENABLE_SELF_UPDATE" == "true" ]]; then
         die "--enable-self-update is only available for Docker installs."
     fi
-    if [[ "$ENABLE_SELF_UPDATE" == "true" && "$DISABLE_SELF_UPDATE" == "true" ]]; then
-        die "--enable-self-update and --disable-self-update cannot be combined."
-    fi
 
     if [[ "$native_detected" == true ]]; then
         INSTALL_METHOD="native"
@@ -1827,6 +1825,13 @@ main() {
     
     # Parse command line arguments
     parse_arguments "$@"
+
+    if [[ "$ENABLE_SELF_UPDATE" == "true" && "$DISABLE_SELF_UPDATE" == "true" ]]; then
+        die "--enable-self-update and --disable-self-update cannot be combined."
+    fi
+    if [[ "$DISABLE_SELF_UPDATE" == "true" && "$UPDATE_MODE" != "true" ]]; then
+        die "--disable-self-update only works together with --update."
+    fi
     
     # Handle special modes
     if [[ "$UPDATE_MODE" == "true" ]]; then

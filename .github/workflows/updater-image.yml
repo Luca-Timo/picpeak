@@ -12,10 +12,12 @@ name: Updater image
 #
 # Every container-variant install pulls :1 automatically, and that container
 # holds the Docker socket. So `publish` only pushes when the tagged commit is
-# already on main (reviewed), and it runs in the `updater-release` environment:
-# give that environment required reviewers, and protect the `updater-v*` tag
-# pattern with a ruleset, in the repository settings. Third-party actions are
-# pinned to commit SHAs for the same reason.
+# already on main (reviewed), and it runs in the `updater-release` environment.
+# Those checks live in this file, and a tag-triggered run takes the workflow
+# from the tagged commit, so on their own they stop mistakes, not someone who
+# can push a tag. What enforces it is repository configuration: a tag ruleset
+# for `updater-v*` and required reviewers on the `updater-release` environment.
+# Third-party actions are pinned to commit SHAs for the same reason.
 #
 # The image only adds bash and the script to docker:cli, so both platforms are
 # built on one runner under QEMU instead of the native-runner matrix that

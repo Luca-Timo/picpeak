@@ -207,8 +207,9 @@ expect_eq "state" "$(status_field state)" failed
 expect_eq "reason" "$(status_field reason)" internal_error
 expect_eq "step recorded" "$(status_field step)" verify
 
-scenario "a request filed while another updater holds the lock is dropped"
+scenario "a request filed while another updater runs an update is dropped"
 mkdir -p "$PROJECT/update/status"
+printf '{\n  "state": "running",\n}\n' > "$PROJECT/update/status/status.json"
 exec 8>"$PROJECT/update/status/.lock"
 if has_real_flock; then
     flock -n 8
@@ -223,18 +224,57 @@ else
 fi
 exec 8>&-
 
+scenario "a request filed while another updater is only polling is kept"
+mkdir -p "$PROJECT/update/status"
+printf '{\n  "state": "idle",\n}\n' > "$PROJECT/update/status/status.json"
+exec 8>"$PROJECT/update/status/.lock"
+if has_real_flock; then
+    flock -n 8
+    run_updater
+    expect_eq "lock holder blocks the run" "$(running backend)" old
+    [[ -e "$PROJECT/update/request/update-requested" ]] && pass "request kept for the next pass" || fail "request kept for the next pass"
+    flock -u 8
+else
+    echo "  skip (no flock on this host)"
+fi
+exec 8>&-
+
 scenario "lock file is not readable by the backend"
 run_updater
 expect_eq "mode 0600" "$(ls -l "$PROJECT/update/status/.lock" | cut -c1-10)" "-rw-------"
 
-scenario "planted directory as request is claimed and removed"
+scenario "planted non-empty directory is moved aside, never walked"
 rm "$PROJECT/update/request/update-requested"
 mkdir -p "$PROJECT/update/request/update-requested/nested"
 touch "$PROJECT/update/request/update-requested/nested/file"
 run_updater; code=$?
 expect_eq "run does not abort" "$code" 0
 expect_eq "state" "$(status_field state)" succeeded
-expect_eq "no leftovers" "$(ls -A "$PROJECT/update/request")" ""
+expect_eq "request dir empty" "$(ls -A "$PROJECT/update/request")" ""
+[[ -f "$PROJECT/update/status/.rejected-request/nested/file" ]] && pass "tree moved intact to status/" || fail "tree moved intact to status/"
+
+scenario "a second planted directory is refused while one is set aside"
+rm "$PROJECT/update/request/update-requested"
+mkdir -p "$PROJECT/update/status/.rejected-request" "$PROJECT/update/request/update-requested/nested"
+run_updater; code=$?
+expect_eq "run does not abort" "$code" 0
+expect_eq "backend untouched" "$(running backend)" old
+[[ -d "$PROJECT/update/request/update-requested/nested" ]] && pass "planted tree left alone" || fail "planted tree left alone"
+grep -q 'refusing it' "$PROJECT.log" && pass "refusal logged" || fail "refusal logged"
+
+scenario "planted empty directory is removed"
+rm "$PROJECT/update/request/update-requested"
+mkdir "$PROJECT/update/request/update-requested"
+run_updater
+expect_eq "state" "$(status_field state)" succeeded
+expect_eq "request dir empty" "$(ls -A "$PROJECT/update/request")" ""
+
+scenario "pre-planted symlink next to the marker receives nothing"
+mkdir -p "$PROJECT.target-dir"
+ln -s "$PROJECT.target-dir" "$PROJECT/update/request/.claimed.12345"
+run_updater
+expect_eq "state" "$(status_field state)" succeeded
+expect_eq "target dir still empty" "$(ls -A "$PROJECT.target-dir")" ""
 
 scenario "planted FIFO as request is claimed without being read"
 rm "$PROJECT/update/request/update-requested"
@@ -242,7 +282,7 @@ mkfifo "$PROJECT/update/request/update-requested"
 run_updater; code=$?
 expect_eq "run does not abort" "$code" 0
 expect_eq "state" "$(status_field state)" succeeded
-expect_eq "no leftovers" "$(ls -A "$PROJECT/update/request")" ""
+expect_eq "request dir empty" "$(ls -A "$PROJECT/update/request")" ""
 
 scenario "crash-looping backend is named as the cause"
 echo new > "$FAKE_STATE/crashing"
@@ -311,6 +351,16 @@ kill -TERM "$watch_pid"; wait "$watch_pid" 2>/dev/null
 expect_eq "state" "$(status_field state)" failed
 expect_eq "reason" "$(status_field reason)" interrupted
 
+scenario "SIGTERM during a host-agent run is recorded as interrupted"
+touch "$FAKE_STATE/slow_up"
+PATH="$ROOT/bin:$PATH" PICPEAK_PROJECT_DIR="$PROJECT" PICPEAK_UPDATE_DIR="$PROJECT/update" \
+    PICPEAK_UPDATER_HEALTH_TIMEOUT=1 bash "$UPDATER" run 2>"$PROJECT.log" &
+run_pid=$!
+for _ in $(seq 1 100); do [[ "$(status_field step 2>/dev/null)" == recreate ]] && break; /bin/sleep 0.05; done
+kill -TERM "$run_pid"; wait "$run_pid" 2>/dev/null
+expect_eq "state" "$(status_field state)" failed
+expect_eq "reason" "$(status_field reason)" interrupted
+
 scenario "watch processes a request and stops promptly on SIGTERM"
 rm "$PROJECT/update/request/update-requested"
 PATH="$ROOT/bin:$PATH" PICPEAK_PROJECT_DIR="$PROJECT" PICPEAK_UPDATE_DIR="$PROJECT/update" \
@@ -351,7 +401,7 @@ ln -s "$PROJECT.target" "$PROJECT/update/request/update-requested"
 run_updater
 expect_eq "target intact" "$(cat "$PROJECT.target")" keep
 expect_eq "state" "$(status_field state)" succeeded
-expect_eq "no claimed leftovers" "$(ls -A "$PROJECT/update/request")" ""
+expect_eq "request dir empty" "$(ls -A "$PROJECT/update/request")" ""
 
 echo
 echo "$PASSES passed, $FAILS failed"
