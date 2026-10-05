@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Download, Trash2, Eye, EyeOff, Heart, Package, MessageSquare, Star, Video, FolderOpen, Cog, AlertTriangle, RefreshCw, LayoutGrid, List, UserRound } from 'lucide-react';
+import { Check, Download, Trash2, Eye, EyeOff, Heart, Package, MessageSquare, Star, Video, FolderOpen, FolderInput, Cog, AlertTriangle, RefreshCw, LayoutGrid, List, UserRound } from 'lucide-react';
 import { COLOR_LABEL_SWATCHES, type ColorLabel } from '../../services/feedback.service';
 import { toast } from 'react-toastify';
 import { useQueryClient } from '@tanstack/react-query';
@@ -17,11 +17,16 @@ import { PermissionGate } from './PermissionGate';
 import { AdminAuthenticatedImage } from './AdminAuthenticatedImage';
 import { BulkCategoryModal } from './BulkCategoryModal';
 import { BulkCreditModal } from './BulkCreditModal';
+import { FolderPickerModal } from './folders/FolderPickerModal';
+import { invalidateFolderViews } from './folders/folderQueries';
+import type { GalleryFolder } from '../../services/folders.service';
+import { folderPathLabel } from '../../utils/folderTree';
 
 interface CategoryOption {
   id: number;
   name: string;
-  // #1160: folders are categories too; the move dialog labels them.
+  // Folders (#1160, issue 1786) are photo_categories rows too; the move
+  // dialog leaves them out, they have their own "Move to folder".
   is_folder?: boolean;
 }
 
@@ -32,6 +37,8 @@ interface AdminPhotoGridProps {
   onPhotosDeleted: () => void;
   onSelectionChange?: (selectedIds: number[]) => void;
   categories?: CategoryOption[];
+  /** The event's folders (issue 1786); "Move to folder" is offered when there are any. */
+  folders?: GalleryFolder[];
   // The list's sort, owned by the parent together with the filter bar's
   // select. Without onSortChange the list headers are plain text.
   sortBy?: PhotoSortKey;
@@ -46,6 +53,7 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
   onPhotosDeleted,
   onSelectionChange,
   categories = [],
+  folders = [],
   sortBy,
   sortOrder,
   onSortChange
@@ -70,6 +78,9 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
   const [deletingPhotos, setDeletingPhotos] = useState<Set<number>>(new Set());
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isUpdatingCategory, setIsUpdatingCategory] = useState(false);
+  // Move to folder (issue 1786)
+  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [isMovingToFolder, setIsMovingToFolder] = useState(false);
   // Photo credits (#1561)
   const [isCreditModalOpen, setIsCreditModalOpen] = useState(false);
   const [isUpdatingCredit, setIsUpdatingCredit] = useState(false);
@@ -311,6 +322,33 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
     }
   };
 
+  const handleMoveToFolder = async (folderId: number | null) => {
+    if (selectedPhotos.size === 0) return;
+    setIsMovingToFolder(true);
+    const selectedIds = Array.from(selectedPhotos);
+    try {
+      await photosService.bulkUpdatePhotos(eventId, selectedIds, { folder_id: folderId });
+      toast.success(t('photos.folders.photosMoved', '{{count}} photos moved to {{folder}}', {
+        count: selectedIds.length,
+        folder: folderId === null
+          ? t('photos.folders.galleryRoot', 'Gallery root')
+          : folderPathLabel(folders, folderId),
+      }));
+      setSelectedPhotos(new Set());
+      setAnchor(null);
+      setIsSelectionMode(false);
+      onSelectionChange?.([]);
+      setIsFolderModalOpen(false);
+      invalidateFolderViews(queryClient, eventId);
+      onPhotosDeleted(); // Refresh the photo list
+    } catch (error: unknown) {
+      const e = error as { response?: { data?: { error?: string } } };
+      toast.error(e.response?.data?.error || t('photos.folders.moveFailed', 'The photos could not be moved'));
+    } finally {
+      setIsMovingToFolder(false);
+    }
+  };
+
   const handleSetCredit = async (creditName: string | null) => {
     setIsUpdatingCredit(true);
     try {
@@ -367,6 +405,16 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
                     >
                       {t('photos.moveToCategory', 'Move to Category')}
                     </Button>
+                    {folders.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsFolderModalOpen(true)}
+                        leftIcon={<FolderInput className="w-4 h-4" />}
+                      >
+                        {t('photos.folders.moveToFolder', 'Move to folder…')}
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -1011,6 +1059,18 @@ export const AdminPhotoGrid: React.FC<AdminPhotoGridProps> = ({
         onConfirm={handleSetCredit}
         photoCount={selectedPhotos.size}
         isLoading={isUpdatingCredit}
+      />
+
+      {/* Move to folder (issue 1786): the gallery root is a target too. */}
+      <FolderPickerModal
+        isOpen={isFolderModalOpen}
+        onClose={() => setIsFolderModalOpen(false)}
+        onConfirm={handleMoveToFolder}
+        title={t('photos.folders.moveToFolderTitle', 'Move {{count}} photos to a folder', { count: selectedPhotos.size })}
+        confirmLabel={t('photos.movePhotos', 'Move Photos')}
+        folders={folders}
+        allowRoot
+        isLoading={isMovingToFolder}
       />
 
       {/* Bulk Category Modal */}

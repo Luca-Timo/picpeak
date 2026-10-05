@@ -12,10 +12,18 @@
  *  - batched readEntries are drained to the empty batch
  *  - hidden entries inside a folder are skipped
  *  - no `items` / no `webkitGetAsEntry` falls back to `dataTransfer.files`
+ *  - each file keeps its directory relative to the drop, and a folder pick
+ *    its webkitRelativePath directory (issue 1786)
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import { collectDroppedFiles, EXAMINED_PER_COLLECTED } from '../droppedFiles';
+import {
+  collectDroppedEntries,
+  collectDroppedFiles,
+  directoryOf,
+  EXAMINED_PER_COLLECTED,
+  pickedFromInput,
+} from '../droppedFiles';
 
 type Entry = FileSystemFileEntry | FileSystemDirectoryEntry;
 
@@ -209,5 +217,52 @@ describe('collectDroppedFiles', () => {
     expect(
       await collectDroppedFiles({ files: plain, items: [{ kind: 'file' }] } as unknown as DataTransfer)
     ).toEqual(plain);
+  });
+});
+
+describe('relative directories (issue 1786)', () => {
+  it('keeps each dropped file\'s directory relative to the drop', async () => {
+    const dt = dataTransferFrom([
+      dirEntry('Export', [
+        dirEntry('Friday', [dirEntry('Activity A', [fileEntry('a1.jpg')]), fileEntry('f1.jpg')]),
+        fileEntry('loose-in-export.jpg'),
+      ]),
+      fileEntry('loose.jpg'),
+    ]);
+
+    const picked = (await collectDroppedEntries(dt)).map(({ file, dir }) => [file.name, dir]);
+
+    expect(picked).toEqual([
+      ['a1.jpg', 'Export/Friday/Activity A'],
+      ['f1.jpg', 'Export/Friday'],
+      ['loose-in-export.jpg', 'Export'],
+      ['loose.jpg', ''],
+    ]);
+  });
+
+  it('keeps the flat list unchanged for callers that do not need directories', async () => {
+    const dt = dataTransferFrom([dirEntry('shoot', [dirEntry('day1', [fileEntry('x.jpg')])])]);
+
+    expect((await collectDroppedFiles(dt)).map((f) => f.name)).toEqual(['x.jpg']);
+  });
+
+  it('marks files without the entry API as loose', async () => {
+    const plain = [new File(['x'], 'plain.jpg', { type: 'image/jpeg' })];
+
+    expect(await collectDroppedEntries({ files: plain } as unknown as DataTransfer)).toEqual([{ file: plain[0], dir: '' }]);
+  });
+
+  it('reads the directory of a folder pick from webkitRelativePath', () => {
+    const inFolder = new File(['x'], 'IMG_1.jpg', { type: 'image/jpeg' });
+    Object.defineProperty(inFolder, 'webkitRelativePath', { value: 'Export/Friday/IMG_1.jpg' });
+    const plain = new File(['x'], 'IMG_2.jpg', { type: 'image/jpeg' });
+
+    expect(pickedFromInput([inFolder, plain]).map((p) => p.dir)).toEqual(['Export/Friday', '']);
+  });
+
+  it('takes the directory part of a relative path', () => {
+    expect(directoryOf('a/b/c.jpg')).toBe('a/b');
+    expect(directoryOf('c.jpg')).toBe('');
+    expect(directoryOf('/a/c.jpg')).toBe('a');
   });
 });

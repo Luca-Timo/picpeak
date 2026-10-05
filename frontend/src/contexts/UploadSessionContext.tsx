@@ -3,7 +3,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import { api } from '../config/api';
-import { photosService } from '../services/photos.service';
+import { appendUploadPlacement, photosService, type UploadPlacement } from '../services/photos.service';
+import { folderQueryKey } from '../services/folders.service';
 import { useUploadProgress } from '../hooks/useUploadProgress';
 
 // The admin upload runs here, outside the upload modal, so the modal can close
@@ -57,10 +58,19 @@ export interface UploadSession {
   processingUnknown?: boolean;
 }
 
+/**
+ * Files that share one placement (issues 1786 + 1562). A folder upload is
+ * one batch per target folder / folder request / first-look group; a plain
+ * upload is a single batch. Every request of a batch carries its placement.
+ */
+export interface UploadBatch {
+  files: File[];
+  placement: UploadPlacement;
+}
+
 export interface StartUploadOptions {
   eventId: number;
-  files: File[];
-  categoryId: number | null;
+  batches: UploadBatch[];
   replaceByName: boolean;
   /** Per-request caps, resolved by the picker from admin settings. */
   maxFilesPerChunk: number;
@@ -128,24 +138,29 @@ export const UploadSessionProvider: React.FC<{ children: React.ReactNode }> = ({
     queryClient.invalidateQueries({ queryKey: ['admin-event', id] });
     queryClient.invalidateQueries({ queryKey: ['admin-event-photos', id] });
     queryClient.invalidateQueries({ queryKey: ['admin-photo-credits', eventId] });
+    // Folder counts and requests opened by the upload (issue 1786).
+    queryClient.invalidateQueries({ queryKey: folderQueryKey(eventId) });
   }, [queryClient]);
 
-  const startUpload = useCallback(({ eventId, files, categoryId, replaceByName, maxFilesPerChunk, maxBytesPerChunk }: StartUploadOptions) => {
-    if (files.length === 0) return;
+  const startUpload = useCallback(({ eventId, batches, replaceByName, maxFilesPerChunk, maxBytesPerChunk }: StartUploadOptions) => {
+    const fileCount = batches.reduce((sum, batch) => sum + batch.files.length, 0);
+    if (fileCount === 0) return;
 
     // Split: large singles use resumable/chunked API; the rest keep the proven multipart path.
     // #509: the per-chunk byte cap is tunable so users behind Cloudflare Tunnel and other
     // reverse proxies with request-size limits can drop it below their proxy's cap. That cap
     // only splits *sets* of files: a lone file above it goes through the chunked-upload API
     // (10MB parts, reachable since #1377).
-    const largeFiles = files.filter((f) => photosService.shouldUseChunkedUpload(f.size, maxBytesPerChunk));
-    const smallFiles = files.filter((f) => !photosService.shouldUseChunkedUpload(f.size, maxBytesPerChunk));
+    // Each file keeps its batch's placement through both paths.
+    const isLarge = (f: File) => photosService.shouldUseChunkedUpload(f.size, maxBytesPerChunk);
+    const largeFiles = batches.flatMap(({ files, placement }) =>
+      files.filter(isLarge).map((file) => ({ file, placement })));
 
     // The chunked complete step has no replace flag, so a large file with
     // replace-by-name on would silently land as a second copy. Skip it and
     // say so in the report rather than behind a toast.
     const skippedForReplace: UploadFailure[] = replaceByName
-      ? largeFiles.map((f) => ({
+      ? largeFiles.map(({ file: f }) => ({
           filename: f.name,
           reason: t(
             'upload.largeFileReplaceSkipped',
@@ -156,20 +171,24 @@ export const UploadSessionProvider: React.FC<{ children: React.ReactNode }> = ({
       : [];
     const largeFilesToUpload = replaceByName ? [] : largeFiles;
 
-    const chunks: File[][] = [];
-    let currentChunk: File[] = [];
-    let currentChunkSize = 0;
-    for (const file of smallFiles) {
-      if (currentChunk.length >= maxFilesPerChunk ||
-          (currentChunkSize + file.size > maxBytesPerChunk && currentChunk.length > 0)) {
-        chunks.push(currentChunk);
-        currentChunk = [];
-        currentChunkSize = 0;
+    // Multipart requests never mix placements: the server applies one
+    // placement per request.
+    const chunks: UploadBatch[] = [];
+    for (const { files, placement } of batches) {
+      let currentChunk: File[] = [];
+      let currentChunkSize = 0;
+      for (const file of files.filter((f) => !isLarge(f))) {
+        if (currentChunk.length >= maxFilesPerChunk ||
+            (currentChunkSize + file.size > maxBytesPerChunk && currentChunk.length > 0)) {
+          chunks.push({ files: currentChunk, placement });
+          currentChunk = [];
+          currentChunkSize = 0;
+        }
+        currentChunk.push(file);
+        currentChunkSize += file.size;
       }
-      currentChunk.push(file);
-      currentChunkSize += file.size;
+      if (currentChunk.length > 0) chunks.push({ files: currentChunk, placement });
     }
-    if (currentChunk.length > 0) chunks.push(currentChunk);
 
     // Treat each large file as its own "unit" for progress (after multipart batches).
     const totalUnits = chunks.length + largeFilesToUpload.length;
@@ -183,7 +202,7 @@ export const UploadSessionProvider: React.FC<{ children: React.ReactNode }> = ({
     setUploadIds([]);
     setSession({
       eventId,
-      fileCount: files.length,
+      fileCount,
       phase: { kind: 'transferring', chunkIndex: 0, totalChunks: totalUnits, bytePct: 0 },
       progress: 0,
       currentChunk: 0,
@@ -209,11 +228,12 @@ export const UploadSessionProvider: React.FC<{ children: React.ReactNode }> = ({
 
       try {
         // --- Large files: existing backend chunked-upload (10MB parts) ---
-        for (const file of largeFilesToUpload) {
+        for (const { file, placement } of largeFilesToUpload) {
           if (controller.signal.aborted) return;
           const index = unitIndex;
           patch({ currentChunk: index + 1, phase: { kind: 'transferring', chunkIndex: index, totalChunks: totalUnits, bytePct: 0 } });
           try {
+            const { categoryId = null, ...folder } = placement;
             await photosService.uploadLargeFile(eventId, file, categoryId, (pct) => {
               // pct is 0–100 for this file's chunks only
               const overall = totalUnits > 0 ? ((index + Math.min(pct, 100) / 100) / totalUnits) * 100 : pct;
@@ -221,7 +241,7 @@ export const UploadSessionProvider: React.FC<{ children: React.ReactNode }> = ({
                 progress: Math.round(overall),
                 phase: { kind: 'transferring', chunkIndex: index, totalChunks: totalUnits, bytePct: Math.round(Math.min(pct, 100)) },
               });
-            });
+            }, folder);
             largeSucceeded += 1;
             // complete() already ran ffmpeg + insert — refresh grid
             refreshEvent(eventId);
@@ -237,10 +257,10 @@ export const UploadSessionProvider: React.FC<{ children: React.ReactNode }> = ({
         for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
           if (controller.signal.aborted) return;
           const index = unitIndex;
-          const chunk = chunks[chunkIndex];
+          const { files: chunk, placement } = chunks[chunkIndex];
           const formData = new FormData();
           chunk.forEach((file) => formData.append('photos', file));
-          if (categoryId) formData.append('category_id', categoryId.toString());
+          appendUploadPlacement(formData, placement);
           if (replaceByName) formData.append('replace_by_name', 'true');
 
           patch({ currentChunk: index + 1, phase: { kind: 'transferring', chunkIndex: index, totalChunks: totalUnits, bytePct: 0 } });

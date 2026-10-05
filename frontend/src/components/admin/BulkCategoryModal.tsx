@@ -6,9 +6,8 @@ import { Button, Card } from '../common';
 interface CategoryOption {
   id: number;
   name: string;
-  // #1160: moving photos into a folder takes them OUT of the main grid, which is
-  // a materially different outcome from tagging them with a filter category.
-  // The option is labelled so the admin knows which one they picked.
+  // Folders (#1160) have their own slot since issue 1786 (photos.folder_id)
+  // and their own "Move to folder" action; they are not offered here.
   is_folder?: boolean;
 }
 
@@ -31,6 +30,7 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const filterCategories = categories.filter((category) => !category.is_folder);
 
   if (!isOpen) return null;
 
@@ -72,11 +72,9 @@ export const BulkCategoryModal: React.FC<BulkCategoryModalProps> = ({
               disabled={isLoading}
             >
               <option value="">{t('photos.uncategorized', 'Uncategorized')}</option>
-              {categories.map((category) => (
+              {filterCategories.map((category) => (
                 <option key={category.id} value={category.id}>
-                  {category.is_folder
-                    ? t('photos.folderOption', '{{name}} (folder — hidden from the main grid)', { name: category.name })
-                    : category.name}
+                  {category.name}
                 </option>
               ))}
             </select>

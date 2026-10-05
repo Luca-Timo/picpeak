@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, FolderTree, Upload } from 'lucide-react';
+import { AlertCircle, Folders, FolderTree, Upload } from 'lucide-react';
 import type { Event } from '../../../types';
 import { Button, Card, Loading } from '../../../components/common';
 import { AdminPhotoGrid, AdminPhotoViewer, PhotoFilters, PhotoUploadModal, PhotoFilterPanel, PhotoExportMenu, EventCategoryManager } from '../../../components/admin';
 import { PermissionGate } from '../../../components/admin/PermissionGate';
 import { AdminPhoto, photosService, CREDIT_FILTER_NONE, type PhotoFilters as PhotoFilterParams, type FeedbackFilters, type FilterSummary } from '../../../services/photos.service';
+import { FolderBrowser, FolderRequestsPanel } from '../../../components/admin/folders';
+import { folderQueryKey, foldersService } from '../../../services/folders.service';
+import { toBoolean } from '../../../utils/parsers';
 import { ExternalSourceBar } from './ExternalSourceBar';
 
 interface PhotosTabProps {
@@ -16,6 +19,8 @@ interface PhotosTabProps {
   photosLoading: boolean;
   photosError: boolean;
   refetchPhotos: () => void;
+  // Folders are photo_categories rows too (is_folder); since issue 1786 they
+  // are managed in the folder bar and never offered as filter categories.
   categories: Array<{ id: number; name: string; slug: string; is_folder?: boolean }>;
   photoFilters: PhotoFilterParams;
   setPhotoFilters: React.Dispatch<React.SetStateAction<PhotoFilterParams>>;
@@ -67,6 +72,35 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
     enabled: Number.isFinite(eventId),
   });
 
+  // Folders (issue 1786): the tree, open folder requests, and whether this
+  // admin may edit them.
+  const { data: folderTree } = useQuery({
+    queryKey: folderQueryKey(eventId),
+    queryFn: () => foldersService.list(eventId),
+    enabled: Number.isFinite(eventId),
+  });
+  const folders = useMemo(() => folderTree?.folders ?? [], [folderTree]);
+  const folderRequests = folderTree?.requests ?? [];
+  const canManageFolders = folderTree?.can_manage === true;
+  const folderFilter = photoFilters.folder_id;
+  const setFolderFilter = (folder_id: PhotoFilterParams['folder_id']) =>
+    setPhotoFilters((prev) => ({ ...prev, folder_id }));
+  // The bar shows once the event has folders or requests; before that an
+  // admin who may create folders opens it from the actions bar.
+  const [folderBarOpened, setFolderBarOpened] = useState(false);
+  const showFolderBar = folders.length > 0 || folderRequests.length > 0 || folderFilter !== undefined || folderBarOpened;
+  const pendingPhotoCount = folderRequests.reduce((sum, r) => sum + r.photo_count, 0);
+
+  // The open folder was deleted or moved away elsewhere: fall back to all photos.
+  useEffect(() => {
+    if (typeof folderFilter === 'number' && folderTree && !folders.some((f) => f.id === folderFilter)) {
+      setPhotoFilters((prev) => ({ ...prev, folder_id: undefined }));
+    }
+  }, [folderFilter, folderTree, folders, setPhotoFilters]);
+
+  // Filter categories only: a folder is not something a photo is tagged with.
+  const filterCategories = useMemo(() => categories.filter((c) => !c.is_folder), [categories]);
+
   return (
     <div>
       {/* Photo Upload Modal */}
@@ -77,10 +111,32 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
         isOpen={showPhotoUpload}
         onClose={() => setShowPhotoUpload(false)}
         eventId={parseInt(id!)}
+        folderStructureDefault={toBoolean(event.folder_structure, false)}
+        defaultFolderId={typeof folderFilter === 'number' ? folderFilter : null}
       />
 
       {event.source_mode === 'reference' && event.external_path && (
         <ExternalSourceBar event={event} onChangeFolder={onChangeFolder} />
+      )}
+
+      <FolderRequestsPanel
+        eventId={eventId}
+        requests={folderRequests}
+        folders={folders}
+        canManage={canManageFolders}
+        onShowWaiting={() => setFolderFilter('pending')}
+      />
+
+      {showFolderBar && (
+        <FolderBrowser
+          eventId={eventId}
+          folders={folders}
+          canManage={canManageFolders}
+          maxDepth={folderTree?.max_depth ?? 3}
+          value={folderFilter}
+          onChange={setFolderFilter}
+          pendingPhotoCount={pendingPhotoCount}
+        />
       )}
 
       {/* Categories (formerly their own tab): organise into categories next
@@ -102,7 +158,7 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
 
       {/* Photo Filters */}
       <PhotoFilters
-        categories={categories}
+        categories={filterCategories}
         selectedCategory={photoFilters.category_id}
         searchTerm={photoFilters.search ?? ''}
         sortBy={photoFilters.sort ?? 'date'}
@@ -154,6 +210,16 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
           >
             {t('events.categories')}
           </Button>
+          {canManageFolders && !showFolderBar && (
+            <Button
+              variant="outline"
+              size="sm"
+              leftIcon={<Folders className="w-4 h-4" />}
+              onClick={() => setFolderBarOpened(true)}
+            >
+              {t('photos.folders.title', 'Folders')}
+            </Button>
+          )}
         </div>
         <PermissionGate permission="photos.download">
           <PhotoExportMenu
@@ -195,7 +261,8 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
             queryClient.invalidateQueries({ queryKey: ['admin-photo-credits', eventId] });
           }}
           onSelectionChange={setSelectedPhotoIds}
-          categories={categories}
+          categories={filterCategories}
+          folders={folders}
           sortBy={photoFilters.sort ?? 'date'}
           sortOrder={photoFilters.order ?? 'desc'}
           onSortChange={(sort, order) => setPhotoFilters(prev => ({ ...prev, sort, order }))}
@@ -215,7 +282,7 @@ export const PhotosTab: React.FC<PhotosTabProps> = ({
             queryClient.invalidateQueries({ queryKey: ['admin-photo-credits', eventId] });
             setSelectedPhoto(null);
           }}
-          categories={categories}
+          categories={filterCategories}
         />
       )}
 

@@ -7,9 +7,11 @@ import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
-import { FolderOpen, RefreshCw } from 'lucide-react';
+import { FolderOpen, FolderTree, RefreshCw } from 'lucide-react';
 import type { Event } from '../../../types';
-import { Button } from '../../../components/common';
+import { Button, useConfirm } from '../../../components/common';
+import { invalidateFolderViews } from '../../../components/admin/folders/folderQueries';
+import { foldersService } from '../../../services/folders.service';
 import { usePermission } from '../../../hooks/usePermission';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { externalMediaService } from '../../../services/externalMedia.service';
@@ -22,6 +24,11 @@ export const ExternalSourceBar: React.FC<{ event: Event; onChangeFolder: () => v
   const canImport = usePermission('photos.upload');
   const canChangeFolder = usePermission('events.edit') && !event.is_archived;
   const watched = toBoolean(event.external_watch, false);
+  const confirm = useConfirm();
+  // Folder structure switched on after the first import (issue 1786): the
+  // photos already imported are still flat until this mirrors the folder.
+  const canApplyStructure = usePermission('folders.manage') && canImport
+    && toBoolean(event.folder_structure, false) && !event.is_archived;
 
   const { data: status } = useQuery({
     queryKey: ['external-import-status', event.id],
@@ -64,6 +71,32 @@ export const ExternalSourceBar: React.FC<{ event: Event; onChangeFolder: () => v
       queryClient.invalidateQueries({ queryKey: ['external-import-status', event.id] });
     },
   });
+
+  const applyStructure = useMutation({
+    mutationFn: () => foldersService.applyExternalStructure(event.id),
+    onSuccess: (result) => {
+      toast.success(result.moved > 0
+        ? t('events.externalSource.structureApplied', '{{count}} photos moved into folders', { count: result.moved })
+        : t('events.externalSource.structureNothing', 'Every photo from a subfolder is in a folder already'));
+      invalidateFolderViews(queryClient, event.id);
+    },
+    onError: (error: unknown) => {
+      const e = error as { response?: { data?: { error?: string } } };
+      toast.error(e.response?.data?.error || t('events.externalSource.structureFailed', 'The folder structure could not be applied'));
+    },
+  });
+
+  const handleApplyStructure = async () => {
+    const ok = await confirm({
+      title: t('events.externalSource.applyStructureTitle', 'Apply the folder structure?'),
+      message: t(
+        'events.externalSource.applyStructureMessage',
+        "Photos that are not in a gallery folder yet move into folders that mirror the external folder's subfolders. Photos already in a folder stay where they are."
+      ),
+      confirmLabel: t('events.externalSource.applyStructure', 'Apply folder structure'),
+    });
+    if (ok) applyStructure.mutate();
+  };
 
   const running = rescan.isPending || status?.is_running === true;
   // A failed run is recorded as its outcome; without this it would read as a
@@ -117,6 +150,19 @@ export const ExternalSourceBar: React.FC<{ event: Event; onChangeFolder: () => v
             {failed
               ? t('events.externalSource.retry', 'Try again')
               : status?.finished_at ? t('events.externalSource.rescan', 'Rescan') : t('events.externalSource.importNow', 'Import now')}
+          </Button>
+        )}
+        {canApplyStructure && (
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={<FolderTree className="w-4 h-4" />}
+            onClick={handleApplyStructure}
+            disabled={running || applyStructure.isPending}
+            isLoading={applyStructure.isPending}
+            title={t('events.externalSource.applyStructureHint', 'Mirror the subfolders onto photos imported before folder structure was on')}
+          >
+            {t('events.externalSource.applyStructure', 'Apply folder structure')}
           </Button>
         )}
         {canChangeFolder && (

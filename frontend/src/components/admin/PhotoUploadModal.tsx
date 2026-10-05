@@ -8,6 +8,10 @@ interface PhotoUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   eventId: number;
+  /** Default of "Keep folder structure": the event's folder_structure (issue 1786). */
+  folderStructureDefault?: boolean;
+  /** Folder loose files go to at first; null = gallery root. */
+  defaultFolderId?: number | null;
 }
 
 // The modal is only the picker. Once the files are handed to the upload
@@ -18,6 +22,8 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
   isOpen,
   onClose,
   eventId,
+  folderStructureDefault,
+  defaultFolderId,
 }) => {
   const { t } = useTranslation();
 
@@ -41,7 +47,12 @@ export const PhotoUploadModal: React.FC<PhotoUploadModalProps> = ({
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          <PhotoUpload eventId={eventId} onUploadStarted={onClose} />
+          <PhotoUpload
+            eventId={eventId}
+            onUploadStarted={onClose}
+            folderStructureDefault={folderStructureDefault}
+            defaultFolderId={defaultFolderId}
+          />
         </div>
       </div>
     </div>

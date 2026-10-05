@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, X, Loader2, Image as ImageIcon, Check, Download, DownloadCloud, ArrowUp, ArrowDown, RotateCcw, Folder, FolderOpen } from 'lucide-react';
 import { categoriesService, type PhotoCategory } from '../../services/categories.service';
 import { photosService } from '../../services/photos.service';
+import { folderQueryKey } from '../../services/folders.service';
 import { Button, Card, AuthenticatedImage } from '../common';
 import { useTranslation } from 'react-i18next';
 import { useMutationWithToast, useModal } from '../../hooks';
@@ -19,10 +20,24 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
 
   // Fetch this event's categories (globals + event-specific), already resolved
   // to the event's effective order by the backend (#782).
-  const { data: categories = [], isLoading } = useQuery({
+  const { data: allCategories = [], isLoading } = useQuery({
     queryKey: ['event-categories', eventId],
     queryFn: () => categoriesService.getEventCategories(eventId),
   });
+  // Nested folders (issue 1786) are created, moved and deleted in the Photos
+  // tab's folder bar; this list orders what the gallery shows side by side:
+  // filter categories and top-level folders. Its "Show as folder" toggle
+  // stays (#1160) — the server moves the photos between category and folder.
+  const categories = React.useMemo(
+    () => allCategories.filter((c) => !(c.is_folder && c.parent_id != null)),
+    [allCategories]
+  );
+  const hasNestedFolders = categories.length !== allCategories.length;
+  // Folder changes move photos and reshape the folder bar.
+  const folderViewKeys = [
+    folderQueryKey(eventId),
+    ['admin-event-photos', String(eventId)],
+  ];
 
   // Fetch photos for hero selection
   const { data: photos = [] } = useQuery({
@@ -58,7 +73,7 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
   // Delete category mutation
   const deleteMutation = useMutationWithToast({
     mutationFn: categoriesService.deleteCategory,
-    invalidateKeys: [['event-categories', eventId]],
+    invalidateKeys: [['event-categories', eventId], ['admin-event-categories', String(eventId)], ...folderViewKeys],
     successMessage: t('categories.categoryDeletedSuccess'),
     errorMessage: t('categories.failedToDeleteCategory'),
   });
@@ -97,7 +112,7 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
     // EventDetailsPage caches the same rows under a DIFFERENT key and feeds them
     // to the Photos tab's move dialog, so invalidating only this one left that
     // dialog labelling a fresh folder as a plain category (#1160).
-    invalidateKeys: [['event-categories', eventId], ['admin-event-categories', String(eventId)]],
+    invalidateKeys: [['event-categories', eventId], ['admin-event-categories', String(eventId)], ...folderViewKeys],
     successMessage: (_data, variables) =>
       variables.isFolder
         ? t('categories.folderEnabled', 'Photos in this category now sit inside a folder')
@@ -128,7 +143,11 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
     const next = [...ordered];
     [next[index], next[target]] = [next[target], next[index]];
     setOrdered(next); // optimistic — instant feedback
-    reorderMutation.mutate(next.map((c) => c.id));
+    // The override replaces the event's whole order: keep the nested folders
+    // this list hides, after the rest and in their current order.
+    const shown = new Set(next.map((c) => c.id));
+    const hidden = allCategories.filter((c) => !shown.has(c.id)).map((c) => c.id);
+    reorderMutation.mutate([...next.map((c) => c.id), ...hidden]);
   };
 
   const handleCreate = () => {
@@ -370,6 +389,12 @@ export const EventCategoryManager: React.FC<EventCategoryManagerProps> = ({ even
             );
           })}
         </div>
+      )}
+
+      {hasNestedFolders && (
+        <p className="text-xs text-muted italic">
+          {t('categories.nestedFoldersHint', 'Folders inside folders are managed in the folder bar of the Photos tab.')}
+        </p>
       )}
 
       {/* Hint about hero photo fallback */}
