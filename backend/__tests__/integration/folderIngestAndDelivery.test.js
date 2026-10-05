@@ -195,6 +195,12 @@ describe('folder ingest and two-stage delivery', () => {
       expect(again.status).toBe(409);
     });
 
+    it('two completions racing each other notify once', async () => {
+      const eventId = await seedEvent({ delivery_status: 'partial' });
+      const results = await Promise.all([delivery().completeDelivery(eventId), delivery().completeDelivery(eventId)]);
+      expect(results.filter((r) => !r.already)).toHaveLength(1);
+    });
+
     it('the guest block caps placeholders and is null for an ordinary gallery', () => {
       const { guestDeliveryPayload } = delivery();
       expect(guestDeliveryPayload({ delivery_status: 'complete' }, 10)).toBeNull();

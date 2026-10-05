@@ -17,7 +17,7 @@
  */
 
 const { db } = require('../database/db');
-const { formatBoolean } = require('../utils/dbCompat');
+const { formatBoolean, isPostgreSQL } = require('../utils/dbCompat');
 const { parseBooleanInput } = require('../utils/parsers');
 const { isUniqueViolation } = require('../utils/dbErrors');
 const { getAppSetting } = require('../utils/appSettings');
@@ -288,6 +288,13 @@ async function insertFolder(eventId, { name, parentId = null, sourcePath = null 
  *                is not allowed — the closest existing ancestor (null = root)
  *   missingFrom  index of the first missing level, or -1 when complete
  */
+/**
+ * Run a write that may hit a unique violation. Inside a transaction it gets
+ * its own savepoint: on Postgres a failed statement aborts the whole
+ * transaction, so the recovery read after a lost race would throw too.
+ */
+const guardedWrite = (conn, fn) => (conn.isTransaction ? conn.transaction((sp) => fn(sp)) : fn(conn));
+
 async function ensurePath(eventId, segments, { canCreate = true, dryRun = false, conn = db } = {}) {
   const segs = (segments || []).slice(0, MAX_FOLDER_DEPTH);
   let parentId = null;
@@ -300,14 +307,14 @@ async function ensurePath(eventId, segments, { canCreate = true, dryRun = false,
       const lower = segs[i].toLowerCase();
       match = childrenOf(parentId, folders).find((f) => String(f.name).toLowerCase() === lower);
       if (match && !match.source_path && !dryRun) {
-        await conn('photo_categories').where('id', match.id).update({ source_path: sourcePath })
+        await guardedWrite(conn, (c) => c('photo_categories').where('id', match.id).update({ source_path: sourcePath }))
           .catch((err) => { if (!isUniqueViolation(err)) throw err; });
       }
     }
     if (match) { parentId = Number(match.id); continue; }
     if (!canCreate || dryRun) return { folderId: parentId, created, missingFrom: i };
     try {
-      const id = await insertFolder(eventId, { name: segs[i], parentId, sourcePath }, conn);
+      const id = await guardedWrite(conn, (c) => insertFolder(eventId, { name: segs[i], parentId, sourcePath }, c));
       created.push(id);
       parentId = id;
     } catch (err) {
@@ -343,7 +350,13 @@ async function createFolder(eventId, { name, parentId = null }, conn = db) {
   }
   const sibling = childrenOf(parentId, folders).find((f) => String(f.name).toLowerCase() === clean.toLowerCase());
   if (sibling) throw new FolderError('A folder with this name already exists here', 409, 'FOLDER_EXISTS');
-  return insertFolder(eventId, { name: clean, parentId: parentId == null ? null : Number(parentId) }, conn);
+  try {
+    return await insertFolder(eventId, { name: clean, parentId: parentId == null ? null : Number(parentId) }, conn);
+  } catch (err) {
+    // Two creates of the same name racing past the sibling check above.
+    if (isUniqueViolation(err)) throw new FolderError('A folder with this name already exists here', 409, 'FOLDER_EXISTS');
+    throw err;
+  }
 }
 
 async function renameFolder(eventId, folderId, name, conn = db) {
@@ -367,6 +380,12 @@ async function renameFolder(eventId, folderId, name, conn = db) {
 }
 
 async function moveFolder(eventId, folderId, newParentId, conn = db) {
+  // Checks and write in one transaction, with the event's folders locked on
+  // Postgres (SQLite serialises writers anyway): two crossing moves (A into
+  // B, B into A) would otherwise both pass the cycle check and detach the
+  // pair from the root.
+  if (!conn.isTransaction) return conn.transaction((trx) => moveFolder(eventId, folderId, newParentId, trx));
+  if (isPostgreSQL()) await conn('photo_categories').where({ event_id: eventId }).forUpdate().select('id');
   const folder = await findEventFolder(eventId, folderId, conn);
   if (!folder) throw new FolderError('Folder not found', 404, 'FOLDER_NOT_FOUND');
   const folders = await eventFolders(eventId, conn);

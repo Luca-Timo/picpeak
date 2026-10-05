@@ -234,6 +234,37 @@ describe('nested folders', () => {
       expect(row.pending_folder_request_id).toBeNull();
     });
 
+    it('a request decided once cannot be decided again (approve after reject is a 404)', async () => {
+      const { requestId, a, sat } = await parkedUpload();
+      const reqs = require('../../src/services/folderRequestService');
+      const [first, second] = await Promise.allSettled([
+        reqs.rejectRequest(eventId, requestId, 1),
+        reqs.approveRequest(eventId, requestId, 1),
+      ]);
+      expect([first.status, second.status].sort()).toEqual(['fulfilled', 'rejected']);
+      const row = await db('folder_requests').where('id', requestId).first();
+      expect(['approved', 'rejected']).toContain(row.status);
+      if (row.status === 'rejected') expect((await db('photos').where('id', a).first()).folder_id).toBe(sat);
+    });
+
+    it('photos that arrive after their request was decided follow the decision', async () => {
+      const { sat, requestId } = await parkedUpload();
+      await request(app).post(`/api/admin/events/${eventId}/folder-requests/${requestId}/approve`).send({});
+      const late = await addPhoto('late.jpg', { folder_id: sat, pending_folder_request_id: requestId });
+      const { afterUploadPlacement } = require('../../src/services/uploadPlacement');
+      await afterUploadPlacement(eventId, { pending_folder_request_id: requestId, folder_id: sat }, 1);
+      const activityB = (await tree.eventFolders(eventId)).find((f) => f.name === 'Activity B');
+      expect(await db('photos').where('id', late).first()).toMatchObject({ folder_id: Number(activityB.id), pending_folder_request_id: null });
+    });
+
+    it('creating a folder inside an approve survives a unique violation (savepoint)', async () => {
+      const { requestId } = await parkedUpload();
+      // Same source path created meanwhile by an upload: the approve must reuse it.
+      await tree.ensurePath(eventId, ['Saturday', 'Activity B']);
+      const res = await request(app).post(`/api/admin/events/${eventId}/folder-requests/${requestId}/approve`).send({});
+      expect(res.status).toBe(200);
+    });
+
     it('only folders.manage may decide', async () => {
       const { requestId } = await parkedUpload();
       canManage = false;

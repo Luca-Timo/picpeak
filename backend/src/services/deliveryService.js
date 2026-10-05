@@ -110,12 +110,19 @@ async function completeDelivery(eventId, { transferBadges = true } = {}) {
 
   const duplicates = await findFirstLookDuplicates(eventId);
   const now = new Date().toISOString();
-  await db.transaction(async (trx) => {
-    await trx('events').where('id', eventId).update({ delivery_status: 'complete', delivery_completed_at: now });
-    if (transferBadges && duplicates.length) {
+  // The partial → complete transition is claimed in the UPDATE itself: two
+  // clicks (or two admins) racing past the read above must not both mail the
+  // customer and fire gallery.completed.
+  const claimed = await db.transaction(async (trx) => {
+    const changed = await trx('events')
+      .where({ id: eventId, delivery_status: 'partial' })
+      .update({ delivery_status: 'complete', delivery_completed_at: now });
+    if (changed && transferBadges && duplicates.length) {
       await trx('photos').whereIn('id', duplicates.map((d) => d.full_id)).update({ first_look: true });
     }
+    return changed > 0;
   });
+  if (!claimed) return { already: true, event, duplicates: [] };
   return { already: false, event: { ...event, delivery_status: 'complete', delivery_completed_at: now }, duplicates };
 }
 

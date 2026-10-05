@@ -67,9 +67,18 @@ function placementColumns(placement) {
   };
 }
 
-/** After the rows are in: a first-look batch switches the event to two-stage delivery. */
+/**
+ * After the rows are in: a batch for a folder request decided meanwhile
+ * follows that decision, and a first-look batch switches the event to
+ * two-stage delivery.
+ */
 async function afterUploadPlacement(eventId, placement, insertedCount, actor) {
-  if (!placement || !placement.first_look || insertedCount <= 0) return;
+  if (!placement || insertedCount <= 0) return;
+  if (placement.pending_folder_request_id) {
+    await requests.settleLateArrivals(Number(eventId), placement.pending_folder_request_id)
+      .catch((err) => require('../utils/logger').warn('folder request settle failed', { eventId, error: err.message }));
+  }
+  if (!placement.first_look) return;
   await require('./deliveryService').markFirstLookArrived(Number(eventId), { actor, source: 'upload' })
     .catch((err) => require('../utils/logger').warn('first look switch failed', { eventId, error: err.message }));
 }
