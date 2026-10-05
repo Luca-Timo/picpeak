@@ -414,6 +414,10 @@ module.exports = (router) => {
           .where('is_archived', formatBoolean(false))
           .modify(whereTimestamp, 'expires_at', '<=', sevenDaysFromNow)
           .modify(whereTimestamp, 'expires_at', '>', new Date());
+      } else if (status === 'awaiting_delivery') {
+        // Two-stage delivery (issue 1562): a first look is out, the full
+        // gallery is not yet.
+        query = query.where('delivery_status', 'partial').where('is_archived', formatBoolean(false));
       }
 
       // Get total count for pagination
