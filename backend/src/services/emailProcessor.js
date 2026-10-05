@@ -841,6 +841,10 @@ async function processTemplate(template, variables, language = 'en') {
   if (processedVariables.expires_at) {
     processedVariables.expires_at = await formatDate(processedVariables.expires_at, language);
   }
+  // Promised completion date of a two-stage delivery (delivery_due_reminder).
+  if (processedVariables.due_date) {
+    processedVariables.due_date = await formatDate(processedVariables.due_date, language);
+  }
 
   // Format welcome message for HTML display (preserve line breaks)
   if (processedVariables.welcome_message) {
