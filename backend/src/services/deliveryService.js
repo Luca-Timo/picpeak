@@ -16,7 +16,7 @@ const { db, logActivity } = require('../database/db');
 const logger = require('../utils/logger');
 const { getAppSetting } = require('../utils/appSettings');
 const { parseBooleanInput } = require('../utils/parsers');
-const { whereTimestamp } = require('../utils/dbCompat');
+const { whereTimestamp, formatBoolean } = require('../utils/dbCompat');
 
 const DEFAULT_DELIVERY_DAYS = 7;
 const REMINDER_LEAD_HOURS = 24;
@@ -27,7 +27,11 @@ const isPartial = (event) => event && event.delivery_status === 'partial';
 /** Event date + N days (Settings → Event defaults), at noon UTC so the date never shifts by timezone. */
 async function defaultDueAt(event, conn = db) {
   const days = Number(await getAppSetting('event_default_delivery_days', DEFAULT_DELIVERY_DAYS, conn)) || DEFAULT_DELIVERY_DAYS;
-  const base = String(event.event_date || '').slice(0, 10);
+  // Postgres hands a DATE column back as a Date, SQLite as a string.
+  const raw = event.event_date instanceof Date && !Number.isNaN(event.event_date.getTime())
+    ? event.event_date.toISOString()
+    : String(event.event_date || '');
+  const base = raw.slice(0, 10);
   const start = /^\d{4}-\d{2}-\d{2}$/.test(base) ? new Date(`${base}T12:00:00Z`) : new Date();
   return new Date(start.getTime() + days * 864e5);
 }
@@ -40,15 +44,33 @@ async function defaultDueAt(event, conn = db) {
  * Writes outside any transaction and logs after the update, so a SQLite
  * caller never deadlocks on the global activity write.
  */
+/**
+ * The columns that put an event into the partial state. One helper for both
+ * ways in (a keyword folder, the settings PUT), so both start a fresh promise
+ * the same way: reminder stamps cleared, and a default due date when none is
+ * given and the stored one is missing or already past. ISO strings, not Dates:
+ * node-sqlite3 can store a Date as "[object Object]".
+ */
+async function enterPartialColumns(event, { dueAtGiven = false } = {}) {
+  const columns = {
+    delivery_status: 'partial',
+    delivery_completed_at: null,
+    delivery_reminder_sent_at: null,
+    delivery_overdue_notified_at: null,
+  };
+  if (dueAtGiven) return columns;
+  const stored = event.delivery_due_at ? Date.parse(event.delivery_due_at) : NaN;
+  if (!Number.isFinite(stored) || stored <= Date.now()) {
+    columns.delivery_due_at = (await defaultDueAt(event)).toISOString();
+    columns.delivery_due_source = 'default';
+  }
+  return columns;
+}
+
 async function markFirstLookArrived(eventId, { actor, source } = {}) {
   const event = await db('events').where('id', eventId).first();
   if (!event || event.delivery_completed_at || isPartial(event)) return false;
-  const update = { delivery_status: 'partial' };
-  if (!event.delivery_due_at) {
-    // ISO strings, not Dates: node-sqlite3 can store a Date as "[object Object]".
-    update.delivery_due_at = (await defaultDueAt(event)).toISOString();
-    update.delivery_due_source = 'default';
-  }
+  const update = await enterPartialColumns(event);
   const changed = await db('events')
     .where('id', eventId)
     .whereNull('delivery_completed_at')
@@ -118,7 +140,7 @@ async function completeDelivery(eventId, { transferBadges = true } = {}) {
       .where({ id: eventId, delivery_status: 'partial' })
       .update({ delivery_status: 'complete', delivery_completed_at: now });
     if (changed && transferBadges && duplicates.length) {
-      await trx('photos').whereIn('id', duplicates.map((d) => d.full_id)).update({ first_look: true });
+      await trx('photos').whereIn('id', duplicates.map((d) => d.full_id)).update({ first_look: formatBoolean(true) });
     }
     return changed > 0;
   });
@@ -140,7 +162,7 @@ async function runDeliveryReminderPass({ now = new Date() } = {}) {
     // whereTimestamp: the column holds ISO strings, and a Date bind compares
     // as epoch milliseconds on SQLite (issue 1733's expiry bug).
     .modify(whereTimestamp, 'delivery_due_at', '<=', soon)
-    .where((q) => q.whereNull('is_archived').orWhere('is_archived', false))
+    .where((q) => q.whereNull('is_archived').orWhere('is_archived', formatBoolean(false)))
     .select('*');
   let sent = 0;
   for (const event of events) {
@@ -157,21 +179,26 @@ async function runDeliveryReminderPass({ now = new Date() } = {}) {
       const delivered = Number((await db('photos').where('event_id', event.id).count('id as c').first()).c) || 0;
       const { getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
       const base = await getAbsoluteFrontendUrl(null, { override: process.env.ADMIN_URL });
-      if (to) {
-        await queueEmail(event.id, to, 'delivery_due_reminder', {
-          event_name: event.event_name,
-          due_date: event.delivery_due_at,
-          delivered_count: delivered,
-          expected_count: event.delivery_expected_count || '?',
-          admin_link: `${base}/admin/events/${event.id}`,
-          overdue: overdue ? 'yes' : '',
-          due_soon: overdue ? '' : 'yes',
-        });
+      if (!to) {
+        // Nobody to tell: no mail and no "reminded" entry in the activity log.
+        logger.warn('delivery reminder skipped: no business profile or admin email', { eventId: event.id });
+        continue;
       }
+      await queueEmail(event.id, to, 'delivery_due_reminder', {
+        event_name: event.event_name,
+        due_date: event.delivery_due_at,
+        delivered_count: delivered,
+        expected_count: event.delivery_expected_count || '?',
+        admin_link: `${base}/admin/events/${event.id}`,
+        overdue: overdue ? 'yes' : '',
+        due_soon: overdue ? '' : 'yes',
+      });
       await logActivity(overdue ? 'delivery_overdue' : 'delivery_due_soon',
         { eventName: event.event_name, dueAt: event.delivery_due_at }, event.id, { type: 'system' });
       sent += 1;
     } catch (err) {
+      // Release the claim so the next hourly pass tries again.
+      await db('events').where('id', event.id).update({ [column]: null }).catch(() => {});
       logger.warn('delivery reminder failed', { eventId: event.id, error: err.message });
     }
   }
@@ -183,6 +210,7 @@ module.exports = {
   MAX_PLACEHOLDER_TILES,
   isPartial,
   defaultDueAt,
+  enterPartialColumns,
   markFirstLookArrived,
   guestDeliveryPayload,
   findFirstLookDuplicates,

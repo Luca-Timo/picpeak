@@ -62,9 +62,12 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
     // A folder (issue 1786) pins the slideshow to the folder and everything
     // below it; a filter category to its own photos.
     const pinned = await db('photo_categories').where('id', event.show_category_id).first('id', 'is_folder', 'event_id');
-    if (pinned && parseBooleanInput(pinned.is_folder, false) && pinned.event_id) {
-      const ids = await folderTree.subtreeIds(event.id, pinned.id);
-      photosQuery = photosQuery.whereIn('photos.folder_id', ids);
+    if (pinned && parseBooleanInput(pinned.is_folder, false)) {
+      // A global (pre-265) folder has no event tree: just itself. Rows that
+      // still carry their folder in category_id (an older backup restored)
+      // match on that column, the way the grid reads them.
+      const ids = pinned.event_id ? await folderTree.subtreeIds(event.id, pinned.id) : [Number(pinned.id)];
+      photosQuery = photosQuery.where((q) => q.whereIn('photos.folder_id', ids).orWhereIn('photos.category_id', ids));
     } else {
       photosQuery = photosQuery.where('photos.category_id', event.show_category_id);
     }

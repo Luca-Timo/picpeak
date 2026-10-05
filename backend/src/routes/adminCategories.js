@@ -224,7 +224,20 @@ router.put('/:id', adminAuth, requirePermission('settings.edit'), [
       }
     }
 
-    const updateData = {
+    // A folder (issue 1786) renames through the tree service: sibling-name
+    // clash as 409, path-joined slug. The generic slug below would collide
+    // for "Activity A" under two different parents.
+    const staysFolder = wasFolder && !togglesFolder && category.event_id;
+    if (staysFolder && name !== category.name) {
+      try {
+        await folderTree.renameFolder(category.event_id, category.id, name);
+      } catch (err) {
+        if (err instanceof folderTree.FolderError) return res.status(err.status).json({ error: err.message, code: err.code });
+        throw err;
+      }
+    }
+
+    const updateData = staysFolder ? {} : {
       name,
       slug: name
         .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -261,9 +274,11 @@ router.put('/:id', adminAuth, requirePermission('settings.edit'), [
     }
 
     await db.transaction(async (trx) => {
-      await trx('photo_categories')
-        .where('id', id)
-        .update(updateData);
+      if (Object.keys(updateData).length > 0) {
+        await trx('photo_categories')
+          .where('id', id)
+          .update(updateData);
+      }
       // Since migration 265 a folder holds its photos in folder_id and a
       // filter category in category_id, so the flip moves them across.
       if (togglesFolder && !wasFolder) {
@@ -275,6 +290,10 @@ router.put('/:id', adminAuth, requirePermission('settings.edit'), [
     });
 
     const updated = await db('photo_categories').where('id', id).first();
+    // Folder moves and download flags change what the guest ZIP may hold.
+    if (category.event_id && (togglesFolder || Object.prototype.hasOwnProperty.call(req.body, 'allow_downloads'))) {
+      require('../services/downloadZipService').invalidate(Number(category.event_id));
+    }
 
     // Log activity
     await logActivity('category_updated',
@@ -362,6 +381,7 @@ router.delete('/:id', adminAuth, requirePermission('settings.edit'), async (req,
     if (parseBooleanInput(category.is_folder, false) && category.event_id) {
       if (await refuseWithoutFolderPermission(req, res)) return;
       const moved = await folderTree.deleteFolder(category.event_id, category.id);
+      require('../services/downloadZipService').invalidate(Number(category.event_id));
       await logActivity('folder_deleted', { name: category.name, movedPhotos: moved }, category.event_id,
         { type: 'admin', id: req.admin.id, name: req.admin.username });
       capabilityEvidence(res, 'category_editing');

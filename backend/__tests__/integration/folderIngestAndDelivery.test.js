@@ -136,6 +136,17 @@ describe('folder ingest and two-stage delivery', () => {
     });
   });
 
+  it('keeps a first-look photo and the full-set photo of the same name apart in a flat import', async () => {
+    const root = `pair-${Date.now()}`;
+    await touch(`${root}/FirstLook/IMG_1.jpg`);
+    await touch(`${root}/IMG_1.jpg`);
+    const eventId = await seedEvent({ source_mode: 'reference', folder_structure: 0 });
+    await runImport(eventId, root);
+    const rows = await db('photos').where('event_id', eventId).select('first_look');
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => Boolean(r.first_look)).sort()).toEqual([false, true]);
+  });
+
   describe('upload placement', () => {
     it('maps a folder sent as category_id to folder_id and a request to its fallback', async () => {
       const eventId = await seedEvent();
@@ -193,6 +204,25 @@ describe('folder ingest and two-stage delivery', () => {
 
       const again = await request(app).post(`/api/admin/events/${eventId}/delivery/complete`).send({});
       expect(again.status).toBe(409);
+    });
+
+    it('re-entering partial starts a fresh promise: stamps cleared, a past due date replaced', async () => {
+      const eventId = await seedEvent({
+        delivery_status: 'complete',
+        delivery_due_at: '2020-01-01T12:00:00.000Z',
+        delivery_reminder_sent_at: '2020-01-01T00:00:00.000Z',
+        delivery_overdue_notified_at: '2020-01-02T00:00:00.000Z',
+      });
+      expect(await delivery().markFirstLookArrived(eventId)).toBe(true);
+      const ev = await db('events').where('id', eventId).first();
+      expect(ev.delivery_reminder_sent_at).toBeNull();
+      expect(ev.delivery_overdue_notified_at).toBeNull();
+      expect(Date.parse(ev.delivery_due_at)).toBeGreaterThan(Date.parse('2020-01-01T12:00:00.000Z'));
+    });
+
+    it('computes the default due date from a DATE column that arrives as a Date (Postgres)', async () => {
+      const due = await delivery().defaultDueAt({ event_date: new Date('2026-07-03T00:00:00.000Z') });
+      expect(due.toISOString().slice(0, 10)).toBe('2026-07-10');
     });
 
     it('two completions racing each other notify once', async () => {

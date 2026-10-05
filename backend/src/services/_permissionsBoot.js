@@ -136,6 +136,18 @@ async function seedPermissionsAtBoot(db, logger) {
     } catch (err) {
       logger?.warn?.('Permissions self-heal: super_admin backfill failed:', err.message);
     }
+    // folders.manage (migration 265) is gone after restoring a backup taken
+    // before it; re-seed it and its projection onto settings.edit holders,
+    // or folder editing would silently need super_admin.
+    try {
+      if (!(await db('permissions').where({ name: 'folders.manage' }).first('id'))) {
+        await require('../../migrations/core/265_nested_folders_and_delivery_stages').seedFolderPermissions(db);
+        granted += 1;
+        logger?.info?.('Permissions self-heal: re-seeded folders.manage');
+      }
+    } catch (err) {
+      logger?.warn?.('Permissions self-heal: folders.manage failed:', err.message);
+    }
     for (const preset of PRESETS) {
       try {
         await ensurePreset(db, logger, preset);

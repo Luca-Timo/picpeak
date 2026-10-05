@@ -1,6 +1,8 @@
 /**
  * Where an admin upload lands (issues 1786 + 1562): one resolver for the
- * multipart, chunked and v1 upload routes, so the three cannot drift.
+ * multipart and chunked upload routes, so the two cannot drift. The v1 API
+ * and guest uploads only map a folder sent as category_id onto folder_id
+ * (categoryScope.resolveCategoryAssignment); they take no folder fields.
  *
  * Request fields (all optional):
  *   category_id        filter category, or — from older clients — a folder id,

@@ -86,21 +86,25 @@ async function ensureGalleryDeliveryTemplatesSeeded(db, logger) {
         else if (/^body_html_de$/i.test(col)) row[col] = def.de.body_html;
         else if (/^body_text_de$/i.test(col)) row[col] = def.de.body_text;
       }
-      const inserted = await db('email_templates').insert(row).returning('id');
-      const templateId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
-      if (hasTranslations) {
-        for (const language of ['en', 'de']) {
-          await db('email_template_translations').insert({
-            template_id: templateId,
-            language,
-            subject: def[language].subject,
-            body_html: def[language].body_html,
-            body_text: def[language].body_text,
-            created_at: new Date(),
-            updated_at: new Date(),
-          });
+      // One transaction: a master row without its translations would never be
+      // healed, because an existing key is never touched again.
+      await db.transaction(async (trx) => {
+        const inserted = await trx('email_templates').insert(row).returning('id');
+        const templateId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
+        if (hasTranslations) {
+          for (const language of ['en', 'de']) {
+            await trx('email_template_translations').insert({
+              template_id: templateId,
+              language,
+              subject: def[language].subject,
+              body_html: def[language].body_html,
+              body_text: def[language].body_text,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+          }
         }
-      }
+      });
       touched.push(templateKey);
       if (logger) logger.info(`Seeded gallery delivery template: ${templateKey}`);
     } catch (err) {

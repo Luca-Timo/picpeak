@@ -84,7 +84,9 @@ router.post('/events/:eventId/folders', adminAuth, requirePermission('folders.ma
 
 router.patch('/events/:eventId/folders/:folderId', adminAuth, requirePermission('folders.manage'), requireEventOwnership, [
   body('name').optional().isString().isLength({ min: 1, max: 100 }),
-  body('parent_id').optional({ nullable: true }).custom((v) => v === null || Number.isInteger(Number(v))),
+  // null = move to the gallery root; anything else must be a real id ("" or
+  // true would otherwise coerce to 0/1).
+  body('parent_id').optional({ nullable: true }).custom((v) => v === null || (typeof v !== 'boolean' && v !== '' && Number.isInteger(Number(v)) && Number(v) > 0)),
   body('allow_downloads').optional().isBoolean(),
 ], async (req, res) => {
   if (invalid(req, res)) return;
@@ -94,7 +96,7 @@ router.patch('/events/:eventId/folders/:folderId', adminAuth, requirePermission(
     if (!(await tree.findEventFolder(eventId, folderId))) return res.status(404).json({ error: 'Folder not found' });
     if (req.body.name !== undefined) await tree.renameFolder(eventId, folderId, req.body.name);
     if (Object.prototype.hasOwnProperty.call(req.body, 'parent_id')) {
-      const parent = req.body.parent_id === null || Number(req.body.parent_id) <= 0 ? null : Number(req.body.parent_id);
+      const parent = req.body.parent_id === null ? null : Number(req.body.parent_id);
       await tree.moveFolder(eventId, folderId, parent);
     }
     if (req.body.allow_downloads !== undefined) {

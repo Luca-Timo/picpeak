@@ -189,7 +189,7 @@ exports.down = async function (knex) {
     'delivery_reminder_sent_at', 'delivery_overdue_notified_at',
   ]);
 
-  if (await knex.schema.hasTable('permissions')) {
+  if (await knex.schema.hasTable('permissions') && await knex.schema.hasTable('role_permissions')) {
     const ids = await knex('permissions').whereIn('name', NEW_PERMISSIONS.map((p) => p.name)).pluck('id');
     if (ids.length) {
       await knex('role_permissions').whereIn('permission_id', ids).del();
@@ -197,3 +197,8 @@ exports.down = async function (knex) {
     }
   }
 };
+
+// Boot self-heal (services/_permissionsBoot): a .picpeak restore of a backup
+// taken before this migration replaces the permission tables, dropping
+// folders.manage and its projection onto settings.edit holders.
+exports.seedFolderPermissions = seedPermissions;

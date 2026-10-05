@@ -50,7 +50,10 @@ const { formatBoolean } = require('../utils/dbCompat');
 function externalPlacement(rel, { map, keywords, mirror }) {
   const dirs = path.dirname(rel) === '.' ? [] : path.dirname(rel).split(path.sep);
   if (dirs.length && (dirs[0] === map.collages || dirs[0] === map.individual)) dirs.shift();
-  const segs = folderTree.toSegments(dirs) || [];
+  const segs = folderTree.toSegments(dirs);
+  // A directory name that is never a folder (".thumbnails", a name with a
+  // backslash): the file is not part of the delivery, as on uploads.
+  if (segs === null) return { segments: null, firstLook: false };
   if (segs.length && folderTree.matchesFirstLookKeyword(segs[0], keywords)) {
     return { segments: [], firstLook: true };
   }
@@ -281,7 +284,9 @@ async function importExternalFolder({
         let type = 'individual';
         if (segs[0] === map.collages) type = 'collage';
         if (segs[0] === map.individual) type = 'individual';
-        preparedFiles.push({ ...f, type, size: stats.size });
+        const where = externalPlacement(f.rel, { map, keywords: firstLookKeywords, mirror: mirrorFolders });
+        if (where.segments === null) { skipped++; continue; }
+        preparedFiles.push({ ...f, type, size: stats.size, where });
       } catch (err) {
         skipped++;
       }
@@ -291,9 +296,12 @@ async function importExternalFolder({
     // gallery folders (Friday/IMG_0001.jpg vs Saturday/IMG_0001.jpg); without
     // folders the historical type+name key stays, so flat imports dedupe
     // exactly as before.
+    // The first-look flag is part of the key in both modes: FirstLook/IMG_1.jpg
+    // and the full set's IMG_1.jpg are two photos (issue 1562), and completing
+    // the delivery is what pairs them up.
     const dedupeKeyOf = (file) => (mirrorFolders
       ? `${file.type}:${path.dirname(file.rel).toLowerCase()}:${path.basename(file.rel).toLowerCase()}`
-      : `${file.type}:${path.basename(file.rel).toLowerCase()}`);
+      : `${file.type}:${file.where && file.where.firstLook ? 'fl:' : ''}${path.basename(file.rel).toLowerCase()}`);
     const dedupeMap = new Map();
     for (const file of preparedFiles) {
       const dedupeKey = dedupeKeyOf(file);
@@ -523,7 +531,7 @@ async function importExternalFolder({
         // Folder + first-look flag (issues 1786, 1562). Folders are created on
         // insert only; a rescan never moves an existing row, so an admin's
         // manual moves survive.
-        const where = externalPlacement(f.rel, { map, keywords: firstLookKeywords, mirror: mirrorFolders });
+        const where = f.where || externalPlacement(f.rel, { map, keywords: firstLookKeywords, mirror: mirrorFolders });
         let folderId = null;
         if (where.segments.length) {
           const key = folderTree.pathKey(where.segments);

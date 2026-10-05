@@ -261,18 +261,33 @@ async function insertFolder(eventId, { name, parentId = null, sourcePath = null 
     ? (await conn('photo_categories').where('id', parentId).first('slug'))?.slug
     : null;
   const own = slugify(name) || 'folder';
-  const slug = await uniqueSlug(eventId, parentSlug ? `${parentSlug}-${own}`.slice(0, 95) : own.slice(0, 95), conn);
-  const inserted = await conn('photo_categories').insert({
-    name,
-    slug,
-    is_global: formatBoolean(false),
-    event_id: eventId,
-    is_folder: formatBoolean(true),
-    parent_id: parentId,
-    source_path: sourcePath,
-    display_order: await nextDisplayOrder(eventId, conn),
-  }).returning('id');
-  return Number(inserted[0]?.id ?? inserted[0]);
+  const base = parentSlug ? `${parentSlug}-${own}`.slice(0, 95) : own.slice(0, 95);
+  // The slug is checked, then inserted: two uploads creating different
+  // paths that slug alike ("Activity B" / "Activity-B") can collide on
+  // UNIQUE(slug, event_id). Such a collision retries with the next suffix;
+  // a source_path collision is the caller's to resolve.
+  for (let attempt = 0; ; attempt += 1) {
+    const slug = await uniqueSlug(eventId, attempt === 0 ? base : `${base}-${attempt + 1}`, conn);
+    try {
+      const inserted = await guardedWrite(conn, (c) => c('photo_categories').insert({
+        name,
+        slug,
+        is_global: formatBoolean(false),
+        event_id: eventId,
+        is_folder: formatBoolean(true),
+        parent_id: parentId,
+        source_path: sourcePath,
+        display_order: 0,
+      }).returning('id'));
+      const id = Number(inserted[0]?.id ?? inserted[0]);
+      await conn('photo_categories').where('id', id).update({ display_order: await nextDisplayOrder(eventId, conn) });
+      return id;
+    } catch (err) {
+      const slugTaken = isUniqueViolation(err)
+        && !(sourcePath && await conn('photo_categories').where({ event_id: eventId, source_path: sourcePath }).first('id'));
+      if (!slugTaken || attempt >= 5) throw err;
+    }
+  }
 }
 
 /**

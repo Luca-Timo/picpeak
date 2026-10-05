@@ -1775,13 +1775,9 @@ module.exports = (router) => {
       // action is what stamps completion and notifies the customer.
       if (Object.prototype.hasOwnProperty.call(updates, 'delivery_status')) {
         if (updates.delivery_status === 'partial' && event.delivery_status !== 'partial') {
-          updates.delivery_completed_at = null;
-          updates.delivery_reminder_sent_at = null;
-          updates.delivery_overdue_notified_at = null;
-          if (!updates.delivery_due_at && !event.delivery_due_at) {
-            updates.delivery_due_at = (await require('../../services/deliveryService').defaultDueAt(event)).toISOString();
-            updates.delivery_due_source = 'default';
-          }
+          // Same entry rules as a FirstLook keyword folder (deliveryService).
+          Object.assign(updates, await require('../../services/deliveryService')
+            .enterPartialColumns(event, { dueAtGiven: Boolean(updates.delivery_due_at) }));
         }
       }
       if (Object.prototype.hasOwnProperty.call(updates, 'delivery_due_at')) {

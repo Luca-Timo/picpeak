@@ -1825,10 +1825,11 @@ router.put('/general', adminAuth, requirePermission('settings.edit'), async (req
       const raw = settings.first_look_folder_keywords;
       const list = (Array.isArray(raw) ? raw : String(raw || '').split(','))
         .map((k) => String(k).replace(/\s+/g, ' ').trim())
-        .filter((k) => k.replace(/[^\p{L}\p{N}]/gu, '').length >= 3)
-        .slice(0, 20);
-      if (list.some((k) => k.length > 60)) {
-        return res.status(400).json({ error: 'first_look_folder_keywords: each keyword must be at most 60 characters' });
+        .filter(Boolean);
+      // Refused, not trimmed: a keyword dropped silently is a folder that
+      // quietly stops starting a first look.
+      if (list.length > 20 || list.some((k) => k.length > 60 || k.replace(/[^\p{L}\p{N}]/gu, '').length < 3)) {
+        return res.status(400).json({ error: 'first_look_folder_keywords: at most 20 keywords, each with at least 3 letters or digits and at most 60 characters' });
       }
       settings.first_look_folder_keywords = [...new Set(list)];
     }
