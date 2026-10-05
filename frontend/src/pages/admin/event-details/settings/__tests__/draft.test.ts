@@ -6,6 +6,7 @@ import {
   eventFieldsFromEvent,
   eventUpdatePayload,
   rebaseDraft,
+  resetSection,
   slideshowFromEvent,
   usesCustomTheme,
   type EventSettingsDraft,
@@ -110,6 +111,40 @@ describe('event settings draft', () => {
     expect(rebased.event.welcome_message).toBe('Hi');
     expect(rebased.event.expires_at).toBe('2027-01-13');
     expect(eventUpdatePayload(rebased.event, server.event, t)).toEqual({ welcome_message: 'Hi' });
+  });
+
+  it('undoes one section and keeps the edits in the others', () => {
+    const fields = eventFieldsFromEvent(EVENT, branding);
+    const base: EventSettingsDraft = { event: fields, feedback: null, downloads: null, slideshow: slideshowFromEvent(EVENT) };
+    const draft: EventSettingsDraft = {
+      ...base,
+      event: { ...fields, welcome_message: 'Hi', expires_at: '2026-12-31', require_password: false },
+      slideshow: { ...base.slideshow!, interval_ms: 9000 },
+    };
+    const undone = resetSection(draft, base, 'access');
+    expect(undone.event.expires_at).toBe(fields.expires_at);
+    expect(undone.event.require_password).toBe(fields.require_password);
+    expect(undone.event.welcome_message).toBe('Hi');
+    expect([...dirtySections(undone, base)].sort()).toEqual(['general', 'slideshow']);
+    expect([...dirtySections(resetSection(undone, base, 'slideshow'), base)]).toEqual(['general']);
+  });
+
+  it('undoes the feedback and downloads slices with their own sections only', () => {
+    const fields = eventFieldsFromEvent(EVENT, branding);
+    const feedback = { feedback_enabled: false } as unknown as EventSettingsDraft['feedback'];
+    const downloads = { standard: 'inherit', picker: 'inherit', allowOriginal: 'inherit' };
+    const base: EventSettingsDraft = { event: fields, feedback, downloads, slideshow: slideshowFromEvent(EVENT) };
+    const draft: EventSettingsDraft = {
+      ...base,
+      feedback: { ...feedback!, feedback_enabled: true },
+      downloads: { ...downloads, picker: 'true' },
+    };
+    const guestsUndone = resetSection(draft, base, 'guests');
+    expect(guestsUndone.feedback).toEqual(feedback);
+    expect(guestsUndone.downloads).toEqual(draft.downloads);
+    const downloadsUndone = resetSection(draft, base, 'downloads');
+    expect(downloadsUndone.downloads).toEqual(downloads);
+    expect(downloadsUndone.feedback).toEqual(draft.feedback);
   });
 
   it('takes the header columns only while custom styling is on', () => {

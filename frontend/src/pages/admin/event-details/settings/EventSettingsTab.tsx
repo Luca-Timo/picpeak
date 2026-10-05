@@ -3,12 +3,17 @@
  * draft, one Save bar (SettingsSaveBar). Replaces the old view/edit toggle,
  * where some cards saved behind Edit and others saved themselves.
  *
+ * Split view (issue 1765, draft E5): the sections as a grouped overview on
+ * the left, each with a line of its current state, and the selected section
+ * edited on the right. Below `lg` the overview is the page and a section
+ * opens full-screen with a back arrow.
+ *
  * Sections the admin may not change render read-only (a disabled fieldset);
  * the backend enforces the same permissions on every endpoint.
  */
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Archive, Trash2 } from 'lucide-react';
+import { Archive, ArrowLeft, Trash2, Undo2 } from 'lucide-react';
 import type { Event } from '../../../../types';
 import { Button } from '../../../../components/common';
 import { SettingsSaveBar } from '../../../../components/admin/SettingsSaveBar';
@@ -25,6 +30,7 @@ import { DownloadsSection } from './DownloadsSection';
 import { AppearanceSection } from './AppearanceSection';
 import { SlideshowSection } from './SlideshowSection';
 import { safeParseDate } from '../utils';
+import { SECTION_ICON, SettingsOverview, useSectionSummaries } from './SettingsOverview';
 
 export interface EventSettingsTabProps {
   event: Event;
@@ -50,7 +56,7 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
   const { hasPermission } = usePermissions();
   const { format } = useLocalizedDate();
   const confirm = useConfirm();
-  const { draft, setDraft, setEvent, dirty, isDirty, isSaving, save, discard, downloadsData } = settings;
+  const { draft, setDraft, setEvent, dirty, isDirty, isSaving, save, discard, discardSection, downloadsData } = settings;
 
   const archived = Boolean(event.is_archived);
   const canEdit = hasPermission('events.edit') && !archived;
@@ -72,9 +78,23 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
 
   const set = (patch: Partial<EventFields>) => setEvent((prev) => ({ ...prev, ...patch }));
 
+  // Phone only: the overview is the page until a section is opened. A link
+  // to a particular section (?section=access, or one from Overview) opens it;
+  // the page always writes ?section=, so the default one does not count.
+  const [phoneOpen, setPhoneOpen] = useState(() => section !== 'general');
+  const firstSection = useRef(section);
+  useEffect(() => {
+    if (section !== firstSection.current) setPhoneOpen(true);
+  }, [section]);
+
+  const open = (key: SettingsSectionKey) => {
+    setSection(key);
+    setPhoneOpen(true);
+  };
+
   const onSave = async () => {
     const { invalidSection } = await save();
-    if (invalidSection) setSection(invalidSection);
+    if (invalidSection) open(invalidSection);
   };
 
   // The date the reminder goes out, when this gallery sets its own offset.
@@ -86,6 +106,22 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
     d.setDate(d.getDate() - Math.floor(Number(offset)));
     return format(d, 'PP');
   })();
+
+  const summaries = useSectionSummaries(event, draft, reminderDate);
+  const activeLabel = visible.find((s) => s.key === active)?.label ?? '';
+  const ActiveIcon = SECTION_ICON[active];
+  const about: Record<SettingsSectionKey, string> = {
+    general: t('events.settingsTab.about.general', 'Customer, client accounts and the welcome message.'),
+    appearance: t('events.settingsTab.about.appearance', 'Hero photo, logo, banners and the look of the gallery.'),
+    access: t('events.settingsTab.about.access', 'Who can open the gallery, and until when.'),
+    downloads: t('events.settingsTab.about.downloads', 'What guests may download, in which size, and how photos are protected.'),
+    guests: t('events.settingsTab.about.guests', 'Guest uploads, names and feedback.'),
+    slideshow: t('events.settingsTab.about.slideshow', 'A fullscreen link for projectors at live events.'),
+    source: t('events.settingsTab.about.source', 'Where the photos of this gallery come from.'),
+    reminder: t('events.settingsTab.about.reminder', 'The reminder email to the customer before the event.'),
+    faces: t('events.settingsTab.about.faces', 'Find and group the people in the photos.'),
+    danger: t('events.settingsTab.about.danger', 'Archive or delete this gallery.'),
+  };
 
   const body = (() => {
     switch (active) {
@@ -142,7 +178,7 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
         return <FaceRecognitionCard eventId={event.id} isArchived={archived} />;
       case 'danger':
         return (
-          <SectionCard title={t('events.settingsTab.danger', 'Danger zone')}>
+          <SectionCard>
             {hasPermission('events.archive') && (
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -199,41 +235,63 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
 
   return (
     <div>
-      <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] gap-6 lg:gap-8">
-        <nav aria-label={t('events.settingsTab.sections', 'Settings sections')} className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible lg:sticky lg:top-4 self-start">
-          {visible.map((s) => (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => setSection(s.key)}
-              aria-current={s.key === active ? 'page' : undefined}
-              className={`flex items-center justify-between gap-2 whitespace-nowrap h-9 px-3 rounded-lg text-sm text-left transition-colors ${
-                s.key === active
-                  ? 'bg-accent-dark/10 text-heading font-semibold'
-                  : s.key === 'danger'
-                    ? 'text-red-600 dark:text-red-400 hover:bg-hover'
-                    : 'text-body hover:bg-hover'
-              }`}
-            >
-              <span>{s.label}</span>
-              {dirty.has(s.key) && (
-                <span className="w-2 h-2 rounded-full bg-amber-500" aria-label={t('settings.saveBar.unsaved', 'You have unsaved changes')} />
-              )}
-            </button>
-          ))}
-        </nav>
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)] 2xl:grid-cols-[420px_minmax(0,1fr)] gap-6 xl:gap-8 2xl:gap-10 items-start">
+        {/* The overview scrolls on its own, so the selected section stays in
+            view next to a long list on a short screen. */}
+        <div className={`${phoneOpen ? 'hidden lg:block' : ''} lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-1`}>
+          <SettingsOverview
+            sections={visible}
+            active={active}
+            onSelect={open}
+            dirty={dirty}
+            summaries={summaries}
+          />
+        </div>
 
-        <div className="min-w-0 max-w-3xl space-y-4">
-          {readOnlyHint && (
-            <p className="text-sm rounded-lg border border-line bg-inset text-body px-4 py-3">
-              {archived
-                ? t('events.settingsTab.readOnlyArchived', 'This gallery is archived. Its settings can no longer be changed.')
-                : t('events.settingsTab.readOnly', 'You can see these settings but not change them.')}
-            </p>
-          )}
-          <fieldset disabled={readOnlyHint} className="min-w-0 space-y-4">
-            {body}
-          </fieldset>
+        {/* The card's cap is the form's width: the form fills the card, so
+            the padding is the same on both sides and a wide display does not
+            leave the card running empty past its fields. From 2xl the card,
+            the padding and the gaps grow a step. */}
+        <div className={`${phoneOpen ? '' : 'hidden lg:block'} min-w-0 lg:max-w-[52rem] 2xl:max-w-[60rem] bg-panel border border-line rounded-xl`}>
+          <div className="flex flex-wrap items-start gap-3 px-5 sm:px-7 2xl:px-10 py-4 2xl:py-5 border-b border-line">
+            <button
+              type="button"
+              onClick={() => setPhoneOpen(false)}
+              className="lg:hidden -ml-1 p-1 rounded-lg text-soft hover:bg-hover"
+              aria-label={t('events.settingsTab.backToSections', 'All settings')}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <ActiveIcon className={`w-5 h-5 mt-0.5 shrink-0 ${active === 'danger' ? 'text-red-600 dark:text-red-400' : 'text-soft'}`} aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <h2 className={`text-lg font-semibold ${active === 'danger' ? 'text-red-600 dark:text-red-400' : 'text-heading'}`}>{activeLabel}</h2>
+              <p className="text-sm text-soft mt-0.5">{about[active]}</p>
+            </div>
+            {canEdit && dirty.has(active) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-amber-700 dark:text-amber-400"
+                leftIcon={<Undo2 className="w-4 h-4" />}
+                onClick={() => discardSection(active)}
+              >
+                {t('events.settingsTab.undoSection', 'Undo changes in this section')}
+              </Button>
+            )}
+          </div>
+
+          <div className="px-5 sm:px-7 2xl:px-10 py-6 2xl:py-8 space-y-4">
+            {readOnlyHint && (
+              <p className="text-sm rounded-lg border border-line bg-inset text-body px-4 py-3">
+                {archived
+                  ? t('events.settingsTab.readOnlyArchived', 'This gallery is archived. Its settings can no longer be changed.')
+                  : t('events.settingsTab.readOnly', 'You can see these settings but not change them.')}
+              </p>
+            )}
+            <fieldset disabled={readOnlyHint} className="min-w-0">
+              {body}
+            </fieldset>
+          </div>
         </div>
       </div>
 

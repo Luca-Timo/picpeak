@@ -53,9 +53,27 @@ relying on browser-back.
 
 - **Overview** answers "what is this and what do I do now?": links, status,
   counts, the next actions. Nothing on it needs saving.
-- **Settings** holds everything configurable, in sections listed on the left
-  (`event-details/settings/EventSettingsTab.tsx`). Order sections from most to least used; a
-  destructive section ("Danger zone") is always last and red.
+- **Settings** holds everything configurable, as a **split view**
+  (`event-details/settings/EventSettingsTab.tsx`, issue 1765):
+  - **Left, the overview:** every section as a row — icon, title, and one
+    line of what it is set to now ("Password on · expires 31 Dec 2026",
+    "External folder · watching"). Rows sit in small groups of two or three
+    under a heading (Basics · Access & downloads · Guests · Photos &
+    automation), so the list stays readable as it grows. A **Default** tag
+    marks a section that only follows the global setting. The list scrolls on
+    its own, so the open section stays in view.
+  - **Right, the open section,** edited in place: a header with its title and
+    one line on what it covers, then the fields. No window, no second Save —
+    the page draft and save bar stay as in § 2.
+  - Order sections from most to least used. The destructive section ("Danger
+    zone") is one full-width red row **after** the groups: it holds actions,
+    not settings.
+  - **Below `lg`** the overview is the page; tapping a row opens that section
+    full-screen with a back arrow. A link to a particular section opens it
+    directly.
+  - This is not a second menu next to the sidebar (#1689): the rows describe
+    **this record's** state, they are not places in the app. Global Settings,
+    CRM and Accounting keep the sidebar.
 - Overview may *summarise* a setting and link to its section ("Photo source:
   External folder · watched" → Settings › Photo source).
 
@@ -86,8 +104,10 @@ migrate when they are touched — no big-bang rewrite.
 - Keep the draft at **page level**, so switching tabs never drops it, and
   register `useUnsavedChanges` there too (`EventDetailsPage.tsx`,
   `EventDetailsLoaded`).
-- Mark dirty sections (amber dot in the section list and on the Settings
-  tab) and name them in the save bar.
+- Mark dirty sections (amber dot and "not saved yet" on the section's row,
+  a dot on the Settings tab) and name them in the save bar. The open section
+  offers **Undo changes in this section**, which puts back only that
+  section's fields (`resetSection`); Discard in the bar drops everything.
 - Send **only what changed**. Build the request from the draft and from the
   server state the same way and send the difference (`settings/draft.ts`,
   `eventUpdatePayload`). Saving an untouched form writes nothing.

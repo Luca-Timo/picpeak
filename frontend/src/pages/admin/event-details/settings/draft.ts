@@ -259,6 +259,24 @@ export function dirtySections(draft: EventSettingsDraft, base: EventSettingsDraf
 }
 
 /**
+ * The draft with one section put back to the server state ("Undo changes in
+ * this section"). Every other section keeps its edits.
+ */
+export function resetSection(draft: EventSettingsDraft, base: EventSettingsDraft, section: SettingsSectionKey): EventSettingsDraft {
+  const fields = { ...draft.event } as Record<string, unknown>;
+  const baseFields = base.event as unknown as Record<string, unknown>;
+  (Object.keys(SECTION_OF_FIELD) as Array<keyof EventFields>).forEach((key) => {
+    if (SECTION_OF_FIELD[key] === section) fields[key] = baseFields[key];
+  });
+  return {
+    event: fields as unknown as EventFields,
+    feedback: section === 'guests' ? base.feedback : draft.feedback,
+    downloads: section === 'downloads' ? base.downloads : draft.downloads,
+    slideshow: section === 'slideshow' ? base.slideshow : draft.slideshow,
+  };
+}
+
+/**
  * The draft after the server state moved from `prevBase` to `server`. On the
  * events row this goes per FIELD: a field the admin has not touched takes the
  * server value, so a change made elsewhere (an instant action, another admin,

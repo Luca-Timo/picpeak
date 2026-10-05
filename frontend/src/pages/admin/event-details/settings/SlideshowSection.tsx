@@ -80,7 +80,6 @@ export const SlideshowSection: React.FC<{
 
   return (
     <SectionCard
-      title={t('slideshow.adminTitle', 'Live Slideshow')}
       description={t('slideshow.adminDescription', 'A separate fullscreen link for projectors at live events. It shows all published photos and automatically picks up new uploads while running.')}
     >
       {!token ? (
