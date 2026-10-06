@@ -1,4 +1,8 @@
-const SHARE_TOKEN_REGEX = /^[0-9a-fA-F]{32}$/;
+// 32 hex is what every gallery gets now. 64 hex: galleries converted from a
+// quote or a contract before that path minted a normal token. Their links
+// are already in customers' inboxes, so they stay valid rather than being
+// rotated. Keep in step with frontend/src/utils/shareToken.ts.
+const SHARE_TOKEN_REGEX = /^(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{64})$/;
 
 /**
  * Extracts the share token portion from a stored share link.
