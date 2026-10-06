@@ -416,7 +416,10 @@ function isUsableLogoUrl(value) {
 }
 
 // Wrap HTML body in the styled email template with header, footer, and logo
-async function wrapEmailHtml(htmlBody, subject, language = 'en') {
+// `inlineListPanels: false` skips inlining the info-panel style on <ul> tags,
+// for bodies that bring their own stylesheet (newsletter campaign body_css):
+// an inline style would beat every rule in it.
+async function wrapEmailHtml(htmlBody, subject, language = 'en', { inlineListPanels = true } = {}) {
   // Email colour palette. The two original settings (email_primary_color and
   // email_secondary_color) keep their existing semantics so emails sent by
   // upgraded instances render byte-for-byte identically until an admin
@@ -511,9 +514,12 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en') {
   // not style itself, so clients that strip <style> keep text and panel in
   // one readable pair.
   const listInlineStyle = `background-color:${listBgColor};color:${listTextColor};padding:20px 20px 20px 40px;border-radius:5px;margin:20px 0;`;
-  const inlinedBody = (typeof htmlBody === 'string' ? htmlBody : '')
-    .replace(/class="button"/g, `class="button" style="${buttonInlineStyle}"`)
-    .replace(/<ul(?![^>]*\sstyle\s*=)(\s[^>]*)?>/gi, (match, attrs = '') => `<ul style="${listInlineStyle}"${attrs}>`);
+  let inlinedBody = (typeof htmlBody === 'string' ? htmlBody : '')
+    .replace(/class="button"/g, `class="button" style="${buttonInlineStyle}"`);
+  if (inlineListPanels) {
+    inlinedBody = inlinedBody
+      .replace(/<ul(?![^>]*\sstyle\s*=)(\s[^>]*)?>/gi, (match, attrs = '') => `<ul style="${listInlineStyle}"${attrs}>`);
+  }
 
   return `
 <!DOCTYPE html>

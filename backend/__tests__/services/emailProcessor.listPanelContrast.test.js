@@ -59,6 +59,14 @@ describe('wrapEmailHtml — info panel text stays readable', () => {
     expect(dark).toContain('<ul style="background-color:#242424;color:#e5e5e5;');
   });
 
+  it('keeps list styling in <style> only when the caller opts out (newsletter body_css)', async () => {
+    await setColors({});
+    const html = await wrapEmailHtml(BODY, 'Subject', 'en', { inlineListPanels: false });
+    expect(html).toContain('<ul>');
+    expect(html).not.toContain('<ul style=');
+    expect(html).toMatch(/\.email-content ul \{\s*background-color: #f9f9f9;\s*color: #333333;/);
+  });
+
   it('leaves a <ul> the template styled itself alone', async () => {
     await setColors({});
     const html = await wrapEmailHtml('<ul class="x" style="color:red"><li>a</li></ul>', 'Subject', 'en');

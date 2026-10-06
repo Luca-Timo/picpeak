@@ -275,7 +275,8 @@ const MAX_MEASURE = 95;
 
 /** WCAG contrast ratio of a colour against white paper. */
 function contrastOnWhite(hex) {
-  return contrastRatio(hex, '#ffffff');
+  // Unparseable input never warned before (NaN < 4.5 is false); keep that.
+  return contrastRatio(hex, '#ffffff') ?? Infinity;
 }
 
 /** The width text runs across, in characters, for a resolved theme. */
