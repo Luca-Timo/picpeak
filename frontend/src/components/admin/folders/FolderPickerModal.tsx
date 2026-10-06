@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FolderInput, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useModalFocus } from '../../../hooks/useModalFocus';
 import { Button, Card } from '../../common';
 import type { FolderNode } from '../../../utils/folderTree';
 import { FolderTreePicker } from './FolderTreePicker';
@@ -40,11 +41,13 @@ const FolderPickerDialog: React.FC<FolderPickerModalProps> = ({
   initialValue,
 }) => {
   const { t } = useTranslation();
+  const panelRef = useModalFocus<HTMLDivElement>(true, onClose, isLoading);
   const [selected, setSelected] = useState<number | null | undefined>(initialValue);
   const picked = selected !== undefined && !(selected !== null && isDisabled?.(selected));
 
   return (
     <div
+      ref={panelRef}
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
       role="dialog"
       aria-modal="true"

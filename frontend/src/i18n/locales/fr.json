@@ -207,7 +207,9 @@
       "firstLookCallout_one": "Dossier de première sélection trouvé : « {{name}} ». Sa {{count}} photo est marquée « Première sélection », et cette galerie passe à la livraison en deux temps : les invités voient que d'autres photos arrivent jusqu'à ce que vous marquiez la galerie complète comme prête.",
       "firstLookCallout_many": "Dossier de première sélection trouvé : « {{name}} ». Ses {{count}} photos sont marquées « Première sélection », et cette galerie passe à la livraison en deux temps : les invités voient que d'autres photos arrivent jusqu'à ce que vous marquiez la galerie complète comme prête.",
       "firstLookCallout_other": "Dossier de première sélection trouvé : « {{name}} ». Ses {{count}} photos sont marquées « Première sélection », et cette galerie passe à la livraison en deux temps : les invités voient que d'autres photos arrivent jusqu'à ce que vous marquiez la galerie complète comme prête.",
-      "firstLookSettings": "Échéance et badge : Paramètres de cette galerie → Dossiers et livraison. Mots-clés : Paramètres → Événements."
+      "firstLookSettings": "Échéance et badge : Paramètres de cette galerie → Dossiers et livraison. Mots-clés : Paramètres → Événements.",
+      "nothingToUpload": "Aucun des fichiers sélectionnés ne peut être téléversé : ils se trouvent tous dans des dossiers masqués ou ignorés.",
+      "keptForNext": "Fichiers ajoutés pendant la préparation des dossiers, toujours sélectionnés : {{count}}."
     },
     "largeFileReplaceSkipped": "Le remplacement par nom n'est pas pris en charge pour les fichiers au-delà de la taille du lot ; téléversez-le sans remplacement."
   },
@@ -843,7 +845,16 @@
     "sortByStatus": "Trier par statut",
     "sortByExpiry": "Trier par expiration",
     "settingsTab": {
-      "delivery": "Dossiers et livraison"
+      "delivery": "Dossiers et livraison",
+      "about": {
+        "delivery": "Dossiers imbriqués issus des envois, et une première sélection avant la galerie complète."
+      },
+      "summary": {
+        "folderStructureOn": "Arborescence activée",
+        "folderStructureOff": "Envois sans dossiers",
+        "firstLookDue": "première sélection, galerie complète pour le {{date}}",
+        "firstLook": "première sélection, la suite après"
+      }
     },
     "folders": {
       "sectionTitle": "Dossiers",
@@ -876,7 +887,7 @@
       "sendMail": "Envoyer l'e-mail « Votre galerie complète est prête »",
       "sendMailHelp": "À l'adresse e-mail du client de cette galerie. Les workflows peuvent aussi réagir à « gallery.completed ».",
       "removeDuplicates": "Supprimer les doublons de la première sélection ({{count}})",
-      "removeDuplicatesHelp": "Ces photos de la première sélection sont revenues dans la galerie complète sous le même nom de fichier d'origine. Les copies de la galerie complète gardent le badge.",
+      "removeDuplicatesHelp": "Photos de la première sélection retrouvées dans la galerie complète : même nom de fichier d'origine, unique des deux côtés, et même heure de prise de vue (à défaut, même taille). La suppression est définitive ; les copies de la galerie complète reprennent le badge.",
       "removeDuplicatesNoPermission": "La suppression de photos nécessite l'autorisation photos.delete.",
       "completeAndNotify": "Marquer comme prête et prévenir",
       "completeOnly": "Marquer comme prête",
@@ -891,7 +902,8 @@
       "progressNoExpected": "Photos jusqu'à présent : {{count}}",
       "overdueShort": "En retard depuis le {{date}}",
       "dueShort": "Échéance le {{date}}",
-      "viewAllAwaiting": "Tout afficher"
+      "viewAllAwaiting": "Tout afficher",
+      "duplicatesNotRemoved": "La galerie est complète, mais les doublons de la première sélection n'ont pas pu être supprimés. Supprimez-les dans l'onglet Photos."
     },
     "externalSource": {
       "applyStructure": "Appliquer la structure des dossiers",

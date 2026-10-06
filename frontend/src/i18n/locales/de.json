@@ -923,7 +923,9 @@
       "needsAdminNotice_other": "{{count}} Ordner existieren noch nicht. Ihre Rolle darf hochladen, aber keine Ordner anlegen, deshalb gehen sie als Ordneranfragen an einen Admin. Bis ein Admin bestätigt, warten die {{files}} Fotos im nächstgelegenen vorhandenen Ordner (mit → angezeigt) und wandern nach der Bestätigung automatisch in die neuen Ordner.",
       "firstLookCallout_one": "First-look-Ordner gefunden: „{{name}}“. Sein {{count}} Foto wird als „First look“ markiert, und die Galerie wechselt zur zweistufigen Auslieferung: Gäste sehen, dass weitere Fotos unterwegs sind, bis Sie die vollständige Galerie als fertig markieren.",
       "firstLookCallout_other": "First-look-Ordner gefunden: „{{name}}“. Seine {{count}} Fotos werden als „First look“ markiert, und die Galerie wechselt zur zweistufigen Auslieferung: Gäste sehen, dass weitere Fotos unterwegs sind, bis Sie die vollständige Galerie als fertig markieren.",
-      "firstLookSettings": "Fälligkeit und Badge: Einstellungen dieser Galerie → Ordner & Auslieferung. Stichwörter: Einstellungen → Events."
+      "firstLookSettings": "Fälligkeit und Badge: Einstellungen dieser Galerie → Ordner & Auslieferung. Stichwörter: Einstellungen → Events.",
+      "nothingToUpload": "Keine der ausgewählten Dateien kann hochgeladen werden: Alle liegen in versteckten oder übersprungenen Ordnern.",
+      "keptForNext": "Dateien, die während der Vorbereitung der Ordner hinzukamen, sind noch ausgewählt: {{count}}."
     },
     "largeFileReplaceSkipped": "Ersetzen nach Dateiname ist für Dateien über der Stapelgröße nicht möglich; laden Sie die Datei ohne Ersetzen hoch."
   },
@@ -2610,7 +2612,8 @@
         "guests": "Uploads, Namen und Feedback der Gäste.",
         "reminder": "Die Erinnerungs-E-Mail an den Kunden vor dem Event.",
         "slideshow": "Ein Vollbild-Link für Beamer bei Live-Events.",
-        "source": "Woher die Fotos dieser Galerie kommen."
+        "source": "Woher die Fotos dieser Galerie kommen.",
+        "delivery": "Verschachtelte Ordner aus Uploads und eine erste Auswahl vor der vollständigen Galerie."
       },
       "access": "Zugang",
       "appearance": "Erscheinungsbild",
@@ -2683,7 +2686,11 @@
         "uploadsOn": "Uploads an",
         "watching": "wird überwacht",
         "watermarked": "mit Wasserzeichen",
-        "welcomeSet": "Willkommensnachricht gesetzt"
+        "welcomeSet": "Willkommensnachricht gesetzt",
+        "folderStructureOn": "Ordnerstruktur an",
+        "folderStructureOff": "Uploads ohne Ordner",
+        "firstLookDue": "erste Auswahl, vollständige Galerie bis {{date}}",
+        "firstLook": "erste Auswahl, mehr folgt"
       },
       "undoSection": "Diesen Bereich zurücksetzen",
       "delivery": "Ordner & Auslieferung"
@@ -2719,7 +2726,7 @@
       "sendMail": "E-Mail „Ihre vollständige Galerie ist da“ senden",
       "sendMailHelp": "An die Kunden-E-Mail dieser Galerie. Workflows können außerdem auf „gallery.completed“ reagieren.",
       "removeDuplicates": "{{count}} Duplikate der ersten Auswahl entfernen",
-      "removeDuplicatesHelp": "Diese Fotos der ersten Auswahl kamen mit demselben Originaldateinamen erneut in der vollständigen Galerie an. Die Kopien in der vollständigen Galerie behalten das Badge.",
+      "removeDuplicatesHelp": "Fotos der ersten Auswahl, die in der vollständigen Galerie erneut vorkommen: gleicher Originaldateiname, auf beiden Seiten eindeutig, und gleiche Aufnahmezeit (ohne Aufnahmezeit: gleiche Größe). Das Löschen ist endgültig; die Kopien in der vollständigen Galerie übernehmen das Badge.",
       "removeDuplicatesNoPermission": "Zum Löschen von Fotos ist die Berechtigung photos.delete nötig.",
       "completeAndNotify": "Als fertig markieren & benachrichtigen",
       "completeOnly": "Als fertig markieren",
@@ -2740,7 +2747,8 @@
       "progressNoExpected_one": "Bisher {{count}} Foto",
       "progressNoExpected_other": "Bisher {{count}} Fotos",
       "removeDuplicates_one": "{{count}} Duplikat der ersten Auswahl entfernen",
-      "removeDuplicates_other": "{{count}} Duplikate der ersten Auswahl entfernen"
+      "removeDuplicates_other": "{{count}} Duplikate der ersten Auswahl entfernen",
+      "duplicatesNotRemoved": "Die Galerie ist vollständig, aber die Duplikate der ersten Auswahl konnten nicht entfernt werden. Löschen Sie sie im Tab Fotos."
     }
   },
   "settings": {
@@ -8340,7 +8348,7 @@
       "pdfShowCompanyName": "Firmennamen im PDF-Briefkopf anzeigen",
       "pdfShowCompanyNameHelp": "Wenn deaktiviert, entfällt die Zeile mit dem Firmennamen (nützlich, wenn das Logo bereits eine Wortmarke mit dem Namen ist).",
       "pdfCompanyNameInline": "Firmennamen direkt über der Adresse darstellen",
-      "pdfCompanyNameInlineHelp": "Wenn aktiviert, erscheint der Firmenname als einfache Zeile direkt über der Strassenadresse (gleiche Grösse und Schriftstärke). Wenn deaktiviert, wird er als fetter Titel unter dem Logo dargestellt.",
+      "pdfCompanyNameInlineHelp": "Wenn aktiviert, erscheint der Firmenname als einfache Zeile direkt über der Strassenadresse (gleiche Größe und Schriftstärke). Wenn deaktiviert, wird er als fetter Titel unter dem Logo dargestellt.",
       "pdfQuoteShowNetDays": "Zahlungsfrist (Netto-Tage) auf Angebots-PDFs anzeigen",
       "pdfQuoteShowNetDaysHelp": "Wenn aktiviert, enthalten Angebots-PDFs die Zeile „X Tage ab Rechnungsdatum.“ im Block mit den Zahlungsbedingungen. Auf Rechnungen wird diese Zeile unabhängig davon immer angezeigt.",
       "pdfQuoteShowSkonto": "Skonto / Frühzahlerrabatt auf Angebots-PDFs anzeigen",

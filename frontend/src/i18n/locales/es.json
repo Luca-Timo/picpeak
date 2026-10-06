@@ -201,7 +201,9 @@
       "needsAdminNotice_other": "{{count}} carpetas aún no existen. Tu rol puede subir archivos, pero no crear carpetas, así que se envían a un administrador como solicitudes de carpeta. Hasta que un administrador las confirme, sus {{files}} fotos esperan en la carpeta existente más cercana (indicada con →) y pasan automáticamente a las nuevas carpetas una vez confirmadas.",
       "firstLookCallout_one": "Carpeta de primera selección encontrada: \"{{name}}\". Su {{count}} foto se marca como \"Primera selección\" y esta galería pasa a la entrega en dos etapas: los invitados ven que hay más fotos en camino hasta que marques la galería completa como lista.",
       "firstLookCallout_other": "Carpeta de primera selección encontrada: \"{{name}}\". Sus {{count}} fotos se marcan como \"Primera selección\" y esta galería pasa a la entrega en dos etapas: los invitados ven que hay más fotos en camino hasta que marques la galería completa como lista.",
-      "firstLookSettings": "Fecha y insignia: Ajustes de esta galería → Carpetas y entrega. Palabras clave: Ajustes → Eventos."
+      "firstLookSettings": "Fecha y insignia: Ajustes de esta galería → Carpetas y entrega. Palabras clave: Ajustes → Eventos.",
+      "nothingToUpload": "No se puede subir ninguno de los archivos seleccionados: todos están en carpetas ocultas u omitidas.",
+      "keptForNext": "Los archivos añadidos mientras se preparaban las carpetas siguen seleccionados: {{count}}."
     },
     "largeFileReplaceSkipped": "Reemplazar por nombre no está disponible para archivos que superan el tamaño del lote; súbelo sin reemplazar."
   },
@@ -851,7 +853,16 @@
     "sortByStatus": "Ordenar por estado",
     "sortByExpiry": "Ordenar por caducidad",
     "settingsTab": {
-      "delivery": "Carpetas y entrega"
+      "delivery": "Carpetas y entrega",
+      "about": {
+        "delivery": "Carpetas anidadas de las subidas y una primera selección antes de la galería completa."
+      },
+      "summary": {
+        "folderStructureOn": "Estructura de carpetas activada",
+        "folderStructureOff": "Subidas sin carpetas",
+        "firstLookDue": "primera selección, galería completa para el {{date}}",
+        "firstLook": "primera selección, más después"
+      }
     },
     "folders": {
       "sectionTitle": "Carpetas",
@@ -884,7 +895,7 @@
       "sendMail": "Enviar el correo «Su galería completa está lista»",
       "sendMailHelp": "Al correo del cliente de esta galería. Los flujos de trabajo también pueden reaccionar a «gallery.completed».",
       "removeDuplicates": "Quitar duplicados de la primera selección ({{count}})",
-      "removeDuplicatesHelp": "Estas fotos de la primera selección volvieron a llegar en la galería completa con el mismo nombre de archivo original. Las copias de la galería completa conservan la insignia.",
+      "removeDuplicatesHelp": "Fotos de la primera selección que vuelven a aparecer en la galería completa: mismo nombre de archivo original, único en ambos lados, y misma hora de captura (o, sin ella, mismo tamaño). Eliminar es definitivo; las copias de la galería completa conservan la insignia.",
       "removeDuplicatesNoPermission": "Para eliminar fotos se necesita el permiso photos.delete.",
       "completeAndNotify": "Marcar como lista y avisar",
       "completeOnly": "Marcar como lista",
@@ -899,7 +910,8 @@
       "progressNoExpected": "Fotos hasta ahora: {{count}}",
       "overdueShort": "Atrasada desde el {{date}}",
       "dueShort": "Vence el {{date}}",
-      "viewAllAwaiting": "Ver todas"
+      "viewAllAwaiting": "Ver todas",
+      "duplicatesNotRemoved": "La galería está completa, pero no se pudieron quitar los duplicados de la primera selección. Elimínalos en la pestaña Fotos."
     },
     "externalSource": {
       "applyStructure": "Aplicar estructura de carpetas",

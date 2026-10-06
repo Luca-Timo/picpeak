@@ -185,6 +185,8 @@ export function useEventSettingsDraft({
       queryClient.invalidateQueries({ queryKey: ['admin-event', String(event.id)] }),
       queryClient.invalidateQueries({ queryKey: ['admin-event-feedback-settings', String(event.id)] }),
       queryClient.invalidateQueries({ queryKey: ['event-download-resolutions', event.id] }),
+      // Saving "partial" brings up the status card and "Full gallery is ready".
+      queryClient.invalidateQueries({ queryKey: ['event-delivery', event.id] }),
       queryClient.invalidateQueries({ queryKey: ['admin-events'] }),
     ]);
     setIsSaving(false);

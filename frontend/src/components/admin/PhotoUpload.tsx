@@ -386,8 +386,12 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
     // Files from folders: resolve their directories for real (creates the
     // folders, or opens folder requests for an upload-only role), then send
     // one batch per placement. Loose files keep the old single batch.
+    // What this click sends. Files dropped while the folders below resolve
+    // are not part of it: they stay selected for the next upload instead of
+    // being cleared unsent (review of PR 1826, concern 14).
+    const sending = selectedFilesRef.current;
     let batches: UploadBatch[] = [{
-      files: selectedFiles.map((picked) => picked.file),
+      files: sending.map((picked) => picked.file),
       placement: { categoryId: selectedCategoryId, folderId: looseFolderId },
     }];
     if (withFolders) {
@@ -403,7 +407,7 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
           keepStructure,
           dryRun: false,
         });
-        batches = groupFilesByPlacement(selectedFiles, result.results, {
+        batches = groupFilesByPlacement(sending, result.results, {
           categoryId: selectedCategoryId,
           looseFolderId,
         }).groups;
@@ -416,6 +420,14 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
       }
     }
 
+    batches = batches.filter((batch) => batch.files.length > 0);
+    if (batches.length === 0) {
+      // Everything sat in hidden or skipped folders: say so instead of
+      // closing the dialog as if an upload had started.
+      toast.warning(t('upload.structure.nothingToUpload', 'None of the selected files can be uploaded: they are all in hidden or skipped folders.'));
+      return;
+    }
+
     startUpload({
       eventId,
       batches,
@@ -424,12 +436,19 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
       maxBytesPerChunk: maxBatchSizeMb * 1024 * 1024,
     });
 
-    commitSelection([]);
+    const sentSet = new Set(sending);
+    const leftOver = selectedFilesRef.current.filter((picked) => !sentSet.has(picked));
+    commitSelection(leftOver);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
     if (folderInputRef.current) {
       folderInputRef.current.value = '';
+    }
+    if (leftOver.length > 0) {
+      // Keep the dialog open with what arrived while preparing.
+      toast.info(t('upload.structure.keptForNext', 'Files added while the folders were prepared are still selected: {{count}}.', { count: leftOver.length }));
+      return;
     }
     onUploadStarted?.();
   };

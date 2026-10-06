@@ -248,7 +248,9 @@
       "firstLookCallout_one": "Pasta de primeira seleção encontrada: \"{{name}}\". A {{count}} foto dela é marcada como \"Primeira seleção\" e esta galeria passa para a entrega em duas etapas: os convidados veem que há mais fotos a caminho até que você marque a galeria completa como pronta.",
       "firstLookCallout_many": "Pasta de primeira seleção encontrada: \"{{name}}\". As {{count}} fotos dela são marcadas como \"Primeira seleção\" e esta galeria passa para a entrega em duas etapas: os convidados veem que há mais fotos a caminho até que você marque a galeria completa como pronta.",
       "firstLookCallout_other": "Pasta de primeira seleção encontrada: \"{{name}}\". As {{count}} fotos dela são marcadas como \"Primeira seleção\" e esta galeria passa para a entrega em duas etapas: os convidados veem que há mais fotos a caminho até que você marque a galeria completa como pronta.",
-      "firstLookSettings": "Prazo e selo: Configurações desta galeria → Pastas e entrega. Palavras-chave: Configurações → Eventos."
+      "firstLookSettings": "Prazo e selo: Configurações desta galeria → Pastas e entrega. Palavras-chave: Configurações → Eventos.",
+      "nothingToUpload": "Nenhum dos arquivos selecionados pode ser enviado: estão todos em pastas ocultas ou ignoradas.",
+      "keptForNext": "Arquivos adicionados enquanto as pastas eram preparadas continuam selecionados: {{count}}."
     },
     "largeFileReplaceSkipped": "Substituir pelo nome não é suportado para arquivos acima do tamanho do lote; envie-o sem substituir."
   },
@@ -958,7 +960,16 @@
     "sortByStatus": "Ordenar por estado",
     "sortByExpiry": "Ordenar por expiração",
     "settingsTab": {
-      "delivery": "Pastas e entrega"
+      "delivery": "Pastas e entrega",
+      "about": {
+        "delivery": "Pastas aninhadas a partir dos envios e uma primeira seleção antes da galeria completa."
+      },
+      "summary": {
+        "folderStructureOn": "Estrutura de pastas ativada",
+        "folderStructureOff": "Envios sem pastas",
+        "firstLookDue": "primeira seleção, galeria completa até {{date}}",
+        "firstLook": "primeira seleção, mais depois"
+      }
     },
     "folders": {
       "sectionTitle": "Pastas",
@@ -991,7 +1002,7 @@
       "sendMail": "Enviar o e-mail «A sua galeria completa está pronta»",
       "sendMailHelp": "Para o e-mail do cliente desta galeria. Os fluxos de trabalho também podem reagir a «gallery.completed».",
       "removeDuplicates": "Remover duplicados da primeira seleção ({{count}})",
-      "removeDuplicatesHelp": "Estas fotos da primeira seleção chegaram novamente na galeria completa com o mesmo nome de arquivo original. As cópias da galeria completa mantêm o selo.",
+      "removeDuplicatesHelp": "Fotos da primeira seleção encontradas novamente na galeria completa: mesmo nome de arquivo original, único em ambos os lados, e mesma hora de captura (ou, sem ela, mesmo tamanho). A exclusão é definitiva; as cópias da galeria completa assumem o selo.",
       "removeDuplicatesNoPermission": "Excluir fotos requer a permissão photos.delete.",
       "completeAndNotify": "Marcar como pronta e avisar",
       "completeOnly": "Marcar como pronta",
@@ -1006,7 +1017,8 @@
       "progressNoExpected": "Fotos até agora: {{count}}",
       "overdueShort": "Atrasada desde {{date}}",
       "dueShort": "Vence em {{date}}",
-      "viewAllAwaiting": "Ver todas"
+      "viewAllAwaiting": "Ver todas",
+      "duplicatesNotRemoved": "A galeria está completa, mas os duplicados da primeira seleção não puderam ser removidos. Exclua-os na guia Fotos."
     },
     "externalSource": {
       "applyStructure": "Aplicar estrutura de pastas",

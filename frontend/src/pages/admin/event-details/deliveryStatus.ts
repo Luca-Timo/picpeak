@@ -13,12 +13,21 @@ export interface DeliveryDue {
 const DAY_MS = 864e5;
 export const DUE_SOON_DAYS = 2;
 
+/**
+ * The promise is a calendar date ("by the 20th", stored at noon UTC so it
+ * reads the same everywhere): it is overdue once that whole day is over in
+ * the admin's timezone, not at the stored noon. `days` counts calendar days.
+ */
 export function deliveryDue(dueAt: string | null | undefined, now: Date = new Date()): DeliveryDue | null {
   if (!dueAt) return null;
-  const date = new Date(dueAt);
-  if (Number.isNaN(date.getTime())) return null;
-  const days = Math.ceil((date.getTime() - now.getTime()) / DAY_MS);
-  const tone = date.getTime() <= now.getTime() ? 'overdue' : days <= DUE_SOON_DAYS ? 'soon' : 'ok';
+  const parsed = new Date(dueAt);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const [y, m, d] = parsed.toISOString().slice(0, 10).split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const endOfDay = new Date(y, m - 1, d, 23, 59, 59, 999);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((date.getTime() - today.getTime()) / DAY_MS);
+  const tone = endOfDay.getTime() < now.getTime() ? 'overdue' : days <= DUE_SOON_DAYS ? 'soon' : 'ok';
   return { date, days, tone };
 }
 

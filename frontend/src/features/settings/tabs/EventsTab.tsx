@@ -45,6 +45,18 @@ export const EventsTab: React.FC<EventsTabProps> = ({
   onDiscard,
 }) => {
   const { t } = useTranslation();
+  // The keyword field edits the raw text; the list is parsed from it on each
+  // change but the text is not re-joined, so Backspace can delete the space
+  // after a comma. Re-synced when the stored list changes elsewhere (load,
+  // discard).
+  const keywordList = eventSettings.first_look_folder_keywords.join(', ');
+  const [keywordText, setKeywordText] = React.useState(keywordList);
+  const lastSyncedKeywords = React.useRef(keywordList);
+  React.useEffect(() => {
+    const parsed = keywordText.split(',').map((k) => k.trim()).filter(Boolean).join(', ');
+    if (keywordList !== lastSyncedKeywords.current && keywordList !== parsed) setKeywordText(keywordList);
+    lastSyncedKeywords.current = keywordList;
+  }, [keywordList, keywordText]);
 
   return (
     <div className="space-y-6">
@@ -355,15 +367,14 @@ export const EventsTab: React.FC<EventsTabProps> = ({
                 <input
                   id="first_look_folder_keywords"
                   type="text"
-                  value={eventSettings.first_look_folder_keywords.join(', ')}
-                  onChange={(e) => setEventSettings(prev => ({
-                    ...prev,
-                    first_look_folder_keywords: e.target.value.split(',').map((k) => k.trimStart()),
-                  }))}
-                  onBlur={() => setEventSettings(prev => ({
-                    ...prev,
-                    first_look_folder_keywords: prev.first_look_folder_keywords.map((k) => k.trim()).filter(Boolean),
-                  }))}
+                  value={keywordText}
+                  onChange={(e) => {
+                    setKeywordText(e.target.value);
+                    setEventSettings(prev => ({
+                      ...prev,
+                      first_look_folder_keywords: e.target.value.split(',').map((k) => k.trim()).filter(Boolean),
+                    }));
+                  }}
                   className="w-full max-w-md px-3 py-2 border border-line-strong rounded-lg bg-panel text-heading text-sm"
                 />
                 <p className="text-xs text-muted mt-1">

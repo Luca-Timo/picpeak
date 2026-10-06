@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useModalFocus } from '../../../hooks/useModalFocus';
 import { Button, Card } from '../../common';
 
 interface FolderNameModalProps {
@@ -31,6 +32,7 @@ const FolderNameDialog: React.FC<FolderNameModalProps> = ({
   onConfirm,
 }) => {
   const { t } = useTranslation();
+  const panelRef = useModalFocus<HTMLDivElement>(true, onClose, isLoading);
   const [name, setName] = useState(initialName);
   const trimmed = name.trim();
   const submit = () => {
@@ -39,6 +41,7 @@ const FolderNameDialog: React.FC<FolderNameModalProps> = ({
 
   return (
     <div
+      ref={panelRef}
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
       role="dialog"
       aria-modal="true"

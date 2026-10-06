@@ -18,6 +18,7 @@ import { Button } from '../../../components/common';
 import { eventsService, type DeliveryState } from '../../../services/events.service';
 import { photosService } from '../../../services/photos.service';
 import { usePermission } from '../../../hooks/usePermission';
+import { useModalFocus } from '../../../hooks/useModalFocus';
 
 interface CompleteDeliveryDialogProps {
   eventId: number;
@@ -32,27 +33,37 @@ export const CompleteDeliveryDialog: React.FC<CompleteDeliveryDialogProps> = ({ 
   const queryClient = useQueryClient();
   const canDelete = usePermission('photos.delete');
   const [sendEmail, setSendEmail] = useState(true);
-  const [removeDuplicates, setRemoveDuplicates] = useState(true);
+  // Off by default: removing deletes photos, and the pairing (same original
+  // name, unique on both sides, same capture time or same size) is a strong
+  // hint, not proof. The admin opts in having seen the count.
+  const [removeDuplicates, setRemoveDuplicates] = useState(false);
 
+  const refresh = () => {
+    // Prefix keys: the event page keys its queries by the route param.
+    queryClient.invalidateQueries({ queryKey: ['event-delivery', eventId] });
+    queryClient.invalidateQueries({ queryKey: ['admin-event'] });
+    queryClient.invalidateQueries({ queryKey: ['admin-event-photos'] });
+    queryClient.invalidateQueries({ queryKey: ['admin-events'] });
+  };
+
+  // Completing and removing duplicates are two requests with two outcomes:
+  // a failed delete must not read as "could not be marked as complete" when
+  // the gallery is complete and the mail is queued.
   const complete = useMutation({
-    mutationFn: async () => {
-      const result = await eventsService.completeDelivery(eventId, { sendEmail });
-      let removed = 0;
-      if (removeDuplicates && canDelete && result.duplicate_photo_ids.length > 0) {
-        await photosService.deletePhotos(eventId, result.duplicate_photo_ids);
-        removed = result.duplicate_photo_ids.length;
-      }
-      return { ...result, removed };
-    },
-    onSuccess: (result) => {
-      // Prefix keys: the event page keys its queries by the route param.
-      queryClient.invalidateQueries({ queryKey: ['event-delivery', eventId] });
-      queryClient.invalidateQueries({ queryKey: ['admin-event'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-event-photos'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-events'] });
+    mutationFn: () => eventsService.completeDelivery(eventId, { sendEmail }),
+    onSuccess: async (result) => {
+      refresh();
       toast.success(result.email_queued
         ? t('events.delivery.completedMailed', 'The gallery is complete. The customer has been notified.')
         : t('events.delivery.completed', 'The gallery is complete.'));
+      if (removeDuplicates && canDelete && result.duplicate_photo_ids.length > 0) {
+        try {
+          await photosService.deletePhotos(eventId, result.duplicate_photo_ids);
+          refresh();
+        } catch {
+          toast.error(t('events.delivery.duplicatesNotRemoved', 'The gallery is complete, but the first-look duplicates could not be removed. Delete them from the Photos tab.'));
+        }
+      }
       onCompleted();
       onClose();
     },
@@ -60,6 +71,8 @@ export const CompleteDeliveryDialog: React.FC<CompleteDeliveryDialogProps> = ({ 
       toast.error(err.response?.data?.error || t('events.delivery.completeFailed', 'The gallery could not be marked as complete.'));
     },
   });
+
+  const panelRef = useModalFocus<HTMLDivElement>(isOpen, onClose, complete.isPending);
 
   if (!isOpen) return null;
   const guestsSee = Math.max(0, state.delivered_count - (removeDuplicates && canDelete ? state.duplicate_count : 0));
@@ -73,7 +86,7 @@ export const CompleteDeliveryDialog: React.FC<CompleteDeliveryDialogProps> = ({ 
       aria-labelledby="complete-delivery-title"
       onClick={(e) => { if (e.target === e.currentTarget && !complete.isPending) onClose(); }}
     >
-      <div className="bg-shell rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
+      <div ref={panelRef} className="bg-shell rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
         <div className="px-6 py-4 border-b border-line flex items-center justify-between gap-4">
           <h2 id="complete-delivery-title" className="text-lg font-semibold text-heading flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5 text-accent" />
@@ -117,7 +130,7 @@ export const CompleteDeliveryDialog: React.FC<CompleteDeliveryDialogProps> = ({ 
                 </span>
                 <span className="text-xs text-muted">
                   {canDelete
-                    ? t('events.delivery.removeDuplicatesHelp', 'These first-look photos arrived again in the full set under the same original filename. The copies in the full set keep the badge.')
+                    ? t('events.delivery.removeDuplicatesHelp', 'First-look photos found again in the full set: same original filename, unique on both sides, and the same capture time (or, without one, the same size). Deleting is permanent; the copies in the full set take over the badge.')
                     : t('events.delivery.removeDuplicatesNoPermission', 'Deleting photos needs the photos.delete permission.')}
                 </span>
               </span>

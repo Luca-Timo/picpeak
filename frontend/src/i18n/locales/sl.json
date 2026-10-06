@@ -925,7 +925,9 @@
       "firstLookCallout_two": "Najdena je mapa prvega izbora: »{{name}}«. Njene fotografije ({{count}}) so označene kot »Prvi izbor« in galerija preklopi na dostavo v dveh korakih: gostje vidijo, da je na poti še več fotografij, dokler celotne galerije ne označite kot pripravljene.",
       "firstLookCallout_few": "Najdena je mapa prvega izbora: »{{name}}«. Njene fotografije ({{count}}) so označene kot »Prvi izbor« in galerija preklopi na dostavo v dveh korakih: gostje vidijo, da je na poti še več fotografij, dokler celotne galerije ne označite kot pripravljene.",
       "firstLookCallout_other": "Najdena je mapa prvega izbora: »{{name}}«. Njene fotografije ({{count}}) so označene kot »Prvi izbor« in galerija preklopi na dostavo v dveh korakih: gostje vidijo, da je na poti še več fotografij, dokler celotne galerije ne označite kot pripravljene.",
-      "firstLookSettings": "Rok in oznaka: nastavitve te galerije → Mape in dostava. Ključne besede: Nastavitve → Dogodki."
+      "firstLookSettings": "Rok in oznaka: nastavitve te galerije → Mape in dostava. Ključne besede: Nastavitve → Dogodki.",
+      "nothingToUpload": "Nobene od izbranih datotek ni mogoče naložiti: vse so v skritih ali preskočenih mapah.",
+      "keptForNext": "Datoteke, dodane med pripravo map, so še vedno izbrane: {{count}}."
     },
     "largeFileReplaceSkipped": "Zamenjava po imenu ni podprta za datoteke, večje od velikosti paketa; naložite jo brez zamenjave."
   },
@@ -1963,7 +1965,16 @@
     "sortByStatus": "Razvrsti po stanju",
     "sortByExpiry": "Razvrsti po poteku",
     "settingsTab": {
-      "delivery": "Mape in dostava"
+      "delivery": "Mape in dostava",
+      "about": {
+        "delivery": "Gnezdene mape iz nalaganj in prvi izbor pred celotno galerijo."
+      },
+      "summary": {
+        "folderStructureOn": "Struktura map vklopljena",
+        "folderStructureOff": "Nalaganja brez map",
+        "firstLookDue": "prvi izbor, celotna galerija do {{date}}",
+        "firstLook": "prvi izbor, več sledi"
+      }
     },
     "folders": {
       "sectionTitle": "Mape",
@@ -1996,7 +2007,7 @@
       "sendMail": "Pošlji e-pošto »Vaša celotna galerija je pripravljena«",
       "sendMailHelp": "Na e-poštni naslov stranke te galerije. Poteki dela se lahko odzovejo tudi na »gallery.completed«.",
       "removeDuplicates": "Odstrani dvojnike prvega izbora ({{count}})",
-      "removeDuplicatesHelp": "Te fotografije prvega izbora so v celotni galeriji prispele znova z istim izvirnim imenom datoteke. Kopije v celotni galeriji obdržijo oznako.",
+      "removeDuplicatesHelp": "Fotografije prvega izbora, ponovno najdene v celotni galeriji: isto izvirno ime datoteke, edinstveno na obeh straneh, in isti čas posnetka (ali, brez njega, ista velikost). Brisanje je trajno; oznako prevzamejo kopije v celotni galeriji.",
       "removeDuplicatesNoPermission": "Za brisanje fotografij je potrebno dovoljenje photos.delete.",
       "completeAndNotify": "Označi kot pripravljeno in obvesti",
       "completeOnly": "Označi kot pripravljeno",
@@ -2011,7 +2022,8 @@
       "progressNoExpected": "Fotografije do zdaj: {{count}}",
       "overdueShort": "Zamuda od {{date}}",
       "dueShort": "Rok {{date}}",
-      "viewAllAwaiting": "Prikaži vse"
+      "viewAllAwaiting": "Prikaži vse",
+      "duplicatesNotRemoved": "Galerija je celotna, dvojnikov prvega izbora pa ni bilo mogoče odstraniti. Izbrišite jih na zavihku Fotografije."
     },
     "externalSource": {
       "applyStructure": "Uporabi strukturo map",

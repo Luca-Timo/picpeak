@@ -923,7 +923,9 @@
       "needsAdminNotice_other": "{{count}} folders don't exist yet. Your role can upload but not create folders, so they're sent to an admin as folder requests. Until an admin confirms, their {{files}} photos wait in the closest existing folder (shown with →) and move into the new folders automatically once confirmed.",
       "firstLookCallout_one": "First-look folder found: \"{{name}}\". Its {{count}} photo is badged \"First look\", and this gallery switches to two-stage delivery: guests see that more photos are on their way until you mark the full gallery as ready.",
       "firstLookCallout_other": "First-look folder found: \"{{name}}\". Its {{count}} photos are badged \"First look\", and this gallery switches to two-stage delivery: guests see that more photos are on their way until you mark the full gallery as ready.",
-      "firstLookSettings": "Due date and badge: this gallery’s Settings → Folders & delivery. Keywords: Settings → Events."
+      "firstLookSettings": "Due date and badge: this gallery’s Settings → Folders & delivery. Keywords: Settings → Events.",
+      "nothingToUpload": "None of the selected files can be uploaded: they are all in hidden or skipped folders.",
+      "keptForNext": "Files added while the folders were prepared are still selected: {{count}}."
     },
     "largeFileReplaceSkipped": "Replace-by-name is not supported for files above the batch size; upload it without replace."
   },
@@ -2072,7 +2074,8 @@
         "guests": "Guest uploads, names and feedback.",
         "reminder": "The reminder email to the customer before the event.",
         "slideshow": "A fullscreen link for projectors at live events.",
-        "source": "Where the photos of this gallery come from."
+        "source": "Where the photos of this gallery come from.",
+        "delivery": "Nested folders from uploads, and delivering a first look before the full gallery."
       },
       "access": "Access",
       "appearance": "Appearance",
@@ -2145,7 +2148,11 @@
         "uploadsOn": "Uploads on",
         "watching": "watching",
         "watermarked": "watermarked",
-        "welcomeSet": "welcome message set"
+        "welcomeSet": "welcome message set",
+        "folderStructureOn": "Folder structure on",
+        "folderStructureOff": "Flat uploads",
+        "firstLookDue": "first look, full gallery by {{date}}",
+        "firstLook": "first look, more to come"
       },
       "undoSection": "Undo changes in this section",
       "delivery": "Folders & delivery"
@@ -2181,7 +2188,7 @@
       "sendMail": "Send the \"your complete gallery is ready\" email",
       "sendMailHelp": "To the customer email of this gallery. Workflows can also react to \"gallery.completed\".",
       "removeDuplicates": "Remove {{count}} first-look duplicates",
-      "removeDuplicatesHelp": "These first-look photos arrived again in the full set under the same original filename. The copies in the full set keep the badge.",
+      "removeDuplicatesHelp": "First-look photos found again in the full set: same original filename, unique on both sides, and the same capture time (or, without one, the same size). Deleting is permanent; the copies in the full set take over the badge.",
       "removeDuplicatesNoPermission": "Deleting photos needs the photos.delete permission.",
       "completeAndNotify": "Mark as ready & notify",
       "completeOnly": "Mark as ready",
@@ -2202,7 +2209,8 @@
       "progressNoExpected_one": "{{count}} photo so far",
       "progressNoExpected_other": "{{count}} photos so far",
       "removeDuplicates_one": "Remove {{count}} first-look duplicate",
-      "removeDuplicates_other": "Remove {{count}} first-look duplicates"
+      "removeDuplicates_other": "Remove {{count}} first-look duplicates",
+      "duplicatesNotRemoved": "The gallery is complete, but the first-look duplicates could not be removed. Delete them from the Photos tab."
     }
   },
   "settings": {
