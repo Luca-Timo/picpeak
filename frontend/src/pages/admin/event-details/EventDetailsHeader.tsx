@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   ExternalLink,
+  Info,
   Calendar,
   Archive,
   AlertTriangle,
@@ -223,14 +224,17 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
                   tooltip, and Publish is in the action row. Anchored at its
                   start, since on a phone it wraps to the left edge. */}
               {event.is_draft ? (
-                <span
-                  tabIndex={0}
+                // A button so a click or tap opens the explanation too, and the
+                // info icon says there is one.
+                <button
+                  type="button"
                   data-tooltip={t('events.draftBanner')}
                   aria-label={`${t('events.draft')}: ${t('events.draftBanner')}`}
-                  className="info-tooltip info-tooltip-start items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300"
+                  className="info-tooltip info-tooltip-start items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-900/60"
                 >
                   {t('events.draft')}
-                </span>
+                  <Info className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
               ) : null}
               {archived ? (
                 <span className="text-muted flex items-center">

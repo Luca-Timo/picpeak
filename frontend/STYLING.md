@@ -173,7 +173,7 @@ component, not re-created next to it.
 | Panes that scroll on their own | `useFillViewport()` (`admin/fillViewport`) | the page fills the window from `lg`; see Layout › Split views |
 | Permission gate | `PermissionGate`, `usePermission`, `useAnyPermission`; route level `RequirePermission` | see UX.md › Permissions |
 | Picker tile | `.tile-selected` on the chosen tile, `border-2 border-line` on the rest | |
-| Hover help | `<span class="info-tooltip" data-tooltip="…">`; add `info-tooltip-start` when the trigger can sit at the left edge | for a short hint on an icon or a status pill; longer help goes under the field. Give a focusable trigger (`tabIndex={0}`) an `aria-label` with the same text |
+| Hover help | `<span class="info-tooltip" data-tooltip="…">`; add `info-tooltip-start` when the trigger can sit at the left edge | for a short hint on an icon or a status pill; longer help goes under the field. A trigger people should click (a status pill) is a `<button>` with an `Info` icon (`w-3.5 h-3.5`) and an `aria-label` with the same text; it opens on click too |
 
 ## Layout and spacing
 

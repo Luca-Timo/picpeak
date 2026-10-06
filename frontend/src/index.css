@@ -373,6 +373,12 @@
     transform: none;
   }
 
+  /* A tooltip on a button (a status pill with an info icon) also opens on
+     click or tap, which focuses it without :focus-visible. */
+  button.info-tooltip:focus::after {
+    opacity: 1;
+  }
+
   /* Image loading skeleton */
   .skeleton {
     @apply animate-pulse rounded-lg bg-neutral-200;
