@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -90,8 +90,12 @@ interface AdminLayoutInnerProps {
 const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, mustChangePassword }) => {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [bottomBarSlot, setBottomBarSlot] = useState<HTMLDivElement | null>(null);
-  // A page that gives its panes their own scrollbars (useFillViewport).
-  const [fillViewport, setFillViewport] = useState(false);
+  // Pages that give their panes their own scrollbars (useFillViewport). A
+  // count, not a flag, so one consumer unmounting cannot switch it off under
+  // another that is still mounted.
+  const [fillCount, setFillCount] = useState(0);
+  const fillViewport = fillCount > 0;
+  const setFillViewport = useCallback((on: boolean) => setFillCount((n) => Math.max(0, n + (on ? 1 : -1))), []);
   const { t } = useTranslation();
 
   // Cmd+K on a Mac, Ctrl+K everywhere else. NOT "either modifier": Ctrl+K on

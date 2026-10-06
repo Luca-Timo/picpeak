@@ -12,7 +12,10 @@ import { createContext, useContext, useEffect } from 'react';
  */
 export const FillViewportContext = createContext<((on: boolean) => void) | null>(null);
 
-/** Fill the content column while the calling component is mounted. */
+/**
+ * Fill the content column while the calling component is mounted. The
+ * layout counts callers: true on mount adds one, false on unmount removes it.
+ */
 export function useFillViewport(): void {
   const setFill = useContext(FillViewportContext);
   useEffect(() => {

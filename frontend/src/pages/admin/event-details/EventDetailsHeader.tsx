@@ -113,6 +113,54 @@ const ActionsMenu: React.FC<{ items: MenuItem[]; align?: 'left' | 'right'; class
   );
 };
 
+/**
+ * The draft marker. What a draft means is its tooltip; the info icon says
+ * there is one. It opens on hover, keyboard focus, and on click or tap via
+ * its own state, since Safari does not focus a button it clicks. Escape or a
+ * click elsewhere closes it; Escape also hides it while it is still hovered
+ * or focused (WCAG 1.4.13), until the pointer or focus leaves.
+ */
+export const DraftPill: React.FC = () => {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const ref = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('touchstart', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      data-tooltip={t('events.draftBanner')}
+      aria-label={`${t('events.draft')}: ${t('events.draftBanner')}`}
+      aria-expanded={open}
+      onClick={() => { setDismissed(false); setOpen((o) => !o); }}
+      onKeyDown={(e) => { if (e.key === 'Escape') { setOpen(false); setDismissed(true); } }}
+      onBlur={() => setDismissed(false)}
+      onMouseLeave={() => setDismissed(false)}
+      className={`info-tooltip info-tooltip-start ${open ? 'is-open' : ''} ${dismissed ? 'is-dismissed' : ''} items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-200 hover:text-yellow-800 dark:hover:bg-yellow-900/60`}
+    >
+      {t('events.draft')}
+      <Info className="w-3.5 h-3.5" aria-hidden="true" />
+    </button>
+  );
+};
+
 export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
   event,
   setShowRenameDialog,
@@ -211,7 +259,7 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
                   below. From sm it is the first item of the action row. */}
               <ActionsMenu items={menuItems} align="right" className="ml-auto shrink-0 sm:hidden" />
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-soft">
+            <div className="relative flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-soft">
               {event.event_date && (
                 <span className="flex items-center">
                   <Calendar className="w-4 h-4 mr-1" />
@@ -229,21 +277,10 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
                 {isGalleryPublic(event.require_password) ? t('events.publicAccess', 'Public access') : t('events.passwordProtected', 'Password protected')}
               </span>
               {/* The pill is the only draft marker: what a draft means is its
-                  tooltip, and Publish is in the action row. Anchored at its
-                  start, since on a phone it wraps to the left edge. */}
-              {event.is_draft ? (
-                // A button so a click or tap opens the explanation too, and the
-                // info icon says there is one.
-                <button
-                  type="button"
-                  data-tooltip={t('events.draftBanner')}
-                  aria-label={`${t('events.draft')}: ${t('events.draftBanner')}`}
-                  className="info-tooltip info-tooltip-start items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-200 dark:hover:bg-yellow-900/60"
-                >
-                  {t('events.draft')}
-                  <Info className="w-3.5 h-3.5" aria-hidden="true" />
-                </button>
-              ) : null}
+                  tooltip, and Publish is in the action row. The row is
+                  `relative`: on a phone the tooltip anchors to it, so it
+                  starts at the content edge wherever the pill wrapped to. */}
+              {event.is_draft ? <DraftPill /> : null}
               {archived ? (
                 <span className="text-muted flex items-center">
                   <Archive className="w-4 h-4 mr-1" />
@@ -342,7 +379,8 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
         <Card className={`p-4 mb-6 border-2 ${isExpired ? 'border-red-500 bg-red-50 dark:bg-red-900/20' : 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'}`}>
           <div className="flex items-start gap-3">
             <AlertTriangle className={`w-5 h-5 flex-shrink-0 ${isExpired ? 'text-red-600' : 'text-orange-600'}`} />
-            {/* Same wrapping row as the draft banner above. */}
+            {/* Text and action share a wrapping row beside the icon: on a
+                phone the button drops under the text, lined up with it. */}
             <div className="flex-1 min-w-0 flex flex-wrap items-start justify-between gap-3">
               <div className="flex-1 basis-64 min-w-0">
                 <p className={`font-medium ${isExpired ? 'text-red-900 dark:text-red-200' : 'text-orange-900 dark:text-orange-200'}`}>

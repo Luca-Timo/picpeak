@@ -288,7 +288,7 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
     // the bottom is padding inside the panes, so their content scrolls right
     // up to the tabs' line and down to the save bar. A floor on the height
     // keeps the panes usable on a very short window; the page scrolls then.
-    <div className="lg:flex-1 lg:min-h-[20rem]">
+    <div className="lg:flex-1 lg:min-h-80">
       <div className="grid grid-cols-1 lg:h-full lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)] 2xl:grid-cols-[420px_minmax(0,1fr)] gap-6 xl:gap-8 2xl:gap-10">
         <div ref={overviewRef} className={`${phoneOpen ? 'hidden lg:block' : ''} lg:min-h-0 lg:overflow-y-auto lg:pr-1 lg:pt-6 lg:pb-8`}>
           <SettingsOverview

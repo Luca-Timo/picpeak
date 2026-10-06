@@ -173,7 +173,7 @@ component, not re-created next to it.
 | Panes that scroll on their own | `useFillViewport()` (`admin/fillViewport`) | the page fills the window from `lg`; see Layout › Split views |
 | Permission gate | `PermissionGate`, `usePermission`, `useAnyPermission`; route level `RequirePermission` | see UX.md › Permissions |
 | Picker tile | `.tile-selected` on the chosen tile, `border-2 border-line` on the rest | |
-| Hover help | `<span class="info-tooltip" data-tooltip="…">`; add `info-tooltip-start` when the trigger can sit at the left edge | for a short hint on an icon or a status pill; longer help goes under the field. A trigger people should click (a status pill) is a `<button>` with an `Info` icon (`w-3.5 h-3.5`) and an `aria-label` with the same text; it opens on click too |
+| Hover help | `<span class="info-tooltip" data-tooltip="…">` for a hint on an icon | longer help goes under the field. A tooltip people should click (a status pill) follows `DraftPill` (`event-details/EventDetailsHeader.tsx`): a `<button>` with an `Info` icon (`w-3.5 h-3.5`), `info-tooltip info-tooltip-start`, its own open state for click/tap (Safari does not focus a clicked button), Escape and an outside click to close, and an `aria-label` with the same text. `info-tooltip-start` takes the bubble out of layout while closed and, on a phone, anchors it to the nearest `relative` row |
 
 ## Layout and spacing
 

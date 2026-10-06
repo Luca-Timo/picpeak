@@ -41,6 +41,7 @@ const event = {
   customer_accounts: [
     { id: 11, email: 'nico@example.com', display_name: null, first_name: 'Nico', last_name: 'Beispiel' },
     { id: 12, email: 'team@example.com', display_name: null, first_name: null, last_name: null },
+    { id: 13, email: 'studio@example.com', display_name: 'Studio Nord', first_name: 'Ana', last_name: 'Nord' },
   ],
 } as unknown as Event;
 
@@ -75,12 +76,13 @@ describe('OverviewTab — assigned customer accounts', () => {
     flagState.flags = { clients: true, customerPortal: true, newsletters: false };
   });
 
-  it('lists each account by name, else email, linked to its customer page', () => {
+  it('lists each account by display name, else first + last, else email, linked to its customer page', () => {
     renderTab();
     const links = within(accountsRow()).getAllByRole('link');
     expect(links.map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
       ['Nico Beispiel', '/admin/clients/accounts/11'],
       ['team@example.com', '/admin/clients/accounts/12'],
+      ['Studio Nord', '/admin/clients/accounts/13'],
     ]);
   });
 
@@ -91,10 +93,22 @@ describe('OverviewTab — assigned customer accounts', () => {
     expect(within(accountsRow()).getByText('Nico Beispiel')).toBeInTheDocument();
   });
 
-  it('shows the names without links when the customer page is switched off', () => {
+  it('shows the names without links when the clients section is switched off', () => {
     flagState.flags = { clients: false, customerPortal: true, newsletters: false };
     renderTab();
     expect(within(accountsRow()).queryAllByRole('link')).toHaveLength(0);
+  });
+
+  it('shows the names without links when neither the portal nor newsletters is on', () => {
+    flagState.flags = { clients: true, customerPortal: false, newsletters: false };
+    renderTab();
+    expect(within(accountsRow()).queryAllByRole('link')).toHaveLength(0);
+  });
+
+  it('links the accounts on a newsletters-only install', () => {
+    flagState.flags = { clients: true, customerPortal: false, newsletters: true };
+    renderTab();
+    expect(within(accountsRow()).getAllByRole('link')).toHaveLength(3);
   });
 
   it('has no row when no account is assigned', () => {
