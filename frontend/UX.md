@@ -60,11 +60,16 @@ relying on browser-back.
     "External folder · watching"). Rows sit in small groups of two or three
     under a heading (Basics · Access & downloads · Guests · Photos &
     automation), so the list stays readable as it grows. A **Default** tag
-    marks a section that only follows the global setting. The list scrolls on
-    its own, so the open section stays in view.
+    marks a section that only follows the global setting.
   - **Right, the open section,** edited in place: a header with its title and
     one line on what it covers, then the fields. No window, no second Save —
-    the page draft and save bar stay as in § 2.
+    the page draft and save bar stay as in § 2. Its card's top lines up with
+    the first row of the list, not with the group heading above it.
+  - **Side by side, the two halves scroll on their own,** under the tabs'
+    line: the page header, the tabs and the save bar stay where they are
+    (`useFillViewport` in `components/admin/fillViewport.ts`). On a display
+    tall enough for both, nothing scrolls. Below `lg` the page scrolls as a
+    whole, as everywhere else.
   - Order sections from most to least used. The destructive section ("Danger
     zone") is one full-width red row **after** the groups: it holds actions,
     not settings.

@@ -29,7 +29,11 @@ export const EventTabs: React.FC<EventTabsProps> = ({
   }`;
 
   return (
-    <div className="mb-6 border-b border-line overflow-x-auto">
+    // overflow-y-hidden: with overflow-x set, the 1px the tab list hangs
+    // past the bottom (-mb-px) made the row scroll vertically, and macOS
+    // showed a scrollbar for it. Settings at lg puts its gap inside its panes,
+    // so they scroll right up to this line.
+    <div className={`border-b border-line overflow-x-auto overflow-y-hidden ${activeTab === 'settings' ? 'mb-6 lg:mb-0' : 'mb-6'}`}>
       <nav className="-mb-px flex gap-8" role="tablist">
         <button type="button" role="tab" aria-selected={activeTab === 'overview'} onClick={() => setActiveTab('overview')} className={tabClass('overview')}>
           {t('events.overview')}
