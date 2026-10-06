@@ -17,7 +17,8 @@ const imp = vi.hoisted(() => ({
   buttonLabel: 'Import now', canRun: true, run: vi.fn(),
 }));
 
-vi.mock('../../useExternalImport', () => ({ useExternalImport: () => imp }));
+const useExternalImport = vi.hoisted(() => vi.fn());
+vi.mock('../../useExternalImport', () => ({ useExternalImport }));
 vi.mock('../../ExternalFolderPicker', () => ({ ExternalFolderPicker: () => null }));
 vi.mock('../../../../../hooks/usePermission', () => ({ usePermission: () => true }));
 vi.mock('react-i18next', () => ({
@@ -27,9 +28,9 @@ vi.mock('react-i18next', () => ({
 
 const saved = { id: 7, source_mode: 'reference', external_path: 'shoot/export' } as unknown as Event;
 
-function renderSection(event: Event, patch: Record<string, unknown> = {}) {
+function renderSection(event: Event, patch: Record<string, unknown> = {}, canEdit = true) {
   const f = { ...eventFieldsFromEvent(event, null), ...patch };
-  return render(<SourceSection f={f} set={() => {}} event={event} />);
+  return render(<SourceSection f={f} set={() => {}} event={event} canEdit={canEdit} />);
 }
 
 const button = () => screen.queryByRole('button', { name: /Import now|Rescan|Try again/ });
@@ -38,6 +39,8 @@ describe('SourceSection — import from the saved folder', () => {
   beforeEach(() => {
     Object.assign(imp, { canImport: true, running: false, failed: false, canRun: true, buttonLabel: 'Import now', statusText: 'Not scanned yet' });
     imp.run.mockClear();
+    useExternalImport.mockReset();
+    useExternalImport.mockImplementation(() => imp);
   });
 
   it('runs the import for the saved folder and shows its status', () => {
@@ -47,6 +50,8 @@ describe('SourceSection — import from the saved folder', () => {
     expect(imp.run).toHaveBeenCalledTimes(1);
   });
 
+  // The saved event has a folder here, so only the unsaved check can hold
+  // the button back.
   it('waits for a newly picked folder to be saved', () => {
     renderSection(saved, { external_path: 'another/folder' });
     expect(screen.getByText('Save the new folder first, then import it here.')).toBeInTheDocument();
@@ -65,7 +70,19 @@ describe('SourceSection — import from the saved folder', () => {
     expect(button()).toHaveTextContent('Try again');
   });
 
-  it('has no button without the permission to import photos', () => {
+  it('is hidden where the settings are read-only, and fetches no status there', () => {
+    renderSection(saved, {}, false);
+    expect(button()).toBeNull();
+    expect(screen.queryByText(/Imports new photos/)).toBeNull();
+    expect(useExternalImport).toHaveBeenCalledWith(saved, { enabled: false });
+  });
+
+  it('asks for the status only when it shows it', () => {
+    renderSection(saved);
+    expect(useExternalImport).toHaveBeenCalledWith(saved, { enabled: true });
+  });
+
+  it('has no button when the hook reports no permission to import (hook mocked)', () => {
     imp.canImport = false;
     renderSection(saved);
     expect(button()).toBeNull();

@@ -13,15 +13,22 @@ import { usePermission } from '../../../hooks/usePermission';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { externalMediaService } from '../../../services/externalMedia.service';
 
-export function useExternalImport(event: Event) {
+/**
+ * `enabled: false` skips the status request, for a caller that will not show
+ * it. The request also needs photos.view, the permission its route checks;
+ * without it the status would only be a 403 on every render.
+ */
+export function useExternalImport(event: Event, { enabled = true }: { enabled?: boolean } = {}) {
   const { t } = useTranslation();
   const { formatDistanceToNow } = useLocalizedDate();
   const queryClient = useQueryClient();
   const canImport = usePermission('photos.upload');
+  const canViewStatus = usePermission('photos.view');
 
   const { data: status } = useQuery({
     queryKey: ['external-import-status', event.id],
     queryFn: () => externalMediaService.getImportStatus(event.id),
+    enabled: enabled && canViewStatus,
     // While an import runs (a rescan, the watcher, or the first import right
     // after creating the gallery) keep the line and the grid moving.
     refetchInterval: (query) => (query.state.data?.is_running ? 3000 : false),

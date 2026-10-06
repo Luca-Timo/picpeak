@@ -281,10 +281,14 @@ export const GuestsSection: React.FC<FieldsProps & {
  * the Photos tab's source line (useExternalImport). A folder picked but not
  * saved yet cannot be imported: the server imports from the saved one.
  */
-const SourceImport: React.FC<{ event: Event; unsaved: boolean }> = ({ event, unsaved }) => {
+const SourceImport: React.FC<{ event: Event; unsaved: boolean; canEdit: boolean }> = ({ event, unsaved, canEdit }) => {
   const { t } = useTranslation();
-  const imp = useExternalImport(event);
-  if (!imp.canImport) return null;
+  // Hidden, not disabled, where the settings are read-only (a role without
+  // events.edit, an archived gallery): the section's fieldset would disable
+  // the button with no reason given. The Photos tab keeps its Rescan for a
+  // role that may upload photos but not edit the gallery.
+  const imp = useExternalImport(event, { enabled: canEdit });
+  if (!imp.canImport || !canEdit) return null;
   const savedFolder = event.source_mode === 'reference' && !!event.external_path;
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-lg bg-accent-dark/10 px-3 py-2">
@@ -315,7 +319,7 @@ const SourceImport: React.FC<{ event: Event; unsaved: boolean }> = ({ event, uns
   );
 };
 
-export const SourceSection: React.FC<FieldsProps & { event: Event }> = ({ f, set, event }) => {
+export const SourceSection: React.FC<FieldsProps & { event: Event; canEdit?: boolean }> = ({ f, set, event, canEdit = true }) => {
   const { t } = useTranslation();
   // Watching makes the server import on the admin's behalf, which the backend
   // gates on photos.upload like the Rescan button.
@@ -382,6 +386,7 @@ export const SourceSection: React.FC<FieldsProps & { event: Event }> = ({ f, set
           {/* Normalised like the draft (draft.ts): a missing mode is managed. */}
           <SourceImport
             event={event}
+            canEdit={canEdit}
             unsaved={(event.source_mode === 'reference' ? 'reference' : 'managed') !== f.source_mode
               || (event.external_path || '') !== f.external_path.trim()}
           />
