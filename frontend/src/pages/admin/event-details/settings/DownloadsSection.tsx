@@ -18,7 +18,7 @@ export const DownloadsSection: React.FC<FieldsProps & {
 
   return (
     <>
-      <SectionCard title={t('events.settingsTab.downloads', 'Downloads')}>
+      <SectionCard>
         <div className="space-y-3">
           {([
             ['allow_downloads', Download, t('events.allowDownloads', 'Allow photo downloads')],

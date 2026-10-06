@@ -25,7 +25,10 @@
  * value that does not depend on the selection at drop time, since that can
  * change while the walk is pending. Only files passing `accept` are
  * collected and counted, so sidecars and oversized files inside the folder
- * do not use up the budget.
+ * do not use up the budget. It is told how deep the file sits: depth 0 is an
+ * item the user dropped by hand, anything above it was found inside a folder,
+ * which is the difference between a rejection worth naming and one that is
+ * just noise.
  *
  * A directory's entry list is always drained and sorted as a whole — names
  * only, which is cheap — because `readEntries` batches come in unspecified
@@ -64,11 +67,17 @@ export const directoryOf = (relativePath: string): string => {
  * empty, so those files are loose.
  */
 export const pickedFromInput = (files: File[]): PickedFile[] =>
-  files.map((file) => ({ file, dir: directoryOf((file as File & { webkitRelativePath?: string }).webkitRelativePath || '') }));
+  files
+    .map((file) => ({ file, rel: (file as File & { webkitRelativePath?: string }).webkitRelativePath || '' }))
+    // A folder pick hands over hidden files too (`._IMG_0001.jpg` AppleDouble
+    // files on every exFAT card, `.DS_Store`, anything under `.thumbnails/`);
+    // skip them as the drop walk does. A plain pick is taken as chosen.
+    .filter(({ rel }) => !rel || !rel.split('/').some((part) => part.startsWith('.')))
+    .map(({ file, rel }) => ({ file, dir: directoryOf(rel) }));
 
 export interface CollectOptions {
   limit?: number;
-  accept?: (file: File) => boolean;
+  accept?: (file: File, depth: number) => boolean;
   onTruncated?: () => void;
 }
 
@@ -103,7 +112,7 @@ export async function collectDroppedEntries(
     out: [], limit, accept, examined: 0, maxExamined: limit * EXAMINED_PER_COLLECTED, truncated: false,
   };
   for (const entry of entries) {
-    await walkEntry(entry, '', walk);
+    await walkEntry(entry, '', walk, 0);
   }
   if (walk.truncated) options.onTruncated?.();
   return walk.out;
@@ -112,7 +121,7 @@ export async function collectDroppedEntries(
 interface Walk {
   out: PickedFile[];
   limit: number;
-  accept: (file: File) => boolean;
+  accept: (file: File, depth: number) => boolean;
   examined: number;
   maxExamined: number;
   truncated: boolean;
@@ -128,13 +137,14 @@ const spent = (walk: Walk) => {
   return true;
 };
 
-// `dir` is the directory the entry sits in, relative to the drop.
-async function walkEntry(entry: FileSystemEntry, dir: string, walk: Walk): Promise<void> {
+// `dir` is the directory the entry sits in, relative to the drop; `depth` is
+// 0 for an item dropped by hand (see `accept`).
+async function walkEntry(entry: FileSystemEntry, dir: string, walk: Walk, depth: number): Promise<void> {
   if (spent(walk)) return;
   if (entry.isFile) {
     walk.examined += 1;
     const file = await fileOf(entry as FileSystemFileEntry);
-    if (file && walk.accept(file)) walk.out.push({ file, dir });
+    if (file && walk.accept(file, depth)) walk.out.push({ file, dir });
     return;
   }
   if (!entry.isDirectory) return;
@@ -144,7 +154,7 @@ async function walkEntry(entry: FileSystemEntry, dir: string, walk: Walk): Promi
   const childDir = dir ? `${dir}/${entry.name}` : entry.name;
   for (const child of children) {
     if (spent(walk)) return;
-    await walkEntry(child, childDir, walk);
+    await walkEntry(child, childDir, walk, depth + 1);
   }
 }
 

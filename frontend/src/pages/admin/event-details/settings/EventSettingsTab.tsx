@@ -3,12 +3,19 @@
  * draft, one Save bar (SettingsSaveBar). Replaces the old view/edit toggle,
  * where some cards saved behind Edit and others saved themselves.
  *
+ * Split view (issue 1765, draft E5): the sections as a grouped overview on
+ * the left, each with a line of its current state, and the selected section
+ * edited on the right. Below `lg` the overview is the page and a section
+ * opens full-screen with a back arrow; opening one there adds a history
+ * entry, so the browser's Back returns to the overview too.
+ *
  * Sections the admin may not change render read-only (a disabled fieldset);
  * the backend enforces the same permissions on every endpoint.
  */
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Archive, Trash2 } from 'lucide-react';
+import { Archive, ArrowLeft, Trash2, Undo2 } from 'lucide-react';
 import type { Event } from '../../../../types';
 import { Button } from '../../../../components/common';
 import { SettingsSaveBar } from '../../../../components/admin/SettingsSaveBar';
@@ -26,12 +33,14 @@ import { AppearanceSection } from './AppearanceSection';
 import { SlideshowSection } from './SlideshowSection';
 import { DeliverySection } from './DeliverySection';
 import { safeParseDate } from '../utils';
+import { SECTION_ICON, SettingsOverview, useSectionSummaries } from './SettingsOverview';
 
 export interface EventSettingsTabProps {
   event: Event;
   settings: EventSettingsDraftApi;
-  section: SettingsSectionKey;
-  setSection: (section: SettingsSectionKey) => void;
+  /** The section opened through the URL, or null when none was. */
+  section: SettingsSectionKey | null;
+  setSection: (section: SettingsSectionKey | null, options?: { push?: boolean }) => void;
   categories: Array<{ id: number; name: string }>;
   photos: AdminPhoto[];
   phoneFieldEnabled: boolean;
@@ -42,16 +51,34 @@ export interface EventSettingsTabProps {
   refetchEvent: () => void;
 }
 
+const LG_QUERY = '(min-width: 1024px)';
+
+/** Tailwind's `lg` and up, where the overview and the section sit side by side. */
+const canMatch = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function';
+
+function useSideBySide(): boolean {
+  // No matchMedia (tests, old webviews): assume the desktop layout.
+  const [matches, setMatches] = useState(() => (canMatch() ? window.matchMedia(LG_QUERY).matches : true));
+  useEffect(() => {
+    if (!canMatch()) return undefined;
+    const query = window.matchMedia(LG_QUERY);
+    const onChange = () => setMatches(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  return matches;
+}
+
 export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
   event, settings, section, setSection, categories, photos, phoneFieldEnabled,
   onArchive, isArchiving, onDelete, isDeleting, refetchEvent,
 }) => {
   const { t } = useTranslation();
-  const { flags } = useFeatureFlags();
-  const { hasPermission } = usePermissions();
+  const { flags, isLoading: flagsLoading } = useFeatureFlags();
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const { format } = useLocalizedDate();
   const confirm = useConfirm();
-  const { draft, setDraft, setEvent, dirty, isDirty, isSaving, save, discard, downloadsData } = settings;
+  const { draft, setDraft, setEvent, dirty, isDirty, isSaving, save, discard, discardSection, downloadsData } = settings;
 
   const archived = Boolean(event.is_archived);
   const canEdit = hasPermission('events.edit') && !archived;
@@ -70,13 +97,46 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
     { key: 'danger', label: t('events.settingsTab.danger', 'Danger zone'), show: !archived && (hasPermission('events.archive') || hasPermission('events.delete')) },
   ];
   const visible = sections.filter((s) => s.show);
-  const active = visible.some((s) => s.key === section) ? section : 'general';
+  const opened = section && visible.some((s) => s.key === section) ? section : null;
+  // Side by side, nothing opened means General. On a phone it means the overview.
+  const active: SettingsSectionKey = opened ?? 'general';
+  const sideBySide = useSideBySide();
+  const phoneOpen = opened !== null;
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const set = (patch: Partial<EventFields>) => setEvent((prev) => ({ ...prev, ...patch }));
 
+  // A link to a section the flags hide (or the role can't see) falls back
+  // to nothing opened, and the URL stops naming it. Only once flags and
+  // permissions have loaded: until then the defaults hide Faces, Slideshow,
+  // Reminder and Danger zone, and a reload on one of them would lose it.
+  useEffect(() => {
+    if (section && !opened && !flagsLoading && !permissionsLoading) setSection(null);
+  }, [section, opened, flagsLoading, permissionsLoading, setSection]);
+
+  // On a phone, opening a section from the overview adds a history entry.
+  const open = (key: SettingsSectionKey) => setSection(key, { push: !sideBySide && !opened });
+
+  // Back to the overview: undo our own history entry when there is one, so
+  // the browser's Back and this arrow agree; otherwise just close.
+  const overviewRef = useRef<HTMLDivElement>(null);
+  const lastOpened = useRef<SettingsSectionKey | null>(null);
+  const closeSection = () => {
+    lastOpened.current = opened;
+    if ((location.state as { settingsSectionPushed?: boolean } | null)?.settingsSectionPushed) navigate(-1);
+    else setSection(null);
+  };
+  // The arrow hides its own container, so focus goes back to the row it came from.
+  useEffect(() => {
+    if (opened || !lastOpened.current) return;
+    overviewRef.current?.querySelector<HTMLButtonElement>(`[data-section="${lastOpened.current}"]`)?.focus();
+    lastOpened.current = null;
+  }, [opened]);
+
   const onSave = async () => {
     const { invalidSection } = await save();
-    if (invalidSection) setSection(invalidSection);
+    if (invalidSection) open(invalidSection);
   };
 
   // The date the reminder goes out, when this gallery sets its own offset.
@@ -88,6 +148,23 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
     d.setDate(d.getDate() - Math.floor(Number(offset)));
     return format(d, 'PP');
   })();
+
+  const summaries = useSectionSummaries(event, draft, reminderDate);
+  const activeLabel = visible.find((s) => s.key === active)?.label ?? '';
+  const ActiveIcon = SECTION_ICON[active];
+  const about: Record<SettingsSectionKey, string> = {
+    general: t('events.settingsTab.about.general', 'Customer, client accounts and the welcome message.'),
+    appearance: t('events.settingsTab.about.appearance', 'Hero photo, logo, banners and the look of the gallery.'),
+    access: t('events.settingsTab.about.access', 'Who can open the gallery, and until when.'),
+    downloads: t('events.settingsTab.about.downloads', 'What guests may download, in which size, and how photos are protected.'),
+    guests: t('events.settingsTab.about.guests', 'Guest uploads, names and feedback.'),
+    slideshow: t('events.settingsTab.about.slideshow', 'A fullscreen link for projectors at live events.'),
+    source: t('events.settingsTab.about.source', 'Where the photos of this gallery come from.'),
+    delivery: t('events.settingsTab.about.delivery', 'Nested folders from uploads, and delivering a first look before the full gallery.'),
+    reminder: t('events.settingsTab.about.reminder', 'The reminder email to the customer before the event.'),
+    faces: t('events.settingsTab.about.faces', 'Find and group the people in the photos.'),
+    danger: t('events.settingsTab.about.danger', 'Archive or delete this gallery.'),
+  };
 
   const body = (() => {
     switch (active) {
@@ -143,10 +220,10 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
       case 'faces':
         // Face recognition is a set of jobs (detect, rescan, recluster,
         // delete) rather than settings, so it acts immediately.
-        return <FaceRecognitionCard eventId={event.id} isArchived={archived} />;
+        return <FaceRecognitionCard eventId={event.id} isArchived={archived} bare />;
       case 'danger':
         return (
-          <SectionCard title={t('events.settingsTab.danger', 'Danger zone')}>
+          <SectionCard>
             {hasPermission('events.archive') && (
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -203,41 +280,65 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
 
   return (
     <div>
-      <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] gap-6 lg:gap-8">
-        <nav aria-label={t('events.settingsTab.sections', 'Settings sections')} className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible lg:sticky lg:top-4 self-start">
-          {visible.map((s) => (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => setSection(s.key)}
-              aria-current={s.key === active ? 'page' : undefined}
-              className={`flex items-center justify-between gap-2 whitespace-nowrap h-9 px-3 rounded-lg text-sm text-left transition-colors ${
-                s.key === active
-                  ? 'bg-accent-dark/10 text-heading font-semibold'
-                  : s.key === 'danger'
-                    ? 'text-red-600 dark:text-red-400 hover:bg-hover'
-                    : 'text-body hover:bg-hover'
-              }`}
-            >
-              <span>{s.label}</span>
-              {dirty.has(s.key) && (
-                <span className="w-2 h-2 rounded-full bg-amber-500" aria-label={t('settings.saveBar.unsaved', 'You have unsaved changes')} />
-              )}
-            </button>
-          ))}
-        </nav>
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)] 2xl:grid-cols-[420px_minmax(0,1fr)] gap-6 xl:gap-8 2xl:gap-10 items-start">
+        {/* The overview scrolls on its own, so the selected section stays in
+            view next to a long list on a short screen. Its height stops above
+            the save bar pinned to the bottom of the same column (~3.5rem), so
+            the last row is never under the bar. */}
+        <div ref={overviewRef} className={`${phoneOpen ? 'hidden lg:block' : ''} lg:sticky lg:top-4 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-1`}>
+          <SettingsOverview
+            sections={visible}
+            active={sideBySide ? active : opened}
+            onSelect={open}
+            dirty={dirty}
+            summaries={summaries}
+          />
+        </div>
 
-        <div className="min-w-0 max-w-3xl space-y-4">
-          {readOnlyHint && (
-            <p className="text-sm rounded-lg border border-line bg-inset text-body px-4 py-3">
-              {archived
-                ? t('events.settingsTab.readOnlyArchived', 'This gallery is archived. Its settings can no longer be changed.')
-                : t('events.settingsTab.readOnly', 'You can see these settings but not change them.')}
-            </p>
-          )}
-          <fieldset disabled={readOnlyHint} className="min-w-0 space-y-4">
-            {body}
-          </fieldset>
+        {/* The card's cap is the form's width: the form fills the card, so
+            the padding is the same on both sides and a wide display does not
+            leave the card running empty past its fields. From 2xl the card,
+            the padding and the gaps grow a step. */}
+        <div className={`${phoneOpen ? '' : 'hidden lg:block'} min-w-0 lg:max-w-[52rem] 2xl:max-w-[60rem] bg-panel border border-line rounded-xl`}>
+          <div className="flex flex-wrap items-start gap-3 px-5 sm:px-7 2xl:px-10 py-4 2xl:py-5 border-b border-line">
+            <button
+              type="button"
+              onClick={closeSection}
+              className="lg:hidden -ml-1 p-1 rounded-lg text-soft hover:bg-hover"
+              aria-label={t('events.settingsTab.backToSections', 'All settings')}
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <ActiveIcon className={`w-5 h-5 mt-0.5 shrink-0 ${active === 'danger' ? 'text-red-600 dark:text-red-400' : 'text-soft'}`} aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <h2 className={`text-lg font-semibold ${active === 'danger' ? 'text-red-600 dark:text-red-400' : 'text-heading'}`}>{activeLabel}</h2>
+              <p className="text-sm text-soft mt-0.5">{about[active]}</p>
+            </div>
+            {canEdit && dirty.has(active) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-amber-700 dark:text-amber-400"
+                leftIcon={<Undo2 className="w-4 h-4" />}
+                onClick={() => discardSection(active)}
+              >
+                {t('events.settingsTab.undoSection', 'Undo changes in this section')}
+              </Button>
+            )}
+          </div>
+
+          <div className="px-5 sm:px-7 2xl:px-10 py-6 2xl:py-8 space-y-4">
+            {readOnlyHint && (
+              <p className="text-sm rounded-lg border border-line bg-inset text-body px-4 py-3">
+                {archived
+                  ? t('events.settingsTab.readOnlyArchived', 'This gallery is archived. Its settings can no longer be changed.')
+                  : t('events.settingsTab.readOnly', 'You can see these settings but not change them.')}
+              </p>
+            )}
+            <fieldset disabled={readOnlyHint} className="min-w-0">
+              {body}
+            </fieldset>
+          </div>
         </div>
       </div>
 

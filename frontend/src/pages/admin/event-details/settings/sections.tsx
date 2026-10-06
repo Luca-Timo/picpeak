@@ -26,12 +26,19 @@ export const inputClass = 'w-full px-3 py-2 border border-line-strong bg-panel t
 export const labelClass = 'block text-sm font-medium text-body mb-1';
 export const checkboxClass = 'w-4 h-4 text-accent border-line-strong rounded focus:ring-primary-500';
 
-export const SectionCard: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
-  <section className="bg-panel border border-line rounded-xl p-5 space-y-4">
-    <div>
-      <h3 className="text-base font-semibold text-heading">{title}</h3>
-      {description && <p className="text-sm text-soft mt-1">{description}</p>}
-    </div>
+/**
+ * One block of a section, flat inside the section panel (the panel is the
+ * card and carries the section's title). A section made of several blocks
+ * titles the blocks after the first, and a rule separates them.
+ */
+export const SectionCard: React.FC<{ title?: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
+  <section className="space-y-4 [&:not(:first-child)]:mt-6 [&:not(:first-child)]:pt-6 [&:not(:first-child)]:border-t border-line">
+    {(title || description) && (
+      <div>
+        {title && <h3 className="text-base font-semibold text-heading">{title}</h3>}
+        {description && <p className={`text-sm text-soft ${title ? 'mt-1' : ''}`}>{description}</p>}
+      </div>
+    )}
     {children}
   </section>
 );
@@ -39,7 +46,7 @@ export const SectionCard: React.FC<{ title: string; description?: string; childr
 export const GeneralSection: React.FC<FieldsProps & { phoneFieldEnabled: boolean }> = ({ f, set, phoneFieldEnabled }) => {
   const { t } = useTranslation();
   return (
-    <SectionCard title={t('events.settingsTab.general', 'General')}>
+    <SectionCard>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className={labelClass} htmlFor="settings-host-name">{t('events.hostName')}</label>
@@ -101,7 +108,7 @@ export const AccessSection: React.FC<FieldsProps> = ({ f, set }) => {
   const { format } = useLocalizedDate();
   const [showPassword, setShowPassword] = useState(false);
   return (
-    <SectionCard title={t('events.settingsTab.access', 'Access')}>
+    <SectionCard>
       <div className="md:w-64">
         <label className={labelClass}>{t('events.expirationDate')}</label>
         <LocalizedDateInput
@@ -189,7 +196,7 @@ export const GuestsSection: React.FC<FieldsProps & {
 }> = ({ f, set, categories, feedback, setFeedback }) => {
   const { t } = useTranslation();
   return (
-    <SectionCard title={t('events.settingsTab.guests', 'Guest interaction')}>
+    <SectionCard>
       <div>
         <label className="flex items-center">
           <input
@@ -279,7 +286,6 @@ export const SourceSection: React.FC<FieldsProps & { event: Event }> = ({ f, set
   }`;
   return (
     <SectionCard
-      title={t('events.settingsTab.source', 'Photo source')}
       description={t('events.sourceModeHelp', 'Use managed mode for direct uploads or point to a mounted /external-media folder when using local storage.')}
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3" role="radiogroup" aria-label={t('events.sourceMode', 'Source Mode')}>
@@ -347,7 +353,6 @@ export const ReminderSection: React.FC<FieldsProps & { reminderDate: string | nu
   const sendOn = !f.event_reminder_disabled;
   return (
     <SectionCard
-      title={t('eventReminderOverride.title', 'Pre-event reminder')}
       description={t('eventReminderOverride.help', 'Per-event override for the customer reminder. Global on-off + default offset live under Settings → Reminder emails. Anything left blank here inherits the global setting / resolved template.')}
     >
       <label className="flex items-center gap-2 text-sm cursor-pointer">

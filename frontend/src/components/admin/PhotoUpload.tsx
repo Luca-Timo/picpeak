@@ -8,7 +8,7 @@ import { categoriesService } from '../../services/categories.service';
 import { folderQueryKey, foldersService, MAX_RESOLVE_PATHS } from '../../services/folders.service';
 import { settingsService } from '../../services/settings.service';
 import { useTranslation } from 'react-i18next';
-import { extensionsToMimeTypes, extensionsToAcceptString, extensionsToLabel, normalizeFileMimeType } from '../../utils/fileTypes';
+import { extensionsToMimeTypes, extensionsToAcceptString, extensionsToLabel, isAllowedUploadFile } from '../../utils/fileTypes';
 import { useUploadSession, type UploadBatch } from '../../contexts/UploadSessionContext';
 import { collectDroppedEntries, pickedFromInput, type PickedFile } from '../../utils/droppedFiles';
 import { buildUploadPreview, groupFilesByPlacement, hasDirectories, uniqueDirectories } from '../../utils/uploadStructure';
@@ -169,8 +169,16 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
   // streams the whole oversized file before the backend 400s it). The folder
   // walk applies it too, so sidecars and oversized files do not use up the
   // per-upload budget before the photos behind them are reached.
-  const admitFile = (file: File): boolean => {
-    if (!allowedMimeTypes.includes(normalizeFileMimeType(file.name, file.type))) return false;
+  const admitFile = (file: File, rejected?: string[]): boolean => {
+    // Matches on the extension when the browser reports no type, which is
+    // what it does for camera RAW on macOS and Windows. A rejection is
+    // silent and its name goes on `rejected` if the caller passed a list,
+    // because a file chosen by hand is worth naming and a sidecar found
+    // inside a dropped folder is not.
+    if (!isAllowedUploadFile(file, allowedMimeTypes)) {
+      rejected?.push(file.name);
+      return false;
+    }
     const limitMb = sizeLimitMbFor(file);
     if (file.size > limitMb * 1024 * 1024) {
       toast.error(t('upload.fileTooLarge', { name: file.name, limit: limitMb }));
@@ -179,8 +187,22 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
     return true;
   };
 
+  // Picking or dropping a file of the wrong type used to produce nothing at
+  // all: no toast, no log, no request. The zone simply did not react, which
+  // reads as a broken page rather than a rejected format.
+  const reportRejectedTypes = (rejected: string[]) => {
+    if (rejected.length === 0) return;
+    toast.error(t('upload.invalidFileType', { names: rejected.join(', ') }));
+  };
+
   const addFiles = (incoming: PickedFile[]) => {
-    const imageFiles = incoming.filter((picked) => admitFile(picked.file));
+    // Only loose files (chosen or dropped by hand, dir '') are named when
+    // rejected: a picked folder of RAW plus XMP sidecars would otherwise put
+    // every sidecar in one toast. The folder input has no `accept` to
+    // prefilter it.
+    const rejected: string[] = [];
+    const imageFiles = incoming.filter((picked) => admitFile(picked.file, picked.dir === '' ? rejected : undefined));
+    reportRejectedTypes(rejected);
     if (imageFiles.length === 0) return;
 
     const current = selectedFilesRef.current;
@@ -272,13 +294,20 @@ export const PhotoUpload: React.FC<PhotoUploadProps> = ({
     // before admin-settings resolved is collected as it is and judged by
     // addFiles when the walk lands. A file it rejects is not collected, so
     // its size toast fires here or in addFiles, never in both.
-    const accept = (file: File) => !settingsLoadedRef.current || admitFileRef.current(file);
+    // Same for the wrong-type toast, which is why the names are gathered
+    // here rather than inside the admission rule. Only the items dropped by
+    // hand, depth 0: a folder of RAW next to its XMP sidecars would
+    // otherwise name every sidecar in it.
+    const rejected: string[] = [];
+    const accept = (file: File, depth: number) => !settingsLoadedRef.current
+      || admitFileRef.current(file, depth === 0 ? rejected : undefined);
     // The walk also stops after examining a multiple of the ceiling (a tree
     // of mostly unsupported files); say so rather than omit the rest silently.
     const onTruncated = () => toast.warning(t('upload.folderTooLarge'));
     void collectDroppedEntries(e.dataTransfer, { limit: FOLDER_WALK_CEILING, accept, onTruncated })
       .then(async (files) => {
         await whenSettingsSettled();
+        reportRejectedTypes(rejected);
         addFilesRef.current(files);
       })
       .finally(() => setPendingWalks((n) => n - 1));

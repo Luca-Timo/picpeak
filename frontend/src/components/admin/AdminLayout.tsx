@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import { useAdminAuth } from '../../contexts';
 import { FeatureFlagsProvider } from '../../contexts/FeatureFlagsContext';
@@ -12,6 +13,7 @@ import { AdminHeader } from './AdminHeader';
 import { MaintenanceBanner } from './MaintenanceBanner';
 import { MandatoryPasswordChangeModal } from './MandatoryPasswordChangeModal';
 import { CommandPalette } from './CommandPalette';
+import { BottomBarSlotContext } from './bottomBarSlot';
 
 const SIDEBAR_COLLAPSED_KEY = 'admin-sidebar-collapsed';
 const ProductUsageNotice = lazy(() => import('./ProductUsageNotice'));
@@ -86,6 +88,8 @@ interface AdminLayoutInnerProps {
 
 const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, mustChangePassword }) => {
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [bottomBarSlot, setBottomBarSlot] = useState<HTMLDivElement | null>(null);
+  const { t } = useTranslation();
 
   // Cmd+K on a Mac, Ctrl+K everywhere else. NOT "either modifier": Ctrl+K on
   // macOS is kill-to-end-of-line in every text field, and claiming it would
@@ -176,9 +180,20 @@ const AdminLayoutInner: React.FC<AdminLayoutInnerProps> = ({ sidebarOpen, setSid
             overflow moved up to the column so the scrollbar gutter is
             reserved once at the column level (see above). main now
             just contributes its content + padding. */}
-        <main id="main-content" className={`flex-1 px-4 sm:px-6 lg:px-8 py-8 ${mustChangePassword ? 'opacity-50 pointer-events-none' : ''}`}>
-          <Outlet />
-        </main>
+        <BottomBarSlotContext.Provider value={bottomBarSlot}>
+          <main id="main-content" className={`flex-1 px-4 sm:px-6 lg:px-8 py-8 ${mustChangePassword ? 'opacity-50 pointer-events-none' : ''}`}>
+            <Outlet />
+          </main>
+        </BottomBarSlotContext.Provider>
+        {/* Bottom bars (SettingsSaveBar) render here: after a <main> that
+            fills the column, so they sit at the bottom of the window even
+            when the page is shorter than it. */}
+        <div
+          ref={setBottomBarSlot}
+          role="region"
+          aria-label={t('settings.saveBar.region', 'Save or discard changes')}
+          className={`sticky bottom-0 z-20 empty:hidden ${mustChangePassword ? 'opacity-50 pointer-events-none' : ''}`}
+        />
       </div>
     </div>
   );

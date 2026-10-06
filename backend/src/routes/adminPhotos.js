@@ -99,7 +99,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const { validateFileType, createFileUploadValidator, normalizeUploadMimeType } = require('../utils/fileSecurityUtils');
+const { validateFileType, createFileUploadValidator, normalizeUploadMimeType, isRawUploadFilename } = require('../utils/fileSecurityUtils');
 
 // Create a multer instance that uses dynamically resolved allowed MIME types.
 // The allowed types are fetched from the database once per request (before multer
@@ -387,7 +387,7 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
             capabilityEvidence(res, 'photo_replacement');
             acceptedUpload(res, {
               video: isVideoMimeType(file.mimetype),
-              raw: path.extname(file.originalname).toLowerCase() === '.dng',
+              raw: isRawUploadFilename(file.originalname),
               s3: process.env.STORAGE_BACKEND === 's3'
             });
             replacedPhotos.push({
@@ -507,7 +507,7 @@ router.post('/:eventId/upload', adminAuth, requirePermission('photos.upload'), r
           .returning('id');
         const photoId = inserted[0]?.id || inserted[0];
 
-        acceptedUpload(res, { video: isVideo, raw: extension.toLowerCase() === '.dng', s3: process.env.STORAGE_BACKEND === 's3' });
+        acceptedUpload(res, { video: isVideo, raw: isRawUploadFilename(file.originalname), s3: process.env.STORAGE_BACKEND === 's3' });
 
         uploadedPhotos.push({
           id: photoId,
@@ -2010,7 +2010,7 @@ router.post('/:eventId/chunked-upload/:uploadId/complete', adminAuth, requirePer
       { type: 'admin', id: req.admin.id, name: req.admin.username });
     if (uploadedPhotos.length) acceptedUpload(res, {
       video: isVideoMimeType(fileObj.mimetype),
-      raw: path.extname(fileObj.originalname).toLowerCase() === '.dng',
+      raw: isRawUploadFilename(fileObj.originalname),
       s3: process.env.STORAGE_BACKEND === 's3'
     });
 

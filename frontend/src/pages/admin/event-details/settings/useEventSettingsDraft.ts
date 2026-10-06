@@ -15,6 +15,7 @@ import {
   eventFieldsFromEvent,
   eventUpdatePayload,
   rebaseDraft,
+  resetSection,
   sameValue,
   slideshowFromEvent,
   slideshowPayload,
@@ -112,6 +113,10 @@ export function useEventSettingsDraft({
   const [isSaving, setIsSaving] = useState(false);
 
   const discard = useCallback(() => setDraft(baseRef.current), []);
+  const discardSection = useCallback(
+    (section: SettingsSectionKey) => setDraft((d) => resetSection(d, baseRef.current, section)),
+    [],
+  );
 
   const setEvent = useCallback(
     (update: (prev: EventSettingsDraft['event']) => EventSettingsDraft['event']) =>
@@ -202,6 +207,7 @@ export function useEventSettingsDraft({
     isSaving,
     save,
     discard,
+    discardSection,
     downloadsData,
   };
 }
