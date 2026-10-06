@@ -72,4 +72,16 @@ describe('wrapEmailHtml — info panel text stays readable', () => {
     const html = await wrapEmailHtml('<ul class="x" style="color:red"><li>a</li></ul>', 'Subject', 'en');
     expect(html).toContain('<ul class="x" style="color:red">');
   });
+
+  it('derives the footer divider from a dark footer instead of a bright #eeeeee stripe', async () => {
+    await setColors({ email_secondary_color: '#141414', email_container_bg_color: '#1c1c1c' });
+    const dark = await wrapEmailHtml(BODY, 'Subject', 'en');
+    expect(dark).not.toContain('#eeeeee');
+    expect(dark).toMatch(/\.email-footer \{[^}]*border-top: 1px solid #2c2c2c;/);
+    expect(dark).toContain('text-align:center;border-top:1px solid #2c2c2c;');
+
+    await setColors({});
+    const light = await wrapEmailHtml(BODY, 'Subject', 'en');
+    expect(light).toContain('text-align:center;border-top:1px solid #eeeeee;');
+  });
 });

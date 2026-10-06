@@ -1,4 +1,4 @@
-const { parseColor, contrastRatio, readableTextOn } = require('../../src/utils/colorContrast');
+const { parseColor, contrastRatio, readableTextOn, dividerOn } = require('../../src/utils/colorContrast');
 
 describe('colorContrast', () => {
   it('parses hex (with and without alpha) and rgb()/rgba()', () => {
@@ -38,5 +38,16 @@ describe('colorContrast', () => {
 
   it('leaves colours it cannot read untouched', () => {
     expect(readableTextOn('white', 'whitesmoke')).toBe('whitesmoke');
+  });
+
+  it('keeps the #eeeeee divider on light and unparseable backgrounds', () => {
+    expect(dividerOn('#f9f9f9')).toBe('#eeeeee');
+    expect(dividerOn('#ffffff')).toBe('#eeeeee');
+    expect(dividerOn('whitesmoke')).toBe('#eeeeee');
+  });
+
+  it('lifts a dark background 10% towards white for the divider', () => {
+    expect(dividerOn('#141414')).toBe('#2c2c2c');
+    expect(dividerOn('#000000')).toBe('#1a1a1a');
   });
 });

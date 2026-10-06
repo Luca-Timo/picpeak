@@ -3,7 +3,8 @@
  *
  * Shared by the PDF theme warnings and the email wrapper, which picks a
  * readable text colour for the info panel when the admin's palette puts
- * light text on a light panel (or dark on dark).
+ * light text on a light panel (or dark on dark), and a footer divider that
+ * doesn't glow on a dark palette.
  *
  * Only #rgb / #rrggbb (alpha ignored) and rgb()/rgba() are parsed. Anything
  * else — a named colour, hsl() — returns null so callers keep the colour
@@ -70,4 +71,19 @@ function readableTextOn(background, preferred, minRatio = 4.5) {
     : LIGHT_TEXT;
 }
 
-module.exports = { parseColor, relativeLuminance, contrastRatio, readableTextOn };
+const DEFAULT_DIVIDER = '#eeeeee';
+
+/**
+ * The colour for a 1px divider drawn on `background`. Light (and
+ * unparseable) backgrounds keep the long-standing #eeeeee; on a dark
+ * background that would be a bright stripe, so the divider becomes the
+ * background lifted 10% towards white — the same hue, just visible.
+ */
+function dividerOn(background) {
+  const rgb = parseColor(background);
+  if (!rgb || relativeLuminance(background) >= 0.2) return DEFAULT_DIVIDER;
+  const lift = (c) => Math.round(c + (255 - c) * 0.1).toString(16).padStart(2, '0');
+  return `#${lift(rgb.r)}${lift(rgb.g)}${lift(rgb.b)}`;
+}
+
+module.exports = { parseColor, relativeLuminance, contrastRatio, readableTextOn, dividerOn };

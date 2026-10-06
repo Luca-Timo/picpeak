@@ -308,7 +308,7 @@ function renderSignatureLink(href, text, color) {
  * @param {object} opts  { mutedTextColor, brandingCompanyName, language }
  * @returns {string} HTML rows for the footer <td>, or '' when disabled.
  */
-function renderEmailSignature(signature, { mutedTextColor, brandingCompanyName, language }) {
+function renderEmailSignature(signature, { mutedTextColor, brandingCompanyName, language, dividerColor = '#eeeeee' }) {
   if (!signature) return '';
 
   const lineStyle = `color:${mutedTextColor};font-size:12px;line-height:18px;margin:4px 0;`;
@@ -358,7 +358,7 @@ function renderEmailSignature(signature, { mutedTextColor, brandingCompanyName, 
   if (!rows.length) return '';
 
   return `
-              <div style="margin:15px 0 5px;padding-top:15px;border-top:1px solid #eeeeee;">
+              <div style="margin:15px 0 5px;padding-top:15px;border-top:1px solid ${dividerColor};">
                 ${rows.join('\n                ')}
               </div>`;
 }
@@ -407,7 +407,7 @@ function renderEmailSignatureText(signature, { brandingCompanyName, language } =
 // scheme other than http(s), and each colour has to match a colour grammar
 // before it is interpolated into <style>, style="" and bgcolor="".
 const { sanitizeCssColor } = require('../utils/cssSanitizer');
-const { readableTextOn } = require('../utils/colorContrast');
+const { readableTextOn, dividerOn } = require('../utils/colorContrast');
 
 function isUsableLogoUrl(value) {
   if (typeof value !== 'string' || !value.trim()) return false;
@@ -481,6 +481,10 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en', { inlineListPan
   // near-white box. Keep the body text colour when it reads on the panel,
   // otherwise switch to a dark or light neutral.
   const listTextColor = readableTextOn(listBgColor, bodyTextColor);
+  // The footer's top border and the signature rule were a fixed #eeeeee —
+  // a bright stripe across any dark palette. Derive them from the footer
+  // background instead; light footers keep #eeeeee.
+  const dividerColor = dividerOn(secondaryColor);
 
   // Build full logo URL - ensure logoUrl is a valid non-empty string
   const frontendUrl = (await getFrontendBaseUrl()) || 'http://localhost:3000';
@@ -497,7 +501,7 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en', { inlineListPan
   // reads the row once. Never throws; returns null when disabled.
   const signatureHtml = renderEmailSignature(
     await businessProfileService.getEmailSignature(),
-    { mutedTextColor, brandingCompanyName: companyName, language }
+    { mutedTextColor, brandingCompanyName: companyName, language, dividerColor }
   );
 
   const year = new Date().getFullYear();
@@ -598,7 +602,7 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en', { inlineListPan
       background-color: ${secondaryColor};
       padding: 30px;
       text-align: center;
-      border-top: 1px solid #eee;
+      border-top: 1px solid ${dividerColor};
     }
     .email-footer img {
       max-width: 120px;
@@ -656,7 +660,7 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en', { inlineListPan
             </td>
           </tr>
           <tr>
-            <td align="center" bgcolor="${secondaryColor}" class="email-footer" style="background-color:${secondaryColor};padding:30px;text-align:center;border-top:1px solid #eeeeee;">
+            <td align="center" bgcolor="${secondaryColor}" class="email-footer" style="background-color:${secondaryColor};padding:30px;text-align:center;border-top:1px solid ${dividerColor};">
               <img src="${logoSrc}" alt="${companyNameHtml}" width="120" style="max-width:120px;height:auto;opacity:0.8;margin-bottom:15px;border:0;">
               <p style="color:${mutedTextColor};font-size:14px;margin:5px 0;">${companyNameHtml}</p>${signatureHtml}
               <p style="font-size:12px;color:#999999;margin:5px 0;">© ${year} ${companyNameHtml}. All rights reserved.</p>
