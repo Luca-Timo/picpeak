@@ -291,23 +291,32 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
       {/* Draft Banner. !! — SQLite returns integer booleans; a bare 0 would render as "0" */}
       {!!event.is_draft && !archived && (
         <Card className="p-4 mb-6 border-2 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20">
+          {/* The text and the action share a wrapping row beside the icon:
+              on a phone the button drops under the text, lined up with it,
+              instead of running off the screen. Its label may wrap too, and
+              the button grows with it (h-auto over btn-sm's h-9):
+              "Veröffentlichen & Kunden benachrichtigen" alone is wider than
+              the text column at 390px. */}
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 flex-shrink-0 text-yellow-600 dark:text-yellow-400" />
-            <div className="flex-1">
-              <p className="font-medium text-yellow-900 dark:text-yellow-200">{t('events.draft')}</p>
-              <p className="text-sm mt-1 text-yellow-700 dark:text-yellow-300">{t('events.draftBanner')}</p>
+            <div className="flex-1 min-w-0 flex flex-wrap items-start justify-between gap-3">
+              <div className="flex-1 basis-64 min-w-0">
+                <p className="font-medium text-yellow-900 dark:text-yellow-200">{t('events.draft')}</p>
+                <p className="text-sm mt-1 text-yellow-700 dark:text-yellow-300">{t('events.draftBanner')}</p>
+              </div>
+              <PermissionGate permission="events.edit">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="max-w-full h-auto min-h-9 py-1.5 whitespace-normal text-left"
+                  leftIcon={<Send className="w-4 h-4 shrink-0" />}
+                  onClick={() => setShowPublishDialog(true)}
+                  isLoading={isPublishing}
+                >
+                  {t('events.publishAndNotify')}
+                </Button>
+              </PermissionGate>
             </div>
-            <PermissionGate permission="events.edit">
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<Send className="w-4 h-4" />}
-                onClick={() => setShowPublishDialog(true)}
-                isLoading={isPublishing}
-              >
-                {t('events.publishAndNotify')}
-              </Button>
-            </PermissionGate>
           </div>
         </Card>
       )}
@@ -317,27 +326,30 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
         <Card className={`p-4 mb-6 border-2 ${isExpired ? 'border-red-500 bg-red-50 dark:bg-red-900/20' : 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'}`}>
           <div className="flex items-start gap-3">
             <AlertTriangle className={`w-5 h-5 flex-shrink-0 ${isExpired ? 'text-red-600' : 'text-orange-600'}`} />
-            <div className="flex-1">
-              <p className={`font-medium ${isExpired ? 'text-red-900 dark:text-red-200' : 'text-orange-900 dark:text-orange-200'}`}>
-                {isExpired
-                  ? t('events.eventExpiredMessage')
-                  : t('events.eventExpiresIn', { days: daysUntilExpiration })}
-              </p>
-              <p className={`text-sm mt-1 ${isExpired ? 'text-red-700 dark:text-red-300' : 'text-orange-700 dark:text-orange-300'}`}>
-                {isExpired ? t('events.guestsCannotAccessGallery') : t('events.warningEmailsHaveBeenSent')}
-              </p>
+            {/* Same wrapping row as the draft banner above. */}
+            <div className="flex-1 min-w-0 flex flex-wrap items-start justify-between gap-3">
+              <div className="flex-1 basis-64 min-w-0">
+                <p className={`font-medium ${isExpired ? 'text-red-900 dark:text-red-200' : 'text-orange-900 dark:text-orange-200'}`}>
+                  {isExpired
+                    ? t('events.eventExpiredMessage')
+                    : t('events.eventExpiresIn', { days: daysUntilExpiration })}
+                </p>
+                <p className={`text-sm mt-1 ${isExpired ? 'text-red-700 dark:text-red-300' : 'text-orange-700 dark:text-orange-300'}`}>
+                  {isExpired ? t('events.guestsCannotAccessGallery') : t('events.warningEmailsHaveBeenSent')}
+                </p>
+              </div>
+              {!isExpired && canHelpClient && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    if (await confirm({ message: `${t('events.extendExpiration', { days: 7 })}?` })) onExtendExpiration(7);
+                  }}
+                >
+                  {t('events.extendSevenDays')}
+                </Button>
+              )}
             </div>
-            {!isExpired && canHelpClient && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  if (await confirm({ message: `${t('events.extendExpiration', { days: 7 })}?` })) onExtendExpiration(7);
-                }}
-              >
-                {t('events.extendSevenDays')}
-              </Button>
-            )}
           </div>
         </Card>
       )}
