@@ -54,6 +54,7 @@ beforeAll(async () => {
   app = express();
   app.use(express.json());
   app.use('/admin/events', require('../../src/routes/adminEvents'));
+  app.use('/admin', require('../../src/routes/adminDelivery'));
 }, 180000);
 
 afterAll(async () => {
@@ -448,5 +449,71 @@ describe('accounts-only galleries get a generated password', () => {
     const id = await seedEvent({ slug: 'typed-password' });
     const res = await request(app).put(`/admin/events/${id}`).send({ customer_email: 'client@recipients.test' });
     expect(res.status).toBe(200);
+  });
+});
+
+describe('"your complete gallery is ready" reaches the same people (issue 1562)', () => {
+  const complete = (id, body = {}) => request(app).post(`/admin/events/${id}/delivery/complete`).send(body);
+  const partial = async (slug, opts) => {
+    const id = await seedEvent({ slug, ...opts });
+    await db('events').where({ id }).update({ delivery_status: 'partial' });
+    return id;
+  };
+  const dataOf = (row) => (typeof row.email_data === 'string' ? JSON.parse(row.email_data) : row.email_data);
+
+  it('mails the customer email (share link) and each account (portal link)', async () => {
+    const id = await partial('complete-both', { customerEmail: 'client@recipients.test' });
+    await assign(id,
+      await seedAccount('anna@recipients.test', 'Anna Muster'),
+      await seedAccount('ben@recipients.test', 'Ben Beispiel'));
+
+    const res = await complete(id);
+    expect(res.status).toBe(200);
+    expect(res.body.email_queued).toBe(true);
+    expect(res.body.recipients).toMatchObject({ email: 'client@recipients.test', account_count: 2 });
+
+    const rows = await queued('gallery_completed');
+    expect(rows.map((r) => r.recipient_email)).toEqual(['anna@recipients.test', 'ben@recipients.test', 'client@recipients.test']);
+    const byTo = Object.fromEntries(rows.map((r) => [r.recipient_email, dataOf(r)]));
+    expect(byTo['client@recipients.test'].gallery_link).toContain('complete-both-token');
+    expect(byTo['anna@recipients.test'].gallery_link).toMatch(/\/customer\/events\/complete-both$/);
+    expect(byTo['anna@recipients.test'].host_name).toBe('Anna Muster');
+  });
+
+  it('tells one person in both fields once, with the portal link', async () => {
+    const id = await partial('complete-same', { customerEmail: 'anna@recipients.test' });
+    await assign(id, await seedAccount('anna@recipients.test', 'Anna Muster'));
+
+    await complete(id);
+    const rows = await queued('gallery_completed');
+    expect(rows.map((r) => r.recipient_email)).toEqual(['anna@recipients.test']);
+    expect(dataOf(rows[0]).gallery_link).toMatch(/\/customer\/events\/complete-same$/);
+  });
+
+  it('mails an accounts-only gallery, and no account without customers.events', async () => {
+    const id = await partial('complete-accounts');
+    await assign(id, await seedAccount('anna@recipients.test', 'Anna Muster'));
+    expect((await complete(id)).body.email_queued).toBe(true);
+    expect(await recipientsOf('gallery_completed')).toEqual(['anna@recipients.test']);
+
+    await db('email_queue').del();
+    mockCanAssignCustomers = false;
+    const other = await partial('complete-no-perm', { customerEmail: 'client@recipients.test' });
+    await assign(other, await seedAccount('ben@recipients.test', 'Ben Beispiel'));
+    await complete(other);
+    expect(await recipientsOf('gallery_completed')).toEqual(['client@recipients.test']);
+  });
+
+  it('sends nothing when the admin unticks the mail, and nothing to accounts of a draft', async () => {
+    const id = await partial('complete-quiet', { customerEmail: 'client@recipients.test' });
+    await assign(id, await seedAccount('anna@recipients.test', 'Anna Muster'));
+    const res = await complete(id, { send_email: false });
+    expect(res.body.email_queued).toBe(false);
+    expect(await queued('gallery_completed')).toHaveLength(0);
+
+    const draft = await partial('complete-draft', { customerEmail: 'client@recipients.test', isDraft: true });
+    await assign(draft, await seedAccount('ben@recipients.test', 'Ben Beispiel'));
+    await complete(draft);
+    expect(await recipientsOf('gallery_completed')).toEqual(['client@recipients.test']);
   });
 });

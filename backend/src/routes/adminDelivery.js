@@ -10,7 +10,8 @@
  * Completing never happens on its own (count reached / date passed would
  * announce an unfinished gallery). It clears the partial state, moves the
  * first-look badge onto full-set copies of first-look photos, queues the new
- * `gallery_completed` mail and emits the `gallery.completed` workflow event
+ * `gallery_completed` mail (to the customer email and every assigned customer
+ * account, through galleryNotificationService) and emits the `gallery.completed` workflow event
  * with the customer address and gallery link, so a custom flow can act on it.
  * Duplicate first-look photos are deleted by the client through the regular
  * bulk-delete route (photos.delete), not here.
@@ -20,10 +21,10 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { db, logActivity } = require('../database/db');
 const { adminAuth } = require('../middleware/auth');
-const { requirePermission } = require('../middleware/permissions');
+const { requirePermission, userHasAnyPermission } = require('../middleware/permissions');
 const { requireEventOwnership } = require('../middleware/ownership');
 const { safeValidationErrors, errorResponse } = require('../utils/routeHelpers');
-const { queueEmail } = require('../services/emailProcessor');
+const { notifyGalleryCompleted, describeRecipients } = require('../services/galleryNotificationService');
 const { buildShareLinkVariants } = require('../services/shareLinkService');
 const delivery = require('../services/deliveryService');
 const logger = require('../utils/logger');
@@ -77,26 +78,30 @@ router.post('/events/:eventId/delivery/complete', adminAuth, requirePermission('
     const [{ total }] = await db('photos').where('event_id', eventId).count('id as total');
     const photoCount = Math.max(0, (Number(total) || 0) - result.duplicates.length);
 
-    let emailQueued = false;
-    if (sendEmail && recipient) {
-      try {
-        const recipientName = event.customer_name || event.host_name || recipient.split('@')[0];
-        emailQueued = !!(await queueEmail(eventId, recipient, 'gallery_completed', {
-          host_name: recipientName,
-          customer_name: recipientName,
+    // The inline address and every assigned customer account the gallery
+    // was announced to (customers.events, as on every announcing route).
+    let sent = { inlineEmail: null, accounts: [] };
+    if (sendEmail) {
+      sent = await notifyGalleryCompleted(event, {
+        includeAccounts: await userHasAnyPermission(req.admin.id, ['customers.events']),
+        buildEmailData: ({ name, link }) => ({
+          host_name: name,
+          customer_name: name,
           event_name: event.event_name,
           event_date: event.event_date,
-          gallery_link: shareUrl,
+          gallery_link: link,
           photo_count: photoCount,
           expiry_date: event.expires_at,
-        }));
-      } catch (err) {
-        logger.warn('gallery_completed mail could not be queued', { eventId, error: err.message });
-      }
+        }),
+      });
     }
+    const emailQueued = Boolean(sent.inlineEmail) || sent.accounts.length > 0;
 
     await logActivity('delivery_completed', {
-      eventName: event.event_name, emailQueued, duplicates: result.duplicates.length,
+      eventName: event.event_name,
+      emailQueued,
+      ...(sent.accounts.length > 0 ? { assigned_accounts: sent.accounts.length } : {}),
+      duplicates: result.duplicates.length,
     }, eventId, { type: 'admin', id: req.admin.id, name: req.admin.username });
 
     try {
@@ -123,6 +128,9 @@ router.post('/events/:eventId/delivery/complete', adminAuth, requirePermission('
     res.json({
       completed: true,
       email_queued: emailQueued,
+      recipients: describeRecipients(sent, {
+        withIdentities: await userHasAnyPermission(req.admin.id, ['customers.view']),
+      }),
       duplicate_photo_ids: result.duplicates.map((d) => d.first_look_id),
       state: await deliveryState(eventId),
     });

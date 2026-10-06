@@ -22,6 +22,7 @@ const { buildShareLinkVariants } = require('./shareLinkService');
 const { getFrontendBaseUrl } = require('../utils/frontendUrl');
 const { hasColumnCached } = require('../utils/schemaCache');
 const { formatBoolean } = require('../utils/dbCompat');
+const { parseBooleanInput } = require('../utils/parsers');
 
 /**
  * Can this assigned customer account actually receive — and act on — the
@@ -211,6 +212,55 @@ async function notifyGalleryRecipients(event, { buildInlineEmailData, recipients
 }
 
 /**
+ * "Your complete gallery is ready" (issue 1562) to the same people the gallery
+ * was announced to: the inline address and every reachable account.
+ *
+ * Accounts get the same `gallery_completed` mail, linked to the gallery in
+ * their customer portal, which opens it without the password. One person in
+ * both fields gets that account version; this mail carries no welcome message
+ * or client access, so there is nothing the account version would drop. A
+ * draft is not announced to accounts, as with customer_gallery_assigned.
+ *
+ * @param {object} event the events row
+ * @param {object} opts
+ * @param {boolean} opts.includeAccounts the caller's customers.events
+ * @param {(to: { email: string, name: string, link: string }) => object} opts.buildEmailData
+ * @returns {Promise<{ inlineEmail: string|null, accounts: object[] }>} who was queued
+ */
+async function notifyGalleryCompleted(event, { includeAccounts, buildEmailData }) {
+  const announceable = !parseBooleanInput(event.is_draft, false) && !parseBooleanInput(event.is_archived, false);
+  const reachable = includeAccounts && announceable ? await reachableAccountsForEvent(event.id) : [];
+  const contact = event.customer_email || event.host_email || null;
+  const inline = contact && !reachable.some((a) => sameAddress(a.email, contact)) ? contact : null;
+
+  const queue = async (email, data) => {
+    try {
+      return (await queueEmail(event.id, email, 'gallery_completed', data)) === true;
+    } catch (err) {
+      logger.warn('gallery_completed mail could not be queued', { eventId: event.id, error: err.message });
+      return false;
+    }
+  };
+
+  let inlineEmail = null;
+  if (inline) {
+    const { shareUrl } = await buildShareLinkVariants({ slug: event.slug, shareToken: event.share_token });
+    const name = event.customer_name || event.host_name || inline.split('@')[0];
+    if (await queue(inline, buildEmailData({ email: inline, name, link: shareUrl }))) inlineEmail = inline;
+  }
+
+  const accounts = [];
+  if (reachable.length > 0) {
+    const portalLink = `${(await getFrontendBaseUrl()) || 'http://localhost:3000'}/customer/events/${encodeURIComponent(event.slug)}`;
+    for (const account of reachable) {
+      const data = buildEmailData({ email: account.email, name: accountLabel(account), link: portalLink });
+      if (await queue(account.email, data)) accounts.push(account);
+    }
+  }
+  return { inlineEmail, accounts };
+}
+
+/**
  * The recipients as the admin UI shows them. Account names and addresses are
  * customers.view data — the routes that announce a gallery need only
  * events.edit or events.support — so without it only the count is given.
@@ -253,6 +303,7 @@ module.exports = {
   hasGalleryEmailOnlyContent,
   galleryCreatedEmailData,
   notifyGalleryRecipients,
+  notifyGalleryCompleted,
   describeRecipients,
   recipientSummary,
   hasPasswordGeneratedColumn,
