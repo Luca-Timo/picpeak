@@ -59,18 +59,47 @@ describe('wrapEmailHtml — info panel text stays readable', () => {
     expect(dark).toContain('<ul style="background-color:#242424;color:#e5e5e5;');
   });
 
-  it('keeps list styling in <style> only when the caller opts out (newsletter body_css)', async () => {
+  it('keeps list styling in <style> only when the body brings its own <style>', async () => {
     await setColors({});
-    const html = await wrapEmailHtml(BODY, 'Subject', 'en', { inlineListPanels: false });
+    const html = await wrapEmailHtml(`<style>.mine ul { background: #000; }</style>${BODY}`, 'Subject', 'en');
     expect(html).toContain('<ul>');
     expect(html).not.toContain('<ul style=');
     expect(html).toMatch(/\.email-content ul \{\s*background-color: #f9f9f9;\s*color: #333333;/);
+  });
+
+  it('checks rgb() colours end to end', async () => {
+    await setColors({
+      email_container_bg_color: 'rgb(28, 28, 28)',
+      email_body_text_color: 'rgb(229, 229, 229)',
+      email_list_bg_color: 'rgb(245, 245, 245)',
+    });
+    const html = await wrapEmailHtml(BODY, 'Subject', 'en');
+    expect(html).toContain('<ul style="background-color:rgb(245, 245, 245);color:#333333;');
+  });
+
+  it('keeps a translucent panel colour and the text colour the admin chose', async () => {
+    await setColors({ email_body_text_color: '#333333', email_list_bg_color: 'rgba(0,0,0,0.05)' });
+    const html = await wrapEmailHtml(BODY, 'Subject', 'en');
+    expect(html).toContain('<ul style="background-color:rgba(0,0,0,0.05);color:#333333;');
+  });
+
+  it('checks links inside the panel against the panel too', async () => {
+    await setColors({ email_primary_color: '#014e4e', email_list_bg_color: '#242424', email_body_text_color: '#e5e5e5' });
+    const html = await wrapEmailHtml(BODY, 'Subject', 'en');
+    expect(html).toMatch(/\.email-content ul a,\s*\.email-content ul a:hover \{\s*color: #f5f5f5;/);
+
+    await setColors({});
+    const light = await wrapEmailHtml(BODY, 'Subject', 'en');
+    expect(light).toMatch(/\.email-content ul a,\s*\.email-content ul a:hover \{\s*color: #5C8762;/);
   });
 
   it('leaves a <ul> the template styled itself alone', async () => {
     await setColors({});
     const html = await wrapEmailHtml('<ul class="x" style="color:red"><li>a</li></ul>', 'Subject', 'en');
     expect(html).toContain('<ul class="x" style="color:red">');
+    const tight = await wrapEmailHtml('<ul class="x"style="color:red"><li>a</li></ul>', 'Subject', 'en');
+    expect(tight).toContain('<ul class="x"style="color:red">');
+    expect(tight).not.toMatch(/<ul style=/);
   });
 
   it('derives the footer divider from a dark footer instead of a bright #eeeeee stripe', async () => {

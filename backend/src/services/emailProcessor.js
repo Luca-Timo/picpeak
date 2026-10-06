@@ -416,10 +416,7 @@ function isUsableLogoUrl(value) {
 }
 
 // Wrap HTML body in the styled email template with header, footer, and logo
-// `inlineListPanels: false` skips inlining the info-panel style on <ul> tags,
-// for bodies that bring their own stylesheet (newsletter campaign body_css):
-// an inline style would beat every rule in it.
-async function wrapEmailHtml(htmlBody, subject, language = 'en', { inlineListPanels = true } = {}) {
+async function wrapEmailHtml(htmlBody, subject, language = 'en') {
   // Email colour palette. The two original settings (email_primary_color and
   // email_secondary_color) keep their existing semantics so emails sent by
   // upgraded instances render byte-for-byte identically until an admin
@@ -479,8 +476,12 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en', { inlineListPan
   // body text colour: a dark palette with the default light panel (or a
   // Branding sync that filled a light panel in) put near-white text on a
   // near-white box. Keep the body text colour when it reads on the panel,
-  // otherwise switch to a dark or light neutral.
+  // otherwise switch to a neutral that does (utils/colorContrast). Links in
+  // the panel get the same check against the primary colour, at 3:1: they
+  // are underlined, and the default green on the default panel is ~4:1 —
+  // 4.5:1 would turn every default install's list links grey.
   const listTextColor = readableTextOn(listBgColor, bodyTextColor);
+  const listLinkColor = readableTextOn(listBgColor, primaryColor, 3);
   // The footer's top border and the signature rule were a fixed #eeeeee —
   // a bright stripe across any dark palette. Derive them from the footer
   // background instead; light footers keep #eeeeee.
@@ -516,13 +517,16 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en', { inlineListPan
   const buttonInlineStyle = `background-color:${primaryColor};color:${buttonTextColor};display:inline-block;padding:12px 30px;text-decoration:none;border-radius:5px;font-weight:500;`;
   // Same for the info panel: inline its look on every <ul> the template did
   // not style itself, so clients that strip <style> keep text and panel in
-  // one readable pair.
+  // one readable pair. A body that brings its own <style> (an admin-edited
+  // template, a newsletter's body_css) styles its lists there, and an inline
+  // style would beat every rule in it — those keep the panel in the wrapper's
+  // <style> only.
   const listInlineStyle = `background-color:${listBgColor};color:${listTextColor};padding:20px 20px 20px 40px;border-radius:5px;margin:20px 0;`;
   let inlinedBody = (typeof htmlBody === 'string' ? htmlBody : '')
     .replace(/class="button"/g, `class="button" style="${buttonInlineStyle}"`);
-  if (inlineListPanels) {
+  if (!/<style[\s>]/i.test(inlinedBody)) {
     inlinedBody = inlinedBody
-      .replace(/<ul(?![^>]*\sstyle\s*=)(\s[^>]*)?>/gi, (match, attrs = '') => `<ul style="${listInlineStyle}"${attrs}>`);
+      .replace(/<ul(?![^>]*[\s"']style\s*=)(\s[^>]*)?>/gi, (match, attrs = '') => `<ul style="${listInlineStyle}"${attrs}>`);
   }
 
   return `
@@ -627,6 +631,10 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en', { inlineListPan
     }
     .email-content ul strong {
       color: ${listTextColor};
+    }
+    .email-content ul a,
+    .email-content ul a:hover {
+      color: ${listLinkColor};
     }
     @media only screen and (max-width: 600px) {
       .email-wrapper {

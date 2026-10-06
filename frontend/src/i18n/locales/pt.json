@@ -2482,7 +2482,7 @@
     "containerBgColorHelp": "O cartão branco que contém o conteúdo do e-mail. Corresponde a Identidade Visual → Superfície.",
     "listBgColor": "Painel de informação",
     "listBgColorHelp": "Fundo dos painéis de informação com marcadores no corpo do e-mail. Corresponde a Identidade Visual → Elevado.",
-    "listContrastWarning": "O texto do corpo é difícil de ler no painel de informação (contraste {{ratio}}:1, recomendado 4,5:1). Os e-mails mudam o texto do painel para um cinzento escuro ou claro legível, mas cores a condizer ficam melhor.",
+    "listContrastWarning": "O texto do corpo é difícil de ler no painel de informação (contraste {{ratio}}:1, recomendado 4,5:1). Os e-mails mudam automaticamente o texto do painel para uma cor legível, mas cores a condizer ficam melhor.",
     "bodyTextColor": "Texto do corpo",
     "bodyTextColorHelp": "Cor de parágrafos e texto a negrito. Corresponde a Identidade Visual → Texto primário.",
     "mutedTextColor": "Texto do rodapé",

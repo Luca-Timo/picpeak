@@ -391,9 +391,7 @@ async function renderForRecipient(campaign, customer, options = {}) {
 
   const styled = css ? `<style type="text/css">${css}</style>\n${withUnsubscribe}` : withUnsubscribe;
 
-  // The campaign's body_css styles its own lists; inline panel styles on
-  // <ul> would override it, so the wrapper keeps those in <style> only.
-  const html = await wrapEmailHtml(styled, subject, language, { inlineListPanels: false });
+  const html = await wrapEmailHtml(styled, subject, language);
   return { subject, html, language };
 }
 

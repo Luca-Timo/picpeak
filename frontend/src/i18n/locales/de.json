@@ -5496,7 +5496,7 @@
     "containerBgColorHelp": "Die weiße Karte, die den E-Mail-Inhalt enthält. Entspricht Branding → Oberfläche.",
     "listBgColor": "Infopanel",
     "listBgColorHelp": "Hintergrund der Aufzählungs-Infopanels im E-Mail-Text. Entspricht Branding → Erhöht.",
-    "listContrastWarning": "Der Fließtext ist auf dem Infopanel schlecht lesbar (Kontrast {{ratio}}:1, empfohlen 4,5:1). E-Mails stellen den Text im Panel automatisch auf ein lesbares Dunkel- oder Hellgrau um, passende Farben sehen aber besser aus.",
+    "listContrastWarning": "Der Fließtext ist auf dem Infopanel schlecht lesbar (Kontrast {{ratio}}:1, empfohlen 4,5:1). E-Mails stellen den Text im Panel automatisch auf eine lesbare Farbe um, passende Farben sehen aber besser aus.",
     "bodyTextColor": "Fließtext",
     "bodyTextColorHelp": "Absatz- und Fetttext-Farbe. Entspricht Branding → Primärer Text.",
     "mutedTextColor": "Fußzeilentext",

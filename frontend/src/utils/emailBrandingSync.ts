@@ -2,9 +2,38 @@ import type { ThemeConfig } from '../types/theme.types';
 import { contrastRatio, relativeLuminance } from './contrast';
 import { DARK_SURFACE_DEFAULTS, LIGHT_SURFACE_DEFAULTS } from './themeMigration';
 
-// relativeLuminance() reads anything it can't parse as black; only infer
-// the mode from colours it can actually read.
-const HEX = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
+const HEX = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const RGB = /^rgba?\(\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*(?:[,/]\s*([\d.]+)(%?)\s*)?\)$/i;
+
+/**
+ * An opaque colour as #rrggbb, or null. Same rules as the email wrapper's
+ * backend/src/utils/colorContrast.js parseColor, so the settings warning
+ * shows for exactly the colours the wrapper corrects: 3/4/6/8-digit hex and
+ * rgb()/rgba(), with translucent values, named colours and hsl() left out.
+ * (relativeLuminance() alone reads anything it can't parse as black.)
+ */
+export function toOpaqueHex(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  const hex = trimmed.match(HEX);
+  if (hex) {
+    let digits = hex[1];
+    if (digits.length <= 4) digits = digits.split('').map((d) => d + d).join('');
+    if (digits.length === 8 && digits.slice(6, 8).toLowerCase() !== 'ff') return null;
+    return `#${digits.slice(0, 6).toLowerCase()}`;
+  }
+  const rgb = trimmed.match(RGB);
+  if (rgb) {
+    const channels = rgb.slice(1, 4).map(Number);
+    if (channels.some((c) => c > 255)) return null;
+    if (rgb[4] !== undefined) {
+      const alpha = Number(rgb[4]) / (rgb[5] === '%' ? 100 : 1);
+      if (!(alpha >= 1)) return null;
+    }
+    return `#${channels.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+  }
+  return null;
+}
 
 export interface EmailBrandingColors {
   primary: string;
@@ -30,8 +59,9 @@ export interface EmailBrandingColors {
 export function emailColorsFromBranding(theme: ThemeConfig | null | undefined): EmailBrandingColors {
   const t = theme || {};
   const base = t.backgroundColor || t.surfaceColor;
+  const baseHex = toOpaqueHex(base);
   const isDark = t.colorMode === 'dark'
-    || (t.colorMode !== 'light' && !!base && HEX.test(base.trim()) && relativeLuminance(base) < 0.5);
+    || (t.colorMode !== 'light' && !!baseHex && relativeLuminance(baseHex) < 0.5);
   const defaults = isDark ? DARK_SURFACE_DEFAULTS : LIGHT_SURFACE_DEFAULTS;
   const surface = t.surfaceColor || defaults.surfaceColor;
 
@@ -50,10 +80,13 @@ export function emailColorsFromBranding(theme: ThemeConfig | null | undefined): 
  * The contrast ratio of body text on the info panel when it is below WCAG
  * AA (4.5:1), else null. The email wrapper swaps the panel text to a
  * readable neutral in that case; the settings page warns about it. Colours
- * that aren't plain hex (rgb(), named) return null, so no warning shows.
+ * the wrapper can't read (translucent, named, hsl()) return null, so no
+ * warning shows for them — the wrapper leaves those alone too.
  */
 export function lowListPanelContrast(bodyText: string, listBg: string): number | null {
-  if (!HEX.test(bodyText.trim()) || !HEX.test(listBg.trim())) return null;
-  const ratio = contrastRatio(bodyText, listBg);
+  const text = toOpaqueHex(bodyText);
+  const bg = toOpaqueHex(listBg);
+  if (!text || !bg) return null;
+  const ratio = contrastRatio(text, bg);
   return ratio < 4.5 ? ratio : null;
 }

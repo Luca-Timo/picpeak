@@ -931,10 +931,10 @@ export const EmailConfigPage: React.FC = () => {
               const ratio = lowListPanelContrast(emailBodyTextColor, emailListBgColor);
               if (ratio === null) return null;
               return (
-                <div role="status" className="mt-6 flex items-start gap-2 p-3 text-sm bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 rounded-lg">
+                <div role="status" className="mt-6 flex items-start gap-2 p-3 text-sm border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-lg">
                   <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <span>
-                    {t('email.listContrastWarning', 'Body text is hard to read on the Info panel (contrast {{ratio}}:1, 4.5:1 recommended). Emails switch the panel text to a readable dark or light grey, but matching colours look better.', { ratio: ratio.toLocaleString(i18n.language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })}
+                    {t('email.listContrastWarning', 'Body text is hard to read on the Info panel (contrast {{ratio}}:1, 4.5:1 recommended). Emails switch the panel text to a readable colour automatically, but matching colours look better.', { ratio: (Math.floor(ratio * 10) / 10).toLocaleString(i18n.language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })}
                   </span>
                 </div>
               );

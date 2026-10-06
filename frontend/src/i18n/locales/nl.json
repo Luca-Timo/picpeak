@@ -2346,7 +2346,7 @@
     "containerBgColorHelp": "De witte kaart die de e-mailinhoud bevat. Komt overeen met Huisstijl → Oppervlak.",
     "listBgColor": "Infopaneel",
     "listBgColorHelp": "Achtergrond van de opsommingsinfopanelen in de e-mailtekst. Komt overeen met Huisstijl → Verhoogd.",
-    "listContrastWarning": "De hoofdtekst is slecht leesbaar op het infopaneel (contrast {{ratio}}:1, 4,5:1 aanbevolen). E-mails zetten de paneeltekst om naar een leesbaar donker- of lichtgrijs, maar passende kleuren zien er beter uit.",
+    "listContrastWarning": "De hoofdtekst is slecht leesbaar op het infopaneel (contrast {{ratio}}:1, 4,5:1 aanbevolen). E-mails zetten de paneeltekst automatisch om naar een leesbare kleur, maar passende kleuren zien er beter uit.",
     "bodyTextColor": "Bodytekst",
     "bodyTextColorHelp": "Kleur van alinea's en vetgedrukte tekst. Komt overeen met Huisstijl → Primaire tekst.",
     "mutedTextColor": "Voetteksttekst",

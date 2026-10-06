@@ -6,13 +6,14 @@
  * light text on a light panel (or dark on dark), and a footer divider that
  * doesn't glow on a dark palette.
  *
- * Only #rgb / #rrggbb (alpha ignored) and rgb()/rgba() are parsed. Anything
- * else — a named colour, hsl() — returns null so callers keep the colour
- * the admin chose instead of guessing.
+ * Only opaque #rgb / #rgba / #rrggbb / #rrggbbaa and rgb()/rgba() are
+ * parsed. A translucent colour shows whatever sits behind it, so its contrast
+ * can't be known from the value alone; it returns null like a named colour or
+ * hsl(), and callers keep the colour the admin chose instead of guessing.
  */
 
 const HEX = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
-const RGB = /^rgba?\(\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*(?:[,/]\s*[\d.]+%?\s*)?\)$/i;
+const RGB = /^rgba?\(\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*(?:[,/]\s*([\d.]+)(%?)\s*)?\)$/i;
 
 function parseColor(value) {
   if (typeof value !== 'string') return null;
@@ -21,6 +22,7 @@ function parseColor(value) {
   if (hex) {
     let digits = hex[1];
     if (digits.length <= 4) digits = digits.split('').map((d) => d + d).join('');
+    if (digits.length === 8 && digits.slice(6, 8).toLowerCase() !== 'ff') return null;
     return {
       r: parseInt(digits.slice(0, 2), 16),
       g: parseInt(digits.slice(2, 4), 16),
@@ -31,6 +33,10 @@ function parseColor(value) {
   if (rgb) {
     const [r, g, b] = rgb.slice(1, 4).map(Number);
     if (r > 255 || g > 255 || b > 255) return null;
+    if (rgb[4] !== undefined) {
+      const alpha = Number(rgb[4]) / (rgb[5] === '%' ? 100 : 1);
+      if (!(alpha >= 1)) return null;
+    }
     return { r, g, b };
   }
   return null;
@@ -55,20 +61,30 @@ function contrastRatio(a, b) {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
-const DARK_TEXT = '#333333';
-const LIGHT_TEXT = '#f5f5f5';
+const SOFT_NEUTRALS = ['#333333', '#f5f5f5'];
+const HARD_NEUTRALS = ['#000000', '#ffffff'];
+
+/** The candidate with the highest contrast on `background`. */
+function bestOn(background, candidates) {
+  return candidates.reduce((best, c) => (
+    contrastRatio(c, background) > contrastRatio(best, background) ? c : best
+  ));
+}
 
 /**
  * The text colour to paint on `background`: `preferred` when it reaches
- * `minRatio`, otherwise whichever of a dark or light neutral reads better.
- * Unparseable input returns `preferred` unchanged.
+ * `minRatio`; otherwise the better of a soft dark or light neutral when that
+ * one reaches it. On a mid-grey panel neither soft neutral does, so the
+ * answer is the best of black, white and `preferred` — never a colour with
+ * less contrast than the one it replaces. Unparseable input returns
+ * `preferred` unchanged.
  */
 function readableTextOn(background, preferred, minRatio = 4.5) {
   const current = contrastRatio(preferred, background);
   if (current === null || current >= minRatio) return preferred;
-  return contrastRatio(DARK_TEXT, background) >= contrastRatio(LIGHT_TEXT, background)
-    ? DARK_TEXT
-    : LIGHT_TEXT;
+  const soft = bestOn(background, SOFT_NEUTRALS);
+  if (contrastRatio(soft, background) >= minRatio) return soft;
+  return bestOn(background, [preferred, ...HARD_NEUTRALS]);
 }
 
 const DEFAULT_DIVIDER = '#eeeeee';
