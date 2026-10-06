@@ -2114,7 +2114,8 @@
       "reminderWhenTo": "Goes out on {{date}} to {{recipient}}",
       "sections": "Settings sections",
       "source": "Photo source",
-      "sourceImportHint": "Saving a new folder imports nothing by itself. After saving, use Import now on the Photos tab.",
+      "sourceImportHelp": "Imports new photos from this folder now. It runs in the background; they appear on the Photos tab.",
+      "sourceImportSaveFirst": "Save the new folder first, then import it here.",
       "sourceManagedHelp": "Photos are uploaded on the Photos tab and stored by PicPeak.",
       "sourceReferenceHelp": "Photos stay in your folder; PicPeak links to them.",
       "summary": {

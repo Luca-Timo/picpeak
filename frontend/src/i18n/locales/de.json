@@ -2652,7 +2652,8 @@
       "reminderWhenTo": "Wird am {{date}} an {{recipient}} gesendet",
       "sections": "Einstellungsbereiche",
       "source": "Fotoquelle",
-      "sourceImportHint": "Das Speichern eines neuen Ordners importiert noch nichts. Danach im Tab Fotos „Jetzt importieren“ nutzen.",
+      "sourceImportHelp": "Importiert jetzt neue Fotos aus diesem Ordner. Läuft im Hintergrund; die Fotos erscheinen im Tab Fotos.",
+      "sourceImportSaveFirst": "Zuerst den neuen Ordner speichern, dann hier importieren.",
       "sourceManagedHelp": "Fotos werden im Tab Fotos hochgeladen und von PicPeak gespeichert.",
       "sourceReferenceHelp": "Fotos bleiben in deinem Ordner; PicPeak verlinkt sie.",
       "summary": {
