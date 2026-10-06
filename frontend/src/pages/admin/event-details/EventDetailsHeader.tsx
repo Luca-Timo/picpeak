@@ -9,8 +9,8 @@ import {
   Copy,
   Mail,
   MoreHorizontal,
+  Pencil,
   Receipt,
-  Type,
   Send,
   Sparkles,
   CheckCircle2
@@ -21,7 +21,6 @@ import { CompleteDeliveryDialog } from './CompleteDeliveryDialog';
 import { deliveryDue, isAwaitingFullGallery } from './deliveryStatus';
 import type { Event } from '../../../types';
 import { Button, Card } from '../../../components/common';
-import { PermissionGate } from '../../../components/admin/PermissionGate';
 import { useConfirm } from '../../../components/common/ConfirmDialog';
 import { useLocalizedDate } from '../../../hooks/useLocalizedDate';
 import { useFeatureFlags } from '../../../contexts/FeatureFlagsContext';
@@ -88,7 +87,7 @@ const ActionsMenu: React.FC<{ items: MenuItem[] }> = ({ items }) => {
         <MoreHorizontal className="w-4 h-4" />
       </Button>
       {open && (
-        <div role="menu" className="absolute right-0 top-full mt-1 z-30 w-56 rounded-lg border border-line bg-panel shadow-lg p-1">
+        <div role="menu" className="absolute left-0 top-full mt-1 z-30 w-56 rounded-lg border border-line bg-panel shadow-lg p-1">
           {items.map((item) => (
             <button
               key={item.key}
@@ -144,10 +143,8 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
   });
   const due = deliveryDue(event.delivery_due_at);
 
+  const canEdit = !archived && hasPermission('events.edit');
   const menuItems: MenuItem[] = [];
-  if (!archived && hasPermission('events.edit')) {
-    menuItems.push({ key: 'rename', label: t('events.rename.button', 'Rename'), icon: <Type className="w-4 h-4" />, onSelect: () => setShowRenameDialog(true) });
-  }
   if (hasPermission('events.create')) {
     menuItems.push({ key: 'duplicate', label: t('events.duplicateEvent', 'Duplicate gallery'), icon: <Copy className="w-4 h-4" />, onSelect: () => setShowDuplicateDialog(true) });
   }
@@ -188,7 +185,23 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
 
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-heading break-words">{event.event_name}</h1>
+            {/* Renaming sits on the name it changes. It stays a dialog, not
+                inline editing: a rename can move the gallery's URL and resend
+                the customer email, which the dialog explains and asks about. */}
+            <div className="flex items-start gap-2">
+              <h1 className="min-w-0 text-2xl font-bold text-heading break-words">{event.event_name}</h1>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setShowRenameDialog(true)}
+                  className="mt-1 p-1 rounded-lg text-soft hover:text-heading hover:bg-hover shrink-0"
+                  aria-label={t('events.rename.button', 'Rename')}
+                  title={t('events.rename.button', 'Rename')}
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-soft">
               {event.event_date && (
                 <span className="flex items-center">
@@ -238,7 +251,11 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
             </div>
           </div>
 
+          {/* Secondary first: the menu, then View gallery, then the one
+              primary action of the moment (publish a draft, send the gallery
+              email, announce the full gallery) at the end of the row. */}
           <div className="flex flex-wrap gap-2 items-center">
+            <ActionsMenu items={menuItems} />
             {event.share_link && (
               <a
                 // Admin preview (#868): an explicit intent flag, no token in the
@@ -251,6 +268,19 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
                 <ExternalLink className="w-4 h-4" />
                 {t('events.viewGallery')}
               </a>
+            )}
+            {/* !! — SQLite returns integer booleans; a bare 0 would render as "0" */}
+            {!!event.is_draft && canEdit && (
+              <Button
+                variant="primary"
+                size="sm"
+                className="max-w-full h-auto min-h-9 py-1.5 whitespace-normal text-left"
+                leftIcon={<Send className="w-4 h-4 shrink-0" />}
+                onClick={() => setShowPublishDialog(true)}
+                isLoading={isPublishing}
+              >
+                {t('events.publishAndNotify')}
+              </Button>
             )}
             {canHelpClient && canSendGalleryEmail(event, reach) && (
               <Button
@@ -273,7 +303,6 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
                 {t('events.delivery.completeButton', 'Full gallery is ready')}
               </Button>
             )}
-            <ActionsMenu items={menuItems} />
           </div>
         </div>
       </div>
@@ -288,37 +317,17 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
         />
       )}
 
-      {/* Draft Banner. !! — SQLite returns integer booleans; a bare 0 would render as "0" */}
+      {/* Draft notice. The publish action is in the header's action row, so
+          this only says what a draft means, in one slim line.
+          !! — SQLite returns integer booleans; a bare 0 would render as "0" */}
       {!!event.is_draft && !archived && (
-        <Card className="p-4 mb-6 border-2 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20">
-          {/* The text and the action share a wrapping row beside the icon:
-              on a phone the button drops under the text, lined up with it,
-              instead of running off the screen. Its label may wrap too, and
-              the button grows with it (h-auto over btn-sm's h-9):
-              "Veröffentlichen & Kunden benachrichtigen" alone is wider than
-              the text column at 390px. */}
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 flex-shrink-0 text-yellow-600 dark:text-yellow-400" />
-            <div className="flex-1 min-w-0 flex flex-wrap items-start justify-between gap-3">
-              <div className="flex-1 basis-64 min-w-0">
-                <p className="font-medium text-yellow-900 dark:text-yellow-200">{t('events.draft')}</p>
-                <p className="text-sm mt-1 text-yellow-700 dark:text-yellow-300">{t('events.draftBanner')}</p>
-              </div>
-              <PermissionGate permission="events.edit">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="max-w-full h-auto min-h-9 py-1.5 whitespace-normal text-left"
-                  leftIcon={<Send className="w-4 h-4 shrink-0" />}
-                  onClick={() => setShowPublishDialog(true)}
-                  isLoading={isPublishing}
-                >
-                  {t('events.publishAndNotify')}
-                </Button>
-              </PermissionGate>
-            </div>
-          </div>
-        </Card>
+        <div className="flex items-start gap-2 mb-6 px-4 py-2.5 rounded-xl border border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 text-sm">
+          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-yellow-600 dark:text-yellow-400" aria-hidden="true" />
+          <p className="min-w-0 text-yellow-700 dark:text-yellow-300">
+            <span className="font-medium text-yellow-900 dark:text-yellow-200">{t('events.draft')}:</span>{' '}
+            {t('events.draftBanner')}
+          </p>
+        </div>
       )}
 
       {/* Expiration Warning */}
