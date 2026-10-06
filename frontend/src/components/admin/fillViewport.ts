@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 /**
  * Lets a page fill the admin content column from `lg` up instead of growing
@@ -23,4 +23,15 @@ export function useFillViewport(): void {
     setFill(true);
     return () => setFill(false);
   }, [setFill]);
+}
+
+/**
+ * The layout's side: whether any page asks to fill, and the setter it hands
+ * down through FillViewportContext. A count, not a flag, so one consumer
+ * unmounting cannot switch fill mode off under another that is still mounted.
+ */
+export function useFillViewportCounter(): [boolean, (on: boolean) => void] {
+  const [count, setCount] = useState(0);
+  const setFill = useCallback((on: boolean) => setCount((n) => Math.max(0, n + (on ? 1 : -1))), []);
+  return [count > 0, setFill];
 }

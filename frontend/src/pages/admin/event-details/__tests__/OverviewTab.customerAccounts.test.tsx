@@ -18,7 +18,10 @@ vi.mock('../../../../hooks/usePermission', () => ({
   usePermission: (p: string) => (p === 'customers.view' ? perms.customersView : true),
   useAnyPermission: () => true,
 }));
-vi.mock('../../../../contexts/FeatureFlagsContext', () => ({ useFeatureFlags: () => ({ flags: flagState.flags }) }));
+vi.mock('../../../../contexts/FeatureFlagsContext', () => ({
+  useFeatureFlags: () => ({ flags: flagState.flags }),
+  useFeatureEnabled: (key: string) => !!(flagState.flags as Record<string, unknown>)[key],
+}));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string, fallback?: unknown) => (typeof fallback === 'string' ? fallback : key), i18n: { language: 'en' } }),
   initReactI18next: { type: '3rdParty', init: () => {} },

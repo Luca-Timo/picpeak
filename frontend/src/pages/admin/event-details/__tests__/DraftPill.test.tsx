@@ -19,7 +19,6 @@ const pill = () => screen.getByRole('button', { name: 'events.draft: events.draf
 describe('DraftPill', () => {
   it('starts closed and carries the explanation as its tooltip and label', () => {
     render(<DraftPill />);
-    expect(pill()).toHaveAttribute('aria-expanded', 'false');
     expect(pill()).not.toHaveClass('is-open');
     expect(pill()).toHaveAttribute('data-tooltip', 'events.draftBanner');
   });
@@ -28,7 +27,6 @@ describe('DraftPill', () => {
     render(<DraftPill />);
     fireEvent.click(pill());
     expect(pill()).toHaveClass('is-open');
-    expect(pill()).toHaveAttribute('aria-expanded', 'true');
     fireEvent.click(pill());
     expect(pill()).not.toHaveClass('is-open');
   });

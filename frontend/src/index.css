@@ -379,11 +379,18 @@
     display: none;
     max-width: min(320px, calc(100vw - 2rem));
   }
-  .info-tooltip-start:hover::after,
   .info-tooltip-start:focus-visible::after,
   .info-tooltip-start.is-open::after {
     display: block;
     opacity: 1;
+  }
+  /* Hover only where there is one: on touch a sticky :hover would keep the
+     bubble after the tap that closed it. */
+  @media (hover: hover) {
+    .info-tooltip-start:hover::after {
+      display: block;
+      opacity: 1;
+    }
   }
   /* Escape on a hovered or focused trigger (set by the component). */
   .info-tooltip-start.is-dismissed::after {

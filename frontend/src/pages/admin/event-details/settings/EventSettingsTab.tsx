@@ -138,6 +138,13 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
     lastOpened.current = null;
   }, [opened]);
 
+  // The detail half is its own scroll pane: a newly opened section starts at
+  // its top, header in view, also after the save's jump to an invalid one.
+  const detailRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (detailRef.current) detailRef.current.scrollTop = 0;
+  }, [active]);
+
   const onSave = async () => {
     const { invalidSection } = await save();
     if (invalidSection) open(invalidSection);
@@ -300,7 +307,7 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
           />
         </div>
 
-        <div className={`${phoneOpen ? '' : 'hidden lg:block'} min-w-0 lg:min-h-0 lg:overflow-y-auto lg:pt-6 lg:pb-8`}>
+        <div ref={detailRef} data-testid="settings-detail-pane" className={`${phoneOpen ? '' : 'hidden lg:block'} min-w-0 lg:min-h-0 lg:overflow-y-auto lg:pt-6 lg:pb-8`}>
           {/* The card's cap is the form's width: the form fills the card, so
               the padding is the same on both sides and a wide display does not
               leave the card running empty past its fields. From 2xl the card,

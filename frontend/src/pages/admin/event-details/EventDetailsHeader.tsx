@@ -148,7 +148,6 @@ export const DraftPill: React.FC = () => {
       type="button"
       data-tooltip={t('events.draftBanner')}
       aria-label={`${t('events.draft')}: ${t('events.draftBanner')}`}
-      aria-expanded={open}
       onClick={() => { setDismissed(false); setOpen((o) => !o); }}
       onKeyDown={(e) => { if (e.key === 'Escape') { setOpen(false); setDismissed(true); } }}
       onBlur={() => setDismissed(false)}
@@ -312,7 +311,10 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
               primary action of the moment (publish a draft, send the gallery
               email, announce the full gallery) at the end of the row. */}
           <div className="flex flex-wrap gap-2 items-center">
-            <ActionsMenu items={menuItems} className="hidden sm:block" />
+            {/* Anchored right too: the row sits at the right edge, so with only
+                the menu (or one button) in it a left-anchored dropdown would
+                run past the content column. */}
+            <ActionsMenu items={menuItems} align="right" className="hidden sm:block" />
             {event.share_link && (
               <a
                 // Admin preview (#868): an explicit intent flag, no token in the
