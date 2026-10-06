@@ -73,8 +73,8 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
   onArchive, isArchiving, onDelete, isDeleting, refetchEvent,
 }) => {
   const { t } = useTranslation();
-  const { flags } = useFeatureFlags();
-  const { hasPermission } = usePermissions();
+  const { flags, isLoading: flagsLoading } = useFeatureFlags();
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const { format } = useLocalizedDate();
   const confirm = useConfirm();
   const { draft, setDraft, setEvent, dirty, isDirty, isSaving, save, discard, discardSection, downloadsData } = settings;
@@ -106,10 +106,12 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
   const set = (patch: Partial<EventFields>) => setEvent((prev) => ({ ...prev, ...patch }));
 
   // A link to a section the flags hide (or the role can't see) falls back
-  // to nothing opened, and the URL stops naming it.
+  // to nothing opened, and the URL stops naming it. Only once flags and
+  // permissions have loaded: until then the defaults hide Faces, Slideshow,
+  // Reminder and Danger zone, and a reload on one of them would lose it.
   useEffect(() => {
-    if (section && !opened) setSection(null);
-  }, [section, opened, setSection]);
+    if (section && !opened && !flagsLoading && !permissionsLoading) setSection(null);
+  }, [section, opened, flagsLoading, permissionsLoading, setSection]);
 
   // On a phone, opening a section from the overview adds a history entry.
   const open = (key: SettingsSectionKey) => setSection(key, { push: !sideBySide && !opened });
