@@ -54,8 +54,12 @@ interface MenuItem {
   onSelect: () => void;
 }
 
-/** The secondary actions, out of the way behind one button. */
-const ActionsMenu: React.FC<{ items: MenuItem[] }> = ({ items }) => {
+/**
+ * The secondary actions, out of the way behind one button. `align` is the
+ * side the dropdown is anchored to: the button's left edge when it starts a
+ * row, its right edge when it is pinned to the right.
+ */
+const ActionsMenu: React.FC<{ items: MenuItem[]; align?: 'left' | 'right'; className?: string }> = ({ items, align = 'left', className = '' }) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -76,7 +80,7 @@ const ActionsMenu: React.FC<{ items: MenuItem[] }> = ({ items }) => {
 
   if (items.length === 0) return null;
   return (
-    <div className="relative" ref={ref}>
+    <div className={`relative ${className}`} ref={ref}>
       <Button
         variant="outline"
         size="sm"
@@ -88,7 +92,7 @@ const ActionsMenu: React.FC<{ items: MenuItem[] }> = ({ items }) => {
         <MoreHorizontal className="w-4 h-4" />
       </Button>
       {open && (
-        <div role="menu" className="absolute left-0 top-full mt-1 z-30 w-56 rounded-lg border border-line bg-panel shadow-lg p-1">
+        <div role="menu" className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-1 z-30 w-56 rounded-lg border border-line bg-panel shadow-lg p-1`}>
           {items.map((item) => (
             <button
               key={item.key}
@@ -185,7 +189,7 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
             which is on screen here (detail pages navigate by the sidebar; #1730). */}
 
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
+          <div className="min-w-0 w-full sm:w-auto">
             {/* Renaming sits on the name it changes. It stays a dialog, not
                 inline editing: a rename can move the gallery's URL and resend
                 the customer email, which the dialog explains and asks about. */}
@@ -202,6 +206,10 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
                   <Pencil className="w-4 h-4" />
                 </button>
               )}
+              {/* On a phone the menu sits on the title row, pinned right, so
+                  View gallery and the primary action fit next to each other
+                  below. From sm it is the first item of the action row. */}
+              <ActionsMenu items={menuItems} align="right" className="ml-auto shrink-0 sm:hidden" />
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-soft">
               {event.event_date && (
@@ -267,7 +275,7 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
               primary action of the moment (publish a draft, send the gallery
               email, announce the full gallery) at the end of the row. */}
           <div className="flex flex-wrap gap-2 items-center">
-            <ActionsMenu items={menuItems} />
+            <ActionsMenu items={menuItems} className="hidden sm:block" />
             {event.share_link && (
               <a
                 // Admin preview (#868): an explicit intent flag, no token in the

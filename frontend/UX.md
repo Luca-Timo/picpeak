@@ -21,7 +21,7 @@ same order.
 
 | Part | Contains | Example |
 |---|---|---|
-| Header | title with a pen to rename it, status badges; action row in the order `⋯` menu, external "View" link, **one** primary action (e.g. Publish on a draft) | `EventDetailsHeader.tsx` |
+| Header | title with a pen to rename it, status badges; action row in the order `⋯` menu, external "View" link, **one** primary action (e.g. Publish on a draft). Below `sm` the `⋯` menu moves onto the title row, pinned right, so View and the primary action fit side by side | `EventDetailsHeader.tsx` |
 | Banners | state that blocks or warns: expiring, archived. A banner explains; the action it calls for lives in the header when the header has one. A state the header already shows as a pill gets no banner: the pill's tooltip explains it (a draft) | expiry banner with +7 days |
 | Tabs | `Overview` first, `Settings` last | `EventTabs.tsx` |
 | Tab body | see below | |
