@@ -206,15 +206,21 @@ component, not re-created next to it.
   page root `lg:flex-1 lg:min-h-0 lg:flex lg:flex-col`, and each pane
   `lg:min-h-0 lg:overflow-y-auto` with its top and bottom gap as padding
   *inside* the pane (`lg:pt-6 lg:pb-8`), so content scrolls right up to the
-  line. Below `lg` the page scrolls as one.
+  line. Below `lg` the page scrolls as one. Every box between `<main>` and
+  the panes takes `lg:min-h-0`, never a `min-h-*` floor: a floor lets the
+  panes overflow `<main>` on a short window, and the pinned save bar then
+  covers their last rows.
 - **Never size from the window by guessing the chrome.** No
   `h-[calc(100vh-6rem)]`: banners, the upload bar and the save bar come and
   go, so the guess is wrong somewhere. Let flex give the height
   (`flex-1 min-h-0`).
 - **A row that scrolls sideways clips the other axis.** `overflow-x-auto`
-  makes overflow-y `auto` too, so a child pulled 1px past the edge (the
-  tab underline's `-mb-px`) gives the row a vertical scrollbar on a Mac
-  that shows scrollbars. Pair it with `overflow-y-hidden`.
+  makes overflow-y `auto` too, so a child pulled 1px past the edge gives
+  the row a vertical scrollbar on a Mac that shows scrollbars. Pair it with
+  `overflow-y-hidden`, and then keep everything inside the row: a tab row
+  draws its divider as an inset shadow (`shadow-[inset_0_-1px_0_var(--ui-line)]`)
+  instead of a border with the tabs pulled over it by `-mb-px`, because
+  the clip would cut that pixel off the active underline.
 - **Columns side by side start on one line,** the first *item* on each side,
   not a group heading on one and a card on the other. Give the heading a
   fixed height from the scale (`h-4 leading-4 mb-2`) and offset the other

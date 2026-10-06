@@ -293,9 +293,11 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
     // From lg this fills the space under the tabs (see useFillViewport), and
     // the two halves are its scroll panes. The gap under the tabs and above
     // the bottom is padding inside the panes, so their content scrolls right
-    // up to the tabs' line and down to the save bar. A floor on the height
-    // keeps the panes usable on a very short window; the page scrolls then.
-    <div className="lg:flex-1 lg:min-h-80">
+    // up to the tabs' line and down to the save bar. No height floor: a floor
+    // made the panes overflow <main> on a short window, where the pinned save
+    // bar then covered their last rows. On a short window the panes are just
+    // shorter, and still scroll (205px at 1280x600 with the expiry banner).
+    <div className="lg:flex-1 lg:min-h-0">
       <div className="grid grid-cols-1 lg:h-full lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)] 2xl:grid-cols-[420px_minmax(0,1fr)] gap-6 xl:gap-8 2xl:gap-10">
         <div ref={overviewRef} className={`${phoneOpen ? 'hidden lg:block' : ''} lg:min-h-0 lg:overflow-y-auto lg:pr-1 lg:pt-6 lg:pb-8`}>
           <SettingsOverview
