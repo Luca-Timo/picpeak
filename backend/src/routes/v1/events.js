@@ -418,7 +418,10 @@ router.get('/events/:id', apiTokenAuth, requireApiScope('read'), requirePermissi
  *                   Optional. If provided, the photo is filed under the
  *                   given photo_categories.id (must belong to the event
  *                   or be a global category). If omitted, the photo
- *                   lands uncategorized.
+ *                   lands uncategorized. Since nested folders (migration 265) a folder's id here
+ *                   places the photo in that folder (its `folder_id`)
+ *                   rather than setting `category_id`, which holds filter
+ *                   categories only.
  *     responses:
  *       201:
  *         description: Photo uploaded
@@ -943,7 +946,12 @@ router.get(
             // external-media ingest never set original_filename, so for NAS
             // and auto-import galleries the camera name lives only there.
             source_filename: photo.source_filename || photo.original_filename || photo.filename || null,
+            // Filter category only. Since migration 265 a photo's folder is
+            // its own field; for photos that were in a folder before the
+            // upgrade, `category` went from the folder's name to null and
+            // the name moved to `folder` (issue 1786).
             category: photo.category_name || null,
+            folder: photo.folder_name || null,
             average_rating: photo.average_rating ? parseFloat(photo.average_rating) : 0,
             feedback_count: photo.feedback_count || 0,
             like_count: photo.like_count || 0,

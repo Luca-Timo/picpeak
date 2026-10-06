@@ -183,12 +183,13 @@ describe('folder ingest and two-stage delivery', () => {
 
     it('completing moves the badge onto full-set copies, reports duplicates and queues the mail', async () => {
       const eventId = await seedEvent({ delivery_status: 'partial', delivery_expected_count: 80 });
-      const mk = async (filename, firstLook) => idOf(await db('photos').insert({
-        event_id: eventId, filename, original_filename: filename, path: `x/${filename}`, type: 'individual', first_look: firstLook ? 1 : 0,
+      const mk = async (filename, firstLook, extra = {}) => idOf(await db('photos').insert({
+        event_id: eventId, filename, original_filename: filename, path: `x/${filename}`, type: 'individual', first_look: firstLook ? 1 : 0, ...extra,
       }).returning('id'));
-      const flDup = await mk('IMG_1.jpg', true);
+      const shot = { captured_at: '2026-07-03T10:15:42.000Z' };
+      const flDup = await mk('IMG_1.jpg', true, shot);
       const flOnly = await mk('IMG_2.jpg', true);
-      const full = await mk('img_1.JPG', false);
+      const full = await mk('img_1.JPG', false, shot);
 
       const res = await request(app).post(`/api/admin/events/${eventId}/delivery/complete`).send({});
       expect(res.status).toBe(200);
@@ -204,6 +205,55 @@ describe('folder ingest and two-stage delivery', () => {
 
       const again = await request(app).post(`/api/admin/events/${eventId}/delivery/complete`).send({});
       expect(again.status).toBe(409);
+    });
+
+    // Review of PR 1826, blocker 1: camera names repeat across folders, and a
+    // wrong pair deletes a unique photo.
+    describe('duplicate pairing', () => {
+      const pairsFor = async (photos) => {
+        const eventId = await seedEvent({ delivery_status: 'partial' });
+        const ids = {};
+        for (const [key, row] of Object.entries(photos)) {
+          ids[key] = idOf(await db('photos').insert({
+            event_id: eventId, filename: row.name, original_filename: row.name, path: `x/${key}`, type: 'individual',
+            first_look: row.fl ? 1 : 0, captured_at: row.at || null, width: row.w || null, height: row.h || null, size_bytes: row.size || null,
+          }).returning('id'));
+        }
+        return { pairs: await delivery().findFirstLookDuplicates(eventId), ids };
+      };
+      const at = '2026-07-03T10:15:42.000Z';
+
+      it('never pairs a name that occurs twice in the full set', async () => {
+        const { pairs } = await pairsFor({
+          fl: { name: 'IMG_0001.jpg', fl: true, at },
+          friday: { name: 'IMG_0001.jpg', at },
+          saturday: { name: 'IMG_0001.jpg', at: '2026-07-04T09:00:00.000Z' },
+        });
+        expect(pairs).toEqual([]);
+      });
+
+      it('never pairs a name that occurs twice among the first look', async () => {
+        const { pairs } = await pairsFor({
+          a: { name: 'IMG_0001.jpg', fl: true, at }, b: { name: 'IMG_0001.jpg', fl: true, at }, full: { name: 'IMG_0001.jpg', at },
+        });
+        expect(pairs).toEqual([]);
+      });
+
+      it('needs the capture time to agree when both have one', async () => {
+        const { pairs } = await pairsFor({
+          fl: { name: 'IMG_0001.jpg', fl: true, at }, full: { name: 'IMG_0001.jpg', at: '2026-07-04T09:00:00.000Z' },
+        });
+        expect(pairs).toEqual([]);
+      });
+
+      it('falls back to identical dimensions and size without capture times, never to the name alone', async () => {
+        const same = await pairsFor({
+          fl: { name: 'a.jpg', fl: true, w: 6000, h: 4000, size: 123 }, full: { name: 'a.jpg', w: 6000, h: 4000, size: 123 },
+        });
+        expect(same.pairs).toEqual([{ first_look_id: same.ids.fl, full_id: same.ids.full }]);
+        const nameOnly = await pairsFor({ fl: { name: 'b.jpg', fl: true }, full: { name: 'b.jpg' } });
+        expect(nameOnly.pairs).toEqual([]);
+      });
     });
 
     it('re-entering partial starts a fresh promise: stamps cleared, a past due date replaced', async () => {
@@ -247,9 +297,24 @@ describe('folder ingest and two-stage delivery', () => {
       await delivery().runDeliveryReminderPass();
       await delivery().runDeliveryReminderPass();
       expect(await count()).toBe(1);
+      // Still the promised day: not overdue yet (review of PR 1826, concern 13).
       await delivery().runDeliveryReminderPass({ now: new Date(due.getTime() + 3600e3) });
-      await delivery().runDeliveryReminderPass({ now: new Date(due.getTime() + 7200e3) });
+      expect(await count()).toBe(1);
+      const dayAfter = new Date(`${due.toISOString().slice(0, 10)}T23:59:59.999Z`).getTime() + 3600e3;
+      await delivery().runDeliveryReminderPass({ now: new Date(dayAfter) });
+      await delivery().runDeliveryReminderPass({ now: new Date(dayAfter + 3600e3) });
       expect(await count()).toBe(2);
+    });
+
+    it('does not claim a reminder it cannot send, so an address added later still gets it', async () => {
+      await db('business_profile').update({ email: null });
+      const due = new Date(Date.now() + 6 * 3600e3);
+      const eventId = await seedEvent({ delivery_status: 'partial', delivery_due_at: due.toISOString(), admin_email: '' });
+      await delivery().runDeliveryReminderPass();
+      expect((await db('events').where('id', eventId).first()).delivery_reminder_sent_at).toBeNull();
+      await db('events').where('id', eventId).update({ admin_email: 'studio@example.com' });
+      await delivery().runDeliveryReminderPass();
+      expect(Number((await db('email_queue').where({ event_id: eventId, email_type: 'delivery_due_reminder' }).count('id as c').first()).c)).toBe(1);
     });
   });
 });

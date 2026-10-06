@@ -150,7 +150,11 @@ exports.up = async function (knex) {
 
   // Backfill: folder membership moves from category_id to folder_id.
   if (await knex.schema.hasColumn('photo_categories', 'is_folder')) {
-    const folderIds = await knex('photo_categories').where('is_folder', true).pluck('id');
+    // Event folders only. A global category flagged is_folder (the categories
+    // API accepted the flag on a global before this PR) has no event tree, so
+    // its photos keep the folder in category_id, where the guest payload and
+    // the per-category download rule still read it as before.
+    const folderIds = await knex('photo_categories').where('is_folder', true).whereNotNull('event_id').pluck('id');
     for (let i = 0; i < folderIds.length; i += 200) {
       const chunk = folderIds.slice(i, i + 200);
       await knex('photos')
@@ -164,7 +168,10 @@ exports.up = async function (knex) {
 };
 
 exports.down = async function (knex) {
-  // Put folder membership back where issue 1160 kept it before dropping the column.
+  // Put folder membership back where issue 1160 kept it before dropping the
+  // column. A rollback of last resort: every photo in a folder gets the folder
+  // as its category_id again, which discards a filter category assigned to
+  // it after this migration ran.
   if (await knex.schema.hasColumn('photos', 'folder_id')) {
     await knex('photos').whereNotNull('folder_id').update({ category_id: knex.ref('folder_id') });
   }

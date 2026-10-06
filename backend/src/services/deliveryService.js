@@ -99,23 +99,55 @@ function guestDeliveryPayload(event, deliveredCount) {
 }
 
 /**
- * First-look photos that arrived again in the full set: same original
- * filename (case-insensitive), one flagged first_look and one not. Returns
- * [{ first_look_id, full_id }].
+ * First-look photos that arrived again in the full set. Camera names repeat
+ * across folders (Friday/IMG_0001.jpg, Saturday/IMG_0001.jpg), so the name
+ * alone proves nothing, and a wrong pair means deleting a unique photo. A
+ * pair needs all of:
+ *   - the original filename (case-insensitive) occurs exactly once among the
+ *     first-look photos and exactly once in the full set: an ambiguous name
+ *     is never paired;
+ *   - a second key agrees: the same capture time (to the second) when both
+ *     have one, otherwise identical width, height and file size.
+ * Returns [{ first_look_id, full_id }].
  */
 async function findFirstLookDuplicates(eventId, conn = db) {
   const rows = await conn('photos')
     .where('event_id', eventId)
-    .select('id', 'first_look', 'original_filename', 'source_filename', 'filename');
+    .select('id', 'first_look', 'original_filename', 'source_filename', 'filename',
+      'captured_at', 'width', 'height', 'size_bytes');
   const nameOf = (r) => String(r.source_filename || r.original_filename || r.filename || '').toLowerCase();
-  const full = new Map();
-  rows.filter((r) => !parseBooleanInput(r.first_look, false)).forEach((r) => {
-    const n = nameOf(r);
-    if (n && !full.has(n)) full.set(n, r.id);
-  });
-  return rows
-    .filter((r) => parseBooleanInput(r.first_look, false) && full.has(nameOf(r)))
-    .map((r) => ({ first_look_id: Number(r.id), full_id: Number(full.get(nameOf(r))) }));
+  const byName = (list) => {
+    const map = new Map();
+    list.forEach((r) => {
+      const n = nameOf(r);
+      if (!n) return;
+      map.set(n, [...(map.get(n) || []), r]);
+    });
+    return map;
+  };
+  const firstLook = byName(rows.filter((r) => parseBooleanInput(r.first_look, false)));
+  const full = byName(rows.filter((r) => !parseBooleanInput(r.first_look, false)));
+  const capturedMs = (r) => {
+    if (!r.captured_at) return null;
+    const ms = r.captured_at instanceof Date ? r.captured_at.getTime() : Date.parse(r.captured_at);
+    return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
+  };
+  const sameShot = (a, b) => {
+    const ca = capturedMs(a);
+    const cb = capturedMs(b);
+    if (ca !== null && cb !== null) return ca === cb;
+    return a.width != null && a.height != null && a.size_bytes != null
+      && Number(a.width) === Number(b.width) && Number(a.height) === Number(b.height)
+      && Number(a.size_bytes) === Number(b.size_bytes);
+  };
+  const pairs = [];
+  for (const [name, candidates] of firstLook) {
+    const matches = full.get(name) || [];
+    if (candidates.length !== 1 || matches.length !== 1) continue;
+    if (!sameShot(candidates[0], matches[0])) continue;
+    pairs.push({ first_look_id: Number(candidates[0].id), full_id: Number(matches[0].id) });
+  }
+  return pairs;
 }
 
 /**
@@ -165,25 +197,30 @@ async function runDeliveryReminderPass({ now = new Date() } = {}) {
     .where((q) => q.whereNull('is_archived').orWhere('is_archived', formatBoolean(false)))
     .select('*');
   let sent = 0;
+  const profile = await db.schema.hasTable('business_profile')
+    ? await db('business_profile').first('email')
+    : null;
   for (const event of events) {
-    const overdue = new Date(event.delivery_due_at) <= now;
+    // Promised "by the 20th" means the whole 20th: overdue only once that
+    // calendar day is over, not at the stored noon.
+    const dueDay = String(event.delivery_due_at instanceof Date ? event.delivery_due_at.toISOString() : event.delivery_due_at).slice(0, 10);
+    const endOfDueDay = Date.parse(`${dueDay}T23:59:59.999Z`);
+    const overdue = Number.isFinite(endOfDueDay) ? endOfDueDay < now.getTime() : new Date(event.delivery_due_at) <= now;
     const column = overdue ? 'delivery_overdue_notified_at' : 'delivery_reminder_sent_at';
     if (event[column]) continue;
+    // Nobody to tell: no mail, no "reminded" log line, and no claim either,
+    // so an address added later still gets this reminder.
+    const to = (profile && profile.email) || event.admin_email;
+    if (!to) {
+      logger.warn('delivery reminder skipped: no business profile or admin email', { eventId: event.id });
+      continue;
+    }
     const claimed = await db('events').where('id', event.id).whereNull(column).update({ [column]: now.toISOString() });
     if (!claimed) continue;
     try {
-      const profile = await db.schema.hasTable('business_profile')
-        ? await db('business_profile').first('email')
-        : null;
-      const to = (profile && profile.email) || event.admin_email;
       const delivered = Number((await db('photos').where('event_id', event.id).count('id as c').first()).c) || 0;
       const { getAbsoluteFrontendUrl } = require('../utils/frontendUrl');
       const base = await getAbsoluteFrontendUrl(null, { override: process.env.ADMIN_URL });
-      if (!to) {
-        // Nobody to tell: no mail and no "reminded" entry in the activity log.
-        logger.warn('delivery reminder skipped: no business profile or admin email', { eventId: event.id });
-        continue;
-      }
       await queueEmail(event.id, to, 'delivery_due_reminder', {
         event_name: event.event_name,
         due_date: event.delivery_due_at,

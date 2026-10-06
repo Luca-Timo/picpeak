@@ -53,6 +53,9 @@ class PhotoExportService {
   async getPhotosWithFeedback(eventId, photoIds = null, adminId = null) {
     let query = db('photos')
       .leftJoin('photo_categories', 'photos.category_id', 'photo_categories.id')
+      // The folder a photo lives in (issue 1786, migration 265): since then
+      // category_id holds filter categories only.
+      .leftJoin('photo_categories as photo_folders', 'photos.folder_id', 'photo_folders.id')
       .where('photos.event_id', eventId)
       .select(
         'photos.id',
@@ -74,7 +77,8 @@ class PhotoExportService {
         'photos.uploaded_at',
         // Photo credit (#1561) — the CSV/JSON column and the XMP dc:creator.
         'photos.credit_name',
-        'photo_categories.name as category_name'
+        'photo_categories.name as category_name',
+        'photo_folders.name as folder_name'
       )
       .orderBy('photos.filename', 'asc');
 

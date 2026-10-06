@@ -44,6 +44,7 @@ describe('nested folders', () => {
     }));
     jest.doMock('../../src/middleware/ownership', () => ({
       requireEventOwnership: (_req, _res, next) => next(),
+      canAccessEvent: () => true,
     }));
 
     ({ db, cleanup } = await require('./helpers/crmDb').bootCrmDb());
@@ -136,6 +137,22 @@ describe('nested folders', () => {
       await tree.ensurePath(eventId, ['Saturday', 'Activity A']);
       const slugs = (await tree.eventFolders(eventId)).filter((f) => f.name === 'Activity A').map((f) => f.slug);
       expect(new Set(slugs).size).toBe(2);
+    });
+
+    it('never creates below level 3 when a source_path match sits deeper than its path (review concern 2)', async () => {
+      const { folderId: c } = await tree.ensurePath(eventId, ['X', 'Y', 'Z']);
+      const a = (await tree.ensurePath(eventId, ['A'])).folderId;
+      await tree.moveFolder(eventId, a, c === null ? null : (await tree.eventFolders(eventId)).find((f) => f.name === 'Y').id);
+      // A now sits at level 3; an upload of A/B/C must fold into A.
+      const r = await tree.ensurePath(eventId, ['A', 'B', 'C']);
+      expect(r.folderId).toBe(a);
+      expect((await tree.eventFolders(eventId)).map((f) => f.name).sort()).toEqual(['A', 'X', 'Y', 'Z']);
+    });
+
+    it('treats decomposed and composed names as one folder (NFC)', async () => {
+      const composed = await tree.ensurePath(eventId, ['Fr\u00e4ulein']);
+      const decomposed = await tree.ensurePath(eventId, ['Fra\u0308ulein']);
+      expect(decomposed.folderId).toBe(composed.folderId);
     });
 
     it('refuses cycles and a fourth level', async () => {
@@ -273,6 +290,23 @@ describe('nested folders', () => {
     });
   });
 
+  describe('category flip (review concern 1)', () => {
+    it('turning a folder back into a category clears its tree columns, and a later upload makes a new folder', async () => {
+      const { folderId } = await tree.ensurePath(eventId, ['Selects']);
+      const categoriesApp = express();
+      categoriesApp.use(express.json());
+      categoriesApp.use('/api/admin/categories', require('../../src/routes/adminCategories'));
+      const res = await request(categoriesApp).put(`/api/admin/categories/${folderId}`).send({ name: 'Selects', is_folder: false });
+      expect(res.status).toBe(200);
+      const row = await db('photo_categories').where('id', folderId).first();
+      expect(row.source_path).toBeNull();
+      expect(row.parent_id).toBeNull();
+      const again = await tree.ensurePath(eventId, ['Selects']);
+      expect(again.folderId).not.toBe(folderId);
+      expect(Boolean((await db('photo_categories').where('id', again.folderId).first()).is_folder)).toBe(true);
+    });
+  });
+
   describe('guest payload', () => {
     it('includes every ancestor of a used folder, folder_id, and the inherited download block', async () => {
       const { folderId: part1 } = await tree.ensurePath(eventId, ['Saturday', 'Activity B', 'Part 1']);
@@ -290,6 +324,15 @@ describe('nested folders', () => {
       const deep = res.body.photos.find((p) => p.filename === 'deep.jpg');
       expect(deep).toMatchObject({ folder_id: part1, first_look: true, category_allow_downloads: false, category_id: null });
       expect(res.body.photos.find((p) => p.filename === 'root.jpg').folder_id).toBeNull();
+    });
+
+    it('does not ship a folder that holds only hidden photos (review concern 7)', async () => {
+      const { folderId: secret } = await tree.ensurePath(eventId, ['Private', 'Rejects']);
+      await addPhoto('hidden.jpg', { folder_id: secret, visibility: 'hidden' });
+      await addPhoto('root2.jpg');
+      const res = await request(app).get('/api/gallery/camp/photos');
+      expect(res.body.categories.map((c) => c.name)).not.toContain('Rejects');
+      expect(res.body.categories.map((c) => c.name)).not.toContain('Private');
     });
 
     it('reports a pre-265 row that still has its folder in category_id the current way', async () => {

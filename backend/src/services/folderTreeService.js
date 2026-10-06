@@ -41,7 +41,9 @@ class FolderError extends Error {
  */
 function normalizeSegment(raw) {
   if (typeof raw !== 'string') return null;
-  const name = raw.replace(/\s+/g, ' ').trim();
+  // NFC: macOS hands names over decomposed ("Fra\u0308ulein"), Windows
+  // composed; without this the same folder name becomes two folders.
+  const name = raw.normalize('NFC').replace(/\s+/g, ' ').trim();
   if (!name || name === '.' || name === '..') return null;
   if (name.startsWith('.') || name === '__MACOSX') return null;
   if (/[\\/]/.test(name) || name.includes(String.fromCharCode(0))) return null;
@@ -260,6 +262,9 @@ async function insertFolder(eventId, { name, parentId = null, sourcePath = null 
   const parentSlug = parentId
     ? (await conn('photo_categories').where('id', parentId).first('slug'))?.slug
     : null;
+  if (parentId != null && depthOf(parentId, indexById(await eventFolders(eventId, conn))) >= MAX_FOLDER_DEPTH) {
+    throw new FolderError(`Folders can be nested at most ${MAX_FOLDER_DEPTH} levels deep`, 400, 'FOLDER_TOO_DEEP');
+  }
   const own = slugify(name) || 'folder';
   const base = parentSlug ? `${parentSlug}-${own}`.slice(0, 95) : own.slice(0, 95);
   // The slug is checked, then inserted: two uploads creating different
@@ -311,7 +316,8 @@ async function insertFolder(eventId, { name, parentId = null, sourcePath = null 
 const guardedWrite = (conn, fn) => (conn.isTransaction ? conn.transaction((sp) => fn(sp)) : fn(conn));
 
 async function ensurePath(eventId, segments, { canCreate = true, dryRun = false, conn = db } = {}) {
-  const segs = (segments || []).slice(0, MAX_FOLDER_DEPTH);
+  // NFC for callers that pass raw names (normalizeSegment does it for paths).
+  const segs = (segments || []).slice(0, MAX_FOLDER_DEPTH).map((seg) => String(seg).normalize('NFC'));
   let parentId = null;
   const created = [];
   for (let i = 0; i < segs.length; i += 1) {
@@ -327,6 +333,12 @@ async function ensurePath(eventId, segments, { canCreate = true, dryRun = false,
       }
     }
     if (match) { parentId = Number(match.id); continue; }
+    // A source_path match can sit deeper than its path suggests (an admin
+    // moved "A" under two other folders): never create below level 3, fold
+    // the rest into the deepest folder allowed instead.
+    if (parentId != null && depthOf(parentId, indexById(folders)) >= MAX_FOLDER_DEPTH) {
+      return { folderId: parentId, created, missingFrom: -1 };
+    }
     if (!canCreate || dryRun) return { folderId: parentId, created, missingFrom: i };
     try {
       const id = await guardedWrite(conn, (c) => insertFolder(eventId, { name: segs[i], parentId, sourcePath }, c));
@@ -335,7 +347,10 @@ async function ensurePath(eventId, segments, { canCreate = true, dryRun = false,
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
       // A concurrent upload created the same path first: use theirs.
-      const row = await conn('photo_categories').where({ event_id: eventId, source_path: sourcePath }).first('id');
+      const row = await conn('photo_categories')
+        .where({ event_id: eventId, source_path: sourcePath })
+        .where('is_folder', formatBoolean(true))
+        .first('id');
       if (!row) throw err;
       parentId = Number(row.id);
     }
@@ -431,6 +446,8 @@ async function deleteFolder(eventId, folderId, conn = db) {
   if (!folder) throw new FolderError('Folder not found', 404, 'FOLDER_NOT_FOUND');
   const parentId = folder.parent_id == null ? null : Number(folder.parent_id);
   const run = async (trx) => {
+    // Same lock as moveFolder, so a move and a delete of the tree serialise.
+    if (isPostgreSQL()) await trx('photo_categories').where({ event_id: eventId }).forUpdate().select('id');
     const moved = await trx('photos').where({ event_id: eventId, folder_id: folder.id }).update({ folder_id: parentId });
     await trx('photo_categories').where({ event_id: eventId, parent_id: folder.id }).update({ parent_id: parentId });
     await trx('folder_requests').where({ event_id: eventId, fallback_folder_id: folder.id }).update({ fallback_folder_id: parentId });

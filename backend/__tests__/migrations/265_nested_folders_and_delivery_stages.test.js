@@ -83,6 +83,16 @@ describe('migration 265', () => {
     await mig.up(db);
   });
 
+  it('leaves photos of a global is_folder category in category_id (review concern 3)', async () => {
+    await mig.down(db);
+    const global = idOf(await db('photo_categories').insert({ name: 'Selects', slug: `g-${Date.now()}`, is_global: 1, event_id: null, is_folder: 1 }).returning('id'));
+    const photo = idOf(await db('photos').insert({
+      event_id: eventId, filename: 'g.jpg', path: 'm265/g.jpg', type: 'individual', category_id: global,
+    }).returning('id'));
+    await mig.up(db);
+    expect(await db('photos').where('id', photo).first()).toMatchObject({ category_id: global, folder_id: null });
+  });
+
   it('defaults existing events to no folder structure and complete delivery', async () => {
     const ev = await db('events').where('id', eventId).first();
     expect(Boolean(ev.folder_structure)).toBe(false);

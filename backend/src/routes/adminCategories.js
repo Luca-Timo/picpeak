@@ -286,6 +286,10 @@ router.put('/:id', adminAuth, requirePermission('settings.edit'), [
       } else if (togglesFolder && wasFolder) {
         await trx('photos').where('folder_id', id).whereNull('category_id').update({ category_id: Number(id), folder_id: null });
         await trx('photos').where('folder_id', id).update({ folder_id: null });
+        // A filter category is no tree node: without this the next upload of
+        // its old path collides on the source_path index and lands photos in
+        // a "folder" that is a filter category.
+        await trx('photo_categories').where('id', id).update({ parent_id: null, source_path: null });
       }
     });
 

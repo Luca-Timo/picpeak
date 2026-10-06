@@ -332,11 +332,15 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
   const folderById = folderTree.indexById(allFolders);
   const usedFolderIds = new Set();
   if (!hiddenForGuest) {
-    const direct = await db('photos')
+    // Only folders holding a photo this viewer may see: a folder with
+    // nothing but hidden or still-processing photos must not ship its name
+    // (and its ancestors' names) to guests. Same rules as the photo list.
+    let directQuery = db('photos')
       .where('event_id', event.id)
       .whereNotNull('folder_id')
-      .distinct('folder_id')
-      .pluck('folder_id');
+      .where((q) => q.where('processing_status', 'complete').orWhereNull('processing_status'));
+    if (!isClient) directQuery = directQuery.where((q) => q.where('visibility', 'visible').orWhereNull('visibility'));
+    const direct = await directQuery.distinct('folder_id').pluck('folder_id');
     for (const id of direct) {
       let cur = folderById.get(Number(id));
       const seen = new Set();
@@ -394,7 +398,13 @@ async function getGalleryPhotos({ event, query = {}, identity, accessLevel, viaC
   // gallery's containment never depends on how the row was written.
   const legacyFolderId = (photo) => (photo.category_id && categoryMap[photo.category_id]?.is_folder
     ? Number(photo.category_id) : null);
-  const folderIdOf = (photo) => (photo.folder_id ? Number(photo.folder_id) : legacyFolderId(photo));
+  // A folder_id with no folder row (deleted while an upload placed into it
+  // was in flight; there is no FK) reads as the gallery root.
+  const folderIdOf = (photo) => {
+    if (!photo.folder_id) return legacyFolderId(photo);
+    const id = Number(photo.folder_id);
+    return categoryMap[id] ? id : null;
+  };
   const filterCategoryIdOf = (photo) => (legacyFolderId(photo) ? null : (photo.category_id || null));
     
   // Include protection settings in response
