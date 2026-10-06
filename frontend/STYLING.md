@@ -173,7 +173,7 @@ component, not re-created next to it.
 | Panes that scroll on their own | `useFillViewport()` (`admin/fillViewport`) | the page fills the window from `lg`; see Layout › Split views |
 | Permission gate | `PermissionGate`, `usePermission`, `useAnyPermission`; route level `RequirePermission` | see UX.md › Permissions |
 | Picker tile | `.tile-selected` on the chosen tile, `border-2 border-line` on the rest | |
-| Hover help | `<span class="info-tooltip" data-tooltip="…">` | for a short hint on an icon; longer help goes under the field |
+| Hover help | `<span class="info-tooltip" data-tooltip="…">`; add `info-tooltip-start` when the trigger can sit at the left edge | for a short hint on an icon or a status pill; longer help goes under the field. Give a focusable trigger (`tabIndex={0}`) an `aria-label` with the same text |
 
 ## Layout and spacing
 
@@ -191,10 +191,11 @@ component, not re-created next to it.
   `min-w-0` on a growing input inside a row. German labels run 30–50 % wider
   than English; check the row in German at 390 px. In a banner (icon, text,
   action), the text and the action share a wrapping row beside the icon, so
-  on a phone the button drops under the text, lined up with it. A label
-  longer than a phone's column ("Veröffentlichen & Kunden benachrichtigen")
-  also needs `max-w-full h-auto whitespace-normal` on its button: `.btn` is
-  `whitespace-nowrap` with a fixed height.
+  on a phone the button drops under the text, lined up with it (the expiry
+  banner). Keep button labels short enough for a phone: `.btn` is
+  `whitespace-nowrap` with a fixed height, so a long label overflows rather
+  than wrapping. If one cannot be shortened, give that button
+  `max-w-full h-auto whitespace-normal`.
 - **No horizontal scroll** in the admin content area at any width. A grid
   child that must not grow gets `min-w-0`; a fixed `w-64` inside a grid cell
   becomes `w-full`.

@@ -366,6 +366,13 @@
     color: #171717;
   }
 
+  /* Bubble starts at the trigger's left edge instead of centring on it,
+     for a trigger that can sit at the screen's left edge (a wrapped pill). */
+  .info-tooltip-start::after {
+    left: 0;
+    transform: none;
+  }
+
   /* Image loading skeleton */
   .skeleton {
     @apply animate-pulse rounded-lg bg-neutral-200;

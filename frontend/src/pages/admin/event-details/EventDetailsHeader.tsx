@@ -219,8 +219,16 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
               >
                 {isGalleryPublic(event.require_password) ? t('events.publicAccess', 'Public access') : t('events.passwordProtected', 'Password protected')}
               </span>
+              {/* The pill is the only draft marker: what a draft means is its
+                  tooltip, and Publish is in the action row. Anchored at its
+                  start, since on a phone it wraps to the left edge. */}
               {event.is_draft ? (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300">
+                <span
+                  tabIndex={0}
+                  data-tooltip={t('events.draftBanner')}
+                  aria-label={`${t('events.draft')}: ${t('events.draftBanner')}`}
+                  className="info-tooltip info-tooltip-start items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300"
+                >
                   {t('events.draft')}
                 </span>
               ) : null}
@@ -274,12 +282,12 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
               <Button
                 variant="primary"
                 size="sm"
-                className="max-w-full h-auto min-h-9 py-1.5 whitespace-normal text-left"
-                leftIcon={<Send className="w-4 h-4 shrink-0" />}
+                leftIcon={<Send className="w-4 h-4" />}
                 onClick={() => setShowPublishDialog(true)}
                 isLoading={isPublishing}
               >
-                {t('events.publishAndNotify')}
+                {/* Just "Publish": the dialog asks whether to notify. */}
+                {t('events.publish', 'Publish')}
               </Button>
             )}
             {canHelpClient && canSendGalleryEmail(event, reach) && (
@@ -315,19 +323,6 @@ export const EventDetailsHeader: React.FC<EventDetailsHeaderProps> = ({
           onClose={() => setCompleteOpen(false)}
           onCompleted={() => { refetchDelivery(); }}
         />
-      )}
-
-      {/* Draft notice. The publish action is in the header's action row, so
-          this only says what a draft means, in one slim line.
-          !! — SQLite returns integer booleans; a bare 0 would render as "0" */}
-      {!!event.is_draft && !archived && (
-        <div className="flex items-start gap-2 mb-6 px-4 py-2.5 rounded-xl border border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 text-sm">
-          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-yellow-600 dark:text-yellow-400" aria-hidden="true" />
-          <p className="min-w-0 text-yellow-700 dark:text-yellow-300">
-            <span className="font-medium text-yellow-900 dark:text-yellow-200">{t('events.draft')}:</span>{' '}
-            {t('events.draftBanner')}
-          </p>
-        </div>
       )}
 
       {/* Expiration Warning */}

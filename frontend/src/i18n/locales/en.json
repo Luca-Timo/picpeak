@@ -1773,6 +1773,7 @@
     "inactive": "Inactive",
     "expired": "Expired",
     "draft": "Draft",
+    "publish": "Publish",
     "publishAndNotify": "Publish & Notify Client",
     "publishConfirm": "This will make the gallery accessible and send the notification email to the client. Continue?",
     "publishSuccess": "Gallery published and client notified!",

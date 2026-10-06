@@ -2322,6 +2322,7 @@
     "inactive": "Inaktiv",
     "expired": "Abgelaufen",
     "draft": "Entwurf",
+    "publish": "Veröffentlichen",
     "publishAndNotify": "Veröffentlichen & Kunden benachrichtigen",
     "publishConfirm": "Dadurch wird die Galerie zugänglich und die Benachrichtigungs-E-Mail an den Kunden gesendet. Fortfahren?",
     "publishSuccess": "Galerie veröffentlicht und Kunde benachrichtigt!",
