@@ -163,10 +163,14 @@ async function galleryCreatedEmailData(event, { password, requirePassword } = {}
  *   the gallery_created payload; only called when that mail goes out
  * @param {object} [opts.recipients] a resolveGalleryRecipients result the
  *   caller already has, so both see the same set
+ * @param {boolean} [opts.allowFallback=true] false when the standard email
+ *   cannot carry a usable password (a generated one, none in the request):
+ *   the folded-in address then gets no fallback rather than the
+ *   "(set at creation)" sentinel
  * @returns {Promise<{ inlineEmail: string|null, accounts: object[] }>} who was
  *   actually queued
  */
-async function notifyGalleryRecipients(event, { buildInlineEmailData, recipients } = {}) {
+async function notifyGalleryRecipients(event, { buildInlineEmailData, recipients, allowFallback = true } = {}) {
   const { inlineEmail, accounts, fallbackFor } = recipients || await resolveGalleryRecipients(event);
 
   // Each recipient on its own: a failure for one must not cost the others
@@ -199,7 +203,7 @@ async function notifyGalleryRecipients(event, { buildInlineEmailData, recipients
 
   // The inline address was folded into an account whose notice was skipped:
   // send the standard email instead, so the person is still told.
-  if (fallbackFor && !notified.includes(fallbackFor.account)) {
+  if (fallbackFor && allowFallback && !notified.includes(fallbackFor.account)) {
     inlineQueued = await queueInline(fallbackFor.email);
   }
 

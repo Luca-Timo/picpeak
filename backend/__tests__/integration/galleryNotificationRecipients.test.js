@@ -247,6 +247,42 @@ describe('publish and send later reach every recipient', () => {
     expect((await request(app).post(`/admin/events/${quiet}/publish`).send({ notify_customer: false })).status).toBe(200);
   });
 
+  it('publishes a generated-password gallery whose customer email is folded into an account, without a password', async () => {
+    // The dialog shows no password field here: the person gets the portal
+    // email, which needs none. The server must not refuse what the dialog
+    // could not ask for (review round 2).
+    const id = await seedEvent({ slug: 'folded-generated', customerEmail: 'anna@recipients.test', isDraft: true, passwordGenerated: true });
+    await assign(id, await seedAccount('anna@recipients.test', 'Anna Muster'));
+
+    const res = await request(app).post(`/admin/events/${id}/publish`).send({});
+    expect(res.status).toBe(200);
+    expect(await recipientsOf('customer_gallery_assigned')).toEqual(['anna@recipients.test']);
+    expect(await queued('gallery_created')).toHaveLength(0);
+
+    await db('email_queue').del();
+    const sent = await request(app).post(`/admin/events/${id}/send-gallery-email`).send({});
+    expect(sent.status).toBe(200);
+    expect(await recipientsOf('customer_gallery_assigned')).toEqual(['anna@recipients.test']);
+  });
+
+  it('withholds the fallback rather than mailing the "(set at creation)" sentinel', async () => {
+    const id = await seedEvent({ slug: 'folded-withheld', customerEmail: 'anna@recipients.test', isDraft: true, passwordGenerated: true });
+    await assign(id, await seedAccount('anna@recipients.test', 'Anna Muster'));
+    const event = await db('events').where({ id }).first();
+    const { notifyGalleryRecipients, resolveGalleryRecipients, galleryCreatedEmailData } = require('../../src/services/galleryNotificationService');
+    const recipients = await resolveGalleryRecipients(event);
+    expect(recipients.fallbackFor).toBeTruthy();
+
+    // A draft: the portal notice is skipped, so only the fallback could tell her.
+    const sent = await notifyGalleryRecipients(event, {
+      recipients,
+      allowFallback: false,
+      buildInlineEmailData: () => galleryCreatedEmailData(event, { requirePassword: true }),
+    });
+    expect(sent).toEqual({ inlineEmail: null, accounts: [] });
+    expect(await db('email_queue')).toHaveLength(0);
+  });
+
   it('gives every admin the notice counts, without the account identities', async () => {
     mockCanViewCustomers = false;
     const id = await seedEvent({ slug: 'notice-counts', customerEmail: 'anna@recipients.test' });

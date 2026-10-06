@@ -577,8 +577,12 @@ module.exports = (router) => {
       // standard email would carry the "(set at creation)" sentinel instead,
       // so it needs the real password in the request — the dialog asks for it.
       const passwordGenerated = parseBooleanInput(event.password_generated, false);
-      if (requirePassword && !password && passwordGenerated
-        && (recipients.inlineEmail || recipients.fallbackFor)) {
+      // Only when the standard email is certain to go out: a folded-in address
+      // is mailed by the fallback only if its portal notice is skipped, and
+      // that fallback is withheld below rather than refused here — the dialog
+      // does not ask for a password it cannot know is needed.
+      const sentinelPassword = requirePassword && !password && passwordGenerated;
+      if (sentinelPassword && recipients.inlineEmail) {
         return res.status(400).json({
           error: 'Set a gallery password — the gallery email carries it.',
           code: 'GALLERY_PASSWORD_REQUIRED',
@@ -617,6 +621,7 @@ module.exports = (router) => {
 
       const sent = await notifyGalleryRecipients(event, {
         recipients,
+        allowFallback: !sentinelPassword,
         buildInlineEmailData: () => galleryCreatedEmailData(event, { password, requirePassword }),
       });
       if (!sent.inlineEmail && sent.accounts.length === 0) {
@@ -688,8 +693,12 @@ module.exports = (router) => {
       // standard email would carry the "(set at creation)" sentinel instead,
       // so it needs the real password in the request — the dialog asks for it.
       const passwordGenerated = parseBooleanInput(event.password_generated, false);
-      if (requirePassword && !password && passwordGenerated
-        && (recipients.inlineEmail || recipients.fallbackFor)) {
+      // Only when the standard email is certain to go out: a folded-in address
+      // is mailed by the fallback only if its portal notice is skipped, and
+      // that fallback is withheld below rather than refused here — the dialog
+      // does not ask for a password it cannot know is needed.
+      const sentinelPassword = requirePassword && !password && passwordGenerated;
+      if (sentinelPassword && recipients.inlineEmail) {
         return res.status(400).json({
           error: 'Set a gallery password — the gallery email carries it.',
           code: 'GALLERY_PASSWORD_REQUIRED',
@@ -735,6 +744,7 @@ module.exports = (router) => {
         try {
           notified = await notifyGalleryRecipients(event, {
             recipients,
+            allowFallback: !sentinelPassword,
             buildInlineEmailData: () => galleryCreatedEmailData(event, { password, requirePassword }),
           });
         } catch (err) {
@@ -747,7 +757,7 @@ module.exports = (router) => {
       // WhatsApp as well. Uses customer_phone from the persisted event row.
       // Not for a generated password nobody knows: the message would carry
       // an empty password line and a link that asks for one.
-      if (notifyCustomer && event.customer_phone && !(passwordGenerated && requirePassword && !password)) {
+      if (notifyCustomer && event.customer_phone && !sentinelPassword) {
         try {
           const { queueWhatsapp, getWhatsAppConfig } = require('../../services/whatsappProcessor');
           const waConfig = await getWhatsAppConfig();
