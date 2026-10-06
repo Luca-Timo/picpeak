@@ -4529,14 +4529,25 @@
           "failed": "Das Update ist fehlgeschlagen.",
           "rolledBack": "Die neue Version ist nicht gestartet, deshalb wurde die vorherige Version wiederhergestellt.",
           "backupFailed": "Die Datenbanksicherung ist fehlgeschlagen, deshalb wurde das Update nicht gestartet. Es wurde nichts verändert.",
-          "requestFailed": "Die Sicherung wurde erstellt, aber die Update-Anfrage konnte nicht abgelegt werden. Es wurde nichts verändert."
+          "requestFailed": "Die Sicherung wurde erstellt, aber die Update-Anfrage konnte nicht abgelegt werden. Es wurde nichts verändert.",
+          "withdrawn": "Die Update-Anfrage wurde abgebrochen. Es wurde nichts verändert.",
+          "expired": "Der Updater hat die Anfrage nicht rechtzeitig übernommen, deshalb wurde sie zurückgezogen. Es wurde nichts verändert. Prüfen Sie, ob der Updater läuft, und versuchen Sie es erneut.",
+          "lost": "Die Update-Anfrage hat den Updater nicht erreicht (PicPeak wurde neu gestartet oder die Anfrage zurückgezogen). Es wurde nichts verändert."
         },
         "error": {
           "badPassword": "Das Passwort ist falsch.",
           "rateLimited": "Zu viele Versuche. Versuchen Sie es in ein paar Minuten erneut.",
           "busy": "Es läuft bereits ein Update.",
-          "generic": "Das Update konnte nicht gestartet werden."
-        }
+          "generic": "Das Update konnte nicht gestartet werden.",
+          "disabled": "In-App-Updates sind auf dieser Installation nicht aktiviert.",
+          "noAgent": "Der Updater ist nicht installiert oder nicht erreichbar.",
+          "unsupportedContract": "Der installierte Updater passt nicht zu dieser PicPeak-Version.",
+          "requestDirNotWritable": "PicPeak kann nicht in sein Update-Anfrageverzeichnis schreiben.",
+          "noLocalPassword": "In-App-Updates brauchen einen Super-Admin, der sich mit Passwort anmeldet."
+        },
+        "cancel": "Anfrage abbrechen",
+        "requestDirNotWritable": "PicPeak kann nicht in sein Update-Anfrageverzeichnis (update/request) schreiben und deshalb kein Update anfordern. Es muss für UID 1001 beschreibbar sein; siehe docs/self-update.md.",
+        "noLocalPassword": "In-App-Updates brauchen einen Super-Admin, der sich mit Passwort anmeldet. Ihr Konto meldet sich nur über SSO an."
       }
     },
     "notifications": "Benachrichtigungen",
@@ -5091,7 +5102,13 @@
       "delivery_completed": "Vollständige Galerie ausgeliefert: {{eventName}}",
       "delivery_due_soon": "Vollständige Galerie für {{eventName}} ist bald fällig",
       "delivery_overdue": "Vollständige Galerie für {{eventName}} ist überfällig",
-      "self_update_requested": "In-App-Update angefordert (von v{{from_version}})"
+      "self_update_requested": "In-App-Update angefordert (von v{{from_version}})",
+      "self_update_refused": "In-App-Update abgelehnt ({{code}})",
+      "self_update_backup_failed": "In-App-Update nicht gestartet: Die Datenbanksicherung ist fehlgeschlagen",
+      "self_update_request_failed": "In-App-Update nicht gestartet: Die Anfrage konnte nicht abgelegt werden",
+      "self_update_expired": "In-App-Update-Anfrage zurückgezogen: Der Updater hat sie nicht übernommen",
+      "self_update_withdrawn": "In-App-Update-Anfrage abgebrochen",
+      "self_update_finished": "In-App-Update beendet: {{state}} ({{from_version}} → {{to_version}})"
     },
     "people": {
       "title": "Personen in dieser Galerie",

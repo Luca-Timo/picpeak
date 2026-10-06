@@ -42,7 +42,7 @@ describe('/admin/system/updates/self-update', () => {
     ...fields,
   }));
 
-  const makeAdmin = async (username, roleName) => {
+  const makeAdmin = async (username, roleName, extra = {}) => {
     const role = await db('roles').where({ name: roleName }).first();
     const inserted = await db('admin_users').insert({
       username,
@@ -52,6 +52,7 @@ describe('/admin/system/updates/self-update', () => {
       is_active: 1,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      ...extra,
     }).returning('id');
     const id = inserted[0]?.id ?? inserted[0];
     return jwt.sign(
@@ -70,6 +71,22 @@ describe('/admin/system/updates/self-update', () => {
     .set('Authorization', `Bearer ${tokens[who]}`)
     .send({ password });
 
+  // Refusals count against the per-admin limiter, so each case that collects
+  // some uses an admin of its own.
+  let freshCount = 0;
+  const freshSuper = async () => {
+    freshCount += 1;
+    const name = `update-super-fresh-${freshCount}`;
+    tokens[name] = await makeAdmin(name, 'super_admin');
+    return name;
+  };
+
+  const withdraw = (who = 'super') => request(app)
+    .delete('/admin/system/updates/self-update')
+    .set('Authorization', `Bearer ${tokens[who]}`);
+
+  const activities = (type) => db('activity_logs').where({ activity_type: type });
+
   // The job runs after the 202; wait until it leaves `backing_up`.
   const settled = async () => {
     for (let i = 0; i < 100; i += 1) {
@@ -87,13 +104,18 @@ describe('/admin/system/updates/self-update', () => {
     tokens.super = await makeAdmin('update-super', 'super_admin');
     tokens.super2 = await makeAdmin('update-super-2', 'super_admin');
     tokens.admin = await makeAdmin('update-admin', 'admin');
+    tokens.sso = await makeAdmin('update-sso', 'super_admin', { auth_provider: 'oidc' });
+    // A role with no permissions at all: not even the update UI's.
+    await db('roles').insert({ name: 'update-nobody', display_name: 'Nobody', is_system: 0 });
+    tokens.nobody = await makeAdmin('update-nobody', 'update-nobody');
 
     app = buildRouteApp('/admin/system', require('../../src/routes/adminSystem'));
   }, 120000);
 
   afterAll(async () => { await cleanup(); });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await db('activity_logs').del();
     updateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'picpeak-update-dir-'));
     fs.mkdirSync(path.join(updateDir, 'request'));
     fs.mkdirSync(path.join(updateDir, 'status'));
@@ -159,6 +181,68 @@ describe('/admin/system/updates/self-update', () => {
       expect((await getStatus()).body.reason).toBe('no_agent');
     });
 
+    it('needs authentication and the update UI permissions', async () => {
+      writeAgentStatus({});
+      expect((await request(app).get('/admin/system/updates/self-update')).status).toBe(401);
+      expect((await getStatus('nobody')).status).toBe(403);
+    });
+
+    it('gives callers who cannot request only the phase and state', async () => {
+      writeAgentStatus({ state: 'running', step: 'pull', message: 'secret detail', image: 'x' });
+      selfUpdateService.job = {
+        id: 'j', phase: 'requested', started_at: new Date().toISOString(), requested_by: 'update-super',
+        backup: { file: 'picpeak-db.sql.gz', size: 1 }, error: null,
+      };
+      const res = await getStatus('admin');
+      expect(res.body.can_request).toBe(false);
+      expect(res.body.request_block).toBe('not_super_admin');
+      expect(res.body.job).toEqual({ phase: 'requested' });
+      expect(res.body.agent).toEqual({ contract: 1, state: 'running', step: 'pull' });
+    });
+
+    it('tells an SSO-only super admin why there is no form', async () => {
+      writeAgentStatus({});
+      const res = await getStatus('sso');
+      expect(res.body).toMatchObject({ can_request: false, request_block: 'no_local_password' });
+    });
+
+    it('says so before any dump when the request directory is not writable', async () => {
+      if (process.getuid && process.getuid() === 0) return; // root ignores the mode
+      writeAgentStatus({});
+      fs.chmodSync(path.join(updateDir, 'request'), 0o500);
+      try {
+        expect((await getStatus()).body).toMatchObject({ available: false, reason: 'request_dir_not_writable' });
+        const name = await freshSuper();
+        const res = await requestUpdate(name);
+        expect(res.status).toBe(409);
+        expect(res.body.code).toBe('SELF_UPDATE_REQUEST_DIR_NOT_WRITABLE');
+        expect(databaseBackupService.backup).not.toHaveBeenCalled();
+      } finally {
+        fs.chmodSync(path.join(updateDir, 'request'), 0o700);
+      }
+    });
+
+    it('withdraws a request nothing picked up in time', async () => {
+      writeAgentStatus({});
+      fs.writeFileSync(requestPath(), '');
+      const old = new Date(Date.now() - 11 * 60 * 1000);
+      fs.utimesSync(requestPath(), old, old);
+      const res = await getStatus();
+      expect(res.body).toMatchObject({ available: true, reason: null });
+      expect(fs.existsSync(requestPath())).toBe(false);
+      expect(await activities('self_update_expired')).toHaveLength(1);
+    });
+
+    it('records the result of an updater run once', async () => {
+      writeAgentStatus({ state: 'succeeded', started_at: '2026-10-06T08:00:00Z', from_version: '3.162.0', to_version: '3.163.0' });
+      await getStatus();
+      selfUpdateService._reset(); // as after a restart: only the stored marker remains
+      await getStatus('admin');
+      const rows = await activities('self_update_finished');
+      expect(rows).toHaveLength(1);
+      expect(JSON.parse(rows[0].metadata)).toMatchObject({ state: 'succeeded', from_version: '3.162.0', to_version: '3.163.0' });
+    });
+
     it('is busy while the updater runs or a request is pending', async () => {
       writeAgentStatus({ state: 'running', step: 'pull' });
       expect((await getStatus()).body).toMatchObject({ available: false, reason: 'busy' });
@@ -189,9 +273,37 @@ describe('/admin/system/updates/self-update', () => {
       });
       expect(status.body.reason).toBe('busy');
 
-      const logged = await db('activity_logs').where({ activity_type: 'self_update_requested' }).first();
-      expect(logged).toBeTruthy();
-      expect(logged.actor_name).toBe('update-super');
+      const logged = await activities('self_update_requested');
+      expect(logged).toHaveLength(1);
+      expect(logged[0].actor_name).toBe('update-super');
+      expect(JSON.parse(logged[0].metadata)).toMatchObject({ backup_file: 'picpeak-db-20261005.sql.gz' });
+    });
+
+    it('lets two confirmed requests start only one update', async () => {
+      writeAgentStatus({});
+      const other = await freshSuper();
+      const [a, b] = await Promise.all([requestUpdate(), requestUpdate(other)]);
+      expect([a.status, b.status].sort()).toEqual([202, 409]);
+      await settled();
+      expect(databaseBackupService.backup).toHaveBeenCalledTimes(1);
+      expect((await getStatus()).body.job.phase).toBe('requested');
+    });
+
+    it('can be cancelled while it waits, and only then', async () => {
+      writeAgentStatus({});
+      expect((await requestUpdate()).status).toBe(202);
+      await settled();
+
+      expect((await withdraw('admin')).status).toBe(403);
+      const res = await withdraw();
+      expect(res.status).toBe(200);
+      expect(fs.existsSync(requestPath())).toBe(false);
+      expect((await getStatus()).body.job.phase).toBe('withdrawn');
+      expect(await activities('self_update_withdrawn')).toHaveLength(1);
+
+      const again = await withdraw();
+      expect(again.status).toBe(409);
+      expect(again.body.code).toBe('SELF_UPDATE_NOTHING_TO_WITHDRAW');
     });
 
     it('files nothing when the database dump fails', async () => {
@@ -204,20 +316,24 @@ describe('/admin/system/updates/self-update', () => {
       expect(status.body.job).toMatchObject({ phase: 'backup_failed', error: 'disk full' });
       // A failed attempt does not block the next one.
       expect(status.body.available).toBe(true);
+      // Nothing was filed, so nothing is logged as requested.
+      expect(await activities('self_update_requested')).toHaveLength(0);
+      expect(await activities('self_update_backup_failed')).toHaveLength(1);
     });
 
     it('reports a request file it could not write', async () => {
       writeAgentStatus({});
-      fs.rmSync(path.join(updateDir, 'request'), { recursive: true });
+      jest.spyOn(selfUpdateService, 'writeRequestFile').mockRejectedValueOnce(new Error('EROFS'));
       expect((await requestUpdate()).status).toBe(202);
       await settled();
       expect((await getStatus()).body.job.phase).toBe('request_failed');
+      expect(await activities('self_update_request_failed')).toHaveLength(1);
     });
 
     it('is refused while disabled, before the password is even checked', async () => {
       writeAgentStatus({});
       delete process.env.PICPEAK_SELF_UPDATE;
-      const res = await requestUpdate('super', 'wrong');
+      const res = await requestUpdate(await freshSuper(), 'wrong');
       expect(res.status).toBe(403);
       expect(res.body.code).toBe('SELF_UPDATE_DISABLED');
       expect(databaseBackupService.backup).not.toHaveBeenCalled();
@@ -230,16 +346,26 @@ describe('/admin/system/updates/self-update', () => {
       expect(databaseBackupService.backup).not.toHaveBeenCalled();
     });
 
-    it('is refused while busy, without a second dump', async () => {
+    it('is refused while busy, without a second dump, and the refusal is logged', async () => {
       writeAgentStatus({ state: 'running' });
-      const res = await requestUpdate();
+      const res = await requestUpdate(await freshSuper());
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('SELF_UPDATE_BUSY');
+      expect(databaseBackupService.backup).not.toHaveBeenCalled();
+      const refused = await activities('self_update_refused');
+      expect(JSON.parse(refused[0].metadata)).toEqual({ code: 'busy' });
+    });
+
+    it('is refused for an SSO-only super admin', async () => {
+      writeAgentStatus({});
+      const res = await requestUpdate('sso');
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('SELF_UPDATE_NO_LOCAL_PASSWORD');
       expect(databaseBackupService.backup).not.toHaveBeenCalled();
     });
 
     it('is refused without an updater', async () => {
-      const res = await requestUpdate();
+      const res = await requestUpdate(await freshSuper());
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('SELF_UPDATE_NO_AGENT');
     });

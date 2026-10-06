@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 const rateLimit = require('express-rate-limit');
 const { db, logActivity } = require('../database/db');
 const { adminAuth } = require('../middleware/auth');
-const { requirePermission, requireSuperAdmin, isSuperAdminUser } = require('../middleware/permissions');
+const { requirePermission, requireSuperAdmin } = require('../middleware/permissions');
 const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
@@ -230,15 +230,37 @@ router.get('/updates/instructions', adminAuth, requirePermission(['settings.view
 // In-app updates (docs/self-update.md). The backend never runs the update: it
 // takes a database dump, then files a request the updater picks up. Status is
 // readable with the same permissions as the rest of the update UI; requesting
-// needs super_admin, the admin's password again, and PICPEAK_SELF_UPDATE=true.
+// needs super_admin, a local password confirmed again, and
+// PICPEAK_SELF_UPDATE=true.
+
+/**
+ * Whether this admin may request an update, and if not, why. SSO-only
+ * accounts (auth_provider 'oidc') carry an unusable random hash by design
+ * (migration 162), so the password confirmation could never succeed for them.
+ */
+async function selfUpdateEligibility(adminId) {
+  const user = await db('admin_users')
+    .leftJoin('roles', 'roles.id', 'admin_users.role_id')
+    .where('admin_users.id', adminId)
+    .select('roles.name as role_name', 'admin_users.auth_provider', 'admin_users.password_hash')
+    .first();
+  if (!user || user.role_name !== 'super_admin') return { canRequest: false, block: 'not_super_admin', user };
+  if (user.auth_provider === 'oidc') return { canRequest: false, block: 'no_local_password', user };
+  return { canRequest: true, block: null, user };
+}
+
+const selfUpdateActor = (req) => ({ type: 'admin', id: req.admin.id, name: req.admin.username });
+
 router.get('/updates/self-update', adminAuth, requirePermission(['settings.view', 'system.view']), async (req, res) => {
   try {
     const selfUpdateService = require('../services/selfUpdateService');
-    const status = await selfUpdateService.getStatus();
+    const { canRequest, block } = await selfUpdateEligibility(req.admin.id);
+    const status = await selfUpdateService.getStatus({ detailed: canRequest });
     res.json({
       ...status,
       currentVersion: await getCurrentVersion(),
-      can_request: await isSuperAdminUser(req.admin.id)
+      can_request: canRequest,
+      request_block: block
     });
   } catch (error) {
     logger.error('Error reading the self-update status:', error);
@@ -246,39 +268,48 @@ router.get('/updates/self-update', adminAuth, requirePermission(['settings.view'
   }
 });
 
-// Guesses at the password re-confirmation, per admin. The login limiter does
+// Failed attempts per admin: wrong passwords, and requests refused because an
+// update is in progress or the feature is unavailable. The login limiter does
 // not cover an already-authenticated session, and this is the one check that
-// stands between a stolen session cookie and restarting the whole stack.
+// stands between a stolen session cookie and restarting the whole stack. Kept
+// in memory like the other limiters, so a restart resets it.
 const selfUpdateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   keyGenerator: (req) => `self-update:${req.admin?.id}`,
-  // Only failures count: a wrong password, or a request refused as busy.
   skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (_req, res) =>
+  handler: (req, res) => {
+    logActivity('self_update_refused', { code: 'rate_limited' }, null, selfUpdateActor(req));
     res.status(429).json({
       error: 'Too many attempts. Try again later.',
       code: 'SELF_UPDATE_RATE_LIMITED'
-    })
+    });
+  }
 });
 
 router.post('/updates/self-update', adminAuth, requireSuperAdmin(), selfUpdateLimiter, async (req, res) => {
+  const refuse = async (status, code, error) => {
+    await logActivity('self_update_refused', { code }, null, selfUpdateActor(req));
+    return res.status(status).json({ error, code: `SELF_UPDATE_${code.toUpperCase()}` });
+  };
   try {
     const selfUpdateService = require('../services/selfUpdateService');
     if (!selfUpdateService.isEnabled()) {
-      return res.status(403).json({ error: 'In-app updates are not enabled on this installation.', code: 'SELF_UPDATE_DISABLED' });
+      return refuse(403, 'disabled', 'In-app updates are not enabled on this installation.');
     }
 
-    const password = typeof req.body?.password === 'string' ? req.body.password : '';
-    const user = password
-      ? await db('admin_users').where('id', req.admin.id).select('password_hash').first()
-      : null;
+    const { block, user } = await selfUpdateEligibility(req.admin.id);
+    if (block === 'no_local_password') {
+      return refuse(403, 'no_local_password', 'In-app updates need a super admin who signs in with a password.');
+    }
+
     // 400, as for the current password in /auth/change-password: a 401 would
     // read as an expired session to the admin client and log the admin out.
-    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
-      return res.status(400).json({ error: 'Password is incorrect.', code: 'SELF_UPDATE_BAD_PASSWORD' });
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    if (!password || !user?.password_hash || !(await bcrypt.compare(password, user.password_hash))) {
+      return refuse(400, 'bad_password', 'Password is incorrect.');
     }
 
     let job;
@@ -286,17 +317,33 @@ router.post('/updates/self-update', adminAuth, requireSuperAdmin(), selfUpdateLi
       job = await selfUpdateService.requestUpdate({ admin: req.admin });
     } catch (error) {
       if (error instanceof selfUpdateService.SelfUpdateError) {
-        return res.status(error.status).json({ error: error.message, code: `SELF_UPDATE_${error.code.toUpperCase()}` });
+        return refuse(error.status, error.code, error.message);
       }
       throw error;
     }
-
-    await logActivity('self_update_requested', { job_id: job.id, from_version: await getCurrentVersion() }, null,
-      { type: 'admin', id: req.admin.id, name: req.admin.username });
+    // The outcome (requested, or why not) is logged by the job itself once
+    // the dump has run; nothing has been filed yet at this point.
     res.status(202).json({ job });
   } catch (error) {
     logger.error('Error requesting a self-update:', error);
     res.status(500).json({ error: 'Failed to request the update' });
+  }
+});
+
+// Cancels a request the updater has not taken yet. No password: it can only
+// stop an update, never start one.
+router.delete('/updates/self-update', adminAuth, requireSuperAdmin(), async (req, res) => {
+  try {
+    const selfUpdateService = require('../services/selfUpdateService');
+    await selfUpdateService.withdrawRequest({ admin: req.admin });
+    res.json({ withdrawn: true });
+  } catch (error) {
+    const selfUpdateService = require('../services/selfUpdateService');
+    if (error instanceof selfUpdateService.SelfUpdateError) {
+      return res.status(error.status).json({ error: error.message, code: `SELF_UPDATE_${error.code.toUpperCase()}` });
+    }
+    logger.error('Error withdrawing a self-update request:', error);
+    res.status(500).json({ error: 'Failed to cancel the update request' });
   }
 });
 

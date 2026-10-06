@@ -4058,14 +4058,25 @@
           "failed": "The update failed.",
           "rolledBack": "The new version did not start, so the previous version was brought back.",
           "backupFailed": "The database backup failed, so the update was not started. Nothing was changed.",
-          "requestFailed": "The backup was taken, but the update request could not be filed. Nothing was changed."
+          "requestFailed": "The backup was taken, but the update request could not be filed. Nothing was changed.",
+          "withdrawn": "The update request was cancelled. Nothing was changed.",
+          "expired": "The updater did not pick up the request in time, so it was withdrawn. Nothing was changed. Check that the updater is running, then try again.",
+          "lost": "The update request did not reach the updater (PicPeak restarted, or the request was withdrawn). Nothing was changed."
         },
         "error": {
           "badPassword": "The password is incorrect.",
           "rateLimited": "Too many attempts. Try again in a few minutes.",
           "busy": "An update is already in progress.",
-          "generic": "The update could not be started."
-        }
+          "generic": "The update could not be started.",
+          "disabled": "In-app updates are not enabled on this installation.",
+          "noAgent": "The updater is not installed or not reachable.",
+          "unsupportedContract": "The installed updater does not match this version of PicPeak.",
+          "requestDirNotWritable": "PicPeak cannot write to its update request directory.",
+          "noLocalPassword": "In-app updates need a super admin who signs in with a password."
+        },
+        "cancel": "Cancel request",
+        "requestDirNotWritable": "PicPeak cannot write to its update request directory (update/request), so it cannot ask for an update. It has to be writable by UID 1001; see docs/self-update.md.",
+        "noLocalPassword": "In-app updates need a super admin who signs in with a password. Your account signs in through SSO only."
       }
     },
     "notifications": "Notifications",
@@ -4622,7 +4633,13 @@
       "delivery_completed": "Full gallery delivered: {{eventName}}",
       "delivery_due_soon": "Full gallery for {{eventName}} is due soon",
       "delivery_overdue": "Full gallery for {{eventName}} is overdue",
-      "self_update_requested": "In-app update requested (from v{{from_version}})"
+      "self_update_requested": "In-app update requested (from v{{from_version}})",
+      "self_update_refused": "In-app update refused ({{code}})",
+      "self_update_backup_failed": "In-app update not started: the database backup failed",
+      "self_update_request_failed": "In-app update not started: the request could not be filed",
+      "self_update_expired": "In-app update request withdrawn: the updater did not pick it up",
+      "self_update_withdrawn": "In-app update request cancelled",
+      "self_update_finished": "In-app update finished: {{state}} ({{from_version}} → {{to_version}})"
     },
     "people": {
       "title": "People in this gallery",

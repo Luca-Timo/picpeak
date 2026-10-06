@@ -14,6 +14,8 @@ const WAITING_HINT_AFTER_MS = 2 * 60 * 1000;
 // job to show for it, is from a session that never came back for the result.
 const STALE_AFTER_MS = 45 * 60 * 1000;
 const TERMINAL_STATES = new Set(['succeeded', 'up_to_date', 'refused', 'failed', 'rolled_back']);
+// Reasons the panel only explains: the manual steps stay the way to update.
+const NOTE_REASONS = new Set(['no_agent', 'unsupported_contract', 'request_dir_not_writable']);
 
 function readRequestedAt(): string | null {
   try {
@@ -65,7 +67,7 @@ export function useSelfUpdateActive(enabled = true): boolean {
   // The server's "off" wins over a remembered request: the panel drops that
   // request itself, but sessionStorage does not re-render this hook.
   if (!data.enabled) return false;
-  return requested || (data.reason !== 'no_agent' && data.reason !== 'unsupported_contract');
+  return requested || !(data.reason && NOTE_REASONS.has(data.reason));
 }
 
 /** The manual steps, folded away while the one-click path is the way to update. */
@@ -94,7 +96,7 @@ export const SelfUpdatePanel: React.FC = () => {
   const [password, setPassword] = useState('');
   const [waitingTooLong, setWaitingTooLong] = useState(false);
 
-  const { data, isError } = useQuery({
+  const { data, isError, dataUpdatedAt } = useQuery({
     queryKey: ['self-update-status'],
     queryFn: selfUpdateService.getStatus,
     // While an update runs the backend restarts, so failed polls are expected
@@ -105,6 +107,11 @@ export const SelfUpdatePanel: React.FC = () => {
       const run = agentRunFor(query.state.data, requestedAt);
       return run && run.state && TERMINAL_STATES.has(run.state) ? false : 2000;
     },
+  });
+
+  const withdrawal = useMutation({
+    mutationFn: () => selfUpdateService.withdrawRequest(),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['self-update-status'] }),
   });
 
   const mutation = useMutation({
@@ -136,6 +143,7 @@ export const SelfUpdatePanel: React.FC = () => {
     writeRequestedAt(null);
     setRequestedAt(null);
     mutation.reset();
+    withdrawal.reset();
   };
 
   // Forget a remembered request that can no longer resolve: the feature was
@@ -159,6 +167,16 @@ export const SelfUpdatePanel: React.FC = () => {
         return t('admin.updates.selfUpdate.error.rateLimited', 'Too many attempts. Try again in a few minutes.');
       case 'SELF_UPDATE_BUSY':
         return t('admin.updates.selfUpdate.error.busy', 'An update is already in progress.');
+      case 'SELF_UPDATE_DISABLED':
+        return t('admin.updates.selfUpdate.error.disabled', 'In-app updates are not enabled on this installation.');
+      case 'SELF_UPDATE_NO_AGENT':
+        return t('admin.updates.selfUpdate.error.noAgent', 'The updater is not installed or not reachable.');
+      case 'SELF_UPDATE_UNSUPPORTED_CONTRACT':
+        return t('admin.updates.selfUpdate.error.unsupportedContract', 'The installed updater does not match this version of PicPeak.');
+      case 'SELF_UPDATE_REQUEST_DIR_NOT_WRITABLE':
+        return t('admin.updates.selfUpdate.error.requestDirNotWritable', 'PicPeak cannot write to its update request directory.');
+      case 'SELF_UPDATE_NO_LOCAL_PASSWORD':
+        return t('admin.updates.selfUpdate.error.noLocalPassword', 'In-app updates need a super admin who signs in with a password.');
       default:
         return fallback || t('admin.updates.selfUpdate.error.generic', 'The update could not be started.');
     }
@@ -198,10 +216,35 @@ export const SelfUpdatePanel: React.FC = () => {
   // An update this browser started: show it through to the end, whatever the
   // status endpoint says in between (the backend is down for part of it).
   if (requestedAt && !abandoned) {
+    // The request is gone without the updater taking it: cancelled here,
+    // withdrawn after waiting too long, or lost because PicPeak restarted
+    // during the backup (the job lived only in that process).
+    // Only judged on a status fetched after the request was made: until the
+    // refetch lands, the cached one predates the job.
+    const lost = Boolean(data && !isError && !run && data.reason !== 'busy'
+      && dataUpdatedAt > Date.parse(requestedAt)
+      && (!job || job.phase === 'withdrawn' || job.phase === 'expired'));
+    if (lost) {
+      const text = job?.phase === 'withdrawn'
+        ? t('admin.updates.selfUpdate.result.withdrawn', 'The update request was cancelled. Nothing was changed.')
+        : job?.phase === 'expired'
+          ? t('admin.updates.selfUpdate.result.expired', 'The updater did not pick up the request in time, so it was withdrawn. Nothing was changed. Check that the updater is running, then try again.')
+          : t('admin.updates.selfUpdate.result.lost', 'The update request did not reach the updater (PicPeak restarted, or the request was withdrawn). Nothing was changed.');
+      return shell(
+        <>
+          <p className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            {text}
+          </p>
+          <Button size="sm" variant="outline" onClick={finish}>{t('common.close', 'Close')}</Button>
+        </>
+      );
+    }
+
     if (job?.phase === 'backup_failed' || job?.phase === 'request_failed') {
       return shell(
         <>
-          <p className="flex items-start gap-2 text-sm text-red-700 dark:text-red-300">
+          <p className="flex items-start gap-2 text-sm text-red-700 dark:text-red-400">
             <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
             {job.phase === 'backup_failed'
               ? t('admin.updates.selfUpdate.result.backupFailed', 'The database backup failed, so the update was not started. Nothing was changed.')
@@ -224,7 +267,7 @@ export const SelfUpdatePanel: React.FC = () => {
       }[run.state];
       return shell(
         <>
-          <p className={`flex items-start gap-2 text-sm ${ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+          <p className={`flex items-start gap-2 text-sm ${ok ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
             {ok ? <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />}
             {headline}
           </p>
@@ -258,10 +301,15 @@ export const SelfUpdatePanel: React.FC = () => {
           {t('admin.updates.selfUpdate.keepOpen', 'You can keep this window open. The site is unavailable for a minute or two while the new version starts.')}
         </p>
         {waitingTooLong && (
-          <p className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
+          <p className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400">
             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
             {t('admin.updates.selfUpdate.phase.waitingLong', 'The updater has not picked up the request yet. Check that it is running on the server (journalctl -u picpeak-updater, or the updater container).')}
           </p>
+        )}
+        {waitingForUpdater && data?.can_request && (
+          <Button size="sm" variant="outline" disabled={withdrawal.isPending} onClick={() => withdrawal.mutate()}>
+            {t('admin.updates.selfUpdate.cancel', 'Cancel request')}
+          </Button>
         )}
       </>
     );
@@ -269,13 +317,16 @@ export const SelfUpdatePanel: React.FC = () => {
 
   if (!data?.enabled) return null;
 
-  if (data.reason === 'no_agent' || data.reason === 'unsupported_contract') {
+  if (data.reason && NOTE_REASONS.has(data.reason)) {
+    const note = {
+      no_agent: t('admin.updates.selfUpdate.noAgent', 'In-app updates are enabled, but the updater is not installed or not reachable. Use the commands below, or set it up as described in docs/self-update.md.'),
+      unsupported_contract: t('admin.updates.selfUpdate.unsupportedContract', 'The installed updater does not match this version of PicPeak. Refresh it with picpeak-setup.sh --update, or update the updater container.'),
+      request_dir_not_writable: t('admin.updates.selfUpdate.requestDirNotWritable', 'PicPeak cannot write to its update request directory (update/request), so it cannot ask for an update. It has to be writable by UID 1001; see docs/self-update.md.'),
+    }[data.reason];
     return shell(
-      <p className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
+      <p className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
         <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-        {data.reason === 'no_agent'
-          ? t('admin.updates.selfUpdate.noAgent', 'In-app updates are enabled, but the updater is not installed or not reachable. Use the commands below, or set it up as described in docs/self-update.md.')
-          : t('admin.updates.selfUpdate.unsupportedContract', 'The installed updater does not match this version of PicPeak. Refresh it with picpeak-setup.sh --update, or update the updater container.')}
+        {note}
       </p>
     );
   }
@@ -287,7 +338,9 @@ export const SelfUpdatePanel: React.FC = () => {
   if (!data.can_request) {
     return shell(
       <p className="text-sm text-body">
-        {t('admin.updates.selfUpdate.onlySuperAdmin', 'A super admin can update PicPeak from here.')}
+        {data.request_block === 'no_local_password'
+          ? t('admin.updates.selfUpdate.noLocalPassword', 'In-app updates need a super admin who signs in with a password. Your account signs in through SSO only.')
+          : t('admin.updates.selfUpdate.onlySuperAdmin', 'A super admin can update PicPeak from here.')}
       </p>
     );
   }

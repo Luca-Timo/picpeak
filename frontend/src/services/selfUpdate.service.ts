@@ -23,9 +23,10 @@ export interface SelfUpdateAgentStatus {
 }
 
 /** The backend's part, before the updater takes over. Lost on restart by design. */
+/** Only `phase` reaches callers who cannot request an update themselves. */
 export interface SelfUpdateJob {
   id: string;
-  phase: 'backing_up' | 'backup_failed' | 'request_failed' | 'requested';
+  phase: 'backing_up' | 'backup_failed' | 'request_failed' | 'requested' | 'withdrawn' | 'expired';
   started_at: string;
   requested_at?: string;
   requested_by: string;
@@ -36,12 +37,13 @@ export interface SelfUpdateJob {
 export interface SelfUpdateStatus {
   enabled: boolean;
   available: boolean;
-  reason: 'disabled' | 'no_agent' | 'unsupported_contract' | 'busy' | null;
+  reason: 'disabled' | 'no_agent' | 'unsupported_contract' | 'request_dir_not_writable' | 'busy' | null;
   contract: number;
   agent: SelfUpdateAgentStatus | null;
   job: SelfUpdateJob | null;
   currentVersion: string;
   can_request: boolean;
+  request_block: 'not_super_admin' | 'no_local_password' | null;
 }
 
 export const selfUpdateService = {
@@ -53,5 +55,10 @@ export const selfUpdateService = {
   async requestUpdate(password: string): Promise<SelfUpdateJob> {
     const { data } = await api.post<{ job: SelfUpdateJob }>('/admin/system/updates/self-update', { password });
     return data.job;
+  },
+
+  /** Cancels a request the updater has not taken yet. */
+  async withdrawRequest(): Promise<void> {
+    await api.delete('/admin/system/updates/self-update');
   },
 };

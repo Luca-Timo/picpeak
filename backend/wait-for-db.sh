@@ -210,8 +210,11 @@ if [ "$(id -u)" = "0" ]; then
   # mounted read-only and belongs to the updater.
   _req_dir="${PICPEAK_UPDATE_DIR:-/app/update}/request"
   if [ -d "$_req_dir" ] && [ ! -L "$_req_dir" ]; then
-    chown nodejs:nodejs "$_req_dir" 2>/dev/null \
-      || echo "WARNING: could not chown $_req_dir to nodejs (UID 1001); in-app updates cannot be requested." >&2
+    # Only worth a warning where the feature is on: an NFS mount with root
+    # squash fails this on every boot, also for installs that never opted in.
+    if ! chown nodejs:nodejs "$_req_dir" 2>/dev/null && [ "${PICPEAK_SELF_UPDATE:-}" = "true" ]; then
+      echo "WARNING: could not chown $_req_dir to nodejs (UID 1001); in-app updates cannot be requested." >&2
+    fi
   fi
   unset _req_dir
   exec su-exec nodejs:nodejs "$0" "$@"

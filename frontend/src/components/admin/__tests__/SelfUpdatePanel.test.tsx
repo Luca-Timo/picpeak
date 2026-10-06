@@ -17,10 +17,12 @@ vi.mock('react-i18next', () => ({
 
 const getStatus = vi.fn();
 const requestUpdate = vi.fn();
+const withdrawRequest = vi.fn();
 vi.mock('../../../services/selfUpdate.service', () => ({
   selfUpdateService: {
     getStatus: (...args: unknown[]) => getStatus(...args),
     requestUpdate: (...args: unknown[]) => requestUpdate(...args),
+    withdrawRequest: (...args: unknown[]) => withdrawRequest(...args),
   },
 }));
 
@@ -41,6 +43,7 @@ function status(over: Record<string, unknown> = {}) {
     job: null,
     currentVersion: '3.159.0',
     can_request: true,
+    request_block: null,
     ...over,
   };
 }
@@ -57,6 +60,7 @@ function renderPanel() {
 beforeEach(() => {
   getStatus.mockReset();
   requestUpdate.mockReset();
+  withdrawRequest.mockReset();
   window.sessionStorage.clear();
 });
 
@@ -119,8 +123,10 @@ describe('SelfUpdatePanel', () => {
 
   it("shows the updater's step for the run it started, not an older one", async () => {
     window.sessionStorage.setItem('picpeak.selfUpdate.requestedAt', STARTED);
-    // A run from before this request: still waiting.
+    // A run from before this request, while the request is still pending
+    // (the server reports that as busy): still waiting.
     getStatus.mockResolvedValue(status({
+      available: false, reason: 'busy',
       agent: { contract: 1, state: 'succeeded', started_at: '2026-10-01T09:00:00Z', message: 'old run' },
     }));
     const { unmount } = renderPanel();
@@ -199,5 +205,60 @@ describe('SelfUpdatePanel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(<QueryClientProvider client={client}><Probe /></QueryClientProvider>);
     expect(await screen.findByText('open')).toBeInTheDocument();
+  });
+
+  it('offers to cancel while the request waits for the updater', async () => {
+    window.sessionStorage.setItem('picpeak.selfUpdate.requestedAt', STARTED);
+    const job = { id: 'j1', phase: 'requested', started_at: STARTED, requested_at: STARTED, requested_by: 'me', backup: null, error: null };
+    getStatus.mockResolvedValue(status({ available: false, reason: 'busy', job }));
+    withdrawRequest.mockResolvedValue(undefined);
+    renderPanel();
+    const cancel = await screen.findByRole('button', { name: 'admin.updates.selfUpdate.cancel' });
+    getStatus.mockResolvedValue(status({ job: { ...job, phase: 'withdrawn' } }));
+    fireEvent.click(cancel);
+    await waitFor(() => expect(withdrawRequest).toHaveBeenCalled());
+    expect(await screen.findByText('admin.updates.selfUpdate.result.withdrawn')).toBeInTheDocument();
+  });
+
+  it('says when the backend withdrew a request nothing picked up', async () => {
+    window.sessionStorage.setItem('picpeak.selfUpdate.requestedAt', STARTED);
+    getStatus.mockResolvedValue(status({
+      job: { id: 'j1', phase: 'expired', started_at: STARTED, requested_by: 'me', backup: null, error: null },
+    }));
+    renderPanel();
+    expect(await screen.findByText('admin.updates.selfUpdate.result.expired')).toBeInTheDocument();
+  });
+
+  it('offers a way out when the job was lost in a restart during the backup', async () => {
+    window.sessionStorage.setItem('picpeak.selfUpdate.requestedAt', STARTED);
+    // No job (the process was replaced), no run, nothing pending.
+    getStatus.mockResolvedValue(status());
+    renderPanel();
+    expect(await screen.findByText('admin.updates.selfUpdate.result.lost')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'common.close' }));
+    expect(window.sessionStorage.getItem('picpeak.selfUpdate.requestedAt')).toBeNull();
+  });
+
+  it('tells an SSO-only super admin why there is no form', async () => {
+    getStatus.mockResolvedValue(status({ can_request: false, request_block: 'no_local_password' }));
+    renderPanel();
+    expect(await screen.findByText('admin.updates.selfUpdate.noLocalPassword')).toBeInTheDocument();
+    expect(screen.queryByText('admin.updates.selfUpdate.submit')).not.toBeInTheDocument();
+  });
+
+  it('explains an unwritable request directory instead of offering the button', async () => {
+    getStatus.mockResolvedValue(status({ available: false, reason: 'request_dir_not_writable' }));
+    renderPanel();
+    expect(await screen.findByText('admin.updates.selfUpdate.requestDirNotWritable')).toBeInTheDocument();
+    expect(screen.queryByText('admin.updates.selfUpdate.submit')).not.toBeInTheDocument();
+  });
+
+  it('maps the server refusal codes to its own messages', async () => {
+    getStatus.mockResolvedValue(status());
+    requestUpdate.mockRejectedValue({ response: { status: 409, data: { code: 'SELF_UPDATE_NO_AGENT', error: 'English text' } } });
+    renderPanel();
+    fireEvent.change(await screen.findByLabelText('admin.updates.selfUpdate.password'), { target: { value: 'pw' } });
+    fireEvent.click(screen.getByRole('button', { name: 'admin.updates.selfUpdate.submit' }));
+    expect(await screen.findByText('admin.updates.selfUpdate.error.noAgent')).toBeInTheDocument();
   });
 });
