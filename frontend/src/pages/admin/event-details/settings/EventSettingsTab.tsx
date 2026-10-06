@@ -306,8 +306,8 @@ export const EventSettingsTab: React.FC<EventSettingsTabProps> = ({
               leave the card running empty past its fields. From 2xl the card,
               the padding and the gaps grow a step. Side by side its top lines
               up with the first section row, below the first group's heading
-              (h-4 + mb-1.5 in SettingsOverview). */}
-          <div className="lg:mt-[1.375rem] lg:max-w-[52rem] 2xl:max-w-[60rem] bg-panel border border-line rounded-xl">
+              (h-4 + mb-2 in SettingsOverview). */}
+          <div className="lg:mt-6 lg:max-w-[52rem] 2xl:max-w-[60rem] bg-panel border border-line rounded-xl">
             <div className="flex flex-wrap items-start gap-3 px-5 sm:px-7 2xl:px-10 py-4 2xl:py-5 border-b border-line">
               <button
                 type="button"

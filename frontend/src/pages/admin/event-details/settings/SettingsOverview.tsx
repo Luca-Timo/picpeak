@@ -239,8 +239,8 @@ export const SettingsOverview: React.FC<SettingsOverviewProps> = ({ sections, ac
           return (
             <section key={group.key}>
               {/* Fixed height: the section card on the right is offset by
-                  h-4 + mb-1.5 to line up with the first row. */}
-              <h3 className="h-4 px-1 mb-1.5 text-[11px] leading-4 font-semibold uppercase tracking-wider text-soft">
+                  h-4 + mb-2 (1.5rem) to line up with the first row. */}
+              <h3 className="h-4 px-1 mb-2 text-[11px] leading-4 font-semibold uppercase tracking-wider text-soft">
                 {t(`events.settingsTab.group.${group.key}`, group.label)}
               </h3>
               <ul className="space-y-1.5 2xl:space-y-2">{keys.map(row)}</ul>
