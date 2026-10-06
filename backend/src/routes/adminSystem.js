@@ -251,6 +251,10 @@ async function selfUpdateEligibility(adminId) {
 
 const selfUpdateActor = (req) => ({ type: 'admin', id: req.admin.id, name: req.admin.username });
 
+// Not side-effect free: reading the status also withdraws a request older than
+// the TTL and records a finished updater run in the activity log. Both should
+// happen anyway, whoever happens to look, so any settings.view holder may
+// trigger them.
 router.get('/updates/self-update', adminAuth, requirePermission(['settings.view', 'system.view']), async (req, res) => {
   try {
     const selfUpdateService = require('../services/selfUpdateService');

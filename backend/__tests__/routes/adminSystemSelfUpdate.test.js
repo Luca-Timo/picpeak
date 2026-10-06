@@ -236,6 +236,10 @@ describe('/admin/system/updates/self-update', () => {
     it('records the result of an updater run once', async () => {
       writeAgentStatus({ state: 'succeeded', started_at: '2026-10-06T08:00:00Z', from_version: '3.162.0', to_version: '3.163.0' });
       await getStatus();
+      // The stored marker round-trips through getAppSetting as the plain
+      // string, which is what the restart case below compares against.
+      const { getAppSetting } = require('../../src/utils/appSettings');
+      expect(await getAppSetting('self_update_last_logged_run')).toBe('2026-10-06T08:00:00Z');
       selfUpdateService._reset(); // as after a restart: only the stored marker remains
       await getStatus('admin');
       const rows = await activities('self_update_finished');
