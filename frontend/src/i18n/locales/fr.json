@@ -2389,6 +2389,7 @@
     "containerBgColorHelp": "La carte blanche qui contient le contenu de l'e-mail. Correspond à Marque → Surface.",
     "listBgColor": "Panneau d'information",
     "listBgColorHelp": "Couleur de fond des panneaux d'information à puces dans le corps de l'e-mail. Correspond à Marque → Élevé.",
+    "listContrastWarning": "Le texte du corps est difficile à lire sur le panneau d'information (contraste {{ratio}}:1, 4,5:1 recommandé). Les e-mails passent le texte du panneau en gris foncé ou clair lisible, mais des couleurs assorties rendent mieux.",
     "bodyTextColor": "Texte du corps",
     "bodyTextColorHelp": "Couleur du texte des paragraphes et en gras. Correspond à Marque → Texte principal.",
     "mutedTextColor": "Texte du pied de page",

@@ -5008,6 +5008,7 @@
     "containerBgColorHelp": "The white card that holds the email content. Maps to Branding → Surface.",
     "listBgColor": "Info panel",
     "listBgColorHelp": "Background of the bulleted info panels inside the email body. Maps to Branding → Elevated.",
+    "listContrastWarning": "Body text is hard to read on the Info panel (contrast {{ratio}}:1, 4.5:1 recommended). Emails switch the panel text to a readable dark or light grey, but matching colours look better.",
     "bodyTextColor": "Body text",
     "bodyTextColorHelp": "Paragraph and bold text colour. Maps to Branding → Primary text.",
     "mutedTextColor": "Footer text",

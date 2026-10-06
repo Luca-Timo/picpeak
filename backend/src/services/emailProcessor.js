@@ -407,6 +407,7 @@ function renderEmailSignatureText(signature, { brandingCompanyName, language } =
 // scheme other than http(s), and each colour has to match a colour grammar
 // before it is interpolated into <style>, style="" and bgcolor="".
 const { sanitizeCssColor } = require('../utils/cssSanitizer');
+const { readableTextOn } = require('../utils/colorContrast');
 
 function isUsableLogoUrl(value) {
   if (typeof value !== 'string' || !value.trim()) return false;
@@ -471,6 +472,12 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en') {
   }
 
   const hoverColor = darkenColor(primaryColor, 0.15);
+  // The info panel only had a background colour, so its text inherited the
+  // body text colour: a dark palette with the default light panel (or a
+  // Branding sync that filled a light panel in) put near-white text on a
+  // near-white box. Keep the body text colour when it reads on the panel,
+  // otherwise switch to a dark or light neutral.
+  const listTextColor = readableTextOn(listBgColor, bodyTextColor);
 
   // Build full logo URL - ensure logoUrl is a valid non-empty string
   const frontendUrl = (await getFrontendBaseUrl()) || 'http://localhost:3000';
@@ -500,8 +507,13 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en') {
   // below is rebuilt as inline-styled tables with bgcolor attrs for the same
   // reason. The <style> block stays as progressive enhancement.
   const buttonInlineStyle = `background-color:${primaryColor};color:${buttonTextColor};display:inline-block;padding:12px 30px;text-decoration:none;border-radius:5px;font-weight:500;`;
+  // Same for the info panel: inline its look on every <ul> the template did
+  // not style itself, so clients that strip <style> keep text and panel in
+  // one readable pair.
+  const listInlineStyle = `background-color:${listBgColor};color:${listTextColor};padding:20px 20px 20px 40px;border-radius:5px;margin:20px 0;`;
   const inlinedBody = (typeof htmlBody === 'string' ? htmlBody : '')
-    .replace(/class="button"/g, `class="button" style="${buttonInlineStyle}"`);
+    .replace(/class="button"/g, `class="button" style="${buttonInlineStyle}"`)
+    .replace(/<ul(?![^>]*\sstyle\s*=)(\s[^>]*)?>/gi, (match, attrs = '') => `<ul style="${listInlineStyle}"${attrs}>`);
 
   return `
 <!DOCTYPE html>
@@ -555,6 +567,7 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en') {
     }
     .email-content ul {
       background-color: ${listBgColor};
+      color: ${listTextColor};
       padding: 20px 20px 20px 40px;
       border-radius: 5px;
       margin: 20px 0;
@@ -601,6 +614,9 @@ async function wrapEmailHtml(htmlBody, subject, language = 'en') {
     }
     strong {
       color: ${bodyTextColor};
+    }
+    .email-content ul strong {
+      color: ${listTextColor};
     }
     @media only screen and (max-width: 600px) {
       .email-wrapper {

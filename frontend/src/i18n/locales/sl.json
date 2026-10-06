@@ -4490,6 +4490,7 @@
     "containerBgColorHelp": "Bela kartica, ki vsebuje e-poštno vsebino. Preslika se v Blagovna znamka → Površina.",
     "listBgColor": "Informacijski panel",
     "listBgColorHelp": "Ozadje označenih informacijskih panelov znotraj telesa e-pošte. Preslika se v Blagovna znamka → Dvignjeno.",
+    "listContrastWarning": "Besedilo je na informacijskem panelu slabo berljivo (kontrast {{ratio}}:1, priporočeno 4,5:1). E-poštna sporočila besedilo v panelu samodejno preklopijo na berljivo temno ali svetlo sivo, vendar se ujemajoče barve vidijo bolje.",
     "bodyTextColor": "Besedilo telesa",
     "bodyTextColorHelp": "Barva odstavkov in krepkega besedila. Preslika se v Blagovna znamka → Primarno besedilo.",
     "mutedTextColor": "Besedilo noge",
